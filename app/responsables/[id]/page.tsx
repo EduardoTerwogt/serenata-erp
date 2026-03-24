@@ -1,0 +1,280 @@
+'use client'
+
+import { useEffect, useState, use } from 'react'
+import { useForm } from 'react-hook-form'
+import Link from 'next/link'
+import { Responsable, HistorialResponsable } from '@/lib/types'
+
+interface ResponsableForm {
+  nombre: string
+  telefono: string
+  correo: string
+  banco: string
+  clabe: string
+  notas: string
+  activo: boolean
+}
+
+function fmt(n: number) {
+  return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
+}
+
+export default function ResponsableDetallePage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = use(params)
+  const [responsable, setResponsable] = useState<Responsable | null>(null)
+  const [historial, setHistorial] = useState<HistorialResponsable[]>([])
+  const [roles, setRoles] = useState<string[]>([])
+  const [rolInput, setRolInput] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  const { register, handleSubmit, reset } = useForm<ResponsableForm>()
+
+  useEffect(() => {
+    fetch(`/api/responsables/${id}`)
+      .then(r => r.json())
+      .then(data => {
+        setResponsable(data)
+        setRoles(data.roles || [])
+        setHistorial(data.historial_responsable || [])
+        reset({
+          nombre: data.nombre,
+          telefono: data.telefono || '',
+          correo: data.correo || '',
+          banco: data.banco || '',
+          clabe: data.clabe || '',
+          notas: data.notas || '',
+          activo: data.activo,
+        })
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [id, reset])
+
+  const agregarRol = () => {
+    const rol = rolInput.trim()
+    if (rol && !roles.includes(rol)) {
+      setRoles(prev => [...prev, rol])
+      setRolInput('')
+    }
+  }
+
+  const onSubmit = async (data: ResponsableForm) => {
+    setGuardando(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/responsables/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...data, roles }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+      const updated = await res.json()
+      setResponsable(updated)
+      setSuccess('Colaborador actualizado correctamente')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al guardar')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  if (loading) return <div className="p-8 text-center text-gray-500">Cargando...</div>
+  if (!responsable) return <div className="p-8 text-center text-gray-500">Colaborador no encontrado</div>
+
+  const totalGanado = historial.reduce((s, h) => s + h.monto, 0)
+
+  return (
+    <div className="p-8 max-w-3xl">
+      <div className="mb-8">
+        <Link href="/responsables" className="text-gray-500 hover:text-gray-300 text-sm">
+          ← Colaboradores
+        </Link>
+        <div className="flex items-center gap-4 mt-3">
+          <div className="w-14 h-14 rounded-full bg-blue-900 flex items-center justify-center text-blue-300 font-bold text-2xl">
+            {responsable.nombre.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-white">{responsable.nombre}</h1>
+            <div className="flex gap-1.5 mt-1 flex-wrap">
+              {roles.map(rol => (
+                <span key={rol} className="text-xs px-2 py-0.5 bg-blue-900 text-blue-300 rounded-full">{rol}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4">{error}</div>
+      )}
+      {success && (
+        <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4">{success}</div>
+      )}
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Info personal */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Información Personal</h2>
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Nombre completo</label>
+              <input
+                {...register('nombre', { required: true })}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Teléfono</label>
+                <input
+                  {...register('telefono')}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Correo</label>
+                <input
+                  type="email"
+                  {...register('correo')}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Activo</label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" {...register('activo')} className="w-4 h-4 accent-blue-600" />
+                <span className="text-gray-300 text-sm">Colaborador activo</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Roles */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Roles</h2>
+          <div className="flex gap-2 mb-3">
+            <input
+              type="text"
+              value={rolInput}
+              onChange={e => setRolInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregarRol() } }}
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+              placeholder="Nuevo rol..."
+            />
+            <button type="button" onClick={agregarRol} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors">
+              Agregar
+            </button>
+          </div>
+          {roles.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {roles.map(rol => (
+                <span key={rol} className="flex items-center gap-1.5 bg-blue-900 text-blue-300 text-sm px-3 py-1 rounded-full">
+                  {rol}
+                  <button type="button" onClick={() => setRoles(prev => prev.filter(r => r !== rol))} className="hover:text-white">×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Datos bancarios */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Datos Bancarios</h2>
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Banco</label>
+              <input
+                {...register('banco')}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">CLABE</label>
+              <input
+                {...register('clabe')}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500"
+                maxLength={18}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Notas */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Notas</h2>
+          <textarea
+            {...register('notas')}
+            rows={3}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 resize-none"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            disabled={guardando}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >
+            {guardando ? 'Guardando...' : 'Guardar Cambios'}
+          </button>
+        </div>
+      </form>
+
+      {/* Historial */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl mt-8">
+        <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Historial de Proyectos</h2>
+          {totalGanado > 0 && (
+            <span className="text-green-400 font-bold">${fmt(totalGanado)}</span>
+          )}
+        </div>
+
+        {historial.length === 0 ? (
+          <div className="p-8 text-center text-gray-500 text-sm">
+            Sin historial de proyectos aún
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800">
+                  <th className="text-left text-gray-400 font-medium px-6 py-3">Proyecto</th>
+                  <th className="text-left text-gray-400 font-medium px-6 py-3">Cliente</th>
+                  <th className="text-left text-gray-400 font-medium px-6 py-3">Fecha</th>
+                  <th className="text-left text-gray-400 font-medium px-6 py-3">Rol</th>
+                  <th className="text-right text-gray-400 font-medium px-6 py-3">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historial.map(h => (
+                  <tr key={h.id} className="border-b border-gray-800/50">
+                    <td className="px-6 py-3 text-white font-medium">{h.proyecto}</td>
+                    <td className="px-6 py-3 text-gray-400">{h.cliente}</td>
+                    <td className="px-6 py-3 text-gray-400">{h.fecha_entrega || '—'}</td>
+                    <td className="px-6 py-3 text-gray-300">{h.rol || '—'}</td>
+                    <td className="px-6 py-3 text-right text-green-400 font-medium">${fmt(h.monto)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-gray-700">
+                  <td colSpan={4} className="px-6 py-3 text-gray-400 font-medium">Total</td>
+                  <td className="px-6 py-3 text-right text-green-400 font-bold">${fmt(totalGanado)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
