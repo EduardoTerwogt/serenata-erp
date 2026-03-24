@@ -40,6 +40,24 @@ export interface ItemCotizacion {
   x_pagar: number
   margen: number
   orden: number
+  notas?: string | null
+}
+
+export interface Producto {
+  id: string
+  descripcion: string
+  categoria: string | null
+  precio_unitario: number
+  x_pagar_sugerido: number
+  activo: boolean
+  created_at: string
+}
+
+export interface Cliente {
+  id: string
+  nombre: string
+  activo: boolean
+  created_at: string
 }
 
 export interface Cotizacion {

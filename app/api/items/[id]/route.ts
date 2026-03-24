@@ -6,7 +6,8 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const { responsable_id, responsable_nombre } = await request.json()
+    const body = await request.json()
+    const { responsable_id, responsable_nombre, notas } = body
 
     // 1. Fetch item to get cotizacion_id and descripcion
     const { data: item, error: itemError } = await supabaseAdmin
@@ -19,16 +20,23 @@ export async function PATCH(
       return Response.json({ error: 'Item no encontrado' }, { status: 404 })
     }
 
-    // 2. Update items_cotizacion
+    // 2. Update items_cotizacion (only include fields present in body)
+    const updateFields: Record<string, unknown> = {}
+    if ('responsable_id' in body) updateFields.responsable_id = responsable_id || null
+    if ('responsable_nombre' in body) updateFields.responsable_nombre = responsable_nombre || null
+    if ('notas' in body) updateFields.notas = notas ?? null
+
     const { error: updateError } = await supabaseAdmin
       .from('items_cotizacion')
-      .update({
-        responsable_id: responsable_id || null,
-        responsable_nombre: responsable_nombre || null,
-      })
+      .update(updateFields)
       .eq('id', id)
 
     if (updateError) throw updateError
+
+    // If only notas was updated, return early — no need to sync cuentas_pagar or historial
+    if (!('responsable_id' in body) && !('responsable_nombre' in body)) {
+      return Response.json({ ok: true })
+    }
 
     // 3. Fetch responsable details for cuentas_pagar sync
     let responsableData: { telefono?: string | null; correo?: string | null; clabe?: string | null; banco?: string | null } | null = null

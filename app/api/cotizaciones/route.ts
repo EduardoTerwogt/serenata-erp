@@ -1,5 +1,6 @@
 import { getCotizaciones, createCotizacion, getNextFolio, getNextFolioComplementaria, upsertItems, folioExists } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export async function GET() {
   try {
@@ -74,6 +75,13 @@ export async function POST(request: Request) {
         margen: item.margen ?? (item.importe ?? 0) - (item.x_pagar ?? 0),
       }))
       await upsertItems(itemsToInsert)
+    }
+
+    // Auto-create client in clientes table if not exists
+    if (cotizacionData.cliente) {
+      await supabaseAdmin
+        .from('clientes')
+        .upsert({ nombre: cotizacionData.cliente }, { onConflict: 'nombre', ignoreDuplicates: true })
     }
 
     return Response.json(cotizacion, { status: 201 })

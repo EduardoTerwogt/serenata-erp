@@ -8,6 +8,7 @@ import {
   createCuentaCobrar,
   getItemsByCotizacion,
 } from '@/lib/db'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(
   _request: Request,
@@ -100,6 +101,28 @@ export async function POST(
       { error: `Error creando cuenta por cobrar: ${e instanceof Error ? e.message : JSON.stringify(e)}` },
       { status: 500 }
     )
+  }
+
+  // 5. Insertar historial_responsable por cada item con responsable_id
+  try {
+    const itemsParaHistorial = await getItemsByCotizacion(id)
+    const historialInserts = itemsParaHistorial
+      .filter(item => !!item.responsable_id)
+      .map(item => ({
+        responsable_id: item.responsable_id,
+        proyecto_id: proyecto.id,
+        proyecto: cotizacion.proyecto,
+        cliente: cotizacion.cliente,
+        fecha_entrega: proyecto.fecha_entrega || null,
+        rol: item.descripcion,
+        monto: item.x_pagar || 0,
+      }))
+    if (historialInserts.length > 0) {
+      await supabaseAdmin.from('historial_responsable').insert(historialInserts)
+    }
+  } catch (e) {
+    console.error('Error insertando historial_responsable:', e)
+    // Non-fatal: continue
   }
 
   return Response.json({

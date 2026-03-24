@@ -36,6 +36,7 @@ export default function ProyectoDetallePage({
   const [proyecto, setProyecto] = useState<Proyecto | null>(null)
   const [items, setItems] = useState<ItemCotizacion[]>([])
   const [responsables, setResponsables] = useState<Responsable[]>([])
+  const [itemNotas, setItemNotas] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
@@ -79,7 +80,9 @@ export default function ProyectoDetallePage({
                 .catch(() => [])
             )
           )
-          setItems([...principalItems, ...compItemArrays.flat()])
+          const allItems = [...principalItems, ...compItemArrays.flat()]
+          setItems(allItems)
+          setItemNotas(Object.fromEntries(allItems.map(i => [i.id, i.notas || ''])))
         })
         .catch(() => {})
 
@@ -99,6 +102,18 @@ export default function ProyectoDetallePage({
       if (!res.ok) throw new Error((await res.json()).error)
       const updated = await res.json()
       setProyecto(updated)
+
+      // Guardar notas de cada partida
+      await Promise.all(
+        Object.entries(itemNotas).map(([itemId, notas]) =>
+          fetch(`/api/items/${itemId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notas }),
+          })
+        )
+      )
+
       setSuccess('Proyecto actualizado correctamente')
       setTimeout(() => setSuccess(null), 3000)
     } catch (e: unknown) {
@@ -153,6 +168,32 @@ export default function ProyectoDetallePage({
           <p className="text-gray-400 mt-1">{proyecto.cliente}</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              const { generarHojaDeLlamado } = await import('@/lib/pdf')
+              await generarHojaDeLlamado({
+                proyecto: proyecto.proyecto,
+                cliente: proyecto.cliente,
+                fecha_entrega: proyecto.fecha_entrega,
+                locacion: proyecto.locacion,
+                horarios: proyecto.horarios,
+                punto_encuentro: proyecto.punto_encuentro,
+                items: items.map(i => ({
+                  id: i.id,
+                  descripcion: i.descripcion,
+                  categoria: i.categoria,
+                  cantidad: i.cantidad,
+                  responsable_id: i.responsable_id,
+                  responsable_nombre: i.responsable_nombre,
+                  notas: itemNotas[i.id] ?? i.notas ?? '',
+                })),
+                responsables,
+              })
+            }}
+            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            📋 Hoja de Llamado
+          </button>
           <button
             onClick={() => {
               setSuccess('Próximamente: integración con Google Calendar')
@@ -266,6 +307,7 @@ export default function ProyectoDetallePage({
                   <th className="text-left text-gray-400 font-medium px-6 py-3">Categoría</th>
                   <th className="text-left text-gray-400 font-medium px-6 py-3 w-16">Cant.</th>
                   <th className="text-left text-gray-400 font-medium px-6 py-3 w-48">Responsable</th>
+                  <th className="text-left text-gray-400 font-medium px-6 py-3">Notas</th>
                 </tr>
               </thead>
               <tbody>
@@ -285,6 +327,15 @@ export default function ProyectoDetallePage({
                           <option key={r.id} value={r.id}>{r.nombre}</option>
                         ))}
                       </select>
+                    </td>
+                    <td className="px-6 py-3">
+                      <input
+                        type="text"
+                        value={itemNotas[item.id] ?? ''}
+                        onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))}
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                        placeholder="Notas..."
+                      />
                     </td>
                   </tr>
                 ))}
