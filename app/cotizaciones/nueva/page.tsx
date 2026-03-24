@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Responsable } from '@/lib/types'
@@ -37,7 +37,7 @@ function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export default function NuevaCotizacionPage() {
+function NuevaCotizacionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -496,5 +496,13 @@ export default function NuevaCotizacionPage() {
         </button>
       </div>
     </div>
+  )
+}
+
+export default function NuevaCotizacionPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-white">Cargando...</div>}>
+      <NuevaCotizacionContent />
+    </Suspense>
   )
 }
