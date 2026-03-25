@@ -18,12 +18,13 @@ export interface Responsable {
 export interface HistorialResponsable {
   id: string
   responsable_id: string
+  cotizacion_id: string | null
   proyecto_id: string | null
-  proyecto: string
+  proyecto_nombre: string
   cliente: string
-  fecha_entrega: string | null
-  rol: string | null
-  monto: number
+  fecha_evento: string | null
+  rol_en_proyecto: string | null
+  x_pagar: number
   created_at: string
 }
 

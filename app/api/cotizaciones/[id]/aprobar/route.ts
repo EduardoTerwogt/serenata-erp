@@ -110,18 +110,21 @@ export async function POST(
       .filter(item => !!item.responsable_id)
       .map(item => ({
         responsable_id: item.responsable_id,
+        cotizacion_id: id,
         proyecto_id: proyecto.id,
-        proyecto: cotizacion.proyecto,
+        proyecto_nombre: cotizacion.proyecto,
         cliente: cotizacion.cliente,
-        fecha_entrega: proyecto.fecha_entrega || null,
-        rol: item.descripcion,
-        monto: item.x_pagar || 0,
+        fecha_evento: cotizacion.fecha_entrega || null,
+        rol_en_proyecto: item.descripcion,
+        x_pagar: item.x_pagar || 0,
       }))
+    console.log('[aprobar] historial inserts:', historialInserts.length, historialInserts.map(h => ({ resp: h.responsable_id, rol: h.rol_en_proyecto })))
     if (historialInserts.length > 0) {
-      await supabaseAdmin.from('historial_responsable').insert(historialInserts)
+      const { error: histError } = await supabaseAdmin.from('historial_responsable').insert(historialInserts)
+      if (histError) console.error('[aprobar] Error insertando historial_responsable:', histError)
     }
   } catch (e) {
-    console.error('Error insertando historial_responsable:', e)
+    console.error('[aprobar] Error insertando historial_responsable:', e)
     // Non-fatal: continue
   }
 

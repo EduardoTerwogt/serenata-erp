@@ -79,9 +79,10 @@ export async function POST(request: Request) {
 
     // Auto-create client in clientes table if not exists
     if (cotizacionData.cliente) {
-      await supabaseAdmin
+      const { error: clienteError } = await supabaseAdmin
         .from('clientes')
         .upsert({ nombre: cotizacionData.cliente }, { onConflict: 'nombre', ignoreDuplicates: true })
+      if (clienteError) console.error('[POST /api/cotizaciones] Error upsert cliente:', clienteError)
     }
 
     return Response.json(cotizacion, { status: 201 })

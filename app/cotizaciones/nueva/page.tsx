@@ -100,6 +100,17 @@ function NuevaCotizacionContent() {
     fetch('/api/responsables').then(r => r.json()).then(setResponsables)
   }, [])
 
+  // Pre-fill readonly fields when creating a complementary quote
+  useEffect(() => {
+    if (complementaria_de) {
+      setValue('cliente', searchParams.get('cliente') || '')
+      setValue('proyecto', searchParams.get('proyecto') || '')
+      setValue('locacion', searchParams.get('locacion') || '')
+      setValue('fecha_entrega', searchParams.get('fecha_entrega') || '')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complementaria_de])
+
   const calcItem = (item: ItemForm) => {
     const importe = (item.cantidad || 0) * (item.precio_unitario || 0)
     const margen = importe - (item.x_pagar || 0)

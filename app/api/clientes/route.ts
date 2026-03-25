@@ -10,19 +10,31 @@ export async function GET(request: Request) {
     .eq('activo', true)
     .order('nombre')
     .limit(10)
-  if (error) return Response.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[GET /api/clientes] Error:', error)
+    return Response.json({ error: error.message }, { status: 500 })
+  }
   console.log('[GET /api/clientes] q:', q, '| encontrados:', data?.length ?? 0)
   return Response.json(data || [])
 }
 
 export async function POST(request: Request) {
-  const { nombre } = await request.json()
-  if (!nombre) return Response.json({ error: 'nombre requerido' }, { status: 400 })
-  const { data, error } = await supabaseAdmin
-    .from('clientes')
-    .upsert({ nombre }, { onConflict: 'nombre', ignoreDuplicates: true })
-    .select()
-    .maybeSingle()
-  if (error) return Response.json({ error: error.message }, { status: 500 })
-  return Response.json(data, { status: 201 })
+  try {
+    const { nombre } = await request.json()
+    if (!nombre) return Response.json({ error: 'nombre requerido' }, { status: 400 })
+    const { data, error } = await supabaseAdmin
+      .from('clientes')
+      .upsert({ nombre }, { onConflict: 'nombre', ignoreDuplicates: true })
+      .select()
+      .maybeSingle()
+    if (error) {
+      console.error('[POST /api/clientes] Error:', error)
+      return Response.json({ error: error.message }, { status: 500 })
+    }
+    console.log('[POST /api/clientes] upsert resultado:', data)
+    return Response.json(data, { status: 201 })
+  } catch (e) {
+    console.error('[POST /api/clientes] Error inesperado:', e)
+    return Response.json({ error: String(e) }, { status: 500 })
+  }
 }

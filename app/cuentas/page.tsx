@@ -65,7 +65,6 @@ export default function CuentasPage() {
   // Resumen cuentas por pagar
   const totalPorPagar = pagar.filter(c => c.estado !== 'PAGADO').reduce((s, c) => s + c.x_pagar, 0)
   const totalPagado = pagar.filter(c => c.estado === 'PAGADO').reduce((s, c) => s + c.x_pagar, 0)
-  const margenTotal = pagar.reduce((s, c) => s + c.margen, 0)
 
   // Resumen cuentas por cobrar
   const totalPorCobrar = cobrar.filter(c => c.estado !== 'PAGADO').reduce((s, c) => s + c.monto_total, 0)
@@ -192,7 +191,7 @@ export default function CuentasPage() {
           {tab === 'pagar' && (
             <>
               {/* Resumen */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                   <p className="text-gray-400 text-sm mb-1">Por pagar</p>
                   <p className="text-2xl font-bold text-red-400">${fmt(totalPorPagar)}</p>
@@ -200,12 +199,6 @@ export default function CuentasPage() {
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                   <p className="text-gray-400 text-sm mb-1">Total pagado</p>
                   <p className="text-2xl font-bold text-green-400">${fmt(totalPagado)}</p>
-                </div>
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                  <p className="text-gray-400 text-sm mb-1">Margen total</p>
-                  <p className={`text-2xl font-bold ${margenTotal >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
-                    ${fmt(margenTotal)}
-                  </p>
                 </div>
               </div>
 
@@ -224,10 +217,8 @@ export default function CuentasPage() {
                           <th className="text-left text-gray-400 font-medium px-4 py-3">Responsable</th>
                           <th className="text-left text-gray-400 font-medium px-4 py-3">Descripción</th>
                           <th className="text-right text-gray-400 font-medium px-4 py-3">Monto</th>
-                          <th className="text-left text-gray-400 font-medium px-4 py-3">Banco</th>
-                          <th className="text-left text-gray-400 font-medium px-4 py-3">CLABE</th>
                           <th className="text-left text-gray-400 font-medium px-4 py-3">Estado</th>
-                          <th className="text-left text-gray-400 font-medium px-4 py-3">Acción</th>
+                          <th className="text-left text-gray-400 font-medium px-4 py-3">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -249,20 +240,7 @@ export default function CuentasPage() {
                                 <p className="text-gray-500 text-xs">×{c.cantidad}</p>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right">
-                              <p className="text-white font-bold">${fmt(c.x_pagar)}</p>
-                              {c.margen > 0 && (
-                                <p className="text-green-500 text-xs">+${fmt(c.margen)}</p>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-gray-400">{c.banco || '—'}</td>
-                            <td className="px-4 py-3">
-                              {c.clabe ? (
-                                <span className="font-mono text-gray-400 text-xs">{c.clabe}</span>
-                              ) : (
-                                <span className="text-gray-600">—</span>
-                              )}
-                            </td>
+                            <td className="px-4 py-3 text-right text-white font-bold">${fmt(c.x_pagar)}</td>
                             <td className="px-4 py-3">
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_PAGAR_STYLE[c.estado]}`}>
                                 {c.estado}

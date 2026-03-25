@@ -15,6 +15,6 @@ export async function GET(
     console.error('[historial] error:', error)
     return Response.json({ error: error.message }, { status: 500 })
   }
-  console.log('[historial] registros encontrados:', data?.length ?? 0)
+  console.log('[historial] registros encontrados:', data?.length ?? 0, data)
   return Response.json(data || [])
 }

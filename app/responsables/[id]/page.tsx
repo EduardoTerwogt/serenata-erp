@@ -27,6 +27,7 @@ export default function ResponsableDetallePage({
   const { id } = use(params)
   const [responsable, setResponsable] = useState<Responsable | null>(null)
   const [historial, setHistorial] = useState<HistorialResponsable[]>([])
+  const [historialError, setHistorialError] = useState<string | null>(null)
   const [roles, setRoles] = useState<string[]>([])
   const [rolInput, setRolInput] = useState('')
   const [loading, setLoading] = useState(true)
@@ -39,10 +40,15 @@ export default function ResponsableDetallePage({
   useEffect(() => {
     Promise.all([
       fetch(`/api/responsables/${id}`).then(r => r.json()),
-      fetch(`/api/responsables/${id}/historial`).then(r => r.json()).catch(() => []),
+      fetch(`/api/responsables/${id}/historial`).then(async r => {
+        const json = await r.json()
+        if (!r.ok) throw new Error(json.error || `HTTP ${r.status}`)
+        return json
+      }).catch(e => { setHistorialError(String(e)); return [] }),
     ]).then(([data, hist]) => {
       setResponsable(data)
       setRoles(data.roles || [])
+      console.log('historial data:', hist)
       // Prefer dedicated historial endpoint; fallback to joined data
       setHistorial(Array.isArray(hist) && hist.length > 0 ? hist : (data.historial_responsable || []))
       reset({
@@ -90,7 +96,7 @@ export default function ResponsableDetallePage({
   if (loading) return <div className="p-8 text-center text-gray-500">Cargando...</div>
   if (!responsable) return <div className="p-8 text-center text-gray-500">Colaborador no encontrado</div>
 
-  const totalGanado = historial.reduce((s, h) => s + h.monto, 0)
+  const totalGanado = historial.reduce((s, h) => s + (h.x_pagar || 0), 0)
 
   return (
     <div className="p-8 max-w-3xl">
@@ -239,6 +245,11 @@ export default function ResponsableDetallePage({
           )}
         </div>
 
+        {historialError && (
+          <div className="mx-6 mb-4 bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
+            Error cargando historial: {historialError}
+          </div>
+        )}
         {historial.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-sm">
             Aún no hay proyectos registrados
@@ -258,12 +269,12 @@ export default function ResponsableDetallePage({
                 {historial.map(h => (
                   <tr key={h.id} className="border-b border-gray-800/50">
                     <td className="px-6 py-3">
-                      <p className="text-white font-medium">{h.proyecto}</p>
+                      <p className="text-white font-medium">{h.proyecto_nombre}</p>
                       <p className="text-gray-500 text-xs">{h.cliente}</p>
                     </td>
-                    <td className="px-6 py-3 text-gray-400">{h.fecha_entrega || '—'}</td>
-                    <td className="px-6 py-3 text-gray-300">{h.rol || '—'}</td>
-                    <td className="px-6 py-3 text-right text-green-400 font-medium">${fmt(h.monto)}</td>
+                    <td className="px-6 py-3 text-gray-400">{h.fecha_evento || '—'}</td>
+                    <td className="px-6 py-3 text-gray-300">{h.rol_en_proyecto || '—'}</td>
+                    <td className="px-6 py-3 text-right text-green-400 font-medium">${fmt(h.x_pagar)}</td>
                   </tr>
                 ))}
               </tbody>
