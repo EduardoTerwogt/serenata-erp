@@ -56,12 +56,16 @@ export default function CotizacionDetallePage({
   const [success, setSuccess] = useState<string | null>(null)
 
   // SICAM: listas completas cargadas al montar
-  const [listaClientes, setListaClientes] = useState<string[]>([])
+  const [listaClientes, setListaClientes] = useState<{ nombre: string; proyectos: string[] }[]>([])
   const [listaProductos, setListaProductos] = useState<Producto[]>([])
   // Autocomplete cliente
   const [clienteInput, setClienteInput] = useState('')
   const [clienteSugerencias, setClienteSugerencias] = useState<string[]>([])
   const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
+  // Autocomplete proyecto
+  const [proyectosDelCliente, setProyectosDelCliente] = useState<string[]>([])
+  const [proyectoInput, setProyectoInput] = useState('')
+  const [mostrarProyectoDropdown, setMostrarProyectoDropdown] = useState(false)
   // Autocomplete productos por fila
   const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
   const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
@@ -88,7 +92,7 @@ export default function CotizacionDetallePage({
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'ENVIADA'
 
   useEffect(() => {
-    fetch('/api/clientes?q=').then(r => r.json()).then(d => setListaClientes((d || []).map((c: { nombre: string }) => c.nombre))).catch(() => {})
+    fetch('/api/clientes?q=').then(r => r.json()).then(d => setListaClientes(d || [])).catch(() => {})
     fetch('/api/productos?q=').then(r => r.json()).then(d => setListaProductos(d || [])).catch(() => {})
   }, [])
 
@@ -99,6 +103,7 @@ export default function CotizacionDetallePage({
     ]).then(([cot, resp]) => {
       setCotizacion(cot)
       setClienteInput(cot.cliente || '')
+      setProyectoInput(cot.proyecto || '')
       setResponsables(resp)
       setPorcentajeFee(cot.porcentaje_fee ?? 0.15)
       setIvaActivo(cot.iva_activo ?? true)
@@ -168,13 +173,22 @@ export default function CotizacionDetallePage({
   const handleClienteChange = (valor: string) => {
     setClienteInput(valor)
     setValue('cliente', valor)
+    setProyectosDelCliente([])
     if (valor.length >= 2) {
-      const filtrados = listaClientes.filter(c => c.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
-      setClienteSugerencias(filtrados)
+      const filtrados = listaClientes.filter(c => c.nombre.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
+      setClienteSugerencias(filtrados.map(c => c.nombre))
       setMostrarClienteDropdown(filtrados.length > 0)
     } else {
       setMostrarClienteDropdown(false)
     }
+  }
+
+  // ── Handlers: proyecto autocomplete (filtro local sobre proyectos del cliente) ──
+  const handleProyectoChange = (valor: string) => {
+    setProyectoInput(valor)
+    setValue('proyecto', valor)
+    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(valor.toLowerCase()))
+    setMostrarProyectoDropdown(filtrados.length > 0)
   }
 
   // ── Handlers: producto autocomplete (filtro local) ──────────────────────────
@@ -503,8 +517,10 @@ export default function CotizacionDetallePage({
                       <div
                         key={i}
                         onMouseDown={() => {
+                          const cli = listaClientes.find(c => c.nombre === nombre)
                           setClienteInput(nombre)
                           setValue('cliente', nombre)
+                          setProyectosDelCliente(cli?.proyectos || [])
                           setMostrarClienteDropdown(false)
                         }}
                         className="px-4 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
@@ -519,9 +535,49 @@ export default function CotizacionDetallePage({
               <p className="text-white py-2">{watch('cliente') || '—'}</p>
             )}
           </div>
-          {/* Resto de campos generales */}
+          {/* Proyecto con autocomplete */}
+          <div className="relative">
+            <label className="block text-sm text-gray-400 mb-1">Proyecto</label>
+            {esEditable ? (
+              <>
+                <input
+                  value={proyectoInput}
+                  onChange={e => handleProyectoChange(e.target.value)}
+                  onFocus={() => {
+                    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
+                    if (filtrados.length > 0) setMostrarProyectoDropdown(true)
+                  }}
+                  onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)}
+                  autoComplete="off"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                />
+                {mostrarProyectoDropdown && (() => {
+                  const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
+                  return filtrados.length > 0 ? (
+                    <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                      {filtrados.map((proy, i) => (
+                        <div
+                          key={i}
+                          onMouseDown={() => {
+                            setProyectoInput(proy)
+                            setValue('proyecto', proy)
+                            setMostrarProyectoDropdown(false)
+                          }}
+                          className="px-4 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
+                        >
+                          {proy}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null
+                })()}
+              </>
+            ) : (
+              <p className="text-white py-2">{watch('proyecto') || '—'}</p>
+            )}
+          </div>
+          {/* Fecha de Entrega y Locación */}
           {[
-            { label: 'Proyecto', name: 'proyecto' as const },
             { label: 'Fecha de Entrega', name: 'fecha_entrega' as const, type: 'date' },
             { label: 'Locación', name: 'locacion' as const },
           ].map(({ label, name, type }) => (

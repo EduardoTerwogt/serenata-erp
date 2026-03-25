@@ -61,12 +61,16 @@ function NuevaCotizacionContent() {
   const isSubmitting = useRef(false)
 
   // SICAM: listas completas cargadas al montar
-  const [listaClientes, setListaClientes] = useState<string[]>([])
+  const [listaClientes, setListaClientes] = useState<{ nombre: string; proyectos: string[] }[]>([])
   const [listaProductos, setListaProductos] = useState<Producto[]>([])
   // Autocomplete cliente
   const [clienteInput, setClienteInput] = useState(clienteParam)
   const [clienteSugerencias, setClienteSugerencias] = useState<string[]>([])
   const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
+  // Autocomplete proyecto
+  const [proyectosDelCliente, setProyectosDelCliente] = useState<string[]>([])
+  const [proyectoInput, setProyectoInput] = useState(proyectoParam)
+  const [mostrarProyectoDropdown, setMostrarProyectoDropdown] = useState(false)
   // Autocomplete productos por fila
   const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
   const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
@@ -100,7 +104,7 @@ function NuevaCotizacionContent() {
   useEffect(() => {
     fetch('/api/folio').then(r => r.json()).then(d => setFolio(d.folio))
     fetch('/api/responsables').then(r => r.json()).then(setResponsables)
-    fetch('/api/clientes?q=').then(r => r.json()).then(d => setListaClientes((d || []).map((c: { nombre: string }) => c.nombre))).catch(() => {})
+    fetch('/api/clientes?q=').then(r => r.json()).then(d => setListaClientes(d || [])).catch(() => {})
     fetch('/api/productos?q=').then(r => r.json()).then(d => setListaProductos(d || [])).catch(() => {})
   }, [])
 
@@ -108,9 +112,11 @@ function NuevaCotizacionContent() {
   useEffect(() => {
     if (complementaria_de) {
       const cli = searchParams.get('cliente') || ''
+      const proy = searchParams.get('proyecto') || ''
       setValue('cliente', cli)
       setClienteInput(cli)
-      setValue('proyecto', searchParams.get('proyecto') || '')
+      setValue('proyecto', proy)
+      setProyectoInput(proy)
       setValue('locacion', searchParams.get('locacion') || '')
       setValue('fecha_entrega', searchParams.get('fecha_entrega') || '')
     }
@@ -142,13 +148,22 @@ function NuevaCotizacionContent() {
   const handleClienteChange = (valor: string) => {
     setClienteInput(valor)
     setValue('cliente', valor)
+    setProyectosDelCliente([])
     if (valor.length >= 2) {
-      const filtrados = listaClientes.filter(c => c.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
-      setClienteSugerencias(filtrados)
+      const filtrados = listaClientes.filter(c => c.nombre.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
+      setClienteSugerencias(filtrados.map(c => c.nombre))
       setMostrarClienteDropdown(filtrados.length > 0)
     } else {
       setMostrarClienteDropdown(false)
     }
+  }
+
+  // ── Handlers: proyecto autocomplete (filtro local sobre proyectos del cliente) ──
+  const handleProyectoChange = (valor: string) => {
+    setProyectoInput(valor)
+    setValue('proyecto', valor)
+    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(valor.toLowerCase()))
+    setMostrarProyectoDropdown(filtrados.length > 0)
   }
 
   // ── Handlers: producto autocomplete (filtro local) ──────────────────────────
@@ -333,8 +348,10 @@ function NuevaCotizacionContent() {
                       <div
                         key={i}
                         onMouseDown={() => {
+                          const cli = listaClientes.find(c => c.nombre === nombre)
                           setClienteInput(nombre)
                           setValue('cliente', nombre)
+                          setProyectosDelCliente(cli?.proyectos || [])
                           setMostrarClienteDropdown(false)
                         }}
                         className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
@@ -348,14 +365,50 @@ function NuevaCotizacionContent() {
             )}
           </div>
 
-          <div>
+          <div className="relative">
             <label className="block text-sm text-gray-400 mb-1">Proyecto *</label>
-            <input
-              {...register('proyecto', { required: true })}
-              readOnly={esComplementaria}
-              className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`}
-              placeholder="Nombre del proyecto"
-            />
+            {esComplementaria ? (
+              <input
+                value={proyectoInput}
+                readOnly
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white opacity-60 cursor-not-allowed"
+              />
+            ) : (
+              <>
+                <input
+                  value={proyectoInput}
+                  onChange={e => handleProyectoChange(e.target.value)}
+                  onFocus={() => {
+                    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
+                    if (filtrados.length > 0) setMostrarProyectoDropdown(true)
+                  }}
+                  onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)}
+                  autoComplete="off"
+                  placeholder="Nombre del proyecto"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                />
+                {mostrarProyectoDropdown && (() => {
+                  const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
+                  return filtrados.length > 0 ? (
+                    <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                      {filtrados.map((proy, i) => (
+                        <div
+                          key={i}
+                          onMouseDown={() => {
+                            setProyectoInput(proy)
+                            setValue('proyecto', proy)
+                            setMostrarProyectoDropdown(false)
+                          }}
+                          className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
+                        >
+                          {proy}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null
+                })()}
+              </>
+            )}
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">Fecha de Entrega</label>

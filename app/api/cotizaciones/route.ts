@@ -77,17 +77,35 @@ export async function POST(request: Request) {
       await upsertItems(itemsToInsert)
     }
 
-    // Auto-save cliente
+    // Auto-save cliente + proyecto
     if (cotizacionData.cliente) {
-      const { error: clienteError } = await supabaseAdmin
+      const proyecto = (cotizacionData.proyecto as string)?.trim() || ''
+      const { data: clienteExistente, error: clienteFetchError } = await supabaseAdmin
         .from('clientes')
-        .upsert({ nombre: cotizacionData.cliente }, { onConflict: 'nombre', ignoreDuplicates: true })
-      if (clienteError) console.error('[POST /api/cotizaciones] Error upsert cliente:', clienteError)
+        .select('id, proyectos')
+        .eq('nombre', cotizacionData.cliente)
+        .maybeSingle()
+      if (clienteFetchError) console.error('[POST /api/cotizaciones] Error buscando cliente:', clienteFetchError)
+      if (clienteExistente) {
+        const proyectosActuales: string[] = clienteExistente.proyectos || []
+        if (proyecto && !proyectosActuales.includes(proyecto)) {
+          const { error: updateError } = await supabaseAdmin
+            .from('clientes')
+            .update({ proyectos: [...proyectosActuales, proyecto] })
+            .eq('id', clienteExistente.id)
+          if (updateError) console.error('[POST /api/cotizaciones] Error actualizando proyectos del cliente:', updateError)
+        }
+      } else {
+        const { error: insertError } = await supabaseAdmin
+          .from('clientes')
+          .insert({ nombre: cotizacionData.cliente, proyectos: proyecto ? [proyecto] : [] })
+        if (insertError) console.error('[POST /api/cotizaciones] Error insertando cliente:', insertError)
+      }
     }
 
     // Auto-save productos de los items
     for (const item of (items as Partial<ItemCotizacion>[]) || []) {
-      if (item.descripcion?.trim() && (item.precio_unitario ?? 0) > 0) {
+      if (item.descripcion?.trim()) {
         const { error: prodError } = await supabaseAdmin
           .from('productos')
           .upsert({

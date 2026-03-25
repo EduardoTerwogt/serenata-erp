@@ -6,7 +6,7 @@ export async function GET(request: Request) {
 
   let query = supabaseAdmin
     .from('clientes')
-    .select('id, nombre')
+    .select('id, nombre, proyectos')
     .eq('activo', true)
     .order('nombre')
 

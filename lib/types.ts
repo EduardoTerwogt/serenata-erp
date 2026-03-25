@@ -57,6 +57,7 @@ export interface Producto {
 export interface Cliente {
   id: string
   nombre: string
+  proyectos: string[]
   activo: boolean
   created_at: string
 }

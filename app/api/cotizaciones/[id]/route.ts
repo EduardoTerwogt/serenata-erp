@@ -92,16 +92,36 @@ export async function PUT(
 
     const cotizacion = await updateCotizacion(id, cotizacionData)
 
-    // Auto-save cliente y productos (no bloquea ni muestra error al usuario)
+    // Auto-save cliente + proyecto (fire-and-forget)
     if (cotizacionData.cliente) {
+      const proyecto = (cotizacionData.proyecto as string)?.trim() || ''
       supabaseAdmin
         .from('clientes')
-        .upsert({ nombre: cotizacionData.cliente }, { onConflict: 'nombre', ignoreDuplicates: true })
-        .then(({ error }) => { if (error) console.error('[PUT /api/cotizaciones] Error upsert cliente:', error) })
+        .select('id, proyectos')
+        .eq('nombre', cotizacionData.cliente)
+        .maybeSingle()
+        .then(({ data: clienteExistente, error: clienteFetchError }) => {
+          if (clienteFetchError) { console.error('[PUT /api/cotizaciones] Error buscando cliente:', clienteFetchError); return }
+          if (clienteExistente) {
+            const proyectosActuales: string[] = clienteExistente.proyectos || []
+            if (proyecto && !proyectosActuales.includes(proyecto)) {
+              supabaseAdmin
+                .from('clientes')
+                .update({ proyectos: [...proyectosActuales, proyecto] })
+                .eq('id', clienteExistente.id)
+                .then(({ error }) => { if (error) console.error('[PUT /api/cotizaciones] Error actualizando proyectos del cliente:', error) })
+            }
+          } else {
+            supabaseAdmin
+              .from('clientes')
+              .insert({ nombre: cotizacionData.cliente, proyectos: proyecto ? [proyecto] : [] })
+              .then(({ error }) => { if (error) console.error('[PUT /api/cotizaciones] Error insertando cliente:', error) })
+          }
+        })
     }
     if (items) {
       for (const item of (items as Partial<ItemCotizacion>[]) || []) {
-        if (item.descripcion?.trim() && (item.precio_unitario ?? 0) > 0) {
+        if (item.descripcion?.trim()) {
           supabaseAdmin
             .from('productos')
             .upsert({
