@@ -77,12 +77,27 @@ export async function POST(request: Request) {
       await upsertItems(itemsToInsert)
     }
 
-    // Auto-create client in clientes table if not exists
+    // Auto-save cliente
     if (cotizacionData.cliente) {
       const { error: clienteError } = await supabaseAdmin
         .from('clientes')
         .upsert({ nombre: cotizacionData.cliente }, { onConflict: 'nombre', ignoreDuplicates: true })
       if (clienteError) console.error('[POST /api/cotizaciones] Error upsert cliente:', clienteError)
+    }
+
+    // Auto-save productos de los items
+    for (const item of (items as Partial<ItemCotizacion>[]) || []) {
+      if (item.descripcion?.trim() && (item.precio_unitario ?? 0) > 0) {
+        const { error: prodError } = await supabaseAdmin
+          .from('productos')
+          .upsert({
+            descripcion: item.descripcion.trim(),
+            categoria: (item.categoria as string)?.trim() || '',
+            precio_unitario: item.precio_unitario,
+            x_pagar_sugerido: item.x_pagar || 0,
+          }, { onConflict: 'descripcion', ignoreDuplicates: true })
+        if (prodError) console.error('[POST /api/cotizaciones] Error upsert producto:', prodError)
+      }
     }
 
     return Response.json(cotizacion, { status: 201 })

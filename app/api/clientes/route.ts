@@ -2,19 +2,24 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const q = searchParams.get('q') || ''
-  const { data, error } = await supabaseAdmin
+  const q = searchParams.get('q') ?? ''
+
+  let query = supabaseAdmin
     .from('clientes')
     .select('id, nombre')
-    .ilike('nombre', `%${q}%`)
     .eq('activo', true)
     .order('nombre')
-    .limit(10)
+
+  if (q) {
+    query = query.ilike('nombre', `%${q}%`).limit(10)
+  }
+
+  const { data, error } = await query
   if (error) {
     console.error('[GET /api/clientes] Error:', error)
     return Response.json({ error: error.message }, { status: 500 })
   }
-  console.log('[GET /api/clientes] q:', q, '| encontrados:', data?.length ?? 0)
+  console.log('[GET /api/clientes] q:', q || '(todos)', '| encontrados:', data?.length ?? 0)
   return Response.json(data || [])
 }
 

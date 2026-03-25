@@ -60,14 +60,16 @@ function NuevaCotizacionContent() {
   const [error, setError] = useState<string | null>(null)
   const isSubmitting = useRef(false)
 
-  // Autocomplete clientes
-  const [clienteSugerencias, setClienteSugerencias] = useState<{ id: string; nombre: string }[]>([])
-  const [showClienteSugerencias, setShowClienteSugerencias] = useState(false)
-  const clienteTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
-
+  // SICAM: listas completas cargadas al montar
+  const [listaClientes, setListaClientes] = useState<string[]>([])
+  const [listaProductos, setListaProductos] = useState<Producto[]>([])
+  // Autocomplete cliente
+  const [clienteInput, setClienteInput] = useState(clienteParam)
+  const [clienteSugerencias, setClienteSugerencias] = useState<string[]>([])
+  const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
   // Autocomplete productos por fila
-  const [productoDropdowns, setProductoDropdowns] = useState<Record<number, { results: Producto[]; show: boolean }>>({})
-  const productoTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+  const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
+  const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
 
   // Modal nuevo producto
   const [modalProducto, setModalProducto] = useState<{
@@ -98,12 +100,16 @@ function NuevaCotizacionContent() {
   useEffect(() => {
     fetch('/api/folio').then(r => r.json()).then(d => setFolio(d.folio))
     fetch('/api/responsables').then(r => r.json()).then(setResponsables)
+    fetch('/api/clientes?q=').then(r => r.json()).then(d => setListaClientes((d || []).map((c: { nombre: string }) => c.nombre))).catch(() => {})
+    fetch('/api/productos?q=').then(r => r.json()).then(d => setListaProductos(d || [])).catch(() => {})
   }, [])
 
   // Pre-fill readonly fields when creating a complementary quote
   useEffect(() => {
     if (complementaria_de) {
-      setValue('cliente', searchParams.get('cliente') || '')
+      const cli = searchParams.get('cliente') || ''
+      setValue('cliente', cli)
+      setClienteInput(cli)
       setValue('proyecto', searchParams.get('proyecto') || '')
       setValue('locacion', searchParams.get('locacion') || '')
       setValue('fecha_entrega', searchParams.get('fecha_entrega') || '')
@@ -132,47 +138,37 @@ function NuevaCotizacionContent() {
     return { subtotal, fee_agencia, general, descuento, iva, total, margen_total, utilidad_total }
   })()
 
-  // ── Handlers: cliente autocomplete ─────────────────────────────────────────
-  const handleClienteInput = (value: string) => {
-    if (clienteTimeout.current) clearTimeout(clienteTimeout.current)
-    if (value.length >= 3) {
-      clienteTimeout.current = setTimeout(async () => {
-        const res = await fetch(`/api/clientes?q=${encodeURIComponent(value)}`)
-        const data = await res.json()
-        console.log('[cliente autocomplete] q:', value, '| encontrados:', Array.isArray(data) ? data.length : data)
-        setClienteSugerencias(Array.isArray(data) ? data : [])
-        setShowClienteSugerencias(Array.isArray(data) && data.length > 0)
-      }, 300)
+  // ── Handlers: cliente autocomplete (filtro local) ───────────────────────────
+  const handleClienteChange = (valor: string) => {
+    setClienteInput(valor)
+    setValue('cliente', valor)
+    if (valor.length >= 2) {
+      const filtrados = listaClientes.filter(c => c.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
+      setClienteSugerencias(filtrados)
+      setMostrarClienteDropdown(filtrados.length > 0)
     } else {
-      setClienteSugerencias([])
-      setShowClienteSugerencias(false)
+      setMostrarClienteDropdown(false)
     }
   }
 
-  // ── Handlers: producto autocomplete ────────────────────────────────────────
-  const handleProductoInput = (index: number, value: string) => {
-    if (productoTimeouts.current[index]) clearTimeout(productoTimeouts.current[index])
-    if (value.length >= 2) {
-      productoTimeouts.current[index] = setTimeout(async () => {
-        const res = await fetch(`/api/productos?q=${encodeURIComponent(value)}`)
-        const data = await res.json()
-        console.log('[producto autocomplete] index:', index, '| q:', value, '| encontrados:', Array.isArray(data) ? data.length : data)
-        setProductoDropdowns(prev => ({
-          ...prev,
-          [index]: { results: Array.isArray(data) ? data : [], show: Array.isArray(data) && data.length > 0 },
-        }))
-      }, 300)
+  // ── Handlers: producto autocomplete (filtro local) ──────────────────────────
+  const handleDescripcionChange = (index: number, valor: string) => {
+    setValue(`items.${index}.descripcion`, valor)
+    if (valor.length >= 2) {
+      const filtrados = listaProductos.filter(p => p.descripcion.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
+      setProductoSugerencias(prev => ({ ...prev, [index]: filtrados }))
+      setMostrarProductoDropdown(prev => ({ ...prev, [index]: filtrados.length > 0 }))
     } else {
-      setProductoDropdowns(prev => ({ ...prev, [index]: { results: [], show: false } }))
+      setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
     }
   }
 
-  const selectProducto = (index: number, p: Producto) => {
+  const seleccionarProducto = (index: number, p: Producto) => {
     setValue(`items.${index}.descripcion`, p.descripcion)
     setValue(`items.${index}.categoria`, p.categoria || '')
-    setValue(`items.${index}.precio_unitario`, p.precio_unitario)
-    setValue(`items.${index}.x_pagar`, p.x_pagar_sugerido || 0)
-    setProductoDropdowns(prev => ({ ...prev, [index]: { results: [], show: false } }))
+    if (p.precio_unitario > 0) setValue(`items.${index}.precio_unitario`, p.precio_unitario)
+    if ((p.x_pagar_sugerido || 0) > 0) setValue(`items.${index}.x_pagar`, p.x_pagar_sugerido || 0)
+    setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
   }
 
   const guardarModalProducto = async () => {
@@ -190,7 +186,7 @@ function NuevaCotizacionContent() {
       })
       if (!res.ok) return
       const p = await res.json()
-      selectProducto(modalProducto.rowIndex, p)
+      seleccionarProducto(modalProducto.rowIndex, p)
       setModalProducto(prev => ({ ...prev, show: false }))
     } catch { /* handle silently */ }
   }
@@ -316,37 +312,35 @@ function NuevaCotizacionContent() {
             <label className="block text-sm text-gray-400 mb-1">Cliente *</label>
             {esComplementaria ? (
               <input
-                {...register('cliente', { required: true })}
+                value={clienteInput}
                 readOnly
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white opacity-60 cursor-not-allowed"
               />
             ) : (
               <>
                 <input
-                  {...register('cliente', { required: true })}
-                  onChange={(e) => {
-                    setValue('cliente', e.target.value)
-                    handleClienteInput(e.target.value)
-                  }}
-                  onBlur={() => setTimeout(() => setShowClienteSugerencias(false), 150)}
+                  value={clienteInput}
+                  onChange={e => handleClienteChange(e.target.value)}
+                  onFocus={() => clienteSugerencias.length > 0 && setMostrarClienteDropdown(true)}
+                  onBlur={() => setTimeout(() => setMostrarClienteDropdown(false), 200)}
                   autoComplete="off"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                   placeholder="Nombre del cliente"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                 />
-                {showClienteSugerencias && (
-                  <div className="absolute z-10 mt-1 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                    {clienteSugerencias.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
+                {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    {clienteSugerencias.map((nombre, i) => (
+                      <div
+                        key={i}
                         onMouseDown={() => {
-                          setValue('cliente', c.nombre)
-                          setShowClienteSugerencias(false)
+                          setClienteInput(nombre)
+                          setValue('cliente', nombre)
+                          setMostrarClienteDropdown(false)
                         }}
-                        className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-700"
+                        className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
                       >
-                        {c.nombre}
-                      </button>
+                        {nombre}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -427,11 +421,9 @@ function NuevaCotizacionContent() {
                         <div className="flex gap-1">
                           <input
                             {...register(`items.${index}.descripcion`)}
-                            onChange={(e) => {
-                              setValue(`items.${index}.descripcion`, e.target.value)
-                              handleProductoInput(index, e.target.value)
-                            }}
-                            onBlur={() => setTimeout(() => setProductoDropdowns(prev => ({ ...prev, [index]: { ...prev[index], show: false } })), 150)}
+                            onChange={e => handleDescripcionChange(index, e.target.value)}
+                            onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))}
+                            onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200)}
                             className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
                             placeholder="Descripción"
                             autoComplete="off"
@@ -443,18 +435,17 @@ function NuevaCotizacionContent() {
                             title="Nuevo producto"
                           >+</button>
                         </div>
-                        {productoDropdowns[index]?.show && productoDropdowns[index]?.results?.length > 0 && (
-                          <div className="absolute z-10 mt-1 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                            {productoDropdowns[index].results.map(p => (
-                              <button
-                                key={p.id}
-                                type="button"
-                                onMouseDown={() => selectProducto(index, p)}
-                                className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-700"
+                        {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && (
+                          <div className="absolute z-50 mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                            {productoSugerencias[index].map((p, i) => (
+                              <div
+                                key={i}
+                                onMouseDown={() => seleccionarProducto(index, p)}
+                                className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
                               >
                                 <div className="font-medium">{p.descripcion}</div>
                                 {p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}
-                              </button>
+                              </div>
                             ))}
                           </div>
                         )}

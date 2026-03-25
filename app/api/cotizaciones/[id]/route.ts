@@ -7,6 +7,7 @@ import {
   getItemsByCotizacion,
 } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export async function GET(
   _request: Request,
@@ -90,6 +91,30 @@ export async function PUT(
     }
 
     const cotizacion = await updateCotizacion(id, cotizacionData)
+
+    // Auto-save cliente y productos (no bloquea ni muestra error al usuario)
+    if (cotizacionData.cliente) {
+      supabaseAdmin
+        .from('clientes')
+        .upsert({ nombre: cotizacionData.cliente }, { onConflict: 'nombre', ignoreDuplicates: true })
+        .then(({ error }) => { if (error) console.error('[PUT /api/cotizaciones] Error upsert cliente:', error) })
+    }
+    if (items) {
+      for (const item of (items as Partial<ItemCotizacion>[]) || []) {
+        if (item.descripcion?.trim() && (item.precio_unitario ?? 0) > 0) {
+          supabaseAdmin
+            .from('productos')
+            .upsert({
+              descripcion: item.descripcion.trim(),
+              categoria: (item.categoria as string)?.trim() || '',
+              precio_unitario: item.precio_unitario,
+              x_pagar_sugerido: item.x_pagar || 0,
+            }, { onConflict: 'descripcion', ignoreDuplicates: true })
+            .then(({ error }) => { if (error) console.error('[PUT /api/cotizaciones] Error upsert producto:', error) })
+        }
+      }
+    }
+
     return Response.json(cotizacion)
   } catch (error) {
     console.error(error)

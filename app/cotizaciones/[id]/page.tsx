@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, use } from 'react'
+import { useEffect, useState, use } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
 import { Cotizacion, Responsable, ItemCotizacion, Producto } from '@/lib/types'
@@ -55,9 +55,16 @@ export default function CotizacionDetallePage({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  // SICAM: listas completas cargadas al montar
+  const [listaClientes, setListaClientes] = useState<string[]>([])
+  const [listaProductos, setListaProductos] = useState<Producto[]>([])
+  // Autocomplete cliente
+  const [clienteInput, setClienteInput] = useState('')
+  const [clienteSugerencias, setClienteSugerencias] = useState<string[]>([])
+  const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
   // Autocomplete productos por fila
-  const [productoDropdowns, setProductoDropdowns] = useState<Record<number, { results: Producto[]; show: boolean }>>({})
-  const productoTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+  const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
+  const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
 
   // Modal nuevo producto
   const [modalProducto, setModalProducto] = useState<{
@@ -81,11 +88,17 @@ export default function CotizacionDetallePage({
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'ENVIADA'
 
   useEffect(() => {
+    fetch('/api/clientes?q=').then(r => r.json()).then(d => setListaClientes((d || []).map((c: { nombre: string }) => c.nombre))).catch(() => {})
+    fetch('/api/productos?q=').then(r => r.json()).then(d => setListaProductos(d || [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
     Promise.all([
       fetch(`/api/cotizaciones/${id}`).then(r => r.json()),
       fetch('/api/responsables').then(r => r.json()),
     ]).then(([cot, resp]) => {
       setCotizacion(cot)
+      setClienteInput(cot.cliente || '')
       setResponsables(resp)
       setPorcentajeFee(cot.porcentaje_fee ?? 0.15)
       setIvaActivo(cot.iva_activo ?? true)
@@ -151,30 +164,37 @@ export default function CotizacionDetallePage({
     }
   })()
 
-  // ── Handlers: producto autocomplete ────────────────────────────────────────
-  const handleProductoInput = (index: number, value: string) => {
-    if (productoTimeouts.current[index]) clearTimeout(productoTimeouts.current[index])
-    if (value.length >= 2) {
-      productoTimeouts.current[index] = setTimeout(async () => {
-        const res = await fetch(`/api/productos?q=${encodeURIComponent(value)}`)
-        const data = await res.json()
-        console.log('[producto autocomplete] index:', index, '| q:', value, '| encontrados:', Array.isArray(data) ? data.length : data)
-        setProductoDropdowns(prev => ({
-          ...prev,
-          [index]: { results: Array.isArray(data) ? data : [], show: Array.isArray(data) && data.length > 0 },
-        }))
-      }, 300)
+  // ── Handlers: cliente autocomplete (filtro local) ───────────────────────────
+  const handleClienteChange = (valor: string) => {
+    setClienteInput(valor)
+    setValue('cliente', valor)
+    if (valor.length >= 2) {
+      const filtrados = listaClientes.filter(c => c.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
+      setClienteSugerencias(filtrados)
+      setMostrarClienteDropdown(filtrados.length > 0)
     } else {
-      setProductoDropdowns(prev => ({ ...prev, [index]: { results: [], show: false } }))
+      setMostrarClienteDropdown(false)
     }
   }
 
-  const selectProducto = (index: number, p: Producto) => {
+  // ── Handlers: producto autocomplete (filtro local) ──────────────────────────
+  const handleDescripcionChange = (index: number, valor: string) => {
+    setValue(`items.${index}.descripcion`, valor)
+    if (valor.length >= 2) {
+      const filtrados = listaProductos.filter(p => p.descripcion.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
+      setProductoSugerencias(prev => ({ ...prev, [index]: filtrados }))
+      setMostrarProductoDropdown(prev => ({ ...prev, [index]: filtrados.length > 0 }))
+    } else {
+      setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
+    }
+  }
+
+  const seleccionarProducto = (index: number, p: Producto) => {
     setValue(`items.${index}.descripcion`, p.descripcion)
     setValue(`items.${index}.categoria`, p.categoria || '')
-    setValue(`items.${index}.precio_unitario`, p.precio_unitario)
-    setValue(`items.${index}.x_pagar`, p.x_pagar_sugerido || 0)
-    setProductoDropdowns(prev => ({ ...prev, [index]: { results: [], show: false } }))
+    if (p.precio_unitario > 0) setValue(`items.${index}.precio_unitario`, p.precio_unitario)
+    if ((p.x_pagar_sugerido || 0) > 0) setValue(`items.${index}.x_pagar`, p.x_pagar_sugerido || 0)
+    setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
   }
 
   const guardarModalProducto = async () => {
@@ -192,7 +212,7 @@ export default function CotizacionDetallePage({
       })
       if (!res.ok) return
       const p = await res.json()
-      selectProducto(modalProducto.rowIndex, p)
+      seleccionarProducto(modalProducto.rowIndex, p)
       setModalProducto(prev => ({ ...prev, show: false }))
     } catch { /* handle silently */ }
   }
@@ -464,8 +484,43 @@ export default function CotizacionDetallePage({
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
         <h2 className="text-lg font-semibold text-white mb-4">Información General</h2>
         <div className="grid grid-cols-2 gap-4">
+          {/* Cliente con autocomplete */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Cliente</label>
+            {esEditable ? (
+              <div className="relative">
+                <input
+                  value={clienteInput}
+                  onChange={e => handleClienteChange(e.target.value)}
+                  onFocus={() => clienteSugerencias.length > 0 && setMostrarClienteDropdown(true)}
+                  onBlur={() => setTimeout(() => setMostrarClienteDropdown(false), 200)}
+                  autoComplete="off"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                />
+                {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    {clienteSugerencias.map((nombre, i) => (
+                      <div
+                        key={i}
+                        onMouseDown={() => {
+                          setClienteInput(nombre)
+                          setValue('cliente', nombre)
+                          setMostrarClienteDropdown(false)
+                        }}
+                        className="px-4 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
+                      >
+                        {nombre}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-white py-2">{watch('cliente') || '—'}</p>
+            )}
+          </div>
+          {/* Resto de campos generales */}
           {[
-            { label: 'Cliente', name: 'cliente' as const },
             { label: 'Proyecto', name: 'proyecto' as const },
             { label: 'Fecha de Entrega', name: 'fecha_entrega' as const, type: 'date' },
             { label: 'Locación', name: 'locacion' as const },
@@ -536,11 +591,9 @@ export default function CotizacionDetallePage({
                           <div className="flex gap-1">
                             <input
                               {...register(`items.${index}.descripcion`)}
-                              onChange={(e) => {
-                                setValue(`items.${index}.descripcion`, e.target.value)
-                                handleProductoInput(index, e.target.value)
-                              }}
-                              onBlur={() => setTimeout(() => setProductoDropdowns(prev => ({ ...prev, [index]: { ...prev[index], show: false } })), 150)}
+                              onChange={e => handleDescripcionChange(index, e.target.value)}
+                              onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))}
+                              onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200)}
                               className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
                               autoComplete="off"
                             />
@@ -551,18 +604,17 @@ export default function CotizacionDetallePage({
                               title="Nuevo producto"
                             >+</button>
                           </div>
-                          {productoDropdowns[index]?.show && productoDropdowns[index]?.results?.length > 0 && (
-                            <div className="absolute z-10 mt-1 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                              {productoDropdowns[index].results.map(p => (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onMouseDown={() => selectProducto(index, p)}
-                                  className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-700"
+                          {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && (
+                            <div className="absolute z-50 mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                              {productoSugerencias[index].map((p, i) => (
+                                <div
+                                  key={i}
+                                  onMouseDown={() => seleccionarProducto(index, p)}
+                                  className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
                                 >
                                   <div className="font-medium">{p.descripcion}</div>
                                   {p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}
-                                </button>
+                                </div>
                               ))}
                             </div>
                           )}
