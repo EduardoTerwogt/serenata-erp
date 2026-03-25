@@ -37,24 +37,25 @@ export default function ResponsableDetallePage({
   const { register, handleSubmit, reset } = useForm<ResponsableForm>()
 
   useEffect(() => {
-    fetch(`/api/responsables/${id}`)
-      .then(r => r.json())
-      .then(data => {
-        setResponsable(data)
-        setRoles(data.roles || [])
-        setHistorial(data.historial_responsable || [])
-        reset({
-          nombre: data.nombre,
-          telefono: data.telefono || '',
-          correo: data.correo || '',
-          banco: data.banco || '',
-          clabe: data.clabe || '',
-          notas: data.notas || '',
-          activo: data.activo,
-        })
-        setLoading(false)
+    Promise.all([
+      fetch(`/api/responsables/${id}`).then(r => r.json()),
+      fetch(`/api/responsables/${id}/historial`).then(r => r.json()).catch(() => []),
+    ]).then(([data, hist]) => {
+      setResponsable(data)
+      setRoles(data.roles || [])
+      // Prefer dedicated historial endpoint; fallback to joined data
+      setHistorial(Array.isArray(hist) && hist.length > 0 ? hist : (data.historial_responsable || []))
+      reset({
+        nombre: data.nombre,
+        telefono: data.telefono || '',
+        correo: data.correo || '',
+        banco: data.banco || '',
+        clabe: data.clabe || '',
+        notas: data.notas || '',
+        activo: data.activo,
       })
-      .catch(() => setLoading(false))
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [id, reset])
 
   const agregarRol = () => {
@@ -240,7 +241,7 @@ export default function ResponsableDetallePage({
 
         {historial.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-sm">
-            Sin historial de proyectos aún
+            Aún no hay proyectos registrados
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -248,8 +249,7 @@ export default function ResponsableDetallePage({
               <thead>
                 <tr className="border-b border-gray-800">
                   <th className="text-left text-gray-400 font-medium px-6 py-3">Proyecto</th>
-                  <th className="text-left text-gray-400 font-medium px-6 py-3">Cliente</th>
-                  <th className="text-left text-gray-400 font-medium px-6 py-3">Fecha</th>
+                  <th className="text-left text-gray-400 font-medium px-6 py-3">Fecha del Evento</th>
                   <th className="text-left text-gray-400 font-medium px-6 py-3">Rol</th>
                   <th className="text-right text-gray-400 font-medium px-6 py-3">Monto</th>
                 </tr>
@@ -257,8 +257,10 @@ export default function ResponsableDetallePage({
               <tbody>
                 {historial.map(h => (
                   <tr key={h.id} className="border-b border-gray-800/50">
-                    <td className="px-6 py-3 text-white font-medium">{h.proyecto}</td>
-                    <td className="px-6 py-3 text-gray-400">{h.cliente}</td>
+                    <td className="px-6 py-3">
+                      <p className="text-white font-medium">{h.proyecto}</p>
+                      <p className="text-gray-500 text-xs">{h.cliente}</p>
+                    </td>
                     <td className="px-6 py-3 text-gray-400">{h.fecha_entrega || '—'}</td>
                     <td className="px-6 py-3 text-gray-300">{h.rol || '—'}</td>
                     <td className="px-6 py-3 text-right text-green-400 font-medium">${fmt(h.monto)}</td>
@@ -267,7 +269,7 @@ export default function ResponsableDetallePage({
               </tbody>
               <tfoot>
                 <tr className="border-t border-gray-700">
-                  <td colSpan={4} className="px-6 py-3 text-gray-400 font-medium">Total</td>
+                  <td colSpan={3} className="px-6 py-3 text-gray-400 font-medium">Total</td>
                   <td className="px-6 py-3 text-right text-green-400 font-bold">${fmt(totalGanado)}</td>
                 </tr>
               </tfoot>

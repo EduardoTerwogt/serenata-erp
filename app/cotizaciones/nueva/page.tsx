@@ -128,6 +128,7 @@ function NuevaCotizacionContent() {
       clienteTimeout.current = setTimeout(async () => {
         const res = await fetch(`/api/clientes?q=${encodeURIComponent(value)}`)
         const data = await res.json()
+        console.log('[cliente autocomplete] q:', value, '| encontrados:', Array.isArray(data) ? data.length : data)
         setClienteSugerencias(Array.isArray(data) ? data : [])
         setShowClienteSugerencias(Array.isArray(data) && data.length > 0)
       }, 300)
@@ -144,6 +145,7 @@ function NuevaCotizacionContent() {
       productoTimeouts.current[index] = setTimeout(async () => {
         const res = await fetch(`/api/productos?q=${encodeURIComponent(value)}`)
         const data = await res.json()
+        console.log('[producto autocomplete] index:', index, '| q:', value, '| encontrados:', Array.isArray(data) ? data.length : data)
         setProductoDropdowns(prev => ({
           ...prev,
           [index]: { results: Array.isArray(data) ? data : [], show: Array.isArray(data) && data.length > 0 },

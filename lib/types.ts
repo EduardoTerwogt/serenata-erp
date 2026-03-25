@@ -103,6 +103,7 @@ export interface CuentaPagar {
   id: string
   cotizacion_id: string
   proyecto_id: string
+  proyecto_nombre?: string
   responsable_id: string | null
   responsable_nombre: string
   item_descripcion: string | null

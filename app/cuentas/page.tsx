@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { CuentaCobrar, CuentaPagar, EstadoPago } from '@/lib/types'
 
 type Tab = 'cobrar' | 'pagar'
@@ -136,6 +137,7 @@ export default function CuentasPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-800">
+                          <th className="text-left text-gray-400 font-medium px-6 py-3">Folio</th>
                           <th className="text-left text-gray-400 font-medium px-6 py-3">Cliente</th>
                           <th className="text-left text-gray-400 font-medium px-6 py-3">Proyecto</th>
                           <th className="text-right text-gray-400 font-medium px-6 py-3">Monto</th>
@@ -147,6 +149,11 @@ export default function CuentasPage() {
                       <tbody>
                         {cobrar.map(c => (
                           <tr key={c.id} className="border-b border-gray-800/50">
+                            <td className="px-6 py-4">
+                              <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm">
+                                {c.cotizacion_id}
+                              </Link>
+                            </td>
                             <td className="px-6 py-4 text-white font-medium">{c.cliente}</td>
                             <td className="px-6 py-4 text-gray-300">{c.proyecto}</td>
                             <td className="px-6 py-4 text-right text-white font-bold">${fmt(c.monto_total)}</td>
@@ -212,6 +219,8 @@ export default function CuentasPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-800">
+                          <th className="text-left text-gray-400 font-medium px-4 py-3">Folio</th>
+                          <th className="text-left text-gray-400 font-medium px-4 py-3">Proyecto</th>
                           <th className="text-left text-gray-400 font-medium px-4 py-3">Responsable</th>
                           <th className="text-left text-gray-400 font-medium px-4 py-3">Descripción</th>
                           <th className="text-right text-gray-400 font-medium px-4 py-3">Monto</th>
@@ -224,6 +233,12 @@ export default function CuentasPage() {
                       <tbody>
                         {pagar.map(c => (
                           <tr key={c.id} className="border-b border-gray-800/50">
+                            <td className="px-4 py-3">
+                              <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm">
+                                {c.cotizacion_id}
+                              </Link>
+                            </td>
+                            <td className="px-4 py-3 text-gray-300 text-sm">{c.proyecto_nombre || '—'}</td>
                             <td className="px-4 py-3">
                               <p className="text-white font-medium">{c.responsable_nombre}</p>
                               {c.correo && <p className="text-gray-500 text-xs">{c.correo}</p>}

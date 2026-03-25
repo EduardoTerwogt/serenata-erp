@@ -11,6 +11,7 @@ export async function GET(request: Request) {
     .order('descripcion')
     .limit(10)
   if (error) return Response.json({ error: error.message }, { status: 500 })
+  console.log('[GET /api/productos] q:', q, '| encontrados:', data?.length ?? 0)
   return Response.json(data || [])
 }
 
