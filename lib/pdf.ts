@@ -42,8 +42,12 @@ function formatFecha(fecha: string | null): string {
 }
 
 function fmtPDF(n: number): string {
-  return '-$ ' + (n || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '-'
+  return '$ ' + (n || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+
+// Aspect ratios derived from actual PNG pixel dimensions (447×448 and 441×62)
+const ISO_RATIO = 447 / 448       // ≈ 1.0 (square)
+const SERENATA_RATIO = 441 / 62   // ≈ 7.11 (wide horizontal)
 
 // Helper: load a (possibly truncated) data-URI through the browser Image→Canvas
 // pipeline and re-export as a complete PNG data URL that jsPDF can parse reliably.
@@ -106,9 +110,11 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     },
   })
 
-  // ISO logo — top right
+  // ISO logo — top right, exact aspect ratio (447×448 ≈ square)
   if (isoLogoPng) {
-    try { doc.addImage(isoLogoPng, 163, 8, 30, 30) } catch { /* skip */ }
+    const isoH = 30
+    const isoW = isoH * ISO_RATIO  // ≈ 30mm
+    try { doc.addImage(isoLogoPng, 163, 8, isoW, isoH) } catch { /* skip */ }
   }
 
   let currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
@@ -129,13 +135,17 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const itemsBody: any[][] = []
-  categories.forEach(cat => {
+  categories.forEach((cat, catIdx) => {
     const catItems = data.items.filter(i => i.categoria === cat)
     const catTotal = catItems.reduce((s, i) => s + (i.importe || 0), 0)
+    // Blank spacer row between categories (not before the first one)
+    if (catIdx > 0) {
+      itemsBody.push([{ content: '', colSpan: 6, styles: { minCellHeight: 3 } }])
+    }
     catItems.forEach((item, idx) => {
       const noPrice = !item.precio_unitario || !item.cantidad
-      const precioCell = noPrice ? '-$ - ,00-' : fmtPDF(item.precio_unitario)
-      const importeCell = noPrice ? '-$ - ,00-' : fmtPDF(item.importe)
+      const precioCell = noPrice ? '$ - ,00' : fmtPDF(item.precio_unitario)
+      const importeCell = noPrice ? '$ - ,00' : fmtPDF(item.importe)
       itemsBody.push([
         idx === 0
           ? { content: cat, styles: { fontStyle: 'bolditalic' } }
@@ -161,7 +171,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
       fontStyle: 'bold',
       fontSize: 9,
     },
-    alternateRowStyles: { fillColor: [249, 249, 249] as [number, number, number] },
+    alternateRowStyles: { fillColor: [255, 255, 255] as [number, number, number] },
     columnStyles: {
       0: { cellWidth: 28 },
       1: { cellWidth: 58 },
@@ -185,9 +195,9 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     { label: 'TOTAL', value: fmtPDF(data.total), bold: true, orange: false },
   ]
 
-  const rowH = 7
-  const bannerPad = 5
-  const bannerH = Math.max(totalsRows.length * rowH + bannerPad * 2, 34)
+  const rowH = 5.5  // compact row height
+  const bannerPad = 6
+  const bannerH = Math.max(totalsRows.length * rowH + bannerPad * 2, 40)
 
   if (currentY + bannerH > 270) { doc.addPage(); currentY = 15 }
 
@@ -195,30 +205,31 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFillColor(20, 20, 20)
   doc.rect(margin, currentY, contentW, bannerH, 'F')
 
-  // SERENATA logo — left side, vertically centered in banner
+  // SERENATA logo — left ~55% of banner, exact aspect ratio (no deformation)
   if (serenataLogoPng) {
-    const logoW = 70
-    const logoH = 17
-    const logoX = margin + 4
+    const logoW = contentW * 0.55          // 55% of banner width
+    const logoH = logoW / SERENATA_RATIO   // height derived from width, ratio 7.11
+    const logoX = margin + 6
     const logoY = currentY + (bannerH - logoH) / 2
     try { doc.addImage(serenataLogoPng, logoX, logoY, logoW, logoH) } catch { /* skip */ }
   }
 
-  // Totals rows — right side
-  const totalsLabelX = margin + 88
-  const totalsValueX = margin + contentW - 3
-  let ty = currentY + bannerPad + 3.5
+  // Totals rows — compact, pushed to the right
+  // Labels right-aligned at labelX, values right-aligned at valueX
+  const labelX = margin + contentW - 70   // labels right edge (leaves 70mm for label+value)
+  const valueX = margin + contentW - 3    // values right edge
+  let ty = currentY + bannerPad + 1
 
   totalsRows.forEach(row => {
     doc.setFont('helvetica', row.bold ? 'bold' : 'normal')
-    doc.setFontSize(9)
+    doc.setFontSize(8.5)
     if (row.orange) {
       doc.setTextColor(255, 128, 0)
     } else {
       doc.setTextColor(255, 255, 255)
     }
-    doc.text(row.label, totalsLabelX, ty)
-    doc.text(row.value, totalsValueX, ty, { align: 'right' })
+    doc.text(row.label, labelX, ty, { align: 'right' })
+    doc.text(row.value, valueX, ty, { align: 'right' })
     ty += rowH
   })
 
