@@ -57,7 +57,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
         {/* Nav */}
         <nav className="p-4 space-y-1">
-          {NAV_LINKS.map(({ href, icon, label }) => (
+          {NAV_LINKS.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
