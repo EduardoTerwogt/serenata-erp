@@ -525,13 +525,9 @@ function NuevaCotizacionContent() {
                       <select
                         {...register(`items.${index}.responsable_id`)}
                         onChange={(e) => {
+                          setValue(`items.${index}.responsable_id`, e.target.value)
                           const r = responsables.find(r => r.id === e.target.value)
-                          if (r) {
-                            const input = document.querySelector<HTMLInputElement>(
-                              `input[name="items.${index}.responsable_nombre"]`
-                            )
-                            if (input) input.value = r.nombre
-                          }
+                          setValue(`items.${index}.responsable_nombre`, r?.nombre ?? '')
                         }}
                         className="w-36 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
                       >
