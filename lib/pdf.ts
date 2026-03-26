@@ -42,16 +42,37 @@ function formatFecha(fecha: string | null): string {
 }
 
 function fmtPDF(n: number): string {
-  return '$ ' + (n || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return '-$ ' + (n || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '-'
 }
 
-// Strip the data URI prefix so jsPDF receives plain base64
-const ISO_LOGO_B64 = ISO_LOGO.split(',')[1]
-const SERENATA_LOGO_B64 = SERENATA_LOGO.split(',')[1]
+// Helper: load a (possibly truncated) data-URI through the browser Image→Canvas
+// pipeline and re-export as a complete PNG data URL that jsPDF can parse reliably.
+async function loadImageAsDataUrl(dataUri: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('No canvas context')); return }
+      ctx.drawImage(img, 0, 0)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = reject
+    img.src = dataUri
+  })
+}
 
 export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   const { default: jsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
+
+  // Pre-load logos through canvas to fix truncated JPEG data
+  let isoLogoPng: string | null = null
+  let serenataLogoPng: string | null = null
+  try { isoLogoPng = await loadImageAsDataUrl(ISO_LOGO) } catch { /* skip */ }
+  try { serenataLogoPng = await loadImageAsDataUrl(SERENATA_LOGO) } catch { /* skip */ }
 
   const doc = new jsPDF('p', 'mm', 'a4')
   const pageW = 210
@@ -70,14 +91,14 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     ['Fecha de entrega:', formatFecha(data.fecha_entrega)],
     ['Locación:', data.locacion || '—'],
     ['Fecha de cotización:', formatFecha(data.fecha_cotizacion)],
-    ['# Cotización:', data.id],
+    ['# Cotización', data.id],
   ]
 
   autoTable(doc, {
     startY: 10,
     margin: { left: margin, right: 52 }, // leave ~50 mm on right for logo
     theme: 'grid',
-    styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0] as [number, number, number] },
+    styles: { fontSize: 9, cellPadding: 2.5, textColor: [0, 0, 0] as [number, number, number] },
     body: headerBody,
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 44, fillColor: [20, 20, 20] as [number, number, number], textColor: [255, 255, 255] as [number, number, number] },
@@ -86,9 +107,9 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   })
 
   // ISO logo — top right
-  try {
-    doc.addImage(ISO_LOGO_B64, 'JPEG', 163, 8, 30, 30)
-  } catch { /* skip if image fails */ }
+  if (isoLogoPng) {
+    try { doc.addImage(isoLogoPng, 163, 8, 30, 30) } catch { /* skip */ }
+  }
 
   let currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
 
@@ -113,8 +134,8 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     const catTotal = catItems.reduce((s, i) => s + (i.importe || 0), 0)
     catItems.forEach((item, idx) => {
       const noPrice = !item.precio_unitario || !item.cantidad
-      const precioCell = noPrice ? '$ - ,00' : fmtPDF(item.precio_unitario)
-      const importeCell = noPrice ? '$ - ,00' : fmtPDF(item.importe)
+      const precioCell = noPrice ? '-$ - ,00-' : fmtPDF(item.precio_unitario)
+      const importeCell = noPrice ? '-$ - ,00-' : fmtPDF(item.importe)
       itemsBody.push([
         idx === 0
           ? { content: cat, styles: { fontStyle: 'bolditalic' } }
@@ -133,7 +154,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     margin: { left: margin, right: margin },
     head: [['Categoría', 'Descripción', 'Cant.', 'P. Unitario', 'Importe', 'Total categoría']],
     body: itemsBody,
-    styles: { fontSize: 8, cellPadding: 2, textColor: [0, 0, 0] as [number, number, number] },
+    styles: { fontSize: 8, cellPadding: 2.5, textColor: [0, 0, 0] as [number, number, number] },
     headStyles: {
       fillColor: [0, 0, 0] as [number, number, number],
       textColor: [255, 255, 255] as [number, number, number],
@@ -142,12 +163,12 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     },
     alternateRowStyles: { fillColor: [249, 249, 249] as [number, number, number] },
     columnStyles: {
-      0: { cellWidth: 30 },
-      1: { cellWidth: 65 },
-      2: { cellWidth: 12, halign: 'center' },
-      3: { cellWidth: 28, halign: 'right' },
-      4: { cellWidth: 25, halign: 'right' },
-      5: { cellWidth: 22, halign: 'right' },
+      0: { cellWidth: 28 },
+      1: { cellWidth: 58 },
+      2: { cellWidth: 14, halign: 'center' },
+      3: { cellWidth: 30, halign: 'right' },
+      4: { cellWidth: 28, halign: 'right' },
+      5: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
     },
   })
 
@@ -157,7 +178,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   type TotalsRow = { label: string; value: string; bold: boolean; orange: boolean }
   const totalsRows: TotalsRow[] = [
     { label: 'Subtotal', value: fmtPDF(data.subtotal), bold: false, orange: false },
-    { label: `Fee de agencia (${(data.porcentaje_fee * 100).toFixed(0)}%)`, value: fmtPDF(data.fee_agencia), bold: false, orange: false },
+    { label: 'Fee de agencia', value: fmtPDF(data.fee_agencia), bold: false, orange: false },
     { label: 'General', value: fmtPDF(data.general), bold: true, orange: true },
     ...(descuento > 0 ? [{ label: 'Descuento', value: `-${fmtPDF(descuento)}`, bold: false, orange: false }] : []),
     ...(data.iva_activo ? [{ label: 'IVA (16%)', value: fmtPDF(data.iva), bold: false, orange: false }] : []),
@@ -175,23 +196,27 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.rect(margin, currentY, contentW, bannerH, 'F')
 
   // SERENATA logo — left side, vertically centered in banner
-  const logoW = 70
-  const logoH = 17
-  const logoX = margin + 4
-  const logoY = currentY + (bannerH - logoH) / 2
-  try {
-    doc.addImage(SERENATA_LOGO_B64, 'JPEG', logoX, logoY, logoW, logoH)
-  } catch { /* skip if image fails */ }
+  if (serenataLogoPng) {
+    const logoW = 70
+    const logoH = 17
+    const logoX = margin + 4
+    const logoY = currentY + (bannerH - logoH) / 2
+    try { doc.addImage(serenataLogoPng, logoX, logoY, logoW, logoH) } catch { /* skip */ }
+  }
 
   // Totals rows — right side
-  const totalsLabelX = margin + logoW + 18
-  const totalsValueX = margin + contentW - 2
+  const totalsLabelX = margin + 88
+  const totalsValueX = margin + contentW - 3
   let ty = currentY + bannerPad + 3.5
 
   totalsRows.forEach(row => {
     doc.setFont('helvetica', row.bold ? 'bold' : 'normal')
     doc.setFontSize(9)
-    doc.setTextColor(row.orange ? 255 : 255, row.orange ? 128 : 255, row.orange ? 0 : 255)
+    if (row.orange) {
+      doc.setTextColor(255, 128, 0)
+    } else {
+      doc.setTextColor(255, 255, 255)
+    }
     doc.text(row.label, totalsLabelX, ty)
     doc.text(row.value, totalsValueX, ty, { align: 'right' })
     ty += rowH
@@ -322,8 +347,16 @@ export async function generarHojaDeLlamado(data: HojaDeLlamadoData): Promise<voi
     return r?.telefono || ''
   }
 
+  // Pre-load logos through canvas
+  let isoLogoPngHL: string | null = null
+  let serenataLogoPngHL: string | null = null
+  try { isoLogoPngHL = await loadImageAsDataUrl(ISO_LOGO) } catch { /* skip */ }
+  try { serenataLogoPngHL = await loadImageAsDataUrl(SERENATA_LOGO) } catch { /* skip */ }
+
   // ── HEADER ────────────────────────────────────────────────────────────────
-  try { doc.addImage(ISO_LOGO_B64, 'JPEG', 163, 8, 30, 30) } catch { /* skip */ }
+  if (isoLogoPngHL) {
+    try { doc.addImage(isoLogoPngHL, 163, 8, 30, 30) } catch { /* skip */ }
+  }
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(22)
@@ -429,7 +462,9 @@ export async function generarHojaDeLlamado(data: HojaDeLlamadoData): Promise<voi
   // ── FOOTER ────────────────────────────────────────────────────────────────
   if (currentY > 255) { doc.addPage(); currentY = 15 }
 
-  try { doc.addImage(SERENATA_LOGO_B64, 'JPEG', margin, currentY, 60, 15) } catch { /* skip */ }
+  if (serenataLogoPngHL) {
+    try { doc.addImage(serenataLogoPngHL, margin, currentY, 60, 15) } catch { /* skip */ }
+  }
 
   const todayDate = new Date()
   const mesesPDF = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
