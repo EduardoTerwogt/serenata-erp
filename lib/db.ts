@@ -297,6 +297,58 @@ export async function createCuentasPagarConProyecto(
   return data as CuentaPagar[]
 }
 
+// ==================== HISTORIAL RESPONSABLE ====================
+
+export async function generarHistorialProyecto(proyectoId: string, proyecto: Proyecto) {
+  // 1. Cotización principal (mismo ID que el proyecto) + complementarias aprobadas
+  const cotizacionIds: string[] = [proyectoId]
+
+  const { data: complementarias } = await supabaseAdmin
+    .from('cotizaciones')
+    .select('id')
+    .eq('es_complementaria_de', proyectoId)
+    .eq('estado', 'APROBADA')
+
+  if (complementarias) {
+    cotizacionIds.push(...complementarias.map((c: { id: string }) => c.id))
+  }
+
+  // 2. Todas las partidas de todas las cotizaciones
+  const allItemArrays = await Promise.all(cotizacionIds.map(cid => getItemsByCotizacion(cid)))
+  const allItems = allItemArrays.flat()
+
+  // 3. Solo partidas con responsable asignado
+  const itemsConResponsable = allItems.filter(item => !!item.responsable_id)
+
+  // 4. Borrar historial previo de este proyecto (idempotencia — snapshot limpio)
+  const { error: delError } = await supabaseAdmin
+    .from('historial_responsable')
+    .delete()
+    .eq('proyecto_id', proyectoId)
+
+  if (delError) throw delError
+
+  if (itemsConResponsable.length === 0) return
+
+  // 5. Insertar una fila por partida
+  const rows = itemsConResponsable.map(item => ({
+    responsable_id: item.responsable_id,
+    cotizacion_id: item.cotizacion_id,
+    proyecto_id: proyectoId,
+    proyecto_nombre: proyecto.proyecto,
+    cliente: proyecto.cliente,
+    fecha_evento: proyecto.fecha_entrega || null,
+    rol_en_proyecto: item.descripcion,
+    x_pagar: item.x_pagar || 0,
+  }))
+
+  const { error: insError } = await supabaseAdmin
+    .from('historial_responsable')
+    .insert(rows)
+
+  if (insError) throw insError
+}
+
 // ==================== CUENTAS POR COBRAR ====================
 
 export async function getCuentasCobrar() {

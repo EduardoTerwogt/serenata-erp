@@ -1,4 +1,4 @@
-import { getProyectoById, updateProyecto } from '@/lib/db'
+import { getProyectoById, updateProyecto, generarHistorialProyecto } from '@/lib/db'
 
 export async function GET(
   _request: Request,
@@ -21,7 +21,23 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
+
+    // Captura estado anterior antes de actualizar
+    const proyectoAnterior = await getProyectoById(id)
+
     const proyecto = await updateProyecto(id, body)
+
+    // Genera historial solo al transicionar a FINALIZADO
+    if (body.estado === 'FINALIZADO' && proyectoAnterior.estado !== 'FINALIZADO') {
+      try {
+        await generarHistorialProyecto(id, proyecto)
+        console.log(`[PUT /api/proyectos/${id}] Historial generado al finalizar proyecto`)
+      } catch (e) {
+        console.error(`[PUT /api/proyectos/${id}] Error generando historial:`, e)
+        // No-fatal: el proyecto ya se actualizó correctamente
+      }
+    }
+
     return Response.json(proyecto)
   } catch (error) {
     console.error(error)

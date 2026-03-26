@@ -71,28 +71,6 @@ export async function PATCH(
         .eq('item_descripcion', item.descripcion)
     }
 
-    // 5. Registrar en historial_responsable
-    if (responsable_id) {
-      const { data: cotizacion } = await supabaseAdmin
-        .from('cotizaciones')
-        .select('proyecto, cliente, fecha_entrega')
-        .eq('id', item.cotizacion_id)
-        .single()
-
-      if (cotizacion) {
-        await supabaseAdmin
-          .from('historial_responsable')
-          .insert({
-            responsable_id,
-            proyecto_id: item.cotizacion_id,
-            proyecto: cotizacion.proyecto,
-            cliente: cotizacion.cliente,
-            fecha_entrega: cotizacion.fecha_entrega,
-            monto: item.x_pagar || 0,
-          })
-      }
-    }
-
     return Response.json({ ok: true })
   } catch (e) {
     console.error('[PATCH /api/items/:id] Error:', e)
