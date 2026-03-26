@@ -76,7 +76,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     styles: { fontSize: 9, cellPadding: 2, textColor: [0, 0, 0] as [number, number, number] },
     body: headerBody,
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 44, fillColor: [255, 255, 255] as [number, number, number] },
+      0: { fontStyle: 'bold', cellWidth: 44, fillColor: [20, 20, 20] as [number, number, number], textColor: [255, 255, 255] as [number, number, number] },
       1: { fillColor: [255, 255, 255] as [number, number, number] },
     },
   })
@@ -149,43 +149,51 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
 
-  // ── 4. TOTALS (right-aligned) ─────────────────────────────────────────────
-  type TotalsRow = { label: string; value: string; bold: boolean; bg: boolean }
+  // ── 4. TOTALS BANNER (dark full-width with logo left + totals right) ────────
+  type TotalsRow = { label: string; value: string; bold: boolean; orange: boolean }
   const totalsRows: TotalsRow[] = [
-    { label: 'Subtotal', value: fmtPDF(data.subtotal), bold: false, bg: false },
-    { label: `Fee de agencia (${(data.porcentaje_fee * 100).toFixed(0)}%)`, value: fmtPDF(data.fee_agencia), bold: false, bg: false },
-    { label: 'General', value: fmtPDF(data.general), bold: true, bg: true },
-    ...(descuento > 0 ? [{ label: 'Descuento', value: `-${fmtPDF(descuento)}`, bold: false, bg: false }] : []),
-    ...(data.iva_activo ? [{ label: 'IVA (16%)', value: fmtPDF(data.iva), bold: false, bg: false }] : []),
-    { label: 'TOTAL', value: fmtPDF(data.total), bold: true, bg: true },
+    { label: 'Subtotal', value: fmtPDF(data.subtotal), bold: false, orange: false },
+    { label: `Fee de agencia (${(data.porcentaje_fee * 100).toFixed(0)}%)`, value: fmtPDF(data.fee_agencia), bold: false, orange: false },
+    { label: 'General', value: fmtPDF(data.general), bold: true, orange: true },
+    ...(descuento > 0 ? [{ label: 'Descuento', value: `-${fmtPDF(descuento)}`, bold: false, orange: false }] : []),
+    ...(data.iva_activo ? [{ label: 'IVA (16%)', value: fmtPDF(data.iva), bold: false, orange: false }] : []),
+    { label: 'TOTAL', value: fmtPDF(data.total), bold: true, orange: false },
   ]
 
-  const totalsLabelX = 118
-  const totalsValueX = 195
-  let ty = currentY + 2
+  const rowH = 7
+  const bannerPad = 5
+  const bannerH = Math.max(totalsRows.length * rowH + bannerPad * 2, 34)
+
+  if (currentY + bannerH > 270) { doc.addPage(); currentY = 15 }
+
+  // Full-width dark banner
+  doc.setFillColor(20, 20, 20)
+  doc.rect(margin, currentY, contentW, bannerH, 'F')
+
+  // SERENATA logo — left side, vertically centered in banner
+  const logoW = 70
+  const logoH = 17
+  const logoX = margin + 4
+  const logoY = currentY + (bannerH - logoH) / 2
+  try {
+    doc.addImage(SERENATA_LOGO, 'JPEG', logoX, logoY, logoW, logoH)
+  } catch { /* skip if image fails */ }
+
+  // Totals rows — right side
+  const totalsLabelX = margin + logoW + 18
+  const totalsValueX = margin + contentW - 2
+  let ty = currentY + bannerPad + 3.5
 
   totalsRows.forEach(row => {
-    if (row.bg) {
-      doc.setFillColor(235, 235, 235)
-      doc.rect(totalsLabelX - 3, ty - 4.5, 80, 7, 'F')
-    }
     doc.setFont('helvetica', row.bold ? 'bold' : 'normal')
     doc.setFontSize(9)
-    doc.setTextColor(0, 0, 0)
+    doc.setTextColor(row.orange ? 255 : 255, row.orange ? 128 : 255, row.orange ? 0 : 255)
     doc.text(row.label, totalsLabelX, ty)
     doc.text(row.value, totalsValueX, ty, { align: 'right' })
-    ty += 7
+    ty += rowH
   })
 
-  currentY = ty + 6
-
-  // ── 5. SERENATA LOGO ──────────────────────────────────────────────────────
-  if (currentY > 240) { doc.addPage(); currentY = 15 }
-
-  try {
-    doc.addImage(SERENATA_LOGO, 'JPEG', margin, currentY, 80, 20)
-  } catch { /* skip if image fails */ }
-  currentY += 28
+  currentY = currentY + bannerH + 8
 
   // ── 6. GENERALES ─────────────────────────────────────────────────────────
   if (currentY > 260) { doc.addPage(); currentY = 15 }
@@ -198,20 +206,25 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.line(margin, currentY + 0.8, margin + gw, currentY + 0.8)
   currentY += 6
 
-  doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
-  const generalesText =
+  const generalesLine1 =
     'Serenata House se deslinda de cualquier daño o pérdida durante la actividad contratada, salvo de los ' +
-    'materiales de producción y el inmueble (en caso de que haya uno contratado).\n' +
-    'cualquier trabajo o elemento adicional será autorizado por el cliente'
-  const wrappedGenerales = doc.splitTextToSize(generalesText, contentW)
-  doc.text(wrappedGenerales, margin, currentY)
-  currentY += (wrappedGenerales.length * 4.5) + 8
+    'materiales de producción y el inmueble (en caso de que haya uno contratado).'
+  const generalesLine2 = 'cualquier trabajo o elemento adicional será autorizado por el cliente'
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(0, 0, 0)
+  const wrappedLine1 = doc.splitTextToSize(generalesLine1, contentW)
+  doc.text(wrappedLine1, margin, currentY)
+  currentY += wrappedLine1.length * 4.5
+  doc.setFont('helvetica', 'normal')
+  const wrappedLine2 = doc.splitTextToSize(generalesLine2, contentW)
+  doc.text(wrappedLine2, margin, currentY)
+  currentY += (wrappedLine2.length * 4.5) + 8
 
   // ── 7. COSTOS ─────────────────────────────────────────────────────────────
   if (currentY > 255) { doc.addPage(); currentY = 15 }
 
-  doc.setFillColor(255, 102, 0)
+  doc.setFillColor(20, 20, 20)
   doc.rect(margin, currentY, contentW, 8, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
@@ -234,7 +247,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   // ── 8. CANCELACIÓN ───────────────────────────────────────────────────────
   if (currentY > 240) { doc.addPage(); currentY = 15 }
 
-  doc.setFillColor(255, 102, 0)
+  doc.setFillColor(20, 20, 20)
   doc.rect(margin, currentY, contentW, 8, 'F')
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
