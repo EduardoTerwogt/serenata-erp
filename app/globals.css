@@ -23,6 +23,18 @@
   --color-gray-800: #27272a;
   --color-gray-900: #18181b;
   --color-gray-950: #09090b;
+
+  /* Remap blue → naranja Serenata (#ff8000) */
+  --color-blue-100: #fff0d6;
+  --color-blue-200: #ffd9a0;
+  --color-blue-300: #ffb84d;
+  --color-blue-400: #ff9a1a;
+  --color-blue-500: #ff8000;
+  --color-blue-600: #e67300;
+  --color-blue-700: #cc6600;
+  --color-blue-800: #a35200;
+  --color-blue-900: #3d1f00;
+  --color-blue-950: #1f0f00;
 }
 
 @media (prefers-color-scheme: dark) {
