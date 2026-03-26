@@ -213,6 +213,7 @@ function NuevaCotizacionContent() {
       return { ...item, importe, margen, orden: i }
     })
     const body: Record<string, unknown> = {
+      id: folio,  // enviar folio para idempotencia
       ...data,
       estado,
       items: itemsConCalc,
@@ -231,8 +232,19 @@ function NuevaCotizacionContent() {
       body: JSON.stringify(body),
     })
     if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.error || 'Error al guardar')
+      // Recuperación: verificar si la cotización se guardó a pesar del error
+      if (folio) {
+        try {
+          const check = await fetch(`/api/cotizaciones/${folio}`)
+          if (check.ok) {
+            console.log('[guardarDatos] Cotización creada a pesar del error, recuperando:', folio)
+            return check.json()
+          }
+        } catch { /* ignorar error de recuperación */ }
+      }
+      let errMsg = 'Error al guardar'
+      try { const err = await res.json(); errMsg = err.error || errMsg } catch { /* ignorar */ }
+      throw new Error(errMsg)
     }
     return res.json()
   }
@@ -447,7 +459,7 @@ function NuevaCotizacionContent() {
             + Agregar fila
           </button>
         </div>
-        <div className="overflow-x-auto">
+        <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800">
@@ -489,7 +501,7 @@ function NuevaCotizacionContent() {
                           >+</button>
                         </div>
                         {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && (
-                          <div className="absolute z-50 mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                          <div className="absolute z-[9999] mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                             {productoSugerencias[index].map((p, i) => (
                               <div
                                 key={i}

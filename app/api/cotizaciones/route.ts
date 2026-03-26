@@ -1,4 +1,4 @@
-import { getCotizaciones, createCotizacion, getNextFolio, getNextFolioComplementaria, upsertItems, folioExists } from '@/lib/db'
+import { getCotizaciones, createCotizacion, getNextFolio, getNextFolioComplementaria, upsertItems } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -17,13 +17,23 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
 
-    const folio = cotizacionData.es_complementaria_de
-      ? await getNextFolioComplementaria(cotizacionData.es_complementaria_de as string)
-      : await getNextFolio()
+    // Usar folio enviado por el cliente (idempotencia) o generar uno nuevo
+    const folio: string = (cotizacionData.id as string) || (
+      cotizacionData.es_complementaria_de
+        ? await getNextFolioComplementaria(cotizacionData.es_complementaria_de as string)
+        : await getNextFolio()
+    )
+    delete (cotizacionData as Record<string, unknown>).id
 
-    // Guard against duplicate folio (previene doble submit en race conditions)
-    if (await folioExists(folio)) {
-      return Response.json({ error: `El folio ${folio} ya existe` }, { status: 409 })
+    // Idempotencia: si este folio ya existe, retornar la cotización existente sin duplicar
+    const { data: cotizacionExistente } = await supabaseAdmin
+      .from('cotizaciones')
+      .select('*')
+      .eq('id', folio)
+      .maybeSingle()
+    if (cotizacionExistente) {
+      console.log('[POST /api/cotizaciones] Folio ya existe, retornando existente:', folio)
+      return Response.json(cotizacionExistente, { status: 200 })
     }
 
     const porcFee: number = porcentaje_fee ?? 0.15

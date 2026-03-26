@@ -623,7 +623,7 @@ export default function CotizacionDetallePage({
             </button>
           )}
         </div>
-        <div className="overflow-x-auto">
+        <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800">
@@ -661,7 +661,7 @@ export default function CotizacionDetallePage({
                             >+</button>
                           </div>
                           {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && (
-                            <div className="absolute z-50 mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                            <div className="absolute z-[9999] mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                               {productoSugerencias[index].map((p, i) => (
                                 <div
                                   key={i}

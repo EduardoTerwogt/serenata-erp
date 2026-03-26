@@ -118,7 +118,11 @@ export async function POST(
         rol_en_proyecto: item.descripcion,
         x_pagar: item.x_pagar || 0,
       }))
-    console.log('[aprobar] historial inserts:', historialInserts.length, historialInserts.map(h => ({ resp: h.responsable_id, rol: h.rol_en_proyecto })))
+    console.log('[aprobar] items totales:', itemsParaHistorial.length, '| con responsable_id:', historialInserts.length)
+    console.log('[aprobar] historial inserts:', historialInserts.map(h => ({ resp: h.responsable_id, rol: h.rol_en_proyecto })))
+    if (historialInserts.length === 0) {
+      console.log('[aprobar] ADVERTENCIA: ningún item tiene responsable_id — historial_responsable quedará vacío')
+    }
     if (historialInserts.length > 0) {
       const { error: histError } = await supabaseAdmin.from('historial_responsable').insert(historialInserts)
       if (histError) console.error('[aprobar] Error insertando historial_responsable:', histError)
