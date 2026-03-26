@@ -45,6 +45,10 @@ function fmtPDF(n: number): string {
   return '$ ' + (n || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+// Strip the data URI prefix so jsPDF receives plain base64
+const ISO_LOGO_B64 = ISO_LOGO.split(',')[1]
+const SERENATA_LOGO_B64 = SERENATA_LOGO.split(',')[1]
+
 export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   const { default: jsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
@@ -83,7 +87,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   // ISO logo — top right
   try {
-    doc.addImage(ISO_LOGO, 'JPEG', 163, 8, 30, 30)
+    doc.addImage(ISO_LOGO_B64, 'JPEG', 163, 8, 30, 30)
   } catch { /* skip if image fails */ }
 
   let currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
@@ -176,7 +180,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   const logoX = margin + 4
   const logoY = currentY + (bannerH - logoH) / 2
   try {
-    doc.addImage(SERENATA_LOGO, 'JPEG', logoX, logoY, logoW, logoH)
+    doc.addImage(SERENATA_LOGO_B64, 'JPEG', logoX, logoY, logoW, logoH)
   } catch { /* skip if image fails */ }
 
   // Totals rows — right side
@@ -319,7 +323,7 @@ export async function generarHojaDeLlamado(data: HojaDeLlamadoData): Promise<voi
   }
 
   // ── HEADER ────────────────────────────────────────────────────────────────
-  try { doc.addImage(ISO_LOGO, 'JPEG', 163, 8, 30, 30) } catch { /* skip */ }
+  try { doc.addImage(ISO_LOGO_B64, 'JPEG', 163, 8, 30, 30) } catch { /* skip */ }
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(22)
@@ -425,7 +429,7 @@ export async function generarHojaDeLlamado(data: HojaDeLlamadoData): Promise<voi
   // ── FOOTER ────────────────────────────────────────────────────────────────
   if (currentY > 255) { doc.addPage(); currentY = 15 }
 
-  try { doc.addImage(SERENATA_LOGO, 'JPEG', margin, currentY, 60, 15) } catch { /* skip */ }
+  try { doc.addImage(SERENATA_LOGO_B64, 'JPEG', margin, currentY, 60, 15) } catch { /* skip */ }
 
   const todayDate = new Date()
   const mesesPDF = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
