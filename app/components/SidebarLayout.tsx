@@ -4,11 +4,11 @@ import { useState } from 'react'
 import Link from 'next/link'
 
 const NAV_LINKS = [
-  { href: '/dashboard', icon: '📊', label: 'Dashboard' },
-  { href: '/cotizaciones', icon: '📋', label: 'Cotizaciones' },
-  { href: '/proyectos', icon: '🎬', label: 'Proyectos' },
-  { href: '/cuentas', icon: '💰', label: 'Cuentas' },
-  { href: '/responsables', icon: '👥', label: 'Colaboradores' },
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/cotizaciones', label: 'Cotizaciones' },
+  { href: '/proyectos', label: 'Proyectos' },
+  { href: '/cuentas', label: 'Cuentas' },
+  { href: '/responsables', label: 'Colaboradores' },
 ]
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
@@ -64,7 +64,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
             >
-              <span>{icon}</span> {label}
+              {label}
             </Link>
           ))}
         </nav>
