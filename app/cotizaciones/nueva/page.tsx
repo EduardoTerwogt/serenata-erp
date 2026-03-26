@@ -9,10 +9,10 @@ interface ItemForm {
   categoria: string
   descripcion: string
   cantidad: number
-  precio_unitario: number
+  precio_unitario: number | ''
   responsable_id: string
   responsable_nombre: string
-  x_pagar: number
+  x_pagar: number | ''
 }
 
 interface CotizacionForm {
@@ -27,10 +27,10 @@ const itemVacio: ItemForm = {
   categoria: '',
   descripcion: '',
   cantidad: 1,
-  precio_unitario: 0,
+  precio_unitario: '',
   responsable_id: '',
   responsable_nombre: '',
-  x_pagar: 0,
+  x_pagar: '',
 }
 
 function fmt(n: number) {
@@ -75,13 +75,6 @@ function NuevaCotizacionContent() {
   const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
   const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
 
-  // Modal nuevo producto
-  const [modalProducto, setModalProducto] = useState<{
-    show: boolean
-    rowIndex: number
-    form: { descripcion: string; categoria: string; precio_unitario: string; x_pagar_sugerido: string }
-  }>({ show: false, rowIndex: 0, form: { descripcion: '', categoria: '', precio_unitario: '0', x_pagar_sugerido: '0' } })
-
   // Configuración de totales (editable por cotización)
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
   const [iva_activo, setIvaActivo] = useState(true)
@@ -124,8 +117,10 @@ function NuevaCotizacionContent() {
   }, [complementaria_de])
 
   const calcItem = (item: ItemForm) => {
-    const importe = (item.cantidad || 0) * (item.precio_unitario || 0)
-    const margen = importe - (item.x_pagar || 0)
+    const pu = typeof item.precio_unitario === 'number' ? item.precio_unitario : 0
+    const xp = typeof item.x_pagar === 'number' ? item.x_pagar : 0
+    const importe = (item.cantidad || 0) * pu
+    const margen = importe - xp
     return { importe, margen }
   }
 
@@ -169,6 +164,9 @@ function NuevaCotizacionContent() {
   // ── Handlers: producto autocomplete (filtro local) ──────────────────────────
   const handleDescripcionChange = (index: number, valor: string) => {
     setValue(`items.${index}.descripcion`, valor)
+    // Limpiar precios cuando el usuario escribe manualmente (solo autocomplete los setea)
+    setValue(`items.${index}.precio_unitario`, '')
+    setValue(`items.${index}.x_pagar`, '')
     if (valor.length >= 2) {
       const filtrados = listaProductos.filter(p => p.descripcion.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
       setProductoSugerencias(prev => ({ ...prev, [index]: filtrados }))
@@ -186,31 +184,18 @@ function NuevaCotizacionContent() {
     setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
   }
 
-  const guardarModalProducto = async () => {
-    const { descripcion, categoria, precio_unitario, x_pagar_sugerido } = modalProducto.form
-    try {
-      const res = await fetch('/api/productos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          descripcion,
-          categoria: categoria || null,
-          precio_unitario: parseFloat(precio_unitario) || 0,
-          x_pagar_sugerido: parseFloat(x_pagar_sugerido) || 0,
-        }),
-      })
-      if (!res.ok) return
-      const p = await res.json()
-      seleccionarProducto(modalProducto.rowIndex, p)
-      setModalProducto(prev => ({ ...prev, show: false }))
-    } catch { /* handle silently */ }
-  }
-
   // ── Guardar ────────────────────────────────────────────────────────────────
   const guardarDatos = async (data: CotizacionForm, estado: 'BORRADOR' | 'ENVIADA') => {
     const itemsConCalc = data.items.map((item, i) => {
       const { importe, margen } = calcItem(item)
-      return { ...item, importe, margen, orden: i }
+      return {
+        ...item,
+        importe,
+        margen,
+        orden: i,
+        precio_unitario: item.precio_unitario === '' ? 0 : item.precio_unitario,
+        x_pagar: item.x_pagar === '' ? 0 : item.x_pagar,
+      }
     })
     const body: Record<string, unknown> = {
       id: folio,  // enviar folio para idempotencia
@@ -287,7 +272,7 @@ function NuevaCotizacionContent() {
           categoria: item.categoria,
           descripcion: item.descripcion,
           cantidad: item.cantidad,
-          precio_unitario: item.precio_unitario,
+          precio_unitario: item.precio_unitario === '' ? 0 : item.precio_unitario,
           importe: item.importe,
         })),
         subtotal: cotizacion.subtotal,
@@ -349,7 +334,14 @@ function NuevaCotizacionContent() {
                   value={clienteInput}
                   onChange={e => handleClienteChange(e.target.value)}
                   onFocus={() => clienteSugerencias.length > 0 && setMostrarClienteDropdown(true)}
-                  onBlur={() => setTimeout(() => setMostrarClienteDropdown(false), 200)}
+                  onBlur={() => setTimeout(() => {
+                    setMostrarClienteDropdown(false)
+                    // Resolver proyectos si se escribió manualmente un cliente existente
+                    if (proyectosDelCliente.length === 0 && clienteInput.trim()) {
+                      const match = listaClientes.find(c => c.nombre.toLowerCase() === clienteInput.trim().toLowerCase())
+                      if (match) setProyectosDelCliente(match.proyectos || [])
+                    }
+                  }, 200)}
                   autoComplete="off"
                   placeholder="Nombre del cliente"
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
@@ -483,8 +475,7 @@ function NuevaCotizacionContent() {
                     </td>
                     <td className="px-4 py-2">
                       <div className="relative">
-                        <div className="flex gap-1">
-                          <input
+                        <input
                             {...register(`items.${index}.descripcion`)}
                             onChange={e => handleDescripcionChange(index, e.target.value)}
                             onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))}
@@ -493,13 +484,6 @@ function NuevaCotizacionContent() {
                             placeholder="Descripción"
                             autoComplete="off"
                           />
-                          <button
-                            type="button"
-                            onClick={() => setModalProducto({ show: true, rowIndex: index, form: { descripcion: '', categoria: '', precio_unitario: '0', x_pagar_sugerido: '0' } })}
-                            className="bg-gray-700 hover:bg-gray-600 text-white px-2 rounded text-xs font-bold"
-                            title="Nuevo producto"
-                          >+</button>
-                        </div>
                         {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && (
                           <div className="absolute z-[9999] mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                             {productoSugerencias[index].map((p, i) => (
@@ -530,7 +514,7 @@ function NuevaCotizacionContent() {
                         type="number"
                         min="0"
                         step="0.01"
-                        {...register(`items.${index}.precio_unitario`, { valueAsNumber: true })}
+                        {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
                         className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
                       />
                     </td>
@@ -563,7 +547,7 @@ function NuevaCotizacionContent() {
                         type="number"
                         min="0"
                         step="0.01"
-                        {...register(`items.${index}.x_pagar`, { valueAsNumber: true })}
+                        {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
                         className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
                       />
                     </td>
@@ -718,75 +702,6 @@ function NuevaCotizacionContent() {
         </button>
       </div>
 
-      {/* Modal: Nuevo Producto */}
-      {modalProducto.show && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={e => { if (e.target === e.currentTarget) setModalProducto(p => ({ ...p, show: false })) }}
-        >
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-96">
-            <h3 className="text-white font-semibold mb-4">Nuevo Producto</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Descripción</label>
-                <input
-                  value={modalProducto.form.descripcion}
-                  onChange={e => setModalProducto(p => ({ ...p, form: { ...p.form, descripcion: e.target.value } }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Categoría</label>
-                <input
-                  value={modalProducto.form.categoria}
-                  onChange={e => setModalProducto(p => ({ ...p, form: { ...p.form, categoria: e.target.value } }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Precio Sugerido</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={modalProducto.form.precio_unitario}
-                    onChange={e => setModalProducto(p => ({ ...p, form: { ...p.form, precio_unitario: e.target.value } }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">X Pagar Sugerido</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={modalProducto.form.x_pagar_sugerido}
-                    onChange={e => setModalProducto(p => ({ ...p, form: { ...p.form, x_pagar_sugerido: e.target.value } }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button
-                type="button"
-                onClick={guardarModalProducto}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-              >
-                Guardar
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalProducto(p => ({ ...p, show: false }))}
-                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

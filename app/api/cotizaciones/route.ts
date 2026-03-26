@@ -113,18 +113,25 @@ export async function POST(request: Request) {
       }
     }
 
-    // Auto-save productos de los items
+    // Auto-save productos — solo insertar si NO existe (nunca actualizar existentes)
     for (const item of (items as Partial<ItemCotizacion>[]) || []) {
       if (item.descripcion?.trim()) {
-        const { error: prodError } = await supabaseAdmin
+        const { data: productoExistente } = await supabaseAdmin
           .from('productos')
-          .upsert({
-            descripcion: item.descripcion.trim(),
-            categoria: (item.categoria as string)?.trim() || '',
-            precio_unitario: item.precio_unitario,
-            x_pagar_sugerido: item.x_pagar || 0,
-          }, { onConflict: 'descripcion', ignoreDuplicates: true })
-        if (prodError) console.error('[POST /api/cotizaciones] Error upsert producto:', prodError)
+          .select('id')
+          .eq('descripcion', item.descripcion.trim())
+          .maybeSingle()
+        if (!productoExistente) {
+          const { error: prodError } = await supabaseAdmin
+            .from('productos')
+            .insert({
+              descripcion: item.descripcion.trim(),
+              categoria: (item.categoria as string)?.trim() || '',
+              precio_unitario: item.precio_unitario || 0,
+              x_pagar_sugerido: item.x_pagar || 0,
+            })
+          if (prodError) console.error('[POST /api/cotizaciones] Error insertando producto:', prodError)
+        }
       }
     }
 

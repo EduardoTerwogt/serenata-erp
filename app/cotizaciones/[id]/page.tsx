@@ -10,10 +10,10 @@ interface ItemForm {
   categoria: string
   descripcion: string
   cantidad: number
-  precio_unitario: number
+  precio_unitario: number | ''
   responsable_id: string
   responsable_nombre: string
-  x_pagar: number
+  x_pagar: number | ''
   importe?: number
   margen?: number
 }
@@ -30,10 +30,10 @@ const itemVacio: ItemForm = {
   categoria: '',
   descripcion: '',
   cantidad: 1,
-  precio_unitario: 0,
+  precio_unitario: '',
   responsable_id: '',
   responsable_nombre: '',
-  x_pagar: 0,
+  x_pagar: '',
 }
 
 function fmt(n: number) {
@@ -69,13 +69,6 @@ export default function CotizacionDetallePage({
   // Autocomplete productos por fila
   const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
   const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
-
-  // Modal nuevo producto
-  const [modalProducto, setModalProducto] = useState<{
-    show: boolean
-    rowIndex: number
-    form: { descripcion: string; categoria: string; precio_unitario: string; x_pagar_sugerido: string }
-  }>({ show: false, rowIndex: 0, form: { descripcion: '', categoria: '', precio_unitario: '0', x_pagar_sugerido: '0' } })
 
   // Configuración de totales (cargada desde la cotización)
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
@@ -130,8 +123,10 @@ export default function CotizacionDetallePage({
   }, [id, reset])
 
   const calcItem = (item: ItemForm) => {
-    const importe = (item.cantidad || 0) * (item.precio_unitario || 0)
-    const margen = importe - (item.x_pagar || 0)
+    const pu = typeof item.precio_unitario === 'number' ? item.precio_unitario : 0
+    const xp = typeof item.x_pagar === 'number' ? item.x_pagar : 0
+    const importe = (item.cantidad || 0) * pu
+    const margen = importe - xp
     return { importe, margen }
   }
 
@@ -194,6 +189,9 @@ export default function CotizacionDetallePage({
   // ── Handlers: producto autocomplete (filtro local) ──────────────────────────
   const handleDescripcionChange = (index: number, valor: string) => {
     setValue(`items.${index}.descripcion`, valor)
+    // Limpiar precios cuando el usuario escribe manualmente
+    setValue(`items.${index}.precio_unitario`, '')
+    setValue(`items.${index}.x_pagar`, '')
     if (valor.length >= 2) {
       const filtrados = listaProductos.filter(p => p.descripcion.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
       setProductoSugerencias(prev => ({ ...prev, [index]: filtrados }))
@@ -209,26 +207,6 @@ export default function CotizacionDetallePage({
     if (p.precio_unitario > 0) setValue(`items.${index}.precio_unitario`, p.precio_unitario)
     if ((p.x_pagar_sugerido || 0) > 0) setValue(`items.${index}.x_pagar`, p.x_pagar_sugerido || 0)
     setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
-  }
-
-  const guardarModalProducto = async () => {
-    const { descripcion, categoria, precio_unitario, x_pagar_sugerido } = modalProducto.form
-    try {
-      const res = await fetch('/api/productos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          descripcion,
-          categoria: categoria || null,
-          precio_unitario: parseFloat(precio_unitario) || 0,
-          x_pagar_sugerido: parseFloat(x_pagar_sugerido) || 0,
-        }),
-      })
-      if (!res.ok) return
-      const p = await res.json()
-      seleccionarProducto(modalProducto.rowIndex, p)
-      setModalProducto(prev => ({ ...prev, show: false }))
-    } catch { /* handle silently */ }
   }
 
   const guardar = async (estado?: string): Promise<boolean> => {
@@ -252,6 +230,8 @@ export default function CotizacionDetallePage({
           importe,
           margen,
           orden: index,
+          precio_unitario: formItem.precio_unitario === '' ? 0 : formItem.precio_unitario,
+          x_pagar: formItem.x_pagar === '' ? 0 : formItem.x_pagar,
           responsable_id: responsableId,
           responsable_nombre: formItem.responsable_nombre || dbItem?.responsable_nombre || r?.nombre || null,
         }
@@ -367,7 +347,7 @@ export default function CotizacionDetallePage({
         categoria: item.categoria,
         descripcion: item.descripcion,
         cantidad: item.cantidad,
-        precio_unitario: item.precio_unitario,
+        precio_unitario: item.precio_unitario === '' ? 0 : item.precio_unitario,
         importe: calcItem(item).importe,
       })),
       subtotal: totales.subtotal,
@@ -507,7 +487,13 @@ export default function CotizacionDetallePage({
                   value={clienteInput}
                   onChange={e => handleClienteChange(e.target.value)}
                   onFocus={() => clienteSugerencias.length > 0 && setMostrarClienteDropdown(true)}
-                  onBlur={() => setTimeout(() => setMostrarClienteDropdown(false), 200)}
+                  onBlur={() => setTimeout(() => {
+                    setMostrarClienteDropdown(false)
+                    if (proyectosDelCliente.length === 0 && clienteInput.trim()) {
+                      const match = listaClientes.find(c => c.nombre.toLowerCase() === clienteInput.trim().toLowerCase())
+                      if (match) setProyectosDelCliente(match.proyectos || [])
+                    }
+                  }, 200)}
                   autoComplete="off"
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                 />
@@ -644,8 +630,7 @@ export default function CotizacionDetallePage({
                       </td>
                       <td className="px-4 py-2">
                         <div className="relative">
-                          <div className="flex gap-1">
-                            <input
+                          <input
                               {...register(`items.${index}.descripcion`)}
                               onChange={e => handleDescripcionChange(index, e.target.value)}
                               onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))}
@@ -653,13 +638,6 @@ export default function CotizacionDetallePage({
                               className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
                               autoComplete="off"
                             />
-                            <button
-                              type="button"
-                              onClick={() => setModalProducto({ show: true, rowIndex: index, form: { descripcion: '', categoria: '', precio_unitario: '0', x_pagar_sugerido: '0' } })}
-                              className="bg-gray-700 hover:bg-gray-600 text-white px-2 rounded text-xs font-bold"
-                              title="Nuevo producto"
-                            >+</button>
-                          </div>
                           {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && (
                             <div className="absolute z-[9999] mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                               {productoSugerencias[index].map((p, i) => (
@@ -680,7 +658,7 @@ export default function CotizacionDetallePage({
                         <input type="number" min="1" {...register(`items.${index}.cantidad`, { valueAsNumber: true })} className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" />
                       </td>
                       <td className="px-4 py-2">
-                        <input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { valueAsNumber: true })} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" />
+                        <input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" />
                       </td>
                       <td className="px-4 py-2 text-white font-medium whitespace-nowrap">${fmt(importe)}</td>
                       <td className="px-4 py-2">
@@ -701,7 +679,7 @@ export default function CotizacionDetallePage({
                         <input type="hidden" {...register(`items.${index}.responsable_nombre`)} />
                       </td>
                       <td className="px-4 py-2">
-                        <input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { valueAsNumber: true })} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" />
+                        <input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" />
                       </td>
                       <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmt(margen)}</td>
                       <td className="px-4 py-2">
@@ -732,76 +710,6 @@ export default function CotizacionDetallePage({
           </table>
         </div>
       </div>
-
-      {/* Modal: Nuevo Producto */}
-      {modalProducto.show && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-          onClick={e => { if (e.target === e.currentTarget) setModalProducto(p => ({ ...p, show: false })) }}
-        >
-          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-96">
-            <h3 className="text-white font-semibold mb-4">Nuevo Producto</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Descripción</label>
-                <input
-                  value={modalProducto.form.descripcion}
-                  onChange={e => setModalProducto(p => ({ ...p, form: { ...p.form, descripcion: e.target.value } }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Categoría</label>
-                <input
-                  value={modalProducto.form.categoria}
-                  onChange={e => setModalProducto(p => ({ ...p, form: { ...p.form, categoria: e.target.value } }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Precio Sugerido</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={modalProducto.form.precio_unitario}
-                    onChange={e => setModalProducto(p => ({ ...p, form: { ...p.form, precio_unitario: e.target.value } }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">X Pagar Sugerido</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={modalProducto.form.x_pagar_sugerido}
-                    onChange={e => setModalProducto(p => ({ ...p, form: { ...p.form, x_pagar_sugerido: e.target.value } }))}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 mt-5">
-              <button
-                type="button"
-                onClick={guardarModalProducto}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-              >
-                Guardar
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalProducto(p => ({ ...p, show: false }))}
-                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Totales */}
       <div className="grid grid-cols-2 gap-6">
