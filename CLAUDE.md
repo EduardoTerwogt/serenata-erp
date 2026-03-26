@@ -8,7 +8,12 @@ Al comenzar cualquier conversación, ejecuta estos pasos ANTES de hacer cualquie
 
 ### 1. Configurar git credentials
 ```bash
-source /home/user/serenata-erp/.env.local.tokens 2>/dev/null || true
+# Buscar token: primero en el proyecto, luego en Mac del usuario
+if [ -f /home/user/serenata-erp/.env.local.tokens ]; then
+  source /home/user/serenata-erp/.env.local.tokens
+elif [ -f ~/serenata-tokens.txt ]; then
+  source ~/serenata-tokens.txt
+fi
 git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/serenata-erp.git
 git config --global user.name "EduardoTerwogt"
 git config --global user.email "eduardoterwogt@gmail.com"
@@ -20,7 +25,7 @@ git checkout main
 ```bash
 git push origin main
 ```
-Si falla, leer el token de `.env.local.tokens` y reconfigurar el remote.
+Si falla, el token expiró. Pedirle al usuario que genere uno nuevo en github.com/settings/tokens (scope: repo) y actualice `~/serenata-tokens.txt` en su Mac.
 
 ---
 
