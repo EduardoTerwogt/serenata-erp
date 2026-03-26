@@ -100,21 +100,21 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   autoTable(doc, {
     startY: 10,
-    margin: { left: margin, right: 52 }, // leave ~50 mm on right for logo
+    margin: { left: margin, right: 42 },
     theme: 'grid',
-    styles: { fontSize: 9, cellPadding: 2.5, textColor: [0, 0, 0] as [number, number, number] },
+    styles: { fontSize: 9.5, cellPadding: { top: 0.7, right: 3.5, bottom: 0.7, left: 3.5 }, textColor: [0, 0, 0] as [number, number, number] },
     body: headerBody,
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 44, fillColor: [20, 20, 20] as [number, number, number], textColor: [255, 255, 255] as [number, number, number] },
+      0: { fontStyle: 'bold', cellWidth: 44, fillColor: [26, 26, 26] as [number, number, number], textColor: [255, 255, 255] as [number, number, number] },
       1: { fillColor: [255, 255, 255] as [number, number, number] },
     },
   })
 
-  // ISO logo — top right, exact aspect ratio (447×448 ≈ square)
+  // ISO logo — top right (130×130px ≈ 33mm square with orange bg)
   if (isoLogoPng) {
-    const isoH = 30
-    const isoW = isoH * ISO_RATIO  // ≈ 30mm
-    try { doc.addImage(isoLogoPng, 163, 8, isoW, isoH) } catch { /* skip */ }
+    const isoH = 33
+    const isoW = isoH * ISO_RATIO  // 447/448 ≈ 33mm
+    try { doc.addImage(isoLogoPng, pageW - margin - isoW, 8, isoW, isoH) } catch { /* skip */ }
   }
 
   let currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8
@@ -124,7 +124,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFontSize(12)
   doc.setTextColor(0, 0, 0)
   doc.text('RESUMEN:', margin, currentY)
-  currentY += 7
+  currentY += 8
 
   // ── 3. ITEMS TABLE ────────────────────────────────────────────────────────
   // Group items by category (preserve insertion order)
@@ -138,10 +138,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   categories.forEach((cat, catIdx) => {
     const catItems = data.items.filter(i => i.categoria === cat)
     const catTotal = catItems.reduce((s, i) => s + (i.importe || 0), 0)
-    // Blank spacer row between categories (not before the first one)
-    if (catIdx > 0) {
-      itemsBody.push([{ content: '', colSpan: 6, styles: { minCellHeight: 3 } }])
-    }
+    const isLastCat = catIdx === categories.length - 1
     catItems.forEach((item, idx) => {
       const noPrice = !item.precio_unitario || !item.cantidad
       const precioCell = noPrice ? '$ - ,00' : fmtPDF(item.precio_unitario)
@@ -157,6 +154,8 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
         idx === 0 ? fmtPDF(catTotal) : '',
       ])
     })
+    // Spacer: 16px (5.6mm) between categories, 32px (11.3mm) before totals
+    itemsBody.push([{ content: '', colSpan: 6, styles: { minCellHeight: isLastCat ? 11.3 : 5.6, fillColor: [255,255,255] as [number,number,number], lineWidth: 0 } }])
   })
 
   autoTable(doc, {
@@ -164,73 +163,101 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     margin: { left: margin, right: margin },
     head: [['Categoría', 'Descripción', 'Cant.', 'P. Unitario', 'Importe', 'Total categoría']],
     body: itemsBody,
-    styles: { fontSize: 8, cellPadding: 2.5, textColor: [0, 0, 0] as [number, number, number] },
+    styles: {
+      fontSize: 9,
+      cellPadding: { top: 1.23, right: 2.1, bottom: 1.23, left: 2.1 },
+      textColor: [0, 0, 0] as [number, number, number],
+      lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0 } as { top: number; right: number; bottom: number; left: number },
+      lineColor: [235, 235, 235] as [number, number, number],
+    },
     headStyles: {
-      fillColor: [0, 0, 0] as [number, number, number],
+      fillColor: [26, 26, 26] as [number, number, number],
       textColor: [255, 255, 255] as [number, number, number],
       fontStyle: 'bold',
-      fontSize: 9,
+      fontSize: 9.5,
+      cellPadding: { top: 1.75, right: 2.1, bottom: 1.75, left: 2.1 },
+      lineWidth: 0,
     },
-    alternateRowStyles: { fillColor: [255, 255, 255] as [number, number, number] },
     columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 58 },
-      2: { cellWidth: 14, halign: 'center' },
-      3: { cellWidth: 30, halign: 'right' },
-      4: { cellWidth: 28, halign: 'right' },
-      5: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
+      0: { cellWidth: 24 },
+      1: { cellWidth: 68 },
+      2: { cellWidth: 13, halign: 'center' },
+      3: { cellWidth: 24, halign: 'right' },
+      4: { cellWidth: 24, halign: 'right' },
+      5: { cellWidth: 29, halign: 'right', fontStyle: 'bold', lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0.15 } as { top: number; right: number; bottom: number; left: number }, lineColor: [235, 235, 235] as [number, number, number] },
     },
   })
 
   currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
 
-  // ── 4. TOTALS BANNER (dark full-width with logo left + totals right) ────────
-  type TotalsRow = { label: string; value: string; bold: boolean; orange: boolean }
+  // ── 4. TOTALS BANNER ────────────────────────────────────────────────────────
+  // Right column fixed 72mm (≈272px), left column gets remaining space for logo
+  const rightColW = 72
+  const leftColW = contentW - rightColW  // 110mm
+
+  type TotalsRow = {
+    label: string; value: string
+    labelColor: [number,number,number]; valueColor: [number,number,number]
+    bold: boolean; fontSize: number
+  }
+  const ORANGE: [number,number,number] = [249, 115, 22]
+  const WHITE: [number,number,number]  = [255, 255, 255]
+  const GRAY: [number,number,number]   = [187, 187, 187]
   const totalsRows: TotalsRow[] = [
-    { label: 'Subtotal', value: fmtPDF(data.subtotal), bold: false, orange: false },
-    { label: 'Fee de agencia', value: fmtPDF(data.fee_agencia), bold: false, orange: false },
-    { label: 'General', value: fmtPDF(data.general), bold: true, orange: true },
-    ...(descuento > 0 ? [{ label: 'Descuento', value: `-${fmtPDF(descuento)}`, bold: false, orange: false }] : []),
-    ...(data.iva_activo ? [{ label: 'IVA (16%)', value: fmtPDF(data.iva), bold: false, orange: false }] : []),
-    { label: 'TOTAL', value: fmtPDF(data.total), bold: true, orange: false },
+    { label: 'Subtotal',       value: fmtPDF(data.subtotal),    labelColor: GRAY,   valueColor: WHITE,  bold: false, fontSize: 8.5 },
+    { label: 'Fee de agencia', value: fmtPDF(data.fee_agencia), labelColor: GRAY,   valueColor: WHITE,  bold: false, fontSize: 8.5 },
+    { label: 'General',        value: fmtPDF(data.general),     labelColor: ORANGE, valueColor: ORANGE, bold: true,  fontSize: 8.5 },
+    ...(descuento > 0
+      ? [{ label: 'Descuento', value: `-${fmtPDF(descuento)}`, labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 8.5 }]
+      : []),
+    ...(data.iva_activo
+      ? [{ label: 'IVA (16%)', value: fmtPDF(data.iva), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 8.5 }]
+      : []),
+    { label: 'TOTAL',          value: fmtPDF(data.total),       labelColor: WHITE,  valueColor: WHITE,  bold: true,  fontSize: 9.5 },
   ]
 
-  const rowH = 5.5  // compact row height
-  const bannerPad = 6
-  const bannerH = Math.max(totalsRows.length * rowH + bannerPad * 2, 40)
+  const rowH    = 5.0
+  const rowGap  = 1.4  // 4px gap between rows
+  const padV    = 3.5  // 10px vertical padding in right col
+  const totalRowsH = totalsRows.length * rowH + (totalsRows.length - 1) * rowGap
+  const bannerH = Math.max(totalRowsH + padV * 2, 38)
 
   if (currentY + bannerH > 270) { doc.addPage(); currentY = 15 }
 
   // Full-width dark banner
-  doc.setFillColor(20, 20, 20)
+  doc.setFillColor(26, 26, 26)
   doc.rect(margin, currentY, contentW, bannerH, 'F')
 
-  // SERENATA logo — left ~55% of banner, exact aspect ratio (no deformation)
+  // SERENATA logo — left column, proportional (no deformation)
   if (serenataLogoPng) {
-    const logoW = contentW * 0.55          // 55% of banner width
-    const logoH = logoW / SERENATA_RATIO   // height derived from width, ratio 7.11
-    const logoX = margin + 6
+    const padH = 7.8   // 22px horizontal padding
+    const maxLogoW = leftColW - padH * 2
+    const logoW = maxLogoW
+    const logoH = logoW / SERENATA_RATIO   // exact ratio 7.11, no stretch
+    const logoX = margin + padH
     const logoY = currentY + (bannerH - logoH) / 2
     try { doc.addImage(serenataLogoPng, logoX, logoY, logoW, logoH) } catch { /* skip */ }
   }
 
-  // Totals rows — compact, pushed to the right
-  // Labels right-aligned at labelX, values right-aligned at valueX
-  const labelX = margin + contentW - 70   // labels right edge (leaves 70mm for label+value)
-  const valueX = margin + contentW - 3    // values right edge
-  let ty = currentY + bannerPad + 1
+  // Totals rows — right column, labels right-aligned then values right-aligned
+  const rightZoneX = margin + leftColW   // start of right column (124mm from page left)
+  const padRight   = 7                   // 20px right padding ≈ 7mm
+  const labelMinW  = 38.8               // 110px min-width for labels
+  const valueMinW  = 30                 // 85px min-width for values
+  const gapLV      = 1.4               // 4px gap between label and value
+  const valueRightX = rightZoneX + rightColW - padRight
+  const labelRightX = valueRightX - valueMinW - gapLV
 
-  totalsRows.forEach(row => {
+  let ty = currentY + padV + rowH * 0.75  // baseline offset
+
+  totalsRows.forEach((row, i) => {
+    if (i > 0) ty += rowH + rowGap
     doc.setFont('helvetica', row.bold ? 'bold' : 'normal')
-    doc.setFontSize(8.5)
-    if (row.orange) {
-      doc.setTextColor(255, 128, 0)
-    } else {
-      doc.setTextColor(255, 255, 255)
-    }
-    doc.text(row.label, labelX, ty, { align: 'right' })
-    doc.text(row.value, valueX, ty, { align: 'right' })
-    ty += rowH
+    doc.setFontSize(row.fontSize)
+    doc.setTextColor(...row.labelColor)
+    doc.text(row.label, labelRightX, ty, { align: 'right' })
+    doc.setTextColor(...row.valueColor)
+    doc.text(row.value, valueRightX, ty, { align: 'right' })
   })
 
   currentY = currentY + bannerH + 8
@@ -246,7 +273,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.line(margin, currentY + 0.8, margin + gw, currentY + 0.8)
   currentY += 6
 
-  doc.setFontSize(8)
+  doc.setFontSize(9)
   const generalesLine1 =
     'Serenata House se deslinda de cualquier daño o pérdida durante la actividad contratada, salvo de los ' +
     'materiales de producción y el inmueble (en caso de que haya uno contratado).'
@@ -255,26 +282,27 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setTextColor(0, 0, 0)
   const wrappedLine1 = doc.splitTextToSize(generalesLine1, contentW)
   doc.text(wrappedLine1, margin, currentY)
-  currentY += wrappedLine1.length * 4.5
+  currentY += wrappedLine1.length * 5.2
   doc.setFont('helvetica', 'normal')
   const wrappedLine2 = doc.splitTextToSize(generalesLine2, contentW)
   doc.text(wrappedLine2, margin, currentY)
-  currentY += (wrappedLine2.length * 4.5) + 8
+  currentY += (wrappedLine2.length * 5.2) + 8
 
   // ── 7. COSTOS ─────────────────────────────────────────────────────────────
   if (currentY > 255) { doc.addPage(); currentY = 15 }
 
-  doc.setFillColor(20, 20, 20)
-  doc.rect(margin, currentY, contentW, 8, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(9)
   doc.setTextColor(255, 255, 255)
-  doc.text('COSTOS', margin + 2, currentY + 5.5)
-  currentY += 10
+  const costosLabelW = doc.getTextWidth('COSTOS') + 6
+  doc.setFillColor(26, 26, 26)
+  doc.rect(margin, currentY, costosLabelW, 6, 'F')
+  doc.text('COSTOS', margin + 3, currentY + 4.2)
+  currentY += 8
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(0, 0, 0)
+  doc.setFontSize(9)
+  doc.setTextColor(17, 17, 17)
   const costosText =
     'Este presupuesto es 100 % modular y se adaptará a las necesidades del cliente.\n' +
     'Una vez aterrizada la propuesta al 100 % se ajustarán los costos.\n' +
@@ -282,22 +310,23 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     'Se requiere el 50% al contratar el servicio / 50% al finalizar'
   const wrappedCostos = doc.splitTextToSize(costosText, contentW)
   doc.text(wrappedCostos, margin, currentY)
-  currentY += (wrappedCostos.length * 4.5) + 8
+  currentY += (wrappedCostos.length * 5.2) + 8
 
   // ── 8. CANCELACIÓN ───────────────────────────────────────────────────────
   if (currentY > 240) { doc.addPage(); currentY = 15 }
 
-  doc.setFillColor(20, 20, 20)
-  doc.rect(margin, currentY, contentW, 8, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(9)
   doc.setTextColor(255, 255, 255)
-  doc.text('CANCELACIÓN', margin + 2, currentY + 5.5)
-  currentY += 10
+  const cancelLabelW = doc.getTextWidth('CANCELACIÓN') + 6
+  doc.setFillColor(26, 26, 26)
+  doc.rect(margin, currentY, cancelLabelW, 6, 'F')
+  doc.text('CANCELACIÓN', margin + 3, currentY + 4.2)
+  currentY += 8
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(0, 0, 0)
+  doc.setFontSize(9)
+  doc.setTextColor(17, 17, 17)
   const cancelacionText =
     'En caso de cancelación deberá hacerse por escrito con acuse de recibo con 192 horas habiles de ' +
     'anticipacion, toda cancelación realizada por este término genera un cargo del 60% del total generado en ' +
