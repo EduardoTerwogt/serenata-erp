@@ -106,7 +106,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     body: headerBody,
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 44, fillColor: [26, 26, 26] as [number, number, number], textColor: [255, 255, 255] as [number, number, number] },
-      1: { fillColor: [255, 255, 255] as [number, number, number] },
+      1: { cellWidth: 61, fillColor: [255, 255, 255] as [number, number, number] },
     },
   })
 
@@ -121,7 +121,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   // ── 2. TITLE "RESUMEN:" ───────────────────────────────────────────────────
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(12)
+  doc.setFontSize(11)
   doc.setTextColor(0, 0, 0)
   doc.text('RESUMEN:', margin, currentY)
   currentY += 8
@@ -218,9 +218,9 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   const rowH    = 5.0
   const rowGap  = 1.4  // 4px gap between rows
-  const padV    = 3.5  // 10px vertical padding in right col
+  const padV    = 2.65  // 10px vertical padding in right col
   const totalRowsH = totalsRows.length * rowH + (totalsRows.length - 1) * rowGap
-  const bannerH = Math.max(totalRowsH + padV * 2, 38)
+  const bannerH = Math.max(totalRowsH + padV * 2, 28)
 
   if (currentY + bannerH > 270) { doc.addPage(); currentY = 15 }
 
@@ -230,7 +230,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   // SERENATA logo — left column, proportional (no deformation)
   if (serenataLogoPng) {
-    const padH = 7.8   // 22px horizontal padding
+    const padH = 4.9   // 14px horizontal padding
     const maxLogoW = leftColW - padH * 2
     const logoW = maxLogoW
     const logoH = logoW / SERENATA_RATIO   // exact ratio 7.11, no stretch
@@ -286,7 +286,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFont('helvetica', 'normal')
   const wrappedLine2 = doc.splitTextToSize(generalesLine2, contentW)
   doc.text(wrappedLine2, margin, currentY)
-  currentY += (wrappedLine2.length * 5.2) + 8
+  currentY += (wrappedLine2.length * 5.2) + 2.1
 
   // ── 7. COSTOS ─────────────────────────────────────────────────────────────
   if (currentY > 255) { doc.addPage(); currentY = 15 }
@@ -310,7 +310,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     'Se requiere el 50% al contratar el servicio / 50% al finalizar'
   const wrappedCostos = doc.splitTextToSize(costosText, contentW)
   doc.text(wrappedCostos, margin, currentY)
-  currentY += (wrappedCostos.length * 5.2) + 8
+  currentY += (wrappedCostos.length * 5.2) + 2.1
 
   // ── 8. CANCELACIÓN ───────────────────────────────────────────────────────
   if (currentY > 240) { doc.addPage(); currentY = 15 }
