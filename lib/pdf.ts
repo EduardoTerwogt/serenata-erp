@@ -90,8 +90,15 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   autoTable(doc, {
     startY: 10,
     margin: { left: margin, right: 42 },
-    theme: 'plain',
-    styles: { fontSize: 9.5, cellPadding: { top: 1.35, right: 2.1, bottom: 1.35, left: 2.1 }, valign: 'middle' as 'middle', textColor: [0, 0, 0] as [number, number, number] },
+    theme: 'grid',
+    styles: {
+      fontSize: 9.5,
+      cellPadding: { top: 1.35, right: 2.1, bottom: 1.35, left: 2.1 },
+      valign: 'middle' as 'middle',
+      textColor: [0, 0, 0] as [number, number, number],
+      lineWidth: 0.15,
+      lineColor: [235, 235, 235] as [number, number, number],
+    },
     body: headerBody,
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 44, fillColor: [26, 26, 26] as [number, number, number], textColor: [255, 255, 255] as [number, number, number] },
@@ -222,28 +229,57 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   })
 
   currentY = currentY + bannerH + 5
-  if (currentY > 260) { doc.addPage(); currentY = 15 }
+
+  const generalesLine1 = 'Serenata House se deslinda de cualquier daño o pérdida durante la actividad contratada, salvo de los materiales de producción y el inmueble (en caso de que haya uno contratado).'
+  const generalesLine2 = 'Cualquier trabajo o elemento adicional será autorizado por el cliente'
+  const costosText = 'Este presupuesto es 100 % modular y se adaptará a las necesidades del cliente.\nUna vez aterrizada la propuesta al 100 % se ajustarán los costos.\nEste presupuesto es estimativo para desarrollar las actividades mencionadas.\nSe requiere el 50% al contratar el servicio / 50% al finalizar'
+  const cancelacionText = 'En caso de cancelación deberá hacerse por escrito con acuse de recibo con 192 horas habiles de anticipacion, toda cancelación realizada por este término genera un cargo del 60% del total generado en la cotización independientemente de que el cliente pagará cualquier tipo de gasto económico que se haya realizado para cumplir con esta cotización los cuales deberán de ser debidamente comprobados al cliente. Todo servicio o equipo adicional al evento se documentará en hojas de cargo o misceláneo que formará parte de este instrumento. El cliente será responsable del equipo cuando lo reciba y cuidará de su total integridad y seguridad. En caso de no reintegrarse después de terminado el servicio cotizado, genera un cobro proporcional por dia de retrazo. Se puede confirmar esta cotizacion via mail , pero siempre en los términos de estas condiciones\nSi la cancelación es recibida con menos de 48 horas antes del evento se cargará 100% del total'
+
+  const noticesBodyFontSize = 9
+  const noticesLineH = 5.2
+  const noticesTitleGap = 6
+  const noticesSectionGap = 2.8
+  const noticesLabelToTextGap = 10.5
+  const noticesSectionTailGap = 2.4
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(noticesBodyFontSize)
+  const wrappedLine1 = doc.splitTextToSize(generalesLine1, contentW)
+  doc.setFont('helvetica', 'normal')
+  const wrappedLine2 = doc.splitTextToSize(generalesLine2, contentW)
+  const wrappedCostos = doc.splitTextToSize(costosText, contentW)
+  const wrappedCancelacion = doc.splitTextToSize(cancelacionText, contentW)
+
+  const noticesBlockH =
+    noticesTitleGap +
+    wrappedLine1.length * noticesLineH +
+    wrappedLine2.length * noticesLineH +
+    noticesSectionGap +
+    noticesLabelToTextGap +
+    wrappedCostos.length * noticesLineH +
+    noticesSectionTailGap +
+    noticesLabelToTextGap +
+    wrappedCancelacion.length * noticesLineH
+
+  if (currentY + noticesBlockH > 280) { doc.addPage(); currentY = 15 }
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(10)
   doc.setTextColor(0, 0, 0)
   doc.text('GENERALES:', margin, currentY)
   const gw = doc.getTextWidth('GENERALES:')
   doc.line(margin, currentY + 0.8, margin + gw, currentY + 0.8)
-  currentY += 6
-  doc.setFontSize(9)
-  const generalesLine1 = 'Serenata House se deslinda de cualquier daño o pérdida durante la actividad contratada, salvo de los materiales de producción y el inmueble (en caso de que haya uno contratado).'
-  const generalesLine2 = 'Cualquier trabajo o elemento adicional será autorizado por el cliente'
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(0, 0, 0)
-  const wrappedLine1 = doc.splitTextToSize(generalesLine1, contentW)
-  doc.text(wrappedLine1, margin, currentY)
-  currentY += wrappedLine1.length * 5.2
-  doc.setFont('helvetica', 'normal')
-  const wrappedLine2 = doc.splitTextToSize(generalesLine2, contentW)
-  doc.text(wrappedLine2, margin, currentY)
-  currentY += (wrappedLine2.length * 5.2) + 2.0
+  currentY += noticesTitleGap
 
-  if (currentY > 255) { doc.addPage(); currentY = 15 }
+  doc.setFontSize(noticesBodyFontSize)
+  doc.setFont('helvetica', 'bold')
+  doc.text(wrappedLine1, margin, currentY)
+  currentY += wrappedLine1.length * noticesLineH
+
+  doc.setFont('helvetica', 'normal')
+  doc.text(wrappedLine2, margin, currentY)
+  currentY += wrappedLine2.length * noticesLineH + noticesSectionGap
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(255, 255, 255)
@@ -251,16 +287,14 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFillColor(26, 26, 26)
   doc.rect(margin, currentY, costosLabelW, 6, 'F')
   doc.text('COSTOS', margin + 3, currentY + 4.2)
-  currentY += 8
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(17, 17, 17)
-  const costosText = 'Este presupuesto es 100 % modular y se adaptará a las necesidades del cliente.\nUna vez aterrizada la propuesta al 100 % se ajustarán los costos.\nEste presupuesto es estimativo para desarrollar las actividades mencionadas.\nSe requiere el 50% al contratar el servicio / 50% al finalizar'
-  const wrappedCostos = doc.splitTextToSize(costosText, contentW)
-  doc.text(wrappedCostos, margin, currentY)
-  currentY += (wrappedCostos.length * 5.2) + 2.0
+  currentY += noticesLabelToTextGap
 
-  if (currentY > 240) { doc.addPage(); currentY = 15 }
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(noticesBodyFontSize)
+  doc.setTextColor(17, 17, 17)
+  doc.text(wrappedCostos, margin, currentY)
+  currentY += wrappedCostos.length * noticesLineH + noticesSectionTailGap
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(255, 255, 255)
@@ -268,12 +302,11 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFillColor(26, 26, 26)
   doc.rect(margin, currentY, cancelLabelW, 6, 'F')
   doc.text('CANCELACIÓN', margin + 3, currentY + 4.2)
-  currentY += 8
+  currentY += noticesLabelToTextGap
+
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
+  doc.setFontSize(noticesBodyFontSize)
   doc.setTextColor(17, 17, 17)
-  const cancelacionText = 'En caso de cancelación deberá hacerse por escrito con acuse de recibo con 192 horas habiles de anticipacion, toda cancelación realizada por este término genera un cargo del 60% del total generado en la cotización independientemente de que el cliente pagará cualquier tipo de gasto económico que se haya realizado para cumplir con esta cotización los cuales deberán de ser debidamente comprobados al cliente. Todo servicio o equipo adicional al evento se documentará en hojas de cargo o misceláneo que formará parte de este instrumento. El cliente será responsable del equipo cuando lo reciba y cuidará de su total integridad y seguridad. En caso de no reintegrarse después de terminado el servicio cotizado, genera un cobro proporcional por dia de retrazo. Se puede confirmar esta cotizacion via mail , pero siempre en los términos de estas condiciones\nSi la cancelación es recibida con menos de 48 horas antes del evento se cargará 100% del total'
-  const wrappedCancelacion = doc.splitTextToSize(cancelacionText, contentW)
   doc.text(wrappedCancelacion, margin, currentY, { align: 'justify', maxWidth: contentW })
   doc.save(`${data.id} - ${data.cliente} - ${data.proyecto}.pdf`)
 }
