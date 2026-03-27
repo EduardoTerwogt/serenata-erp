@@ -1,8 +1,12 @@
-import { getNextFolio } from '@/lib/db'
+import { getNextFolio, getNextFolioComplementaria } from '@/lib/db'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const folio = await getNextFolio()
+    const { searchParams } = new URL(request.url)
+    const complementariaDe = (searchParams.get('complementaria_de') || '').trim()
+    const folio = complementariaDe
+      ? await getNextFolioComplementaria(complementariaDe)
+      : await getNextFolio()
     return Response.json({ folio })
   } catch (error) {
     console.error(error)

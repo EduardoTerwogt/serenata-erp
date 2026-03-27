@@ -90,11 +90,14 @@ function NuevaCotizacionContent() {
   const watchedItems = watch('items')
 
   useEffect(() => {
-    fetch('/api/folio').then(r => r.json()).then(d => setFolio(d.folio))
+    const folioUrl = esComplementaria
+      ? `/api/folio?complementaria_de=${encodeURIComponent(complementaria_de)}`
+      : '/api/folio'
+    fetch(folioUrl).then(r => r.json()).then(d => setFolio(d.folio))
     fetch('/api/responsables').then(r => r.json()).then(setResponsables)
     fetch('/api/clientes?q=').then(r => r.json()).then(d => setListaClientes(d || [])).catch(() => {})
     fetch('/api/productos?q=').then(r => r.json()).then(d => setListaProductos(d || [])).catch(() => {})
-  }, [])
+  }, [esComplementaria, complementaria_de])
 
   useEffect(() => {
     if (complementaria_de) {
@@ -214,7 +217,6 @@ function NuevaCotizacionContent() {
         const err = await res.json()
         errMsg = err.error || errMsg
       } catch {
-        // ignorar
       }
 
       if (folio) {
@@ -229,7 +231,6 @@ function NuevaCotizacionContent() {
             }
           }
         } catch {
-          // ignorar error de recuperación
         }
       }
 
@@ -340,44 +341,26 @@ function NuevaCotizacionContent() {
           <div className="relative">
             <label className="block text-sm text-gray-400 mb-1">Cliente *</label>
             {esComplementaria ? (
-              <input
-                value={clienteInput}
-                readOnly
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white opacity-60 cursor-not-allowed"
-              />
+              <input value={clienteInput} readOnly className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white opacity-60 cursor-not-allowed" />
             ) : (
               <>
-                <input
-                  value={clienteInput}
-                  onChange={e => handleClienteChange(e.target.value)}
-                  onFocus={() => clienteSugerencias.length > 0 && setMostrarClienteDropdown(true)}
-                  onBlur={() => setTimeout(() => {
-                    setMostrarClienteDropdown(false)
-                    if (proyectosDelCliente.length === 0 && clienteInput.trim()) {
-                      const match = listaClientes.find(c => c.nombre.toLowerCase() === clienteInput.trim().toLowerCase())
-                      if (match) setProyectosDelCliente(match.proyectos || [])
-                    }
-                  }, 200)}
-                  autoComplete="off"
-                  placeholder="Nombre del cliente"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                />
+                <input value={clienteInput} onChange={e => handleClienteChange(e.target.value)} onFocus={() => clienteSugerencias.length > 0 && setMostrarClienteDropdown(true)} onBlur={() => setTimeout(() => {
+                  setMostrarClienteDropdown(false)
+                  if (proyectosDelCliente.length === 0 && clienteInput.trim()) {
+                    const match = listaClientes.find(c => c.nombre.toLowerCase() === clienteInput.trim().toLowerCase())
+                    if (match) setProyectosDelCliente(match.proyectos || [])
+                  }
+                }, 200)} autoComplete="off" placeholder="Nombre del cliente" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
                 {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
                   <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                     {clienteSugerencias.map((nombre, i) => (
-                      <div
-                        key={i}
-                        onMouseDown={() => {
-                          const cli = listaClientes.find(c => c.nombre === nombre)
-                          setClienteInput(nombre)
-                          setValue('cliente', nombre)
-                          setProyectosDelCliente(cli?.proyectos || [])
-                          setMostrarClienteDropdown(false)
-                        }}
-                        className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
-                      >
-                        {nombre}
-                      </div>
+                      <div key={i} onMouseDown={() => {
+                        const cli = listaClientes.find(c => c.nombre === nombre)
+                        setClienteInput(nombre)
+                        setValue('cliente', nombre)
+                        setProyectosDelCliente(cli?.proyectos || [])
+                        setMostrarClienteDropdown(false)
+                      }} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{nombre}</div>
                     ))}
                   </div>
                 )}
@@ -388,41 +371,23 @@ function NuevaCotizacionContent() {
           <div className="relative">
             <label className="block text-sm text-gray-400 mb-1">Proyecto *</label>
             {esComplementaria ? (
-              <input
-                value={proyectoInput}
-                readOnly
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white opacity-60 cursor-not-allowed"
-              />
+              <input value={proyectoInput} readOnly className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white opacity-60 cursor-not-allowed" />
             ) : (
               <>
-                <input
-                  value={proyectoInput}
-                  onChange={e => handleProyectoChange(e.target.value)}
-                  onFocus={() => {
-                    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
-                    if (filtrados.length > 0) setMostrarProyectoDropdown(true)
-                  }}
-                  onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)}
-                  autoComplete="off"
-                  placeholder="Nombre del proyecto"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                />
+                <input value={proyectoInput} onChange={e => handleProyectoChange(e.target.value)} onFocus={() => {
+                  const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
+                  if (filtrados.length > 0) setMostrarProyectoDropdown(true)
+                }} onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)} autoComplete="off" placeholder="Nombre del proyecto" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
                 {mostrarProyectoDropdown && (() => {
                   const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
                   return filtrados.length > 0 ? (
                     <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                       {filtrados.map((proy, i) => (
-                        <div
-                          key={i}
-                          onMouseDown={() => {
-                            setProyectoInput(proy)
-                            setValue('proyecto', proy)
-                            setMostrarProyectoDropdown(false)
-                          }}
-                          className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
-                        >
-                          {proy}
-                        </div>
+                        <div key={i} onMouseDown={() => {
+                          setProyectoInput(proy)
+                          setValue('proyecto', proy)
+                          setMostrarProyectoDropdown(false)
+                        }} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{proy}</div>
                       ))}
                     </div>
                   ) : null
@@ -432,21 +397,11 @@ function NuevaCotizacionContent() {
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">Fecha de Entrega</label>
-            <input
-              type="date"
-              {...register('fecha_entrega')}
-              readOnly={esComplementaria}
-              className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`}
-            />
+            <input type="date" {...register('fecha_entrega')} readOnly={esComplementaria} className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`} />
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">Locación</label>
-            <input
-              {...register('locacion')}
-              readOnly={esComplementaria}
-              className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`}
-              placeholder="Lugar del evento"
-            />
+            <input {...register('locacion')} readOnly={esComplementaria} className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`} placeholder="Lugar del evento" />
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">Fecha de Cotización</label>
@@ -458,13 +413,7 @@ function NuevaCotizacionContent() {
       <div className="bg-gray-900 border border-gray-800 rounded-xl mb-6">
         <div className="p-6 border-b border-gray-800 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Partidas</h2>
-          <button
-            type="button"
-            onClick={() => append({ ...itemVacio })}
-            className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors"
-          >
-            + Agregar fila
-          </button>
+          <button type="button" onClick={() => append({ ...itemVacio })} className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors">+ Agregar fila</button>
         </div>
         <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
           <table className="w-full text-sm">
@@ -481,32 +430,14 @@ function NuevaCotizacionContent() {
                 const { importe, margen } = calcItem(item)
                 return (
                   <tr key={field.id} className="border-b border-gray-800/50">
-                    <td className="px-4 py-2">
-                      <input
-                        {...register(`items.${index}.categoria`)}
-                        className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
-                        placeholder="Categoría"
-                      />
-                    </td>
+                    <td className="px-4 py-2"><input {...register(`items.${index}.categoria`)} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" placeholder="Categoría" /></td>
                     <td className="px-4 py-2">
                       <div className="relative">
-                        <input
-                          {...register(`items.${index}.descripcion`)}
-                          onChange={e => handleDescripcionChange(index, e.target.value)}
-                          onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))}
-                          onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200)}
-                          className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
-                          placeholder="Descripción"
-                          autoComplete="off"
-                        />
+                        <input {...register(`items.${index}.descripcion`)} onChange={e => handleDescripcionChange(index, e.target.value)} onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))} onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200)} className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" placeholder="Descripción" autoComplete="off" />
                         {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && (
                           <div className="absolute z-[9999] mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                             {productoSugerencias[index].map((p, i) => (
-                              <div
-                                key={i}
-                                onMouseDown={() => seleccionarProducto(index, p)}
-                                className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
-                              >
+                              <div key={i} onMouseDown={() => seleccionarProducto(index, p)} className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">
                                 <div className="font-medium">{p.descripcion}</div>
                                 {p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}
                               </div>
@@ -515,66 +446,23 @@ function NuevaCotizacionContent() {
                         )}
                       </div>
                     </td>
+                    <td className="px-4 py-2"><input type="number" min="1" step="1" {...register(`items.${index}.cantidad`, { valueAsNumber: true })} className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" /></td>
+                    <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" /></td>
+                    <td className="px-4 py-2 text-white font-medium whitespace-nowrap">${fmt(importe)}</td>
                     <td className="px-4 py-2">
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        {...register(`items.${index}.cantidad`, { valueAsNumber: true })}
-                        className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
-                      />
-                    </td>
-                    <td className="px-4 py-2">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
-                        className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
-                      />
-                    </td>
-                    <td className="px-4 py-2 text-white font-medium whitespace-nowrap">
-                      ${fmt(importe)}
-                    </td>
-                    <td className="px-4 py-2">
-                      <select
-                        {...register(`items.${index}.responsable_id`)}
-                        onChange={(e) => {
-                          setValue(`items.${index}.responsable_id`, e.target.value)
-                          const r = responsables.find(r => r.id === e.target.value)
-                          setValue(`items.${index}.responsable_nombre`, r?.nombre ?? '')
-                        }}
-                        className="w-36 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
-                      >
+                      <select {...register(`items.${index}.responsable_id`)} onChange={(e) => {
+                        setValue(`items.${index}.responsable_id`, e.target.value)
+                        const r = responsables.find(r => r.id === e.target.value)
+                        setValue(`items.${index}.responsable_nombre`, r?.nombre ?? '')
+                      }} className="w-36 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500">
                         <option value="">Sin asignar</option>
-                        {responsables.map(r => (
-                          <option key={r.id} value={r.id}>{r.nombre}</option>
-                        ))}
+                        {responsables.map(r => (<option key={r.id} value={r.id}>{r.nombre}</option>))}
                       </select>
                       <input type="hidden" {...register(`items.${index}.responsable_nombre`)} />
                     </td>
-                    <td className="px-4 py-2">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
-                        className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
-                      />
-                    </td>
-                    <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      ${fmt(margen)}
-                    </td>
-                    <td className="px-4 py-2">
-                      <button
-                        type="button"
-                        onClick={() => remove(index)}
-                        disabled={fields.length === 1}
-                        className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors"
-                      >
-                        ✕
-                      </button>
-                    </td>
+                    <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" /></td>
+                    <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmt(margen)}</td>
+                    <td className="px-4 py-2"><button type="button" onClick={() => remove(index)} disabled={fields.length === 1} className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
                   </tr>
                 )
               })}
@@ -587,128 +475,29 @@ function NuevaCotizacionContent() {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Totales</h3>
           <div className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Subtotal</span>
-              <span className="text-white">${fmt(totales.subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-sm items-center">
-              <span className="text-gray-400 flex items-center gap-2">
-                Fee Agencia
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.5"
-                  value={(porcentaje_fee * 100).toFixed(1)}
-                  onChange={e => setPorcentajeFee((parseFloat(e.target.value) || 0) / 100)}
-                  className="w-14 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"
-                />
-                <span className="text-gray-500 text-xs">%</span>
-              </span>
-              <span className="text-white">${fmt(totales.fee_agencia)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">General</span>
-              <span className="text-white">${fmt(totales.general)}</span>
-            </div>
-            <div className="flex justify-between text-sm items-center">
-              <span className="text-gray-400 flex items-center gap-2">
-                IVA (16%)
-                <button
-                  type="button"
-                  onClick={() => setIvaActivo(v => !v)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${iva_activo ? 'bg-blue-600' : 'bg-gray-600'}`}
-                >
-                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${iva_activo ? 'translate-x-4' : 'translate-x-1'}`} />
-                </button>
-              </span>
-              <span className={iva_activo ? 'text-white' : 'text-gray-600'}>${fmt(totales.iva)}</span>
-            </div>
-            <div className="flex justify-between text-sm items-center">
-              <span className="text-gray-400 flex items-center gap-2 flex-wrap">
-                Descuento
-                <select
-                  value={descuento_tipo}
-                  onChange={e => setDescuentoTipo(e.target.value as 'monto' | 'porcentaje')}
-                  className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"
-                >
-                  <option value="monto">$ Monto</option>
-                  <option value="porcentaje">% Porcentaje</option>
-                </select>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={descuento_valor}
-                  onChange={e => setDescuentoValor(parseFloat(e.target.value) || 0)}
-                  className="w-20 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"
-                />
-              </span>
-              <span className={totales.descuento > 0 ? 'text-yellow-400' : 'text-gray-600'}>
-                {totales.descuento > 0 ? `-$${fmt(totales.descuento)}` : '$0.00'}
-              </span>
-            </div>
-            <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-bold">
-              <span className="text-white">TOTAL</span>
-              <span className="text-green-400 text-lg">${fmt(totales.total)}</span>
-            </div>
+            <div className="flex justify-between text-sm"><span className="text-gray-400">Subtotal</span><span className="text-white">${fmt(totales.subtotal)}</span></div>
+            <div className="flex justify-between text-sm items-center"><span className="text-gray-400 flex items-center gap-2">Fee Agencia<input type="number" min="0" max="100" step="0.5" value={(porcentaje_fee * 100).toFixed(1)} onChange={e => setPorcentajeFee((parseFloat(e.target.value) || 0) / 100)} className="w-14 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500" /><span className="text-gray-500 text-xs">%</span></span><span className="text-white">${fmt(totales.fee_agencia)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-400">General</span><span className="text-white">${fmt(totales.general)}</span></div>
+            <div className="flex justify-between text-sm items-center"><span className="text-gray-400 flex items-center gap-2">IVA (16%)<button type="button" onClick={() => setIvaActivo(v => !v)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${iva_activo ? 'bg-blue-600' : 'bg-gray-600'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${iva_activo ? 'translate-x-4' : 'translate-x-1'}`} /></button></span><span className={iva_activo ? 'text-white' : 'text-gray-600'}>${fmt(totales.iva)}</span></div>
+            <div className="flex justify-between text-sm items-center"><span className="text-gray-400 flex items-center gap-2 flex-wrap">Descuento<select value={descuento_tipo} onChange={e => setDescuentoTipo(e.target.value as 'monto' | 'porcentaje')} className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"><option value="monto">$ Monto</option><option value="porcentaje">% Porcentaje</option></select><input type="number" min="0" step="0.01" value={descuento_valor} onChange={e => setDescuentoValor(parseFloat(e.target.value) || 0)} className="w-20 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500" /></span><span className={totales.descuento > 0 ? 'text-yellow-400' : 'text-gray-600'}>{totales.descuento > 0 ? `-$${fmt(totales.descuento)}` : '$0.00'}</span></div>
+            <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-bold"><span className="text-white">TOTAL</span><span className="text-green-400 text-lg">${fmt(totales.total)}</span></div>
           </div>
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Utilidad</h3>
           <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Margen Total</span>
-              <span className={totales.margen_total >= 0 ? 'text-green-400' : 'text-red-400'}>
-                ${fmt(totales.margen_total)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Fee Agencia</span>
-              <span className="text-white">${fmt(totales.fee_agencia)}</span>
-            </div>
-            <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-semibold">
-              <span className="text-gray-300">Utilidad Total</span>
-              <span className={totales.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'}>
-                ${fmt(totales.utilidad_total)}
-              </span>
-            </div>
-            {totales.subtotal > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Margen %</span>
-                <span className="text-blue-400">
-                  {((totales.margen_total / totales.subtotal) * 100).toFixed(1)}%
-                </span>
-              </div>
-            )}
+            <div className="flex justify-between text-sm"><span className="text-gray-400">Margen Total</span><span className={totales.margen_total >= 0 ? 'text-green-400' : 'text-red-400'}>${fmt(totales.margen_total)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-400">Fee Agencia</span><span className="text-white">${fmt(totales.fee_agencia)}</span></div>
+            <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-semibold"><span className="text-gray-300">Utilidad Total</span><span className={totales.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'}>${fmt(totales.utilidad_total)}</span></div>
+            {totales.subtotal > 0 && (<div className="flex justify-between text-sm"><span className="text-gray-400">Margen %</span><span className="text-blue-400">{((totales.margen_total / totales.subtotal) * 100).toFixed(1)}%</span></div>)}
           </div>
         </div>
       </div>
 
       <div className="flex gap-3">
-        <button
-          type="button"
-          disabled={guardando}
-          onClick={onGuardarBorrador}
-          className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
-        >
-          {guardando ? 'Guardando...' : 'Guardar Borrador'}
-        </button>
-        <button
-          type="button"
-          disabled={guardando}
-          onClick={onGenerarCotizacion}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
-        >
-          {guardando ? 'Generando...' : 'Generar Cotización'}
-        </button>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="text-gray-400 hover:text-white px-4 py-3 rounded-lg transition-colors"
-        >
-          Cancelar
-        </button>
+        <button type="button" disabled={guardando} onClick={onGuardarBorrador} className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50">{guardando ? 'Guardando...' : 'Guardar Borrador'}</button>
+        <button type="button" disabled={guardando} onClick={onGenerarCotizacion} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50">{guardando ? 'Generando...' : 'Generar Cotización'}</button>
+        <button type="button" onClick={() => router.back()} className="text-gray-400 hover:text-white px-4 py-3 rounded-lg transition-colors">Cancelar</button>
       </div>
 
     </div>

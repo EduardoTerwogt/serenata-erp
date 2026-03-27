@@ -160,6 +160,7 @@ export default function ProyectoDetallePage({
                 locacion: proyecto.locacion,
                 horarios: proyecto.horarios,
                 punto_encuentro: proyecto.punto_encuentro,
+                notas: proyecto.notas,
                 items: items.map(i => ({
                   id: i.id,
                   descripcion: i.descripcion,

@@ -104,11 +104,11 @@ export async function POST(request: Request) {
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : []
 
-    const folio: string = (cotizacionData.id as string) || (
-      cotizacionData.es_complementaria_de
-        ? await getNextFolioComplementaria(cotizacionData.es_complementaria_de as string)
-        : await getNextFolio()
-    )
+    const requestedId = String(cotizacionData.id || '').trim()
+    const complementariaDe = String(cotizacionData.es_complementaria_de || '').trim()
+    const folio: string = complementariaDe
+      ? await getNextFolioComplementaria(complementariaDe)
+      : requestedId || await getNextFolio()
     delete (cotizacionData as Record<string, unknown>).id
 
     const porcFee: number = porcentaje_fee ?? 0.15
