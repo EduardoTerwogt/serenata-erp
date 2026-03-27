@@ -1,13 +1,97 @@
 import {
-  getCotizacionById,
-  updateCotizacion,
   deleteCotizacion,
   deleteItemsByCotizacion,
+  getCotizacionById,
+  updateCotizacion,
   upsertItems,
-  getItemsByCotizacion,
 } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
+
+function buildPersistedItems(
+  cotizacionId: string,
+  items: Partial<ItemCotizacion>[],
+  previousItems: ItemCotizacion[]
+) {
+  const previousItemsById = new Map(previousItems.map(item => [item.id, item]))
+
+  return items.map((item, index) => {
+    const previousItem = (item.id && previousItemsById.get(item.id)) || previousItems[index]
+    return {
+      categoria: item.categoria || '',
+      descripcion: item.descripcion || '',
+      cantidad: item.cantidad ?? 0,
+      precio_unitario: item.precio_unitario ?? 0,
+      responsable_id: item.responsable_id || previousItem?.responsable_id || null,
+      responsable_nombre: item.responsable_nombre || previousItem?.responsable_nombre || null,
+      x_pagar: item.x_pagar ?? 0,
+      importe: item.importe ?? (item.cantidad ?? 0) * (item.precio_unitario ?? 0),
+      margen: item.margen ?? ((item.importe ?? (item.cantidad ?? 0) * (item.precio_unitario ?? 0)) - (item.x_pagar ?? 0)),
+      orden: item.orden ?? index,
+      notas: item.notas ?? previousItem?.notas ?? null,
+      cotizacion_id: cotizacionId,
+    }
+  })
+}
+
+async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: unknown) {
+  const cliente = String(clienteValue || '').trim()
+  const proyecto = String(proyectoValue || '').trim()
+
+  if (!cliente) return
+
+  const { data: clienteExistente, error: clienteFetchError } = await supabaseAdmin
+    .from('clientes')
+    .select('id, proyectos')
+    .eq('nombre', cliente)
+    .maybeSingle()
+
+  if (clienteFetchError) throw clienteFetchError
+
+  if (clienteExistente) {
+    const proyectosActuales = Array.isArray(clienteExistente.proyectos) ? clienteExistente.proyectos : []
+    const proyectos = proyecto && !proyectosActuales.includes(proyecto)
+      ? [...proyectosActuales, proyecto]
+      : proyectosActuales
+
+    const { error: updateError } = await supabaseAdmin
+      .from('clientes')
+      .update({ proyectos, activo: true })
+      .eq('id', clienteExistente.id)
+
+    if (updateError) throw updateError
+    return
+  }
+
+  const { error: insertError } = await supabaseAdmin
+    .from('clientes')
+    .insert({
+      nombre: cliente,
+      proyectos: proyecto ? [proyecto] : [],
+      activo: true,
+    })
+
+  if (insertError) throw insertError
+}
+
+async function autosaveProductos(items: Partial<ItemCotizacion>[]) {
+  for (const item of items) {
+    const descripcion = String(item.descripcion || '').trim()
+    if (!descripcion) continue
+
+    const { error } = await supabaseAdmin
+      .from('productos')
+      .upsert({
+        descripcion,
+        categoria: String(item.categoria || '').trim() || null,
+        precio_unitario: item.precio_unitario ?? 0,
+        x_pagar_sugerido: item.x_pagar ?? 0,
+        activo: true,
+      }, { onConflict: 'descripcion' })
+
+    if (error) throw error
+  }
+}
 
 export async function GET(
   _request: Request,
@@ -29,113 +113,77 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
+    const previousCotizacion = await getCotizacionById(id)
+    const previousItems = previousCotizacion.items || []
+
     const body = await request.json()
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
+    const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : null
 
-    console.log('ITEMS RECIBIDOS EN PUT:', JSON.stringify(items?.map((i: ItemCotizacion) => ({desc: i.descripcion, resp: i.responsable_nombre}))))
-    if (items !== undefined) {
+    if (inputItems !== null) {
       const porcFee: number = porcentaje_fee ?? 0.15
       const ivaActivo: boolean = iva_activo ?? true
       const descTipo: 'monto' | 'porcentaje' = descuento_tipo ?? 'monto'
       const descValor: number = descuento_valor ?? 0
 
-      const subtotal: number = (items as Partial<ItemCotizacion>[]).reduce(
-        (sum, item) => sum + (item.importe ?? 0),
-        0
-      )
+      const subtotal = inputItems.reduce((sum, item) => sum + (item.importe ?? 0), 0)
       const fee_agencia = subtotal * porcFee
       const general = subtotal + fee_agencia
       const descuento = descTipo === 'porcentaje' ? general * (descValor / 100) : descValor
       const base_iva = general - descuento
       const iva = ivaActivo ? base_iva * 0.16 : 0
       const total = base_iva + iva
-      const margen_total = (items as Partial<ItemCotizacion>[]).reduce(
-        (sum, item) => sum + (item.margen ?? 0),
-        0
-      )
+      const margen_total = inputItems.reduce((sum, item) => sum + (item.margen ?? 0), 0)
       const utilidad_total = margen_total + fee_agencia - descuento
 
       Object.assign(cotizacionData, {
-        subtotal, fee_agencia, general, iva, total, margen_total, utilidad_total,
-        porcentaje_fee: porcFee, iva_activo: ivaActivo,
-        descuento_tipo: descTipo, descuento_valor: descValor,
+        subtotal,
+        fee_agencia,
+        general,
+        iva,
+        total,
+        margen_total,
+        utilidad_total,
+        porcentaje_fee: porcFee,
+        iva_activo: ivaActivo,
+        descuento_tipo: descTipo,
+        descuento_valor: descValor,
       })
-
-      // CRÍTICO: leer responsables actuales ANTES de borrar para no perderlos
-      const existingItems = await getItemsByCotizacion(id)
-      const existingRespMap = new Map(existingItems.map(i => [i.id, {
-        responsable_id: i.responsable_id,
-        responsable_nombre: i.responsable_nombre,
-      }]))
-
-      await deleteItemsByCotizacion(id)
-      if (items.length > 0) {
-        const itemsToInsert = (items as Partial<ItemCotizacion>[]).map((item, index) => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { id: _id, ...rest } = item as ItemCotizacion & { id?: string }
-          // Si el form envió vacío, preserva el valor que había en la BD
-          const prev = _id ? existingRespMap.get(_id) : undefined
-          return {
-            ...rest,
-            cotizacion_id: id,
-            orden: index,
-            importe: item.importe ?? (item.cantidad ?? 0) * (item.precio_unitario ?? 0),
-            margen: item.margen ?? (item.importe ?? 0) - (item.x_pagar ?? 0),
-            responsable_id: item.responsable_id || prev?.responsable_id || null,
-            responsable_nombre: (item.responsable_nombre as string) || prev?.responsable_nombre || null,
-          }
-        })
-        itemsToInsert.forEach(item => console.log('GUARDANDO ITEM:', (item as ItemCotizacion).descripcion, '| RESPONSABLE:', item.responsable_nombre))
-        await upsertItems(itemsToInsert)
-      }
     }
 
-    const cotizacion = await updateCotizacion(id, cotizacionData)
+    try {
+      await updateCotizacion(id, cotizacionData)
 
-    // Auto-save cliente + proyecto (fire-and-forget)
-    if (cotizacionData.cliente) {
-      const proyecto = (cotizacionData.proyecto as string)?.trim() || ''
-      supabaseAdmin
-        .from('clientes')
-        .select('id, proyectos')
-        .eq('nombre', cotizacionData.cliente)
-        .maybeSingle()
-        .then(({ data: clienteExistente, error: clienteFetchError }) => {
-          if (clienteFetchError) { console.error('[PUT /api/cotizaciones] Error buscando cliente:', clienteFetchError); return }
-          if (clienteExistente) {
-            const proyectosActuales: string[] = clienteExistente.proyectos || []
-            if (proyecto && !proyectosActuales.includes(proyecto)) {
-              supabaseAdmin
-                .from('clientes')
-                .update({ proyectos: [...proyectosActuales, proyecto] })
-                .eq('id', clienteExistente.id)
-                .then(({ error }) => { if (error) console.error('[PUT /api/cotizaciones] Error actualizando proyectos del cliente:', error) })
-            }
-          } else {
-            supabaseAdmin
-              .from('clientes')
-              .insert({ nombre: cotizacionData.cliente, proyectos: proyecto ? [proyecto] : [] })
-              .then(({ error }) => { if (error) console.error('[PUT /api/cotizaciones] Error insertando cliente:', error) })
-          }
-        })
-    }
-    if (items) {
-      for (const item of (items as Partial<ItemCotizacion>[]) || []) {
-        if (item.descripcion?.trim()) {
-          supabaseAdmin
-            .from('productos')
-            .upsert({
-              descripcion: item.descripcion.trim(),
-              categoria: (item.categoria as string)?.trim() || '',
-              precio_unitario: item.precio_unitario,
-              x_pagar_sugerido: item.x_pagar || 0,
-            }, { onConflict: 'descripcion', ignoreDuplicates: true })
-            .then(({ error }) => { if (error) console.error('[PUT /api/cotizaciones] Error upsert producto:', error) })
+      if (inputItems !== null) {
+        await deleteItemsByCotizacion(id)
+        if (inputItems.length > 0) {
+          await upsertItems(buildPersistedItems(id, inputItems, previousItems))
         }
       }
-    }
 
-    return Response.json(cotizacion)
+      await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
+      if (inputItems !== null) {
+        await autosaveProductos(inputItems)
+      }
+
+      return Response.json(await getCotizacionById(id))
+    } catch (error) {
+      try {
+        const { id: _prevId, items: _prevItems, created_at: _prevCreatedAt, ...previousData } = previousCotizacion
+        await updateCotizacion(id, previousData)
+        await deleteItemsByCotizacion(id)
+        if (previousItems.length > 0) {
+          await upsertItems(previousItems.map((item, index) => ({
+            ...item,
+            cotizacion_id: id,
+            orden: item.orden ?? index,
+          })))
+        }
+      } catch (restoreError) {
+        console.error('[PUT /api/cotizaciones/:id] Error restaurando snapshot previo:', restoreError)
+      }
+      throw error
+    }
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error actualizando cotización' }, { status: 500 })

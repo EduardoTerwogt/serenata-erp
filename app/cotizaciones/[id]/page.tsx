@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useCallback, useEffect, useState, use } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
 import { Cotizacion, Responsable, ItemCotizacion, Producto } from '@/lib/types'
@@ -55,22 +55,17 @@ export default function CotizacionDetallePage({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // SICAM: listas completas cargadas al montar
   const [listaClientes, setListaClientes] = useState<{ nombre: string; proyectos: string[] }[]>([])
   const [listaProductos, setListaProductos] = useState<Producto[]>([])
-  // Autocomplete cliente
   const [clienteInput, setClienteInput] = useState('')
   const [clienteSugerencias, setClienteSugerencias] = useState<string[]>([])
   const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
-  // Autocomplete proyecto
   const [proyectosDelCliente, setProyectosDelCliente] = useState<string[]>([])
   const [proyectoInput, setProyectoInput] = useState('')
   const [mostrarProyectoDropdown, setMostrarProyectoDropdown] = useState(false)
-  // Autocomplete productos por fila
   const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
   const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
 
-  // Configuración de totales (cargada desde la cotización)
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
   const [iva_activo, setIvaActivo] = useState(true)
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
@@ -84,43 +79,59 @@ export default function CotizacionDetallePage({
 
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'ENVIADA'
 
-  useEffect(() => {
-    fetch('/api/clientes?q=').then(r => r.json()).then(d => setListaClientes(d || [])).catch(() => {})
-    fetch('/api/productos?q=').then(r => r.json()).then(d => setListaProductos(d || [])).catch(() => {})
+  const refreshCatalogos = useCallback(async () => {
+    try {
+      const [clientes, productos] = await Promise.all([
+        fetch('/api/clientes?q=').then(r => r.json()),
+        fetch('/api/productos?q=').then(r => r.json()),
+      ])
+      setListaClientes(clientes || [])
+      setListaProductos(productos || [])
+    } catch {
+      // ignorar refresh de catálogos
+    }
   }, [])
+
+  const applyCotizacionToState = useCallback((cot: Cotizacion) => {
+    setCotizacion(cot)
+    setClienteInput(cot.cliente || '')
+    setProyectoInput(cot.proyecto || '')
+    setPorcentajeFee(cot.porcentaje_fee ?? 0.15)
+    setIvaActivo(cot.iva_activo ?? true)
+    setDescuentoTipo(cot.descuento_tipo ?? 'monto')
+    setDescuentoValor(cot.descuento_valor ?? 0)
+    reset({
+      cliente: cot.cliente,
+      proyecto: cot.proyecto,
+      fecha_entrega: cot.fecha_entrega || '',
+      locacion: cot.locacion || '',
+      items: (cot.items || []).map((item: ItemCotizacion) => ({
+        id: item.id,
+        categoria: item.categoria,
+        descripcion: item.descripcion,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio_unitario,
+        responsable_id: item.responsable_id || '',
+        responsable_nombre: item.responsable_nombre || '',
+        x_pagar: item.x_pagar,
+      })),
+    })
+  }, [reset])
+
+  useEffect(() => {
+    refreshCatalogos()
+  }, [refreshCatalogos])
 
   useEffect(() => {
     Promise.all([
       fetch(`/api/cotizaciones/${id}`).then(r => r.json()),
       fetch('/api/responsables').then(r => r.json()),
     ]).then(([cot, resp]) => {
-      setCotizacion(cot)
-      setClienteInput(cot.cliente || '')
-      setProyectoInput(cot.proyecto || '')
+      applyCotizacionToState(cot)
       setResponsables(resp)
-      setPorcentajeFee(cot.porcentaje_fee ?? 0.15)
-      setIvaActivo(cot.iva_activo ?? true)
-      setDescuentoTipo(cot.descuento_tipo ?? 'monto')
-      setDescuentoValor(cot.descuento_valor ?? 0)
-      reset({
-        cliente: cot.cliente,
-        proyecto: cot.proyecto,
-        fecha_entrega: cot.fecha_entrega || '',
-        locacion: cot.locacion || '',
-        items: (cot.items || []).map((item: ItemCotizacion) => ({
-          id: item.id,
-          categoria: item.categoria,
-          descripcion: item.descripcion,
-          cantidad: item.cantidad,
-          precio_unitario: item.precio_unitario,
-          responsable_id: item.responsable_id || '',
-          responsable_nombre: item.responsable_nombre || '',
-          x_pagar: item.x_pagar,
-        })),
-      })
       setLoading(false)
     }).catch(() => setLoading(false))
-  }, [id, reset])
+  }, [id, applyCotizacionToState])
 
   const calcItem = (item: ItemForm) => {
     const pu = typeof item.precio_unitario === 'number' ? item.precio_unitario : 0
@@ -146,7 +157,6 @@ export default function CotizacionDetallePage({
     return { subtotal, fee_agencia, general, descuento, iva, total, margen_total, utilidad_total }
   })()
 
-  // Valores a mostrar en modo no editable (APROBADA)
   const displayTotales = esEditable ? totales : (() => {
     const g = cotizacion?.general ?? 0
     const dv = cotizacion?.descuento_valor ?? 0
@@ -164,7 +174,6 @@ export default function CotizacionDetallePage({
     }
   })()
 
-  // ── Handlers: cliente autocomplete (filtro local) ───────────────────────────
   const handleClienteChange = (valor: string) => {
     setClienteInput(valor)
     setValue('cliente', valor)
@@ -178,7 +187,6 @@ export default function CotizacionDetallePage({
     }
   }
 
-  // ── Handlers: proyecto autocomplete (filtro local sobre proyectos del cliente) ──
   const handleProyectoChange = (valor: string) => {
     setProyectoInput(valor)
     setValue('proyecto', valor)
@@ -186,10 +194,8 @@ export default function CotizacionDetallePage({
     setMostrarProyectoDropdown(filtrados.length > 0)
   }
 
-  // ── Handlers: producto autocomplete (filtro local) ──────────────────────────
   const handleDescripcionChange = (index: number, valor: string) => {
     setValue(`items.${index}.descripcion`, valor)
-    // Limpiar precios cuando el usuario escribe manualmente
     setValue(`items.${index}.precio_unitario`, '')
     setValue(`items.${index}.x_pagar`, '')
     if (valor.length >= 2) {
@@ -219,7 +225,6 @@ export default function CotizacionDetallePage({
         fecha_entrega: watch('fecha_entrega'),
         locacion: watch('locacion'),
       }
-      // P2: usar índice (no id) para lookup, porque react-hook-form puede no trackear el campo id
       const itemsParaGuardar = watchedItems.map((formItem, index) => {
         const { importe, margen } = calcItem(formItem)
         const dbItem = cotizacion?.items?.[index]
@@ -246,17 +251,19 @@ export default function CotizacionDetallePage({
       }
       if (estado) body.estado = estado
 
-      console.log('ITEMS A GUARDAR:', JSON.stringify(itemsParaGuardar.map(i => ({desc: i.descripcion, resp: i.responsable_nombre}))))
       const res = await fetch(`/api/cotizaciones/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error((await res.json()).error)
-      const updated = await res.json()
-      console.log('COTIZACION ITEMS ANTES:', cotizacion?.items?.map(i => i.responsable_nombre))
-      console.log('UPDATED CONTIENE ITEMS:', !!updated.items)
-      setCotizacion(prev => prev ? { ...prev, ...updated, items: prev.items } : updated)
+
+      const refreshedRes = await fetch(`/api/cotizaciones/${id}`)
+      if (!refreshedRes.ok) throw new Error('Error recargando cotización actualizada')
+      const refreshedCotizacion = await refreshedRes.json()
+      applyCotizacionToState(refreshedCotizacion)
+      await refreshCatalogos()
+
       setSuccess('Guardado correctamente')
       setTimeout(() => setSuccess(null), 3000)
       return true
@@ -274,25 +281,23 @@ export default function CotizacionDetallePage({
     setSuccess(null)
     try {
       const ok = await guardar()
-      if (!ok) { setAprobando(false); return }
-      setSuccess(null)
+      if (!ok) {
+        setAprobando(false)
+        return
+      }
+
       const res = await fetch(`/api/cotizaciones/${id}/aprobar`, { method: 'POST' })
       if (!res.ok) {
         const errData = await res.json()
         throw new Error(errData.error || 'Error aprobando cotización')
       }
-      // Recargar cotización completa con items después de aprobar
+
       const reloadRes = await fetch(`/api/cotizaciones/${id}`)
+      if (!reloadRes.ok) throw new Error('Error recargando cotización aprobada')
       const fullCot = await reloadRes.json()
-      // Preservar responsables si fullCot los trae vacíos (bug de sincronía DB)
-      if (fullCot.items) {
-        fullCot.items = fullCot.items.map((item: ItemCotizacion, index: number) => ({
-          ...item,
-          responsable_nombre: item.responsable_nombre || cotizacion?.items?.[index]?.responsable_nombre || null,
-          responsable_id: item.responsable_id || cotizacion?.items?.[index]?.responsable_id || null,
-        }))
-      }
-      setCotizacion(fullCot)
+      applyCotizacionToState(fullCot)
+      await refreshCatalogos()
+
       setSuccess('¡Cotización aprobada! Proyecto y cuentas creados.')
       setTimeout(() => setSuccess(null), 4000)
     } catch (e: unknown) {
@@ -333,16 +338,15 @@ export default function CotizacionDetallePage({
 
   const generarCotizacion = async () => {
     const ok = await guardar('ENVIADA')
-    if (!ok) return
-    // Usa datos actuales del form para el PDF (no depende del estado React)
+    if (!ok || !cotizacion) return
     const { generarPDFCotizacion } = await import('@/lib/pdf')
     await generarPDFCotizacion({
-      id: cotizacion!.id,
+      id: cotizacion.id,
       cliente: watch('cliente'),
       proyecto: watch('proyecto'),
       fecha_entrega: watch('fecha_entrega'),
       locacion: watch('locacion'),
-      fecha_cotizacion: cotizacion!.fecha_cotizacion,
+      fecha_cotizacion: cotizacion.fecha_cotizacion,
       items: watchedItems.map(item => ({
         categoria: item.categoria,
         descripcion: item.descripcion,
@@ -383,7 +387,6 @@ export default function CotizacionDetallePage({
 
   return (
     <div className="p-8 max-w-7xl">
-      {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -399,7 +402,6 @@ export default function CotizacionDetallePage({
           <p className="text-gray-400">{cotizacion.proyecto} — {cotizacion.cliente}</p>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
-          {/* BORRADOR: Guardar + Generar Cotización (→ENVIADA + PDF) */}
           {cotizacion.estado === 'BORRADOR' && (
             <>
               <button
@@ -418,7 +420,6 @@ export default function CotizacionDetallePage({
               </button>
             </>
           )}
-          {/* ENVIADA: Guardar + Generar PDF + Aprobar */}
           {cotizacion.estado === 'ENVIADA' && (
             <>
               <button
@@ -443,7 +444,6 @@ export default function CotizacionDetallePage({
               </button>
             </>
           )}
-          {/* APROBADA: Generar PDF + Crear Complementaria */}
           {cotizacion.estado === 'APROBADA' && (
             <>
               <button
@@ -474,11 +474,9 @@ export default function CotizacionDetallePage({
         </div>
       )}
 
-      {/* Info general */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
         <h2 className="text-lg font-semibold text-white mb-4">Información General</h2>
         <div className="grid grid-cols-2 gap-4">
-          {/* Cliente con autocomplete */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">Cliente</label>
             {esEditable ? (
@@ -521,7 +519,6 @@ export default function CotizacionDetallePage({
               <p className="text-white py-2">{watch('cliente') || '—'}</p>
             )}
           </div>
-          {/* Proyecto con autocomplete */}
           <div className="relative">
             <label className="block text-sm text-gray-400 mb-1">Proyecto</label>
             {esEditable ? (
@@ -562,7 +559,6 @@ export default function CotizacionDetallePage({
               <p className="text-white py-2">{watch('proyecto') || '—'}</p>
             )}
           </div>
-          {/* Fecha de Entrega y Locación */}
           {[
             { label: 'Fecha de Entrega', name: 'fecha_entrega' as const, type: 'date' },
             { label: 'Locación', name: 'locacion' as const },
@@ -595,7 +591,6 @@ export default function CotizacionDetallePage({
         </div>
       </div>
 
-      {/* Items */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl mb-6">
         <div className="p-6 border-b border-gray-800 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Partidas</h2>
@@ -631,13 +626,13 @@ export default function CotizacionDetallePage({
                       <td className="px-4 py-2">
                         <div className="relative">
                           <input
-                              {...register(`items.${index}.descripcion`)}
-                              onChange={e => handleDescripcionChange(index, e.target.value)}
-                              onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))}
-                              onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200)}
-                              className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
-                              autoComplete="off"
-                            />
+                            {...register(`items.${index}.descripcion`)}
+                            onChange={e => handleDescripcionChange(index, e.target.value)}
+                            onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))}
+                            onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200)}
+                            className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
+                            autoComplete="off"
+                          />
                           {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && (
                             <div className="absolute z-[9999] mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                               {productoSugerencias[index].map((p, i) => (
@@ -711,7 +706,6 @@ export default function CotizacionDetallePage({
         </div>
       </div>
 
-      {/* Totales */}
       <div className="grid grid-cols-2 gap-6">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Totales</h3>
