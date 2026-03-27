@@ -239,8 +239,8 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   let noticesTitleGap = 4.8
   let noticesSectionGap = 1.0
   let noticesLabelToTextGap = 6.2
-  let noticesSectionTailGap = 0.6
-  const gapBetweenBannerAndGenerales = 2.6
+  let noticesSectionTailGap = 0.0
+  const gapBetweenBannerAndGenerales = 4.4
 
   const measureNotices = () => {
     doc.setFont('helvetica', 'bold')
@@ -263,7 +263,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
       noticesSectionTailGap +
       6 + noticesLabelToTextGap +
       cancelacion1.length * noticesLineH +
-      (cancelacion2.length > 0 ? noticesSectionTailGap + cancelacion2.length * noticesLineH : 0)
+      (cancelacion2.length > 0 ? cancelacion2.length * noticesLineH : 0)
 
     return { line1, line2, costos, cancelacion1, cancelacion2, blockH }
   }
@@ -275,7 +275,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     noticesTitleGap = 4.2
     noticesSectionGap = 0.8
     noticesLabelToTextGap = 5.6
-    noticesSectionTailGap = 0.4
+    noticesSectionTailGap = 0.0
     measuredNotices = measureNotices()
   }
 
@@ -334,7 +334,6 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.text(wrappedCancelacion1, margin, currentY, { align: 'justify', maxWidth: contentW })
   currentY += wrappedCancelacion1.length * noticesLineH
   if (wrappedCancelacion2.length > 0) {
-    currentY += noticesSectionTailGap
     doc.text(wrappedCancelacion2, margin, currentY)
   }
 
