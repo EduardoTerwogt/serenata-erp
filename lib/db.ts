@@ -262,7 +262,7 @@ export async function createCuentasPagarDesdeCotizacion(cotizacionId: string) {
 
   const { data, error } = await supabaseAdmin
     .from('cuentas_pagar')
-    .upsert(cuentas, { onConflict: 'cotizacion_id,item_id' })
+    .insert(cuentas)
     .select()
   if (error) throw error
   return data as CuentaPagar[]
@@ -295,7 +295,7 @@ export async function createCuentasPagarConProyecto(
 
   const { data, error } = await supabaseAdmin
     .from('cuentas_pagar')
-    .upsert(cuentas, { onConflict: 'cotizacion_id,item_id' })
+    .insert(cuentas)
     .select()
   console.log('[createCuentasPagarConProyecto] resultado inserción:', { data, error })
   if (error) throw error
