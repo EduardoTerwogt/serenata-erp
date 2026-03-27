@@ -92,7 +92,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     margin: { left: margin, right: 39 },
     theme: 'grid',
     styles: {
-      fontSize: 9.5,
+      fontSize: 8.5,
       cellPadding: { top: 1.35, right: 2.1, bottom: 1.35, left: 2.1 },
       valign: 'middle' as 'middle',
       textColor: [0, 0, 0] as [number, number, number],
@@ -183,11 +183,12 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   const ORANGE: [number,number,number] = [249, 115, 22]
   const WHITE: [number,number,number]  = [255, 255, 255]
   const GRAY: [number,number,number]   = [187, 187, 187]
+  const YELLOW: [number,number,number] = [245, 208, 66]
   const totalsRows: TotalsRow[] = [
     { label: 'Subtotal', value: fmtPDF(data.subtotal), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 9.5 },
     { label: 'Fee de agencia', value: fmtPDF(data.fee_agencia), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 9.5 },
     { label: 'General', value: fmtPDF(data.general), labelColor: ORANGE, valueColor: ORANGE, bold: true, fontSize: 10.5 },
-    ...(descuento > 0 ? [{ label: 'Descuento', value: `-${fmtPDF(descuento)}`, labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 9.5 }] : []),
+    ...(descuento > 0 ? [{ label: 'Descuento', value: `-${fmtPDF(descuento)}`, labelColor: YELLOW, valueColor: YELLOW, bold: false, fontSize: 9.5 }] : []),
     ...(data.iva_activo ? [{ label: 'IVA (16%)', value: fmtPDF(data.iva), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 9.5 }] : []),
     { label: 'TOTAL', value: fmtPDF(data.total), labelColor: WHITE, valueColor: WHITE, bold: true, fontSize: 10.5 },
   ]
@@ -309,7 +310,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(noticesBodyFontSize)
   doc.setTextColor(17, 17, 17)
-  doc.text(wrappedCostos, margin, currentY, { align: 'justify', maxWidth: contentW })
+  doc.text(wrappedCostos, margin, currentY)
   currentY += wrappedCostos.length * noticesLineH + noticesSectionTailGap
 
   doc.setFont('helvetica', 'bold')
