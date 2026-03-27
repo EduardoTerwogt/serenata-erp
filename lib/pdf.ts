@@ -73,7 +73,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   const doc = new jsPDF('p', 'mm', 'a4')
   const pageW = 210
-  const margin = 14
+  const margin = 11.5
   const contentW = pageW - 2 * margin
 
   const descuento = data.descuento_tipo === 'porcentaje' ? data.general * (data.descuento_valor / 100) : data.descuento_valor
@@ -89,7 +89,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   autoTable(doc, {
     startY: 10,
-    margin: { left: margin, right: 42 },
+    margin: { left: margin, right: 39 },
     theme: 'grid',
     styles: {
       fontSize: 9.5,
@@ -102,7 +102,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     body: headerBody,
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 44, fillColor: [26, 26, 26] as [number, number, number], textColor: [255, 255, 255] as [number, number, number] },
-      1: { cellWidth: 61, fillColor: [255, 255, 255] as [number, number, number] },
+      1: { cellWidth: 64, fillColor: [255, 255, 255] as [number, number, number] },
     },
   })
 
@@ -168,7 +168,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     },
     columnStyles: {
       0: { cellWidth: 24 },
-      1: { cellWidth: 68 },
+      1: { cellWidth: 73 },
       2: { cellWidth: 13, halign: 'center' },
       3: { cellWidth: 24, halign: 'right' },
       4: { cellWidth: 24, halign: 'right' },
@@ -176,7 +176,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     },
   })
 
-  currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6
+  currentY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5.5
   const rightColW = 72
   const leftColW = contentW - rightColW
   type TotalsRow = { label: string; value: string; labelColor: [number,number,number]; valueColor: [number,number,number]; bold: boolean; fontSize: number }
@@ -228,45 +228,60 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     doc.text(row.value, valueRightX, ty, { align: 'right' })
   })
 
-  currentY = currentY + bannerH + 5
+  currentY = currentY + bannerH + 3.2
 
   const generalesLine1 = 'Serenata House se deslinda de cualquier daño o pérdida durante la actividad contratada, salvo de los materiales de producción y el inmueble (en caso de que haya uno contratado).'
   const generalesLine2 = 'Cualquier trabajo o elemento adicional será autorizado por el cliente'
   const costosText = 'Este presupuesto es 100 % modular y se adaptará a las necesidades del cliente.\nUna vez aterrizada la propuesta al 100 % se ajustarán los costos.\nEste presupuesto es estimativo para desarrollar las actividades mencionadas.\nSe requiere el 50% al contratar el servicio / 50% al finalizar'
   const cancelacionText = 'En caso de cancelación deberá hacerse por escrito con acuse de recibo con 192 horas habiles de anticipacion, toda cancelación realizada por este término genera un cargo del 60% del total generado en la cotización independientemente de que el cliente pagará cualquier tipo de gasto económico que se haya realizado para cumplir con esta cotización los cuales deberán de ser debidamente comprobados al cliente. Todo servicio o equipo adicional al evento se documentará en hojas de cargo o misceláneo que formará parte de este instrumento. El cliente será responsable del equipo cuando lo reciba y cuidará de su total integridad y seguridad. En caso de no reintegrarse después de terminado el servicio cotizado, genera un cobro proporcional por dia de retrazo. Se puede confirmar esta cotizacion via mail , pero siempre en los términos de estas condiciones\nSi la cancelación es recibida con menos de 48 horas antes del evento se cargará 100% del total'
 
-  const noticesBodyFontSize = 9
-  const noticesLineH = 5.2
-  const noticesTitleGap = 6
-  const noticesSectionGap = 1.6
-  const noticesLabelToTextGap = 8.4
-  const noticesSectionTailGap = 1.2
+  let noticesBodyFontSize = 8.5
+  let noticesLineH = 4.55
+  let noticesTitleGap = 4.8
+  let noticesSectionGap = 1.0
+  let noticesLabelToTextGap = 6.2
+  let noticesSectionTailGap = 0.6
+
+  const measureNotices = () => {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(noticesBodyFontSize)
+    const line1 = doc.splitTextToSize(generalesLine1, contentW)
+    doc.setFont('helvetica', 'normal')
+    const line2 = doc.splitTextToSize(generalesLine2, contentW)
+    const costos = doc.splitTextToSize(costosText, contentW)
+    const cancelacion = doc.splitTextToSize(cancelacionText, contentW)
+    const blockH =
+      noticesTitleGap +
+      line1.length * noticesLineH +
+      line2.length * noticesLineH +
+      noticesSectionGap +
+      6 + noticesLabelToTextGap +
+      costos.length * noticesLineH +
+      noticesSectionTailGap +
+      6 + noticesLabelToTextGap +
+      cancelacion.length * noticesLineH
+
+    return { line1, line2, costos, cancelacion, blockH }
+  }
+
+  let measuredNotices = measureNotices()
+  if (currentY + measuredNotices.blockH > 286) {
+    noticesBodyFontSize = 8.2
+    noticesLineH = 4.25
+    noticesTitleGap = 4.2
+    noticesSectionGap = 0.8
+    noticesLabelToTextGap = 5.6
+    noticesSectionTailGap = 0.4
+    measuredNotices = measureNotices()
+  }
+
+  const wrappedLine1 = measuredNotices.line1
+  const wrappedLine2 = measuredNotices.line2
+  const wrappedCostos = measuredNotices.costos
+  const wrappedCancelacion = measuredNotices.cancelacion
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(noticesBodyFontSize)
-  const wrappedLine1 = doc.splitTextToSize(generalesLine1, contentW)
-  doc.setFont('helvetica', 'normal')
-  const wrappedLine2 = doc.splitTextToSize(generalesLine2, contentW)
-  const wrappedCostos = doc.splitTextToSize(costosText, contentW)
-  const wrappedCancelacion = doc.splitTextToSize(cancelacionText, contentW)
-
-  const noticesBlockH =
-    noticesTitleGap +
-    wrappedLine1.length * noticesLineH +
-    wrappedLine2.length * noticesLineH +
-    noticesSectionGap +
-    6 +
-    noticesLabelToTextGap +
-    wrappedCostos.length * noticesLineH +
-    noticesSectionTailGap +
-    6 +
-    noticesLabelToTextGap +
-    wrappedCancelacion.length * noticesLineH
-
-  if (currentY + noticesBlockH > 280) { doc.addPage(); currentY = 15 }
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(9.6)
   doc.setTextColor(0, 0, 0)
   doc.text('GENERALES:', margin, currentY)
   const gw = doc.getTextWidth('GENERALES:')
@@ -275,15 +290,15 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
 
   doc.setFontSize(noticesBodyFontSize)
   doc.setFont('helvetica', 'bold')
-  doc.text(wrappedLine1, margin, currentY)
+  doc.text(wrappedLine1, margin, currentY, { align: 'justify', maxWidth: contentW })
   currentY += wrappedLine1.length * noticesLineH
 
   doc.setFont('helvetica', 'normal')
-  doc.text(wrappedLine2, margin, currentY)
+  doc.text(wrappedLine2, margin, currentY, { align: 'justify', maxWidth: contentW })
   currentY += wrappedLine2.length * noticesLineH + noticesSectionGap
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(8.8)
   doc.setTextColor(255, 255, 255)
   const costosLabelW = doc.getTextWidth('COSTOS') + 6
   doc.setFillColor(26, 26, 26)
@@ -294,11 +309,11 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(noticesBodyFontSize)
   doc.setTextColor(17, 17, 17)
-  doc.text(wrappedCostos, margin, currentY)
+  doc.text(wrappedCostos, margin, currentY, { align: 'justify', maxWidth: contentW })
   currentY += wrappedCostos.length * noticesLineH + noticesSectionTailGap
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(8.8)
   doc.setTextColor(255, 255, 255)
   const cancelLabelW = doc.getTextWidth('CANCELACIÓN') + 6
   doc.setFillColor(26, 26, 26)
