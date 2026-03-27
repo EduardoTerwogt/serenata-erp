@@ -1,4 +1,36 @@
-import { getProyectoById, updateProyecto, generarHistorialProyecto } from '@/lib/db'
+import { generarHistorialProyecto, getItemsByCotizacion, getProyectoById, updateProyecto } from '@/lib/db'
+import { supabaseAdmin } from '@/lib/supabase'
+import { ItemCotizacion } from '@/lib/types'
+
+async function getProyectoDetalle(id: string) {
+  const proyecto = await getProyectoById(id)
+  const principalItems = await getItemsByCotizacion(id)
+
+  const { data: complementarias, error } = await supabaseAdmin
+    .from('cotizaciones')
+    .select('id')
+    .eq('es_complementaria_de', id)
+    .eq('estado', 'APROBADA')
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+
+  const compItemArrays = await Promise.all(
+    (complementarias || []).map(async (c: { id: string }) => {
+      try {
+        return await getItemsByCotizacion(c.id)
+      } catch {
+        return [] as ItemCotizacion[]
+      }
+    })
+  )
+
+  return {
+    ...proyecto,
+    items: [...principalItems, ...compItemArrays.flat()],
+    cotizacion_ids: [id, ...(complementarias || []).map((c: { id: string }) => c.id)],
+  }
+}
 
 export async function GET(
   _request: Request,
@@ -6,7 +38,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const proyecto = await getProyectoById(id)
+    const proyecto = await getProyectoDetalle(id)
     return Response.json(proyecto)
   } catch (error) {
     console.error(error)
@@ -21,24 +53,67 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
+    const { notas_por_item = {}, ...proyectoUpdates } = body
 
-    // Captura estado anterior antes de actualizar
     const proyectoAnterior = await getProyectoById(id)
+    const detalleAnterior = await getProyectoDetalle(id)
+    const itemIdsValidos = new Set((detalleAnterior.items || []).map((item: ItemCotizacion) => item.id))
+    const notasPrevias = new Map(
+      (detalleAnterior.items || []).map((item: ItemCotizacion) => [item.id, item.notas || ''])
+    )
 
-    const proyecto = await updateProyecto(id, body)
+    const proyecto = await updateProyecto(id, proyectoUpdates)
 
-    // Genera historial solo al transicionar a FINALIZADO
-    if (body.estado === 'FINALIZADO' && proyectoAnterior.estado !== 'FINALIZADO') {
-      try {
-        await generarHistorialProyecto(id, proyecto)
-        console.log(`[PUT /api/proyectos/${id}] Historial generado al finalizar proyecto`)
-      } catch (e) {
-        console.error(`[PUT /api/proyectos/${id}] Error generando historial:`, e)
-        // No-fatal: el proyecto ya se actualizó correctamente
+    try {
+      for (const [itemId, notas] of Object.entries(notas_por_item as Record<string, string>)) {
+        if (!itemIdsValidos.has(itemId)) {
+          throw new Error(`La partida ${itemId} no pertenece a este proyecto`)
+        }
+
+        const { error } = await supabaseAdmin
+          .from('items_cotizacion')
+          .update({ notas: notas || null })
+          .eq('id', itemId)
+
+        if (error) throw error
       }
-    }
 
-    return Response.json(proyecto)
+      if (proyectoUpdates.estado === 'FINALIZADO' && proyectoAnterior.estado !== 'FINALIZADO') {
+        try {
+          await generarHistorialProyecto(id, proyecto)
+          console.log(`[PUT /api/proyectos/${id}] Historial generado al finalizar proyecto`)
+        } catch (e) {
+          console.error(`[PUT /api/proyectos/${id}] Error generando historial:`, e)
+        }
+      }
+
+      return Response.json(await getProyectoDetalle(id))
+    } catch (error) {
+      try {
+        await updateProyecto(id, {
+          cliente: proyectoAnterior.cliente,
+          proyecto: proyectoAnterior.proyecto,
+          fecha_entrega: proyectoAnterior.fecha_entrega,
+          locacion: proyectoAnterior.locacion,
+          horarios: proyectoAnterior.horarios,
+          punto_encuentro: proyectoAnterior.punto_encuentro,
+          notas: proyectoAnterior.notas,
+          estado: proyectoAnterior.estado,
+        })
+
+        for (const [itemId, notas] of Array.from(notasPrevias.entries())) {
+          const { error: notasError } = await supabaseAdmin
+            .from('items_cotizacion')
+            .update({ notas: notas || null })
+            .eq('id', itemId)
+          if (notasError) throw notasError
+        }
+      } catch (rollbackError) {
+        console.error(`[PUT /api/proyectos/${id}] Error haciendo rollback:`, rollbackError)
+      }
+
+      throw error
+    }
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error actualizando proyecto' }, { status: 500 })

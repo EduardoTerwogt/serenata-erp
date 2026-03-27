@@ -5,6 +5,11 @@ import { useForm } from 'react-hook-form'
 import Link from 'next/link'
 import { Proyecto, EstadoProyecto, ItemCotizacion, Responsable } from '@/lib/types'
 
+interface ProyectoDetalle extends Proyecto {
+  items?: ItemCotizacion[]
+  cotizacion_ids?: string[]
+}
+
 interface ProyectoForm {
   fecha_entrega: string
   locacion: string
@@ -33,7 +38,7 @@ export default function ProyectoDetallePage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
-  const [proyecto, setProyecto] = useState<Proyecto | null>(null)
+  const [proyecto, setProyecto] = useState<ProyectoDetalle | null>(null)
   const [items, setItems] = useState<ItemCotizacion[]>([])
   const [responsables, setResponsables] = useState<Responsable[]>([])
   const [itemNotas, setItemNotas] = useState<Record<string, string>>({})
@@ -51,6 +56,8 @@ export default function ProyectoDetallePage({
     ]).then(([proy, resp]) => {
       setProyecto(proy)
       setResponsables(resp)
+      setItems(proy.items || [])
+      setItemNotas(Object.fromEntries((proy.items || []).map((i: ItemCotizacion) => [i.id, i.notas || ''])))
       reset({
         fecha_entrega: proy.fecha_entrega || '',
         locacion: proy.locacion || '',
@@ -59,33 +66,6 @@ export default function ProyectoDetallePage({
         notas: proy.notas || '',
         estado: proy.estado,
       })
-
-      // Load items from principal cotizacion + all approved complementary cotizaciones
-      fetch(`/api/cotizaciones/${id}`)
-        .then(r => r.json())
-        .then(async cot => {
-          const principalItems: ItemCotizacion[] = cot.items || []
-          // Fetch complementary cotizaciones linked to this project
-          const allCots = await fetch('/api/cotizaciones').then(r => r.json()).catch(() => [])
-          const complementarias = Array.isArray(allCots)
-            ? allCots.filter((c: { tipo?: string; es_complementaria_de?: string; estado?: string }) =>
-                c.tipo === 'COMPLEMENTARIA' && c.es_complementaria_de === id && c.estado === 'APROBADA'
-              )
-            : []
-          const compItemArrays = await Promise.all(
-            complementarias.map((c: { id: string }) =>
-              fetch(`/api/cotizaciones/${c.id}`)
-                .then(r => r.json())
-                .then(comp => comp.items || [])
-                .catch(() => [])
-            )
-          )
-          const allItems = [...principalItems, ...compItemArrays.flat()]
-          setItems(allItems)
-          setItemNotas(Object.fromEntries(allItems.map(i => [i.id, i.notas || ''])))
-        })
-        .catch(() => {})
-
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [id, reset])
@@ -94,25 +74,30 @@ export default function ProyectoDetallePage({
     setGuardando(true)
     setError(null)
     try {
+      const notasPorItem = Object.fromEntries(items.map(item => [item.id, itemNotas[item.id] ?? '']))
+
       const res = await fetch(`/api/proyectos/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          notas_por_item: notasPorItem,
+        }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
+
       const updated = await res.json()
       setProyecto(updated)
-
-      // Guardar notas de cada partida
-      await Promise.all(
-        Object.entries(itemNotas).map(([itemId, notas]) =>
-          fetch(`/api/items/${itemId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ notas }),
-          })
-        )
-      )
+      setItems(updated.items || [])
+      setItemNotas(Object.fromEntries((updated.items || []).map((i: ItemCotizacion) => [i.id, i.notas || ''])))
+      reset({
+        fecha_entrega: updated.fecha_entrega || '',
+        locacion: updated.locacion || '',
+        horarios: updated.horarios || '',
+        punto_encuentro: updated.punto_encuentro || '',
+        notas: updated.notas || '',
+        estado: updated.estado,
+      })
 
       setSuccess('Proyecto actualizado correctamente')
       setTimeout(() => setSuccess(null), 3000)
@@ -125,13 +110,11 @@ export default function ProyectoDetallePage({
 
   const actualizarResponsableItem = async (itemId: string, responsableId: string) => {
     const responsable = responsables.find(r => r.id === responsableId)
-    // Actualiza visualmente de inmediato
     setItems(prev => prev.map(item =>
       item.id === itemId
         ? { ...item, responsable_id: responsableId, responsable_nombre: responsable?.nombre || null }
         : item
     ))
-    // Persiste en BD y sincroniza cuentas_pagar
     try {
       const res = await fetch(`/api/items/${itemId}`, {
         method: 'PATCH',
@@ -158,7 +141,6 @@ export default function ProyectoDetallePage({
 
   return (
     <div className="p-8 max-w-5xl">
-      {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
@@ -219,7 +201,6 @@ export default function ProyectoDetallePage({
         <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4">{success}</div>
       )}
 
-      {/* Sección 1: Info General */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
         <h2 className="text-lg font-semibold text-white mb-4">Información General</h2>
         <form onSubmit={handleSubmit(guardar)}>
@@ -287,7 +268,6 @@ export default function ProyectoDetallePage({
         </form>
       </div>
 
-      {/* Sección 2: Items por categoría (sin precios) */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl">
         <div className="p-6 border-b border-gray-800">
           <h2 className="text-lg font-semibold text-white">Partidas del Proyecto</h2>
