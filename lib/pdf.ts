@@ -238,9 +238,9 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   const noticesBodyFontSize = 9
   const noticesLineH = 5.2
   const noticesTitleGap = 6
-  const noticesSectionGap = 2.8
-  const noticesLabelToTextGap = 10.5
-  const noticesSectionTailGap = 2.4
+  const noticesSectionGap = 1.6
+  const noticesLabelToTextGap = 8.4
+  const noticesSectionTailGap = 1.2
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(noticesBodyFontSize)
@@ -255,9 +255,11 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     wrappedLine1.length * noticesLineH +
     wrappedLine2.length * noticesLineH +
     noticesSectionGap +
+    6 +
     noticesLabelToTextGap +
     wrappedCostos.length * noticesLineH +
     noticesSectionTailGap +
+    6 +
     noticesLabelToTextGap +
     wrappedCancelacion.length * noticesLineH
 
@@ -287,7 +289,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFillColor(26, 26, 26)
   doc.rect(margin, currentY, costosLabelW, 6, 'F')
   doc.text('COSTOS', margin + 3, currentY + 4.2)
-  currentY += noticesLabelToTextGap
+  currentY += 6 + noticesLabelToTextGap
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(noticesBodyFontSize)
@@ -302,7 +304,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFillColor(26, 26, 26)
   doc.rect(margin, currentY, cancelLabelW, 6, 'F')
   doc.text('CANCELACIÓN', margin + 3, currentY + 4.2)
-  currentY += noticesLabelToTextGap
+  currentY += 6 + noticesLabelToTextGap
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(noticesBodyFontSize)
