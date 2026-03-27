@@ -91,7 +91,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
     startY: 10,
     margin: { left: margin, right: 42 },
     theme: 'grid',
-    styles: { fontSize: 9.5, cellPadding: { top: 0.7, right: 3.5, bottom: 0.7, left: 3.5 }, textColor: [0, 0, 0] as [number, number, number] },
+    styles: { fontSize: 9.5, cellPadding: { top: 1.35, right: 3.5, bottom: 1.35, left: 3.5 }, textColor: [0, 0, 0] as [number, number, number] },
     body: headerBody,
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 44, fillColor: [26, 26, 26] as [number, number, number], textColor: [255, 255, 255] as [number, number, number] },
@@ -100,7 +100,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   })
 
   if (isoLogoPng) {
-    const isoH = 33
+    const isoH = 36
     const isoW = isoH * ISO_RATIO
     try { doc.addImage(isoLogoPng, pageW - margin - isoW, 8, isoW, isoH) } catch {}
   }
@@ -176,17 +176,17 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   const WHITE: [number,number,number]  = [255, 255, 255]
   const GRAY: [number,number,number]   = [187, 187, 187]
   const totalsRows: TotalsRow[] = [
-    { label: 'Subtotal', value: fmtPDF(data.subtotal), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 8.5 },
-    { label: 'Fee de agencia', value: fmtPDF(data.fee_agencia), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 8.5 },
-    { label: 'General', value: fmtPDF(data.general), labelColor: ORANGE, valueColor: ORANGE, bold: true, fontSize: 8.5 },
-    ...(descuento > 0 ? [{ label: 'Descuento', value: `-${fmtPDF(descuento)}`, labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 8.5 }] : []),
-    ...(data.iva_activo ? [{ label: 'IVA (16%)', value: fmtPDF(data.iva), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 8.5 }] : []),
-    { label: 'TOTAL', value: fmtPDF(data.total), labelColor: WHITE, valueColor: WHITE, bold: true, fontSize: 9.5 },
+    { label: 'Subtotal', value: fmtPDF(data.subtotal), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 9.5 },
+    { label: 'Fee de agencia', value: fmtPDF(data.fee_agencia), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 9.5 },
+    { label: 'General', value: fmtPDF(data.general), labelColor: ORANGE, valueColor: ORANGE, bold: true, fontSize: 10.5 },
+    ...(descuento > 0 ? [{ label: 'Descuento', value: `-${fmtPDF(descuento)}`, labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 9.5 }] : []),
+    ...(data.iva_activo ? [{ label: 'IVA (16%)', value: fmtPDF(data.iva), labelColor: GRAY, valueColor: WHITE, bold: false, fontSize: 9.5 }] : []),
+    { label: 'TOTAL', value: fmtPDF(data.total), labelColor: WHITE, valueColor: WHITE, bold: true, fontSize: 10.5 },
   ]
 
-  const rowH = 5.0
-  const rowGap = 1.4
-  const padV = 2.65
+  const rowH = 5.5
+  const rowGap = 1.6
+  const padV = 3.1
   const totalRowsH = totalsRows.length * rowH + (totalsRows.length - 1) * rowGap
   const bannerH = Math.max(totalRowsH + padV * 2, 28)
   if (currentY + bannerH > 270) { doc.addPage(); currentY = 15 }
@@ -236,11 +236,11 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setTextColor(0, 0, 0)
   const wrappedLine1 = doc.splitTextToSize(generalesLine1, contentW)
   doc.text(wrappedLine1, margin, currentY)
-  currentY += wrappedLine1.length * 5.2
+  currentY += wrappedLine1.length * 5.6 + 1.2
   doc.setFont('helvetica', 'normal')
   const wrappedLine2 = doc.splitTextToSize(generalesLine2, contentW)
   doc.text(wrappedLine2, margin, currentY)
-  currentY += (wrappedLine2.length * 5.2) + 2.1
+  currentY += (wrappedLine2.length * 5.6) + 3.2
 
   if (currentY > 255) { doc.addPage(); currentY = 15 }
   doc.setFont('helvetica', 'bold')
@@ -250,14 +250,14 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFillColor(26, 26, 26)
   doc.rect(margin, currentY, costosLabelW, 6, 'F')
   doc.text('COSTOS', margin + 3, currentY + 4.2)
-  currentY += 8
+  currentY += 10.5
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(17, 17, 17)
   const costosText = 'Este presupuesto es 100 % modular y se adaptará a las necesidades del cliente.\nUna vez aterrizada la propuesta al 100 % se ajustarán los costos.\nEste presupuesto es estimativo para desarrollar las actividades mencionadas.\nSe requiere el 50% al contratar el servicio / 50% al finalizar'
   const wrappedCostos = doc.splitTextToSize(costosText, contentW)
   doc.text(wrappedCostos, margin, currentY)
-  currentY += (wrappedCostos.length * 5.2) + 2.1
+  currentY += (wrappedCostos.length * 5.6) + 3.2
 
   if (currentY > 240) { doc.addPage(); currentY = 15 }
   doc.setFont('helvetica', 'bold')
@@ -267,7 +267,7 @@ export async function generarPDFCotizacion(data: PDFData): Promise<void> {
   doc.setFillColor(26, 26, 26)
   doc.rect(margin, currentY, cancelLabelW, 6, 'F')
   doc.text('CANCELACIÓN', margin + 3, currentY + 4.2)
-  currentY += 8
+  currentY += 10.5
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.setTextColor(17, 17, 17)
