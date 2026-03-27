@@ -26,12 +26,24 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { descripcion, categoria, precio_unitario, x_pagar_sugerido } = await request.json()
-    if (!descripcion) return Response.json({ error: 'descripcion requerida' }, { status: 400 })
+    const normalizedDescripcion = String(descripcion || '').trim()
+
+    if (!normalizedDescripcion) {
+      return Response.json({ error: 'descripcion requerida' }, { status: 400 })
+    }
+
     const { data, error } = await supabaseAdmin
       .from('productos')
-      .insert({ descripcion, categoria: categoria || null, precio_unitario: precio_unitario || 0, x_pagar_sugerido: x_pagar_sugerido || 0 })
+      .upsert({
+        descripcion: normalizedDescripcion,
+        categoria: categoria || null,
+        precio_unitario: precio_unitario || 0,
+        x_pagar_sugerido: x_pagar_sugerido || 0,
+        activo: true,
+      }, { onConflict: 'descripcion' })
       .select()
-      .single()
+      .maybeSingle()
+
     if (error) {
       console.error('[POST /api/productos] Error:', error)
       return Response.json({ error: error.message }, { status: 500 })

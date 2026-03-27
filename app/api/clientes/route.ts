@@ -26,16 +26,23 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const { nombre } = await request.json()
-    if (!nombre) return Response.json({ error: 'nombre requerido' }, { status: 400 })
+    const normalizedName = String(nombre || '').trim()
+
+    if (!normalizedName) {
+      return Response.json({ error: 'nombre requerido' }, { status: 400 })
+    }
+
     const { data, error } = await supabaseAdmin
       .from('clientes')
-      .upsert({ nombre }, { onConflict: 'nombre', ignoreDuplicates: true })
+      .upsert({ nombre: normalizedName, activo: true }, { onConflict: 'nombre' })
       .select()
       .maybeSingle()
+
     if (error) {
       console.error('[POST /api/clientes] Error:', error)
       return Response.json({ error: error.message }, { status: 500 })
     }
+
     console.log('[POST /api/clientes] upsert resultado:', data)
     return Response.json(data, { status: 201 })
   } catch (e) {
