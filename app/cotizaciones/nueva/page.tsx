@@ -63,9 +63,6 @@ function NuevaCotizacionContent() {
   const [error, setError] = useState<string | null>(null)
   const isSubmitting = useRef(false)
 
-  // ✅ Usar hook compartido para autocomplete y búsqueda
-  const quotationForm = useQuotationForm(setValue, watchedItems)
-
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
   const [iva_activo, setIvaActivo] = useState(true)
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
@@ -81,8 +78,11 @@ function NuevaCotizacionContent() {
     },
   })
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchedItems = watch('items')
+  const { fields, append, remove } = useFieldArray({ control, name: 'items' })
+
+  // ✅ Usar hook compartido para autocomplete y búsqueda
+  const quotationForm = useQuotationForm(setValue, watchedItems)
 
   useEffect(() => {
     const folioUrl = esComplementaria
@@ -139,6 +139,8 @@ function NuevaCotizacionContent() {
     handleProyectoChange,
     handleDescripcionChange,
     seleccionarProducto,
+    seleccionarCliente,
+    listaClientes,
     listaProductos,
     clienteInput,
     setClienteInput,
@@ -329,19 +331,13 @@ function NuevaCotizacionContent() {
                   setMostrarClienteDropdown(false)
                   if (proyectosDelCliente.length === 0 && clienteInput.trim()) {
                     const match = listaClientes.find(c => c.nombre.toLowerCase() === clienteInput.trim().toLowerCase())
-                    if (match) setProyectosDelCliente(match.proyectos || [])
+                    if (match) seleccionarCliente(match.nombre)
                   }
                 }, 200)} autoComplete="off" placeholder="Nombre del cliente" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
                 {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
                   <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                     {clienteSugerencias.map((nombre, i) => (
-                      <div key={i} onMouseDown={() => {
-                        const cli = listaClientes.find(c => c.nombre === nombre)
-                        setClienteInput(nombre)
-                        setValue('cliente', nombre)
-                        setProyectosDelCliente(cli?.proyectos || [])
-                        setMostrarClienteDropdown(false)
-                      }} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{nombre}</div>
+                      <div key={i} onMouseDown={() => seleccionarCliente(nombre)} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{nombre}</div>
                     ))}
                   </div>
                 )}
@@ -532,13 +528,7 @@ function NuevaCotizacionContent() {
                   {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
                     <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                       {clienteSugerencias.map((nombre, i) => (
-                        <div key={i} onMouseDown={() => {
-                          const cli = listaClientes.find(c => c.nombre === nombre)
-                          setClienteInput(nombre)
-                          setValue('cliente', nombre)
-                          setProyectosDelCliente(cli?.proyectos || [])
-                          setMostrarClienteDropdown(false)
-                        }} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{nombre}</div>
+                        <div key={i} onMouseDown={() => seleccionarCliente(nombre)} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{nombre}</div>
                       ))}
                     </div>
                   )}
