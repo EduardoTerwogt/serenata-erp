@@ -5,34 +5,13 @@ import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Responsable } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
-
-interface ItemForm {
-  categoria: string
-  descripcion: string
-  cantidad: number
-  precio_unitario: number | ''
-  responsable_id: string
-  responsable_nombre: string
-  x_pagar: number | ''
-}
-
-interface CotizacionForm {
-  cliente: string
-  proyecto: string
-  fecha_entrega: string
-  locacion: string
-  items: ItemForm[]
-}
-
-const itemVacio: ItemForm = {
-  categoria: '',
-  descripcion: '',
-  cantidad: 1,
-  precio_unitario: '',
-  responsable_id: '',
-  responsable_nombre: '',
-  x_pagar: '',
-}
+import {
+  buildQuotationMutationPayload,
+  buildQuotationPdfPayload,
+  EMPTY_QUOTATION_ITEM,
+} from '@/lib/quotations/mappers'
+import { calculateQuotationTotals } from '@/lib/quotations/calculations'
+import { QuotationFormValues } from '@/lib/quotations/types'
 
 function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -67,13 +46,13 @@ function NuevaCotizacionContent() {
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
   const [descuento_valor, setDescuentoValor] = useState(0)
 
-  const { register, control, watch, handleSubmit, setValue } = useForm<CotizacionForm>({
+  const { register, control, watch, handleSubmit, setValue } = useForm<QuotationFormValues>({
     defaultValues: {
       cliente: clienteParam,
       proyecto: proyectoParam,
       fecha_entrega: fechaEntregaParam,
       locacion: locacionParam,
-      items: [{ ...itemVacio }],
+      items: [{ ...EMPTY_QUOTATION_ITEM }],
     },
   })
 
@@ -131,43 +110,24 @@ function NuevaCotizacionContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complementaria_de])
 
-  const totales = (() => {
-    const subtotal = watchedItems.reduce((s, item) => s + calcItem(item).importe, 0)
-    const fee_agencia = subtotal * porcentaje_fee
-    const general = subtotal + fee_agencia
-    const descuento = descuento_tipo === 'porcentaje'
-      ? general * (descuento_valor / 100)
-      : descuento_valor
-    const base_iva = general - descuento
-    const iva = iva_activo ? base_iva * 0.16 : 0
-    const total = base_iva + iva
-    const margen_total = watchedItems.reduce((s, item) => s + calcItem(item).margen, 0)
-    const utilidad_total = margen_total + fee_agencia - descuento
-    return { subtotal, fee_agencia, general, descuento, iva, total, margen_total, utilidad_total }
-  })()
+  const totales = calculateQuotationTotals({
+    items: watchedItems,
+    porcentaje_fee,
+    iva_activo,
+    descuento_tipo,
+    descuento_valor,
+  })
 
-  const guardarDatos = async (data: CotizacionForm, estado: 'BORRADOR' | 'ENVIADA') => {
-    const itemsConCalc = data.items.map((item, i) => {
-      const { importe, margen } = calcItem(item)
-      return {
-        ...item,
-        importe,
-        margen,
-        orden: i,
-        precio_unitario: item.precio_unitario === '' ? 0 : item.precio_unitario,
-        x_pagar: item.x_pagar === '' ? 0 : item.x_pagar,
-      }
-    })
-
+  const guardarDatos = async (data: QuotationFormValues, estado: 'BORRADOR' | 'ENVIADA') => {
     const body: Record<string, unknown> = {
       id: folio,
-      ...data,
-      estado,
-      items: itemsConCalc,
-      porcentaje_fee,
-      iva_activo,
-      descuento_tipo,
-      descuento_valor,
+      ...buildQuotationMutationPayload(data, {
+        estado,
+        porcentaje_fee,
+        iva_activo,
+        descuento_tipo,
+        descuento_valor,
+      }),
     }
 
     if (esComplementaria) {
@@ -175,6 +135,7 @@ function NuevaCotizacionContent() {
       body.es_complementaria_de = complementaria_de
     }
 
+    const expectedItemsCount = data.items.length
     const res = await fetch('/api/cotizaciones', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -195,7 +156,7 @@ function NuevaCotizacionContent() {
           if (check.ok) {
             const recovered = await check.json()
             const persistedCount = recovered?.items?.length ?? 0
-            if (persistedCount === itemsConCalc.length) {
+            if (persistedCount === expectedItemsCount) {
               return recovered
             }
           }
@@ -207,13 +168,13 @@ function NuevaCotizacionContent() {
     }
 
     const savedCotizacion = await res.json()
-    if ((savedCotizacion?.items?.length ?? 0) === itemsConCalc.length) return savedCotizacion
+    if ((savedCotizacion?.items?.length ?? 0) === expectedItemsCount) return savedCotizacion
 
     if (savedCotizacion?.id) {
       const reload = await fetch(`/api/cotizaciones/${savedCotizacion.id}`)
       if (reload.ok) {
         const fullCotizacion = await reload.json()
-        if ((fullCotizacion?.items?.length ?? 0) === itemsConCalc.length) return fullCotizacion
+        if ((fullCotizacion?.items?.length ?? 0) === expectedItemsCount) return fullCotizacion
       }
     }
 
@@ -245,31 +206,7 @@ function NuevaCotizacionContent() {
       const cotizacion = await guardarDatos(data, 'ENVIADA')
 
       const { generarPDFCotizacion } = await import('@/lib/pdf')
-      const itemsConCalc = data.items.map(item => ({ ...item, ...calcItem(item) }))
-      await generarPDFCotizacion({
-        id: cotizacion.id,
-        cliente: cotizacion.cliente,
-        proyecto: cotizacion.proyecto,
-        fecha_entrega: cotizacion.fecha_entrega,
-        locacion: cotizacion.locacion,
-        fecha_cotizacion: cotizacion.fecha_cotizacion,
-        items: itemsConCalc.map(item => ({
-          categoria: item.categoria,
-          descripcion: item.descripcion,
-          cantidad: item.cantidad,
-          precio_unitario: item.precio_unitario === '' ? 0 : item.precio_unitario,
-          importe: item.importe,
-        })),
-        subtotal: cotizacion.subtotal,
-        fee_agencia: cotizacion.fee_agencia,
-        general: cotizacion.general,
-        iva: cotizacion.iva,
-        total: cotizacion.total,
-        iva_activo: cotizacion.iva_activo ?? true,
-        porcentaje_fee: cotizacion.porcentaje_fee ?? 0.15,
-        descuento_tipo: cotizacion.descuento_tipo ?? 'monto',
-        descuento_valor: cotizacion.descuento_valor ?? 0,
-      })
+      await generarPDFCotizacion(buildQuotationPdfPayload(cotizacion, data.items))
 
       router.push(`/cotizaciones/${cotizacion.id}`)
     } catch (e: unknown) {
@@ -425,7 +362,7 @@ function NuevaCotizacionContent() {
             <h2 className="text-lg font-semibold text-white">Partidas</h2>
             <button
               type="button"
-              onClick={() => append({ ...itemVacio })}
+              onClick={() => append({ ...EMPTY_QUOTATION_ITEM })}
               className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0"
             >
               + Agregar fila
@@ -443,7 +380,7 @@ function NuevaCotizacionContent() {
               </thead>
               <tbody>
                 {fields.map((field, index) => {
-                  const item = watchedItems[index] || itemVacio
+                  const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
                   const { importe, margen } = calcItem(item)
                   return (
                     <tr key={field.id} className="border-b border-gray-800/50">
@@ -511,7 +448,7 @@ function NuevaCotizacionContent() {
 
           <div className="md:hidden p-4 space-y-3">
             {fields.map((field, index) => {
-              const item = watchedItems[index] || itemVacio
+              const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
               const { importe, margen } = calcItem(item)
               return (
                 <div

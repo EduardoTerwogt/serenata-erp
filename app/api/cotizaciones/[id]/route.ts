@@ -7,32 +7,7 @@ import {
 } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
-
-function buildPersistedItems(
-  cotizacionId: string,
-  items: Partial<ItemCotizacion>[],
-  previousItems: ItemCotizacion[]
-) {
-  const previousItemsById = new Map(previousItems.map(item => [item.id, item]))
-
-  return items.map((item, index) => {
-    const previousItem = (item.id && previousItemsById.get(item.id)) || previousItems[index]
-    return {
-      categoria: item.categoria || '',
-      descripcion: item.descripcion || '',
-      cantidad: item.cantidad ?? 0,
-      precio_unitario: item.precio_unitario ?? 0,
-      responsable_id: item.responsable_id || previousItem?.responsable_id || null,
-      responsable_nombre: item.responsable_nombre || previousItem?.responsable_nombre || null,
-      x_pagar: item.x_pagar ?? 0,
-      importe: item.importe ?? (item.cantidad ?? 0) * (item.precio_unitario ?? 0),
-      margen: item.margen ?? ((item.importe ?? (item.cantidad ?? 0) * (item.precio_unitario ?? 0)) - (item.x_pagar ?? 0)),
-      orden: item.orden ?? index,
-      notas: item.notas ?? previousItem?.notas ?? null,
-      cotizacion_id: cotizacionId,
-    }
-  })
-}
+import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
 
 async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: unknown) {
   const cliente = String(clienteValue || '').trim()
@@ -121,34 +96,16 @@ export async function PUT(
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : null
 
     if (inputItems !== null) {
-      const porcFee: number = porcentaje_fee ?? 0.15
-      const ivaActivo: boolean = iva_activo ?? true
-      const descTipo: 'monto' | 'porcentaje' = descuento_tipo ?? 'monto'
-      const descValor: number = descuento_valor ?? 0
-
-      const subtotal = inputItems.reduce((sum, item) => sum + (item.importe ?? 0), 0)
-      const fee_agencia = subtotal * porcFee
-      const general = subtotal + fee_agencia
-      const descuento = descTipo === 'porcentaje' ? general * (descValor / 100) : descValor
-      const base_iva = general - descuento
-      const iva = ivaActivo ? base_iva * 0.16 : 0
-      const total = base_iva + iva
-      const margen_total = inputItems.reduce((sum, item) => sum + (item.margen ?? 0), 0)
-      const utilidad_total = margen_total + fee_agencia - descuento
-
-      Object.assign(cotizacionData, {
-        subtotal,
-        fee_agencia,
-        general,
-        iva,
-        total,
-        margen_total,
-        utilidad_total,
-        porcentaje_fee: porcFee,
-        iva_activo: ivaActivo,
-        descuento_tipo: descTipo,
-        descuento_valor: descValor,
-      })
+      Object.assign(
+        cotizacionData,
+        buildQuotationPersistenceData(
+          inputItems,
+          porcentaje_fee ?? 0.15,
+          iva_activo ?? true,
+          descuento_tipo ?? 'monto',
+          descuento_valor ?? 0
+        )
+      )
     }
 
     try {
@@ -157,7 +114,11 @@ export async function PUT(
       if (inputItems !== null) {
         await deleteItemsByCotizacion(id)
         if (inputItems.length > 0) {
-          await upsertItems(buildPersistedItems(id, inputItems, previousItems))
+          await upsertItems(buildPersistedQuotationItems(id, inputItems, {
+            previousItems,
+            preservePreviousResponsables: true,
+            preservePreviousNotas: true,
+          }))
         }
       }
 
