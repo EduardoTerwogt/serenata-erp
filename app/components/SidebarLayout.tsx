@@ -79,7 +79,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-bold text-blue-400 hover:border-gray-600 transition-colors"
-                title={session?.user?.email}
+                title={session?.user?.email ?? undefined}
               >
                 {session?.user?.email?.[0].toUpperCase() || '?'}
               </button>
