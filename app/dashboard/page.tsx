@@ -31,9 +31,9 @@ export default async function DashboardPage() {
   const cotizacionesBorrador = cotizaciones?.filter(c => c.estado === 'BORRADOR').length || 0
 
   return (
-    <div className="p-8">
+    <div className="px-5 pt-6 pb-6 md:p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-white">Dashboard</h1>
         <p className="text-gray-400 mt-1">Resumen general de Serenata</p>
       </div>
 
@@ -50,40 +50,40 @@ export default async function DashboardPage() {
       )}
 
       {/* Tarjetas principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <p className="text-gray-400 text-sm">Por Cobrar</p>
-          <p className="text-2xl font-bold text-green-400 mt-2">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+          <p className="text-gray-400 text-xs md:text-sm">Por Cobrar</p>
+          <p className="text-xl md:text-2xl font-bold text-green-400 mt-2">
             ${totalCobrar.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-gray-500 text-xs mt-1">Pendiente de pago</p>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <p className="text-gray-400 text-sm">Por Pagar</p>
-          <p className="text-2xl font-bold text-red-400 mt-2">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+          <p className="text-gray-400 text-xs md:text-sm">Por Pagar</p>
+          <p className="text-xl md:text-2xl font-bold text-red-400 mt-2">
             ${totalPagar.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-gray-500 text-xs mt-1">A colaboradores</p>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <p className="text-gray-400 text-sm">Cotizaciones Aprobadas</p>
-          <p className="text-2xl font-bold text-blue-400 mt-2">{cotizacionesAprobadas}</p>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+          <p className="text-gray-400 text-xs md:text-sm">Cotizaciones Aprobadas</p>
+          <p className="text-xl md:text-2xl font-bold text-blue-400 mt-2">{cotizacionesAprobadas}</p>
           <p className="text-gray-500 text-xs mt-1">Proyectos activos</p>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <p className="text-gray-400 text-sm">En Borrador</p>
-          <p className="text-2xl font-bold text-yellow-400 mt-2">{cotizacionesBorrador}</p>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+          <p className="text-gray-400 text-xs md:text-sm">En Borrador</p>
+          <p className="text-xl md:text-2xl font-bold text-yellow-400 mt-2">{cotizacionesBorrador}</p>
           <p className="text-gray-500 text-xs mt-1">Sin enviar</p>
         </div>
 
       </div>
 
-      {/* Tabla de cotizaciones recientes */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl">
+      {/* Cotizaciones Recientes — Desktop Table */}
+      <div className="hidden md:block bg-gray-900 border border-gray-800 rounded-xl">
         <div className="p-6 border-b border-gray-800">
           <h2 className="text-lg font-semibold text-white">Cotizaciones Recientes</h2>
         </div>
@@ -127,6 +127,41 @@ export default async function DashboardPage() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Cotizaciones Recientes — Mobile Cards */}
+      <div className="md:hidden">
+        <h2 className="text-lg font-semibold text-white mb-4">Cotizaciones Recientes</h2>
+        <div className="space-y-3">
+          {cotizaciones?.slice(0, 10).map((cot) => (
+            <a
+              key={cot.id}
+              href={`/cotizaciones/${cot.id}`}
+              className="block bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors"
+            >
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-mono text-blue-400 font-bold text-sm">{cot.id}</span>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                  cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
+                  cot.estado === 'ENVIADA' ? 'bg-blue-900 text-blue-300' :
+                  'bg-yellow-900 text-yellow-300'
+                }`}>
+                  {cot.estado}
+                </span>
+              </div>
+              <p className="text-white font-medium text-[15px] mb-1">{cot.proyecto}</p>
+              <p className="text-gray-500 text-sm mb-3">{cot.cliente}</p>
+              <div className="flex justify-between items-center">
+                <span className="text-white font-bold text-lg">
+                  ${(cot.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </span>
+              </div>
+            </a>
+          ))}
+          {(!cotizaciones || cotizaciones.length === 0) && (
+            <p className="text-center text-gray-500 py-6">No hay cotizaciones aún</p>
+          )}
         </div>
       </div>
     </div>
