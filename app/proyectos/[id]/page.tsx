@@ -14,6 +14,8 @@ import {
   updateProjectDetail,
   updateProjectItemResponsable,
 } from '@/lib/services/project-service'
+import { SectionCard } from '@/components/ui/SectionCard'
+import { StatusBanner } from '@/components/ui/StatusBanner'
 
 const ESTADOS: EstadoProyecto[] = ['PREPRODUCCION', 'RODAJE', 'POSTPRODUCCION', 'FINALIZADO']
 
@@ -143,11 +145,10 @@ export default function ProyectoDetallePage({
         </div>
       </div>
 
-      {error && <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4">{error}</div>}
-      {success && <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4">{success}</div>}
+      {error && <StatusBanner tone="error" className="mb-4">{error}</StatusBanner>}
+      {success && <StatusBanner tone="success" className="mb-4">{success}</StatusBanner>}
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-3 md:mb-4">Información General</h2>
+      <SectionCard title="Información General" className="mb-6" contentClassName="p-4 md:p-6">
         <form onSubmit={handleSubmit(guardar)}>
           <div className="grid grid-cols-1 gap-3 md:gap-4 mb-3 md:mb-4">
             <div>
@@ -181,14 +182,9 @@ export default function ProyectoDetallePage({
             {guardando ? 'Guardando...' : 'Guardar Cambios'}
           </button>
         </form>
-      </div>
+      </SectionCard>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl">
-        <div className="p-6 border-b border-gray-800">
-          <h2 className="text-lg font-semibold text-white">Partidas del Proyecto</h2>
-          <p className="text-gray-500 text-sm mt-1">Asigna responsables y agrega notas por partida</p>
-        </div>
-
+      <SectionCard title="Partidas del Proyecto" description="Asigna responsables y agrega notas por partida" borderedHeader>
         <ResponsiveTableCard<ItemCotizacion>
           data={items}
           columns={[
@@ -243,7 +239,7 @@ export default function ProyectoDetallePage({
           keyExtractor={(item) => item.id}
           emptyMessage="No hay partidas. Las partidas se cargan desde la cotización aprobada."
         />
-      </div>
+      </SectionCard>
     </div>
   )
 }
