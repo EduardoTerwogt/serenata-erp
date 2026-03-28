@@ -255,37 +255,76 @@ export default function ResponsableDetallePage({
             Aún no hay proyectos registrados
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="text-left text-gray-400 font-medium px-6 py-3">Proyecto</th>
-                  <th className="text-left text-gray-400 font-medium px-6 py-3">Fecha del Evento</th>
-                  <th className="text-left text-gray-400 font-medium px-6 py-3">Rol</th>
-                  <th className="text-right text-gray-400 font-medium px-6 py-3">Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historial.map(h => (
-                  <tr key={h.id} className="border-b border-gray-800/50">
-                    <td className="px-6 py-3">
-                      <p className="text-white font-medium">{h.proyecto_nombre}</p>
-                      <p className="text-gray-500 text-xs">{h.cliente}</p>
-                    </td>
-                    <td className="px-6 py-3 text-gray-400">{h.fecha_evento || '—'}</td>
-                    <td className="px-6 py-3 text-gray-300">{h.rol_en_proyecto || '—'}</td>
-                    <td className="px-6 py-3 text-right text-green-400 font-medium">${fmt(h.x_pagar)}</td>
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="text-left text-gray-400 font-medium px-6 py-3">Proyecto</th>
+                    <th className="text-left text-gray-400 font-medium px-6 py-3">Fecha del Evento</th>
+                    <th className="text-left text-gray-400 font-medium px-6 py-3">Rol</th>
+                    <th className="text-right text-gray-400 font-medium px-6 py-3">Monto</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-gray-700">
-                  <td colSpan={3} className="px-6 py-3 text-gray-400 font-medium">Total</td>
-                  <td className="px-6 py-3 text-right text-green-400 font-bold">${fmt(totalGanado)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {historial.map(h => (
+                    <tr key={h.id} className="border-b border-gray-800/50">
+                      <td className="px-6 py-3">
+                        <p className="text-white font-medium">{h.proyecto_nombre}</p>
+                        <p className="text-gray-500 text-xs">{h.cliente}</p>
+                      </td>
+                      <td className="px-6 py-3 text-gray-400">{h.fecha_evento || '—'}</td>
+                      <td className="px-6 py-3 text-gray-300">{h.rol_en_proyecto || '—'}</td>
+                      <td className="px-6 py-3 text-right text-green-400 font-medium">${fmt(h.x_pagar)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-gray-700">
+                    <td colSpan={3} className="px-6 py-3 text-gray-400 font-medium">Total</td>
+                    <td className="px-6 py-3 text-right text-green-400 font-bold">${fmt(totalGanado)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-3 px-0">
+              {historial.map(h => (
+                <div key={h.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                  <div className="mb-2">
+                    <p className="text-white font-medium text-[15px]">{h.proyecto_nombre}</p>
+                    <p className="text-gray-400 text-sm">{h.cliente}</p>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    {h.fecha_evento && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Fecha:</span>
+                        <span className="text-gray-300">{h.fecha_evento}</span>
+                      </div>
+                    )}
+                    {h.rol_en_proyecto && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Rol:</span>
+                        <span className="text-gray-300">{h.rol_en_proyecto}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center pt-3 border-t border-gray-700 mt-3">
+                    <span className="text-gray-400">Monto:</span>
+                    <span className="text-green-400 font-medium">${fmt(h.x_pagar)}</span>
+                  </div>
+                </div>
+              ))}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mt-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">Total Ganado</span>
+                  <span className="text-green-400 font-bold text-lg">${fmt(totalGanado)}</span>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
