@@ -393,13 +393,13 @@ function NuevaCotizacionContent() {
               )}
             </div>
 
-            <div>
+            <div className="min-w-0">
               <label className="block text-sm text-gray-400 mb-1">Fecha de Entrega</label>
               <input
                 type="date"
                 {...register('fecha_entrega')}
                 readOnly={esComplementaria}
-                className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`}
+                className={`w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`}
               />
             </div>
 
@@ -491,7 +491,7 @@ function NuevaCotizacionContent() {
                           className="w-36 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
                         >
                           <option value="">Sin asignar</option>
-                          {responsables.map(r => (<option key={r.id} value={r.id}>{r.nombre}</option>))}
+                          {responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
                         </select>
                         <input type="hidden" {...register(`items.${index}.responsable_nombre`)} />
                       </td>
@@ -558,13 +558,13 @@ function NuevaCotizacionContent() {
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Totales</h3>
             <div className="space-y-3">
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm gap-3">
                 <span className="text-gray-400">Subtotal</span>
-                <span className="text-white">${fmt(totales.subtotal)}</span>
+                <span className="text-white text-right">${fmt(totales.subtotal)}</span>
               </div>
 
-              <div className="flex justify-between text-sm items-center gap-3">
-                <span className="text-gray-400 flex items-center gap-2 flex-wrap">
+              <div className="flex justify-between text-sm items-start gap-3">
+                <span className="text-gray-400 flex items-center gap-2 flex-wrap flex-1 min-w-0">
                   Fee Agencia
                   <input
                     type="number"
@@ -577,16 +577,16 @@ function NuevaCotizacionContent() {
                   />
                   <span className="text-gray-500 text-xs">%</span>
                 </span>
-                <span className="text-white">${fmt(totales.fee_agencia)}</span>
+                <span className="text-white text-right flex-shrink-0">${fmt(totales.fee_agencia)}</span>
               </div>
 
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm gap-3">
                 <span className="text-gray-400">General</span>
-                <span className="text-white">${fmt(totales.general)}</span>
+                <span className="text-white text-right">${fmt(totales.general)}</span>
               </div>
 
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-gray-400 flex items-center gap-2">
+              <div className="flex justify-between text-sm items-center gap-3">
+                <span className="text-gray-400 flex items-center gap-2 flex-wrap flex-1 min-w-0">
                   IVA (16%)
                   <button
                     type="button"
@@ -596,37 +596,39 @@ function NuevaCotizacionContent() {
                     <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${iva_activo ? 'translate-x-4' : 'translate-x-1'}`} />
                   </button>
                 </span>
-                <span className={iva_activo ? 'text-white' : 'text-gray-600'}>${fmt(totales.iva)}</span>
+                <span className={`${iva_activo ? 'text-white' : 'text-gray-600'} text-right flex-shrink-0`}>${fmt(totales.iva)}</span>
               </div>
 
-              <div className="flex justify-between text-sm items-center gap-3">
-                <span className="text-gray-400 flex items-center gap-2 flex-wrap">
-                  Descuento
-                  <select
-                    value={descuento_tipo}
-                    onChange={e => setDescuentoTipo(e.target.value as 'monto' | 'porcentaje')}
-                    className="bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="monto">$ Monto</option>
-                    <option value="porcentaje">% Porcentaje</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={descuento_valor}
-                    onChange={e => setDescuentoValor(parseFloat(e.target.value) || 0)}
-                    className="w-20 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500"
-                  />
-                </span>
-                <span className={totales.descuento > 0 ? 'text-yellow-400' : 'text-gray-600'}>
+              <div className="flex justify-between text-sm items-start gap-3">
+                <div className="text-gray-400 flex-1 min-w-0">
+                  <div className="mb-2">Descuento</div>
+                  <div className="flex flex-wrap gap-2">
+                    <select
+                      value={descuento_tipo}
+                      onChange={e => setDescuentoTipo(e.target.value as 'monto' | 'porcentaje')}
+                      className="bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="monto">$ Monto</option>
+                      <option value="porcentaje">% Porcentaje</option>
+                    </select>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={descuento_valor}
+                      onChange={e => setDescuentoValor(parseFloat(e.target.value) || 0)}
+                      className="w-24 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <span className={`${totales.descuento > 0 ? 'text-yellow-400' : 'text-gray-600'} text-right flex-shrink-0 pt-0.5`}>
                   {totales.descuento > 0 ? `-$${fmt(totales.descuento)}` : '$0.00'}
                 </span>
               </div>
 
-              <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-bold">
+              <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-bold gap-3">
                 <span className="text-white">TOTAL</span>
-                <span className="text-green-400 text-lg">${fmt(totales.total)}</span>
+                <span className="text-green-400 text-lg text-right">${fmt(totales.total)}</span>
               </div>
             </div>
           </div>
@@ -634,22 +636,22 @@ function NuevaCotizacionContent() {
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
             <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Utilidad</h3>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm gap-3">
                 <span className="text-gray-400">Margen Total</span>
-                <span className={totales.margen_total >= 0 ? 'text-green-400' : 'text-red-400'}>${fmt(totales.margen_total)}</span>
+                <span className={`${totales.margen_total >= 0 ? 'text-green-400' : 'text-red-400'} text-right`}>${fmt(totales.margen_total)}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-sm gap-3">
                 <span className="text-gray-400">Fee Agencia</span>
-                <span className="text-white">${fmt(totales.fee_agencia)}</span>
+                <span className="text-white text-right">${fmt(totales.fee_agencia)}</span>
               </div>
-              <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-semibold">
+              <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-semibold gap-3">
                 <span className="text-gray-300">Utilidad Total</span>
-                <span className={totales.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'}>${fmt(totales.utilidad_total)}</span>
+                <span className={`${totales.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'} text-right`}>${fmt(totales.utilidad_total)}</span>
               </div>
               {totales.subtotal > 0 && (
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-sm gap-3">
                   <span className="text-gray-400">Margen %</span>
-                  <span className="text-blue-400">{((totales.margen_total / totales.subtotal) * 100).toFixed(1)}%</span>
+                  <span className="text-blue-400 text-right">{((totales.margen_total / totales.subtotal) * 100).toFixed(1)}%</span>
                 </div>
               )}
             </div>
@@ -686,16 +688,16 @@ function NuevaCotizacionContent() {
       {editingItemIndex !== null && (
         <div className="md:hidden fixed inset-0 bg-gray-950 z-50 overflow-y-auto">
           <div className="px-5 pt-12 pb-8">
-            <div className="flex justify-between items-center mb-7">
-              <button onClick={() => setEditingItemIndex(null)} className="text-gray-400 text-sm hover:text-gray-300">
-                Cancelar
-              </button>
-              <span className="text-white font-medium text-[15px]">
-                {watchedItems[editingItemIndex]?.descripcion ? 'Editar partida' : 'Nueva partida'}
-              </span>
-              <button onClick={() => setEditingItemIndex(null)} className="text-blue-500 font-medium text-sm hover:text-blue-400">
+            <div className="flex justify-between items-center mb-7 gap-3">
+              <button
+                onClick={() => setEditingItemIndex(null)}
+                className="min-h-[44px] px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm transition-colors"
+              >
                 Listo
               </button>
+              <span className="text-white font-medium text-[15px] text-right flex-1 min-w-0">
+                {watchedItems[editingItemIndex]?.descripcion ? 'Editar partida' : 'Nueva partida'}
+              </span>
             </div>
 
             <div className="space-y-5">

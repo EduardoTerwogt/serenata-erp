@@ -142,15 +142,15 @@ export default function ProyectoDetallePage({
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8 max-w-5xl">
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex items-start justify-between mb-8 flex-col md:flex-row gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <Link href="/proyectos" className="text-gray-500 hover:text-gray-300 text-sm">← Proyectos</Link>
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white">{proyecto.proyecto}</h1>
-          <p className="text-gray-400 mt-1">{proyecto.cliente}</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-white break-words">{proyecto.proyecto}</h1>
+          <p className="text-gray-400 mt-1 break-words">{proyecto.cliente}</p>
         </div>
-        <div className="flex flex-col md:flex-row gap-2 md:gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full md:w-auto md:flex md:flex-row md:flex-wrap md:justify-end">
           <button
             onClick={async () => {
               const { generarHojaDeLlamado } = await import('@/lib/pdf')
@@ -174,7 +174,7 @@ export default function ProyectoDetallePage({
                 responsables,
               })
             }}
-            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm md:text-sm transition-colors min-h-[44px] md:min-h-auto flex items-center justify-center"
+            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px] flex items-center justify-center text-center"
           >
             📋 Hoja de Llamado
           </button>
@@ -183,15 +183,15 @@ export default function ProyectoDetallePage({
               setSuccess('Próximamente: integración con Google Calendar')
               setTimeout(() => setSuccess(null), 3000)
             }}
-            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm md:text-sm transition-colors min-h-[44px] md:min-h-auto flex items-center justify-center"
+            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px] flex items-center justify-center text-center"
           >
             📅 Google Calendar
           </button>
           <Link
             href={`/cotizaciones/nueva?complementaria_de=${id}&cliente=${encodeURIComponent(proyecto.cliente)}&proyecto=${encodeURIComponent(proyecto.proyecto)}`}
-            className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2.5 rounded-lg text-sm md:text-sm transition-colors min-h-[44px] md:min-h-auto flex items-center justify-center text-center whitespace-normal"
+            className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px] flex items-center justify-center text-center sm:col-span-2 md:col-span-1"
           >
-            + Cotización Complementaria
+            + Cotización complementaria
           </Link>
         </div>
       </div>
@@ -206,12 +206,12 @@ export default function ProyectoDetallePage({
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
         <h2 className="text-lg font-semibold text-white mb-4">Información General</h2>
         <form onSubmit={handleSubmit(guardar)}>
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 gap-4 mb-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Estado</label>
               <select
                 {...register('estado')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
               >
                 {ESTADOS.map(e => (
                   <option key={e} value={e}>{e}</option>
@@ -223,14 +223,14 @@ export default function ProyectoDetallePage({
               <input
                 type="date"
                 {...register('fecha_entrega')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
               />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Locación</label>
               <input
                 {...register('locacion')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
                 placeholder="Lugar del evento"
               />
             </div>
@@ -238,7 +238,7 @@ export default function ProyectoDetallePage({
               <label className="block text-sm text-gray-400 mb-1">Horarios</label>
               <input
                 {...register('horarios')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
                 placeholder="Ej. 08:00 - 20:00"
               />
             </div>
@@ -246,7 +246,7 @@ export default function ProyectoDetallePage({
               <label className="block text-sm text-gray-400 mb-1">Punto de Encuentro</label>
               <input
                 {...register('punto_encuentro')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
                 placeholder="Dirección o referencia"
               />
             </div>
@@ -263,7 +263,7 @@ export default function ProyectoDetallePage({
           <button
             type="submit"
             disabled={guardando}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 min-h-[44px] w-full md:w-auto"
           >
             {guardando ? 'Guardando...' : 'Guardar Cambios'}
           </button>
@@ -276,7 +276,6 @@ export default function ProyectoDetallePage({
           <p className="text-gray-500 text-sm mt-1">Asigna responsables y agrega notas por partida</p>
         </div>
 
-        {/* ✅ Usando componente responsivo compartido */}
         <ResponsiveTableCard<ItemCotizacion>
           data={items}
           columns={[
