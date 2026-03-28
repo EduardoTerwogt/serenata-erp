@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react'
+import type { ReactNode } from 'react'
 
 interface Column {
   key: string
@@ -15,18 +15,15 @@ interface ResponsiveTableCardProps<T> {
   emptyMessage?: string
 }
 
+const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
+  left: 'text-left',
+  center: 'text-center',
+  right: 'text-right',
+}
+
 /**
  * Componente genérico que renderiza una tabla en desktop y cards en mobile
  * Reutilizable en múltiples páginas para evitar duplicación de código
- *
- * @example
- * <ResponsiveTableCard
- *   data={cuentas}
- *   columns={[{ key: 'cliente', label: 'Cliente' }, ...]}
- *   renderDesktopRow={(cuenta) => <td>{cuenta.cliente}</td>}
- *   renderMobileCard={(cuenta) => <div>{cuenta.cliente}</div>}
- *   keyExtractor={(cuenta) => cuenta.id}
- * />
  */
 export function ResponsiveTableCard<T>({
   data,
@@ -46,7 +43,6 @@ export function ResponsiveTableCard<T>({
 
   return (
     <>
-      {/* DESKTOP: Table View */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -54,7 +50,7 @@ export function ResponsiveTableCard<T>({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`text-${col.align || 'left'} text-gray-400 font-medium px-6 py-3`}
+                  className={`${ALIGN_CLASS[col.align ?? 'left']} text-gray-400 font-medium px-6 py-3`}
                 >
                   {col.label}
                 </th>
@@ -71,7 +67,6 @@ export function ResponsiveTableCard<T>({
         </table>
       </div>
 
-      {/* MOBILE: Card View */}
       <div className="md:hidden space-y-3 px-0">
         {data.map((item, index) => (
           <div key={keyExtractor(item, index)}>

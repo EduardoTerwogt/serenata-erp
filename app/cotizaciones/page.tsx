@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { Cotizacion, EstadoCotizacion } from '@/lib/types'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'ENVIADA', 'APROBADA']
@@ -14,7 +14,10 @@ export default function CotizacionesPage() {
   useEffect(() => {
     fetch('/api/cotizaciones')
       .then(r => r.json())
-      .then(data => { setCotizaciones(data); setLoading(false) })
+      .then(data => {
+        setCotizaciones(data)
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [])
 
@@ -63,7 +66,6 @@ export default function CotizacionesPage() {
               href={`/cotizaciones/${cot.id}`}
               className="block bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 hover:border-gray-600 transition-colors"
             >
-              {/* Mobile Layout */}
               <div className="md:hidden">
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-mono text-blue-400 font-bold text-sm">{cot.id}</span>
@@ -84,13 +86,12 @@ export default function CotizacionesPage() {
                 )}
                 <div className="flex justify-between items-center">
                   <span className="text-white font-bold text-lg">
-                    ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                   <span className="text-gray-600 text-xs">{cot.fecha_entrega || 'Sin fecha'}</span>
                 </div>
               </div>
 
-              {/* Desktop Layout */}
               <div className="hidden md:flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <span className="font-mono text-blue-400 font-bold text-lg">{cot.id}</span>
@@ -108,7 +109,7 @@ export default function CotizacionesPage() {
                 <div className="flex items-center gap-6">
                   <div className="text-right">
                     <p className="text-white font-bold">
-                      ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                     <p className="text-gray-500 text-xs">{cot.fecha_entrega || 'Sin fecha'}</p>
                   </div>

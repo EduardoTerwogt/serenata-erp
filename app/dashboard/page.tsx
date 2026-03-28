@@ -1,6 +1,4 @@
-import { getCotizaciones } from '@/lib/db'
-import { getCuentasCobrar } from '@/lib/db'
-import { getCuentasPagar } from '@/lib/db'
+import { getCotizaciones, getCuentasCobrar, getCuentasPagar } from '@/lib/db'
 
 export default async function DashboardPage() {
   const [resCot, resCobrar, resPagar] = await Promise.allSettled([
@@ -49,9 +47,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Tarjetas principales */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
           <p className="text-gray-400 text-xs md:text-sm">Por Cobrar</p>
           <p className="text-xl md:text-2xl font-bold text-green-400 mt-2">
@@ -79,10 +75,8 @@ export default async function DashboardPage() {
           <p className="text-xl md:text-2xl font-bold text-yellow-400 mt-2">{cotizacionesBorrador}</p>
           <p className="text-gray-500 text-xs mt-1">Sin enviar</p>
         </div>
-
       </div>
 
-      {/* Cotizaciones Recientes — Desktop Table */}
       <div className="hidden md:block bg-gray-900 border border-gray-800 rounded-xl">
         <div className="p-6 border-b border-gray-800">
           <h2 className="text-lg font-semibold text-white">Cotizaciones Recientes</h2>
@@ -105,7 +99,7 @@ export default async function DashboardPage() {
                   <td className="px-6 py-4 text-sm text-gray-300">{cot.cliente}</td>
                   <td className="px-6 py-4 text-sm text-gray-300">{cot.proyecto}</td>
                   <td className="px-6 py-4 text-sm text-white font-medium">
-                    ${(cot.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    ${(cot.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${
@@ -130,7 +124,6 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Cotizaciones Recientes — Mobile Cards */}
       <div className="md:hidden">
         <h2 className="text-lg font-semibold text-white mb-4">Cotizaciones Recientes</h2>
         <div className="space-y-3">
@@ -154,7 +147,7 @@ export default async function DashboardPage() {
               <p className="text-gray-500 text-sm mb-3">{cot.cliente}</p>
               <div className="flex justify-between items-center">
                 <span className="text-white font-bold text-lg">
-                  ${(cot.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  ${(cot.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </a>
