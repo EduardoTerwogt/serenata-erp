@@ -42,7 +42,7 @@ export default function LoginPage() {
                 required
                 autoComplete="email"
                 placeholder="tu@correo.com"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-base text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"
               />
             </div>
             <div>
@@ -54,7 +54,7 @@ export default function LoginPage() {
                 required
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-base text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"
               />
             </div>
             {error && (

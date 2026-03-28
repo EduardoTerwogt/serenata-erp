@@ -379,18 +379,18 @@ export default function CotizacionDetallePage({
   }
 
   if (loading) {
-    return <div className="p-8 text-center text-gray-500">Cargando...</div>
+    return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cargando...</div>
   }
   if (!cotizacion) {
-    return <div className="p-8 text-center text-gray-500">Cotización no encontrada</div>
+    return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cotización no encontrada</div>
   }
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl">
       <div className="flex items-start justify-between mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl font-bold text-white font-mono">{cotizacion.id}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-white font-mono">{cotizacion.id}</h1>
             <span className={`text-sm px-3 py-1 rounded-full font-medium ${
               cotizacion.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
               cotizacion.estado === 'ENVIADA' ? 'bg-blue-900 text-blue-300' :

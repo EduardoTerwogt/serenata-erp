@@ -30,9 +30,9 @@ export default function ProyectosPage() {
   }, [])
 
   return (
-    <div className="p-8">
+    <div className="px-5 pt-6 pb-6 md:p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Proyectos</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-white">Proyectos</h1>
         <p className="text-gray-400 mt-1">Proyectos en producción</p>
       </div>
 

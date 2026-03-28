@@ -21,10 +21,10 @@ export default function ResponsablesPage() {
   )
 
   return (
-    <div className="p-8">
+    <div className="px-5 pt-6 pb-6 md:p-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-white">Colaboradores</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white">Colaboradores</h1>
           <p className="text-gray-400 mt-1">Gestiona tu equipo de trabajo</p>
         </div>
         <Link

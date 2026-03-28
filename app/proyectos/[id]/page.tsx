@@ -136,17 +136,17 @@ export default function ProyectoDetallePage({
     }
   }
 
-  if (loading) return <div className="p-8 text-center text-gray-500">Cargando...</div>
-  if (!proyecto) return <div className="p-8 text-center text-gray-500">Proyecto no encontrado</div>
+  if (loading) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cargando...</div>
+  if (!proyecto) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Proyecto no encontrado</div>
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="px-5 pt-6 pb-6 md:p-8 max-w-5xl">
       <div className="flex items-start justify-between mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <Link href="/proyectos" className="text-gray-500 hover:text-gray-300 text-sm">← Proyectos</Link>
           </div>
-          <h1 className="text-3xl font-bold text-white">{proyecto.proyecto}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white">{proyecto.proyecto}</h1>
           <p className="text-gray-400 mt-1">{proyecto.cliente}</p>
         </div>
         <div className="flex gap-2">
@@ -276,7 +276,7 @@ export default function ProyectoDetallePage({
         </div>
 
         {items.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 text-sm">
+          <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500 text-sm">
             No hay partidas. Las partidas se cargan desde la cotización aprobada.
           </div>
         ) : (
