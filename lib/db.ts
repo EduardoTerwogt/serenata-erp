@@ -326,6 +326,12 @@ export async function generarHistorialProyecto(proyectoId: string, proyecto: Pro
       .toLowerCase()
       .replace(/\s+/g, ' ')
 
+  const normalizeRole = (value: string | null | undefined) =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+
   const itemsConAlgunaReferencia = allItems.filter(item => !!item.responsable_id || !!item.responsable_nombre)
 
   let responsableIdPorNombre = new Map<string, string>()
@@ -352,38 +358,47 @@ export async function generarHistorialProyecto(proyectoId: string, proyecto: Pro
 
   if (delError) throw delError
 
-  const rows = itemsConAlgunaReferencia
-    .map(item => {
-      const resolvedResponsableId =
-        item.responsable_id ||
-        responsableIdPorNombre.get(normalizeResponsableName(item.responsable_nombre)) ||
-        null
+  const rowsMap = new Map<string, {
+    responsable_id: string
+    cotizacion_id: string
+    proyecto_id: string
+    proyecto_nombre: string
+    cliente: string
+    fecha_evento: string | null
+    rol_en_proyecto: string | null
+    x_pagar: number
+  }>()
 
-      if (!resolvedResponsableId) return null
+  for (const item of itemsConAlgunaReferencia) {
+    const resolvedResponsableId =
+      item.responsable_id ||
+      responsableIdPorNombre.get(normalizeResponsableName(item.responsable_nombre)) ||
+      null
 
-      return {
-        id: crypto.randomUUID(),
-        responsable_id: resolvedResponsableId,
-        cotizacion_id: item.cotizacion_id,
-        proyecto_id: proyectoId,
-        proyecto_nombre: proyecto.proyecto,
-        cliente: proyecto.cliente,
-        fecha_evento: proyecto.fecha_entrega || null,
-        rol_en_proyecto: item.descripcion || item.categoria || null,
-        x_pagar: item.x_pagar || 0,
-      }
+    if (!resolvedResponsableId) continue
+
+    const role = item.descripcion || item.categoria || null
+    const key = `${resolvedResponsableId}__${normalizeRole(role)}`
+    const existing = rowsMap.get(key)
+
+    if (existing) {
+      existing.x_pagar += item.x_pagar || 0
+      continue
+    }
+
+    rowsMap.set(key, {
+      responsable_id: resolvedResponsableId,
+      cotizacion_id: item.cotizacion_id,
+      proyecto_id: proyectoId,
+      proyecto_nombre: proyecto.proyecto,
+      cliente: proyecto.cliente,
+      fecha_evento: proyecto.fecha_entrega || null,
+      rol_en_proyecto: role,
+      x_pagar: item.x_pagar || 0,
     })
-    .filter((row): row is {
-      id: string
-      responsable_id: string
-      cotizacion_id: string
-      proyecto_id: string
-      proyecto_nombre: string
-      cliente: string
-      fecha_evento: string | null
-      rol_en_proyecto: string | null
-      x_pagar: number
-    } => row !== null)
+  }
+
+  const rows = Array.from(rowsMap.values())
 
   if (rows.length === 0) return 0
 

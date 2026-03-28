@@ -131,6 +131,9 @@ export async function PUT(
     }
   } catch (error) {
     console.error(error)
-    return Response.json({ error: 'Error actualizando proyecto' }, { status: 500 })
+    return Response.json(
+      { error: `Error actualizando proyecto: ${error instanceof Error ? error.message : JSON.stringify(error)}` },
+      { status: 500 },
+    )
   }
 }
