@@ -55,6 +55,7 @@ function NuevaCotizacionContent() {
   const esComplementaria = !!complementaria_de
 
   const [mobileStep, setMobileStep] = useState(1)
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
   const [folio, setFolio] = useState<string>('')
   const [responsables, setResponsables] = useState<Responsable[]>([])
   const [guardando, setGuardando] = useState(false)
@@ -621,9 +622,7 @@ function NuevaCotizacionContent() {
                 const item = watchedItems[index] || itemVacio
                 const { importe, margen } = calcItem(item)
                 return (
-                  <div key={field.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 cursor-pointer" onClick={() => {
-                    // Aquí iría un modal para editar, por ahora solo mostramos info
-                  }}>
+                  <div key={field.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 cursor-pointer hover:border-gray-700 transition-colors" onClick={() => setEditingItemIndex(index)}>
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="text-white font-medium text-[15px]">{item.descripcion || 'Sin descripción'}</p>
@@ -738,6 +737,109 @@ function NuevaCotizacionContent() {
               <button onClick={() => setMobileStep(2)} className="w-full text-gray-500 py-3 text-sm hover:text-gray-400 transition-colors">
                 Atrás
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de edición de partida — mobile only */}
+        {editingItemIndex !== null && (
+          <div className="md:hidden fixed inset-0 bg-gray-950 z-50 overflow-y-auto">
+            <div className="px-5 pt-12 pb-8">
+              {/* Header */}
+              <div className="flex justify-between items-center mb-7">
+                <button onClick={() => setEditingItemIndex(null)} className="text-gray-400 text-sm hover:text-gray-300">
+                  Cancelar
+                </button>
+                <span className="text-white font-medium text-[15px]">
+                  {watchedItems[editingItemIndex]?.descripcion ? 'Editar partida' : 'Nueva partida'}
+                </span>
+                <button onClick={() => setEditingItemIndex(null)} className="text-blue-500 font-medium text-sm hover:text-blue-400">
+                  Listo
+                </button>
+              </div>
+
+              {/* Campos */}
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-[13px] text-gray-400 mb-2">Descripción</label>
+                  <input {...register(`items.${editingItemIndex}.descripcion`)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Descripción del item"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[13px] text-gray-400 mb-2">Categoría</label>
+                  <input {...register(`items.${editingItemIndex}.categoria`)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Categoría"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-[13px] text-gray-400 mb-2">Cantidad</label>
+                    <input type="number" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white text-center focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="flex-[2]">
+                    <label className="block text-[13px] text-gray-400 mb-2">Precio unitario</label>
+                    <input type="number" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[13px] text-gray-400 mb-2">Responsable</label>
+                  <select {...register(`items.${editingItemIndex}.responsable_id`)}
+                    onChange={(e) => {
+                      setValue(`items.${editingItemIndex!}.responsable_id`, e.target.value)
+                      const r = responsables.find(r => r.id === e.target.value)
+                      setValue(`items.${editingItemIndex!}.responsable_nombre`, r?.nombre ?? '')
+                    }}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 appearance-none"
+                  >
+                    <option value="">Sin asignar</option>
+                    {responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[13px] text-gray-400 mb-2">Por pagar al responsable</label>
+                  <input type="number" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Cálculo en vivo */}
+              {editingItemIndex !== null && (
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mt-6">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-500 text-sm">Importe</span>
+                    <span className="text-gray-300 text-sm font-medium">${fmt(calcItem(watchedItems[editingItemIndex]).importe)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 text-sm">Margen</span>
+                    <span className={`text-sm font-medium ${calcItem(watchedItems[editingItemIndex]).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      ${fmt(calcItem(watchedItems[editingItemIndex]).margen)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Botón eliminar */}
+              {fields.length > 1 && (
+                <button type="button" onClick={() => {
+                  remove(editingItemIndex)
+                  setEditingItemIndex(null)
+                }}
+                  className="w-full text-red-400 hover:text-red-300 py-3 text-sm mt-6 transition-colors">
+                  Eliminar partida
+                </button>
+              )}
             </div>
           </div>
         )}
