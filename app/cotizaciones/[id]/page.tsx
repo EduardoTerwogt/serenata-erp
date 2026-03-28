@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState, use } from 'react'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { use, useCallback, useEffect, useState } from 'react'
+import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
-import { Cotizacion, Responsable, ItemCotizacion, Producto } from '@/lib/types'
+import { Cotizacion, ItemCotizacion, Responsable } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 
 interface ItemForm {
@@ -68,14 +68,33 @@ export default function CotizacionDetallePage({
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchedItems = watch('items')
 
-  // ✅ Usar hook compartido para autocomplete y búsqueda
-  // En lugar de duplicar estado en cada página, usamos el hook
   const quotationForm = useQuotationForm(setValue, watchedItems)
 
-  const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'ENVIADA'
+  const {
+    refreshCatalogos,
+    calcItem,
+    handleClienteChange,
+    handleProyectoChange,
+    handleDescripcionChange,
+    seleccionarProducto,
+    seleccionarCliente,
+    listaClientes,
+    clienteInput,
+    setClienteInput,
+    clienteSugerencias,
+    mostrarClienteDropdown,
+    setMostrarClienteDropdown,
+    proyectosDelCliente,
+    proyectoInput,
+    setProyectoInput,
+    mostrarProyectoDropdown,
+    setMostrarProyectoDropdown,
+    productoSugerencias,
+    mostrarProductoDropdown,
+    setMostrarProductoDropdown,
+  } = quotationForm
 
-  // ✅ refreshCatalogos viene del hook
-  const { refreshCatalogos } = quotationForm
+  const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'ENVIADA'
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
@@ -101,7 +120,7 @@ export default function CotizacionDetallePage({
         x_pagar: item.x_pagar,
       })),
     })
-  }, [reset])
+  }, [reset, setClienteInput, setProyectoInput])
 
   useEffect(() => {
     refreshCatalogos()
@@ -111,15 +130,14 @@ export default function CotizacionDetallePage({
     Promise.all([
       fetch(`/api/cotizaciones/${id}`).then(r => r.json()),
       fetch('/api/responsables').then(r => r.json()),
-    ]).then(([cot, resp]) => {
-      applyCotizacionToState(cot)
-      setResponsables(resp)
-      setLoading(false)
-    }).catch(() => setLoading(false))
+    ])
+      .then(([cot, resp]) => {
+        applyCotizacionToState(cot)
+        setResponsables(resp)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [id, applyCotizacionToState])
-
-  // ✅ calcItem viene del hook
-  const { calcItem } = quotationForm
 
   const totales = (() => {
     const items = watchedItems || []
@@ -153,29 +171,6 @@ export default function CotizacionDetallePage({
       utilidad_total: cotizacion?.utilidad_total ?? 0,
     }
   })()
-
-  // ✅ Funciones vienen del hook compartido
-  const {
-    handleClienteChange,
-    handleProyectoChange,
-    handleDescripcionChange,
-    seleccionarProducto,
-    seleccionarCliente,
-    listaClientes,
-    clienteInput,
-    setClienteInput,
-    clienteSugerencias,
-    mostrarClienteDropdown,
-    setMostrarClienteDropdown,
-    proyectosDelCliente,
-    proyectoInput,
-    setProyectoInput,
-    mostrarProyectoDropdown,
-    setMostrarProyectoDropdown,
-    productoSugerencias,
-    mostrarProductoDropdown,
-    setMostrarProductoDropdown,
-  } = quotationForm
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)
@@ -343,15 +338,16 @@ export default function CotizacionDetallePage({
   if (loading) {
     return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cargando...</div>
   }
+
   if (!cotizacion) {
     return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cotización no encontrada</div>
   }
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl">
-      <div className="flex items-start justify-between mb-8">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
             <h1 className="text-2xl md:text-3xl font-bold text-white font-mono">{cotizacion.id}</h1>
             <span className={`text-sm px-3 py-1 rounded-full font-medium ${
               cotizacion.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
@@ -363,20 +359,21 @@ export default function CotizacionDetallePage({
           </div>
           <p className="text-gray-400">{cotizacion.proyecto} — {cotizacion.cliente}</p>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
+
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:justify-end">
           {cotizacion.estado === 'BORRADOR' && (
             <>
               <button
                 onClick={() => guardar()}
                 disabled={guardando}
-                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]"
               >
                 {guardando ? 'Guardando...' : 'Guardar'}
               </button>
               <button
                 onClick={generarCotizacion}
                 disabled={guardando}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]"
               >
                 {guardando ? 'Generando...' : 'Generar Cotización'}
               </button>
@@ -387,20 +384,20 @@ export default function CotizacionDetallePage({
               <button
                 onClick={() => guardar()}
                 disabled={guardando}
-                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]"
               >
                 {guardando ? 'Guardando...' : 'Guardar'}
               </button>
               <button
                 onClick={generarPDF}
-                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]"
               >
                 Generar PDF
               </button>
               <button
                 onClick={aprobar}
                 disabled={aprobando || guardando}
-                className="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                className="bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 min-h-[44px]"
               >
                 {aprobando ? 'Aprobando...' : 'Aprobar Cotización'}
               </button>
@@ -410,13 +407,13 @@ export default function CotizacionDetallePage({
             <>
               <button
                 onClick={generarPDF}
-                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]"
               >
                 Generar PDF
               </button>
               <button
                 onClick={crearComplementaria}
-                className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]"
               >
                 Crear Complementaria
               </button>
@@ -436,9 +433,9 @@ export default function CotizacionDetallePage({
         </div>
       )}
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 mb-6">
         <h2 className="text-lg font-semibold text-white mb-4">Información General</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm text-gray-400 mb-1">Cliente</label>
             {esEditable ? (
@@ -455,7 +452,7 @@ export default function CotizacionDetallePage({
                     }
                   }, 200)}
                   autoComplete="off"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white focus:outline-none focus:border-blue-500"
                 />
                 {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
                   <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
@@ -463,7 +460,7 @@ export default function CotizacionDetallePage({
                       <div
                         key={i}
                         onMouseDown={() => seleccionarCliente(nombre)}
-                        className="px-4 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
+                        className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
                       >
                         {nombre}
                       </div>
@@ -475,6 +472,7 @@ export default function CotizacionDetallePage({
               <p className="text-white py-2">{watch('cliente') || '—'}</p>
             )}
           </div>
+
           <div className="relative">
             <label className="block text-sm text-gray-400 mb-1">Proyecto</label>
             {esEditable ? (
@@ -488,7 +486,7 @@ export default function CotizacionDetallePage({
                   }}
                   onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)}
                   autoComplete="off"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white focus:outline-none focus:border-blue-500"
                 />
                 {mostrarProyectoDropdown && (() => {
                   const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
@@ -502,7 +500,7 @@ export default function CotizacionDetallePage({
                             setValue('proyecto', proy)
                             setMostrarProyectoDropdown(false)
                           }}
-                          className="px-4 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
+                          className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
                         >
                           {proy}
                         </div>
@@ -515,6 +513,7 @@ export default function CotizacionDetallePage({
               <p className="text-white py-2">{watch('proyecto') || '—'}</p>
             )}
           </div>
+
           {[
             { label: 'Fecha de Entrega', name: 'fecha_entrega' as const, type: 'date' },
             { label: 'Locación', name: 'locacion' as const },
@@ -525,19 +524,20 @@ export default function CotizacionDetallePage({
                 <input
                   type={type || 'text'}
                   {...register(name)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white focus:outline-none focus:border-blue-500"
                 />
               ) : (
                 <p className="text-white py-2">{watch(name) || '—'}</p>
               )}
             </div>
           ))}
+
           {cotizacion.fecha_cotizacion && (
             <div>
               <label className="block text-sm text-gray-400 mb-1">Fecha de Cotización</label>
               <p className="text-white py-2">
                 {(() => {
-                  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+                  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
                   const parts = cotizacion.fecha_cotizacion!.split('-').map(Number)
                   return `${parts[2]} de ${meses[parts[1] - 1]} ${parts[0]}`
                 })()}
@@ -548,19 +548,19 @@ export default function CotizacionDetallePage({
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl mb-6">
-        <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+        <div className="p-4 md:p-6 border-b border-gray-800 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Partidas</h2>
           {esEditable && (
             <button
               type="button"
               onClick={() => append({ ...itemVacio })}
-              className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors"
+              className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0"
             >
               + Agregar fila
             </button>
           )}
         </div>
-        {/* Desktop Table */}
+
         <div className="hidden md:block" style={{ overflowX: 'auto', overflowY: 'visible' }}>
           <table className="w-full text-sm">
             <thead>
@@ -662,65 +662,71 @@ export default function CotizacionDetallePage({
           </table>
         </div>
 
-        {/* Mobile Cards */}
-        <div className="md:hidden space-y-3 px-0">
+        <div className="md:hidden p-4 space-y-3">
           {esEditable ? (
             fields.map((field, index) => {
               const item = watchedItems[index] || itemVacio
               const { importe, margen } = calcItem(item)
               return (
-                <div key={field.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4 cursor-pointer hover:border-gray-600 transition-colors" onClick={() => setEditingItemIndex(index)}>
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <p className="text-white font-medium text-[15px] mb-1">{item.descripcion || 'Sin descripción'}</p>
+                <div
+                  key={field.id}
+                  className="bg-gray-800 border border-gray-700 rounded-xl p-4 cursor-pointer hover:border-gray-600 transition-colors"
+                  onClick={() => setEditingItemIndex(index)}
+                >
+                  <div className="flex justify-between items-start gap-3 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-medium text-[15px] truncate">{item.descripcion || 'Sin descripción'}</p>
                       <p className="text-gray-400 text-sm">{item.categoria || 'Sin categoría'}</p>
                     </div>
-                    <span className={`text-sm font-medium ml-2 whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      ${fmt(margen)}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        remove(index)
+                      }}
+                      disabled={fields.length === 1}
+                      className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors text-sm"
+                    >
+                      ✕
+                    </button>
                   </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <div className="text-gray-400">
-                      <span>{item.cantidad}x</span>
-                      <span className="ml-1">${fmt(item.precio_unitario as number)}</span>
-                    </div>
+                  <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
+                    <span className="text-gray-500">Cant. {item.cantidad || 0}</span>
+                    <span className="text-gray-500 text-right">P. Unit. ${fmt(typeof item.precio_unitario === 'number' ? item.precio_unitario : 0)}</span>
+                    <span className="text-gray-400">X pagar ${fmt(typeof item.x_pagar === 'number' ? item.x_pagar : 0)}</span>
+                    <span className={`text-right font-medium ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>Margen ${fmt(margen)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-700">
+                    <span className="text-gray-500 text-xs">{item.responsable_nombre || 'Sin responsable'}</span>
                     <span className="text-white font-bold">${fmt(importe)}</span>
                   </div>
-                  {item.responsable_nombre && (
-                    <div className="text-gray-400 text-xs mt-2 pt-2 border-t border-gray-700">
-                      Responsable: {item.responsable_nombre}
-                    </div>
-                  )}
                 </div>
               )
             })
           ) : (
             (cotizacion.items || []).map(item => {
               const importe = (item.cantidad ?? 1) * (item.precio_unitario ?? 0)
-              const margen = (item.margen ?? 0)
+              const margen = item.margen ?? 0
               return (
                 <div key={item.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <p className="text-white font-medium text-[15px] mb-1">{item.descripcion}</p>
+                  <div className="flex justify-between items-start gap-3 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-medium text-[15px] truncate">{item.descripcion}</p>
                       <p className="text-gray-400 text-sm">{item.categoria}</p>
                     </div>
-                    <span className={`text-sm font-medium ml-2 whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className={`text-sm font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       ${fmt(margen)}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <div className="text-gray-400">
-                      <span>{item.cantidad}x</span>
-                      <span className="ml-1">${fmt(item.precio_unitario)}</span>
-                    </div>
+                  <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
+                    <span className="text-gray-500">Cant. {item.cantidad}</span>
+                    <span className="text-gray-500 text-right">P. Unit. ${fmt(item.precio_unitario)}</span>
+                    <span className="text-gray-400">X pagar ${fmt(item.x_pagar)}</span>
+                    <span className="text-right text-gray-500">{item.responsable_nombre || 'Sin responsable'}</span>
+                  </div>
+                  <div className="flex justify-end pt-2 border-t border-gray-700">
                     <span className="text-white font-bold">${fmt(importe)}</span>
                   </div>
-                  {item.responsable_nombre && (
-                    <div className="text-gray-400 text-xs mt-2 pt-2 border-t border-gray-700">
-                      Responsable: {item.responsable_nombre}
-                    </div>
-                  )}
                 </div>
               )
             })
@@ -728,36 +734,51 @@ export default function CotizacionDetallePage({
         </div>
       </div>
 
-      {/* Modal de edición de partida — mobile only */}
       {editingItemIndex !== null && esEditable && (
         <div className="md:hidden fixed inset-0 bg-gray-950 z-50 overflow-y-auto">
           <div className="px-5 pt-12 pb-8">
-            {/* Header */}
             <div className="flex justify-between items-center mb-7">
               <button onClick={() => setEditingItemIndex(null)} className="text-gray-400 text-sm hover:text-gray-300">
                 Cancelar
               </button>
-              <span className="text-white font-medium text-[15px]">
-                Editar partida
-              </span>
+              <span className="text-white font-medium text-[15px]">Editar partida</span>
               <button onClick={() => setEditingItemIndex(null)} className="text-blue-500 font-medium text-sm hover:text-blue-400">
                 Listo
               </button>
             </div>
 
-            {/* Campos */}
             <div className="space-y-5">
-              <div>
+              <div className="relative">
                 <label className="block text-[13px] text-gray-400 mb-2">Descripción</label>
-                <input {...register(`items.${editingItemIndex}.descripcion`)}
+                <input
+                  {...register(`items.${editingItemIndex}.descripcion`)}
+                  onChange={e => handleDescripcionChange(editingItemIndex, e.target.value)}
+                  onFocus={() => (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: true }))}
+                  onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: false })), 200)}
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
                   placeholder="Descripción del item"
+                  autoComplete="off"
                 />
+                {mostrarProductoDropdown[editingItemIndex] && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    {productoSugerencias[editingItemIndex].map((p, i) => (
+                      <div
+                        key={i}
+                        onMouseDown={() => seleccionarProducto(editingItemIndex, p)}
+                        className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"
+                      >
+                        <div className="font-medium">{p.descripcion}</div>
+                        {p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-[13px] text-gray-400 mb-2">Categoría</label>
-                <input {...register(`items.${editingItemIndex}.categoria`)}
+                <input
+                  {...register(`items.${editingItemIndex}.categoria`)}
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
                   placeholder="Categoría"
                 />
@@ -766,13 +787,20 @@ export default function CotizacionDetallePage({
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="block text-[13px] text-gray-400 mb-2">Cantidad</label>
-                  <input type="number" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })}
+                  <input
+                    type="number"
+                    min="1"
+                    {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })}
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white text-center focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div className="flex-[2]">
                   <label className="block text-[13px] text-gray-400 mb-2">Precio unitario</label>
-                  <input type="number" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
@@ -780,50 +808,55 @@ export default function CotizacionDetallePage({
 
               <div>
                 <label className="block text-[13px] text-gray-400 mb-2">Responsable</label>
-                <select {...register(`items.${editingItemIndex}.responsable_id`)}
+                <select
+                  {...register(`items.${editingItemIndex}.responsable_id`)}
                   onChange={(e) => {
-                    setValue(`items.${editingItemIndex!}.responsable_id`, e.target.value)
+                    setValue(`items.${editingItemIndex}.responsable_id`, e.target.value)
                     const r = responsables.find(r => r.id === e.target.value)
-                    setValue(`items.${editingItemIndex!}.responsable_nombre`, r?.nombre ?? '')
+                    setValue(`items.${editingItemIndex}.responsable_nombre`, r?.nombre ?? '')
                   }}
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 appearance-none"
                 >
                   <option value="">Sin asignar</option>
                   {responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
                 </select>
+                <input type="hidden" {...register(`items.${editingItemIndex}.responsable_nombre`)} />
               </div>
 
               <div>
                 <label className="block text-[13px] text-gray-400 mb-2">Por pagar al responsable</label>
-                <input type="number" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })}
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
             </div>
 
-            {/* Cálculo en vivo */}
-            {editingItemIndex !== null && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mt-6">
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-500 text-sm">Importe</span>
-                  <span className="text-gray-300 text-sm font-medium">${fmt(calcItem(watchedItems[editingItemIndex]).importe)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 text-sm">Margen</span>
-                  <span className={`text-sm font-medium ${calcItem(watchedItems[editingItemIndex]).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    ${fmt(calcItem(watchedItems[editingItemIndex]).margen)}
-                  </span>
-                </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mt-6">
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-500 text-sm">Importe</span>
+                <span className="text-gray-300 text-sm font-medium">${fmt(calcItem(watchedItems[editingItemIndex] || itemVacio).importe)}</span>
               </div>
-            )}
+              <div className="flex justify-between">
+                <span className="text-gray-500 text-sm">Margen</span>
+                <span className={`text-sm font-medium ${calcItem(watchedItems[editingItemIndex] || itemVacio).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  ${fmt(calcItem(watchedItems[editingItemIndex] || itemVacio).margen)}
+                </span>
+              </div>
+            </div>
 
-            {/* Botón eliminar */}
             {fields.length > 1 && (
-              <button type="button" onClick={() => {
-                remove(editingItemIndex)
-                setEditingItemIndex(null)
-              }}
-                className="w-full text-red-400 hover:text-red-300 py-3 text-sm mt-6 transition-colors">
+              <button
+                type="button"
+                onClick={() => {
+                  remove(editingItemIndex)
+                  setEditingItemIndex(null)
+                }}
+                className="w-full text-red-400 hover:text-red-300 py-3 text-sm mt-6 transition-colors"
+              >
                 Eliminar partida
               </button>
             )}
@@ -831,16 +864,16 @@ export default function CotizacionDetallePage({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Totales</h3>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Subtotal</span>
               <span className="text-white">${fmt(displayTotales.subtotal)}</span>
             </div>
-            <div className="flex justify-between text-sm items-center">
-              <span className="text-gray-400 flex items-center gap-2">
+            <div className="flex justify-between text-sm items-center gap-3">
+              <span className="text-gray-400 flex items-center gap-2 flex-wrap">
                 Fee Agencia
                 {esEditable ? (
                   <>
@@ -851,7 +884,7 @@ export default function CotizacionDetallePage({
                       step="0.5"
                       value={(porcentaje_fee * 100).toFixed(1)}
                       onChange={e => setPorcentajeFee((parseFloat(e.target.value) || 0) / 100)}
-                      className="w-14 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"
+                      className="w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500"
                     />
                     <span className="text-gray-500 text-xs">%</span>
                   </>
@@ -883,13 +916,13 @@ export default function CotizacionDetallePage({
               </span>
             </div>
             {esEditable ? (
-              <div className="flex justify-between text-sm items-center">
+              <div className="flex justify-between text-sm items-center gap-3">
                 <span className="text-gray-400 flex items-center gap-2 flex-wrap">
                   Descuento
                   <select
                     value={descuento_tipo}
                     onChange={e => setDescuentoTipo(e.target.value as 'monto' | 'porcentaje')}
-                    className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"
+                    className="bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500"
                   >
                     <option value="monto">$ Monto</option>
                     <option value="porcentaje">% Porcentaje</option>
@@ -900,7 +933,7 @@ export default function CotizacionDetallePage({
                     step="0.01"
                     value={descuento_valor}
                     onChange={e => setDescuentoValor(parseFloat(e.target.value) || 0)}
-                    className="w-20 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs focus:outline-none focus:border-blue-500"
+                    className="w-20 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500"
                   />
                 </span>
                 <span className={totales.descuento > 0 ? 'text-yellow-400' : 'text-gray-600'}>
@@ -919,14 +952,13 @@ export default function CotizacionDetallePage({
             </div>
           </div>
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
           <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Utilidad</h3>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Margen Total</span>
-              <span className={displayTotales.margen_total >= 0 ? 'text-green-400' : 'text-red-400'}>
-                ${fmt(displayTotales.margen_total)}
-              </span>
+              <span className={displayTotales.margen_total >= 0 ? 'text-green-400' : 'text-red-400'}>${fmt(displayTotales.margen_total)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Fee Agencia</span>
@@ -934,9 +966,7 @@ export default function CotizacionDetallePage({
             </div>
             <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-semibold">
               <span className="text-gray-300">Utilidad Total</span>
-              <span className={displayTotales.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'}>
-                ${fmt(displayTotales.utilidad_total)}
-              </span>
+              <span className={displayTotales.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'}>${fmt(displayTotales.utilidad_total)}</span>
             </div>
           </div>
         </div>
