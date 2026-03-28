@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CuentaCobrar, CuentaPagar, EstadoPago } from '@/lib/types'
+import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 
 type Tab = 'cobrar' | 'pagar'
 
@@ -127,108 +128,93 @@ export default function CuentasPage() {
               </div>
 
               <div className="bg-gray-900 border border-gray-800 rounded-xl">
-                {cobrar.length === 0 ? (
-                  <div className="p-12 text-center text-gray-500">
-                    No hay cuentas por cobrar
-                  </div>
-                ) : (
-                  <>
-                    {/* Desktop Table */}
-                    <div className="hidden md:block overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-800">
-                            <th className="text-left text-gray-400 font-medium px-6 py-3">Folio</th>
-                            <th className="text-left text-gray-400 font-medium px-6 py-3">Cliente</th>
-                            <th className="text-left text-gray-400 font-medium px-6 py-3">Proyecto</th>
-                            <th className="text-right text-gray-400 font-medium px-6 py-3">Monto</th>
-                            <th className="text-left text-gray-400 font-medium px-6 py-3">Vencimiento</th>
-                            <th className="text-left text-gray-400 font-medium px-6 py-3">Estado</th>
-                            <th className="text-left text-gray-400 font-medium px-6 py-3">Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cobrar.map(c => (
-                            <tr key={c.id} className="border-b border-gray-800/50">
-                              <td className="px-6 py-4">
-                                <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm">
-                                  {c.cotizacion_id}
-                                </Link>
-                              </td>
-                              <td className="px-6 py-4 text-white font-medium">{c.cliente}</td>
-                              <td className="px-6 py-4 text-gray-300">{c.proyecto}</td>
-                              <td className="px-6 py-4 text-right text-white font-bold">${fmt(c.monto_total)}</td>
-                              <td className="px-6 py-4 text-gray-400">{c.fecha_vencimiento || '—'}</td>
-                              <td className="px-6 py-4">
-                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_COBRAR_STYLE[c.estado]}`}>
-                                  {c.estado}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4">
-                                {c.estado !== 'PAGADO' && (
-                                  <button
-                                    onClick={() => marcarCobrado(c.id)}
-                                    className="text-xs bg-green-800 hover:bg-green-700 text-green-200 px-3 py-1.5 rounded-lg transition-colors"
-                                  >
-                                    Marcar Pagado
-                                  </button>
-                                )}
-                                {c.estado === 'PAGADO' && (
-                                  <span className="text-xs text-gray-500">
-                                    {c.fecha_pago}
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Mobile Cards */}
-                    <div className="md:hidden space-y-3 px-0">
-                      {cobrar.map(c => (
-                        <div key={c.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm font-bold">
-                              {c.cotizacion_id}
-                            </Link>
-                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_COBRAR_STYLE[c.estado]}`}>
-                              {c.estado}
-                            </span>
-                          </div>
-                          <div className="mb-3">
-                            <p className="text-white font-medium text-[15px]">{c.cliente}</p>
-                            <p className="text-gray-400 text-sm">{c.proyecto}</p>
-                          </div>
-                          <div className="flex justify-between items-center mb-3 pb-3 border-t border-gray-700 pt-3">
-                            <span className="text-gray-400">Monto:</span>
-                            <span className="text-white font-bold">${fmt(c.monto_total)}</span>
-                          </div>
-                          {c.fecha_vencimiento && (
-                            <div className="flex justify-between items-center text-sm mb-3 text-gray-400">
-                              <span>Vencimiento:</span>
-                              <span>{c.fecha_vencimiento}</span>
-                            </div>
-                          )}
-                          {c.estado !== 'PAGADO' && (
-                            <button
-                              onClick={() => marcarCobrado(c.id)}
-                              className="w-full text-xs bg-green-800 hover:bg-green-700 text-green-200 px-3 py-2 rounded-lg transition-colors"
-                            >
-                              Marcar Pagado
-                            </button>
-                          )}
-                          {c.estado === 'PAGADO' && (
-                            <div className="text-xs text-gray-500 text-center">
-                              Pagado el {c.fecha_pago}
-                            </div>
-                          )}
+                {/* ✅ Usando componente responsivo compartido */}
+                <ResponsiveTableCard<CuentaCobrar>
+                  data={cobrar}
+                  columns={[
+                    { key: 'folio', label: 'Folio' },
+                    { key: 'cliente', label: 'Cliente' },
+                    { key: 'proyecto', label: 'Proyecto' },
+                    { key: 'monto', label: 'Monto', align: 'right' },
+                    { key: 'vencimiento', label: 'Vencimiento' },
+                    { key: 'estado', label: 'Estado' },
+                    { key: 'acciones', label: 'Acciones' },
+                  ]}
+                  renderDesktopRow={(c) => (
+                    <>
+                      <td className="px-6 py-4">
+                        <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm">
+                          {c.cotizacion_id}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-4 text-white font-medium">{c.cliente}</td>
+                      <td className="px-6 py-4 text-gray-300">{c.proyecto}</td>
+                      <td className="px-6 py-4 text-right text-white font-bold">${fmt(c.monto_total)}</td>
+                      <td className="px-6 py-4 text-gray-400">{c.fecha_vencimiento || '—'}</td>
+                      <td className="px-6 py-4">
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_COBRAR_STYLE[c.estado]}`}>
+                          {c.estado}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {c.estado !== 'PAGADO' && (
+                          <button
+                            onClick={() => marcarCobrado(c.id)}
+                            className="text-xs bg-green-800 hover:bg-green-700 text-green-200 px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            Marcar Pagado
+                          </button>
+                        )}
+                        {c.estado === 'PAGADO' && (
+                          <span className="text-xs text-gray-500">
+                            {c.fecha_pago}
+                          </span>
+                        )}
+                      </td>
+                    </>
+                  )}
+                  renderMobileCard={(c) => (
+                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm font-bold">
+                          {c.cotizacion_id}
+                        </Link>
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_COBRAR_STYLE[c.estado]}`}>
+                          {c.estado}
+                        </span>
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-white font-medium text-[15px]">{c.cliente}</p>
+                        <p className="text-gray-400 text-sm">{c.proyecto}</p>
+                      </div>
+                      <div className="flex justify-between items-center mb-3 pb-3 border-t border-gray-700 pt-3">
+                        <span className="text-gray-400">Monto:</span>
+                        <span className="text-white font-bold">${fmt(c.monto_total)}</span>
+                      </div>
+                      {c.fecha_vencimiento && (
+                        <div className="flex justify-between items-center text-sm mb-3 text-gray-400">
+                          <span>Vencimiento:</span>
+                          <span>{c.fecha_vencimiento}</span>
                         </div>
-                      ))}
+                      )}
+                      {c.estado !== 'PAGADO' && (
+                        <button
+                          onClick={() => marcarCobrado(c.id)}
+                          className="w-full text-xs bg-green-800 hover:bg-green-700 text-green-200 px-3 py-2 rounded-lg transition-colors"
+                        >
+                          Marcar Pagado
+                        </button>
+                      )}
+                      {c.estado === 'PAGADO' && (
+                        <div className="text-xs text-gray-500 text-center">
+                          Pagado el {c.fecha_pago}
+                        </div>
+                      )}
                     </div>
-                  </>
-                )}
+                  )}
+                  keyExtractor={(c) => c.id}
+                  emptyMessage="No hay cuentas por cobrar"
+                />
               </div>
             </>
           )}
@@ -249,115 +235,100 @@ export default function CuentasPage() {
               </div>
 
               <div className="bg-gray-900 border border-gray-800 rounded-xl">
-                {pagar.length === 0 ? (
-                  <div className="p-12 text-center text-gray-500">
-                    No hay cuentas por pagar
-                  </div>
-                ) : (
-                  <>
-                    {/* Desktop Table */}
-                    <div className="hidden md:block overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-800">
-                            <th className="text-left text-gray-400 font-medium px-4 py-3">Folio</th>
-                            <th className="text-left text-gray-400 font-medium px-4 py-3">Proyecto</th>
-                            <th className="text-left text-gray-400 font-medium px-4 py-3">Responsable</th>
-                            <th className="text-left text-gray-400 font-medium px-4 py-3">Descripción</th>
-                            <th className="text-right text-gray-400 font-medium px-4 py-3">Monto</th>
-                            <th className="text-left text-gray-400 font-medium px-4 py-3">Estado</th>
-                            <th className="text-left text-gray-400 font-medium px-4 py-3">Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pagar.map(c => (
-                            <tr key={c.id} className="border-b border-gray-800/50">
-                              <td className="px-4 py-3">
-                                <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm">
-                                  {c.cotizacion_id}
-                                </Link>
-                              </td>
-                              <td className="px-4 py-3 text-gray-300 text-sm">{c.proyecto_nombre || '—'}</td>
-                              <td className="px-4 py-3">
-                                <p className="text-white font-medium">{c.responsable_nombre}</p>
-                                {c.correo && <p className="text-gray-500 text-xs">{c.correo}</p>}
-                              </td>
-                              <td className="px-4 py-3 text-gray-300 max-w-[180px]">
-                                <p className="truncate">{c.item_descripcion || '—'}</p>
-                                {c.cantidad > 1 && (
-                                  <p className="text-gray-500 text-xs">×{c.cantidad}</p>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-right text-white font-bold">${fmt(c.x_pagar)}</td>
-                              <td className="px-4 py-3">
-                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_PAGAR_STYLE[c.estado]}`}>
-                                  {c.estado}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                {c.estado !== 'PAGADO' ? (
-                                  <button
-                                    onClick={() => marcarPagado(c.id)}
-                                    className="text-xs bg-green-800 hover:bg-green-700 text-green-200 px-3 py-1.5 rounded-lg transition-colors"
-                                  >
-                                    Marcar Pagado
-                                  </button>
-                                ) : (
-                                  <span className="text-xs text-gray-500">{c.fecha_pago}</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Mobile Cards */}
-                    <div className="md:hidden space-y-3 px-0">
-                      {pagar.map(c => (
-                        <div key={c.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm font-bold">
-                              {c.cotizacion_id}
-                            </Link>
-                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_PAGAR_STYLE[c.estado]}`}>
-                              {c.estado}
-                            </span>
-                          </div>
-                          <div className="mb-3">
-                            <p className="text-white font-medium text-[15px]">{c.proyecto_nombre || '—'}</p>
-                            <p className="text-gray-400 text-sm">{c.responsable_nombre}</p>
-                            {c.correo && <p className="text-gray-500 text-xs">{c.correo}</p>}
-                          </div>
-                          {c.item_descripcion && (
-                            <div className="mb-3">
-                              <p className="text-gray-300 text-sm">{c.item_descripcion}</p>
-                              {c.cantidad > 1 && (
-                                <p className="text-gray-500 text-xs">×{c.cantidad}</p>
-                              )}
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center mb-3 pb-3 border-t border-gray-700 pt-3">
-                            <span className="text-gray-400">Monto:</span>
-                            <span className="text-white font-bold">${fmt(c.x_pagar)}</span>
-                          </div>
-                          {c.estado !== 'PAGADO' ? (
-                            <button
-                              onClick={() => marcarPagado(c.id)}
-                              className="w-full text-xs bg-green-800 hover:bg-green-700 text-green-200 px-3 py-2 rounded-lg transition-colors"
-                            >
-                              Marcar Pagado
-                            </button>
-                          ) : (
-                            <div className="text-xs text-gray-500 text-center">
-                              Pagado el {c.fecha_pago}
-                            </div>
+                {/* ✅ Usando componente responsivo compartido */}
+                <ResponsiveTableCard<CuentaPagar>
+                  data={pagar}
+                  columns={[
+                    { key: 'folio', label: 'Folio' },
+                    { key: 'proyecto', label: 'Proyecto' },
+                    { key: 'responsable', label: 'Responsable' },
+                    { key: 'descripcion', label: 'Descripción' },
+                    { key: 'monto', label: 'Monto', align: 'right' },
+                    { key: 'estado', label: 'Estado' },
+                    { key: 'acciones', label: 'Acciones' },
+                  ]}
+                  renderDesktopRow={(c) => (
+                    <>
+                      <td className="px-4 py-3">
+                        <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm">
+                          {c.cotizacion_id}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-gray-300 text-sm">{c.proyecto_nombre || '—'}</td>
+                      <td className="px-4 py-3">
+                        <p className="text-white font-medium">{c.responsable_nombre}</p>
+                        {c.correo && <p className="text-gray-500 text-xs">{c.correo}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-300 max-w-[180px]">
+                        <p className="truncate">{c.item_descripcion || '—'}</p>
+                        {c.cantidad > 1 && (
+                          <p className="text-gray-500 text-xs">×{c.cantidad}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-white font-bold">${fmt(c.x_pagar)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_PAGAR_STYLE[c.estado]}`}>
+                          {c.estado}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {c.estado !== 'PAGADO' ? (
+                          <button
+                            onClick={() => marcarPagado(c.id)}
+                            className="text-xs bg-green-800 hover:bg-green-700 text-green-200 px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            Marcar Pagado
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-500">{c.fecha_pago}</span>
+                        )}
+                      </td>
+                    </>
+                  )}
+                  renderMobileCard={(c) => (
+                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <Link href={`/cotizaciones/${c.cotizacion_id}`} className="font-mono text-blue-400 hover:text-blue-300 text-sm font-bold">
+                          {c.cotizacion_id}
+                        </Link>
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_PAGAR_STYLE[c.estado]}`}>
+                          {c.estado}
+                        </span>
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-white font-medium text-[15px]">{c.proyecto_nombre || '—'}</p>
+                        <p className="text-gray-400 text-sm">{c.responsable_nombre}</p>
+                        {c.correo && <p className="text-gray-500 text-xs">{c.correo}</p>}
+                      </div>
+                      {c.item_descripcion && (
+                        <div className="mb-3">
+                          <p className="text-gray-300 text-sm">{c.item_descripcion}</p>
+                          {c.cantidad > 1 && (
+                            <p className="text-gray-500 text-xs">×{c.cantidad}</p>
                           )}
                         </div>
-                      ))}
+                      )}
+                      <div className="flex justify-between items-center mb-3 pb-3 border-t border-gray-700 pt-3">
+                        <span className="text-gray-400">Monto:</span>
+                        <span className="text-white font-bold">${fmt(c.x_pagar)}</span>
+                      </div>
+                      {c.estado !== 'PAGADO' ? (
+                        <button
+                          onClick={() => marcarPagado(c.id)}
+                          className="w-full text-xs bg-green-800 hover:bg-green-700 text-green-200 px-3 py-2 rounded-lg transition-colors"
+                        >
+                          Marcar Pagado
+                        </button>
+                      ) : (
+                        <div className="text-xs text-gray-500 text-center">
+                          Pagado el {c.fecha_pago}
+                        </div>
+                      )}
                     </div>
-                  </>
-                )}
+                  )}
+                  keyExtractor={(c) => c.id}
+                  emptyMessage="No hay cuentas por pagar"
+                />
               </div>
             </>
           )}

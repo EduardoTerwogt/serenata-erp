@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react'
 import { useForm } from 'react-hook-form'
 import Link from 'next/link'
 import { Proyecto, EstadoProyecto, ItemCotizacion, Responsable } from '@/lib/types'
+import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 
 interface ProyectoDetalle extends Proyecto {
   items?: ItemCotizacion[]
@@ -275,100 +276,85 @@ export default function ProyectoDetallePage({
           <p className="text-gray-500 text-sm mt-1">Asigna responsables y agrega notas por partida</p>
         </div>
 
-        {items.length === 0 ? (
-          <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500 text-sm">
-            No hay partidas. Las partidas se cargan desde la cotización aprobada.
-          </div>
-        ) : (
-          <>
-            {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-800">
-                    <th className="text-left text-gray-400 font-medium px-6 py-3">Descripción</th>
-                    <th className="text-left text-gray-400 font-medium px-6 py-3">Categoría</th>
-                    <th className="text-left text-gray-400 font-medium px-6 py-3 w-16">Cant.</th>
-                    <th className="text-left text-gray-400 font-medium px-6 py-3 w-48">Responsable</th>
-                    <th className="text-left text-gray-400 font-medium px-6 py-3">Notas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map(item => (
-                    <tr key={item.id} className="border-b border-gray-800/50">
-                      <td className="px-6 py-3 text-white">{item.descripcion}</td>
-                      <td className="px-6 py-3 text-gray-400">{item.categoria}</td>
-                      <td className="px-6 py-3 text-gray-300">{item.cantidad}</td>
-                      <td className="px-6 py-3">
-                        <select
-                          value={item.responsable_id || ''}
-                          onChange={e => actualizarResponsableItem(item.id, e.target.value)}
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
-                        >
-                          <option value="">Sin asignar</option>
-                          {responsables.map(r => (
-                            <option key={r.id} value={r.id}>{r.nombre}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-6 py-3">
-                        <input
-                          type="text"
-                          value={itemNotas[item.id] ?? ''}
-                          onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))}
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
-                          placeholder="Notas..."
-                        />
-                      </td>
-                    </tr>
+        {/* ✅ Usando componente responsivo compartido */}
+        <ResponsiveTableCard<ItemCotizacion>
+          data={items}
+          columns={[
+            { key: 'descripcion', label: 'Descripción' },
+            { key: 'categoria', label: 'Categoría' },
+            { key: 'cantidad', label: 'Cant.' },
+            { key: 'responsable', label: 'Responsable' },
+            { key: 'notas', label: 'Notas' },
+          ]}
+          renderDesktopRow={(item) => (
+            <>
+              <td className="px-6 py-3 text-white">{item.descripcion}</td>
+              <td className="px-6 py-3 text-gray-400">{item.categoria}</td>
+              <td className="px-6 py-3 text-gray-300">{item.cantidad}</td>
+              <td className="px-6 py-3">
+                <select
+                  value={item.responsable_id || ''}
+                  onChange={e => actualizarResponsableItem(item.id, e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Sin asignar</option>
+                  {responsables.map(r => (
+                    <option key={r.id} value={r.id}>{r.nombre}</option>
                   ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Cards */}
-            <div className="md:hidden space-y-3 px-0">
-              {items.map(item => (
-                <div key={item.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                  <div className="mb-3">
-                    <p className="text-white font-medium text-[15px] mb-1">{item.descripcion}</p>
-                    <p className="text-gray-400 text-sm">{item.categoria}</p>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-[13px] text-gray-400 mb-1.5">Responsable</label>
-                      <select
-                        value={item.responsable_id || ''}
-                        onChange={e => actualizarResponsableItem(item.id, e.target.value)}
-                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500"
-                      >
-                        <option value="">Sin asignar</option>
-                        {responsables.map(r => (
-                          <option key={r.id} value={r.id}>{r.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[13px] text-gray-400 mb-1.5">Notas</label>
-                      <input
-                        type="text"
-                        value={itemNotas[item.id] ?? ''}
-                        onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))}
-                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500"
-                        placeholder="Notas..."
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-400 pt-2 border-t border-gray-700">
-                      <span>{item.cantidad}x</span>
-                      <span className="text-white">•</span>
-                      <span>Cant: {item.cantidad}</span>
-                    </div>
-                  </div>
+                </select>
+              </td>
+              <td className="px-6 py-3">
+                <input
+                  type="text"
+                  value={itemNotas[item.id] ?? ''}
+                  onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                  placeholder="Notas..."
+                />
+              </td>
+            </>
+          )}
+          renderMobileCard={(item) => (
+            <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+              <div className="mb-3">
+                <p className="text-white font-medium text-[15px] mb-1">{item.descripcion}</p>
+                <p className="text-gray-400 text-sm">{item.categoria}</p>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[13px] text-gray-400 mb-1.5">Responsable</label>
+                  <select
+                    value={item.responsable_id || ''}
+                    onChange={e => actualizarResponsableItem(item.id, e.target.value)}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">Sin asignar</option>
+                    {responsables.map(r => (
+                      <option key={r.id} value={r.id}>{r.nombre}</option>
+                    ))}
+                  </select>
                 </div>
-              ))}
+                <div>
+                  <label className="block text-[13px] text-gray-400 mb-1.5">Notas</label>
+                  <input
+                    type="text"
+                    value={itemNotas[item.id] ?? ''}
+                    onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500"
+                    placeholder="Notas..."
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-400 pt-2 border-t border-gray-700">
+                  <span>{item.cantidad}x</span>
+                  <span className="text-white">•</span>
+                  <span>Cant: {item.cantidad}</span>
+                </div>
+              </div>
             </div>
-          </>
-        )}
+          )}
+          keyExtractor={(item) => item.id}
+          emptyMessage="No hay partidas. Las partidas se cargan desde la cotización aprobada."
+        />
       </div>
     </div>
   )
