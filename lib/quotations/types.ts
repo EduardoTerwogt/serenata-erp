@@ -1,6 +1,8 @@
-import { Cotizacion, ItemCotizacion } from '@/lib/types'
+import { Cotizacion, Responsable } from '@/lib/types'
 
 export type DescuentoTipo = 'monto' | 'porcentaje'
+export type QuotationStatus = 'BORRADOR' | 'ENVIADA' | 'APROBADA'
+export type QuotationKind = 'PRINCIPAL' | 'COMPLEMENTARIA'
 
 export interface QuotationFormItem {
   id?: string
@@ -49,7 +51,7 @@ export interface QuotationTotals {
   utilidad_total: number
 }
 
-export interface PersistedQuotationItem extends Omit<ItemCotizacion, 'id'> {}
+export interface PersistedQuotationItem extends Omit<import('@/lib/types').ItemCotizacion, 'id'> {}
 
 export interface QuotationPdfItem {
   categoria: string
@@ -96,3 +98,24 @@ export type QuotationLikeForPdf = Pick<
   | 'descuento_tipo'
   | 'descuento_valor'
 >
+
+export interface SaveQuotationOptions {
+  estado: Extract<QuotationStatus, 'BORRADOR' | 'ENVIADA'>
+  porcentaje_fee: number
+  iva_activo: boolean
+  descuento_tipo: DescuentoTipo
+  descuento_valor: number
+  id?: string
+  tipo?: QuotationKind
+  es_complementaria_de?: string
+}
+
+export interface UpdateQuotationOptions {
+  estado?: QuotationStatus
+  porcentaje_fee: number
+  iva_activo: boolean
+  descuento_tipo: DescuentoTipo
+  descuento_valor: number
+  responsables: Responsable[]
+  currentQuotation: Cotizacion | null
+}

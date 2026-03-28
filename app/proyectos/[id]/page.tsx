@@ -9,13 +9,12 @@ import {
   buildItemNotasMap,
   buildProjectFormDefaults,
   fetchProjectDetailBundle,
-  ProyectoDetalle,
-  ProyectoFormValues,
   updateProjectDetail,
   updateProjectItemResponsable,
 } from '@/lib/services/project-service'
 import { SectionCard } from '@/components/ui/SectionCard'
 import { StatusBanner } from '@/components/ui/StatusBanner'
+import { ProyectoDetalle, ProyectoFormValues } from '@/lib/projects/types'
 
 const ESTADOS: EstadoProyecto[] = ['PREPRODUCCION', 'RODAJE', 'POSTPRODUCCION', 'FINALIZADO']
 

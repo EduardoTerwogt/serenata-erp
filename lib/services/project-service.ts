@@ -1,18 +1,11 @@
-import { ItemCotizacion, Proyecto, Responsable } from '@/lib/types'
-
-export interface ProyectoDetalle extends Proyecto {
-  items?: ItemCotizacion[]
-  cotizacion_ids?: string[]
-}
-
-export interface ProyectoFormValues {
-  fecha_entrega: string
-  locacion: string
-  horarios: string
-  punto_encuentro: string
-  notas: string
-  estado: Proyecto['estado']
-}
+import { ItemCotizacion, Responsable } from '@/lib/types'
+import {
+  ProjectDetailBundle,
+  ProjectItemNotasMap,
+  ProjectItemResponsableUpdate,
+  ProyectoDetalle,
+  ProyectoFormValues,
+} from '@/lib/projects/types'
 
 export async function fetchProjectDetail(id: string): Promise<ProyectoDetalle> {
   const res = await fetch(`/api/proyectos/${id}`)
@@ -20,19 +13,19 @@ export async function fetchProjectDetail(id: string): Promise<ProyectoDetalle> {
   return res.json()
 }
 
-export async function fetchProjectDetailBundle(id: string): Promise<{ proyecto: ProyectoDetalle; responsables: Responsable[] }> {
+export async function fetchProjectDetailBundle(id: string): Promise<ProjectDetailBundle> {
   const [proyecto, responsables] = await Promise.all([
     fetchProjectDetail(id),
     fetch('/api/responsables').then(async r => {
       if (!r.ok) throw new Error('Error cargando responsables')
-      return r.json()
+      return r.json() as Promise<Responsable[]>
     }),
   ])
 
   return { proyecto, responsables }
 }
 
-export function buildItemNotasMap(items: ItemCotizacion[]): Record<string, string> {
+export function buildItemNotasMap(items: ItemCotizacion[]): ProjectItemNotasMap {
   return Object.fromEntries(items.map(item => [item.id, item.notas || '']))
 }
 
@@ -51,7 +44,7 @@ export async function updateProjectDetail(
   id: string,
   data: ProyectoFormValues,
   items: ItemCotizacion[],
-  itemNotas: Record<string, string>
+  itemNotas: ProjectItemNotasMap
 ): Promise<ProyectoDetalle> {
   const notas_por_item = Object.fromEntries(items.map(item => [item.id, itemNotas[item.id] ?? '']))
 
@@ -72,7 +65,11 @@ export async function updateProjectDetail(
   return res.json()
 }
 
-export async function updateProjectItemResponsable(itemId: string, responsableId: string, responsables: Responsable[]) {
+export async function updateProjectItemResponsable(
+  itemId: string,
+  responsableId: string,
+  responsables: Responsable[]
+): Promise<ProjectItemResponsableUpdate> {
   const responsable = responsables.find(r => r.id === responsableId)
 
   const res = await fetch(`/api/items/${itemId}`, {

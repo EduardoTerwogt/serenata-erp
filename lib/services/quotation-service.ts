@@ -1,27 +1,10 @@
 import { Cotizacion, Responsable } from '@/lib/types'
 import { buildQuotationMutationPayload, buildQuotationPdfPayload } from '@/lib/quotations/mappers'
-import { QuotationFormValues } from '@/lib/quotations/types'
-
-interface SaveQuotationOptions {
-  estado: 'BORRADOR' | 'ENVIADA'
-  porcentaje_fee: number
-  iva_activo: boolean
-  descuento_tipo: 'monto' | 'porcentaje'
-  descuento_valor: number
-  id?: string
-  tipo?: 'PRINCIPAL' | 'COMPLEMENTARIA'
-  es_complementaria_de?: string
-}
-
-interface UpdateQuotationOptions {
-  estado?: 'BORRADOR' | 'ENVIADA' | 'APROBADA'
-  porcentaje_fee: number
-  iva_activo: boolean
-  descuento_tipo: 'monto' | 'porcentaje'
-  descuento_valor: number
-  responsables: Responsable[]
-  currentQuotation: Cotizacion | null
-}
+import {
+  QuotationFormValues,
+  SaveQuotationOptions,
+  UpdateQuotationOptions,
+} from '@/lib/quotations/types'
 
 export async function fetchResponsables(): Promise<Responsable[]> {
   const res = await fetch('/api/responsables')
