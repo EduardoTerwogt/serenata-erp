@@ -13,8 +13,42 @@ const NAV_LINKS = [
   { href: '/responsables', label: 'Colaboradores', section: 'responsables' },
 ]
 
+const BOTTOM_NAV_TABS = [
+  { href: '/dashboard', label: 'Dashboard', section: 'dashboard', icon: 'home' },
+  { href: '/cotizaciones', label: 'Cotizaciones', section: 'cotizaciones', icon: 'doc' },
+  { href: '/proyectos', label: 'Proyectos', section: 'proyectos', icon: 'folder' },
+  { href: '/responsables', label: 'Responsables', section: 'responsables', icon: 'user' },
+]
+
+// SVG Icons for bottom nav
+const NavIcons = {
+  home: (active: boolean) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-blue-500' : 'text-gray-500'}>
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  ),
+  doc: (active: boolean) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-blue-500' : 'text-gray-500'}>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  ),
+  folder: (active: boolean) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-blue-500' : 'text-gray-500'}>
+      <path d="M22 19a2 2 0 01-2.414-2.6l-5.676-9.201a2 2 0 00-3.28 0L2.414 16.6A2 2 0 004 20z" />
+    </svg>
+  ),
+  user: (active: boolean) => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-blue-500' : 'text-gray-500'}>
+      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
+}
+
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
   const pathname = usePathname()
   const { data: session } = useSession()
 
@@ -23,41 +57,65 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
   const userSections = (session?.user as { sections?: string[] })?.sections ?? []
   const visibleLinks = NAV_LINKS.filter(link => userSections.includes(link.section))
+  const visibleBottomTabs = BOTTOM_NAV_TABS.filter(link => userSections.includes(link.section))
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Hamburger — mobile */}
-      <button
-        onClick={() => setOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-50 bg-gray-900 border border-gray-700 rounded-lg p-2 text-white"
-        aria-label="Abrir menú"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
+      {/* HEADER — mobile only */}
+      <header className="md:hidden fixed top-0 left-0 right-0 bg-gray-950 border-b border-gray-800/50 z-50 px-4 py-3.5">
+        <div className="flex items-center justify-between">
+          {/* Logo */}
+          <h1 className="text-lg font-bold text-blue-500">Serenata</h1>
 
-      {/* Overlay — mobile */}
-      {open && (
-        <div className="md:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setOpen(false)} />
-      )}
+          {/* Search + Avatar */}
+          <div className="flex items-center gap-3">
+            {/* Search icon — visual only for now */}
+            <button className="text-gray-400 hover:text-gray-300 text-xl transition-colors">
+              🔍
+            </button>
 
-      {/* SIDEBAR */}
-      <aside
-        className={`fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 z-50 flex flex-col transform transition-transform duration-200
-          ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
-      >
-        {/* Logo */}
-        <div className="p-6 border-b border-gray-800 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-white">Serenata</h1>
-            <p className="text-xs text-gray-400 mt-1">Sistema de gestión</p>
+            {/* Avatar with dropdown menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-bold text-blue-400 hover:border-gray-600 transition-colors"
+                title={session?.user?.email}
+              >
+                {session?.user?.email?.[0].toUpperCase() || '?'}
+              </button>
+
+              {/* Dropdown menu */}
+              {showUserMenu && (
+                <div className="absolute right-0 top-full mt-2 bg-gray-900 border border-gray-800 rounded-xl shadow-xl w-44 z-50 overflow-hidden">
+                  <Link
+                    href="/users"
+                    className="flex items-center gap-3 px-4 py-3.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    Perfil
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false)
+                      signOut({ callbackUrl: '/login' })
+                    }}
+                    className="w-full text-left px-4 py-3.5 text-sm text-gray-400 hover:text-red-400 hover:bg-gray-800/50 transition-colors border-t border-gray-800"
+                  >
+                    Cerrar sesión
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          <button
-            onClick={() => setOpen(false)}
-            className="md:hidden text-gray-400 hover:text-white"
-            aria-label="Cerrar menú"
-          >✕</button>
+        </div>
+      </header>
+
+      {/* SIDEBAR — desktop only */}
+      <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 z-50 flex-col">
+        {/* Logo */}
+        <div className="p-6 border-b border-gray-800">
+          <h1 className="text-xl font-bold text-white">Serenata</h1>
+          <p className="text-xs text-gray-400 mt-1">Sistema de gestión</p>
         </div>
 
         {/* Nav */}
@@ -66,7 +124,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             <Link
               key={href}
               href={href}
-              onClick={() => setOpen(false)}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors
                 ${pathname.startsWith(href)
                   ? 'bg-blue-600 text-white'
@@ -91,9 +148,41 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="md:ml-64 min-h-screen pt-14 md:pt-0">
+      <main className="md:ml-64 min-h-screen pt-16 md:pt-0 pb-20 md:pb-0">
         {children}
       </main>
+
+      {/* BOTTOM NAV — mobile only */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800/50 z-50">
+        <div className="flex justify-around items-center h-20 px-4">
+          {visibleBottomTabs.map(tab => {
+            const isActive = pathname.startsWith(tab.href)
+            const icon = NavIcons[tab.icon as keyof typeof NavIcons]
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className="flex flex-col items-center gap-1.5 w-14 py-2 transition-colors"
+              >
+                {icon && icon(isActive)}
+                <span className={`text-[10px] transition-colors ${
+                  isActive ? 'text-blue-500 font-medium' : 'text-gray-500'
+                }`}>
+                  {tab.label}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+
+      {/* Click outside handler for dropdown */}
+      {showUserMenu && (
+        <div
+          className="md:hidden fixed inset-0 z-40"
+          onClick={() => setShowUserMenu(false)}
+        />
+      )}
     </div>
   )
 }
