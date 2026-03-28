@@ -61,6 +61,12 @@ export async function PUT(
     const notasPrevias = new Map(
       (detalleAnterior.items || []).map((item: ItemCotizacion) => [item.id, item.notas || ''])
     )
+    const { data: historialPrevio, error: historialPrevioError } = await supabaseAdmin
+      .from('historial_responsable')
+      .select('*')
+      .eq('proyecto_id', id)
+
+    if (historialPrevioError) throw historialPrevioError
 
     const proyecto = await updateProyecto(id, proyectoUpdates)
 
@@ -78,13 +84,9 @@ export async function PUT(
         if (error) throw error
       }
 
-      if (proyectoUpdates.estado === 'FINALIZADO' && proyectoAnterior.estado !== 'FINALIZADO') {
-        try {
-          await generarHistorialProyecto(id, proyecto)
-          console.log(`[PUT /api/proyectos/${id}] Historial generado al finalizar proyecto`)
-        } catch (e) {
-          console.error(`[PUT /api/proyectos/${id}] Error generando historial:`, e)
-        }
+      if (proyecto.estado === 'FINALIZADO') {
+        const totalRows = await generarHistorialProyecto(id, proyecto)
+        console.log(`[PUT /api/proyectos/${id}] Historial generado / regenerado (${totalRows} filas)`)
       }
 
       return Response.json(await getProyectoDetalle(id))
@@ -107,6 +109,19 @@ export async function PUT(
             .update({ notas: notas || null })
             .eq('id', itemId)
           if (notasError) throw notasError
+        }
+
+        const { error: deleteHistorialError } = await supabaseAdmin
+          .from('historial_responsable')
+          .delete()
+          .eq('proyecto_id', id)
+        if (deleteHistorialError) throw deleteHistorialError
+
+        if ((historialPrevio || []).length > 0) {
+          const { error: restoreHistorialError } = await supabaseAdmin
+            .from('historial_responsable')
+            .insert(historialPrevio)
+          if (restoreHistorialError) throw restoreHistorialError
         }
       } catch (rollbackError) {
         console.error(`[PUT /api/proyectos/${id}] Error haciendo rollback:`, rollbackError)
