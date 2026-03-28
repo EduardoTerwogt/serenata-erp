@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, use } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
 import { Cotizacion, Responsable, ItemCotizacion, Producto } from '@/lib/types'
+import { useQuotationForm } from '@/hooks/useQuotationForm'
 
 interface ItemForm {
   id?: string
@@ -56,16 +57,9 @@ export default function CotizacionDetallePage({
   const [success, setSuccess] = useState<string | null>(null)
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
 
-  const [listaClientes, setListaClientes] = useState<{ nombre: string; proyectos: string[] }[]>([])
-  const [listaProductos, setListaProductos] = useState<Producto[]>([])
-  const [clienteInput, setClienteInput] = useState('')
-  const [clienteSugerencias, setClienteSugerencias] = useState<string[]>([])
-  const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
-  const [proyectosDelCliente, setProyectosDelCliente] = useState<string[]>([])
-  const [proyectoInput, setProyectoInput] = useState('')
-  const [mostrarProyectoDropdown, setMostrarProyectoDropdown] = useState(false)
-  const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
-  const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
+  // ✅ Usar hook compartido para autocomplete y búsqueda
+  // En lugar de duplicar estado en cada página, usamos el hook
+  const quotationForm = useQuotationForm(setValue, watchedItems)
 
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
   const [iva_activo, setIvaActivo] = useState(true)
@@ -80,18 +74,8 @@ export default function CotizacionDetallePage({
 
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'ENVIADA'
 
-  const refreshCatalogos = useCallback(async () => {
-    try {
-      const [clientes, productos] = await Promise.all([
-        fetch('/api/clientes?q=').then(r => r.json()),
-        fetch('/api/productos?q=').then(r => r.json()),
-      ])
-      setListaClientes(clientes || [])
-      setListaProductos(productos || [])
-    } catch {
-      // ignorar refresh de catálogos
-    }
-  }, [])
+  // ✅ refreshCatalogos viene del hook
+  const { refreshCatalogos } = quotationForm
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
@@ -134,13 +118,8 @@ export default function CotizacionDetallePage({
     }).catch(() => setLoading(false))
   }, [id, applyCotizacionToState])
 
-  const calcItem = (item: ItemForm) => {
-    const pu = typeof item.precio_unitario === 'number' ? item.precio_unitario : 0
-    const xp = typeof item.x_pagar === 'number' ? item.x_pagar : 0
-    const importe = (item.cantidad || 0) * pu
-    const margen = importe - xp
-    return { importe, margen }
-  }
+  // ✅ calcItem viene del hook
+  const { calcItem } = quotationForm
 
   const totales = (() => {
     const items = watchedItems || []
@@ -175,46 +154,26 @@ export default function CotizacionDetallePage({
     }
   })()
 
-  const handleClienteChange = (valor: string) => {
-    setClienteInput(valor)
-    setValue('cliente', valor)
-    setProyectosDelCliente([])
-    if (valor.length >= 2) {
-      const filtrados = listaClientes.filter(c => c.nombre.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
-      setClienteSugerencias(filtrados.map(c => c.nombre))
-      setMostrarClienteDropdown(filtrados.length > 0)
-    } else {
-      setMostrarClienteDropdown(false)
-    }
-  }
-
-  const handleProyectoChange = (valor: string) => {
-    setProyectoInput(valor)
-    setValue('proyecto', valor)
-    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(valor.toLowerCase()))
-    setMostrarProyectoDropdown(filtrados.length > 0)
-  }
-
-  const handleDescripcionChange = (index: number, valor: string) => {
-    setValue(`items.${index}.descripcion`, valor)
-    setValue(`items.${index}.precio_unitario`, '')
-    setValue(`items.${index}.x_pagar`, '')
-    if (valor.length >= 2) {
-      const filtrados = listaProductos.filter(p => p.descripcion.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
-      setProductoSugerencias(prev => ({ ...prev, [index]: filtrados }))
-      setMostrarProductoDropdown(prev => ({ ...prev, [index]: filtrados.length > 0 }))
-    } else {
-      setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
-    }
-  }
-
-  const seleccionarProducto = (index: number, p: Producto) => {
-    setValue(`items.${index}.descripcion`, p.descripcion)
-    setValue(`items.${index}.categoria`, p.categoria || '')
-    if (p.precio_unitario > 0) setValue(`items.${index}.precio_unitario`, p.precio_unitario)
-    if ((p.x_pagar_sugerido || 0) > 0) setValue(`items.${index}.x_pagar`, p.x_pagar_sugerido || 0)
-    setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
-  }
+  // ✅ Funciones vienen del hook compartido
+  const {
+    handleClienteChange,
+    handleProyectoChange,
+    handleDescripcionChange,
+    seleccionarProducto,
+    clienteInput,
+    setClienteInput,
+    clienteSugerencias,
+    mostrarClienteDropdown,
+    setMostrarClienteDropdown,
+    proyectosDelCliente,
+    proyectoInput,
+    setProyectoInput,
+    mostrarProyectoDropdown,
+    setMostrarProyectoDropdown,
+    productoSugerencias,
+    mostrarProductoDropdown,
+    setMostrarProductoDropdown,
+  } = quotationForm
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)

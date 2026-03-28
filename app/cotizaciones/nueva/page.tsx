@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Responsable, Producto } from '@/lib/types'
+import { useQuotationForm } from '@/hooks/useQuotationForm'
 
 interface ItemForm {
   categoria: string
@@ -62,16 +63,8 @@ function NuevaCotizacionContent() {
   const [error, setError] = useState<string | null>(null)
   const isSubmitting = useRef(false)
 
-  const [listaClientes, setListaClientes] = useState<{ nombre: string; proyectos: string[] }[]>([])
-  const [listaProductos, setListaProductos] = useState<Producto[]>([])
-  const [clienteInput, setClienteInput] = useState(clienteParam)
-  const [clienteSugerencias, setClienteSugerencias] = useState<string[]>([])
-  const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
-  const [proyectosDelCliente, setProyectosDelCliente] = useState<string[]>([])
-  const [proyectoInput, setProyectoInput] = useState(proyectoParam)
-  const [mostrarProyectoDropdown, setMostrarProyectoDropdown] = useState(false)
-  const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
-  const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
+  // ✅ Usar hook compartido para autocomplete y búsqueda
+  const quotationForm = useQuotationForm(setValue, watchedItems)
 
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
   const [iva_activo, setIvaActivo] = useState(true)
@@ -97,11 +90,18 @@ function NuevaCotizacionContent() {
       : '/api/folio'
     fetch(folioUrl).then(r => r.json()).then(d => setFolio(d.folio))
     fetch('/api/responsables').then(r => r.json()).then(setResponsables)
-    fetch('/api/clientes?q=').then(r => r.json()).then(d => setListaClientes(d || [])).catch(() => {})
-    fetch('/api/productos?q=').then(r => r.json()).then(d => setListaProductos(d || [])).catch(() => {})
+    // ✅ Catálogos (clientes y productos) se cargan automáticamente desde el hook
   }, [esComplementaria, complementaria_de])
 
+  // ✅ Inicializar clienteInput y proyectoInput desde parámetros iniciales
   useEffect(() => {
+    if (clienteParam) {
+      setClienteInput(clienteParam)
+    }
+    if (proyectoParam) {
+      setProyectoInput(proyectoParam)
+    }
+
     if (complementaria_de) {
       const cli = searchParams.get('cliente') || ''
       const proy = searchParams.get('proyecto') || ''
@@ -115,13 +115,8 @@ function NuevaCotizacionContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complementaria_de])
 
-  const calcItem = (item: ItemForm) => {
-    const pu = typeof item.precio_unitario === 'number' ? item.precio_unitario : 0
-    const xp = typeof item.x_pagar === 'number' ? item.x_pagar : 0
-    const importe = (item.cantidad || 0) * pu
-    const margen = importe - xp
-    return { importe, margen }
-  }
+  // ✅ calcItem viene del hook
+  const { calcItem } = quotationForm
 
   const totales = (() => {
     const subtotal = watchedItems.reduce((s, item) => s + calcItem(item).importe, 0)
@@ -138,46 +133,27 @@ function NuevaCotizacionContent() {
     return { subtotal, fee_agencia, general, descuento, iva, total, margen_total, utilidad_total }
   })()
 
-  const handleClienteChange = (valor: string) => {
-    setClienteInput(valor)
-    setValue('cliente', valor)
-    setProyectosDelCliente([])
-    if (valor.length >= 2) {
-      const filtrados = listaClientes.filter(c => c.nombre.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
-      setClienteSugerencias(filtrados.map(c => c.nombre))
-      setMostrarClienteDropdown(filtrados.length > 0)
-    } else {
-      setMostrarClienteDropdown(false)
-    }
-  }
-
-  const handleProyectoChange = (valor: string) => {
-    setProyectoInput(valor)
-    setValue('proyecto', valor)
-    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(valor.toLowerCase()))
-    setMostrarProyectoDropdown(filtrados.length > 0)
-  }
-
-  const handleDescripcionChange = (index: number, valor: string) => {
-    setValue(`items.${index}.descripcion`, valor)
-    setValue(`items.${index}.precio_unitario`, '')
-    setValue(`items.${index}.x_pagar`, '')
-    if (valor.length >= 2) {
-      const filtrados = listaProductos.filter(p => p.descripcion.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
-      setProductoSugerencias(prev => ({ ...prev, [index]: filtrados }))
-      setMostrarProductoDropdown(prev => ({ ...prev, [index]: filtrados.length > 0 }))
-    } else {
-      setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
-    }
-  }
-
-  const seleccionarProducto = (index: number, p: Producto) => {
-    setValue(`items.${index}.descripcion`, p.descripcion)
-    setValue(`items.${index}.categoria`, p.categoria || '')
-    if (p.precio_unitario > 0) setValue(`items.${index}.precio_unitario`, p.precio_unitario)
-    if ((p.x_pagar_sugerido || 0) > 0) setValue(`items.${index}.x_pagar`, p.x_pagar_sugerido || 0)
-    setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
-  }
+  // ✅ Funciones vienen del hook compartido
+  const {
+    handleClienteChange,
+    handleProyectoChange,
+    handleDescripcionChange,
+    seleccionarProducto,
+    listaProductos,
+    clienteInput,
+    setClienteInput,
+    clienteSugerencias,
+    mostrarClienteDropdown,
+    setMostrarClienteDropdown,
+    proyectosDelCliente,
+    proyectoInput,
+    setProyectoInput,
+    mostrarProyectoDropdown,
+    setMostrarProyectoDropdown,
+    productoSugerencias,
+    mostrarProductoDropdown,
+    setMostrarProductoDropdown,
+  } = quotationForm
 
   const guardarDatos = async (data: CotizacionForm, estado: 'BORRADOR' | 'ENVIADA') => {
     const itemsConCalc = data.items.map((item, i) => {
