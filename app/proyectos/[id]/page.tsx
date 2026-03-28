@@ -149,7 +149,7 @@ export default function ProyectoDetallePage({
           <h1 className="text-2xl md:text-3xl font-bold text-white">{proyecto.proyecto}</h1>
           <p className="text-gray-400 mt-1">{proyecto.cliente}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col md:flex-row gap-2 md:gap-2">
           <button
             onClick={async () => {
               const { generarHojaDeLlamado } = await import('@/lib/pdf')
@@ -173,7 +173,7 @@ export default function ProyectoDetallePage({
                 responsables,
               })
             }}
-            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm md:text-sm transition-colors min-h-[44px] md:min-h-auto flex items-center justify-center"
           >
             📋 Hoja de Llamado
           </button>
@@ -182,13 +182,13 @@ export default function ProyectoDetallePage({
               setSuccess('Próximamente: integración con Google Calendar')
               setTimeout(() => setSuccess(null), 3000)
             }}
-            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm md:text-sm transition-colors min-h-[44px] md:min-h-auto flex items-center justify-center"
           >
             📅 Google Calendar
           </button>
           <Link
             href={`/cotizaciones/nueva?complementaria_de=${id}&cliente=${encodeURIComponent(proyecto.cliente)}&proyecto=${encodeURIComponent(proyecto.proyecto)}`}
-            className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+            className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-2.5 rounded-lg text-sm md:text-sm transition-colors min-h-[44px] md:min-h-auto flex items-center justify-center text-center whitespace-normal"
           >
             + Cotización Complementaria
           </Link>
@@ -280,49 +280,94 @@ export default function ProyectoDetallePage({
             No hay partidas. Las partidas se cargan desde la cotización aprobada.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="text-left text-gray-400 font-medium px-6 py-3">Descripción</th>
-                  <th className="text-left text-gray-400 font-medium px-6 py-3">Categoría</th>
-                  <th className="text-left text-gray-400 font-medium px-6 py-3 w-16">Cant.</th>
-                  <th className="text-left text-gray-400 font-medium px-6 py-3 w-48">Responsable</th>
-                  <th className="text-left text-gray-400 font-medium px-6 py-3">Notas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(item => (
-                  <tr key={item.id} className="border-b border-gray-800/50">
-                    <td className="px-6 py-3 text-white">{item.descripcion}</td>
-                    <td className="px-6 py-3 text-gray-400">{item.categoria}</td>
-                    <td className="px-6 py-3 text-gray-300">{item.cantidad}</td>
-                    <td className="px-6 py-3">
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="text-left text-gray-400 font-medium px-6 py-3">Descripción</th>
+                    <th className="text-left text-gray-400 font-medium px-6 py-3">Categoría</th>
+                    <th className="text-left text-gray-400 font-medium px-6 py-3 w-16">Cant.</th>
+                    <th className="text-left text-gray-400 font-medium px-6 py-3 w-48">Responsable</th>
+                    <th className="text-left text-gray-400 font-medium px-6 py-3">Notas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(item => (
+                    <tr key={item.id} className="border-b border-gray-800/50">
+                      <td className="px-6 py-3 text-white">{item.descripcion}</td>
+                      <td className="px-6 py-3 text-gray-400">{item.categoria}</td>
+                      <td className="px-6 py-3 text-gray-300">{item.cantidad}</td>
+                      <td className="px-6 py-3">
+                        <select
+                          value={item.responsable_id || ''}
+                          onChange={e => actualizarResponsableItem(item.id, e.target.value)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="">Sin asignar</option>
+                          {responsables.map(r => (
+                            <option key={r.id} value={r.id}>{r.nombre}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-6 py-3">
+                        <input
+                          type="text"
+                          value={itemNotas[item.id] ?? ''}
+                          onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))}
+                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                          placeholder="Notas..."
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-3 px-0">
+              {items.map(item => (
+                <div key={item.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                  <div className="mb-3">
+                    <p className="text-white font-medium text-[15px] mb-1">{item.descripcion}</p>
+                    <p className="text-gray-400 text-sm">{item.categoria}</p>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[13px] text-gray-400 mb-1.5">Responsable</label>
                       <select
                         value={item.responsable_id || ''}
                         onChange={e => actualizarResponsableItem(item.id, e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500"
                       >
                         <option value="">Sin asignar</option>
                         {responsables.map(r => (
                           <option key={r.id} value={r.id}>{r.nombre}</option>
                         ))}
                       </select>
-                    </td>
-                    <td className="px-6 py-3">
+                    </div>
+                    <div>
+                      <label className="block text-[13px] text-gray-400 mb-1.5">Notas</label>
                       <input
                         type="text"
                         value={itemNotas[item.id] ?? ''}
                         onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))}
-                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500"
                         placeholder="Notas..."
                       />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-400 pt-2 border-t border-gray-700">
+                      <span>{item.cantidad}x</span>
+                      <span className="text-white">•</span>
+                      <span>Cant: {item.cantidad}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
