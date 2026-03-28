@@ -23,26 +23,26 @@ export default function CotizacionesPage() {
     : cotizaciones.filter(c => c.estado === filtro)
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="px-5 pt-6 pb-6 md:p-8">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between md:mb-8 mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Cotizaciones</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white">Cotizaciones</h1>
           <p className="text-gray-400 mt-1">Gestiona todas tus cotizaciones</p>
         </div>
         <Link
           href="/cotizaciones/nueva"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium transition-colors text-center min-h-[44px] flex items-center justify-center md:min-h-auto"
         >
           + Nueva Cotización
         </Link>
       </div>
 
-      <div className="flex gap-3 mb-6">
+      <div className="flex gap-2 md:gap-3 mb-6 overflow-x-auto flex-nowrap md:flex-wrap pb-2">
         {ESTADOS.map(estado => (
           <button
             key={estado}
             onClick={() => setFiltro(estado)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 md:flex-shrink min-h-[44px] flex items-center justify-center md:min-h-auto ${
               filtro === estado
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
@@ -61,9 +61,37 @@ export default function CotizacionesPage() {
             <Link
               key={cot.id}
               href={`/cotizaciones/${cot.id}`}
-              className="block bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-gray-600 transition-colors"
+              className="block bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 hover:border-gray-600 transition-colors"
             >
-              <div className="flex items-center justify-between">
+              {/* Mobile Layout */}
+              <div className="md:hidden">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-mono text-blue-400 font-bold text-sm">{cot.id}</span>
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                    cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
+                    cot.estado === 'ENVIADA' ? 'bg-blue-900 text-blue-300' :
+                    'bg-yellow-900 text-yellow-300'
+                  }`}>
+                    {cot.estado}
+                  </span>
+                </div>
+                <p className="text-white font-medium text-[15px] mb-1">{cot.proyecto}</p>
+                <p className="text-gray-500 text-sm mb-3">{cot.cliente}</p>
+                {cot.tipo === 'COMPLEMENTARIA' && (
+                  <p className="text-xs text-purple-300 mb-2">
+                    Complementaria de <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
+                  </p>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-white font-bold text-lg">
+                    ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </span>
+                  <span className="text-gray-600 text-xs">{cot.fecha_entrega || 'Sin fecha'}</span>
+                </div>
+              </div>
+
+              {/* Desktop Layout */}
+              <div className="hidden md:flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <span className="font-mono text-blue-400 font-bold text-lg">{cot.id}</span>
                   <div>
