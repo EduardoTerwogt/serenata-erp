@@ -3,35 +3,19 @@
 import { useEffect, useState, use } from 'react'
 import { useForm } from 'react-hook-form'
 import Link from 'next/link'
-import { Proyecto, EstadoProyecto, ItemCotizacion, Responsable } from '@/lib/types'
+import { EstadoProyecto, ItemCotizacion, Responsable } from '@/lib/types'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
-
-interface ProyectoDetalle extends Proyecto {
-  items?: ItemCotizacion[]
-  cotizacion_ids?: string[]
-}
-
-interface ProyectoForm {
-  fecha_entrega: string
-  locacion: string
-  horarios: string
-  punto_encuentro: string
-  notas: string
-  estado: EstadoProyecto
-}
+import {
+  buildItemNotasMap,
+  buildProjectFormDefaults,
+  fetchProjectDetailBundle,
+  ProyectoDetalle,
+  ProyectoFormValues,
+  updateProjectDetail,
+  updateProjectItemResponsable,
+} from '@/lib/services/project-service'
 
 const ESTADOS: EstadoProyecto[] = ['PREPRODUCCION', 'RODAJE', 'POSTPRODUCCION', 'FINALIZADO']
-
-const ESTADO_COLORES: Record<EstadoProyecto, string> = {
-  PREPRODUCCION: 'bg-yellow-900 text-yellow-300',
-  RODAJE: 'bg-blue-900 text-blue-300',
-  POSTPRODUCCION: 'bg-purple-900 text-purple-300',
-  FINALIZADO: 'bg-green-900 text-green-300',
-}
-
-function fmt(n: number) {
-  return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
-}
 
 export default function ProyectoDetallePage({
   params,
@@ -48,58 +32,30 @@ export default function ProyectoDetallePage({
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const { register, reset, handleSubmit } = useForm<ProyectoForm>()
+  const { register, reset, handleSubmit } = useForm<ProyectoFormValues>()
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/proyectos/${id}`).then(r => r.json()),
-      fetch('/api/responsables').then(r => r.json()),
-    ]).then(([proy, resp]) => {
-      setProyecto(proy)
-      setResponsables(resp)
-      setItems(proy.items || [])
-      setItemNotas(Object.fromEntries((proy.items || []).map((i: ItemCotizacion) => [i.id, i.notas || ''])))
-      reset({
-        fecha_entrega: proy.fecha_entrega || '',
-        locacion: proy.locacion || '',
-        horarios: proy.horarios || '',
-        punto_encuentro: proy.punto_encuentro || '',
-        notas: proy.notas || '',
-        estado: proy.estado,
+    fetchProjectDetailBundle(id)
+      .then(({ proyecto: proy, responsables: resp }) => {
+        setProyecto(proy)
+        setResponsables(resp)
+        setItems(proy.items || [])
+        setItemNotas(buildItemNotasMap(proy.items || []))
+        reset(buildProjectFormDefaults(proy))
+        setLoading(false)
       })
-      setLoading(false)
-    }).catch(() => setLoading(false))
+      .catch(() => setLoading(false))
   }, [id, reset])
 
-  const guardar = async (data: ProyectoForm) => {
+  const guardar = async (data: ProyectoFormValues) => {
     setGuardando(true)
     setError(null)
     try {
-      const notasPorItem = Object.fromEntries(items.map(item => [item.id, itemNotas[item.id] ?? '']))
-
-      const res = await fetch(`/api/proyectos/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          notas_por_item: notasPorItem,
-        }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error)
-
-      const updated = await res.json()
+      const updated = await updateProjectDetail(id, data, items, itemNotas)
       setProyecto(updated)
       setItems(updated.items || [])
-      setItemNotas(Object.fromEntries((updated.items || []).map((i: ItemCotizacion) => [i.id, i.notas || ''])))
-      reset({
-        fecha_entrega: updated.fecha_entrega || '',
-        locacion: updated.locacion || '',
-        horarios: updated.horarios || '',
-        punto_encuentro: updated.punto_encuentro || '',
-        notas: updated.notas || '',
-        estado: updated.estado,
-      })
-
+      setItemNotas(buildItemNotasMap(updated.items || []))
+      reset(buildProjectFormDefaults(updated))
       setSuccess('Proyecto actualizado correctamente')
       setTimeout(() => setSuccess(null), 3000)
     } catch (e: unknown) {
@@ -110,30 +66,21 @@ export default function ProyectoDetallePage({
   }
 
   const actualizarResponsableItem = async (itemId: string, responsableId: string) => {
+    const previousItems = items
     const responsable = responsables.find(r => r.id === responsableId)
     setItems(prev => prev.map(item =>
       item.id === itemId
         ? { ...item, responsable_id: responsableId, responsable_nombre: responsable?.nombre || null }
         : item
     ))
+
     try {
-      const res = await fetch(`/api/items/${itemId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          responsable_id: responsableId || null,
-          responsable_nombre: responsable?.nombre || null,
-        }),
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        setError(err.error || 'Error actualizando responsable')
-      } else {
-        setSuccess('Responsable actualizado')
-        setTimeout(() => setSuccess(null), 2000)
-      }
-    } catch {
-      setError('Error de red al actualizar responsable')
+      await updateProjectItemResponsable(itemId, responsableId, responsables)
+      setSuccess('Responsable actualizado')
+      setTimeout(() => setSuccess(null), 2000)
+    } catch (e: unknown) {
+      setItems(previousItems)
+      setError(e instanceof Error ? e.message : 'Error de red al actualizar responsable')
     }
   }
 
@@ -196,12 +143,8 @@ export default function ProyectoDetallePage({
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4">{error}</div>
-      )}
-      {success && (
-        <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4">{success}</div>
-      )}
+      {error && <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4">{error}</div>}
+      {success && <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4">{success}</div>}
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 mb-6">
         <h2 className="text-lg font-semibold text-white mb-3 md:mb-4">Información General</h2>
@@ -209,62 +152,32 @@ export default function ProyectoDetallePage({
           <div className="grid grid-cols-1 gap-3 md:gap-4 mb-3 md:mb-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Estado</label>
-              <select
-                {...register('estado')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-              >
-                {ESTADOS.map(e => (
-                  <option key={e} value={e}>{e}</option>
-                ))}
+              <select {...register('estado')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Fecha de Entrega</label>
-              <input
-                type="date"
-                {...register('fecha_entrega')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-              />
+              <input type="date" {...register('fecha_entrega')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Locación</label>
-              <input
-                {...register('locacion')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                placeholder="Lugar del evento"
-              />
+              <input {...register('locacion')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="Lugar del evento" />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Horarios</label>
-              <input
-                {...register('horarios')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                placeholder="Ej. 08:00 - 20:00"
-              />
+              <input {...register('horarios')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="Ej. 08:00 - 20:00" />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Punto de Encuentro</label>
-              <input
-                {...register('punto_encuentro')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                placeholder="Dirección o referencia"
-              />
+              <input {...register('punto_encuentro')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="Dirección o referencia" />
             </div>
           </div>
           <div className="mb-3 md:mb-4">
             <label className="block text-sm text-gray-400 mb-1">Notas</label>
-            <textarea
-              {...register('notas')}
-              rows={3}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
-              placeholder="Notas adicionales..."
-            />
+            <textarea {...register('notas')} rows={3} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none" placeholder="Notas adicionales..." />
           </div>
-          <button
-            type="submit"
-            disabled={guardando}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 md:py-3 rounded-lg font-medium transition-colors disabled:opacity-50 min-h-[44px] w-full md:w-auto"
-          >
+          <button type="submit" disabled={guardando} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 md:py-3 rounded-lg font-medium transition-colors disabled:opacity-50 min-h-[44px] w-full md:w-auto">
             {guardando ? 'Guardando...' : 'Guardar Cambios'}
           </button>
         </form>
@@ -291,25 +204,13 @@ export default function ProyectoDetallePage({
               <td className="px-6 py-3 text-gray-400">{item.categoria}</td>
               <td className="px-6 py-3 text-gray-300">{item.cantidad}</td>
               <td className="px-6 py-3">
-                <select
-                  value={item.responsable_id || ''}
-                  onChange={e => actualizarResponsableItem(item.id, e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
-                >
+                <select value={item.responsable_id || ''} onChange={e => actualizarResponsableItem(item.id, e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500">
                   <option value="">Sin asignar</option>
-                  {responsables.map(r => (
-                    <option key={r.id} value={r.id}>{r.nombre}</option>
-                  ))}
+                  {responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
                 </select>
               </td>
               <td className="px-6 py-3">
-                <input
-                  type="text"
-                  value={itemNotas[item.id] ?? ''}
-                  onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500"
-                  placeholder="Notas..."
-                />
+                <input type="text" value={itemNotas[item.id] ?? ''} onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:border-blue-500" placeholder="Notas..." />
               </td>
             </>
           )}
@@ -322,26 +223,14 @@ export default function ProyectoDetallePage({
               <div className="space-y-3">
                 <div>
                   <label className="block text-[13px] text-gray-400 mb-1.5">Responsable</label>
-                  <select
-                    value={item.responsable_id || ''}
-                    onChange={e => actualizarResponsableItem(item.id, e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500"
-                  >
+                  <select value={item.responsable_id || ''} onChange={e => actualizarResponsableItem(item.id, e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500">
                     <option value="">Sin asignar</option>
-                    {responsables.map(r => (
-                      <option key={r.id} value={r.id}>{r.nombre}</option>
-                    ))}
+                    {responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-[13px] text-gray-400 mb-1.5">Notas</label>
-                  <input
-                    type="text"
-                    value={itemNotas[item.id] ?? ''}
-                    onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500"
-                    placeholder="Notas..."
-                  />
+                  <input type="text" value={itemNotas[item.id] ?? ''} onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2.5 text-base text-white focus:outline-none focus:border-blue-500" placeholder="Notas..." />
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-400 pt-2 border-t border-gray-700">
                   <span>{item.cantidad}x</span>
