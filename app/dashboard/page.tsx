@@ -35,7 +35,6 @@ export default async function DashboardPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white">Dashboard</h1>
         <p className="text-gray-400 mt-1">Resumen general de Serenata</p>
-        <p className="text-gray-500 mt-2 text-sm italic">Este dashboard aun no es funcional</p>
       </div>
 
       {queryErrors.length > 0 && (
