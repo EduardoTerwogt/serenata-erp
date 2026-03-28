@@ -303,15 +303,15 @@ function NuevaCotizacionContent() {
         )}
 
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 mb-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Información General</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <h2 className="text-lg font-semibold text-white mb-3 md:mb-4">Información General</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <div className="relative">
               <label className="block text-sm text-gray-400 mb-1">Cliente *</label>
               {esComplementaria ? (
                 <input
                   value={clienteInput}
                   readOnly
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white opacity-60 cursor-not-allowed"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white opacity-60 cursor-not-allowed"
                 />
               ) : (
                 <>
@@ -328,7 +328,7 @@ function NuevaCotizacionContent() {
                     }, 200)}
                     autoComplete="off"
                     placeholder="Nombre del cliente"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white focus:outline-none focus:border-blue-500"
                   />
                   {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
                     <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
@@ -353,7 +353,7 @@ function NuevaCotizacionContent() {
                 <input
                   value={proyectoInput}
                   readOnly
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white opacity-60 cursor-not-allowed"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white opacity-60 cursor-not-allowed"
                 />
               ) : (
                 <>
@@ -367,7 +367,7 @@ function NuevaCotizacionContent() {
                     onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)}
                     autoComplete="off"
                     placeholder="Nombre del proyecto"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white focus:outline-none focus:border-blue-500"
                   />
                   {mostrarProyectoDropdown && (() => {
                     const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
@@ -399,7 +399,7 @@ function NuevaCotizacionContent() {
                 type="date"
                 {...register('fecha_entrega')}
                 readOnly={esComplementaria}
-                className={`w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`}
+                className={`w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`}
               />
             </div>
 
@@ -408,14 +408,14 @@ function NuevaCotizacionContent() {
               <input
                 {...register('locacion')}
                 readOnly={esComplementaria}
-                className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-base md:text-sm text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`}
+                className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`}
                 placeholder="Lugar del evento"
               />
             </div>
 
             <div>
               <label className="block text-sm text-gray-400 mb-1">Fecha de Cotización</label>
-              <p className="text-white py-2 text-sm">{fechaHoy()}</p>
+              <p className="text-white py-1.5 text-sm">{fechaHoy()}</p>
             </div>
           </div>
         </div>

@@ -203,15 +203,15 @@ export default function ProyectoDetallePage({
         <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4">{success}</div>
       )}
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4">Información General</h2>
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 mb-6">
+        <h2 className="text-lg font-semibold text-white mb-3 md:mb-4">Información General</h2>
         <form onSubmit={handleSubmit(guardar)}>
-          <div className="grid grid-cols-1 gap-4 mb-4">
+          <div className="grid grid-cols-1 gap-3 md:gap-4 mb-3 md:mb-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Estado</label>
               <select
                 {...register('estado')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               >
                 {ESTADOS.map(e => (
                   <option key={e} value={e}>{e}</option>
@@ -223,14 +223,14 @@ export default function ProyectoDetallePage({
               <input
                 type="date"
                 {...register('fecha_entrega')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Locación</label>
               <input
                 {...register('locacion')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                 placeholder="Lugar del evento"
               />
             </div>
@@ -238,7 +238,7 @@ export default function ProyectoDetallePage({
               <label className="block text-sm text-gray-400 mb-1">Horarios</label>
               <input
                 {...register('horarios')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                 placeholder="Ej. 08:00 - 20:00"
               />
             </div>
@@ -246,24 +246,24 @@ export default function ProyectoDetallePage({
               <label className="block text-sm text-gray-400 mb-1">Punto de Encuentro</label>
               <input
                 {...register('punto_encuentro')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-3 md:py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500"
                 placeholder="Dirección o referencia"
               />
             </div>
           </div>
-          <div className="mb-4">
+          <div className="mb-3 md:mb-4">
             <label className="block text-sm text-gray-400 mb-1">Notas</label>
             <textarea
               {...register('notas')}
               rows={3}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 resize-none"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
               placeholder="Notas adicionales..."
             />
           </div>
           <button
             type="submit"
             disabled={guardando}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 min-h-[44px] w-full md:w-auto"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 md:py-3 rounded-lg font-medium transition-colors disabled:opacity-50 min-h-[44px] w-full md:w-auto"
           >
             {guardando ? 'Guardando...' : 'Guardar Cambios'}
           </button>
