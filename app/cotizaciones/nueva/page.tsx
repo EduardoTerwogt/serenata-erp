@@ -54,6 +54,7 @@ function NuevaCotizacionContent() {
   const fechaEntregaParam = searchParams.get('fecha_entrega') || ''
   const esComplementaria = !!complementaria_de
 
+  const [mobileStep, setMobileStep] = useState(1)
   const [folio, setFolio] = useState<string>('')
   const [responsables, setResponsables] = useState<Responsable[]>([])
   const [guardando, setGuardando] = useState(false)
@@ -315,6 +316,9 @@ function NuevaCotizacionContent() {
   })
 
   return (
+    <>
+      {/* DESKTOP: Formulario original sin cambios */}
+      <div className="hidden md:block">
     <div className="p-8 max-w-7xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white">Nueva Cotización</h1>
@@ -501,6 +505,244 @@ function NuevaCotizacionContent() {
       </div>
 
     </div>
+      </div>
+
+      {/* MOBILE: Wizard de 3 pasos */}
+      <div className="md:hidden px-5 pt-6 pb-6">
+        {/* Step indicator */}
+        <div className="flex items-center gap-0 mb-7">
+          {[1, 2, 3].map(step => (
+            <div key={step}>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${
+                mobileStep > step ? 'bg-green-500 text-white' :
+                mobileStep === step ? 'bg-blue-500 text-white' :
+                'bg-gray-800 text-gray-500'
+              }`}>
+                {mobileStep > step ? '✓' : step}
+              </div>
+              {step < 3 && <div className={`w-12 h-0.5 ${mobileStep > step ? 'bg-green-500' : 'bg-gray-800'}`} />}
+            </div>
+          ))}
+        </div>
+
+        {/* Step 1: Información General */}
+        {mobileStep === 1 && (
+          <div className="space-y-5">
+            <div>
+              <p className="text-gray-500 text-xs mb-1">Folio asignado</p>
+              <p className="text-xl font-mono text-blue-400 font-bold">{folio || '...'}</p>
+            </div>
+
+            {esComplementaria && (
+              <div className="bg-blue-900/40 border border-blue-700 text-blue-300 rounded-lg px-4 py-3">
+                Complementaria de <span className="font-mono font-bold">{complementaria_de}</span>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3">
+                {error}
+              </div>
+            )}
+
+            <div className="relative">
+              <label className="block text-[13px] text-gray-400 mb-2">Cliente *</label>
+              {esComplementaria ? (
+                <input value={clienteInput} readOnly className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white opacity-60 cursor-not-allowed" />
+              ) : (
+                <>
+                  <input value={clienteInput} onChange={e => handleClienteChange(e.target.value)} onFocus={() => mostrarClienteDropdown && setMostrarClienteDropdown(true)} onBlur={() => setTimeout(() => setMostrarClienteDropdown(false), 200)} autoComplete="off" placeholder="Nombre del cliente" className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500" />
+                  {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                      {clienteSugerencias.map((nombre, i) => (
+                        <div key={i} onMouseDown={() => {
+                          const cli = listaClientes.find(c => c.nombre === nombre)
+                          setClienteInput(nombre)
+                          setValue('cliente', nombre)
+                          setProyectosDelCliente(cli?.proyectos || [])
+                          setMostrarClienteDropdown(false)
+                        }} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{nombre}</div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="relative">
+              <label className="block text-[13px] text-gray-400 mb-2">Proyecto *</label>
+              {esComplementaria ? (
+                <input value={proyectoInput} readOnly className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white opacity-60 cursor-not-allowed" />
+              ) : (
+                <>
+                  <input value={proyectoInput} onChange={e => handleProyectoChange(e.target.value)} onFocus={() => {
+                    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
+                    if (filtrados.length > 0) setMostrarProyectoDropdown(true)
+                  }} onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)} autoComplete="off" placeholder="Nombre del proyecto" className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500" />
+                  {mostrarProyectoDropdown && (() => {
+                    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
+                    return filtrados.length > 0 ? (
+                      <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                        {filtrados.map((proy, i) => (
+                          <div key={i} onMouseDown={() => {
+                            setProyectoInput(proy)
+                            setValue('proyecto', proy)
+                            setMostrarProyectoDropdown(false)
+                          }} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{proy}</div>
+                        ))}
+                      </div>
+                    ) : null
+                  })()}
+                </>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[13px] text-gray-400 mb-2">Fecha de Entrega</label>
+              <input type="date" {...register('fecha_entrega')} readOnly={esComplementaria} className={`w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`} />
+            </div>
+
+            <div>
+              <label className="block text-[13px] text-gray-400 mb-2">Locación</label>
+              <input {...register('locacion')} readOnly={esComplementaria} className={`w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`} placeholder="Lugar del evento" />
+            </div>
+
+            <button onClick={() => setMobileStep(2)} className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl font-medium text-base transition-colors">
+              Siguiente
+            </button>
+          </div>
+        )}
+
+        {/* Step 2: Partidas */}
+        {mobileStep === 2 && (
+          <div className="space-y-4">
+            <div className="space-y-3">
+              {fields.map((field, index) => {
+                const item = watchedItems[index] || itemVacio
+                const { importe, margen } = calcItem(item)
+                return (
+                  <div key={field.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 cursor-pointer" onClick={() => {
+                    // Aquí iría un modal para editar, por ahora solo mostramos info
+                  }}>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="text-white font-medium text-[15px]">{item.descripcion || 'Sin descripción'}</p>
+                        <p className="text-gray-500 text-xs">{item.categoria || 'Sin categoría'}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-4 text-[13px]">
+                      <span className="text-gray-500">×{item.cantidad || 0}</span>
+                      <span className="text-gray-500">${fmt(typeof item.precio_unitario === 'number' ? item.precio_unitario : 0)}</span>
+                      <span className="text-gray-400">Pagar ${fmt(typeof item.x_pagar === 'number' ? item.x_pagar : 0)}</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-2">
+                      <span className={`text-[13px] font-medium ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        Margen ${fmt(margen)}
+                      </span>
+                      <button type="button" onClick={e => { e.stopPropagation(); remove(index); }} disabled={fields.length === 1} className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors text-sm">
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <button type="button" onClick={() => append({...itemVacio})} className="w-full py-3.5 rounded-xl border-2 border-dashed border-gray-800 text-gray-500 text-sm hover:border-gray-700 transition-colors">
+              + Agregar partida
+            </button>
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setMobileStep(3)} className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl font-medium text-base transition-colors">
+                Siguiente
+              </button>
+              <button onClick={() => setMobileStep(1)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-4 rounded-xl font-medium text-base transition-colors">
+                Atrás
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Totales y Confirmación */}
+        {mobileStep === 3 && (
+          <div className="space-y-5">
+            {/* Resumen card */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <p className="text-gray-500 text-xs">{folio} · {watch('cliente')}</p>
+              <p className="text-white font-medium text-base">{watch('proyecto')}</p>
+              <p className="text-gray-600 text-xs mt-1">{fields.length} partidas · Entrega: {watch('fecha_entrega') || 'Sin fecha'}</p>
+            </div>
+
+            {/* Fee y IVA controls */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-300 text-sm">Fee agencia</span>
+                <div className="flex items-center gap-2">
+                  <input type="number" value={(porcentaje_fee*100).toFixed(1)} onChange={e => setPorcentajeFee((parseFloat(e.target.value)||0)/100)} className="w-14 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm text-center focus:outline-none focus:border-blue-500" />
+                  <span className="text-gray-500 text-sm">%</span>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-gray-300 text-sm flex items-center gap-2">
+                  IVA (16%)
+                  <button type="button" onClick={() => setIvaActivo(v => !v)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${iva_activo ? 'bg-blue-600' : 'bg-gray-600'}`}>
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${iva_activo ? 'translate-x-4' : 'translate-x-1'}`} />
+                  </button>
+                </span>
+              </div>
+            </div>
+
+            {/* Desglose totales */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="space-y-2.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Subtotal</span>
+                  <span className="text-gray-300">${fmt(totales.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Fee ({(porcentaje_fee*100).toFixed(0)}%)</span>
+                  <span className="text-gray-300">${fmt(totales.fee_agencia)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">General</span>
+                  <span className="text-gray-300">${fmt(totales.general)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">IVA</span>
+                  <span className="text-gray-300">${fmt(totales.iva)}</span>
+                </div>
+                <div className="border-t border-gray-800 pt-2.5 mt-2.5">
+                  <div className="flex justify-between">
+                    <span className="text-white font-semibold">Total</span>
+                    <span className="text-white font-bold text-lg">${fmt(totales.total)}</span>
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-gray-500 text-sm">Margen total</span>
+                    <span className={`text-sm font-medium ${totales.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      ${fmt(totales.utilidad_total)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="space-y-3">
+              <button onClick={onGenerarCotizacion} disabled={guardando} className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl font-medium text-base transition-colors disabled:opacity-50 min-h-[44px] flex items-center justify-center">
+                {guardando ? 'Generando...' : 'Generar Cotización'}
+              </button>
+              <button onClick={onGuardarBorrador} disabled={guardando} className="w-full bg-gray-900 text-gray-400 py-3.5 rounded-xl text-sm border border-gray-800 hover:border-gray-700 transition-colors disabled:opacity-50">
+                {guardando ? 'Guardando...' : 'Guardar Borrador'}
+              </button>
+              <button onClick={() => setMobileStep(2)} className="w-full text-gray-500 py-3 text-sm hover:text-gray-400 transition-colors">
+                Atrás
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
