@@ -67,7 +67,8 @@ export async function PUT(
       return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
     }
 
-    const { notas_por_item = {}, ...proyectoUpdates } = body
+    const parsed = validation.data
+    const { notas_por_item = {}, ...proyectoUpdates } = parsed
 
     const proyectoAnterior = await getProyectoById(id)
     const detalleAnterior = await getProyectoDetalle(id)

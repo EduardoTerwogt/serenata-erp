@@ -124,7 +124,8 @@ export async function POST(request: Request) {
       return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
     }
 
-    const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
+    const parsed = validation.data
+    const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = parsed
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : []
 
     const requestedId = String(cotizacionData.id || '').trim()

@@ -18,7 +18,8 @@ export async function PATCH(
       return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
     }
 
-    const { responsable_id, responsable_nombre, notas } = body
+    const parsed = validation.data
+    const { responsable_id, responsable_nombre, notas } = parsed
 
     const { data: item, error: itemError } = await supabaseAdmin
       .from('items_cotizacion')
@@ -31,9 +32,9 @@ export async function PATCH(
     }
 
     const updateFields: Record<string, unknown> = {}
-    if ('responsable_id' in body) updateFields.responsable_id = responsable_id || null
-    if ('responsable_nombre' in body) updateFields.responsable_nombre = responsable_nombre || null
-    if ('notas' in body) updateFields.notas = notas ?? null
+    if ('responsable_id' in parsed) updateFields.responsable_id = responsable_id || null
+    if ('responsable_nombre' in parsed) updateFields.responsable_nombre = responsable_nombre || null
+    if ('notas' in parsed) updateFields.notas = notas ?? null
 
     const { error: updateError } = await supabaseAdmin
       .from('items_cotizacion')
@@ -42,7 +43,7 @@ export async function PATCH(
 
     if (updateError) throw updateError
 
-    if (!('responsable_id' in body) && !('responsable_nombre' in body)) {
+    if (!('responsable_id' in parsed) && !('responsable_nombre' in parsed)) {
       return Response.json({ ok: true })
     }
 
