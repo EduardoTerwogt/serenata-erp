@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatSupabaseError, isMissingRpcFunctionError } from '../quotations/rpc-utils'
+import { formatSupabaseError, isMissingRpcFunctionError } from '../rpc-utils'
 
 describe('rpc-utils', () => {
   it('formatSupabaseError concatena code, message, details y hint disponibles', () => {
