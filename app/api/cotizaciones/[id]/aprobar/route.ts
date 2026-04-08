@@ -1,16 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCotizacionById } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
+import { approveQuotationAndFetchResult } from '@/lib/server/quotations/approval'
 
-/**
- * POST /api/cotizaciones/[id]/aprobar
- *
- * Aprueba una cotización usando la función SQL transaccional `approve_cotizacion`.
- * Toda la lógica (proyecto, cuentas_pagar, cuenta_cobrar, estado) corre en
- * una sola transacción Postgres — no hay estados parciales posibles.
- *
- * Idempotente: si ya está APROBADA devuelve el estado actual sin modificar nada.
- */
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -19,42 +9,7 @@ export async function POST(
   if (authResult.response) return authResult.response
 
   const { id } = await params
+  const result = await approveQuotationAndFetchResult(id)
 
-  let cotizacion
-  try {
-    cotizacion = await getCotizacionById(id)
-  } catch {
-    return Response.json({ error: 'Cotización no encontrada' }, { status: 404 })
-  }
-
-  if (cotizacion.estado === 'APROBADA') {
-    return Response.json({ cotizacion, already_approved: true })
-  }
-
-  const { data, error } = await supabaseAdmin.rpc('approve_cotizacion', { p_id: id })
-
-  if (error) {
-    console.error('[aprobar] RPC error:', error)
-    const msg = error.message || 'Error aprobando cotización'
-    const status = msg.includes('no encontrada') || msg.includes('P0002') ? 404 : 500
-    return Response.json({ error: msg }, { status })
-  }
-
-  const result = data as {
-    already_approved: boolean
-    cotizacion_id: string
-    proyecto_id?: string
-    cuentas_pagar?: unknown[]
-    cuenta_cobrar?: unknown
-  }
-
-  const cotizacionAprobada = await getCotizacionById(id).catch(() => cotizacion)
-
-  return Response.json({
-    cotizacion: cotizacionAprobada,
-    proyecto_id: result.proyecto_id ?? id,
-    cuentas_pagar: result.cuentas_pagar ?? [],
-    cuenta_cobrar: result.cuenta_cobrar ?? null,
-    already_approved: result.already_approved,
-  })
+  return Response.json(result.body, { status: result.status })
 }
