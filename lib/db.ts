@@ -241,7 +241,6 @@ export async function deleteCuentasPagarByCotizacion(cotizacionId: string) {
 
 export async function createCuentasPagarDesdeCotizacion(cotizacionId: string) {
   const items = await getItemsByCotizacion(cotizacionId)
-  console.log(`[createCuentasPagar] items encontrados: ${items.length}`, items.map(i => ({ id: i.id, desc: i.descripcion, x_pagar: i.x_pagar, responsable: i.responsable_nombre })))
 
   const cuentas = items
     .filter(item => item.x_pagar > 0)
@@ -273,8 +272,6 @@ export async function createCuentasPagarConProyecto(
   proyectoId: string,
   items: ItemCotizacion[]
 ) {
-  console.log(`[createCuentasPagarConProyecto] cotizacion=${cotizacionId} proyecto=${proyectoId} items=${items.length}`, items.map(i => ({ id: i.id, desc: i.descripcion, x_pagar: i.x_pagar, responsable: i.responsable_nombre })))
-
   const cuentas = items
     .filter(item => item.x_pagar > 0)
     .map(item => ({
@@ -290,14 +287,12 @@ export async function createCuentasPagarConProyecto(
       estado: 'PENDIENTE',
     }))
 
-  console.log(`[createCuentasPagarConProyecto] cuentas a crear: ${cuentas.length}`)
   if (cuentas.length === 0) return []
 
   const { data, error } = await supabaseAdmin
     .from('cuentas_pagar')
     .insert(cuentas)
     .select()
-  console.log('[createCuentasPagarConProyecto] resultado inserción:', { data, error })
   if (error) throw error
   return data as CuentaPagar[]
 }
