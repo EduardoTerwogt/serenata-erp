@@ -1,3 +1,4 @@
+import { requireSection } from '@/lib/api-auth'
 import { generarHistorialProyecto, getItemsByCotizacion, getProyectoById, updateProyecto } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemCotizacion } from '@/lib/types'
@@ -37,6 +38,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('proyectos')
+  if (authResult.response) return authResult.response
+
   try {
     const { id } = await params
     const proyecto = await getProyectoDetalle(id)
@@ -51,6 +55,9 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('proyectos')
+  if (authResult.response) return authResult.response
+
   try {
     const { id } = await params
     const body = await request.json()

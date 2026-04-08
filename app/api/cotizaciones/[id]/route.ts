@@ -1,3 +1,4 @@
+import { requireSection } from '@/lib/api-auth'
 import {
   deleteCotizacion,
   deleteItemsByCotizacion,
@@ -98,6 +99,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('cotizaciones')
+  if (authResult.response) return authResult.response
+
   try {
     const { id } = await params
     const cotizacion = await getCotizacionById(id)
@@ -112,6 +116,9 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('cotizaciones')
+  if (authResult.response) return authResult.response
+
   try {
     const { id } = await params
     const previousCotizacion = await getCotizacionById(id)
@@ -185,6 +192,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('cotizaciones')
+  if (authResult.response) return authResult.response
+
   try {
     const { id } = await params
     await deleteItemsByCotizacion(id)

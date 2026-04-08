@@ -1,3 +1,4 @@
+import { requireAnySection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemPatchSchema, validate } from '@/lib/validation/schemas'
 
@@ -5,6 +6,9 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireAnySection(['cotizaciones', 'proyectos'])
+  if (authResult.response) return authResult.response
+
   try {
     const { id } = await params
     const body = await request.json()

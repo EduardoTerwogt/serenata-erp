@@ -1,39 +1,77 @@
-import { auth } from '@/auth'
+import { auth, type AppSection } from '@/auth'
+import { getUserSections, hasAnySection } from '@/lib/authz'
 import { NextResponse } from 'next/server'
 
-const SECTION_PATHS: Record<string, string> = {
-  '/dashboard': 'dashboard',
-  '/cotizaciones': 'cotizaciones',
-  '/proyectos': 'proyectos',
-  '/cuentas': 'cuentas',
-  '/responsables': 'responsables',
+type SectionRule = {
+  prefix: string
+  sections: AppSection[]
+}
+
+const PAGE_SECTION_RULES: SectionRule[] = [
+  { prefix: '/dashboard', sections: ['dashboard'] },
+  { prefix: '/cotizaciones', sections: ['cotizaciones'] },
+  { prefix: '/proyectos', sections: ['proyectos'] },
+  { prefix: '/cuentas', sections: ['cuentas'] },
+  { prefix: '/responsables', sections: ['responsables'] },
+]
+
+const API_SECTION_RULES: SectionRule[] = [
+  { prefix: '/api/cotizaciones', sections: ['cotizaciones'] },
+  { prefix: '/api/clientes', sections: ['cotizaciones'] },
+  { prefix: '/api/productos', sections: ['cotizaciones'] },
+  { prefix: '/api/proyectos', sections: ['proyectos'] },
+  { prefix: '/api/items', sections: ['cotizaciones', 'proyectos'] },
+  { prefix: '/api/cuentas', sections: ['cuentas'] },
+  { prefix: '/api/responsables', sections: ['responsables'] },
+]
+
+function isPublicPath(pathname: string) {
+  return (
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/keep-alive')
+  )
+}
+
+function resolveRequiredSections(pathname: string, isApiRoute: boolean): AppSection[] | null {
+  const rules = isApiRoute ? API_SECTION_RULES : PAGE_SECTION_RULES
+  const rule = rules.find(entry => pathname.startsWith(entry.prefix))
+  return rule?.sections ?? null
+}
+
+function getFirstAllowedPath(sections: string[]) {
+  const rule = PAGE_SECTION_RULES.find(entry => hasAnySection(sections, entry.sections))
+  return rule?.prefix ?? '/login'
 }
 
 export default auth((req) => {
   const { pathname } = req.nextUrl
+  const isApiRoute = pathname.startsWith('/api/')
 
-  // Rutas públicas
-  if (pathname.startsWith('/login') || pathname.startsWith('/api/auth')) {
+  if (isPublicPath(pathname)) {
     return NextResponse.next()
   }
 
-  // Sin sesión → login
-  if (!req.auth) {
+  if (!req.auth?.user) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    }
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  const sections = (req.auth.user as { sections?: string[] })?.sections ?? []
+  const sections = getUserSections(req.auth.user as { sections?: string[] })
 
-  // Raíz → primera sección permitida
-  if (pathname === '/') {
-    return NextResponse.redirect(new URL(`/${sections[0] ?? 'login'}`, req.url))
+  if (!isApiRoute && pathname === '/') {
+    return NextResponse.redirect(new URL(getFirstAllowedPath(sections), req.url))
   }
 
-  // Verificar acceso a la sección
-  for (const [path, section] of Object.entries(SECTION_PATHS)) {
-    if (pathname.startsWith(path) && !sections.includes(section)) {
-      return NextResponse.redirect(new URL(`/${sections[0] ?? 'login'}`, req.url))
+  const requiredSections = resolveRequiredSections(pathname, isApiRoute)
+
+  if (requiredSections && !hasAnySection(sections, requiredSections)) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
     }
+    return NextResponse.redirect(new URL(getFirstAllowedPath(sections), req.url))
   }
 
   return NextResponse.next()

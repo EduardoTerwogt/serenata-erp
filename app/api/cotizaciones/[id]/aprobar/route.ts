@@ -1,3 +1,4 @@
+import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase'
 
@@ -14,9 +15,11 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('cotizaciones')
+  if (authResult.response) return authResult.response
+
   const { id } = await params
 
-  // Verificar existencia e idempotencia rápida antes de llamar a la RPC
   let cotizacion
   try {
     cotizacion = await getCotizacionById(id)
@@ -28,7 +31,6 @@ export async function POST(
     return Response.json({ cotizacion, already_approved: true })
   }
 
-  // Llamar a la función transaccional en Postgres
   const { data, error } = await supabaseAdmin.rpc('approve_cotizacion', { p_id: id })
 
   if (error) {
@@ -46,7 +48,6 @@ export async function POST(
     cuenta_cobrar?: unknown
   }
 
-  // Leer estado final completo para devolverlo a la UI
   const cotizacionAprobada = await getCotizacionById(id).catch(() => cotizacion)
 
   return Response.json({
