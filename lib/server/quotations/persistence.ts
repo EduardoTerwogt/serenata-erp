@@ -1,8 +1,4 @@
-import {
-  getCotizacionById,
-  getNextFolio,
-  getNextFolioComplementaria,
-} from '@/lib/db'
+import { getCotizacionById } from '@/lib/db'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemCotizacion } from '@/lib/types'
@@ -105,15 +101,19 @@ export async function buildCreateCotizacionPayload(
     iva_activo?: boolean
     descuento_tipo?: 'monto' | 'porcentaje'
     descuento_valor?: number
+    forcedFolio?: string
+    preventOverwrite?: boolean
   }
 ) {
-  const requestedId = String(cotizacionData.id || '').trim()
-  const complementariaDe = String(cotizacionData.es_complementaria_de || '').trim()
-  const folio: string = complementariaDe
-    ? await getNextFolioComplementaria(complementariaDe)
-    : requestedId || await getNextFolio()
+  const folio = String(options.forcedFolio || cotizacionData.id || '').trim()
+  if (!folio) throw new Error('No se pudo resolver un folio para la cotización')
 
   const cotizacionActual = await getCotizacionById(folio).catch(() => null)
+
+  if (cotizacionActual && options.preventOverwrite) {
+    throw new Error('Ya existe una cotización con el folio reservado. Recarga la página e inténtalo de nuevo.')
+  }
+
   const previousItems = cotizacionActual?.items || []
   const fechaCotizacion = cotizacionActual?.fecha_cotizacion || new Date().toISOString().split('T')[0]
 

@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getNextFolio, getNextFolioComplementaria } from '@/lib/db'
+import { reserveNextQuotationFolio } from '@/lib/server/quotations/folio'
 
 export async function GET(request: Request) {
   const authResult = await requireSection('cotizaciones')
@@ -8,10 +8,12 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const complementariaDe = (searchParams.get('complementaria_de') || '').trim()
-    const folio = complementariaDe
-      ? await getNextFolioComplementaria(complementariaDe)
-      : await getNextFolio()
-    return Response.json({ folio })
+    const reservation = await reserveNextQuotationFolio(complementariaDe || undefined)
+    return Response.json({
+      folio: reservation.folio,
+      reservation_token: reservation.reservationToken,
+      atomic: reservation.atomic,
+    })
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error generando folio' }, { status: 500 })

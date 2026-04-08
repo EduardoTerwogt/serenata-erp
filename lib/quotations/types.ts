@@ -108,6 +108,7 @@ export interface SaveQuotationOptions {
   id?: string
   tipo?: QuotationKind
   es_complementaria_de?: string
+  reservation_token?: string | null
 }
 
 export interface UpdateQuotationOptions {

@@ -32,6 +32,7 @@ function NuevaCotizacionContent() {
 
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
   const [folio, setFolio] = useState<string>('')
+  const [reservationToken, setReservationToken] = useState<string | null>(null)
   const [responsables, setResponsables] = useState<Responsable[]>([])
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -83,8 +84,9 @@ function NuevaCotizacionContent() {
     Promise.all([
       fetchNextQuotationFolio(esComplementaria ? complementaria_de : undefined),
       fetchResponsables(),
-    ]).then(([nextFolio, resp]) => {
-      setFolio(nextFolio)
+    ]).then(([reservation, resp]) => {
+      setFolio(reservation.folio)
+      setReservationToken(reservation.reservationToken)
       setResponsables(resp)
     }).catch(() => {
       setError('Error cargando datos iniciales')
@@ -124,6 +126,7 @@ function NuevaCotizacionContent() {
     try {
       const cotizacion = await saveNewQuotation(data, {
         id: folio,
+        reservation_token: reservationToken,
         estado: 'BORRADOR',
         porcentaje_fee,
         iva_activo,
@@ -148,6 +151,7 @@ function NuevaCotizacionContent() {
     try {
       const cotizacion = await saveNewQuotation(data, {
         id: folio,
+        reservation_token: reservationToken,
         estado: 'ENVIADA',
         porcentaje_fee,
         iva_activo,

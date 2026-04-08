@@ -9,6 +9,7 @@ import {
 import { CotizacionCreateSchema, validate } from '@/lib/validation/schemas'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
+import { consumeReservedQuotationFolio } from '@/lib/server/quotations/folio'
 
 export async function GET() {
   const authResult = await requireSection('cotizaciones')
@@ -33,6 +34,8 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
+    const reservationToken = typeof body.reservation_token === 'string' ? body.reservation_token.trim() : ''
+    const requestedId = typeof body.id === 'string' ? body.id.trim() : ''
 
     const validation = validate(CotizacionCreateSchema, body)
     if (!validation.ok) {
@@ -43,10 +46,22 @@ export async function POST(request: Request) {
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = parsed
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : []
 
+    const usingReservedFolio = !!requestedId
+
+    if (usingReservedFolio) {
+      await consumeReservedQuotationFolio(requestedId, reservationToken || null)
+    }
+
     const { folio, payload, wasExisting } = await buildCreateCotizacionPayload(
-      cotizacionData as Record<string, unknown>,
+      { ...cotizacionData, ...(requestedId ? { id: requestedId } : {}) } as Record<string, unknown>,
       inputItems,
-      { porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }
+      {
+        porcentaje_fee,
+        iva_activo,
+        descuento_tipo,
+        descuento_valor,
+        ...(requestedId ? { forcedFolio: requestedId, preventOverwrite: true } : {}),
+      }
     )
 
     await createOrReplaceCotizacion(payload)
@@ -54,7 +69,9 @@ export async function POST(request: Request) {
 
     return Response.json(await getCotizacionById(folio), { status: wasExisting ? 200 : 201 })
   } catch (error) {
-    console.error('[POST /api/cotizaciones] Error creando cotización:', formatSupabaseError(error))
-    return Response.json({ error: 'Error creando cotización' }, { status: 500 })
+    const message = formatSupabaseError(error)
+    const status = String(message).includes('folio reservado') || String(message).includes('reserva de folio') ? 409 : 500
+    console.error('[POST /api/cotizaciones] Error creando cotización:', message)
+    return Response.json({ error: message || 'Error creando cotización' }, { status })
   }
 }

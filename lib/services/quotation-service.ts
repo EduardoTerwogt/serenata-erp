@@ -18,7 +18,7 @@ export async function fetchQuotationDetail(id: string): Promise<Cotizacion> {
   return res.json()
 }
 
-export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<string> {
+export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string; reservationToken: string | null; atomic: boolean }> {
   const folioUrl = complementariaDe
     ? `/api/folio?complementaria_de=${encodeURIComponent(complementariaDe)}`
     : '/api/folio'
@@ -26,7 +26,11 @@ export async function fetchNextQuotationFolio(complementariaDe?: string): Promis
   const res = await fetch(folioUrl)
   if (!res.ok) throw new Error('Error obteniendo folio')
   const data = await res.json()
-  return data.folio
+  return {
+    folio: data.folio,
+    reservationToken: data.reservation_token || null,
+    atomic: data.atomic !== false,
+  }
 }
 
 export async function saveNewQuotation(
@@ -46,6 +50,7 @@ export async function saveNewQuotation(
 
   if (options.tipo) body.tipo = options.tipo
   if (options.es_complementaria_de) body.es_complementaria_de = options.es_complementaria_de
+  if (options.reservation_token) body.reservation_token = options.reservation_token
 
   const expectedItemsCount = data.items.length
   const res = await fetch('/api/cotizaciones', {
