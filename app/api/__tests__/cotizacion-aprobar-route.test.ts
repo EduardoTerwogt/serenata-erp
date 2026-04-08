@@ -1,27 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const requireSectionMock = vi.fn()
-const approveQuotationAndFetchResultMock = vi.fn()
+const mocks = vi.hoisted(() => ({
+  requireSectionMock: vi.fn(),
+  approveQuotationAndFetchResultMock: vi.fn(),
+}))
 
 vi.mock('@/lib/api-auth', () => ({
-  requireSection: requireSectionMock,
+  requireSection: mocks.requireSectionMock,
 }))
 
 vi.mock('@/lib/server/quotations/approval', () => ({
-  approveQuotationAndFetchResult: approveQuotationAndFetchResultMock,
+  approveQuotationAndFetchResult: mocks.approveQuotationAndFetchResultMock,
 }))
 
 import { POST } from '../cotizaciones/[id]/aprobar/route'
 
 describe('POST /api/cotizaciones/[id]/aprobar', () => {
   beforeEach(() => {
-    requireSectionMock.mockReset()
-    approveQuotationAndFetchResultMock.mockReset()
+    mocks.requireSectionMock.mockReset()
+    mocks.approveQuotationAndFetchResultMock.mockReset()
   })
 
   it('delegates approval and preserves status/body from the service', async () => {
-    requireSectionMock.mockResolvedValue({ response: null })
-    approveQuotationAndFetchResultMock.mockResolvedValue({
+    mocks.requireSectionMock.mockResolvedValue({ response: null })
+    mocks.approveQuotationAndFetchResultMock.mockResolvedValue({
       status: 200,
       body: {
         cotizacion: { id: 'SH001', estado: 'APROBADA' },
@@ -34,7 +36,7 @@ describe('POST /api/cotizaciones/[id]/aprobar', () => {
       { params: Promise.resolve({ id: 'SH001' }) },
     )
 
-    expect(approveQuotationAndFetchResultMock).toHaveBeenCalledWith('SH001')
+    expect(mocks.approveQuotationAndFetchResultMock).toHaveBeenCalledWith('SH001')
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({
       cotizacion: { id: 'SH001', estado: 'APROBADA' },
@@ -43,7 +45,7 @@ describe('POST /api/cotizaciones/[id]/aprobar', () => {
   })
 
   it('corta la ejecución cuando el usuario no tiene acceso', async () => {
-    requireSectionMock.mockResolvedValue({
+    mocks.requireSectionMock.mockResolvedValue({
       response: Response.json({ error: 'No autorizado' }, { status: 403 }),
     })
 
@@ -52,7 +54,7 @@ describe('POST /api/cotizaciones/[id]/aprobar', () => {
       { params: Promise.resolve({ id: 'SH001' }) },
     )
 
-    expect(approveQuotationAndFetchResultMock).not.toHaveBeenCalled()
+    expect(mocks.approveQuotationAndFetchResultMock).not.toHaveBeenCalled()
     expect(response.status).toBe(403)
     await expect(response.json()).resolves.toEqual({ error: 'No autorizado' })
   })

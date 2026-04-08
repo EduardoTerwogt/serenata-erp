@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const getCotizacionByIdMock = vi.fn()
-const rpcMock = vi.fn()
+const mocks = vi.hoisted(() => ({
+  getCotizacionByIdMock: vi.fn(),
+  rpcMock: vi.fn(),
+}))
 
 vi.mock('@/lib/db', () => ({
-  getCotizacionById: getCotizacionByIdMock,
+  getCotizacionById: mocks.getCotizacionByIdMock,
 }))
 
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
-    rpc: rpcMock,
+    rpc: mocks.rpcMock,
   },
 }))
 
@@ -17,12 +19,12 @@ import { approveQuotationAndFetchResult } from '../approval'
 
 describe('approveQuotationAndFetchResult', () => {
   beforeEach(() => {
-    getCotizacionByIdMock.mockReset()
-    rpcMock.mockReset()
+    mocks.getCotizacionByIdMock.mockReset()
+    mocks.rpcMock.mockReset()
   })
 
   it('retorna 404 cuando la cotización no existe', async () => {
-    getCotizacionByIdMock.mockRejectedValue(new Error('missing'))
+    mocks.getCotizacionByIdMock.mockRejectedValue(new Error('missing'))
 
     const result = await approveQuotationAndFetchResult('SH001')
 
@@ -31,12 +33,12 @@ describe('approveQuotationAndFetchResult', () => {
       status: 404,
       body: { error: 'Cotización no encontrada' },
     })
-    expect(rpcMock).not.toHaveBeenCalled()
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
   it('retorna la cotización actual sin llamar al RPC cuando ya está aprobada', async () => {
     const cotizacion = { id: 'SH001', estado: 'APROBADA' }
-    getCotizacionByIdMock.mockResolvedValue(cotizacion)
+    mocks.getCotizacionByIdMock.mockResolvedValue(cotizacion)
 
     const result = await approveQuotationAndFetchResult('SH001')
 
@@ -48,12 +50,12 @@ describe('approveQuotationAndFetchResult', () => {
         already_approved: true,
       },
     })
-    expect(rpcMock).not.toHaveBeenCalled()
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
   it('mapea a 404 cuando el RPC responde que la cotización no fue encontrada', async () => {
-    getCotizacionByIdMock.mockResolvedValue({ id: 'SH001', estado: 'BORRADOR' })
-    rpcMock.mockResolvedValue({
+    mocks.getCotizacionByIdMock.mockResolvedValue({ id: 'SH001', estado: 'BORRADOR' })
+    mocks.rpcMock.mockResolvedValue({
       data: null,
       error: { message: 'cotización no encontrada' },
     })
@@ -68,11 +70,11 @@ describe('approveQuotationAndFetchResult', () => {
   })
 
   it('retorna la cotización aprobada y los artefactos creados por el RPC', async () => {
-    getCotizacionByIdMock
+    mocks.getCotizacionByIdMock
       .mockResolvedValueOnce({ id: 'SH001', estado: 'BORRADOR' })
       .mockResolvedValueOnce({ id: 'SH001', estado: 'APROBADA' })
 
-    rpcMock.mockResolvedValue({
+    mocks.rpcMock.mockResolvedValue({
       data: {
         already_approved: false,
         cotizacion_id: 'SH001',
@@ -85,7 +87,7 @@ describe('approveQuotationAndFetchResult', () => {
 
     const result = await approveQuotationAndFetchResult('SH001')
 
-    expect(rpcMock).toHaveBeenCalledWith('approve_cotizacion', { p_id: 'SH001' })
+    expect(mocks.rpcMock).toHaveBeenCalledWith('approve_cotizacion', { p_id: 'SH001' })
     expect(result).toEqual({
       ok: true,
       status: 200,

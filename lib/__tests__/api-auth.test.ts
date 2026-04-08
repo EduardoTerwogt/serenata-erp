@@ -1,20 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const authMock = vi.fn()
+const mocks = vi.hoisted(() => ({
+  authMock: vi.fn(),
+}))
 
 vi.mock('@/auth', () => ({
-  auth: authMock,
+  auth: mocks.authMock,
 }))
 
 import { requireAnySection, requireSection } from '../api-auth'
 
 describe('api-auth guards', () => {
   beforeEach(() => {
-    authMock.mockReset()
+    mocks.authMock.mockReset()
   })
 
   it('retorna 401 cuando no hay sesión', async () => {
-    authMock.mockResolvedValue(null)
+    mocks.authMock.mockResolvedValue(null)
 
     const result = await requireSection('cotizaciones')
 
@@ -24,7 +26,7 @@ describe('api-auth guards', () => {
   })
 
   it('retorna 403 cuando el usuario no tiene la sección requerida', async () => {
-    authMock.mockResolvedValue({
+    mocks.authMock.mockResolvedValue({
       user: {
         sections: ['dashboard'],
       },
@@ -44,7 +46,7 @@ describe('api-auth guards', () => {
       },
     }
 
-    authMock.mockResolvedValue(session)
+    mocks.authMock.mockResolvedValue(session)
 
     const result = await requireAnySection(['responsables', 'cotizaciones'])
 

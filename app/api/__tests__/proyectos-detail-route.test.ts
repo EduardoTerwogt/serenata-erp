@@ -1,36 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const requireSectionMock = vi.fn()
-const updateProyectoWithRollbackMock = vi.fn()
-const validateMock = vi.fn()
+const mocks = vi.hoisted(() => ({
+  requireSectionMock: vi.fn(),
+  updateProyectoWithRollbackMock: vi.fn(),
+  validateMock: vi.fn(),
+}))
 
 vi.mock('@/lib/api-auth', () => ({
-  requireSection: requireSectionMock,
+  requireSection: mocks.requireSectionMock,
 }))
 
 vi.mock('@/lib/server/projects/service', () => ({
   getProyectoDetalle: vi.fn(),
-  updateProyectoWithRollback: updateProyectoWithRollbackMock,
+  updateProyectoWithRollback: mocks.updateProyectoWithRollbackMock,
 }))
 
 vi.mock('@/lib/validation/schemas', () => ({
   ProyectoUpdateSchema: {},
-  validate: validateMock,
+  validate: mocks.validateMock,
 }))
 
 import { PUT } from '../proyectos/[id]/route'
 
 describe('PUT /api/proyectos/[id]', () => {
   beforeEach(() => {
-    requireSectionMock.mockReset()
-    updateProyectoWithRollbackMock.mockReset()
-    validateMock.mockReset()
+    mocks.requireSectionMock.mockReset()
+    mocks.updateProyectoWithRollbackMock.mockReset()
+    mocks.validateMock.mockReset()
 
-    requireSectionMock.mockResolvedValue({ response: null })
+    mocks.requireSectionMock.mockResolvedValue({ response: null })
   })
 
   it('actualiza el proyecto y separa correctamente notas_por_item del resto del payload', async () => {
-    validateMock.mockReturnValue({
+    mocks.validateMock.mockReturnValue({
       ok: true,
       data: {
         estado: 'FINALIZADO',
@@ -41,7 +43,7 @@ describe('PUT /api/proyectos/[id]', () => {
       },
     })
 
-    updateProyectoWithRollbackMock.mockResolvedValue({
+    mocks.updateProyectoWithRollbackMock.mockResolvedValue({
       id: 'PROY-001',
       estado: 'FINALIZADO',
       notas: 'Proyecto terminado',
@@ -55,7 +57,7 @@ describe('PUT /api/proyectos/[id]', () => {
       { params: Promise.resolve({ id: 'PROY-001' }) },
     )
 
-    expect(updateProyectoWithRollbackMock).toHaveBeenCalledWith(
+    expect(mocks.updateProyectoWithRollbackMock).toHaveBeenCalledWith(
       'PROY-001',
       {
         estado: 'FINALIZADO',
@@ -74,7 +76,7 @@ describe('PUT /api/proyectos/[id]', () => {
   })
 
   it('retorna 400 cuando la validación del proyecto falla', async () => {
-    validateMock.mockReturnValue({
+    mocks.validateMock.mockReturnValue({
       ok: false,
       error: 'Proyecto inválido',
       details: { estado: ['Valor no permitido'] },
@@ -88,7 +90,7 @@ describe('PUT /api/proyectos/[id]', () => {
       { params: Promise.resolve({ id: 'PROY-001' }) },
     )
 
-    expect(updateProyectoWithRollbackMock).not.toHaveBeenCalled()
+    expect(mocks.updateProyectoWithRollbackMock).not.toHaveBeenCalled()
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
       error: 'Proyecto inválido',

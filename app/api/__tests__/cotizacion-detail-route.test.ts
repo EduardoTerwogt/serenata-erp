@@ -1,45 +1,47 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const requireSectionMock = vi.fn()
-const getCotizacionByIdMock = vi.fn()
-const buildUpdateCotizacionPayloadMock = vi.fn()
-const createOrReplaceCotizacionMock = vi.fn()
-const runQuotationNonCriticalAutosavesMock = vi.fn()
-const validateMock = vi.fn()
+const mocks = vi.hoisted(() => ({
+  requireSectionMock: vi.fn(),
+  getCotizacionByIdMock: vi.fn(),
+  buildUpdateCotizacionPayloadMock: vi.fn(),
+  createOrReplaceCotizacionMock: vi.fn(),
+  runQuotationNonCriticalAutosavesMock: vi.fn(),
+  validateMock: vi.fn(),
+}))
 
 vi.mock('@/lib/api-auth', () => ({
-  requireSection: requireSectionMock,
+  requireSection: mocks.requireSectionMock,
 }))
 
 vi.mock('@/lib/db', () => ({
-  getCotizacionById: getCotizacionByIdMock,
+  getCotizacionById: mocks.getCotizacionByIdMock,
   deleteCotizacion: vi.fn(),
   deleteItemsByCotizacion: vi.fn(),
 }))
 
 vi.mock('@/lib/server/quotations/persistence', () => ({
-  buildUpdateCotizacionPayload: buildUpdateCotizacionPayloadMock,
-  createOrReplaceCotizacion: createOrReplaceCotizacionMock,
-  runQuotationNonCriticalAutosaves: runQuotationNonCriticalAutosavesMock,
+  buildUpdateCotizacionPayload: mocks.buildUpdateCotizacionPayloadMock,
+  createOrReplaceCotizacion: mocks.createOrReplaceCotizacionMock,
+  runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
 }))
 
 vi.mock('@/lib/validation/schemas', () => ({
   CotizacionUpdateSchema: {},
-  validate: validateMock,
+  validate: mocks.validateMock,
 }))
 
 import { PUT } from '../cotizaciones/[id]/route'
 
 describe('PUT /api/cotizaciones/[id]', () => {
   beforeEach(() => {
-    requireSectionMock.mockReset()
-    getCotizacionByIdMock.mockReset()
-    buildUpdateCotizacionPayloadMock.mockReset()
-    createOrReplaceCotizacionMock.mockReset()
-    runQuotationNonCriticalAutosavesMock.mockReset()
-    validateMock.mockReset()
+    mocks.requireSectionMock.mockReset()
+    mocks.getCotizacionByIdMock.mockReset()
+    mocks.buildUpdateCotizacionPayloadMock.mockReset()
+    mocks.createOrReplaceCotizacionMock.mockReset()
+    mocks.runQuotationNonCriticalAutosavesMock.mockReset()
+    mocks.validateMock.mockReset()
 
-    requireSectionMock.mockResolvedValue({ response: null })
+    mocks.requireSectionMock.mockResolvedValue({ response: null })
   })
 
   it('actualiza la cotización y regresa el recurso refrescado', async () => {
@@ -60,11 +62,11 @@ describe('PUT /api/cotizaciones/[id]', () => {
       estado: 'BORRADOR',
     }
 
-    getCotizacionByIdMock
+    mocks.getCotizacionByIdMock
       .mockResolvedValueOnce(previousCotizacion)
       .mockResolvedValueOnce(updatedCotizacion)
 
-    validateMock.mockReturnValue({
+    mocks.validateMock.mockReturnValue({
       ok: true,
       data: {
         proyecto: 'Evento nuevo',
@@ -76,7 +78,7 @@ describe('PUT /api/cotizaciones/[id]', () => {
       },
     })
 
-    buildUpdateCotizacionPayloadMock.mockResolvedValue({
+    mocks.buildUpdateCotizacionPayloadMock.mockResolvedValue({
       id: 'SH001',
       cliente: 'ACME',
       proyecto: 'Evento nuevo',
@@ -91,7 +93,7 @@ describe('PUT /api/cotizaciones/[id]', () => {
       { params: Promise.resolve({ id: 'SH001' }) },
     )
 
-    expect(buildUpdateCotizacionPayloadMock).toHaveBeenCalledWith(
+    expect(mocks.buildUpdateCotizacionPayloadMock).toHaveBeenCalledWith(
       'SH001',
       previousCotizacion,
       { proyecto: 'Evento nuevo' },
@@ -103,13 +105,13 @@ describe('PUT /api/cotizaciones/[id]', () => {
         descuento_valor: 0,
       },
     )
-    expect(createOrReplaceCotizacionMock).toHaveBeenCalledWith({
+    expect(mocks.createOrReplaceCotizacionMock).toHaveBeenCalledWith({
       id: 'SH001',
       cliente: 'ACME',
       proyecto: 'Evento nuevo',
       items: [{ descripcion: 'Audio', precio_unitario: 1000 }],
     })
-    expect(runQuotationNonCriticalAutosavesMock).toHaveBeenCalledWith(
+    expect(mocks.runQuotationNonCriticalAutosavesMock).toHaveBeenCalledWith(
       'ACME',
       'Evento nuevo',
       [{ descripcion: 'Audio', precio_unitario: 1000 }],
@@ -120,7 +122,7 @@ describe('PUT /api/cotizaciones/[id]', () => {
   })
 
   it('retorna 400 cuando la validación falla', async () => {
-    getCotizacionByIdMock.mockResolvedValue({
+    mocks.getCotizacionByIdMock.mockResolvedValue({
       id: 'SH001',
       cliente: 'ACME',
       proyecto: 'Evento viejo',
@@ -130,7 +132,7 @@ describe('PUT /api/cotizaciones/[id]', () => {
       items: [],
     })
 
-    validateMock.mockReturnValue({
+    mocks.validateMock.mockReturnValue({
       ok: false,
       error: 'Payload inválido',
       details: { proyecto: ['Requerido'] },
@@ -145,8 +147,8 @@ describe('PUT /api/cotizaciones/[id]', () => {
     )
 
     expect(response.status).toBe(400)
-    expect(buildUpdateCotizacionPayloadMock).not.toHaveBeenCalled()
-    expect(createOrReplaceCotizacionMock).not.toHaveBeenCalled()
+    expect(mocks.buildUpdateCotizacionPayloadMock).not.toHaveBeenCalled()
+    expect(mocks.createOrReplaceCotizacionMock).not.toHaveBeenCalled()
     await expect(response.json()).resolves.toEqual({
       error: 'Payload inválido',
       details: { proyecto: ['Requerido'] },
