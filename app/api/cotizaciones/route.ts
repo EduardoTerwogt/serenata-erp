@@ -1,17 +1,25 @@
 import {
   createCotizacion,
   deleteCotizacion,
-  deleteItemsByCotizacion,
   getCotizacionById,
   getNextFolio,
   getNextFolioComplementaria,
   updateCotizacion,
-  upsertItems,
 } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
 import { CotizacionCreateSchema, validate } from '@/lib/validation/schemas'
+
+/** Reemplaza items de una cotización en una sola transacción Postgres.
+ *  Si el INSERT falla, el DELETE se revierte → items anteriores preservados. */
+async function replaceItems(cotizacionId: string, items: ReturnType<typeof buildPersistedQuotationItems>) {
+  const { error } = await supabaseAdmin.rpc('replace_cotizacion_items', {
+    p_cotizacion_id: cotizacionId,
+    p_items: items,
+  })
+  if (error) throw error
+}
 
 async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: unknown) {
   const cliente = String(clienteValue || '').trim()
@@ -134,29 +142,22 @@ export async function POST(request: Request) {
         ...normalizedCotizacionData,
         fecha_cotizacion: cotizacionActual?.fecha_cotizacion || fechaCotizacion,
       })
-      await deleteItemsByCotizacion(folio)
-      if (inputItems.length > 0) {
-        await upsertItems(buildPersistedQuotationItems(folio, inputItems))
-      }
+      // DELETE + INSERT atómico: si falla, items anteriores quedan intactos
+      await replaceItems(folio, buildPersistedQuotationItems(folio, inputItems))
       await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
       await autosaveProductos(inputItems)
       return Response.json(await getCotizacionById(folio), { status: 200 })
     }
 
-    await createCotizacion({
-      id: folio,
-      ...normalizedCotizacionData,
-    })
+    await createCotizacion({ id: folio, ...normalizedCotizacionData })
 
     try {
-      if (inputItems.length > 0) {
-        await upsertItems(buildPersistedQuotationItems(folio, inputItems))
-      }
+      // DELETE + INSERT atómico: si falla, cotización header queda sin items (estado conocido)
+      await replaceItems(folio, buildPersistedQuotationItems(folio, inputItems))
       await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
       await autosaveProductos(inputItems)
       return Response.json(await getCotizacionById(folio), { status: 201 })
     } catch (error) {
-      await deleteItemsByCotizacion(folio).catch(() => {})
       await deleteCotizacion(folio).catch(() => {})
       throw error
     }

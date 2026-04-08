@@ -3,12 +3,21 @@ import {
   deleteItemsByCotizacion,
   getCotizacionById,
   updateCotizacion,
-  upsertItems,
 } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
 import { CotizacionUpdateSchema, validate } from '@/lib/validation/schemas'
+
+/** Reemplaza items de una cotización en una sola transacción Postgres.
+ *  Si el INSERT falla, el DELETE se revierte → items anteriores preservados. */
+async function replaceItems(cotizacionId: string, items: ReturnType<typeof buildPersistedQuotationItems>) {
+  const { error } = await supabaseAdmin.rpc('replace_cotizacion_items', {
+    p_cotizacion_id: cotizacionId,
+    p_items: items,
+  })
+  if (error) throw error
+}
 
 async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: unknown) {
   const cliente = String(clienteValue || '').trim()
@@ -115,43 +124,23 @@ export async function PUT(
       )
     }
 
-    try {
-      await updateCotizacion(id, cotizacionData)
+    await updateCotizacion(id, cotizacionData)
 
-      if (inputItems !== null) {
-        await deleteItemsByCotizacion(id)
-        if (inputItems.length > 0) {
-          await upsertItems(buildPersistedQuotationItems(id, inputItems, {
-            previousItems,
-            preservePreviousResponsables: true,
-            preservePreviousNotas: true,
-          }))
-        }
-      }
-
-      await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
-      if (inputItems !== null) {
-        await autosaveProductos(inputItems)
-      }
-
-      return Response.json(await getCotizacionById(id))
-    } catch (error) {
-      try {
-        const { id: _prevId, items: _prevItems, created_at: _prevCreatedAt, ...previousData } = previousCotizacion
-        await updateCotizacion(id, previousData)
-        await deleteItemsByCotizacion(id)
-        if (previousItems.length > 0) {
-          await upsertItems(previousItems.map((item, index) => ({
-            ...item,
-            cotizacion_id: id,
-            orden: item.orden ?? index,
-          })))
-        }
-      } catch (restoreError) {
-        console.error('[PUT /api/cotizaciones/:id] Error restaurando snapshot previo:', restoreError)
-      }
-      throw error
+    if (inputItems !== null) {
+      // DELETE + INSERT atómico: si falla, items anteriores quedan intactos en BD
+      await replaceItems(id, buildPersistedQuotationItems(id, inputItems, {
+        previousItems,
+        preservePreviousResponsables: true,
+        preservePreviousNotas: true,
+      }))
     }
+
+    await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
+    if (inputItems !== null) {
+      await autosaveProductos(inputItems)
+    }
+
+    return Response.json(await getCotizacionById(id))
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error actualizando cotización' }, { status: 500 })
