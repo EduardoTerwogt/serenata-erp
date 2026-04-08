@@ -100,8 +100,7 @@ export async function PUT(
       }
 
       if (proyecto.estado === 'FINALIZADO') {
-        const totalRows = await generarHistorialProyecto(id, proyecto)
-        console.log(`[PUT /api/proyectos/${id}] Historial generado / regenerado (${totalRows} filas)`)
+        await generarHistorialProyecto(id, proyecto)
       }
 
       return Response.json(await getProyectoDetalle(id))
