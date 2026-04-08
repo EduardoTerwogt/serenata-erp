@@ -14,16 +14,10 @@ import {
   generateQuotationPdf,
   saveNewQuotation,
 } from '@/lib/services/quotation-service'
-
-function fmt(n: number) {
-  return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function fechaHoy() {
-  const d = new Date()
-  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-  return `${d.getDate()} de ${meses[d.getMonth()]} ${d.getFullYear()}`
-}
+import { formatTodaySpanishLongDate } from '@/lib/quotations/format'
+import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
+import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
+import { QuotationTotalsPanels } from '@/components/quotations/QuotationTotalsPanels'
 
 function NuevaCotizacionContent() {
   const router = useRouter()
@@ -60,7 +54,6 @@ function NuevaCotizacionContent() {
 
   const watchedItems = watch('items')
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
-
   const quotationForm = useQuotationForm(setValue, watchedItems)
 
   const {
@@ -178,9 +171,7 @@ function NuevaCotizacionContent() {
       <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl">
         <div className="mb-8">
           <h1 className="text-2xl md:text-3xl font-bold text-white">Nueva Cotización</h1>
-          <p className="text-gray-400 mt-1">
-            Folio: <span className="font-mono text-blue-400 font-bold">{folio || '...'}</span>
-          </p>
+          <p className="text-gray-400 mt-1">Folio: <span className="font-mono text-blue-400 font-bold">{folio || '...'}</span></p>
         </div>
 
         {esComplementaria && (
@@ -189,114 +180,62 @@ function NuevaCotizacionContent() {
           </div>
         )}
 
-        {error && (
-          <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-6">
-            {error}
-          </div>
-        )}
+        {error && <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-6">{error}</div>}
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 mb-6">
-          <h2 className="text-lg font-semibold text-white mb-3 md:mb-4">Información General</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-            <div className="relative">
-              <label className="block text-sm text-gray-400 mb-1">Cliente *</label>
-              {esComplementaria ? (
-                <input value={clienteInput} readOnly className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white opacity-60 cursor-not-allowed" />
-              ) : (
-                <>
-                  <input value={clienteInput} onChange={e => handleClienteChange(e.target.value)} onFocus={() => clienteSugerencias.length > 0 && setMostrarClienteDropdown(true)} onBlur={() => setTimeout(() => {
-                    setMostrarClienteDropdown(false)
-                    if (proyectosDelCliente.length === 0 && clienteInput.trim()) {
-                      const match = listaClientes.find(c => c.nombre.toLowerCase() === clienteInput.trim().toLowerCase())
-                      if (match) seleccionarCliente(match.nombre)
-                    }
-                  }, 200)} autoComplete="off" placeholder="Nombre del cliente" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white focus:outline-none focus:border-blue-500" />
-                  {mostrarClienteDropdown && clienteSugerencias.length > 0 && <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{clienteSugerencias.map((nombre, i) => <div key={i} onMouseDown={() => seleccionarCliente(nombre)} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{nombre}</div>)}</div>}
-                </>
-              )}
-            </div>
+        <QuotationGeneralInfoSection
+          register={register}
+          setValue={setValue}
+          clienteInput={clienteInput}
+          proyectoInput={proyectoInput}
+          clienteSugerencias={clienteSugerencias}
+          mostrarClienteDropdown={mostrarClienteDropdown}
+          setMostrarClienteDropdown={setMostrarClienteDropdown}
+          proyectosDelCliente={proyectosDelCliente}
+          mostrarProyectoDropdown={mostrarProyectoDropdown}
+          setMostrarProyectoDropdown={setMostrarProyectoDropdown}
+          listaClientes={listaClientes}
+          handleClienteChange={handleClienteChange}
+          handleProyectoChange={handleProyectoChange}
+          seleccionarCliente={seleccionarCliente}
+          setProyectoInput={setProyectoInput}
+          isReadOnly={esComplementaria}
+          readOnlyDisplay="input"
+          dateLabel={formatTodaySpanishLongDate()}
+          fechaEntregaValue={watch('fecha_entrega')}
+          locacionValue={watch('locacion')}
+        />
 
-            <div className="relative">
-              <label className="block text-sm text-gray-400 mb-1">Proyecto *</label>
-              {esComplementaria ? (
-                <input value={proyectoInput} readOnly className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white opacity-60 cursor-not-allowed" />
-              ) : (
-                <>
-                  <input value={proyectoInput} onChange={e => handleProyectoChange(e.target.value)} onFocus={() => {
-                    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
-                    if (filtrados.length > 0) setMostrarProyectoDropdown(true)
-                  }} onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)} autoComplete="off" placeholder="Nombre del proyecto" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white focus:outline-none focus:border-blue-500" />
-                  {mostrarProyectoDropdown && (() => {
-                    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
-                    return filtrados.length > 0 ? <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{filtrados.map((proy, i) => <div key={i} onMouseDown={() => {
-                      setProyectoInput(proy)
-                      setValue('proyecto', proy)
-                      setMostrarProyectoDropdown(false)
-                    }} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{proy}</div>)}</div> : null
-                  })()}
-                </>
-              )}
-            </div>
+        <QuotationItemsSection
+          editable
+          register={register}
+          setValue={setValue}
+          watchedItems={watchedItems}
+          fields={fields}
+          append={append}
+          remove={remove}
+          editingItemIndex={editingItemIndex}
+          setEditingItemIndex={setEditingItemIndex}
+          calcItem={calcItem}
+          handleDescripcionChange={handleDescripcionChange}
+          seleccionarProducto={seleccionarProducto}
+          productoSugerencias={productoSugerencias}
+          mostrarProductoDropdown={mostrarProductoDropdown}
+          setMostrarProductoDropdown={setMostrarProductoDropdown}
+          responsables={responsables}
+        />
 
-            <div className="min-w-0">
-              <label className="block text-sm text-gray-400 mb-1">Fecha de Entrega</label>
-              <input type="date" {...register('fecha_entrega')} readOnly={esComplementaria} className={`w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`} />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Locación</label>
-              <input {...register('locacion')} readOnly={esComplementaria} className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm md:text-sm text-white focus:outline-none focus:border-blue-500 ${esComplementaria ? 'opacity-60 cursor-not-allowed' : ''}`} placeholder="Lugar del evento" />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Fecha de Cotización</label>
-              <p className="text-white py-1.5 text-sm">{fechaHoy()}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gray-900 border border-gray-800 rounded-xl mb-6">
-          <div className="p-4 md:p-6 border-b border-gray-800 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-white">Partidas</h2>
-            <button type="button" onClick={() => append({ ...EMPTY_QUOTATION_ITEM })} className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>
-          </div>
-
-          <div className="hidden md:block" style={{ overflowX: 'auto', overflowY: 'visible' }}>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-gray-800">{['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'X Pagar', 'Margen', ''].map(h => <th key={h} className="text-left text-gray-400 font-medium px-4 py-3 whitespace-nowrap">{h}</th>)}</tr></thead>
-              <tbody>
-                {fields.map((field, index) => {
-                  const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
-                  const { importe, margen } = calcItem(item)
-                  return <tr key={field.id} className="border-b border-gray-800/50">
-                    <td className="px-4 py-2"><input {...register(`items.${index}.categoria`)} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" placeholder="Categoría" /></td>
-                    <td className="px-4 py-2"><div className="relative"><input {...register(`items.${index}.descripcion`)} onChange={e => handleDescripcionChange(index, e.target.value)} onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))} onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200)} className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" placeholder="Descripción" autoComplete="off" />{mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && <div className="absolute z-[9999] mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{productoSugerencias[index].map((p, i) => <div key={i} onMouseDown={() => seleccionarProducto(index, p)} className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}</div>)}</div>}</div></td>
-                    <td className="px-4 py-2"><input type="number" min="1" step="1" {...register(`items.${index}.cantidad`, { valueAsNumber: true })} className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" /></td>
-                    <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" /></td>
-                    <td className="px-4 py-2 text-white font-medium whitespace-nowrap">${fmt(importe)}</td>
-                    <td className="px-4 py-2"><select {...register(`items.${index}.responsable_id`)} onChange={(e) => { setValue(`items.${index}.responsable_id`, e.target.value); const r = responsables.find(r => r.id === e.target.value); setValue(`items.${index}.responsable_nombre`, r?.nombre ?? '') }} className="w-36 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"><option value="">Sin asignar</option>{responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select><input type="hidden" {...register(`items.${index}.responsable_nombre`)} /></td>
-                    <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500" /></td>
-                    <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmt(margen)}</td>
-                    <td className="px-4 py-2"><button type="button" onClick={() => remove(index)} disabled={fields.length === 1} className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
-                  </tr>
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="md:hidden p-4 space-y-3">
-            {fields.map((field, index) => {
-              const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
-              const { importe, margen } = calcItem(item)
-              return <div key={field.id} className="bg-gray-800 border border-gray-700 rounded-xl p-4 cursor-pointer hover:border-gray-600 transition-colors" onClick={() => setEditingItemIndex(index)}><div className="flex justify-between items-start gap-3 mb-2"><div className="min-w-0"><p className="text-white font-medium text-[15px] truncate">{item.descripcion || 'Sin descripción'}</p><p className="text-gray-500 text-xs">{item.categoria || 'Sin categoría'}</p></div><button type="button" onClick={(e) => { e.stopPropagation(); remove(index) }} disabled={fields.length === 1} className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors text-sm">✕</button></div><div className="grid grid-cols-2 gap-2 text-[13px] mb-2"><span className="text-gray-500">Cant. {item.cantidad || 0}</span><span className="text-gray-500 text-right">P. Unit. ${fmt(typeof item.precio_unitario === 'number' ? item.precio_unitario : 0)}</span><span className="text-gray-400">X pagar ${fmt(typeof item.x_pagar === 'number' ? item.x_pagar : 0)}</span><span className={`text-right font-medium ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>Margen ${fmt(margen)}</span></div><div className="flex justify-between items-center pt-2 border-t border-gray-700"><span className="text-gray-500 text-xs">{item.responsable_nombre || 'Sin responsable'}</span><span className="text-white font-bold">${fmt(importe)}</span></div></div>
-            })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6"><h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Totales</h3><div className="space-y-3"><div className="flex justify-between text-sm gap-3"><span className="text-gray-400">Subtotal</span><span className="text-white text-right">${fmt(totales.subtotal)}</span></div><div className="flex justify-between text-sm items-start gap-3"><span className="text-gray-400 flex items-center gap-2 flex-wrap flex-1 min-w-0">Fee Agencia<input type="number" min="0" max="100" step="0.5" value={(porcentaje_fee * 100).toFixed(1)} onChange={e => setPorcentajeFee((parseFloat(e.target.value) || 0) / 100)} className="w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500" /><span className="text-gray-500 text-xs">%</span></span><span className="text-white text-right flex-shrink-0">${fmt(totales.fee_agencia)}</span></div><div className="flex justify-between text-sm gap-3"><span className="text-gray-400">General</span><span className="text-white text-right">${fmt(totales.general)}</span></div><div className="flex justify-between text-sm items-center gap-3"><span className="text-gray-400 flex items-center gap-2 flex-wrap flex-1 min-w-0">IVA (16%)<button type="button" onClick={() => setIvaActivo(v => !v)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${iva_activo ? 'bg-blue-600' : 'bg-gray-600'}`}><span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${iva_activo ? 'translate-x-4' : 'translate-x-1'}`} /></button></span><span className={`${iva_activo ? 'text-white' : 'text-gray-600'} text-right flex-shrink-0`}>${fmt(totales.iva)}</span></div><div className="flex justify-between text-sm items-start gap-3"><div className="text-gray-400 flex-1 min-w-0"><div className="mb-2">Descuento</div><div className="flex flex-wrap gap-2"><select value={descuento_tipo} onChange={e => setDescuentoTipo(e.target.value as 'monto' | 'porcentaje')} className="bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500"><option value="monto">$ Monto</option><option value="porcentaje">% Porcentaje</option></select><input type="number" min="0" step="0.01" value={descuento_valor} onChange={e => setDescuentoValor(parseFloat(e.target.value) || 0)} className="w-24 bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white text-xs focus:outline-none focus:border-blue-500" /></div></div><span className={`${totales.descuento > 0 ? 'text-yellow-400' : 'text-gray-600'} text-right flex-shrink-0 pt-0.5`}>{totales.descuento > 0 ? `-$${fmt(totales.descuento)}` : '$0.00'}</span></div><div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-bold gap-3"><span className="text-white">TOTAL</span><span className="text-green-400 text-lg text-right">${fmt(totales.total)}</span></div></div></div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6"><h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Utilidad</h3><div className="space-y-2"><div className="flex justify-between text-sm gap-3"><span className="text-gray-400">Margen Total</span><span className={`${totales.margen_total >= 0 ? 'text-green-400' : 'text-red-400'} text-right`}>${fmt(totales.margen_total)}</span></div><div className="flex justify-between text-sm gap-3"><span className="text-gray-400">Fee Agencia</span><span className="text-white text-right">${fmt(totales.fee_agencia)}</span></div><div className="border-t border-gray-700 pt-2 mt-1 flex justify-between font-semibold gap-3"><span className="text-gray-300">Utilidad Total</span><span className={`${totales.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'} text-right`}>${fmt(totales.utilidad_total)}</span></div>{totales.subtotal > 0 && <div className="flex justify-between text-sm gap-3"><span className="text-gray-400">Margen %</span><span className="text-blue-400 text-right">{((totales.margen_total / totales.subtotal) * 100).toFixed(1)}%</span></div>}</div></div>
-        </div>
+        <QuotationTotalsPanels
+          totals={totales}
+          editable
+          porcentaje_fee={porcentaje_fee}
+          setPorcentajeFee={setPorcentajeFee}
+          iva_activo={iva_activo}
+          setIvaActivo={setIvaActivo}
+          descuento_tipo={descuento_tipo}
+          setDescuentoTipo={setDescuentoTipo}
+          descuento_valor={descuento_valor}
+          setDescuentoValor={setDescuentoValor}
+        />
 
         <div className="flex flex-col md:flex-row gap-3">
           <button type="button" disabled={guardando} onClick={onGuardarBorrador} className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar Borrador'}</button>
@@ -304,8 +243,6 @@ function NuevaCotizacionContent() {
           <button type="button" onClick={() => router.back()} className="text-gray-400 hover:text-white px-4 py-3 rounded-lg transition-colors min-h-[44px]">Cancelar</button>
         </div>
       </div>
-
-      {editingItemIndex !== null && <div className="md:hidden fixed inset-0 bg-gray-950 z-50 overflow-y-auto"><div className="px-5 pt-12 pb-8"><div className="flex justify-between items-center mb-7 gap-3"><button onClick={() => setEditingItemIndex(null)} className="min-h-[44px] px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm transition-colors">Listo</button><span className="text-white font-medium text-[15px] text-right flex-1 min-w-0">{watchedItems[editingItemIndex]?.descripcion ? 'Editar partida' : 'Nueva partida'}</span></div><div className="space-y-5"><div className="relative"><label className="block text-[13px] text-gray-400 mb-2">Descripción</label><input {...register(`items.${editingItemIndex}.descripcion`)} onChange={e => handleDescripcionChange(editingItemIndex, e.target.value)} onFocus={() => (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: true }))} onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: false })), 200)} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500" placeholder="Descripción del item" autoComplete="off" />{mostrarProductoDropdown[editingItemIndex] && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{productoSugerencias[editingItemIndex].map((p, i) => <div key={i} onMouseDown={() => seleccionarProducto(editingItemIndex, p)} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}</div>)}</div>}</div><div><label className="block text-[13px] text-gray-400 mb-2">Categoría</label><input {...register(`items.${editingItemIndex}.categoria`)} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500" placeholder="Categoría" /></div><div className="flex gap-3"><div className="flex-1"><label className="block text-[13px] text-gray-400 mb-2">Cantidad</label><input type="number" min="1" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white text-center focus:outline-none focus:border-blue-500" /></div><div className="flex-[2]"><label className="block text-[13px] text-gray-400 mb-2">Precio unitario</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500" /></div></div><div><label className="block text-[13px] text-gray-400 mb-2">Responsable</label><select {...register(`items.${editingItemIndex}.responsable_id`)} onChange={(e) => { setValue(`items.${editingItemIndex}.responsable_id`, e.target.value); const r = responsables.find(r => r.id === e.target.value); setValue(`items.${editingItemIndex}.responsable_nombre`, r?.nombre ?? '') }} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 appearance-none"><option value="">Sin asignar</option>{responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select></div><div><label className="block text-[13px] text-gray-400 mb-2">Por pagar al responsable</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500" /></div></div><div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mt-6"><div className="flex justify-between mb-2"><span className="text-gray-500 text-sm">Importe</span><span className="text-gray-300 text-sm font-medium">${fmt(calcItem(watchedItems[editingItemIndex]).importe)}</span></div><div className="flex justify-between"><span className="text-gray-500 text-sm">Margen</span><span className={`text-sm font-medium ${calcItem(watchedItems[editingItemIndex]).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmt(calcItem(watchedItems[editingItemIndex]).margen)}</span></div></div>{fields.length > 1 && <button type="button" onClick={() => { remove(editingItemIndex); setEditingItemIndex(null) }} className="w-full text-red-400 hover:text-red-300 py-3 text-sm mt-6 transition-colors">Eliminar partida</button>}</div></div>}
     </>
   )
 }
