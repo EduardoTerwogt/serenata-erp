@@ -85,6 +85,9 @@ export interface Cotizacion {
   descuento_valor?: number
   created_at: string
   items?: ItemCotizacion[]
+  // Google Workspace metadata — null until each integration is activated
+  drive_file_id?: string | null
+  calendar_event_id?: string | null
 }
 
 export interface Proyecto {
