@@ -6,13 +6,13 @@ export const ItemCotizacionSchema = z.object({
   id: z.string().optional(),
   categoria: z.string().default(''),
   descripcion: z.string().min(1, 'La descripción del item es requerida'),
-  cantidad: z.number({ coerce: true }).min(0).default(0),
-  precio_unitario: z.union([z.number({ coerce: true }).min(0), z.literal('')]).default(0),
-  x_pagar: z.union([z.number({ coerce: true }).min(0), z.literal('')]).default(0),
+  cantidad: z.coerce.number().min(0).default(0),
+  precio_unitario: z.union([z.coerce.number().min(0), z.literal('')]).default(0),
+  x_pagar: z.union([z.coerce.number().min(0), z.literal('')]).default(0),
   responsable_id: z.string().optional().default(''),
   responsable_nombre: z.string().optional().default(''),
   notas: z.string().nullable().optional(),
-  orden: z.number({ coerce: true }).int().optional(),
+  orden: z.coerce.number().int().optional(),
 })
 
 // ==================== COTIZACIONES ====================
@@ -25,10 +25,10 @@ const CotizacionBaseSchema = z.object({
   estado: z.enum(['BORRADOR', 'ENVIADA', 'APROBADA']).optional(),
   tipo: z.enum(['PRINCIPAL', 'COMPLEMENTARIA']).optional(),
   es_complementaria_de: z.string().nullable().optional(),
-  porcentaje_fee: z.number({ coerce: true }).min(0).max(1).optional().default(0.15),
+  porcentaje_fee: z.coerce.number().min(0).max(1).optional().default(0.15),
   iva_activo: z.boolean().optional().default(true),
   descuento_tipo: z.enum(['monto', 'porcentaje']).optional().default('monto'),
-  descuento_valor: z.number({ coerce: true }).min(0).optional().default(0),
+  descuento_valor: z.coerce.number().min(0).optional().default(0),
   items: z.array(ItemCotizacionSchema).optional().default([]),
 })
 
@@ -37,7 +37,6 @@ export const CotizacionCreateSchema = CotizacionBaseSchema.extend({
 })
 
 export const CotizacionUpdateSchema = CotizacionBaseSchema.partial().extend({
-  // En update, cliente y proyecto no son requeridos (puede ser update parcial)
   items: z.array(ItemCotizacionSchema).optional(),
 })
 
@@ -68,7 +67,7 @@ export const ItemPatchSchema = z.object({
 
 /**
  * Valida un payload contra un schema Zod.
- * Retorna { ok: true, data } o { ok: false, error: string, details: issues[] }
+ * Retorna { ok: true, data } o { ok: false, error, details }
  */
 export function validate<T>(schema: z.ZodType<T>, payload: unknown):
   | { ok: true; data: T }
@@ -87,3 +86,6 @@ export function validate<T>(schema: z.ZodType<T>, payload: unknown):
     details,
   }
 }
+
+// Re-exportar z para uso en rutas si se necesita
+export { z }
