@@ -1,8 +1,8 @@
-import { requireSection } from '@/lib/api-auth'
+import { requireAnySection, requireSection } from '@/lib/api-auth'
 import { getResponsables, createResponsable } from '@/lib/db'
 
 export async function GET() {
-  const authResult = await requireSection('responsables')
+  const authResult = await requireAnySection(['responsables', 'cotizaciones'])
   if (authResult.response) return authResult.response
 
   try {
