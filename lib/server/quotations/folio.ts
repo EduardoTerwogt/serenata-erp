@@ -13,6 +13,40 @@ function isMissingFunctionError(error: unknown) {
   return message.includes('reserve_next_cotizacion_folio') || message.includes('consume_cotizacion_folio_reservation')
 }
 
+function isMissingReservationTableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '')
+  return message.includes('cotizacion_folio_reservations') || message.includes('relation')
+}
+
+export async function validateReservedQuotationFolio(
+  folio: string,
+  reservationToken: string,
+): Promise<ReservedQuotationFolio | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('cotizacion_folio_reservations')
+      .select('folio, token, expires_at, consumed_at')
+      .eq('folio', folio)
+      .eq('token', reservationToken)
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data) return null
+    if (data.consumed_at) return null
+    if (!data.expires_at || new Date(data.expires_at).getTime() <= Date.now()) return null
+
+    return {
+      folio: data.folio,
+      reservationToken: data.token,
+      atomic: true,
+      expiresAt: data.expires_at,
+    }
+  } catch (error) {
+    if (isMissingReservationTableError(error)) return null
+    throw error
+  }
+}
+
 export async function reserveNextQuotationFolio(baseFolio?: string): Promise<ReservedQuotationFolio> {
   try {
     const { data, error } = await supabaseAdmin.rpc('reserve_next_cotizacion_folio', {

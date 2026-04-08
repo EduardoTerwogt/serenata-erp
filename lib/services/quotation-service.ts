@@ -18,10 +18,18 @@ export async function fetchQuotationDetail(id: string): Promise<Cotizacion> {
   return res.json()
 }
 
-export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string; reservationToken: string | null; atomic: boolean; expiresAt: string | null }> {
-  const folioUrl = complementariaDe
-    ? `/api/folio?complementaria_de=${encodeURIComponent(complementariaDe)}`
-    : '/api/folio'
+export async function fetchNextQuotationFolio(
+  complementariaDe?: string,
+  existingReservation?: { folio: string; reservationToken: string }
+): Promise<{ folio: string; reservationToken: string | null; atomic: boolean; expiresAt: string | null; reused: boolean }> {
+  const params = new URLSearchParams()
+  if (complementariaDe) params.set('complementaria_de', complementariaDe)
+  if (existingReservation?.folio && existingReservation?.reservationToken) {
+    params.set('existing_folio', existingReservation.folio)
+    params.set('existing_token', existingReservation.reservationToken)
+  }
+
+  const folioUrl = params.toString() ? `/api/folio?${params.toString()}` : '/api/folio'
 
   const res = await fetch(folioUrl)
   if (!res.ok) throw new Error('Error obteniendo folio')
@@ -31,6 +39,7 @@ export async function fetchNextQuotationFolio(complementariaDe?: string): Promis
     reservationToken: data.reservation_token || null,
     atomic: data.atomic !== false,
     expiresAt: data.expires_at || null,
+    reused: !!data.reused,
   }
 }
 
