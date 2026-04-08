@@ -2,20 +2,15 @@ import {
   deleteCotizacion,
   deleteItemsByCotizacion,
   getCotizacionById,
-  updateCotizacion,
 } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
+import { formatSupabaseError } from '@/lib/quotations/rpc-utils'
 import { CotizacionUpdateSchema, validate } from '@/lib/validation/schemas'
 
-/** Reemplaza items de una cotización en una sola transacción Postgres.
- *  Si el INSERT falla, el DELETE se revierte → items anteriores preservados. */
-async function replaceItems(cotizacionId: string, items: ReturnType<typeof buildPersistedQuotationItems>) {
-  const { error } = await supabaseAdmin.rpc('replace_cotizacion_items', {
-    p_cotizacion_id: cotizacionId,
-    p_items: items,
-  })
+async function saveCotizacionAtomic(payload: Record<string, unknown>) {
+  const { error } = await supabaseAdmin.rpc('save_cotizacion', { p_data: payload })
   if (error) throw error
 }
 
@@ -78,6 +73,27 @@ async function autosaveProductos(items: Partial<ItemCotizacion>[]) {
   }
 }
 
+async function runNonCriticalAutosaves(
+  clienteValue: unknown,
+  proyectoValue: unknown,
+  items: Partial<ItemCotizacion>[]
+) {
+  const tasks: Promise<unknown>[] = [autosaveClienteYProyecto(clienteValue, proyectoValue)]
+
+  if (items.length > 0) {
+    tasks.push(autosaveProductos(items))
+  }
+
+  const results = await Promise.allSettled(tasks)
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      const label = index === 0 ? 'cliente/proyecto' : 'productos'
+      console.warn(`[PUT /api/cotizaciones/:id] Autosave no crítico falló (${label}):`, result.reason)
+    }
+  })
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -111,37 +127,56 @@ export async function PUT(
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : null
 
-    if (inputItems !== null) {
-      Object.assign(
-        cotizacionData,
-        buildQuotationPersistenceData(
-          inputItems,
-          porcentaje_fee ?? 0.15,
-          iva_activo ?? true,
-          descuento_tipo ?? 'monto',
-          descuento_valor ?? 0
-        )
-      )
+    const resolvedPorcentajeFee = porcentaje_fee ?? previousCotizacion.porcentaje_fee ?? 0.15
+    const resolvedIvaActivo = iva_activo ?? previousCotizacion.iva_activo ?? true
+    const resolvedDescuentoTipo = descuento_tipo ?? previousCotizacion.descuento_tipo ?? 'monto'
+    const resolvedDescuentoValor = descuento_valor ?? previousCotizacion.descuento_valor ?? 0
+
+    const sourceItemsForTotals = inputItems ?? previousItems
+    const persistenceData = buildQuotationPersistenceData(
+      sourceItemsForTotals,
+      resolvedPorcentajeFee,
+      resolvedIvaActivo,
+      resolvedDescuentoTipo,
+      resolvedDescuentoValor
+    )
+
+    const itemsPayload = inputItems !== null
+      ? buildPersistedQuotationItems(id, inputItems, {
+          previousItems,
+          preservePreviousResponsables: true,
+          preservePreviousNotas: true,
+        })
+      : buildPersistedQuotationItems(id, previousItems, {
+          previousItems,
+          preservePreviousResponsables: true,
+          preservePreviousNotas: true,
+        })
+
+    const payload = {
+      id,
+      cliente: cotizacionData.cliente ?? previousCotizacion.cliente,
+      proyecto: cotizacionData.proyecto ?? previousCotizacion.proyecto,
+      fecha_entrega: cotizacionData.fecha_entrega ?? previousCotizacion.fecha_entrega,
+      locacion: cotizacionData.locacion ?? previousCotizacion.locacion,
+      fecha_cotizacion: previousCotizacion.fecha_cotizacion,
+      tipo: cotizacionData.tipo ?? previousCotizacion.tipo ?? 'PRINCIPAL',
+      es_complementaria_de: cotizacionData.es_complementaria_de ?? previousCotizacion.es_complementaria_de ?? null,
+      estado: cotizacionData.estado ?? previousCotizacion.estado ?? 'BORRADOR',
+      ...persistenceData,
+      items: itemsPayload,
     }
 
-    await updateCotizacion(id, cotizacionData)
-
-    if (inputItems !== null) {
-      await replaceItems(id, buildPersistedQuotationItems(id, inputItems, {
-        previousItems,
-        preservePreviousResponsables: true,
-        preservePreviousNotas: true,
-      }))
-    }
-
-    await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
-    if (inputItems !== null) {
-      await autosaveProductos(inputItems)
-    }
+    await saveCotizacionAtomic(payload)
+    await runNonCriticalAutosaves(
+      payload.cliente,
+      payload.proyecto,
+      inputItems ?? []
+    )
 
     return Response.json(await getCotizacionById(id))
   } catch (error) {
-    console.error(error)
+    console.error('[PUT /api/cotizaciones/:id] Error actualizando cotización:', formatSupabaseError(error))
     return Response.json({ error: 'Error actualizando cotización' }, { status: 500 })
   }
 }

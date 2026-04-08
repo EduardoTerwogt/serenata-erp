@@ -1,23 +1,16 @@
 import {
-  createCotizacion,
-  deleteCotizacion,
   getCotizacionById,
   getNextFolio,
   getNextFolioComplementaria,
-  updateCotizacion,
 } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
+import { formatSupabaseError } from '@/lib/quotations/rpc-utils'
 import { CotizacionCreateSchema, validate } from '@/lib/validation/schemas'
 
-/** Reemplaza items de una cotización en una sola transacción Postgres.
- *  Si el INSERT falla, el DELETE se revierte → items anteriores preservados. */
-async function replaceItems(cotizacionId: string, items: ReturnType<typeof buildPersistedQuotationItems>) {
-  const { error } = await supabaseAdmin.rpc('replace_cotizacion_items', {
-    p_cotizacion_id: cotizacionId,
-    p_items: items,
-  })
+async function saveCotizacionAtomic(payload: Record<string, unknown>) {
+  const { error } = await supabaseAdmin.rpc('save_cotizacion', { p_data: payload })
   if (error) throw error
 }
 
@@ -80,6 +73,27 @@ async function autosaveProductos(items: Partial<ItemCotizacion>[]) {
   }
 }
 
+async function runNonCriticalAutosaves(
+  clienteValue: unknown,
+  proyectoValue: unknown,
+  items: Partial<ItemCotizacion>[]
+) {
+  const tasks: Promise<unknown>[] = [autosaveClienteYProyecto(clienteValue, proyectoValue)]
+
+  if (items.length > 0) {
+    tasks.push(autosaveProductos(items))
+  }
+
+  const results = await Promise.allSettled(tasks)
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      const label = index === 0 ? 'cliente/proyecto' : 'productos'
+      console.warn(`[POST /api/cotizaciones] Autosave no crítico falló (${label}):`, result.reason)
+    }
+  })
+}
+
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
@@ -111,56 +125,51 @@ export async function POST(request: Request) {
     const folio: string = complementariaDe
       ? await getNextFolioComplementaria(complementariaDe)
       : requestedId || await getNextFolio()
-    delete (cotizacionData as Record<string, unknown>).id
+
+    const cotizacionActual = await getCotizacionById(folio).catch(() => null)
+    const previousItems = cotizacionActual?.items || []
+    const fechaCotizacion = cotizacionActual?.fecha_cotizacion || new Date().toISOString().split('T')[0]
 
     const persistenceData = buildQuotationPersistenceData(
       inputItems,
-      porcentaje_fee ?? 0.15,
-      iva_activo ?? true,
-      descuento_tipo ?? 'monto',
-      descuento_valor ?? 0
+      porcentaje_fee ?? cotizacionActual?.porcentaje_fee ?? 0.15,
+      iva_activo ?? cotizacionActual?.iva_activo ?? true,
+      descuento_tipo ?? cotizacionActual?.descuento_tipo ?? 'monto',
+      descuento_valor ?? cotizacionActual?.descuento_valor ?? 0
     )
-    const fechaCotizacion = new Date().toISOString().split('T')[0]
 
-    const normalizedCotizacionData = {
-      ...cotizacionData,
-      ...persistenceData,
-      tipo: cotizacionData.tipo ?? 'PRINCIPAL',
-      estado: cotizacionData.estado ?? 'BORRADOR',
+    const itemsPayload = buildPersistedQuotationItems(
+      folio,
+      inputItems,
+      cotizacionActual
+        ? {
+            previousItems,
+            preservePreviousResponsables: true,
+            preservePreviousNotas: true,
+          }
+        : undefined
+    )
+
+    const payload = {
+      id: folio,
+      cliente: cotizacionData.cliente,
+      proyecto: cotizacionData.proyecto,
+      fecha_entrega: cotizacionData.fecha_entrega,
+      locacion: cotizacionData.locacion,
       fecha_cotizacion: fechaCotizacion,
+      tipo: cotizacionData.tipo ?? cotizacionActual?.tipo ?? 'PRINCIPAL',
+      es_complementaria_de: cotizacionData.es_complementaria_de ?? cotizacionActual?.es_complementaria_de ?? null,
+      estado: cotizacionData.estado ?? cotizacionActual?.estado ?? 'BORRADOR',
+      ...persistenceData,
+      items: itemsPayload,
     }
 
-    const { data: cotizacionExistente } = await supabaseAdmin
-      .from('cotizaciones')
-      .select('id')
-      .eq('id', folio)
-      .maybeSingle()
+    await saveCotizacionAtomic(payload)
+    await runNonCriticalAutosaves(cotizacionData.cliente, cotizacionData.proyecto, inputItems)
 
-    if (cotizacionExistente) {
-      const cotizacionActual = await getCotizacionById(folio).catch(() => null)
-      await updateCotizacion(folio, {
-        ...normalizedCotizacionData,
-        fecha_cotizacion: cotizacionActual?.fecha_cotizacion || fechaCotizacion,
-      })
-      await replaceItems(folio, buildPersistedQuotationItems(folio, inputItems))
-      await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
-      await autosaveProductos(inputItems)
-      return Response.json(await getCotizacionById(folio), { status: 200 })
-    }
-
-    await createCotizacion({ id: folio, ...normalizedCotizacionData })
-
-    try {
-      await replaceItems(folio, buildPersistedQuotationItems(folio, inputItems))
-      await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
-      await autosaveProductos(inputItems)
-      return Response.json(await getCotizacionById(folio), { status: 201 })
-    } catch (error) {
-      await deleteCotizacion(folio).catch(() => {})
-      throw error
-    }
+    return Response.json(await getCotizacionById(folio), { status: cotizacionActual ? 200 : 201 })
   } catch (error) {
-    console.error(error)
+    console.error('[POST /api/cotizaciones] Error creando cotización:', formatSupabaseError(error))
     return Response.json({ error: 'Error creando cotización' }, { status: 500 })
   }
 }
