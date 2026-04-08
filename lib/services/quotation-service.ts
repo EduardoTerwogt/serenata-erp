@@ -18,29 +18,15 @@ export async function fetchQuotationDetail(id: string): Promise<Cotizacion> {
   return res.json()
 }
 
-export async function fetchNextQuotationFolio(
-  complementariaDe?: string,
-  existingReservation?: { folio: string; reservationToken: string }
-): Promise<{ folio: string; reservationToken: string | null; atomic: boolean; expiresAt: string | null; reused: boolean }> {
-  const params = new URLSearchParams()
-  if (complementariaDe) params.set('complementaria_de', complementariaDe)
-  if (existingReservation?.folio && existingReservation?.reservationToken) {
-    params.set('existing_folio', existingReservation.folio)
-    params.set('existing_token', existingReservation.reservationToken)
-  }
-
-  const folioUrl = params.toString() ? `/api/folio?${params.toString()}` : '/api/folio'
+export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string }> {
+  const folioUrl = complementariaDe
+    ? `/api/folio?complementaria_de=${encodeURIComponent(complementariaDe)}`
+    : '/api/folio'
 
   const res = await fetch(folioUrl)
   if (!res.ok) throw new Error('Error obteniendo folio')
   const data = await res.json()
-  return {
-    folio: data.folio,
-    reservationToken: data.reservation_token || null,
-    atomic: data.atomic !== false,
-    expiresAt: data.expires_at || null,
-    reused: !!data.reused,
-  }
+  return { folio: data.folio }
 }
 
 export async function saveNewQuotation(
@@ -48,7 +34,6 @@ export async function saveNewQuotation(
   options: SaveQuotationOptions
 ): Promise<Cotizacion> {
   const body: Record<string, unknown> = {
-    ...(options.id ? { id: options.id } : {}),
     ...buildQuotationMutationPayload(data, {
       estado: options.estado,
       porcentaje_fee: options.porcentaje_fee,
@@ -60,7 +45,6 @@ export async function saveNewQuotation(
 
   if (options.tipo) body.tipo = options.tipo
   if (options.es_complementaria_de) body.es_complementaria_de = options.es_complementaria_de
-  if (options.reservation_token) body.reservation_token = options.reservation_token
 
   const expectedItemsCount = data.items.length
   const res = await fetch('/api/cotizaciones', {
@@ -76,16 +60,6 @@ export async function saveNewQuotation(
       errMsg = err.error || errMsg
     } catch {
       // ignore
-    }
-
-    if (options.id) {
-      try {
-        const recovered = await fetchQuotationDetail(options.id)
-        const persistedCount = recovered?.items?.length ?? 0
-        if (persistedCount === expectedItemsCount) return recovered
-      } catch {
-        // ignore recovery failure
-      }
     }
 
     throw new Error(errMsg)

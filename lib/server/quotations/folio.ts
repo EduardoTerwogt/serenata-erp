@@ -18,32 +18,59 @@ function isMissingReservationTableError(error: unknown) {
   return message.includes('cotizacion_folio_reservations') || message.includes('relation')
 }
 
-export async function validateReservedQuotationFolio(
-  folio: string,
-  reservationToken: string,
-): Promise<ReservedQuotationFolio | null> {
+function extractPrincipalNumber(folio: string | null | undefined) {
+  const match = String(folio || '').match(/^SH(\d+)$/)
+  return match ? Number(match[1]) : null
+}
+
+function extractComplementariaCode(folio: string | null | undefined, baseFolio: string) {
+  const escapedBase = baseFolio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = String(folio || '').match(new RegExp(`^${escapedBase}-([A-Z])$`))
+  return match ? match[1].charCodeAt(0) : null
+}
+
+export async function previewNextQuotationFolio(baseFolio?: string): Promise<string> {
+  const trimmedBase = baseFolio?.trim() || ''
+
   try {
+    if (!trimmedBase) {
+      const nextFromReal = await getNextFolio()
+      const realNumber = (extractPrincipalNumber(nextFromReal) ?? 1) - 1
+
+      const { data, error } = await supabaseAdmin
+        .from('cotizacion_folio_reservations')
+        .select('folio')
+        .eq('kind', 'PRINCIPAL')
+        .is('consumed_at', null)
+        .gt('expires_at', new Date().toISOString())
+
+      if (error) throw error
+
+      const activeMax = Math.max(0, ...(data || []).map(row => extractPrincipalNumber(row.folio) ?? 0))
+      const next = Math.max(realNumber, activeMax) + 1
+      return `SH${String(next).padStart(3, '0')}`
+    }
+
+    const nextFromReal = await getNextFolioComplementaria(trimmedBase)
+    const nextCode = extractComplementariaCode(nextFromReal, trimmedBase) ?? 65
+    const realCode = nextCode - 1
+
     const { data, error } = await supabaseAdmin
       .from('cotizacion_folio_reservations')
-      .select('folio, token, expires_at, consumed_at')
-      .eq('folio', folio)
-      .eq('token', reservationToken)
-      .maybeSingle()
+      .select('folio')
+      .eq('kind', 'COMPLEMENTARIA')
+      .eq('base_folio', trimmedBase)
+      .is('consumed_at', null)
+      .gt('expires_at', new Date().toISOString())
 
     if (error) throw error
-    if (!data) return null
-    if (data.consumed_at) return null
-    if (!data.expires_at || new Date(data.expires_at).getTime() <= Date.now()) return null
 
-    return {
-      folio: data.folio,
-      reservationToken: data.token,
-      atomic: true,
-      expiresAt: data.expires_at,
-    }
+    const activeMax = Math.max(64, ...(data || []).map(row => extractComplementariaCode(row.folio, trimmedBase) ?? 64))
+    const finalCode = Math.max(realCode, activeMax) + 1
+    return `${trimmedBase}-${String.fromCharCode(finalCode)}`
   } catch (error) {
-    if (isMissingReservationTableError(error)) return null
-    throw error
+    if (!isMissingReservationTableError(error)) throw error
+    return trimmedBase ? getNextFolioComplementaria(trimmedBase) : getNextFolio()
   }
 }
 
