@@ -1,35 +1,36 @@
 import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
+import { getAuthUsers, verifyPassword } from '@/lib/auth-utils'
 
 export type AppSection = 'dashboard' | 'cotizaciones' | 'proyectos' | 'cuentas' | 'responsables'
-
-const USERS = [
-  {
-    id: '1',
-    email: 'eduardoterwogth@gmail.com',
-    password: 'Serenata2',
-    name: 'Eduardo',
-    sections: ['dashboard', 'cotizaciones', 'proyectos', 'cuentas', 'responsables'] as AppSection[],
-  },
-  {
-    id: '2',
-    email: 'jgbandieramonte@gmail.com',
-    password: 'Serenata1',
-    name: 'Jefe',
-    sections: ['cotizaciones'] as AppSection[],
-  },
-]
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },
       async authorize(credentials) {
-        const user = USERS.find(
-          u => u.email === credentials?.email && u.password === credentials?.password
-        )
+        if (!credentials?.email || !credentials?.password) return null
+
+        let users
+        try {
+          users = getAuthUsers()
+        } catch (e) {
+          console.error('[auth] Error loading users from AUTH_USERS:', e)
+          return null
+        }
+
+        const user = users.find(u => u.email === credentials.email)
         if (!user) return null
-        return { id: user.id, email: user.email, name: user.name, sections: user.sections }
+
+        const valid = await verifyPassword(String(credentials.password), user.passwordHash)
+        if (!valid) return null
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          sections: user.sections as AppSection[],
+        }
       },
     }),
   ],
