@@ -1,12 +1,9 @@
-type SupabaseErrorLike =
-  | {
-      message?: string | null
-      details?: string | null
-      hint?: string | null
-      code?: string | null
-    }
-  | null
-  | undefined
+type SupabaseErrorLike = {
+  message?: string | null
+  details?: string | null
+  hint?: string | null
+  code?: string | null
+}
 
 export function formatSupabaseError(error: unknown): string {
   if (!error || typeof error !== 'object') {
