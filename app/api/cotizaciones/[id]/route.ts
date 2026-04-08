@@ -1,4 +1,10 @@
-import { deleteCotizacion, deleteItemsByCotizacion, getCotizacionById } from '@/lib/db'
+import {
+  deleteCotizacion,
+  deleteItemsByCotizacion,
+  getCotizacionById,
+  updateCotizacion,
+  upsertItems,
+} from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
@@ -83,6 +89,8 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
+    const previousCotizacion = await getCotizacionById(id)
+    const previousItems = previousCotizacion.items || []
 
     const body = await request.json()
 
@@ -91,61 +99,59 @@ export async function PUT(
       return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
     }
 
-    const previousCotizacion = await getCotizacionById(id)
-    const previousItems = previousCotizacion.items || []
-
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : null
 
-    let persistenceData = {}
     if (inputItems !== null) {
-      persistenceData = buildQuotationPersistenceData(
-        inputItems,
-        porcentaje_fee ?? 0.15,
-        iva_activo ?? true,
-        descuento_tipo ?? 'monto',
-        descuento_valor ?? 0
+      Object.assign(
+        cotizacionData,
+        buildQuotationPersistenceData(
+          inputItems,
+          porcentaje_fee ?? 0.15,
+          iva_activo ?? true,
+          descuento_tipo ?? 'monto',
+          descuento_valor ?? 0
+        )
       )
     }
 
-    const rpcPayload = {
-      id,
-      ...cotizacionData,
-      ...persistenceData,
-      fecha_cotizacion: previousCotizacion.fecha_cotizacion,
-      // Si no se envían items, preservar los anteriores con sus responsables y notas
-      items: inputItems !== null
-        ? buildPersistedQuotationItems(id, inputItems, {
+    try {
+      await updateCotizacion(id, cotizacionData)
+
+      if (inputItems !== null) {
+        await deleteItemsByCotizacion(id)
+        if (inputItems.length > 0) {
+          await upsertItems(buildPersistedQuotationItems(id, inputItems, {
             previousItems,
             preservePreviousResponsables: true,
             preservePreviousNotas: true,
-          })
-        : previousItems.map((item, index) => ({
+          }))
+        }
+      }
+
+      await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
+      if (inputItems !== null) {
+        await autosaveProductos(inputItems)
+      }
+
+      return Response.json(await getCotizacionById(id))
+    } catch (error) {
+      try {
+        const { id: _prevId, items: _prevItems, created_at: _prevCreatedAt, ...previousData } = previousCotizacion
+        await updateCotizacion(id, previousData)
+        await deleteItemsByCotizacion(id)
+        if (previousItems.length > 0) {
+          await upsertItems(previousItems.map((item, index) => ({
             ...item,
             cotizacion_id: id,
             orden: item.orden ?? index,
-          })),
+          })))
+        }
+      } catch (restoreError) {
+        console.error('[PUT /api/cotizaciones/:id] Error restaurando snapshot previo:', restoreError)
+      }
+      throw error
     }
-
-    // Actualizar cotización + items en una sola transacción Postgres
-    const { error: rpcError } = await supabaseAdmin.rpc('save_cotizacion', { p_data: rpcPayload })
-
-    if (rpcError) {
-      console.error('[PUT /api/cotizaciones/:id] RPC error:', rpcError)
-      return Response.json({ error: 'Error actualizando cotización' }, { status: 500 })
-    }
-
-    // Side-effects no críticos
-    autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto).catch(e =>
-      console.warn('[PUT /api/cotizaciones/:id] autosave cliente/proyecto falló (no crítico):', e)
-    )
-    if (inputItems !== null) {
-      autosaveProductos(inputItems).catch(e =>
-        console.warn('[PUT /api/cotizaciones/:id] autosave productos falló (no crítico):', e)
-      )
-    }
-
-    return Response.json(await getCotizacionById(id))
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error actualizando cotización' }, { status: 500 })

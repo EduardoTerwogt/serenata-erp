@@ -1,4 +1,13 @@
-import { getCotizacionById, getNextFolio, getNextFolioComplementaria } from '@/lib/db'
+import {
+  createCotizacion,
+  deleteCotizacion,
+  deleteItemsByCotizacion,
+  getCotizacionById,
+  getNextFolio,
+  getNextFolioComplementaria,
+  updateCotizacion,
+  upsertItems,
+} from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
@@ -89,7 +98,6 @@ export async function POST(request: Request) {
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : []
 
-    // Determinar folio
     const requestedId = String(cotizacionData.id || '').trim()
     const complementariaDe = String(cotizacionData.es_complementaria_de || '').trim()
     const folio: string = complementariaDe
@@ -106,43 +114,52 @@ export async function POST(request: Request) {
     )
     const fechaCotizacion = new Date().toISOString().split('T')[0]
 
-    // Conservar fecha_cotizacion original si la cotización ya existe
-    const { data: cotizacionExistente } = await supabaseAdmin
-      .from('cotizaciones')
-      .select('id, fecha_cotizacion')
-      .eq('id', folio)
-      .maybeSingle()
-
-    const fecha_cotizacion_final = cotizacionExistente?.fecha_cotizacion || fechaCotizacion
-
-    const rpcPayload = {
-      id: folio,
+    const normalizedCotizacionData = {
       ...cotizacionData,
       ...persistenceData,
       tipo: cotizacionData.tipo ?? 'PRINCIPAL',
       estado: cotizacionData.estado ?? 'BORRADOR',
-      fecha_cotizacion: fecha_cotizacion_final,
-      items: buildPersistedQuotationItems(folio, inputItems),
+      fecha_cotizacion: fechaCotizacion,
     }
 
-    // Guardar cotización + items en una sola transacción Postgres
-    const { error: rpcError } = await supabaseAdmin.rpc('save_cotizacion', { p_data: rpcPayload })
+    const { data: cotizacionExistente } = await supabaseAdmin
+      .from('cotizaciones')
+      .select('id')
+      .eq('id', folio)
+      .maybeSingle()
 
-    if (rpcError) {
-      console.error('[POST /api/cotizaciones] RPC error:', rpcError)
-      return Response.json({ error: 'Error creando cotización' }, { status: 500 })
+    if (cotizacionExistente) {
+      const cotizacionActual = await getCotizacionById(folio).catch(() => null)
+      await updateCotizacion(folio, {
+        ...normalizedCotizacionData,
+        fecha_cotizacion: cotizacionActual?.fecha_cotizacion || fechaCotizacion,
+      })
+      await deleteItemsByCotizacion(folio)
+      if (inputItems.length > 0) {
+        await upsertItems(buildPersistedQuotationItems(folio, inputItems))
+      }
+      await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
+      await autosaveProductos(inputItems)
+      return Response.json(await getCotizacionById(folio), { status: 200 })
     }
 
-    // Side-effects no críticos: fallar aquí no revierte la cotización
-    autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto).catch(e =>
-      console.warn('[POST /api/cotizaciones] autosave cliente/proyecto falló (no crítico):', e)
-    )
-    autosaveProductos(inputItems).catch(e =>
-      console.warn('[POST /api/cotizaciones] autosave productos falló (no crítico):', e)
-    )
+    await createCotizacion({
+      id: folio,
+      ...normalizedCotizacionData,
+    })
 
-    const saved = await getCotizacionById(folio)
-    return Response.json(saved, { status: cotizacionExistente ? 200 : 201 })
+    try {
+      if (inputItems.length > 0) {
+        await upsertItems(buildPersistedQuotationItems(folio, inputItems))
+      }
+      await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
+      await autosaveProductos(inputItems)
+      return Response.json(await getCotizacionById(folio), { status: 201 })
+    } catch (error) {
+      await deleteItemsByCotizacion(folio).catch(() => {})
+      await deleteCotizacion(folio).catch(() => {})
+      throw error
+    }
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error creando cotización' }, { status: 500 })
