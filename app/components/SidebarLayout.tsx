@@ -30,7 +30,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white overflow-x-hidden">
+    <div className="min-h-screen bg-gray-950 text-white overflow-x-hidden md:pl-64">
       <header className="md:hidden fixed top-0 left-0 right-0 bg-gray-950 border-b border-gray-800/50 z-50 px-4 py-3.5">
         <div className="flex items-center justify-between gap-3 min-w-0">
           <h1 className="text-lg font-bold text-blue-500 truncate">Serenata</h1>
@@ -137,7 +137,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
       </aside>
 
-      <main className="md:ml-64 min-h-screen pt-16 md:pt-0 pb-0 overflow-x-hidden w-full max-w-full">
+      <main className="min-h-screen pt-16 md:pt-0 pb-0 overflow-x-hidden w-full max-w-full">
         <div className="w-full max-w-full overflow-x-hidden">
           {children}
         </div>
