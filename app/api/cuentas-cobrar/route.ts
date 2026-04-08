@@ -1,6 +1,10 @@
+import { requireSection } from '@/lib/api-auth'
 import { getCuentasCobrar, updateCuentaCobrar } from '@/lib/db'
 
 export async function GET() {
+  const authResult = await requireSection('cuentas')
+  if (authResult.response) return authResult.response
+
   try {
     const cuentas = await getCuentasCobrar()
     return Response.json(cuentas)
@@ -11,6 +15,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const authResult = await requireSection('cuentas')
+  if (authResult.response) return authResult.response
+
   try {
     const body = await request.json()
     const { id, ...updates } = body

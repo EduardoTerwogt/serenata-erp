@@ -1,6 +1,10 @@
+import { requireSection } from '@/lib/api-auth'
 import { getNextFolio, getNextFolioComplementaria } from '@/lib/db'
 
 export async function GET(request: Request) {
+  const authResult = await requireSection('cotizaciones')
+  if (authResult.response) return authResult.response
+
   try {
     const { searchParams } = new URL(request.url)
     const complementariaDe = (searchParams.get('complementaria_de') || '').trim()

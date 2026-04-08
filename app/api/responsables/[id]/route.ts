@@ -1,9 +1,13 @@
+import { requireSection } from '@/lib/api-auth'
 import { getResponsableById, updateResponsable } from '@/lib/db'
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('responsables')
+  if (authResult.response) return authResult.response
+
   try {
     const { id } = await params
     const responsable = await getResponsableById(id)
@@ -18,6 +22,9 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('responsables')
+  if (authResult.response) return authResult.response
+
   try {
     const { id } = await params
     const body = await request.json()

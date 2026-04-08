@@ -1,6 +1,10 @@
+import { requireSection } from '@/lib/api-auth'
 import { getResponsables, createResponsable } from '@/lib/db'
 
 export async function GET() {
+  const authResult = await requireSection('responsables')
+  if (authResult.response) return authResult.response
+
   try {
     const responsables = await getResponsables()
     return Response.json(responsables)
@@ -11,6 +15,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const authResult = await requireSection('responsables')
+  if (authResult.response) return authResult.response
+
   try {
     const body = await request.json()
     const responsable = await createResponsable({ ...body, activo: true })

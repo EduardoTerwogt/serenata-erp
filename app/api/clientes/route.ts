@@ -1,6 +1,10 @@
+import { requireSection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export async function GET(request: Request) {
+  const authResult = await requireSection('cotizaciones')
+  if (authResult.response) return authResult.response
+
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q') ?? ''
 
@@ -19,11 +23,13 @@ export async function GET(request: Request) {
     console.error('[GET /api/clientes] Error:', error)
     return Response.json({ error: error.message }, { status: 500 })
   }
-  console.log('[GET /api/clientes] q:', q || '(todos)', '| encontrados:', data?.length ?? 0)
   return Response.json(data || [])
 }
 
 export async function POST(request: Request) {
+  const authResult = await requireSection('cotizaciones')
+  if (authResult.response) return authResult.response
+
   try {
     const { nombre } = await request.json()
     const normalizedName = String(nombre || '').trim()
@@ -43,7 +49,6 @@ export async function POST(request: Request) {
       return Response.json({ error: error.message }, { status: 500 })
     }
 
-    console.log('[POST /api/clientes] upsert resultado:', data)
     return Response.json(data, { status: 201 })
   } catch (e) {
     console.error('[POST /api/clientes] Error inesperado:', e)

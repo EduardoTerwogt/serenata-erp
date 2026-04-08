@@ -1,8 +1,12 @@
+import { requireSection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { updateCuentaPagar } from '@/lib/db'
 import { CuentaPagar } from '@/lib/types'
 
 export async function GET() {
+  const authResult = await requireSection('cuentas')
+  if (authResult.response) return authResult.response
+
   try {
     const { data, error } = await supabaseAdmin
       .from('cuentas_pagar')
@@ -11,7 +15,6 @@ export async function GET() {
     if (error) throw error
     const cuentas = (data || []) as CuentaPagar[]
 
-    // Enrich with proyecto name from cotizaciones
     const seen = new Set<string>()
     const cotizacionIds = cuentas.map(c => c.cotizacion_id).filter(id => {
       if (!id || seen.has(id)) return false
@@ -36,6 +39,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const authResult = await requireSection('cuentas')
+  if (authResult.response) return authResult.response
+
   try {
     const body = await request.json()
     const { id, ...updates } = body
