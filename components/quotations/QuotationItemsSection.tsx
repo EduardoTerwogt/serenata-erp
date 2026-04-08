@@ -1,17 +1,10 @@
 'use client'
 
 import { UseFieldArrayAppend, UseFieldArrayRemove, UseFormRegister, UseFormSetValue } from 'react-hook-form'
-import { Responsable } from '@/lib/types'
+import { Producto, Responsable } from '@/lib/types'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { fmtCurrency } from '@/lib/quotations/format'
-
-interface ProductoOption {
-  descripcion: string
-  categoria: string | null
-  precio_unitario: number
-  x_pagar_sugerido: number
-}
 
 interface ReadOnlyItem {
   id: string
@@ -37,8 +30,8 @@ interface Props {
   setEditingItemIndex: (value: number | null) => void
   calcItem: (item: QuotationFormValues['items'][number]) => { importe: number; margen: number }
   handleDescripcionChange: (index: number, value: string) => void
-  seleccionarProducto: (index: number, producto: ProductoOption) => void
-  productoSugerencias: Record<number, ProductoOption[]>
+  seleccionarProducto: (index: number, producto: Producto) => void
+  productoSugerencias: Record<number, Producto[]>
   mostrarProductoDropdown: Record<number, boolean>
   setMostrarProductoDropdown: (updater: Record<number, boolean> | ((prev: Record<number, boolean>) => Record<number, boolean>)) => void
   responsables: Responsable[]
