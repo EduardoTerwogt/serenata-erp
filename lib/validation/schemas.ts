@@ -1,0 +1,89 @@
+import { z } from 'zod'
+
+// ==================== ITEMS ====================
+
+export const ItemCotizacionSchema = z.object({
+  id: z.string().optional(),
+  categoria: z.string().default(''),
+  descripcion: z.string().min(1, 'La descripción del item es requerida'),
+  cantidad: z.number({ coerce: true }).min(0).default(0),
+  precio_unitario: z.union([z.number({ coerce: true }).min(0), z.literal('')]).default(0),
+  x_pagar: z.union([z.number({ coerce: true }).min(0), z.literal('')]).default(0),
+  responsable_id: z.string().optional().default(''),
+  responsable_nombre: z.string().optional().default(''),
+  notas: z.string().nullable().optional(),
+  orden: z.number({ coerce: true }).int().optional(),
+})
+
+// ==================== COTIZACIONES ====================
+
+const CotizacionBaseSchema = z.object({
+  cliente: z.string().min(1, 'El cliente es requerido'),
+  proyecto: z.string().min(1, 'El proyecto es requerido'),
+  fecha_entrega: z.string().nullable().optional(),
+  locacion: z.string().nullable().optional(),
+  estado: z.enum(['BORRADOR', 'ENVIADA', 'APROBADA']).optional(),
+  tipo: z.enum(['PRINCIPAL', 'COMPLEMENTARIA']).optional(),
+  es_complementaria_de: z.string().nullable().optional(),
+  porcentaje_fee: z.number({ coerce: true }).min(0).max(1).optional().default(0.15),
+  iva_activo: z.boolean().optional().default(true),
+  descuento_tipo: z.enum(['monto', 'porcentaje']).optional().default('monto'),
+  descuento_valor: z.number({ coerce: true }).min(0).optional().default(0),
+  items: z.array(ItemCotizacionSchema).optional().default([]),
+})
+
+export const CotizacionCreateSchema = CotizacionBaseSchema.extend({
+  id: z.string().optional(),
+})
+
+export const CotizacionUpdateSchema = CotizacionBaseSchema.partial().extend({
+  // En update, cliente y proyecto no son requeridos (puede ser update parcial)
+  items: z.array(ItemCotizacionSchema).optional(),
+})
+
+// ==================== PROYECTOS ====================
+
+export const ProyectoUpdateSchema = z.object({
+  fecha_entrega: z.string().nullable().optional(),
+  locacion: z.string().nullable().optional(),
+  horarios: z.string().nullable().optional(),
+  punto_encuentro: z.string().nullable().optional(),
+  notas: z.string().nullable().optional(),
+  estado: z.enum(['PREPRODUCCION', 'RODAJE', 'POSTPRODUCCION', 'FINALIZADO']).optional(),
+  notas_por_item: z.record(z.string(), z.string()).optional().default({}),
+})
+
+// ==================== ITEMS (PATCH) ====================
+
+export const ItemPatchSchema = z.object({
+  responsable_id: z.string().nullable().optional(),
+  responsable_nombre: z.string().nullable().optional(),
+  notas: z.string().nullable().optional(),
+}).refine(
+  data => 'responsable_id' in data || 'responsable_nombre' in data || 'notas' in data,
+  { message: 'Al menos un campo debe enviarse: responsable_id, responsable_nombre o notas' }
+)
+
+// ==================== HELPER ====================
+
+/**
+ * Valida un payload contra un schema Zod.
+ * Retorna { ok: true, data } o { ok: false, error: string, details: issues[] }
+ */
+export function validate<T>(schema: z.ZodType<T>, payload: unknown):
+  | { ok: true; data: T }
+  | { ok: false; error: string; details: { path: string; message: string }[] } {
+  const result = schema.safeParse(payload)
+  if (result.success) return { ok: true, data: result.data }
+
+  const details = result.error.issues.map(issue => ({
+    path: issue.path.join('.'),
+    message: issue.message,
+  }))
+
+  return {
+    ok: false,
+    error: `Payload inválido: ${details.map(d => d.path ? `${d.path}: ${d.message}` : d.message).join(', ')}`,
+    details,
+  }
+}

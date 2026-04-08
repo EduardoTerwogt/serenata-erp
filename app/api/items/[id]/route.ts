@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
+import { ItemPatchSchema, validate } from '@/lib/validation/schemas'
 
 export async function PATCH(
   request: Request,
@@ -7,6 +8,12 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
+
+    const validation = validate(ItemPatchSchema, body)
+    if (!validation.ok) {
+      return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
+    }
+
     const { responsable_id, responsable_nombre, notas } = body
 
     const { data: item, error: itemError } = await supabaseAdmin

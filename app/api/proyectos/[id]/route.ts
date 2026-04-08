@@ -1,6 +1,7 @@
 import { generarHistorialProyecto, getItemsByCotizacion, getProyectoById, updateProyecto } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemCotizacion } from '@/lib/types'
+import { ProyectoUpdateSchema, validate } from '@/lib/validation/schemas'
 
 async function getProyectoDetalle(id: string) {
   const proyecto = await getProyectoById(id)
@@ -53,6 +54,12 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
+
+    const validation = validate(ProyectoUpdateSchema, body)
+    if (!validation.ok) {
+      return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
+    }
+
     const { notas_por_item = {}, ...proyectoUpdates } = body
 
     const proyectoAnterior = await getProyectoById(id)

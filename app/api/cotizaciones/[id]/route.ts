@@ -2,6 +2,7 @@ import { deleteCotizacion, deleteItemsByCotizacion, getCotizacionById } from '@/
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
+import { CotizacionUpdateSchema, validate } from '@/lib/validation/schemas'
 
 async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: unknown) {
   const cliente = String(clienteValue || '').trim()
@@ -83,10 +84,16 @@ export async function PUT(
   try {
     const { id } = await params
 
+    const body = await request.json()
+
+    const validation = validate(CotizacionUpdateSchema, body)
+    if (!validation.ok) {
+      return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
+    }
+
     const previousCotizacion = await getCotizacionById(id)
     const previousItems = previousCotizacion.items || []
 
-    const body = await request.json()
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : null
 

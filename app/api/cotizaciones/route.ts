@@ -2,6 +2,7 @@ import { getCotizacionById, getNextFolio, getNextFolioComplementaria } from '@/l
 import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
+import { CotizacionCreateSchema, validate } from '@/lib/validation/schemas'
 
 async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: unknown) {
   const cliente = String(clienteValue || '').trim()
@@ -79,6 +80,12 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
+
+    const validation = validate(CotizacionCreateSchema, body)
+    if (!validation.ok) {
+      return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
+    }
+
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : []
 
