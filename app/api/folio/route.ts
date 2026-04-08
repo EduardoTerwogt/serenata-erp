@@ -13,6 +13,7 @@ export async function GET(request: Request) {
       folio: reservation.folio,
       reservation_token: reservation.reservationToken,
       atomic: reservation.atomic,
+      expires_at: reservation.expiresAt,
     })
   } catch (error) {
     console.error(error)

@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Responsable } from '@/lib/types'
@@ -19,6 +19,47 @@ import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGe
 import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
 import { QuotationTotalsPanels } from '@/components/quotations/QuotationTotalsPanels'
 
+interface StoredQuotationReservation {
+  folio: string
+  reservationToken: string | null
+  atomic: boolean
+  expiresAt: string | null
+}
+
+function isFutureIsoDate(value?: string | null) {
+  if (!value) return false
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) && timestamp > Date.now()
+}
+
+function readStoredReservation(storageKey: string): StoredQuotationReservation | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(storageKey)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as StoredQuotationReservation
+    if (!parsed?.atomic || !parsed?.folio || !parsed?.reservationToken || !isFutureIsoDate(parsed.expiresAt)) {
+      window.localStorage.removeItem(storageKey)
+      return null
+    }
+    return parsed
+  } catch {
+    window.localStorage.removeItem(storageKey)
+    return null
+  }
+}
+
+function persistReservation(storageKey: string, reservation: StoredQuotationReservation) {
+  if (typeof window === 'undefined') return
+  if (!reservation.atomic || !reservation.reservationToken || !reservation.expiresAt) return
+  window.localStorage.setItem(storageKey, JSON.stringify(reservation))
+}
+
+function clearStoredReservation(storageKey: string) {
+  if (typeof window === 'undefined') return
+  window.localStorage.removeItem(storageKey)
+}
+
 function NuevaCotizacionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -29,6 +70,10 @@ function NuevaCotizacionContent() {
   const locacionParam = searchParams.get('locacion') || ''
   const fechaEntregaParam = searchParams.get('fecha_entrega') || ''
   const esComplementaria = !!complementaria_de
+  const reservationStorageKey = useMemo(
+    () => `quotation-folio-reservation:${esComplementaria ? complementaria_de : 'principal'}`,
+    [esComplementaria, complementaria_de]
+  )
 
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
   const [folio, setFolio] = useState<string>('')
@@ -81,17 +126,30 @@ function NuevaCotizacionContent() {
   } = quotationForm
 
   useEffect(() => {
-    Promise.all([
-      fetchNextQuotationFolio(esComplementaria ? complementaria_de : undefined),
-      fetchResponsables(),
-    ]).then(([reservation, resp]) => {
-      setFolio(reservation.folio)
-      setReservationToken(reservation.reservationToken)
-      setResponsables(resp)
-    }).catch(() => {
-      setError('Error cargando datos iniciales')
-    })
-  }, [esComplementaria, complementaria_de])
+    const storedReservation = readStoredReservation(reservationStorageKey)
+
+    const folioPromise = storedReservation
+      ? Promise.resolve(storedReservation)
+      : fetchNextQuotationFolio(esComplementaria ? complementaria_de : undefined)
+
+    Promise.all([folioPromise, fetchResponsables()])
+      .then(([reservation, resp]) => {
+        setFolio(reservation.folio)
+        setReservationToken(reservation.reservationToken)
+        if (reservation.atomic && reservation.reservationToken && reservation.expiresAt) {
+          persistReservation(reservationStorageKey, {
+            folio: reservation.folio,
+            reservationToken: reservation.reservationToken,
+            atomic: reservation.atomic,
+            expiresAt: reservation.expiresAt,
+          })
+        }
+        setResponsables(resp)
+      })
+      .catch(() => {
+        setError('Error cargando datos iniciales')
+      })
+  }, [esComplementaria, complementaria_de, reservationStorageKey])
 
   useEffect(() => {
     if (clienteParam) setClienteInput(clienteParam)
@@ -134,9 +192,15 @@ function NuevaCotizacionContent() {
         descuento_valor,
         ...(esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {}),
       })
+      clearStoredReservation(reservationStorageKey)
       router.push(`/cotizaciones/${cotizacion.id}`)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error desconocido')
+      const message = e instanceof Error ? e.message : 'Error desconocido'
+      if (message.includes('reserva de folio') || message.includes('folio reservado')) {
+        clearStoredReservation(reservationStorageKey)
+        setReservationToken(null)
+      }
+      setError(message)
     } finally {
       isSubmitting.current = false
       setGuardando(false)
@@ -160,10 +224,16 @@ function NuevaCotizacionContent() {
         ...(esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {}),
       })
 
+      clearStoredReservation(reservationStorageKey)
       await generateQuotationPdf(cotizacion, data.items)
       router.push(`/cotizaciones/${cotizacion.id}`)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error desconocido')
+      const message = e instanceof Error ? e.message : 'Error desconocido'
+      if (message.includes('reserva de folio') || message.includes('folio reservado')) {
+        clearStoredReservation(reservationStorageKey)
+        setReservationToken(null)
+      }
+      setError(message)
     } finally {
       isSubmitting.current = false
       setGuardando(false)

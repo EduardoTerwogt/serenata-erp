@@ -5,6 +5,7 @@ export interface ReservedQuotationFolio {
   folio: string
   reservationToken: string | null
   atomic: boolean
+  expiresAt: string | null
 }
 
 function isMissingFunctionError(error: unknown) {
@@ -19,13 +20,14 @@ export async function reserveNextQuotationFolio(baseFolio?: string): Promise<Res
     })
     if (error) throw error
 
-    const payload = data as { folio?: string; token?: string; atomic?: boolean } | null
+    const payload = data as { folio?: string; token?: string; atomic?: boolean; expires_at?: string } | null
     if (!payload?.folio) throw new Error('La reserva de folio no devolvió un folio válido')
 
     return {
       folio: payload.folio,
       reservationToken: payload.token || null,
       atomic: payload.atomic !== false,
+      expiresAt: payload.expires_at || null,
     }
   } catch (error) {
     if (!isMissingFunctionError(error)) throw error
@@ -38,6 +40,7 @@ export async function reserveNextQuotationFolio(baseFolio?: string): Promise<Res
       folio,
       reservationToken: null,
       atomic: false,
+      expiresAt: null,
     }
   }
 }

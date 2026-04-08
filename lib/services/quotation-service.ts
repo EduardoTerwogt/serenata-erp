@@ -18,7 +18,7 @@ export async function fetchQuotationDetail(id: string): Promise<Cotizacion> {
   return res.json()
 }
 
-export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string; reservationToken: string | null; atomic: boolean }> {
+export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string; reservationToken: string | null; atomic: boolean; expiresAt: string | null }> {
   const folioUrl = complementariaDe
     ? `/api/folio?complementaria_de=${encodeURIComponent(complementariaDe)}`
     : '/api/folio'
@@ -30,6 +30,7 @@ export async function fetchNextQuotationFolio(complementariaDe?: string): Promis
     folio: data.folio,
     reservationToken: data.reservation_token || null,
     atomic: data.atomic !== false,
+    expiresAt: data.expires_at || null,
   }
 }
 
