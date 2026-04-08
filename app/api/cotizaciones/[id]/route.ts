@@ -108,7 +108,8 @@ export async function PUT(
       return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
     }
 
-    const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
+    const parsed = validation.data
+    const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = parsed
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : null
 
     if (inputItems !== null) {
@@ -127,7 +128,6 @@ export async function PUT(
     await updateCotizacion(id, cotizacionData)
 
     if (inputItems !== null) {
-      // DELETE + INSERT atómico: si falla, items anteriores quedan intactos en BD
       await replaceItems(id, buildPersistedQuotationItems(id, inputItems, {
         previousItems,
         preservePreviousResponsables: true,

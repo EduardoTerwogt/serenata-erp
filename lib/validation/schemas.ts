@@ -9,8 +9,8 @@ export const ItemCotizacionSchema = z.object({
   cantidad: z.coerce.number().min(0).default(0),
   precio_unitario: z.union([z.coerce.number().min(0), z.literal('')]).default(0),
   x_pagar: z.union([z.coerce.number().min(0), z.literal('')]).default(0),
-  responsable_id: z.string().optional().default(''),
-  responsable_nombre: z.string().optional().default(''),
+  responsable_id: z.string().nullable().optional().transform(v => v ?? ''),
+  responsable_nombre: z.string().nullable().optional().transform(v => v ?? ''),
   notas: z.string().nullable().optional(),
   orden: z.coerce.number().int().optional(),
 })

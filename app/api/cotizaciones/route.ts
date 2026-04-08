@@ -103,7 +103,8 @@ export async function POST(request: Request) {
       return Response.json({ error: validation.error, details: validation.details }, { status: 400 })
     }
 
-    const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = body
+    const parsed = validation.data
+    const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = parsed
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : []
 
     const requestedId = String(cotizacionData.id || '').trim()
@@ -142,7 +143,6 @@ export async function POST(request: Request) {
         ...normalizedCotizacionData,
         fecha_cotizacion: cotizacionActual?.fecha_cotizacion || fechaCotizacion,
       })
-      // DELETE + INSERT atómico: si falla, items anteriores quedan intactos
       await replaceItems(folio, buildPersistedQuotationItems(folio, inputItems))
       await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
       await autosaveProductos(inputItems)
@@ -152,7 +152,6 @@ export async function POST(request: Request) {
     await createCotizacion({ id: folio, ...normalizedCotizacionData })
 
     try {
-      // DELETE + INSERT atómico: si falla, cotización header queda sin items (estado conocido)
       await replaceItems(folio, buildPersistedQuotationItems(folio, inputItems))
       await autosaveClienteYProyecto(cotizacionData.cliente, cotizacionData.proyecto)
       await autosaveProductos(inputItems)
