@@ -49,8 +49,6 @@ export default function ResponsableDetallePage({
     ]).then(([data, hist]) => {
       setResponsable(data)
       setRoles(data.roles || [])
-      console.log('historial data:', hist)
-      // Prefer dedicated historial endpoint; fallback to joined data
       setHistorial(Array.isArray(hist) && hist.length > 0 ? hist : (data.historial_responsable || []))
       reset({
         nombre: data.nombre,
@@ -128,7 +126,6 @@ export default function ResponsableDetallePage({
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Info personal */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Información Personal</h2>
           <div className="grid grid-cols-1 gap-4">
@@ -166,7 +163,6 @@ export default function ResponsableDetallePage({
           </div>
         </div>
 
-        {/* Roles */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Roles</h2>
           <div className="flex gap-2 mb-3">
@@ -194,7 +190,6 @@ export default function ResponsableDetallePage({
           )}
         </div>
 
-        {/* Datos bancarios */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Datos Bancarios</h2>
           <div className="grid grid-cols-1 gap-4">
@@ -216,7 +211,6 @@ export default function ResponsableDetallePage({
           </div>
         </div>
 
-        {/* Notas */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Notas</h2>
           <textarea
@@ -237,7 +231,6 @@ export default function ResponsableDetallePage({
         </div>
       </form>
 
-      {/* Historial */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl mt-8">
         <div className="p-6 border-b border-gray-800 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Historial de Proyectos</h2>
@@ -251,7 +244,6 @@ export default function ResponsableDetallePage({
             Error cargando historial: {historialError}
           </div>
         )}
-        {/* ✅ Usando componente responsivo compartido */}
         <div className="relative">
           <ResponsiveTableCard<HistorialResponsable>
             data={historial}
@@ -302,8 +294,6 @@ export default function ResponsableDetallePage({
             emptyMessage="Aún no hay proyectos registrados"
           />
 
-          {/* Total en desktop se muestra en el footer de la tabla */}
-          {/* Total en mobile se muestra abajo */}
           {historial.length > 0 && (
             <div className="md:hidden bg-gray-900 border border-gray-800 rounded-xl p-4 mt-4">
               <div className="flex justify-between items-center">
@@ -313,7 +303,6 @@ export default function ResponsableDetallePage({
             </div>
           )}
 
-          {/* Footer total para desktop */}
           {historial.length > 0 && (
             <div className="hidden md:block border-t border-gray-700">
               <div className="px-6 py-3 flex justify-end">

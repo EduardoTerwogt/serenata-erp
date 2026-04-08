@@ -1,11 +1,14 @@
+import { requireSection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('responsables')
+  if (authResult.response) return authResult.response
+
   const { id } = await params
-  console.log('[GET /api/responsables/:id/historial] responsable_id:', id)
   const { data, error } = await supabaseAdmin
     .from('historial_responsable')
     .select('*')
@@ -15,6 +18,5 @@ export async function GET(
     console.error('[historial] error:', error)
     return Response.json({ error: error.message }, { status: 500 })
   }
-  console.log('[historial] registros encontrados:', data?.length ?? 0, data)
   return Response.json(data || [])
 }
