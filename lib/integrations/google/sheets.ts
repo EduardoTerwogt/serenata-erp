@@ -175,7 +175,7 @@ export async function getSheetIds(
     for (const sheet of res.data.sheets ?? []) {
       const title = sheet.properties?.title
       const id = sheet.properties?.sheetId
-      if (title && id !== undefined) result[title] = id
+      if (title && id != null) result[title] = id
     }
     return result
   } catch (err: unknown) {
