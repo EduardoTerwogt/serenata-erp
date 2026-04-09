@@ -1,52 +1,185 @@
-// Google Sheets integration — interface and disabled stub.
+// Google Sheets integration — real implementation using Sheets API v4.
 //
-// NOTE: Sync strategy (import-only vs bidirectional) is not yet defined.
-// This interface covers the minimal operations needed for the most likely
-// use cases without committing to a specific strategy.
+// Comparte el mismo OAuth2 client que Drive (mismo refresh token).
+// Requiere scope: https://www.googleapis.com/auth/spreadsheets
 //
-// The stub (active now) always returns null/false — no Sheets calls are made.
-// Replace SheetsServiceStub with SheetsServiceImpl when the integration is activated.
+// Uso principal:
+//   - Crear un spreadsheet con pestañas por tabla
+//   - Sincronizar datos Supabase ↔ Google Sheets (bidireccional, manual)
 
-export interface SheetsAppendParams {
-  /** Target spreadsheet ID */
-  spreadsheetId: string
-  /** Sheet tab name, e.g. "Cotizaciones" */
-  sheetName: string
-  /** Row values in column order */
-  values: (string | number | boolean | null)[]
+import { google } from 'googleapis'
+import { getGoogleOAuth2Client } from './auth'
+
+export type CellValue = string | number | boolean | null
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function getSheetsInstance() {
+  const auth = getGoogleOAuth2Client()
+  if (!auth) {
+    console.error('[Sheets] getGoogleOAuth2Client() returned null — Google credentials not configured')
+    return null
+  }
+  return google.sheets({ version: 'v4', auth })
 }
 
-export interface SheetsUpdateParams {
-  spreadsheetId: string
-  sheetName: string
-  /** 1-based row index to update */
-  rowIndex: number
-  values: (string | number | boolean | null)[]
+/** Escapa el nombre de la pestaña para usarlo en rangos de la API */
+function sheetRange(sheetName: string, from = 'A1'): string {
+  // Si tiene espacios o caracteres especiales, envolver en comillas simples
+  const safe = sheetName.includes("'") ? sheetName.replace(/'/g, "''") : sheetName
+  return `'${safe}'!${from}`
 }
 
-export interface SheetsAppendResult {
-  /** 1-based row index of the appended row */
-  rowIndex: number
+// ─── createSpreadsheet ───────────────────────────────────────────────────────
+
+export async function createSpreadsheet(
+  title: string,
+  sheetNames: string[],
+): Promise<{ spreadsheetId: string; url: string } | null> {
+  const sheets = getSheetsInstance()
+  if (!sheets) return null
+
+  console.log('[Sheets] createSpreadsheet —', title, '— tabs:', sheetNames)
+
+  const res = await sheets.spreadsheets.create({
+    requestBody: {
+      properties: { title },
+      sheets: sheetNames.map((name, index) => ({
+        properties: { sheetId: index + 1, title: name, index },
+      })),
+    },
+  })
+
+  if (!res.data.spreadsheetId) return null
+
+  console.log('[Sheets] Created —', res.data.spreadsheetId)
+  return {
+    spreadsheetId: res.data.spreadsheetId,
+    url: res.data.spreadsheetUrl ?? `https://docs.google.com/spreadsheets/d/${res.data.spreadsheetId}`,
+  }
 }
 
-export interface SheetsService {
-  /**
-   * Append a row to the end of a sheet.
-   * Returns null when Sheets is not configured or the operation fails non-fatally.
-   */
-  appendRow(params: SheetsAppendParams): Promise<SheetsAppendResult | null>
+// ─── readAllRows ─────────────────────────────────────────────────────────────
 
-  /**
-   * Update an existing row in a sheet.
-   * Returns false when Sheets is not configured or the row is not found.
-   */
-  updateRow(params: SheetsUpdateParams): Promise<boolean>
+/** Lee TODAS las filas (incluyendo header en row 0) de una pestaña. */
+export async function readAllRows(
+  spreadsheetId: string,
+  sheetName: string,
+): Promise<string[][] | null> {
+  const sheets = getSheetsInstance()
+  if (!sheets) return null
+
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: sheetRange(sheetName),
+      valueRenderOption: 'UNFORMATTED_VALUE',
+    })
+    return (res.data.values as string[][] | undefined) ?? []
+  } catch (err: unknown) {
+    console.error('[Sheets] readAllRows error:', (err as Error).message)
+    return null
+  }
 }
 
-// Disabled stub — safe no-op.
-class SheetsServiceStub implements SheetsService {
-  async appendRow(_params: SheetsAppendParams): Promise<null> { return null }
-  async updateRow(_params: SheetsUpdateParams): Promise<false> { return false }
+// ─── overwriteSheet ──────────────────────────────────────────────────────────
+
+/**
+ * Borra el contenido de la pestaña y escribe las filas dadas (header + datos).
+ * Formato: primera fila = headers, resto = datos.
+ */
+export async function overwriteSheet(
+  spreadsheetId: string,
+  sheetName: string,
+  rows: CellValue[][],
+): Promise<boolean> {
+  const sheets = getSheetsInstance()
+  if (!sheets) return false
+
+  // 1. Limpiar
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId,
+    range: sheetRange(sheetName),
+  })
+
+  if (rows.length === 0) return true
+
+  // 2. Escribir (convertir null a cadena vacía para la API)
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: [{
+        range: sheetRange(sheetName, 'A1'),
+        values: rows.map(row => row.map(v => v === null || v === undefined ? '' : v)),
+      }],
+    },
+  })
+
+  console.log('[Sheets] overwriteSheet — tab:', sheetName, '— rows written:', rows.length)
+  return true
 }
 
-export const sheetsService: SheetsService = new SheetsServiceStub()
+// ─── formatHeaderRow ─────────────────────────────────────────────────────────
+
+/**
+ * Aplica formato bold + fondo gris oscuro a la primera fila de una pestaña.
+ * Requiere conocer el sheetId numérico de la pestaña.
+ */
+export async function formatHeaderRow(
+  spreadsheetId: string,
+  sheetId: number,
+): Promise<void> {
+  const sheets = getSheetsInstance()
+  if (!sheets) return
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        repeatCell: {
+          range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: { red: 0.1, green: 0.1, blue: 0.1 },
+              textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
+            },
+          },
+          fields: 'userEnteredFormat(backgroundColor,textFormat)',
+        },
+      }, {
+        updateSheetProperties: {
+          properties: { sheetId, gridProperties: { frozenRowCount: 1 } },
+          fields: 'gridProperties.frozenRowCount',
+        },
+      }],
+    },
+  })
+}
+
+// ─── getSheetIds ──────────────────────────────────────────────────────────────
+
+/** Retorna un mapa de { sheetName → sheetId numérico } del spreadsheet. */
+export async function getSheetIds(
+  spreadsheetId: string,
+): Promise<Record<string, number> | null> {
+  const sheets = getSheetsInstance()
+  if (!sheets) return null
+
+  try {
+    const res = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets.properties(sheetId,title)',
+    })
+    const result: Record<string, number> = {}
+    for (const sheet of res.data.sheets ?? []) {
+      const title = sheet.properties?.title
+      const id = sheet.properties?.sheetId
+      if (title && id !== undefined) result[title] = id
+    }
+    return result
+  } catch (err: unknown) {
+    console.error('[Sheets] getSheetIds error:', (err as Error).message)
+    return null
+  }
+}

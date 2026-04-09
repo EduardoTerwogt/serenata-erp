@@ -1,29 +1,28 @@
-// Google Drive environment configuration — OAuth 2.0 (user-delegated access).
+// Google environment configuration — OAuth 2.0 (user-delegated access).
 //
-// Drive accede al Google Drive personal del propietario de la app via OAuth2.
-// Las Service Accounts no tienen cuota de almacenamiento en "Mi unidad" personal.
-//
-// Required env vars para Drive:
+// Required env vars (Drive + Sheets comparten el mismo refresh token):
 //   GOOGLE_CLIENT_ID            — OAuth 2.0 client ID (Google Cloud Console)
 //   GOOGLE_CLIENT_SECRET        — OAuth 2.0 client secret
-//   GOOGLE_DRIVE_REFRESH_TOKEN  — refresh token obtenido via /api/integrations/drive/authorize
+//   GOOGLE_DRIVE_REFRESH_TOKEN  — refresh token con scopes: drive.file + spreadsheets
 //   GOOGLE_DRIVE_FOLDER_ID      — ID de la carpeta en Drive donde se guardan los PDFs
 //
 // Optional:
-//   GOOGLE_CALENDAR_ID          — reservado para integración futura de Calendar
+//   GOOGLE_SHEETS_SPREADSHEET_ID — ID del Google Sheet de sincronización
+//   GOOGLE_CALENDAR_ID           — reservado para integración futura de Calendar
 //
-// Para obtener el refresh token:
-//   1. Configura GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Vercel
+// Para obtener / renovar el refresh token:
+//   1. Asegúrate de tener GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Vercel
 //   2. Visita https://serenata-erp.vercel.app/api/integrations/drive/authorize
-//   3. Autoriza el acceso a Drive
+//   3. Autoriza los accesos (Drive + Sheets aparecerán en el mismo consent)
 //   4. Copia el refresh token que aparece en pantalla
-//   5. Agrégalo a Vercel como GOOGLE_DRIVE_REFRESH_TOKEN
+//   5. Actualiza GOOGLE_DRIVE_REFRESH_TOKEN en Vercel con el nuevo token
 
 export interface GoogleEnv {
   clientId: string
   clientSecret: string
   driveRefreshToken: string
   driveFolderId: string
+  sheetsSpreadsheetId: string | null
   calendarId: string | null
 }
 
@@ -40,10 +39,16 @@ export function getGoogleEnv(): GoogleEnv | null {
     clientSecret,
     driveRefreshToken: refreshToken,
     driveFolderId: folderId,
+    sheetsSpreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID ?? null,
     calendarId: process.env.GOOGLE_CALENDAR_ID ?? null,
   }
 }
 
 export function isGoogleConfigured(): boolean {
   return getGoogleEnv() !== null
+}
+
+export function isSheetsConfigured(): boolean {
+  const env = getGoogleEnv()
+  return env !== null && env.sheetsSpreadsheetId !== null
 }

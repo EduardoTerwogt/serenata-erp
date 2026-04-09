@@ -19,8 +19,11 @@ const REDIRECT_URI =
   'https://serenata-erp.vercel.app/api/integrations/drive/callback'
 
 // Drive scope: only files created or opened by this app.
-// Add additional scopes here when Calendar / Sheets are implemented.
-const DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.file']
+// Sheets scope: full access to create/read/write spreadsheets.
+const DRIVE_SCOPES = [
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/spreadsheets',
+]
 
 /**
  * Returns a configured OAuth2 client ready for Drive API calls.
