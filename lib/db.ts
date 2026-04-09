@@ -609,7 +609,7 @@ export async function getCuentasPagarPendientesEventosRealizados() {
   }) as any[]
 }
 
-export function calcularEstadoCuentaCobrar(montoPagado: number, montoTotal: number): string {
+export function calcularEstadoCuentaCobrar(montoPagado: number, montoTotal: number): EstadoCuentaCobrar {
   if (montoPagado === 0) return 'FACTURADO'
   if (montoPagado >= montoTotal) return 'PAGADO'
   return 'PARCIALMENTE_PAGADO'
