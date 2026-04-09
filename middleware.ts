@@ -58,7 +58,9 @@ export default auth((req) => {
     if (isApiRoute) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
     }
-    return NextResponse.redirect(new URL('/login', req.url))
+    const loginUrl = new URL('/login', req.url)
+    loginUrl.searchParams.set('callbackUrl', pathname)
+    return NextResponse.redirect(loginUrl)
   }
 
   const sections = getUserSections(req.auth.user as { sections?: string[] })

@@ -77,6 +77,17 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                         </Link>
                       )
                     })}
+                    <Link
+                      href="/admin/sheets"
+                      onClick={closeMobileMenus}
+                      className={`flex items-center px-4 py-3.5 text-sm transition-colors border-t border-gray-800 mt-1 pt-3 ${
+                        pathname.startsWith('/admin/sheets')
+                          ? 'text-orange-400'
+                          : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'
+                      }`}
+                    >
+                      Google Sheets
+                    </Link>
                   </nav>
 
                   <div className="border-t border-gray-800 py-2">
@@ -123,6 +134,17 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               {label}
             </Link>
           ))}
+          <div className="pt-3 mt-3 border-t border-gray-800">
+            <Link
+              href="/admin/sheets"
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm
+                ${pathname.startsWith('/admin/sheets')
+                  ? 'bg-orange-600/20 text-orange-400'
+                  : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'}`}
+            >
+              Google Sheets
+            </Link>
+          </div>
         </nav>
 
         <div className="p-4 border-t border-gray-800">
