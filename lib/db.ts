@@ -10,6 +10,7 @@ import {
   DocumentoCuentaCobrar,
   DocumentoCuentaPagar,
   OrdenPago,
+  EstadoCuentaCobrar,
 } from '@/lib/types'
 
 // ==================== COTIZACIONES ====================

@@ -3,31 +3,45 @@
  */
 
 export interface FacturaData {
-  folio: string
-  fecha_emision: string
-  monto_total: number
+  folio?: string
+  fecha_emision?: string
+  monto_total?: number
+  error?: string
 }
 
 /**
  * Parsea un XML de factura CFDI y extrae datos clave
  */
 export function parseFacturaXML(xmlContent: string): FacturaData {
-  // Extraer folio - buscar en atributo Folio del Comprobante
-  const folioMatch = xmlContent.match(/Folio\s*=\s*["']([^"']+)["']/)
-  const folio = folioMatch?.[1] || 'DESCONOCIDO'
+  try {
+    // Extraer folio - buscar en atributo Folio del Comprobante
+    const folioMatch = xmlContent.match(/Folio\s*=\s*["']([^"']+)["']/)
+    const folio = folioMatch?.[1]
 
-  // Extraer fecha - buscar en atributo Fecha
-  const fechaMatch = xmlContent.match(/Fecha\s*=\s*["']([^"']+)["']/)
-  const fecha = fechaMatch?.[1]?.split('T')?.[0] || new Date().toISOString().split('T')[0]
+    // Extraer fecha - buscar en atributo Fecha
+    const fechaMatch = xmlContent.match(/Fecha\s*=\s*["']([^"']+)["']/)
+    const fecha = fechaMatch?.[1]?.split('T')?.[0]
 
-  // Extraer monto total - buscar Total del Comprobante
-  const montoMatch = xmlContent.match(/Total\s*=\s*["']([^"']+)["']/)
-  const monto = montoMatch ? parseFloat(montoMatch[1]) : 0
+    // Extraer monto total - buscar Total del Comprobante
+    const montoMatch = xmlContent.match(/Total\s*=\s*["']([^"']+)["']/)
+    const monto = montoMatch ? parseFloat(montoMatch[1]) : undefined
 
-  return {
-    folio,
-    fecha_emision: fecha,
-    monto_total: monto,
+    // Validar que al menos tengamos folio y fecha
+    if (!folio || !fecha) {
+      return {
+        error: 'No se pudieron extraer folio y/o fecha del XML'
+      }
+    }
+
+    return {
+      folio,
+      fecha_emision: fecha,
+      monto_total: monto || 0,
+    }
+  } catch (err) {
+    return {
+      error: `Error parseando XML: ${err instanceof Error ? err.message : 'desconocido'}`
+    }
   }
 }
 

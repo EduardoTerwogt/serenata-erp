@@ -46,7 +46,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     // Parsear XML
     const xmlContent = await xmlFile.text()
-    const facturaData = await parseFacturaXML(xmlContent)
+    const facturaData = parseFacturaXML(xmlContent)
 
     if (facturaData.error) {
       return Response.json(
@@ -55,15 +55,22 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
-    // Validar monto
+    // Validar que tenemos datos mínimos
+    if (!facturaData.fecha_emision || !facturaData.monto_total) {
+      return Response.json(
+        { error: 'Factura incompleta: falta fecha o monto' },
+        { status: 400 }
+      )
+    }
+
+    // Validar monto (informativa, no bloqueante)
     const validacion = validarMontoFactura(facturaData.monto_total, cotizacion.total)
-    if (!validacion.valido) {
-      // Solo informativa, no bloqueante
-      console.warn(`[cuentas-cobrar] Validación informativa: ${validacion.mensaje}`)
+    if (!validacion.coincide) {
+      console.warn(`[cuentas-cobrar] Discrepancia de monto: Factura $${facturaData.monto_total} vs Cotización $${cotizacion.total}`)
     }
 
     // Calcular deadline
-    const deadline = calcularDeadline(facturaData.fecha_emision || new Date().toISOString())
+    const deadline = calcularDeadline(facturaData.fecha_emision)
 
     // Subir archivos a Drive
     const googleEnv = getGoogleEnv()
@@ -103,17 +110,15 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         tipo: file.type as any,
         archivo_url: file.url,
         archivo_nombre: file.nombre,
-        archivo_size: null,
       })
     }
 
     // Actualizar cuenta
-    const nuevoEstado = cuenta.monto_pagado && cuenta.monto_pagado > 0 ? 'PARCIALMENTE_PAGADO' : 'FACTURADO'
     const cuentaActualizada = await updateCuentaCobrar(id, {
-      estado: nuevoEstado,
+      estado: 'FACTURADO',
       fecha_factura: facturaData.fecha_emision,
-      deadline_pago: deadline,
-    })
+      fecha_vencimiento: deadline,
+    } as any)
 
     // Trigger sincronización con Sheets
     triggerSheetsSync('cuentas_cobrar')
