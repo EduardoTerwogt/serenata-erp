@@ -6,6 +6,37 @@ import Link from 'next/link'
 type Tab = 'cobrar' | 'pagar'
 type DetailTab = 'info' | 'documentos' | 'pago'
 
+interface CuentaCobrarMock {
+  id: string
+  cotizacion_id: string
+  cliente: string
+  proyecto: string
+  monto_total: number
+  estado: 'FACTURA_PENDIENTE' | 'FACTURADO' | 'PARCIALMENTE_PAGADO' | 'PAGADO' | 'VENCIDO'
+  folio: string
+  fecha_factura: string
+  fecha_vencimiento: string
+  monto_pagado: number
+  fecha_pago?: string
+  tipo?: 'cobrar'
+}
+
+interface CuentaPagarMock {
+  id: string
+  cotizacion_id: string
+  responsable_nombre: string
+  proyecto_nombre: string
+  item_descripcion: string
+  x_pagar: number
+  estado: 'PENDIENTE' | 'EN_PROCESO_PAGO' | 'PAGADO'
+  folio: string
+  monto_pagado: number
+  fecha_pago?: string
+  tipo?: 'pagar'
+}
+
+type CuentaMock = (CuentaCobrarMock | CuentaPagarMock) & { tipo: 'cobrar' | 'pagar' }
+
 // Datos mockados
 const CUENTAS_COBRAR_MOCK = [
   {
@@ -34,6 +65,19 @@ const CUENTAS_COBRAR_MOCK = [
     monto_pagado: 3000,
     fecha_pago: '2026-04-12',
   },
+  {
+    id: '3',
+    cotizacion_id: 'SH003',
+    cliente: 'Universal Studios',
+    proyecto: 'Documental Naturaleza',
+    monto_total: 12000,
+    estado: 'PAGADO' as const,
+    folio: 'CC-2026-00003',
+    fecha_factura: '2026-03-15',
+    fecha_vencimiento: '2026-04-15',
+    monto_pagado: 12000,
+    fecha_pago: '2026-04-10',
+  },
 ]
 
 const CUENTAS_PAGAR_MOCK = [
@@ -59,6 +103,18 @@ const CUENTAS_PAGAR_MOCK = [
     folio: 'CP-2026-00002',
     monto_pagado: 0,
   },
+  {
+    id: '3',
+    cotizacion_id: 'SH003',
+    responsable_nombre: 'Carlos Mendez',
+    proyecto_nombre: 'Documental Naturaleza',
+    item_descripcion: 'Edición y Postproducción',
+    x_pagar: 6000,
+    estado: 'PAGADO' as const,
+    folio: 'CP-2026-00003',
+    monto_pagado: 6000,
+    fecha_pago: '2026-04-08',
+  },
 ]
 
 const ESTADO_COBRAR_STYLE = {
@@ -81,7 +137,7 @@ function fmt(n: number) {
 
 export default function MockupCuentasPage() {
   const [tab, setTab] = useState<Tab>('cobrar')
-  const [selectedCuenta, setSelectedCuenta] = useState<any>(null)
+  const [selectedCuenta, setSelectedCuenta] = useState<CuentaMock | null>(null)
   const [detailTab, setDetailTab] = useState<DetailTab>('info')
   const [showOrdenModal, setShowOrdenModal] = useState(false)
 
