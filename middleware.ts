@@ -29,7 +29,9 @@ function isPublicPath(pathname: string) {
   return (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/api/keep-alive')
+    pathname.startsWith('/api/keep-alive') ||
+    pathname.startsWith('/api/integrations/drive/authorize') ||
+    pathname.startsWith('/api/integrations/drive/callback')
   )
 }
 
