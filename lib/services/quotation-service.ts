@@ -131,10 +131,13 @@ export async function generateQuotationPdf(quotation: Cotizacion, itemsOverride?
   const { generarPDFCotizacion } = await import('@/lib/pdf')
   const pdfBase64 = await generarPDFCotizacion(buildQuotationPdfPayload(quotation, itemsOverride || quotation.items || []))
 
-  // Upload to Drive for non-BORRADOR quotations (fire-and-forget, never blocks UI)
+  // Upload to Drive for non-BORRADOR quotations (fire-and-forget, never blocks PDF download)
   if (quotation.estado !== 'BORRADOR') {
     const fileName = `${quotation.id} - ${quotation.cliente} - ${quotation.proyecto}.pdf`
-    uploadPdfToDrive(quotation.id, fileName, pdfBase64).catch(() => {})
+    console.log('[Drive] Iniciando upload — cotizacion:', quotation.id, '— estado:', quotation.estado)
+    uploadPdfToDrive(quotation.id, fileName, pdfBase64)
+      .then(result => console.log('[Drive] Upload OK —', result))
+      .catch(err => console.error('[Drive] Upload FALLÓ —', err?.message ?? err))
   }
 }
 
@@ -144,11 +147,12 @@ async function uploadPdfToDrive(cotizacionId: string, fileName: string, contentB
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ cotizacionId, fileName, contentBase64 }),
   })
+  const data = await res.json().catch(() => ({ error: 'Respuesta no JSON' }))
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Drive upload failed' }))
-    throw new Error(err.error || 'Drive upload failed')
+    console.error('[Drive] API route retornó', res.status, '—', data?.error)
+    throw new Error(data?.error || `HTTP ${res.status}`)
   }
-  return res.json()
+  return data
 }
 
 export function buildComplementariaUrl(id: string, cotizacion: Cotizacion) {

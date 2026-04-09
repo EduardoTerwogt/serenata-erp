@@ -1,11 +1,17 @@
 import { requireAnySection } from '@/lib/api-auth'
 import { driveService } from '@/lib/integrations/google/drive'
+import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: Request) {
+  // ── 1. Auth ──────────────────────────────────────────────────────────────
   const { response } = await requireAnySection(['cotizaciones'])
-  if (response) return response
+  if (response) {
+    console.log('[Drive/upload] Auth rejected — status', response.status)
+    return response
+  }
 
+  // ── 2. Parse body ─────────────────────────────────────────────────────────
   let body: { cotizacionId?: string; fileName?: string; contentBase64?: string }
   try {
     body = await req.json()
@@ -22,7 +28,17 @@ export async function POST(req: Request) {
     )
   }
 
-  // Look up cotización and its current drive_file_id (server-side source of truth)
+  console.log('[Drive/upload] Received request — cotizacionId:', cotizacionId, '— fileName:', fileName, '— base64 length:', contentBase64.length)
+
+  // ── 3. Check Google configuration ────────────────────────────────────────
+  const googleEnv = getGoogleEnv()
+  if (!googleEnv) {
+    console.error('[Drive/upload] Google not configured — getGoogleEnv() returned null. Check env vars: GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_KEY, GOOGLE_DRIVE_FOLDER_ID, GOOGLE_CALENDAR_ID')
+    return Response.json({ error: 'Google Drive no está configurado (env vars faltantes)' }, { status: 503 })
+  }
+  console.log('[Drive/upload] Google configured — email:', googleEnv.serviceAccountEmail, '— folder:', googleEnv.driveFolderId)
+
+  // ── 4. Fetch cotización ───────────────────────────────────────────────────
   const { data: cotizacion, error: fetchError } = await supabaseAdmin
     .from('cotizaciones')
     .select('id, drive_file_id')
@@ -30,46 +46,59 @@ export async function POST(req: Request) {
     .single()
 
   if (fetchError || !cotizacion) {
+    console.error('[Drive/upload] Cotización not found:', fetchError?.message)
     return Response.json({ error: 'Cotización no encontrada' }, { status: 404 })
   }
 
+  console.log('[Drive/upload] Cotización found — existing drive_file_id:', cotizacion.drive_file_id ?? 'null (new upload)')
+
+  // ── 5. Upload or update in Drive ─────────────────────────────────────────
   try {
     let result
 
     if (cotizacion.drive_file_id) {
-      // Update existing file in Drive (avoids duplicates)
+      console.log('[Drive/upload] Updating existing file:', cotizacion.drive_file_id)
       result = await driveService.updateFile({
         fileId: cotizacion.drive_file_id,
         contentBase64,
       })
-      // If update fails (file deleted from Drive), fall back to new upload
+      // Fallback: file may have been deleted manually from Drive
       if (!result) {
+        console.log('[Drive/upload] updateFile returned null — falling back to uploadPdf')
         result = await driveService.uploadPdf({ fileName, contentBase64 })
       }
     } else {
+      console.log('[Drive/upload] Uploading new file')
       result = await driveService.uploadPdf({ fileName, contentBase64 })
     }
 
     if (!result) {
-      return Response.json({ error: 'Google Drive no está configurado' }, { status: 503 })
+      console.error('[Drive/upload] driveService returned null — credentials may be invalid or folder inaccessible')
+      return Response.json({ error: 'Drive upload returned null — revisar credenciales y permisos de carpeta' }, { status: 503 })
     }
 
-    // Persist drive_file_id on the cotización
+    console.log('[Drive/upload] Drive success — fileId:', result.fileId)
+
+    // ── 6. Persist drive_file_id ──────────────────────────────────────────
     const { error: updateError } = await supabaseAdmin
       .from('cotizaciones')
       .update({ drive_file_id: result.fileId })
       .eq('id', cotizacionId)
 
     if (updateError) {
-      console.error('Error saving drive_file_id:', updateError)
-      // File was uploaded but DB not updated — return result anyway
-      // (next upload will create a new file, but won't lose the current one)
+      console.error('[Drive/upload] Supabase update failed:', updateError.message)
+      // File is in Drive but DB not updated — not critical, return success anyway
+    } else {
+      console.log('[Drive/upload] drive_file_id saved in Supabase ✓')
     }
 
     return Response.json(result)
+
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Error desconocido'
-    console.error('Drive upload error:', message)
-    return Response.json({ error: 'Error subiendo archivo a Google Drive' }, { status: 500 })
+    const message = err instanceof Error ? err.message : String(err)
+    const stack   = err instanceof Error ? err.stack   : undefined
+    console.error('[Drive/upload] Exception:', message)
+    if (stack) console.error('[Drive/upload] Stack:', stack)
+    return Response.json({ error: message }, { status: 500 })
   }
 }

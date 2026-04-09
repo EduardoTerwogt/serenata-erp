@@ -37,16 +37,7 @@ export interface DriveUploadResult {
 }
 
 export interface DriveService {
-  /**
-   * Upload a PDF to the configured Drive folder.
-   * Returns null when Drive is not configured.
-   */
   uploadPdf(params: DriveUploadParams): Promise<DriveUploadResult | null>
-
-  /**
-   * Replace an existing Drive file with updated content.
-   * Returns null when Drive is not configured.
-   */
   updateFile(params: DriveUpdateParams): Promise<DriveUploadResult | null>
 }
 
@@ -57,13 +48,24 @@ function getDriveInstance() {
   return { drive: google.drive({ version: 'v3', auth }), env }
 }
 
+/** Convert base64 string to a Readable stream for the googleapis media body. */
+function base64ToStream(base64: string): Readable {
+  const buffer = Buffer.from(base64, 'base64')
+  // Wrap in array so Readable.from() yields one full buffer chunk (not individual bytes)
+  return Readable.from([buffer])
+}
+
 class DriveServiceImpl implements DriveService {
   async uploadPdf({ fileName, contentBase64, mimeType = 'application/pdf' }: DriveUploadParams): Promise<DriveUploadResult | null> {
     const instance = getDriveInstance()
-    if (!instance) return null
+    if (!instance) {
+      console.error('[Drive] getDriveInstance() returned null — Google credentials not configured')
+      return null
+    }
     const { drive, env } = instance
 
-    const buffer = Buffer.from(contentBase64, 'base64')
+    console.log('[Drive] uploadPdf — folder:', env.driveFolderId, '— file:', fileName)
+
     const res = await drive.files.create({
       requestBody: {
         name: fileName,
@@ -71,10 +73,12 @@ class DriveServiceImpl implements DriveService {
       },
       media: {
         mimeType,
-        body: Readable.from(buffer),
+        body: base64ToStream(contentBase64),
       },
       fields: 'id,webViewLink',
     })
+
+    console.log('[Drive] uploadPdf — response id:', res.data.id, 'link:', res.data.webViewLink)
 
     if (!res.data.id) return null
 
@@ -86,18 +90,24 @@ class DriveServiceImpl implements DriveService {
 
   async updateFile({ fileId, contentBase64 }: DriveUpdateParams): Promise<DriveUploadResult | null> {
     const instance = getDriveInstance()
-    if (!instance) return null
+    if (!instance) {
+      console.error('[Drive] getDriveInstance() returned null — Google credentials not configured')
+      return null
+    }
     const { drive } = instance
 
-    const buffer = Buffer.from(contentBase64, 'base64')
+    console.log('[Drive] updateFile — fileId:', fileId)
+
     const res = await drive.files.update({
       fileId,
       media: {
         mimeType: 'application/pdf',
-        body: Readable.from(buffer),
+        body: base64ToStream(contentBase64),
       },
       fields: 'id,webViewLink',
     })
+
+    console.log('[Drive] updateFile — response id:', res.data.id)
 
     if (!res.data.id) return null
 
