@@ -143,9 +143,10 @@ export const driveService: DriveService = new DriveServiceImpl()
  * @param file - Archivo File del navegador
  * @param folderPath - Ruta de carpeta: /Cuentas/Por Cobrar/CC-2026-00001
  * @param fileName - Nombre del archivo en Drive (ej: factura.pdf)
+ * @param rootFolderId - ID raíz específico. Si no se proporciona, usa GOOGLE_DRIVE_FOLDER_ID
  * @returns URL del archivo en Drive
  */
-export async function uploadFileToDrive(file: File, folderPath: string, fileName: string): Promise<string> {
+export async function uploadFileToDrive(file: File, folderPath: string, fileName: string, rootFolderId?: string): Promise<string> {
   const auth = getGoogleOAuth2Client()
   const env = getGoogleEnv()
 
@@ -154,10 +155,11 @@ export async function uploadFileToDrive(file: File, folderPath: string, fileName
   }
 
   const drive = google.drive({ version: 'v3', auth })
+  const baseFolderId = rootFolderId || env.driveFolderId
 
   try {
     // Crear/obtener carpeta recursivamente
-    const folderId = await ensureFolderPath(drive, env.driveFolderId, folderPath)
+    const folderId = await ensureFolderPath(drive, baseFolderId, folderPath)
 
     // Leer archivo como buffer
     const buffer = await file.arrayBuffer()

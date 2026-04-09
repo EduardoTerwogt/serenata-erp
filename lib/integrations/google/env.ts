@@ -4,9 +4,10 @@
 //   GOOGLE_CLIENT_ID            — OAuth 2.0 client ID (Google Cloud Console)
 //   GOOGLE_CLIENT_SECRET        — OAuth 2.0 client secret
 //   GOOGLE_DRIVE_REFRESH_TOKEN  — refresh token con scopes: drive.file + spreadsheets
-//   GOOGLE_DRIVE_FOLDER_ID      — ID de la carpeta en Drive donde se guardan los PDFs
+//   GOOGLE_DRIVE_FOLDER_ID      — ID de la carpeta en Drive para cotizaciones
 //
 // Optional:
+//   GOOGLE_DRIVE_FOLDER_ID_CUENTAS — ID de la carpeta en Drive para cuentas (por cobrar/pagar)
 //   GOOGLE_SHEETS_SPREADSHEET_ID — ID del Google Sheet de sincronización
 //   GOOGLE_CALENDAR_ID           — reservado para integración futura de Calendar
 //
@@ -22,6 +23,7 @@ export interface GoogleEnv {
   clientSecret: string
   driveRefreshToken: string
   driveFolderId: string
+  driveFolderIdCuentas: string | null
   sheetsSpreadsheetId: string | null
   calendarId: string | null
 }
@@ -31,6 +33,7 @@ export function getGoogleEnv(): GoogleEnv | null {
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET
   const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN
   const folderId     = process.env.GOOGLE_DRIVE_FOLDER_ID
+  const folderIdCuentas = process.env.GOOGLE_DRIVE_FOLDER_ID_CUENTAS
 
   if (!clientId || !clientSecret || !refreshToken || !folderId) return null
 
@@ -39,6 +42,7 @@ export function getGoogleEnv(): GoogleEnv | null {
     clientSecret,
     driveRefreshToken: refreshToken,
     driveFolderId: folderId,
+    driveFolderIdCuentas: folderIdCuentas ?? null,
     sheetsSpreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID ?? null,
     calendarId: process.env.GOOGLE_CALENDAR_ID ?? null,
   }

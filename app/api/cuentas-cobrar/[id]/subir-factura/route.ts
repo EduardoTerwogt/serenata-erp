@@ -3,6 +3,7 @@ import { getCuentasCobrar, updateCuentaCobrar, createDocumentoCuentaCobrar, getC
 import { supabaseAdmin } from '@/lib/supabase'
 import { parseFacturaXML, validarMontoFactura, calcularDeadline } from '@/lib/server/xml/factura-parser'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
+import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
@@ -65,12 +66,21 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const deadline = calcularDeadline(facturaData.fecha_emision || new Date().toISOString())
 
     // Subir archivos a Drive
-    const folderPath = `/Cuentas/Por Cobrar/${cuenta.folio}`
+    const googleEnv = getGoogleEnv()
+    if (!googleEnv) {
+      return Response.json(
+        { error: 'Google Drive no configurado' },
+        { status: 500 }
+      )
+    }
+
+    const folderPath = `/Por Cobrar/${cuenta.folio}`
     const uploadedFiles: { type: string; url: string; nombre: string }[] = []
+    const cuentasFolderId = googleEnv.driveFolderIdCuentas
 
     // Subir PDF
     if (pdfFile) {
-      const pdfUrl = await uploadFileToDrive(pdfFile, folderPath, 'factura.pdf')
+      const pdfUrl = await uploadFileToDrive(pdfFile, folderPath, 'factura.pdf', cuentasFolderId || undefined)
       uploadedFiles.push({
         type: 'FACTURA_PDF',
         url: pdfUrl,
@@ -79,7 +89,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     // Subir XML
-    const xmlUrl = await uploadFileToDrive(xmlFile, folderPath, 'factura.xml')
+    const xmlUrl = await uploadFileToDrive(xmlFile, folderPath, 'factura.xml', cuentasFolderId || undefined)
     uploadedFiles.push({
       type: 'FACTURA_XML',
       url: xmlUrl,
