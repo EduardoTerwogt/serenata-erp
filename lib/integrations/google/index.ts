@@ -4,13 +4,13 @@
 export { driveService }          from './drive'
 export type { DriveService, DriveUploadResult, DriveUploadParams, DriveUpdateParams } from './drive'
 
-export { sheetsService }         from './sheets'
-export type { SheetsService, SheetsAppendResult, SheetsAppendParams, SheetsUpdateParams } from './sheets'
+export { createSpreadsheet, readAllRows, overwriteSheet, formatHeaderRow, getSheetIds } from './sheets'
+export type { CellValue }        from './sheets'
 
 export { calendarService }       from './calendar'
 export type { CalendarService, CalendarEventResult, CalendarCreateParams, CalendarConfirmParams } from './calendar'
 
 export { getGoogleOAuth2Client, getAuthorizationUrl } from './auth'
 
-export { getGoogleEnv, isGoogleConfigured } from './env'
+export { getGoogleEnv, isGoogleConfigured, isSheetsConfigured } from './env'
 export type { GoogleEnv }        from './env'
