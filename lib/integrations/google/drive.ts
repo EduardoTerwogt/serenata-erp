@@ -99,23 +99,36 @@ class DriveServiceImpl implements DriveService {
 
     console.log('[Drive] updateFile — fileId:', fileId)
 
-    const res = await drive.files.update({
-      supportsAllDrives: true,
-      fileId,
-      media: {
-        mimeType: 'application/pdf',
-        body: base64ToStream(contentBase64),
-      },
-      fields: 'id,webViewLink',
-    })
+    try {
+      const res = await drive.files.update({
+        supportsAllDrives: true,
+        fileId,
+        requestBody: {
+          trashed: false, // Restore from trash if the file was deleted manually
+        },
+        media: {
+          mimeType: 'application/pdf',
+          body: base64ToStream(contentBase64),
+        },
+        fields: 'id,webViewLink,trashed',
+      })
 
-    console.log('[Drive] updateFile — response id:', res.data.id)
+      console.log('[Drive] updateFile — response id:', res.data.id, '— trashed:', res.data.trashed)
 
-    if (!res.data.id) return null
+      if (!res.data.id) return null
 
-    return {
-      fileId: res.data.id,
-      webViewLink: res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`,
+      return {
+        fileId: res.data.id,
+        webViewLink: res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`,
+      }
+    } catch (err: unknown) {
+      // File was permanently deleted from Drive — return null so the caller falls back to uploadPdf
+      const status = (err as { status?: number; code?: number })?.status ?? (err as { status?: number; code?: number })?.code
+      if (status === 404) {
+        console.warn('[Drive] updateFile — file not found (permanently deleted?), returning null for fallback')
+        return null
+      }
+      throw err
     }
   }
 }
