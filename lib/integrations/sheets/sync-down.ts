@@ -47,7 +47,7 @@ async function syncTableDown(
     // 2. Construir filas para Sheets: [header, ...datos]
     const headerRow: CellValue[] = columns
     const dataRows: CellValue[][] = rows.map(row =>
-      columns.map(col => toSheetValue((row as Record<string, unknown>)[col]))
+      columns.map(col => toSheetValue((row as unknown as Record<string, unknown>)[col]))
     )
 
     const allRows: CellValue[][] = [headerRow, ...dataRows]
