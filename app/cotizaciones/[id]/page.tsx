@@ -22,6 +22,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [aprobando, setAprobando] = useState(false)
+  const [generandoPdf, setGenerandoPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
@@ -154,13 +155,51 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }
 
-  const generarPDF = async () => { if (cotizacion) await generateQuotationPdf(cotizacion) }
+  const generarPDF = async () => {
+    if (!cotizacion) return
+    setGenerandoPdf(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const result = await generateQuotationPdf(cotizacion, undefined, { skipDownload: true })
+      if (result.savedToDrive) {
+        setSuccess('PDF guardado exitosamente en Drive')
+      } else if (result.driveError) {
+        setError(`Error al guardar en Drive: ${result.driveError}`)
+      } else {
+        setError('No se pudo guardar el PDF en Drive')
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al generar PDF')
+    } finally {
+      setGenerandoPdf(false)
+    }
+    setTimeout(() => { setSuccess(null); setError(null) }, 5000)
+  }
+
   const generarCotizacion = async () => {
     const ok = await guardar('ENVIADA')
     if (!ok) return
     const refreshedCotizacion = await fetchQuotationDetail(id)
     applyCotizacionToState(refreshedCotizacion)
-    await generateQuotationPdf(refreshedCotizacion, watchedItems)
+    setGenerandoPdf(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const result = await generateQuotationPdf(refreshedCotizacion, watchedItems, { skipDownload: true })
+      if (result.savedToDrive) {
+        setSuccess('PDF guardado exitosamente en Drive')
+      } else if (result.driveError) {
+        setError(`Error al guardar en Drive: ${result.driveError}`)
+      } else {
+        setError('No se pudo guardar el PDF en Drive')
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al generar PDF')
+    } finally {
+      setGenerandoPdf(false)
+    }
+    setTimeout(() => { setSuccess(null); setError(null) }, 5000)
   }
   const crearComplementaria = () => { if (cotizacion) router.push(buildComplementariaUrl(id, cotizacion)) }
 
@@ -178,9 +217,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           <p className="text-gray-400">{cotizacion.proyecto} — {cotizacion.cliente}</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:justify-end">
-          {cotizacion.estado === 'BORRADOR' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarCotizacion} disabled={guardando} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Generando...' : 'Generar Cotización'}</button></>}
-          {cotizacion.estado === 'ENVIADA' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarPDF} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]">Generar PDF</button><button onClick={aprobar} disabled={aprobando || guardando} className="bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 min-h-[44px]">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</button></>}
-          {cotizacion.estado === 'APROBADA' && <><button onClick={generarPDF} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]">Generar PDF</button><button onClick={crearComplementaria} className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]">Crear Complementaria</button></>}
+          {cotizacion.estado === 'BORRADOR' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarCotizacion} disabled={guardando || generandoPdf} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : guardando ? 'Generando...' : 'Generar Cotización'}</button></>}
+          {cotizacion.estado === 'ENVIADA' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarPDF} disabled={generandoPdf} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={aprobar} disabled={aprobando || guardando} className="bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 min-h-[44px]">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</button></>}
+          {cotizacion.estado === 'APROBADA' && <><button onClick={generarPDF} disabled={generandoPdf} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={crearComplementaria} className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]">Crear Complementaria</button></>}
         </div>
       </div>
 

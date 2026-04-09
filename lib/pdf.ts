@@ -62,7 +62,8 @@ async function loadImageAsDataUrl(src: string): Promise<string> {
   })
 }
 
-export async function generarPDFCotizacion(data: PDFData): Promise<string> {
+export async function generarPDFCotizacion(data: PDFData, options?: { downloadPdf?: boolean }): Promise<string> {
+  const shouldDownload = options?.downloadPdf !== false
   const { default: jsPDF } = await import('jspdf')
   const { default: autoTable } = await import('jspdf-autotable')
 
@@ -329,7 +330,9 @@ export async function generarPDFCotizacion(data: PDFData): Promise<string> {
   doc.setTextColor(17, 17, 17)
   doc.text(wrappedCancelacionAll, margin, currentY, { align: 'justify', maxWidth: contentW })
 
-  doc.save(`${data.id} - ${data.cliente} - ${data.proyecto}.pdf`)
+  if (shouldDownload) {
+    doc.save(`${data.id} - ${data.cliente} - ${data.proyecto}.pdf`)
+  }
   // Return base64-encoded PDF content (strip data-URI prefix)
   return doc.output('datauristring').split(',')[1]
 }

@@ -127,17 +127,36 @@ export async function approveQuotation(id: string): Promise<Cotizacion> {
   return fetchQuotationDetail(id)
 }
 
-export async function generateQuotationPdf(quotation: Cotizacion, itemsOverride?: QuotationFormValues['items']) {
-  const { generarPDFCotizacion } = await import('@/lib/pdf')
-  const pdfBase64 = await generarPDFCotizacion(buildQuotationPdfPayload(quotation, itemsOverride || quotation.items || []))
+export interface GeneratePdfResult {
+  savedToDrive: boolean
+  driveError?: string
+}
 
-  // Upload to Drive for non-BORRADOR quotations (fire-and-forget, never blocks PDF download)
-  if (quotation.estado !== 'BORRADOR') {
-    const fileName = `${quotation.id} - ${quotation.cliente} - ${quotation.proyecto}.pdf`
-    console.log('[Drive] Iniciando upload — cotizacion:', quotation.id, '— estado:', quotation.estado)
-    uploadPdfToDrive(quotation.id, fileName, pdfBase64)
-      .then(result => console.log('[Drive] Upload OK —', result))
-      .catch(err => console.error('[Drive] Upload FALLÓ —', err?.message ?? err))
+export async function generateQuotationPdf(
+  quotation: Cotizacion,
+  itemsOverride?: QuotationFormValues['items'],
+  options?: { skipDownload?: boolean }
+): Promise<GeneratePdfResult> {
+  const { generarPDFCotizacion } = await import('@/lib/pdf')
+  const skipDownload = options?.skipDownload === true
+
+  const pdfBase64 = await generarPDFCotizacion(
+    buildQuotationPdfPayload(quotation, itemsOverride || quotation.items || []),
+    { downloadPdf: !skipDownload }
+  )
+
+  if (quotation.estado === 'BORRADOR') {
+    return { savedToDrive: false }
+  }
+
+  const fileName = `${quotation.id} - ${quotation.cliente} - ${quotation.proyecto}.pdf`
+  try {
+    await uploadPdfToDrive(quotation.id, fileName, pdfBase64)
+    return { savedToDrive: true }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[Drive] Upload FALLÓ —', msg)
+    return { savedToDrive: false, driveError: msg }
   }
 }
 
