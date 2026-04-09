@@ -13,9 +13,9 @@ export async function GET() {
 
     // Filtrar alertas: cuentas no pagadas cercanas al vencimiento
     const alertas = cuentas
-      .filter(c => c.estado !== 'PAGADO' && c.deadline_pago)
+      .filter(c => c.estado !== 'PAGADO' && c.fecha_vencimiento)
       .map(c => {
-        const deadline = new Date(c.deadline_pago!)
+        const deadline = new Date(c.fecha_vencimiento!)
         const diasFaltantes = Math.ceil((deadline.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
         const esVencida = deadline < hoy
         const estaPorVencer = diasFaltantes <= 3 && diasFaltantes > 0
@@ -27,7 +27,7 @@ export async function GET() {
           proyecto: c.proyecto,
           monto_total: c.monto_total,
           monto_pagado: c.monto_pagado || 0,
-          deadline_pago: c.deadline_pago,
+          fecha_vencimiento: c.fecha_vencimiento,
           dias_faltantes: diasFaltantes,
           estado: c.estado,
           alerta: esVencida ? 'VENCIDA' : estaPorVencer ? 'POR_VENCER' : null,

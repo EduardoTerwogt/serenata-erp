@@ -1,5 +1,16 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { Cotizacion, CuentaCobrar, CuentaPagar, ItemCotizacion, Proyecto, Responsable, PagoComprobante, DocumentoCuentaCobrar, DocumentoCuentaPagar, OrdenPago } from '@/lib/types'
+import {
+  Cotizacion,
+  CuentaCobrar,
+  CuentaPagar,
+  ItemCotizacion,
+  Proyecto,
+  Responsable,
+  PagoComprobante,
+  DocumentoCuentaCobrar,
+  DocumentoCuentaPagar,
+  OrdenPago,
+} from '@/lib/types'
 
 // ==================== COTIZACIONES ====================
 
@@ -436,7 +447,7 @@ export async function createCuentaCobrar(cotizacion: Cotizacion) {
       cliente: cotizacion.cliente,
       proyecto: cotizacion.proyecto,
       monto_total: cotizacion.total,
-      estado: 'FACTURA_PENDIENTE',
+      estado: 'PENDIENTE',
     }, { onConflict: 'cotizacion_id' })
     .select()
     .single()
@@ -444,7 +455,37 @@ export async function createCuentaCobrar(cotizacion: Cotizacion) {
   return data as CuentaCobrar
 }
 
-// ==================== PAGOS COMPROBANTES ====================
+// ==================== DOCUMENTOS CUENTAS COBRAR ====================
+
+export async function createDocumentoCuentaCobrar(documento: Partial<DocumentoCuentaCobrar>) {
+  const { data, error } = await supabaseAdmin
+    .from('documentos_cuentas_cobrar')
+    .insert(documento)
+    .select()
+    .single()
+  if (error) throw error
+  return data as DocumentoCuentaCobrar
+}
+
+export async function getDocumentosCuentaCobrar(cuentaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('documentos_cuentas_cobrar')
+    .select('*')
+    .eq('cuentas_cobrar_id', cuentaId)
+    .order('fecha_carga', { ascending: false })
+  if (error) throw error
+  return data as DocumentoCuentaCobrar[]
+}
+
+export async function deleteDocumentoCuentaCobrar(id: string) {
+  const { error } = await supabaseAdmin
+    .from('documentos_cuentas_cobrar')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
+// ==================== PAGOS COMPROBANTES CUENTAS COBRAR ====================
 
 export async function createPagoComprobante(pago: Partial<PagoComprobante>) {
   const { data, error } = await supabaseAdmin
@@ -456,12 +497,12 @@ export async function createPagoComprobante(pago: Partial<PagoComprobante>) {
   return data as PagoComprobante
 }
 
-export async function getPagosComprobantesByCuenta(cuentasCobrId: string) {
+export async function getPagosComprobantesByCuenta(cuentaId: string) {
   const { data, error } = await supabaseAdmin
     .from('pagos_comprobantes')
     .select('*')
-    .eq('cuentas_cobrar_id', cuentasCobrId)
-    .order('fecha_pago', { ascending: true })
+    .eq('cuentas_cobrar_id', cuentaId)
+    .order('fecha_pago', { ascending: false })
   if (error) throw error
   return data as PagoComprobante[]
 }
@@ -474,31 +515,31 @@ export async function deletePagoComprobante(id: string) {
   if (error) throw error
 }
 
-// ==================== DOCUMENTOS CUENTAS POR COBRAR ====================
+// ==================== DOCUMENTOS CUENTAS PAGAR ====================
 
-export async function createDocumentoCuentaCobrar(doc: Partial<DocumentoCuentaCobrar>) {
+export async function createDocumentoCuentaPagar(documento: Partial<DocumentoCuentaPagar>) {
   const { data, error } = await supabaseAdmin
-    .from('documentos_cuentas_cobrar')
-    .insert(doc)
+    .from('documentos_cuentas_pagar')
+    .insert(documento)
     .select()
     .single()
   if (error) throw error
-  return data as DocumentoCuentaCobrar
+  return data as DocumentoCuentaPagar
 }
 
-export async function getDocumentosCuentaCobrar(cuentasCobrId: string) {
+export async function getDocumentosCuentaPagar(cuentaId: string) {
   const { data, error } = await supabaseAdmin
-    .from('documentos_cuentas_cobrar')
+    .from('documentos_cuentas_pagar')
     .select('*')
-    .eq('cuentas_cobrar_id', cuentasCobrId)
+    .eq('cuentas_pagar_id', cuentaId)
     .order('fecha_carga', { ascending: false })
   if (error) throw error
-  return data as DocumentoCuentaCobrar[]
+  return data as DocumentoCuentaPagar[]
 }
 
-export async function deleteDocumentoCuentaCobrar(id: string) {
+export async function deleteDocumentoCuentaPagar(id: string) {
   const { error } = await supabaseAdmin
-    .from('documentos_cuentas_cobrar')
+    .from('documentos_cuentas_pagar')
     .delete()
     .eq('id', id)
   if (error) throw error
@@ -546,47 +587,17 @@ export async function updateOrdenPago(id: string, updates: Partial<OrdenPago>) {
   return data as OrdenPago
 }
 
-// ==================== DOCUMENTOS CUENTAS POR PAGAR ====================
+// ==================== FUNCIONES HELPER ====================
 
-export async function createDocumentoCuentaPagar(doc: Partial<DocumentoCuentaPagar>) {
-  const { data, error } = await supabaseAdmin
-    .from('documentos_cuentas_pagar')
-    .insert(doc)
-    .select()
-    .single()
-  if (error) throw error
-  return data as DocumentoCuentaPagar
-}
-
-export async function getDocumentosCuentaPagar(cuentasParId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('documentos_cuentas_pagar')
-    .select('*')
-    .eq('cuentas_pagar_id', cuentasParId)
-    .order('fecha_carga', { ascending: false })
-  if (error) throw error
-  return data as DocumentoCuentaPagar[]
-}
-
-export async function deleteDocumentoCuentaPagar(id: string) {
-  const { error } = await supabaseAdmin
-    .from('documentos_cuentas_pagar')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
-}
-
-// ==================== UTILIDADES PARA CUENTAS ====================
-
-/**
- * Obtiene todas las cuentas por pagar pendientes de eventos ya realizados
- * Usada para generar orden de pago
- */
 export async function getCuentasPagarPendientesEventosRealizados() {
   const hoy = new Date().toISOString().split('T')[0]
   const { data, error } = await supabaseAdmin
     .from('cuentas_pagar')
-    .select('*, cotizaciones(fecha_entrega)')
+    .select(`
+      *,
+      cotizaciones(fecha_entrega, proyecto),
+      proyectos(nombre)
+    `)
     .eq('estado', 'PENDIENTE')
     .order('responsable_nombre', { ascending: true })
     .order('cotizacion_id', { ascending: true })
@@ -598,9 +609,6 @@ export async function getCuentasPagarPendientesEventosRealizados() {
   }) as any[]
 }
 
-/**
- * Calcula el estado automático de una cuenta por cobrar basado en monto_pagado
- */
 export function calcularEstadoCuentaCobrar(montoPagado: number, montoTotal: number): string {
   if (montoPagado === 0) return 'FACTURADO'
   if (montoPagado >= montoTotal) return 'PAGADO'
