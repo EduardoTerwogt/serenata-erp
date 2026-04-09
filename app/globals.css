@@ -1,63 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&family=Source+Code+Pro:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Colores base para tema oscuro cinematográfico */
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+
+  /* Design tokens tipográficos */
+  --font-inter: 'Inter', system-ui, sans-serif;
+  --font-poppins: 'Poppins', sans-serif;
+  --font-source-code: 'Source Code Pro', monospace;
+
+  /* Colores primarios */
+  --color-primary-500: #f97316;
+  --color-primary-600: #ea580c;
+  --color-secondary-500: #0ea5e9;
+  --color-secondary-600: #0284c7;
+  --color-accent-500: #22c55e;
+
+  /* Elevación y sombras */
+  --shadow-elevation-1: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  --shadow-elevation-2: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-elevation-3: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+
+  /* Transiciones fluidas */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-poppins);
+  --font-mono: var(--font-source-code);
 
-  /* Remap gray → paleta zinc (negro/carbón neutro, sin tinte azul) */
+  /* Remapeo de colores para coherencia */
   --color-gray-50:  #fafafa;
-  --color-gray-100: #f4f4f5;
-  --color-gray-200: #e4e4e7;
-  --color-gray-300: #d4d4d8;
-  --color-gray-400: #a1a1aa;
-  --color-gray-500: #71717a;
-  --color-gray-600: #52525b;
-  --color-gray-700: #3f3f46;
-  --color-gray-800: #27272a;
-  --color-gray-900: #18181b;
-  --color-gray-950: #09090b;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #ececec;
+  --color-gray-300: #d6d6d6;
+  --color-gray-400: #a6a6a6;
+  --color-gray-500: #787878;
+  --color-gray-600: #5a5a5a;
+  --color-gray-700: #3c3c3c;
+  --color-gray-800: #242424;
+  --color-gray-900: #121212;
+  --color-gray-950: #0a0a0a;
 
-  /* Remap blue → naranja Serenata (#ff8000) */
-  --color-blue-100: #fff0d6;
-  --color-blue-200: #ffd9a0;
-  --color-blue-300: #ffb84d;
-  --color-blue-400: #ff9a1a;
-  --color-blue-500: #ff8000;
-  --color-blue-600: #e67300;
-  --color-blue-700: #cc6600;
-  --color-blue-800: #a35200;
-  --color-blue-900: #3d1f00;
-  --color-blue-950: #1f0f00;
+  /* Naranja Serenata como primario */
+  --color-blue-50: #fff7ed;
+  --color-blue-100: #ffedd5;
+  --color-blue-200: #fed7aa;
+  --color-blue-300: #fdba74;
+  --color-blue-400: #fb923c;
+  --color-blue-500: #f97316;
+  --color-blue-600: #ea580c;
+  --color-blue-700: #c2410c;
+  --color-blue-800: #92400e;
+  --color-blue-900: #78350f;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #09090b;
+    --background: #0a0a0a;
     --foreground: #fafafa;
   }
 }
 
+/* Estilos base mejorados */
 * {
   box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 html,
 body {
   max-width: 100%;
   overflow-x: hidden;
+  height: 100%;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* Optimización de fuentes */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-poppins);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+code, pre, kbd, samp {
+  font-family: var(--font-source-code);
 }
 
 input[type="date"] {
