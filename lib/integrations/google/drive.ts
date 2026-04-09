@@ -67,6 +67,9 @@ class DriveServiceImpl implements DriveService {
     console.log('[Drive] uploadPdf — folder:', env.driveFolderId, '— file:', fileName)
 
     const res = await drive.files.create({
+      // supportsAllDrives: required for Shared Drives (Service Accounts have no
+      // storage quota in personal "My Drive" — Shared Drive is the correct target)
+      supportsAllDrives: true,
       requestBody: {
         name: fileName,
         parents: [env.driveFolderId],
@@ -99,6 +102,7 @@ class DriveServiceImpl implements DriveService {
     console.log('[Drive] updateFile — fileId:', fileId)
 
     const res = await drive.files.update({
+      supportsAllDrives: true,
       fileId,
       media: {
         mimeType: 'application/pdf',
