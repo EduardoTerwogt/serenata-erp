@@ -98,6 +98,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         applyCotizacionToState(cot)
         setResponsables(resp)
         setLoading(false)
+        // Mostrar mensaje de Drive si viene de Generar Cotización nueva
+        const pending = sessionStorage.getItem('pdf_drive_result')
+        if (pending) {
+          sessionStorage.removeItem('pdf_drive_result')
+          try {
+            const { link } = JSON.parse(pending)
+            setSuccess('PDF guardado exitosamente en Drive')
+            setDriveLink(link ?? null)
+          } catch { /* ignorar */ }
+        }
       })
       .catch(() => setLoading(false))
   }, [id, applyCotizacionToState])
