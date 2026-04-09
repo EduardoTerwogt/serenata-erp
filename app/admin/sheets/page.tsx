@@ -41,15 +41,17 @@ export default function SheetsSyncPage() {
 
     try {
       const res = await fetch(`/api/integrations/sheets/${action}`, { method: 'POST' })
-      const data = await res.json()
+      const text = await res.text()
+      let data: Record<string, unknown> = {}
+      try { data = text ? JSON.parse(text) : {} } catch { data = { error: text || `Error HTTP ${res.status}` } }
 
       if (!res.ok) {
         setStep('error')
-        setErrorMsg(data?.error ?? `Error HTTP ${res.status}`)
+        setErrorMsg((data?.error as string) ?? `Error HTTP ${res.status}`)
         return
       }
 
-      setResult(data)
+      setResult(data as SyncSummary)
       setStep('done')
     } catch (e: unknown) {
       setStep('error')
