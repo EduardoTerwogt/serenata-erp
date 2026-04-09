@@ -2,24 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CuentaCobrar, CuentaPagar, EstadoPago } from '@/lib/types'
+import { CuentaCobrar, CuentaPagar, EstadoPago, EstadoCuentaCobrar, EstadoCuentaPagar } from '@/lib/types'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 
 type Tab = 'cobrar' | 'pagar'
 
-type EstadoCobrar = EstadoPago | 'VENCIDO'
-
-const ESTADO_COBRAR_STYLE: Record<EstadoCobrar, string> = {
-  PENDIENTE: 'bg-yellow-900 text-yellow-300',
+const ESTADO_COBRAR_STYLE: Record<EstadoCuentaCobrar, string> = {
+  FACTURA_PENDIENTE: 'bg-gray-700 text-gray-300',
+  FACTURADO: 'bg-yellow-900 text-yellow-300',
+  PARCIALMENTE_PAGADO: 'bg-blue-900 text-blue-300',
   PAGADO: 'bg-green-900 text-green-300',
-  PARCIAL: 'bg-blue-900 text-blue-300',
   VENCIDO: 'bg-red-900 text-red-300',
 }
 
-const ESTADO_PAGAR_STYLE: Record<EstadoPago, string> = {
+const ESTADO_PAGAR_STYLE: Record<EstadoCuentaPagar, string> = {
   PENDIENTE: 'bg-yellow-900 text-yellow-300',
+  EN_PROCESO_PAGO: 'bg-orange-900 text-orange-300',
   PAGADO: 'bg-green-900 text-green-300',
-  PARCIAL: 'bg-blue-900 text-blue-300',
 }
 
 function fmt(n: number) {
@@ -88,6 +87,20 @@ export default function CuentasPage() {
   // Resumen cuentas por cobrar
   const totalPorCobrar = cobrarFiltradas.filter(c => c.estado !== 'PAGADO').reduce((s, c) => s + c.monto_total, 0)
   const totalCobrado = cobrarFiltradas.filter(c => c.estado === 'PAGADO').reduce((s, c) => s + c.monto_total, 0)
+
+  // Función para mostrar estado en español
+  const displayEstado = (estado: string) => {
+    const estadoMap: Record<string, string> = {
+      FACTURA_PENDIENTE: 'Factura Pendiente',
+      FACTURADO: 'Facturado',
+      PARCIALMENTE_PAGADO: 'Parcialmente Pagado',
+      PAGADO: 'Pagado',
+      VENCIDO: 'Vencido',
+      PENDIENTE: 'Pendiente',
+      EN_PROCESO_PAGO: 'En Proceso',
+    }
+    return estadoMap[estado] || estado
+  }
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
@@ -179,7 +192,7 @@ export default function CuentasPage() {
                       <td className="px-6 py-4 text-gray-400">{c.fecha_vencimiento || '—'}</td>
                       <td className="px-6 py-4">
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_COBRAR_STYLE[c.estado]}`}>
-                          {c.estado}
+                          {displayEstado(c.estado)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -294,7 +307,7 @@ export default function CuentasPage() {
                       <td className="px-4 py-3 text-right text-white font-bold">${fmt(c.x_pagar)}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_PAGAR_STYLE[c.estado]}`}>
-                          {c.estado}
+                          {displayEstado(c.estado)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -318,7 +331,7 @@ export default function CuentasPage() {
                           {c.cotizacion_id}
                         </Link>
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${ESTADO_PAGAR_STYLE[c.estado]}`}>
-                          {c.estado}
+                          {displayEstado(c.estado)}
                         </span>
                       </div>
                       <div className="mb-3">
