@@ -95,8 +95,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       monto,
       tipo_pago: tipoPago as any,
       fecha_pago: fechaPago,
-      comprobante_url: comprobanteUrl,
-      archivo_nombre: comprobante?.name || null,
+      comprobante_url: comprobanteUrl || '',
+      archivo_nombre: comprobante?.name || `pago_${fechaPago}`,
       notas,
     })
 
