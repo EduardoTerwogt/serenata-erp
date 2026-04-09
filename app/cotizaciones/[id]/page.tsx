@@ -25,6 +25,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [generandoPdf, setGenerandoPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [driveLink, setDriveLink] = useState<string | null>(null)
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
   const [iva_activo, setIvaActivo] = useState(true)
@@ -155,26 +156,34 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }
 
+  const handlePdfResult = (result: { savedToDrive: boolean; driveWebViewLink?: string; driveError?: string }) => {
+    if (result.savedToDrive) {
+      setSuccess('PDF guardado exitosamente en Drive')
+      setDriveLink(result.driveWebViewLink ?? null)
+    } else if (result.driveError) {
+      setError(`Error al guardar en Drive: ${result.driveError}`)
+      setDriveLink(null)
+    } else {
+      setError('No se pudo guardar el PDF en Drive')
+      setDriveLink(null)
+    }
+    setTimeout(() => { setSuccess(null); setError(null); setDriveLink(null) }, 10000)
+  }
+
   const generarPDF = async () => {
     if (!cotizacion) return
     setGenerandoPdf(true)
     setError(null)
     setSuccess(null)
+    setDriveLink(null)
     try {
       const result = await generateQuotationPdf(cotizacion, undefined, { skipDownload: true })
-      if (result.savedToDrive) {
-        setSuccess('PDF guardado exitosamente en Drive')
-      } else if (result.driveError) {
-        setError(`Error al guardar en Drive: ${result.driveError}`)
-      } else {
-        setError('No se pudo guardar el PDF en Drive')
-      }
+      handlePdfResult(result)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar PDF')
     } finally {
       setGenerandoPdf(false)
     }
-    setTimeout(() => { setSuccess(null); setError(null) }, 5000)
   }
 
   const generarCotizacion = async () => {
@@ -185,21 +194,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     setGenerandoPdf(true)
     setError(null)
     setSuccess(null)
+    setDriveLink(null)
     try {
       const result = await generateQuotationPdf(refreshedCotizacion, watchedItems, { skipDownload: true })
-      if (result.savedToDrive) {
-        setSuccess('PDF guardado exitosamente en Drive')
-      } else if (result.driveError) {
-        setError(`Error al guardar en Drive: ${result.driveError}`)
-      } else {
-        setError('No se pudo guardar el PDF en Drive')
-      }
+      handlePdfResult(result)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar PDF')
     } finally {
       setGenerandoPdf(false)
     }
-    setTimeout(() => { setSuccess(null); setError(null) }, 5000)
   }
   const crearComplementaria = () => { if (cotizacion) router.push(buildComplementariaUrl(id, cotizacion)) }
 
@@ -224,7 +227,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       </div>
 
       {error && <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4">{error}</div>}
-      {success && <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4">{success}</div>}
+      {success && (
+        <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4 flex items-center justify-between gap-4">
+          <span>{success}</span>
+          {driveLink && (
+            <a href={driveLink} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-200 underline text-sm whitespace-nowrap">
+              Ver en Drive →
+            </a>
+          )}
+        </div>
+      )}
 
       <QuotationGeneralInfoSection
         register={register}

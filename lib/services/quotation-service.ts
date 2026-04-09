@@ -129,6 +129,7 @@ export async function approveQuotation(id: string): Promise<Cotizacion> {
 
 export interface GeneratePdfResult {
   savedToDrive: boolean
+  driveWebViewLink?: string
   driveError?: string
 }
 
@@ -151,8 +152,11 @@ export async function generateQuotationPdf(
 
   const fileName = `${quotation.id} - ${quotation.cliente} - ${quotation.proyecto}.pdf`
   try {
-    await uploadPdfToDrive(quotation.id, fileName, pdfBase64)
-    return { savedToDrive: true }
+    const driveResult = await uploadPdfToDrive(quotation.id, fileName, pdfBase64)
+    return {
+      savedToDrive: true,
+      driveWebViewLink: driveResult?.webViewLink,
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[Drive] Upload FALLÓ —', msg)
