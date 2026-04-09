@@ -22,6 +22,7 @@ export interface GoogleEnv {
   clientSecret: string
   driveRefreshToken: string
   driveFolderId: string
+  driveFolderIdCuentas: string | null
   sheetsSpreadsheetId: string | null
   calendarId: string | null
 }
@@ -39,6 +40,7 @@ export function getGoogleEnv(): GoogleEnv | null {
     clientSecret,
     driveRefreshToken: refreshToken,
     driveFolderId: folderId,
+    driveFolderIdCuentas: process.env.GOOGLE_DRIVE_FOLDER_ID_CUENTAS ?? null,
     sheetsSpreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID ?? null,
     calendarId: process.env.GOOGLE_CALENDAR_ID ?? null,
   }

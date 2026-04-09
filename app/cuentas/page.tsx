@@ -2,24 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CuentaCobrar, CuentaPagar, EstadoPago } from '@/lib/types'
+import { CuentaCobrar, CuentaPagar, EstadoCuentaCobrar, EstadoCuentaPagar } from '@/lib/types'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 
 type Tab = 'cobrar' | 'pagar'
 
-type EstadoCobrar = EstadoPago | 'VENCIDO'
-
-const ESTADO_COBRAR_STYLE: Record<EstadoCobrar, string> = {
-  PENDIENTE: 'bg-yellow-900 text-yellow-300',
+const ESTADO_COBRAR_STYLE: Record<EstadoCuentaCobrar, string> = {
+  FACTURA_PENDIENTE: 'bg-gray-600 text-gray-300',
+  FACTURADO: 'bg-yellow-900 text-yellow-300',
+  PARCIALMENTE_PAGADO: 'bg-blue-900 text-blue-300',
   PAGADO: 'bg-green-900 text-green-300',
-  PARCIAL: 'bg-blue-900 text-blue-300',
   VENCIDO: 'bg-red-900 text-red-300',
 }
 
-const ESTADO_PAGAR_STYLE: Record<EstadoPago, string> = {
+const ESTADO_PAGAR_STYLE: Record<EstadoCuentaPagar, string> = {
   PENDIENTE: 'bg-yellow-900 text-yellow-300',
+  EN_PROCESO_PAGO: 'bg-orange-900 text-orange-300',
   PAGADO: 'bg-green-900 text-green-300',
-  PARCIAL: 'bg-blue-900 text-blue-300',
 }
 
 function fmt(n: number) {

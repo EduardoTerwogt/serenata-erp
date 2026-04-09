@@ -2,6 +2,15 @@ export type EstadoCotizacion = 'BORRADOR' | 'EMITIDA' | 'APROBADA' | 'CANCELADA'
 export type EstadoProyecto = 'PREPRODUCCION' | 'RODAJE' | 'POSTPRODUCCION' | 'FINALIZADO'
 export type EstadoPago = 'PENDIENTE' | 'PAGADO' | 'PARCIAL'
 
+// Cuentas por Cobrar estados
+export type EstadoCuentaCobrar = 'FACTURA_PENDIENTE' | 'FACTURADO' | 'PARCIALMENTE_PAGADO' | 'PAGADO' | 'VENCIDO'
+
+// Cuentas por Pagar estados
+export type EstadoCuentaPagar = 'PENDIENTE' | 'EN_PROCESO_PAGO' | 'PAGADO'
+
+// Tipos de pago
+export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO'
+
 export interface Responsable {
   id: string
   nombre: string
@@ -120,10 +129,16 @@ export interface CuentaPagar {
   correo: string | null
   clabe: string | null
   banco: string | null
-  estado: EstadoPago
+  estado: EstadoCuentaPagar
+  folio?: string
+  fecha_vencimiento?: string | null
+  monto_pagado?: number
   fecha_pago: string | null
   metodo_pago: string | null
+  orden_pago_id?: string | null
   notas: string | null
+  updated_at?: string
+  created_at?: string
 }
 
 export interface CuentaCobrar {
@@ -132,8 +147,59 @@ export interface CuentaCobrar {
   cliente: string
   proyecto: string
   monto_total: number
-  estado: EstadoPago | 'VENCIDO'
-  fecha_vencimiento: string | null
+  estado: EstadoCuentaCobrar
+  folio?: string
+  fecha_factura?: string | null
+  fecha_vencimiento?: string | null
+  monto_pagado?: number
   fecha_pago: string | null
   notas: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface PagoComprobante {
+  id: string
+  cuentas_cobrar_id: string
+  monto: number
+  tipo_pago: TipoPago
+  fecha_pago: string
+  comprobante_url: string
+  archivo_nombre: string
+  notas?: string | null
+  created_at: string
+}
+
+export interface DocumentoCuentaCobrar {
+  id: string
+  cuentas_cobrar_id: string
+  tipo: 'FACTURA_PDF' | 'FACTURA_XML' | 'COMPLEMENTO_PAGO' | 'OTRO'
+  archivo_url: string
+  archivo_nombre: string
+  archivo_size?: number
+  fecha_carga: string
+  created_at: string
+}
+
+export interface DocumentoCuentaPagar {
+  id: string
+  cuentas_pagar_id: string
+  tipo: 'FACTURA_PROVEEDOR' | 'COMPROBANTE_PAGO' | 'OTRO'
+  archivo_url: string
+  archivo_nombre: string
+  fecha_carga: string
+  created_at: string
+}
+
+export interface OrdenPago {
+  id: string
+  fecha_generacion: string
+  pdf_url: string
+  pdf_nombre: string
+  estado: 'GENERADA' | 'PARCIALMENTE_PAGADA' | 'COMPLETADA'
+  total_monto: number
+  notas?: string | null
+  created_by: string
+  created_at: string
+  updated_at?: string
 }

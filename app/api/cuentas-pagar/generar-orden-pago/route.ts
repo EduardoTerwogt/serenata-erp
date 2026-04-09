@@ -139,7 +139,7 @@ export async function POST(request: Request) {
       pdf_nombre: fileName,
       estado: 'GENERADA',
       total_monto: totalGeneral,
-      created_by: authResult.user?.email || 'sistema',
+      created_by: authResult.session?.user?.email || 'sistema',
     })
 
     // Actualizar todas las cuentas a EN_PROCESO_PAGO

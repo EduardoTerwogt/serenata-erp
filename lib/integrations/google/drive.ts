@@ -134,3 +134,93 @@ class DriveServiceImpl implements DriveService {
 }
 
 export const driveService: DriveService = new DriveServiceImpl()
+
+// ==================== GENERIC FILE UPLOAD FOR ACCOUNTS ====================
+
+/**
+ * Helper function to ensure a folder path exists in Drive and return its folder ID
+ */
+async function ensureFolderPath(
+  drive: any,
+  folderPath: string,
+  rootFolderId: string
+): Promise<string> {
+  // Parse the path: "/Por Cobrar/CC-2026-00001" → ["Por Cobrar", "CC-2026-00001"]
+  const parts = folderPath.split('/').filter(p => p.length > 0)
+
+  let currentParentId = rootFolderId
+  for (const folderName of parts) {
+    // Search for folder with this name in current parent
+    const res = await drive.files.list({
+      supportsAllDrives: true,
+      q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${currentParentId}' in parents and trashed=false`,
+      spaces: 'drive',
+      fields: 'files(id, name)',
+      pageSize: 1,
+    })
+
+    let folderId = res.data.files?.[0]?.id
+
+    // If folder doesn't exist, create it
+    if (!folderId) {
+      const createRes = await drive.files.create({
+        supportsAllDrives: true,
+        requestBody: {
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [currentParentId],
+        },
+        fields: 'id',
+      })
+      folderId = createRes.data.id
+    }
+
+    currentParentId = folderId
+  }
+
+  return currentParentId
+}
+
+/**
+ * Upload any type of file to Google Drive with automatic folder creation
+ */
+export async function uploadFileToDrive(
+  file: File,
+  folderPath: string,
+  fileName: string,
+  rootFolderId?: string
+): Promise<string> {
+  const auth = getGoogleOAuth2Client()
+  const env = getGoogleEnv()
+  if (!auth || !env) {
+    throw new Error('Google Drive not configured')
+  }
+
+  const drive = google.drive({ version: 'v3', auth })
+  const finalRootFolderId = rootFolderId || env.driveFolderId
+
+  // Ensure folder path exists and get the final folder ID
+  const parentFolderId = await ensureFolderPath(drive, folderPath, finalRootFolderId)
+
+  // Convert file to buffer
+  const arrayBuffer = await file.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+
+  // Upload file to the final folder
+  const res = await drive.files.create({
+    supportsAllDrives: true,
+    requestBody: {
+      name: fileName,
+      mimeType: file.type,
+      parents: [parentFolderId],
+    },
+    media: {
+      mimeType: file.type,
+      body: Readable.from([buffer]),
+    },
+    fields: 'id, webViewLink',
+  })
+
+  // Return file URL
+  return res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`
+}
