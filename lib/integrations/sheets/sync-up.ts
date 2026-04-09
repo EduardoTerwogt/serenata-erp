@@ -99,7 +99,7 @@ async function syncTableUp(
         .from(table)
         .select(pk)
         .in(pk, pkValues)
-      existingIds = new Set((existing ?? []).map((r: Record<string, unknown>) => String(r[pk])))
+      existingIds = new Set((existing ?? []).map((r: unknown) => String((r as Record<string, unknown>)[pk])))
     }
 
     // 4. Procesar cada fila
