@@ -134,3 +134,102 @@ class DriveServiceImpl implements DriveService {
 }
 
 export const driveService: DriveService = new DriveServiceImpl()
+
+// ==================== UPLOAD GENÉRICO DE ARCHIVOS ====================
+
+/**
+ * Sube un archivo genérico a Google Drive en una carpeta específica
+ * Crea la carpeta si no existe
+ * @param file - Archivo File del navegador
+ * @param folderPath - Ruta de carpeta: /Cuentas/Por Cobrar/CC-2026-00001
+ * @param fileName - Nombre del archivo en Drive (ej: factura.pdf)
+ * @returns URL del archivo en Drive
+ */
+export async function uploadFileToDrive(file: File, folderPath: string, fileName: string): Promise<string> {
+  const auth = getGoogleOAuth2Client()
+  const env = getGoogleEnv()
+
+  if (!auth || !env) {
+    throw new Error('Google credentials not configured')
+  }
+
+  const drive = google.drive({ version: 'v3', auth })
+
+  try {
+    // Crear/obtener carpeta recursivamente
+    const folderId = await ensureFolderPath(drive, env.driveFolderId, folderPath)
+
+    // Leer archivo como buffer
+    const buffer = await file.arrayBuffer()
+
+    // Subir archivo
+    const response = await drive.files.create({
+      supportsAllDrives: true,
+      requestBody: {
+        name: fileName,
+        parents: [folderId],
+      },
+      media: {
+        mimeType: file.type || 'application/octet-stream',
+        body: Readable.from([Buffer.from(buffer)]),
+      },
+      fields: 'id,webViewLink',
+    })
+
+    if (!response.data.id) {
+      throw new Error('No file ID returned from Drive API')
+    }
+
+    console.log(`[Drive] File uploaded: ${fileName} (ID: ${response.data.id})`)
+
+    // Retornar URL de Drive o ID para luego construir URL
+    return response.data.webViewLink || `https://drive.google.com/file/d/${response.data.id}/view`
+  } catch (error) {
+    console.error(`[Drive] Error uploading file ${fileName}:`, error)
+    throw error
+  }
+}
+
+/**
+ * Asegura que existe la ruta de carpetas y retorna el ID de la carpeta final
+ * Crea carpetas inexistentes recursivamente
+ */
+async function ensureFolderPath(drive: ReturnType<typeof google.drive>, rootFolderId: string, folderPath: string): Promise<string> {
+  const parts = folderPath.split('/').filter(p => p.length > 0)
+
+  let currentFolderId = rootFolderId
+
+  for (const folderName of parts) {
+    // Buscar si la carpeta existe
+    const searchResult = await drive.files.list({
+      supportsAllDrives: true,
+      q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and parents in '${currentFolderId}' and trashed=false`,
+      fields: 'files(id)',
+      spaces: 'drive',
+    })
+
+    if (searchResult.data.files && searchResult.data.files.length > 0) {
+      // Carpeta existe
+      currentFolderId = searchResult.data.files[0].id!
+    } else {
+      // Crear carpeta
+      const createResult = await drive.files.create({
+        supportsAllDrives: true,
+        requestBody: {
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [currentFolderId],
+        },
+        fields: 'id',
+      })
+
+      if (!createResult.data.id) {
+        throw new Error(`Failed to create folder: ${folderName}`)
+      }
+
+      currentFolderId = createResult.data.id
+    }
+  }
+
+  return currentFolderId
+}
