@@ -7,6 +7,7 @@ interface SyncResult {
   rows?: number
   inserted?: number
   updated?: number
+  deleted?: number
   errors?: number
   ok: boolean
   error?: string
@@ -19,6 +20,7 @@ interface SyncSummary {
   totalRows?: number
   totalInserted?: number
   totalUpdated?: number
+  totalDeleted?: number
   totalErrors?: number
   errors?: number
   results?: SyncResult[]
@@ -76,7 +78,10 @@ export default function SheetsSyncPage() {
     if (result.message) return result.message
     if (result.totalRows !== undefined) return `${result.totalRows} filas sincronizadas`
     if (result.totalInserted !== undefined || result.totalUpdated !== undefined) {
-      return `+${result.totalInserted ?? 0} insertados, ~${result.totalUpdated ?? 0} actualizados, ${result.totalErrors ?? 0} errores`
+      const parts = [`+${result.totalInserted ?? 0} insertados`, `~${result.totalUpdated ?? 0} actualizados`]
+      if ((result.totalDeleted ?? 0) > 0) parts.push(`-${result.totalDeleted} borrados`)
+      parts.push(`${result.totalErrors ?? 0} errores`)
+      return parts.join(', ')
     }
     if (result.syncSummary) {
       return `${result.syncSummary.totalRows ?? 0} filas escritas, ${result.syncSummary.errors ?? 0} errores`
@@ -196,7 +201,14 @@ export default function SheetsSyncPage() {
                   <tr key={i} className="border-b border-gray-800">
                     <td className="py-1">{r.tab}</td>
                     <td className="py-1 text-right">
-                      {r.rows !== undefined ? r.rows : `+${r.inserted ?? 0} ~${r.updated ?? 0}`}
+                      {r.rows !== undefined
+                        ? r.rows
+                        : [
+                            `+${r.inserted ?? 0}`,
+                            `~${r.updated ?? 0}`,
+                            (r.deleted ?? 0) > 0 ? `-${r.deleted}` : null,
+                          ].filter(Boolean).join(' ')
+                      }
                     </td>
                     <td className="py-1 text-right">
                       {r.ok ? (

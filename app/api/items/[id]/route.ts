@@ -1,6 +1,7 @@
 import { requireAnySection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemPatchSchema, validate } from '@/lib/validation/schemas'
+import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function PATCH(
   request: Request,
@@ -44,6 +45,7 @@ export async function PATCH(
     if (updateError) throw updateError
 
     if (!('responsable_id' in parsed) && !('responsable_nombre' in parsed)) {
+      triggerSheetsSync('items_cotizacion')
       return Response.json({ ok: true })
     }
 
@@ -83,6 +85,7 @@ export async function PATCH(
 
     if (syncLegacyError) throw syncLegacyError
 
+    triggerSheetsSync('items_cotizacion', 'cuentas_pagar')
     return Response.json({ ok: true })
   } catch (e) {
     console.error('[PATCH /api/items/:id] Error:', e)

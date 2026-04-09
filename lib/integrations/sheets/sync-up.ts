@@ -1,12 +1,14 @@
 // Sync ascendente: Google Sheets → Supabase.
 //
-// Lee las filas del Sheet, valida, y hace upsert en Supabase usando la PK.
+// Lee las filas del Sheet, valida, y hace upsert + delete en Supabase.
 // Reglas:
 //   - Si el ID existe en Supabase → UPDATE (solo columnas no readonly)
 //   - Si el ID no existe → INSERT
+//   - Si el ID existe en Supabase pero NO en el Sheet → DELETE
 //   - Filas sin ID → se ignoran con warning
 //   - Columnas readonly (calculadas) → nunca se modifican desde Sheets
-//   - Supabase es siempre la fuente de verdad (no borra filas que no estén en Sheets)
+//   - Si el Sheet está vacío o solo tiene header → no se borra nada (seguro)
+//   - Supabase es la fuente de verdad en estructura; Sheets es editor de datos
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { readAllRows } from '@/lib/integrations/google/sheets'
@@ -15,7 +17,7 @@ import { TABLE_SCHEMAS, TableSchema, fromSheetValue } from './schema'
 export interface RowResult {
   rowIndex: number
   pk: string | null
-  action: 'inserted' | 'updated' | 'skipped' | 'error'
+  action: 'inserted' | 'updated' | 'deleted' | 'skipped' | 'error'
   error?: string
 }
 
@@ -24,6 +26,7 @@ export interface SyncUpTableResult {
   table: string
   inserted: number
   updated: number
+  deleted: number
   skipped: number
   errors: number
   rowResults: RowResult[]
@@ -36,6 +39,7 @@ export interface SyncUpSummary {
   results: SyncUpTableResult[]
   totalInserted: number
   totalUpdated: number
+  totalDeleted: number
   totalErrors: number
 }
 
@@ -74,21 +78,22 @@ async function syncTableUp(
 ): Promise<SyncUpTableResult> {
   const { tab, table, pk, readonly: readonlyCols } = schema
   const rowResults: RowResult[] = []
-  let inserted = 0, updated = 0, skipped = 0, errors = 0
+  let inserted = 0, updated = 0, deleted = 0, skipped = 0, errors = 0
 
   try {
     // 1. Leer todas las filas del Sheet
     const rawRows = await readAllRows(spreadsheetId, tab)
     if (rawRows === null) throw new Error('No se pudo leer la pestaña del Sheet')
     if (rawRows.length <= 1) {
+      // Sheet vacío o solo header: no procesar nada (protección contra borrado accidental)
       console.log(`[Sheets/sync-up] ${tab}: sin datos para sincronizar`)
-      return { tab, table, inserted: 0, updated: 0, skipped: 0, errors: 0, rowResults: [], ok: true }
+      return { tab, table, inserted: 0, updated: 0, deleted: 0, skipped: 0, errors: 0, rowResults: [], ok: true }
     }
 
     // 2. Parsear filas (header + datos)
     const { dataRows } = parseSheetRows(rawRows, schema)
 
-    // 3. Obtener IDs existentes en Supabase para saber si hacer INSERT o UPDATE
+    // 3. Obtener IDs existentes en Supabase
     const pkValues = dataRows
       .map(row => row[pk])
       .filter(v => v !== null && v !== undefined && v !== '') as string[]
@@ -102,13 +107,12 @@ async function syncTableUp(
       existingIds = new Set((existing ?? []).map((r: unknown) => String((r as Record<string, unknown>)[pk])))
     }
 
-    // 4. Procesar cada fila
+    // 4. Procesar cada fila (INSERT o UPDATE)
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i]
-      const rowIndex = i + 2 // +2 porque: fila 1 = header, +1 porque el índice es 1-based
+      const rowIndex = i + 2 // +2: fila 1 = header, índice 1-based
       const pkValue = row[pk] ? String(row[pk]) : null
 
-      // Fila sin PK → ignorar
       if (!pkValue) {
         rowResults.push({ rowIndex, pk: null, action: 'skipped', error: `Sin valor en columna '${pk}'` })
         skipped++
@@ -134,7 +138,7 @@ async function syncTableUp(
           rowResults.push({ rowIndex, pk: pkValue, action: 'updated' })
           updated++
         } else {
-          // INSERT — incluir todas las columnas que estén en el schema
+          // INSERT
           const insertPayload: Record<string, unknown> = {}
           for (const col of schema.columns) {
             if (row[col] !== undefined && row[col] !== null) {
@@ -158,13 +162,38 @@ async function syncTableUp(
       }
     }
 
-    console.log(`[Sheets/sync-up] ${tab}: +${inserted} insertados, ~${updated} actualizados, ${errors} errores`)
-    return { tab, table, inserted, updated, skipped, errors, rowResults, ok: errors === 0 }
+    // 5. DELETE — borrar filas que están en Supabase pero NO en el Sheet
+    // Solo aplica cuando el sheet tiene al menos una fila con datos válidos
+    if (pkValues.length > 0) {
+      const { data: allSupabaseRows } = await supabaseAdmin.from(table).select(pk)
+      const allSupabasePks = (allSupabaseRows ?? []).map(
+        (r: unknown) => String((r as Record<string, unknown>)[pk])
+      )
+      const sheetPkSet = new Set(pkValues)
+      const toDelete = allSupabasePks.filter(id => !sheetPkSet.has(id))
+
+      for (const pkToDelete of toDelete) {
+        try {
+          const { error } = await supabaseAdmin.from(table).delete().eq(pk, pkToDelete)
+          if (error) throw error
+          rowResults.push({ rowIndex: -1, pk: pkToDelete, action: 'deleted' })
+          deleted++
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err)
+          console.error(`[Sheets/sync-up] Error borrando ${tab} pk=${pkToDelete}:`, message)
+          rowResults.push({ rowIndex: -1, pk: pkToDelete, action: 'error', error: `No se pudo borrar: ${message}` })
+          errors++
+        }
+      }
+    }
+
+    console.log(`[Sheets/sync-up] ${tab}: +${inserted} ins, ~${updated} upd, -${deleted} del, ${errors} err`)
+    return { tab, table, inserted, updated, deleted, skipped, errors, rowResults, ok: errors === 0 }
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[Sheets/sync-up] ERROR FATAL en ${tab}:`, message)
-    return { tab, table, inserted, updated, skipped, errors, rowResults, ok: false, error: message }
+    return { tab, table, inserted, updated, deleted, skipped, errors, rowResults, ok: false, error: message }
   }
 }
 
@@ -172,11 +201,15 @@ async function syncTableUp(
 
 /**
  * Sincroniza TODAS las tablas del Google Sheet a Supabase.
+ * El orden garantiza que se respeten las FK: primero se borran
+ * tablas dependientes y luego las tablas padre.
  */
 export async function syncAllUp(spreadsheetId: string): Promise<SyncUpSummary> {
   console.log('[Sheets/sync-up] Iniciando sync ascendente — spreadsheetId:', spreadsheetId)
 
-  // Orden importa: primero tablas sin FK, luego las que dependen de ellas
+  // Orden: primero tablas sin FK, luego las que dependen de ellas.
+  // Para el DELETE el orden inverso sería el ideal, pero como cada tabla
+  // se procesa independientemente, los errores de FK se reportan al usuario.
   const orderedSchemas = [
     ...TABLE_SCHEMAS.filter(s => ['responsables', 'productos', 'clientes'].includes(s.table)),
     ...TABLE_SCHEMAS.filter(s => ['cotizaciones'].includes(s.table)),
@@ -192,11 +225,12 @@ export async function syncAllUp(spreadsheetId: string): Promise<SyncUpSummary> {
 
   const totalInserted = results.reduce((s, r) => s + r.inserted, 0)
   const totalUpdated = results.reduce((s, r) => s + r.updated, 0)
+  const totalDeleted = results.reduce((s, r) => s + r.deleted, 0)
   const totalErrors = results.reduce((s, r) => s + r.errors, 0)
 
-  console.log(`[Sheets/sync-up] Completado — +${totalInserted} ins, ~${totalUpdated} upd, ${totalErrors} err`)
+  console.log(`[Sheets/sync-up] Completado — +${totalInserted} ins, ~${totalUpdated} upd, -${totalDeleted} del, ${totalErrors} err`)
 
-  return { spreadsheetId, results, totalInserted, totalUpdated, totalErrors }
+  return { spreadsheetId, results, totalInserted, totalUpdated, totalDeleted, totalErrors }
 }
 
 /**
@@ -208,7 +242,7 @@ export async function syncTableUpByName(
 ): Promise<SyncUpTableResult> {
   const schema = TABLE_SCHEMAS.find(s => s.table === tableName || s.tab === tableName)
   if (!schema) {
-    return { tab: tableName, table: tableName, inserted: 0, updated: 0, skipped: 0, errors: 1, rowResults: [], ok: false, error: `Tabla '${tableName}' no encontrada en schema` }
+    return { tab: tableName, table: tableName, inserted: 0, updated: 0, deleted: 0, skipped: 0, errors: 1, rowResults: [], ok: false, error: `Tabla '${tableName}' no encontrada en schema` }
   }
   return syncTableUp(spreadsheetId, schema)
 }

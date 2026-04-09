@@ -1,5 +1,6 @@
 import { requireAnySection, requireSection } from '@/lib/api-auth'
 import { getResponsables, createResponsable } from '@/lib/db'
+import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function GET() {
   const authResult = await requireAnySection(['responsables', 'cotizaciones'])
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const responsable = await createResponsable({ ...body, activo: true })
+    triggerSheetsSync('responsables')
     return Response.json(responsable, { status: 201 })
   } catch (error) {
     console.error(error)

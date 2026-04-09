@@ -1,6 +1,7 @@
 import { requireSection } from '@/lib/api-auth'
 import { getProyectoDetalle, updateProyectoWithRollback } from '@/lib/server/projects/service'
 import { ProyectoUpdateSchema, validate } from '@/lib/validation/schemas'
+import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function GET(
   _request: Request,
@@ -39,6 +40,7 @@ export async function PUT(
     const { notas_por_item = {}, ...proyectoUpdates } = parsed
 
     const proyecto = await updateProyectoWithRollback(id, proyectoUpdates, notas_por_item as Record<string, string>)
+    triggerSheetsSync('proyectos', 'items_cotizacion')
     return Response.json(proyecto)
   } catch (error) {
     console.error(error)

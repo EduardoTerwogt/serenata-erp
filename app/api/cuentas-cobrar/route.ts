@@ -1,5 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { getCuentasCobrar, updateCuentaCobrar } from '@/lib/db'
+import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function GET() {
   const authResult = await requireSection('cuentas')
@@ -23,6 +24,7 @@ export async function PUT(request: Request) {
     const { id, ...updates } = body
     if (!id) return Response.json({ error: 'ID requerido' }, { status: 400 })
     const cuenta = await updateCuentaCobrar(id, updates)
+    triggerSheetsSync('cuentas_cobrar')
     return Response.json(cuenta)
   } catch (error) {
     console.error(error)

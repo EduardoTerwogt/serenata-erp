@@ -1,5 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { getResponsableById, updateResponsable } from '@/lib/db'
+import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function GET(
   _request: Request,
@@ -29,6 +30,7 @@ export async function PUT(
     const { id } = await params
     const body = await request.json()
     const responsable = await updateResponsable(id, body)
+    triggerSheetsSync('responsables')
     return Response.json(responsable)
   } catch (error) {
     console.error(error)

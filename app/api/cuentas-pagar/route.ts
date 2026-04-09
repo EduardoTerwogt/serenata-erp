@@ -2,6 +2,7 @@ import { requireSection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { updateCuentaPagar } from '@/lib/db'
 import { CuentaPagar } from '@/lib/types'
+import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function GET() {
   const authResult = await requireSection('cuentas')
@@ -47,6 +48,7 @@ export async function PUT(request: Request) {
     const { id, ...updates } = body
     if (!id) return Response.json({ error: 'ID requerido' }, { status: 400 })
     const cuenta = await updateCuentaPagar(id, updates)
+    triggerSheetsSync('cuentas_pagar')
     return Response.json(cuenta)
   } catch (error) {
     console.error(error)

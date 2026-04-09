@@ -2,6 +2,7 @@ import { requireAnySection } from '@/lib/api-auth'
 import { driveService } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { supabaseAdmin } from '@/lib/supabase'
+import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function POST(req: Request) {
   // ── 1. Auth ──────────────────────────────────────────────────────────────
@@ -90,6 +91,7 @@ export async function POST(req: Request) {
       // File is in Drive but DB not updated — not critical, return success anyway
     } else {
       console.log('[Drive/upload] drive_file_id saved in Supabase ✓')
+      triggerSheetsSync('cotizaciones')
     }
 
     return Response.json(result)

@@ -1,5 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
+import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function GET(request: Request) {
   const authResult = await requireSection('cotizaciones')
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       console.error('[POST /api/clientes] Error:', error)
       return Response.json({ error: error.message }, { status: 500 })
     }
-
+    triggerSheetsSync('clientes')
     return Response.json(data, { status: 201 })
   } catch (e) {
     console.error('[POST /api/clientes] Error inesperado:', e)
