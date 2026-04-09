@@ -13,6 +13,7 @@ export interface TableSchema {
   pk: string
   columns: string[]
   readonly: string[]
+  orderBy?: string  // columna para ordenar en sync-down; default 'created_at'
 }
 
 export const TABLE_SCHEMAS: TableSchema[] = [
@@ -39,6 +40,7 @@ export const TABLE_SCHEMAS: TableSchema[] = [
       'x_pagar', 'margen', 'orden', 'notas',
     ],
     readonly: ['importe', 'margen'],
+    orderBy: 'cotizacion_id',  // no tiene created_at
   },
   {
     tab: 'Proyectos',

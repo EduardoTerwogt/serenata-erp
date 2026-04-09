@@ -30,14 +30,14 @@ async function syncTableDown(
   spreadsheetId: string,
   schema: TableSchema,
 ): Promise<SyncDownResult> {
-  const { tab, table, columns } = schema
+  const { tab, table, columns, orderBy } = schema
 
   try {
     // 1. Leer todos los datos de Supabase
     const { data, error } = await supabaseAdmin
       .from(table)
       .select(columns.join(', '))
-      .order('created_at', { ascending: true })
+      .order(orderBy ?? 'created_at', { ascending: true })
       .limit(5000) // límite de seguridad
 
     if (error) throw error
