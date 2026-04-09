@@ -1,39 +1,46 @@
-// Google Workspace environment configuration.
+// Google Drive environment configuration — OAuth 2.0 (user-delegated access).
 //
-// Reads Google credentials from environment variables without throwing if absent.
-// Returns null when any required variable is missing, so the rest of the app
-// continues working normally without Google credentials configured.
+// Drive accede al Google Drive personal del propietario de la app via OAuth2.
+// Las Service Accounts no tienen cuota de almacenamiento en "Mi unidad" personal.
 //
-// Required env vars (all must be present to enable Google integrations):
-//   GOOGLE_SERVICE_ACCOUNT_EMAIL   — service account email (*.iam.gserviceaccount.com)
-//   GOOGLE_SERVICE_ACCOUNT_KEY     — service account private key (RSA, PEM format)
-//   GOOGLE_DRIVE_FOLDER_ID         — Drive folder ID where PDFs will be uploaded
-//   GOOGLE_CALENDAR_ID             — Calendar ID for quotation events (e.g. primary or custom)
+// Required env vars para Drive:
+//   GOOGLE_CLIENT_ID            — OAuth 2.0 client ID (Google Cloud Console)
+//   GOOGLE_CLIENT_SECRET        — OAuth 2.0 client secret
+//   GOOGLE_DRIVE_REFRESH_TOKEN  — refresh token obtenido via /api/integrations/drive/authorize
+//   GOOGLE_DRIVE_FOLDER_ID      — ID de la carpeta en Drive donde se guardan los PDFs
 //
-// The private key value in env vars often has literal \n instead of real newlines.
-// getGoogleEnv() normalises that automatically.
+// Optional:
+//   GOOGLE_CALENDAR_ID          — reservado para integración futura de Calendar
+//
+// Para obtener el refresh token:
+//   1. Configura GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Vercel
+//   2. Visita https://serenata-erp.vercel.app/api/integrations/drive/authorize
+//   3. Autoriza el acceso a Drive
+//   4. Copia el refresh token que aparece en pantalla
+//   5. Agrégalo a Vercel como GOOGLE_DRIVE_REFRESH_TOKEN
 
 export interface GoogleEnv {
-  serviceAccountEmail: string
-  serviceAccountKey: string
+  clientId: string
+  clientSecret: string
+  driveRefreshToken: string
   driveFolderId: string
-  calendarId: string
+  calendarId: string | null
 }
 
 export function getGoogleEnv(): GoogleEnv | null {
-  const email    = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-  const key      = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
-  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
-  const calId    = process.env.GOOGLE_CALENDAR_ID
+  const clientId     = process.env.GOOGLE_CLIENT_ID
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN
+  const folderId     = process.env.GOOGLE_DRIVE_FOLDER_ID
 
-  if (!email || !key || !folderId || !calId) return null
+  if (!clientId || !clientSecret || !refreshToken || !folderId) return null
 
   return {
-    serviceAccountEmail: email,
-    // Normalise escaped newlines that some hosting platforms inject
-    serviceAccountKey: key.replace(/\\n/g, '\n'),
+    clientId,
+    clientSecret,
+    driveRefreshToken: refreshToken,
     driveFolderId: folderId,
-    calendarId: calId,
+    calendarId: process.env.GOOGLE_CALENDAR_ID ?? null,
   }
 }
 

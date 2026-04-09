@@ -33,10 +33,10 @@ export async function POST(req: Request) {
   // ── 3. Check Google configuration ────────────────────────────────────────
   const googleEnv = getGoogleEnv()
   if (!googleEnv) {
-    console.error('[Drive/upload] Google not configured — getGoogleEnv() returned null. Check env vars: GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_KEY, GOOGLE_DRIVE_FOLDER_ID, GOOGLE_CALENDAR_ID')
+    console.error('[Drive/upload] Google not configured — getGoogleEnv() returned null. Check env vars: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_DRIVE_REFRESH_TOKEN, GOOGLE_DRIVE_FOLDER_ID')
     return Response.json({ error: 'Google Drive no está configurado (env vars faltantes)' }, { status: 503 })
   }
-  console.log('[Drive/upload] Google configured — email:', googleEnv.serviceAccountEmail, '— folder:', googleEnv.driveFolderId)
+  console.log('[Drive/upload] Google configured — folder:', googleEnv.driveFolderId)
 
   // ── 4. Fetch cotización ───────────────────────────────────────────────────
   const { data: cotizacion, error: fetchError } = await supabaseAdmin

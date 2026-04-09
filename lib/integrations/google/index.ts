@@ -10,7 +10,7 @@ export type { SheetsService, SheetsAppendResult, SheetsAppendParams, SheetsUpdat
 export { calendarService }       from './calendar'
 export type { CalendarService, CalendarEventResult, CalendarCreateParams, CalendarConfirmParams } from './calendar'
 
-export { getGoogleAuthClient }   from './auth'
+export { getGoogleOAuth2Client, getAuthorizationUrl } from './auth'
 
 export { getGoogleEnv, isGoogleConfigured } from './env'
 export type { GoogleEnv }        from './env'

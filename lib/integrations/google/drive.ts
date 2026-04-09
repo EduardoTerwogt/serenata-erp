@@ -11,7 +11,7 @@
 
 import { google } from 'googleapis'
 import { Readable } from 'stream'
-import { getGoogleAuthClient } from './auth'
+import { getGoogleOAuth2Client } from './auth'
 import { getGoogleEnv } from './env'
 
 export interface DriveUploadParams {
@@ -42,7 +42,7 @@ export interface DriveService {
 }
 
 function getDriveInstance() {
-  const auth = getGoogleAuthClient()
+  const auth = getGoogleOAuth2Client()
   const env = getGoogleEnv()
   if (!auth || !env) return null
   return { drive: google.drive({ version: 'v3', auth }), env }
@@ -67,8 +67,6 @@ class DriveServiceImpl implements DriveService {
     console.log('[Drive] uploadPdf — folder:', env.driveFolderId, '— file:', fileName)
 
     const res = await drive.files.create({
-      // supportsAllDrives: required for Shared Drives (Service Accounts have no
-      // storage quota in personal "My Drive" — Shared Drive is the correct target)
       supportsAllDrives: true,
       requestBody: {
         name: fileName,
