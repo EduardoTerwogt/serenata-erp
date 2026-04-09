@@ -1,14 +1,18 @@
-// Google Drive integration — interface and disabled stub.
+// Google Drive integration — real implementation.
 //
-// Architecture for the real implementation (not yet active):
-//   1. Client generates PDF via lib/pdf.ts (unchanged, browser-side)
-//   2. Client converts blob to base64 and POSTs to /api/integrations/drive/upload
-//   3. API route calls driveService.uploadPdf() with the base64 content
-//   4. driveService stores the file in the configured Drive folder
-//   5. Returns { fileId, webViewLink } which is persisted on cotizaciones.drive_file_id
+// Flow:
+//   1. Client generates PDF via lib/pdf.ts (browser-side, unchanged)
+//   2. Client sends base64 to POST /api/integrations/drive/upload
+//   3. API route calls driveService.uploadPdf() or .updateFile()
+//   4. File is stored in the configured Drive folder (GOOGLE_DRIVE_FOLDER_ID)
+//   5. drive_file_id is persisted on the cotización row
 //
-// The stub (active now) always returns null — no Drive calls are made.
-// Replace DriveServiceStub with DriveServiceImpl when the integration is activated.
+// Returns null when Google credentials are missing — app works normally without Drive.
+
+import { google } from 'googleapis'
+import { Readable } from 'stream'
+import { getGoogleAuthClient } from './auth'
+import { getGoogleEnv } from './env'
 
 export interface DriveUploadParams {
   /** Final file name in Drive, e.g. "SH007 - Acme - Spot TV.pdf" */
@@ -35,22 +39,73 @@ export interface DriveUploadResult {
 export interface DriveService {
   /**
    * Upload a PDF to the configured Drive folder.
-   * Returns null when Drive is not configured or the upload fails non-fatally.
+   * Returns null when Drive is not configured.
    */
   uploadPdf(params: DriveUploadParams): Promise<DriveUploadResult | null>
 
   /**
    * Replace an existing Drive file with updated content.
-   * Returns null when Drive is not configured or the file is not found.
+   * Returns null when Drive is not configured.
    */
   updateFile(params: DriveUpdateParams): Promise<DriveUploadResult | null>
 }
 
-// Disabled stub — safe no-op, returns null for every operation.
-// Active by default until the Drive integration is enabled.
-class DriveServiceStub implements DriveService {
-  async uploadPdf(_params: DriveUploadParams): Promise<null> { return null }
-  async updateFile(_params: DriveUpdateParams): Promise<null> { return null }
+function getDriveInstance() {
+  const auth = getGoogleAuthClient()
+  const env = getGoogleEnv()
+  if (!auth || !env) return null
+  return { drive: google.drive({ version: 'v3', auth }), env }
 }
 
-export const driveService: DriveService = new DriveServiceStub()
+class DriveServiceImpl implements DriveService {
+  async uploadPdf({ fileName, contentBase64, mimeType = 'application/pdf' }: DriveUploadParams): Promise<DriveUploadResult | null> {
+    const instance = getDriveInstance()
+    if (!instance) return null
+    const { drive, env } = instance
+
+    const buffer = Buffer.from(contentBase64, 'base64')
+    const res = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        parents: [env.driveFolderId],
+      },
+      media: {
+        mimeType,
+        body: Readable.from(buffer),
+      },
+      fields: 'id,webViewLink',
+    })
+
+    if (!res.data.id) return null
+
+    return {
+      fileId: res.data.id,
+      webViewLink: res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`,
+    }
+  }
+
+  async updateFile({ fileId, contentBase64 }: DriveUpdateParams): Promise<DriveUploadResult | null> {
+    const instance = getDriveInstance()
+    if (!instance) return null
+    const { drive } = instance
+
+    const buffer = Buffer.from(contentBase64, 'base64')
+    const res = await drive.files.update({
+      fileId,
+      media: {
+        mimeType: 'application/pdf',
+        body: Readable.from(buffer),
+      },
+      fields: 'id,webViewLink',
+    })
+
+    if (!res.data.id) return null
+
+    return {
+      fileId: res.data.id,
+      webViewLink: res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`,
+    }
+  }
+}
+
+export const driveService: DriveService = new DriveServiceImpl()

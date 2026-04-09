@@ -129,7 +129,26 @@ export async function approveQuotation(id: string): Promise<Cotizacion> {
 
 export async function generateQuotationPdf(quotation: Cotizacion, itemsOverride?: QuotationFormValues['items']) {
   const { generarPDFCotizacion } = await import('@/lib/pdf')
-  await generarPDFCotizacion(buildQuotationPdfPayload(quotation, itemsOverride || quotation.items || []))
+  const pdfBase64 = await generarPDFCotizacion(buildQuotationPdfPayload(quotation, itemsOverride || quotation.items || []))
+
+  // Upload to Drive for non-BORRADOR quotations (fire-and-forget, never blocks UI)
+  if (quotation.estado !== 'BORRADOR') {
+    const fileName = `${quotation.id} - ${quotation.cliente} - ${quotation.proyecto}.pdf`
+    uploadPdfToDrive(quotation.id, fileName, pdfBase64).catch(() => {})
+  }
+}
+
+async function uploadPdfToDrive(cotizacionId: string, fileName: string, contentBase64: string) {
+  const res = await fetch('/api/integrations/drive/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cotizacionId, fileName, contentBase64 }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Drive upload failed' }))
+    throw new Error(err.error || 'Drive upload failed')
+  }
+  return res.json()
 }
 
 export function buildComplementariaUrl(id: string, cotizacion: Cotizacion) {
