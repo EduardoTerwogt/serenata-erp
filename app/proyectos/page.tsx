@@ -20,6 +20,7 @@ const ESTADO_ICON: Record<EstadoProyecto, string> = {
 
 export default function ProyectosPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
+  const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -36,6 +37,14 @@ export default function ProyectosPage() {
         <p className="text-gray-400 mt-1">Proyectos en producción</p>
       </div>
 
+      <input
+        type="text"
+        placeholder="Buscar por proyecto, cliente o folio..."
+        value={busqueda}
+        onChange={e => setBusqueda(e.target.value)}
+        className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 mb-6 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+      />
+
       {loading ? (
         <div className="text-center py-12 text-gray-500">Cargando...</div>
       ) : proyectos.length === 0 ? (
@@ -45,7 +54,15 @@ export default function ProyectosPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {proyectos.map(p => (
+          {proyectos.filter(p => {
+            const term = busqueda.toLowerCase().trim()
+            if (!term) return true
+            return (
+              p.proyecto.toLowerCase().includes(term) ||
+              p.cliente.toLowerCase().includes(term) ||
+              p.id.toLowerCase().includes(term)
+            )
+          }).map(p => (
             <Link
               key={p.id}
               href={`/proyectos/${p.id}`}

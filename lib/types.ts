@@ -1,4 +1,4 @@
-export type EstadoCotizacion = 'BORRADOR' | 'ENVIADA' | 'APROBADA'
+export type EstadoCotizacion = 'BORRADOR' | 'EMITIDA' | 'APROBADA' | 'CANCELADA'
 export type EstadoProyecto = 'PREPRODUCCION' | 'RODAJE' | 'POSTPRODUCCION' | 'FINALIZADO'
 export type EstadoPago = 'PENDIENTE' | 'PAGADO' | 'PARCIAL'
 

@@ -3,7 +3,7 @@
 // Future integration points (NOT active yet — do not call these from production code):
 //
 //   POINT A — Create tentative event:
-//     Trigger: cotización created with estado = 'ENVIADA'
+//     Trigger: cotización created with estado = 'EMITIDA'
 //     Location: lib/server/quotations/persistence.ts, after successful save
 //     Action: calendarService.createQuotationEvent(...)
 //     Stores: cotizaciones.calendar_event_id

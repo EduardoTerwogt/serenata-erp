@@ -4,11 +4,12 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Cotizacion, EstadoCotizacion } from '@/lib/types'
 
-const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'ENVIADA', 'APROBADA']
+const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
 
 export default function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [filtro, setFiltro] = useState<EstadoCotizacion | 'TODAS'>('TODAS')
+  const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -21,9 +22,24 @@ export default function CotizacionesPage() {
       .catch(() => setLoading(false))
   }, [])
 
-  const filtradas = filtro === 'TODAS'
+  const porEstado = filtro === 'TODAS'
     ? cotizaciones
     : cotizaciones.filter(c => c.estado === filtro)
+
+  const filtradas = busqueda.trim()
+    ? porEstado.filter(cot => {
+        const term = busqueda.toLowerCase()
+        return (
+          cot.id.toLowerCase().includes(term) ||
+          cot.cliente.toLowerCase().includes(term) ||
+          cot.proyecto.toLowerCase().includes(term) ||
+          (cot.items || []).some(item =>
+            item.descripcion.toLowerCase().includes(term) ||
+            (item.responsable_nombre && item.responsable_nombre.toLowerCase().includes(term))
+          )
+        )
+      })
+    : porEstado
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8 overflow-x-hidden">
@@ -56,6 +72,14 @@ export default function CotizacionesPage() {
         ))}
       </div>
 
+      <input
+        type="text"
+        placeholder="Buscar por folio, cliente, proyecto, item o responsable..."
+        value={busqueda}
+        onChange={e => setBusqueda(e.target.value)}
+        className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 mb-6 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+      />
+
       {loading ? (
         <div className="text-center py-12 text-gray-500">Cargando...</div>
       ) : filtradas.length > 0 ? (
@@ -71,7 +95,8 @@ export default function CotizacionesPage() {
                   <span className="font-mono text-blue-400 font-bold text-sm truncate">{cot.id}</span>
                   <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${
                     cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
-                    cot.estado === 'ENVIADA' ? 'bg-blue-900 text-blue-300' :
+                    cot.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' :
+                    cot.estado === 'CANCELADA' ? 'bg-red-900 text-red-300' :
                     'bg-yellow-900 text-yellow-300'
                   }`}>
                     {cot.estado}
@@ -115,7 +140,8 @@ export default function CotizacionesPage() {
                   </div>
                   <span className={`text-xs px-3 py-1 rounded-full font-medium ${
                     cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
-                    cot.estado === 'ENVIADA' ? 'bg-blue-900 text-blue-300' :
+                    cot.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' :
+                    cot.estado === 'CANCELADA' ? 'bg-red-900 text-red-300' :
                     'bg-yellow-900 text-yellow-300'
                   }`}>
                     {cot.estado}

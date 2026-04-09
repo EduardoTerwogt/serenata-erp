@@ -117,7 +117,7 @@ describe('CotizacionUpdateSchema', () => {
   })
 
   it('acepta update parcial solo con estado', () => {
-    const result = CotizacionUpdateSchema.safeParse({ estado: 'ENVIADA' })
+    const result = CotizacionUpdateSchema.safeParse({ estado: 'EMITIDA' })
     expect(result.success).toBe(true)
   })
 

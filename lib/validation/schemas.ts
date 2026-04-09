@@ -22,7 +22,7 @@ const CotizacionBaseSchema = z.object({
   proyecto: z.string().min(1, 'El proyecto es requerido'),
   fecha_entrega: z.string().nullable().optional(),
   locacion: z.string().nullable().optional(),
-  estado: z.enum(['BORRADOR', 'ENVIADA', 'APROBADA']).optional(),
+  estado: z.enum(['BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']).optional(),
   tipo: z.enum(['PRINCIPAL', 'COMPLEMENTARIA']).optional(),
   es_complementaria_de: z.string().nullable().optional(),
   porcentaje_fee: z.coerce.number().min(0).max(1).optional().default(0.15),

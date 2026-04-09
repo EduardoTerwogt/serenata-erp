@@ -1,7 +1,7 @@
 import { Cotizacion, Responsable } from '@/lib/types'
 
 export type DescuentoTipo = 'monto' | 'porcentaje'
-export type QuotationStatus = 'BORRADOR' | 'ENVIADA' | 'APROBADA'
+export type QuotationStatus = 'BORRADOR' | 'EMITIDA' | 'APROBADA' | 'CANCELADA'
 export type QuotationKind = 'PRINCIPAL' | 'COMPLEMENTARIA'
 
 export interface QuotationFormItem {
@@ -100,7 +100,7 @@ export type QuotationLikeForPdf = Pick<
 >
 
 export interface SaveQuotationOptions {
-  estado: Extract<QuotationStatus, 'BORRADOR' | 'ENVIADA'>
+  estado: Extract<QuotationStatus, 'BORRADOR' | 'EMITIDA'>
   porcentaje_fee: number
   iva_activo: boolean
   descuento_tipo: DescuentoTipo

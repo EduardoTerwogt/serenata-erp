@@ -104,7 +104,7 @@ export default async function DashboardPage() {
                   <td className="px-6 py-4">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                       cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
-                      cot.estado === 'ENVIADA' ? 'bg-blue-900 text-blue-300' :
+                      cot.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' :
                       'bg-yellow-900 text-yellow-300'
                     }`}>
                       {cot.estado}
@@ -137,7 +137,7 @@ export default async function DashboardPage() {
                 <span className="font-mono text-blue-400 font-bold text-sm">{cot.id}</span>
                 <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
                   cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
-                  cot.estado === 'ENVIADA' ? 'bg-blue-900 text-blue-300' :
+                  cot.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' :
                   'bg-yellow-900 text-yellow-300'
                 }`}>
                   {cot.estado}

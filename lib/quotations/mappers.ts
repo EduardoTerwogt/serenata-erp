@@ -29,7 +29,7 @@ export function mapQuotationItemsForSave(items: QuotationFormItem[]) {
 }
 
 interface BuildQuotationMutationPayloadOptions {
-  estado?: 'BORRADOR' | 'ENVIADA' | 'APROBADA'
+  estado?: 'BORRADOR' | 'EMITIDA' | 'APROBADA' | 'CANCELADA'
   porcentaje_fee: number
   iva_activo: boolean
   descuento_tipo: 'monto' | 'porcentaje'

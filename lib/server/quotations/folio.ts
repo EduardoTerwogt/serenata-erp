@@ -34,40 +34,67 @@ export async function previewNextQuotationFolio(baseFolio?: string): Promise<str
 
   try {
     if (!trimmedBase) {
-      const nextFromReal = await getNextFolio()
-      const realNumber = (extractPrincipalNumber(nextFromReal) ?? 1) - 1
+      // Obtener todos los folios principales existentes
+      const { data: existing } = await supabaseAdmin
+        .from('cotizaciones')
+        .select('id')
+      const existingNumbers = new Set(
+        (existing || []).map(c => extractPrincipalNumber(c.id)).filter((n): n is number => n !== null)
+      )
 
-      const { data, error } = await supabaseAdmin
+      // Obtener reservas activas
+      const { data: reserved, error } = await supabaseAdmin
         .from('cotizacion_folio_reservations')
         .select('folio')
         .eq('kind', 'PRINCIPAL')
         .is('consumed_at', null)
         .gt('expires_at', new Date().toISOString())
-
       if (error) throw error
 
-      const activeMax = Math.max(0, ...(data || []).map(row => extractPrincipalNumber(row.folio) ?? 0))
-      const next = Math.max(realNumber, activeMax) + 1
-      return `SH${String(next).padStart(3, '0')}`
+      const reservedNumbers = new Set(
+        (reserved || []).map(r => extractPrincipalNumber(r.folio)).filter((n): n is number => n !== null)
+      )
+
+      // Buscar primer gap disponible empezando desde 1
+      const maxNumber = Math.max(0, ...Array.from(existingNumbers), ...Array.from(reservedNumbers))
+      for (let i = 1; i <= maxNumber; i++) {
+        if (!existingNumbers.has(i) && !reservedNumbers.has(i)) {
+          return `SH${String(i).padStart(3, '0')}`
+        }
+      }
+      // Sin gaps, usar siguiente número
+      return `SH${String(maxNumber + 1).padStart(3, '0')}`
     }
 
-    const nextFromReal = await getNextFolioComplementaria(trimmedBase)
-    const nextCode = extractComplementariaCode(nextFromReal, trimmedBase) ?? 65
-    const realCode = nextCode - 1
+    // Complementarias — misma lógica de gaps
+    const { data: existing } = await supabaseAdmin
+      .from('cotizaciones')
+      .select('id')
+      .eq('es_complementaria_de', trimmedBase)
+    const existingCodes = new Set(
+      (existing || []).map(c => extractComplementariaCode(c.id, trimmedBase)).filter((n): n is number => n !== null)
+    )
 
-    const { data, error } = await supabaseAdmin
+    const { data: reserved, error } = await supabaseAdmin
       .from('cotizacion_folio_reservations')
       .select('folio')
       .eq('kind', 'COMPLEMENTARIA')
       .eq('base_folio', trimmedBase)
       .is('consumed_at', null)
       .gt('expires_at', new Date().toISOString())
-
     if (error) throw error
 
-    const activeMax = Math.max(64, ...(data || []).map(row => extractComplementariaCode(row.folio, trimmedBase) ?? 64))
-    const finalCode = Math.max(realCode, activeMax) + 1
-    return `${trimmedBase}-${String.fromCharCode(finalCode)}`
+    const reservedCodes = new Set(
+      (reserved || []).map(r => extractComplementariaCode(r.folio, trimmedBase)).filter((n): n is number => n !== null)
+    )
+
+    const maxCode = Math.max(64, ...Array.from(existingCodes), ...Array.from(reservedCodes))
+    for (let i = 65; i <= maxCode; i++) { // 65 = 'A'
+      if (!existingCodes.has(i) && !reservedCodes.has(i)) {
+        return `${trimmedBase}-${String.fromCharCode(i)}`
+      }
+    }
+    return `${trimmedBase}-${String.fromCharCode(maxCode + 1)}`
   } catch (error) {
     if (!isMissingReservationTableError(error)) throw error
     return trimmedBase ? getNextFolioComplementaria(trimmedBase) : getNextFolio()

@@ -30,6 +30,7 @@ export default function CuentasPage() {
   const [tab, setTab] = useState<Tab>('cobrar')
   const [cobrar, setCobrar] = useState<CuentaCobrar[]>([])
   const [pagar, setPagar] = useState<CuentaPagar[]>([])
+  const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
 
   const cargar = async () => {
@@ -63,13 +64,30 @@ export default function CuentasPage() {
     cargar()
   }
 
+  const term = busqueda.toLowerCase().trim()
+  const cobrarFiltradas = term
+    ? cobrar.filter(c =>
+        c.cotizacion_id.toLowerCase().includes(term) ||
+        c.cliente.toLowerCase().includes(term) ||
+        c.proyecto.toLowerCase().includes(term)
+      )
+    : cobrar
+  const pagarFiltradas = term
+    ? pagar.filter(c =>
+        c.cotizacion_id.toLowerCase().includes(term) ||
+        (c.responsable_nombre || '').toLowerCase().includes(term) ||
+        (c.proyecto_nombre || '').toLowerCase().includes(term) ||
+        (c.item_descripcion || '').toLowerCase().includes(term)
+      )
+    : pagar
+
   // Resumen cuentas por pagar
-  const totalPorPagar = pagar.filter(c => c.estado !== 'PAGADO').reduce((s, c) => s + c.x_pagar, 0)
-  const totalPagado = pagar.filter(c => c.estado === 'PAGADO').reduce((s, c) => s + c.x_pagar, 0)
+  const totalPorPagar = pagarFiltradas.filter(c => c.estado !== 'PAGADO').reduce((s, c) => s + c.x_pagar, 0)
+  const totalPagado = pagarFiltradas.filter(c => c.estado === 'PAGADO').reduce((s, c) => s + c.x_pagar, 0)
 
   // Resumen cuentas por cobrar
-  const totalPorCobrar = cobrar.filter(c => c.estado !== 'PAGADO').reduce((s, c) => s + c.monto_total, 0)
-  const totalCobrado = cobrar.filter(c => c.estado === 'PAGADO').reduce((s, c) => s + c.monto_total, 0)
+  const totalPorCobrar = cobrarFiltradas.filter(c => c.estado !== 'PAGADO').reduce((s, c) => s + c.monto_total, 0)
+  const totalCobrado = cobrarFiltradas.filter(c => c.estado === 'PAGADO').reduce((s, c) => s + c.monto_total, 0)
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
@@ -108,6 +126,14 @@ export default function CuentasPage() {
         </button>
       </div>
 
+      <input
+        type="text"
+        placeholder={tab === 'cobrar' ? 'Buscar por folio, cliente o proyecto...' : 'Buscar por folio, responsable, proyecto o descripción...'}
+        value={busqueda}
+        onChange={e => setBusqueda(e.target.value)}
+        className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 mb-6 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+      />
+
       {loading ? (
         <div className="text-center py-12 text-gray-500">Cargando...</div>
       ) : (
@@ -130,7 +156,7 @@ export default function CuentasPage() {
               <div className="bg-gray-900 border border-gray-800 rounded-xl">
                 {/* ✅ Usando componente responsivo compartido */}
                 <ResponsiveTableCard<CuentaCobrar>
-                  data={cobrar}
+                  data={cobrarFiltradas}
                   columns={[
                     { key: 'folio', label: 'Folio' },
                     { key: 'cliente', label: 'Cliente' },
@@ -237,7 +263,7 @@ export default function CuentasPage() {
               <div className="bg-gray-900 border border-gray-800 rounded-xl">
                 {/* ✅ Usando componente responsivo compartido */}
                 <ResponsiveTableCard<CuentaPagar>
-                  data={pagar}
+                  data={pagarFiltradas}
                   columns={[
                     { key: 'folio', label: 'Folio' },
                     { key: 'proyecto', label: 'Proyecto' },

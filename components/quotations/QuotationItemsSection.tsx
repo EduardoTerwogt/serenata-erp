@@ -1,5 +1,7 @@
 'use client'
 
+import { useRef, useEffect, useState as useStateReact, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { UseFieldArrayAppend, UseFieldArrayRemove, UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import { Producto, Responsable } from '@/lib/types'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
@@ -57,6 +59,27 @@ export function QuotationItemsSection({
   responsables,
   readOnlyItems = [],
 }: Props) {
+  const descInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+  const [dropdownPos, setDropdownPos] = useStateReact<Record<number, { top: number; left: number } | null>>({})
+
+  const updateDropdownPos = useCallback((index: number) => {
+    const el = descInputRefs.current[index]
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    setDropdownPos(prev => ({ ...prev, [index]: { top: rect.bottom + 4, left: rect.left } }))
+  }, [])
+
+  // Recalc positions on scroll
+  useEffect(() => {
+    const handler = () => {
+      Object.entries(mostrarProductoDropdown).forEach(([k, v]) => {
+        if (v) updateDropdownPos(Number(k))
+      })
+    }
+    window.addEventListener('scroll', handler, true)
+    return () => window.removeEventListener('scroll', handler, true)
+  }, [mostrarProductoDropdown, updateDropdownPos])
+
   const renderEditableDesktopRow = (fieldId: string, index: number) => {
     const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
     const { importe, margen } = calcItem(item)
@@ -68,21 +91,26 @@ export function QuotationItemsSection({
           <div className="relative">
             <input
               {...register(`items.${index}.descripcion`)}
-              onChange={e => handleDescripcionChange(index, e.target.value)}
-              onFocus={() => (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true }))}
+              ref={el => { descInputRefs.current[index] = el; register(`items.${index}.descripcion`).ref(el) }}
+              onChange={e => { handleDescripcionChange(index, e.target.value); register(`items.${index}.descripcion`).onChange(e) }}
+              onFocus={() => { updateDropdownPos(index); (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true })) }}
               onBlur={() => setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200)}
               className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500"
               autoComplete="off"
             />
-            {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && (
-              <div className="absolute z-[9999] mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+            {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && dropdownPos[index] && typeof document !== 'undefined' && createPortal(
+              <div
+                className="fixed z-[9999] w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto"
+                style={{ top: dropdownPos[index]!.top, left: dropdownPos[index]!.left }}
+              >
                 {productoSugerencias[index].map((p, i) => (
                   <div key={i} onMouseDown={() => seleccionarProducto(index, p)} className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">
                     <div className="font-medium">{p.descripcion}</div>
                     {p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}
                   </div>
                 ))}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         </td>

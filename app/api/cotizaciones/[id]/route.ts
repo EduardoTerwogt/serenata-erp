@@ -81,6 +81,13 @@ export async function DELETE(
 
   try {
     const { id } = await params
+    const cotizacion = await getCotizacionById(id)
+    if (cotizacion.estado !== 'BORRADOR') {
+      return Response.json(
+        { error: 'Solo se pueden borrar cotizaciones en estado BORRADOR. Usa cancelar para EMITIDA/APROBADA.' },
+        { status: 403 }
+      )
+    }
     await deleteItemsByCotizacion(id)
     await deleteCotizacion(id)
     triggerSheetsSync('cotizaciones', 'items_cotizacion')

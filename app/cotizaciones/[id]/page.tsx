@@ -23,6 +23,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [guardando, setGuardando] = useState(false)
   const [aprobando, setAprobando] = useState(false)
   const [generandoPdf, setGenerandoPdf] = useState(false)
+  const [cancelando, setCancelando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [driveLink, setDriveLink] = useState<string | null>(null)
@@ -62,7 +63,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     setMostrarProductoDropdown,
   } = quotationForm
 
-  const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'ENVIADA'
+  const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'EMITIDA'
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
@@ -132,7 +133,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         descuento_valor,
         responsables,
         currentQuotation: cotizacion,
-        ...(estado ? { estado: estado as 'BORRADOR' | 'ENVIADA' | 'APROBADA' } : {}),
+        ...(estado ? { estado: estado as 'BORRADOR' | 'EMITIDA' | 'APROBADA' } : {}),
       })
       applyCotizacionToState(refreshedCotizacion)
       await refreshCatalogos()
@@ -197,7 +198,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }
 
   const generarCotizacion = async () => {
-    const ok = await guardar('ENVIADA')
+    const ok = await guardar('EMITIDA')
     if (!ok) return
     const refreshedCotizacion = await fetchQuotationDetail(id)
     applyCotizacionToState(refreshedCotizacion)
@@ -216,6 +217,28 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }
   const crearComplementaria = () => { if (cotizacion) router.push(buildComplementariaUrl(id, cotizacion)) }
 
+  const cancelarCotizacion = async () => {
+    if (!confirm('¿Cancelar esta cotización? Se eliminará el proyecto y las cuentas por cobrar/pagar asociadas.')) return
+    setCancelando(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const res = await fetch(`/api/cotizaciones/${id}/cancelar`, { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json()
+        throw new Error(body.error || 'Error al cancelar')
+      }
+      const updated = await res.json()
+      applyCotizacionToState(updated)
+      setSuccess('Cotización cancelada. Proyecto y cuentas eliminados.')
+      setTimeout(() => setSuccess(null), 4000)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al cancelar')
+    } finally {
+      setCancelando(false)
+    }
+  }
+
   if (loading) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cargando...</div>
   if (!cotizacion) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cotización no encontrada</div>
 
@@ -225,14 +248,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
             <h1 className="text-2xl md:text-3xl font-bold text-white font-mono">{cotizacion.id}</h1>
-            <span className={`text-sm px-3 py-1 rounded-full font-medium ${cotizacion.estado === 'APROBADA' ? 'bg-green-900 text-green-300' : cotizacion.estado === 'ENVIADA' ? 'bg-blue-900 text-blue-300' : 'bg-yellow-900 text-yellow-300'}`}>{cotizacion.estado}</span>
+            <span className={`text-sm px-3 py-1 rounded-full font-medium ${cotizacion.estado === 'APROBADA' ? 'bg-green-900 text-green-300' : cotizacion.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' : cotizacion.estado === 'CANCELADA' ? 'bg-red-900 text-red-300' : 'bg-yellow-900 text-yellow-300'}`}>{cotizacion.estado}</span>
           </div>
           <p className="text-gray-400">{cotizacion.proyecto} — {cotizacion.cliente}</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:justify-end">
           {cotizacion.estado === 'BORRADOR' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarCotizacion} disabled={guardando || generandoPdf} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : guardando ? 'Generando...' : 'Generar Cotización'}</button></>}
-          {cotizacion.estado === 'ENVIADA' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarPDF} disabled={generandoPdf} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={aprobar} disabled={aprobando || guardando} className="bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 min-h-[44px]">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</button></>}
-          {cotizacion.estado === 'APROBADA' && <><button onClick={generarPDF} disabled={generandoPdf} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={crearComplementaria} className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]">Crear Complementaria</button></>}
+          {cotizacion.estado === 'EMITIDA' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarPDF} disabled={generandoPdf} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={aprobar} disabled={aprobando || guardando} className="bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 min-h-[44px]">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</button><button onClick={cancelarCotizacion} disabled={cancelando} className="bg-red-800 hover:bg-red-700 text-red-200 px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button></>}
+          {cotizacion.estado === 'APROBADA' && <><button onClick={generarPDF} disabled={generandoPdf} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={crearComplementaria} className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]">Crear Complementaria</button><button onClick={cancelarCotizacion} disabled={cancelando} className="bg-red-800 hover:bg-red-700 text-red-200 px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button></>}
         </div>
       </div>
 
