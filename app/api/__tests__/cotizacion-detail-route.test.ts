@@ -30,6 +30,10 @@ vi.mock('@/lib/validation/schemas', () => ({
   validate: mocks.validateMock,
 }))
 
+vi.mock('@/lib/integrations/sheets/trigger', () => ({
+  triggerSheetsSync: vi.fn(),
+}))
+
 import { PUT } from '../cotizaciones/[id]/route'
 
 describe('PUT /api/cotizaciones/[id]', () => {
