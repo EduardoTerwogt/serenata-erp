@@ -80,6 +80,17 @@ export const TABLE_SCHEMAS: TableSchema[] = [
     readonly: ['created_at'],
   },
   {
+    tab: 'Historial Responsables',
+    table: 'historial_responsable',
+    pk: 'id',
+    columns: [
+      'id', 'responsable_id', 'cotizacion_id', 'proyecto_id',
+      'proyecto_nombre', 'cliente', 'fecha_evento', 'rol_en_proyecto',
+      'x_pagar', 'created_at',
+    ],
+    readonly: ['created_at'],
+  },
+  {
     tab: 'Cuentas por Cobrar',
     table: 'cuentas_cobrar',
     pk: 'id',
