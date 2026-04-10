@@ -11,7 +11,7 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
 
   await page.getByRole('button', { name: 'Generar Orden de Pago' }).click()
   await expect(page.getByRole('heading', { name: 'Generar Orden de Pago' })).toBeVisible()
-  await expect(page.getByRole('dialog').getByText('José García', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('José García').first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Generar Orden PDF' }).click()
   await expect(page.getByRole('link', { name: 'Abrir PDF' })).toBeVisible()

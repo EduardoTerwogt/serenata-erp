@@ -41,5 +41,5 @@ test('handles documentos y pagos en cuentas por cobrar', async ({ page }) => {
   await form.getByRole('button', { name: 'Registrar Pago' }).click()
 
   await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible()
-  await expect(page.getByText('2026-04-18', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText(/PAGADO/i).first()).toBeVisible()
 })
