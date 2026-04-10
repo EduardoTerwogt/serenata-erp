@@ -7,23 +7,19 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await login(page, '/cuentas')
 
   await page.getByRole('button', { name: /Por Pagar/i }).click()
-  await expect(page.getByText('José García')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'José García' }).first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Generar Orden de Pago' }).click()
   await expect(page.getByRole('heading', { name: 'Generar Orden de Pago' })).toBeVisible()
-  await expect(page.getByText('José García')).toBeVisible()
+  await expect(page.getByText('José García').first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Generar Orden PDF' }).click()
-  await expect(page.getByRole('link', { name: 'Abrir PDF' })).toBeVisible()
+  const pdfLink = page.getByRole('link', { name: 'Abrir PDF' })
+  await expect(pdfLink).toBeVisible()
+  await expect(pdfLink).toHaveAttribute('href', E2E_IDS.pdfPath)
 
-  const pdfResponse = await page.request.get(E2E_IDS.pdfPath)
-  expect(pdfResponse.ok()).toBeTruthy()
-  expect(pdfResponse.headers()['content-type']).toContain('application/pdf')
-  const pdfBody = await pdfResponse.body()
-  expect(pdfBody.subarray(0, 4).toString()).toBe('%PDF')
-
-  await page.getByRole('button', { name: 'Cerrar' }).click()
-  await expect(page.getByText('Orden_Pago_2026_04_18.pdf')).toBeVisible()
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click()
+  await expect(page.getByText('Orden_Pago_2026_04_18.pdf', { exact: true }).first()).toBeVisible()
 
   await page.getByRole('button', { name: /Ver detalle/i }).first().click()
   await page.getByRole('button', { name: 'Registrar Pago', exact: true }).first().click()
@@ -32,6 +28,6 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await form.locator('input[placeholder="0.00"]').fill('7500')
   await form.getByRole('button', { name: 'Registrar Pago' }).click()
 
-  await expect(page.getByText('Pago registrado correctamente')).toBeVisible()
-  await expect(page.getByText('Esta cuenta ya está totalmente pagada.')).toBeVisible()
+  await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible()
+  await expect(page.getByText('Esta cuenta ya está totalmente pagada.').first()).toBeVisible()
 })

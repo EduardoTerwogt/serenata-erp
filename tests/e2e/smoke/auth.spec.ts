@@ -14,5 +14,5 @@ test('loads the cuentas shell for e2e smoke coverage', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Cuentas' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Por Cobrar/i })).toBeVisible()
   await expect(page.getByRole('button', { name: /Por Pagar/i })).toBeVisible()
-  await expect(page.getByText('Walmart México')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Walmart México' })).toBeVisible()
 })
