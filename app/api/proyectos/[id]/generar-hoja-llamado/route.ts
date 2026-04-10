@@ -1,5 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
-import { getProyectoById } from '@/lib/db'
+import { getProyectoDetalle } from '@/lib/server/projects/service'
+import { getResponsables } from '@/lib/db'
 import { generateHojaDeLlamadoPdf } from '@/lib/server/pdf/hoja-llamado-pdf'
 
 export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
@@ -9,11 +10,14 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
   try {
     const { id } = await props.params
 
-    // Fetch proyecto data
-    const proyecto = await getProyectoById(id)
+    // Fetch proyecto data with items
+    const proyecto = await getProyectoDetalle(id)
     if (!proyecto) {
       return new Response('Proyecto no encontrado', { status: 404 })
     }
+
+    // Fetch responsables separately
+    const responsables = await getResponsables()
 
     // Transform proyecto data to PDF format
     const pdfData = {
@@ -33,7 +37,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
         responsable_nombre: item.responsable_nombre || null,
         notas: item.notas || null,
       })),
-      responsables: (proyecto.responsables || []).map((resp: any) => ({
+      responsables: responsables.map((resp: any) => ({
         id: resp.id,
         nombre: resp.nombre,
         telefono: resp.telefono || null,
