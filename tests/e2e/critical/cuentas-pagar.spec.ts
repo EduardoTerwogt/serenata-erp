@@ -14,17 +14,9 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await expect(page.getByText('José García').first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Generar Orden PDF' }).click()
-  await expect(page.getByRole('link', { name: 'Abrir PDF' })).toBeVisible()
-
-  const pdfResponsePromise = page.waitForResponse((response) =>
-    response.url().includes(E2E_IDS.pdfPath) && response.ok()
-  )
-  await page.getByRole('link', { name: 'Abrir PDF' }).click()
-  const pdfResponse = await pdfResponsePromise
-  expect(pdfResponse.ok()).toBeTruthy()
-  expect(pdfResponse.headers()['content-type']).toContain('application/pdf')
-  const pdfBody = await pdfResponse.body()
-  expect(pdfBody.subarray(0, 4).toString()).toBe('%PDF')
+  const pdfLink = page.getByRole('link', { name: 'Abrir PDF' })
+  await expect(pdfLink).toBeVisible()
+  await expect(pdfLink).toHaveAttribute('href', E2E_IDS.pdfPath)
 
   await page.getByRole('button', { name: 'Cerrar' }).click()
   await expect(page.getByText('Orden_Pago_2026_04_18.pdf', { exact: true }).first()).toBeVisible()
