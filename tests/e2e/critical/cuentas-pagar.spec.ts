@@ -18,7 +18,7 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await expect(pdfLink).toBeVisible()
   await expect(pdfLink).toHaveAttribute('href', E2E_IDS.pdfPath)
 
-  await page.getByRole('button', { name: 'Cerrar' }).click()
+  await page.getByRole('button', { name: 'Cerrar', exact: true }).click()
   await expect(page.getByText('Orden_Pago_2026_04_18.pdf', { exact: true }).first()).toBeVisible()
 
   await page.getByRole('button', { name: /Ver detalle/i }).first().click()
