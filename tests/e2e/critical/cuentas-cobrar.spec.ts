@@ -7,7 +7,7 @@ test('handles documentos y pagos en cuentas por cobrar', async ({ page }) => {
   await login(page, '/cuentas')
 
   await page.getByRole('button', { name: /Ver detalle/i }).first().click()
-  await expect(page.getByText('CC-2026-00015')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'CC-2026-00015' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Documentos', exact: true }).click()
 
@@ -40,6 +40,6 @@ test('handles documentos y pagos en cuentas por cobrar', async ({ page }) => {
   await form.locator('input[type="date"]').fill('2026-04-18')
   await form.getByRole('button', { name: 'Registrar Pago' }).click()
 
-  await expect(page.getByText('Pago registrado correctamente')).toBeVisible()
-  await expect(page.getByText('2026-04-18')).toBeVisible()
+  await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible()
+  await expect(page.getByText('2026-04-18', { exact: true }).first()).toBeVisible()
 })
