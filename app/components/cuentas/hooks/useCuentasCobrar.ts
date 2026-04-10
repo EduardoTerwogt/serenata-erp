@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { CuentaCobrar, DocumentoCuentaCobrar, PagoComprobante } from '@/lib/types'
+import { getJson, sendFormData } from '@/lib/client/api'
 
 interface CuentaDetalle {
   cuenta: CuentaCobrar
@@ -34,9 +35,7 @@ export function useCuentasCobrar() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/cuentas-cobrar')
-      if (!res.ok) throw new Error('Error al cargar cuentas por cobrar')
-      const data = await res.json()
+      const data = await getJson<CuentaCobrar[]>('/api/cuentas-cobrar', 'Error al cargar cuentas por cobrar')
       setCuentas(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
@@ -49,18 +48,14 @@ export function useCuentasCobrar() {
 
   const cargarDetalle = async (id: string): Promise<CuentaDetalle | null> => {
     try {
-      const res = await fetch(`/api/cuentas-cobrar/${id}/documentos`)
-      if (!res.ok) throw new Error('Error al cargar detalle')
-      return await res.json()
+      return await getJson<CuentaDetalle>(`/api/cuentas-cobrar/${id}/documentos`, 'Error al cargar detalle')
     } catch {
       return null
     }
   }
 
   const cargarAlertas = async (): Promise<{ total_alertas: number; alertas: AlertaCuentaCobrar[] }> => {
-    const res = await fetch('/api/cuentas-cobrar/alertas')
-    if (!res.ok) throw new Error('Error al cargar alertas')
-    return res.json()
+    return getJson('/api/cuentas-cobrar/alertas', 'Error al cargar alertas')
   }
 
   const subirFactura = async (id: string, xml: File, pdf?: File) => {
@@ -68,16 +63,9 @@ export function useCuentasCobrar() {
     formData.append('factura_xml', xml)
     if (pdf) formData.append('factura_pdf', pdf)
 
-    const res = await fetch(`/api/cuentas-cobrar/${id}/subir-factura`, {
-      method: 'POST',
-      body: formData,
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || 'Error al subir factura')
-    }
+    const result = await sendFormData(`/api/cuentas-cobrar/${id}/subir-factura`, formData, 'Error al subir factura')
     await cargar()
-    return res.json()
+    return result
   }
 
   const subirComplemento = async (id: string, xml: File, notas?: string) => {
@@ -85,16 +73,9 @@ export function useCuentasCobrar() {
     formData.append('complemento_xml', xml)
     if (notas) formData.append('notas', notas)
 
-    const res = await fetch(`/api/cuentas-cobrar/${id}/subir-complemento`, {
-      method: 'POST',
-      body: formData,
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || 'Error al subir complemento')
-    }
+    const result = await sendFormData(`/api/cuentas-cobrar/${id}/subir-complemento`, formData, 'Error al subir complemento')
     await cargar()
-    return res.json()
+    return result
   }
 
   const registrarPago = async (
@@ -108,16 +89,9 @@ export function useCuentasCobrar() {
     if (data.notas) formData.append('notas', data.notas)
     if (data.comprobante) formData.append('comprobante', data.comprobante)
 
-    const res = await fetch(`/api/cuentas-cobrar/${id}/registrar-pago`, {
-      method: 'POST',
-      body: formData,
-    })
-    if (!res.ok) {
-      const respData = await res.json()
-      throw new Error(respData.error || 'Error al registrar pago')
-    }
+    const result = await sendFormData(`/api/cuentas-cobrar/${id}/registrar-pago`, formData, 'Error al registrar pago')
     await cargar()
-    return res.json()
+    return result
   }
 
   return {

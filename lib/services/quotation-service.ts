@@ -1,21 +1,18 @@
 import { Cotizacion, Responsable } from '@/lib/types'
-import { buildQuotationMutationPayload, buildQuotationPdfPayload } from '@/lib/quotations/mappers'
+import { buildQuotationMutationPayload } from '@/lib/quotations/mappers'
 import {
   QuotationFormValues,
   SaveQuotationOptions,
   UpdateQuotationOptions,
 } from '@/lib/quotations/types'
+import { getArrayBuffer, getJson, sendJson } from '@/lib/client/api'
 
 export async function fetchResponsables(): Promise<Responsable[]> {
-  const res = await fetch('/api/responsables')
-  if (!res.ok) throw new Error('Error cargando responsables')
-  return res.json()
+  return getJson('/api/responsables', 'Error cargando responsables')
 }
 
 export async function fetchQuotationDetail(id: string): Promise<Cotizacion> {
-  const res = await fetch(`/api/cotizaciones/${id}`)
-  if (!res.ok) throw new Error('Cotización no encontrada')
-  return res.json()
+  return getJson(`/api/cotizaciones/${id}`, 'Cotización no encontrada')
 }
 
 export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string }> {
@@ -23,9 +20,7 @@ export async function fetchNextQuotationFolio(complementariaDe?: string): Promis
     ? `/api/folio?complementaria_de=${encodeURIComponent(complementariaDe)}`
     : '/api/folio'
 
-  const res = await fetch(folioUrl)
-  if (!res.ok) throw new Error('Error obteniendo folio')
-  const data = await res.json()
+  const data = await getJson<{ folio: string }>(folioUrl, 'Error obteniendo folio')
   return { folio: data.folio }
 }
 
@@ -47,25 +42,8 @@ export async function saveNewQuotation(
   if (options.es_complementaria_de) body.es_complementaria_de = options.es_complementaria_de
 
   const expectedItemsCount = data.items.length
-  const res = await fetch('/api/cotizaciones', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const savedQuotation = await sendJson<Cotizacion>('/api/cotizaciones', body, 'Error al guardar')
 
-  if (!res.ok) {
-    let errMsg = 'Error al guardar'
-    try {
-      const err = await res.json()
-      errMsg = err.error || errMsg
-    } catch {
-      // ignore
-    }
-
-    throw new Error(errMsg)
-  }
-
-  const savedQuotation = await res.json()
   if ((savedQuotation?.items?.length ?? 0) === expectedItemsCount) return savedQuotation
 
   if (savedQuotation?.id) {
@@ -101,29 +79,16 @@ export async function updateQuotation(
     }
   })
 
-  const res = await fetch(`/api/cotizaciones/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...basePayload,
-      items,
-    }),
-  })
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Error al actualizar cotización' }))
-    throw new Error(err.error || 'Error al actualizar cotización')
-  }
+  await sendJson(`/api/cotizaciones/${id}`, {
+    ...basePayload,
+    items,
+  }, 'Error al actualizar cotización', { method: 'PUT' })
 
   return fetchQuotationDetail(id)
 }
 
 export async function approveQuotation(id: string): Promise<Cotizacion> {
-  const res = await fetch(`/api/cotizaciones/${id}/aprobar`, { method: 'POST' })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Error aprobando cotización' }))
-    throw new Error(err.error || 'Error aprobando cotización')
-  }
+  await getJson(`/api/cotizaciones/${id}/aprobar`, 'Error aprobando cotización', { method: 'POST' })
   return fetchQuotationDetail(id)
 }
 
@@ -140,15 +105,8 @@ export async function generateQuotationPdf(
 ): Promise<GeneratePdfResult> {
   const skipDownload = options?.skipDownload === true
 
-  // Fetch PDF from server-side API endpoint
-  const pdfRes = await fetch(`/api/cotizaciones/${quotation.id}/generar-pdf`)
-  if (!pdfRes.ok) {
-    throw new Error('Error generando PDF')
-  }
+  const pdfArrayBuffer = await getArrayBuffer(`/api/cotizaciones/${quotation.id}/generar-pdf`, 'Error generando PDF')
 
-  const pdfArrayBuffer = await pdfRes.arrayBuffer()
-
-  // Trigger download in browser if not skipped
   if (!skipDownload) {
     const blob = new Blob([pdfArrayBuffer], { type: 'application/pdf' })
     const url = URL.createObjectURL(blob)
@@ -165,7 +123,6 @@ export async function generateQuotationPdf(
     return { savedToDrive: false }
   }
 
-  // Convert ArrayBuffer to base64 for Drive upload
   const uint8Array = new Uint8Array(pdfArrayBuffer)
   let binaryString = ''
   for (let i = 0; i < uint8Array.length; i++) {
@@ -188,16 +145,19 @@ export async function generateQuotationPdf(
 }
 
 async function uploadPdfToDrive(cotizacionId: string, fileName: string, contentBase64: string) {
-  const res = await fetch('/api/integrations/drive/upload', {
+  const response = await fetch('/api/integrations/drive/upload', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ cotizacionId, fileName, contentBase64 }),
   })
-  const data = await res.json().catch(() => ({ error: 'Respuesta no JSON' }))
-  if (!res.ok) {
-    console.error('[Drive] API route retornó', res.status, '—', data?.error)
-    throw new Error(data?.error || `HTTP ${res.status}`)
+
+  const data = await response.json().catch(() => ({ error: 'Respuesta no JSON' }))
+
+  if (!response.ok) {
+    console.error('[Drive] API route retornó', response.status, '—', data?.error)
+    throw new Error(data?.error || `HTTP ${response.status}`)
   }
+
   return data
 }
 

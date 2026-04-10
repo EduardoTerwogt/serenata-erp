@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { CuentaPagar, DocumentoCuentaPagar, OrdenPago } from '@/lib/types'
+import { getJson, sendFormData } from '@/lib/client/api'
 
 interface CuentaPagarDetalle {
   cuenta: CuentaPagar
@@ -69,9 +70,7 @@ export function useCuentasPagar() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/cuentas-pagar')
-      if (!res.ok) throw new Error('Error al cargar cuentas por pagar')
-      const data = await res.json()
+      const data = await getJson<CuentaPagar[]>('/api/cuentas-pagar', 'Error al cargar cuentas por pagar')
       setCuentas(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
@@ -84,35 +83,23 @@ export function useCuentasPagar() {
 
   const cargarDetalle = async (id: string): Promise<CuentaPagarDetalle | null> => {
     try {
-      const res = await fetch(`/api/cuentas-pagar/${id}/documentos`)
-      if (!res.ok) throw new Error('Error al cargar detalle')
-      return await res.json()
+      return await getJson<CuentaPagarDetalle>(`/api/cuentas-pagar/${id}/documentos`, 'Error al cargar detalle')
     } catch {
       return null
     }
   }
 
   const cargarPreviewOrdenPago = async (): Promise<OrdenPagoPreviewResult> => {
-    const res = await fetch('/api/cuentas-pagar/generar-orden-pago')
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Error al cargar preview de orden')
-    return data
+    return getJson('/api/cuentas-pagar/generar-orden-pago', 'Error al cargar preview de orden')
   }
 
   const subirFactura = async (id: string, archivo: File) => {
     const formData = new FormData()
     formData.append('factura_proveedor', archivo)
 
-    const res = await fetch(`/api/cuentas-pagar/${id}/subir-factura`, {
-      method: 'POST',
-      body: formData,
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || 'Error al subir factura')
-    }
+    const result = await sendFormData(`/api/cuentas-pagar/${id}/subir-factura`, formData, 'Error al subir factura')
     await cargar()
-    return res.json()
+    return result
   }
 
   const registrarPago = async (
@@ -123,34 +110,21 @@ export function useCuentasPagar() {
     formData.append('monto', String(data.monto))
     if (data.comprobante) formData.append('comprobante', data.comprobante)
 
-    const res = await fetch(`/api/cuentas-pagar/${id}/registrar-pago`, {
-      method: 'POST',
-      body: formData,
-    })
-    if (!res.ok) {
-      const respData = await res.json()
-      throw new Error(respData.error || 'Error al registrar pago')
-    }
+    const result = await sendFormData(`/api/cuentas-pagar/${id}/registrar-pago`, formData, 'Error al registrar pago')
     await cargar()
-    return res.json()
+    return result
   }
 
   const generarOrdenPago = async (): Promise<OrdenPagoResult> => {
-    const res = await fetch('/api/cuentas-pagar/generar-orden-pago', {
+    const data = await getJson<OrdenPagoResult>('/api/cuentas-pagar/generar-orden-pago', 'Error al generar orden de pago', {
       method: 'POST',
     })
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(data.error || 'Error al generar orden de pago')
-    }
     await cargar()
     return data
   }
 
   const cargarHistorialOrdenes = async (): Promise<{ total: number; ordenes: OrdenPago[] }> => {
-    const res = await fetch('/api/cuentas-pagar/ordenes-historial')
-    if (!res.ok) throw new Error('Error al cargar historial')
-    return res.json()
+    return getJson('/api/cuentas-pagar/ordenes-historial', 'Error al cargar historial')
   }
 
   return {
