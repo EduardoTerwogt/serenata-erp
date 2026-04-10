@@ -47,7 +47,6 @@ export async function createCuentasPagarDesdeCotizacion(cotizacionId: string) {
     .filter(item => item.x_pagar > 0)
     .map(item => ({
       cotizacion_id: cotizacionId,
-      cotizacion_id: cotizacionId,
       proyecto_id: cotizacionId,
       item_id: item.id,
       responsable_nombre: item.responsable_nombre || 'Sin asignar',
