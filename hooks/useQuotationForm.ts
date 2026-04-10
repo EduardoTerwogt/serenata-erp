@@ -35,7 +35,29 @@ export function useQuotationForm(
   }, [])
 
   useEffect(() => {
-    refreshCatalogos()
+    if (typeof window === 'undefined') return
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    let idleId: number | null = null
+
+    const loadCatalogos = () => {
+      void refreshCatalogos()
+    }
+
+    if ('requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(loadCatalogos, { timeout: 1500 })
+    } else {
+      timeoutId = setTimeout(loadCatalogos, 0)
+    }
+
+    return () => {
+      if (idleId !== null && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId)
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId)
+      }
+    }
   }, [refreshCatalogos])
 
   const calcItem = (item: QuotationFormItem) => calculateQuotationItem(item)
