@@ -56,7 +56,7 @@ export async function mockCuentasApis(page: Page) {
     fecha_pago: null as string | null,
     metodo_pago: null,
     notas: null,
-    orden_pago_id: null,
+    orden_pago_id: null as string | null,
   }
 
   const cuentasCobrar = [cobrarCuenta]
