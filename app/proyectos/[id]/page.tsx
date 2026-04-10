@@ -101,26 +101,26 @@ export default function ProyectoDetallePage({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full md:w-auto md:flex md:flex-row md:flex-wrap md:justify-end">
           <button
             onClick={async () => {
-              const { generarHojaDeLlamado } = await import('@/lib/pdf')
-              await generarHojaDeLlamado({
-                proyecto: proyecto.proyecto,
-                cliente: proyecto.cliente,
-                fecha_entrega: proyecto.fecha_entrega,
-                locacion: proyecto.locacion,
-                horarios: proyecto.horarios,
-                punto_encuentro: proyecto.punto_encuentro,
-                notas: proyecto.notas,
-                items: items.map(i => ({
-                  id: i.id,
-                  descripcion: i.descripcion,
-                  categoria: i.categoria,
-                  cantidad: i.cantidad,
-                  responsable_id: i.responsable_id,
-                  responsable_nombre: i.responsable_nombre,
-                  notas: itemNotas[i.id] ?? i.notas ?? '',
-                })),
-                responsables,
-              })
+              try {
+                const pdfRes = await fetch(`/api/proyectos/${id}/generar-hoja-llamado`)
+                if (!pdfRes.ok) {
+                  setError('Error al generar hoja de llamado')
+                  return
+                }
+
+                const pdfArrayBuffer = await pdfRes.arrayBuffer()
+                const blob = new Blob([pdfArrayBuffer], { type: 'application/pdf' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `${proyecto.proyecto} - ${proyecto.cliente} - Hoja de Llamado.pdf`
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Error al generar PDF')
+              }
             }}
             className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px] flex items-center justify-center text-center"
           >
