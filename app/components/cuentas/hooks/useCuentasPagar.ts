@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CuentaPagar, DocumentoCuentaPagar, OrdenPago } from '@/lib/types'
 import { getJson, sendFormData } from '@/lib/client/api'
 
@@ -79,30 +79,30 @@ export function useCuentasPagar() {
     }
   }, [])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { void cargar() }, [cargar])
 
-  const cargarDetalle = async (id: string): Promise<CuentaPagarDetalle | null> => {
+  const cargarDetalle = useCallback(async (id: string): Promise<CuentaPagarDetalle | null> => {
     try {
       return await getJson<CuentaPagarDetalle>(`/api/cuentas-pagar/${id}/documentos`, 'Error al cargar detalle')
     } catch {
       return null
     }
-  }
+  }, [])
 
-  const cargarPreviewOrdenPago = async (): Promise<OrdenPagoPreviewResult> => {
+  const cargarPreviewOrdenPago = useCallback(async (): Promise<OrdenPagoPreviewResult> => {
     return getJson('/api/cuentas-pagar/generar-orden-pago', 'Error al cargar preview de orden')
-  }
+  }, [])
 
-  const subirFactura = async (id: string, archivo: File) => {
+  const subirFactura = useCallback(async (id: string, archivo: File) => {
     const formData = new FormData()
     formData.append('factura_proveedor', archivo)
 
     const result = await sendFormData(`/api/cuentas-pagar/${id}/subir-factura`, formData, 'Error al subir factura')
     await cargar()
     return result
-  }
+  }, [cargar])
 
-  const registrarPago = async (
+  const registrarPago = useCallback(async (
     id: string,
     data: { monto: number; comprobante?: File }
   ) => {
@@ -113,21 +113,21 @@ export function useCuentasPagar() {
     const result = await sendFormData(`/api/cuentas-pagar/${id}/registrar-pago`, formData, 'Error al registrar pago')
     await cargar()
     return result
-  }
+  }, [cargar])
 
-  const generarOrdenPago = async (): Promise<OrdenPagoResult> => {
+  const generarOrdenPago = useCallback(async (): Promise<OrdenPagoResult> => {
     const data = await getJson<OrdenPagoResult>('/api/cuentas-pagar/generar-orden-pago', 'Error al generar orden de pago', {
       method: 'POST',
     })
     await cargar()
     return data
-  }
+  }, [cargar])
 
-  const cargarHistorialOrdenes = async (): Promise<{ total: number; ordenes: OrdenPago[] }> => {
+  const cargarHistorialOrdenes = useCallback(async (): Promise<{ total: number; ordenes: OrdenPago[] }> => {
     return getJson('/api/cuentas-pagar/ordenes-historial', 'Error al cargar historial')
-  }
+  }, [])
 
-  return {
+  return useMemo(() => ({
     cuentas,
     loading,
     error,
@@ -138,5 +138,5 @@ export function useCuentasPagar() {
     registrarPago,
     generarOrdenPago,
     cargarHistorialOrdenes,
-  }
+  }), [cuentas, loading, error, cargar, cargarDetalle, cargarPreviewOrdenPago, subirFactura, registrarPago, generarOrdenPago, cargarHistorialOrdenes])
 }

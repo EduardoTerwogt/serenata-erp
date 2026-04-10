@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CuentaCobrar, DocumentoCuentaCobrar, PagoComprobante } from '@/lib/types'
 import { getJson, sendFormData } from '@/lib/client/api'
 
@@ -44,21 +44,21 @@ export function useCuentasCobrar() {
     }
   }, [])
 
-  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { void cargar() }, [cargar])
 
-  const cargarDetalle = async (id: string): Promise<CuentaDetalle | null> => {
+  const cargarDetalle = useCallback(async (id: string): Promise<CuentaDetalle | null> => {
     try {
       return await getJson<CuentaDetalle>(`/api/cuentas-cobrar/${id}/documentos`, 'Error al cargar detalle')
     } catch {
       return null
     }
-  }
+  }, [])
 
-  const cargarAlertas = async (): Promise<{ total_alertas: number; alertas: AlertaCuentaCobrar[] }> => {
+  const cargarAlertas = useCallback(async (): Promise<{ total_alertas: number; alertas: AlertaCuentaCobrar[] }> => {
     return getJson('/api/cuentas-cobrar/alertas', 'Error al cargar alertas')
-  }
+  }, [])
 
-  const subirFactura = async (id: string, xml: File, pdf?: File) => {
+  const subirFactura = useCallback(async (id: string, xml: File, pdf?: File) => {
     const formData = new FormData()
     formData.append('factura_xml', xml)
     if (pdf) formData.append('factura_pdf', pdf)
@@ -66,9 +66,9 @@ export function useCuentasCobrar() {
     const result = await sendFormData(`/api/cuentas-cobrar/${id}/subir-factura`, formData, 'Error al subir factura')
     await cargar()
     return result
-  }
+  }, [cargar])
 
-  const subirComplemento = async (id: string, xml: File, notas?: string) => {
+  const subirComplemento = useCallback(async (id: string, xml: File, notas?: string) => {
     const formData = new FormData()
     formData.append('complemento_xml', xml)
     if (notas) formData.append('notas', notas)
@@ -76,9 +76,9 @@ export function useCuentasCobrar() {
     const result = await sendFormData(`/api/cuentas-cobrar/${id}/subir-complemento`, formData, 'Error al subir complemento')
     await cargar()
     return result
-  }
+  }, [cargar])
 
-  const registrarPago = async (
+  const registrarPago = useCallback(async (
     id: string,
     data: { monto: number; tipo_pago: string; fecha_pago: string; notas?: string; comprobante?: File }
   ) => {
@@ -92,9 +92,9 @@ export function useCuentasCobrar() {
     const result = await sendFormData(`/api/cuentas-cobrar/${id}/registrar-pago`, formData, 'Error al registrar pago')
     await cargar()
     return result
-  }
+  }, [cargar])
 
-  return {
+  return useMemo(() => ({
     cuentas,
     loading,
     error,
@@ -104,5 +104,5 @@ export function useCuentasCobrar() {
     subirFactura,
     subirComplemento,
     registrarPago,
-  }
+  }), [cuentas, loading, error, cargar, cargarDetalle, cargarAlertas, subirFactura, subirComplemento, registrarPago])
 }

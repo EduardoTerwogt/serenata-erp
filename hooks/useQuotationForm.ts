@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { UseFormSetValue } from 'react-hook-form'
 import { Producto } from '@/lib/types'
 import { calculateQuotationItem } from '@/lib/quotations/calculations'
@@ -13,12 +13,9 @@ export function useQuotationForm(
   const [listaClientes, setListaClientes] = useState<{ nombre: string; proyectos: string[] }[]>([])
   const [listaProductos, setListaProductos] = useState<Producto[]>([])
   const [clienteInput, setClienteInput] = useState('')
-  const [clienteSugerencias, setClienteSugerencias] = useState<string[]>([])
   const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
-  const [proyectosDelCliente, setProyectosDelCliente] = useState<string[]>([])
   const [proyectoInput, setProyectoInput] = useState('')
   const [mostrarProyectoDropdown, setMostrarProyectoDropdown] = useState(false)
-  const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
   const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
 
   const refreshCatalogos = useCallback(async () => {
@@ -60,71 +57,106 @@ export function useQuotationForm(
     }
   }, [refreshCatalogos])
 
-  const calcItem = (item: QuotationFormItem) => calculateQuotationItem(item)
+  const clienteSugerencias = useMemo(() => {
+    if (clienteInput.length < 2) return []
 
-  const handleClienteChange = (valor: string) => {
+    return listaClientes
+      .filter((cliente) => cliente.nombre.toLowerCase().includes(clienteInput.toLowerCase()))
+      .slice(0, 8)
+      .map((cliente) => cliente.nombre)
+  }, [clienteInput, listaClientes])
+
+  const proyectosDelCliente = useMemo(() => {
+    const clienteSeleccionado = listaClientes.find(
+      (cliente) => cliente.nombre.toLowerCase() === clienteInput.trim().toLowerCase()
+    )
+
+    return clienteSeleccionado?.proyectos || []
+  }, [clienteInput, listaClientes])
+
+  const productoSugerencias = useMemo(() => {
+    return watchedItems.reduce<Record<number, Producto[]>>((acc, item, index) => {
+      const descripcion = item?.descripcion?.trim() || ''
+
+      if (descripcion.length < 2) {
+        acc[index] = []
+        return acc
+      }
+
+      acc[index] = listaProductos
+        .filter((producto) => producto.descripcion.toLowerCase().includes(descripcion.toLowerCase()))
+        .slice(0, 8)
+
+      return acc
+    }, {})
+  }, [listaProductos, watchedItems])
+
+  const calcItem = useCallback((item: QuotationFormItem) => calculateQuotationItem(item), [])
+
+  const handleClienteChange = useCallback((valor: string) => {
     setClienteInput(valor)
     setValue('cliente', valor)
-    setProyectosDelCliente([])
 
-    if (valor.length >= 2) {
-      const filtrados = listaClientes.filter(c => c.nombre.toLowerCase().includes(valor.toLowerCase())).slice(0, 8)
-      setClienteSugerencias(filtrados.map(c => c.nombre))
-      setMostrarClienteDropdown(filtrados.length > 0)
-
-      const clienteSeleccionado = listaClientes.find(c => c.nombre.toLowerCase() === valor.toLowerCase())
-      if (clienteSeleccionado) {
-        setProyectosDelCliente(clienteSeleccionado.proyectos || [])
-      }
-    } else {
+    if (valor.length < 2) {
       setMostrarClienteDropdown(false)
+      return
     }
-  }
 
-  const handleProyectoChange = (valor: string) => {
+    const tieneSugerencias = listaClientes.some((cliente) =>
+      cliente.nombre.toLowerCase().includes(valor.toLowerCase())
+    )
+    setMostrarClienteDropdown(tieneSugerencias)
+  }, [listaClientes, setValue])
+
+  const handleProyectoChange = useCallback((valor: string) => {
     setProyectoInput(valor)
     setValue('proyecto', valor)
-    const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(valor.toLowerCase()))
-    setMostrarProyectoDropdown(filtrados.length > 0)
-  }
 
-  const handleDescripcionChange = (index: number, valor: string) => {
+    const tieneSugerencias = proyectosDelCliente.some((proyecto) =>
+      proyecto.toLowerCase().includes(valor.toLowerCase())
+    )
+    setMostrarProyectoDropdown(tieneSugerencias)
+  }, [proyectosDelCliente, setValue])
+
+  const handleDescripcionChange = useCallback((index: number, valor: string) => {
     setValue(`items.${index}.descripcion`, valor)
     setValue(`items.${index}.precio_unitario`, '')
     setValue(`items.${index}.x_pagar`, '')
 
-    if (valor.length >= 2) {
-      const filtrados = listaProductos
-        .filter(p => p.descripcion.toLowerCase().includes(valor.toLowerCase()))
-        .slice(0, 8)
-      setProductoSugerencias(prev => ({ ...prev, [index]: filtrados }))
-      setMostrarProductoDropdown(prev => ({ ...prev, [index]: filtrados.length > 0 }))
-    } else {
-      setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
+    if (valor.length < 2) {
+      setMostrarProductoDropdown((prev) => ({ ...prev, [index]: false }))
+      return
     }
-  }
 
-  const seleccionarProducto = (index: number, p: Producto) => {
-    setValue(`items.${index}.descripcion`, p.descripcion)
-    setValue(`items.${index}.categoria`, p.categoria || '')
-    if (p.precio_unitario > 0) {
-      setValue(`items.${index}.precio_unitario`, p.precio_unitario)
-    }
-    if ((p.x_pagar_sugerido || 0) > 0) {
-      setValue(`items.${index}.x_pagar`, p.x_pagar_sugerido || 0)
-    }
-    setMostrarProductoDropdown(prev => ({ ...prev, [index]: false }))
-  }
+    const tieneSugerencias = listaProductos.some((producto) =>
+      producto.descripcion.toLowerCase().includes(valor.toLowerCase())
+    )
+    setMostrarProductoDropdown((prev) => ({ ...prev, [index]: tieneSugerencias }))
+  }, [listaProductos, setValue])
 
-  const seleccionarCliente = (cliente: string) => {
-    handleClienteChange(cliente)
+  const seleccionarProducto = useCallback((index: number, producto: Producto) => {
+    setValue(`items.${index}.descripcion`, producto.descripcion)
+    setValue(`items.${index}.categoria`, producto.categoria || '')
+    if (producto.precio_unitario > 0) {
+      setValue(`items.${index}.precio_unitario`, producto.precio_unitario)
+    }
+    if ((producto.x_pagar_sugerido || 0) > 0) {
+      setValue(`items.${index}.x_pagar`, producto.x_pagar_sugerido || 0)
+    }
+    setMostrarProductoDropdown((prev) => ({ ...prev, [index]: false }))
+  }, [setValue])
+
+  const seleccionarCliente = useCallback((cliente: string) => {
+    setClienteInput(cliente)
+    setValue('cliente', cliente)
     setMostrarClienteDropdown(false)
-  }
+  }, [setValue])
 
-  const seleccionarProyecto = (proyecto: string) => {
-    handleProyectoChange(proyecto)
+  const seleccionarProyecto = useCallback((proyecto: string) => {
+    setProyectoInput(proyecto)
+    setValue('proyecto', proyecto)
     setMostrarProyectoDropdown(false)
-  }
+  }, [setValue])
 
   return {
     listaClientes,

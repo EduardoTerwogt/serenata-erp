@@ -4,7 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { OrdenPago } from '@/lib/types'
 import { useCuentasCobrar } from '@/app/components/cuentas/hooks/useCuentasCobrar'
 import { useCuentasPagar } from '@/app/components/cuentas/hooks/useCuentasPagar'
-import { AlertaCuentaCobrar, SelectedCuenta, Tab } from '@/app/components/cuentas/types'
+import {
+  AlertaCuentaCobrar,
+  SelectedCuenta,
+  Tab,
+} from '@/app/components/cuentas/types'
+import {
+  buildCobrarRows,
+  buildPagarRows,
+  countPendingCuentas,
+  filterCobrarRows,
+  filterPagarRows,
+  getCuentaSearchTerm,
+  sumMontoPagado,
+  sumMontoPendiente,
+} from '@/app/components/cuentas/selectors'
 
 export function useCuentasPage() {
   const [tab, setTab] = useState<Tab>('cobrar')
@@ -20,13 +34,14 @@ export function useCuentasPage() {
   const cobrarApi = useCuentasCobrar()
   const pagarApi = useCuentasPagar()
 
+  const { cuentas: cuentasCobrar, loading: loadingCobrar, recargar: recargarCobrar, cargarAlertas: fetchAlertas } = cobrarApi
+  const { cuentas: cuentasPagar, loading: loadingPagar, recargar: recargarPagar, cargarHistorialOrdenes: fetchHistorialOrdenes } = pagarApi
+
   const cargarAlertas = useCallback(async () => {
     setLoadingAlertas(true)
 
     try {
-      const res = await fetch('/api/cuentas-cobrar/alertas')
-      if (!res.ok) throw new Error('Error cargando alertas')
-      const data = await res.json()
+      const data = await fetchAlertas()
       setAlertas(data.alertas || [])
       alertasLoadedRef.current = true
     } catch {
@@ -35,23 +50,21 @@ export function useCuentasPage() {
     } finally {
       setLoadingAlertas(false)
     }
-  }, [])
+  }, [fetchAlertas])
 
   const cargarHistorialOrdenes = useCallback(async () => {
     try {
-      const res = await fetch('/api/cuentas-pagar/ordenes-historial')
-      if (!res.ok) throw new Error('Error cargando historial')
-      const data = await res.json()
+      const data = await fetchHistorialOrdenes()
       setHistorialOrdenes(data.ordenes || [])
       historialLoadedRef.current = true
     } catch {
       setHistorialOrdenes([])
       historialLoadedRef.current = false
     }
-  }, [])
+  }, [fetchHistorialOrdenes])
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([cobrarApi.recargar(), pagarApi.recargar()])
+    await Promise.all([recargarCobrar(), recargarPagar()])
 
     if (tab === 'cobrar') {
       alertasLoadedRef.current = false
@@ -62,7 +75,7 @@ export function useCuentasPage() {
       historialLoadedRef.current = false
       await cargarHistorialOrdenes()
     }
-  }, [cargarAlertas, cargarHistorialOrdenes, cobrarApi.recargar, pagarApi.recargar, tab])
+  }, [cargarAlertas, cargarHistorialOrdenes, recargarCobrar, recargarPagar, tab])
 
   useEffect(() => {
     if (tab !== 'cobrar' || alertasLoadedRef.current) return
@@ -74,47 +87,20 @@ export function useCuentasPage() {
     void cargarHistorialOrdenes()
   }, [cargarHistorialOrdenes, tab])
 
-  const term = busqueda.toLowerCase().trim()
+  const term = useMemo(() => getCuentaSearchTerm(busqueda), [busqueda])
+  const cobrarRows = useMemo(() => buildCobrarRows(cuentasCobrar), [cuentasCobrar])
+  const pagarRows = useMemo(() => buildPagarRows(cuentasPagar), [cuentasPagar])
 
-  const cobrarFiltradas = useMemo(() => {
-    return (term
-      ? cobrarApi.cuentas.filter((cuenta) =>
-          cuenta.cotizacion_id.toLowerCase().includes(term) ||
-          (cuenta.folio || '').toLowerCase().includes(term) ||
-          cuenta.cliente.toLowerCase().includes(term) ||
-          cuenta.proyecto.toLowerCase().includes(term)
-        )
-      : cobrarApi.cuentas
-    ).map((cuenta) => ({ ...cuenta, tipo: 'cobrar' as const }))
-  }, [cobrarApi.cuentas, term])
+  const cobrarFiltradas = useMemo(() => filterCobrarRows(cobrarRows, term), [cobrarRows, term])
+  const pagarFiltradas = useMemo(() => filterPagarRows(pagarRows, term), [pagarRows, term])
 
-  const pagarFiltradas = useMemo(() => {
-    return (term
-      ? pagarApi.cuentas.filter((cuenta) =>
-          cuenta.cotizacion_id.toLowerCase().includes(term) ||
-          (cuenta.folio || '').toLowerCase().includes(term) ||
-          (cuenta.responsable_nombre || '').toLowerCase().includes(term) ||
-          (cuenta.proyecto_nombre || '').toLowerCase().includes(term) ||
-          (cuenta.item_descripcion || '').toLowerCase().includes(term)
-        )
-      : pagarApi.cuentas
-    ).map((cuenta) => ({ ...cuenta, tipo: 'pagar' as const }))
-  }, [pagarApi.cuentas, term])
-
-  const totalPorCobrar = cobrarFiltradas.reduce((sum, cuenta) => sum + Math.max(0, cuenta.monto_total - Number(cuenta.monto_pagado || 0)), 0)
-  const totalCobrado = cobrarFiltradas.reduce((sum, cuenta) => sum + Number(cuenta.monto_pagado || 0), 0)
-  const totalPorPagar = pagarFiltradas.reduce((sum, cuenta) => sum + Math.max(0, cuenta.x_pagar - Number(cuenta.monto_pagado || 0)), 0)
-  const totalPagado = pagarFiltradas.reduce((sum, cuenta) => sum + Number(cuenta.monto_pagado || 0), 0)
-  const cuentasCobrarPendientes = useMemo(
-    () => cobrarApi.cuentas.filter(c => c.estado !== 'PAGADO').length,
-    [cobrarApi.cuentas]
-  )
-  const cuentasPagarPendientes = useMemo(
-    () => pagarApi.cuentas.filter(c => c.estado !== 'PAGADO').length,
-    [pagarApi.cuentas]
-  )
-
-  const loading = tab === 'cobrar' ? cobrarApi.loading : pagarApi.loading
+  const totalPorCobrar = useMemo(() => sumMontoPendiente(cobrarFiltradas), [cobrarFiltradas])
+  const totalCobrado = useMemo(() => sumMontoPagado(cobrarFiltradas), [cobrarFiltradas])
+  const totalPorPagar = useMemo(() => sumMontoPendiente(pagarFiltradas), [pagarFiltradas])
+  const totalPagado = useMemo(() => sumMontoPagado(pagarFiltradas), [pagarFiltradas])
+  const cuentasCobrarPendientes = useMemo(() => countPendingCuentas(cuentasCobrar), [cuentasCobrar])
+  const cuentasPagarPendientes = useMemo(() => countPendingCuentas(cuentasPagar), [cuentasPagar])
+  const loading = tab === 'cobrar' ? loadingCobrar : loadingPagar
 
   return {
     tab,
