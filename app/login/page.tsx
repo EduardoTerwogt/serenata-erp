@@ -1,14 +1,13 @@
 'use client'
 import { Suspense, useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
   const searchParams = useSearchParams()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,8 +20,7 @@ function LoginForm() {
       setError('Correo o contraseña incorrectos')
     } else {
       const callbackUrl = searchParams.get('callbackUrl') ?? '/'
-      router.push(callbackUrl)
-      router.refresh()
+      window.location.assign(callbackUrl)
     }
   }
 
