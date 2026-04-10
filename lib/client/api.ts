@@ -9,6 +9,10 @@ async function safeParseJson(response: Response): Promise<JsonLike | null> {
 }
 
 export async function getApiErrorMessage(response: Response, fallbackMessage: string) {
+  if (response.status === 413) {
+    return 'El archivo es demasiado pesado. Intenta con un comprobante menor a 4 MB.'
+  }
+
   const data = await safeParseJson(response)
   const errorMessage = typeof data?.error === 'string' ? data.error : null
   return errorMessage || fallbackMessage
