@@ -597,7 +597,7 @@ export async function getCuentasPagarPendientesEventosRealizados() {
     .select(`
       *,
       cotizaciones(fecha_entrega, proyecto),
-      proyectos(nombre)
+      proyectos(proyecto)
     `)
     .eq('estado', 'PENDIENTE')
     .order('responsable_nombre', { ascending: true })
