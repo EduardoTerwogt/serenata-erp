@@ -17,7 +17,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 
     // Transform cotización data to PDF format
     const pdfData: CotizacionPDFData = {
-      id: cotizacion.folio,
+      id: cotizacion.id,
       cliente: cotizacion.cliente,
       proyecto: cotizacion.proyecto,
       fecha_entrega: cotizacion.fecha_entrega,
@@ -48,7 +48,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
     return new Response(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Cotizacion_${cotizacion.folio}.pdf"`,
+        'Content-Disposition': `attachment; filename="Cotizacion_${cotizacion.id}.pdf"`,
         'Content-Length': pdfBuffer.byteLength.toString(),
       },
     })
