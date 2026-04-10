@@ -23,7 +23,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       fecha_entrega: cotizacion.fecha_entrega,
       locacion: cotizacion.locacion || null,
       fecha_cotizacion: cotizacion.fecha_cotizacion || null,
-      items: cotizacion.items.map((item: any) => ({
+      items: (cotizacion.items || []).map((item: any) => ({
         categoria: item.categoria,
         descripcion: item.descripcion,
         cantidad: item.cantidad,

@@ -166,7 +166,12 @@ export async function generateQuotationPdf(
   }
 
   // Convert ArrayBuffer to base64 for Drive upload
-  const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfArrayBuffer)))
+  const uint8Array = new Uint8Array(pdfArrayBuffer)
+  let binaryString = ''
+  for (let i = 0; i < uint8Array.length; i++) {
+    binaryString += String.fromCharCode(uint8Array[i])
+  }
+  const pdfBase64 = btoa(binaryString)
 
   const fileName = `${quotation.id} - ${quotation.cliente} - ${quotation.proyecto}.pdf`
   try {
