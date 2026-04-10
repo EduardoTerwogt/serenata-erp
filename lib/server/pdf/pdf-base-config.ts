@@ -17,12 +17,12 @@ export const PDF_CONFIG = {
 
   // Colores en RGB (para jsPDF)
   colors: {
-    primary: [255, 128, 0], // #ff8000 - Naranja Serenata
-    text: [26, 26, 26], // #1a1a1a - Text oscuro
-    lightText: [110, 110, 110], // #6e6e6e - Text gris
-    lightBg: [245, 245, 245], // #f5f5f5 - Fondo claro
-    headerBg: [26, 26, 26], // #1a1a1a - Header oscuro
-    white: [255, 255, 255], // Blanco
+    primary: [255, 128, 0] as [number, number, number], // #ff8000 - Naranja Serenata
+    text: [26, 26, 26] as [number, number, number], // #1a1a1a - Text oscuro
+    lightText: [110, 110, 110] as [number, number, number], // #6e6e6e - Text gris
+    lightBg: [245, 245, 245] as [number, number, number], // #f5f5f5 - Fondo claro
+    headerBg: [26, 26, 26] as [number, number, number], // #1a1a1a - Header oscuro
+    white: [255, 255, 255] as [number, number, number], // Blanco
   },
 
   // Tamaños de fuente
@@ -37,9 +37,9 @@ export const PDF_CONFIG = {
   // Líneas y bordes
   lines: {
     weight: 2,       // Grosor de líneas principales
-    color: [249, 115, 22], // Color naranja para líneas destacadas [rgb aprox de #f97316]
+    color: [249, 115, 22] as [number, number, number], // Color naranja para líneas destacadas [rgb aprox de #f97316]
     gridWeight: 0.15, // Grosor de líneas de cuadrículas
-    gridColor: [235, 235, 235], // Color de cuadrícula
+    gridColor: [235, 235, 235] as [number, number, number], // Color de cuadrícula
   },
 
   // Configuración de página
