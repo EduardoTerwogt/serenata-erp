@@ -18,7 +18,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const [showMobileNav, setShowMobileNav] = useState(false)
   const pathname = usePathname()
   const { data: session } = useSession()
-  const userSections = (session?.user as { sections?: string[] })?.sections ?? []
+  const userSections = useMemo(
+    () => (session?.user as { sections?: string[] } | undefined)?.sections ?? [],
+    [session?.user]
+  )
   const visibleLinks = useMemo(
     () => NAV_LINKS.filter(link => userSections.includes(link.section)),
     [userSections]
