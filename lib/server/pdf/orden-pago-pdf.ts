@@ -1,49 +1,55 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { OrdenPagoPreviewResult } from '@/lib/server/ordenes-pago/build'
+import {
+  PDF_CONFIG,
+  checkPageSpace,
+  formatCurrencyPdf,
+} from '@/lib/server/pdf/pdf-base-config'
 
 export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuffer {
-  const doc = new jsPDF({
-    unit: 'pt',
-    format: 'a4',
-  })
+  const doc = new jsPDF(PDF_CONFIG.page)
 
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 40
-  let currentY = 46
+  const margin = PDF_CONFIG.margins.left
 
+  // Header
+  let currentY = PDF_CONFIG.margins.top
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(22)
-  doc.setTextColor(26, 26, 26)
+  doc.setFontSize(PDF_CONFIG.fonts.title)
+  doc.setTextColor(...PDF_CONFIG.colors.text)
   doc.text('ORDEN DE PAGO', margin, currentY)
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.setTextColor(110, 110, 110)
   currentY += 16
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(PDF_CONFIG.fonts.small)
+  doc.setTextColor(...PDF_CONFIG.colors.lightText)
   doc.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`, margin, currentY)
 
-  doc.setDrawColor(249, 115, 22)
-  doc.setLineWidth(2)
-  doc.line(margin, currentY + 10, pageWidth - margin, currentY + 10)
+  // Línea separadora
+  currentY += 10
+  doc.setDrawColor(...PDF_CONFIG.lines.color)
+  doc.setLineWidth(PDF_CONFIG.lines.weight)
+  doc.line(margin, currentY, pageWidth - margin, currentY)
   currentY += 28
 
+  // Responsables
   preview.responsables.forEach((responsable, index) => {
-    if (currentY > pageHeight - 140) {
-      doc.addPage()
-      currentY = 46
-    }
+    // Verificar espacio en página
+    currentY = checkPageSpace(doc, currentY, 140)
 
+    // Nombre del responsable
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(14)
-    doc.setTextColor(249, 115, 22)
+    doc.setFontSize(PDF_CONFIG.fonts.heading)
+    doc.setTextColor(...PDF_CONFIG.colors.primary)
     doc.text(responsable.responsable.nombre, margin, currentY)
     currentY += 16
 
+    // Datos de contacto
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    doc.setTextColor(90, 90, 90)
+    doc.setFontSize(PDF_CONFIG.fonts.body)
+    doc.setTextColor(...PDF_CONFIG.colors.lightText)
     const contacto = [
       responsable.responsable.correo ? `Correo: ${responsable.responsable.correo}` : null,
       responsable.responsable.telefono ? `Tel: ${responsable.responsable.telefono}` : null,
@@ -56,14 +62,17 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
       currentY += 16
     }
 
+    // Eventos
     responsable.eventos.forEach((evento) => {
+      // Caja de evento
       doc.setFont('helvetica', 'bold')
-      doc.setTextColor(30, 30, 30)
-      doc.setFillColor(245, 245, 245)
+      doc.setTextColor(...PDF_CONFIG.colors.text)
+      doc.setFillColor(...PDF_CONFIG.colors.lightBg)
       doc.roundedRect(margin, currentY, pageWidth - margin * 2, 22, 6, 6, 'F')
       doc.text(`${evento.proyecto} (${evento.cotizacion_folio})`, margin + 10, currentY + 15)
       currentY += 28
 
+      // Tabla de items
       autoTable(doc, {
         startY: currentY,
         margin: { left: margin, right: margin },
@@ -71,29 +80,36 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
         body: evento.items.map((item) => [
           item.descripcion,
           String(item.cantidad),
-          `$${item.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+          formatCurrencyPdf(item.monto),
         ]),
         theme: 'grid',
         styles: {
-          fontSize: 9,
+          fontSize: PDF_CONFIG.fonts.small,
           cellPadding: 6,
+          lineColor: PDF_CONFIG.lines.gridColor,
+          lineWidth: PDF_CONFIG.lines.gridWeight,
+          textColor: PDF_CONFIG.colors.text,
         },
         headStyles: {
           fillColor: [232, 232, 232],
-          textColor: [34, 34, 34],
+          textColor: PDF_CONFIG.colors.text,
+          fontStyle: 'bold',
         },
         bodyStyles: {
-          textColor: [50, 50, 50],
+          textColor: PDF_CONFIG.colors.text,
         },
       })
 
       currentY = (doc as any).lastAutoTable.finalY + 8
 
+      // Total del evento
       doc.setFont('helvetica', 'bold')
       doc.setFillColor(255, 243, 224)
       doc.roundedRect(margin, currentY, pageWidth - margin * 2, 22, 6, 6, 'F')
+      doc.setTextColor(...PDF_CONFIG.colors.text)
+      doc.setFontSize(PDF_CONFIG.fonts.body)
       doc.text(
-        `TOTAL EVENTO: $${evento.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+        `TOTAL EVENTO: ${formatCurrencyPdf(evento.subtotal)}`,
         pageWidth - margin - 10,
         currentY + 15,
         { align: 'right' }
@@ -101,11 +117,14 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
       currentY += 34
     })
 
+    // Total del responsable
     doc.setFont('helvetica', 'bold')
     doc.setFillColor(255, 237, 213)
     doc.roundedRect(margin, currentY, pageWidth - margin * 2, 26, 8, 8, 'F')
+    doc.setTextColor(...PDF_CONFIG.colors.text)
+    doc.setFontSize(PDF_CONFIG.fonts.heading)
     doc.text(
-      `TOTAL ${responsable.responsable.nombre.toUpperCase()}: $${responsable.total_responsable.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+      `TOTAL ${responsable.responsable.nombre.toUpperCase()}: ${formatCurrencyPdf(responsable.total_responsable)}`,
       pageWidth - margin - 10,
       currentY + 17,
       { align: 'right' }
@@ -113,23 +132,22 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
     currentY += index === preview.responsables.length - 1 ? 34 : 42
   })
 
-  if (currentY > pageHeight - 90) {
-    doc.addPage()
-    currentY = 46
-  }
+  // Footer con total general
+  currentY = checkPageSpace(doc, currentY, 90)
 
-  doc.setDrawColor(249, 115, 22)
+  doc.setDrawColor(...PDF_CONFIG.lines.color)
   doc.setLineWidth(1.5)
   doc.line(margin, currentY, pageWidth - margin, currentY)
   currentY += 28
 
-  doc.setFillColor(249, 115, 22)
+  // Caja de total general
+  doc.setFillColor(...PDF_CONFIG.colors.primary)
   doc.roundedRect(pageWidth - 260, currentY - 18, 220, 34, 8, 8, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(14)
+  doc.setTextColor(...PDF_CONFIG.colors.white)
+  doc.setFontSize(PDF_CONFIG.fonts.heading)
   doc.text(
-    `TOTAL GENERAL: $${preview.resumen.total_general.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+    `TOTAL GENERAL: ${formatCurrencyPdf(preview.resumen.total_general)}`,
     pageWidth - 50,
     currentY + 3,
     { align: 'right' }
