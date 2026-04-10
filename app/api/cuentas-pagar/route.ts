@@ -22,6 +22,7 @@ export async function GET() {
       seen.add(id)
       return true
     })
+
     if (cotizacionIds.length > 0) {
       const { data: cots } = await supabaseAdmin
         .from('cotizaciones')
@@ -47,7 +48,13 @@ export async function PUT(request: Request) {
     const body = await request.json()
     const { id, ...updates } = body
     if (!id) return Response.json({ error: 'ID requerido' }, { status: 400 })
-    const cuenta = await updateCuentaPagar(id, updates)
+
+    const allowedKeys = new Set(['estado', 'fecha_pago', 'monto_pagado', 'notas', 'orden_pago_id'])
+    const sanitizedUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([key]) => allowedKeys.has(key))
+    )
+
+    const cuenta = await updateCuentaPagar(id, sanitizedUpdates)
     triggerSheetsSync('cuentas_pagar')
     return Response.json(cuenta)
   } catch (error) {

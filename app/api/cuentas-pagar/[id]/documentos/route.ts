@@ -1,5 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasPagar, getDocumentosCuentaPagar } from '@/lib/db'
+import { getCuentasPagar, getDocumentosCuentaPagar, getOrdenPagoById } from '@/lib/db'
+import { calcularSaldoPendiente } from '@/lib/server/cuentas/status'
 
 export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -7,45 +8,26 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 
   try {
     const { id } = await props.params
-
-    // Obtener cuenta
     const cuentas = await getCuentasPagar()
     const cuenta = cuentas.find(c => c.id === id)
     if (!cuenta) {
-      return Response.json(
-        { error: 'Cuenta por pagar no encontrada' },
-        { status: 404 }
-      )
+      return Response.json({ error: 'Cuenta por pagar no encontrada' }, { status: 404 })
     }
 
-    // Obtener documentos
     const documentos = await getDocumentosCuentaPagar(id)
+    const ordenPago = cuenta.orden_pago_id ? await getOrdenPagoById(cuenta.orden_pago_id).catch(() => null) : null
 
     return Response.json({
-      cuenta: {
-        id: cuenta.id,
-        folio: cuenta.folio,
-        responsable_nombre: cuenta.responsable_nombre,
-        x_pagar: cuenta.x_pagar,
-        estado: cuenta.estado,
-      },
-      documentos: documentos.map(d => ({
-        id: d.id,
-        tipo: d.tipo,
-        archivo_url: d.archivo_url,
-        archivo_nombre: d.archivo_nombre,
-        fecha_carga: d.fecha_carga,
-      })),
+      cuenta,
+      documentos,
+      orden_pago: ordenPago,
       resumen: {
         monto_pagado: cuenta.monto_pagado || 0,
-        saldo_pendiente: cuenta.x_pagar - (cuenta.monto_pagado || 0),
+        saldo_pendiente: calcularSaldoPendiente(cuenta.x_pagar, cuenta.monto_pagado || 0),
       },
     })
   } catch (error) {
     console.error('[cuentas-pagar/documentos]', error)
-    return Response.json(
-      { error: 'Error obteniendo documentos' },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Error obteniendo documentos' }, { status: 500 })
   }
 }

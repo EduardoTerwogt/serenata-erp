@@ -10,6 +10,21 @@ interface CuentaDetalle {
   resumen: { total_pagado: number; saldo_pendiente: number }
 }
 
+interface AlertaCuentaCobrar {
+  id: string
+  folio?: string
+  cliente: string
+  proyecto: string
+  monto_total: number
+  monto_pagado: number
+  saldo_pendiente: number
+  fecha_vencimiento?: string
+  dias_faltantes: number
+  estado: string
+  alerta: 'VENCIDA' | 'POR_VENCER'
+  mensaje: string
+}
+
 export function useCuentasCobrar() {
   const [cuentas, setCuentas] = useState<CuentaCobrar[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,6 +55,12 @@ export function useCuentasCobrar() {
     } catch {
       return null
     }
+  }
+
+  const cargarAlertas = async (): Promise<{ total_alertas: number; alertas: AlertaCuentaCobrar[] }> => {
+    const res = await fetch('/api/cuentas-cobrar/alertas')
+    if (!res.ok) throw new Error('Error al cargar alertas')
+    return res.json()
   }
 
   const subirFactura = async (id: string, xml: File, pdf?: File) => {
@@ -105,6 +126,7 @@ export function useCuentasCobrar() {
     error,
     recargar: cargar,
     cargarDetalle,
+    cargarAlertas,
     subirFactura,
     subirComplemento,
     registrarPago,

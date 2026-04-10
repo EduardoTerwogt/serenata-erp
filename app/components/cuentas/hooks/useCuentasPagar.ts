@@ -6,11 +6,52 @@ import { CuentaPagar, DocumentoCuentaPagar, OrdenPago } from '@/lib/types'
 interface CuentaPagarDetalle {
   cuenta: CuentaPagar
   documentos: DocumentoCuentaPagar[]
+  orden_pago?: OrdenPago | null
   resumen: { monto_pagado: number; saldo_pendiente: number }
 }
 
+interface OrdenPagoPreviewResult {
+  responsables: {
+    responsable: {
+      id: string
+      nombre: string
+      correo: string | null
+      telefono: string | null
+      banco: string | null
+      clabe: string | null
+    }
+    eventos: {
+      cotizacion_folio: string
+      proyecto: string
+      items: {
+        descripcion: string
+        cantidad: number
+        monto: number
+        cuenta_id: string
+      }[]
+      subtotal: number
+    }[]
+    total_responsable: number
+  }[]
+  resumen: {
+    responsables: number
+    eventos: number
+    items_totales: number
+    total_general: number
+  }
+  cuentas_ids: string[]
+}
+
 interface OrdenPagoResult {
-  orden_pago: OrdenPago
+  success: boolean
+  orden_pago: {
+    id: string
+    fecha_generacion: string
+    pdf_url: string
+    pdf_nombre: string
+    total_monto: number
+    cantidad_cuentas: number
+  }
   resumen: {
     responsables: number
     eventos: number
@@ -49,6 +90,13 @@ export function useCuentasPagar() {
     } catch {
       return null
     }
+  }
+
+  const cargarPreviewOrdenPago = async (): Promise<OrdenPagoPreviewResult> => {
+    const res = await fetch('/api/cuentas-pagar/generar-orden-pago')
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Error al cargar preview de orden')
+    return data
   }
 
   const subirFactura = async (id: string, archivo: File) => {
@@ -91,12 +139,12 @@ export function useCuentasPagar() {
     const res = await fetch('/api/cuentas-pagar/generar-orden-pago', {
       method: 'POST',
     })
+    const data = await res.json()
     if (!res.ok) {
-      const data = await res.json()
       throw new Error(data.error || 'Error al generar orden de pago')
     }
     await cargar()
-    return res.json()
+    return data
   }
 
   const cargarHistorialOrdenes = async (): Promise<{ total: number; ordenes: OrdenPago[] }> => {
@@ -111,6 +159,7 @@ export function useCuentasPagar() {
     error,
     recargar: cargar,
     cargarDetalle,
+    cargarPreviewOrdenPago,
     subirFactura,
     registrarPago,
     generarOrdenPago,

@@ -36,13 +36,13 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  const isBlocked = props.estado === 'EN_PROCESO_PAGO'
+  const showOrdenInfo = props.tipo === 'pagar' && props.estado === 'EN_PROCESO_PAGO'
   const isPagado = props.estado === 'PAGADO'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const montoNum = parseFloat(monto)
-    if (!montoNum || montoNum <= 0) { setError('Ingresa un monto valido'); return }
+    if (!montoNum || montoNum <= 0) { setError('Ingresa un monto válido'); return }
 
     setSaving(true)
     setError(null)
@@ -79,10 +79,10 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-white mb-4">Registrar Pago</h3>
 
-      {isBlocked && (
+      {showOrdenInfo && (
         <div className="p-3 bg-orange-900/30 border border-orange-700 rounded-lg">
           <p className="text-orange-300 text-sm">
-            Esta cuenta esta en una Orden de Pago. El registro de pago se habilita cuando se complete la orden.
+            Esta cuenta está vinculada a una Orden de Pago. Puedes registrar el pago normalmente para completar la orden.
           </p>
         </div>
       )}
@@ -90,7 +90,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
       {isPagado && (
         <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
           <p className="text-green-300 text-sm">
-            Esta cuenta ya esta totalmente pagada.
+            Esta cuenta ya está totalmente pagada.
           </p>
         </div>
       )}
@@ -107,9 +107,9 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
         </div>
       )}
 
-      {!isBlocked && !isPagado && (
+      {!isPagado && (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Monto</label>
               <input
@@ -187,7 +187,6 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
         </form>
       )}
 
-      {/* Historial de pagos - solo cobrar */}
       {props.tipo === 'cobrar' && props.pagos.length > 0 && (
         <div className="pt-6 border-t border-gray-800">
           <h4 className="font-semibold text-white mb-3">Historial de Pagos</h4>
