@@ -124,8 +124,16 @@ export function CuentasPage() {
   const totalCobrado = cobrarFiltradas.reduce((sum, cuenta) => sum + Number(cuenta.monto_pagado || 0), 0)
   const totalPorPagar = pagarFiltradas.reduce((sum, cuenta) => sum + Math.max(0, cuenta.x_pagar - Number(cuenta.monto_pagado || 0)), 0)
   const totalPagado = pagarFiltradas.reduce((sum, cuenta) => sum + Number(cuenta.monto_pagado || 0), 0)
+  const cuentasCobrarPendientes = useMemo(
+    () => cobrarApi.cuentas.filter(c => c.estado !== 'PAGADO').length,
+    [cobrarApi.cuentas]
+  )
+  const cuentasPagarPendientes = useMemo(
+    () => pagarApi.cuentas.filter(c => c.estado !== 'PAGADO').length,
+    [pagarApi.cuentas]
+  )
 
-  const loading = cobrarApi.loading || pagarApi.loading
+  const loading = tab === 'cobrar' ? cobrarApi.loading : pagarApi.loading
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
@@ -144,9 +152,9 @@ export function CuentasPage() {
               }`}
             >
               Por Cobrar
-              {cobrarApi.cuentas.filter(c => c.estado !== 'PAGADO').length > 0 && (
+              {cuentasCobrarPendientes > 0 && (
                 <span className="ml-2 bg-yellow-600 text-white text-xs rounded-full px-1.5 py-0.5">
-                  {cobrarApi.cuentas.filter(c => c.estado !== 'PAGADO').length}
+                  {cuentasCobrarPendientes}
                 </span>
               )}
             </button>
@@ -157,9 +165,9 @@ export function CuentasPage() {
               }`}
             >
               Por Pagar
-              {pagarApi.cuentas.filter(c => c.estado !== 'PAGADO').length > 0 && (
+              {cuentasPagarPendientes > 0 && (
                 <span className="ml-2 bg-red-700 text-white text-xs rounded-full px-1.5 py-0.5">
-                  {pagarApi.cuentas.filter(c => c.estado !== 'PAGADO').length}
+                  {cuentasPagarPendientes}
                 </span>
               )}
             </button>

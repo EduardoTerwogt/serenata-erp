@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
@@ -18,11 +18,13 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const [showMobileNav, setShowMobileNav] = useState(false)
   const pathname = usePathname()
   const { data: session } = useSession()
+  const userSections = (session?.user as { sections?: string[] })?.sections ?? []
+  const visibleLinks = useMemo(
+    () => NAV_LINKS.filter(link => userSections.includes(link.section)),
+    [userSections]
+  )
 
   if (pathname === '/login') return <>{children}</>
-
-  const userSections = (session?.user as { sections?: string[] })?.sections ?? []
-  const visibleLinks = NAV_LINKS.filter(link => userSections.includes(link.section))
 
   const closeMobileMenus = () => {
     setShowMobileNav(false)
