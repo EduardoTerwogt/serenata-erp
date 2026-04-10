@@ -16,6 +16,7 @@ export function useQuotationForm(
   const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
   const [proyectoInput, setProyectoInput] = useState('')
   const [mostrarProyectoDropdown, setMostrarProyectoDropdown] = useState(false)
+  const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
   const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
 
   const refreshCatalogos = useCallback(async () => {
@@ -74,23 +75,6 @@ export function useQuotationForm(
     return clienteSeleccionado?.proyectos || []
   }, [clienteInput, listaClientes])
 
-  const productoSugerencias = useMemo(() => {
-    return watchedItems.reduce<Record<number, Producto[]>>((acc, item, index) => {
-      const descripcion = item?.descripcion?.trim() || ''
-
-      if (descripcion.length < 2) {
-        acc[index] = []
-        return acc
-      }
-
-      acc[index] = listaProductos
-        .filter((producto) => producto.descripcion.toLowerCase().includes(descripcion.toLowerCase()))
-        .slice(0, 8)
-
-      return acc
-    }, {})
-  }, [listaProductos, watchedItems])
-
   const calcItem = useCallback((item: QuotationFormItem) => calculateQuotationItem(item), [])
 
   const handleClienteChange = useCallback((valor: string) => {
@@ -123,15 +107,17 @@ export function useQuotationForm(
     setValue(`items.${index}.precio_unitario`, '')
     setValue(`items.${index}.x_pagar`, '')
 
-    if (valor.length < 2) {
-      setMostrarProductoDropdown((prev) => ({ ...prev, [index]: false }))
+    if (valor.length >= 2) {
+      const filtrados = listaProductos
+        .filter((producto) => producto.descripcion.toLowerCase().includes(valor.toLowerCase()))
+        .slice(0, 8)
+      setProductoSugerencias((prev) => ({ ...prev, [index]: filtrados }))
+      setMostrarProductoDropdown((prev) => ({ ...prev, [index]: filtrados.length > 0 }))
       return
     }
 
-    const tieneSugerencias = listaProductos.some((producto) =>
-      producto.descripcion.toLowerCase().includes(valor.toLowerCase())
-    )
-    setMostrarProductoDropdown((prev) => ({ ...prev, [index]: tieneSugerencias }))
+    setProductoSugerencias((prev) => ({ ...prev, [index]: [] }))
+    setMostrarProductoDropdown((prev) => ({ ...prev, [index]: false }))
   }, [listaProductos, setValue])
 
   const seleccionarProducto = useCallback((index: number, producto: Producto) => {
@@ -143,6 +129,7 @@ export function useQuotationForm(
     if ((producto.x_pagar_sugerido || 0) > 0) {
       setValue(`items.${index}.x_pagar`, producto.x_pagar_sugerido || 0)
     }
+    setProductoSugerencias((prev) => ({ ...prev, [index]: [] }))
     setMostrarProductoDropdown((prev) => ({ ...prev, [index]: false }))
   }, [setValue])
 
