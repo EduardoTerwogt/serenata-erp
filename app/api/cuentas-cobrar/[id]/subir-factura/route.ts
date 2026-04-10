@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasCobrar, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById } from '@/lib/db'
+import { getCuentasCobrar, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase'
 import { parseFacturaXML, validarMontoFactura, calcularDeadline } from '@/lib/server/xml/factura-parser'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
@@ -81,26 +81,27 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
-    const folderPath = `/Por Cobrar/${cuenta.folio}`
+    const proyecto = await getProyectoById(cuenta.cotizacion_id)
+    const folderPath = `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
     const uploadedFiles: { type: string; url: string; nombre: string }[] = []
     const cuentasFolderId = googleEnv.driveFolderIdCuentas
 
     // Subir PDF
     if (pdfFile) {
-      const pdfUrl = await uploadFileToDrive(pdfFile, folderPath, 'factura.pdf', cuentasFolderId || undefined)
+      const pdfUrl = await uploadFileToDrive(pdfFile, folderPath, pdfFile.name, cuentasFolderId || undefined)
       uploadedFiles.push({
         type: 'FACTURA_PDF',
         url: pdfUrl,
-        nombre: 'factura.pdf',
+        nombre: pdfFile.name,
       })
     }
 
     // Subir XML
-    const xmlUrl = await uploadFileToDrive(xmlFile, folderPath, 'factura.xml', cuentasFolderId || undefined)
+    const xmlUrl = await uploadFileToDrive(xmlFile, folderPath, xmlFile.name, cuentasFolderId || undefined)
     uploadedFiles.push({
       type: 'FACTURA_XML',
       url: xmlUrl,
-      nombre: 'factura.xml',
+      nombre: xmlFile.name,
     })
 
     // Crear registros en BD
