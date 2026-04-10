@@ -1,12 +1,11 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CuentaCobrar, CuentaPagar, OrdenPago } from '@/lib/types'
 import { useCuentasCobrar } from '@/app/components/cuentas/hooks/useCuentasCobrar'
 import { useCuentasPagar } from '@/app/components/cuentas/hooks/useCuentasPagar'
 import { CuentasTable } from '@/app/components/cuentas/CuentasTable'
-import { CuentaDetailModal } from '@/app/components/cuentas/CuentaDetailModal'
-import { OrdenPagoModal } from '@/app/components/cuentas/OrdenPagoModal'
 
 type Tab = 'cobrar' | 'pagar'
 
@@ -27,6 +26,16 @@ interface AlertaCuentaCobrar {
   mensaje: string
   estado: string
 }
+
+const CuentaDetailModal = dynamic(
+  () => import('@/app/components/cuentas/CuentaDetailModal').then((mod) => mod.CuentaDetailModal),
+  { ssr: false }
+)
+
+const OrdenPagoModal = dynamic(
+  () => import('@/app/components/cuentas/OrdenPagoModal').then((mod) => mod.OrdenPagoModal),
+  { ssr: false }
+)
 
 function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
@@ -307,21 +316,25 @@ export function CuentasPage() {
         />
       )}
 
-      <CuentaDetailModal
-        cuenta={selectedCuenta}
-        onClose={() => setSelectedCuenta(null)}
-        cobrarActions={cobrarApi}
-        pagarActions={pagarApi}
-        onRefresh={refreshAll}
-      />
+      {selectedCuenta && (
+        <CuentaDetailModal
+          cuenta={selectedCuenta}
+          onClose={() => setSelectedCuenta(null)}
+          cobrarActions={cobrarApi}
+          pagarActions={pagarApi}
+          onRefresh={refreshAll}
+        />
+      )}
 
-      <OrdenPagoModal
-        isOpen={showOrdenModal}
-        onClose={() => setShowOrdenModal(false)}
-        onRefresh={refreshAll}
-        cargarPreview={pagarApi.cargarPreviewOrdenPago}
-        generarOrden={pagarApi.generarOrdenPago}
-      />
+      {showOrdenModal && (
+        <OrdenPagoModal
+          isOpen={showOrdenModal}
+          onClose={() => setShowOrdenModal(false)}
+          onRefresh={refreshAll}
+          cargarPreview={pagarApi.cargarPreviewOrdenPago}
+          generarOrden={pagarApi.generarOrdenPago}
+        />
+      )}
     </div>
   )
 }
