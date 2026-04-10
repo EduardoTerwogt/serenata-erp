@@ -30,7 +30,7 @@ export async function mockCuentasApis(page: Page) {
     estado: 'PARCIALMENTE_PAGADO',
     fecha_factura: '2026-04-09',
     fecha_vencimiento: '2026-05-09',
-    fecha_pago: null,
+    fecha_pago: null as string | null,
     notas: null,
   }
 
@@ -53,7 +53,7 @@ export async function mockCuentasApis(page: Page) {
     telefono: '5555555555',
     banco: 'BBVA',
     clabe: '012345678901234567',
-    fecha_pago: null,
+    fecha_pago: null as string | null,
     metodo_pago: null,
     notas: null,
     orden_pago_id: null,
