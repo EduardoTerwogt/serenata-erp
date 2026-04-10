@@ -62,6 +62,6 @@ export function sumMontoPendiente<T extends MonetaryCuenta | MonetaryCuentaPagar
   return cuentas.reduce((sum, cuenta) => sum + getMontoPendiente(cuenta), 0)
 }
 
-export function sumMontoPagado<T extends { monto_pagado: number | null }>(cuentas: T[]) {
+export function sumMontoPagado<T extends { monto_pagado?: number | null }>(cuentas: T[]) {
   return cuentas.reduce((sum, cuenta) => sum + Number(cuenta.monto_pagado || 0), 0)
 }
