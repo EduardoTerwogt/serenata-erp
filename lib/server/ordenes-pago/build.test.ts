@@ -54,4 +54,4 @@ describe('ordenes-pago/build', () => {
     expect(result.resumen.total_general).toBe(1500)
     expect(result.responsables[0].eventos[0].items).toHaveLength(2)
   })
-}
+})

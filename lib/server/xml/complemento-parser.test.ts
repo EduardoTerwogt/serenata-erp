@@ -26,4 +26,4 @@ describe('xml/complemento-parser', () => {
     const result = parseComplementoPagoXML('<xml />')
     expect(result.error).toBeTruthy()
   })
-}
+})

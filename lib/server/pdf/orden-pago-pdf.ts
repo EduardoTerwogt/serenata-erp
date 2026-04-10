@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { OrdenPagoPreviewResult } from '@/lib/server/ordenes-pago/build'
 
-export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): Uint8Array {
+export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuffer {
   const doc = new jsPDF({
     unit: 'pt',
     format: 'a4',
@@ -135,5 +135,5 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): Uint8Arra
     { align: 'right' }
   )
 
-  return new Uint8Array(doc.output('arraybuffer'))
+  return doc.output('arraybuffer') as ArrayBuffer
 }

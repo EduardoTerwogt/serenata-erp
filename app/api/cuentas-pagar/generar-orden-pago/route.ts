@@ -39,11 +39,11 @@ export async function POST() {
     }
 
     const preview = buildOrdenPagoPreview(cuentasPendientes as any)
-    const pdfBytes = generateOrdenPagoPdf(preview)
+    const pdfArrayBuffer = generateOrdenPagoPdf(preview)
 
     const fechaFormato = new Date().toISOString().split('T')[0].replace(/-/g, '_')
     const fileName = `Orden_Pago_${fechaFormato}.pdf`
-    const pdfFile = new File([pdfBytes], fileName, { type: 'application/pdf' })
+    const pdfFile = new File([pdfArrayBuffer], fileName, { type: 'application/pdf' })
     const folderPath = '/Ordenes de Pago'
     const pdfUrl = await uploadFileToDrive(pdfFile, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
 

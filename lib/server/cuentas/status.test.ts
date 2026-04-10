@@ -42,4 +42,4 @@ describe('cuentas/status', () => {
       { x_pagar: 200, monto_pagado: 200 },
     ])).toBe('COMPLETADA')
   })
-}
+})
