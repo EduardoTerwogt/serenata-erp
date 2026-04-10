@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CuentaCobrar, CuentaPagar, OrdenPago } from '@/lib/types'
 import { useCuentasCobrar } from '@/app/components/cuentas/hooks/useCuentasCobrar'
 import { useCuentasPagar } from '@/app/components/cuentas/hooks/useCuentasPagar'
@@ -40,58 +40,65 @@ export function CuentasPage() {
   const [alertas, setAlertas] = useState<AlertaCuentaCobrar[]>([])
   const [loadingAlertas, setLoadingAlertas] = useState(false)
   const [historialOrdenes, setHistorialOrdenes] = useState<OrdenPago[]>([])
+  const alertasLoadedRef = useRef(false)
+  const historialLoadedRef = useRef(false)
 
   const cobrarApi = useCuentasCobrar()
   const pagarApi = useCuentasPagar()
 
-  const refreshAll = useCallback(async () => {
-    await Promise.all([cobrarApi.recargar(), pagarApi.recargar()])
-  }, [cobrarApi.recargar, pagarApi.recargar])
-
-  useEffect(() => {
-    let cancelled = false
+  const cargarAlertas = useCallback(async () => {
     setLoadingAlertas(true)
 
-    fetch('/api/cuentas-cobrar/alertas')
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Error cargando alertas')
-        return res.json()
-      })
-      .then((data) => {
-        if (!cancelled) setAlertas(data.alertas || [])
-      })
-      .catch(() => {
-        if (!cancelled) setAlertas([])
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingAlertas(false)
-      })
-
-    return () => {
-      cancelled = true
+    try {
+      const res = await fetch('/api/cuentas-cobrar/alertas')
+      if (!res.ok) throw new Error('Error cargando alertas')
+      const data = await res.json()
+      setAlertas(data.alertas || [])
+      alertasLoadedRef.current = true
+    } catch {
+      setAlertas([])
+      alertasLoadedRef.current = false
+    } finally {
+      setLoadingAlertas(false)
     }
-  }, [cobrarApi.cuentas])
+  }, [])
+
+  const cargarHistorialOrdenes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cuentas-pagar/ordenes-historial')
+      if (!res.ok) throw new Error('Error cargando historial')
+      const data = await res.json()
+      setHistorialOrdenes(data.ordenes || [])
+      historialLoadedRef.current = true
+    } catch {
+      setHistorialOrdenes([])
+      historialLoadedRef.current = false
+    }
+  }, [])
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([cobrarApi.recargar(), pagarApi.recargar()])
+
+    if (tab === 'cobrar') {
+      alertasLoadedRef.current = false
+      await cargarAlertas()
+    }
+
+    if (tab === 'pagar') {
+      historialLoadedRef.current = false
+      await cargarHistorialOrdenes()
+    }
+  }, [cargarAlertas, cargarHistorialOrdenes, cobrarApi.recargar, pagarApi.recargar, tab])
 
   useEffect(() => {
-    if (tab !== 'pagar') return
+    if (tab !== 'cobrar' || alertasLoadedRef.current) return
+    void cargarAlertas()
+  }, [cargarAlertas, tab])
 
-    let cancelled = false
-    fetch('/api/cuentas-pagar/ordenes-historial')
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Error cargando historial')
-        return res.json()
-      })
-      .then((data) => {
-        if (!cancelled) setHistorialOrdenes(data.ordenes || [])
-      })
-      .catch(() => {
-        if (!cancelled) setHistorialOrdenes([])
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [tab, pagarApi.cuentas])
+  useEffect(() => {
+    if (tab !== 'pagar' || historialLoadedRef.current) return
+    void cargarHistorialOrdenes()
+  }, [cargarHistorialOrdenes, tab])
 
   const term = busqueda.toLowerCase().trim()
 
