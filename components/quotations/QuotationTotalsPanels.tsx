@@ -2,6 +2,7 @@
 
 import { QuotationTotals } from '@/lib/quotations/types'
 import { fmtCurrency } from '@/lib/quotations/format'
+import { AppCard } from '@/components/ui/AppCard'
 
 interface Props {
   totals: QuotationTotals
@@ -30,7 +31,7 @@ export function QuotationTotalsPanels({
 }: Props) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+      <AppCard className="p-4 md:p-6">
         <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Totales</h3>
         <div className="space-y-3">
           <div className="flex justify-between text-sm gap-3">
@@ -116,8 +117,8 @@ export function QuotationTotalsPanels({
             <span className="text-green-400 text-lg text-right">${fmtCurrency(totals.total)}</span>
           </div>
         </div>
-      </div>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+      </AppCard>
+      <AppCard className="p-4 md:p-6">
         <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Utilidad</h3>
         <div className="space-y-2">
           <div className="flex justify-between text-sm gap-3">
@@ -139,7 +140,7 @@ export function QuotationTotalsPanels({
             </div>
           )}
         </div>
-      </div>
+      </AppCard>
     </div>
   )
 }

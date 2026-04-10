@@ -2,6 +2,7 @@
 
 import { UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import { QuotationFormValues } from '@/lib/quotations/types'
+import { AppCard } from '@/components/ui/AppCard'
 
 interface ClienteOption {
   nombre: string
@@ -58,7 +59,7 @@ export function QuotationGeneralInfoSection({
   const readOnlyAsText = isReadOnly && readOnlyDisplay === 'text'
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 mb-6">
+    <AppCard className="p-4 md:p-6 mb-6">
       <h2 className="text-lg font-semibold text-white mb-4">{title}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="relative">
@@ -128,6 +129,6 @@ export function QuotationGeneralInfoSection({
           <p className="text-white py-1.5 text-sm">{dateLabel}</p>
         </div>
       </div>
-    </div>
+    </AppCard>
   )
 }

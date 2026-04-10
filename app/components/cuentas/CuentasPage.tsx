@@ -4,6 +4,8 @@ import dynamic from 'next/dynamic'
 import { CuentasTable } from '@/app/components/cuentas/CuentasTable'
 import { useCuentasPage } from '@/app/components/cuentas/useCuentasPage'
 import { formatCuentasCurrency } from '@/app/components/cuentas/utils'
+import { AppCard } from '@/components/ui/AppCard'
+import { MetricCard } from '@/components/ui/MetricCard'
 
 const CuentaDetailModal = dynamic(
   () => import('@/app/components/cuentas/CuentaDetailModal').then((mod) => mod.CuentaDetailModal),
@@ -104,22 +106,13 @@ export function CuentasPage() {
       {tab === 'cobrar' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-sm mb-1">Pendiente por cobrar</p>
-              <p className="text-2xl font-bold text-yellow-400">${formatCuentasCurrency(totalPorCobrar)}</p>
-            </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-sm mb-1">Total cobrado</p>
-              <p className="text-2xl font-bold text-green-400">${formatCuentasCurrency(totalCobrado)}</p>
-            </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-sm mb-1">Alertas activas</p>
-              <p className="text-2xl font-bold text-red-400">{loadingAlertas ? '...' : alertas.length}</p>
-            </div>
+            <MetricCard label="Pendiente por cobrar" value={`$${formatCuentasCurrency(totalPorCobrar)}`} valueClassName="text-yellow-400" />
+            <MetricCard label="Total cobrado" value={`$${formatCuentasCurrency(totalCobrado)}`} valueClassName="text-green-400" />
+            <MetricCard label="Alertas activas" value={loadingAlertas ? '...' : alertas.length} valueClassName="text-red-400" />
           </div>
 
           {!loadingAlertas && alertas.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+            <AppCard className="p-5 mb-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-white font-semibold">Alertas de Cobro</h2>
                 <span className="text-xs text-gray-500">{alertas.length} alerta(s)</span>
@@ -144,7 +137,7 @@ export function CuentasPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </AppCard>
           )}
         </>
       )}
@@ -152,18 +145,12 @@ export function CuentasPage() {
       {tab === 'pagar' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-sm mb-1">Pendiente por pagar</p>
-              <p className="text-2xl font-bold text-red-400">${formatCuentasCurrency(totalPorPagar)}</p>
-            </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-sm mb-1">Total pagado</p>
-              <p className="text-2xl font-bold text-green-400">${formatCuentasCurrency(totalPagado)}</p>
-            </div>
+            <MetricCard label="Pendiente por pagar" value={`$${formatCuentasCurrency(totalPorPagar)}`} valueClassName="text-red-400" />
+            <MetricCard label="Total pagado" value={`$${formatCuentasCurrency(totalPagado)}`} valueClassName="text-green-400" />
           </div>
 
           {historialOrdenes.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+            <AppCard className="p-5 mb-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-white font-semibold">Historial de Órdenes</h2>
                 <span className="text-xs text-gray-500">{historialOrdenes.length} orden(es)</span>
@@ -192,7 +179,7 @@ export function CuentasPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </AppCard>
           )}
         </>
       )}
