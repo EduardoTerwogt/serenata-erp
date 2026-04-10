@@ -1,4 +1,5 @@
 'use client'
+import dynamic from 'next/dynamic'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -10,8 +11,22 @@ import { QuotationFormValues } from '@/lib/quotations/types'
 import { fetchNextQuotationFolio, fetchResponsables, generateQuotationPdf, saveNewQuotation } from '@/lib/services/quotation-service'
 import { formatTodaySpanishLongDate } from '@/lib/quotations/format'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
-import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
-import { QuotationTotalsPanels } from '@/components/quotations/QuotationTotalsPanels'
+
+const QuotationItemsSection = dynamic(
+  () => import('@/components/quotations/QuotationItemsSection').then((mod) => mod.QuotationItemsSection),
+  {
+    ssr: false,
+    loading: () => <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-gray-400">Cargando partidas...</div>,
+  }
+)
+
+const QuotationTotalsPanels = dynamic(
+  () => import('@/components/quotations/QuotationTotalsPanels').then((mod) => mod.QuotationTotalsPanels),
+  {
+    ssr: false,
+    loading: () => <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-gray-400">Cargando totales...</div>,
+  }
+)
 
 function NuevaCotizacionContent() {
   const router = useRouter()
@@ -37,7 +52,48 @@ function NuevaCotizacionContent() {
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const quotationForm = useQuotationForm(setValue, watchedItems)
   const { calcItem, handleClienteChange, handleProyectoChange, handleDescripcionChange, seleccionarProducto, seleccionarCliente, listaClientes, clienteInput, setClienteInput, clienteSugerencias, mostrarClienteDropdown, setMostrarClienteDropdown, proyectosDelCliente, proyectoInput, setProyectoInput, mostrarProyectoDropdown, setMostrarProyectoDropdown, productoSugerencias, mostrarProductoDropdown, setMostrarProductoDropdown } = quotationForm
-  useEffect(() => { Promise.all([fetchNextQuotationFolio(esComplementaria ? complementaria_de : undefined), fetchResponsables()]).then(([preview, resp]) => { setFolio(preview.folio); setResponsables(resp) }).catch(() => setError('Error cargando datos iniciales')) }, [esComplementaria, complementaria_de])
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetchNextQuotationFolio(esComplementaria ? complementaria_de : undefined)
+      .then((preview) => {
+        if (!cancelled) setFolio(preview.folio)
+      })
+      .catch(() => {
+        if (!cancelled) setError('Error cargando datos iniciales')
+      })
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    let idleId: number | null = null
+
+    const loadResponsables = () => {
+      void fetchResponsables()
+        .then((resp) => {
+          if (!cancelled) setResponsables(resp)
+        })
+        .catch(() => {
+          if (!cancelled) setError('Error cargando datos iniciales')
+        })
+    }
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(loadResponsables, { timeout: 1500 })
+    } else {
+      timeoutId = setTimeout(loadResponsables, 0)
+    }
+
+    return () => {
+      cancelled = true
+      if (idleId !== null && typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId)
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [esComplementaria, complementaria_de])
+
   useEffect(() => { if (clienteParam) setClienteInput(clienteParam); if (proyectoParam) setProyectoInput(proyectoParam); if (complementaria_de) { const cli = searchParams.get('cliente') || ''; const proy = searchParams.get('proyecto') || ''; setValue('cliente', cli); setClienteInput(cli); setValue('proyecto', proy); setProyectoInput(proy); setValue('locacion', searchParams.get('locacion') || ''); setValue('fecha_entrega', searchParams.get('fecha_entrega') || '') } }, [complementaria_de, clienteParam, proyectoParam, searchParams, setClienteInput, setProyectoInput, setValue])
   const totales = calculateQuotationTotals({ items: watchedItems, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor })
   const onGuardarBorrador = handleSubmit(async (data) => { if (isSubmitting.current) return; isSubmitting.current = true; setGuardando(true); setError(null); try { const cotizacion = await saveNewQuotation(data, { estado: 'BORRADOR', porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...(esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {}) }); router.push(`/cotizaciones/${cotizacion.id}`) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error desconocido') } finally { isSubmitting.current = false; setGuardando(false) } })
