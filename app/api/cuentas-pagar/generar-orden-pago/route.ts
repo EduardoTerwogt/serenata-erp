@@ -15,8 +15,15 @@ export async function GET() {
     const preview = buildOrdenPagoPreview(cuentasPendientes as any)
     return Response.json(preview)
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error)
-    console.error('[cuentas-pagar/generar-orden-pago][GET]', errorMsg)
+    let errorMsg = 'Error desconocido'
+    if (error instanceof Error) {
+      errorMsg = error.message
+    } else if (typeof error === 'object' && error !== null) {
+      errorMsg = JSON.stringify(error)
+    } else {
+      errorMsg = String(error)
+    }
+    console.error('[cuentas-pagar/generar-orden-pago][GET]', errorMsg, error)
     return Response.json(
       {
         error: 'Error obteniendo preview de orden de pago',
@@ -86,8 +93,15 @@ export async function POST() {
       preview: preview.responsables,
     })
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error)
-    console.error('[cuentas-pagar/generar-orden-pago][POST]', errorMsg)
+    let errorMsg = 'Error desconocido'
+    if (error instanceof Error) {
+      errorMsg = error.message
+    } else if (typeof error === 'object' && error !== null) {
+      errorMsg = JSON.stringify(error)
+    } else {
+      errorMsg = String(error)
+    }
+    console.error('[cuentas-pagar/generar-orden-pago][POST]', errorMsg, error)
     return Response.json(
       {
         error: 'Error generando orden de pago',
