@@ -33,8 +33,8 @@ function fmt(n: number) {
 
 export function CuentasTable({ tab, cuentas, onSelect }: Props) {
   const columns = tab === 'cobrar'
-    ? ['Folio', 'Cliente', 'Proyecto', 'Pagado / Total', 'Vencimiento', 'Estado', 'Acción']
-    : ['Folio', 'Proyecto', 'Responsable', 'Descripción', 'Pagado / Total', 'Estado', 'Acción']
+    ? ['Folio', 'Cliente', 'Proyecto', 'Pagado / Total', 'Vencimiento', 'Estado']
+    : ['Folio', 'Proyecto', 'Responsable', 'Descripción', 'Pagado / Total', 'Estado']
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -58,12 +58,11 @@ export function CuentasTable({ tab, cuentas, onSelect }: Props) {
                 : ESTADO_PAGAR_STYLE[cuenta.estado]
 
               return (
-                <tr key={`${cuenta.tipo}-${cuenta.id}`} className="hover:bg-gray-800/70 transition-colors">
+                <tr key={`${cuenta.tipo}-${cuenta.id}`} className="hover:bg-gray-800/70 transition-colors cursor-pointer" onClick={() => onSelect(cuenta)}>
                   <td className="px-6 py-4">
                     <div className="text-blue-400 font-mono text-sm">
-                      {cuenta.folio || cuenta.cotizacion_id}
+                      {cuenta.cotizacion_id}
                     </div>
-                    <div className="text-gray-500 text-xs mt-1">{cuenta.cotizacion_id}</div>
                   </td>
 
                   {cuenta.tipo === 'cobrar' ? (
@@ -93,14 +92,6 @@ export function CuentasTable({ tab, cuentas, onSelect }: Props) {
                       {cuenta.estado}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => onSelect(cuenta)}
-                      className="text-xs bg-blue-800 hover:bg-blue-700 text-blue-200 px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      Ver detalle
-                    </button>
-                  </td>
                 </tr>
               )
             })}
@@ -117,13 +108,12 @@ export function CuentasTable({ tab, cuentas, onSelect }: Props) {
             : ESTADO_PAGAR_STYLE[cuenta.estado]
 
           return (
-            <div key={`${cuenta.tipo}-${cuenta.id}`} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+            <div key={`${cuenta.tipo}-${cuenta.id}`} className="bg-gray-800 border border-gray-700 rounded-xl p-4 cursor-pointer hover:bg-gray-700/80 transition-colors" onClick={() => onSelect(cuenta)}>
               <div className="flex justify-between items-start mb-2 gap-3">
                 <div>
                   <div className="font-mono text-blue-400 text-sm font-bold">
-                    {cuenta.folio || cuenta.cotizacion_id}
+                    {cuenta.cotizacion_id}
                   </div>
-                  <div className="text-gray-500 text-xs mt-1">{cuenta.cotizacion_id}</div>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${estadoStyle}`}>
                   {cuenta.estado}
@@ -154,13 +144,6 @@ export function CuentasTable({ tab, cuentas, onSelect }: Props) {
                   </div>
                 </>
               )}
-
-              <button
-                onClick={() => onSelect(cuenta)}
-                className="w-full text-xs bg-blue-800 hover:bg-blue-700 text-blue-200 px-3 py-2 rounded-lg transition-colors mt-4"
-              >
-                Ver detalle
-              </button>
             </div>
           )
         })}

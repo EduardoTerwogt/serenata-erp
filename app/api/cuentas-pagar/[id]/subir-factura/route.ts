@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasPagar, createDocumentoCuentaPagar } from '@/lib/db'
+import { getCuentasPagar, createDocumentoCuentaPagar, getProyectoById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
@@ -22,7 +22,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
-    // Obtener cuenta
+    // Obtener cuenta y proyecto
     const cuentas = await getCuentasPagar()
     const cuenta = cuentas.find(c => c.id === id)
     if (!cuenta) {
@@ -31,6 +31,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         { status: 404 }
       )
     }
+
+    const proyecto = await getProyectoById(cuenta.proyecto_id)
 
     // Subir factura a Drive
     const googleEnv = getGoogleEnv()
@@ -41,8 +43,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
-    const folderPath = `/Por Pagar/${cuenta.folio}`
-    const fileName = `factura_proveedor.${facturaFile.type.split('/')[1] || 'pdf'}`
+    const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
+    const fileName = facturaFile.name
     const facturaUrl = await uploadFileToDrive(facturaFile, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
 
     // Crear documento en BD

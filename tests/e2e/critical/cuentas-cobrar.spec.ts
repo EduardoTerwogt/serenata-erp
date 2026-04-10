@@ -6,7 +6,7 @@ test('handles documentos y pagos en cuentas por cobrar', async ({ page }) => {
   await mockCuentasApis(page)
   await login(page, '/cuentas')
 
-  await page.getByRole('button', { name: /Ver detalle/i }).first().click()
+  await page.locator('tr').filter({ hasText: 'Walmart México' }).first().click()
   await expect(page.getByRole('heading', { name: 'CC-2026-00015' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Documentos', exact: true }).click()

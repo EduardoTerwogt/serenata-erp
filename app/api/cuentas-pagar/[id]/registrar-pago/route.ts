@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { createDocumentoCuentaPagar, getCuentasPagar, updateCuentaPagar, updateOrdenPago } from '@/lib/db'
+import { createDocumentoCuentaPagar, getCuentasPagar, getProyectoById, updateCuentaPagar, updateOrdenPago } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
@@ -42,9 +42,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
       }
 
-      const folderPath = `/Por Pagar/${cuenta.folio || cuenta.cotizacion_id}`
-      const ext = comprobante.name.includes('.') ? comprobante.name.split('.').pop() : 'pdf'
-      const fileName = `comprobante_pago_${new Date().getTime()}.${ext}`
+      const proyecto = await getProyectoById(cuenta.proyecto_id)
+      const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
+      const fileName = comprobante.name
       comprobanteUrl = await uploadFileToDrive(comprobante, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
 
       await createDocumentoCuentaPagar({

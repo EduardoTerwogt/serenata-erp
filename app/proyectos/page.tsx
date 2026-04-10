@@ -74,6 +74,11 @@ export default function ProyectosPage() {
                   {p.estado}
                 </span>
               </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="bg-orange-600 text-white text-xs font-mono font-bold px-2 py-1 rounded">
+                  {p.id}
+                </span>
+              </div>
               <h3 className="text-white font-semibold text-lg leading-tight mb-1">{p.proyecto}</h3>
               <p className="text-gray-400 text-sm mb-4">{p.cliente}</p>
               <div className="space-y-1 text-xs text-gray-500">
