@@ -25,6 +25,8 @@ const API_SECTION_RULES: SectionRule[] = [
   { prefix: '/api/responsables', sections: ['responsables'] },
 ]
 
+const E2E_BYPASS_COOKIE = 'e2e-bypass'
+
 function isPublicPath(pathname: string) {
   return (
     pathname.startsWith('/login') ||
@@ -46,11 +48,19 @@ function getFirstAllowedPath(sections: string[]) {
   return rule?.prefix ?? '/login'
 }
 
+function shouldBypassForE2E(req: Parameters<ReturnType<typeof auth>>[0]) {
+  return process.env.PLAYWRIGHT_E2E_BYPASS === 'true' && req.cookies.get(E2E_BYPASS_COOKIE)?.value === '1'
+}
+
 export default auth((req) => {
   const { pathname } = req.nextUrl
   const isApiRoute = pathname.startsWith('/api/')
 
   if (isPublicPath(pathname)) {
+    return NextResponse.next()
+  }
+
+  if (shouldBypassForE2E(req)) {
     return NextResponse.next()
   }
 
