@@ -448,7 +448,7 @@ export async function createCuentaCobrar(cotizacion: Cotizacion) {
       cliente: cotizacion.cliente,
       proyecto: cotizacion.proyecto,
       monto_total: cotizacion.total,
-      estado: 'PENDIENTE',
+      estado: 'FACTURA_PENDIENTE',
     }, { onConflict: 'cotizacion_id' })
     .select()
     .single()

@@ -123,7 +123,7 @@ BEGIN
     v_cotizacion.cliente,
     v_cotizacion.proyecto,
     v_cotizacion.total,
-    'PENDIENTE'
+    'FACTURA_PENDIENTE'
   )
   ON CONFLICT (cotizacion_id) DO UPDATE SET
     cliente     = EXCLUDED.cliente,

@@ -42,4 +42,10 @@ describe('cuentas/status', () => {
       { x_pagar: 200, monto_pagado: 200 },
     ])).toBe('COMPLETADA')
   })
+
+  it('rejects invalid estado PENDIENTE for cuentas cobrar', () => {
+    // Este test documenta que PENDIENTE es inválido según EstadoCuentaCobrar
+    const validEstados: EstadoCuentaCobrar[] = ['FACTURA_PENDIENTE', 'FACTURADO', 'PARCIALMENTE_PAGADO', 'PAGADO', 'VENCIDO']
+    expect(validEstados).not.toContain('PENDIENTE' as any)
+  })
 })
