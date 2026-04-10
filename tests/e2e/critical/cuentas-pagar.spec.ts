@@ -21,7 +21,7 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click()
   await expect(page.getByText('Orden_Pago_2026_04_18.pdf', { exact: true }).first()).toBeVisible()
 
-  await page.getByRole('button', { name: /Ver detalle/i }).first().click()
+  await page.locator('tr').filter({ hasText: 'José García' }).first().click()
   await page.getByRole('button', { name: 'Registrar Pago', exact: true }).first().click()
 
   const form = page.locator('form')
