@@ -138,17 +138,35 @@ export async function generateQuotationPdf(
   itemsOverride?: QuotationFormValues['items'],
   options?: { skipDownload?: boolean }
 ): Promise<GeneratePdfResult> {
-  const { generarPDFCotizacion } = await import('@/lib/pdf')
   const skipDownload = options?.skipDownload === true
 
-  const pdfBase64 = await generarPDFCotizacion(
-    buildQuotationPdfPayload(quotation, itemsOverride || quotation.items || []),
-    { downloadPdf: !skipDownload }
-  )
+  // Fetch PDF from server-side API endpoint
+  const pdfRes = await fetch(`/api/cotizaciones/${quotation.id}/generar-pdf`)
+  if (!pdfRes.ok) {
+    throw new Error('Error generando PDF')
+  }
+
+  const pdfArrayBuffer = await pdfRes.arrayBuffer()
+
+  // Trigger download in browser if not skipped
+  if (!skipDownload) {
+    const blob = new Blob([pdfArrayBuffer], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Cotizacion_${quotation.folio}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   if (quotation.estado === 'BORRADOR') {
     return { savedToDrive: false }
   }
+
+  // Convert ArrayBuffer to base64 for Drive upload
+  const pdfBase64 = btoa(String.fromCharCode(...new Uint8Array(pdfArrayBuffer)))
 
   const fileName = `${quotation.id} - ${quotation.cliente} - ${quotation.proyecto}.pdf`
   try {
