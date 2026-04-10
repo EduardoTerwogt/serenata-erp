@@ -16,7 +16,11 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await page.getByRole('button', { name: 'Generar Orden PDF' }).click()
   await expect(page.getByRole('link', { name: 'Abrir PDF' })).toBeVisible()
 
-  const pdfResponse = await page.request.get(E2E_IDS.pdfPath)
+  const pdfResponsePromise = page.waitForResponse((response) =>
+    response.url().includes(E2E_IDS.pdfPath) && response.ok()
+  )
+  await page.getByRole('link', { name: 'Abrir PDF' }).click()
+  const pdfResponse = await pdfResponsePromise
   expect(pdfResponse.ok()).toBeTruthy()
   expect(pdfResponse.headers()['content-type']).toContain('application/pdf')
   const pdfBody = await pdfResponse.body()
