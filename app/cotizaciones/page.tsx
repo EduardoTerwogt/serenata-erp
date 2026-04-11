@@ -20,6 +20,18 @@ export default function CotizacionesPage() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
+
+    // Fase 5c: Prefetch de catálogos en background para Nueva Cotización
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        Promise.all([
+          fetch('/api/clientes?q=').catch(() => {}),
+          fetch('/api/productos?q=').catch(() => {}),
+          fetch('/api/responsables').catch(() => {}),
+          fetch('/api/folio').catch(() => {}),
+        ])
+      })
+    }
   }, [])
 
   const porEstado = filtro === 'TODAS'
