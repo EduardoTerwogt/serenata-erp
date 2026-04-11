@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ServiceTemplate, ServiceTemplateItem } from '@/lib/types'
+import { useServiceTemplateForm } from '@/hooks/useServiceTemplateForm'
 
 interface TemplateFormModalProps {
   template: ServiceTemplate | null
@@ -14,6 +15,18 @@ export default function TemplateFormModal({ template, onClose }: TemplateFormMod
   const [items, setItems] = useState<ServiceTemplateItem[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  // Reference for descripción inputs to track focus
+  const descInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+
+  // Product autocomplete hook
+  const {
+    productoSugerencias,
+    mostrarProductoDropdown,
+    setMostrarProductoDropdown,
+    handleDescripcionChange,
+    seleccionarProducto,
+  } = useServiceTemplateForm(items, setItems)
 
   useEffect(() => {
     if (template) {
@@ -48,6 +61,9 @@ export default function TemplateFormModal({ template, onClose }: TemplateFormMod
   }
 
   const handleUpdateItem = (index: number, field: keyof ServiceTemplateItem, value: any) => {
+    // SKIP: descripcion is handled by handleDescripcionChange from the hook
+    if (field === 'descripcion') return
+
     const newItems = [...items]
     newItems[index] = { ...newItems[index], [field]: value }
     setItems(newItems)
@@ -194,14 +210,43 @@ export default function TemplateFormModal({ template, onClose }: TemplateFormMod
                   </div>
 
                   <div className="mb-3">
-                    <label className="text-xs text-gray-400 block mb-1">Descripción *</label>
-                    <input
-                      type="text"
-                      value={item.descripcion}
-                      onChange={e => handleUpdateItem(idx, 'descripcion', e.target.value)}
-                      placeholder="Descripción del item"
-                      className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                    />
+                    <label className="text-xs text-gray-400 block mb-1">Descripción * (type 2+ chars for suggestions)</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        ref={el => { descInputRefs.current[idx] = el }}
+                        value={item.descripcion}
+                        onChange={e => handleDescripcionChange(idx, e.target.value)}
+                        onFocus={() => {
+                          if ((productoSugerencias[idx]?.length ?? 0) > 0) {
+                            setMostrarProductoDropdown(prev => ({ ...prev, [idx]: true }))
+                          }
+                        }}
+                        onBlur={() =>
+                          setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [idx]: false })), 200)
+                        }
+                        placeholder="Descripción del item"
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                      />
+
+                      {/* Dropdown suggestions */}
+                      {mostrarProductoDropdown[idx] && productoSugerencias[idx]?.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 bg-gray-900 border border-gray-700 rounded-lg mt-1 z-50 shadow-lg">
+                          {productoSugerencias[idx].map(producto => (
+                            <div
+                              key={producto.id}
+                              onClick={() => seleccionarProducto(idx, producto)}
+                              className="px-3 py-2 hover:bg-gray-800 cursor-pointer text-sm text-gray-300 border-b border-gray-800 last:border-0 transition-colors"
+                            >
+                              <div className="font-medium">{producto.descripcion}</div>
+                              <div className="text-xs text-gray-500">
+                                Precio: ${producto.precio_unitario} | X Pagar: ${producto.x_pagar_sugerido}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-3 mb-3">
