@@ -3,8 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { UseFormSetValue } from 'react-hook-form'
 import { Producto } from '@/lib/types'
+import { getJson } from '@/lib/client/api'
 import { calculateQuotationItem } from '@/lib/quotations/calculations'
 import { QuotationFormItem, QuotationFormValues } from '@/lib/quotations/types'
+
+// Fase 1: Caché de catálogos a nivel de módulo — evita refetch en navegación y remounts
+interface CatalogosCache {
+  clientes: { nombre: string; proyectos: string[] }[]
+  productos: Producto[]
+  ts: number
+}
+let _catalogosCache: CatalogosCache | null = null
+const CATALOGOS_TTL_MS = 5 * 60 * 1000 // 5 minutos
 
 export function useQuotationForm(
   setValue: UseFormSetValue<QuotationFormValues>,
@@ -19,16 +29,26 @@ export function useQuotationForm(
   const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
   const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
 
-  const refreshCatalogos = useCallback(async () => {
+  const refreshCatalogos = useCallback(async (force = false) => {
+    // Servir desde caché si está vigente y no se fuerza actualización
+    if (!force && _catalogosCache && Date.now() - _catalogosCache.ts < CATALOGOS_TTL_MS) {
+      setListaClientes(_catalogosCache.clientes)
+      setListaProductos(_catalogosCache.productos)
+      return
+    }
+
     try {
       const [clientes, productos] = await Promise.all([
-        fetch('/api/clientes?q=').then(r => r.json()),
-        fetch('/api/productos?q=').then(r => r.json()),
+        getJson<{ nombre: string; proyectos: string[] }[]>('/api/clientes?q=', 'Error clientes'),
+        getJson<Producto[]>('/api/productos?q=', 'Error productos'),
       ])
-      setListaClientes(clientes || [])
-      setListaProductos(productos || [])
+      const newClientes = clientes || []
+      const newProductos = productos || []
+      _catalogosCache = { clientes: newClientes, productos: newProductos, ts: Date.now() }
+      setListaClientes(newClientes)
+      setListaProductos(newProductos)
     } catch {
-      // ignorar errores de catálogos
+      // ignorar errores de catálogos — no bloquear la UI
     }
   }, [])
 

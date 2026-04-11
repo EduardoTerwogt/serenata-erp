@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useCallback, useEffect, useState } from 'react'
+import { use, useCallback, useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
 import { Cotizacion, ItemCotizacion, Responsable } from '@/lib/types'
@@ -113,8 +113,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       .catch(() => setLoading(false))
   }, [id, applyCotizacionToState])
 
-  const totales = calculateQuotationTotals({ items: watchedItems || [], porcentaje_fee, iva_activo, descuento_tipo, descuento_valor })
-  const displayTotales = esEditable && cotizacion ? totales : (cotizacion ? buildReadOnlyTotals(cotizacion) : totales)
+  // Fase 3: Memoizar cálculo de totales — evita recalcular en cada keystroke
+  const totales = useMemo(
+    () => calculateQuotationTotals({ items: watchedItems || [], porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }),
+    [watchedItems, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor]
+  )
+  const displayTotales = useMemo(
+    () => esEditable && cotizacion ? totales : (cotizacion ? buildReadOnlyTotals(cotizacion) : totales),
+    [esEditable, cotizacion, totales]
+  )
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)
@@ -239,7 +246,23 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }
 
-  if (loading) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cargando...</div>
+  if (loading) return (
+    <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl animate-pulse">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
+        <div className="space-y-2">
+          <div className="h-8 bg-gray-800 rounded w-40" />
+          <div className="h-4 bg-gray-800 rounded w-64" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-11 bg-gray-800 rounded w-24" />
+          <div className="h-11 bg-gray-800 rounded w-36" />
+        </div>
+      </div>
+      <div className="h-32 bg-gray-800 rounded-xl mb-6" />
+      <div className="h-64 bg-gray-800 rounded-xl mb-6" />
+      <div className="h-40 bg-gray-800 rounded-xl" />
+    </div>
+  )
   if (!cotizacion) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cotización no encontrada</div>
 
   return (

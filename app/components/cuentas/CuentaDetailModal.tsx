@@ -125,7 +125,19 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
 
         <div className="p-6">
           {loading ? (
-            <div className="text-center py-10 text-gray-500">Cargando detalle...</div>
+            <div className="space-y-4 animate-pulse">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="h-4 bg-gray-800 rounded w-3/4" />
+                <div className="h-4 bg-gray-800 rounded w-1/2" />
+                <div className="h-4 bg-gray-800 rounded w-2/3" />
+                <div className="h-4 bg-gray-800 rounded w-3/5" />
+              </div>
+              <div className="h-24 bg-gray-800 rounded" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="h-4 bg-gray-800 rounded" />
+                <div className="h-4 bg-gray-800 rounded w-4/5" />
+              </div>
+            </div>
           ) : (
             <>
               {tab === 'info' && cuentaCobrar && (

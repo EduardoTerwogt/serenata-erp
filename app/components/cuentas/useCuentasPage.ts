@@ -63,6 +63,20 @@ export function useCuentasPage() {
     }
   }, [fetchHistorialOrdenes])
 
+  // Fase 2: Refresh selectivo — solo recarga la lista afectada, no ambas
+  const refreshCobrar = useCallback(async () => {
+    await recargarCobrar()
+    if (alertasLoadedRef.current) {
+      alertasLoadedRef.current = false
+      await cargarAlertas()
+    }
+  }, [recargarCobrar, cargarAlertas])
+
+  const refreshPagar = useCallback(async () => {
+    await recargarPagar()
+  }, [recargarPagar])
+
+  // refreshAll conservado para OrdenPagoModal que puede afectar ambas listas
   const refreshAll = useCallback(async () => {
     await Promise.all([recargarCobrar(), recargarPagar()])
 
@@ -117,6 +131,8 @@ export function useCuentasPage() {
     cobrarApi,
     pagarApi,
     refreshAll,
+    refreshCobrar,
+    refreshPagar,
     cobrarFiltradas,
     pagarFiltradas,
     totalPorCobrar,

@@ -81,7 +81,37 @@ export default function CotizacionesPage() {
       />
 
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Cargando...</div>
+        <div className="space-y-3 animate-pulse">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+              <div className="hidden md:flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="h-5 bg-gray-800 rounded w-20" />
+                  <div className="space-y-1">
+                    <div className="h-4 bg-gray-800 rounded w-40" />
+                    <div className="h-3 bg-gray-800 rounded w-28" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="h-5 bg-gray-800 rounded w-24" />
+                  <div className="h-6 bg-gray-800 rounded-full w-20" />
+                </div>
+              </div>
+              <div className="md:hidden space-y-2">
+                <div className="flex justify-between">
+                  <div className="h-4 bg-gray-800 rounded w-24" />
+                  <div className="h-4 bg-gray-800 rounded-full w-16" />
+                </div>
+                <div className="h-4 bg-gray-800 rounded w-3/4" />
+                <div className="h-3 bg-gray-800 rounded w-1/2" />
+                <div className="flex justify-between">
+                  <div className="h-5 bg-gray-800 rounded w-28" />
+                  <div className="h-3 bg-gray-800 rounded w-20" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : filtradas.length > 0 ? (
         <div className="space-y-3">
           {filtradas.map(cot => (

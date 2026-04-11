@@ -33,6 +33,8 @@ export function CuentasPage() {
     cobrarApi,
     pagarApi,
     refreshAll,
+    refreshCobrar,
+    refreshPagar,
     cobrarFiltradas,
     pagarFiltradas,
     totalPorCobrar,
@@ -206,7 +208,21 @@ export function CuentasPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Cargando...</div>
+        <div className="rounded-xl border border-gray-800 overflow-hidden animate-pulse">
+          <div className="bg-gray-800/60 px-4 py-3 grid grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-3 bg-gray-700 rounded" />
+            ))}
+          </div>
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="px-4 py-4 grid grid-cols-4 gap-4 border-t border-gray-800/60">
+              <div className="h-3 bg-gray-800 rounded w-3/4" />
+              <div className="h-3 bg-gray-800 rounded w-1/2" />
+              <div className="h-3 bg-gray-800 rounded w-2/3" />
+              <div className="h-3 bg-gray-800 rounded w-1/3 ml-auto" />
+            </div>
+          ))}
+        </div>
       ) : (
         <CuentasTable
           tab={tab}
@@ -221,7 +237,7 @@ export function CuentasPage() {
           onClose={() => setSelectedCuenta(null)}
           cobrarActions={cobrarApi}
           pagarActions={pagarApi}
-          onRefresh={refreshAll}
+          onRefresh={selectedCuenta.tipo === 'cobrar' ? refreshCobrar : refreshPagar}
         />
       )}
 
