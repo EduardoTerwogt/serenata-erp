@@ -10,7 +10,6 @@ interface Props {
   tab: 'cobrar' | 'pagar'
   cuentas: CuentaListItem[]
   onSelect: (cuenta: CuentaListItem) => void
-  onPrefetch?: (cuentaId: string) => void
 }
 
 const ESTADO_COBRAR_STYLE: Record<EstadoCuentaCobrar | 'PENDIENTE', string> = {
@@ -32,7 +31,7 @@ function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
 }
 
-export function CuentasTable({ tab, cuentas, onSelect, onPrefetch }: Props) {
+export function CuentasTable({ tab, cuentas, onSelect }: Props) {
   const columns = tab === 'cobrar'
     ? ['Folio', 'Cliente', 'Proyecto', 'Pagado / Total', 'Vencimiento', 'Estado']
     : ['Folio', 'Proyecto', 'Responsable', 'Descripción', 'Pagado / Total', 'Estado']
@@ -59,12 +58,7 @@ export function CuentasTable({ tab, cuentas, onSelect, onPrefetch }: Props) {
                 : ESTADO_PAGAR_STYLE[cuenta.estado]
 
               return (
-                <tr
-                  key={`${cuenta.tipo}-${cuenta.id}`}
-                  className="hover:bg-gray-800/70 transition-colors cursor-pointer"
-                  onClick={() => onSelect(cuenta)}
-                  onMouseEnter={() => onPrefetch?.(cuenta.id)}
-                >
+                <tr key={`${cuenta.tipo}-${cuenta.id}`} className="hover:bg-gray-800/70 transition-colors cursor-pointer" onClick={() => onSelect(cuenta)}>
                   <td className="px-6 py-4">
                     <div className="text-blue-400 font-mono text-sm">
                       {cuenta.cotizacion_id}
@@ -114,12 +108,7 @@ export function CuentasTable({ tab, cuentas, onSelect, onPrefetch }: Props) {
             : ESTADO_PAGAR_STYLE[cuenta.estado]
 
           return (
-            <div
-              key={`${cuenta.tipo}-${cuenta.id}`}
-              className="bg-gray-800 border border-gray-700 rounded-xl p-4 cursor-pointer hover:bg-gray-700/80 transition-colors"
-              onClick={() => onSelect(cuenta)}
-              onMouseEnter={() => onPrefetch?.(cuenta.id)}
-            >
+            <div key={`${cuenta.tipo}-${cuenta.id}`} className="bg-gray-800 border border-gray-700 rounded-xl p-4 cursor-pointer hover:bg-gray-700/80 transition-colors" onClick={() => onSelect(cuenta)}>
               <div className="flex justify-between items-start mb-2 gap-3">
                 <div>
                   <div className="font-mono text-blue-400 text-sm font-bold">

@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Cotizacion, EstadoCotizacion } from '@/lib/types'
-import { fetchQuotationDetail } from '@/lib/services/quotation-service'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
 
@@ -127,17 +126,11 @@ export default function CotizacionesPage() {
         </div>
       ) : filtradas.length > 0 ? (
         <div className="space-y-3">
-          {filtradas.map(cot => {
-            const handlePrefetch = () => {
-              // Prefetch del detalle en background (sin await, no bloquea)
-              fetchQuotationDetail(cot.id).catch(() => {})
-            }
-            return (
+          {filtradas.map(cot => (
             <Link
               key={cot.id}
               href={`/cotizaciones/${cot.id}`}
               className="block bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 hover:border-gray-600 transition-colors"
-              onMouseEnter={handlePrefetch}
             >
               <div className="md:hidden">
                 <div className="flex justify-between items-center mb-2 gap-3">
@@ -198,8 +191,7 @@ export default function CotizacionesPage() {
                 </div>
               </div>
             </Link>
-            )
-          })}
+          ))}
         </div>
       ) : (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
