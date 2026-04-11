@@ -81,8 +81,26 @@ export function usePlaneacionFlow() {
     setState(s => ({ ...s, loading: true, error: '' }))
 
     try {
-      // Parse information (simplified - only fecha + locacion)
-      const extracted = parseEventInfo(state.rawInput)
+      // Extract events via AI, fallback to local parser if unavailable
+      let extracted: ExtractedEventLine[] = []
+
+      try {
+        const res = await fetch('/api/planeacion/extract-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: state.rawInput }),
+        })
+        if (res.ok) {
+          extracted = await res.json()
+        }
+      } catch {
+        // AI extraction failed, fall through to local parser
+      }
+
+      // Fallback: local regex parser
+      if (extracted.length === 0) {
+        extracted = parseEventInfo(state.rawInput)
+      }
 
       // Enrich with match information via API
       const enriched: ValidatedEventLine[] = []
@@ -113,7 +131,7 @@ export function usePlaneacionFlow() {
           ...line,
           id: Math.random().toString(36).substr(2, 9),
           ciudad: line.ciudad ?? undefined,
-          action: line.action ?? 'por_confirmar', // Preserve parser detection; default if not found
+          action: line.action ?? 'por_confirmar',
           matchedQuotationId,
           matchedQuotationInfo,
           selectedTemplateId: undefined,
