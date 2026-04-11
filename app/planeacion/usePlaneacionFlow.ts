@@ -179,11 +179,12 @@ export function usePlaneacionFlow() {
   }
 
   const getCreationSummary = () => {
+    // Categorize by action + confidence
     const toCreate = state.extractedLines.filter(
-      line => line.action === 'confirmado'
+      line => line.action === 'confirmado' && (line.confidence ?? 0) >= 0.8
     )
     const toPending = state.extractedLines.filter(
-      line => line.action === 'por_confirmar'
+      line => line.action === 'por_confirmar' || (line.action === 'confirmado' && (line.confidence ?? 0) < 0.8)
     )
     const toCancel = state.extractedLines.filter(
       line => line.action === 'cancelado'
