@@ -77,6 +77,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
 
   const cuentaCobrar = cuenta.tipo === 'cobrar' ? (detalleCobrar?.cuenta || cuenta) : null
   const cuentaPagar = cuenta.tipo === 'pagar' ? (detallePagar?.cuenta || cuenta) : null
+  const visibleFolio = cuenta.folio || cuenta.cotizacion_id
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
@@ -84,7 +85,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
         <div className="sticky top-0 bg-gray-900/95 backdrop-blur border-b border-gray-800 p-6 flex justify-between items-start z-10">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h2 className="text-xl font-bold text-white">{cuenta.cotizacion_id}</h2>
+              <h2 className="text-xl font-bold text-white">{visibleFolio}</h2>
               <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-800 text-gray-200">
                 {cuenta.estado}
               </span>
