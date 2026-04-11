@@ -1,15 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ServiceTemplate } from '@/lib/types'
-import TemplateFormModal from './components/TemplateFormModal'
 
 export default function PlantillasServiciosPage() {
+  const router = useRouter()
   const [templates, setTemplates] = useState<ServiceTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
-  const [showModal, setShowModal] = useState(false)
-  const [editingTemplate, setEditingTemplate] = useState<ServiceTemplate | null>(null)
 
   useEffect(() => {
     fetchTemplates()
@@ -35,13 +34,11 @@ export default function PlantillasServiciosPage() {
   )
 
   const handleCreateNew = () => {
-    setEditingTemplate(null)
-    setShowModal(true)
+    router.push('/plantillas-servicios/nueva')
   }
 
   const handleEdit = (template: ServiceTemplate) => {
-    setEditingTemplate(template)
-    setShowModal(true)
+    router.push(`/plantillas-servicios/${template.id}/editar`)
   }
 
   const handleDelete = async (id: string) => {
@@ -86,12 +83,6 @@ export default function PlantillasServiciosPage() {
       console.error('Error duplicating template:', error)
       alert('Error al duplicar la plantilla')
     }
-  }
-
-  const handleModalClose = () => {
-    setShowModal(false)
-    setEditingTemplate(null)
-    fetchTemplates()
   }
 
   return (
@@ -198,13 +189,6 @@ export default function PlantillasServiciosPage() {
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <TemplateFormModal
-          template={editingTemplate}
-          onClose={handleModalClose}
-        />
-      )}
     </div>
   )
 }
