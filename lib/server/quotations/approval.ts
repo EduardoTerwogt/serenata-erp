@@ -1,5 +1,6 @@
 import { getCotizacionById } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase'
+import { invalidateFolioCache } from '@/app/api/folio/route'
 
 export async function approveQuotationAndFetchResult(id: string) {
   let cotizacion
@@ -20,6 +21,9 @@ export async function approveQuotationAndFetchResult(id: string) {
     const status = msg.includes('no encontrada') || msg.includes('P0002') ? 404 : 500
     return { ok: false as const, status, body: { error: msg } }
   }
+
+  // Invalidate folio cache after successful approval (folio is consumed)
+  invalidateFolioCache()
 
   const result = data as {
     already_approved: boolean

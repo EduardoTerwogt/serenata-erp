@@ -15,6 +15,10 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
+vi.mock('@/app/api/folio/route', () => ({
+  invalidateFolioCache: vi.fn(),
+}))
+
 import { approveQuotationAndFetchResult } from '../approval'
 
 describe('approveQuotationAndFetchResult', () => {
