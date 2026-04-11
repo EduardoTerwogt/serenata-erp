@@ -22,6 +22,7 @@ export interface PlaneacionFlowState {
   templates: ServiceTemplate[]
   loading: boolean
   error: string
+  extractionMethod?: 'ai' | 'regex'
 }
 
 export function usePlaneacionFlow() {
@@ -81,8 +82,41 @@ export function usePlaneacionFlow() {
     setState(s => ({ ...s, loading: true, error: '' }))
 
     try {
-      // Parse information (simplified - only fecha + locacion)
-      const extracted = parseEventInfo(state.rawInput)
+      let extracted: ExtractedEventLine[] = []
+      let extractionMethod: 'ai' | 'regex' = 'regex'
+
+      // Try AI extraction first
+      try {
+        const aiRes = await fetch('/api/planeacion/extract-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: state.rawInput }),
+        })
+        if (aiRes.ok) {
+          const aiData = await aiRes.json()
+          if (aiData.events && aiData.events.length > 0) {
+            extracted = aiData.events
+            extractionMethod = 'ai'
+          }
+        }
+      } catch (aiError) {
+        console.error('AI extraction failed, falling back to regex parser:', aiError)
+      }
+
+      // Fallback to local regex parser if AI extraction failed
+      if (extracted.length === 0) {
+        extracted = parseEventInfo(state.rawInput)
+        extractionMethod = 'regex'
+      }
+
+      if (extracted.length === 0) {
+        setState(s => ({
+          ...s,
+          loading: false,
+          error: 'No se encontraron fechas o locaciones. Verifica el formato.',
+        }))
+        return
+      }
 
       // Enrich with match information via API
       const enriched: ValidatedEventLine[] = []
@@ -112,27 +146,19 @@ export function usePlaneacionFlow() {
         enriched.push({
           ...line,
           id: Math.random().toString(36).substr(2, 9),
-          ciudad: undefined,
-          action: 'por_confirmar', // Default: user must explicitly set to 'confirmado'
+          ciudad: line.ciudad ?? undefined,
+          action: line.action ?? 'por_confirmar',
           matchedQuotationId,
           matchedQuotationInfo,
           selectedTemplateId: undefined,
         })
       }
 
-      if (enriched.length === 0) {
-        setState(s => ({
-          ...s,
-          loading: false,
-          error: 'No se encontraron fechas o locaciones. Verifica el formato.',
-        }))
-        return
-      }
-
       setState(s => ({
         ...s,
         step: 'validation',
         extractedLines: enriched,
+        extractionMethod,
         loading: false,
       }))
     } catch (err) {

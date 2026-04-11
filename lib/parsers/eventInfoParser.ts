@@ -10,6 +10,8 @@ export interface ExtractedEventLine {
   locacion: string | null
   ciudad?: string
   action?: 'confirmado' | 'por_confirmar' | 'cancelado'
+  notas?: string | null
+  confidence?: number
 }
 
 // Patterns for detecting dates
