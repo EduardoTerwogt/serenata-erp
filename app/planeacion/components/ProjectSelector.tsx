@@ -69,7 +69,11 @@ export default function ClienteProyectoSelector({
           <input
             type="text"
             value={clienteInput}
-            onChange={e => handleClienteChange(e.target.value)}
+            onChange={e => {
+              const value = e.target.value
+              handleClienteChange(value)
+              onSelectCliente(value)
+            }}
             onFocus={() => setMostrarClienteDropdown(true)}
             placeholder="Busca o escribe cliente..."
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
@@ -100,7 +104,11 @@ export default function ClienteProyectoSelector({
           <input
             type="text"
             value={proyectoInput}
-            onChange={e => handleProyectoChange(e.target.value)}
+            onChange={e => {
+              const value = e.target.value
+              handleProyectoChange(value)
+              onSelectProyecto(value)
+            }}
             onFocus={() => {
               const filtrados = proyectosDelCliente.filter(p =>
                 p.toLowerCase().includes(proyectoInput.toLowerCase())

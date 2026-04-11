@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { usePlaneacionFlow } from './usePlaneacionFlow'
 import ProjectSelector from './components/ProjectSelector'
 import InputForm from './components/InputForm'
@@ -36,11 +37,19 @@ export default function PlaneacionPage() {
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Planeación de Eventos</h1>
-        <p className="text-gray-400">
-          Carga información de tus eventos y crea cotizaciones en lote
-        </p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Planeación de Eventos</h1>
+          <p className="text-gray-400">
+            Carga información de tus eventos y crea cotizaciones en lote
+          </p>
+        </div>
+        <Link
+          href="/planeacion/pendientes"
+          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors whitespace-nowrap"
+        >
+          📋 Ver Pendientes
+        </Link>
       </div>
 
       {/* Progress indicator */}

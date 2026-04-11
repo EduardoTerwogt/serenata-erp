@@ -151,6 +151,11 @@ export default function CotizacionesPage() {
                     Complementaria de <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
                   </p>
                 )}
+                {(!cot.items || cot.items.length === 0) && (
+                  <p className="text-xs text-orange-300 mb-2 break-words">
+                    ⚠️ Sin items (llenar manualmente)
+                  </p>
+                )}
                 <div className="flex justify-between items-center gap-3">
                   <span className="text-white font-bold text-lg break-words">
                     ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -170,6 +175,11 @@ export default function CotizacionesPage() {
                     <span className="text-xs px-2 py-0.5 rounded bg-purple-900 text-purple-300">
                       Complementaria de{' '}
                       <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
+                    </span>
+                  )}
+                  {(!cot.items || cot.items.length === 0) && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-orange-900 text-orange-300">
+                      ⚠️ Sin items
                     </span>
                   )}
                 </div>

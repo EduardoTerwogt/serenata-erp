@@ -6,6 +6,47 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 )
 
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const estado = searchParams.get('estado')
+    const cliente = searchParams.get('cliente')
+
+    let query = supabaseAdmin
+      .from('planeacion_pendientes')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (estado) {
+      query = query.eq('estado', estado)
+    }
+
+    if (cliente) {
+      query = query.ilike('cliente', `%${cliente}%`)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('Error fetching planeacion_pendientes:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch pendientes' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      pendientes: data || [],
+    })
+  } catch (err) {
+    console.error('GET /api/planeacion/pendientes error:', err)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -45,6 +86,41 @@ export async function POST(request: NextRequest) {
     })
   } catch (err) {
     console.error('POST /api/planeacion/pendientes error:', err)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { pathname } = new URL(request.url)
+    const id = pathname.split('/').pop()
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'ID is required' },
+        { status: 400 }
+      )
+    }
+
+    const { error } = await supabaseAdmin
+      .from('planeacion_pendientes')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('Error deleting planeacion_pendiente:', error)
+      return NextResponse.json(
+        { error: 'Failed to delete pendiente' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('DELETE /api/planeacion/pendientes error:', err)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
