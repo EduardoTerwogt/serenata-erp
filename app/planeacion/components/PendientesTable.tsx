@@ -1,61 +1,46 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { ServiceTemplate } from '@/lib/types'
+import { ValidatedEventLine } from '../usePlaneacionFlow'
 
-interface Pendiente {
-  id: string
-  cliente: string
-  proyecto: string
-  fecha: string | null
-  fecha_iso: string | null
-  ciudad: string | null
-  locacion: string | null
-  estado: 'por_confirmar' | 'cancelado'
-  created_at: string
+interface PendientesTableProps {
+  lines: ValidatedEventLine[]
+  onLineUpdate: (lineId: string, updates: Partial<ValidatedEventLine>) => void
+  onLineDelete: (lineId: string) => void
+  templates: ServiceTemplate[]
+  onConfirm: () => void
+  loading: boolean
+  error: string
+  onGoBack: () => void
 }
 
-export default function PendientesTable() {
-  const [pendientes, setPendientes] = useState<Pendiente[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [estadoFilter, setEstadoFilter] = useState<'todos' | 'por_confirmar' | 'cancelado'>('todos')
-
-  useEffect(() => {
-    const fetchPendientes = async () => {
-      setLoading(true)
-      setError('')
-      try {
-        const params = estadoFilter === 'todos' ? '' : `?estado=${estadoFilter}`
-        const res = await fetch(`/api/planeacion/pendientes${params}`)
-        if (res.ok) {
-          const data = await res.json()
-          setPendientes(data.pendientes)
-        } else {
-          setError('Error cargando pendientes')
-        }
-      } catch (err) {
-        setError('Error al conectar con el servidor')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchPendientes()
-  }, [estadoFilter])
-
-  const getEstadoLabel = (estado: string) => {
-    switch (estado) {
+export default function PendientesTable({
+  lines,
+  onLineUpdate,
+  onLineDelete,
+  templates,
+  onConfirm,
+  loading,
+  error,
+  onGoBack,
+}: PendientesTableProps) {
+  const getActionLabel = (action: string) => {
+    switch (action) {
+      case 'confirmado':
+        return 'Confirmado'
       case 'por_confirmar':
         return 'Por Confirmar'
       case 'cancelado':
         return 'Cancelado'
       default:
-        return estado
+        return action
     }
   }
 
-  const getEstadoColor = (estado: string) => {
-    switch (estado) {
+  const getActionColor = (action: string) => {
+    switch (action) {
+      case 'confirmado':
+        return 'bg-green-900/30 text-green-400 border-green-800'
       case 'por_confirmar':
         return 'bg-yellow-900/30 text-yellow-400 border-yellow-800'
       case 'cancelado':
@@ -65,30 +50,7 @@ export default function PendientesTable() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro que quieres eliminar este pendiente?')) return
-
-    try {
-      const res = await fetch(`/api/planeacion/pendientes/${id}`, {
-        method: 'DELETE',
-      })
-      if (res.ok) {
-        setPendientes(p => p.filter(pend => pend.id !== id))
-      } else {
-        setError('Error al eliminar pendiente')
-      }
-    } catch (err) {
-      setError('Error al conectar con el servidor')
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-gray-400">Cargando pendientes...</p>
-      </div>
-    )
-  }
+  const hasConfirmed = lines.some(line => line.action === 'confirmado')
 
   return (
     <div className="space-y-6">
@@ -98,59 +60,79 @@ export default function PendientesTable() {
         </div>
       )}
 
-      {/* Filter tabs */}
-      <div className="flex gap-3">
-        {(['todos', 'por_confirmar', 'cancelado'] as const).map(filter => (
-          <button
-            key={filter}
-            onClick={() => setEstadoFilter(filter)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              estadoFilter === filter
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
-          >
-            {filter === 'todos' ? 'Todos' : getEstadoLabel(filter)}
-          </button>
-        ))}
-      </div>
-
-      {/* Table */}
+      {/* Lines Table */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-800 border-b border-gray-700">
               <tr>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Cliente</th>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Proyecto</th>
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación</th>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Estado</th>
+                <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>
+                <th className="px-4 py-3 text-left text-gray-300 font-medium">Plantilla</th>
+                <th className="px-4 py-3 text-left text-gray-300 font-medium">Acción</th>
                 <th className="px-4 py-3 text-center text-gray-300 font-medium"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
-              {pendientes.map(pendiente => (
-                <tr key={pendiente.id} className="hover:bg-gray-800/50 transition-colors">
-                  <td className="px-4 py-3 text-gray-300">{pendiente.cliente}</td>
-                  <td className="px-4 py-3 text-gray-300">{pendiente.proyecto}</td>
+              {lines.map(line => (
+                <tr key={line.id} className="hover:bg-gray-800/50 transition-colors">
                   <td className="px-4 py-3 text-gray-300">
-                    {pendiente.fecha ? <span title={pendiente.fecha_iso || ''}>{pendiente.fecha}</span> : '—'}
+                    <input
+                      type="text"
+                      value={line.fecha || ''}
+                      onChange={e => onLineUpdate(line.id, { fecha: e.target.value || null })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
                   </td>
-                  <td className="px-4 py-3 text-gray-300">{pendiente.ciudad || '—'}</td>
-                  <td className="px-4 py-3 text-gray-300">{pendiente.locacion || '—'}</td>
+                  <td className="px-4 py-3 text-gray-300">
+                    <input
+                      type="text"
+                      value={line.ciudad || ''}
+                      onChange={e => onLineUpdate(line.id, { ciudad: e.target.value || undefined })}
+                      placeholder="Ciudad"
+                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-gray-300">
+                    <input
+                      type="text"
+                      value={line.locacion || ''}
+                      onChange={e => onLineUpdate(line.id, { locacion: e.target.value || null })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-gray-300">
+                    <select
+                      value={line.selectedTemplateId || ''}
+                      onChange={e => onLineUpdate(line.id, { selectedTemplateId: e.target.value || undefined })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">— Sin plantilla —</option>
+                      {templates.map(template => (
+                        <option key={template.id} value={template.id}>
+                          {template.nombre} ({template.items.length} items)
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="px-4 py-3">
-                    <span className={`inline-block px-3 py-1 rounded text-xs font-medium border ${getEstadoColor(pendiente.estado)}`}>
-                      {getEstadoLabel(pendiente.estado)}
-                    </span>
+                    <select
+                      value={line.action}
+                      onChange={e => onLineUpdate(line.id, { action: e.target.value as any })}
+                      className={`w-full px-2 py-1 rounded text-xs font-medium border ${getActionColor(line.action)} bg-gray-800 focus:outline-none focus:border-blue-500`}
+                    >
+                      <option value="confirmado">Confirmado</option>
+                      <option value="por_confirmar">Por Confirmar</option>
+                      <option value="cancelado">Cancelado</option>
+                    </select>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button
-                      onClick={() => handleDelete(pendiente.id)}
-                      className="text-red-400 hover:text-red-300 text-xs font-medium"
+                      onClick={() => onLineDelete(line.id)}
+                      className="text-red-400 hover:text-red-300 text-xs"
                     >
-                      Eliminar
+                      ✕
                     </button>
                   </td>
                 </tr>
@@ -160,18 +142,35 @@ export default function PendientesTable() {
         </div>
 
         {/* Empty state */}
-        {pendientes.length === 0 && (
+        {lines.length === 0 && (
           <div className="px-4 py-8 text-center">
             <p className="text-gray-400">No hay pendientes para mostrar</p>
           </div>
         )}
+
+        {/* Info message */}
+        {lines.length > 0 && (
+          <div className="px-4 py-3 bg-gray-800/50 border-t border-gray-700 text-xs text-gray-400">
+            <p>💡 Marca filas como "Confirmado" para crearlas como cotizaciones. Puedes editar los campos y seleccionar plantilla.</p>
+          </div>
+        )}
       </div>
 
-      {/* Info box */}
-      <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-        <p className="text-sm text-gray-400">
-          ℹ️ Aquí se muestran las filas marcadas como <span className="font-medium text-yellow-400">Por Confirmar</span> o <span className="font-medium text-red-400">Cancelado</span> durante el flujo de planeación. Puedes revisar, eliminar o procesarlas posteriormente.
-        </p>
+      {/* Action buttons */}
+      <div className="flex gap-3">
+        <button
+          onClick={onGoBack}
+          className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+        >
+          ← Volver
+        </button>
+        <button
+          onClick={onConfirm}
+          disabled={loading || !hasConfirmed}
+          className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+        >
+          {loading ? 'Procesando...' : 'Revisar Cambios →'}
+        </button>
       </div>
     </div>
   )

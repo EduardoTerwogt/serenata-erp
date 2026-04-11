@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePlaneacionFlow } from './usePlaneacionFlow'
 import ProjectSelector from './components/ProjectSelector'
@@ -9,6 +9,7 @@ import ValidationTable from './components/ValidationTable'
 import ConfirmationSummary from './components/ConfirmationSummary'
 
 export default function PlaneacionPage() {
+  const [pendientesCount, setPendientesCount] = useState(0)
   const {
     state,
     handleSelectCliente,
@@ -30,26 +31,53 @@ export default function PlaneacionPage() {
     loadTemplates()
   }, [])
 
+  // Load pendientes count
+  useEffect(() => {
+    const fetchPendientesCount = async () => {
+      try {
+        const res = await fetch('/api/planeacion/pendientes')
+        if (res.ok) {
+          const data = await res.json()
+          setPendientesCount(data.pendientes?.length || 0)
+        }
+      } catch (err) {
+        // Non-critical
+      }
+    }
+
+    fetchPendientesCount()
+  }, [])
+
   const { toCreate, toPending, toCancel } = getCreationSummary()
 
   const steps = ['project', 'input', 'validation', 'confirmation'] as const
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
-      {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Planeación de Eventos</h1>
-          <p className="text-gray-400">
-            Carga información de tus eventos y crea cotizaciones en lote
-          </p>
+      {/* Pendientes Banner */}
+      {pendientesCount > 0 && (
+        <div className="mb-8 bg-yellow-900/20 border border-yellow-800 rounded-xl p-4 md:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-lg font-semibold text-yellow-300 mb-1">📋 {pendientesCount} pendientes por revisar</p>
+              <p className="text-sm text-yellow-200">Filas guardadas como "Por Confirmar" o "Cancelado" que puedes editar y procesar</p>
+            </div>
+            <Link
+              href="/planeacion/pendientes"
+              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium transition-colors whitespace-nowrap"
+            >
+              Ver y Procesar →
+            </Link>
+          </div>
         </div>
-        <Link
-          href="/planeacion/pendientes"
-          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors whitespace-nowrap"
-        >
-          📋 Ver Pendientes
-        </Link>
+      )}
+
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">Planeación de Eventos</h1>
+        <p className="text-gray-400">
+          Carga información de tus eventos y crea cotizaciones en lote
+        </p>
       </div>
 
       {/* Progress indicator */}
