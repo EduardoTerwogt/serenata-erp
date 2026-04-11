@@ -8,6 +8,8 @@ export interface ExtractedEventLine {
   raw: string
   fecha: string | null
   locacion: string | null
+  ciudad?: string
+  action?: 'confirmado' | 'por_confirmar' | 'cancelado'
 }
 
 // Patterns for detecting dates
@@ -17,11 +19,19 @@ const DATE_PATTERNS = [
   /(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/,
 ]
 
-// Location keywords
+// Location keywords - expanded with schools, buildings, and common places
 const LOCATION_KEYWORDS = [
+  // Cities
   'cdmx', 'coyoacán', 'coyoacan', 'metepec', 'toluca', 'edomex', 'edo.\\s*mex',
-  'secundaria', 'fes', 'ebc', 'cecyt', 'metro', 'forum', 'foro', 'anáhuac', 'anahuac',
-  'ymc', 'ymca', 'uvm', 'hidalgo', 'chabacano', 'insurgentes', 'niebla', 'aragon'
+  // Schools & Universities
+  'secundaria', 'preparatoria', 'colegio', 'escuela', 'instituto', 'universidad',
+  'fes', 'ebc', 'cecyt', 'anáhuac', 'anahuac', 'uvm',
+  // Buildings & Venues
+  'arena', 'forum', 'foro', 'anfiteatro', 'auditorio', 'sala', 'centro cultural',
+  'metro', 'metro\\s+chabacano', 'chabacano', 'insurgentes', 'niebla',
+  // Specific Places
+  'ymca', 'ymc', 'hidalgo', 'aragon', 'tec', 'tec\\s+31',
+  'parque', 'plaza', 'hotel', 'piso'
 ]
 
 export function parseEventInfo(text: string): ExtractedEventLine[] {
@@ -60,7 +70,25 @@ function isNarrativeLine(line: string): boolean {
 }
 
 function parseLine(line: string): ExtractedEventLine {
-  const raw = line.trim()
+  let raw = line.trim()
+
+  // Strip leading bullets/dashes
+  raw = raw.replace(/^[-*]\s+/, '').trim()
+
+  // Remove "Confirmo:" prefix if present
+  raw = raw.replace(/^(?:Confirmo|Confirmar)[:\s]+/i, '').trim()
+
+  // Extract action from status indicators at the end
+  let action: 'confirmado' | 'por_confirmar' | 'cancelado' | undefined
+  const statusMatch = raw.match(/\((confirmad[ao]|pend[ia]nte|cancelad[ao])\)/i)
+  if (statusMatch) {
+    const status = statusMatch[1].toLowerCase()
+    if (status.startsWith('confirmad')) action = 'confirmado'
+    else if (status.startsWith('pend')) action = 'por_confirmar'
+    else if (status.startsWith('cancelad')) action = 'cancelado'
+    // Remove status from raw for further parsing
+    raw = raw.replace(/\s*\([^)]*\)\s*$/, '').trim()
+  }
 
   // Extract fecha
   let fecha: string | null = null
@@ -72,18 +100,54 @@ function parseLine(line: string): ExtractedEventLine {
     }
   }
 
-  // Extract locacion
+  // Extract ciudad and locacion
+  let ciudad: string | undefined
   let locacion: string | null = null
-  const locRegex = new RegExp(`(${LOCATION_KEYWORDS.join('|')})(?:\\s+[a-záéíóú0-9\\-,]*)?`, 'i')
-  const locMatch = raw.match(locRegex)
-  if (locMatch) {
-    locacion = locMatch[0].trim()
+
+  // Pattern 1: "ciudad, locacion" (separated by comma)
+  const commaMatch = raw.match(/^([^,]+?[a-z])\s*,\s*(.+?)(?:\s+\(|$)/i)
+  if (commaMatch) {
+    const beforeComma = commaMatch[1].trim()
+    const afterComma = commaMatch[2].trim()
+
+    // Check if before comma is a city keyword
+    if (/(cdmx|toluca|metepec|edomex|edo\.?\s*mex)/i.test(beforeComma)) {
+      ciudad = beforeComma
+      // Try to find location keyword in the rest of the line
+      const locRegex = new RegExp(`(${LOCATION_KEYWORDS.join('|')})(?:\\s+[a-záéíóú0-9\\-]*)?`, 'i')
+      const locMatch = raw.match(locRegex)
+      if (locMatch) {
+        locacion = locMatch[0].trim()
+      } else {
+        // If no keyword found, use the afterComma part
+        locacion = afterComma
+      }
+    }
+  }
+
+  // Pattern 2: "fecha en [place]" (if no comma-based extraction)
+  if (!locacion) {
+    const enMatch = raw.match(/\ben\s+([a-záéíóú\s\-0-9]+?)(?:\s*\(|$)/i)
+    if (enMatch) {
+      locacion = enMatch[1].trim()
+    }
+  }
+
+  // Pattern 3: Location keyword match (fallback)
+  if (!locacion) {
+    const locRegex = new RegExp(`(${LOCATION_KEYWORDS.join('|')})(?:\\s+[a-záéíóú0-9\\-]*)?`, 'i')
+    const locMatch = raw.match(locRegex)
+    if (locMatch) {
+      locacion = locMatch[0].trim()
+    }
   }
 
   return {
-    raw,
+    raw: line.trim(),
     fecha,
     locacion,
+    ciudad,
+    action,
   }
 }
 
