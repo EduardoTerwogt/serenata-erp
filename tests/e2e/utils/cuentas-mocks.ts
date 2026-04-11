@@ -127,6 +127,7 @@ export async function mockCuentasApis(page: Page) {
       ? [{
           id: cobrarCuenta.id,
           folio: cobrarCuenta.folio,
+          cotizacion_id: cobrarCuenta.cotizacion_id,
           cliente: cobrarCuenta.cliente,
           proyecto: cobrarCuenta.proyecto,
           monto_total: cobrarCuenta.monto_total,

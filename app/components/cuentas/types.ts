@@ -9,6 +9,7 @@ export type SelectedCuenta =
 export interface AlertaCuentaCobrar {
   id: string
   folio?: string
+  cotizacion_id?: string
   cliente: string
   proyecto: string
   monto_total: number

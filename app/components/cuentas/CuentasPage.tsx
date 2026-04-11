@@ -125,7 +125,7 @@ export function CuentasPage() {
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${alerta.alerta === 'VENCIDA' ? 'bg-red-900 text-red-300' : 'bg-yellow-900 text-yellow-300'}`}>
                           {alerta.alerta}
                         </span>
-                        <span className="text-gray-500 text-xs">{alerta.folio || alerta.cotizacion_id || '—'}</span>
+                        <span className="text-gray-500 text-xs">{alerta.cotizacion_id || '—'}</span>
                       </div>
                       <p className="text-white font-medium">{alerta.cliente} • {alerta.proyecto}</p>
                       <p className="text-gray-400 text-sm mt-1">{alerta.mensaje}</p>

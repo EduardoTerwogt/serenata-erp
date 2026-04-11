@@ -25,7 +25,7 @@ export function TabInformacion(props: TabInformacionProps) {
     const { cuenta, resumen } = props
     const montoPagado = resumen?.total_pagado ?? cuenta.monto_pagado ?? 0
     const saldoPendiente = resumen?.saldo_pendiente ?? (cuenta.monto_total - montoPagado)
-    const visibleFolio = cuenta.folio || cuenta.cotizacion_id
+    const visibleFolio = cuenta.cotizacion_id
 
     return (
       <div className="space-y-4">
@@ -80,7 +80,7 @@ export function TabInformacion(props: TabInformacionProps) {
   const { cuenta, resumen } = props
   const montoPagado = resumen?.monto_pagado ?? cuenta.monto_pagado ?? 0
   const saldoPendiente = resumen?.saldo_pendiente ?? (cuenta.x_pagar - montoPagado)
-  const visibleFolio = cuenta.folio || cuenta.cotizacion_id
+  const visibleFolio = cuenta.cotizacion_id
 
   return (
     <div className="space-y-4">

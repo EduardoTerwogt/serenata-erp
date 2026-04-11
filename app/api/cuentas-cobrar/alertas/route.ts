@@ -40,6 +40,7 @@ export async function GET() {
         return {
           id: c.id,
           folio: c.folio,
+          cotizacion_id: c.cotizacion_id,
           cliente: c.cliente,
           proyecto: c.proyecto,
           monto_total: c.monto_total,

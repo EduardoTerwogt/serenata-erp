@@ -77,7 +77,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
 
   const cuentaCobrar = cuenta.tipo === 'cobrar' ? (detalleCobrar?.cuenta || cuenta) : null
   const cuentaPagar = cuenta.tipo === 'pagar' ? (detallePagar?.cuenta || cuenta) : null
-  const visibleFolio = cuenta.folio || cuenta.cotizacion_id
+  const visibleFolio = cuenta.cotizacion_id
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
