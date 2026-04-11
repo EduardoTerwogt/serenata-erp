@@ -215,6 +215,11 @@ export function CuentasPage() {
           tab={tab}
           cuentas={tab === 'cobrar' ? cobrarFiltradas : pagarFiltradas}
           onSelect={(cuenta) => setSelectedCuenta(cuenta)}
+          onPrefetch={(cuentaId) => {
+            // Prefetch detail in background without blocking UI
+            (tab === 'cobrar' ? cobrarApi.cargarDetalle(cuentaId) : pagarApi.cargarDetalle(cuentaId))
+              .catch(() => {})
+          }}
         />
       )}
 
