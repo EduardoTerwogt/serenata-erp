@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { ExtractedEventLine, parseEventInfo } from '@/lib/parsers/eventInfoParser'
-import { findSimilarQuotation } from '@/lib/utils/quotationMatcher'
 import { ServiceTemplate } from '@/lib/types'
 
 export interface ValidatedEventLine extends ExtractedEventLine {
@@ -72,17 +71,33 @@ export function usePlaneacionFlow() {
       // Parse information
       const extracted = parseEventInfo(state.rawInput)
 
-      // Enrich with match information
+      // Enrich with match information via API (server-side only)
       const enriched: ValidatedEventLine[] = []
       for (const line of extracted) {
-        const match = await findSimilarQuotation(line.fecha, line.locacion)
+        let matchedQuotationId: string | undefined
+        let matchedQuotationInfo: string | undefined
+
+        try {
+          const res = await fetch('/api/planeacion/match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fecha: line.fecha, locacion: line.locacion }),
+          })
+          if (res.ok) {
+            const match = await res.json()
+            matchedQuotationId = match.quotation?.id
+            matchedQuotationInfo = match.reason
+          }
+        } catch {
+          // Match not critical, continue
+        }
 
         enriched.push({
           ...line,
           id: Math.random().toString(36).substr(2, 9),
           action: 'ignore',
-          matchedQuotationId: match.quotation?.id,
-          matchedQuotationInfo: match.reason,
+          matchedQuotationId,
+          matchedQuotationInfo,
           confirmed: false,
         })
       }
