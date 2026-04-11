@@ -1,12 +1,8 @@
 import { requireSection } from '@/lib/api-auth'
 import Anthropic from '@anthropic-ai/sdk'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
 
 const EXTRACT_PROMPT = `Eres un extractor de datos de eventos para una productora audiovisual/musical.
 
@@ -70,7 +66,7 @@ export async function POST(request: Request) {
     const costUSD = (tokensInput * 0.0008 + tokensOutput * 0.004) / 1000 // Haiku pricing
 
     try {
-      await supabase.from('extraction_logs').insert({
+      await supabaseAdmin.from('extraction_logs').insert({
         proyecto_id: 'serenata-erp', // TODO: get from session/context
         metodo: 'ai',
         tokens_input: tokensInput,

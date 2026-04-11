@@ -1,10 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
+import { supabaseAdmin } from '@/lib/supabase'
 
 // Anthropic Haiku pricing (current as of 2026)
 // Input: $0.80 per 1M tokens
@@ -20,7 +15,7 @@ export async function GET(request: Request) {
     // Get last 30 days of usage
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('extraction_logs')
       .select('tokens_input, tokens_output, costo_usd, eventos_extraidos')
       .gte('created_at', thirtyDaysAgo.toISOString())
