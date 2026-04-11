@@ -112,8 +112,8 @@ export function usePlaneacionFlow() {
         enriched.push({
           ...line,
           id: Math.random().toString(36).substr(2, 9),
-          ciudad: undefined,
-          action: 'por_confirmar', // Default: user must explicitly set to 'confirmado'
+          ciudad: line.ciudad ?? undefined,
+          action: line.action ?? 'por_confirmar', // Preserve parser detection; default if not found
           matchedQuotationId,
           matchedQuotationInfo,
           selectedTemplateId: undefined,

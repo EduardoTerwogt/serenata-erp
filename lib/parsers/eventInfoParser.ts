@@ -10,6 +10,8 @@ export interface ExtractedEventLine {
   locacion: string | null
   ciudad?: string
   action?: 'confirmado' | 'por_confirmar' | 'cancelado'
+  notas?: string
+  confidence?: number // 0-1: alta (0.9+), media (0.6), baja (0.3)
 }
 
 // Patterns for detecting dates
@@ -41,22 +43,67 @@ const EN_LOCATION_PATTERN = /\ben\s+([a-záéíóú\s\-0-9]+?)(?:\s*\(|$)/i
 const STATUS_PATTERN = /\((confirmad[ao]|pend[ia]nte|cancelad[ao])\)/i
 const CITY_KEYWORDS_PATTERN = /(cdmx|toluca|metepec|edomex|edo\.?\s*mex)/i
 
+// Action detection patterns (natural language)
+const ACTION_CANCELADO = /cancelad[ao]|pospuest[ao]/i
+const ACTION_PENDIENTE = /pendiente|por\s+confirmar|a\s+reserva|por\s+definir|detalles\s+por/i
+const ACTION_CONFIRMADO = /confirm[ao]|confirmada|visto\s+bueno/i
+
 export function parseEventInfo(text: string): ExtractedEventLine[] {
-  const lines = text.split('\n').filter(line => line.trim().length > 0)
-  const results: ExtractedEventLine[] = []
+  // Split into candidate blocks (grouped by fecha)
+  const blocks = splitIntoCandidateBlocks(text)
+
+  // Parse each block
+  const results: ExtractedEventLine[] = blocks
+    .map(block => parseCandidateBlock(block))
+    .filter(event => event.fecha || event.locacion)
+
+  return results
+}
+
+/**
+ * Splits text into candidate event blocks.
+ * A block starts with a line containing a date and continues until the next date.
+ * Lines without dates but short or venue-like are merged into current block.
+ */
+function splitIntoCandidateBlocks(text: string): string[] {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  const blocks: string[] = []
+  let currentBlock: string[] = []
 
   for (const line of lines) {
-    // Skip if line is mostly narrative (too long, no numbers)
+    // Skip greeting/closing lines
     if (isNarrativeLine(line)) continue
 
-    const extracted = parseLine(line)
-    // Only keep lines that have at least a fecha or locacion
-    if (extracted.fecha || extracted.locacion) {
-      results.push(extracted)
+    const hasDate = DATE_PATTERNS.some(pattern => pattern.test(line))
+
+    if (hasDate) {
+      // If we have a pending block, save it
+      if (currentBlock.length > 0) {
+        blocks.push(currentBlock.join('\n'))
+      }
+      // Start new block
+      currentBlock = [line]
+    } else if (currentBlock.length > 0) {
+      // Add to current block if: short line, venue-like, or status-like
+      const isShort = line.length < 80
+      const hasVenue = /\b(secundaria|fes|ebc|arena|ymca|metro|colegio|escuela|barco|forum|sala|auditorio)\b/i.test(line)
+      const hasStatus = /pendiente|confirm|cancel|reserva|definir/i.test(line)
+
+      if (isShort || hasVenue || hasStatus) {
+        currentBlock.push(line)
+      } else if (currentBlock.length === 1) {
+        // Single-line block without context, add this line anyway (narrative might be notes)
+        currentBlock.push(line)
+      }
     }
   }
 
-  return results
+  // Save last block if exists
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock.join('\n'))
+  }
+
+  return blocks
 }
 
 function isNarrativeLine(line: string): boolean {
@@ -76,70 +123,78 @@ function isNarrativeLine(line: string): boolean {
   return false
 }
 
-function parseLine(line: string): ExtractedEventLine {
-  let raw = line.trim()
+/**
+ * Parse a candidate block (can be single or multiple lines).
+ * Extracts fecha, ciudad, locacion, action, notas, and confidence.
+ */
+function parseCandidateBlock(block: string): ExtractedEventLine {
+  const raw = block.trim()
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0)
 
-  // Strip leading bullets/dashes
-  raw = raw.replace(/^[-*]\s+/, '').trim()
-
-  // Remove "Confirmo:" prefix if present
-  raw = raw.replace(/^(?:Confirmo|Confirmar)[:\s]+/i, '').trim()
-
-  // Extract action from status indicators at the end
-  let action: 'confirmado' | 'por_confirmar' | 'cancelado' | undefined
-  const statusMatch = raw.match(STATUS_PATTERN)
-  if (statusMatch) {
-    const status = statusMatch[1].toLowerCase()
-    if (status.startsWith('confirmad')) action = 'confirmado'
-    else if (status.startsWith('pend')) action = 'por_confirmar'
-    else if (status.startsWith('cancelad')) action = 'cancelado'
-    // Remove status from raw for further parsing
-    raw = raw.replace(/\s*\([^)]*\)\s*$/, '').trim()
+  // Extract fecha from first line or any line with date
+  let fecha: string | null = null
+  let fechaLine = ''
+  for (const line of lines) {
+    for (const pattern of DATE_PATTERNS) {
+      const match = line.match(pattern)
+      if (match) {
+        fecha = extractDateFromMatch(match)
+        if (fecha) {
+          fechaLine = line
+          break
+        }
+      }
+    }
+    if (fecha) break
   }
 
-  // Extract fecha
-  let fecha: string | null = null
-  for (const pattern of DATE_PATTERNS) {
-    const match = raw.match(pattern)
-    if (match) {
-      fecha = extractDateFromMatch(match)
-      if (fecha) break
-    }
+  // Detect action from natural language (look in all lines)
+  let action: 'confirmado' | 'por_confirmar' | 'cancelado' | undefined
+  const fullText = raw.toLowerCase()
+
+  if (ACTION_CANCELADO.test(fullText)) {
+    action = 'cancelado'
+  } else if (ACTION_PENDIENTE.test(fullText)) {
+    action = 'por_confirmar'
+  } else if (ACTION_CONFIRMADO.test(fullText) && !ACTION_PENDIENTE.test(fullText)) {
+    // Only confirmado if no conflicting signals
+    action = 'confirmado'
   }
 
   // Extract ciudad and locacion
   let ciudad: string | undefined
   let locacion: string | null = null
 
-  // Pattern 1: "ciudad, locacion" (separated by comma)
-  const commaMatch = raw.match(/^([^,]+?[a-z])\s*,\s*(.+?)(?:\s+\(|$)/i)
-  if (commaMatch) {
-    const beforeComma = commaMatch[1].trim()
-    const afterComma = commaMatch[2].trim()
+  // First, try to find location in any line
+  for (const line of lines) {
+    // Pattern: "ciudad, locacion"
+    const commaMatch = line.match(/^([^,]+?[a-z])\s*,\s*(.+?)(?:\s+\(|$)/i)
+    if (commaMatch) {
+      const beforeComma = commaMatch[1].trim()
+      if (CITY_KEYWORDS_PATTERN.test(beforeComma)) {
+        ciudad = beforeComma
+        // Find location in rest of block
+        const locMatch = raw.match(LOC_REGEX)
+        if (locMatch) {
+          locacion = locMatch[0].trim()
+        } else {
+          locacion = commaMatch[2].trim().replace(/\s*\([^)]*\)\s*$/, '').trim()
+        }
+        break
+      }
+    }
 
-    // Check if before comma is a city keyword
-    if (CITY_KEYWORDS_PATTERN.test(beforeComma)) {
-      ciudad = beforeComma
-      // Try to find location keyword in the rest of the line
-      const locMatch = raw.match(LOC_REGEX)
-      if (locMatch) {
-        locacion = locMatch[0].trim()
-      } else {
-        // If no keyword found, use the afterComma part
-        locacion = afterComma
+    // Pattern: "en [place]"
+    if (!locacion) {
+      const enMatch = line.match(EN_LOCATION_PATTERN)
+      if (enMatch) {
+        locacion = enMatch[1].trim()
+        break
       }
     }
   }
 
-  // Pattern 2: "fecha en [place]" (if no comma-based extraction)
-  if (!locacion) {
-    const enMatch = raw.match(EN_LOCATION_PATTERN)
-    if (enMatch) {
-      locacion = enMatch[1].trim()
-    }
-  }
-
-  // Pattern 3: Location keyword match (fallback)
+  // Fallback: keyword search
   if (!locacion) {
     const locMatch = raw.match(LOC_REGEX)
     if (locMatch) {
@@ -147,14 +202,29 @@ function parseLine(line: string): ExtractedEventLine {
     }
   }
 
+  // Extract notas: all lines except the one with fecha and location info
+  const notasLines = lines.filter(line => {
+    return line !== fechaLine && !LOC_REGEX.test(line) && !EN_LOCATION_PATTERN.test(line)
+  })
+  const notas = notasLines.length > 0 ? notasLines.join(' ').trim() : undefined
+
+  // Calculate confidence
+  let confidence = 0.3 // base
+  if (fecha) confidence += 0.3
+  if (locacion) confidence += 0.3
+  if (action) confidence += 0.1
+
   return {
-    raw: line.trim(),
+    raw,
     fecha,
     locacion,
     ciudad,
     action,
+    notas: notas || undefined,
+    confidence: Math.min(confidence, 1),
   }
 }
+
 
 function extractDateFromMatch(match: RegExpMatchArray): string | null {
   // D+ month format (e.g., "23 abril")
