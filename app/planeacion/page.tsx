@@ -29,7 +29,7 @@ export default function PlaneacionPage() {
   const { toCreate, toUpdate, toCancel } = getCreationSummary()
   const selectedTemplate = state.selectedTemplateId
     ? state.templates.find(t => t.id === state.selectedTemplateId)
-    : null
+    : undefined
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
