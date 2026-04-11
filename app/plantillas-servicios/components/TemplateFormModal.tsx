@@ -204,14 +204,26 @@ export default function TemplateFormModal({ template, onClose }: TemplateFormMod
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="grid grid-cols-3 gap-3 mb-3">
                     <div>
                       <label className="text-xs text-gray-400 block mb-1">Precio Unitario</label>
                       <input
                         type="number"
                         value={item.precio_unitario}
-                        onChange={e => handleUpdateItem(idx, 'precio_unitario', parseFloat(e.target.value))}
+                        onChange={e => handleUpdateItem(idx, 'precio_unitario', parseFloat(e.target.value) || 0)}
                         step="0.01"
+                        min="0"
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1">X Pagar</label>
+                      <input
+                        type="number"
+                        value={item.x_pagar}
+                        onChange={e => handleUpdateItem(idx, 'x_pagar', parseFloat(e.target.value) || 0)}
+                        step="0.01"
+                        min="0"
                         className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
                       />
                     </div>
