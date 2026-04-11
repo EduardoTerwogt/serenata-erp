@@ -6,6 +6,7 @@ import { ServiceTemplate } from '@/lib/types'
 
 export interface ValidatedEventLine extends ExtractedEventLine {
   id: string
+  proyecto: string
   action: 'create' | 'update' | 'cancel' | 'ignore'
   matchedQuotationId?: string
   matchedQuotationInfo?: string
@@ -14,7 +15,8 @@ export interface ValidatedEventLine extends ExtractedEventLine {
 }
 
 export interface PlaneacionFlowState {
-  step: 'input' | 'validation' | 'confirmation'
+  step: 'project' | 'input' | 'validation' | 'confirmation'
+  selectedProyecto: string
   rawInput: string
   extractedLines: ValidatedEventLine[]
   selectedTemplateId?: string
@@ -23,16 +25,10 @@ export interface PlaneacionFlowState {
   error: string
 }
 
-export interface CreateQuotationAction {
-  proyecto: string
-  fecha_entrega: string
-  locacion: string
-  template_id: string
-}
-
 export function usePlaneacionFlow() {
   const [state, setState] = useState<PlaneacionFlowState>({
-    step: 'input',
+    step: 'project',
+    selectedProyecto: '',
     rawInput: '',
     extractedLines: [],
     templates: [],
@@ -55,6 +51,15 @@ export function usePlaneacionFlow() {
     }
   }
 
+  const handleSelectProyecto = (proyecto: string) => {
+    setState(s => ({ ...s, selectedProyecto: proyecto }))
+  }
+
+  const handleNextFromProject = () => {
+    loadTemplates()
+    setState(s => ({ ...s, step: 'input' }))
+  }
+
   const handleInputChange = (input: string) => {
     setState(s => ({ ...s, rawInput: input }))
   }
@@ -68,10 +73,10 @@ export function usePlaneacionFlow() {
     setState(s => ({ ...s, loading: true, error: '' }))
 
     try {
-      // Parse information
+      // Parse information (simplified - only fecha + locacion)
       const extracted = parseEventInfo(state.rawInput)
 
-      // Enrich with match information via API (server-side only)
+      // Enrich with match information via API
       const enriched: ValidatedEventLine[] = []
       for (const line of extracted) {
         let matchedQuotationId: string | undefined
@@ -81,7 +86,11 @@ export function usePlaneacionFlow() {
           const res = await fetch('/api/planeacion/match', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fecha: line.fecha, locacion: line.locacion }),
+            body: JSON.stringify({
+              fecha: line.fecha,
+              locacion: line.locacion,
+              cliente: state.selectedProyecto,
+            }),
           })
           if (res.ok) {
             const match = await res.json()
@@ -95,6 +104,7 @@ export function usePlaneacionFlow() {
         enriched.push({
           ...line,
           id: Math.random().toString(36).substr(2, 9),
+          proyecto: state.selectedProyecto,
           action: 'ignore',
           matchedQuotationId,
           matchedQuotationInfo,
@@ -106,12 +116,10 @@ export function usePlaneacionFlow() {
         setState(s => ({
           ...s,
           loading: false,
-          error: 'No se pudieron extraer fechas o locaciones. Verifica el formato.',
+          error: 'No se encontraron fechas o locaciones. Verifica el formato.',
         }))
         return
       }
-
-      await loadTemplates()
 
       setState(s => ({
         ...s,
@@ -156,7 +164,6 @@ export function usePlaneacionFlow() {
   }
 
   const handleConfirmSelection = () => {
-    // Validate that all lines are confirmed if they have action 'create' or 'update'
     const allConfirmed = state.extractedLines
       .filter(line => line.action !== 'ignore' && line.action !== 'cancel')
       .every(line => line.confirmed)
@@ -218,12 +225,12 @@ export function usePlaneacionFlow() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            cliente: line.proyecto || 'Por definir',
-            proyecto: line.proyecto || 'Por definir',
+            cliente: line.proyecto,
+            proyecto: line.proyecto,
             fecha_entrega: line.fecha,
             locacion: line.locacion,
             estado: 'BORRADOR',
-            items: [], // Will be populated from template
+            items: [],
             tipo: 'PRINCIPAL',
           }),
         })
@@ -237,13 +244,13 @@ export function usePlaneacionFlow() {
       setState(s => ({
         ...s,
         loading: false,
-        step: 'input',
+        step: 'project',
+        selectedProyecto: '',
         rawInput: '',
         extractedLines: [],
         error: `✓ ${createdIds.length} cotizaciones creadas en BORRADOR`,
       }))
 
-      // Reload page after a delay
       setTimeout(() => {
         window.location.href = '/cotizaciones'
       }, 1500)
@@ -256,22 +263,25 @@ export function usePlaneacionFlow() {
     }
   }
 
-  const goBack = (step: 'input' | 'validation' = 'input') => {
-    if (step === 'input') {
+  const goBack = (targetStep: 'project' | 'input' | 'validation' = 'input') => {
+    if (targetStep === 'project') {
       setState(s => ({
         ...s,
-        step: 'input',
+        step: 'project',
+        selectedProyecto: '',
         rawInput: '',
         extractedLines: [],
         error: '',
       }))
     } else {
-      setState(s => ({ ...s, step: 'validation', error: '' }))
+      setState(s => ({ ...s, step: targetStep, error: '' }))
     }
   }
 
   return {
     state,
+    handleSelectProyecto,
+    handleNextFromProject,
     handleInputChange,
     handleExtractInformation,
     handleLineUpdate,

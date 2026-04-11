@@ -63,8 +63,10 @@ export interface ServiceTemplateItem {
   descripcion: string
   cantidad: number
   precio_unitario: number
+  x_pagar: number
   responsable_nombre?: string | null
-  notas?: string | null
+  responsable_id?: string | null
+  producto_id?: string | null
 }
 
 export interface ServiceTemplate {

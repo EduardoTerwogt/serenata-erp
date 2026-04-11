@@ -3,32 +3,45 @@
 import { useEffect } from 'react'
 
 interface InputFormProps {
+  proyecto: string
   value: string
   onChange: (value: string) => void
   onExtract: () => void
   loading: boolean
   error: string
   onLoadTemplates?: () => void
+  onGoBack?: () => void
 }
 
 export default function InputForm({
+  proyecto,
   value,
   onChange,
   onExtract,
   loading,
   error,
   onLoadTemplates,
+  onGoBack,
 }: InputFormProps) {
   useEffect(() => {
     onLoadTemplates?.()
   }, [])
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto space-y-6">
+      {/* Proyecto display */}
+      {proyecto && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <p className="text-xs text-gray-400 mb-2">Proyecto seleccionado:</p>
+          <p className="text-lg font-semibold text-white">{proyecto}</p>
+        </div>
+      )}
+
+      {/* Main form */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 md:p-8">
         <h2 className="text-2xl font-bold text-white mb-2">Carga Información de Eventos</h2>
         <p className="text-gray-400 mb-6">
-          Copia y pega la información de tus correos o WhatsApp. El sistema extraerá fechas y locaciones automáticamente.
+          Copia y pega la información de tus correos o WhatsApp para <strong>{proyecto}</strong>. El sistema extraerá fechas y locaciones automáticamente.
         </p>
 
         {error && !error.startsWith('✓') && (
@@ -54,19 +67,29 @@ export default function InputForm({
           <p className="text-xs text-gray-400 mb-2 font-medium">CONSEJOS:</p>
           <ul className="text-xs text-gray-400 space-y-1">
             <li>• Puedes pegar cualquier formato: tablas, listas, párrafos</li>
-            <li>• Incluye fechas (ej: 23 abril, 23/04, etc.)</li>
-            <li>• Incluye locaciones (ej: CDMX, Metro, FES Aragón, etc.)</li>
-            <li>• Estados: confirmada, pendiente, cancelada (opcional)</li>
+            <li>• El sistema busca fechas (ej: 23 abril, 23/04, etc.)</li>
+            <li>• El sistema busca locaciones (ej: CDMX, Metro, FES Aragón, etc.)</li>
+            <li>• Los párrafos sin fechas o locaciones se ignoran</li>
           </ul>
         </div>
 
-        <button
-          onClick={onExtract}
-          disabled={loading || !value.trim()}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition-colors"
-        >
-          {loading ? 'Extrayendo información...' : 'Extraer Información'}
-        </button>
+        <div className="flex gap-3">
+          {onGoBack && (
+            <button
+              onClick={onGoBack}
+              className="flex-1 px-4 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+            >
+              ← Cambiar Proyecto
+            </button>
+          )}
+          <button
+            onClick={onExtract}
+            disabled={loading || !value.trim()}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition-colors"
+          >
+            {loading ? 'Extrayendo información...' : 'Extraer Información'}
+          </button>
+        </div>
       </div>
     </div>
   )

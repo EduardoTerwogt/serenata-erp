@@ -7,8 +7,10 @@ export const ServiceTemplateItemSchema = z.object({
   descripcion: z.string().min(1, 'La descripción es requerida'),
   cantidad: z.coerce.number().min(0.01, 'La cantidad debe ser mayor a 0').default(1),
   precio_unitario: z.union([z.coerce.number().min(0), z.literal('')]).transform(v => v === '' ? 0 : Number(v)).default(0),
+  x_pagar: z.union([z.coerce.number().min(0), z.literal('')]).transform(v => v === '' ? 0 : Number(v)).default(0),
   responsable_nombre: z.string().nullable().optional(),
-  notas: z.string().nullable().optional(),
+  responsable_id: z.string().nullable().optional(),
+  producto_id: z.string().nullable().optional(),
 })
 
 export const ServiceTemplateCreateSchema = z.object({

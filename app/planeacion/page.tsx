@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { usePlaneacionFlow } from './usePlaneacionFlow'
+import ProjectSelector from './components/ProjectSelector'
 import InputForm from './components/InputForm'
 import ValidationTable from './components/ValidationTable'
 import ConfirmationSummary from './components/ConfirmationSummary'
@@ -9,6 +10,8 @@ import ConfirmationSummary from './components/ConfirmationSummary'
 export default function PlaneacionPage() {
   const {
     state,
+    handleSelectProyecto,
+    handleNextFromProject,
     handleInputChange,
     handleExtractInformation,
     handleLineUpdate,
@@ -31,6 +34,8 @@ export default function PlaneacionPage() {
     ? state.templates.find(t => t.id === state.selectedTemplateId)
     : undefined
 
+  const steps = ['project', 'input', 'validation', 'confirmation'] as const
+
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
       {/* Header */}
@@ -42,40 +47,52 @@ export default function PlaneacionPage() {
       </div>
 
       {/* Progress indicator */}
-      <div className="mb-8 flex gap-3 md:gap-6">
-        {['input', 'validation', 'confirmation'].map((step, idx) => (
-          <div key={step} className="flex items-center">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                state.step === step
-                  ? 'bg-blue-600 text-white'
-                  : idx < ['input', 'validation', 'confirmation'].indexOf(state.step)
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-700 text-gray-400'
-              }`}
-            >
-              {idx + 1}
+      {state.step !== 'project' && (
+        <div className="mb-8 flex gap-3 md:gap-6">
+          {['input', 'validation', 'confirmation'].map((step, idx) => (
+            <div key={step} className="flex items-center">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                  state.step === step
+                    ? 'bg-blue-600 text-white'
+                    : steps.indexOf(state.step as any) > steps.indexOf(step as any)
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                {idx + 1}
+              </div>
+              <div className="text-sm font-medium text-gray-400 ml-2 hidden md:block">
+                {step === 'input' && 'Cargar'}
+                {step === 'validation' && 'Validar'}
+                {step === 'confirmation' && 'Confirmar'}
+              </div>
+              {idx < 2 && <div className="h-0.5 bg-gray-700 w-6 md:w-12 ml-2 md:ml-6"></div>}
             </div>
-            <div className="text-sm font-medium text-gray-400 ml-2 hidden md:block">
-              {step === 'input' && 'Cargar'}
-              {step === 'validation' && 'Validar'}
-              {step === 'confirmation' && 'Confirmar'}
-            </div>
-            {idx < 2 && <div className="h-0.5 bg-gray-700 w-6 md:w-12 ml-2 md:ml-6"></div>}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Content based on step */}
       <div className="mb-8">
+        {state.step === 'project' && (
+          <ProjectSelector
+            onSelectProyecto={handleSelectProyecto}
+            onNext={handleNextFromProject}
+            loading={state.loading}
+          />
+        )}
+
         {state.step === 'input' && (
           <InputForm
+            proyecto={state.selectedProyecto}
             value={state.rawInput}
             onChange={handleInputChange}
             onExtract={handleExtractInformation}
             loading={state.loading}
             error={state.error}
             onLoadTemplates={loadTemplates}
+            onGoBack={() => goBack('project')}
           />
         )}
 

@@ -107,12 +107,9 @@ export default function ValidationTable({
               {lines.map(line => (
                 <tr key={line.id} className="hover:bg-gray-800/50 transition-colors">
                   <td className="px-4 py-3 text-gray-300">
-                    <input
-                      type="text"
-                      value={line.proyecto}
-                      onChange={e => onLineUpdate(line.id, { proyecto: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-                    />
+                    <div className="text-sm font-medium text-white bg-gray-800/40 px-2 py-1 rounded">
+                      {line.proyecto}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-gray-300">
                     <input
