@@ -10,8 +10,8 @@ export interface ExtractedEventLine {
   locacion: string | null
   ciudad?: string
   action?: 'confirmado' | 'por_confirmar' | 'cancelado'
-  notas?: string
-  confidence?: number // 0-1: alta (0.9+), media (0.6), baja (0.3)
+  notas?: string | null
+  confidence?: number
 }
 
 // Patterns for detecting dates

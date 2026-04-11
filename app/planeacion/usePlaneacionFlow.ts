@@ -20,9 +20,9 @@ export interface PlaneacionFlowState {
   rawInput: string
   extractedLines: ValidatedEventLine[]
   templates: ServiceTemplate[]
-  extractionMethod?: 'ai' | 'regex' // Track which method was used
   loading: boolean
   error: string
+  extractionMethod?: 'ai' | 'regex'
 }
 
 export function usePlaneacionFlow() {
@@ -82,29 +82,40 @@ export function usePlaneacionFlow() {
     setState(s => ({ ...s, loading: true, error: '' }))
 
     try {
-      // Extract events via AI, fallback to local parser if unavailable
       let extracted: ExtractedEventLine[] = []
       let extractionMethod: 'ai' | 'regex' = 'regex'
 
+      // Try AI extraction first
       try {
-        const res = await fetch('/api/planeacion/extract-ai', {
+        const aiRes = await fetch('/api/planeacion/extract-ai', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: state.rawInput }),
         })
-        if (res.ok) {
-          const data = await res.json()
-          extracted = data.events || []
-          extractionMethod = data.method === 'ai' ? 'ai' : 'regex'
+        if (aiRes.ok) {
+          const aiData = await aiRes.json()
+          if (aiData.events && aiData.events.length > 0) {
+            extracted = aiData.events
+            extractionMethod = 'ai'
+          }
         }
-      } catch {
-        // AI extraction failed, fall through to local parser
+      } catch (aiError) {
+        console.error('AI extraction failed, falling back to regex parser:', aiError)
       }
 
-      // Fallback: local regex parser
+      // Fallback to local regex parser if AI extraction failed
       if (extracted.length === 0) {
         extracted = parseEventInfo(state.rawInput)
         extractionMethod = 'regex'
+      }
+
+      if (extracted.length === 0) {
+        setState(s => ({
+          ...s,
+          loading: false,
+          error: 'No se encontraron fechas o locaciones. Verifica el formato.',
+        }))
+        return
       }
 
       // Enrich with match information via API
@@ -141,15 +152,6 @@ export function usePlaneacionFlow() {
           matchedQuotationInfo,
           selectedTemplateId: undefined,
         })
-      }
-
-      if (enriched.length === 0) {
-        setState(s => ({
-          ...s,
-          loading: false,
-          error: 'No se encontraron fechas o locaciones. Verifica el formato.',
-        }))
-        return
       }
 
       setState(s => ({
@@ -203,11 +205,12 @@ export function usePlaneacionFlow() {
   }
 
   const getCreationSummary = () => {
+    // Categorize by action + confidence
     const toCreate = state.extractedLines.filter(
-      line => line.action === 'confirmado'
+      line => line.action === 'confirmado' && (line.confidence ?? 0) >= 0.8
     )
     const toPending = state.extractedLines.filter(
-      line => line.action === 'por_confirmar'
+      line => line.action === 'por_confirmar' || (line.action === 'confirmado' && (line.confidence ?? 0) < 0.8)
     )
     const toCancel = state.extractedLines.filter(
       line => line.action === 'cancelado'
