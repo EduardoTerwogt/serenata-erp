@@ -7,10 +7,12 @@ import { useSession, signOut } from 'next-auth/react'
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard', section: 'dashboard' },
+  { href: '/planeacion', label: 'Planeación', section: 'planeacion' },
   { href: '/cotizaciones', label: 'Cotizaciones', section: 'cotizaciones' },
   { href: '/proyectos', label: 'Proyectos', section: 'proyectos' },
   { href: '/cuentas', label: 'Cuentas', section: 'cuentas' },
   { href: '/responsables', label: 'Colaboradores', section: 'responsables' },
+  { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion' },
 ]
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {

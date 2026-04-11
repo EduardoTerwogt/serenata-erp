@@ -1,5 +1,24 @@
 import { z } from 'zod'
 
+// ==================== SERVICE TEMPLATES ====================
+
+export const ServiceTemplateItemSchema = z.object({
+  categoria: z.string().min(1, 'La categoría es requerida'),
+  descripcion: z.string().min(1, 'La descripción es requerida'),
+  cantidad: z.coerce.number().min(0.01, 'La cantidad debe ser mayor a 0').default(1),
+  precio_unitario: z.union([z.coerce.number().min(0), z.literal('')]).default(0),
+  responsable_nombre: z.string().nullable().optional(),
+  notas: z.string().nullable().optional(),
+})
+
+export const ServiceTemplateCreateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre de la plantilla es requerido'),
+  descripcion: z.string().nullable().optional(),
+  items: z.array(ServiceTemplateItemSchema).min(1, 'Al menos un item es requerido'),
+})
+
+export const ServiceTemplateUpdateSchema = ServiceTemplateCreateSchema.partial()
+
 // ==================== ITEMS ====================
 
 export const ItemCotizacionSchema = z.object({

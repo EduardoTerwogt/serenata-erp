@@ -58,6 +58,25 @@ export interface Producto {
   created_at: string
 }
 
+export interface ServiceTemplateItem {
+  categoria: string
+  descripcion: string
+  cantidad: number
+  precio_unitario: number
+  responsable_nombre?: string | null
+  notas?: string | null
+}
+
+export interface ServiceTemplate {
+  id: string
+  nombre: string
+  descripcion: string | null
+  items: ServiceTemplateItem[]
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface Cliente {
   id: string
   nombre: string
