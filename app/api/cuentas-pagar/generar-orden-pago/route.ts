@@ -6,6 +6,23 @@ import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { buildOrdenPagoPreview } from '@/lib/server/ordenes-pago/build'
 import { generateOrdenPagoPdf } from '@/lib/server/pdf/orden-pago-pdf'
 
+function buildOrdenPagoFileName(preview: ReturnType<typeof buildOrdenPagoPreview>) {
+  const now = new Date()
+  const day = String(now.getDate()).padStart(2, '0')
+  const month = now.toLocaleDateString('es-MX', { month: 'short', timeZone: 'UTC' })
+  const monthFormatted = month.replace('.', '').replace(/^./, (value) => value.toUpperCase())
+  const folios = Array.from(
+    new Set(
+      preview.responsables.flatMap((responsable) =>
+        responsable.eventos.map((evento) => evento.cotizacion_folio).filter(Boolean)
+      )
+    )
+  )
+
+  const foliosSegment = folios.join(',')
+  return `O.P ${day}-${monthFormatted} ${foliosSegment}.pdf`
+}
+
 export async function GET() {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
@@ -55,8 +72,7 @@ export async function POST() {
     const preview = buildOrdenPagoPreview(cuentasPendientes as any)
     const pdfArrayBuffer = generateOrdenPagoPdf(preview)
 
-    const fechaFormato = new Date().toISOString().split('T')[0].replace(/-/g, '_')
-    const fileName = `Orden_Pago_${fechaFormato}.pdf`
+    const fileName = buildOrdenPagoFileName(preview)
     const pdfFile = new File([pdfArrayBuffer], fileName, { type: 'application/pdf' })
     const folderPath = '/Ordenes de Pago'
     const pdfUrl = await uploadFileToDrive(pdfFile, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)

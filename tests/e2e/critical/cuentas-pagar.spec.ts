@@ -19,7 +19,7 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await expect(pdfLink).toHaveAttribute('href', E2E_IDS.pdfPath)
 
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click()
-  await expect(page.getByText('Orden_Pago_2026_04_18.pdf', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('O.P 18-Abr SH054', { exact: false }).first()).toBeVisible()
 
   await page.locator('tr').filter({ hasText: 'José García' }).first().click()
   await page.getByRole('button', { name: 'Registrar Pago', exact: true }).first().click()
