@@ -132,7 +132,8 @@ export default function PlantillasServiciosPage() {
           {filtrados.map(template => (
             <div
               key={template.id}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-gray-600 transition-colors flex flex-col"
+              onClick={() => handleEdit(template)}
+              className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-blue-500 cursor-pointer transition-colors flex flex-col"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
@@ -165,20 +166,14 @@ export default function PlantillasServiciosPage() {
               {/* Acciones */}
               <div className="flex gap-2 pt-4 border-t border-gray-800">
                 <button
-                  onClick={() => handleEdit(template)}
-                  className="flex-1 text-sm bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 px-3 py-2 rounded transition-colors"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => handleDuplicate(template)}
+                  onClick={(e) => { e.stopPropagation(); handleDuplicate(template) }}
                   className="flex-1 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded transition-colors"
                   title="Duplicar plantilla"
                 >
                   Duplicar
                 </button>
                 <button
-                  onClick={() => handleDelete(template.id)}
+                  onClick={(e) => { e.stopPropagation(); handleDelete(template.id) }}
                   className="flex-1 text-sm bg-red-900/20 hover:bg-red-900/40 text-red-400 px-3 py-2 rounded transition-colors"
                 >
                   Eliminar

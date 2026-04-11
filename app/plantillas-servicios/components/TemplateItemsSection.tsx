@@ -139,15 +139,16 @@ export function TemplateItemsSection({
       {/* Cantidad */}
       <td className="px-4 py-2">
         <input
-          type="number"
-          min="0.01"
+          type="text"
+          inputMode="decimal"
           value={item.cantidad}
-          onChange={e => updateItem(index, 'cantidad', e.target.value === '' ? 1 : parseFloat(e.target.value) || 1)}
+          onChange={e => updateItem(index, 'cantidad', e.target.value)}
           onBlur={e => {
             const val = parseFloat(e.currentTarget.value)
-            if (isNaN(val) || val <= 0) updateItem(index, 'cantidad', 1)
+            updateItem(index, 'cantidad', isNaN(val) || val <= 0 ? 1 : val)
           }}
-          className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 text-sm [&::-webkit-outer-spin-button]:[appearance:none] [&::-webkit-inner-spin-button]:[appearance:none] [&]:[-moz-appearance:textfield]"
+          placeholder="1"
+          className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
         />
       </td>
 
@@ -298,14 +299,16 @@ export function TemplateItemsSection({
               <div className="flex-1">
                 <label className="block text-[13px] text-gray-400 mb-2">Cantidad</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={item.cantidad}
-                  onChange={e => updateItem(editingIndex, 'cantidad', e.target.value === '' ? 1 : parseFloat(e.target.value) || 1)}
+                  onChange={e => updateItem(editingIndex, 'cantidad', e.target.value)}
                   onBlur={e => {
                     const val = parseFloat(e.currentTarget.value)
-                    if (isNaN(val) || val <= 0) updateItem(editingIndex, 'cantidad', 1)
+                    updateItem(editingIndex, 'cantidad', isNaN(val) || val <= 0 ? 1 : val)
                   }}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white text-center focus:outline-none focus:border-blue-500 [&::-webkit-outer-spin-button]:[appearance:none] [&::-webkit-inner-spin-button]:[appearance:none] [&]:[-moz-appearance:textfield]"
+                  placeholder="1"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white text-center focus:outline-none focus:border-blue-500"
                 />
               </div>
               <div className="flex-[2]">
