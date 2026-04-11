@@ -37,7 +37,7 @@ interface Props {
   }
   pagarActions: {
     cargarDetalle: (id: string) => Promise<CuentaPagarDetalle | null>
-    subirFactura: (id: string, archivo: File) => Promise<unknown>
+    subirFactura: (id: string, xml: File, pdf: File) => Promise<unknown>
     registrarPago: (id: string, data: { monto: number; comprobante?: File }) => Promise<unknown>
   }
   onRefresh: () => Promise<void>

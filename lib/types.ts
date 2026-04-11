@@ -94,7 +94,6 @@ export interface Cotizacion {
   descuento_valor?: number
   created_at: string
   items?: ItemCotizacion[]
-  // Google Workspace metadata — null until each integration is activated
   drive_file_id?: string | null
   calendar_event_id?: string | null
 }
@@ -131,6 +130,7 @@ export interface CuentaPagar {
   banco: string | null
   estado: EstadoCuentaPagar
   folio?: string
+  fecha_factura?: string | null
   fecha_vencimiento?: string | null
   monto_pagado?: number
   fecha_pago: string | null
@@ -184,7 +184,7 @@ export interface DocumentoCuentaCobrar {
 export interface DocumentoCuentaPagar {
   id: string
   cuentas_pagar_id: string
-  tipo: 'FACTURA_PROVEEDOR' | 'COMPROBANTE_PAGO' | 'OTRO'
+  tipo: 'FACTURA_PROVEEDOR' | 'FACTURA_PROVEEDOR_XML' | 'COMPROBANTE_PAGO' | 'OTRO'
   archivo_url: string
   archivo_nombre: string
   fecha_carga: string

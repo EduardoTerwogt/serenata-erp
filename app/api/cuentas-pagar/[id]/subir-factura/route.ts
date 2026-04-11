@@ -1,8 +1,16 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasPagar, createDocumentoCuentaPagar, getProyectoById } from '@/lib/db'
+import { getCuentasPagar, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+
+function extractFacturaFechaFromXml(xmlContent: string): string | null {
+  const match = xmlContent.match(/\bFecha=["']([^"']+)["']/i)
+  if (!match?.[1]) return null
+  const rawValue = match[1]
+  const datePart = rawValue.split('T')[0]
+  return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : null
+}
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -12,17 +20,23 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const { id } = await props.params
     const formData = await request.formData()
 
-    // Obtener archivo
-    const facturaFile = formData.get('factura_proveedor') as File | null
+    const facturaXmlFile = formData.get('factura_proveedor_xml') as File | null
+    const facturaPdfFile = formData.get('factura_proveedor_pdf') as File | null
 
-    if (!facturaFile) {
+    if (!facturaXmlFile) {
       return Response.json(
-        { error: 'Se requiere archivo de factura proveedor' },
+        { error: 'Se requiere archivo XML de factura proveedor' },
         { status: 400 }
       )
     }
 
-    // Obtener cuenta y proyecto
+    if (!facturaPdfFile) {
+      return Response.json(
+        { error: 'Se requiere archivo PDF de factura proveedor' },
+        { status: 400 }
+      )
+    }
+
     const cuentas = await getCuentasPagar()
     const cuenta = cuentas.find(c => c.id === id)
     if (!cuenta) {
@@ -34,7 +48,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     const proyecto = await getProyectoById(cuenta.proyecto_id)
 
-    // Subir factura a Drive
     const googleEnv = getGoogleEnv()
     if (!googleEnv) {
       return Response.json(
@@ -44,28 +57,53 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
-    const fileName = facturaFile.name
-    const facturaUrl = await uploadFileToDrive(facturaFile, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
+    const facturaXmlUrl = await uploadFileToDrive(
+      facturaXmlFile,
+      folderPath,
+      facturaXmlFile.name,
+      googleEnv.driveFolderIdCuentas || undefined
+    )
+    const facturaPdfUrl = await uploadFileToDrive(
+      facturaPdfFile,
+      folderPath,
+      facturaPdfFile.name,
+      googleEnv.driveFolderIdCuentas || undefined
+    )
 
-    // Crear documento en BD
-    const documento = await createDocumentoCuentaPagar({
+    const documentoXml = await createDocumentoCuentaPagar({
       cuentas_pagar_id: id,
-      tipo: 'FACTURA_PROVEEDOR',
-      archivo_url: facturaUrl,
-      archivo_nombre: facturaFile.name,
+      tipo: 'FACTURA_PROVEEDOR_XML',
+      archivo_url: facturaXmlUrl,
+      archivo_nombre: facturaXmlFile.name,
     })
 
-    // Trigger sincronización con Sheets
+    const documentoPdf = await createDocumentoCuentaPagar({
+      cuentas_pagar_id: id,
+      tipo: 'FACTURA_PROVEEDOR',
+      archivo_url: facturaPdfUrl,
+      archivo_nombre: facturaPdfFile.name,
+    })
+
+    const facturaXmlContent = await facturaXmlFile.text()
+    const fechaFactura = extractFacturaFechaFromXml(facturaXmlContent)
+
+    let cuentaActualizada = cuenta
+    if (fechaFactura) {
+      cuentaActualizada = await updateCuentaPagar(id, { fecha_factura: fechaFactura } as Partial<typeof cuenta>)
+    }
+
     triggerSheetsSync('cuentas_pagar')
 
     return Response.json({
       success: true,
-      documento,
+      documentos: [documentoXml, documentoPdf],
+      fecha_factura: fechaFactura,
       cuenta: {
-        id: cuenta.id,
-        folio: cuenta.folio,
-        responsable_nombre: cuenta.responsable_nombre,
-        x_pagar: cuenta.x_pagar,
+        id: cuentaActualizada.id,
+        cotizacion_id: cuentaActualizada.cotizacion_id,
+        responsable_nombre: cuentaActualizada.responsable_nombre,
+        x_pagar: cuentaActualizada.x_pagar,
+        fecha_factura: cuentaActualizada.fecha_factura || fechaFactura,
       },
     })
   } catch (error) {

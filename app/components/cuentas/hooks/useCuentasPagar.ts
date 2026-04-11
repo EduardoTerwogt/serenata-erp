@@ -93,9 +93,10 @@ export function useCuentasPagar() {
     return getJson('/api/cuentas-pagar/generar-orden-pago', 'Error al cargar preview de orden')
   }, [])
 
-  const subirFactura = useCallback(async (id: string, archivo: File) => {
+  const subirFactura = useCallback(async (id: string, xml: File, pdf: File) => {
     const formData = new FormData()
-    formData.append('factura_proveedor', archivo)
+    formData.append('factura_proveedor_xml', xml)
+    formData.append('factura_proveedor_pdf', pdf)
 
     const result = await sendFormData(`/api/cuentas-pagar/${id}/subir-factura`, formData, 'Error al subir factura')
     await cargar()

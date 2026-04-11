@@ -53,6 +53,7 @@ export async function mockCuentasApis(page: Page) {
     telefono: '5555555555',
     banco: 'BBVA',
     clabe: '012345678901234567',
+    fecha_factura: null as string | null,
     fecha_pago: null as string | null,
     metodo_pago: null,
     notas: null,
@@ -268,17 +269,34 @@ export async function mockCuentasApis(page: Page) {
   })
 
   await page.route(`**/api/cuentas-pagar/${E2E_IDS.pagarId}/subir-factura`, async (route) => {
-    pagarDocumentos.unshift({
-      id: `dcp-${Date.now()}`,
-      cuentas_pagar_id: E2E_IDS.pagarId,
-      tipo: 'FACTURA_PROVEEDOR',
-      archivo_url: 'https://example.com/factura_proveedor_e2e.pdf',
-      archivo_nombre: 'factura_proveedor_e2e.pdf',
-      fecha_carga: '2026-04-18',
-      created_at: '2026-04-18',
-    })
+    pagarCuenta.fecha_factura = '2026-04-08'
+    pagarDocumentos.unshift(
+      {
+        id: `dcp-${Date.now()}-xml`,
+        cuentas_pagar_id: E2E_IDS.pagarId,
+        tipo: 'FACTURA_PROVEEDOR_XML',
+        archivo_url: 'https://example.com/factura_proveedor.xml',
+        archivo_nombre: 'factura_proveedor.xml',
+        fecha_carga: '2026-04-18',
+        created_at: '2026-04-18',
+      },
+      {
+        id: `dcp-${Date.now()}-pdf`,
+        cuentas_pagar_id: E2E_IDS.pagarId,
+        tipo: 'FACTURA_PROVEEDOR',
+        archivo_url: 'https://example.com/factura_proveedor_e2e.pdf',
+        archivo_nombre: 'factura_proveedor_e2e.pdf',
+        fecha_carga: '2026-04-18',
+        created_at: '2026-04-18',
+      }
+    )
 
-    await fulfillJson(route, { success: true })
+    await fulfillJson(route, {
+      success: true,
+      documentos_creados: 2,
+      fecha_factura: pagarCuenta.fecha_factura,
+      cuenta: pagarCuenta,
+    })
   })
 
   await page.route(`**/api/cuentas-pagar/${E2E_IDS.pagarId}/registrar-pago`, async (route) => {

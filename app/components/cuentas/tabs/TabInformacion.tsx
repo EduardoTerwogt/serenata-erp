@@ -45,11 +45,11 @@ export function TabInformacion(props: TabInformacionProps) {
           </div>
           <div>
             <p className="text-gray-400 text-sm">Fecha Factura</p>
-            <p className="text-white font-medium">{cuenta.fecha_factura || '\u2014'}</p>
+            <p className="text-white font-medium">{cuenta.fecha_factura || '—'}</p>
           </div>
           <div>
             <p className="text-gray-400 text-sm">Fecha Vencimiento</p>
-            <p className="text-yellow-400 font-medium">{cuenta.fecha_vencimiento || '\u2014'}</p>
+            <p className="text-yellow-400 font-medium">{cuenta.fecha_vencimiento || '—'}</p>
           </div>
           <div>
             <p className="text-gray-400 text-sm">Monto Total</p>
@@ -76,7 +76,6 @@ export function TabInformacion(props: TabInformacionProps) {
     )
   }
 
-  // Pagar
   const { cuenta, resumen } = props
   const montoPagado = resumen?.monto_pagado ?? cuenta.monto_pagado ?? 0
   const saldoPendiente = resumen?.saldo_pendiente ?? (cuenta.x_pagar - montoPagado)
@@ -96,11 +95,15 @@ export function TabInformacion(props: TabInformacionProps) {
         </div>
         <div>
           <p className="text-gray-400 text-sm">Proyecto</p>
-          <p className="text-white font-medium">{cuenta.proyecto_nombre || '\u2014'}</p>
+          <p className="text-white font-medium">{cuenta.proyecto_nombre || '—'}</p>
+        </div>
+        <div>
+          <p className="text-gray-400 text-sm">Fecha Factura</p>
+          <p className="text-white font-medium">{cuenta.fecha_factura || '—'}</p>
         </div>
         <div className="col-span-2">
           <p className="text-gray-400 text-sm">Descripcion Item</p>
-          <p className="text-white font-medium">{cuenta.item_descripcion || '\u2014'}</p>
+          <p className="text-white font-medium">{cuenta.item_descripcion || '—'}</p>
           {cuenta.cantidad > 1 && <p className="text-gray-500 text-xs mt-1">Cantidad: {cuenta.cantidad}</p>}
         </div>
         <div>
@@ -118,7 +121,6 @@ export function TabInformacion(props: TabInformacionProps) {
           </p>
         </div>
 
-        {/* Contacto */}
         <div className="col-span-2 pt-4 border-t border-gray-800">
           <p className="text-gray-400 text-sm mb-2">Informacion de Contacto</p>
           <div className="text-sm text-gray-300 space-y-1">

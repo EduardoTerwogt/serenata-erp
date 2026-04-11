@@ -16,7 +16,7 @@ interface TabDocumentosPagarProps {
   tipo: 'pagar'
   cuentaId: string
   documentos: DocumentoCuentaPagar[]
-  onSubirFactura: (id: string, archivo: File) => Promise<unknown>
+  onSubirFactura: (id: string, xml: File, pdf: File) => Promise<unknown>
   onRefresh: () => void
 }
 
@@ -27,7 +27,8 @@ const TIPO_DOC_LABEL: Record<string, string> = {
   FACTURA_XML: 'Factura XML',
   COMPLEMENTO_PAGO: 'Complemento de Pago XML',
   COMPLEMENTO_PAGO_PDF: 'Complemento de Pago PDF',
-  FACTURA_PROVEEDOR: 'Factura Proveedor',
+  FACTURA_PROVEEDOR: 'Factura Proveedor PDF',
+  FACTURA_PROVEEDOR_XML: 'Factura Proveedor XML',
   COMPROBANTE_PAGO: 'Comprobante de Pago',
   OTRO: 'Otro',
 }
@@ -40,7 +41,8 @@ export function TabDocumentos(props: TabDocumentosProps) {
   const pdfRef = useRef<HTMLInputElement>(null)
   const complementoXmlRef = useRef<HTMLInputElement>(null)
   const complementoPdfRef = useRef<HTMLInputElement>(null)
-  const facturaProvRef = useRef<HTMLInputElement>(null)
+  const facturaProvXmlRef = useRef<HTMLInputElement>(null)
+  const facturaProvPdfRef = useRef<HTMLInputElement>(null)
 
   const handleSubirFacturaCobrar = async () => {
     if (props.tipo !== 'cobrar') return
@@ -89,16 +91,19 @@ export function TabDocumentos(props: TabDocumentosProps) {
 
   const handleSubirFacturaPagar = async () => {
     if (props.tipo !== 'pagar') return
-    const file = facturaProvRef.current?.files?.[0]
-    if (!file) { setUploadError('Selecciona un archivo'); return }
+    const xmlFile = facturaProvXmlRef.current?.files?.[0]
+    const pdfFile = facturaProvPdfRef.current?.files?.[0]
+    if (!xmlFile) { setUploadError('Selecciona un archivo XML de factura proveedor'); return }
+    if (!pdfFile) { setUploadError('Selecciona un archivo PDF de factura proveedor'); return }
 
     setUploading(true)
     setUploadError(null)
     setUploadSuccess(null)
     try {
-      await props.onSubirFactura(props.cuentaId, file)
+      await props.onSubirFactura(props.cuentaId, xmlFile, pdfFile)
       setUploadSuccess('Factura proveedor subida correctamente')
-      if (facturaProvRef.current) facturaProvRef.current.value = ''
+      if (facturaProvXmlRef.current) facturaProvXmlRef.current.value = ''
+      if (facturaProvPdfRef.current) facturaProvPdfRef.current.value = ''
       props.onRefresh()
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Error al subir')
@@ -218,11 +223,26 @@ export function TabDocumentos(props: TabDocumentosProps) {
         ) : (
           <div className="space-y-2">
             <p className="text-sm font-medium text-gray-300">Subir Factura Proveedor</p>
-            <input
-              ref={facturaProvRef}
-              type="file"
-              className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
-            />
+            <div className="space-y-2">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">XML (requerido)</label>
+                <input
+                  ref={facturaProvXmlRef}
+                  type="file"
+                  accept=".xml"
+                  className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">PDF (requerido)</label>
+                <input
+                  ref={facturaProvPdfRef}
+                  type="file"
+                  accept=".pdf"
+                  className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
+                />
+              </div>
+            </div>
             <button
               onClick={handleSubirFacturaPagar}
               disabled={uploading}
