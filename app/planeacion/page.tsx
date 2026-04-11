@@ -10,13 +10,13 @@ import ConfirmationSummary from './components/ConfirmationSummary'
 export default function PlaneacionPage() {
   const {
     state,
+    handleSelectCliente,
     handleSelectProyecto,
     handleNextFromProject,
     handleInputChange,
     handleExtractInformation,
     handleLineUpdate,
     handleLineDelete,
-    handleSelectTemplate,
     handleConfirmSelection,
     handleCreateQuotations,
     getCreationSummary,
@@ -29,10 +29,7 @@ export default function PlaneacionPage() {
     loadTemplates()
   }, [])
 
-  const { toCreate, toUpdate, toCancel } = getCreationSummary()
-  const selectedTemplate = state.selectedTemplateId
-    ? state.templates.find(t => t.id === state.selectedTemplateId)
-    : undefined
+  const { toCreate, toPending, toCancel } = getCreationSummary()
 
   const steps = ['project', 'input', 'validation', 'confirmation'] as const
 
@@ -77,6 +74,7 @@ export default function PlaneacionPage() {
       <div className="mb-8">
         {state.step === 'project' && (
           <ProjectSelector
+            onSelectCliente={handleSelectCliente}
             onSelectProyecto={handleSelectProyecto}
             onNext={handleNextFromProject}
             loading={state.loading}
@@ -102,8 +100,6 @@ export default function PlaneacionPage() {
             onLineUpdate={handleLineUpdate}
             onLineDelete={handleLineDelete}
             templates={state.templates}
-            selectedTemplateId={state.selectedTemplateId}
-            onSelectTemplate={handleSelectTemplate}
             onConfirm={handleConfirmSelection}
             loading={state.loading}
             error={state.error}
@@ -114,9 +110,7 @@ export default function PlaneacionPage() {
         {state.step === 'confirmation' && (
           <ConfirmationSummary
             toCreate={toCreate}
-            toUpdate={toUpdate}
-            toCancel={toCancel}
-            template={selectedTemplate}
+            templates={state.templates}
             onConfirmCreate={handleCreateQuotations}
             loading={state.loading}
             error={state.error}

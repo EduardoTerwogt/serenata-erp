@@ -135,3 +135,62 @@ function getMonthNumber(monthStr: string): number | null {
   }
   return monthMap[monthStr.toLowerCase()] || null
 }
+
+/**
+ * Normaliza fechas extraídas por el parser a formato ISO YYYY-MM-DD
+ * Soporta formatos:
+ * - "23 abril" o "23 de abril" → 2026-04-23 (año actual asumido)
+ * - "23/04" → 2026-04-23 (DD/MM)
+ * - "23/04/2026" → 2026-04-23 (DD/MM/YYYY)
+ * - "23/04/26" → 2026-04-23 (DD/MM/YY, interpreta 26 como 2026)
+ * - "2026-04-23" → 2026-04-23 (ya ISO)
+ * - "23" → null (día sin mes)
+ * @param raw - Fecha en formato natural o parseado
+ * @param anoBase - Año base para fechas sin año (default: año actual)
+ * @returns Fecha en YYYY-MM-DD o null si no se puede parsear
+ */
+export function normalizarFechaISO(raw: string | null, anoBase?: number): string | null {
+  if (!raw || !raw.trim()) return null
+
+  const currentYear = anoBase ?? new Date().getFullYear()
+  const trimmed = raw.trim()
+
+  // Ya está en ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed
+  }
+
+  // Formato "DD mes" o "DD de mes" (ej: "23 abril", "23 de abril")
+  const mesMatch = trimmed.match(/^(\d{1,2})\s+(?:de\s+)?(enero|february|febrero|march|marzo|april|abril|may|mayo|june|junio|july|julio|august|agosto|september|septiembre|october|octubre|november|noviembre|december|diciembre)$/i)
+  if (mesMatch) {
+    const day = parseInt(mesMatch[1])
+    const month = getMonthNumber(mesMatch[2])
+    if (month && day >= 1 && day <= 31) {
+      return formatDateISO(currentYear, month, day)
+    }
+  }
+
+  // Formato DD/MM o DD/MM/YYYY o DD/MM/YY
+  const numMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/)
+  if (numMatch) {
+    const day = parseInt(numMatch[1])
+    const month = parseInt(numMatch[2])
+    let year = currentYear
+
+    if (numMatch[3]) {
+      const yearStr = numMatch[3]
+      year = yearStr.length === 2 ? 2000 + parseInt(yearStr) : parseInt(yearStr)
+    }
+
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return formatDateISO(year, month, day)
+    }
+  }
+
+  // No se pudo parsear
+  return null
+}
+
+function formatDateISO(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}

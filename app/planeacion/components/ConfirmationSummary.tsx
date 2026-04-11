@@ -5,9 +5,7 @@ import { ServiceTemplate } from '@/lib/types'
 
 interface ConfirmationSummaryProps {
   toCreate: ValidatedEventLine[]
-  toUpdate: ValidatedEventLine[]
-  toCancel: ValidatedEventLine[]
-  template?: ServiceTemplate
+  templates: ServiceTemplate[]
   onConfirmCreate: () => void
   loading: boolean
   error: string
@@ -16,14 +14,18 @@ interface ConfirmationSummaryProps {
 
 export default function ConfirmationSummary({
   toCreate,
-  toUpdate,
-  toCancel,
-  template,
+  templates,
   onConfirmCreate,
   loading,
   error,
   onGoBack,
 }: ConfirmationSummaryProps) {
+  const getTemplateName = (templateId?: string) => {
+    if (!templateId) return '— Sin plantilla (items manuales) —'
+    const template = templates.find(t => t.id === templateId)
+    return template ? template.nombre : '— Sin plantilla —'
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {error && !error.startsWith('✓') && (
@@ -38,93 +40,29 @@ export default function ConfirmationSummary({
         </div>
       )}
 
-      {/* Template info */}
-      {template && (
-        <div className="bg-blue-900/20 border border-blue-800 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-blue-400 mb-2">Plantilla: {template.nombre}</h3>
-          <p className="text-blue-300 text-sm mb-3">{template.items.length} items incluidos</p>
-          <div className="space-y-1">
-            {template.items.slice(0, 5).map((item, idx) => (
-              <div key={idx} className="text-xs text-blue-300">
-                • {item.descripcion} ({item.cantidad}x)
-              </div>
-            ))}
-            {template.items.length > 5 && (
-              <div className="text-xs text-blue-400">+ {template.items.length - 5} más items</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-green-900/20 border border-green-800 rounded-xl p-4">
-          <div className="text-3xl font-bold text-green-400">{toCreate.length}</div>
-          <div className="text-sm text-green-300">Cotizaciones a crear</div>
-        </div>
-        <div className="bg-blue-900/20 border border-blue-800 rounded-xl p-4">
-          <div className="text-3xl font-bold text-blue-400">{toUpdate.length}</div>
-          <div className="text-sm text-blue-300">Cotizaciones a actualizar</div>
-        </div>
-        <div className="bg-red-900/20 border border-red-800 rounded-xl p-4">
-          <div className="text-3xl font-bold text-red-400">{toCancel.length}</div>
-          <div className="text-sm text-red-300">Cotizaciones a cancelar</div>
-        </div>
+      {/* Summary card */}
+      <div className="bg-green-900/20 border border-green-800 rounded-xl p-6">
+        <div className="text-3xl font-bold text-green-400">{toCreate.length}</div>
+        <div className="text-lg text-green-300">Cotizaciones a crear</div>
       </div>
 
       {/* Details */}
       {toCreate.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="inline-block w-6 h-6 bg-green-600 text-white text-sm rounded-full flex items-center justify-center">+</span>
-            A Crear ({toCreate.length})
-          </h3>
-          <div className="space-y-2">
+          <h3 className="text-lg font-semibold text-white mb-4">Detalle de cotizaciones:</h3>
+          <div className="space-y-3">
             {toCreate.map(line => (
-              <div key={line.id} className="bg-gray-800/50 border border-gray-700 rounded p-3 text-sm text-gray-300">
-                <div>
-                  <span className="font-medium text-white">{line.proyecto}</span>
-                  {line.fecha && <span className="text-gray-400 ml-2">📅 {line.fecha}</span>}
-                  {line.locacion && <span className="text-gray-400 ml-2">📍 {line.locacion}</span>}
+              <div key={line.id} className="bg-gray-800/50 border border-gray-700 rounded p-4 text-sm">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
+                    {line.fecha && <div className="text-gray-300">📅 <span className="font-medium">{line.fecha}</span></div>}
+                    <div className="text-gray-400 mt-1">
+                      {[line.ciudad, line.locacion].filter(Boolean).join(' — ')}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {toUpdate.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="inline-block w-6 h-6 bg-blue-600 text-white text-sm rounded-full flex items-center justify-center">↻</span>
-            A Actualizar ({toUpdate.length})
-          </h3>
-          <div className="space-y-2">
-            {toUpdate.map(line => (
-              <div key={line.id} className="bg-gray-800/50 border border-gray-700 rounded p-3 text-sm text-gray-300">
-                <div>
-                  <span className="font-medium text-white">{line.proyecto}</span>
-                  {line.matchedQuotationInfo && (
-                    <div className="text-xs text-gray-500 mt-1">{line.matchedQuotationInfo}</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {toCancel.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="inline-block w-6 h-6 bg-red-600 text-white text-sm rounded-full flex items-center justify-center">✕</span>
-            A Cancelar ({toCancel.length})
-          </h3>
-          <div className="space-y-2">
-            {toCancel.map(line => (
-              <div key={line.id} className="bg-gray-800/50 border border-gray-700 rounded p-3 text-sm text-gray-300">
-                <div>
-                  <span className="font-medium text-white">{line.proyecto}</span>
+                <div className="inline-block px-3 py-1 bg-blue-900/30 border border-blue-800 rounded text-xs text-blue-300 font-medium">
+                  {getTemplateName(line.selectedTemplateId)}
                 </div>
               </div>
             ))}
@@ -149,7 +87,7 @@ export default function ConfirmationSummary({
         </button>
         <button
           onClick={onConfirmCreate}
-          disabled={loading || (toCreate.length === 0 && toUpdate.length === 0 && toCancel.length === 0)}
+          disabled={loading || toCreate.length === 0}
           className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
         >
           {loading ? 'Creando cotizaciones...' : 'Confirmar y Crear'}

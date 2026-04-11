@@ -1,25 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { ExtractedEventLine, parseEventInfo } from '@/lib/parsers/eventInfoParser'
+import { ExtractedEventLine, parseEventInfo, normalizarFechaISO } from '@/lib/parsers/eventInfoParser'
 import { ServiceTemplate } from '@/lib/types'
 
 export interface ValidatedEventLine extends ExtractedEventLine {
   id: string
-  proyecto: string
-  action: 'create' | 'update' | 'cancel' | 'ignore'
+  ciudad?: string
+  action: 'confirmado' | 'por_confirmar' | 'cancelado'
   matchedQuotationId?: string
   matchedQuotationInfo?: string
   selectedTemplateId?: string
-  confirmed: boolean
 }
 
 export interface PlaneacionFlowState {
   step: 'project' | 'input' | 'validation' | 'confirmation'
+  selectedCliente: string
   selectedProyecto: string
   rawInput: string
   extractedLines: ValidatedEventLine[]
-  selectedTemplateId?: string
   templates: ServiceTemplate[]
   loading: boolean
   error: string
@@ -28,6 +27,7 @@ export interface PlaneacionFlowState {
 export function usePlaneacionFlow() {
   const [state, setState] = useState<PlaneacionFlowState>({
     step: 'project',
+    selectedCliente: '',
     selectedProyecto: '',
     rawInput: '',
     extractedLines: [],
@@ -51,13 +51,21 @@ export function usePlaneacionFlow() {
     }
   }
 
+  const handleSelectCliente = (cliente: string) => {
+    setState(s => ({ ...s, selectedCliente: cliente }))
+  }
+
   const handleSelectProyecto = (proyecto: string) => {
     setState(s => ({ ...s, selectedProyecto: proyecto }))
   }
 
   const handleNextFromProject = () => {
+    if (!state.selectedCliente.trim() || !state.selectedProyecto.trim()) {
+      setState(s => ({ ...s, error: 'Selecciona cliente y proyecto' }))
+      return
+    }
     loadTemplates()
-    setState(s => ({ ...s, step: 'input' }))
+    setState(s => ({ ...s, step: 'input', error: '' }))
   }
 
   const handleInputChange = (input: string) => {
@@ -89,7 +97,7 @@ export function usePlaneacionFlow() {
             body: JSON.stringify({
               fecha: line.fecha,
               locacion: line.locacion,
-              cliente: state.selectedProyecto,
+              cliente: state.selectedCliente,
             }),
           })
           if (res.ok) {
@@ -104,11 +112,11 @@ export function usePlaneacionFlow() {
         enriched.push({
           ...line,
           id: Math.random().toString(36).substr(2, 9),
-          proyecto: state.selectedProyecto,
-          action: 'ignore',
+          ciudad: undefined,
+          action: 'por_confirmar', // Default: user must explicitly set to 'confirmado'
           matchedQuotationId,
           matchedQuotationInfo,
-          confirmed: false,
+          selectedTemplateId: undefined,
         })
       }
 
@@ -152,34 +160,13 @@ export function usePlaneacionFlow() {
     }))
   }
 
-  const handleSelectTemplate = (templateId: string) => {
-    setState(s => ({
-      ...s,
-      selectedTemplateId: templateId,
-      extractedLines: s.extractedLines.map(line => ({
-        ...line,
-        selectedTemplateId: templateId,
-      })),
-    }))
-  }
-
   const handleConfirmSelection = () => {
-    const allConfirmed = state.extractedLines
-      .filter(line => line.action !== 'ignore' && line.action !== 'cancel')
-      .every(line => line.confirmed)
+    const toConfirm = state.extractedLines.filter(line => line.action === 'confirmado')
 
-    if (!allConfirmed) {
+    if (toConfirm.length === 0) {
       setState(s => ({
         ...s,
-        error: 'Confirma todas las fechas que quieres crear/actualizar',
-      }))
-      return
-    }
-
-    if (!state.selectedTemplateId) {
-      setState(s => ({
-        ...s,
-        error: 'Selecciona una plantilla de servicios',
+        error: 'Marca al menos una fila como "Confirmado"',
       }))
       return
     }
@@ -193,23 +180,23 @@ export function usePlaneacionFlow() {
 
   const getCreationSummary = () => {
     const toCreate = state.extractedLines.filter(
-      line => line.action === 'create' && line.confirmed
+      line => line.action === 'confirmado'
     )
-    const toUpdate = state.extractedLines.filter(
-      line => line.action === 'update' && line.confirmed
+    const toPending = state.extractedLines.filter(
+      line => line.action === 'por_confirmar'
     )
     const toCancel = state.extractedLines.filter(
-      line => line.action === 'cancel' && line.confirmed
+      line => line.action === 'cancelado'
     )
 
-    return { toCreate, toUpdate, toCancel }
+    return { toCreate, toPending, toCancel }
   }
 
   const handleCreateQuotations = async () => {
-    const { toCreate } = getCreationSummary()
+    const { toCreate, toPending, toCancel } = getCreationSummary()
 
     if (toCreate.length === 0) {
-      setState(s => ({ ...s, error: 'Selecciona al menos una fecha para crear' }))
+      setState(s => ({ ...s, error: 'Selecciona al menos una fila como "Confirmado"' }))
       return
     }
 
@@ -217,20 +204,51 @@ export function usePlaneacionFlow() {
 
     try {
       const createdIds: string[] = []
+      const pendientesCount = toPending.length + toCancel.length
 
+      // 1. Create quotations for 'confirmado' rows
       for (const line of toCreate) {
         if (!line.fecha) continue
+
+        // Normalize fecha to ISO format
+        const fechaISO = normalizarFechaISO(line.fecha)
+
+        // Get template if selected
+        const template = line.selectedTemplateId
+          ? state.templates.find(t => t.id === line.selectedTemplateId)
+          : undefined
+
+        // Map template items to quotation items
+        const items = template?.items?.map((it, idx) => ({
+          categoria: it.categoria,
+          descripcion: it.descripcion,
+          cantidad: it.cantidad,
+          precio_unitario: it.precio_unitario,
+          importe: it.cantidad * it.precio_unitario,
+          x_pagar: it.x_pagar,
+          margen: (it.cantidad * it.precio_unitario) - (it.x_pagar * it.cantidad),
+          responsable_nombre: it.responsable_nombre ?? null,
+          responsable_id: it.responsable_id ?? null,
+          producto_id: it.producto_id ?? null,
+          orden: idx,
+          notas: null,
+        })) ?? []
+
+        // Concatenate ciudad + locacion
+        const locacion = [line.ciudad, line.locacion]
+          .filter(Boolean)
+          .join(' — ')
 
         const res = await fetch('/api/cotizaciones', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            cliente: line.proyecto,
-            proyecto: line.proyecto,
-            fecha_entrega: line.fecha,
-            locacion: line.locacion,
+            cliente: state.selectedCliente,
+            proyecto: state.selectedProyecto,
+            fecha_entrega: fechaISO,
+            locacion,
             estado: 'BORRADOR',
-            items: [],
+            items,
             tipo: 'PRINCIPAL',
           }),
         })
@@ -241,20 +259,52 @@ export function usePlaneacionFlow() {
         }
       }
 
+      // 2. Save pendientes (por_confirmar + cancelado) if any
+      if (pendientesCount > 0) {
+        const pendientesPayload = [...toPending, ...toCancel].map(line => ({
+          cliente: state.selectedCliente,
+          proyecto: state.selectedProyecto,
+          fecha: line.fecha,
+          fecha_iso: normalizarFechaISO(line.fecha) || null,
+          ciudad: line.ciudad || null,
+          locacion: line.locacion || null,
+          estado: line.action, // 'por_confirmar' | 'cancelado'
+          raw_input: line.raw,
+        }))
+
+        try {
+          await fetch('/api/planeacion/pendientes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pendientesPayload),
+          })
+        } catch (err) {
+          console.error('Error saving pendientes:', err)
+          // Non-critical, continue
+        }
+      }
+
+      // 3. Show success message
+      const message = pendientesCount > 0
+        ? `✓ ${createdIds.length} cotizaciones creadas · ${pendientesCount} pendientes guardadas`
+        : `✓ ${createdIds.length} cotizaciones creadas en BORRADOR`
+
       setState(s => ({
         ...s,
         loading: false,
         step: 'project',
+        selectedCliente: '',
         selectedProyecto: '',
         rawInput: '',
         extractedLines: [],
-        error: `✓ ${createdIds.length} cotizaciones creadas en BORRADOR`,
+        error: message,
       }))
 
       setTimeout(() => {
         window.location.href = '/cotizaciones'
       }, 1500)
     } catch (err) {
+      console.error('Error creating quotations:', err)
       setState(s => ({
         ...s,
         loading: false,
@@ -268,6 +318,7 @@ export function usePlaneacionFlow() {
       setState(s => ({
         ...s,
         step: 'project',
+        selectedCliente: '',
         selectedProyecto: '',
         rawInput: '',
         extractedLines: [],
@@ -280,13 +331,13 @@ export function usePlaneacionFlow() {
 
   return {
     state,
+    handleSelectCliente,
     handleSelectProyecto,
     handleNextFromProject,
     handleInputChange,
     handleExtractInformation,
     handleLineUpdate,
     handleLineDelete,
-    handleSelectTemplate,
     handleConfirmSelection,
     handleCreateQuotations,
     getCreationSummary,
