@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { usePendientesFlow } from '../usePendientesFlow'
 import PendientesTable from '../components/PendientesTable'
 import PendientesConfirmation from '../components/PendientesConfirmation'
@@ -31,19 +30,11 @@ export default function PendientesPage() {
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Pendientes de Planeación</h1>
-          <p className="text-gray-400">
-            Revisa y procesa las filas marcadas como "Por Confirmar" o "Cancelado"
-          </p>
-        </div>
-        <Link
-          href="/planeacion"
-          className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors"
-        >
-          ← Volver a Planeación
-        </Link>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">Pendientes de Planeación</h1>
+        <p className="text-gray-400">
+          Revisa y procesa las filas marcadas como "Por Confirmar" o "Cancelado"
+        </p>
       </div>
 
       {/* Content based on step */}

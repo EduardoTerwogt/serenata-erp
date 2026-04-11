@@ -19,10 +19,11 @@ export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from('cotizaciones')
-      .select('*')
+      .select('*, items_cotizacion(*)')
       .order('created_at', { ascending: false })
     if (error) throw error
-    return Response.json(data)
+    const mapped = (data || []).map((d: any) => ({ ...d, items: d.items_cotizacion }))
+    return Response.json(mapped)
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error obteniendo cotizaciones' }, { status: 500 })
