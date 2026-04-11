@@ -141,10 +141,13 @@ export function TemplateItemsSection({
         <input
           type="number"
           min="0.01"
-          step="0.01"
           value={item.cantidad}
-          onChange={e => updateItem(index, 'cantidad', parseFloat(e.target.value) || 1)}
-          className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 text-sm"
+          onChange={e => updateItem(index, 'cantidad', e.target.value === '' ? 1 : parseFloat(e.target.value) || 1)}
+          onBlur={e => {
+            const val = parseFloat(e.currentTarget.value)
+            if (isNaN(val) || val <= 0) updateItem(index, 'cantidad', 1)
+          }}
+          className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 text-sm [&::-webkit-outer-spin-button]:[appearance:none] [&::-webkit-inner-spin-button]:[appearance:none] [&]:[-moz-appearance:textfield]"
         />
       </td>
 
@@ -296,11 +299,13 @@ export function TemplateItemsSection({
                 <label className="block text-[13px] text-gray-400 mb-2">Cantidad</label>
                 <input
                   type="number"
-                  min="0.01"
-                  step="0.01"
                   value={item.cantidad}
-                  onChange={e => updateItem(editingIndex, 'cantidad', parseFloat(e.target.value) || 1)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white text-center focus:outline-none focus:border-blue-500"
+                  onChange={e => updateItem(editingIndex, 'cantidad', e.target.value === '' ? 1 : parseFloat(e.target.value) || 1)}
+                  onBlur={e => {
+                    const val = parseFloat(e.currentTarget.value)
+                    if (isNaN(val) || val <= 0) updateItem(editingIndex, 'cantidad', 1)
+                  }}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white text-center focus:outline-none focus:border-blue-500 [&::-webkit-outer-spin-button]:[appearance:none] [&::-webkit-inner-spin-button]:[appearance:none] [&]:[-moz-appearance:textfield]"
                 />
               </div>
               <div className="flex-[2]">
