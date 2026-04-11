@@ -5,9 +5,14 @@ import { ValidatedEventLine } from './usePlaneacionFlow'
 import { ServiceTemplate } from '@/lib/types'
 import { normalizarFechaISO } from '@/lib/parsers/eventInfoParser'
 
+interface PendienteRow extends ValidatedEventLine {
+  cliente?: string
+  proyecto?: string
+}
+
 interface PendientesFlowState {
   step: 'list' | 'confirmation'
-  pendientes: ValidatedEventLine[]
+  pendientes: PendienteRow[]
   templates: ServiceTemplate[]
   loading: boolean
   error: string
@@ -38,6 +43,8 @@ export function usePendientesFlow() {
           ciudad: p.ciudad,
           action: p.estado,
           selectedTemplateId: undefined,
+          cliente: p.cliente,
+          proyecto: p.proyecto,
         }))
         setState(s => ({
           ...s,
@@ -124,6 +131,7 @@ export function usePendientesFlow() {
 
     try {
       const createdIds: string[] = []
+      const deletedIds: string[] = []
 
       // 1. Create quotations for 'confirmado' rows
       for (const line of toCreate) {
@@ -157,23 +165,15 @@ export function usePendientesFlow() {
           .filter(Boolean)
           .join(' — ')
 
-        // Extract cliente and proyecto from raw data or use defaults
-        // Note: pendientes have cliente and proyecto saved
-        const pendiente = state.pendientes.find(p => p.id === line.id)
-        if (!pendiente) continue
-
-        // Fetch the original pendiente data to get cliente/proyecto
-        const pendientesData = await fetch('/api/planeacion/pendientes').then(r => r.json())
-        const originalPendiente = pendientesData.pendientes?.find((p: any) => p.id === line.id)
-
-        if (!originalPendiente) continue
+        const pendienteData = line as PendienteRow
+        if (!pendienteData.cliente || !pendienteData.proyecto) continue
 
         const res = await fetch('/api/cotizaciones', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            cliente: originalPendiente.cliente,
-            proyecto: originalPendiente.proyecto,
+            cliente: pendienteData.cliente,
+            proyecto: pendienteData.proyecto,
             fecha_entrega: fechaISO,
             locacion,
             estado: 'BORRADOR',
@@ -185,6 +185,7 @@ export function usePendientesFlow() {
         if (res.ok) {
           const quot = await res.json()
           createdIds.push(quot.id)
+          deletedIds.push(line.id)
 
           // Delete from pendientes after successful creation
           try {
@@ -192,19 +193,19 @@ export function usePendientesFlow() {
               method: 'DELETE',
             })
           } catch (err) {
-            // Non-critical
+            console.error('Warning: Failed to delete pendiente after creation:', err)
           }
         }
       }
 
-      // 3. Show success message
+      // Show success message
       const message = `✓ ${createdIds.length} cotizaciones creadas en BORRADOR desde pendientes`
 
       setState(s => ({
         ...s,
         loading: false,
         step: 'list',
-        pendientes: s.pendientes.filter(p => !createdIds.includes(p.id)),
+        pendientes: s.pendientes.filter(p => !deletedIds.includes(p.id)),
         error: message,
       }))
 
