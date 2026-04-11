@@ -48,11 +48,10 @@ export class CacheManager {
    */
   invalidate(pattern: string): void {
     const prefix = pattern.replace('*', '')
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(prefix)) {
-        this.cache.delete(key)
-      }
-    }
+    const keysToDelete = Array.from(this.cache.keys()).filter((key) => key.startsWith(prefix))
+    keysToDelete.forEach((key) => {
+      this.cache.delete(key)
+    })
   }
 
   /**
