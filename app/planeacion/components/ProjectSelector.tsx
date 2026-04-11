@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
+import { QuotationFormValues } from '@/lib/quotations/types'
 
 interface ClienteProyectoSelectorProps {
   onSelectCliente: (cliente: string) => void
@@ -17,10 +17,9 @@ export default function ClienteProyectoSelector({
   onNext,
   loading,
 }: ClienteProyectoSelectorProps) {
-  const { register, setValue, watch } = useForm<{ cliente: string; proyecto: string }>()
-  const [clienteVal, setClienteVal] = useState('')
-  const [proyectoVal, setProyectoVal] = useState('')
-
+  const { setValue } = useForm<QuotationFormValues>({
+    defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [] },
+  })
   // Reuse the quotation form hook for client/project autocomplete
   const {
     listaClientes,
@@ -39,13 +38,11 @@ export default function ClienteProyectoSelector({
   } = useQuotationForm(setValue, [])
 
   const handleSelectCliente = (cliente: string) => {
-    setClienteVal(cliente)
     onSelectCliente(cliente)
     handleClienteChange(cliente)
   }
 
   const handleSelectProyecto = (proyecto: string) => {
-    setProyectoVal(proyecto)
     onSelectProyecto(proyecto)
     setProyectoInput(proyecto)
   }
