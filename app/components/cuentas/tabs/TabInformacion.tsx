@@ -32,7 +32,7 @@ export function TabInformacion(props: TabInformacionProps) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <p className="text-gray-400 text-sm">Folio</p>
-            <p className="text-white font-medium font-mono">{cuenta.folio || cuenta.cotizacion_id}</p>
+            <p className="text-white font-medium font-mono">{cuenta.cotizacion_id}</p>
           </div>
           <div>
             <p className="text-gray-400 text-sm">Cliente</p>
@@ -86,7 +86,7 @@ export function TabInformacion(props: TabInformacionProps) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <p className="text-gray-400 text-sm">Folio</p>
-          <p className="text-white font-medium font-mono">{cuenta.folio || cuenta.cotizacion_id}</p>
+          <p className="text-white font-medium font-mono">{cuenta.cotizacion_id}</p>
         </div>
         <div>
           <p className="text-gray-400 text-sm">Responsable</p>
