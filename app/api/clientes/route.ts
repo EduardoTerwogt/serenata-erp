@@ -1,10 +1,10 @@
 import { requireSection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { CacheManager } from '@/lib/api/cache'
 
 // Fase 8c: Caché en servidor para búsquedas (5 minutos TTL)
-const CACHE_TTL = 5 * 60 * 1000
-const searchCache = new Map<string, { data: any; timestamp: number }>()
+const cache = new CacheManager(5 * 60 * 1000)
 
 export async function GET(request: Request) {
   const authResult = await requireSection('cotizaciones')
@@ -15,9 +15,9 @@ export async function GET(request: Request) {
 
   // Fase 8c: Verificar caché antes de consultar BD
   const cacheKey = `clientes:${q}`
-  const cached = searchCache.get(cacheKey)
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return Response.json(cached.data)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    return Response.json(cached)
   }
 
   let query = supabaseAdmin
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
   }
 
   // Guardar en caché para futuras búsquedas
-  searchCache.set(cacheKey, { data: data || [], timestamp: Date.now() })
+  cache.set(cacheKey, data || [])
   return Response.json(data || [])
 }
 
@@ -63,6 +63,10 @@ export async function POST(request: Request) {
       console.error('[POST /api/clientes] Error:', error)
       return Response.json({ error: error.message }, { status: 500 })
     }
+
+    // Invalidate cache after successful creation
+    cache.invalidate('clientes:')
+
     triggerSheetsSync('clientes')
     return Response.json(data, { status: 201 })
   } catch (e) {

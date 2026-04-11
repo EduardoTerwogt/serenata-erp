@@ -1,10 +1,10 @@
 import { requireAnySection, requireSection } from '@/lib/api-auth'
 import { getResponsables, createResponsable } from '@/lib/db'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { CacheManager } from '@/lib/api/cache'
 
 // Fase 8c: Caché en servidor para responsables (5 minutos TTL)
-const CACHE_TTL = 5 * 60 * 1000
-const searchCache = new Map<string, { data: any; timestamp: number }>()
+const cache = new CacheManager(5 * 60 * 1000)
 
 export async function GET() {
   const authResult = await requireAnySection(['responsables', 'cotizaciones'])
@@ -13,15 +13,15 @@ export async function GET() {
   try {
     // Fase 8c: Verificar caché antes de consultar BD
     const cacheKey = 'responsables:all'
-    const cached = searchCache.get(cacheKey)
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return Response.json(cached.data)
+    const cached = cache.get(cacheKey)
+    if (cached) {
+      return Response.json(cached)
     }
 
     const responsables = await getResponsables()
 
     // Guardar en caché para futuras búsquedas
-    searchCache.set(cacheKey, { data: responsables, timestamp: Date.now() })
+    cache.set(cacheKey, responsables)
     return Response.json(responsables)
   } catch (error) {
     console.error(error)
@@ -36,6 +36,10 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const responsable = await createResponsable({ ...body, activo: true })
+
+    // Invalidate cache after successful creation
+    cache.invalidate('responsables:')
+
     triggerSheetsSync('responsables')
     return Response.json(responsable, { status: 201 })
   } catch (error) {
