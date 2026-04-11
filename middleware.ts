@@ -8,6 +8,7 @@ type SectionRule = {
 }
 
 const PAGE_SECTION_RULES: SectionRule[] = [
+  { prefix: '/admin/sheets', sections: ['admin'] },
   { prefix: '/dashboard', sections: ['dashboard'] },
   { prefix: '/cotizaciones', sections: ['cotizaciones'] },
   { prefix: '/proyectos', sections: ['proyectos'] },
@@ -16,6 +17,7 @@ const PAGE_SECTION_RULES: SectionRule[] = [
 ]
 
 const API_SECTION_RULES: SectionRule[] = [
+  { prefix: '/api/integrations/sheets', sections: ['admin'] },
   { prefix: '/api/cotizaciones', sections: ['cotizaciones'] },
   { prefix: '/api/clientes', sections: ['cotizaciones'] },
   { prefix: '/api/productos', sections: ['cotizaciones'] },
