@@ -44,6 +44,22 @@ export function CuentasPage() {
     loading,
   } = useCuentasPage()
 
+  const abrirDetalleDesdeAlerta = (alertaId: string) => {
+    const cuentaDesdeLista = cobrarFiltradas.find((cuenta) => cuenta.id === alertaId)
+    if (cuentaDesdeLista) {
+      setSelectedCuenta(cuentaDesdeLista)
+      return
+    }
+
+    const cuentaCompleta = cobrarApi.cuentas.find((cuenta) => cuenta.id === alertaId)
+    if (cuentaCompleta) {
+      setSelectedCuenta({ ...cuentaCompleta, tipo: 'cobrar' })
+      return
+    }
+
+    setTab('cobrar')
+  }
+
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
       <div className="mb-8">
@@ -119,7 +135,12 @@ export function CuentasPage() {
               </div>
               <div className="space-y-3">
                 {alertas.slice(0, 5).map((alerta) => (
-                  <div key={alerta.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-gray-800 border border-gray-700 rounded-lg p-4">
+                  <button
+                    key={alerta.id}
+                    type="button"
+                    onClick={() => abrirDetalleDesdeAlerta(alerta.id)}
+                    className="w-full text-left flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-gray-800 border border-gray-700 rounded-lg p-4 hover:bg-gray-700/80 transition-colors cursor-pointer"
+                  >
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${alerta.alerta === 'VENCIDA' ? 'bg-red-900 text-red-300' : 'bg-yellow-900 text-yellow-300'}`}>
@@ -134,7 +155,7 @@ export function CuentasPage() {
                       <p className="text-gray-500 text-xs">Saldo pendiente</p>
                       <p className="text-white font-bold">${formatCuentasCurrency(alerta.saldo_pendiente)}</p>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </AppCard>
