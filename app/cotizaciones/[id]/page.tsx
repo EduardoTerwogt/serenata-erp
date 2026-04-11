@@ -13,6 +13,7 @@ import { formatSpanishLongDate } from '@/lib/quotations/format'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
 import { QuotationTotalsPanels } from '@/components/quotations/QuotationTotalsPanels'
+import { SkeletonQuotationDetail } from '@/app/components/ui/SkeletonQuotationDetail'
 
 export default function CotizacionDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -246,23 +247,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }
 
-  if (loading) return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl animate-pulse">
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
-        <div className="space-y-2">
-          <div className="h-8 bg-gray-800 rounded w-40" />
-          <div className="h-4 bg-gray-800 rounded w-64" />
-        </div>
-        <div className="flex gap-2">
-          <div className="h-11 bg-gray-800 rounded w-24" />
-          <div className="h-11 bg-gray-800 rounded w-36" />
-        </div>
-      </div>
-      <div className="h-32 bg-gray-800 rounded-xl mb-6" />
-      <div className="h-64 bg-gray-800 rounded-xl mb-6" />
-      <div className="h-40 bg-gray-800 rounded-xl" />
-    </div>
-  )
+  if (loading) return <SkeletonQuotationDetail />
   if (!cotizacion) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cotización no encontrada</div>
 
   return (

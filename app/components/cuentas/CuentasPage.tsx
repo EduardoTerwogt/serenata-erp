@@ -6,6 +6,7 @@ import { useCuentasPage } from '@/app/components/cuentas/useCuentasPage'
 import { formatCuentasCurrency } from '@/app/components/cuentas/utils'
 import { AppCard } from '@/components/ui/AppCard'
 import { MetricCard } from '@/components/ui/MetricCard'
+import { SkeletonTable } from '@/app/components/ui/SkeletonTable'
 
 const CuentaDetailModal = dynamic(
   () => import('@/app/components/cuentas/CuentaDetailModal').then((mod) => mod.CuentaDetailModal),
@@ -208,21 +209,7 @@ export function CuentasPage() {
       )}
 
       {loading ? (
-        <div className="rounded-xl border border-gray-800 overflow-hidden animate-pulse">
-          <div className="bg-gray-800/60 px-4 py-3 grid grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-3 bg-gray-700 rounded" />
-            ))}
-          </div>
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="px-4 py-4 grid grid-cols-4 gap-4 border-t border-gray-800/60">
-              <div className="h-3 bg-gray-800 rounded w-3/4" />
-              <div className="h-3 bg-gray-800 rounded w-1/2" />
-              <div className="h-3 bg-gray-800 rounded w-2/3" />
-              <div className="h-3 bg-gray-800 rounded w-1/3 ml-auto" />
-            </div>
-          ))}
-        </div>
+        <SkeletonTable columns={4} rows={6} />
       ) : (
         <CuentasTable
           tab={tab}
