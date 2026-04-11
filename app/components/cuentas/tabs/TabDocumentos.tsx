@@ -8,7 +8,7 @@ interface TabDocumentosCobrarProps {
   cuentaId: string
   documentos: DocumentoCuentaCobrar[]
   onSubirFactura: (id: string, xml: File, pdf?: File) => Promise<unknown>
-  onSubirComplemento: (id: string, xml: File, notas?: string) => Promise<unknown>
+  onSubirComplemento: (id: string, xml: File, pdf: File, notas?: string) => Promise<unknown>
   onRefresh: () => void
 }
 
@@ -25,7 +25,8 @@ type TabDocumentosProps = TabDocumentosCobrarProps | TabDocumentosPagarProps
 const TIPO_DOC_LABEL: Record<string, string> = {
   FACTURA_PDF: 'Factura PDF',
   FACTURA_XML: 'Factura XML',
-  COMPLEMENTO_PAGO: 'Complemento de Pago',
+  COMPLEMENTO_PAGO: 'Complemento de Pago XML',
+  COMPLEMENTO_PAGO_PDF: 'Complemento de Pago PDF',
   FACTURA_PROVEEDOR: 'Factura Proveedor',
   COMPROBANTE_PAGO: 'Comprobante de Pago',
   OTRO: 'Otro',
@@ -37,7 +38,8 @@ export function TabDocumentos(props: TabDocumentosProps) {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
   const xmlRef = useRef<HTMLInputElement>(null)
   const pdfRef = useRef<HTMLInputElement>(null)
-  const complementoRef = useRef<HTMLInputElement>(null)
+  const complementoXmlRef = useRef<HTMLInputElement>(null)
+  const complementoPdfRef = useRef<HTMLInputElement>(null)
   const facturaProvRef = useRef<HTMLInputElement>(null)
 
   const handleSubirFacturaCobrar = async () => {
@@ -64,16 +66,19 @@ export function TabDocumentos(props: TabDocumentosProps) {
 
   const handleSubirComplemento = async () => {
     if (props.tipo !== 'cobrar') return
-    const xmlFile = complementoRef.current?.files?.[0]
+    const xmlFile = complementoXmlRef.current?.files?.[0]
+    const pdfFile = complementoPdfRef.current?.files?.[0]
     if (!xmlFile) { setUploadError('Selecciona un archivo XML de complemento'); return }
+    if (!pdfFile) { setUploadError('Selecciona un archivo PDF de complemento'); return }
 
     setUploading(true)
     setUploadError(null)
     setUploadSuccess(null)
     try {
-      await props.onSubirComplemento(props.cuentaId, xmlFile)
+      await props.onSubirComplemento(props.cuentaId, xmlFile, pdfFile)
       setUploadSuccess('Complemento subido correctamente')
-      if (complementoRef.current) complementoRef.current.value = ''
+      if (complementoXmlRef.current) complementoXmlRef.current.value = ''
+      if (complementoPdfRef.current) complementoPdfRef.current.value = ''
       props.onRefresh()
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Error al subir')
@@ -108,7 +113,6 @@ export function TabDocumentos(props: TabDocumentosProps) {
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-white mb-4">Documentos</h3>
 
-      {/* Mensajes */}
       {uploadError && (
         <div className="p-3 bg-red-900/30 border border-red-700 rounded-lg">
           <p className="text-red-300 text-sm">{uploadError}</p>
@@ -120,7 +124,6 @@ export function TabDocumentos(props: TabDocumentosProps) {
         </div>
       )}
 
-      {/* Lista de documentos existentes */}
       <div className="space-y-2">
         {documentos.length === 0 && (
           <p className="text-gray-500 text-sm italic py-4">No hay documentos cargados</p>
@@ -131,7 +134,7 @@ export function TabDocumentos(props: TabDocumentosProps) {
               <p className="text-white text-sm font-medium truncate">{doc.archivo_nombre}</p>
               <p className="text-gray-400 text-xs">
                 {TIPO_DOC_LABEL[doc.tipo] || doc.tipo}
-                {' \u2022 '}
+                {' • '}
                 {new Date(doc.fecha_carga || doc.created_at).toLocaleDateString('es-MX')}
               </p>
             </div>
@@ -147,11 +150,9 @@ export function TabDocumentos(props: TabDocumentosProps) {
         ))}
       </div>
 
-      {/* Upload sections */}
       <div className="pt-4 border-t border-gray-800 space-y-4">
         {props.tipo === 'cobrar' ? (
           <>
-            {/* Subir factura */}
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-300">Subir Factura</p>
               <div className="space-y-2">
@@ -183,15 +184,28 @@ export function TabDocumentos(props: TabDocumentosProps) {
               </div>
             </div>
 
-            {/* Subir complemento */}
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-300">Subir Complemento de Pago</p>
-              <input
-                ref={complementoRef}
-                type="file"
-                accept=".xml"
-                className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
-              />
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">XML (requerido)</label>
+                  <input
+                    ref={complementoXmlRef}
+                    type="file"
+                    accept=".xml"
+                    className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">PDF (requerido)</label>
+                  <input
+                    ref={complementoPdfRef}
+                    type="file"
+                    accept=".pdf"
+                    className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
+                  />
+                </div>
+              </div>
               <button
                 onClick={handleSubirComplemento}
                 disabled={uploading}

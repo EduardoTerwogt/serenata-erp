@@ -173,7 +173,7 @@ export interface PagoComprobante {
 export interface DocumentoCuentaCobrar {
   id: string
   cuentas_cobrar_id: string
-  tipo: 'FACTURA_PDF' | 'FACTURA_XML' | 'COMPLEMENTO_PAGO' | 'OTRO'
+  tipo: 'FACTURA_PDF' | 'FACTURA_XML' | 'COMPLEMENTO_PAGO' | 'COMPLEMENTO_PAGO_PDF' | 'OTRO'
   archivo_url: string
   archivo_nombre: string
   archivo_size?: number

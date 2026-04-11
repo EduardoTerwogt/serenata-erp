@@ -191,24 +191,30 @@ export async function mockCuentasApis(page: Page) {
   })
 
   await page.route(`**/api/cuentas-cobrar/${E2E_IDS.cobrarId}/subir-complemento`, async (route) => {
-    cobrarDocumentos.unshift({
-      id: `dcc-${Date.now()}-complemento`,
-      cuentas_cobrar_id: E2E_IDS.cobrarId,
-      tipo: 'COMPLEMENTO_PAGO',
-      archivo_url: 'https://example.com/complemento.xml',
-      archivo_nombre: 'complemento.xml',
-      fecha_carga: '2026-04-18',
-      created_at: '2026-04-18',
-    })
+    cobrarDocumentos.unshift(
+      {
+        id: `dcc-${Date.now()}-complemento-xml`,
+        cuentas_cobrar_id: E2E_IDS.cobrarId,
+        tipo: 'COMPLEMENTO_PAGO',
+        archivo_url: 'https://example.com/complemento.xml',
+        archivo_nombre: 'complemento.xml',
+        fecha_carga: '2026-04-18',
+        created_at: '2026-04-18',
+      },
+      {
+        id: `dcc-${Date.now()}-complemento-pdf`,
+        cuentas_cobrar_id: E2E_IDS.cobrarId,
+        tipo: 'COMPLEMENTO_PAGO_PDF',
+        archivo_url: 'https://example.com/complemento.pdf',
+        archivo_nombre: 'complemento.pdf',
+        fecha_carga: '2026-04-18',
+        created_at: '2026-04-18',
+      }
+    )
 
     await fulfillJson(route, {
       success: true,
-      parsed: {
-        uuid: 'ABC-123',
-        fecha_pago: '2026-04-18',
-        monto_total_pagos: 4750,
-        moneda: 'MXN',
-      },
+      documentos_creados: 2,
     })
   })
 

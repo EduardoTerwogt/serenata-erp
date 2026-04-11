@@ -68,9 +68,10 @@ export function useCuentasCobrar() {
     return result
   }, [cargar])
 
-  const subirComplemento = useCallback(async (id: string, xml: File, notas?: string) => {
+  const subirComplemento = useCallback(async (id: string, xml: File, pdf: File, notas?: string) => {
     const formData = new FormData()
     formData.append('complemento_xml', xml)
+    formData.append('complemento_pdf', pdf)
     if (notas) formData.append('notas', notas)
 
     const result = await sendFormData(`/api/cuentas-cobrar/${id}/subir-complemento`, formData, 'Error al subir complemento')

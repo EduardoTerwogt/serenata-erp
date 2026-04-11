@@ -30,6 +30,11 @@ test('handles documentos y pagos en cuentas por cobrar', async ({ page }) => {
     mimeType: 'application/xml',
     buffer: Buffer.from('<cfdi:Comprobante><cfdi:Complemento><pago20:Pagos MontoTotalPagos="4750"><pago20:Pago FechaPago="2026-04-18T12:00:00" MonedaP="MXN" /></pago20:Pagos><tfd:TimbreFiscalDigital UUID="ABC-123" /></cfdi:Complemento></cfdi:Comprobante>', 'utf-8'),
   })
+  await fileInputs.nth(3).setInputFiles({
+    name: 'complemento.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8'),
+  })
   await page.getByRole('button', { name: 'Subir Complemento' }).click()
   await expect(page.getByText('Complemento subido correctamente')).toBeVisible()
 

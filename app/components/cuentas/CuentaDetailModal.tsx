@@ -32,7 +32,7 @@ interface Props {
   cobrarActions: {
     cargarDetalle: (id: string) => Promise<CuentaCobrarDetalle | null>
     subirFactura: (id: string, xml: File, pdf?: File) => Promise<unknown>
-    subirComplemento: (id: string, xml: File, notas?: string) => Promise<unknown>
+    subirComplemento: (id: string, xml: File, pdf: File, notas?: string) => Promise<unknown>
     registrarPago: (id: string, data: { monto: number; tipo_pago: string; fecha_pago: string; notas?: string; comprobante?: File }) => Promise<unknown>
   }
   pagarActions: {
