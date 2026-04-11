@@ -136,7 +136,7 @@ export default function ProyectoDetallePage({
             📅 Google Calendar
           </button>
           <Link
-            href={`/cotizaciones/nueva?complementaria_de=${id}&cliente=${encodeURIComponent(proyecto.cliente)}&proyecto=${encodeURIComponent(proyecto.proyecto)}`}
+            href={`/cotizaciones/nueva?complementaria_de=${id}&cliente=${encodeURIComponent(proyecto.cliente)}&proyecto=${encodeURIComponent(proyecto.proyecto)}&locacion=${encodeURIComponent(proyecto.locacion || '')}&fecha_entrega=${encodeURIComponent(proyecto.fecha_entrega || '')}`}
             className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px] flex items-center justify-center text-center sm:col-span-2 md:col-span-1"
           >
             + Cotización complementaria
