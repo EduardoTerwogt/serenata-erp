@@ -163,27 +163,13 @@ export function TabDocumentos(props: TabDocumentosProps) {
               <div className="space-y-2">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">XML (requerido)</label>
-                  <input
-                    ref={xmlRef}
-                    type="file"
-                    accept=".xml"
-                    className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
-                  />
+                  <input ref={xmlRef} type="file" accept=".xml" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">PDF (opcional)</label>
-                  <input
-                    ref={pdfRef}
-                    type="file"
-                    accept=".pdf"
-                    className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
-                  />
+                  <input ref={pdfRef} type="file" accept=".pdf" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
                 </div>
-                <button
-                  onClick={handleSubirFacturaCobrar}
-                  disabled={uploading}
-                  className="w-full py-2 px-3 bg-blue-800 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-blue-200 rounded-lg text-sm font-medium transition-colors"
-                >
+                <button onClick={handleSubirFacturaCobrar} disabled={uploading} className="w-full py-2 px-3 bg-blue-800 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-blue-200 rounded-lg text-sm font-medium transition-colors">
                   {uploading ? 'Subiendo...' : 'Subir Factura'}
                 </button>
               </div>
@@ -194,28 +180,14 @@ export function TabDocumentos(props: TabDocumentosProps) {
               <div className="space-y-2">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">XML (requerido)</label>
-                  <input
-                    ref={complementoXmlRef}
-                    type="file"
-                    accept=".xml"
-                    className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
-                  />
+                  <input ref={complementoXmlRef} type="file" accept=".xml" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">PDF (requerido)</label>
-                  <input
-                    ref={complementoPdfRef}
-                    type="file"
-                    accept=".pdf"
-                    className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
-                  />
+                  <input ref={complementoPdfRef} type="file" accept=".pdf" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
                 </div>
               </div>
-              <button
-                onClick={handleSubirComplemento}
-                disabled={uploading}
-                className="w-full py-2 px-3 bg-blue-800 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-blue-200 rounded-lg text-sm font-medium transition-colors"
-              >
+              <button onClick={handleSubirComplemento} disabled={uploading} className="w-full py-2 px-3 bg-blue-800 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-blue-200 rounded-lg text-sm font-medium transition-colors">
                 {uploading ? 'Subiendo...' : 'Subir Complemento'}
               </button>
             </div>
@@ -226,28 +198,14 @@ export function TabDocumentos(props: TabDocumentosProps) {
             <div className="space-y-2">
               <div>
                 <label className="block text-xs text-gray-400 mb-1">XML (requerido)</label>
-                <input
-                  ref={facturaProvXmlRef}
-                  type="file"
-                  accept=".xml"
-                  className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
-                />
+                <input ref={facturaProvXmlRef} type="file" accept=".xml" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1">PDF (requerido)</label>
-                <input
-                  ref={facturaProvPdfRef}
-                  type="file"
-                  accept=".pdf"
-                  className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
-                />
+                <input ref={facturaProvPdfRef} type="file" accept=".pdf" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
               </div>
             </div>
-            <button
-              onClick={handleSubirFacturaPagar}
-              disabled={uploading}
-              className="w-full py-2 px-3 bg-blue-800 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-blue-200 rounded-lg text-sm font-medium transition-colors"
-            >
+            <button onClick={handleSubirFacturaPagar} disabled={uploading} className="w-full py-2 px-3 bg-blue-800 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-blue-200 rounded-lg text-sm font-medium transition-colors">
               {uploading ? 'Subiendo...' : 'Subir Factura Proveedor'}
             </button>
           </div>

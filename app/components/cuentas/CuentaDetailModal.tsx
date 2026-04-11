@@ -96,7 +96,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                 : `${cuenta.responsable_nombre} • ${cuenta.proyecto_nombre || '—'}`}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none">
+          <button aria-label="Cerrar" onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none">
             ×
           </button>
         </div>

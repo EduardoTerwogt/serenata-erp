@@ -24,51 +24,27 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const facturaPdfFile = formData.get('factura_proveedor_pdf') as File | null
 
     if (!facturaXmlFile) {
-      return Response.json(
-        { error: 'Se requiere archivo XML de factura proveedor' },
-        { status: 400 }
-      )
+      return Response.json({ error: 'Se requiere archivo XML de factura proveedor' }, { status: 400 })
     }
-
     if (!facturaPdfFile) {
-      return Response.json(
-        { error: 'Se requiere archivo PDF de factura proveedor' },
-        { status: 400 }
-      )
+      return Response.json({ error: 'Se requiere archivo PDF de factura proveedor' }, { status: 400 })
     }
 
     const cuentas = await getCuentasPagar()
     const cuenta = cuentas.find(c => c.id === id)
     if (!cuenta) {
-      return Response.json(
-        { error: 'Cuenta por pagar no encontrada' },
-        { status: 404 }
-      )
+      return Response.json({ error: 'Cuenta por pagar no encontrada' }, { status: 404 })
     }
 
     const proyecto = await getProyectoById(cuenta.proyecto_id)
-
     const googleEnv = getGoogleEnv()
     if (!googleEnv) {
-      return Response.json(
-        { error: 'Google Drive no configurado' },
-        { status: 500 }
-      )
+      return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
     }
 
     const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
-    const facturaXmlUrl = await uploadFileToDrive(
-      facturaXmlFile,
-      folderPath,
-      facturaXmlFile.name,
-      googleEnv.driveFolderIdCuentas || undefined
-    )
-    const facturaPdfUrl = await uploadFileToDrive(
-      facturaPdfFile,
-      folderPath,
-      facturaPdfFile.name,
-      googleEnv.driveFolderIdCuentas || undefined
-    )
+    const facturaXmlUrl = await uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, googleEnv.driveFolderIdCuentas || undefined)
+    const facturaPdfUrl = await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, googleEnv.driveFolderIdCuentas || undefined)
 
     const documentoXml = await createDocumentoCuentaPagar({
       cuentas_pagar_id: id,
@@ -108,9 +84,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     })
   } catch (error) {
     console.error('[cuentas-pagar/subir-factura]', error)
-    return Response.json(
-      { error: 'Error al subir factura' },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Error al subir factura' }, { status: 500 })
   }
 }

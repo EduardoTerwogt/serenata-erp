@@ -2,13 +2,8 @@ export type EstadoCotizacion = 'BORRADOR' | 'EMITIDA' | 'APROBADA' | 'CANCELADA'
 export type EstadoProyecto = 'PREPRODUCCION' | 'RODAJE' | 'POSTPRODUCCION' | 'FINALIZADO'
 export type EstadoPago = 'PENDIENTE' | 'PAGADO' | 'PARCIAL'
 
-// Cuentas por Cobrar estados
 export type EstadoCuentaCobrar = 'FACTURA_PENDIENTE' | 'FACTURADO' | 'PARCIALMENTE_PAGADO' | 'PAGADO' | 'VENCIDO'
-
-// Cuentas por Pagar estados
 export type EstadoCuentaPagar = 'PENDIENTE' | 'EN_PROCESO_PAGO' | 'PAGADO'
-
-// Tipos de pago
 export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO'
 
 export interface Responsable {
