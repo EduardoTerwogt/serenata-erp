@@ -34,6 +34,13 @@ const LOCATION_KEYWORDS = [
   'parque', 'plaza', 'hotel', 'piso'
 ]
 
+// Pre-compiled constants to avoid redundant regex compilation
+const LOC_REGEX_PATTERN = LOCATION_KEYWORDS.join('|')
+const LOC_REGEX = new RegExp(`(${LOC_REGEX_PATTERN})(?:\\s+[a-záéíóú0-9\\-]*)?`, 'i')
+const EN_LOCATION_PATTERN = /\ben\s+([a-záéíóú\s\-0-9]+?)(?:\s*\(|$)/i
+const STATUS_PATTERN = /\((confirmad[ao]|pend[ia]nte|cancelad[ao])\)/i
+const CITY_KEYWORDS_PATTERN = /(cdmx|toluca|metepec|edomex|edo\.?\s*mex)/i
+
 export function parseEventInfo(text: string): ExtractedEventLine[] {
   const lines = text.split('\n').filter(line => line.trim().length > 0)
   const results: ExtractedEventLine[] = []
@@ -62,7 +69,7 @@ function isNarrativeLine(line: string): boolean {
 
   // Skip if mostly text without dates/numbers
   const hasDate = /\d{1,2}/i.test(trimmed)
-  const hasLocation = new RegExp(LOCATION_KEYWORDS.join('|'), 'i').test(trimmed)
+  const hasLocation = new RegExp(LOC_REGEX_PATTERN, 'i').test(trimmed)
 
   if (!hasDate && !hasLocation) return true
 
@@ -80,7 +87,7 @@ function parseLine(line: string): ExtractedEventLine {
 
   // Extract action from status indicators at the end
   let action: 'confirmado' | 'por_confirmar' | 'cancelado' | undefined
-  const statusMatch = raw.match(/\((confirmad[ao]|pend[ia]nte|cancelad[ao])\)/i)
+  const statusMatch = raw.match(STATUS_PATTERN)
   if (statusMatch) {
     const status = statusMatch[1].toLowerCase()
     if (status.startsWith('confirmad')) action = 'confirmado'
@@ -111,11 +118,10 @@ function parseLine(line: string): ExtractedEventLine {
     const afterComma = commaMatch[2].trim()
 
     // Check if before comma is a city keyword
-    if (/(cdmx|toluca|metepec|edomex|edo\.?\s*mex)/i.test(beforeComma)) {
+    if (CITY_KEYWORDS_PATTERN.test(beforeComma)) {
       ciudad = beforeComma
       // Try to find location keyword in the rest of the line
-      const locRegex = new RegExp(`(${LOCATION_KEYWORDS.join('|')})(?:\\s+[a-záéíóú0-9\\-]*)?`, 'i')
-      const locMatch = raw.match(locRegex)
+      const locMatch = raw.match(LOC_REGEX)
       if (locMatch) {
         locacion = locMatch[0].trim()
       } else {
@@ -127,7 +133,7 @@ function parseLine(line: string): ExtractedEventLine {
 
   // Pattern 2: "fecha en [place]" (if no comma-based extraction)
   if (!locacion) {
-    const enMatch = raw.match(/\ben\s+([a-záéíóú\s\-0-9]+?)(?:\s*\(|$)/i)
+    const enMatch = raw.match(EN_LOCATION_PATTERN)
     if (enMatch) {
       locacion = enMatch[1].trim()
     }
@@ -135,8 +141,7 @@ function parseLine(line: string): ExtractedEventLine {
 
   // Pattern 3: Location keyword match (fallback)
   if (!locacion) {
-    const locRegex = new RegExp(`(${LOCATION_KEYWORDS.join('|')})(?:\\s+[a-záéíóú0-9\\-]*)?`, 'i')
-    const locMatch = raw.match(locRegex)
+    const locMatch = raw.match(LOC_REGEX)
     if (locMatch) {
       locacion = locMatch[0].trim()
     }
