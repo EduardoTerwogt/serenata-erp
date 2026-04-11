@@ -20,6 +20,7 @@ export interface PlaneacionFlowState {
   rawInput: string
   extractedLines: ValidatedEventLine[]
   templates: ServiceTemplate[]
+  extractionMethod?: 'ai' | 'regex' // Track which method was used
   loading: boolean
   error: string
 }
@@ -83,6 +84,7 @@ export function usePlaneacionFlow() {
     try {
       // Extract events via AI, fallback to local parser if unavailable
       let extracted: ExtractedEventLine[] = []
+      let extractionMethod: 'ai' | 'regex' = 'regex'
 
       try {
         const res = await fetch('/api/planeacion/extract-ai', {
@@ -91,7 +93,9 @@ export function usePlaneacionFlow() {
           body: JSON.stringify({ text: state.rawInput }),
         })
         if (res.ok) {
-          extracted = await res.json()
+          const data = await res.json()
+          extracted = data.events || []
+          extractionMethod = data.method === 'ai' ? 'ai' : 'regex'
         }
       } catch {
         // AI extraction failed, fall through to local parser
@@ -100,6 +104,7 @@ export function usePlaneacionFlow() {
       // Fallback: local regex parser
       if (extracted.length === 0) {
         extracted = parseEventInfo(state.rawInput)
+        extractionMethod = 'regex'
       }
 
       // Enrich with match information via API
@@ -151,6 +156,7 @@ export function usePlaneacionFlow() {
         ...s,
         step: 'validation',
         extractedLines: enriched,
+        extractionMethod,
         loading: false,
       }))
     } catch (err) {

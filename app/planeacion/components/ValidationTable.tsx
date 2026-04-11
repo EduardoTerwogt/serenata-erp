@@ -12,6 +12,7 @@ interface ValidationTableProps {
   loading: boolean
   error: string
   onGoBack: () => void
+  extractionMethod?: 'ai' | 'regex'
 }
 
 export default function ValidationTable({
@@ -23,6 +24,7 @@ export default function ValidationTable({
   loading,
   error,
   onGoBack,
+  extractionMethod,
 }: ValidationTableProps) {
   const getActionLabel = (action: string) => {
     switch (action) {
@@ -151,9 +153,30 @@ export default function ValidationTable({
           </table>
         </div>
 
-        {/* Info message */}
-        <div className="px-4 py-3 bg-gray-800/50 border-t border-gray-700 text-xs text-gray-400">
+        {/* Info message with extraction method */}
+        <div className="px-4 py-3 bg-gray-800/50 border-t border-gray-700 text-xs text-gray-400 space-y-2">
           <p>💡 Marca filas como "Confirmado" para crearlas como cotizaciones. "Por Confirmar" y "Cancelado" se guardan para revisar después.</p>
+          <div className="flex items-center gap-2 text-gray-500">
+            {extractionMethod === 'ai' ? (
+              <>
+                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+                <span>Extracción: <strong>Claude AI</strong></span>
+                <a
+                  href="https://console.anthropic.com/account/usage"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 ml-auto"
+                >
+                  Ver uso →
+                </a>
+              </>
+            ) : (
+              <>
+                <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span>
+                <span>Extracción: <strong>Parser Local</strong> (fallback)</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

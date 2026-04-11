@@ -134,6 +134,7 @@ export default function PlaneacionPage() {
             loading={state.loading}
             error={state.error}
             onGoBack={() => goBack('input')}
+            extractionMethod={state.extractionMethod}
           />
         )}
 

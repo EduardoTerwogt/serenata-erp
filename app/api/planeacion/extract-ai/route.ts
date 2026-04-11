@@ -55,12 +55,12 @@ export async function POST(request: Request) {
 
     // Extract JSON array from response
     const jsonMatch = content.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) return Response.json([])
+    if (!jsonMatch) return Response.json({ events: [], method: 'ai' })
 
     const events = JSON.parse(jsonMatch[0])
-    return Response.json(events)
+    return Response.json({ events, method: 'ai' })
   } catch (error) {
     console.error('Error extracting events with AI:', error)
-    return Response.json([], { status: 500 })
+    return Response.json({ events: [], method: 'ai-error' }, { status: 500 })
   }
 }
