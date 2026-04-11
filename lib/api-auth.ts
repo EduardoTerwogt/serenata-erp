@@ -3,7 +3,7 @@ import { getUserSections, hasAnySection } from '@/lib/authz'
 import { cookies } from 'next/headers'
 
 const E2E_BYPASS_COOKIE = 'e2e-bypass'
-const ALL_SECTIONS: AppSection[] = ['dashboard', 'cotizaciones', 'proyectos', 'cuentas', 'responsables']
+const ALL_SECTIONS: AppSection[] = ['dashboard', 'cotizaciones', 'proyectos', 'cuentas', 'responsables', 'planeacion']
 
 async function shouldBypassForE2E() {
   if (process.env.PLAYWRIGHT_E2E_BYPASS !== 'true') return false
