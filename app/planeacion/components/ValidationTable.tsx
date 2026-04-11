@@ -69,6 +69,7 @@ export default function ValidationTable({
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>
+                <th className="px-4 py-3 text-left text-gray-300 font-medium">Notas</th>
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Plantilla</th>
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Acción</th>
                 <th className="px-4 py-3 text-center text-gray-300 font-medium"></th>
@@ -100,6 +101,15 @@ export default function ValidationTable({
                       value={line.locacion || ''}
                       onChange={e => onLineUpdate(line.id, { locacion: e.target.value || null })}
                       className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-gray-300">
+                    <input
+                      type="text"
+                      value={line.notas || ''}
+                      onChange={e => onLineUpdate(line.id, { notas: e.target.value || undefined })}
+                      placeholder="Notas (extra)"
+                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
                     />
                   </td>
                   <td className="px-4 py-3 text-gray-300">
