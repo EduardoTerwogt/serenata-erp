@@ -6,7 +6,7 @@ import {
 export async function getResponsables() {
   const { data, error } = await supabaseAdmin
     .from('responsables')
-    .select('*')
+    .select('id, nombre, email, telefono')
     .eq('activo', true)
     .order('nombre')
   if (error) throw error

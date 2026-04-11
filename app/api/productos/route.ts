@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
   let query = supabaseAdmin
     .from('productos')
-    .select('*')
+    .select('id, descripcion, categoria, precio_unitario, x_pagar_sugerido')
     .eq('activo', true)
     .order('descripcion')
 
