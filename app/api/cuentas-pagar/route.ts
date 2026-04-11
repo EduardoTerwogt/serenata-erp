@@ -1,7 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { supabaseAdmin } from '@/lib/supabase'
-import { updateCuentaPagar } from '@/lib/db'
-import { CuentaPagar } from '@/lib/types'
+import { getCuentasPagar, updateCuentaPagar } from '@/lib/db'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function GET() {
@@ -9,30 +7,7 @@ export async function GET() {
   if (authResult.response) return authResult.response
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from('cuentas_pagar')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    const cuentas = (data || []) as CuentaPagar[]
-
-    const seen = new Set<string>()
-    const cotizacionIds = cuentas.map(c => c.cotizacion_id).filter(id => {
-      if (!id || seen.has(id)) return false
-      seen.add(id)
-      return true
-    })
-
-    if (cotizacionIds.length > 0) {
-      const { data: cots } = await supabaseAdmin
-        .from('cotizaciones')
-        .select('id, proyecto')
-        .in('id', cotizacionIds)
-      const proyectoPorCot: Record<string, string> = {}
-      for (const cot of cots || []) proyectoPorCot[cot.id] = cot.proyecto
-      for (const c of cuentas) c.proyecto_nombre = proyectoPorCot[c.cotizacion_id] || undefined
-    }
-
+    const cuentas = await getCuentasPagar()
     return Response.json(cuentas)
   } catch (error) {
     console.error(error)

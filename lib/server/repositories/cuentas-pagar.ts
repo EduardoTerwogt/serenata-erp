@@ -8,13 +8,59 @@ import {
 } from '@/lib/types'
 import { getItemsByCotizacion } from '@/lib/server/repositories/quotations'
 
+async function hydrateProyectoNombre(cuentas: CuentaPagar[]) {
+  if (cuentas.length === 0) return cuentas
+
+  const cotizacionIds = Array.from(new Set(cuentas.map((cuenta) => cuenta.cotizacion_id).filter(Boolean)))
+  const proyectoIds = Array.from(new Set(cuentas.map((cuenta) => cuenta.proyecto_id).filter(Boolean)))
+
+  const proyectoPorCotizacion: Record<string, string> = {}
+  const proyectoPorId: Record<string, string> = {}
+
+  if (cotizacionIds.length > 0) {
+    const { data: cotizaciones, error: cotizacionesError } = await supabaseAdmin
+      .from('cotizaciones')
+      .select('id, proyecto')
+      .in('id', cotizacionIds)
+
+    if (cotizacionesError) throw cotizacionesError
+
+    for (const cotizacion of cotizaciones || []) {
+      proyectoPorCotizacion[cotizacion.id] = cotizacion.proyecto
+    }
+  }
+
+  if (proyectoIds.length > 0) {
+    const { data: proyectos, error: proyectosError } = await supabaseAdmin
+      .from('proyectos')
+      .select('id, proyecto')
+      .in('id', proyectoIds)
+
+    if (proyectosError) throw proyectosError
+
+    for (const proyecto of proyectos || []) {
+      proyectoPorId[proyecto.id] = proyecto.proyecto
+    }
+  }
+
+  return cuentas.map((cuenta) => ({
+    ...cuenta,
+    proyecto_nombre:
+      cuenta.proyecto_nombre ||
+      proyectoPorCotizacion[cuenta.cotizacion_id] ||
+      proyectoPorId[cuenta.proyecto_id] ||
+      undefined,
+  }))
+}
+
 export async function getCuentasPagar() {
   const { data, error } = await supabaseAdmin
     .from('cuentas_pagar')
     .select('*')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data as CuentaPagar[]
+  const cuentas = (data || []) as CuentaPagar[]
+  return hydrateProyectoNombre(cuentas)
 }
 
 export async function updateCuentaPagar(id: string, updates: Partial<CuentaPagar>) {
