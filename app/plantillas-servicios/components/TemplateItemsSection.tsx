@@ -154,8 +154,8 @@ export function TemplateItemsSection({
           type="number"
           min="0"
           step="0.01"
-          value={item.precio_unitario}
-          onChange={e => updateItem(index, 'precio_unitario', parseFloat(e.target.value) || 0)}
+          value={item.precio_unitario === 0 ? '' : item.precio_unitario}
+          onChange={e => updateItem(index, 'precio_unitario', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
           className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 text-sm"
         />
       </td>
@@ -178,8 +178,8 @@ export function TemplateItemsSection({
           type="number"
           min="0"
           step="0.01"
-          value={item.x_pagar}
-          onChange={e => updateItem(index, 'x_pagar', parseFloat(e.target.value) || 0)}
+          value={item.x_pagar === 0 ? '' : item.x_pagar}
+          onChange={e => updateItem(index, 'x_pagar', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
           className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 text-sm"
         />
       </td>
@@ -309,8 +309,8 @@ export function TemplateItemsSection({
                   type="number"
                   min="0"
                   step="0.01"
-                  value={item.precio_unitario}
-                  onChange={e => updateItem(editingIndex, 'precio_unitario', parseFloat(e.target.value) || 0)}
+                  value={item.precio_unitario === 0 ? '' : item.precio_unitario}
+                  onChange={e => updateItem(editingIndex, 'precio_unitario', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -334,8 +334,8 @@ export function TemplateItemsSection({
                 type="number"
                 min="0"
                 step="0.01"
-                value={item.x_pagar}
-                onChange={e => updateItem(editingIndex, 'x_pagar', parseFloat(e.target.value) || 0)}
+                value={item.x_pagar === 0 ? '' : item.x_pagar}
+                onChange={e => updateItem(editingIndex, 'x_pagar', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500"
               />
             </div>
