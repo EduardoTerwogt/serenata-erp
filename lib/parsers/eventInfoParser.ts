@@ -47,7 +47,8 @@ function isNarrativeLine(line: string): boolean {
 
   // Skip if it's greeting/closing
   if (/^(hola|gracias|avisenme|¡gracias|thanks|dear)/i.test(trimmed)) return true
-  if (/^(@[A-Za-z]|\\[si ven|pero|en el caso|las que vienen|las fechas del)/i.test(trimmed)) return true
+  if (/^@[A-Za-z]/.test(trimmed)) return true
+  if (/^(si ven|pero|en el caso|las que vienen|las fechas del)/i.test(trimmed)) return true
 
   // Skip if mostly text without dates/numbers
   const hasDate = /\d{1,2}/i.test(trimmed)

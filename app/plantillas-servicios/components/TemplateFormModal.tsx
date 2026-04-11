@@ -35,8 +35,10 @@ export default function TemplateFormModal({ template, onClose }: TemplateFormMod
         descripcion: '',
         cantidad: 1,
         precio_unitario: 0,
+        x_pagar: 0,
         responsable_nombre: null,
-        notas: null,
+        responsable_id: null,
+        producto_id: null,
       },
     ])
   }
@@ -223,17 +225,6 @@ export default function TemplateFormModal({ template, onClose }: TemplateFormMod
                         className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                       />
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-gray-400 block mb-1">Notas (opcional)</label>
-                    <textarea
-                      value={item.notas || ''}
-                      onChange={e => handleUpdateItem(idx, 'notas', e.target.value || null)}
-                      placeholder="Notas adicionales"
-                      rows={1}
-                      className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                    />
                   </div>
                 </div>
               ))}
