@@ -13,7 +13,7 @@ interface PrefetchOptions {
  */
 export function usePrefetch(fetchFn: PrefetchFn, options: PrefetchOptions = {}) {
   const { delay = 0 } = options
-  const timeoutRef = useRef<NodeJS.Timeout>()
+  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const lastFetchRef = useRef<Promise<any> | null>(null)
 
   const prefetch = useCallback(() => {
