@@ -4,42 +4,61 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const EXTRACT_PROMPT = `Eres un asistente experto en extraer información de eventos de mensajes de texto.
+const EXTRACT_PROMPT = `Eres un asistente experto en extraer información de eventos de mensajes de texto informales/complejos.
 
 Tu tarea: analizar el mensaje y extraer TODOS los eventos mencionados, sin importar el formato.
 
-Para cada evento, retorna un JSON con:
+Para cada evento, retorna JSON con estos campos:
 - raw: texto que describe este evento
 - fecha: la fecha del evento (ej: "17 abril", "6 de mayo", "13/4"), o null
-- locacion: el lugar/venue específico (no la ciudad), o null
+- locacion: lugar/venue específico (no la ciudad), o null
 - ciudad: ciudad/estado mencionado, o null
-- proyecto: nombre del proyecto/artista si se menciona, o null
-- action: "confirmado" si el evento va a ocurrir, "por_confirmar" si hay duda/condición, "cancelado" si fue cancelado
-- notas: información importante específica de este evento (duración, detalles especiales), o null
-- confidence: qué tan seguro estás (0-1, donde 1 es muy claro)
+- proyecto: nombre del proyecto/artista, o null
+- action: "confirmado" | "por_confirmar" | "cancelado"
+- notas: información específica de este evento (duración, equipment, cambios especiales), o null
+- confidence: 0-1 (donde 1 = muy claro)
 
-GUÍAS DE INTERPRETACIÓN (confía en tu entendimiento):
-- Un evento = una fecha específica + información relevante
-- El proyecto puede detectarse de múltiples formas: listados, "con [proyecto]", "para [proyecto]", "@[persona]"
-- El estado (action): es "confirmado" si suena que el evento ocurrirá, "por_confirmar" si hay condiciones/dudas, "cancelado" si fue cancelado
-- Las notas capturan detalles importantes: duración, equipment, advertencias especiales, cambios de planes
-- Sé flexible con formatos: tablas, listas, párrafos, WhatsApp informales, todo vale
+CÓMO INTERPRETAR (confía en tu entendimiento):
 
-SOBRE NOTAS CONTEXTUALES (campo separado):
-Si hay frases informativas que aplican a múltiples eventos, guárdalas en "notasContextuales":
-- Ejemplo: "contaremos con pantallas para todos" → aplica a TODOS
-- Ejemplo: "para las fechas del 16, 22, 29 será con otro proveedor" → aplica a esas 3 fechas
-- Formato: { "2026-05-06": "nota específica", "2026-04-17": "nota general" }
+1. DETECTA EVENTOS en cualquier formato:
+   - Tabla: "8 abril | CDMX, Fes Aragón" → evento confirmado
+   - Lista: "17 abril / 23 abril (pendiente)" → detecta fechas y estados
+   - Párrafos: "evento el 6 de mayo en Anahuac Sur" → extrae fecha + ubicación
+   - Listas simples: "Low Clika\n17 abril\n23 abril\nDestino\n16 abril" → agrupa por proyecto
 
-RESPUESTA EN JSON VÁLIDO:
+2. DETECTA PROYECTO de múltiples formas:
+   - Listado explícito: "Low Clika\n17 abril\n23 abril" → proyecto es "Low Clika"
+   - Mención directa: "con Danna", "para Low Clika", "evento Low Clika"
+   - Contexto: "@[persona]" o proyecto mencionado en párrafo introductorio
+
+3. INTERPRETA ACTION basado en lenguaje:
+   - "confirmado", "confirmada", "confirmada" → action: confirmado
+   - "(pendiente)", "por confirmar", "se confirma hasta..." → action: por_confirmar
+   - "cancelado", "pospuesto" → action: cancelado
+   - En tabla o listado sin marca → por defecto: confirmado
+   - Indicadores: "si...", "aunque...", "hasta que..." → por_confirmar
+
+4. CAPTURA NOTAS importantes específicas del evento:
+   - Duración: "45 minutos, de 5:05 p.m. a 5:50 p.m."
+   - Detalles: "No habrá video, pero sí iluminación"
+   - Advertencias: "una cita importante, no podrá asistir"
+   - Son notas del EVENTO ESPECÍFICO, no generales
+
+NOTAS CONTEXTUALES (campo separado):
+Si hay frases que aplican a múltiples eventos O a un grupo específico, guárdalas en "notasContextuales":
+- Ejemplo: "para las fechas del 16, 22, 29 será con otro proveedor" → {"2026-04-16": "...", "2026-04-22": "...", "2026-04-29": "..."}
+- Ejemplo: "contaremos con pantallas y otro rider" (sin fecha) → aplica a TODAS las fechas: {"2026-04-17": "...", "2026-04-23": "...", ...}
+- Nota ESPECÍFICA de una fecha va en campo "notas" del evento, NO en notasContextuales
+
+ESTRUCTURA JSON:
 {
   "events": [
-    {"raw": "...", "fecha": "...", "locacion": "...", "ciudad": "...", "proyecto": "...", "action": "...", "notas": "...", "confidence": 0.9}
+    {"raw": "...", "fecha": "17 abril", "locacion": "...", "ciudad": "...", "proyecto": "Low Clika", "action": "confirmado", "notas": null, "confidence": 0.95}
   ],
-  "notasContextuales": {"2026-05-06": "nota", ...}
+  "notasContextuales": {"2026-05-06": "detalles importantes"}
 }
 
-Responde SOLO con JSON, sin texto adicional.`
+Responde SOLO con JSON válido, sin texto adicional.`
 
 export async function POST(request: Request) {
   const authResult = await requireSection('planeacion')
