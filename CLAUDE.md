@@ -33,7 +33,8 @@ git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/sere
 ## Reglas de trabajo
 
 **Planear antes de tocar código:**
-- Proponer approach y confirmar con el usuario ANTES de implementar.
+- Para cambios medianos o riesgosos, proponer approach y confirmar con el usuario ANTES de implementar.
+- Para fixes pequeños y seguros (typos, edits puntuales, cambios de doc), ejecutar directo explicando brevemente lo que se hará.
 - Si hay dudas, hacer las preguntas necesarias hasta tener claridad total.
 - Escribir el plan → ejecutar → replanear si algo cambia.
 
@@ -102,7 +103,7 @@ app/                          # Next.js App Router
 │   ├── service-templates/    # CRUD plantillas
 │   ├── clientes/             # Catálogo de clientes
 │   ├── productos/            # Catálogo de productos
-│   ├── integrations/         # Google Drive, Sheets, Calendar
+│   ├── integrations/         # Google Drive y Sheets activos; Calendar parcial
 │   └── auth/                 # NextAuth
 ├── cotizaciones/             # Pages: lista, nueva, [id] detalle
 ├── proyectos/                # Pages: lista, [id] detalle
@@ -131,7 +132,7 @@ lib/                          # Lógica de negocio y utilidades
 ├── client/api.ts             # Helpers fetch: getJson, postJson, putJson, etc.
 ├── quotations/               # Cálculos, formateo, mappers de cotizaciones
 ├── parsers/                  # eventInfoParser (regex fallback)
-├── integrations/             # Google Drive, Sheets, Calendar
+├── integrations/             # Google Drive y Sheets activos; Calendar parcial
 └── server/                   # Lógica server-only
     ├── pdf/                  # Generación PDF (jspdf + autotable)
     ├── quotations/           # Approval, cancel, folio, persistence
@@ -213,15 +214,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
 ## Testing
 
-**TODOS los checks deben pasar antes de push:**
+**Antes de push a `main`, correr lo que aplique al cambio:**
 ```bash
-npm test                  # 1. Vitest — unit tests
-npm run build             # 2. Verificar build (simula deploy Vercel)
-npm run test:e2e:smoke    # 3. Playwright — smoke tests
-npm run test:e2e:critical # 4. Playwright — critical tests
+npm test                  # Vitest — siempre que el cambio toque código (no solo docs)
+npm run build             # Si el cambio toca TS/TSX, config de Next o rutas
+npm run test:e2e:smoke    # Si el cambio afecta flujos cubiertos por smoke
+npm run test:e2e:critical # Si el cambio afecta flujos críticos (cotizaciones, cuentas, proyectos)
 ```
 
-Si cualquiera falla → diagnosticar, arreglar, re-ejecutar. No hacer push hasta que los 4 pasen.
+Regla de oro: **no pushear con tests en rojo**. Si algo falla → diagnosticar, arreglar, re-ejecutar. Si una suite e2e está inestable por entorno (no por el cambio), documentarlo en el commit y avisar al usuario.
 
 - Unit tests: `lib/**/__tests__/*.test.ts`
 - E2E tests: `tests/e2e/{smoke,critical,live}/*.spec.ts`
@@ -237,7 +238,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
-# Auth (NextAuth)
+# Auth (NextAuth v5)
 AUTH_SECRET=
 AUTH_TRUST_HOST=true
 AUTH_USERS='[{"id":"...","email":"...","passwordHash":"...","name":"...","sections":["..."]}]'
@@ -246,13 +247,24 @@ NEXTAUTH_URL=
 # AI (Planeación)
 ANTHROPIC_API_KEY=
 
-# Google integrations
+# Google — OAuth base
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URL=
-GOOGLE_SERVICE_ACCOUNT_EMAIL=
-GOOGLE_SERVICE_ACCOUNT_KEY=
-GOOGLE_SHEETS_MAIN_SPREADSHEET_ID=
+GOOGLE_REDIRECT_URI=
+
+# Google Drive (PDFs de cotizaciones, órdenes de pago, etc.)
+GOOGLE_DRIVE_REFRESH_TOKEN=
+GOOGLE_DRIVE_FOLDER_ID=
+GOOGLE_DRIVE_FOLDER_ID_CUENTAS=
+
+# Google Sheets (mirror)
+GOOGLE_SHEETS_SPREADSHEET_ID=
+
+# Google Calendar (parcial — solo desde planeación)
+GOOGLE_CALENDAR_ID=
+
+# Cron (keep-alive endpoint)
+CRON_SECRET=
 ```
 
 ---
