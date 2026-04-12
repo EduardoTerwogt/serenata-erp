@@ -66,7 +66,7 @@ git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/sere
 ERP para productora audiovisual mexicana (Serenata House). Módulos:
 
 - **Cotizaciones**: Items desglosados con folio auto-incremental (SH001, SH002...). Tipos: PRINCIPAL y COMPLEMENTARIA. Estados: BORRADOR → EMITIDA → APROBADA | CANCELADA. Al aprobar → crea Proyecto + Cuentas cobrar/pagar automáticamente.
-- **Proyectos**: Evento/producción aprobada. Estados: PREPRODUCCION → RODAJE → POSTPRODUCCION → FINALIZADO. Ligado 1:1 a cotización aprobada.
+- **Proyectos**: Evento/producción aprobada. Estados: PREPRODUCCION → RODAJE → POSTPRODUCCION → FINALIZADO. Creado desde la cotización PRINCIPAL aprobada; puede acumular impacto de COMPLEMENTARIA aprobadas.
 - **Cuentas por Cobrar**: Lo que el cliente debe pagar. Generadas al aprobar. Facturas (PDF+XML), complementos de pago, pagos parciales.
 - **Cuentas por Pagar**: Lo que se paga a cada responsable. Item con responsable → cuenta por pagar. Órdenes de pago agrupadas.
 - **Responsables**: Colaboradores/freelancers. Datos bancarios, roles, historial de proyectos.
