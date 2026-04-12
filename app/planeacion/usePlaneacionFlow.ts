@@ -62,8 +62,8 @@ export function usePlaneacionFlow() {
   }
 
   const handleNextFromProject = async () => {
-    if (!state.selectedCliente.trim()) {
-      setState(s => ({ ...s, error: 'Selecciona un cliente' }))
+    if (!state.selectedCliente.trim() || !state.selectedProyecto.trim()) {
+      setState(s => ({ ...s, error: 'Selecciona cliente y proyecto' }))
       return
     }
 
