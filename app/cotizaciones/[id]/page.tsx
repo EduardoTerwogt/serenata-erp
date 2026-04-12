@@ -33,6 +33,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [iva_activo, setIvaActivo] = useState(true)
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
   const [descuento_valor, setDescuentoValor] = useState(0)
+  // NUEVO: Estado para notas de eventos
+  const [notas, setNotas] = useState<Array<{ fecha_evento: string; nota: string }>>([])
+  const [cargandoNotas, setCargandoNotas] = useState(true)
 
   const { register, control, watch, reset, setValue } = useForm<QuotationFormValues>({
     defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
@@ -113,6 +116,25 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       })
       .catch(() => setLoading(false))
   }, [id, applyCotizacionToState])
+
+  // NUEVO: Cargar notas de eventos desde planeacion_event_notas
+  useEffect(() => {
+    const loadNotas = async () => {
+      try {
+        setCargandoNotas(true)
+        const res = await fetch(`/api/planeacion/notas?cotizacion_id=${id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setNotas(data.notas || [])
+        }
+      } catch (err) {
+        console.error('Error loading event notes:', err)
+      } finally {
+        setCargandoNotas(false)
+      }
+    }
+    loadNotas()
+  }, [id])
 
   // Fase 3: Memoizar cálculo de totales — evita recalcular en cada keystroke
   const totales = useMemo(
@@ -251,7 +273,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   if (!cotizacion) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cotización no encontrada</div>
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl">
+    <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl flex gap-6 flex-col lg:flex-row">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
@@ -334,6 +356,29 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         descuento_valor={descuento_valor}
         setDescuentoValor={setDescuentoValor}
       />
+
+      {/* NUEVO: Panel lateral de notas de eventos */}
+      {notas.length > 0 && !cargandoNotas && (
+        <div className="lg:w-80 flex-shrink-0">
+          <div className="bg-gray-900 border border-orange-800/40 rounded-xl p-5 sticky top-8">
+            <h3 className="font-semibold text-orange-400 mb-4 flex items-center gap-2">
+              <span>📝</span> Notas de Eventos
+            </h3>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {notas.map((nota, idx) => (
+                <div key={idx} className="border-l-2 border-orange-600/50 pl-3">
+                  {nota.fecha_evento && (
+                    <p className="text-xs font-medium text-orange-300 mb-1">{nota.fecha_evento}</p>
+                  )}
+                  <p className="text-xs text-orange-200/80 leading-relaxed">
+                    {nota.nota}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

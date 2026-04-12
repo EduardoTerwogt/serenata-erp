@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import ExtractionStatusBar from './ExtractionStatusBar'
 
 interface InputFormProps {
   proyecto: string
@@ -91,6 +92,20 @@ export default function InputForm({
           </button>
         </div>
       </div>
+
+      {/* NUEVO: Loading Modal */}
+      {loading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center max-w-sm mx-4">
+            <div className="animate-spin mb-6 text-4xl">⚙️</div>
+            <h3 className="text-lg font-semibold text-white mb-2">Analizando eventos...</h3>
+            <p className="text-sm text-gray-400 mb-6">
+              Claude está interpretando tu mensaje para extraer fechas, locaciones y proyectos.
+            </p>
+            <ExtractionStatusBar method="ai" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
