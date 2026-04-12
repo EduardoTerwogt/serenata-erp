@@ -11,7 +11,7 @@ Extrae TODOS los eventos del texto que contienen fecha de evento. Para cada even
 - fecha: string como "23 abril", "23/04", o null si no hay
 - locacion: nombre del venue/escuela/sala/lugar específico (NO la ciudad), o null
 - ciudad: ciudad si se menciona explícitamente, o null
-- proyecto: nombre del proyecto si se menciona explícitamente (ej: "Low Clika", "Destino", "MICRODRAMA"), o null
+- proyecto: nombre del proyecto detectado (null si no se encuentra), ver REGLAS DE PROYECTO
 - action: "confirmado" | "por_confirmar" | "cancelado"
 - notas: info extra (para la gira, pendiente de detalles, etc), o null
 - confidence: número 0-1 (1 = muy claro)
@@ -29,19 +29,24 @@ REGLAS DE EXTRACCIÓN:
 - Separa ciudad de venue: "CDMX, FES Aragón" → ciudad=CDMX, locacion=FES Aragón
 - Extracta venue de frases como "en el Barco Utopía", "en Arena CDMX"
 
-DETECCIÓN DE PROYECTOS:
-- Busca nombres mencionados al inicio o título del mensaje (ej: "actualizaciones para Low Clika")
-- Sí hay múltiples proyectos, asigna cada evento al proyecto que le corresponda
-- Ejemplos: "Low Clika", "Destino", "YMCA", "MICRODRAMA", "HBL_Siento Records"
+REGLAS DE PROYECTO:
+- Busca palabras CAPITALIZADAS que representen proyectos (ej: "Low Clika", "Destino", "YMCA", "MICRODRAMA")
+- Pueden estar al inicio del mensaje (título) o mencionadas en párrafos: "actualizaciones para Low Clika"
+- TAMBIÉN DEDUCE por contexto: si dice "con Danna" o "para Danna" → proyecto es "Danna"
+- Si NO encuentra proyecto explícito ni contexto, retorna null
+- NO inventes proyectos, SÍ hay duda, retorna null
 
 DETECCIÓN DE NOTAS CONTEXTUALES:
 - Busca párrafos explicativos que aplican a uno o más eventos específicos
-- Ejemplos de notas por evento:
-  * "Las fechas del metro, pero en especial la del 28 de mayo es importante..." → asociar a evento del 28 mayo
-  * "Esto será con otro proveedor que NO ES SUENA LA CIUDAD..." → asociar a eventos de 16, 22, 29 abril, etc.
-  * "Contaremos con pantallas y otro rider" → asociar a los mismos eventos
-- Retorna en campo adicional "notasContextuales" (objeto con fechas como claves):
-  {"2026-05-28": "Las fechas del metro...", "2026-04-16": "Esto será con otro proveedor..."}
+- IMPORTANTE: La nota debe MENCIONAR EXPLÍCITAMENTE las fechas a las que aplica
+- Ejemplos:
+  * "Las fechas del metro, pero en especial la del 28 de mayo..." → nota solo para 28 mayo
+  * "16 abril, 22 abril, 29 abril y 13 mayo... Esto será con otro proveedor..." → nota para esas 4 fechas
+  * "Contaremos con pantallas" sin mencionar fechas → NO INCLUIR como nota contextual
+- Retorna en campo adicional "notasContextuales" (objeto con fechas ISO como claves):
+  {"2026-05-28": "Las fechas del metro, pero en especial...", "2026-04-16": "Esto será con otro proveedor..."}
+- Si misma nota aplica a múltiples fechas, duplica la entrada:
+  {"2026-04-16": "...", "2026-04-22": "...", "2026-04-29": "..."}
 
 Responde SOLO con JSON válido, sin texto adicional. Estructura:
 {
