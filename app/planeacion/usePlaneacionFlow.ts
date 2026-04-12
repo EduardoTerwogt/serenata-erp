@@ -61,12 +61,14 @@ export function usePlaneacionFlow() {
     setState(s => ({ ...s, selectedProyecto: proyecto }))
   }
 
-  const handleNextFromProject = () => {
+  const handleNextFromProject = async () => {
     if (!state.selectedCliente.trim()) {
       setState(s => ({ ...s, error: 'Selecciona un cliente' }))
       return
     }
-    loadTemplates()
+
+    // Cargar templates cuando usuario confirma cliente
+    await loadTemplates()
     setState(s => ({ ...s, step: 'validation', error: '' }))
   }
 

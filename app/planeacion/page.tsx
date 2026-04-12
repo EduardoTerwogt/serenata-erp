@@ -28,7 +28,8 @@ export default function PlaneacionPage() {
 
   // Load templates on mount
   useEffect(() => {
-    loadTemplates()
+    // Cargar templates cuando el usuario confirme la selección de cliente
+    // No cargar automáticamente al montar la página para evitar mostrar loading modal
   }, [])
 
   // Load pendientes count
