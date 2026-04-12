@@ -24,9 +24,8 @@ export default function InputForm({
   onLoadTemplates,
   onGoBack,
 }: InputFormProps) {
-  useEffect(() => {
-    onLoadTemplates?.()
-  }, [])
+  // No cargar templates automáticamente en mount
+  // Se cargan cuando el usuario confirma cliente
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -74,23 +73,13 @@ export default function InputForm({
           </ul>
         </div>
 
-        <div className="flex gap-3">
-          {onGoBack && (
-            <button
-              onClick={onGoBack}
-              className="flex-1 px-4 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
-            >
-              ← Cambiar Proyecto
-            </button>
-          )}
-          <button
-            onClick={onExtract}
-            disabled={loading || !value.trim()}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition-colors"
-          >
-            {loading ? 'Extrayendo información...' : 'Extraer Información'}
-          </button>
-        </div>
+        <button
+          onClick={onExtract}
+          disabled={loading || !value.trim()}
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition-colors"
+        >
+          {loading ? 'Extrayendo información...' : 'Extraer Información'}
+        </button>
       </div>
 
       {/* NUEVO: Loading Modal */}

@@ -151,27 +151,6 @@ export default function PlaneacionPage() {
         )}
       </div>
 
-      {/* Help section for input step */}
-      {state.step === 'input' && (
-        <div className="max-w-3xl mx-auto mt-12 bg-gray-800/30 border border-gray-700 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Ejemplo de formato aceptado:</h3>
-          <div className="bg-gray-950 border border-gray-800 rounded-lg p-4 font-mono text-xs text-gray-300 overflow-x-auto">
-            <pre>{`Hola, aquí están las fechas confirmadas:
-
-8 abril   CDMX, Aragón      Fes Aragón (confirmada)
-17 abril  CDMX              Secundaria TEC 78
-23 abril  CDMX              YMCA (pendiente)
-30 abril  CDMX              Secundaria TEC 31
-
-También:
-Confirmo: 9 mayo, Metepec
-
-Por otros medios:
-- 6 Mayo en Anáhuac Sur
-- 21 Mayo en EBC`}</pre>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
