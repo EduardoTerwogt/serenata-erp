@@ -24,19 +24,6 @@ export default function PendientesTable({
   error,
   onGoBack,
 }: PendientesTableProps) {
-  const getActionLabel = (action: string) => {
-    switch (action) {
-      case 'confirmado':
-        return 'Confirmado'
-      case 'por_confirmar':
-        return 'Por Confirmar'
-      case 'cancelado':
-        return 'Cancelado'
-      default:
-        return action
-    }
-  }
-
   const getActionColor = (action: string) => {
     switch (action) {
       case 'confirmado':
@@ -52,6 +39,98 @@ export default function PendientesTable({
 
   const hasConfirmed = lines.some(line => line.action === 'confirmado')
 
+  const EventRow = ({ line }: { line: ValidatedEventLine }) => {
+    const hasNotes = !!line.notas
+
+    return (
+      <>
+        <tr key={line.id} className="hover:bg-gray-800/50 transition-colors">
+          <td className="px-4 py-3 text-gray-300">
+            <input
+              type="text"
+              value={line.proyecto || ''}
+              onChange={e => onLineUpdate(line.id, { proyecto: e.target.value || undefined })}
+              placeholder="Proyecto"
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+            />
+          </td>
+          <td className="px-4 py-3 text-gray-300">
+            <input
+              type="text"
+              value={line.fecha || ''}
+              onChange={e => onLineUpdate(line.id, { fecha: e.target.value || null })}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+          </td>
+          <td className="px-4 py-3 text-gray-300">
+            <input
+              type="text"
+              value={line.ciudad || ''}
+              onChange={e => onLineUpdate(line.id, { ciudad: e.target.value || undefined })}
+              placeholder="Ciudad"
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+            />
+          </td>
+          <td className="px-4 py-3 text-gray-300">
+            <input
+              type="text"
+              value={line.locacion || ''}
+              onChange={e => onLineUpdate(line.id, { locacion: e.target.value || null })}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+          </td>
+          <td className="px-4 py-3 text-gray-300">
+            <select
+              value={line.selectedTemplateId || ''}
+              onChange={e => onLineUpdate(line.id, { selectedTemplateId: e.target.value || undefined })}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="">— Sin plantilla —</option>
+              {templates.map(template => (
+                <option key={template.id} value={template.id}>
+                  {template.nombre} ({template.items.length} items)
+                </option>
+              ))}
+            </select>
+          </td>
+          <td className="px-4 py-3">
+            <select
+              value={line.action}
+              onChange={e => onLineUpdate(line.id, { action: e.target.value as any })}
+              className={`w-full px-2 py-1 rounded text-xs font-medium border ${getActionColor(line.action)} bg-gray-800 focus:outline-none focus:border-blue-500`}
+            >
+              <option value="confirmado">Confirmado</option>
+              <option value="por_confirmar">Por Confirmar</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </td>
+          <td className="px-4 py-3 text-center">
+            <button
+              onClick={() => onLineDelete(line.id)}
+              className="text-red-400 hover:text-red-300 text-xs"
+            >
+              ✕
+            </button>
+          </td>
+        </tr>
+        {hasNotes && (
+          <tr className="bg-orange-900/10">
+            <td colSpan={7} className="px-4 py-3">
+              <p className="text-xs font-semibold text-orange-400 mb-2">Notas del evento:</p>
+              <textarea
+                value={line.notas || ''}
+                onChange={e => onLineUpdate(line.id, { notas: e.target.value || null })}
+                rows={2}
+                className="w-full bg-gray-800 border border-orange-700 rounded px-2 py-1 text-xs text-orange-100 placeholder-gray-600 focus:outline-none focus:border-orange-500"
+                placeholder="Edita la nota..."
+              />
+            </td>
+          </tr>
+        )}
+      </>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {error && (
@@ -66,6 +145,7 @@ export default function PendientesTable({
           <table className="w-full text-sm">
             <thead className="bg-gray-800 border-b border-gray-700">
               <tr>
+                <th className="px-4 py-3 text-left text-gray-300 font-medium">Proyecto</th>
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
                 <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>
@@ -76,66 +156,7 @@ export default function PendientesTable({
             </thead>
             <tbody className="divide-y divide-gray-800">
               {lines.map(line => (
-                <tr key={line.id} className="hover:bg-gray-800/50 transition-colors">
-                  <td className="px-4 py-3 text-gray-300">
-                    <input
-                      type="text"
-                      value={line.fecha || ''}
-                      onChange={e => onLineUpdate(line.id, { fecha: e.target.value || null })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-gray-300">
-                    <input
-                      type="text"
-                      value={line.ciudad || ''}
-                      onChange={e => onLineUpdate(line.id, { ciudad: e.target.value || undefined })}
-                      placeholder="Ciudad"
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-gray-300">
-                    <input
-                      type="text"
-                      value={line.locacion || ''}
-                      onChange={e => onLineUpdate(line.id, { locacion: e.target.value || null })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-gray-300">
-                    <select
-                      value={line.selectedTemplateId || ''}
-                      onChange={e => onLineUpdate(line.id, { selectedTemplateId: e.target.value || undefined })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="">— Sin plantilla —</option>
-                      {templates.map(template => (
-                        <option key={template.id} value={template.id}>
-                          {template.nombre} ({template.items.length} items)
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={line.action}
-                      onChange={e => onLineUpdate(line.id, { action: e.target.value as any })}
-                      className={`w-full px-2 py-1 rounded text-xs font-medium border ${getActionColor(line.action)} bg-gray-800 focus:outline-none focus:border-blue-500`}
-                    >
-                      <option value="confirmado">Confirmado</option>
-                      <option value="por_confirmar">Por Confirmar</option>
-                      <option value="cancelado">Cancelado</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      onClick={() => onLineDelete(line.id)}
-                      className="text-red-400 hover:text-red-300 text-xs"
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
+                <EventRow key={line.id} line={line} />
               ))}
             </tbody>
           </table>
@@ -151,7 +172,7 @@ export default function PendientesTable({
         {/* Info message */}
         {lines.length > 0 && (
           <div className="px-4 py-3 bg-gray-800/50 border-t border-gray-700 text-xs text-gray-400">
-            <p>💡 Marca filas como "Confirmado" para crearlas como cotizaciones. Puedes editar los campos y seleccionar plantilla.</p>
+            <p>Marca filas como "Confirmado" para crearlas como cotizaciones. Puedes editar los campos y seleccionar plantilla.</p>
           </div>
         )}
       </div>

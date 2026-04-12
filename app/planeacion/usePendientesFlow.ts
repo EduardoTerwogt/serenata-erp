@@ -42,6 +42,7 @@ export function usePendientesFlow() {
           raw: p.raw_input || '',
           ciudad: p.ciudad,
           action: p.estado,
+          notas: p.notas || null,
           selectedTemplateId: undefined,
           cliente: p.cliente,
           proyecto: p.proyecto,

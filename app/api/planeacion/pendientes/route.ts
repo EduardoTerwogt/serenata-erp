@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
           locacion: p.locacion || null,
           estado: p.estado, // 'por_confirmar' | 'cancelado'
           raw_input: p.raw_input || null,
+          notas: p.notas || null,
         }))
       )
 
@@ -94,38 +95,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
-  try {
-    const { pathname } = new URL(request.url)
-    const id = pathname.split('/').pop()
-
-    if (!id) {
-      return NextResponse.json(
-        { error: 'ID is required' },
-        { status: 400 }
-      )
-    }
-
-    // Soft delete: mark as eliminada=true instead of hard delete
-    const { error } = await supabaseAdmin
-      .from('planeacion_pendientes')
-      .update({ eliminada: true })
-      .eq('id', id)
-
-    if (error) {
-      console.error('Error marking planeacion_pendiente as eliminada:', error)
-      return NextResponse.json(
-        { error: 'Failed to delete pendiente' },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (err) {
-    console.error('DELETE /api/planeacion/pendientes error:', err)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-}

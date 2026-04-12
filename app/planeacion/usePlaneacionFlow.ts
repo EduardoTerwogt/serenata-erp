@@ -367,6 +367,7 @@ export function usePlaneacionFlow() {
           locacion: line.locacion || null,
           estado: line.action, // 'por_confirmar' | 'cancelado'
           raw_input: line.raw,
+          notas: line.notas || null,
         }))
 
         try {
