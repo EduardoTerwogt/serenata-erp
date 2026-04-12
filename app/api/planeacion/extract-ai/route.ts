@@ -4,63 +4,103 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const EXTRACT_PROMPT = `Eres un extractor de datos de eventos para una productora audiovisual/musical.
+const EXTRACT_PROMPT = `Eres un extractor inteligente de datos de eventos para una productora audiovisual/musical.
 
-Extrae TODOS los eventos del texto que contienen fecha de evento. Para cada evento retorna:
-- raw: copia del texto relevante
-- fecha: string como "23 abril", "23/04", o null si no hay
-- locacion: nombre del venue/escuela/sala/lugar específico (NO la ciudad), o null
-- ciudad: ciudad si se menciona explícitamente, o null
-- proyecto: nombre del proyecto detectado (null si no se encuentra), ver REGLAS DE PROYECTO
+Tu objetivo: extraer TODOS los eventos del texto, incluso si están en formato desordenado, y entender el contexto detrás de ellos.
+
+ESTRUCTURA DE RESPUESTA:
+Para cada evento, retorna:
+- raw: copia del texto relevante que describe este evento
+- fecha: string como "8 abril", "8/4", "8 de abril", o null si no hay
+- locacion: nombre del venue/sala/lugar específico (NO la ciudad), o null
+- ciudad: ciudad/estado mencionado explícitamente, o null
+- proyecto: nombre del proyecto detectado del texto, o null
 - action: "confirmado" | "por_confirmar" | "cancelado"
-- notas: info extra (para la gira, pendiente de detalles, etc), o null
-- confidence: número 0-1 (1 = muy claro)
+- notas: información crítica específica de ESTE evento solamente, o null
+- confidence: número 0-1 (0.9-1 = muy claro, 0.6-0.8 = tiene pistas, 0.3-0.6 = incierto)
 
-REGLAS DE ACCIÓN:
-- "Confirmo:", "confirmado", "confirmada", "visto bueno" → "confirmado"
-- "cancelado", "cancelada", "pospuesto" → "cancelado"
-- "pendiente", "por confirmar", "a reserva", "detalles por definir", incertidumbre → "por_confirmar"
-- Por default si no está claro → "por_confirmar"
-- cancelado gana sobre confirmado si hay señales contradictorias
+---
 
-REGLAS CRÍTICAS DE EXTRACCIÓN (IMPORTANTE - EVITA SPLITEAR):
-- UNA fecha + UNA locación = UN SOLO evento (aunque tenga proyecto, notas o varias partes en el texto)
-- Ejemplo: "27 de abril en foro niEBLA CON low, importante solicitar rider" → 1 evento (NO 2)
-- Si varias líneas describen UN solo evento (fecha en una línea, venue en siguiente, proyecto en tercera), júntalas como 1 único evento
-- Ignora saludos, cierres y texto sin fechas
-- Separa ciudad de venue: "CDMX, FES Aragón" → ciudad=CDMX, locacion=FES Aragón
-- Extracta venue de frases como "en el Barco Utopía", "en Arena CDMX", "en foro niEBLA"
+ESTRATEGIA DE EXTRACCIÓN (FLEXIBLE):
 
-REGLAS DE PROYECTO:
-- Busca palabras CAPITALIZADAS o después de "CON"/"PARA" (ej: "Low Clika", "Destino", "YMCA", "MICRODRAMA", "Low", "low")
-- Pueden estar: al inicio, mencionadas con "CON proyecto" o "PARA proyecto", o en párrafos
-- Ejemplos correctos:
-  * "27 abril en foro CON low" → proyecto="low" (mismo evento, no 2)
-  * "actualizaciones para Danna" → proyecto="Danna"
-  * "Destino en CDMX" → proyecto="Destino"
-- Si NO encuentra proyecto explícito, retorna null
-- NO inventes proyectos, si hay duda, retorna null
+1. **Busca TABLAS de eventos primero**
+   - Patrón: líneas con fecha + ciudad + locación/venue
+   - Ejemplo: "8 abril | CDMX, Aragón | Fes Aragón" → fecha="8 abril", ciudad="CDMX", locacion="Fes Aragón"
+   - Estos SON eventos confirmados (existen en tabla = confirmados)
+   - Confidence: 0.9-0.95
 
-DETECCIÓN DE NOTAS CONTEXTUALES:
-- Busca frases informativas que aplican a uno o más eventos
-- Dos tipos de asociación:
-  1. Notas CON fechas específicas: Si menciona fechas explícitamente
-     * "Las fechas del metro, pero en especial la del 28 de mayo..." → 28 mayo
-     * "16 abril, 22 abril, 29 abril... Esto será con otro proveedor..." → esas 4 fechas
-  2. Notas SIN fechas específicas: Si es contextual pero no menciona fecha
-     * "Importante solicitar el rider del lugar" → aplica a TODOS los eventos
-     * "Contaremos con pantallas y otro rider" → aplica a TODOS los eventos
-     * "Detalles por confirmar" → aplica a TODOS los eventos
-- Retorna en campo "notasContextuales" (objeto con fechas ISO como claves):
-  Para notas sin fecha: retorna TODAS las fechas encontradas en events
-  {"2026-04-27": "Importante solicitar el rider...", "2026-05-28": "Importante solicitar el rider..."}
-- Si misma nota aplica a múltiples fechas, duplica la entrada
+2. **Busca FECHAS SUELTAS mencionadas en párrafos**
+   - Patrón: "para los días: 16 abril, 22 abril, 29 abril..."
+   - Patrón: "si no se logra el 23..." (hace referencia a una fecha)
+   - Patrón: "hasta el 13 de abril me confirman" (fecha con condición)
+   - Estas son potenciales eventos
+   - Action: "por_confirmar" si tiene condiciones, "confirmado" si está clara
+   - Confidence: 0.5-0.8 (depende de claridad)
 
-Responde SOLO con JSON válido, sin texto adicional. Estructura:
+3. **Detecta PROYECTO**
+   - Busca en la introducción: "actualización de fechas... con [PROYECTO]"
+   - Busca referencias implícitas: "como parte del [PROYECTO]"
+   - Un solo proyecto por mensaje → aplicar a TODOS los eventos
+   - Si hay múltiples proyectos, usar información adicional para asociar
+
+4. **Interpreta ESTADO (action)**
+   - "confirmado" if: está en tabla clara, está sin condicionales
+   - "por_confirmar" if: tiene "(pendiente)", "(por confirmar)", condiciones, "hasta que...", "si...", incertidumbre
+   - "cancelado" if: dice "cancelado", "pospuesto", "no se logra"
+   - Default: "por_confirmar" si hay ambigüedad
+
+5. **Extrae NOTAS CONTEXTUALES** (campo separado "notasContextuales")
+   - Busca frases informativas que aplican a eventos específicos
+   - Tipo A - Nota CON FECHA ESPECÍFICA:
+     * "si no se logra el 23 se tendría que posponer..." → aplica solo a fecha "23"
+     * "es importante ya que va muy de la mano de otras acciones..." → aplica a esa fecha
+   - Tipo B - Nota SIN FECHA pero PARA UN GRUPO:
+     * "para los días: 16 abril, 22 abril... Esto será con otro proveedor..."
+     * → aplica a 16 abril, 22 abril, 29 abril, etc.
+   - Tipo C - Nota GENERAL (sin fecha específica):
+     * "contaremos con pantallas y otro rider" → aplica a TODOS los eventos
+   - Formato de retorno:
+     {
+       "2026-04-23": "si no se logra el 23 se tendría que posponer...",
+       "2026-04-16": "Esto será con otro proveedor...",
+       "2026-05-28": "es importante ya que va muy de la mano..."
+     }
+
+---
+
+REGLAS DE DECISIÓN (flexibles):
+
+• UNA fecha + UNA locación = UN evento (no splitear)
+• Si ve "CON [proyecto]", "PARA [proyecto]", "[proyecto] en [fecha]" → NO crea evento nuevo, es información adicional
+• Si hay una tabla: esa es la fuente de verdad para eventos confirmados
+• Si hay fechas sueltas + condiciones: extrae como "por_confirmar"
+• Si hay ambigüedad: confidence baja (0.5-0.7), action "por_confirmar"
+• Si ve referencias como "Las fechas del metro" → busca qué fechas son "del metro" en el texto
+• Si ve aclaraciones como "si no se logra" o "hasta que confirmen" → action "por_confirmar"
+
+---
+
+ESTRUCTURA DE RESPUESTA JSON:
 {
-  "events": [{"raw":"...","fecha":"...","locacion":"...","ciudad":"...","proyecto":"...","action":"...","notas":"...","confidence":0.9}],
-  "notasContextuales": {"2026-05-28": "...", "2026-04-16": "..."}
-}`
+  "events": [
+    {
+      "raw": "texto que describe este evento",
+      "fecha": "8 abril" o null,
+      "locacion": "Fes Aragón" o null,
+      "ciudad": "CDMX" o null,
+      "proyecto": "Low Clika" o null,
+      "action": "confirmado" | "por_confirmar" | "cancelado",
+      "notas": "nota específica de este evento" o null,
+      "confidence": 0.9
+    }
+  ],
+  "notasContextuales": {
+    "2026-04-23": "nota que aplica a esta fecha",
+    "2026-04-16": "nota para este grupo de fechas"
+  }
+}
+
+IMPORTANTE: Responde SOLO con JSON válido, sin texto adicional.`
 
 export async function POST(request: Request) {
   const authResult = await requireSection('planeacion')
