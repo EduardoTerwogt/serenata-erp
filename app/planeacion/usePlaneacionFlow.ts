@@ -28,7 +28,7 @@ export interface PlaneacionFlowState {
 
 export function usePlaneacionFlow() {
   const [state, setState] = useState<PlaneacionFlowState>({
-    step: 'project',
+    step: 'input',  // CAMBIO: Inicia en input (pegar información)
     selectedCliente: '',
     selectedProyecto: '',
     rawInput: '',
@@ -62,12 +62,12 @@ export function usePlaneacionFlow() {
   }
 
   const handleNextFromProject = () => {
-    if (!state.selectedCliente.trim() || !state.selectedProyecto.trim()) {
-      setState(s => ({ ...s, error: 'Selecciona cliente y proyecto' }))
+    if (!state.selectedCliente.trim()) {
+      setState(s => ({ ...s, error: 'Selecciona un cliente' }))
       return
     }
     loadTemplates()
-    setState(s => ({ ...s, step: 'input', error: '' }))
+    setState(s => ({ ...s, step: 'validation', error: '' }))
   }
 
   const handleInputChange = (input: string) => {
@@ -80,7 +80,8 @@ export function usePlaneacionFlow() {
       return
     }
 
-    setState(s => ({ ...s, loading: true, error: '' }))
+    // CAMBIO: Cambiar a 'project' inmediatamente mientras carga Claude
+    setState(s => ({ ...s, step: 'project', loading: true, error: '' }))
 
     try {
       let extracted: ExtractedEventLine[] = []
@@ -166,12 +167,13 @@ export function usePlaneacionFlow() {
         })
       }
 
+      // CAMBIO: Guardar datos pero mantenerse en 'project' esperando cliente
       setState(s => ({
         ...s,
-        step: 'validation',
         extractedLines: enriched,
         extractionMethod,
         loading: false,
+        error: '', // Clear any error once extraction succeeds
       }))
     } catch (err) {
       setState(s => ({

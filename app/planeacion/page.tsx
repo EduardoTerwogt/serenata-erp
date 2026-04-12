@@ -73,10 +73,10 @@ export default function PlaneacionPage() {
         </Link>
       )}
 
-      {/* Progress indicator */}
-      {state.step !== 'project' && (
+      {/* Progress indicator - new flow: input → project → validation → confirmation */}
+      {state.step !== 'input' && (
         <div className="mb-8 flex gap-3 md:gap-6">
-          {['input', 'validation', 'confirmation'].map((step, idx) => (
+          {['project', 'validation', 'confirmation'].map((step, idx) => (
             <div key={step} className="flex items-center">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
@@ -90,7 +90,7 @@ export default function PlaneacionPage() {
                 {idx + 1}
               </div>
               <div className="text-sm font-medium text-gray-400 ml-2 hidden md:block">
-                {step === 'input' && 'Cargar'}
+                {step === 'project' && 'Cliente'}
                 {step === 'validation' && 'Validar'}
                 {step === 'confirmation' && 'Confirmar'}
               </div>
@@ -102,15 +102,7 @@ export default function PlaneacionPage() {
 
       {/* Content based on step */}
       <div className="mb-8">
-        {state.step === 'project' && (
-          <ProjectSelector
-            onSelectCliente={handleSelectCliente}
-            onSelectProyecto={handleSelectProyecto}
-            onNext={handleNextFromProject}
-            loading={state.loading}
-          />
-        )}
-
+        {/* Nuevo flujo: input → project (mientras carga) → validation → confirmation */}
         {state.step === 'input' && (
           <InputForm
             proyecto={state.selectedProyecto}
@@ -120,7 +112,16 @@ export default function PlaneacionPage() {
             loading={state.loading}
             error={state.error}
             onLoadTemplates={loadTemplates}
-            onGoBack={() => goBack('project')}
+            onGoBack={() => goBack('input')}
+          />
+        )}
+
+        {state.step === 'project' && (
+          <ProjectSelector
+            onSelectCliente={handleSelectCliente}
+            onSelectProyecto={handleSelectProyecto}
+            onNext={handleNextFromProject}
+            loading={state.loading}
           />
         )}
 
