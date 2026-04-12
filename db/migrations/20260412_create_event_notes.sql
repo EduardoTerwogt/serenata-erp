@@ -2,8 +2,8 @@
 -- Notas se extraen del mensaje original por Claude AI y se asocian a eventos por fecha
 CREATE TABLE IF NOT EXISTS public.planeacion_event_notas (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  cotizacion_id UUID REFERENCES public.cotizaciones(id) ON DELETE CASCADE,
-  evento_id UUID,  -- ID del evento original (ValidatedEventLine.id durante planeación)
+  cotizacion_id TEXT REFERENCES public.cotizaciones(id) ON DELETE CASCADE,  -- cotizaciones.id es TEXT (folio)
+  evento_id TEXT,  -- ID del evento original (ValidatedEventLine.id durante planeación)
   fecha_evento DATE,  -- Fecha del evento para agrupación en UI
   nota TEXT NOT NULL,
   tipo TEXT DEFAULT 'contextual',  -- 'contextual' | 'usuario' | 'system'
