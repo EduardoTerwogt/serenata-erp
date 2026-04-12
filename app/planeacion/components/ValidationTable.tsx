@@ -87,68 +87,97 @@ export default function ValidationTable({
     }
   }
 
-  const EventRow = ({ line, isHighlighted = false }: { line: ValidatedEventLine; isHighlighted?: boolean }) => (
-    <tr key={line.id} className={`${isHighlighted ? 'bg-gray-800/30' : 'hover:bg-gray-800/50'} transition-colors`}>
-      <td className="px-4 py-3 text-gray-300">
-        <input
-          type="text"
-          value={line.fecha || ''}
-          onChange={e => onLineUpdate(line.id, { fecha: e.target.value || null })}
-          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-        />
-      </td>
-      <td className="px-4 py-3 text-gray-300">
-        <input
-          type="text"
-          value={line.ciudad || ''}
-          onChange={e => onLineUpdate(line.id, { ciudad: e.target.value || undefined })}
-          placeholder="Ciudad"
-          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-        />
-      </td>
-      <td className="px-4 py-3 text-gray-300">
-        <input
-          type="text"
-          value={line.locacion || ''}
-          onChange={e => onLineUpdate(line.id, { locacion: e.target.value || null })}
-          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-        />
-      </td>
-      <td className="px-4 py-3 text-gray-300">
-        <select
-          value={line.selectedTemplateId || ''}
-          onChange={e => onLineUpdate(line.id, { selectedTemplateId: e.target.value || undefined })}
-          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-        >
-          <option value="">— Sin plantilla —</option>
-          {templates.map(template => (
-            <option key={template.id} value={template.id}>
-              {template.nombre} ({template.items.length} items)
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className="px-4 py-3">
-        <select
-          value={line.action}
-          onChange={e => onLineUpdate(line.id, { action: e.target.value as any })}
-          className={`w-full px-2 py-1 rounded text-xs font-medium border ${getActionColor(line.action)} bg-gray-800 focus:outline-none focus:border-blue-500`}
-        >
-          <option value="confirmado">Confirmado</option>
-          <option value="por_confirmar">Por Confirmar</option>
-          <option value="cancelado">Cancelado</option>
-        </select>
-      </td>
-      <td className="px-4 py-3 text-center">
-        <button
-          onClick={() => onLineDelete(line.id)}
-          className="text-red-400 hover:text-red-300 text-xs"
-        >
-          ✕
-        </button>
-      </td>
-    </tr>
-  )
+  const EventRow = ({ line, isHighlighted = false }: { line: ValidatedEventLine; isHighlighted?: boolean }) => {
+    const hasNotes = line.notasAsociadas && Object.keys(line.notasAsociadas).length > 0
+
+    return (
+      <>
+        <tr key={line.id} className={`${isHighlighted ? 'bg-gray-800/30' : 'hover:bg-gray-800/50'} transition-colors`}>
+          <td className="px-4 py-3 text-gray-300">
+            <input
+              type="text"
+              value={line.proyecto || ''}
+              onChange={e => onLineUpdate(line.id, { proyecto: e.target.value || undefined })}
+              placeholder="Proyecto"
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+            />
+          </td>
+          <td className="px-4 py-3 text-gray-300">
+            <input
+              type="text"
+              value={line.fecha || ''}
+              onChange={e => onLineUpdate(line.id, { fecha: e.target.value || null })}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+          </td>
+          <td className="px-4 py-3 text-gray-300">
+            <input
+              type="text"
+              value={line.ciudad || ''}
+              onChange={e => onLineUpdate(line.id, { ciudad: e.target.value || undefined })}
+              placeholder="Ciudad"
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+            />
+          </td>
+          <td className="px-4 py-3 text-gray-300">
+            <input
+              type="text"
+              value={line.locacion || ''}
+              onChange={e => onLineUpdate(line.id, { locacion: e.target.value || null })}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+          </td>
+          <td className="px-4 py-3 text-gray-300">
+            <select
+              value={line.selectedTemplateId || ''}
+              onChange={e => onLineUpdate(line.id, { selectedTemplateId: e.target.value || undefined })}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="">— Sin plantilla —</option>
+              {templates.map(template => (
+                <option key={template.id} value={template.id}>
+                  {template.nombre} ({template.items.length} items)
+                </option>
+              ))}
+            </select>
+          </td>
+          <td className="px-4 py-3">
+            <select
+              value={line.action}
+              onChange={e => onLineUpdate(line.id, { action: e.target.value as any })}
+              className={`w-full px-2 py-1 rounded text-xs font-medium border ${getActionColor(line.action)} bg-gray-800 focus:outline-none focus:border-blue-500`}
+            >
+              <option value="confirmado">Confirmado</option>
+              <option value="por_confirmar">Por Confirmar</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </td>
+          <td className="px-4 py-3 text-center">
+            <button
+              onClick={() => onLineDelete(line.id)}
+              className="text-red-400 hover:text-red-300 text-xs"
+            >
+              ✕
+            </button>
+          </td>
+        </tr>
+        {/* NUEVO: Mostrar notas asociadas debajo del evento */}
+        {hasNotes && (
+          <tr className="bg-orange-900/10">
+            <td colSpan={7} className="px-4 py-3">
+              <div className="space-y-1">
+                {Object.entries(line.notasAsociadas!).map(([fecha, nota]) => (
+                  <div key={fecha} className="text-xs text-orange-300 italic leading-relaxed pl-4 border-l-2 border-orange-600">
+                    📝 {nota}
+                  </div>
+                ))}
+              </div>
+            </td>
+          </tr>
+        )}
+      </>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -182,6 +211,7 @@ export default function ValidationTable({
             <table className="w-full text-sm">
               <thead className="bg-gray-800 border-b border-gray-700">
                 <tr>
+                  <th className="px-4 py-3 text-left text-gray-300 font-medium">📌 Proyecto</th>
                   <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
                   <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
                   <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>
@@ -211,6 +241,7 @@ export default function ValidationTable({
             <table className="w-full text-sm">
               <thead className="bg-gray-800 border-b border-gray-700">
                 <tr>
+                  <th className="px-4 py-3 text-left text-gray-300 font-medium">📌 Proyecto</th>
                   <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
                   <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
                   <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>
@@ -240,6 +271,7 @@ export default function ValidationTable({
             <table className="w-full text-sm">
               <thead className="bg-gray-800 border-b border-gray-700">
                 <tr>
+                  <th className="px-4 py-3 text-left text-gray-300 font-medium">📌 Proyecto</th>
                   <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
                   <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
                   <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>

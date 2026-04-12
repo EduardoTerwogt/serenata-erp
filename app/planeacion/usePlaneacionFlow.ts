@@ -7,6 +7,7 @@ import { ServiceTemplate } from '@/lib/types'
 export interface ValidatedEventLine extends ExtractedEventLine {
   id: string
   ciudad?: string
+  proyecto?: string  // NUEVO: nombre del proyecto (editable en ValidationTable)
   action: 'confirmado' | 'por_confirmar' | 'cancelado'
   matchedQuotationId?: string
   matchedQuotationInfo?: string
@@ -84,6 +85,7 @@ export function usePlaneacionFlow() {
     try {
       let extracted: ExtractedEventLine[] = []
       let extractionMethod: 'ai' | 'regex' = 'regex'
+      let notasContextuales: { [key: string]: string } = {}
 
       // Try AI extraction first
       try {
@@ -96,6 +98,7 @@ export function usePlaneacionFlow() {
           const aiData = await aiRes.json()
           if (aiData.events && aiData.events.length > 0) {
             extracted = aiData.events
+            notasContextuales = aiData.notasContextuales || {}
             extractionMethod = 'ai'
           }
         }
@@ -118,7 +121,7 @@ export function usePlaneacionFlow() {
         return
       }
 
-      // Enrich with match information via API
+      // Enrich with match information via API + associate contextual notes
       const enriched: ValidatedEventLine[] = []
       for (const line of extracted) {
         let matchedQuotationId: string | undefined
@@ -143,11 +146,20 @@ export function usePlaneacionFlow() {
           // Match not critical, continue
         }
 
+        // Normalize fecha to ISO and find associated notes
+        const fechaISO = normalizarFechaISO(line.fecha)
+        const notasAsociadas: { [key: string]: string } = {}
+        if (fechaISO && notasContextuales[fechaISO]) {
+          notasAsociadas[fechaISO] = notasContextuales[fechaISO]
+        }
+
         enriched.push({
           ...line,
           id: Math.random().toString(36).substr(2, 9),
           ciudad: line.ciudad ?? undefined,
+          proyecto: line.proyecto ?? undefined,  // NUEVO: proyecto detectado por Claude
           action: line.action ?? 'por_confirmar',
+          notasAsociadas,  // NUEVO: notas asociadas a este evento
           matchedQuotationId,
           matchedQuotationInfo,
           selectedTemplateId: undefined,
@@ -179,11 +191,26 @@ export function usePlaneacionFlow() {
     }))
   }
 
-  const handleLineDelete = (lineId: string) => {
+  const handleLineDelete = async (lineId: string) => {
+    // Eliminar del estado local
     setState(s => ({
       ...s,
       extractedLines: s.extractedLines.filter(line => line.id !== lineId),
     }))
+
+    // Si es una línea que ya existe en BD (de planeacion_pendientes), marcarla como eliminada
+    const lineToDelete = state.extractedLines.find(line => line.id === lineId)
+    if (lineToDelete && lineId.length === 36) {
+      // UUID format suggests it's from DB
+      try {
+        await fetch(`/api/planeacion/lines/${lineId}/delete`, {
+          method: 'POST',
+        })
+      } catch (err) {
+        console.error('Error marking line as deleted in BD:', err)
+        // No fail if deletion in BD fails, it's already removed from UI
+      }
+    }
   }
 
   const handleConfirmSelection = () => {
@@ -283,6 +310,28 @@ export function usePlaneacionFlow() {
         if (res.ok) {
           const quot = await res.json()
           createdIds.push(quot.id)
+
+          // NUEVO: Guardar notas asociadas a este evento
+          if (line.notasAsociadas && Object.keys(line.notasAsociadas).length > 0) {
+            try {
+              await fetch('/api/planeacion/save-notes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  cotizacion_id: quot.id,
+                  eventos: [
+                    {
+                      fecha_evento: fechaISO,
+                      notas: Object.values(line.notasAsociadas).join('\n'),
+                    }
+                  ]
+                }),
+              })
+            } catch (err) {
+              console.error('Error saving notes:', err)
+              // Non-critical, continue
+            }
+          }
         }
       }
 

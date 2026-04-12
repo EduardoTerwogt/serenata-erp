@@ -11,6 +11,7 @@ Extrae TODOS los eventos del texto que contienen fecha de evento. Para cada even
 - fecha: string como "23 abril", "23/04", o null si no hay
 - locacion: nombre del venue/escuela/sala/lugar específico (NO la ciudad), o null
 - ciudad: ciudad si se menciona explícitamente, o null
+- proyecto: nombre del proyecto si se menciona explícitamente (ej: "Low Clika", "Destino", "MICRODRAMA"), o null
 - action: "confirmado" | "por_confirmar" | "cancelado"
 - notas: info extra (para la gira, pendiente de detalles, etc), o null
 - confidence: número 0-1 (1 = muy claro)
@@ -28,8 +29,25 @@ REGLAS DE EXTRACCIÓN:
 - Separa ciudad de venue: "CDMX, FES Aragón" → ciudad=CDMX, locacion=FES Aragón
 - Extracta venue de frases como "en el Barco Utopía", "en Arena CDMX"
 
-Responde SOLO con JSON válido, sin texto adicional:
-[{"raw":"...","fecha":"...","locacion":"...","ciudad":"...","action":"...","notas":"...","confidence":0.9}]`
+DETECCIÓN DE PROYECTOS:
+- Busca nombres mencionados al inicio o título del mensaje (ej: "actualizaciones para Low Clika")
+- Sí hay múltiples proyectos, asigna cada evento al proyecto que le corresponda
+- Ejemplos: "Low Clika", "Destino", "YMCA", "MICRODRAMA", "HBL_Siento Records"
+
+DETECCIÓN DE NOTAS CONTEXTUALES:
+- Busca párrafos explicativos que aplican a uno o más eventos específicos
+- Ejemplos de notas por evento:
+  * "Las fechas del metro, pero en especial la del 28 de mayo es importante..." → asociar a evento del 28 mayo
+  * "Esto será con otro proveedor que NO ES SUENA LA CIUDAD..." → asociar a eventos de 16, 22, 29 abril, etc.
+  * "Contaremos con pantallas y otro rider" → asociar a los mismos eventos
+- Retorna en campo adicional "notasContextuales" (objeto con fechas como claves):
+  {"2026-05-28": "Las fechas del metro...", "2026-04-16": "Esto será con otro proveedor..."}
+
+Responde SOLO con JSON válido, sin texto adicional. Estructura:
+{
+  "events": [{"raw":"...","fecha":"...","locacion":"...","ciudad":"...","proyecto":"...","action":"...","notas":"...","confidence":0.9}],
+  "notasContextuales": {"2026-05-28": "...", "2026-04-16": "..."}
+}`
 
 export async function POST(request: Request) {
   const authResult = await requireSection('planeacion')
@@ -54,11 +72,36 @@ export async function POST(request: Request) {
 
     const content = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
 
-    // Extract JSON array from response
-    const jsonMatch = content.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) return Response.json({ events: [], method: 'ai' })
+    // Extract JSON object or array from response
+    let events = []
+    let notasContextuales: { [key: string]: string } = {}
 
-    const events = JSON.parse(jsonMatch[0])
+    // Try parsing as object with events and notasContextuales
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0])
+        if (parsed.events && Array.isArray(parsed.events)) {
+          events = parsed.events
+          notasContextuales = parsed.notasContextuales || {}
+        } else if (Array.isArray(parsed)) {
+          events = parsed
+        }
+      } else {
+        // Try array format (fallback)
+        const arrayMatch = content.match(/\[[\s\S]*\]/)
+        if (arrayMatch) {
+          events = JSON.parse(arrayMatch[0])
+        }
+      }
+    } catch (parseError) {
+      console.error('Error parsing Claude response:', parseError)
+      return Response.json({ events: [], notasContextuales: {}, method: 'ai-error' }, { status: 500 })
+    }
+
+    if (!events || events.length === 0) {
+      return Response.json({ events: [], notasContextuales: {}, method: 'ai' })
+    }
 
     // Log usage
     const tokensInput = response.usage.input_tokens
@@ -80,9 +123,9 @@ export async function POST(request: Request) {
       // Don't fail the request if logging fails
     }
 
-    return Response.json({ events, method: 'ai' })
+    return Response.json({ events, notasContextuales, method: 'ai' })
   } catch (error) {
     console.error('Error extracting events with AI:', error)
-    return Response.json({ events: [], method: 'ai-error' }, { status: 500 })
+    return Response.json({ events: [], notasContextuales: {}, method: 'ai-error' }, { status: 500 })
   }
 }

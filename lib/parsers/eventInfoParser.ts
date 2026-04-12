@@ -9,9 +9,11 @@ export interface ExtractedEventLine {
   fecha: string | null
   locacion: string | null
   ciudad?: string
+  proyecto?: string  // NUEVO: nombre del proyecto detectado por Claude
   action?: 'confirmado' | 'por_confirmar' | 'cancelado'
   notas?: string | null
   confidence?: number
+  notasAsociadas?: { [fechaISO: string]: string }  // NUEVO: notas asociadas a eventos por fecha ISO
 }
 
 // Patterns for detecting dates

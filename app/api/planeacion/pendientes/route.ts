@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from('planeacion_pendientes')
       .select('*')
+      .eq('eliminada', false)  // NUEVO: filtrar líneas no eliminadas
       .order('created_at', { ascending: false })
 
     if (estado) {
