@@ -38,13 +38,17 @@ REGLAS DE PROYECTO:
 
 DETECCIÓN DE NOTAS CONTEXTUALES:
 - Busca párrafos explicativos que aplican a uno o más eventos específicos
-- IMPORTANTE: La nota debe MENCIONAR EXPLÍCITAMENTE las fechas a las que aplica
-- Ejemplos:
-  * "Las fechas del metro, pero en especial la del 28 de mayo..." → nota solo para 28 mayo
-  * "16 abril, 22 abril, 29 abril y 13 mayo... Esto será con otro proveedor..." → nota para esas 4 fechas
-  * "Contaremos con pantallas" sin mencionar fechas → NO INCLUIR como nota contextual
+- Dos tipos de asociación:
+  1. Notas CON fechas específicas: Si menciona fechas explícitamente
+     * "Las fechas del metro, pero en especial la del 28 de mayo..." → 28 mayo
+     * "16 abril, 22 abril, 29 abril... Esto será con otro proveedor..." → esas 4 fechas
+  2. Notas SIN fechas específicas: Si es contextual pero no menciona fecha
+     * "Importante solicitar el rider del lugar" → aplica a TODOS los eventos
+     * "Contaremos con pantallas y otro rider" → aplica a TODOS los eventos
+     * "Detalles por confirmar" → aplica a TODOS los eventos
 - Retorna en campo adicional "notasContextuales" (objeto con fechas ISO como claves):
-  {"2026-05-28": "Las fechas del metro, pero en especial...", "2026-04-16": "Esto será con otro proveedor..."}
+  Para notas sin fecha: retorna TODAS las fechas encontradas en events
+  {"2026-04-27": "Importante solicitar el rider...", "2026-05-28": "Importante solicitar el rider..."}
 - Si misma nota aplica a múltiples fechas, duplica la entrada:
   {"2026-04-16": "...", "2026-04-22": "...", "2026-04-29": "..."}
 
