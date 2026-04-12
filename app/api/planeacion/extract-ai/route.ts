@@ -14,14 +14,17 @@ const EXTRACT_PROMPT = `Extrae todos los eventos del siguiente texto. Retorna JS
       "ciudad": "ciudad" o null,
       "proyecto": "proyecto/artista" o null,
       "action": "confirmado" | "por_confirmar" | "cancelado",
-      "notas": "detalles importantes directos del texto" o null,
+      "notas": "cualquier información adicional mencionada en el mismo párrafo/línea" o null,
       "confidence": 0.0-1.0
     }
   ],
   "notasContextuales": {"fecha_iso": "notas que aplican a múltiples eventos"}
 }
 
-IMPORTANTE: Si hay detalles, información especial o notas en el mensaje, inclúyelas en "notas". Extrae el texto directamente del mensaje sin parafrasear.
+Ejemplo: Si el mensaje dice "evento el 27 de abril en foro niEBLA, importante solicitar el rider del lugar ya que mencionan que no cuentan con mucho equipo", entonces:
+- fecha: "27 de abril"
+- locacion: "foro niEBLA"
+- notas: "importante solicitar el rider del lugar ya que mencionan que no cuentan con mucho equipo"
 
 Solo retorna JSON, nada más.`
 
