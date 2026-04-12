@@ -3,13 +3,13 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const authResult = await requireSection('planeacion')
   if (authResult.response) return authResult.response
 
   try {
-    const { id } = params
+    const { id } = await params
 
     if (!id) {
       return Response.json(
