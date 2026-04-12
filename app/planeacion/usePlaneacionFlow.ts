@@ -62,8 +62,8 @@ export function usePlaneacionFlow() {
   }
 
   const handleNextFromProject = async () => {
-    if (!state.selectedCliente.trim() || !state.selectedProyecto.trim()) {
-      setState(s => ({ ...s, error: 'Selecciona cliente y proyecto' }))
+    if (!state.selectedCliente.trim()) {
+      setState(s => ({ ...s, error: 'Selecciona un cliente' }))
       return
     }
 
@@ -228,6 +228,15 @@ export function usePlaneacionFlow() {
       return
     }
 
+    const sinProyecto = toConfirm.filter(line => !line.proyecto?.trim())
+    if (sinProyecto.length > 0) {
+      setState(s => ({
+        ...s,
+        error: `${sinProyecto.length} evento(s) no tienen proyecto asignado. Completa el campo Proyecto antes de continuar.`,
+      }))
+      return
+    }
+
     const sinPlantilla = toConfirm.filter(line => !line.selectedTemplateId)
     if (sinPlantilla.length > 0) {
       const proceed = window.confirm(
@@ -310,7 +319,7 @@ export function usePlaneacionFlow() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             cliente: state.selectedCliente,
-            proyecto: state.selectedProyecto,
+            proyecto: line.proyecto || 'Sin proyecto',
             fecha_entrega: fechaISO,
             locacion,
             estado: 'BORRADOR',
@@ -351,7 +360,7 @@ export function usePlaneacionFlow() {
       if (pendientesCount > 0) {
         const pendientesPayload = [...toPending, ...toCancel].map(line => ({
           cliente: state.selectedCliente,
-          proyecto: state.selectedProyecto,
+          proyecto: line.proyecto || 'Sin proyecto',
           fecha: line.fecha,
           fecha_iso: normalizarFechaISO(line.fecha) || null,
           ciudad: line.ciudad || null,
