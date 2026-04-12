@@ -161,14 +161,26 @@ export default function ValidationTable({
             </button>
           </td>
         </tr>
-        {/* NUEVO: Mostrar notas asociadas debajo del evento */}
+        {/* NUEVO: Mostrar y editar notas asociadas debajo del evento */}
         {hasNotes && (
           <tr className="bg-orange-900/10">
             <td colSpan={7} className="px-4 py-3">
-              <div className="space-y-1">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-orange-400 mb-2">📝 Notas del evento:</p>
                 {Object.entries(line.notasAsociadas!).map(([fecha, nota]) => (
-                  <div key={fecha} className="text-xs text-orange-300 italic leading-relaxed pl-4 border-l-2 border-orange-600">
-                    📝 {nota}
+                  <div key={fecha} className="flex gap-2 items-start">
+                    <span className="text-xs text-orange-600 font-medium flex-shrink-0 mt-1 min-w-fit">{fecha}:</span>
+                    <input
+                      type="text"
+                      value={nota}
+                      onChange={e => {
+                        const updated = { ...line.notasAsociadas! }
+                        updated[fecha] = e.target.value
+                        onLineUpdate(line.id, { notasAsociadas: updated })
+                      }}
+                      className="flex-1 bg-gray-800 border border-orange-700 rounded px-2 py-1 text-xs text-orange-100 placeholder-gray-600 focus:outline-none focus:border-orange-500"
+                      placeholder="Edita la nota..."
+                    />
                   </div>
                 ))}
               </div>
