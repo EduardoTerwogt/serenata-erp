@@ -1,5 +1,3 @@
-@AGENTS.md
-
 # Serenata ERP
 
 ## Proyecto
