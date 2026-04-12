@@ -1,10 +1,10 @@
 import { requireSection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
-// Anthropic Haiku pricing (current as of 2026)
-// Input: $0.80 per 1M tokens
-// Output: $4.00 per 1M tokens
-const TOKENS_PER_DOLLAR = 1000 // Conservative estimate
+// Anthropic Sonnet pricing (current as of 2026)
+// Input: $3.00 per 1M tokens
+// Output: $15.00 per 1M tokens
+const TOKENS_PER_DOLLAR = 250 // Conservative estimate for Sonnet
 const INITIAL_CREDIT = 5 // $5 USD free credit
 
 export async function GET(request: Request) {
