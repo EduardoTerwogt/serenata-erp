@@ -14,14 +14,14 @@ const EXTRACT_PROMPT = `Extrae todos los eventos del siguiente texto. Retorna JS
       "ciudad": "ciudad" o null,
       "proyecto": "proyecto/artista" o null,
       "action": "confirmado" | "por_confirmar" | "cancelado",
-      "notas": "COPIAR TEXTUAL del mensaje" o null,
+      "notas": "detalles importantes directos del texto" o null,
       "confidence": 0.0-1.0
     }
   ],
-  "notasContextuales": {"fecha_iso": "COPIAR TEXTUAL del mensaje"}
+  "notasContextuales": {"fecha_iso": "notas que aplican a múltiples eventos"}
 }
 
-IMPORTANTE: Las notas deben ser copia TEXTUAL del mensaje, no parafraseadas ni interpretadas. Si el mensaje dice "importante solicitar el rider del lugar ya que mencionan que no cuentan con mucho equipo", eso es exactamente lo que va en notas.
+IMPORTANTE: Si hay detalles, información especial o notas en el mensaje, inclúyelas en "notas". Extrae el texto directamente del mensaje sin parafrasear.
 
 Solo retorna JSON, nada más.`
 
