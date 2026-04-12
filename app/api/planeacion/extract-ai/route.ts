@@ -4,61 +4,24 @@ import { supabaseAdmin } from '@/lib/supabase'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const EXTRACT_PROMPT = `Eres un asistente experto en extraer información de eventos de mensajes de texto informales/complejos.
-
-Tu tarea: analizar el mensaje y extraer TODOS los eventos mencionados, sin importar el formato.
-
-Para cada evento, retorna JSON con estos campos:
-- raw: texto que describe este evento
-- fecha: la fecha del evento (ej: "17 abril", "6 de mayo", "13/4"), o null
-- locacion: lugar/venue específico (no la ciudad), o null
-- ciudad: ciudad/estado mencionado, o null
-- proyecto: nombre del proyecto/artista, o null
-- action: "confirmado" | "por_confirmar" | "cancelado"
-- notas: información específica de este evento (duración, equipment, cambios especiales), o null
-- confidence: 0-1 (donde 1 = muy claro)
-
-CÓMO INTERPRETAR (confía en tu entendimiento):
-
-1. DETECTA EVENTOS en cualquier formato:
-   - Tabla: "8 abril | CDMX, Fes Aragón" → evento confirmado
-   - Lista: "17 abril / 23 abril (pendiente)" → detecta fechas y estados
-   - Párrafos: "evento el 6 de mayo en Anahuac Sur" → extrae fecha + ubicación
-   - Listas simples: "Low Clika\n17 abril\n23 abril\nDestino\n16 abril" → agrupa por proyecto
-
-2. DETECTA PROYECTO de múltiples formas:
-   - Listado explícito: "Low Clika\n17 abril\n23 abril" → proyecto es "Low Clika"
-   - Mención directa: "con Danna", "para Low Clika", "evento Low Clika"
-   - Contexto: "@[persona]" o proyecto mencionado en párrafo introductorio
-
-3. INTERPRETA ACTION basado en lenguaje:
-   - "confirmado", "confirmada", "confirmada" → action: confirmado
-   - "(pendiente)", "por confirmar", "se confirma hasta..." → action: por_confirmar
-   - "cancelado", "pospuesto" → action: cancelado
-   - En tabla o listado sin marca → por defecto: confirmado
-   - Indicadores: "si...", "aunque...", "hasta que..." → por_confirmar
-
-4. CAPTURA NOTAS importantes específicas del evento:
-   - Duración: "45 minutos, de 5:05 p.m. a 5:50 p.m."
-   - Detalles: "No habrá video, pero sí iluminación"
-   - Advertencias: "una cita importante, no podrá asistir"
-   - Son notas del EVENTO ESPECÍFICO, no generales
-
-NOTAS CONTEXTUALES (campo separado):
-Si hay frases que aplican a múltiples eventos O a un grupo específico, guárdalas en "notasContextuales":
-- Ejemplo: "para las fechas del 16, 22, 29 será con otro proveedor" → {"2026-04-16": "...", "2026-04-22": "...", "2026-04-29": "..."}
-- Ejemplo: "contaremos con pantallas y otro rider" (sin fecha) → aplica a TODAS las fechas: {"2026-04-17": "...", "2026-04-23": "...", ...}
-- Nota ESPECÍFICA de una fecha va en campo "notas" del evento, NO en notasContextuales
-
-ESTRUCTURA JSON:
+const EXTRACT_PROMPT = `Extrae todos los eventos del siguiente texto. Retorna JSON con este formato:
 {
   "events": [
-    {"raw": "...", "fecha": "17 abril", "locacion": "...", "ciudad": "...", "proyecto": "Low Clika", "action": "confirmado", "notas": null, "confidence": 0.95}
+    {
+      "raw": "texto del evento",
+      "fecha": "fecha" o null,
+      "locacion": "lugar específico" o null,
+      "ciudad": "ciudad" o null,
+      "proyecto": "proyecto/artista" o null,
+      "action": "confirmado" | "por_confirmar" | "cancelado",
+      "notas": "detalles importantes" o null,
+      "confidence": 0.0-1.0
+    }
   ],
-  "notasContextuales": {"2026-05-06": "detalles importantes"}
+  "notasContextuales": {"fecha_iso": "nota"}
 }
 
-Responde SOLO con JSON válido, sin texto adicional.`
+Solo retorna JSON, nada más.`
 
 export async function POST(request: Request) {
   const authResult = await requireSection('planeacion')
