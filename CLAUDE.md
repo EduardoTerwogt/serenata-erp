@@ -7,7 +7,8 @@
 - **App:** https://serenata-erp.vercel.app
 - **Repo:** https://github.com/EduardoTerwogt/serenata-erp
 - **Rama:** `main`
-- **Stack:** Next.js 16 (App Router) + TypeScript + React 19 + Supabase (PostgreSQL) + Tailwind CSS v4 + Vercel
+- **Stack:** Next.js 16 (App Router) + TypeScript + React 19 + Supabase (PostgreSQL, cliente directo + RPCs) + Tailwind CSS v4 + Vercel
+- **Nota:** `prisma` aparece en `package.json` pero NO es la capa activa de datos. No usarlo — todo el acceso va por `supabaseAdmin` / `supabase` y RPCs.
 
 ---
 
@@ -24,7 +25,7 @@ git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/sere
 ### Reglas
 - Siempre `main`. Nunca ramas. Nunca PRs.
 - Commit + push después de cada cambio funcional.
-- Vercel auto-despliega en 1-2 min.
+- Push a `main` dispara deploy automático en Vercel.
 - Si el token falla → pedir al usuario uno nuevo y actualizar `.env.local.tokens`.
 
 ---
@@ -70,6 +71,20 @@ ERP para productora audiovisual mexicana (Serenata House). Módulos:
 - **Responsables**: Colaboradores/freelancers. Datos bancarios, roles, historial de proyectos.
 - **Planeación**: Extracción AI de eventos desde mensajes informales (email/WhatsApp). Claude Sonnet parsea fechas, locaciones, proyectos. Se validan y convierten en cotizaciones en lote.
 - **Plantillas de Servicios**: Templates reutilizables con items pre-configurados para cotizaciones nuevas.
+- **Google Sheets (espejo)**: Sheets acompaña a Supabase como mirror de consulta externa. **Supabase es fuente de verdad**; las escrituras en la app se sincronizan hacia Sheets automáticamente. Nunca tratar Sheets como origen — siempre escribir contra Supabase.
+
+---
+
+## Features parciales / pendientes
+
+Antes de modificar cualquiera de estos, PREGUNTAR al usuario:
+
+- **Google Calendar desde Proyectos**: UI presente pero el flow end-to-end no está completo. No asumir que funciona como en planeación.
+- **Complementos de pago (CFDI)**: Upload y registro funcional, pero la conciliación automática con cuentas por cobrar no está completa.
+- **Órdenes de pago**: CRUD funciona, pero flujos de aprobación/firma pueden estar pendientes.
+- **Plantillas de servicios**: Completas para cotizaciones nuevas; integración con cotizaciones complementarias es parcial.
+
+Si se detecta otro feature a medias, documentarlo aquí en lugar de "arreglarlo" sin consultar.
 
 ---
 
@@ -156,6 +171,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 **PDF:** jspdf + jspdf-autotable. Archivos en `lib/server/pdf/`. Se suben a Google Drive.
 
 **Soft delete:** `planeacion_pendientes` usa columna `eliminada: boolean`. GET filtra `eliminada = false`.
+
+---
+
+## Gotchas (trampas del repo)
+
+- **Aprobar / cancelar cotizaciones usa RPCs con efectos laterales.** Aprobar crea Proyecto + Cuentas por cobrar + Cuentas por pagar en una transacción. Cancelar revierte. **Nunca recrear manualmente** — siempre llamar la RPC existente en `lib/server/quotations/`.
+- **Reservar folio es atómico vía RPC.** No generar folios en JS — race conditions garantizadas.
+- **Escribir en cotizaciones/proyectos/cuentas dispara sync a Google Sheets.** Si algo rompe el sync, revisar `lib/integrations/` antes de culpar al write.
+- **Actualizar un PDF reusa `drive_file_id`.** Si existe, se actualiza el archivo de Drive en vez de crear uno nuevo. No borrar el campo sin entender el flow.
+- **Cotizaciones COMPLEMENTARIA afectan al Proyecto del padre.** Al aprobarse, suman al proyecto/cuentas de la PRINCIPAL. No tratarlas como independientes.
+- **Planeación guarda `planeacion_pendientes` + `planeacion_event_notas`.** Las notas contextuales son extraídas por Claude AI y asociadas por evento/fecha — no confundir con notas de usuario.
+- **`planeacion_pendientes.eliminada` es soft delete.** GET debe filtrar `eliminada = false`. No usar DELETE físico.
+- **`params` es Promise en Next.js 16.** Siempre `await params` antes de usar.
+- **Prisma está en deps pero NO se usa.** Ver nota en Stack. Todo va por Supabase + RPCs.
 
 ---
 
