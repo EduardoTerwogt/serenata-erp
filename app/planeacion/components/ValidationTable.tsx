@@ -54,25 +54,6 @@ export default function ValidationTable({
   const tentativas = lines.filter(line => line.action === 'por_confirmar' || (line.action === 'confirmado' && (line.confidence ?? 0) < 0.8))
   const cancelados = lines.filter(line => line.action === 'cancelado')
 
-  // Extract alerts from tentativas
-  const alerts = []
-  if (tentativas.length > 0) {
-    alerts.push({
-      type: 'warning' as const,
-      icon: '⏳',
-      text: `${tentativas.length} fecha${tentativas.length !== 1 ? 's' : ''} pendiente${tentativas.length !== 1 ? 's' : ''} de confirmación`,
-    })
-  }
-  // Add any contextual notes as alerts
-  tentativas.forEach(line => {
-    if (line.notas) {
-      alerts.push({
-        type: 'info' as const,
-        icon: '📝',
-        text: line.notas,
-      })
-    }
-  })
 
   const getActionColor = (action: string) => {
     switch (action) {
@@ -199,18 +180,6 @@ export default function ValidationTable({
         </div>
       )}
 
-      {/* Alerts Box */}
-      {alerts.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
-          <div className="text-sm font-semibold text-gray-300 mb-3">⚠️ Contexto & Alertas</div>
-          {alerts.map((alert, idx) => (
-            <div key={idx} className="flex gap-3 items-start">
-              <span className="text-lg flex-shrink-0">{alert.icon}</span>
-              <p className="text-sm text-gray-300">{alert.text}</p>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Confirmados Section */}
       {confirmados.length > 0 && (

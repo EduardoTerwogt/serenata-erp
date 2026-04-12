@@ -16,28 +16,33 @@ Extrae TODOS los eventos del texto que contienen fecha de evento. Para cada even
 - notas: info extra (para la gira, pendiente de detalles, etc), o null
 - confidence: número 0-1 (1 = muy claro)
 
-REGLAS DE ACTION:
+REGLAS DE ACCIÓN:
 - "Confirmo:", "confirmado", "confirmada", "visto bueno" → "confirmado"
 - "cancelado", "cancelada", "pospuesto" → "cancelado"
 - "pendiente", "por confirmar", "a reserva", "detalles por definir", incertidumbre → "por_confirmar"
 - Por default si no está claro → "por_confirmar"
 - cancelado gana sobre confirmado si hay señales contradictorias
 
-REGLAS DE EXTRACCIÓN:
+REGLAS CRÍTICAS DE EXTRACCIÓN (IMPORTANTE - EVITA SPLITEAR):
+- UNA fecha + UNA locación = UN SOLO evento (aunque tenga proyecto, notas o varias partes en el texto)
+- Ejemplo: "27 de abril en foro niEBLA CON low, importante solicitar rider" → 1 evento (NO 2)
+- Si varias líneas describen UN solo evento (fecha en una línea, venue en siguiente, proyecto en tercera), júntalas como 1 único evento
 - Ignora saludos, cierres y texto sin fechas
-- Si varias líneas describen UN solo evento (fecha en una línea, venue en la siguiente), júntalas como 1 evento
 - Separa ciudad de venue: "CDMX, FES Aragón" → ciudad=CDMX, locacion=FES Aragón
-- Extracta venue de frases como "en el Barco Utopía", "en Arena CDMX"
+- Extracta venue de frases como "en el Barco Utopía", "en Arena CDMX", "en foro niEBLA"
 
 REGLAS DE PROYECTO:
-- Busca palabras CAPITALIZADAS que representen proyectos (ej: "Low Clika", "Destino", "YMCA", "MICRODRAMA")
-- Pueden estar al inicio del mensaje (título) o mencionadas en párrafos: "actualizaciones para Low Clika"
-- TAMBIÉN DEDUCE por contexto: si dice "con Danna" o "para Danna" → proyecto es "Danna"
-- Si NO encuentra proyecto explícito ni contexto, retorna null
-- NO inventes proyectos, SÍ hay duda, retorna null
+- Busca palabras CAPITALIZADAS o después de "CON"/"PARA" (ej: "Low Clika", "Destino", "YMCA", "MICRODRAMA", "Low", "low")
+- Pueden estar: al inicio, mencionadas con "CON proyecto" o "PARA proyecto", o en párrafos
+- Ejemplos correctos:
+  * "27 abril en foro CON low" → proyecto="low" (mismo evento, no 2)
+  * "actualizaciones para Danna" → proyecto="Danna"
+  * "Destino en CDMX" → proyecto="Destino"
+- Si NO encuentra proyecto explícito, retorna null
+- NO inventes proyectos, si hay duda, retorna null
 
 DETECCIÓN DE NOTAS CONTEXTUALES:
-- Busca párrafos explicativos que aplican a uno o más eventos específicos
+- Busca frases informativas que aplican a uno o más eventos
 - Dos tipos de asociación:
   1. Notas CON fechas específicas: Si menciona fechas explícitamente
      * "Las fechas del metro, pero en especial la del 28 de mayo..." → 28 mayo
@@ -46,11 +51,10 @@ DETECCIÓN DE NOTAS CONTEXTUALES:
      * "Importante solicitar el rider del lugar" → aplica a TODOS los eventos
      * "Contaremos con pantallas y otro rider" → aplica a TODOS los eventos
      * "Detalles por confirmar" → aplica a TODOS los eventos
-- Retorna en campo adicional "notasContextuales" (objeto con fechas ISO como claves):
+- Retorna en campo "notasContextuales" (objeto con fechas ISO como claves):
   Para notas sin fecha: retorna TODAS las fechas encontradas en events
   {"2026-04-27": "Importante solicitar el rider...", "2026-05-28": "Importante solicitar el rider..."}
-- Si misma nota aplica a múltiples fechas, duplica la entrada:
-  {"2026-04-16": "...", "2026-04-22": "...", "2026-04-29": "..."}
+- Si misma nota aplica a múltiples fechas, duplica la entrada
 
 Responde SOLO con JSON válido, sin texto adicional. Estructura:
 {
