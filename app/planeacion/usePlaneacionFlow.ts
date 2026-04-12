@@ -228,6 +228,14 @@ export function usePlaneacionFlow() {
       return
     }
 
+    const sinPlantilla = toConfirm.filter(line => !line.selectedTemplateId)
+    if (sinPlantilla.length > 0) {
+      const proceed = window.confirm(
+        `${sinPlantilla.length} cotización(es) se crearán sin items (sin plantilla seleccionada). ¿Continuar?`
+      )
+      if (!proceed) return
+    }
+
     setState(s => ({
       ...s,
       step: 'confirmation',
@@ -236,12 +244,12 @@ export function usePlaneacionFlow() {
   }
 
   const getCreationSummary = () => {
-    // Categorize by action + confidence
+    // Categorize by action only — user's manual choice is final authority
     const toCreate = state.extractedLines.filter(
-      line => line.action === 'confirmado' && (line.confidence ?? 0) >= 0.8
+      line => line.action === 'confirmado'
     )
     const toPending = state.extractedLines.filter(
-      line => line.action === 'por_confirmar' || (line.action === 'confirmado' && (line.confidence ?? 0) < 0.8)
+      line => line.action === 'por_confirmar'
     )
     const toCancel = state.extractedLines.filter(
       line => line.action === 'cancelado'

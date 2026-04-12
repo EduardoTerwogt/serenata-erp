@@ -49,9 +49,9 @@ export default function ValidationTable({
     fetchUsage()
   }, [])
 
-  // Categorize lines
-  const confirmados = lines.filter(line => line.action === 'confirmado' && (line.confidence ?? 0) >= 0.8)
-  const tentativas = lines.filter(line => line.action === 'por_confirmar' || (line.action === 'confirmado' && (line.confidence ?? 0) < 0.8))
+  // Categorize lines by action only — user's manual choice is final authority
+  const confirmados = lines.filter(line => line.action === 'confirmado')
+  const tentativas = lines.filter(line => line.action === 'por_confirmar')
   const cancelados = lines.filter(line => line.action === 'cancelado')
 
 
