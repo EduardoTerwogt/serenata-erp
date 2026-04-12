@@ -86,11 +86,22 @@ export function usePendientesFlow() {
     }))
   }
 
-  const handleLineDelete = (lineId: string) => {
+  const handleLineDelete = async (lineId: string) => {
+    // Remove from UI immediately
     setState(s => ({
       ...s,
       pendientes: s.pendientes.filter(line => line.id !== lineId),
     }))
+
+    // Persist deletion to BD (soft delete)
+    try {
+      await fetch(`/api/planeacion/pendientes/${lineId}`, {
+        method: 'DELETE',
+      })
+    } catch (err) {
+      console.error('Warning: Failed to delete pendiente from BD:', err)
+      // Don't show error to user since UI already updated
+    }
   }
 
   const handleConfirmSelection = () => {

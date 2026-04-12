@@ -106,13 +106,14 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Soft delete: mark as eliminada=true instead of hard delete
     const { error } = await supabaseAdmin
       .from('planeacion_pendientes')
-      .delete()
+      .update({ eliminada: true })
       .eq('id', id)
 
     if (error) {
-      console.error('Error deleting planeacion_pendiente:', error)
+      console.error('Error marking planeacion_pendiente as eliminada:', error)
       return NextResponse.json(
         { error: 'Failed to delete pendiente' },
         { status: 500 }

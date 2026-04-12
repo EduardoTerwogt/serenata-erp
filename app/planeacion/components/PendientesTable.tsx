@@ -6,7 +6,7 @@ import { ValidatedEventLine } from '../usePlaneacionFlow'
 interface PendientesTableProps {
   lines: ValidatedEventLine[]
   onLineUpdate: (lineId: string, updates: Partial<ValidatedEventLine>) => void
-  onLineDelete: (lineId: string) => void
+  onLineDelete: (lineId: string) => Promise<void>
   templates: ServiceTemplate[]
   onConfirm: () => void
   loading: boolean
