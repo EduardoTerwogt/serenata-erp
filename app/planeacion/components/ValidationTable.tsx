@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ServiceTemplate } from '@/lib/types'
 import { ValidatedEventLine } from '../usePlaneacionFlow'
+import NoteModal from './NoteModal'
 
 interface ValidationTableProps {
   lines: ValidatedEventLine[]
@@ -25,6 +26,8 @@ export default function ValidationTable({
   error,
   onGoBack,
 }: ValidationTableProps) {
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null)
+
   const [usage, setUsage] = useState<{
     tokensUsed: number
     tokensAvailable: number
@@ -69,9 +72,8 @@ export default function ValidationTable({
   }
 
   const EventRow = ({ line, isHighlighted = false }: { line: ValidatedEventLine; isHighlighted?: boolean }) => {
-    const hasContextNotes = line.notasAsociadas && Object.keys(line.notasAsociadas).length > 0
-    const hasEventNotes = !!line.notas
-    const hasNotes = hasContextNotes || hasEventNotes
+    const hasNotes = !!(line.notas || (line.notasAsociadas && Object.keys(line.notasAsociadas).length > 0))
+    const notePreview = line.notas ? line.notas.slice(0, 60) + (line.notas.length > 60 ? '…' : '') : ''
 
     return (
       <>
@@ -136,49 +138,32 @@ export default function ValidationTable({
             </select>
           </td>
           <td className="px-4 py-3 text-center">
-            <button
-              onClick={() => onLineDelete(line.id)}
-              className="text-red-400 hover:text-red-300 text-xs"
-            >
-              ✕
-            </button>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setOpenNoteId(line.id)}
+                title={hasNotes ? (notePreview || 'Ver notas') : 'Agregar nota'}
+                className={`transition-colors ${hasNotes ? 'text-orange-400 hover:text-orange-300' : 'text-gray-600 hover:text-gray-400'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+              <button
+                onClick={() => onLineDelete(line.id)}
+                className="text-red-400 hover:text-red-300 text-xs"
+              >
+                ✕
+              </button>
+            </div>
           </td>
         </tr>
-        {/* Mostrar notas del evento (per-event notas + notasAsociadas) */}
-        {hasNotes && (
-          <tr className="bg-orange-900/10">
-            <td colSpan={7} className="px-4 py-3">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-orange-400 mb-2">Notas del evento:</p>
-                {hasEventNotes && (
-                  <textarea
-                    value={line.notas || ''}
-                    onChange={e => onLineUpdate(line.id, { notas: e.target.value || null })}
-                    rows={2}
-                    className="w-full bg-gray-800 border border-orange-700 rounded px-2 py-1 text-xs text-orange-100 placeholder-gray-600 focus:outline-none focus:border-orange-500"
-                    placeholder="Edita la nota..."
-                  />
-                )}
-                {hasContextNotes && Object.entries(line.notasAsociadas!).map(([fecha, nota]) => (
-                  <div key={fecha} className="flex gap-2 items-start">
-                    <span className="text-xs text-orange-600 font-medium flex-shrink-0 mt-1 min-w-fit">{fecha}:</span>
-                    <input
-                      type="text"
-                      value={nota}
-                      onChange={e => {
-                        const updated = { ...line.notasAsociadas! }
-                        updated[fecha] = e.target.value
-                        onLineUpdate(line.id, { notasAsociadas: updated })
-                      }}
-                      className="flex-1 bg-gray-800 border border-orange-700 rounded px-2 py-1 text-xs text-orange-100 placeholder-gray-600 focus:outline-none focus:border-orange-500"
-                      placeholder="Edita la nota..."
-                    />
-                  </div>
-                ))}
-              </div>
-            </td>
-          </tr>
-        )}
+        <NoteModal
+          isOpen={openNoteId === line.id}
+          onClose={() => setOpenNoteId(null)}
+          notas={line.notas}
+          notasAsociadas={line.notasAsociadas}
+          onSave={(notas, notasAsociadas) => onLineUpdate(line.id, { notas, notasAsociadas })}
+        />
       </>
     )
   }
