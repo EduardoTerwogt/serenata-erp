@@ -3,8 +3,10 @@
 import { use, useCallback, useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
-import { Cotizacion, ItemCotizacion, Responsable } from '@/lib/types'
+import { useSession } from 'next-auth/react'
+import { Cotizacion, CotizacionCollabSection, ItemCotizacion, Responsable } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
+import { useQuotationCollaboration } from '@/hooks/useQuotationCollaboration'
 import { calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
@@ -17,6 +19,7 @@ import { SkeletonQuotationDetail } from '@/app/components/ui/SkeletonQuotationDe
 
 export default function CotizacionDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const { data: session } = useSession()
   const router = useRouter()
   const [cotizacion, setCotizacion] = useState<Cotizacion | null>(null)
   const [responsables, setResponsables] = useState<Responsable[]>([])
@@ -66,6 +69,21 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   } = quotationForm
 
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'EMITIDA'
+  const {
+    onlineUsers,
+    sectionEditors,
+    setActiveSection,
+    activity,
+    reportSave,
+  } = useQuotationCollaboration({
+    cotizacionId: id,
+    enabled: !!esEditable,
+    currentUser: {
+      id: (session?.user as { id?: string | null } | undefined)?.id,
+      email: session?.user?.email,
+      name: session?.user?.name,
+    },
+  })
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
@@ -148,6 +166,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       })
       applyCotizacionToState(refreshedCotizacion)
       await refreshCatalogos()
+      await reportSave()
       setSuccess('Guardado correctamente')
       setTimeout(() => setSuccess(null), 3000)
       return true
@@ -253,6 +272,27 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   if (loading) return <SkeletonQuotationDetail />
   if (!cotizacion) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cotización no encontrada</div>
 
+  const currentUserId = (session?.user as { id?: string | null } | undefined)?.id || session?.user?.email || null
+  const uniqueOnlineUsers = onlineUsers.filter((user, index, arr) => arr.findIndex(item => item.user_id === user.user_id) === index)
+  const otherOnlineUsers = uniqueOnlineUsers.filter(user => user.user_id !== currentUserId)
+
+  const sectionLabels: Record<CotizacionCollabSection, string> = {
+    notas: 'Notas',
+    general: 'Información general',
+    partidas: 'Partidas',
+    totales: 'Totales',
+  }
+
+  const SectionEditBadge = ({ section }: { section: CotizacionCollabSection }) => {
+    const editor = sectionEditors[section]
+    if (!editor) return null
+    return (
+      <p className="text-xs text-orange-300 mb-2">
+        {editor.name || editor.email || 'Usuario'} está editando esta sección
+      </p>
+    )
+  }
+
   return (
     <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
@@ -262,6 +302,21 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
             <span className={`text-sm px-3 py-1 rounded-full font-medium ${cotizacion.estado === 'APROBADA' ? 'bg-green-900 text-green-300' : cotizacion.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' : cotizacion.estado === 'CANCELADA' ? 'bg-red-900 text-red-300' : 'bg-yellow-900 text-yellow-300'}`}>{cotizacion.estado}</span>
           </div>
           <p className="text-gray-400">{cotizacion.proyecto} — {cotizacion.cliente}</p>
+          <div className="mt-2">
+            <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Colaborando ahora</p>
+            <div className="flex flex-wrap gap-2">
+              {otherOnlineUsers.length === 0 ? (
+                <span className="text-xs text-gray-500">Solo tú en esta cotización</span>
+              ) : (
+                otherOnlineUsers.map(user => (
+                  <span key={user.user_id} className="text-xs bg-gray-800 border border-gray-700 rounded-full px-2.5 py-1 text-gray-200">
+                    {user.name || user.email}
+                    {user.active_section ? ` · ${sectionLabels[user.active_section]}` : ''}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:justify-end">
           {cotizacion.estado === 'BORRADOR' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarCotizacion} disabled={guardando || generandoPdf} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : guardando ? 'Generando...' : 'Generar Cotización'}</button></>}
@@ -283,7 +338,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       )}
 
       {(notasInternas || esEditable) && (
-        <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-6">
+        <div
+          className={`bg-gray-800/60 border rounded-xl p-4 mb-6 ${sectionEditors.notas ? 'border-orange-600/70' : 'border-gray-700'}`}
+          onFocusCapture={() => esEditable && setActiveSection('notas')}
+        >
+          <SectionEditBadge section="notas" />
           <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-medium">Notas del evento (uso interno)</p>
           {esEditable ? (
             <textarea
@@ -299,61 +358,101 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      <QuotationGeneralInfoSection
-        register={register}
-        setValue={setValue}
-        clienteInput={clienteInput}
-        proyectoInput={proyectoInput}
-        clienteSugerencias={clienteSugerencias}
-        mostrarClienteDropdown={mostrarClienteDropdown}
-        setMostrarClienteDropdown={setMostrarClienteDropdown}
-        proyectosDelCliente={proyectosDelCliente}
-        mostrarProyectoDropdown={mostrarProyectoDropdown}
-        setMostrarProyectoDropdown={setMostrarProyectoDropdown}
-        listaClientes={listaClientes}
-        handleClienteChange={handleClienteChange}
-        handleProyectoChange={handleProyectoChange}
-        seleccionarCliente={seleccionarCliente}
-        setProyectoInput={setProyectoInput}
-        isReadOnly={!esEditable}
-        readOnlyDisplay={esEditable ? 'input' : 'text'}
-        dateLabel={formatSpanishLongDate(cotizacion.fecha_cotizacion)}
-        fechaEntregaValue={watch('fecha_entrega')}
-        locacionValue={watch('locacion')}
-      />
+      <div
+        className={`rounded-xl ${sectionEditors.general ? 'ring-1 ring-orange-600/70 ring-offset-0' : ''}`}
+        onFocusCapture={() => esEditable && setActiveSection('general')}
+      >
+        <div className="px-1">
+          <SectionEditBadge section="general" />
+        </div>
+        <QuotationGeneralInfoSection
+          register={register}
+          setValue={setValue}
+          clienteInput={clienteInput}
+          proyectoInput={proyectoInput}
+          clienteSugerencias={clienteSugerencias}
+          mostrarClienteDropdown={mostrarClienteDropdown}
+          setMostrarClienteDropdown={setMostrarClienteDropdown}
+          proyectosDelCliente={proyectosDelCliente}
+          mostrarProyectoDropdown={mostrarProyectoDropdown}
+          setMostrarProyectoDropdown={setMostrarProyectoDropdown}
+          listaClientes={listaClientes}
+          handleClienteChange={handleClienteChange}
+          handleProyectoChange={handleProyectoChange}
+          seleccionarCliente={seleccionarCliente}
+          setProyectoInput={setProyectoInput}
+          isReadOnly={!esEditable}
+          readOnlyDisplay={esEditable ? 'input' : 'text'}
+          dateLabel={formatSpanishLongDate(cotizacion.fecha_cotizacion)}
+          fechaEntregaValue={watch('fecha_entrega')}
+          locacionValue={watch('locacion')}
+        />
+      </div>
 
-      <QuotationItemsSection
-        editable={!!esEditable}
-        register={register}
-        setValue={setValue}
-        watchedItems={watchedItems}
-        fields={fields}
-        append={append}
-        remove={remove}
-        editingItemIndex={editingItemIndex}
-        setEditingItemIndex={setEditingItemIndex}
-        calcItem={calcItem}
-        handleDescripcionChange={handleDescripcionChange}
-        seleccionarProducto={seleccionarProducto}
-        productoSugerencias={productoSugerencias}
-        mostrarProductoDropdown={mostrarProductoDropdown}
-        setMostrarProductoDropdown={setMostrarProductoDropdown}
-        responsables={responsables}
-        readOnlyItems={cotizacion.items || []}
-      />
+      <div
+        className={`rounded-xl ${sectionEditors.partidas ? 'ring-1 ring-orange-600/70 ring-offset-0' : ''}`}
+        onFocusCapture={() => esEditable && setActiveSection('partidas')}
+      >
+        <div className="px-1">
+          <SectionEditBadge section="partidas" />
+        </div>
+        <QuotationItemsSection
+          editable={!!esEditable}
+          register={register}
+          setValue={setValue}
+          watchedItems={watchedItems}
+          fields={fields}
+          append={append}
+          remove={remove}
+          editingItemIndex={editingItemIndex}
+          setEditingItemIndex={setEditingItemIndex}
+          calcItem={calcItem}
+          handleDescripcionChange={handleDescripcionChange}
+          seleccionarProducto={seleccionarProducto}
+          productoSugerencias={productoSugerencias}
+          mostrarProductoDropdown={mostrarProductoDropdown}
+          setMostrarProductoDropdown={setMostrarProductoDropdown}
+          responsables={responsables}
+          readOnlyItems={cotizacion.items || []}
+        />
+      </div>
 
-      <QuotationTotalsPanels
-        totals={displayTotales}
-        editable={!!esEditable}
-        porcentaje_fee={porcentaje_fee}
-        setPorcentajeFee={setPorcentajeFee}
-        iva_activo={iva_activo}
-        setIvaActivo={setIvaActivo}
-        descuento_tipo={descuento_tipo}
-        setDescuentoTipo={setDescuentoTipo}
-        descuento_valor={descuento_valor}
-        setDescuentoValor={setDescuentoValor}
-      />
+      <div
+        className={`rounded-xl ${sectionEditors.totales ? 'ring-1 ring-orange-600/70 ring-offset-0' : ''}`}
+        onFocusCapture={() => esEditable && setActiveSection('totales')}
+      >
+        <div className="px-1">
+          <SectionEditBadge section="totales" />
+        </div>
+        <QuotationTotalsPanels
+          totals={displayTotales}
+          editable={!!esEditable}
+          porcentaje_fee={porcentaje_fee}
+          setPorcentajeFee={setPorcentajeFee}
+          iva_activo={iva_activo}
+          setIvaActivo={setIvaActivo}
+          descuento_tipo={descuento_tipo}
+          setDescuentoTipo={setDescuentoTipo}
+          descuento_valor={descuento_valor}
+          setDescuentoValor={setDescuentoValor}
+        />
+      </div>
+
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">Actividad de colaboración</h3>
+        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+          {activity.length === 0 && <p className="text-sm text-gray-500">Sin actividad reciente.</p>}
+          {activity.map(event => (
+            <div key={event.id} className="text-sm text-gray-300 flex flex-wrap items-center gap-2 border-b border-gray-800 pb-2">
+              <span className="text-gray-200 font-medium">{event.user_name || event.user_email}</span>
+              <span className="text-gray-500">·</span>
+              <span>{event.event_type === 'join' ? 'entró' : event.event_type === 'leave' ? 'salió' : event.event_type === 'save' ? 'guardó cambios' : event.event_type === 'start_edit_section' ? 'comenzó a editar' : 'dejó de editar'}</span>
+              {event.section && <span className="text-orange-300">{sectionLabels[event.section]}</span>}
+              <span className="ml-auto text-xs text-gray-500">{new Date(event.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
