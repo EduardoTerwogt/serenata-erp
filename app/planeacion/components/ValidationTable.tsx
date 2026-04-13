@@ -138,13 +138,13 @@ export default function ValidationTable({
             </select>
           </td>
           <td className="px-4 py-3 text-center">
-            <div className="flex items-center justify-center gap-2">
+            <div className="flex items-center justify-center gap-5">
               <button
                 onClick={() => setOpenNoteId(line.id)}
                 title={hasNotes ? (notePreview || 'Ver notas') : 'Agregar nota'}
-                className={`transition-colors ${hasNotes ? 'text-orange-400 hover:text-orange-300' : 'text-gray-600 hover:text-gray-400'}`}
+                className={`transition-colors ${hasNotes ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-600 hover:text-gray-400'}`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
               </button>
