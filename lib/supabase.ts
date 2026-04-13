@@ -14,14 +14,14 @@ if (!supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-type AnySupabaseClient = ReturnType<typeof createClient>
+let supabaseAdmin = null as any
 
-export const supabaseAdmin: AnySupabaseClient =
-  typeof window === 'undefined'
-    ? (() => {
-        if (!supabaseServiceKey) {
-          throw new Error('SUPABASE_SERVICE_ROLE_KEY is required')
-        }
-        return createClient(supabaseUrl, supabaseServiceKey)
-      })()
-    : (null as unknown as AnySupabaseClient)
+if (typeof window === 'undefined') {
+  if (!supabaseServiceKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required')
+  }
+
+  supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
+}
+
+export { supabaseAdmin }
