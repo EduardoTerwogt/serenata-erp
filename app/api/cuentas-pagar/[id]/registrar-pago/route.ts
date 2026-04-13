@@ -5,6 +5,7 @@ import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { supabaseAdmin } from '@/lib/supabase'
 import { calcularEstadoOrdenPago, calcularSaldoPendiente } from '@/lib/server/cuentas/status'
+import type { CuentaPagar } from '@/lib/types'
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -72,11 +73,12 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
       if (cuentasOrdenError) throw cuentasOrdenError
 
-      const cuentasConEstadoActual = (cuentasOrden || []).map((row) =>
-        row.id === id ? { ...row, monto_pagado: totalPagado } : row
+      const cuentasConEstadoActual: Pick<CuentaPagar, 'id' | 'x_pagar' | 'monto_pagado'>[] = (cuentasOrden || []).map(
+        (row: Pick<CuentaPagar, 'id' | 'x_pagar' | 'monto_pagado'>) =>
+          row.id === id ? { ...row, monto_pagado: totalPagado } : row
       )
 
-      const estadoOrden = calcularEstadoOrdenPago(cuentasConEstadoActual as any)
+      const estadoOrden = calcularEstadoOrdenPago(cuentasConEstadoActual)
       ordenPagoActualizada = await updateOrdenPago(cuenta.orden_pago_id, { estado: estadoOrden })
     }
 
