@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { ServiceTemplate } from '@/lib/types'
 import { ValidatedEventLine } from '../usePlaneacionFlow'
+import NoteModal from './NoteModal'
 
 interface PendientesTableProps {
   lines: ValidatedEventLine[]
@@ -24,6 +26,8 @@ export default function PendientesTable({
   error,
   onGoBack,
 }: PendientesTableProps) {
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null)
+
   const getActionColor = (action: string) => {
     switch (action) {
       case 'confirmado':
@@ -41,6 +45,7 @@ export default function PendientesTable({
 
   const EventRow = ({ line }: { line: ValidatedEventLine }) => {
     const hasNotes = !!line.notas
+    const notePreview = line.notas ? line.notas.slice(0, 60) + (line.notas.length > 60 ? '…' : '') : ''
 
     return (
       <>
@@ -105,28 +110,31 @@ export default function PendientesTable({
             </select>
           </td>
           <td className="px-4 py-3 text-center">
-            <button
-              onClick={() => onLineDelete(line.id)}
-              className="text-red-400 hover:text-red-300 text-xs"
-            >
-              ✕
-            </button>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setOpenNoteId(line.id)}
+                title={hasNotes ? (notePreview || 'Ver notas') : 'Agregar nota'}
+                className={`transition-colors ${hasNotes ? 'text-orange-400 hover:text-orange-300' : 'text-gray-600 hover:text-gray-400'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+              <button
+                onClick={() => onLineDelete(line.id)}
+                className="text-red-400 hover:text-red-300 text-xs"
+              >
+                ✕
+              </button>
+            </div>
           </td>
         </tr>
-        {hasNotes && (
-          <tr className="bg-orange-900/10">
-            <td colSpan={7} className="px-4 py-3">
-              <p className="text-xs font-semibold text-orange-400 mb-2">Notas del evento:</p>
-              <textarea
-                value={line.notas || ''}
-                onChange={e => onLineUpdate(line.id, { notas: e.target.value || null })}
-                rows={2}
-                className="w-full bg-gray-800 border border-orange-700 rounded px-2 py-1 text-xs text-orange-100 placeholder-gray-600 focus:outline-none focus:border-orange-500"
-                placeholder="Edita la nota..."
-              />
-            </td>
-          </tr>
-        )}
+        <NoteModal
+          isOpen={openNoteId === line.id}
+          onClose={() => setOpenNoteId(null)}
+          notas={line.notas}
+          onSave={(notas) => onLineUpdate(line.id, { notas })}
+        />
       </>
     )
   }
