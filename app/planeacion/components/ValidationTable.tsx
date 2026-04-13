@@ -27,6 +27,7 @@ export default function ValidationTable({
   onGoBack,
 }: ValidationTableProps) {
   const [openNoteId, setOpenNoteId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const [usage, setUsage] = useState<{
     tokensUsed: number
@@ -148,12 +149,33 @@ export default function ValidationTable({
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
               </button>
-              <button
-                onClick={() => onLineDelete(line.id)}
-                className="text-red-400 hover:text-red-300 text-xs"
-              >
-                ✕
-              </button>
+              {confirmDeleteId === line.id ? (
+                <span className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => { onLineDelete(line.id); setConfirmDeleteId(null) }}
+                    className="text-red-400 hover:text-red-300 text-xs font-medium"
+                    title="Confirmar eliminación"
+                  >
+                    Sí
+                  </button>
+                  <span className="text-gray-600 text-xs">/</span>
+                  <button
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="text-gray-400 hover:text-gray-300 text-xs"
+                    title="Cancelar"
+                  >
+                    No
+                  </button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => setConfirmDeleteId(line.id)}
+                  className="text-red-400 hover:text-red-300 text-xs"
+                  title="Eliminar fila"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </td>
         </tr>
