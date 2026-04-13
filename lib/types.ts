@@ -220,3 +220,17 @@ export interface OrdenPago {
   created_at: string
   updated_at?: string
 }
+
+export type CotizacionCollabSection = 'notas' | 'general' | 'partidas' | 'totales'
+
+export interface CotizacionCollabActivityEvent {
+  id: string
+  cotizacion_id: string
+  user_id: string
+  user_email: string
+  user_name: string
+  event_type: 'join' | 'leave' | 'start_edit_section' | 'stop_edit_section' | 'save'
+  section: CotizacionCollabSection | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
