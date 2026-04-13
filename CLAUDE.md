@@ -18,10 +18,16 @@ git config --global user.name "EduardoTerwogt"
 git config --global user.email "eduardoterwogt@gmail.com"
 source /home/user/serenata-erp/.env.local.tokens 2>/dev/null
 git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/serenata-erp.git
+
+# GitHub main es fuente de verdad — forzar local = origin/main SIEMPRE
+git fetch origin main
+git checkout main
+git reset --hard origin/main
 ```
 
 ### Reglas
 - Siempre `main`. Nunca ramas. Nunca PRs.
+- **GitHub `main` = verdad absoluta.** El `main` local del sandbox es desechable. Nunca preservar divergencias. Nunca `git push` sin haber reseteado primero a `origin/main` al inicio de la sesión.
 - Commit + push después de cada cambio funcional.
 - Push a `main` dispara deploy automático en Vercel.
 - Si el token falla → pedir al usuario uno nuevo y actualizar `.env.local.tokens`.
@@ -184,6 +190,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 - **`planeacion_pendientes.eliminada` es soft delete.** GET debe filtrar `eliminada = false`. No usar DELETE físico.
 - **`params` es Promise en Next.js 16.** Siempre `await params` antes de usar.
 - **Prisma está en deps pero NO se usa.** Ver nota en Stack. Todo va por Supabase + RPCs.
+- **El `main` local del entorno sandbox NO es fuente de verdad.** Puede tener commits legacy de estado persistente del proxy git. Al inicio de sesión SIEMPRE `git fetch origin main && git reset --hard origin/main`. Nunca hacer cherry-pick para "rescatar" commits locales — son basura. Si hay duda sobre qué está en local, resetear y volver a empezar desde `origin/main`.
 
 ---
 
