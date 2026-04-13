@@ -35,9 +35,16 @@ interface UseQuotationCollaborationResult {
 
 const MAX_ACTIVITY_EVENTS = 40
 
+function randomId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `evt_${Math.random().toString(36).slice(2, 12)}`
+}
+
 function normalizeEvent(input: Partial<CotizacionCollabActivityEvent>): CotizacionCollabActivityEvent {
   return {
-    id: input.id || crypto.randomUUID(),
+    id: input.id || randomId(),
     cotizacion_id: input.cotizacion_id || '',
     user_id: input.user_id || 'anon',
     user_email: input.user_email || '',
