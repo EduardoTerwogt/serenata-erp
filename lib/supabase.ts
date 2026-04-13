@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -14,9 +14,9 @@ if (!supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-type GenericSupabaseClient = SupabaseClient<Record<string, never>, 'public', Record<string, never>>
+type AnySupabaseClient = ReturnType<typeof createClient>
 
-export const supabaseAdmin: GenericSupabaseClient =
+export const supabaseAdmin: AnySupabaseClient =
   typeof window === 'undefined'
     ? (() => {
         if (!supabaseServiceKey) {
@@ -24,4 +24,4 @@ export const supabaseAdmin: GenericSupabaseClient =
         }
         return createClient(supabaseUrl, supabaseServiceKey)
       })()
-    : (null as unknown as GenericSupabaseClient)
+    : (null as unknown as AnySupabaseClient)
