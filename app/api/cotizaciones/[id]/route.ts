@@ -11,6 +11,7 @@ import {
   buildUpdateCotizacionPayload,
   createOrReplaceCotizacion,
   runQuotationNonCriticalAutosaves,
+  saveNotasInternas,
 } from '@/lib/server/quotations/persistence'
 import { CotizacionUpdateSchema, validate } from '@/lib/validation/schemas'
 
@@ -62,6 +63,9 @@ export async function PUT(
     )
 
     await createOrReplaceCotizacion(payload)
+    if (parsed.notas_internas !== undefined) {
+      await saveNotasInternas(id, parsed.notas_internas ?? null)
+    }
     await runQuotationNonCriticalAutosaves(payload.cliente, payload.proyecto, inputItems ?? [], 'PUT /api/cotizaciones/:id')
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
 

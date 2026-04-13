@@ -82,6 +82,7 @@ export async function updateQuotation(
   await sendJson(`/api/cotizaciones/${id}`, {
     ...basePayload,
     items,
+    ...(options.notas_internas !== undefined ? { notas_internas: options.notas_internas } : {}),
   }, 'Error al actualizar cotización', { method: 'PUT' })
 
   return fetchQuotationDetail(id)

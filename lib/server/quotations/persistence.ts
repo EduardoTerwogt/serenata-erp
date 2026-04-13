@@ -93,6 +93,14 @@ export async function createOrReplaceCotizacion(payload: Record<string, unknown>
   await saveCotizacionAtomic(payload)
 }
 
+export async function saveNotasInternas(id: string, notas: string | null) {
+  const { error } = await supabaseAdmin
+    .from('cotizaciones')
+    .update({ notas_internas: notas })
+    .eq('id', id)
+  if (error) throw error
+}
+
 export async function buildCreateCotizacionPayload(
   cotizacionData: Record<string, unknown>,
   inputItems: Partial<ItemCotizacion>[],

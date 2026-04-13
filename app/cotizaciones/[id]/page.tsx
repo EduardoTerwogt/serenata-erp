@@ -28,6 +28,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [driveLink, setDriveLink] = useState<string | null>(null)
+  const [notasInternas, setNotasInternas] = useState('')
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
   const [iva_activo, setIvaActivo] = useState(true)
@@ -68,6 +69,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
+    setNotasInternas(cot.notas_internas ?? '')
     setClienteInput(cot.cliente || '')
     setProyectoInput(cot.proyecto || '')
     setPorcentajeFee(cot.porcentaje_fee ?? 0.15)
@@ -141,6 +143,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         descuento_valor,
         responsables,
         currentQuotation: cotizacion,
+        notas_internas: notasInternas || null,
         ...(estado ? { estado: estado as 'BORRADOR' | 'EMITIDA' | 'APROBADA' } : {}),
       })
       applyCotizacionToState(refreshedCotizacion)
@@ -275,6 +278,23 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
             <a href={driveLink} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-200 underline text-sm whitespace-nowrap">
               Ver en Drive →
             </a>
+          )}
+        </div>
+      )}
+
+      {(notasInternas || esEditable) && (
+        <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4 mb-6">
+          <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-medium">Notas del evento (uso interno)</p>
+          {esEditable ? (
+            <textarea
+              value={notasInternas}
+              onChange={e => setNotasInternas(e.target.value)}
+              rows={3}
+              placeholder="Sin notas..."
+              className="w-full bg-transparent text-gray-300 text-sm resize-none outline-none placeholder-gray-600"
+            />
+          ) : (
+            <p className="text-gray-400 text-sm whitespace-pre-wrap">{notasInternas || '—'}</p>
           )}
         </div>
       )}

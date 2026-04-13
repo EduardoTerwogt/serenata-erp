@@ -6,6 +6,7 @@ import {
   buildCreateCotizacionPayload,
   createOrReplaceCotizacion,
   runQuotationNonCriticalAutosaves,
+  saveNotasInternas,
 } from '@/lib/server/quotations/persistence'
 import { CotizacionCreateSchema, validate } from '@/lib/validation/schemas'
 import { ItemCotizacion } from '@/lib/types'
@@ -73,6 +74,9 @@ export async function POST(request: Request) {
     )
 
     await createOrReplaceCotizacion(payload)
+    if (parsed.notas_internas !== undefined) {
+      await saveNotasInternas(folio, parsed.notas_internas ?? null)
+    }
     await consumeReservedQuotationFolio(folio, reservationToken || null)
     await runQuotationNonCriticalAutosaves(cotizacionData.cliente, cotizacionData.proyecto, inputItems, 'POST /api/cotizaciones')
     triggerSheetsSync('cotizaciones', 'items_cotizacion', 'clientes', 'productos')

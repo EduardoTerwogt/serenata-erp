@@ -191,6 +191,7 @@ export function usePendientesFlow() {
             estado: 'BORRADOR',
             items,
             tipo: 'PRINCIPAL',
+            notas_internas: line.notas || null,
           }),
         })
 

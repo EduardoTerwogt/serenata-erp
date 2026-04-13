@@ -119,4 +119,5 @@ export interface UpdateQuotationOptions {
   descuento_valor: number
   responsables: Responsable[]
   currentQuotation: Cotizacion | null
+  notas_internas?: string | null
 }

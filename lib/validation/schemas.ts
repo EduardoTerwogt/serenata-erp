@@ -51,6 +51,7 @@ const CotizacionBaseSchema = z.object({
   descuento_tipo: z.enum(['monto', 'porcentaje']).optional().default('monto'),
   descuento_valor: z.coerce.number().min(0).optional().default(0),
   items: z.array(ItemCotizacionSchema).optional().default([]),
+  notas_internas: z.string().nullable().optional(),
 })
 
 export const CotizacionCreateSchema = CotizacionBaseSchema.extend({

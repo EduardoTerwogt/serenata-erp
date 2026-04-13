@@ -112,6 +112,7 @@ export interface Cotizacion {
   items?: ItemCotizacion[]
   drive_file_id?: string | null
   calendar_event_id?: string | null
+  notas_internas?: string | null
 }
 
 export interface Proyecto {

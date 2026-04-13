@@ -325,6 +325,7 @@ export function usePlaneacionFlow() {
             estado: 'BORRADOR',
             items,
             tipo: 'PRINCIPAL',
+            notas_internas: line.notas || null,
           }),
         })
 
