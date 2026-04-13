@@ -122,18 +122,17 @@ export default function PendientesTable({
                 </svg>
               </button>
               {confirmDeleteId === line.id ? (
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-4">
                   <button
                     onClick={() => { onLineDelete(line.id); setConfirmDeleteId(null) }}
-                    className="text-red-400 hover:text-red-300 text-xs font-medium"
+                    className="text-red-400 hover:text-red-300 text-sm font-bold"
                     title="Confirmar eliminación"
                   >
                     Sí
                   </button>
-                  <span className="text-gray-600 text-xs">/</span>
                   <button
                     onClick={() => setConfirmDeleteId(null)}
-                    className="text-gray-400 hover:text-gray-300 text-xs"
+                    className="text-gray-400 hover:text-gray-300 text-sm font-bold"
                     title="Cancelar"
                   >
                     No
