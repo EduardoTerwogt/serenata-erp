@@ -1,4 +1,4 @@
-import { getCotizacionById } from '@/lib/db'
+import { getCotizacionById, updateCotizacion as updateCotizacionRecord } from '@/lib/db'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemCotizacion } from '@/lib/types'
@@ -71,7 +71,13 @@ export async function runQuotationNonCriticalAutosaves(
   clienteValue: unknown,
   proyectoValue: unknown,
   items: Partial<ItemCotizacion>[],
-  source: 'POST /api/cotizaciones' | 'PUT /api/cotizaciones/:id' | 'PATCH /api/cotizaciones/:id/general' | 'PATCH /api/cotizaciones/:id/totales'
+  source:
+    | 'POST /api/cotizaciones'
+    | 'PUT /api/cotizaciones/:id'
+    | 'PATCH /api/cotizaciones/:id/general'
+    | 'PATCH /api/cotizaciones/:id/totales'
+    | 'POST /api/cotizaciones/:id/items'
+    | 'PATCH /api/cotizaciones/:id/items/:itemId'
 ) {
   const tasks: Promise<unknown>[] = [autosaveClienteYProyecto(clienteValue, proyectoValue)]
 
@@ -99,6 +105,20 @@ export async function saveNotasInternas(id: string, notas: string | null) {
     .update({ notas_internas: notas })
     .eq('id', id)
   if (error) throw error
+}
+
+export async function recalculateQuotationHeader(cotizacionId: string) {
+  const cotizacion = await getCotizacionById(cotizacionId)
+  const persistenceData = buildQuotationPersistenceData(
+    cotizacion.items || [],
+    cotizacion.porcentaje_fee ?? 0.15,
+    cotizacion.iva_activo ?? true,
+    cotizacion.descuento_tipo ?? 'monto',
+    cotizacion.descuento_valor ?? 0
+  )
+
+  await updateCotizacionRecord(cotizacionId, persistenceData)
+  return getCotizacionById(cotizacionId)
 }
 
 export async function buildCreateCotizacionPayload(
