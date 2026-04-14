@@ -71,7 +71,7 @@ export async function runQuotationNonCriticalAutosaves(
   clienteValue: unknown,
   proyectoValue: unknown,
   items: Partial<ItemCotizacion>[],
-  source: 'POST /api/cotizaciones' | 'PUT /api/cotizaciones/:id'
+  source: 'POST /api/cotizaciones' | 'PUT /api/cotizaciones/:id' | 'PATCH /api/cotizaciones/:id/general' | 'PATCH /api/cotizaciones/:id/totales'
 ) {
   const tasks: Promise<unknown>[] = [autosaveClienteYProyecto(clienteValue, proyectoValue)]
 
