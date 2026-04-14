@@ -10,7 +10,7 @@ import { QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuota
 import { calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchResponsables, generateQuotationPdf, updateQuotation } from '@/lib/services/quotation-service'
+import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchResponsables, generateQuotationPdf, saveQuotationNotes, updateQuotation } from '@/lib/services/quotation-service'
 import { formatSpanishLongDate } from '@/lib/quotations/format'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
@@ -23,6 +23,8 @@ const sectionLabels: Record<QuotationPresenceSection, string> = {
   partidas: 'Partidas',
   totales: 'Totales',
 }
+
+const NOTAS_AUTOSAVE_DELAY_MS = 800
 
 function getInitials(value: string) {
   const parts = value.trim().split(/\s+/).filter(Boolean)
@@ -63,8 +65,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [iva_activo, setIvaActivo] = useState(true)
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
   const [descuento_valor, setDescuentoValor] = useState(0)
+  const [isSavingNotas, setIsSavingNotas] = useState(false)
   const notasSectionRef = useRef<HTMLDivElement | null>(null)
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
+  const notasAutosaveTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+  const notasDirtyRef = useRef(false)
+  const notasLockHeldRef = useRef(false)
+  const lastSavedNotasRef = useRef('')
 
   const { register, control, watch, reset, setValue } = useForm<QuotationFormValues>({
     defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
@@ -97,7 +104,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   } = quotationForm
 
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'EMITIDA'
-  const { onlineUsers, sectionEditors, setActiveSection, releaseSection } = useQuotationPresence({
+  const { onlineUsers, sectionEditors, savedSections, setActiveSection, releaseSection, markSectionSaved } = useQuotationPresence({
     cotizacionId: id,
     enabled: !!esEditable,
     currentUser: {
@@ -109,7 +116,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
-    setNotasInternas(cot.notas_internas ?? '')
+    const notas = cot.notas_internas ?? ''
+    setNotasInternas(notas)
+    lastSavedNotasRef.current = notas
+    notasDirtyRef.current = false
     setClienteInput(cot.cliente || '')
     setProyectoInput(cot.proyecto || '')
     setPorcentajeFee(cot.porcentaje_fee ?? 0.15)
@@ -133,6 +143,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       })),
     })
   }, [reset, setClienteInput, setProyectoInput])
+
+  const applyNotasOnly = useCallback((notas: string | null) => {
+    const normalized = notas ?? ''
+    setNotasInternas(normalized)
+    lastSavedNotasRef.current = normalized
+    notasDirtyRef.current = false
+    setCotizacion((prev) => (prev ? { ...prev, notas_internas: notas } : prev))
+  }, [])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
 
@@ -164,7 +182,76 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     [esEditable, cotizacion, totales]
   )
 
-  const handleSectionBlur = useCallback((event: FocusEvent<HTMLDivElement>, section: QuotationPresenceSection, ref: React.RefObject<HTMLDivElement | null>) => {
+  const persistNotasAutosave = useCallback(async () => {
+    if (!cotizacion) return
+
+    const normalizedNotas = notasInternas.trim() ? notasInternas : ''
+    const previousNotas = lastSavedNotasRef.current
+
+    if (normalizedNotas === previousNotas) {
+      notasDirtyRef.current = false
+      notasLockHeldRef.current = false
+      releaseSection()
+      return
+    }
+
+    setIsSavingNotas(true)
+    try {
+      const updated = await saveQuotationNotes(id, normalizedNotas || null)
+      applyNotasOnly(updated.notas_internas ?? null)
+      markSectionSaved('notas')
+    } catch (saveError: unknown) {
+      setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas')
+    } finally {
+      setIsSavingNotas(false)
+      notasLockHeldRef.current = false
+      releaseSection()
+    }
+  }, [applyNotasOnly, cotizacion, id, markSectionSaved, notasInternas, releaseSection])
+
+  useEffect(() => {
+    if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current) return
+    if (sectionEditors.notas) return
+
+    if (notasAutosaveTimerRef.current) {
+      window.clearTimeout(notasAutosaveTimerRef.current)
+    }
+
+    notasAutosaveTimerRef.current = window.setTimeout(() => {
+      void persistNotasAutosave()
+    }, NOTAS_AUTOSAVE_DELAY_MS)
+
+    return () => {
+      if (notasAutosaveTimerRef.current) {
+        window.clearTimeout(notasAutosaveTimerRef.current)
+        notasAutosaveTimerRef.current = null
+      }
+    }
+  }, [esEditable, notasInternas, persistNotasAutosave, sectionEditors.notas])
+
+  useEffect(() => {
+    const remoteNotasSaves = savedSections.notas || 0
+    if (!remoteNotasSaves) return
+    if (notasLockHeldRef.current || isSavingNotas) return
+
+    fetchQuotationDetail(id)
+      .then((updated) => {
+        applyNotasOnly(updated.notas_internas ?? null)
+      })
+      .catch((loadError) => {
+        console.error('[cotizaciones/[id]] Error refrescando notas tras save remoto:', loadError)
+      })
+  }, [applyNotasOnly, id, isSavingNotas, savedSections.notas])
+
+  useEffect(() => {
+    return () => {
+      if (notasAutosaveTimerRef.current) {
+        window.clearTimeout(notasAutosaveTimerRef.current)
+      }
+    }
+  }, [])
+
+  const handleSectionBlur = useCallback((event: FocusEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement | null>) => {
     if (!esEditable) return
 
     const nextTarget = event.relatedTarget as Node | null
@@ -176,6 +263,32 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       releaseSection()
     }, 0)
   }, [esEditable, releaseSection])
+
+  const handleNotasFocus = useCallback(() => {
+    if (!esEditable || !!sectionEditors.notas) return
+    notasLockHeldRef.current = true
+    setActiveSection('notas')
+  }, [esEditable, sectionEditors.notas, setActiveSection])
+
+  const handleNotasBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    if (!esEditable) return
+
+    const nextTarget = event.relatedTarget as Node | null
+    if (nextTarget && notasSectionRef.current?.contains(nextTarget)) return
+
+    window.setTimeout(() => {
+      const activeElement = document.activeElement
+      if (activeElement && notasSectionRef.current?.contains(activeElement)) return
+
+      if (notasDirtyRef.current) {
+        void persistNotasAutosave()
+        return
+      }
+
+      notasLockHeldRef.current = false
+      releaseSection()
+    }, 0)
+  }, [esEditable, persistNotasAutosave, releaseSection])
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)
@@ -375,18 +488,25 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         <div
           ref={notasSectionRef}
           className={`bg-gray-800/60 border rounded-xl p-4 mb-6 ${notasLockedByOther ? 'border-orange-600/70 opacity-80' : 'border-gray-700'}`}
-          onFocusCapture={() => esEditable && !notasLockedByOther && setActiveSection('notas')}
-          onBlurCapture={(event) => handleSectionBlur(event, 'notas', notasSectionRef)}
+          onFocusCapture={handleNotasFocus}
+          onBlurCapture={handleNotasBlur}
         >
           <SectionEditBadge section="notas" />
           <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-medium">Notas del evento (uso interno)</p>
           {esEditable ? (
             <textarea
               value={notasInternas}
-              onChange={e => setNotasInternas(e.target.value)}
+              onChange={e => {
+                if (!notasLockHeldRef.current && !notasLockedByOther) {
+                  notasLockHeldRef.current = true
+                  setActiveSection('notas')
+                }
+                notasDirtyRef.current = true
+                setNotasInternas(e.target.value)
+              }}
               rows={3}
               placeholder="Sin notas..."
-              disabled={notasLockedByOther}
+              disabled={notasLockedByOther || isSavingNotas}
               className="w-full bg-transparent text-gray-300 text-sm resize-none outline-none placeholder-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             />
           ) : (
@@ -399,7 +519,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         ref={generalSectionRef}
         className={`rounded-xl ${generalLockedByOther ? 'ring-1 ring-orange-600/70 opacity-80' : ''}`}
         onFocusCapture={() => esEditable && !generalLockedByOther && setActiveSection('general')}
-        onBlurCapture={(event) => handleSectionBlur(event, 'general', generalSectionRef)}
+        onBlurCapture={(event) => handleSectionBlur(event, generalSectionRef)}
       >
         <div className="px-1">
           <SectionEditBadge section="general" />

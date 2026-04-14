@@ -29,8 +29,10 @@ interface UseQuotationPresenceOptions {
 interface UseQuotationPresenceResult {
   onlineUsers: QuotationPresenceUser[]
   sectionEditors: Partial<Record<QuotationPresenceSection, QuotationPresenceUser>>
+  savedSections: Partial<Record<QuotationPresenceSection, number>>
   setActiveSection: (section: QuotationPresenceSection | null) => void
   releaseSection: () => void
+  markSectionSaved: (section: QuotationPresenceSection) => void
   isConnected: boolean
 }
 
@@ -45,6 +47,14 @@ interface SectionSignalPayload {
   at: string
 }
 
+interface SectionSavedPayload {
+  section: QuotationPresenceSection
+  user_id: string
+  email: string
+  name: string
+  at: string
+}
+
 export function useQuotationPresence({
   cotizacionId,
   enabled,
@@ -52,6 +62,7 @@ export function useQuotationPresence({
 }: UseQuotationPresenceOptions): UseQuotationPresenceResult {
   const [rawOnlineUsers, setRawOnlineUsers] = useState<QuotationPresenceUser[]>([])
   const [activeSectionOverrides, setActiveSectionOverrides] = useState<Record<string, QuotationPresenceSection | null>>({})
+  const [savedSections, setSavedSections] = useState<Partial<Record<QuotationPresenceSection, number>>>({})
   const [isConnected, setIsConnected] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
@@ -95,6 +106,23 @@ export function useQuotationPresence({
     }).catch(() => null)
   }, [identity.email, identity.name, identity.userId])
 
+  const markSectionSaved = useCallback((section: QuotationPresenceSection) => {
+    const channel = channelRef.current
+    if (!channel) return
+
+    void channel.send({
+      type: 'broadcast',
+      event: 'section_saved',
+      payload: {
+        section,
+        user_id: identity.userId,
+        email: identity.email,
+        name: identity.name,
+        at: new Date().toISOString(),
+      } satisfies SectionSavedPayload,
+    }).catch(() => null)
+  }, [identity.email, identity.name, identity.userId])
+
   const setActiveSection = useCallback((section: QuotationPresenceSection | null) => {
     const previous = activeSectionRef.current
     activeSectionRef.current = section
@@ -125,6 +153,7 @@ export function useQuotationPresence({
     if (!enabled) {
       setRawOnlineUsers([])
       setActiveSectionOverrides({})
+      setSavedSections({})
       setIsConnected(false)
       return
     }
@@ -156,6 +185,20 @@ export function useQuotationPresence({
       }))
     })
 
+    channel.on('broadcast', { event: 'section_saved' }, ({ payload }) => {
+      const saved = payload as SectionSavedPayload | undefined
+      if (!saved?.user_id || saved.user_id === identity.userId) return
+
+      setActiveSectionOverrides((prev) => ({
+        ...prev,
+        [saved.user_id]: null,
+      }))
+      setSavedSections((prev) => ({
+        ...prev,
+        [saved.section]: (prev[saved.section] || 0) + 1,
+      }))
+    })
+
     channel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         setIsConnected(true)
@@ -180,6 +223,7 @@ export function useQuotationPresence({
       setIsConnected(false)
       setRawOnlineUsers([])
       setActiveSectionOverrides({})
+      setSavedSections({})
       void channel.untrack().catch(() => null)
       void supabaseBrowser.removeChannel(channel)
       channelRef.current = null
@@ -212,8 +256,10 @@ export function useQuotationPresence({
   return {
     onlineUsers,
     sectionEditors,
+    savedSections,
     setActiveSection,
     releaseSection,
+    markSectionSaved,
     isConnected,
   }
 }

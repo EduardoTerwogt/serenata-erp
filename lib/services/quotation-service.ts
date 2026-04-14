@@ -20,6 +20,12 @@ export async function fetchQuotationDetail(id: string): Promise<Cotizacion> {
   return getJson(`/api/cotizaciones/${id}`, 'Cotización no encontrada')
 }
 
+export async function saveQuotationNotes(id: string, notasInternas: string | null): Promise<Cotizacion> {
+  return sendJson(`/api/cotizaciones/${id}/notas`, {
+    notas_internas: notasInternas,
+  }, 'Error guardando notas internas', { method: 'PATCH' })
+}
+
 export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string }> {
   const folioUrl = complementariaDe
     ? `/api/folio?complementaria_de=${encodeURIComponent(complementariaDe)}`
