@@ -10,7 +10,7 @@ import { QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuota
 import { calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchResponsables, generateQuotationPdf, saveQuotationNotes, updateQuotation } from '@/lib/services/quotation-service'
+import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchResponsables, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, updateQuotation } from '@/lib/services/quotation-service'
 import { formatSpanishLongDate } from '@/lib/quotations/format'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
@@ -25,6 +25,14 @@ const sectionLabels: Record<QuotationPresenceSection, string> = {
 }
 
 const NOTAS_AUTOSAVE_DELAY_MS = 800
+const GENERAL_AUTOSAVE_DELAY_MS = 800
+
+interface GeneralSnapshot {
+  cliente: string
+  proyecto: string
+  fecha_entrega: string
+  locacion: string
+}
 
 function getInitials(value: string) {
   const parts = value.trim().split(/\s+/).filter(Boolean)
@@ -43,6 +51,19 @@ function getShortName(name?: string | null, email?: string | null) {
     return cleanEmail.split('@')[0]
   }
   return 'Usuario'
+}
+
+function buildGeneralSnapshot(values: Partial<GeneralSnapshot>): GeneralSnapshot {
+  return {
+    cliente: values.cliente || '',
+    proyecto: values.proyecto || '',
+    fecha_entrega: values.fecha_entrega || '',
+    locacion: values.locacion || '',
+  }
+}
+
+function areGeneralSnapshotsEqual(a: GeneralSnapshot, b: GeneralSnapshot) {
+  return a.cliente === b.cliente && a.proyecto === b.proyecto && a.fecha_entrega === b.fecha_entrega && a.locacion === b.locacion
 }
 
 export default function CotizacionDetallePage({ params }: { params: Promise<{ id: string }> }) {
@@ -66,18 +87,25 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
   const [descuento_valor, setDescuentoValor] = useState(0)
   const [isSavingNotas, setIsSavingNotas] = useState(false)
+  const [isSavingGeneral, setIsSavingGeneral] = useState(false)
   const notasSectionRef = useRef<HTMLDivElement | null>(null)
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
   const notasAutosaveTimerRef = useRef<number | null>(null)
+  const generalAutosaveTimerRef = useRef<number | null>(null)
   const notasDirtyRef = useRef(false)
+  const generalDirtyRef = useRef(false)
   const notasLockHeldRef = useRef(false)
+  const generalLockHeldRef = useRef(false)
   const lastSavedNotasRef = useRef('')
+  const lastSavedGeneralRef = useRef<GeneralSnapshot>(buildGeneralSnapshot({}))
 
-  const { register, control, watch, reset, setValue } = useForm<QuotationFormValues>({
+  const { register, control, watch, reset, setValue, getValues } = useForm<QuotationFormValues>({
     defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchedItems = watch('items')
+  const watchedFechaEntrega = watch('fecha_entrega') || ''
+  const watchedLocacion = watch('locacion') || ''
   const quotationForm = useQuotationForm(setValue, watchedItems)
   const {
     refreshCatalogos,
@@ -103,6 +131,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     setMostrarProductoDropdown,
   } = quotationForm
 
+  const currentGeneralSnapshot = useMemo(() => buildGeneralSnapshot({
+    cliente: clienteInput,
+    proyecto: proyectoInput,
+    fecha_entrega: watchedFechaEntrega,
+    locacion: watchedLocacion,
+  }), [clienteInput, proyectoInput, watchedFechaEntrega, watchedLocacion])
+
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'EMITIDA'
   const { onlineUsers, sectionEditors, savedSections, setActiveSection, releaseSection, markSectionSaved } = useQuotationPresence({
     cotizacionId: id,
@@ -117,9 +152,17 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
     const notas = cot.notas_internas ?? ''
+    const general = buildGeneralSnapshot({
+      cliente: cot.cliente,
+      proyecto: cot.proyecto,
+      fecha_entrega: cot.fecha_entrega || '',
+      locacion: cot.locacion || '',
+    })
     setNotasInternas(notas)
     lastSavedNotasRef.current = notas
     notasDirtyRef.current = false
+    lastSavedGeneralRef.current = general
+    generalDirtyRef.current = false
     setClienteInput(cot.cliente || '')
     setProyectoInput(cot.proyecto || '')
     setPorcentajeFee(cot.porcentaje_fee ?? 0.15)
@@ -151,6 +194,30 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     notasDirtyRef.current = false
     setCotizacion((prev) => (prev ? { ...prev, notas_internas: notas } : prev))
   }, [])
+
+  const applyGeneralOnly = useCallback((cot: Cotizacion) => {
+    const general = buildGeneralSnapshot({
+      cliente: cot.cliente,
+      proyecto: cot.proyecto,
+      fecha_entrega: cot.fecha_entrega || '',
+      locacion: cot.locacion || '',
+    })
+    lastSavedGeneralRef.current = general
+    generalDirtyRef.current = false
+    setClienteInput(general.cliente)
+    setProyectoInput(general.proyecto)
+    setValue('cliente', general.cliente)
+    setValue('proyecto', general.proyecto)
+    setValue('fecha_entrega', general.fecha_entrega)
+    setValue('locacion', general.locacion)
+    setCotizacion((prev) => prev ? {
+      ...prev,
+      cliente: general.cliente,
+      proyecto: general.proyecto,
+      fecha_entrega: general.fecha_entrega || null,
+      locacion: general.locacion || null,
+    } : prev)
+  }, [setClienteInput, setProyectoInput, setValue])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
 
@@ -209,6 +276,43 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }, [applyNotasOnly, cotizacion, id, markSectionSaved, notasInternas, releaseSection])
 
+  const persistGeneralAutosave = useCallback(async () => {
+    if (!cotizacion) return
+
+    const snapshot = buildGeneralSnapshot({
+      cliente: clienteInput,
+      proyecto: proyectoInput,
+      fecha_entrega: getValues('fecha_entrega') || '',
+      locacion: getValues('locacion') || '',
+    })
+    const previousSnapshot = lastSavedGeneralRef.current
+
+    if (areGeneralSnapshotsEqual(snapshot, previousSnapshot)) {
+      generalDirtyRef.current = false
+      generalLockHeldRef.current = false
+      releaseSection()
+      return
+    }
+
+    setIsSavingGeneral(true)
+    try {
+      const updated = await saveQuotationGeneral(id, {
+        cliente: snapshot.cliente,
+        proyecto: snapshot.proyecto,
+        fecha_entrega: snapshot.fecha_entrega || null,
+        locacion: snapshot.locacion || null,
+      })
+      applyGeneralOnly(updated)
+      markSectionSaved('general')
+    } catch (saveError: unknown) {
+      setError(saveError instanceof Error ? saveError.message : 'Error guardando información general')
+    } finally {
+      setIsSavingGeneral(false)
+      generalLockHeldRef.current = false
+      releaseSection()
+    }
+  }, [applyGeneralOnly, clienteInput, cotizacion, getValues, id, markSectionSaved, proyectoInput, releaseSection])
+
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current) return
     if (sectionEditors.notas) return
@@ -230,6 +334,26 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [esEditable, notasInternas, persistNotasAutosave, sectionEditors.notas])
 
   useEffect(() => {
+    if (!esEditable || !generalLockHeldRef.current || !generalDirtyRef.current) return
+    if (sectionEditors.general) return
+
+    if (generalAutosaveTimerRef.current !== null) {
+      window.clearTimeout(generalAutosaveTimerRef.current)
+    }
+
+    generalAutosaveTimerRef.current = window.setTimeout(() => {
+      void persistGeneralAutosave()
+    }, GENERAL_AUTOSAVE_DELAY_MS)
+
+    return () => {
+      if (generalAutosaveTimerRef.current !== null) {
+        window.clearTimeout(generalAutosaveTimerRef.current)
+        generalAutosaveTimerRef.current = null
+      }
+    }
+  }, [currentGeneralSnapshot, esEditable, persistGeneralAutosave, sectionEditors.general])
+
+  useEffect(() => {
     const remoteNotasSaves = savedSections.notas || 0
     if (!remoteNotasSaves) return
     if (notasLockHeldRef.current || isSavingNotas) return
@@ -244,9 +368,33 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [applyNotasOnly, id, isSavingNotas, savedSections.notas])
 
   useEffect(() => {
+    const remoteGeneralSaves = savedSections.general || 0
+    if (!remoteGeneralSaves) return
+    if (generalLockHeldRef.current || isSavingGeneral) return
+
+    fetchQuotationDetail(id)
+      .then((updated) => {
+        applyGeneralOnly(updated)
+      })
+      .catch((loadError) => {
+        console.error('[cotizaciones/[id]] Error refrescando general tras save remoto:', loadError)
+      })
+  }, [applyGeneralOnly, id, isSavingGeneral, savedSections.general])
+
+  useEffect(() => {
+    if (!generalLockHeldRef.current) return
+    if (!areGeneralSnapshotsEqual(currentGeneralSnapshot, lastSavedGeneralRef.current)) {
+      generalDirtyRef.current = true
+    }
+  }, [currentGeneralSnapshot])
+
+  useEffect(() => {
     return () => {
       if (notasAutosaveTimerRef.current !== null) {
         window.clearTimeout(notasAutosaveTimerRef.current)
+      }
+      if (generalAutosaveTimerRef.current !== null) {
+        window.clearTimeout(generalAutosaveTimerRef.current)
       }
     }
   }, [])
@@ -270,6 +418,12 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     setActiveSection('notas')
   }, [esEditable, sectionEditors.notas, setActiveSection])
 
+  const handleGeneralFocus = useCallback(() => {
+    if (!esEditable || !!sectionEditors.general) return
+    generalLockHeldRef.current = true
+    setActiveSection('general')
+  }, [esEditable, sectionEditors.general, setActiveSection])
+
   const handleNotasBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
     if (!esEditable) return
 
@@ -289,6 +443,44 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       releaseSection()
     }, 0)
   }, [esEditable, persistNotasAutosave, releaseSection])
+
+  const handleGeneralBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    if (!esEditable) return
+
+    const nextTarget = event.relatedTarget as Node | null
+    if (nextTarget && generalSectionRef.current?.contains(nextTarget)) return
+
+    window.setTimeout(() => {
+      const activeElement = document.activeElement
+      if (activeElement && generalSectionRef.current?.contains(activeElement)) return
+
+      if (generalDirtyRef.current) {
+        void persistGeneralAutosave()
+        return
+      }
+
+      generalLockHeldRef.current = false
+      releaseSection()
+    }, 0)
+  }, [esEditable, persistGeneralAutosave, releaseSection])
+
+  const trackedHandleClienteChange = useCallback((value: string) => {
+    if (!generalLockHeldRef.current && !sectionEditors.general) {
+      generalLockHeldRef.current = true
+      setActiveSection('general')
+    }
+    generalDirtyRef.current = true
+    handleClienteChange(value)
+  }, [handleClienteChange, sectionEditors.general, setActiveSection])
+
+  const trackedHandleProyectoChange = useCallback((value: string) => {
+    if (!generalLockHeldRef.current && !sectionEditors.general) {
+      generalLockHeldRef.current = true
+      setActiveSection('general')
+    }
+    generalDirtyRef.current = true
+    handleProyectoChange(value)
+  }, [handleProyectoChange, sectionEditors.general, setActiveSection])
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)
@@ -518,8 +710,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       <div
         ref={generalSectionRef}
         className={`rounded-xl ${generalLockedByOther ? 'ring-1 ring-orange-600/70 opacity-80' : ''}`}
-        onFocusCapture={() => esEditable && !generalLockedByOther && setActiveSection('general')}
-        onBlurCapture={(event) => handleSectionBlur(event, generalSectionRef)}
+        onFocusCapture={handleGeneralFocus}
+        onBlurCapture={handleGeneralBlur}
       >
         <div className="px-1">
           <SectionEditBadge section="general" />
@@ -536,11 +728,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           mostrarProyectoDropdown={mostrarProyectoDropdown}
           setMostrarProyectoDropdown={setMostrarProyectoDropdown}
           listaClientes={listaClientes}
-          handleClienteChange={handleClienteChange}
-          handleProyectoChange={handleProyectoChange}
+          handleClienteChange={trackedHandleClienteChange}
+          handleProyectoChange={trackedHandleProyectoChange}
           seleccionarCliente={seleccionarCliente}
           setProyectoInput={setProyectoInput}
-          isReadOnly={!esEditable || generalLockedByOther}
+          isReadOnly={!esEditable || generalLockedByOther || isSavingGeneral}
           readOnlyDisplay={esEditable ? 'input' : 'text'}
           dateLabel={formatSpanishLongDate(cotizacion.fecha_cotizacion)}
           fechaEntregaValue={watch('fecha_entrega')}

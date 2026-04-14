@@ -26,6 +26,18 @@ export async function saveQuotationNotes(id: string, notasInternas: string | nul
   }, 'Error guardando notas internas', { method: 'PATCH' })
 }
 
+export async function saveQuotationGeneral(
+  id: string,
+  payload: {
+    cliente: string
+    proyecto: string
+    fecha_entrega: string | null
+    locacion: string | null
+  }
+): Promise<Cotizacion> {
+  return sendJson(`/api/cotizaciones/${id}/general`, payload, 'Error guardando información general', { method: 'PATCH' })
+}
+
 export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string }> {
   const folioUrl = complementariaDe
     ? `/api/folio?complementaria_de=${encodeURIComponent(complementariaDe)}`
