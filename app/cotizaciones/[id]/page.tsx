@@ -115,6 +115,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     handleDescripcionChange,
     seleccionarProducto,
     seleccionarCliente,
+    seleccionarProyecto,
     listaClientes,
     clienteInput,
     setClienteInput,
@@ -418,11 +419,23 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     setActiveSection('notas')
   }, [esEditable, sectionEditors.notas, setActiveSection])
 
-  const handleGeneralFocus = useCallback(() => {
+  const activateGeneralEditing = useCallback(() => {
     if (!esEditable || !!sectionEditors.general) return
-    generalLockHeldRef.current = true
-    setActiveSection('general')
+    if (!generalLockHeldRef.current) {
+      generalLockHeldRef.current = true
+      setActiveSection('general')
+    }
   }, [esEditable, sectionEditors.general, setActiveSection])
+
+  const markGeneralDirty = useCallback(() => {
+    if (!esEditable || !!sectionEditors.general) return
+    activateGeneralEditing()
+    generalDirtyRef.current = true
+  }, [activateGeneralEditing, esEditable, sectionEditors.general])
+
+  const handleGeneralFocus = useCallback(() => {
+    activateGeneralEditing()
+  }, [activateGeneralEditing])
 
   const handleNotasBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
     if (!esEditable) return
@@ -465,22 +478,32 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [esEditable, persistGeneralAutosave, releaseSection])
 
   const trackedHandleClienteChange = useCallback((value: string) => {
-    if (!generalLockHeldRef.current && !sectionEditors.general) {
-      generalLockHeldRef.current = true
-      setActiveSection('general')
-    }
-    generalDirtyRef.current = true
+    markGeneralDirty()
     handleClienteChange(value)
-  }, [handleClienteChange, sectionEditors.general, setActiveSection])
+  }, [handleClienteChange, markGeneralDirty])
 
   const trackedHandleProyectoChange = useCallback((value: string) => {
-    if (!generalLockHeldRef.current && !sectionEditors.general) {
-      generalLockHeldRef.current = true
-      setActiveSection('general')
-    }
-    generalDirtyRef.current = true
+    markGeneralDirty()
     handleProyectoChange(value)
-  }, [handleProyectoChange, sectionEditors.general, setActiveSection])
+  }, [handleProyectoChange, markGeneralDirty])
+
+  const trackedSelectCliente = useCallback((value: string) => {
+    markGeneralDirty()
+    seleccionarCliente(value)
+  }, [markGeneralDirty, seleccionarCliente])
+
+  const trackedSelectProyecto = useCallback((value: string) => {
+    markGeneralDirty()
+    seleccionarProyecto(value)
+  }, [markGeneralDirty, seleccionarProyecto])
+
+  const trackedHandleFechaEntregaChange = useCallback(() => {
+    markGeneralDirty()
+  }, [markGeneralDirty])
+
+  const trackedHandleLocacionChange = useCallback(() => {
+    markGeneralDirty()
+  }, [markGeneralDirty])
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)
@@ -732,6 +755,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           handleProyectoChange={trackedHandleProyectoChange}
           seleccionarCliente={seleccionarCliente}
           setProyectoInput={setProyectoInput}
+          onClienteSelected={trackedSelectCliente}
+          onProyectoSelected={trackedSelectProyecto}
+          onFechaEntregaChange={trackedHandleFechaEntregaChange}
+          onLocacionChange={trackedHandleLocacionChange}
           isReadOnly={!esEditable || generalLockedByOther || isSavingGeneral}
           readOnlyDisplay={esEditable ? 'input' : 'text'}
           dateLabel={formatSpanishLongDate(cotizacion.fecha_cotizacion)}
