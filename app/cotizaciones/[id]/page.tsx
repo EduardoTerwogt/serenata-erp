@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useCallback, useEffect, useMemo, useState } from 'react'
+import { FocusEvent, use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -63,6 +63,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [iva_activo, setIvaActivo] = useState(true)
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
   const [descuento_valor, setDescuentoValor] = useState(0)
+  const notasSectionRef = useRef<HTMLDivElement | null>(null)
+  const generalSectionRef = useRef<HTMLDivElement | null>(null)
 
   const { register, control, watch, reset, setValue } = useForm<QuotationFormValues>({
     defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
@@ -95,7 +97,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   } = quotationForm
 
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'EMITIDA'
-  const { onlineUsers, sectionEditors, setActiveSection } = useQuotationPresence({
+  const { onlineUsers, sectionEditors, setActiveSection, releaseSection } = useQuotationPresence({
     cotizacionId: id,
     enabled: !!esEditable,
     currentUser: {
@@ -161,6 +163,19 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     () => esEditable && cotizacion ? totales : (cotizacion ? buildReadOnlyTotals(cotizacion) : totales),
     [esEditable, cotizacion, totales]
   )
+
+  const handleSectionBlur = useCallback((event: FocusEvent<HTMLDivElement>, section: QuotationPresenceSection, ref: React.RefObject<HTMLDivElement | null>) => {
+    if (!esEditable) return
+
+    const nextTarget = event.relatedTarget as Node | null
+    if (nextTarget && ref.current?.contains(nextTarget)) return
+
+    window.setTimeout(() => {
+      const activeElement = document.activeElement
+      if (activeElement && ref.current?.contains(activeElement)) return
+      releaseSection()
+    }, 0)
+  }, [esEditable, releaseSection])
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)
@@ -292,6 +307,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const currentUserId = (session?.user as { id?: string | null } | undefined)?.id || session?.user?.email || null
   const uniqueOnlineUsers = onlineUsers.filter((user, index, arr) => arr.findIndex((item) => item.user_id === user.user_id) === index)
   const visibleOnlineUsers = uniqueOnlineUsers.filter((user) => user.user_id !== currentUserId)
+  const notasLockedByOther = !!sectionEditors.notas
+  const generalLockedByOther = !!sectionEditors.general
 
   const SectionEditBadge = ({ section }: { section: QuotationPresenceSection }) => {
     const editor = sectionEditors[section]
@@ -356,8 +373,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       {(notasInternas || esEditable) && (
         <div
-          className={`bg-gray-800/60 border rounded-xl p-4 mb-6 ${sectionEditors.notas ? 'border-orange-600/70' : 'border-gray-700'}`}
-          onFocusCapture={() => esEditable && setActiveSection('notas')}
+          ref={notasSectionRef}
+          className={`bg-gray-800/60 border rounded-xl p-4 mb-6 ${notasLockedByOther ? 'border-orange-600/70 opacity-80' : 'border-gray-700'}`}
+          onFocusCapture={() => esEditable && !notasLockedByOther && setActiveSection('notas')}
+          onBlurCapture={(event) => handleSectionBlur(event, 'notas', notasSectionRef)}
         >
           <SectionEditBadge section="notas" />
           <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-medium">Notas del evento (uso interno)</p>
@@ -367,7 +386,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
               onChange={e => setNotasInternas(e.target.value)}
               rows={3}
               placeholder="Sin notas..."
-              className="w-full bg-transparent text-gray-300 text-sm resize-none outline-none placeholder-gray-600"
+              disabled={notasLockedByOther}
+              className="w-full bg-transparent text-gray-300 text-sm resize-none outline-none placeholder-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             />
           ) : (
             <p className="text-gray-400 text-sm whitespace-pre-wrap">{notasInternas || '—'}</p>
@@ -376,8 +396,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       )}
 
       <div
-        className={`rounded-xl ${sectionEditors.general ? 'ring-1 ring-orange-600/70 ring-offset-0' : ''}`}
-        onFocusCapture={() => esEditable && setActiveSection('general')}
+        ref={generalSectionRef}
+        className={`rounded-xl ${generalLockedByOther ? 'ring-1 ring-orange-600/70 opacity-80' : ''}`}
+        onFocusCapture={() => esEditable && !generalLockedByOther && setActiveSection('general')}
+        onBlurCapture={(event) => handleSectionBlur(event, 'general', generalSectionRef)}
       >
         <div className="px-1">
           <SectionEditBadge section="general" />
@@ -398,7 +420,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           handleProyectoChange={handleProyectoChange}
           seleccionarCliente={seleccionarCliente}
           setProyectoInput={setProyectoInput}
-          isReadOnly={!esEditable}
+          isReadOnly={!esEditable || generalLockedByOther}
           readOnlyDisplay={esEditable ? 'input' : 'text'}
           dateLabel={formatSpanishLongDate(cotizacion.fecha_cotizacion)}
           fechaEntregaValue={watch('fecha_entrega')}

@@ -30,6 +30,7 @@ interface UseQuotationPresenceResult {
   onlineUsers: QuotationPresenceUser[]
   sectionEditors: Partial<Record<QuotationPresenceSection, QuotationPresenceUser>>
   setActiveSection: (section: QuotationPresenceSection | null) => void
+  releaseSection: () => void
   isConnected: boolean
 }
 
@@ -68,6 +69,12 @@ export function useQuotationPresence({
     activeSectionRef.current = section
     if (!enabled) return
     trackPresence(section)
+  }, [enabled, trackPresence])
+
+  const releaseSection = useCallback(() => {
+    activeSectionRef.current = null
+    if (!enabled) return
+    trackPresence(null)
   }, [enabled, trackPresence])
 
   useEffect(() => {
@@ -141,6 +148,7 @@ export function useQuotationPresence({
     onlineUsers,
     sectionEditors,
     setActiveSection,
+    releaseSection,
     isConnected,
   }
 }
