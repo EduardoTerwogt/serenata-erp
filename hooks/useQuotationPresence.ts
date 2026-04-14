@@ -31,7 +31,7 @@ interface UseQuotationPresenceResult {
   sectionEditors: Partial<Record<QuotationPresenceSection, QuotationPresenceUser>>
   savedSections: Partial<Record<QuotationPresenceSection, number>>
   setActiveSection: (section: QuotationPresenceSection | null) => void
-  releaseSection: () => void
+  releaseSection: (section?: QuotationPresenceSection) => void
   markSectionSaved: (section: QuotationPresenceSection) => void
   isConnected: boolean
 }
@@ -139,12 +139,18 @@ export function useQuotationPresence({
     trackPresence(section)
   }, [enabled, sendSectionSignal, trackPresence])
 
-  const releaseSection = useCallback(() => {
+  const releaseSection = useCallback((section?: QuotationPresenceSection) => {
     const previous = activeSectionRef.current
+    const sectionToRelease = section || previous
+
+    if (section && previous !== section) {
+      return
+    }
+
     activeSectionRef.current = null
     if (!enabled) return
-    if (previous) {
-      sendSectionSignal('released', previous)
+    if (sectionToRelease) {
+      sendSectionSignal('released', sectionToRelease)
     }
     trackPresence(null)
   }, [enabled, sendSectionSignal, trackPresence])

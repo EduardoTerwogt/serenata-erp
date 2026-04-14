@@ -26,6 +26,7 @@ const sectionLabels: Record<QuotationPresenceSection, string> = {
 
 const NOTAS_AUTOSAVE_DELAY_MS = 800
 const GENERAL_AUTOSAVE_DELAY_MS = 800
+const SECTION_IDLE_RELEASE_MS = 5000
 
 interface GeneralSnapshot {
   cliente: string
@@ -92,10 +93,17 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
   const notasAutosaveTimerRef = useRef<number | null>(null)
   const generalAutosaveTimerRef = useRef<number | null>(null)
+  const notasIdleReleaseTimerRef = useRef<number | null>(null)
+  const generalIdleReleaseTimerRef = useRef<number | null>(null)
   const notasDirtyRef = useRef(false)
   const generalDirtyRef = useRef(false)
   const notasLockHeldRef = useRef(false)
   const generalLockHeldRef = useRef(false)
+  const notasFocusedRef = useRef(false)
+  const generalFocusedRef = useRef(false)
+  const notasValueRef = useRef('')
+  const clienteInputValueRef = useRef('')
+  const proyectoInputValueRef = useRef('')
   const lastSavedNotasRef = useRef('')
   const lastSavedGeneralRef = useRef<GeneralSnapshot>(buildGeneralSnapshot({}))
 
@@ -150,6 +158,57 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     },
   })
 
+  const getCurrentNotasSnapshot = useCallback(() => {
+    return notasValueRef.current.trim() ? notasValueRef.current : ''
+  }, [])
+
+  const getCurrentGeneralSnapshot = useCallback(() => {
+    return buildGeneralSnapshot({
+      cliente: clienteInputValueRef.current,
+      proyecto: proyectoInputValueRef.current,
+      fecha_entrega: getValues('fecha_entrega') || '',
+      locacion: getValues('locacion') || '',
+    })
+  }, [getValues])
+
+  const clearNotasIdleReleaseTimer = useCallback(() => {
+    if (notasIdleReleaseTimerRef.current !== null) {
+      window.clearTimeout(notasIdleReleaseTimerRef.current)
+      notasIdleReleaseTimerRef.current = null
+    }
+  }, [])
+
+  const clearGeneralIdleReleaseTimer = useCallback(() => {
+    if (generalIdleReleaseTimerRef.current !== null) {
+      window.clearTimeout(generalIdleReleaseTimerRef.current)
+      generalIdleReleaseTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleNotasIdleRelease = useCallback(() => {
+    clearNotasIdleReleaseTimer()
+    if (!notasLockHeldRef.current) return
+
+    notasIdleReleaseTimerRef.current = window.setTimeout(() => {
+      notasIdleReleaseTimerRef.current = null
+      if (!notasLockHeldRef.current || notasDirtyRef.current || isSavingNotas) return
+      notasLockHeldRef.current = false
+      releaseSection('notas')
+    }, SECTION_IDLE_RELEASE_MS)
+  }, [clearNotasIdleReleaseTimer, isSavingNotas, releaseSection])
+
+  const scheduleGeneralIdleRelease = useCallback(() => {
+    clearGeneralIdleReleaseTimer()
+    if (!generalLockHeldRef.current) return
+
+    generalIdleReleaseTimerRef.current = window.setTimeout(() => {
+      generalIdleReleaseTimerRef.current = null
+      if (!generalLockHeldRef.current || generalDirtyRef.current || isSavingGeneral) return
+      generalLockHeldRef.current = false
+      releaseSection('general')
+    }, SECTION_IDLE_RELEASE_MS)
+  }, [clearGeneralIdleReleaseTimer, isSavingGeneral, releaseSection])
+
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
     const notas = cot.notas_internas ?? ''
@@ -160,12 +219,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       locacion: cot.locacion || '',
     })
     setNotasInternas(notas)
+    notasValueRef.current = notas
     lastSavedNotasRef.current = notas
     notasDirtyRef.current = false
     lastSavedGeneralRef.current = general
     generalDirtyRef.current = false
     setClienteInput(cot.cliente || '')
+    clienteInputValueRef.current = cot.cliente || ''
     setProyectoInput(cot.proyecto || '')
+    proyectoInputValueRef.current = cot.proyecto || ''
     setPorcentajeFee(cot.porcentaje_fee ?? 0.15)
     setIvaActivo(cot.iva_activo ?? true)
     setDescuentoTipo(cot.descuento_tipo ?? 'monto')
@@ -191,6 +253,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const applyNotasOnly = useCallback((notas: string | null) => {
     const normalized = notas ?? ''
     setNotasInternas(normalized)
+    notasValueRef.current = normalized
     lastSavedNotasRef.current = normalized
     notasDirtyRef.current = false
     setCotizacion((prev) => (prev ? { ...prev, notas_internas: notas } : prev))
@@ -206,7 +269,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     lastSavedGeneralRef.current = general
     generalDirtyRef.current = false
     setClienteInput(general.cliente)
+    clienteInputValueRef.current = general.cliente
     setProyectoInput(general.proyecto)
+    proyectoInputValueRef.current = general.proyecto
     setValue('cliente', general.cliente)
     setValue('proyecto', general.proyecto)
     setValue('fecha_entrega', general.fecha_entrega)
@@ -221,6 +286,18 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [setClienteInput, setProyectoInput, setValue])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
+
+  useEffect(() => {
+    notasValueRef.current = notasInternas
+  }, [notasInternas])
+
+  useEffect(() => {
+    clienteInputValueRef.current = clienteInput
+  }, [clienteInput])
+
+  useEffect(() => {
+    proyectoInputValueRef.current = proyectoInput
+  }, [proyectoInput])
 
   useEffect(() => {
     Promise.all([fetchQuotationDetail(id), fetchResponsables()])
@@ -253,69 +330,124 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const persistNotasAutosave = useCallback(async () => {
     if (!cotizacion) return
 
-    const normalizedNotas = notasInternas.trim() ? notasInternas : ''
+    const notasToSave = getCurrentNotasSnapshot()
     const previousNotas = lastSavedNotasRef.current
 
-    if (normalizedNotas === previousNotas) {
+    if (notasToSave === previousNotas) {
       notasDirtyRef.current = false
-      notasLockHeldRef.current = false
-      releaseSection()
+      if (!notasFocusedRef.current) {
+        clearNotasIdleReleaseTimer()
+        notasLockHeldRef.current = false
+        releaseSection('notas')
+        return
+      }
+      scheduleNotasIdleRelease()
       return
     }
 
+    let saveSucceeded = false
     setIsSavingNotas(true)
     try {
-      const updated = await saveQuotationNotes(id, normalizedNotas || null)
-      applyNotasOnly(updated.notas_internas ?? null)
+      await saveQuotationNotes(id, notasToSave || null)
+      lastSavedNotasRef.current = notasToSave
+      setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev))
+      saveSucceeded = true
       markSectionSaved('notas')
     } catch (saveError: unknown) {
       setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas')
+      notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current
+      clearNotasIdleReleaseTimer()
+      notasLockHeldRef.current = false
+      releaseSection('notas')
+      return
     } finally {
       setIsSavingNotas(false)
-      notasLockHeldRef.current = false
-      releaseSection()
     }
-  }, [applyNotasOnly, cotizacion, id, markSectionSaved, notasInternas, releaseSection])
+
+    if (!saveSucceeded) return
+
+    const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current
+    notasDirtyRef.current = hasPendingChanges
+
+    if (!notasFocusedRef.current) {
+      clearNotasIdleReleaseTimer()
+      notasLockHeldRef.current = false
+      releaseSection('notas')
+      return
+    }
+
+    if (!hasPendingChanges) {
+      scheduleNotasIdleRelease()
+    }
+  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, markSectionSaved, releaseSection, scheduleNotasIdleRelease])
 
   const persistGeneralAutosave = useCallback(async () => {
     if (!cotizacion) return
 
-    const snapshot = buildGeneralSnapshot({
-      cliente: clienteInput,
-      proyecto: proyectoInput,
-      fecha_entrega: getValues('fecha_entrega') || '',
-      locacion: getValues('locacion') || '',
-    })
+    const snapshot = getCurrentGeneralSnapshot()
     const previousSnapshot = lastSavedGeneralRef.current
 
     if (areGeneralSnapshotsEqual(snapshot, previousSnapshot)) {
       generalDirtyRef.current = false
-      generalLockHeldRef.current = false
-      releaseSection()
+      if (!generalFocusedRef.current) {
+        clearGeneralIdleReleaseTimer()
+        generalLockHeldRef.current = false
+        releaseSection('general')
+        return
+      }
+      scheduleGeneralIdleRelease()
       return
     }
 
+    let saveSucceeded = false
     setIsSavingGeneral(true)
     try {
-      const updated = await saveQuotationGeneral(id, {
+      await saveQuotationGeneral(id, {
         cliente: snapshot.cliente,
         proyecto: snapshot.proyecto,
         fecha_entrega: snapshot.fecha_entrega || null,
         locacion: snapshot.locacion || null,
       })
-      applyGeneralOnly(updated)
+      lastSavedGeneralRef.current = snapshot
+      setCotizacion((prev) => prev ? {
+        ...prev,
+        cliente: snapshot.cliente,
+        proyecto: snapshot.proyecto,
+        fecha_entrega: snapshot.fecha_entrega || null,
+        locacion: snapshot.locacion || null,
+      } : prev)
+      saveSucceeded = true
       markSectionSaved('general')
     } catch (saveError: unknown) {
       setError(saveError instanceof Error ? saveError.message : 'Error guardando información general')
+      generalDirtyRef.current = !areGeneralSnapshotsEqual(getCurrentGeneralSnapshot(), lastSavedGeneralRef.current)
+      clearGeneralIdleReleaseTimer()
+      generalLockHeldRef.current = false
+      releaseSection('general')
+      return
     } finally {
       setIsSavingGeneral(false)
-      generalLockHeldRef.current = false
-      releaseSection()
     }
-  }, [applyGeneralOnly, clienteInput, cotizacion, getValues, id, markSectionSaved, proyectoInput, releaseSection])
+
+    if (!saveSucceeded) return
+
+    const hasPendingChanges = !areGeneralSnapshotsEqual(getCurrentGeneralSnapshot(), lastSavedGeneralRef.current)
+    generalDirtyRef.current = hasPendingChanges
+
+    if (!generalFocusedRef.current) {
+      clearGeneralIdleReleaseTimer()
+      generalLockHeldRef.current = false
+      releaseSection('general')
+      return
+    }
+
+    if (!hasPendingChanges) {
+      scheduleGeneralIdleRelease()
+    }
+  }, [clearGeneralIdleReleaseTimer, cotizacion, getCurrentGeneralSnapshot, id, markSectionSaved, releaseSection, scheduleGeneralIdleRelease])
 
   useEffect(() => {
-    if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current) return
+    if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
     if (sectionEditors.notas) return
 
     if (notasAutosaveTimerRef.current !== null) {
@@ -332,10 +464,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         notasAutosaveTimerRef.current = null
       }
     }
-  }, [esEditable, notasInternas, persistNotasAutosave, sectionEditors.notas])
+  }, [esEditable, isSavingNotas, notasInternas, persistNotasAutosave, sectionEditors.notas])
 
   useEffect(() => {
-    if (!esEditable || !generalLockHeldRef.current || !generalDirtyRef.current) return
+    if (!esEditable || !generalLockHeldRef.current || !generalDirtyRef.current || isSavingGeneral) return
     if (sectionEditors.general) return
 
     if (generalAutosaveTimerRef.current !== null) {
@@ -352,7 +484,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         generalAutosaveTimerRef.current = null
       }
     }
-  }, [currentGeneralSnapshot, esEditable, persistGeneralAutosave, sectionEditors.general])
+  }, [currentGeneralSnapshot, esEditable, isSavingGeneral, persistGeneralAutosave, sectionEditors.general])
 
   useEffect(() => {
     const remoteNotasSaves = savedSections.notas || 0
@@ -397,8 +529,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (generalAutosaveTimerRef.current !== null) {
         window.clearTimeout(generalAutosaveTimerRef.current)
       }
+      clearNotasIdleReleaseTimer()
+      clearGeneralIdleReleaseTimer()
     }
-  }, [])
+  }, [clearGeneralIdleReleaseTimer, clearNotasIdleReleaseTimer])
 
   const handleSectionBlur = useCallback((event: FocusEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement | null>) => {
     if (!esEditable) return
@@ -413,19 +547,35 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }, 0)
   }, [esEditable, releaseSection])
 
-  const handleNotasFocus = useCallback(() => {
+  const activateNotasEditing = useCallback(() => {
+    clearNotasIdleReleaseTimer()
+    notasFocusedRef.current = true
     if (!esEditable || !!sectionEditors.notas) return
-    notasLockHeldRef.current = true
-    setActiveSection('notas')
-  }, [esEditable, sectionEditors.notas, setActiveSection])
+    if (!notasLockHeldRef.current) {
+      notasLockHeldRef.current = true
+      setActiveSection('notas')
+    }
+  }, [clearNotasIdleReleaseTimer, esEditable, sectionEditors.notas, setActiveSection])
+
+  const markNotasDirty = useCallback(() => {
+    if (!esEditable || !!sectionEditors.notas) return
+    activateNotasEditing()
+    notasDirtyRef.current = true
+  }, [activateNotasEditing, esEditable, sectionEditors.notas])
+
+  const handleNotasFocus = useCallback(() => {
+    activateNotasEditing()
+  }, [activateNotasEditing])
 
   const activateGeneralEditing = useCallback(() => {
+    clearGeneralIdleReleaseTimer()
+    generalFocusedRef.current = true
     if (!esEditable || !!sectionEditors.general) return
     if (!generalLockHeldRef.current) {
       generalLockHeldRef.current = true
       setActiveSection('general')
     }
-  }, [esEditable, sectionEditors.general, setActiveSection])
+  }, [clearGeneralIdleReleaseTimer, esEditable, sectionEditors.general, setActiveSection])
 
   const markGeneralDirty = useCallback(() => {
     if (!esEditable || !!sectionEditors.general) return
@@ -447,15 +597,18 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const activeElement = document.activeElement
       if (activeElement && notasSectionRef.current?.contains(activeElement)) return
 
+      notasFocusedRef.current = false
+      clearNotasIdleReleaseTimer()
+
       if (notasDirtyRef.current) {
         void persistNotasAutosave()
         return
       }
 
       notasLockHeldRef.current = false
-      releaseSection()
+      releaseSection('notas')
     }, 0)
-  }, [esEditable, persistNotasAutosave, releaseSection])
+  }, [clearNotasIdleReleaseTimer, esEditable, persistNotasAutosave, releaseSection])
 
   const handleGeneralBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
     if (!esEditable) return
@@ -467,15 +620,18 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const activeElement = document.activeElement
       if (activeElement && generalSectionRef.current?.contains(activeElement)) return
 
+      generalFocusedRef.current = false
+      clearGeneralIdleReleaseTimer()
+
       if (generalDirtyRef.current) {
         void persistGeneralAutosave()
         return
       }
 
       generalLockHeldRef.current = false
-      releaseSection()
+      releaseSection('general')
     }, 0)
-  }, [esEditable, persistGeneralAutosave, releaseSection])
+  }, [clearGeneralIdleReleaseTimer, esEditable, persistGeneralAutosave, releaseSection])
 
   const trackedHandleClienteChange = useCallback((value: string) => {
     markGeneralDirty()
@@ -712,16 +868,12 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
             <textarea
               value={notasInternas}
               onChange={e => {
-                if (!notasLockHeldRef.current && !notasLockedByOther) {
-                  notasLockHeldRef.current = true
-                  setActiveSection('notas')
-                }
-                notasDirtyRef.current = true
+                markNotasDirty()
                 setNotasInternas(e.target.value)
               }}
               rows={3}
               placeholder="Sin notas..."
-              disabled={notasLockedByOther || isSavingNotas}
+              disabled={notasLockedByOther}
               className="w-full bg-transparent text-gray-300 text-sm resize-none outline-none placeholder-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             />
           ) : (
@@ -759,7 +911,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           onProyectoSelected={trackedSelectProyecto}
           onFechaEntregaChange={trackedHandleFechaEntregaChange}
           onLocacionChange={trackedHandleLocacionChange}
-          isReadOnly={!esEditable || generalLockedByOther || isSavingGeneral}
+          isReadOnly={!esEditable || generalLockedByOther}
           readOnlyDisplay={esEditable ? 'input' : 'text'}
           dateLabel={formatSpanishLongDate(cotizacion.fecha_cotizacion)}
           fechaEntregaValue={watch('fecha_entrega')}
