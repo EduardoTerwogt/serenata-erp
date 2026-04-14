@@ -34,12 +34,24 @@ interface UseQuotationPresenceResult {
   isConnected: boolean
 }
 
+type SectionSignalStatus = 'editing' | 'released'
+
+interface SectionSignalPayload {
+  status: SectionSignalStatus
+  section: QuotationPresenceSection
+  user_id: string
+  email: string
+  name: string
+  at: string
+}
+
 export function useQuotationPresence({
   cotizacionId,
   enabled,
   currentUser,
 }: UseQuotationPresenceOptions): UseQuotationPresenceResult {
-  const [onlineUsers, setOnlineUsers] = useState<QuotationPresenceUser[]>([])
+  const [rawOnlineUsers, setRawOnlineUsers] = useState<QuotationPresenceUser[]>([])
+  const [activeSectionOverrides, setActiveSectionOverrides] = useState<Record<string, QuotationPresenceSection | null>>({})
   const [isConnected, setIsConnected] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
@@ -65,21 +77,54 @@ export function useQuotationPresence({
     }).catch(() => null)
   }, [identity.email, identity.name, identity.userId])
 
+  const sendSectionSignal = useCallback((status: SectionSignalStatus, section: QuotationPresenceSection) => {
+    const channel = channelRef.current
+    if (!channel) return
+
+    void channel.send({
+      type: 'broadcast',
+      event: 'section_signal',
+      payload: {
+        status,
+        section,
+        user_id: identity.userId,
+        email: identity.email,
+        name: identity.name,
+        at: new Date().toISOString(),
+      } satisfies SectionSignalPayload,
+    }).catch(() => null)
+  }, [identity.email, identity.name, identity.userId])
+
   const setActiveSection = useCallback((section: QuotationPresenceSection | null) => {
+    const previous = activeSectionRef.current
     activeSectionRef.current = section
     if (!enabled) return
+
+    if (previous && previous !== section) {
+      sendSectionSignal('released', previous)
+    }
+
+    if (section) {
+      sendSectionSignal('editing', section)
+    }
+
     trackPresence(section)
-  }, [enabled, trackPresence])
+  }, [enabled, sendSectionSignal, trackPresence])
 
   const releaseSection = useCallback(() => {
+    const previous = activeSectionRef.current
     activeSectionRef.current = null
     if (!enabled) return
+    if (previous) {
+      sendSectionSignal('released', previous)
+    }
     trackPresence(null)
-  }, [enabled, trackPresence])
+  }, [enabled, sendSectionSignal, trackPresence])
 
   useEffect(() => {
     if (!enabled) {
-      setOnlineUsers([])
+      setRawOnlineUsers([])
+      setActiveSectionOverrides({})
       setIsConnected(false)
       return
     }
@@ -98,7 +143,17 @@ export function useQuotationPresence({
       const users = Object.values(state)
         .flatMap((entries) => entries)
         .filter(Boolean)
-      setOnlineUsers(users)
+      setRawOnlineUsers(users)
+    })
+
+    channel.on('broadcast', { event: 'section_signal' }, ({ payload }) => {
+      const signal = payload as SectionSignalPayload | undefined
+      if (!signal?.user_id || signal.user_id === identity.userId) return
+
+      setActiveSectionOverrides((prev) => ({
+        ...prev,
+        [signal.user_id]: signal.status === 'editing' ? signal.section : null,
+      }))
     })
 
     channel.subscribe(async (status) => {
@@ -123,12 +178,22 @@ export function useQuotationPresence({
 
     return () => {
       setIsConnected(false)
-      setOnlineUsers([])
+      setRawOnlineUsers([])
+      setActiveSectionOverrides({})
       void channel.untrack().catch(() => null)
       void supabaseBrowser.removeChannel(channel)
       channelRef.current = null
     }
   }, [cotizacionId, enabled, identity.email, identity.name, identity.userId])
+
+  const onlineUsers = useMemo(() => {
+    return rawOnlineUsers.map((user) => ({
+      ...user,
+      active_section: Object.prototype.hasOwnProperty.call(activeSectionOverrides, user.user_id)
+        ? activeSectionOverrides[user.user_id]
+        : user.active_section,
+    }))
+  }, [activeSectionOverrides, rawOnlineUsers])
 
   const sectionEditors = useMemo(() => {
     const editors: Partial<Record<QuotationPresenceSection, QuotationPresenceUser>> = {}
