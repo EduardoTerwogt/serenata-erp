@@ -7,6 +7,13 @@ import { supabaseAdmin } from '@/lib/supabase'
 const TOKENS_PER_DOLLAR = 250 // Conservative estimate for Sonnet
 const INITIAL_CREDIT = 5 // $5 USD free credit
 
+interface ExtractionLogRow {
+  tokens_input: number | null
+  tokens_output: number | null
+  costo_usd: string | null
+  eventos_extraidos: number | null
+}
+
 export async function GET(request: Request) {
   const authResult = await requireSection('planeacion')
   if (authResult.response) return authResult.response
@@ -25,12 +32,14 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Error fetching usage' }, { status: 500 })
     }
 
+    const rows: ExtractionLogRow[] = data || []
+
     // Calculate totals
-    const totalTokensInput = (data || []).reduce((sum, row) => sum + (row.tokens_input || 0), 0)
-    const totalTokensOutput = (data || []).reduce((sum, row) => sum + (row.tokens_output || 0), 0)
+    const totalTokensInput = rows.reduce((sum: number, row: ExtractionLogRow) => sum + (row.tokens_input || 0), 0)
+    const totalTokensOutput = rows.reduce((sum: number, row: ExtractionLogRow) => sum + (row.tokens_output || 0), 0)
     const totalTokens = totalTokensInput + totalTokensOutput
-    const totalCost = (data || []).reduce((sum, row) => sum + (parseFloat(row.costo_usd) || 0), 0)
-    const totalEvents = (data || []).reduce((sum, row) => sum + (row.eventos_extraidos || 0), 0)
+    const totalCost = rows.reduce((sum: number, row: ExtractionLogRow) => sum + (parseFloat(row.costo_usd || '0') || 0), 0)
+    const totalEvents = rows.reduce((sum: number, row: ExtractionLogRow) => sum + (row.eventos_extraidos || 0), 0)
 
     // Calculate percentage
     const creditTokens = INITIAL_CREDIT * TOKENS_PER_DOLLAR
