@@ -38,6 +38,18 @@ export async function saveQuotationGeneral(
   return sendJson(`/api/cotizaciones/${id}/general`, payload, 'Error guardando información general', { method: 'PATCH' })
 }
 
+export async function saveQuotationTotals(
+  id: string,
+  payload: {
+    porcentaje_fee: number
+    iva_activo: boolean
+    descuento_tipo: 'monto' | 'porcentaje'
+    descuento_valor: number
+  }
+): Promise<Cotizacion> {
+  return sendJson(`/api/cotizaciones/${id}/totales`, payload, 'Error guardando configuración de totales', { method: 'PATCH' })
+}
+
 export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string }> {
   const folioUrl = complementariaDe
     ? `/api/folio?complementaria_de=${encodeURIComponent(complementariaDe)}`

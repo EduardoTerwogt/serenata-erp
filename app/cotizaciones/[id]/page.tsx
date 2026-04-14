@@ -10,7 +10,7 @@ import { QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuota
 import { calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchResponsables, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, updateQuotation } from '@/lib/services/quotation-service'
+import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchResponsables, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, saveQuotationTotals, updateQuotation } from '@/lib/services/quotation-service'
 import { formatSpanishLongDate } from '@/lib/quotations/format'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
@@ -26,6 +26,7 @@ const sectionLabels: Record<QuotationPresenceSection, string> = {
 
 const NOTAS_AUTOSAVE_DELAY_MS = 800
 const GENERAL_AUTOSAVE_DELAY_MS = 800
+const TOTALS_AUTOSAVE_DELAY_MS = 800
 const SECTION_IDLE_RELEASE_MS = 5000
 
 interface GeneralSnapshot {
@@ -33,6 +34,13 @@ interface GeneralSnapshot {
   proyecto: string
   fecha_entrega: string
   locacion: string
+}
+
+interface TotalsSnapshot {
+  porcentaje_fee: number
+  iva_activo: boolean
+  descuento_tipo: 'monto' | 'porcentaje'
+  descuento_valor: number
 }
 
 function getInitials(value: string) {
@@ -67,6 +75,19 @@ function areGeneralSnapshotsEqual(a: GeneralSnapshot, b: GeneralSnapshot) {
   return a.cliente === b.cliente && a.proyecto === b.proyecto && a.fecha_entrega === b.fecha_entrega && a.locacion === b.locacion
 }
 
+function buildTotalsSnapshot(values: Partial<TotalsSnapshot>): TotalsSnapshot {
+  return {
+    porcentaje_fee: typeof values.porcentaje_fee === 'number' ? values.porcentaje_fee : 0.15,
+    iva_activo: typeof values.iva_activo === 'boolean' ? values.iva_activo : true,
+    descuento_tipo: values.descuento_tipo === 'porcentaje' ? 'porcentaje' : 'monto',
+    descuento_valor: typeof values.descuento_valor === 'number' ? values.descuento_valor : 0,
+  }
+}
+
+function areTotalsSnapshotsEqual(a: TotalsSnapshot, b: TotalsSnapshot) {
+  return a.porcentaje_fee === b.porcentaje_fee && a.iva_activo === b.iva_activo && a.descuento_tipo === b.descuento_tipo && a.descuento_valor === b.descuento_valor
+}
+
 export default function CotizacionDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const { data: session } = useSession()
@@ -89,23 +110,35 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [descuento_valor, setDescuentoValor] = useState(0)
   const [isSavingNotas, setIsSavingNotas] = useState(false)
   const [isSavingGeneral, setIsSavingGeneral] = useState(false)
+  const [isSavingTotals, setIsSavingTotals] = useState(false)
   const notasSectionRef = useRef<HTMLDivElement | null>(null)
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
+  const totalsSectionRef = useRef<HTMLDivElement | null>(null)
   const notasAutosaveTimerRef = useRef<number | null>(null)
   const generalAutosaveTimerRef = useRef<number | null>(null)
+  const totalsAutosaveTimerRef = useRef<number | null>(null)
   const notasIdleReleaseTimerRef = useRef<number | null>(null)
   const generalIdleReleaseTimerRef = useRef<number | null>(null)
+  const totalsIdleReleaseTimerRef = useRef<number | null>(null)
   const notasDirtyRef = useRef(false)
   const generalDirtyRef = useRef(false)
+  const totalsDirtyRef = useRef(false)
   const notasLockHeldRef = useRef(false)
   const generalLockHeldRef = useRef(false)
+  const totalsLockHeldRef = useRef(false)
   const notasFocusedRef = useRef(false)
   const generalFocusedRef = useRef(false)
+  const totalsFocusedRef = useRef(false)
   const notasValueRef = useRef('')
   const clienteInputValueRef = useRef('')
   const proyectoInputValueRef = useRef('')
+  const porcentajeFeeValueRef = useRef(0.15)
+  const ivaActivoValueRef = useRef(true)
+  const descuentoTipoValueRef = useRef<'monto' | 'porcentaje'>('monto')
+  const descuentoValorValueRef = useRef(0)
   const lastSavedNotasRef = useRef('')
   const lastSavedGeneralRef = useRef<GeneralSnapshot>(buildGeneralSnapshot({}))
+  const lastSavedTotalsRef = useRef<TotalsSnapshot>(buildTotalsSnapshot({}))
 
   const { register, control, watch, reset, setValue, getValues } = useForm<QuotationFormValues>({
     defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
@@ -147,6 +180,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     locacion: watchedLocacion,
   }), [clienteInput, proyectoInput, watchedFechaEntrega, watchedLocacion])
 
+  const currentTotalsSnapshot = useMemo(() => buildTotalsSnapshot({
+    porcentaje_fee,
+    iva_activo,
+    descuento_tipo,
+    descuento_valor,
+  }), [descuento_tipo, descuento_valor, iva_activo, porcentaje_fee])
+
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'EMITIDA'
   const { onlineUsers, sectionEditors, savedSections, setActiveSection, releaseSection, markSectionSaved } = useQuotationPresence({
     cotizacionId: id,
@@ -171,6 +211,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     })
   }, [getValues])
 
+  const getCurrentTotalsSnapshot = useCallback(() => {
+    return buildTotalsSnapshot({
+      porcentaje_fee: porcentajeFeeValueRef.current,
+      iva_activo: ivaActivoValueRef.current,
+      descuento_tipo: descuentoTipoValueRef.current,
+      descuento_valor: descuentoValorValueRef.current,
+    })
+  }, [])
+
   const clearNotasIdleReleaseTimer = useCallback(() => {
     if (notasIdleReleaseTimerRef.current !== null) {
       window.clearTimeout(notasIdleReleaseTimerRef.current)
@@ -182,6 +231,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     if (generalIdleReleaseTimerRef.current !== null) {
       window.clearTimeout(generalIdleReleaseTimerRef.current)
       generalIdleReleaseTimerRef.current = null
+    }
+  }, [])
+
+  const clearTotalsIdleReleaseTimer = useCallback(() => {
+    if (totalsIdleReleaseTimerRef.current !== null) {
+      window.clearTimeout(totalsIdleReleaseTimerRef.current)
+      totalsIdleReleaseTimerRef.current = null
     }
   }, [])
 
@@ -209,6 +265,18 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }, SECTION_IDLE_RELEASE_MS)
   }, [clearGeneralIdleReleaseTimer, isSavingGeneral, releaseSection])
 
+  const scheduleTotalsIdleRelease = useCallback(() => {
+    clearTotalsIdleReleaseTimer()
+    if (!totalsLockHeldRef.current) return
+
+    totalsIdleReleaseTimerRef.current = window.setTimeout(() => {
+      totalsIdleReleaseTimerRef.current = null
+      if (!totalsLockHeldRef.current || totalsDirtyRef.current || isSavingTotals) return
+      totalsLockHeldRef.current = false
+      releaseSection('totales')
+    }, SECTION_IDLE_RELEASE_MS)
+  }, [clearTotalsIdleReleaseTimer, isSavingTotals, releaseSection])
+
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
     const notas = cot.notas_internas ?? ''
@@ -218,20 +286,32 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       fecha_entrega: cot.fecha_entrega || '',
       locacion: cot.locacion || '',
     })
+    const totalsConfig = buildTotalsSnapshot({
+      porcentaje_fee: cot.porcentaje_fee,
+      iva_activo: cot.iva_activo,
+      descuento_tipo: cot.descuento_tipo,
+      descuento_valor: cot.descuento_valor,
+    })
     setNotasInternas(notas)
     notasValueRef.current = notas
     lastSavedNotasRef.current = notas
     notasDirtyRef.current = false
     lastSavedGeneralRef.current = general
     generalDirtyRef.current = false
+    lastSavedTotalsRef.current = totalsConfig
+    totalsDirtyRef.current = false
     setClienteInput(cot.cliente || '')
     clienteInputValueRef.current = cot.cliente || ''
     setProyectoInput(cot.proyecto || '')
     proyectoInputValueRef.current = cot.proyecto || ''
-    setPorcentajeFee(cot.porcentaje_fee ?? 0.15)
-    setIvaActivo(cot.iva_activo ?? true)
-    setDescuentoTipo(cot.descuento_tipo ?? 'monto')
-    setDescuentoValor(cot.descuento_valor ?? 0)
+    setPorcentajeFee(totalsConfig.porcentaje_fee)
+    porcentajeFeeValueRef.current = totalsConfig.porcentaje_fee
+    setIvaActivo(totalsConfig.iva_activo)
+    ivaActivoValueRef.current = totalsConfig.iva_activo
+    setDescuentoTipo(totalsConfig.descuento_tipo)
+    descuentoTipoValueRef.current = totalsConfig.descuento_tipo
+    setDescuentoValor(totalsConfig.descuento_valor)
+    descuentoValorValueRef.current = totalsConfig.descuento_valor
     reset({
       cliente: cot.cliente,
       proyecto: cot.proyecto,
@@ -285,6 +365,32 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } : prev)
   }, [setClienteInput, setProyectoInput, setValue])
 
+  const applyTotalsOnly = useCallback((cot: Cotizacion) => {
+    const totalsConfig = buildTotalsSnapshot({
+      porcentaje_fee: cot.porcentaje_fee,
+      iva_activo: cot.iva_activo,
+      descuento_tipo: cot.descuento_tipo,
+      descuento_valor: cot.descuento_valor,
+    })
+    lastSavedTotalsRef.current = totalsConfig
+    totalsDirtyRef.current = false
+    setPorcentajeFee(totalsConfig.porcentaje_fee)
+    porcentajeFeeValueRef.current = totalsConfig.porcentaje_fee
+    setIvaActivo(totalsConfig.iva_activo)
+    ivaActivoValueRef.current = totalsConfig.iva_activo
+    setDescuentoTipo(totalsConfig.descuento_tipo)
+    descuentoTipoValueRef.current = totalsConfig.descuento_tipo
+    setDescuentoValor(totalsConfig.descuento_valor)
+    descuentoValorValueRef.current = totalsConfig.descuento_valor
+    setCotizacion((prev) => prev ? {
+      ...prev,
+      porcentaje_fee: totalsConfig.porcentaje_fee,
+      iva_activo: totalsConfig.iva_activo,
+      descuento_tipo: totalsConfig.descuento_tipo,
+      descuento_valor: totalsConfig.descuento_valor,
+    } : prev)
+  }, [])
+
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
 
   useEffect(() => {
@@ -298,6 +404,22 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   useEffect(() => {
     proyectoInputValueRef.current = proyectoInput
   }, [proyectoInput])
+
+  useEffect(() => {
+    porcentajeFeeValueRef.current = porcentaje_fee
+  }, [porcentaje_fee])
+
+  useEffect(() => {
+    ivaActivoValueRef.current = iva_activo
+  }, [iva_activo])
+
+  useEffect(() => {
+    descuentoTipoValueRef.current = descuento_tipo
+  }, [descuento_tipo])
+
+  useEffect(() => {
+    descuentoValorValueRef.current = descuento_valor
+  }, [descuento_valor])
 
   useEffect(() => {
     Promise.all([fetchQuotationDetail(id), fetchResponsables()])
@@ -446,6 +568,66 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }, [clearGeneralIdleReleaseTimer, cotizacion, getCurrentGeneralSnapshot, id, markSectionSaved, releaseSection, scheduleGeneralIdleRelease])
 
+  const persistTotalsAutosave = useCallback(async () => {
+    if (!cotizacion) return
+
+    const snapshot = getCurrentTotalsSnapshot()
+    const previousSnapshot = lastSavedTotalsRef.current
+
+    if (areTotalsSnapshotsEqual(snapshot, previousSnapshot)) {
+      totalsDirtyRef.current = false
+      if (!totalsFocusedRef.current) {
+        clearTotalsIdleReleaseTimer()
+        totalsLockHeldRef.current = false
+        releaseSection('totales')
+        return
+      }
+      scheduleTotalsIdleRelease()
+      return
+    }
+
+    let saveSucceeded = false
+    setIsSavingTotals(true)
+    try {
+      await saveQuotationTotals(id, snapshot)
+      lastSavedTotalsRef.current = snapshot
+      setCotizacion((prev) => prev ? {
+        ...prev,
+        porcentaje_fee: snapshot.porcentaje_fee,
+        iva_activo: snapshot.iva_activo,
+        descuento_tipo: snapshot.descuento_tipo,
+        descuento_valor: snapshot.descuento_valor,
+      } : prev)
+      saveSucceeded = true
+      markSectionSaved('totales')
+    } catch (saveError: unknown) {
+      setError(saveError instanceof Error ? saveError.message : 'Error guardando configuración de totales')
+      totalsDirtyRef.current = !areTotalsSnapshotsEqual(getCurrentTotalsSnapshot(), lastSavedTotalsRef.current)
+      clearTotalsIdleReleaseTimer()
+      totalsLockHeldRef.current = false
+      releaseSection('totales')
+      return
+    } finally {
+      setIsSavingTotals(false)
+    }
+
+    if (!saveSucceeded) return
+
+    const hasPendingChanges = !areTotalsSnapshotsEqual(getCurrentTotalsSnapshot(), lastSavedTotalsRef.current)
+    totalsDirtyRef.current = hasPendingChanges
+
+    if (!totalsFocusedRef.current) {
+      clearTotalsIdleReleaseTimer()
+      totalsLockHeldRef.current = false
+      releaseSection('totales')
+      return
+    }
+
+    if (!hasPendingChanges) {
+      scheduleTotalsIdleRelease()
+    }
+  }, [clearTotalsIdleReleaseTimer, cotizacion, getCurrentTotalsSnapshot, id, markSectionSaved, releaseSection, scheduleTotalsIdleRelease])
+
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
     if (sectionEditors.notas) return
@@ -487,6 +669,26 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [currentGeneralSnapshot, esEditable, isSavingGeneral, persistGeneralAutosave, sectionEditors.general])
 
   useEffect(() => {
+    if (!esEditable || !totalsLockHeldRef.current || !totalsDirtyRef.current || isSavingTotals) return
+    if (sectionEditors.totales) return
+
+    if (totalsAutosaveTimerRef.current !== null) {
+      window.clearTimeout(totalsAutosaveTimerRef.current)
+    }
+
+    totalsAutosaveTimerRef.current = window.setTimeout(() => {
+      void persistTotalsAutosave()
+    }, TOTALS_AUTOSAVE_DELAY_MS)
+
+    return () => {
+      if (totalsAutosaveTimerRef.current !== null) {
+        window.clearTimeout(totalsAutosaveTimerRef.current)
+        totalsAutosaveTimerRef.current = null
+      }
+    }
+  }, [currentTotalsSnapshot, esEditable, isSavingTotals, persistTotalsAutosave, sectionEditors.totales])
+
+  useEffect(() => {
     const remoteNotasSaves = savedSections.notas || 0
     if (!remoteNotasSaves) return
     if (notasLockHeldRef.current || isSavingNotas) return
@@ -515,11 +717,32 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [applyGeneralOnly, id, isSavingGeneral, savedSections.general])
 
   useEffect(() => {
+    const remoteTotalsSaves = savedSections.totales || 0
+    if (!remoteTotalsSaves) return
+    if (totalsLockHeldRef.current || isSavingTotals) return
+
+    fetchQuotationDetail(id)
+      .then((updated) => {
+        applyTotalsOnly(updated)
+      })
+      .catch((loadError) => {
+        console.error('[cotizaciones/[id]] Error refrescando totales tras save remoto:', loadError)
+      })
+  }, [applyTotalsOnly, id, isSavingTotals, savedSections.totales])
+
+  useEffect(() => {
     if (!generalLockHeldRef.current) return
     if (!areGeneralSnapshotsEqual(currentGeneralSnapshot, lastSavedGeneralRef.current)) {
       generalDirtyRef.current = true
     }
   }, [currentGeneralSnapshot])
+
+  useEffect(() => {
+    if (!totalsLockHeldRef.current) return
+    if (!areTotalsSnapshotsEqual(currentTotalsSnapshot, lastSavedTotalsRef.current)) {
+      totalsDirtyRef.current = true
+    }
+  }, [currentTotalsSnapshot])
 
   useEffect(() => {
     return () => {
@@ -529,10 +752,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (generalAutosaveTimerRef.current !== null) {
         window.clearTimeout(generalAutosaveTimerRef.current)
       }
+      if (totalsAutosaveTimerRef.current !== null) {
+        window.clearTimeout(totalsAutosaveTimerRef.current)
+      }
       clearNotasIdleReleaseTimer()
       clearGeneralIdleReleaseTimer()
+      clearTotalsIdleReleaseTimer()
     }
-  }, [clearGeneralIdleReleaseTimer, clearNotasIdleReleaseTimer])
+  }, [clearGeneralIdleReleaseTimer, clearNotasIdleReleaseTimer, clearTotalsIdleReleaseTimer])
 
   const handleSectionBlur = useCallback((event: FocusEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement | null>) => {
     if (!esEditable) return
@@ -587,6 +814,26 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     activateGeneralEditing()
   }, [activateGeneralEditing])
 
+  const activateTotalsEditing = useCallback(() => {
+    clearTotalsIdleReleaseTimer()
+    totalsFocusedRef.current = true
+    if (!esEditable || !!sectionEditors.totales) return
+    if (!totalsLockHeldRef.current) {
+      totalsLockHeldRef.current = true
+      setActiveSection('totales')
+    }
+  }, [clearTotalsIdleReleaseTimer, esEditable, sectionEditors.totales, setActiveSection])
+
+  const markTotalsDirty = useCallback(() => {
+    if (!esEditable || !!sectionEditors.totales) return
+    activateTotalsEditing()
+    totalsDirtyRef.current = true
+  }, [activateTotalsEditing, esEditable, sectionEditors.totales])
+
+  const handleTotalsFocus = useCallback(() => {
+    activateTotalsEditing()
+  }, [activateTotalsEditing])
+
   const handleNotasBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
     if (!esEditable) return
 
@@ -633,6 +880,29 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }, 0)
   }, [clearGeneralIdleReleaseTimer, esEditable, persistGeneralAutosave, releaseSection])
 
+  const handleTotalsBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    if (!esEditable) return
+
+    const nextTarget = event.relatedTarget as Node | null
+    if (nextTarget && totalsSectionRef.current?.contains(nextTarget)) return
+
+    window.setTimeout(() => {
+      const activeElement = document.activeElement
+      if (activeElement && totalsSectionRef.current?.contains(activeElement)) return
+
+      totalsFocusedRef.current = false
+      clearTotalsIdleReleaseTimer()
+
+      if (totalsDirtyRef.current) {
+        void persistTotalsAutosave()
+        return
+      }
+
+      totalsLockHeldRef.current = false
+      releaseSection('totales')
+    }, 0)
+  }, [clearTotalsIdleReleaseTimer, esEditable, persistTotalsAutosave, releaseSection])
+
   const trackedHandleClienteChange = useCallback((value: string) => {
     markGeneralDirty()
     handleClienteChange(value)
@@ -660,6 +930,31 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const trackedHandleLocacionChange = useCallback(() => {
     markGeneralDirty()
   }, [markGeneralDirty])
+
+  const trackedSetPorcentajeFee = useCallback((value: number) => {
+    markTotalsDirty()
+    porcentajeFeeValueRef.current = value
+    setPorcentajeFee(value)
+  }, [markTotalsDirty])
+
+  const trackedSetIvaActivo = useCallback((value: boolean | ((prev: boolean) => boolean)) => {
+    markTotalsDirty()
+    const nextValue = typeof value === 'function' ? value(ivaActivoValueRef.current) : value
+    ivaActivoValueRef.current = nextValue
+    setIvaActivo(nextValue)
+  }, [markTotalsDirty])
+
+  const trackedSetDescuentoTipo = useCallback((value: 'monto' | 'porcentaje') => {
+    markTotalsDirty()
+    descuentoTipoValueRef.current = value
+    setDescuentoTipo(value)
+  }, [markTotalsDirty])
+
+  const trackedSetDescuentoValor = useCallback((value: number) => {
+    markTotalsDirty()
+    descuentoValorValueRef.current = value
+    setDescuentoValor(value)
+  }, [markTotalsDirty])
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)
@@ -793,6 +1088,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const visibleOnlineUsers = uniqueOnlineUsers.filter((user) => user.user_id !== currentUserId)
   const notasLockedByOther = !!sectionEditors.notas
   const generalLockedByOther = !!sectionEditors.general
+  const totalsLockedByOther = !!sectionEditors.totales
 
   const SectionEditBadge = ({ section }: { section: QuotationPresenceSection }) => {
     const editor = sectionEditors[section]
@@ -948,23 +1244,25 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       </div>
 
       <div
-        className={`rounded-xl ${sectionEditors.totales ? 'ring-1 ring-orange-600/70 ring-offset-0' : ''}`}
-        onFocusCapture={() => esEditable && setActiveSection('totales')}
+        ref={totalsSectionRef}
+        className={`rounded-xl ${totalsLockedByOther ? 'ring-1 ring-orange-600/70 opacity-80' : ''}`}
+        onFocusCapture={handleTotalsFocus}
+        onBlurCapture={handleTotalsBlur}
       >
         <div className="px-1">
           <SectionEditBadge section="totales" />
         </div>
         <QuotationTotalsPanels
           totals={displayTotales}
-          editable={!!esEditable}
+          editable={!!esEditable && !totalsLockedByOther}
           porcentaje_fee={porcentaje_fee}
-          setPorcentajeFee={setPorcentajeFee}
+          setPorcentajeFee={trackedSetPorcentajeFee}
           iva_activo={iva_activo}
-          setIvaActivo={setIvaActivo}
+          setIvaActivo={trackedSetIvaActivo}
           descuento_tipo={descuento_tipo}
-          setDescuentoTipo={setDescuentoTipo}
+          setDescuentoTipo={trackedSetDescuentoTipo}
           descuento_valor={descuento_valor}
-          setDescuentoValor={setDescuentoValor}
+          setDescuentoValor={trackedSetDescuentoValor}
         />
       </div>
     </div>
