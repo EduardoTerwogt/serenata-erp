@@ -8,7 +8,12 @@ import {
 import { getArrayBuffer, getJson, sendJson } from '@/lib/client/api'
 
 export async function fetchResponsables(): Promise<Responsable[]> {
-  return getJson('/api/responsables', 'Error cargando responsables')
+  try {
+    return await getJson('/api/responsables', 'Error cargando responsables')
+  } catch (error) {
+    console.error('[quotation-service] Error cargando responsables:', error)
+    return []
+  }
 }
 
 export async function fetchQuotationDetail(id: string): Promise<Cotizacion> {
