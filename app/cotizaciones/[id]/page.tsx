@@ -68,7 +68,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [isSavingNotas, setIsSavingNotas] = useState(false)
   const notasSectionRef = useRef<HTMLDivElement | null>(null)
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
-  const notasAutosaveTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+  const notasAutosaveTimerRef = useRef<number | null>(null)
   const notasDirtyRef = useRef(false)
   const notasLockHeldRef = useRef(false)
   const lastSavedNotasRef = useRef('')
@@ -213,7 +213,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current) return
     if (sectionEditors.notas) return
 
-    if (notasAutosaveTimerRef.current) {
+    if (notasAutosaveTimerRef.current !== null) {
       window.clearTimeout(notasAutosaveTimerRef.current)
     }
 
@@ -222,7 +222,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }, NOTAS_AUTOSAVE_DELAY_MS)
 
     return () => {
-      if (notasAutosaveTimerRef.current) {
+      if (notasAutosaveTimerRef.current !== null) {
         window.clearTimeout(notasAutosaveTimerRef.current)
         notasAutosaveTimerRef.current = null
       }
@@ -245,7 +245,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   useEffect(() => {
     return () => {
-      if (notasAutosaveTimerRef.current) {
+      if (notasAutosaveTimerRef.current !== null) {
         window.clearTimeout(notasAutosaveTimerRef.current)
       }
     }
