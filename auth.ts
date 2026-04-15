@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import { getAuthUsers, verifyPassword } from '@/lib/auth-utils'
+import { normalizeUserSections } from '@/lib/authz'
 
 export type AppSection = 'admin' | 'dashboard' | 'cotizaciones' | 'proyectos' | 'cuentas' | 'responsables' | 'planeacion'
 
@@ -29,7 +30,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user.id,
           email: user.email,
           name: user.name,
-          sections: user.sections as AppSection[],
+          sections: normalizeUserSections(user.sections),
         }
       },
     }),
@@ -38,12 +39,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
   callbacks: {
     jwt({ token, user }) {
-      if (user) token.sections = (user as { sections: AppSection[] }).sections
+      if (user) {
+        token.sections = normalizeUserSections((user as { sections?: string[] }).sections)
+      } else {
+        token.sections = normalizeUserSections(token.sections as string[] | undefined)
+      }
       return token
     },
     session({ session, token }) {
-      if (session.user)
-        (session.user as { sections?: AppSection[] }).sections = token.sections as AppSection[]
+      if (session.user) {
+        (session.user as { sections?: AppSection[] }).sections = normalizeUserSections(token.sections as string[] | undefined)
+      }
       return session
     },
   },
