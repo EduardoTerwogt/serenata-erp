@@ -48,6 +48,8 @@ interface Props {
   onItemFieldChange?: (index: number, field: QuotationItemCellField) => void
   isItemCellLocked?: (index: number, field: QuotationItemCellField) => boolean
   isItemRowLocked?: (index: number) => boolean
+  isItemRowActionBlocked?: (index: number) => boolean
+  getItemRowStatusText?: (index: number) => string | null
 }
 
 export function QuotationItemsSection({
@@ -77,6 +79,8 @@ export function QuotationItemsSection({
   onItemFieldChange,
   isItemCellLocked,
   isItemRowLocked,
+  isItemRowActionBlocked,
+  getItemRowStatusText,
 }: Props) {
   const descInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const [dropdownPos, setDropdownPos] = useStateReact<Record<number, { top: number; left: number } | null>>({})
@@ -99,14 +103,17 @@ export function QuotationItemsSection({
   }, [mostrarProductoDropdown, updateDropdownPos])
 
   const rowLocked = (index: number) => isItemRowLocked?.(index) ?? false
+  const actionBlocked = (index: number) => isItemRowActionBlocked?.(index) ?? rowLocked(index)
   const cellLocked = (index: number, field: QuotationItemCellField) => rowLocked(index) || (isItemCellLocked?.(index, field) ?? false)
+  const rowStatus = (index: number) => getItemRowStatusText?.(index) || null
 
   const renderEditableDesktopRow = (fieldId: string, index: number) => {
     const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
     const { importe, margen } = calcItem(item)
+    const statusText = rowStatus(index)
 
     return (
-      <tr key={fieldId} className="border-b border-gray-800/50">
+      <tr key={fieldId} className={`border-b border-gray-800/50 ${rowLocked(index) || actionBlocked(index) ? 'bg-gray-900/40' : ''}`}>
         <td className="px-4 py-2"><input {...register(`items.${index}.categoria`)} onFocus={() => onItemFieldFocus?.(index, 'categoria')} onBlur={() => onItemFieldBlur?.(index, 'categoria')} onChange={(e) => { onItemFieldChange?.(index, 'categoria'); register(`items.${index}.categoria`).onChange(e) }} disabled={cellLocked(index, 'categoria')} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" /></td>
         <td className="px-4 py-2">
           <div className="relative">
@@ -126,7 +133,11 @@ export function QuotationItemsSection({
                 style={{ top: dropdownPos[index]!.top, left: dropdownPos[index]!.left }}
               >
                 {productoSugerencias[index].map((p, i) => (
-                  <div key={i} onMouseDown={() => (onSelectProduct || seleccionarProducto)(index, p)} className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">
+                  <div
+                    key={i}
+                    onMouseDown={() => { if (!actionBlocked(index)) { (onSelectProduct || seleccionarProducto)(index, p) } }}
+                    className={`px-3 py-2 text-sm border-b border-gray-700 last:border-0 ${actionBlocked(index) ? 'cursor-not-allowed text-gray-500' : 'hover:bg-gray-700 cursor-pointer text-white'}`}
+                  >
                     <div className="font-medium">{p.descripcion}</div>
                     {p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}
                   </div>
@@ -135,6 +146,7 @@ export function QuotationItemsSection({
               document.body
             )}
           </div>
+          {statusText && <p className="mt-1 text-[11px] text-orange-300">{statusText}</p>}
         </td>
         <td className="px-4 py-2"><input type="number" min="1" {...register(`items.${index}.cantidad`, { valueAsNumber: true })} onFocus={() => onItemFieldFocus?.(index, 'cantidad')} onBlur={() => onItemFieldBlur?.(index, 'cantidad')} onChange={(e) => { onItemFieldChange?.(index, 'cantidad'); register(`items.${index}.cantidad`).onChange(e) }} disabled={cellLocked(index, 'cantidad')} className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" /></td>
         <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => onItemFieldFocus?.(index, 'precio_unitario')} onBlur={() => onItemFieldBlur?.(index, 'precio_unitario')} onChange={(e) => { onItemFieldChange?.(index, 'precio_unitario'); register(`items.${index}.precio_unitario`).onChange(e) }} disabled={cellLocked(index, 'precio_unitario')} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" /></td>
@@ -145,6 +157,7 @@ export function QuotationItemsSection({
             onFocus={() => onItemFieldFocus?.(index, 'responsable_id')}
             onBlur={() => onItemFieldBlur?.(index, 'responsable_id')}
             onChange={e => {
+              if (actionBlocked(index)) return
               if (onResponsableChange) {
                 onResponsableChange(index, e.target.value)
               } else {
@@ -153,7 +166,7 @@ export function QuotationItemsSection({
                 setValue(`items.${index}.responsable_nombre`, r?.nombre ?? '')
               }
             }}
-            disabled={cellLocked(index, 'responsable_id')}
+            disabled={actionBlocked(index) || cellLocked(index, 'responsable_id')}
             className="w-36 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="">Sin asignar</option>
@@ -163,7 +176,7 @@ export function QuotationItemsSection({
         </td>
         <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => onItemFieldFocus?.(index, 'x_pagar')} onBlur={() => onItemFieldBlur?.(index, 'x_pagar')} onChange={(e) => { onItemFieldChange?.(index, 'x_pagar'); register(`items.${index}.x_pagar`).onChange(e) }} disabled={cellLocked(index, 'x_pagar')} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" /></td>
         <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(margen)}</td>
-        <td className="px-4 py-2"><button type="button" onClick={() => (onRemoveRow ? onRemoveRow(index) : remove(index))} disabled={fields.length === 1 || rowLocked(index)} className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
+        <td className="px-4 py-2"><button type="button" onClick={() => (onRemoveRow ? onRemoveRow(index) : remove(index))} disabled={fields.length === 1 || actionBlocked(index)} className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
       </tr>
     )
   }
@@ -184,14 +197,16 @@ export function QuotationItemsSection({
   const renderEditableMobileCard = (fieldId: string, index: number) => {
     const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
     const { importe, margen } = calcItem(item)
+    const statusText = rowStatus(index)
     return (
-      <div key={fieldId} className={`bg-gray-800 border border-gray-700 rounded-xl p-4 ${rowLocked(index) ? 'opacity-60' : 'cursor-pointer hover:border-gray-600'} transition-colors`} onClick={() => !rowLocked(index) && setEditingItemIndex(index)}>
+      <div key={fieldId} className={`bg-gray-800 border border-gray-700 rounded-xl p-4 ${rowLocked(index) || actionBlocked(index) ? 'opacity-60' : 'cursor-pointer hover:border-gray-600'} transition-colors`} onClick={() => !rowLocked(index) && setEditingItemIndex(index)}>
         <div className="flex justify-between items-start gap-3 mb-2">
           <div className="min-w-0">
             <p className="text-white font-medium text-[15px] truncate">{item.descripcion || 'Sin descripción'}</p>
             <p className="text-gray-500 text-xs">{item.categoria || 'Sin categoría'}</p>
+            {statusText && <p className="mt-1 text-[11px] text-orange-300">{statusText}</p>}
           </div>
-          <button type="button" onClick={(e) => { e.stopPropagation(); if (onRemoveRow) { onRemoveRow(index) } else { remove(index) } }} disabled={fields.length === 1 || rowLocked(index)} className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors text-sm">✕</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); if (onRemoveRow) { onRemoveRow(index) } else { remove(index) } }} disabled={fields.length === 1 || actionBlocked(index)} className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors text-sm">✕</button>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-gray-500">Cant. {item.cantidad || 0}</span>
@@ -271,22 +286,23 @@ export function QuotationItemsSection({
               <button onClick={() => setEditingItemIndex(null)} className="min-h-[44px] px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm transition-colors">Listo</button>
               <span className="text-white font-medium text-[15px] text-right flex-1 min-w-0">{watchedItems[editingItemIndex]?.descripcion ? 'Editar partida' : 'Nueva partida'}</span>
             </div>
+            {rowStatus(editingItemIndex) && <div className="mb-4 rounded-lg border border-orange-700/60 bg-orange-900/20 px-3 py-2 text-xs text-orange-300">{rowStatus(editingItemIndex)}</div>}
             <div className="space-y-5">
               <div className="relative">
                 <label className="block text-[13px] text-gray-400 mb-2">Descripción</label>
                 <input {...register(`items.${editingItemIndex}.descripcion`)} onChange={e => { onItemFieldChange?.(editingItemIndex, 'descripcion'); handleDescripcionChange(editingItemIndex, e.target.value) }} onFocus={() => { onItemFieldFocus?.(editingItemIndex, 'descripcion'); (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: true })) }} onBlur={() => { onItemFieldBlur?.(editingItemIndex, 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: false })), 200) }} disabled={cellLocked(editingItemIndex, 'descripcion')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Descripción del item" autoComplete="off" />
-                {mostrarProductoDropdown[editingItemIndex] && !rowLocked(editingItemIndex) && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{productoSugerencias[editingItemIndex].map((p, i) => <div key={i} onMouseDown={() => (onSelectProduct || seleccionarProducto)(editingItemIndex, p)} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0"><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}</div>)}</div>}
+                {mostrarProductoDropdown[editingItemIndex] && !rowLocked(editingItemIndex) && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{productoSugerencias[editingItemIndex].map((p, i) => <div key={i} onMouseDown={() => { if (!actionBlocked(editingItemIndex)) { (onSelectProduct || seleccionarProducto)(editingItemIndex, p) } }} className={`px-4 py-3 text-sm border-b border-gray-700 last:border-0 ${actionBlocked(editingItemIndex) ? 'cursor-not-allowed text-gray-500' : 'hover:bg-gray-700 cursor-pointer text-white'}`}><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}</div>)}</div>}
               </div>
               <div><label className="block text-[13px] text-gray-400 mb-2">Categoría</label><input {...register(`items.${editingItemIndex}.categoria`)} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'categoria')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'categoria')} onChange={(e) => { onItemFieldChange?.(editingItemIndex, 'categoria'); register(`items.${editingItemIndex}.categoria`).onChange(e) }} disabled={cellLocked(editingItemIndex, 'categoria')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Categoría" /></div>
               <div className="flex gap-3"><div className="flex-1"><label className="block text-[13px] text-gray-400 mb-2">Cantidad</label><input type="number" min="1" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'cantidad')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'cantidad')} onChange={(e) => { onItemFieldChange?.(editingItemIndex, 'cantidad'); register(`items.${editingItemIndex}.cantidad`).onChange(e) }} disabled={cellLocked(editingItemIndex, 'cantidad')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white text-center focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" /></div><div className="flex-[2]"><label className="block text-[13px] text-gray-400 mb-2">Precio unitario</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'precio_unitario')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'precio_unitario')} onChange={(e) => { onItemFieldChange?.(editingItemIndex, 'precio_unitario'); register(`items.${editingItemIndex}.precio_unitario`).onChange(e) }} disabled={cellLocked(editingItemIndex, 'precio_unitario')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" /></div></div>
-              <div><label className="block text-[13px] text-gray-400 mb-2">Responsable</label><select {...register(`items.${editingItemIndex}.responsable_id`)} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'responsable_id')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'responsable_id')} onChange={(e) => { if (onResponsableChange) { onResponsableChange(editingItemIndex, e.target.value) } else { setValue(`items.${editingItemIndex}.responsable_id`, e.target.value); const r = responsables.find(r => r.id === e.target.value); setValue(`items.${editingItemIndex}.responsable_nombre`, r?.nombre ?? '') } }} disabled={cellLocked(editingItemIndex, 'responsable_id')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 appearance-none disabled:opacity-50 disabled:cursor-not-allowed"><option value="">Sin asignar</option>{responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select><input type="hidden" {...register(`items.${editingItemIndex}.responsable_nombre`)} /></div>
+              <div><label className="block text-[13px] text-gray-400 mb-2">Responsable</label><select {...register(`items.${editingItemIndex}.responsable_id`)} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'responsable_id')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'responsable_id')} onChange={(e) => { if (actionBlocked(editingItemIndex)) return; if (onResponsableChange) { onResponsableChange(editingItemIndex, e.target.value) } else { setValue(`items.${editingItemIndex}.responsable_id`, e.target.value); const r = responsables.find(r => r.id === e.target.value); setValue(`items.${editingItemIndex}.responsable_nombre`, r?.nombre ?? '') } }} disabled={actionBlocked(editingItemIndex) || cellLocked(editingItemIndex, 'responsable_id')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 appearance-none disabled:opacity-50 disabled:cursor-not-allowed"><option value="">Sin asignar</option>{responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select><input type="hidden" {...register(`items.${editingItemIndex}.responsable_nombre`)} /></div>
               <div><label className="block text-[13px] text-gray-400 mb-2">Por pagar al responsable</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'x_pagar')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'x_pagar')} onChange={(e) => { onItemFieldChange?.(editingItemIndex, 'x_pagar'); register(`items.${editingItemIndex}.x_pagar`).onChange(e) }} disabled={cellLocked(editingItemIndex, 'x_pagar')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" /></div>
             </div>
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mt-6">
               <div className="flex justify-between mb-2"><span className="text-gray-500 text-sm">Importe</span><span className="text-gray-300 text-sm font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).importe)}</span></div>
               <div className="flex justify-between"><span className="text-gray-500 text-sm">Margen</span><span className={`text-sm font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
-            {fields.length > 1 && <button type="button" onClick={() => { if (onRemoveRow) { onRemoveRow(editingItemIndex) } else { remove(editingItemIndex) } setEditingItemIndex(null) }} className="w-full text-red-400 hover:text-red-300 py-3 text-sm mt-6 transition-colors">Eliminar partida</button>}
+            {fields.length > 1 && <button type="button" onClick={() => { if (onRemoveRow) { onRemoveRow(editingItemIndex) } else { remove(editingItemIndex) } setEditingItemIndex(null) }} disabled={actionBlocked(editingItemIndex)} className="w-full text-red-400 hover:text-red-300 py-3 text-sm mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
           </div>
         </div>
       )}

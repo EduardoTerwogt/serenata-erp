@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabaseBrowser } from '@/lib/supabase-browser'
+import type { ItemCotizacion } from '@/lib/types'
 
 export type QuotationPresenceSection = 'notas' | 'general' | 'partidas' | 'totales'
 export type QuotationItemCellField = 'categoria' | 'descripcion' | 'cantidad' | 'precio_unitario' | 'responsable_id' | 'x_pagar'
 export type QuotationItemRowMode = 'new_row' | 'row_action'
+export type QuotationItemMutationAction = 'upsert' | 'delete'
 
 interface CurrentUser {
   id?: string | null
@@ -27,6 +29,16 @@ export interface QuotationItemRowEditor extends QuotationPresenceUser {
   mode: QuotationItemRowMode
 }
 
+export interface QuotationItemMutationPayload {
+  action: QuotationItemMutationAction
+  row_id: string
+  item?: ItemCotizacion | null
+  user_id: string
+  email: string
+  name: string
+  at: string
+}
+
 interface UseQuotationPresenceOptions {
   cotizacionId: string
   enabled: boolean
@@ -38,6 +50,7 @@ interface UseQuotationPresenceResult {
   sectionEditors: Partial<Record<QuotationPresenceSection, QuotationPresenceUser>>
   itemCellEditors: Record<string, QuotationPresenceUser>
   itemRowEditors: Record<string, QuotationItemRowEditor>
+  latestItemMutation: QuotationItemMutationPayload | null
   savedSections: Partial<Record<QuotationPresenceSection, number>>
   setActiveSection: (section: QuotationPresenceSection | null) => void
   releaseSection: (section?: QuotationPresenceSection) => void
@@ -45,6 +58,7 @@ interface UseQuotationPresenceResult {
   releaseItemCell: (rowId: string, field: QuotationItemCellField) => void
   lockItemRow: (rowId: string, mode: QuotationItemRowMode) => void
   releaseItemRow: (rowId: string) => void
+  broadcastItemMutation: (payload: { action: QuotationItemMutationAction; row_id: string; item?: ItemCotizacion | null }) => void
   markSectionSaved: (section: QuotationPresenceSection) => void
   isConnected: boolean
 }
@@ -102,6 +116,7 @@ export function useQuotationPresence({
   const [savedSections, setSavedSections] = useState<Partial<Record<QuotationPresenceSection, number>>>({})
   const [itemCellEditors, setItemCellEditors] = useState<Record<string, QuotationPresenceUser>>({})
   const [itemRowEditors, setItemRowEditors] = useState<Record<string, QuotationItemRowEditor>>({})
+  const [latestItemMutation, setLatestItemMutation] = useState<QuotationItemMutationPayload | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
@@ -183,6 +198,23 @@ export function useQuotationPresence({
     }).catch(() => null)
   }, [identity.email, identity.name, identity.userId])
 
+  const broadcastItemMutation = useCallback((payload: { action: QuotationItemMutationAction; row_id: string; item?: ItemCotizacion | null }) => {
+    const channel = channelRef.current
+    if (!channel) return
+
+    void channel.send({
+      type: 'broadcast',
+      event: 'item_mutation',
+      payload: {
+        ...payload,
+        user_id: identity.userId,
+        email: identity.email,
+        name: identity.name,
+        at: new Date().toISOString(),
+      } satisfies QuotationItemMutationPayload,
+    }).catch(() => null)
+  }, [identity.email, identity.name, identity.userId])
+
   const markSectionSaved = useCallback((section: QuotationPresenceSection) => {
     const channel = channelRef.current
     if (!channel) return
@@ -259,6 +291,7 @@ export function useQuotationPresence({
       setSavedSections({})
       setItemCellEditors({})
       setItemRowEditors({})
+      setLatestItemMutation(null)
       setIsConnected(false)
       return
     }
@@ -343,6 +376,12 @@ export function useQuotationPresence({
       })
     })
 
+    channel.on('broadcast', { event: 'item_mutation' }, ({ payload }) => {
+      const mutation = payload as QuotationItemMutationPayload | undefined
+      if (!mutation?.user_id || mutation.user_id === identity.userId) return
+      setLatestItemMutation({ ...mutation })
+    })
+
     channel.on('broadcast', { event: 'section_saved' }, ({ payload }) => {
       const saved = payload as SectionSavedPayload | undefined
       if (!saved?.user_id || saved.user_id === identity.userId) return
@@ -384,6 +423,7 @@ export function useQuotationPresence({
       setSavedSections({})
       setItemCellEditors({})
       setItemRowEditors({})
+      setLatestItemMutation(null)
       void channel.untrack().catch(() => null)
       void supabaseBrowser.removeChannel(channel)
       channelRef.current = null
@@ -418,6 +458,7 @@ export function useQuotationPresence({
     sectionEditors,
     itemCellEditors,
     itemRowEditors,
+    latestItemMutation,
     savedSections,
     setActiveSection,
     releaseSection,
@@ -425,6 +466,7 @@ export function useQuotationPresence({
     releaseItemCell,
     lockItemRow,
     releaseItemRow,
+    broadcastItemMutation,
     markSectionSaved,
     isConnected,
   }
