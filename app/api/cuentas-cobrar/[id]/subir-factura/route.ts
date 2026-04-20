@@ -25,6 +25,20 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
+    // Validar tipos MIME permitidos
+    const ALLOWED_XML_TYPES = ['text/xml', 'application/xml']
+    const ALLOWED_PDF_TYPES = ['application/pdf']
+    if (!ALLOWED_XML_TYPES.includes(xmlFile.type) && !xmlFile.name.endsWith('.xml')) {
+      return Response.json({ error: 'El archivo XML debe ser de tipo text/xml o application/xml' }, { status: 400 })
+    }
+    if (pdfFile && !ALLOWED_PDF_TYPES.includes(pdfFile.type) && !pdfFile.name.endsWith('.pdf')) {
+      return Response.json({ error: 'El archivo PDF debe ser de tipo application/pdf' }, { status: 400 })
+    }
+    const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+    if (xmlFile.size > MAX_FILE_SIZE || (pdfFile && pdfFile.size > MAX_FILE_SIZE)) {
+      return Response.json({ error: 'El archivo excede el límite de 10 MB' }, { status: 400 })
+    }
+
     // Obtener cuenta
     const cuentas = await getCuentasCobrar()
     const cuenta = cuentas.find(c => c.id === id)

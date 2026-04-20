@@ -14,7 +14,7 @@ interface CatalogosCache {
   ts: number
 }
 let _catalogosCache: CatalogosCache | null = null
-const CATALOGOS_TTL_MS = 5 * 60 * 1000 // 5 minutos
+const CATALOGOS_TTL_MS = 30 * 60 * 1000 // 30 minutos
 
 export function useQuotationForm(
   setValue: UseFormSetValue<QuotationFormValues>,

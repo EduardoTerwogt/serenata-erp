@@ -34,9 +34,17 @@ export function calculateDiscountAmount(
   descuento_tipo: DescuentoTipo,
   descuento_valor: number
 ): number {
-  return descuento_tipo === 'porcentaje'
-    ? general * (descuento_valor / 100)
-    : descuento_valor
+  const safeValor = Math.max(0, descuento_valor)
+  if (descuento_tipo === 'porcentaje') {
+    // Porcentaje capped a 100% para evitar totales negativos
+    return general * (Math.min(safeValor, 100) / 100)
+  }
+  // Descuento fijo no puede exceder el monto base
+  return Math.min(safeValor, general)
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100
 }
 
 export function calculateQuotationTotals({
@@ -47,15 +55,15 @@ export function calculateQuotationTotals({
   descuento_valor,
 }: QuotationTotalsInput): QuotationTotals {
   const normalizedItems = items.map(normalizeQuotationItem)
-  const subtotal = normalizedItems.reduce((sum, item) => sum + item.importe, 0)
-  const fee_agencia = subtotal * porcentaje_fee
-  const general = subtotal + fee_agencia
-  const descuento = calculateDiscountAmount(general, descuento_tipo, descuento_valor)
-  const base_iva = general - descuento
-  const iva = iva_activo ? base_iva * 0.16 : 0
-  const total = base_iva + iva
-  const margen_total = normalizedItems.reduce((sum, item) => sum + item.margen, 0)
-  const utilidad_total = margen_total + fee_agencia - descuento
+  const subtotal = round2(normalizedItems.reduce((sum, item) => sum + item.importe, 0))
+  const fee_agencia = round2(subtotal * porcentaje_fee)
+  const general = round2(subtotal + fee_agencia)
+  const descuento = round2(calculateDiscountAmount(general, descuento_tipo, descuento_valor))
+  const base_iva = round2(general - descuento)
+  const iva = iva_activo ? round2(base_iva * 0.16) : 0
+  const total = round2(base_iva + iva)
+  const margen_total = round2(normalizedItems.reduce((sum, item) => sum + item.margen, 0))
+  const utilidad_total = round2(margen_total + fee_agencia - descuento)
 
   return {
     subtotal,

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   getCotizacionByIdMock: vi.fn(),
   rpcMock: vi.fn(),
+  fromMock: vi.fn(),
 }))
 
 vi.mock('@/lib/db', () => ({
@@ -12,15 +13,38 @@ vi.mock('@/lib/db', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     rpc: mocks.rpcMock,
+    from: mocks.fromMock,
   },
 }))
 
 import { cancelQuotation } from '../cancellation'
 
+// Helper: mock cuentas_cobrar query to return no payments (cancellation allowed)
+function mockNoPayments() {
+  mocks.fromMock.mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }),
+  })
+}
+
+// Helper: mock cuentas_cobrar query to return existing payments (cancellation blocked)
+function mockWithPayments(montoPagado: number) {
+  mocks.fromMock.mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({
+        data: [{ id: 'cc-1', monto_pagado: montoPagado }],
+        error: null,
+      }),
+    }),
+  })
+}
+
 describe('cancelQuotation', () => {
   beforeEach(() => {
     mocks.getCotizacionByIdMock.mockReset()
     mocks.rpcMock.mockReset()
+    mocks.fromMock.mockReset()
   })
 
   it('successfully cancels an EMITIDA quotation using RPC transaction', async () => {
@@ -28,6 +52,7 @@ describe('cancelQuotation', () => {
     const cotizacion = { id: quotationId, estado: 'EMITIDA', cliente: 'ACME' }
 
     mocks.getCotizacionByIdMock.mockResolvedValue(cotizacion)
+    mockNoPayments()
     mocks.rpcMock.mockResolvedValue({
       data: [{ id: quotationId, estado: 'CANCELADA' }],
       error: null,
@@ -49,6 +74,7 @@ describe('cancelQuotation', () => {
     const cotizacion = { id: quotationId, estado: 'APROBADA', cliente: 'TechCorp' }
 
     mocks.getCotizacionByIdMock.mockResolvedValue(cotizacion)
+    mockNoPayments()
     mocks.rpcMock.mockResolvedValue({
       data: [{ id: quotationId, estado: 'CANCELADA' }],
       error: null,
@@ -87,11 +113,26 @@ describe('cancelQuotation', () => {
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
-  it('throws error when RPC call fails', async () => {
+  it('throws error when cotizacion has existing payments', async () => {
     const quotationId = 'SH005'
+    const cotizacion = { id: quotationId, estado: 'APROBADA', cliente: 'Paid Client' }
+
+    mocks.getCotizacionByIdMock.mockResolvedValue(cotizacion)
+    mockWithPayments(5000)
+
+    await expect(cancelQuotation(quotationId)).rejects.toThrow(
+      'No se puede cancelar: ya existe un pago de $5000.00 registrado',
+    )
+
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('throws error when RPC call fails', async () => {
+    const quotationId = 'SH006'
     const cotizacion = { id: quotationId, estado: 'EMITIDA', cliente: 'Will Fail' }
 
     mocks.getCotizacionByIdMock.mockResolvedValue(cotizacion)
+    mockNoPayments()
     mocks.rpcMock.mockResolvedValue({
       data: null,
       error: { message: 'Database constraint violation' },
@@ -113,10 +154,11 @@ describe('cancelQuotation', () => {
   })
 
   it('uses RPC transaction for atomicity - ensures all-or-nothing semantics', async () => {
-    const quotationId = 'SH006'
+    const quotationId = 'SH007'
     const cotizacion = { id: quotationId, estado: 'APROBADA' }
 
     mocks.getCotizacionByIdMock.mockResolvedValue(cotizacion)
+    mockNoPayments()
     mocks.rpcMock.mockResolvedValue({
       data: [{ id: quotationId, estado: 'CANCELADA' }],
       error: null,

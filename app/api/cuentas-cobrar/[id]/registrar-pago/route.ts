@@ -105,7 +105,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       },
     })
   } catch (error) {
-    console.error('[cuentas-cobrar/registrar-pago]', error)
-    return Response.json({ error: 'Error registrando pago' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error('[cuentas-cobrar/registrar-pago]', msg)
+    return Response.json({ error: `Error registrando pago: ${msg}` }, { status: 500 })
   }
 }

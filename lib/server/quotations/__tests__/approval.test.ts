@@ -57,8 +57,24 @@ describe('approveQuotationAndFetchResult', () => {
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
-  it('mapea a 404 cuando el RPC responde que la cotización no fue encontrada', async () => {
+  it('retorna 400 cuando se intenta aprobar desde BORRADOR (debe pasar por EMITIDA)', async () => {
     mocks.getCotizacionByIdMock.mockResolvedValue({ id: 'SH001', estado: 'BORRADOR' })
+
+    const result = await approveQuotationAndFetchResult('SH001')
+
+    expect(result).toEqual({
+      ok: false,
+      status: 400,
+      body: {
+        error: 'Solo se pueden aprobar cotizaciones en estado EMITIDA. Estado actual: BORRADOR',
+      },
+    })
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('mapea a 404 cuando el RPC responde que la cotización no fue encontrada', async () => {
+    // La cotización debe estar EMITIDA para que la guardia de estado pase
+    mocks.getCotizacionByIdMock.mockResolvedValue({ id: 'SH001', estado: 'EMITIDA' })
     mocks.rpcMock.mockResolvedValue({
       data: null,
       error: { message: 'cotización no encontrada' },
@@ -75,7 +91,7 @@ describe('approveQuotationAndFetchResult', () => {
 
   it('retorna la cotización aprobada y los artefactos creados por el RPC', async () => {
     mocks.getCotizacionByIdMock
-      .mockResolvedValueOnce({ id: 'SH001', estado: 'BORRADOR' })
+      .mockResolvedValueOnce({ id: 'SH001', estado: 'EMITIDA' })
       .mockResolvedValueOnce({ id: 'SH001', estado: 'APROBADA' })
 
     mocks.rpcMock.mockResolvedValue({

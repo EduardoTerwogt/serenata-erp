@@ -14,6 +14,16 @@ export async function approveQuotationAndFetchResult(id: string) {
     return { ok: true as const, status: 200, body: { cotizacion, already_approved: true } }
   }
 
+  if (cotizacion.estado !== 'EMITIDA') {
+    return {
+      ok: false as const,
+      status: 400,
+      body: {
+        error: `Solo se pueden aprobar cotizaciones en estado EMITIDA. Estado actual: ${cotizacion.estado}`,
+      },
+    }
+  }
+
   const { data, error } = await supabaseAdmin.rpc('approve_cotizacion', { p_id: id })
 
   if (error) {

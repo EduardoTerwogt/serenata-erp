@@ -1,3 +1,5 @@
+export const maxDuration = 60
+
 import { requireSection } from '@/lib/api-auth'
 import { createOrdenPago, getCuentasPagarPendientesEventosRealizados, updateCuentaPagar } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
