@@ -8,11 +8,12 @@ describe('authz helpers', () => {
     expect(getUserSections({})).toEqual([])
   })
 
-  it('getUserSections retorna las sections del usuario cuando existen', () => {
-    expect(getUserSections({ sections: ['cotizaciones', 'proyectos'] })).toEqual([
-      'cotizaciones',
-      'proyectos',
-    ])
+  it('getUserSections retorna las sections del usuario + dependencias expandidas', () => {
+    // cotizaciones tiene dependencia en responsables (ver SECTION_DEPENDENCIES en authz.ts)
+    const sections = getUserSections({ sections: ['cotizaciones', 'proyectos'] })
+    expect(sections).toContain('cotizaciones')
+    expect(sections).toContain('proyectos')
+    expect(sections).toContain('responsables') // dependencia de cotizaciones
   })
 
   it('hasAnySection retorna true si el usuario tiene alguna sección requerida', () => {

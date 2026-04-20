@@ -1,3 +1,5 @@
+export const maxDuration = 60
+
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
 import { generateCotizacionPdf, type CotizacionPDFData } from '@/lib/server/pdf/cotizacion-pdf'

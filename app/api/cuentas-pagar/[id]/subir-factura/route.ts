@@ -30,6 +30,20 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: 'Se requiere archivo PDF de factura proveedor' }, { status: 400 })
     }
 
+    // Validar tipos MIME permitidos
+    const ALLOWED_XML_TYPES = ['text/xml', 'application/xml']
+    const ALLOWED_PDF_TYPES = ['application/pdf']
+    if (!ALLOWED_XML_TYPES.includes(facturaXmlFile.type) && !facturaXmlFile.name.endsWith('.xml')) {
+      return Response.json({ error: 'El archivo XML debe ser de tipo text/xml o application/xml' }, { status: 400 })
+    }
+    if (!ALLOWED_PDF_TYPES.includes(facturaPdfFile.type) && !facturaPdfFile.name.endsWith('.pdf')) {
+      return Response.json({ error: 'El archivo PDF debe ser de tipo application/pdf' }, { status: 400 })
+    }
+    const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+    if (facturaXmlFile.size > MAX_FILE_SIZE || facturaPdfFile.size > MAX_FILE_SIZE) {
+      return Response.json({ error: 'El archivo excede el límite de 10 MB' }, { status: 400 })
+    }
+
     const cuentas = await getCuentasPagar()
     const cuenta = cuentas.find(c => c.id === id)
     if (!cuenta) {

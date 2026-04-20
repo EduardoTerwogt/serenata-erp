@@ -1,3 +1,4 @@
+import { requireSection } from '@/lib/api-auth'
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -7,6 +8,9 @@ const supabaseAdmin = createClient(
 )
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireSection('planeacion')
+  if (authResult.response) return authResult.response
+
   try {
     const { searchParams } = new URL(request.url)
     const estado = searchParams.get('estado')
@@ -15,7 +19,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from('planeacion_pendientes')
       .select('*')
-      .eq('eliminada', false)  // NUEVO: filtrar líneas no eliminadas
+      .eq('eliminada', false)
       .order('created_at', { ascending: false })
 
     if (estado) {
@@ -49,6 +53,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireSection('planeacion')
+  if (authResult.response) return authResult.response
+
   try {
     const body = await request.json()
     const pendientes = Array.isArray(body) ? body : [body]
@@ -57,7 +64,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, inserted: 0 })
     }
 
-    // Insertar filas de pendientes en batch
     const { data, error } = await supabaseAdmin
       .from('planeacion_pendientes')
       .insert(
@@ -68,7 +74,7 @@ export async function POST(request: NextRequest) {
           fecha_iso: p.fecha_iso || null,
           ciudad: p.ciudad || null,
           locacion: p.locacion || null,
-          estado: p.estado, // 'por_confirmar' | 'cancelado'
+          estado: p.estado,
           raw_input: p.raw_input || null,
           notas: p.notas || null,
         }))
@@ -94,4 +100,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

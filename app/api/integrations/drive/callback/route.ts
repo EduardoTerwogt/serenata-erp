@@ -77,19 +77,22 @@ export async function GET(req: Request) {
     )
   }
 
+  const tokenPreview = refreshToken.substring(0, 12) + '...' + refreshToken.slice(-4)
+  // Token completo solo en logs del servidor (nunca en HTML visible al browser)
+  console.log('[Drive/callback] Refresh token generado. Copialo desde este log de Vercel (Functions tab):', refreshToken)
+
   return new Response(
-    html('Autorizaci\u00f3n exitosa \u2713', `
-      <p style="color:green; font-size:1.1em">\u00a1Autorizaci\u00f3n completa!  Copia el refresh token y agr\u00e9galo a Vercel.</p>
-      <h2>Refresh Token</h2>
-      <textarea rows="4" style="width:100%;font-family:monospace;font-size:0.9em;padding:8px">${escHtml(refreshToken)}</textarea>
+    html('Autorización exitosa ✓', `
+      <p style="color:green; font-size:1.1em">¡Autorización completa!</p>
+      <p>Vista previa: <code>${escHtml(tokenPreview)}</code></p>
+      <p style="color:#f59e0b">&#9888; Por seguridad el token completo no se muestra aquí.
+      Cópialo desde los <strong>logs de Vercel</strong> (Functions tab) donde aparece una sola vez.</p>
       <h2>Pasos siguientes</h2>
       <ol>
-        <li>En Vercel \u2192 Settings \u2192 Environment Variables, agrega:</li>
+        <li>En Vercel → Settings → Environment Variables, agrega <code>GOOGLE_DRIVE_REFRESH_TOKEN</code>.</li>
+        <li>Haz un <em>Redeploy</em> para que la variable tome efecto.</li>
       </ol>
-      <pre style="background:#111;color:#eee;padding:12px;border-radius:4px">GOOGLE_DRIVE_REFRESH_TOKEN = ${escHtml(refreshToken)}</pre>
-      <p>Despu\u00e9s haz un <em>Redeploy</em> en Vercel para que la variable tome efecto.</p>
-      <p style="color:#888;font-size:0.85em">Este refresh token no expira mientras la app siga autorizada en tu cuenta Google.
-      Si lo revocan, visita <a href="/api/integrations/drive/authorize">/api/integrations/drive/authorize</a> de nuevo.</p>
+      <p style="color:#888;font-size:0.85em">El refresh token no expira mientras la app siga autorizada en tu cuenta Google.</p>
     `),
     { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
   )
@@ -105,7 +108,7 @@ function html(title: string, body: string): string {
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>${escHtml(title)} \u2014 Serenata ERP</title>
+  <title>${escHtml(title)} — Serenata ERP</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 700px; margin: 60px auto; padding: 0 20px; background: #0a0a0a; color: #e5e5e5; }
     h1   { color: #ff8000; }

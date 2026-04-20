@@ -1,32 +1,38 @@
 import { getCotizacionById } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase'
 
-/**
- * Cancel an EMITIDA or APROBADA quotation.
- * Uses RPC transaction to atomically:
- * - Delete associated proyecto, cuentas_pagar, and cuentas_cobrar
- * - Update estado to 'CANCELADA'
- *
- * If any operation fails, the entire transaction is rolled back,
- * ensuring data integrity.
- */
 export async function cancelQuotation(id: string) {
   const cotizacion = await getCotizacionById(id)
 
-  // Validate estado before attempting cancellation
   if (cotizacion.estado !== 'EMITIDA' && cotizacion.estado !== 'APROBADA') {
     throw new Error(
       `Solo se pueden cancelar cotizaciones en estado EMITIDA o APROBADA. Estado actual: ${cotizacion.estado}`
     )
   }
 
-  // Use RPC for transactional safety - all operations succeed or all fail
+  // Bloquear cancelación si ya hay pagos registrados en cuentas_cobrar
+  const { data: cuentas, error: cuentasError } = await supabaseAdmin
+    .from('cuentas_cobrar')
+    .select('id, monto_pagado')
+    .eq('cotizacion_id', id)
+
+  if (cuentasError) {
+    throw new Error(`Error verificando pagos: ${cuentasError.message}`)
+  }
+
+  const totalPagado = (cuentas || []).reduce((sum, c) => sum + (Number(c.monto_pagado) || 0), 0)
+  if (totalPagado > 0) {
+    throw new Error(
+      `No se puede cancelar: ya existe un pago de $${totalPagado.toFixed(2)} registrado en esta cotización. ` +
+      `Contacta al administrador para revertir el pago antes de cancelar.`
+    )
+  }
+
   const { data, error } = await supabaseAdmin.rpc('cancel_cotizacion', { p_id: id })
 
   if (error) {
     throw new Error(`Error cancelando cotizacion: ${error.message}`)
   }
 
-  // Return cancelled cotización with updated estado
   return { ...cotizacion, estado: 'CANCELADA' }
 }
