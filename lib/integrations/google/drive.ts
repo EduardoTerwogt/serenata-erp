@@ -48,6 +48,54 @@ function getDriveInstance() {
   return { drive: google.drive({ version: 'v3', auth }), env }
 }
 
+function extractDriveErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message
+  if (typeof err === 'string') return err
+
+  const googleErr = err as {
+    message?: string
+    response?: {
+      data?: {
+        error?: string | {
+          message?: string
+          status?: string
+        }
+      }
+    }
+  }
+
+  const responseError = googleErr?.response?.data?.error
+  if (typeof responseError === 'string' && responseError.trim()) {
+    return responseError
+  }
+  if (responseError && typeof responseError === 'object') {
+    const message = responseError.message?.trim()
+    const status = responseError.status?.trim()
+    if (message && status) return `${status}: ${message}`
+    if (message) return message
+    if (status) return status
+  }
+  if (googleErr?.message) return googleErr.message
+
+  return String(err)
+}
+
+function isInvalidGrantError(err: unknown): boolean {
+  return extractDriveErrorMessage(err).toLowerCase().includes('invalid_grant')
+}
+
+function toOperationalDriveError(err: unknown, action: string): Error {
+  if (isInvalidGrantError(err)) {
+    return new Error(
+      `Google Drive desautorizado (${action}): invalid_grant. ` +
+      'El refresh token expiró, fue revocado o ya no coincide con GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET. ' +
+      'Reautoriza Drive y actualiza GOOGLE_DRIVE_REFRESH_TOKEN en Vercel.'
+    )
+  }
+
+  return err instanceof Error ? err : new Error(extractDriveErrorMessage(err))
+}
+
 /** Convert base64 string to a Readable stream for the googleapis media body. */
 function base64ToStream(base64: string): Readable {
   const buffer = Buffer.from(base64, 'base64')
@@ -66,26 +114,30 @@ class DriveServiceImpl implements DriveService {
 
     console.log('[Drive] uploadPdf — folder:', env.driveFolderId, '— file:', fileName)
 
-    const res = await drive.files.create({
-      supportsAllDrives: true,
-      requestBody: {
-        name: fileName,
-        parents: [env.driveFolderId],
-      },
-      media: {
-        mimeType,
-        body: base64ToStream(contentBase64),
-      },
-      fields: 'id,webViewLink',
-    })
+    try {
+      const res = await drive.files.create({
+        supportsAllDrives: true,
+        requestBody: {
+          name: fileName,
+          parents: [env.driveFolderId],
+        },
+        media: {
+          mimeType,
+          body: base64ToStream(contentBase64),
+        },
+        fields: 'id,webViewLink',
+      })
 
-    console.log('[Drive] uploadPdf — response id:', res.data.id, 'link:', res.data.webViewLink)
+      console.log('[Drive] uploadPdf — response id:', res.data.id, 'link:', res.data.webViewLink)
 
-    if (!res.data.id) return null
+      if (!res.data.id) return null
 
-    return {
-      fileId: res.data.id,
-      webViewLink: res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`,
+      return {
+        fileId: res.data.id,
+        webViewLink: res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`,
+      }
+    } catch (err: unknown) {
+      throw toOperationalDriveError(err, 'uploadPdf')
     }
   }
 
@@ -128,7 +180,7 @@ class DriveServiceImpl implements DriveService {
         console.warn('[Drive] updateFile — file not found (permanently deleted?), returning null for fallback')
         return null
       }
-      throw err
+      throw toOperationalDriveError(err, 'updateFile')
     }
   }
 }
@@ -145,40 +197,44 @@ async function ensureFolderPath(
   folderPath: string,
   rootFolderId: string
 ): Promise<string> {
-  // Parse the path: "/Por Cobrar/CC-2026-00001" → ["Por Cobrar", "CC-2026-00001"]
-  const parts = folderPath.split('/').filter(p => p.length > 0)
+  try {
+    // Parse the path: "/Por Cobrar/CC-2026-00001" → ["Por Cobrar", "CC-2026-00001"]
+    const parts = folderPath.split('/').filter(p => p.length > 0)
 
-  let currentParentId = rootFolderId
-  for (const folderName of parts) {
-    // Search for folder with this name in current parent
-    const res = await drive.files.list({
-      supportsAllDrives: true,
-      q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${currentParentId}' in parents and trashed=false`,
-      spaces: 'drive',
-      fields: 'files(id, name)',
-      pageSize: 1,
-    })
-
-    let folderId = res.data.files?.[0]?.id
-
-    // If folder doesn't exist, create it
-    if (!folderId) {
-      const createRes = await drive.files.create({
+    let currentParentId = rootFolderId
+    for (const folderName of parts) {
+      // Search for folder with this name in current parent
+      const res = await drive.files.list({
         supportsAllDrives: true,
-        requestBody: {
-          name: folderName,
-          mimeType: 'application/vnd.google-apps.folder',
-          parents: [currentParentId],
-        },
-        fields: 'id',
+        q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${currentParentId}' in parents and trashed=false`,
+        spaces: 'drive',
+        fields: 'files(id, name)',
+        pageSize: 1,
       })
-      folderId = createRes.data.id
+
+      let folderId = res.data.files?.[0]?.id
+
+      // If folder doesn't exist, create it
+      if (!folderId) {
+        const createRes = await drive.files.create({
+          supportsAllDrives: true,
+          requestBody: {
+            name: folderName,
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: [currentParentId],
+          },
+          fields: 'id',
+        })
+        folderId = createRes.data.id
+      }
+
+      currentParentId = folderId
     }
 
-    currentParentId = folderId
+    return currentParentId
+  } catch (err: unknown) {
+    throw toOperationalDriveError(err, 'ensureFolderPath')
   }
-
-  return currentParentId
 }
 
 /**
@@ -199,28 +255,32 @@ export async function uploadFileToDrive(
   const drive = google.drive({ version: 'v3', auth })
   const finalRootFolderId = rootFolderId || env.driveFolderId
 
-  // Ensure folder path exists and get the final folder ID
-  const parentFolderId = await ensureFolderPath(drive, folderPath, finalRootFolderId)
+  try {
+    // Ensure folder path exists and get the final folder ID
+    const parentFolderId = await ensureFolderPath(drive, folderPath, finalRootFolderId)
 
-  // Convert file to buffer
-  const arrayBuffer = await file.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+    // Convert file to buffer
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
 
-  // Upload file to the final folder
-  const res = await drive.files.create({
-    supportsAllDrives: true,
-    requestBody: {
-      name: fileName,
-      mimeType: file.type,
-      parents: [parentFolderId],
-    },
-    media: {
-      mimeType: file.type,
-      body: Readable.from([buffer]),
-    },
-    fields: 'id, webViewLink',
-  })
+    // Upload file to the final folder
+    const res = await drive.files.create({
+      supportsAllDrives: true,
+      requestBody: {
+        name: fileName,
+        mimeType: file.type,
+        parents: [parentFolderId],
+      },
+      media: {
+        mimeType: file.type,
+        body: Readable.from([buffer]),
+      },
+      fields: 'id, webViewLink',
+    })
 
-  // Return file URL
-  return res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`
+    // Return file URL
+    return res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`
+  } catch (err: unknown) {
+    throw toOperationalDriveError(err, 'uploadFileToDrive')
+  }
 }
