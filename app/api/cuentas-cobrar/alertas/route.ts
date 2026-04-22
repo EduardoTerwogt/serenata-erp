@@ -30,11 +30,13 @@ export async function GET() {
     )
 
     const alertas = cuentasActualizadas
-      .filter(c => c.estado !== 'PAGADO' && c.fecha_vencimiento)
+      .filter((c): c is typeof c & { fecha_vencimiento: string } =>
+        c.estado !== 'PAGADO' && c.fecha_vencimiento != null
+      )
       .map(c => {
-        const deadline = new Date(c.fecha_vencimiento!)
+        const deadline = new Date(c.fecha_vencimiento)
         const diasFaltantes = Math.ceil((deadline.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
-        const esVencida = c.fecha_vencimiento! < hoyIso
+        const esVencida = c.fecha_vencimiento < hoyIso
         const estaPorVencer = diasFaltantes <= 3 && diasFaltantes > 0
 
         return {

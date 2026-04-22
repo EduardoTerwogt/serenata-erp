@@ -1,9 +1,13 @@
+import { requireSection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireSection('planeacion')
+  if (authResult.response) return authResult.response
+
   try {
     const { id } = await params
 

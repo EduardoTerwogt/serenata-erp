@@ -2,6 +2,7 @@ import { requireAnySection, requireSection } from '@/lib/api-auth'
 import { getResponsables, createResponsable } from '@/lib/db'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { CacheManager } from '@/lib/api/cache'
+import { validate, ResponsableCreateSchema } from '@/lib/validation/schemas'
 
 // Fase 8c: Caché en servidor para responsables (5 minutos TTL)
 const cache = new CacheManager(5 * 60 * 1000)
@@ -35,7 +36,9 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const responsable = await createResponsable({ ...body, activo: true })
+    const validation = validate(ResponsableCreateSchema, body)
+    if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 })
+    const responsable = await createResponsable({ ...validation.data, activo: true })
 
     // Invalidate cache after successful creation
     cache.invalidate('responsables:')

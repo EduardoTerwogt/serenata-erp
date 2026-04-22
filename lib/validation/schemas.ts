@@ -62,6 +62,18 @@ export const CotizacionUpdateSchema = CotizacionBaseSchema.partial().extend({
   items: z.array(ItemCotizacionSchema).optional(),
 })
 
+// ==================== RESPONSABLES ====================
+
+export const ResponsableCreateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido'),
+  telefono: z.string().nullable().optional(),
+  correo: z.string().email('Correo inválido').nullable().optional(),
+  banco: z.string().nullable().optional(),
+  clabe: z.string().nullable().optional(),
+  roles: z.array(z.string()).optional().default([]),
+  notas: z.string().nullable().optional(),
+})
+
 // ==================== PROYECTOS ====================
 
 export const ProyectoUpdateSchema = z.object({

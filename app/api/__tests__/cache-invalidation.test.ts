@@ -221,10 +221,11 @@ describe('Cache Invalidation', () => {
         }),
       )
 
-      // Verify createResponsable was called
+      // Verify createResponsable was called (roles defaults to [] from schema)
       expect(mocks.createResponsableMock).toHaveBeenCalledWith({
         nombre: 'John Doe',
         activo: true,
+        roles: [],
       })
 
       // Next GET should call getResponsables (cache was invalidated)
