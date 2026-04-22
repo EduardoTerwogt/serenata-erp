@@ -58,6 +58,7 @@ export async function getCuentasPagar() {
     .from('cuentas_pagar')
     .select('*')
     .order('created_at', { ascending: false })
+    .limit(500)
   if (error) throw error
   const cuentas = (data || []) as CuentaPagar[]
   return hydrateProyectoNombre(cuentas)

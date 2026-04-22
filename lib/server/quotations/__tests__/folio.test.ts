@@ -176,21 +176,15 @@ describe('quotation folio helpers', () => {
     })
   })
 
-  it('reserveNextQuotationFolio hace fallback no atómico cuando falta la función RPC', async () => {
+  it('reserveNextQuotationFolio lanza error cuando falta la función RPC (sin fallback no-atómico)', async () => {
     mocks.rpcMock.mockResolvedValue({
       data: null,
       error: new Error('Could not find the function public.reserve_next_cotizacion_folio in the schema cache'),
     })
-    mocks.getNextFolioMock.mockResolvedValue('SH012')
 
-    const reservation = await reserveNextQuotationFolio()
-
-    expect(reservation).toEqual({
-      folio: 'SH012',
-      reservationToken: null,
-      atomic: false,
-      expiresAt: null,
-    })
+    await expect(reserveNextQuotationFolio()).rejects.toThrow(
+      'La función de reserva atómica de folio no está instalada en la base de datos.'
+    )
   })
 
   it('consumeReservedQuotationFolio no llama al RPC sin token y falla si la reserva ya expiró', async () => {

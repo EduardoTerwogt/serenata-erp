@@ -16,7 +16,7 @@ export async function GET(
     .order('created_at', { ascending: false })
   if (error) {
     console.error('[historial] error:', error)
-    return Response.json({ error: error.message }, { status: 500 })
+    return Response.json({ error: 'Error obteniendo historial' }, { status: 500 })
   }
   return Response.json(data || [])
 }

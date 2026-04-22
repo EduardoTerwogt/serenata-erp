@@ -162,30 +162,9 @@ async function syncTableUp(
       }
     }
 
-    // 5. DELETE — borrar filas que están en Supabase pero NO en el Sheet
-    // Solo aplica cuando el sheet tiene al menos una fila con datos válidos
-    if (pkValues.length > 0) {
-      const { data: allSupabaseRows } = await supabaseAdmin.from(table).select(pk)
-      const allSupabasePks = (allSupabaseRows ?? []).map(
-        (r: unknown) => String((r as Record<string, unknown>)[pk])
-      )
-      const sheetPkSet = new Set(pkValues)
-      const toDelete = allSupabasePks.filter(id => !sheetPkSet.has(id))
-
-      for (const pkToDelete of toDelete) {
-        try {
-          const { error } = await supabaseAdmin.from(table).delete().eq(pk, pkToDelete)
-          if (error) throw error
-          rowResults.push({ rowIndex: -1, pk: pkToDelete, action: 'deleted' })
-          deleted++
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err)
-          console.error(`[Sheets/sync-up] Error borrando ${tab} pk=${pkToDelete}:`, message)
-          rowResults.push({ rowIndex: -1, pk: pkToDelete, action: 'error', error: `No se pudo borrar: ${message}` })
-          errors++
-        }
-      }
-    }
+    // 5. DELETE — DESHABILITADO intencionalmente.
+    // Supabase es fuente de verdad. Eliminar filas del Sheet no debe borrar datos en BD.
+    // Si se necesita borrar, hacerlo directamente en Supabase.
 
     console.log(`[Sheets/sync-up] ${tab}: +${inserted} ins, ~${updated} upd, -${deleted} del, ${errors} err`)
     return { tab, table, inserted, updated, deleted, skipped, errors, rowResults, ok: errors === 0 }

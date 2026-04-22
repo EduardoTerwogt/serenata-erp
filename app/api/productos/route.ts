@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   const { data, error } = await query
   if (error) {
     console.error('[GET /api/productos] Error:', error)
-    return Response.json({ error: error.message }, { status: 500 })
+    return Response.json({ error: 'Error en productos' }, { status: 500 })
   }
 
   // Guardar en caché para futuras búsquedas
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('[POST /api/productos] Error:', error)
-      return Response.json({ error: error.message }, { status: 500 })
+      return Response.json({ error: 'Error en productos' }, { status: 500 })
     }
 
     // Invalidate cache after successful creation
@@ -77,6 +77,6 @@ export async function POST(request: Request) {
     return Response.json(data, { status: 201 })
   } catch (e) {
     console.error('[POST /api/productos] Error inesperado:', e)
-    return Response.json({ error: String(e) }, { status: 500 })
+    return Response.json({ error: 'Error inesperado' }, { status: 500 })
   }
 }

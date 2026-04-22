@@ -119,17 +119,13 @@ export async function reserveNextQuotationFolio(baseFolio?: string): Promise<Res
     }
   } catch (error) {
     if (!isMissingFunctionError(error)) throw error
-
-    const folio = baseFolio?.trim()
-      ? await getNextFolioComplementaria(baseFolio.trim())
-      : await getNextFolio()
-
-    return {
-      folio,
-      reservationToken: null,
-      atomic: false,
-      expiresAt: null,
-    }
+    // La función RPC de reserva atómica no existe en la BD.
+    // Fallar explícitamente: sin reserva atómica, dos requests concurrentes
+    // podrían obtener el mismo folio y generar duplicados.
+    throw new Error(
+      'La función de reserva atómica de folio no está instalada en la base de datos. ' +
+      'Ejecuta la migración 20260408_save_cotizacion_rpc.sql en Supabase.'
+    )
   }
 }
 

@@ -7,15 +7,14 @@ const ALL_SECTIONS: AppSection[] = ['admin', 'dashboard', 'cotizaciones', 'proye
 
 async function shouldBypassForE2E() {
   if (process.env.PLAYWRIGHT_E2E_BYPASS !== 'true') return false
-  const cookieStore = await cookies()
-  const bypassing = cookieStore.get(E2E_BYPASS_COOKIE)?.value === '1'
-  if (bypassing && process.env.NODE_ENV === 'production') {
-    console.error(
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
       '[SECURITY] PLAYWRIGHT_E2E_BYPASS=true está activo en producción. ' +
-      'Elimina esta variable de entorno en Vercel inmediatamente.'
+      'Elimina esta variable de entorno en Vercel de inmediato.'
     )
   }
-  return bypassing
+  const cookieStore = await cookies()
+  return cookieStore.get(E2E_BYPASS_COOKIE)?.value === '1'
 }
 
 export async function requireAnySection(requiredSections: AppSection[]) {
