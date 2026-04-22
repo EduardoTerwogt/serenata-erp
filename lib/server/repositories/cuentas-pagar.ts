@@ -75,6 +75,14 @@ export async function updateCuentaPagar(id: string, updates: Partial<CuentaPagar
   return data as CuentaPagar
 }
 
+export async function updateCuentasPagarEnOrden(ids: string[], ordenId: string) {
+  const { error } = await supabaseAdmin
+    .from('cuentas_pagar')
+    .update({ estado: 'EN_PROCESO_PAGO', orden_pago_id: ordenId })
+    .in('id', ids)
+  if (error) throw error
+}
+
 export async function deleteCuentasPagarByCotizacion(cotizacionId: string) {
   const { error } = await supabaseAdmin
     .from('cuentas_pagar')

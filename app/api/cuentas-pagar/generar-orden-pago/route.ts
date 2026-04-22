@@ -1,7 +1,7 @@
 export const maxDuration = 60
 
 import { requireSection } from '@/lib/api-auth'
-import { createOrdenPago, getCuentasPagarPendientesEventosRealizados, updateCuentaPagar } from '@/lib/db'
+import { createOrdenPago, getCuentasPagarPendientesEventosRealizados, updateCuentasPagarEnOrden } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
@@ -88,12 +88,7 @@ export async function POST() {
       created_by: authResult.session?.user?.email || 'sistema',
     })
 
-    for (const id of preview.cuentas_ids) {
-      await updateCuentaPagar(id, {
-        estado: 'EN_PROCESO_PAGO',
-        orden_pago_id: ordenPago.id,
-      })
-    }
+    await updateCuentasPagarEnOrden(preview.cuentas_ids, ordenPago.id)
 
     triggerSheetsSync('cuentas_pagar')
 

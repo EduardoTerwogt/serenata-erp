@@ -56,6 +56,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       }
 
       const proyecto = await getProyectoById(cuenta.cotizacion_id)
+      if (!proyecto) {
+        return Response.json({ error: 'Proyecto asociado no encontrado' }, { status: 404 })
+      }
       const folderPath = `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
       const fileName = comprobante.name
       comprobanteUrl = await uploadFileToDrive(comprobante, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
