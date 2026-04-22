@@ -58,8 +58,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
-    // Parsear XML
+    // Parsear XML — validar contenido antes de regex parse
     const xmlContent = await xmlFile.text()
+    if (!xmlContent.trim().startsWith('<')) {
+      return Response.json({ error: 'El archivo XML no contiene datos XML válidos' }, { status: 400 })
+    }
     const facturaData = parseFacturaXML(xmlContent)
 
     if (facturaData.error) {

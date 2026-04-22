@@ -50,7 +50,16 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: 'Cuenta por pagar no encontrada' }, { status: 404 })
     }
 
+    // Validar contenido XML antes de subir
+    const facturaXmlContent = await facturaXmlFile.text()
+    if (!facturaXmlContent.trim().startsWith('<')) {
+      return Response.json({ error: 'El archivo XML no contiene datos XML válidos' }, { status: 400 })
+    }
+
     const proyecto = await getProyectoById(cuenta.proyecto_id)
+    if (!proyecto) {
+      return Response.json({ error: 'Proyecto asociado no encontrado' }, { status: 404 })
+    }
     const googleEnv = getGoogleEnv()
     if (!googleEnv) {
       return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
@@ -74,7 +83,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       archivo_nombre: facturaPdfFile.name,
     })
 
-    const facturaXmlContent = await facturaXmlFile.text()
     const fechaFactura = extractFacturaFechaFromXml(facturaXmlContent)
 
     let cuentaActualizada = cuenta

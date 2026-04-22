@@ -5,21 +5,25 @@ import { z } from 'zod'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// Rate limiting en memoria: max 20 llamadas por hora por sesión (IP-based)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 const RATE_LIMIT_MAX = 20
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000 // 1 hora
 
-function checkRateLimit(key: string): boolean {
-  const now = Date.now()
-  const entry = rateLimitMap.get(key)
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+async function checkRateLimit(userEmail: string): Promise<boolean> {
+  try {
+    const oneHourAgo = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString()
+    const { count, error } = await supabaseAdmin
+      .from('extraction_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('proyecto_id', userEmail)
+      .gte('created_at', oneHourAgo)
+    if (error) {
+      console.error('[extract-ai] Rate limit check DB error, failing open:', error.message)
+      return true
+    }
+    return (count ?? 0) < RATE_LIMIT_MAX
+  } catch {
     return true
   }
-  if (entry.count >= RATE_LIMIT_MAX) return false
-  entry.count++
-  return true
 }
 
 const EventoSchema = z.object({
@@ -70,9 +74,9 @@ export async function POST(request: Request) {
   const authResult = await requireSection('planeacion')
   if (authResult.response) return authResult.response
 
-  // Rate limiting basado en email del usuario autenticado
+  // Rate limiting basado en email del usuario autenticado (persistente en BD)
   const userEmail = (authResult.session?.user as { email?: string })?.email ?? 'unknown'
-  if (!checkRateLimit(userEmail)) {
+  if (!(await checkRateLimit(userEmail))) {
     return Response.json(
       { error: 'Límite de extracciones alcanzado (20/hora). Intenta de nuevo más tarde.' },
       { status: 429 }

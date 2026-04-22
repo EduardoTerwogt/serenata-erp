@@ -56,12 +56,20 @@ async function hydrateProyectoNombre(cuentas: CuentaPagar[]) {
 export async function getCuentasPagar() {
   const { data, error } = await supabaseAdmin
     .from('cuentas_pagar')
-    .select('*')
+    .select('*, cotizaciones(proyecto), proyectos(proyecto)')
     .order('created_at', { ascending: false })
     .limit(500)
   if (error) throw error
-  const cuentas = (data || []) as CuentaPagar[]
-  return hydrateProyectoNombre(cuentas)
+  return (data || []).map((row: any) => ({
+    ...row,
+    proyecto_nombre:
+      row.proyecto_nombre ||
+      row.cotizaciones?.proyecto ||
+      row.proyectos?.proyecto ||
+      undefined,
+    cotizaciones: undefined,
+    proyectos: undefined,
+  })) as CuentaPagar[]
 }
 
 export async function updateCuentaPagar(id: string, updates: Partial<CuentaPagar>) {
