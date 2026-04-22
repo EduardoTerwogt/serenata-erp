@@ -14,7 +14,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         let users
         try {
-          users = getAuthUsers()
+          users = await getAuthUsers()
         } catch (e) {
           console.error('[auth] Error loading users from AUTH_USERS:', e)
           return null

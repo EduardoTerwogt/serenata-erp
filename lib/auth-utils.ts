@@ -80,22 +80,25 @@ export interface AuthUser {
 }
 
 /**
- * Carga el registro de usuarios desde la variable de entorno AUTH_USERS.
- * Formato esperado: JSON array de AuthUser.
+ * Carga usuarios desde la tabla `usuarios` en Supabase.
+ * Si la tabla no existe o falla, hace fallback al env var AUTH_USERS.
  */
-export function getAuthUsers(): AuthUser[] {
-  const raw = process.env.AUTH_USERS
-  if (!raw) {
-    throw new Error(
-      'AUTH_USERS environment variable is not set. ' +
-      'Configure it in Vercel with a JSON array of users.'
-    )
+export async function getAuthUsers(): Promise<AuthUser[]> {
+  try {
+    const { getUsuariosForAuth } = await import('@/lib/server/repositories/usuarios')
+    const users = await getUsuariosForAuth()
+    if (users.length > 0) return users
+  } catch {
+    // fallback al env var si la tabla aún no existe
   }
+
+  const raw = process.env.AUTH_USERS
+  if (!raw) return []
   try {
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) throw new Error('AUTH_USERS must be a JSON array')
+    if (!Array.isArray(parsed)) return []
     return parsed as AuthUser[]
-  } catch (e) {
-    throw new Error(`AUTH_USERS is not valid JSON: ${e instanceof Error ? e.message : e}`)
+  } catch {
+    return []
   }
 }
