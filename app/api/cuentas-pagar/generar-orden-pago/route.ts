@@ -25,6 +25,11 @@ function buildOrdenPagoFileName(preview: ReturnType<typeof buildOrdenPagoPreview
   return `O.P ${day}-${monthFormatted} ${foliosSegment}.pdf`
 }
 
+function isDriveAuthError(message: string) {
+  const normalized = message.toLowerCase()
+  return normalized.includes('invalid_grant') || normalized.includes('google drive desautorizado')
+}
+
 export async function GET() {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
@@ -115,6 +120,17 @@ export async function POST() {
       errorMsg = String(error)
     }
     console.error('[cuentas-pagar/generar-orden-pago][POST]', errorMsg, error)
+
+    if (isDriveAuthError(errorMsg)) {
+      return Response.json(
+        {
+          error: 'Google Drive desautorizado. Reautoriza Drive y actualiza GOOGLE_DRIVE_REFRESH_TOKEN en Vercel.',
+          details: errorMsg,
+        },
+        { status: 503 }
+      )
+    }
+
     return Response.json(
       {
         error: 'Error generando orden de pago',
