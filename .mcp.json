@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "supabase-test": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?features=database%2Cdebugging%2Cdevelopment&project_ref=ozrtsludmcguvgqdjicn"
+    },
+    "supabase-prod": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?features=database%2Cdebugging%2Cdevelopment&project_ref=fwmyoqokcjtldiofuxdg"
+    }
+  }
+}
