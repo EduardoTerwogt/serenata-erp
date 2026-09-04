@@ -13,6 +13,7 @@ import {
   updateProjectItemResponsable,
 } from '@/lib/services/project-service'
 import { SectionCard } from '@/components/ui/SectionCard'
+import { DateField } from '@/components/ui/DateField'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { ProyectoDetalle, ProyectoFormValues } from '@/lib/projects/types'
 
@@ -33,7 +34,7 @@ export default function ProyectoDetallePage({
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const { register, reset, handleSubmit } = useForm<ProyectoFormValues>()
+  const { register, reset, handleSubmit, watch } = useForm<ProyectoFormValues>()
 
   useEffect(() => {
     fetchProjectDetailBundle(id)
@@ -158,7 +159,7 @@ export default function ProyectoDetallePage({
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Fecha de Entrega</label>
-              <input type="date" {...register('fecha_entrega')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+              <DateField {...register('fecha_entrega')} value={watch('fecha_entrega')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Locación</label>

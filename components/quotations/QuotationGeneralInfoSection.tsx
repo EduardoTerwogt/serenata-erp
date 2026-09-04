@@ -3,6 +3,7 @@
 import { UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { AppCard } from '@/components/ui/AppCard'
+import { DateField } from '@/components/ui/DateField'
 import { formatDateDisplay } from '@/lib/format-date'
 
 interface ClienteOption {
@@ -136,9 +137,9 @@ export function QuotationGeneralInfoSection({
           {readOnlyAsText ? (
             <p className="text-white py-2">{formatDateDisplay(fechaEntregaValue)}</p>
           ) : (
-            <input type="date" {...register('fecha_entrega', onFechaEntregaChange ? {
+            <DateField {...register('fecha_entrega', onFechaEntregaChange ? {
               onChange: (event) => onFechaEntregaChange(event.target.value),
-            } : undefined)} readOnly={isReadOnly} className={`w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`} />
+            } : undefined)} value={fechaEntregaValue} readOnly={isReadOnly} className={`w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`} />
           )}
         </div>
 

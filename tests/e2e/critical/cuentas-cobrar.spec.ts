@@ -42,6 +42,10 @@ test('handles documentos y pagos en cuentas por cobrar', async ({ page }) => {
 
   const form = page.locator('form')
   await form.locator('input[placeholder="0.00"]').fill('4750')
+  // Fecha de Pago usa DateField (components/ui/DateField.tsx): en reposo es un
+  // botón con el texto formateado, hay que hacer click para revelar el
+  // <input type="date"> nativo antes de poder rellenarlo.
+  await form.getByText('Fecha de Pago', { exact: true }).locator('xpath=following-sibling::*[1]').click()
   await form.locator('input[type="date"]').fill('2026-04-18')
   await form.getByRole('button', { name: 'Registrar Pago' }).click()
 

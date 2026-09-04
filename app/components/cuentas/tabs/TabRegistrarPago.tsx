@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { PagoComprobante } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
+import { DateField } from '@/components/ui/DateField'
 
 const MAX_COMPROBANTE_BYTES = 3.5 * 1024 * 1024
 const MAX_IMAGE_DIMENSION = 1600
@@ -253,8 +254,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Fecha de Pago</label>
-                <input
-                  type="date"
+                <DateField
                   value={fechaPago}
                   onChange={(e) => setFechaPago(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
