@@ -47,6 +47,25 @@ Dos conexiones al servidor MCP oficial de Supabase, configuradas como Custom Con
 
 ---
 
+## Ambiente de prueba — Google Drive (Fase 4.5)
+
+Carpeta de Drive exclusiva para pruebas automáticas (CI / `tests/e2e/live`), separada de las carpetas reales de producción — `DRIVE_TEST_FOLDER_ID`: `1cofExiUSPDRq9CeH6oU-WSBev1I56m-a`. Reemplaza tanto a `GOOGLE_DRIVE_FOLDER_ID` como a `GOOGLE_DRIVE_FOLDER_ID_CUENTAS` en el ambiente de prueba — un solo folder para ambos; el código ya organiza subcarpetas por tipo/cuenta dentro del folder raíz (`ensureFolderPath` en `lib/integrations/google/drive.ts`).
+
+**No hizo falta tocar código.** `lib/integrations/google/env.ts` ya lee el folder desde variables de entorno planas (`GOOGLE_DRIVE_FOLDER_ID` / `GOOGLE_DRIVE_FOLDER_ID_CUENTAS`) — el aislamiento prueba/producción se logra en la capa de configuración de CI, no en el código de la app: el job de e2e en vivo (Punto 4) exporta esas dos variables con el valor de `DRIVE_TEST_FOLDER_ID` **solo dentro de ese job**. La app nunca ve ni conoce el folder real de producción en ese contexto — no existe ruta de código por la que un test pudiera escribir ahí, sin importar qué refresh token use.
+
+**Refresh token:** se recomienda uno separado del de producción (`GOOGLE_DRIVE_REFRESH_TOKEN_TEST`), por mínimo privilegio (si se filtra el de CI no compromete la cuenta completa de producción) y cuota independiente. No es estrictamente necesario para el aislamiento del folder (eso ya lo garantiza no exponer el folder ID real a CI), pero es la opción más segura. Mismo flujo que el de producción: `/api/integrations/drive/authorize` → consentir → copiar el token de los logs de Vercel (Functions tab) → guardarlo como secreto de GitHub Actions (nunca en Vercel).
+
+**Secretos de GitHub Actions** (Settings → Secrets and variables → Actions → New repository secret) — listos para que el job del Punto 4 los use:
+
+| Nombre | Valor |
+|---|---|
+| `DRIVE_TEST_FOLDER_ID` | `1cofExiUSPDRq9CeH6oU-WSBev1I56m-a` |
+| `GOOGLE_CLIENT_ID` | mismo valor que ya está en Vercel |
+| `GOOGLE_CLIENT_SECRET` | mismo valor que ya está en Vercel |
+| `GOOGLE_DRIVE_REFRESH_TOKEN_TEST` | token nuevo (recomendado) — no reusar el de producción |
+
+---
+
 ## Reglas de trabajo
 
 **Planear antes de tocar código:**
@@ -283,6 +302,13 @@ GOOGLE_CALENDAR_ID=
 
 # Cron (keep-alive endpoint)
 CRON_SECRET=
+
+# Ambiente de prueba (Fase 4.5) — solo GitHub Actions secrets, NUNCA en Vercel
+TEST_SUPABASE_URL=
+TEST_SUPABASE_ANON_KEY=
+TEST_SUPABASE_SERVICE_ROLE_KEY=
+DRIVE_TEST_FOLDER_ID=
+GOOGLE_DRIVE_REFRESH_TOKEN_TEST=
 ```
 
 ---
