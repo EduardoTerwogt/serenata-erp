@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-09-04T05:30:14.164Z",
+  "count": 24,
+  "order": [
+    "20260327_p0_p1_cotizaciones_stability.sql",
+    "20260408_approve_cotizacion_rpc.sql",
+    "20260408_atomic_cotizacion_folio_reservations.sql",
+    "20260408_google_workspace_fields.sql",
+    "20260408_save_cotizacion_rpc.sql",
+    "20260408_sync_cotizacion_rpcs_with_prod.sql",
+    "20260409_rename_enviada_to_emitida.sql",
+    "20260410_cuentas_cobrar_completa.sql",
+    "20260410_cuentas_pagar_estados.sql",
+    "20260410_fix_approve_cotizacion_overload.sql",
+    "20260411_create_cancel_cotizacion_rpc.sql",
+    "20260411_extraction_logs.sql",
+    "20260411_performance_indexes_fase5b.sql",
+    "20260411_planeacion_pendientes.sql",
+    "20260411_service_templates.sql",
+    "20260412_add_eliminated_flag.sql",
+    "20260412_add_notas_to_pendientes.sql",
+    "20260412_create_event_notes.sql",
+    "20260413_add_notas_internas_cotizaciones.sql",
+    "20260420_atomic_registrar_pago.sql",
+    "20260420_cancel_cotizacion_payments_guard.sql",
+    "20260422_add_usuarios_table.sql",
+    "20260422_enable_rls_all_tables.sql",
+    "20260422_enable_rls_missing_tables.sql"
+  ]
+}

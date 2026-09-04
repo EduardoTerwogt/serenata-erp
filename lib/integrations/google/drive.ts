@@ -96,6 +96,29 @@ function toOperationalDriveError(err: unknown, action: string): Error {
   return err instanceof Error ? err : new Error(extractDriveErrorMessage(err))
 }
 
+export type DriveAuthStatus = 'ok' | 'not_configured' | 'invalid_grant' | 'error'
+
+/**
+ * Lightweight credential check for proactive monitoring (e.g. the keep-alive cron).
+ * Does not upload/write anything — just confirms the refresh token still works.
+ */
+export async function checkDriveAuth(): Promise<{ status: DriveAuthStatus; message?: string }> {
+  const instance = getDriveInstance()
+  if (!instance) {
+    return { status: 'not_configured', message: 'GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN o GOOGLE_DRIVE_FOLDER_ID no configurados' }
+  }
+
+  try {
+    await instance.drive.about.get({ fields: 'user' })
+    return { status: 'ok' }
+  } catch (err: unknown) {
+    if (isInvalidGrantError(err)) {
+      return { status: 'invalid_grant', message: extractDriveErrorMessage(err) }
+    }
+    return { status: 'error', message: extractDriveErrorMessage(err) }
+  }
+}
+
 /** Convert base64 string to a Readable stream for the googleapis media body. */
 function base64ToStream(base64: string): Readable {
   const buffer = Buffer.from(base64, 'base64')

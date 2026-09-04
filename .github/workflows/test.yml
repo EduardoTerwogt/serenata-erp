@@ -34,3 +34,20 @@ jobs:
         env:
           CI: true
         run: npm test
+
+      - name: Run lint
+        # No bloquea el job: hay hallazgos conocidos y documentados (ver reporte
+        # de cierre de Fase 1) que no cambian comportamiento — esto es visibilidad,
+        # no gate. Un hallazgo NUEVO no aparece salvo que se revise el log manualmente.
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Run build
+        env:
+          AUTH_SECRET: ci-build-secret
+          AUTH_TRUST_HOST: 'true'
+          NEXTAUTH_URL: http://127.0.0.1:3000
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: ci-service-role-key
+        run: npm run build

@@ -31,6 +31,7 @@ git reset --hard origin/main
 - Commit + push después de cada cambio funcional.
 - Push a `main` dispara deploy automático en Vercel.
 - Si el token falla → pedir al usuario uno nuevo y actualizar `.env.local.tokens`.
+- **Ejecución entre sesiones:** una sesión nueva con tareas pendientes en cola de una sesión anterior NUNCA las ejecuta ni pushea automáticamente al abrir — siempre confirma primero con el usuario qué se va a hacer (ver incidente del 3-sep en el historial del proyecto). `.claude/hooks/pre-push-gate.mjs` (registrado en `.claude/settings.json`) es el control técnico de esta regla: bloquea el primer `git push` de cada sesión para forzar una pausa explícita; el segundo intento en la misma sesión pasa normalmente.
 
 ---
 
