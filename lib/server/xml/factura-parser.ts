@@ -22,8 +22,12 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
     const fechaMatch = xmlContent.match(/Fecha\s*=\s*["']([^"']+)["']/)
     const fecha = fechaMatch?.[1]?.split('T')?.[0]
 
-    // Extraer monto total - buscar Total del Comprobante
-    const montoMatch = xmlContent.match(/Total\s*=\s*["']([^"']+)["']/)
+    // Extraer monto total - buscar Total del Comprobante.
+    // No basta con /Total\s*=\s*.../: "SubTotal" contiene "Total" como substring, y en
+    // cualquier CFDI real SubTotal aparece antes que Total en el XML, así que un regex sin
+    // anclar hace match con SubTotal primero. El lookbehind exige que "Total" no esté
+    // precedido por una letra (descarta "SubTotal").
+    const montoMatch = xmlContent.match(/(?<![a-zA-Z])Total\s*=\s*["']([^"']+)["']/)
     const monto = montoMatch ? parseFloat(montoMatch[1]) : undefined
 
     // Validar que al menos tengamos folio y fecha
@@ -62,6 +66,9 @@ export function validarMontoFactura(montoFactura: number, montoCotizacion: numbe
  */
 export function calcularDeadline(fechaEmision: string): string {
   const fecha = new Date(fechaEmision)
+  if (Number.isNaN(fecha.getTime())) {
+    throw new Error(`No se pudo calcular la fecha de vencimiento: "${fechaEmision}" no es una fecha válida`)
+  }
   fecha.setDate(fecha.getDate() + 30)
   return fecha.toISOString().split('T')[0]
 }

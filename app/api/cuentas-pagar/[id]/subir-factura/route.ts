@@ -106,6 +106,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     })
   } catch (error) {
     console.error('[cuentas-pagar/subir-factura]', error)
-    return Response.json({ error: 'Error al subir factura' }, { status: 500 })
+    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }

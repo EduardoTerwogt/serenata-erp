@@ -97,7 +97,14 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
-    const proyecto = await getProyectoById(cuenta.cotizacion_id)
+    // cuentas_cobrar solo guarda cotizacion_id, no proyecto_id — y proyectos.id == cotizacion_id
+    // únicamente para cotizaciones PRINCIPAL. Para COMPLEMENTARIA, el proyecto es el de la
+    // cotización padre (cotizacion.es_complementaria_de), igual que resuelve approve_cotizacion()
+    // en la RPC (db/migrations/20260410_fix_approve_cotizacion_overload.sql).
+    const proyectoId = cotizacion.tipo === 'COMPLEMENTARIA' && cotizacion.es_complementaria_de
+      ? cotizacion.es_complementaria_de
+      : cotizacion.id
+    const proyecto = await getProyectoById(proyectoId)
     if (!proyecto) {
       return Response.json({ error: 'Proyecto asociado no encontrado' }, { status: 404 })
     }
@@ -153,7 +160,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
   } catch (error) {
     console.error('[cuentas-cobrar/subir-factura]', error)
     return Response.json(
-      { error: 'Error al subir factura' },
+      { error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }
