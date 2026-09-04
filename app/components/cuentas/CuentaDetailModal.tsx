@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { CuentaCobrar, CuentaPagar, DocumentoCuentaCobrar, DocumentoCuentaPagar, OrdenPago, PagoComprobante } from '@/lib/types'
 import { TabDocumentos } from '@/app/components/cuentas/tabs/TabDocumentos'
+import { formatDateDisplay } from '@/lib/format-date'
 import { TabInformacion } from '@/app/components/cuentas/tabs/TabInformacion'
 import { TabRegistrarPago } from '@/app/components/cuentas/tabs/TabRegistrarPago'
 
@@ -154,7 +155,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                         <div>
                           <p className="text-white font-medium">{detallePagar.orden_pago.pdf_nombre}</p>
                           <p className="text-gray-500 text-xs mt-1">
-                            {detallePagar.orden_pago.estado} • {detallePagar.orden_pago.fecha_generacion}
+                            {detallePagar.orden_pago.estado} • {formatDateDisplay(detallePagar.orden_pago.fecha_generacion)}
                           </p>
                         </div>
                         <a

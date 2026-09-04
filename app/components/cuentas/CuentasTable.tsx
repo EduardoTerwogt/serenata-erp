@@ -1,6 +1,7 @@
 'use client'
 
 import { CuentaCobrar, CuentaPagar, EstadoCuentaCobrar, EstadoCuentaPagar } from '@/lib/types'
+import { formatDateDisplay } from '@/lib/format-date'
 
 type CuentaListItem =
   | ({ tipo: 'cobrar' } & CuentaCobrar)
@@ -70,7 +71,7 @@ export function CuentasTable({ tab, cuentas, onSelect }: Props) {
                       <td className="px-6 py-4 text-white font-medium">{cuenta.cliente}</td>
                       <td className="px-6 py-4 text-gray-300">{cuenta.proyecto}</td>
                       <td className="px-6 py-4 text-white font-bold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
-                      <td className="px-6 py-4 text-gray-400">{cuenta.fecha_vencimiento || '—'}</td>
+                      <td className="px-6 py-4 text-gray-400">{formatDateDisplay(cuenta.fecha_vencimiento)}</td>
                     </>
                   ) : (
                     <>
@@ -130,7 +131,7 @@ export function CuentasTable({ tab, cuentas, onSelect }: Props) {
                   </div>
                   <div className="flex justify-between text-sm mt-2">
                     <span className="text-gray-400">Vencimiento</span>
-                    <span className="text-gray-300">{cuenta.fecha_vencimiento || '—'}</span>
+                    <span className="text-gray-300">{formatDateDisplay(cuenta.fecha_vencimiento)}</span>
                   </div>
                 </>
               ) : (

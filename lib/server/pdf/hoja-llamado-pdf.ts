@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable'
 import fs from 'fs'
 import path from 'path'
 import { JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
+import { formatDateDisplay } from '@/lib/format-date'
 
 export interface HojaDeLlamadoData {
   proyecto: string
@@ -44,30 +45,6 @@ function loadImageAsBase64(filePath: string): string | null {
     console.warn(`[hoja-llamado] No se pudo cargar imagen: ${filePath}`)
     return null
   }
-}
-
-function formatFecha(fecha: string | null): string {
-  if (!fecha) return '—'
-  const meses = [
-    'enero',
-    'febrero',
-    'marzo',
-    'abril',
-    'mayo',
-    'junio',
-    'julio',
-    'agosto',
-    'septiembre',
-    'octubre',
-    'noviembre',
-    'diciembre',
-  ]
-
-  const parts = fecha.split('-')
-  if (parts.length !== 3) return fecha
-
-  const [year, month, day] = parts.map(Number)
-  return `${day} de ${meses[month - 1]} ${year}`
 }
 
 export function generateHojaDeLlamadoPdf(data: HojaDeLlamadoData): ArrayBuffer {
@@ -111,7 +88,7 @@ export function generateHojaDeLlamadoPdf(data: HojaDeLlamadoData): ArrayBuffer {
 
   // Tabla de información general
   const infoBody = [
-    ['Fecha:', formatFecha(data.fecha_entrega)],
+    ['Fecha:', formatDateDisplay(data.fecha_entrega)],
     ['Cliente:', data.cliente],
     ['Locación:', data.locacion || 'Por definir'],
     ['Horarios:', data.horarios || 'Por definir'],

@@ -1,6 +1,7 @@
 'use client'
 
 import { CuentaCobrar, CuentaPagar } from '@/lib/types'
+import { formatDateDisplay } from '@/lib/format-date'
 
 function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
@@ -45,11 +46,11 @@ export function TabInformacion(props: TabInformacionProps) {
           </div>
           <div>
             <p className="text-gray-400 text-sm">Fecha Factura</p>
-            <p className="text-white font-medium">{cuenta.fecha_factura || '—'}</p>
+            <p className="text-white font-medium">{formatDateDisplay(cuenta.fecha_factura)}</p>
           </div>
           <div>
             <p className="text-gray-400 text-sm">Fecha Vencimiento</p>
-            <p className="text-yellow-400 font-medium">{cuenta.fecha_vencimiento || '—'}</p>
+            <p className="text-yellow-400 font-medium">{formatDateDisplay(cuenta.fecha_vencimiento)}</p>
           </div>
           <div>
             <p className="text-gray-400 text-sm">Monto Total</p>
@@ -99,7 +100,7 @@ export function TabInformacion(props: TabInformacionProps) {
         </div>
         <div>
           <p className="text-gray-400 text-sm">Fecha Factura</p>
-          <p className="text-white font-medium">{cuenta.fecha_factura || '—'}</p>
+          <p className="text-white font-medium">{formatDateDisplay(cuenta.fecha_factura)}</p>
         </div>
         <div className="col-span-2">
           <p className="text-gray-400 text-sm">Descripcion Item</p>

@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { CuentasTable } from '@/app/components/cuentas/CuentasTable'
 import { useCuentasPage } from '@/app/components/cuentas/useCuentasPage'
 import { formatCuentasCurrency } from '@/app/components/cuentas/utils'
+import { formatDateDisplay } from '@/lib/format-date'
 import { AppCard } from '@/components/ui/AppCard'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { SkeletonTable } from '@/app/components/ui/SkeletonTable'
@@ -185,7 +186,7 @@ export function CuentasPage() {
                     <div>
                       <p className="text-white font-medium">{orden.pdf_nombre}</p>
                       <p className="text-gray-400 text-sm mt-1">
-                        {orden.estado} • {orden.fecha_generacion}
+                        {orden.estado} • {formatDateDisplay(orden.fecha_generacion)}
                       </p>
                     </div>
                     <div className="text-right">

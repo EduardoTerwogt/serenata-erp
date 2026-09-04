@@ -5,6 +5,7 @@
  */
 
 import { jsPDF } from 'jspdf'
+import { formatDateDisplay } from '@/lib/format-date'
 
 /**
  * jspdf-autotable no tipa la propiedad `lastAutoTable` que agrega al doc en runtime
@@ -90,8 +91,7 @@ export function drawPdfHeader(
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(PDF_CONFIG.fonts.small)
     doc.setTextColor(...PDF_CONFIG.colors.lightText)
-    const today = new Date().toLocaleDateString('es-MX')
-    doc.text(`Generado: ${today}`, margin, currentY)
+    doc.text(`Generado: ${formatDateDisplay(new Date())}`, margin, currentY)
     currentY += 4
   }
 
@@ -165,22 +165,4 @@ export function formatCurrencyPdf(amount: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
-}
-
-/**
- * Formato de fecha en español para PDFs
- */
-export function formatDatePdf(dateString: string | null): string {
-  if (!dateString) return '—'
-
-  const meses = [
-    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
-  ]
-
-  const parts = dateString.split('-')
-  if (parts.length !== 3) return dateString
-
-  const [year, month, day] = parts.map(Number)
-  return `${day} de ${meses[month - 1]} ${year}`
 }

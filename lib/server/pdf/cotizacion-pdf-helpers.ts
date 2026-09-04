@@ -1,7 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import type { RowInput } from 'jspdf-autotable'
-import { formatCurrencyPdf, formatDatePdf } from '@/lib/server/pdf/pdf-base-config'
+import { formatCurrencyPdf } from '@/lib/server/pdf/pdf-base-config'
+import { formatDateDisplay } from '@/lib/format-date'
 import { CotizacionPDFData, TotalsRow } from '@/lib/server/pdf/cotizacion-pdf-types'
 
 const ISO_LOGO_PATH = path.join(process.cwd(), 'public', 'logo iso.png')
@@ -42,9 +43,9 @@ export function buildHeaderBody(data: CotizacionPDFData) {
   return [
     ['Cliente:', data.cliente],
     ['Proyecto:', data.proyecto],
-    ['Fecha de entrega:', formatDatePdf(data.fecha_entrega)],
+    ['Fecha de entrega:', formatDateDisplay(data.fecha_entrega)],
     ['Locación:', data.locacion || '—'],
-    ['Fecha de cotización:', formatDatePdf(data.fecha_cotizacion)],
+    ['Fecha de cotización:', formatDateDisplay(data.fecha_cotizacion)],
     ['# Cotización', data.id],
   ]
 }

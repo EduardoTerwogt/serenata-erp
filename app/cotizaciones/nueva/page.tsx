@@ -1,7 +1,7 @@
 'use client'
 import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
-import { formatTodaySpanishLongDate } from '@/lib/quotations/format'
+import { formatDateDisplay } from '@/lib/format-date'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { useNuevaCotizacionPage } from '@/app/cotizaciones/nueva/useNuevaCotizacionPage'
 
@@ -108,7 +108,7 @@ function NuevaCotizacionContent() {
         setProyectoInput={setProyectoInput}
         isReadOnly={esComplementaria}
         readOnlyDisplay="input"
-        dateLabel={formatTodaySpanishLongDate()}
+        dateLabel={formatDateDisplay(new Date())}
         fechaEntregaValue={watch('fecha_entrega')}
         locacionValue={watch('locacion')}
       />

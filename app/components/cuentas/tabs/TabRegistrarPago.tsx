@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { PagoComprobante } from '@/lib/types'
+import { formatDateDisplay } from '@/lib/format-date'
 
 const MAX_COMPROBANTE_BYTES = 3.5 * 1024 * 1024
 const MAX_IMAGE_DIMENSION = 1600
@@ -303,7 +304,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
               <div key={pago.id} className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
                 <div>
                   <p className="text-white text-sm font-medium">
-                    {new Date(pago.fecha_pago).toLocaleDateString('es-MX')}
+                    {formatDateDisplay(pago.fecha_pago)}
                   </p>
                   <p className="text-gray-400 text-xs">
                     ${fmt(pago.monto)} - {pago.tipo_pago === 'TRANSFERENCIA' ? 'Transferencia' : 'Efectivo'}

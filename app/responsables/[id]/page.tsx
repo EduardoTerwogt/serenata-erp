@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react'
 import { useForm } from 'react-hook-form'
 import Link from 'next/link'
 import { Responsable, HistorialResponsable } from '@/lib/types'
+import { formatDateDisplay } from '@/lib/format-date'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 
 interface ResponsableForm {
@@ -259,7 +260,7 @@ export default function ResponsableDetallePage({
                   <p className="text-white font-medium">{h.proyecto_nombre}</p>
                   <p className="text-gray-500 text-xs">{h.cliente}</p>
                 </td>
-                <td className="px-6 py-3 text-gray-400">{h.fecha_evento || '—'}</td>
+                <td className="px-6 py-3 text-gray-400">{formatDateDisplay(h.fecha_evento)}</td>
                 <td className="px-6 py-3 text-gray-300">{h.rol_en_proyecto || '—'}</td>
                 <td className="px-6 py-3 text-right text-green-400 font-medium">${fmt(h.x_pagar)}</td>
               </>
@@ -274,7 +275,7 @@ export default function ResponsableDetallePage({
                   {h.fecha_evento && (
                     <div className="flex justify-between">
                       <span className="text-gray-400">Fecha:</span>
-                      <span className="text-gray-300">{h.fecha_evento}</span>
+                      <span className="text-gray-300">{formatDateDisplay(h.fecha_evento)}</span>
                     </div>
                   )}
                   {h.rol_en_proyecto && (

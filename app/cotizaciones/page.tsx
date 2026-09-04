@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Cotizacion, EstadoCotizacion } from '@/lib/types'
+import { formatDateDisplay } from '@/lib/format-date'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
 
@@ -160,7 +161,7 @@ export default function CotizacionesPage() {
                   <span className="text-white font-bold text-lg break-words">
                     ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
-                  <span className="text-gray-600 text-xs text-right flex-shrink-0">{cot.fecha_entrega || 'Sin fecha'}</span>
+                  <span className="text-gray-600 text-xs text-right flex-shrink-0">{formatDateDisplay(cot.fecha_entrega)}</span>
                 </div>
               </div>
 
@@ -188,7 +189,7 @@ export default function CotizacionesPage() {
                     <p className="text-white font-bold">
                       ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
-                    <p className="text-gray-500 text-xs">{cot.fecha_entrega || 'Sin fecha'}</p>
+                    <p className="text-gray-500 text-xs">{formatDateDisplay(cot.fecha_entrega)}</p>
                   </div>
                   <span className={`text-xs px-3 py-1 rounded-full font-medium ${
                     cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :

@@ -7,6 +7,7 @@ import {
   formatCurrencyPdf,
   JsPDFWithAutoTable,
 } from '@/lib/server/pdf/pdf-base-config'
+import { formatDateDisplay } from '@/lib/format-date'
 
 export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuffer {
   const doc = new jsPDF(PDF_CONFIG.page)
@@ -25,7 +26,7 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(PDF_CONFIG.fonts.small)
   doc.setTextColor(...PDF_CONFIG.colors.lightText)
-  doc.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`, margin, currentY)
+  doc.text(`Generado: ${formatDateDisplay(new Date())}`, margin, currentY)
 
   // Línea separadora
   currentY += 10

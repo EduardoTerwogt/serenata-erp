@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Proyecto, EstadoProyecto } from '@/lib/types'
+import { formatDateDisplay } from '@/lib/format-date'
 import { SkeletonCards } from '@/app/components/ui/SkeletonCards'
 
 const ESTADO_COLORES: Record<EstadoProyecto, string> = {
@@ -84,7 +85,7 @@ export default function ProyectosPage() {
               <p className="text-gray-400 text-sm mb-4">{p.cliente}</p>
               <div className="space-y-1 text-xs text-gray-500">
                 {p.fecha_entrega && (
-                  <p>📅 {p.fecha_entrega}</p>
+                  <p>📅 {formatDateDisplay(p.fecha_entrega)}</p>
                 )}
                 {p.locacion && (
                   <p>📍 {p.locacion}</p>

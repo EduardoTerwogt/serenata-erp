@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { DocumentoCuentaCobrar, DocumentoCuentaPagar } from '@/lib/types'
+import { formatDateDisplay } from '@/lib/format-date'
 
 interface TabDocumentosCobrarProps {
   tipo: 'cobrar'
@@ -140,7 +141,7 @@ export function TabDocumentos(props: TabDocumentosProps) {
               <p className="text-gray-400 text-xs">
                 {TIPO_DOC_LABEL[doc.tipo] || doc.tipo}
                 {' • '}
-                {new Date(doc.fecha_carga || doc.created_at).toLocaleDateString('es-MX')}
+                {formatDateDisplay(doc.fecha_carga || doc.created_at)}
               </p>
             </div>
             <a

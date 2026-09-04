@@ -3,6 +3,7 @@
 import { UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { AppCard } from '@/components/ui/AppCard'
+import { formatDateDisplay } from '@/lib/format-date'
 
 interface ClienteOption {
   nombre: string
@@ -133,7 +134,7 @@ export function QuotationGeneralInfoSection({
         <div>
           <label className="block text-sm text-gray-400 mb-1">Fecha de Entrega</label>
           {readOnlyAsText ? (
-            <p className="text-white py-2">{fechaEntregaValue || '—'}</p>
+            <p className="text-white py-2">{formatDateDisplay(fechaEntregaValue)}</p>
           ) : (
             <input type="date" {...register('fecha_entrega', onFechaEntregaChange ? {
               onChange: (event) => onFechaEntregaChange(event.target.value),
