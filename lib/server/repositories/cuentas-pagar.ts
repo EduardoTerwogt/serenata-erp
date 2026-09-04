@@ -8,49 +8,9 @@ import {
 } from '@/lib/types'
 import { getItemsByCotizacion } from '@/lib/server/repositories/quotations'
 
-async function hydrateProyectoNombre(cuentas: CuentaPagar[]) {
-  if (cuentas.length === 0) return cuentas
-
-  const cotizacionIds = Array.from(new Set(cuentas.map((cuenta) => cuenta.cotizacion_id).filter(Boolean)))
-  const proyectoIds = Array.from(new Set(cuentas.map((cuenta) => cuenta.proyecto_id).filter(Boolean)))
-
-  const proyectoPorCotizacion: Record<string, string> = {}
-  const proyectoPorId: Record<string, string> = {}
-
-  if (cotizacionIds.length > 0) {
-    const { data: cotizaciones, error: cotizacionesError } = await supabaseAdmin
-      .from('cotizaciones')
-      .select('id, proyecto')
-      .in('id', cotizacionIds)
-
-    if (cotizacionesError) throw cotizacionesError
-
-    for (const cotizacion of cotizaciones || []) {
-      proyectoPorCotizacion[cotizacion.id] = cotizacion.proyecto
-    }
-  }
-
-  if (proyectoIds.length > 0) {
-    const { data: proyectos, error: proyectosError } = await supabaseAdmin
-      .from('proyectos')
-      .select('id, proyecto')
-      .in('id', proyectoIds)
-
-    if (proyectosError) throw proyectosError
-
-    for (const proyecto of proyectos || []) {
-      proyectoPorId[proyecto.id] = proyecto.proyecto
-    }
-  }
-
-  return cuentas.map((cuenta) => ({
-    ...cuenta,
-    proyecto_nombre:
-      cuenta.proyecto_nombre ||
-      proyectoPorCotizacion[cuenta.cotizacion_id] ||
-      proyectoPorId[cuenta.proyecto_id] ||
-      undefined,
-  }))
+export type CuentaPagarConJoins = CuentaPagar & {
+  cotizaciones?: { proyecto?: string; fecha_entrega?: string } | null
+  proyectos?: { proyecto?: string } | null
 }
 
 export async function getCuentasPagar() {
@@ -60,7 +20,7 @@ export async function getCuentasPagar() {
     .order('created_at', { ascending: false })
     .limit(500)
   if (error) throw error
-  return (data || []).map((row: any) => ({
+  return ((data || []) as CuentaPagarConJoins[]).map((row) => ({
     ...row,
     proyecto_nombre:
       row.proyecto_nombre ||
@@ -345,8 +305,8 @@ export async function getCuentasPagarPendientesEventosRealizados() {
     .order('responsable_nombre', { ascending: true })
     .order('cotizacion_id', { ascending: true })
   if (error) throw error
-  return data.filter((cuenta: any) => {
+  return (data as CuentaPagarConJoins[]).filter((cuenta) => {
     const fechaEntrega = cuenta.cotizaciones?.fecha_entrega
     return fechaEntrega && fechaEntrega <= hoy
-  }) as any[]
+  })
 }

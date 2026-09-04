@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
 import ExtractionStatusBar from './ExtractionStatusBar'
 
 interface InputFormProps {

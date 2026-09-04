@@ -7,7 +7,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import fs from 'fs'
 import path from 'path'
-import { PDF_CONFIG, formatDatePdf } from '@/lib/server/pdf/pdf-base-config'
+import { JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
 
 export interface HojaDeLlamadoData {
   proyecto: string
@@ -130,7 +130,7 @@ export function generateHojaDeLlamadoPdf(data: HojaDeLlamadoData): ArrayBuffer {
     },
   })
 
-  currentY = (doc as any).lastAutoTable.finalY + 10
+  currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10
 
   // Notas Generales
   const notasGenerales = (data.notas || '').trim()
@@ -183,7 +183,7 @@ export function generateHojaDeLlamadoPdf(data: HojaDeLlamadoData): ArrayBuffer {
       },
       alternateRowStyles: { fillColor: [245, 245, 245] as [number, number, number] },
     })
-    currentY = (doc as any).lastAutoTable.finalY + 10
+    currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10
   } else {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
@@ -228,7 +228,7 @@ export function generateHojaDeLlamadoPdf(data: HojaDeLlamadoData): ArrayBuffer {
       },
       alternateRowStyles: { fillColor: [245, 245, 245] as [number, number, number] },
     })
-    currentY = (doc as any).lastAutoTable.finalY + 10
+    currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10
   }
 
   // Footer con logos

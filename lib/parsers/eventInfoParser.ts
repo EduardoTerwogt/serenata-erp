@@ -42,7 +42,6 @@ const LOCATION_KEYWORDS = [
 const LOC_REGEX_PATTERN = LOCATION_KEYWORDS.join('|')
 const LOC_REGEX = new RegExp(`(${LOC_REGEX_PATTERN})(?:\\s+[a-záéíóú0-9\\-]*)?`, 'i')
 const EN_LOCATION_PATTERN = /\ben\s+([a-záéíóú\s\-0-9]+?)(?:\s*\(|$)/i
-const STATUS_PATTERN = /\((confirmad[ao]|pend[ia]nte|cancelad[ao])\)/i
 const CITY_KEYWORDS_PATTERN = /(cdmx|toluca|metepec|edomex|edo\.?\s*mex)/i
 
 // Action detection patterns (natural language)

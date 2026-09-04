@@ -5,13 +5,13 @@ import {
   PDF_CONFIG,
   checkPageSpace,
   formatCurrencyPdf,
+  JsPDFWithAutoTable,
 } from '@/lib/server/pdf/pdf-base-config'
 
 export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuffer {
   const doc = new jsPDF(PDF_CONFIG.page)
 
   const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
   const margin = PDF_CONFIG.margins.left
 
   // Header
@@ -100,7 +100,7 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
         },
       })
 
-      currentY = (doc as any).lastAutoTable.finalY + 8
+      currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 8
 
       // Total del evento
       doc.setFont('helvetica', 'bold')

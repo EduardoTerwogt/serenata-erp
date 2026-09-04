@@ -10,6 +10,18 @@ interface PendienteRow extends ValidatedEventLine {
   proyecto?: string
 }
 
+interface PendienteApiRow {
+  id: string
+  fecha: string | null
+  locacion: string | null
+  raw_input?: string | null
+  ciudad?: string | null
+  estado: 'confirmado' | 'por_confirmar' | 'cancelado'
+  notas?: string | null
+  cliente?: string
+  proyecto?: string
+}
+
 interface PendientesFlowState {
   step: 'list' | 'confirmation'
   pendientes: PendienteRow[]
@@ -35,12 +47,12 @@ export function usePendientesFlow() {
       const res = await fetch('/api/planeacion/pendientes')
       if (res.ok) {
         const data = await res.json()
-        const pendientes = (data.pendientes || []).map((p: any) => ({
+        const pendientes = ((data.pendientes || []) as PendienteApiRow[]).map((p) => ({
           id: p.id,
           fecha: p.fecha,
           locacion: p.locacion,
           raw: p.raw_input || '',
-          ciudad: p.ciudad,
+          ciudad: p.ciudad ?? undefined,
           action: p.estado,
           notas: p.notas || null,
           selectedTemplateId: undefined,
@@ -56,7 +68,7 @@ export function usePendientesFlow() {
       } else {
         setState(s => ({ ...s, loading: false, error: 'Error cargando pendientes' }))
       }
-    } catch (err) {
+    } catch {
       setState(s => ({ ...s, loading: false, error: 'Error al cargar pendientes' }))
     }
   }
@@ -68,7 +80,7 @@ export function usePendientesFlow() {
         const templates = await res.json()
         setState(s => ({ ...s, templates }))
       }
-    } catch (err) {
+    } catch {
       // Non-critical
     }
   }

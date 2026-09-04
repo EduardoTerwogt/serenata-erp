@@ -6,7 +6,8 @@
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatCurrencyPdf } from '@/lib/server/pdf/pdf-base-config'
+import type { LineWidths } from 'jspdf-autotable'
+import { JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
 import { CotizacionPDFData } from '@/lib/server/pdf/cotizacion-pdf-types'
 import {
   ISO_RATIO,
@@ -64,7 +65,7 @@ export function generateCotizacionPdf(data: CotizacionPDFData): ArrayBuffer {
   })
 
   if (isoLogoPng) {
-    const headerFinalY = (doc as any).lastAutoTable.finalY
+    const headerFinalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY
     const isoH = headerFinalY - 10
     const isoW = isoH * ISO_RATIO
     try {
@@ -74,7 +75,7 @@ export function generateCotizacionPdf(data: CotizacionPDFData): ArrayBuffer {
     }
   }
 
-  let currentY = (doc as any).lastAutoTable.finalY + 8
+  let currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 8
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(0, 0, 0)
@@ -90,7 +91,7 @@ export function generateCotizacionPdf(data: CotizacionPDFData): ArrayBuffer {
       fontSize: 9,
       cellPadding: { top: 1.23, right: 2.1, bottom: 1.23, left: 2.1 },
       textColor: [0, 0, 0] as [number, number, number],
-      lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0 } as any,
+      lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0 } as Partial<LineWidths>,
       lineColor: [235, 235, 235] as [number, number, number],
     },
     headStyles: {
@@ -111,13 +112,13 @@ export function generateCotizacionPdf(data: CotizacionPDFData): ArrayBuffer {
         cellWidth: 29,
         halign: 'right' as const,
         fontStyle: 'bold',
-        lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0.15 } as any,
+        lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0.15 } as Partial<LineWidths>,
         lineColor: [235, 235, 235] as [number, number, number],
       },
     },
   })
 
-  currentY = (doc as any).lastAutoTable.finalY + 5.5
+  currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 5.5
   const rightColW = 72
   const leftColW = contentW - rightColW
   const totalsRows = buildTotalsRows(data, descuento)

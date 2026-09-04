@@ -20,31 +20,18 @@ export default function ClienteProyectoSelector({
   const { setValue } = useForm<QuotationFormValues>({
     defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [] },
   })
-  // Reuse the quotation form hook for client/project autocomplete
+  // Reuse the quotation form hook for client autocomplete
   const {
-    listaClientes,
     clienteInput,
     clienteSugerencias,
     mostrarClienteDropdown,
     setMostrarClienteDropdown,
-    proyectosDelCliente,
-    proyectoInput,
-    mostrarProyectoDropdown,
-    setMostrarProyectoDropdown,
     handleClienteChange,
-    handleProyectoChange,
-    seleccionarCliente,
-    setProyectoInput,
   } = useQuotationForm(setValue, [])
 
   const handleSelectCliente = (cliente: string) => {
     onSelectCliente(cliente)
     handleClienteChange(cliente)
-  }
-
-  const handleSelectProyecto = (proyecto: string) => {
-    onSelectProyecto(proyecto)
-    setProyectoInput(proyecto)
   }
 
   const handleNext = () => {

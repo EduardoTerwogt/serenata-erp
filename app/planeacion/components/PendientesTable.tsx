@@ -102,7 +102,7 @@ export default function PendientesTable({
           <td className="px-4 py-3">
             <select
               value={line.action}
-              onChange={e => onLineUpdate(line.id, { action: e.target.value as any })}
+              onChange={e => onLineUpdate(line.id, { action: e.target.value as ValidatedEventLine['action'] })}
               className={`w-full px-2 py-1 rounded text-xs font-medium border ${getActionColor(line.action)} bg-gray-800 focus:outline-none focus:border-blue-500`}
             >
               <option value="confirmado">Confirmado</option>
@@ -201,7 +201,7 @@ export default function PendientesTable({
         {/* Info message */}
         {lines.length > 0 && (
           <div className="px-4 py-3 bg-gray-800/50 border-t border-gray-700 text-xs text-gray-400">
-            <p>Marca filas como "Confirmado" para crearlas como cotizaciones. Puedes editar los campos y seleccionar plantilla.</p>
+            <p>Marca filas como &quot;Confirmado&quot; para crearlas como cotizaciones. Puedes editar los campos y seleccionar plantilla.</p>
           </div>
         )}
       </div>

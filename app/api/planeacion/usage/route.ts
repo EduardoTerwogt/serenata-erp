@@ -7,7 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 const TOKENS_PER_DOLLAR = 250 // Conservative estimate for Sonnet
 const INITIAL_CREDIT = 5 // $5 USD free credit
 
-export async function GET(request: Request) {
+export async function GET() {
   const authResult = await requireSection('planeacion')
   if (authResult.response) return authResult.response
 

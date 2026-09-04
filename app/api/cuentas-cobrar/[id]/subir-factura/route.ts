@@ -1,6 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
 import { getCuentasCobrar, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
 import { parseFacturaXML, validarMontoFactura, calcularDeadline } from '@/lib/server/xml/factura-parser'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
@@ -103,7 +102,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: 'Proyecto asociado no encontrado' }, { status: 404 })
     }
     const folderPath = `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
-    const uploadedFiles: { type: string; url: string; nombre: string }[] = []
+    const uploadedFiles: { type: 'FACTURA_PDF' | 'FACTURA_XML'; url: string; nombre: string }[] = []
     const cuentasFolderId = googleEnv.driveFolderIdCuentas
 
     // Subir PDF
@@ -128,7 +127,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     for (const file of uploadedFiles) {
       await createDocumentoCuentaCobrar({
         cuentas_cobrar_id: id,
-        tipo: file.type as any,
+        tipo: file.type,
         archivo_url: file.url,
         archivo_nombre: file.nombre,
       })
@@ -139,7 +138,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       estado: 'FACTURADO',
       fecha_factura: facturaData.fecha_emision,
       fecha_vencimiento: deadline,
-    } as any)
+    })
 
     // Trigger sincronización con Sheets
     triggerSheetsSync('cuentas_cobrar')

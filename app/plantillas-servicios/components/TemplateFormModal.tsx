@@ -60,7 +60,7 @@ export default function TemplateFormModal({ template, onClose }: TemplateFormMod
     setItems(items.filter((_, i) => i !== index))
   }
 
-  const handleUpdateItem = (index: number, field: keyof ServiceTemplateItem, value: any) => {
+  const handleUpdateItem = (index: number, field: keyof ServiceTemplateItem, value: string | number | null) => {
     // SKIP: descripcion is handled by handleDescripcionChange from the hook
     if (field === 'descripcion') return
 

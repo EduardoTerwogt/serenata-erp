@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, inserted: 0 })
     }
 
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('planeacion_pendientes')
       .insert(
         pendientes.map((p) => ({

@@ -90,7 +90,7 @@ export function QuotationItemsSection({
     if (!el) return
     const rect = el.getBoundingClientRect()
     setDropdownPos(prev => ({ ...prev, [index]: { top: rect.bottom + 4, left: rect.left } }))
-  }, [])
+  }, [setDropdownPos])
 
   useEffect(() => {
     const handler = () => {
@@ -121,7 +121,7 @@ export function QuotationItemsSection({
               {...register(`items.${index}.descripcion`)}
               ref={el => { descInputRefs.current[index] = el; register(`items.${index}.descripcion`).ref(el) }}
               onChange={e => { onItemFieldChange?.(index, 'descripcion'); handleDescripcionChange(index, e.target.value); register(`items.${index}.descripcion`).onChange(e) }}
-              onFocus={() => { onItemFieldFocus?.(index, 'descripcion'); updateDropdownPos(index); (productoSugerencias[index]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [index]: true })) }}
+              onFocus={() => { onItemFieldFocus?.(index, 'descripcion'); updateDropdownPos(index); if ((productoSugerencias[index]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [index]: true })) }}
               onBlur={() => { onItemFieldBlur?.(index, 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200) }}
               disabled={cellLocked(index, 'descripcion')}
               className="w-44 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -290,7 +290,7 @@ export function QuotationItemsSection({
             <div className="space-y-5">
               <div className="relative">
                 <label className="block text-[13px] text-gray-400 mb-2">Descripción</label>
-                <input {...register(`items.${editingItemIndex}.descripcion`)} onChange={e => { onItemFieldChange?.(editingItemIndex, 'descripcion'); handleDescripcionChange(editingItemIndex, e.target.value) }} onFocus={() => { onItemFieldFocus?.(editingItemIndex, 'descripcion'); (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: true })) }} onBlur={() => { onItemFieldBlur?.(editingItemIndex, 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: false })), 200) }} disabled={cellLocked(editingItemIndex, 'descripcion')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Descripción del item" autoComplete="off" />
+                <input {...register(`items.${editingItemIndex}.descripcion`)} onChange={e => { onItemFieldChange?.(editingItemIndex, 'descripcion'); handleDescripcionChange(editingItemIndex, e.target.value) }} onFocus={() => { onItemFieldFocus?.(editingItemIndex, 'descripcion'); if ((productoSugerencias[editingItemIndex]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: true })) }} onBlur={() => { onItemFieldBlur?.(editingItemIndex, 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: false })), 200) }} disabled={cellLocked(editingItemIndex, 'descripcion')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Descripción del item" autoComplete="off" />
                 {mostrarProductoDropdown[editingItemIndex] && !rowLocked(editingItemIndex) && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{productoSugerencias[editingItemIndex].map((p, i) => <div key={i} onMouseDown={() => { if (!actionBlocked(editingItemIndex)) { (onSelectProduct || seleccionarProducto)(editingItemIndex, p) } }} className={`px-4 py-3 text-sm border-b border-gray-700 last:border-0 ${actionBlocked(editingItemIndex) ? 'cursor-not-allowed text-gray-500' : 'hover:bg-gray-700 cursor-pointer text-white'}`}><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-gray-400 text-xs">{p.categoria}</div>}</div>)}</div>}
               </div>
               <div><label className="block text-[13px] text-gray-400 mb-2">Categoría</label><input {...register(`items.${editingItemIndex}.categoria`)} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'categoria')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'categoria')} onChange={(e) => { onItemFieldChange?.(editingItemIndex, 'categoria'); register(`items.${editingItemIndex}.categoria`).onChange(e) }} disabled={cellLocked(editingItemIndex, 'categoria')} className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-base text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="Categoría" /></div>

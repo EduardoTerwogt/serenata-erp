@@ -4,6 +4,7 @@ import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { calcularEstadoCuentaCobrarDetallado, calcularSaldoPendiente } from '@/lib/server/cuentas/status'
+import type { TipoPago } from '@/lib/types'
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -19,7 +20,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const comprobante = formData.get('comprobante') as File | null
     const notas = formData.get('notas') as string | null
 
-    if (!monto || monto <= 0) {
+    if (!Number.isFinite(monto) || monto <= 0) {
       return Response.json({ error: 'Monto debe ser mayor a 0' }, { status: 400 })
     }
 
@@ -75,7 +76,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const pagoCobrar = await createPagoComprobante({
       cuentas_cobrar_id: id,
       monto,
-      tipo_pago: tipoPago as any,
+      tipo_pago: tipoPago as TipoPago,
       fecha_pago: fechaPago,
       comprobante_url: comprobanteUrl || '',
       archivo_nombre: comprobante?.name || `pago_${fechaPago}`,

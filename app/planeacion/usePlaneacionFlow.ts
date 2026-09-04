@@ -48,7 +48,7 @@ export function usePlaneacionFlow() {
       } else {
         setState(s => ({ ...s, loading: false, error: 'Error cargando plantillas' }))
       }
-    } catch (err) {
+    } catch {
       setState(s => ({ ...s, loading: false, error: 'Error al cargar plantillas' }))
     }
   }
@@ -177,7 +177,7 @@ export function usePlaneacionFlow() {
         loading: false,
         error: '', // Clear any error once extraction succeeds
       }))
-    } catch (err) {
+    } catch {
       setState(s => ({
         ...s,
         loading: false,

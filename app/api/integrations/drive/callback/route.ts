@@ -47,12 +47,10 @@ export async function GET(req: Request) {
   const client = new google.auth.OAuth2(clientId, clientSecret, REDIRECT_URI)
 
   let refreshToken: string | null | undefined
-  let accessToken:  string | null | undefined
 
   try {
     const { tokens } = await client.getToken(code)
     refreshToken = tokens.refresh_token
-    accessToken  = tokens.access_token
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     return new Response(
@@ -71,7 +69,7 @@ export async function GET(req: Request) {
           <li>Revoca el acceso de esta aplicaci\u00f3n</li>
           <li>Visita <a href="/api/integrations/drive/authorize">/api/integrations/drive/authorize</a> de nuevo</li>
         </ol>
-        <p>Access token recibido: <code>${escHtml(accessToken ?? '(ninguno)')}</code></p>
+        <p style="color:#888;font-size:0.85em">Por seguridad los tokens no se muestran aquí. Revisa los logs de Vercel (Functions tab) si los necesitas.</p>
       `),
       { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     )

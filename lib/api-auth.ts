@@ -1,6 +1,7 @@
 import { auth, type AppSection } from '@/auth'
 import { getUserSections, hasAnySection } from '@/lib/authz'
 import { cookies } from 'next/headers'
+import type { Session } from 'next-auth'
 
 const E2E_BYPASS_COOKIE = 'e2e-bypass'
 const ALL_SECTIONS: AppSection[] = ['admin', 'dashboard', 'cotizaciones', 'proyectos', 'cuentas', 'responsables', 'planeacion']
@@ -26,7 +27,8 @@ export async function requireAnySection(requiredSections: AppSection[]) {
           name: 'E2E User',
           sections: ALL_SECTIONS,
         },
-      } as any,
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      } as Session,
       response: null,
     }
   }

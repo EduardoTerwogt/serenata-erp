@@ -17,7 +17,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const monto = parseFloat(formData.get('monto') as string)
     const comprobante = formData.get('comprobante') as File | null
 
-    if (!monto || monto <= 0) {
+    if (!Number.isFinite(monto) || monto <= 0) {
       return Response.json({ error: 'Monto debe ser mayor a 0' }, { status: 400 })
     }
 
@@ -73,10 +73,12 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       if (cuentasOrdenError) throw cuentasOrdenError
 
       const cuentasConEstadoActual = (cuentasOrden || []).map((row) =>
-        row.id === id ? { ...row, monto_pagado: totalPagado } : row
+        row.id === id
+          ? { x_pagar: row.x_pagar, monto_pagado: totalPagado }
+          : { x_pagar: row.x_pagar, monto_pagado: row.monto_pagado ?? undefined }
       )
 
-      const estadoOrden = calcularEstadoOrdenPago(cuentasConEstadoActual as any)
+      const estadoOrden = calcularEstadoOrdenPago(cuentasConEstadoActual)
       ordenPagoActualizada = await updateOrdenPago(cuenta.orden_pago_id, { estado: estadoOrden })
     }
 

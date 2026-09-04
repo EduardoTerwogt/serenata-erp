@@ -33,7 +33,7 @@ export default function PendientesPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white mb-2">Pendientes de Planeación</h1>
         <p className="text-gray-400">
-          Revisa y procesa las filas marcadas como "Por Confirmar" o "Cancelado"
+          Revisa y procesa las filas marcadas como &quot;Por Confirmar&quot; o &quot;Cancelado&quot;
         </p>
       </div>
 

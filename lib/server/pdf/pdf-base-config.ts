@@ -6,6 +6,14 @@
 
 import { jsPDF } from 'jspdf'
 
+/**
+ * jspdf-autotable no tipa la propiedad `lastAutoTable` que agrega al doc en runtime
+ * (su .d.ts declara jsPDFDocument como `any`) — la tipamos localmente en vez de castear a `any`.
+ */
+export interface JsPDFWithAutoTable extends jsPDF {
+  lastAutoTable: { finalY: number }
+}
+
 export const PDF_CONFIG = {
   // Márgenes en puntos (pt)
   margins: {

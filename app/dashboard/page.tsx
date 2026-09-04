@@ -18,12 +18,12 @@ export default async function DashboardPage() {
   const cuentasPagar = resPagar.status === 'fulfilled' ? resPagar.value : []
 
   const totalCobrar = cuentasCobrar
-    ?.filter((c: any) => c.estado !== 'PAGADO')
-    .reduce((sum: number, c: any) => sum + c.monto_total, 0) || 0
+    ?.filter((c) => c.estado !== 'PAGADO')
+    .reduce((sum, c) => sum + c.monto_total, 0) || 0
 
   const totalPagar = cuentasPagar
-    ?.filter((c: any) => c.estado !== 'PAGADO')
-    .reduce((sum: number, c: any) => sum + c.x_pagar, 0) || 0
+    ?.filter((c) => c.estado !== 'PAGADO')
+    .reduce((sum, c) => sum + c.x_pagar, 0) || 0
 
   const cotizacionesAprobadas = cotizaciones?.filter(c => c.estado === 'APROBADA').length || 0
   const cotizacionesBorrador = cotizaciones?.filter(c => c.estado === 'BORRADOR').length || 0

@@ -1,6 +1,7 @@
 import { requireSection } from '@/lib/api-auth'
 import { getResponsableById, updateResponsable } from '@/lib/db'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { validate, ResponsableUpdateSchema } from '@/lib/validation/schemas'
 
 export async function GET(
   _request: Request,
@@ -29,7 +30,9 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const responsable = await updateResponsable(id, body)
+    const validation = validate(ResponsableUpdateSchema, body)
+    if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 })
+    const responsable = await updateResponsable(id, validation.data)
     triggerSheetsSync('responsables')
     return Response.json(responsable)
   } catch (error) {

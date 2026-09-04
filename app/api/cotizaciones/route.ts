@@ -13,6 +13,11 @@ import { ItemCotizacion } from '@/lib/types'
 import { supabaseAdmin } from '@/lib/supabase'
 import { consumeReservedQuotationFolio, reserveNextQuotationFolio } from '@/lib/server/quotations/folio'
 
+interface CotizacionRawRow {
+  [key: string]: unknown
+  items_cotizacion: ItemCotizacion[]
+}
+
 export async function GET() {
   const authResult = await requireSection('cotizaciones')
   if (authResult.response) return authResult.response
@@ -23,7 +28,7 @@ export async function GET() {
       .select('*, items_cotizacion(*)')
       .order('created_at', { ascending: false })
     if (error) throw error
-    const mapped = (data || []).map((d: any) => ({ ...d, items: d.items_cotizacion }))
+    const mapped = ((data || []) as CotizacionRawRow[]).map((d) => ({ ...d, items: d.items_cotizacion }))
     return Response.json(mapped)
   } catch (error) {
     console.error(error)

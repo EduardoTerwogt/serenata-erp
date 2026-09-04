@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 
-type PrefetchFn = () => Promise<any>
+type PrefetchFn<T = unknown> = () => Promise<T>
 
 interface PrefetchOptions {
   delay?: number
@@ -11,10 +11,10 @@ interface PrefetchOptions {
  * Hook para prefetch de datos en background
  * Útil para precargardatos cuando el usuario hace hover o focus en un elemento
  */
-export function usePrefetch(fetchFn: PrefetchFn, options: PrefetchOptions = {}) {
+export function usePrefetch<T = unknown>(fetchFn: PrefetchFn<T>, options: PrefetchOptions = {}) {
   const { delay = 0 } = options
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
-  const lastFetchRef = useRef<Promise<any> | null>(null)
+  const lastFetchRef = useRef<Promise<unknown> | null>(null)
 
   const prefetch = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)

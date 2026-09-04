@@ -1,6 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { ServiceTemplateRepository } from '@/lib/server/repositories/service-templates'
-import { ServiceTemplateCreateSchema, ServiceTemplateUpdateSchema, validate } from '@/lib/validation/schemas'
+import { ServiceTemplateCreateSchema, validate } from '@/lib/validation/schemas'
 
 export async function GET() {
   const authResult = await requireSection('planeacion')

@@ -56,7 +56,6 @@ async function syncTableDown(
     const ok = await overwriteSheet(spreadsheetId, tab, allRows)
     if (!ok) throw new Error('overwriteSheet returned false')
 
-    console.log(`[Sheets/sync-down] ${tab}: ${rows.length} filas escritas`)
     return { tab, table, rows: rows.length, ok: true }
 
   } catch (err: unknown) {
@@ -73,8 +72,6 @@ async function syncTableDown(
  * Devuelve un resumen con el resultado por tabla.
  */
 export async function syncAllDown(spreadsheetId: string): Promise<SyncDownSummary> {
-  console.log('[Sheets/sync-down] Iniciando sync descendente — spreadsheetId:', spreadsheetId)
-
   // Formatear headers después (necesitamos los sheetIds)
   const sheetIds = await getSheetIds(spreadsheetId)
 
@@ -96,8 +93,6 @@ export async function syncAllDown(spreadsheetId: string): Promise<SyncDownSummar
 
   const totalRows = results.reduce((sum, r) => sum + r.rows, 0)
   const errors = results.filter(r => !r.ok).length
-
-  console.log(`[Sheets/sync-down] Completado — ${totalRows} filas totales, ${errors} errores`)
 
   return { spreadsheetId, results, totalRows, errors }
 }

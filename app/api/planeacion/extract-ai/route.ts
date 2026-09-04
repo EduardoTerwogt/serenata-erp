@@ -140,7 +140,10 @@ export async function POST(request: Request) {
     const validated = ExtractResponseSchema.safeParse(rawParsed)
     if (!validated.success) {
       console.error('Claude response failed Zod validation:', validated.error.issues)
-      return Response.json({ events: [], notasContextuales: {}, method: 'ai-validation-error' })
+      return Response.json(
+        { error: 'No se pudo interpretar la respuesta de IA. Intenta de nuevo.' },
+        { status: 422 }
+      )
     }
 
     const { events, notasContextuales } = validated.data

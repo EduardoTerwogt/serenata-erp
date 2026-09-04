@@ -28,7 +28,7 @@ export async function cancelQuotation(id: string) {
     )
   }
 
-  const { data, error } = await supabaseAdmin.rpc('cancel_cotizacion', { p_id: id })
+  const { error } = await supabaseAdmin.rpc('cancel_cotizacion', { p_id: id })
 
   if (error) {
     throw new Error(`Error cancelando cotizacion: ${error.message}`)

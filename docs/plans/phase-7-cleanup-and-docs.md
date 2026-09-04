@@ -17,7 +17,6 @@ El cleanup de esta fase fue deliberadamente corto:
 - se prefirió dejar explícitas deudas conocidas en documentación antes que arriesgar un deploy verde
 
 ## Deuda conocida registrada
-- `middleware.ts` sigue activo aunque Next.js 16 recomienda `proxy`
 - existen cambios históricos de DB/RPC fuera del alcance del cierre 5–7
 
 ## Por qué fue seguro

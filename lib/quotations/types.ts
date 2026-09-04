@@ -51,7 +51,7 @@ export interface QuotationTotals {
   utilidad_total: number
 }
 
-export interface PersistedQuotationItem extends Omit<import('@/lib/types').ItemCotizacion, 'id'> {}
+export type PersistedQuotationItem = Omit<import('@/lib/types').ItemCotizacion, 'id'>
 
 export interface QuotationPdfItem {
   categoria: string

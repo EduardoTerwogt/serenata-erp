@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import type { RowInput } from 'jspdf-autotable'
 import { formatCurrencyPdf, formatDatePdf } from '@/lib/server/pdf/pdf-base-config'
 import { CotizacionPDFData, TotalsRow } from '@/lib/server/pdf/cotizacion-pdf-types'
 
@@ -54,7 +55,7 @@ export function buildItemsBody(data: CotizacionPDFData) {
     if (!categories.includes(item.categoria)) categories.push(item.categoria)
   })
 
-  const itemsBody: any[][] = []
+  const itemsBody: RowInput[] = []
   categories.forEach((cat, catIdx) => {
     const catItems = data.items.filter(i => i.categoria === cat)
     const catTotal = catItems.reduce((s, i) => s + (i.importe || 0), 0)

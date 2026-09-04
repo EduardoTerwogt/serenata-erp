@@ -28,7 +28,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       horarios: proyecto.horarios || null,
       punto_encuentro: proyecto.punto_encuentro || null,
       notas: proyecto.notas || null,
-      items: (proyecto.items || []).map((item: any) => ({
+      items: (proyecto.items || []).map((item) => ({
         id: item.id,
         descripcion: item.descripcion,
         categoria: item.categoria,
@@ -37,7 +37,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
         responsable_nombre: item.responsable_nombre || null,
         notas: item.notas || null,
       })),
-      responsables: responsables.map((resp: any) => ({
+      responsables: responsables.map((resp) => ({
         id: resp.id,
         nombre: resp.nombre,
         telefono: resp.telefono || null,

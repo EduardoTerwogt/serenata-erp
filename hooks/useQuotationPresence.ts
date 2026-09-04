@@ -286,13 +286,13 @@ export function useQuotationPresence({
 
   useEffect(() => {
     if (!enabled) {
-      setRawOnlineUsers([])
-      setActiveSectionOverrides({})
-      setSavedSections({})
-      setItemCellEditors({})
-      setItemRowEditors({})
-      setLatestItemMutation(null)
-      setIsConnected(false)
+      setRawOnlineUsers((prev) => (prev.length ? [] : prev))
+      setActiveSectionOverrides((prev) => (Object.keys(prev).length ? {} : prev))
+      setSavedSections((prev) => (Object.keys(prev).length ? {} : prev))
+      setItemCellEditors((prev) => (Object.keys(prev).length ? {} : prev))
+      setItemRowEditors((prev) => (Object.keys(prev).length ? {} : prev))
+      setLatestItemMutation((prev) => (prev === null ? prev : null))
+      setIsConnected((prev) => (prev ? false : prev))
       return
     }
 

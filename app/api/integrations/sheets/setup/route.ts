@@ -38,7 +38,6 @@ export async function POST(req: Request) {
     // ── Crear Spreadsheet ───────────────────────────────────────────────────
     const sheetNames = TABLE_SCHEMAS.map(s => s.tab)
 
-    console.log('[Sheets/setup] Creando spreadsheet:', title)
     const created = await createSpreadsheet(title, sheetNames)
 
     if (!created) {
@@ -47,8 +46,6 @@ export async function POST(req: Request) {
         { status: 503 },
       )
     }
-
-    console.log('[Sheets/setup] Spreadsheet creado:', created.spreadsheetId)
 
     // ── Sync inicial: Supabase → Sheets ────────────────────────────────────
     const syncSummary = await syncAllDown(created.spreadsheetId)

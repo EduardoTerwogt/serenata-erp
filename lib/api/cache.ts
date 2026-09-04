@@ -10,7 +10,7 @@
  */
 
 export class CacheManager {
-  private cache = new Map<string, { data: any; timestamp: number }>()
+  private cache = new Map<string, { data: unknown; timestamp: number }>()
 
   constructor(private ttlMs: number) {}
 
@@ -19,7 +19,7 @@ export class CacheManager {
    * @param key Cache key
    * @returns Cached data or null if not found or expired
    */
-  get(key: string): any | null {
+  get<T>(key: string): T | null {
     const entry = this.cache.get(key)
     if (!entry) return null
 
@@ -29,7 +29,7 @@ export class CacheManager {
       return null
     }
 
-    return entry.data
+    return entry.data as T
   }
 
   /**
@@ -37,7 +37,7 @@ export class CacheManager {
    * @param key Cache key
    * @param data Data to cache
    */
-  set(key: string, data: any): void {
+  set<T>(key: string, data: T): void {
     this.cache.set(key, { data, timestamp: Date.now() })
   }
 

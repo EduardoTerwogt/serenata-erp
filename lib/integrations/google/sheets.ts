@@ -39,8 +39,6 @@ export async function createSpreadsheet(
   const sheets = getSheetsInstance()
   if (!sheets) return null
 
-  console.log('[Sheets] createSpreadsheet —', title, '— tabs:', sheetNames)
-
   const res = await sheets.spreadsheets.create({
     requestBody: {
       properties: { title },
@@ -52,7 +50,6 @@ export async function createSpreadsheet(
 
   if (!res.data.spreadsheetId) return null
 
-  console.log('[Sheets] Created —', res.data.spreadsheetId)
   return {
     spreadsheetId: res.data.spreadsheetId,
     url: res.data.spreadsheetUrl ?? `https://docs.google.com/spreadsheets/d/${res.data.spreadsheetId}`,
@@ -116,7 +113,6 @@ export async function overwriteSheet(
     },
   })
 
-  console.log('[Sheets] overwriteSheet — tab:', sheetName, '— rows written:', rows.length)
   return true
 }
 

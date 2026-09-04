@@ -36,7 +36,7 @@ export async function GET() {
 
   try {
     const cuentasPendientes = await getCuentasPagarPendientesEventosRealizados()
-    const preview = buildOrdenPagoPreview(cuentasPendientes as any)
+    const preview = buildOrdenPagoPreview(cuentasPendientes)
     return Response.json(preview)
   } catch (error) {
     let errorMsg = 'Error desconocido'
@@ -76,7 +76,7 @@ export async function POST() {
       return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
     }
 
-    const preview = buildOrdenPagoPreview(cuentasPendientes as any)
+    const preview = buildOrdenPagoPreview(cuentasPendientes)
     const pdfArrayBuffer = generateOrdenPagoPdf(preview)
 
     const fileName = buildOrdenPagoFileName(preview)

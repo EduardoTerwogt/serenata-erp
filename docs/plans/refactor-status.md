@@ -40,7 +40,6 @@ Durante el proceso también quedó ejecutada una fase adicional de modularizaci�
 - registro final del alcance real alcanzado
 
 ## Pendientes conocidos que no formaron parte del cierre
-- migrar `middleware.ts` a la convención `proxy` recomendada por Next.js 16
 - revisar por separado deuda histórica de DB/RPC que no perteneció al cierre del refactor
 
 ## Resultado práctico

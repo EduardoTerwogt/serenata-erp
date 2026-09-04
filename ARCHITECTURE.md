@@ -16,7 +16,7 @@ Serenata ERP es una app en Next.js que combina UI autenticada, APIs internas y s
 
 ## Capas actuales
 ### 1. Shell, auth y autorización
-La navegación autenticada se protege desde `middleware.ts`, que valida sesión, secciones autorizadas y acceso a rutas API/página. La app aún usa la convención `middleware.ts`; Next.js 16 la marca como deprecada a favor de `proxy`, pero ese cambio no fue parte del refactor de fases 0–7.
+La navegación autenticada se protege desde `proxy.ts`, que valida sesión, secciones autorizadas y acceso a rutas API/página (migrado desde la convención deprecada `middleware.ts` a la convención `proxy` de Next.js 16).
 
 ### 2. UI de páginas
 Las pantallas viven en `app/.../page.tsx` y delegan lógica a hooks o componentes por dominio cuando aplica. Después del refactor, páginas críticas como nueva cotización y cuentas quedaron más delgadas.
@@ -54,6 +54,5 @@ Los flujos que se mantuvieron funcionalmente estables durante el refactor fueron
 - limitar primitives de UI internas a repetición real y de bajo riesgo
 
 ## Deuda conocida explícita
-- `middleware.ts` sigue vigente aunque Next 16 ya recomienda `proxy`
 - existen cambios históricos de DB/RPC en el repo que no formaron parte del cierre de fases 5–7
 - los checks remotos se usan como validación final real cuando se trabaja directo contra GitHub

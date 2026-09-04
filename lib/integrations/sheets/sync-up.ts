@@ -78,7 +78,8 @@ async function syncTableUp(
 ): Promise<SyncUpTableResult> {
   const { tab, table, pk, readonly: readonlyCols } = schema
   const rowResults: RowResult[] = []
-  let inserted = 0, updated = 0, deleted = 0, skipped = 0, errors = 0
+  let inserted = 0, updated = 0, skipped = 0, errors = 0
+  const deleted = 0
 
   try {
     // 1. Leer todas las filas del Sheet
@@ -86,7 +87,6 @@ async function syncTableUp(
     if (rawRows === null) throw new Error('No se pudo leer la pestaña del Sheet')
     if (rawRows.length <= 1) {
       // Sheet vacío o solo header: no procesar nada (protección contra borrado accidental)
-      console.log(`[Sheets/sync-up] ${tab}: sin datos para sincronizar`)
       return { tab, table, inserted: 0, updated: 0, deleted: 0, skipped: 0, errors: 0, rowResults: [], ok: true }
     }
 
@@ -166,7 +166,6 @@ async function syncTableUp(
     // Supabase es fuente de verdad. Eliminar filas del Sheet no debe borrar datos en BD.
     // Si se necesita borrar, hacerlo directamente en Supabase.
 
-    console.log(`[Sheets/sync-up] ${tab}: +${inserted} ins, ~${updated} upd, -${deleted} del, ${errors} err`)
     return { tab, table, inserted, updated, deleted, skipped, errors, rowResults, ok: errors === 0 }
 
   } catch (err: unknown) {
@@ -184,8 +183,6 @@ async function syncTableUp(
  * tablas dependientes y luego las tablas padre.
  */
 export async function syncAllUp(spreadsheetId: string): Promise<SyncUpSummary> {
-  console.log('[Sheets/sync-up] Iniciando sync ascendente — spreadsheetId:', spreadsheetId)
-
   // Orden: primero tablas sin FK, luego las que dependen de ellas.
   // Para el DELETE el orden inverso sería el ideal, pero como cada tabla
   // se procesa independientemente, los errores de FK se reportan al usuario.
@@ -206,8 +203,6 @@ export async function syncAllUp(spreadsheetId: string): Promise<SyncUpSummary> {
   const totalUpdated = results.reduce((s, r) => s + r.updated, 0)
   const totalDeleted = results.reduce((s, r) => s + r.deleted, 0)
   const totalErrors = results.reduce((s, r) => s + r.errors, 0)
-
-  console.log(`[Sheets/sync-up] Completado — +${totalInserted} ins, ~${totalUpdated} upd, -${totalDeleted} del, ${totalErrors} err`)
 
   return { spreadsheetId, results, totalInserted, totalUpdated, totalDeleted, totalErrors }
 }

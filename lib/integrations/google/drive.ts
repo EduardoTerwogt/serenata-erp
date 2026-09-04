@@ -9,7 +9,7 @@
 //
 // Returns null when Google credentials are missing — app works normally without Drive.
 
-import { google } from 'googleapis'
+import { google, drive_v3 } from 'googleapis'
 import { Readable } from 'stream'
 import { getGoogleOAuth2Client } from './auth'
 import { getGoogleEnv } from './env'
@@ -112,8 +112,6 @@ class DriveServiceImpl implements DriveService {
     }
     const { drive, env } = instance
 
-    console.log('[Drive] uploadPdf — folder:', env.driveFolderId, '— file:', fileName)
-
     try {
       const res = await drive.files.create({
         supportsAllDrives: true,
@@ -127,8 +125,6 @@ class DriveServiceImpl implements DriveService {
         },
         fields: 'id,webViewLink',
       })
-
-      console.log('[Drive] uploadPdf — response id:', res.data.id, 'link:', res.data.webViewLink)
 
       if (!res.data.id) return null
 
@@ -149,8 +145,6 @@ class DriveServiceImpl implements DriveService {
     }
     const { drive } = instance
 
-    console.log('[Drive] updateFile — fileId:', fileId)
-
     try {
       const res = await drive.files.update({
         supportsAllDrives: true,
@@ -164,8 +158,6 @@ class DriveServiceImpl implements DriveService {
         },
         fields: 'id,webViewLink,trashed',
       })
-
-      console.log('[Drive] updateFile — response id:', res.data.id, '— trashed:', res.data.trashed)
 
       if (!res.data.id) return null
 
@@ -193,7 +185,7 @@ export const driveService: DriveService = new DriveServiceImpl()
  * Helper function to ensure a folder path exists in Drive and return its folder ID
  */
 async function ensureFolderPath(
-  drive: any,
+  drive: drive_v3.Drive,
   folderPath: string,
   rootFolderId: string
 ): Promise<string> {
@@ -225,7 +217,11 @@ async function ensureFolderPath(
           },
           fields: 'id',
         })
-        folderId = createRes.data.id
+        folderId = createRes.data.id ?? undefined
+      }
+
+      if (!folderId) {
+        throw new Error(`No se pudo obtener o crear el ID de carpeta para "${folderName}"`)
       }
 
       currentParentId = folderId

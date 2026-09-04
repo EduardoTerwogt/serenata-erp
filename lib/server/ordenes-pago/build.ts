@@ -1,4 +1,4 @@
-import { CuentaPagar } from '@/lib/types'
+import type { CuentaPagarConJoins } from '@/lib/server/repositories/cuentas-pagar'
 
 export interface OrdenPagoPreviewItem {
   descripcion: string
@@ -38,7 +38,7 @@ export interface OrdenPagoPreviewResult {
   cuentas_ids: string[]
 }
 
-export function buildOrdenPagoPreview(cuentasPendientes: CuentaPagar[]): OrdenPagoPreviewResult {
+export function buildOrdenPagoPreview(cuentasPendientes: CuentaPagarConJoins[]): OrdenPagoPreviewResult {
   const groupedByResponsable = new Map<string, OrdenPagoPreviewResponsable>()
 
   for (const cuenta of cuentasPendientes) {
@@ -66,7 +66,7 @@ export function buildOrdenPagoPreview(cuentasPendientes: CuentaPagar[]): OrdenPa
     if (!evento) {
       evento = {
         cotizacion_folio: cuenta.cotizacion_id,
-        proyecto: cuenta.proyecto_nombre || (cuenta as any).cotizaciones?.proyecto || 'Sin proyecto',
+        proyecto: cuenta.proyecto_nombre || cuenta.cotizaciones?.proyecto || 'Sin proyecto',
         items: [],
         subtotal: 0,
       }

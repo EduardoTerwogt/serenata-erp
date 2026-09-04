@@ -74,6 +74,17 @@ export const ResponsableCreateSchema = z.object({
   notas: z.string().nullable().optional(),
 })
 
+export const ResponsableUpdateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido').optional(),
+  telefono: z.string().nullable().optional(),
+  correo: z.string().email('Correo inválido').nullable().optional(),
+  banco: z.string().nullable().optional(),
+  clabe: z.string().nullable().optional(),
+  roles: z.array(z.string()).optional(),
+  notas: z.string().nullable().optional(),
+  activo: z.boolean().optional(),
+})
+
 // ==================== PROYECTOS ====================
 
 export const ProyectoUpdateSchema = z.object({

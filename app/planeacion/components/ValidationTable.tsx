@@ -130,7 +130,7 @@ export default function ValidationTable({
           <td className="px-4 py-3">
             <select
               value={line.action}
-              onChange={e => onLineUpdate(line.id, { action: e.target.value as any })}
+              onChange={e => onLineUpdate(line.id, { action: e.target.value as ValidatedEventLine['action'] })}
               className={`w-full px-2 py-1 rounded text-xs font-medium border ${getActionColor(line.action)} bg-gray-800 focus:outline-none focus:border-blue-500`}
             >
               <option value="confirmado">Confirmado</option>

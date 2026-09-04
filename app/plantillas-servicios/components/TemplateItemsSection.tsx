@@ -57,7 +57,7 @@ export function TemplateItemsSection({
     return () => window.removeEventListener('scroll', handler, true)
   }, [mostrarProductoDropdown, updateDropdownPos])
 
-  const updateItem = (index: number, field: keyof ServiceTemplateItem, value: any) => {
+  const updateItem = (index: number, field: keyof ServiceTemplateItem, value: string | number | null) => {
     const updated = [...items]
     updated[index] = { ...updated[index], [field]: value }
     onItemsChange(updated)

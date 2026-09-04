@@ -41,7 +41,7 @@ export default function PlaneacionPage() {
           const data = await res.json()
           setPendientesCount(data.pendientes?.length || 0)
         }
-      } catch (err) {
+      } catch {
         // Non-critical
       }
     }
@@ -49,7 +49,7 @@ export default function PlaneacionPage() {
     fetchPendientesCount()
   }, [])
 
-  const { toCreate, toPending, toCancel } = getCreationSummary()
+  const { toCreate } = getCreationSummary()
 
   const steps = ['project', 'input', 'validation', 'confirmation'] as const
 
@@ -70,20 +70,20 @@ export default function PlaneacionPage() {
           className="block mb-8 bg-yellow-900/20 border border-yellow-800 rounded-xl p-4 md:p-5 hover:bg-yellow-900/30 hover:border-yellow-700 transition-colors cursor-pointer"
         >
           <p className="text-base font-semibold text-yellow-300 mb-0.5">📋 {pendientesCount} pendientes por revisar</p>
-          <p className="text-sm text-yellow-200">Filas guardadas como "Por Confirmar" o "Cancelado" — click aquí para editar y procesar</p>
+          <p className="text-sm text-yellow-200">Filas guardadas como &quot;Por Confirmar&quot; o &quot;Cancelado&quot; — click aquí para editar y procesar</p>
         </Link>
       )}
 
       {/* Progress indicator - new flow: input → project → validation → confirmation */}
       {state.step !== 'input' && (
         <div className="mb-8 flex gap-3 md:gap-6">
-          {['project', 'validation', 'confirmation'].map((step, idx) => (
+          {(['project', 'validation', 'confirmation'] as const).map((step, idx) => (
             <div key={step} className="flex items-center">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
                   state.step === step
                     ? 'bg-blue-600 text-white'
-                    : steps.indexOf(state.step as any) > steps.indexOf(step as any)
+                    : steps.indexOf(state.step) > steps.indexOf(step)
                     ? 'bg-green-600 text-white'
                     : 'bg-gray-700 text-gray-400'
                 }`}
