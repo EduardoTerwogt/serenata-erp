@@ -1,7 +1,8 @@
 {
-  "generated_at": "2026-09-04T05:30:14.164Z",
-  "count": 24,
+  "generated_at": "2026-09-04T22:44:54.015Z",
+  "count": 26,
   "order": [
+    "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
     "20260408_approve_cotizacion_rpc.sql",
     "20260408_atomic_cotizacion_folio_reservations.sql",
@@ -25,6 +26,7 @@
     "20260420_cancel_cotizacion_payments_guard.sql",
     "20260422_add_usuarios_table.sql",
     "20260422_enable_rls_all_tables.sql",
-    "20260422_enable_rls_missing_tables.sql"
+    "20260422_enable_rls_missing_tables.sql",
+    "20260423_fix_search_indexes_trgm.sql"
   ]
 }
