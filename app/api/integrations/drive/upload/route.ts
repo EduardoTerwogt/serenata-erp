@@ -54,7 +54,6 @@ export async function POST(req: Request) {
   console.log('[Drive/upload] Cotización found — existing drive_file_id:', cotizacion.drive_file_id ?? 'null (new upload)')
 
   // ── 5. Upload or update in Drive ─────────────────────────────────────────
-  const isNewUpload = !cotizacion.drive_file_id
   try {
     let result
 
@@ -82,21 +81,21 @@ export async function POST(req: Request) {
     console.log('[Drive/upload] Drive success — fileId:', result.fileId)
 
     // ── 6. Persist drive_file_id ──────────────────────────────────────────
-    // For new uploads: only set if still null — prevents duplicate Drive files
-    // in the rare case of concurrent uploads for the same cotización.
-    const baseQuery = supabaseAdmin.from('cotizaciones').update({ drive_file_id: result.fileId }).eq('id', cotizacionId)
-    const { error: updateError } = isNewUpload
-      ? await baseQuery.is('drive_file_id', null)
-      : await baseQuery
+    const { error: updateError } = await supabaseAdmin
+      .from('cotizaciones')
+      .update({ drive_file_id: result.fileId })
+      .eq('id', cotizacionId)
 
     if (updateError) {
       console.error('[Drive/upload] Supabase update failed:', updateError.message)
-      // File is in Drive but DB not updated — not critical, return success anyway
-    } else {
-      console.log('[Drive/upload] drive_file_id saved in Supabase ✓')
-      triggerSheetsSync('cotizaciones')
+      return Response.json(
+        { error: 'PDF subido a Drive pero no se pudo guardar el enlace en la base de datos. Intenta generar el PDF de nuevo.' },
+        { status: 500 }
+      )
     }
 
+    console.log('[Drive/upload] drive_file_id saved in Supabase ✓')
+    triggerSheetsSync('cotizaciones')
     return Response.json(result)
 
   } catch (err: unknown) {

@@ -62,18 +62,6 @@ export const CotizacionUpdateSchema = CotizacionBaseSchema.partial().extend({
   items: z.array(ItemCotizacionSchema).optional(),
 })
 
-// ==================== RESPONSABLES ====================
-
-export const ResponsableCreateSchema = z.object({
-  nombre: z.string().min(1, 'El nombre es requerido'),
-  telefono: z.string().nullable().optional(),
-  correo: z.string().email('Correo inválido').nullable().optional(),
-  banco: z.string().nullable().optional(),
-  clabe: z.string().nullable().optional(),
-  roles: z.array(z.string()).optional().default([]),
-  notas: z.string().nullable().optional(),
-})
-
 // ==================== PROYECTOS ====================
 
 export const ProyectoUpdateSchema = z.object({
@@ -96,6 +84,19 @@ export const ItemPatchSchema = z.object({
   data => 'responsable_id' in data || 'responsable_nombre' in data || 'notas' in data,
   { message: 'Al menos un campo debe enviarse: responsable_id, responsable_nombre o notas' }
 )
+
+// ==================== RESPONSABLES ====================
+
+export const ResponsableUpdateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido').optional(),
+  telefono: z.string().nullable().optional(),
+  correo: z.string().email('Email inválido').nullable().optional(),
+  banco: z.string().nullable().optional(),
+  clabe: z.string().nullable().optional(),
+  roles: z.array(z.string()).optional(),
+  notas: z.string().nullable().optional(),
+  activo: z.boolean().optional(),
+})
 
 // ==================== HELPER ====================
 

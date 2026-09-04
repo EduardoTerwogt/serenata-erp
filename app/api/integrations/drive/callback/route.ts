@@ -21,7 +21,7 @@ export async function GET(req: Request) {
 
   if (error) {
     return new Response(
-      html('Error de autorizaci\u00f3n', `<p style="color:red">Google retorn\u00f3: <strong>${escHtml(error)}</strong></p>
+      html('Error de autorización', `<p style="color:red">Google retornó: <strong>${escHtml(error)}</strong></p>
       <p>Visita <a href="/api/integrations/drive/authorize">/api/integrations/drive/authorize</a> para intentar de nuevo.</p>`),
       { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     )
@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 
   if (!code) {
     return new Response(
-      html('Par\u00e1metro faltante', '<p style="color:red">No se recibi\u00f3 el par\u00e1metro <code>code</code>.</p>'),
+      html('Parámetro faltante', '<p style="color:red">No se recibió el parámetro <code>code</code>.</p>'),
       { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     )
   }
@@ -39,7 +39,7 @@ export async function GET(req: Request) {
 
   if (!clientId || !clientSecret) {
     return new Response(
-      html('Configuraci\u00f3n incompleta', '<p style="color:red">GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET no est\u00e1n configurados.</p>'),
+      html('Configuración incompleta', '<p style="color:red">GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET no están configurados.</p>'),
       { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     )
   }
@@ -47,16 +47,14 @@ export async function GET(req: Request) {
   const client = new google.auth.OAuth2(clientId, clientSecret, REDIRECT_URI)
 
   let refreshToken: string | null | undefined
-  let accessToken:  string | null | undefined
 
   try {
     const { tokens } = await client.getToken(code)
     refreshToken = tokens.refresh_token
-    accessToken  = tokens.access_token
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     return new Response(
-      html('Error al intercambiar c\u00f3digo', `<p style="color:red">${escHtml(msg)}</p>`),
+      html('Error al intercambiar código', `<p style="color:red">${escHtml(msg)}</p>`),
       { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     )
   }
@@ -64,14 +62,14 @@ export async function GET(req: Request) {
   if (!refreshToken) {
     return new Response(
       html('Refresh token no recibido', `
-        <p style="color:orange"><strong>Google no retorn\u00f3 un refresh_token.</strong></p>
-        <p>Esto ocurre cuando ya autorizaste la app anteriormente.  Para forzar la emisi\u00f3n de uno nuevo:</p>
+        <p style="color:orange"><strong>Google no retornó un refresh_token.</strong></p>
+        <p>Esto ocurre cuando ya autorizaste la app anteriormente.  Para forzar la emisión de uno nuevo:</p>
         <ol>
           <li>Ve a <a href="https://myaccount.google.com/permissions" target="_blank">Permisos de cuenta Google</a></li>
-          <li>Revoca el acceso de esta aplicaci\u00f3n</li>
+          <li>Revoca el acceso de esta aplicación</li>
           <li>Visita <a href="/api/integrations/drive/authorize">/api/integrations/drive/authorize</a> de nuevo</li>
         </ol>
-        <p>Access token recibido: <code>${escHtml(accessToken ?? '(ninguno)')}</code></p>
+        <p style="color:#888;font-size:0.85em">Por seguridad los tokens no se muestran aquí. Revisa los logs de Vercel (Functions tab) si los necesitas.</p>
       `),
       { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     )
