@@ -17,7 +17,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const monto = parseFloat(formData.get('monto') as string)
     const comprobante = formData.get('comprobante') as File | null
 
-    if (!Number.isFinite(monto) || monto <= 0) {
+    if (!monto || monto <= 0) {
       return Response.json({ error: 'Monto debe ser mayor a 0' }, { status: 400 })
     }
 
