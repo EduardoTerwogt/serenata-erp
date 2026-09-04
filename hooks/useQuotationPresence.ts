@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabaseBrowser } from '@/lib/supabase-browser'
 import type { ItemCotizacion } from '@/lib/types'
@@ -106,18 +106,93 @@ function getCellLockKey(rowId: string, field: QuotationItemCellField) {
   return `${rowId}:${field}`
 }
 
+interface PresenceState {
+  rawOnlineUsers: QuotationPresenceUser[]
+  activeSectionOverrides: Record<string, QuotationPresenceSection | null>
+  savedSections: Partial<Record<QuotationPresenceSection, number>>
+  itemCellEditors: Record<string, QuotationPresenceUser>
+  itemRowEditors: Record<string, QuotationItemRowEditor>
+  latestItemMutation: QuotationItemMutationPayload | null
+  isConnected: boolean
+}
+
+const initialPresenceState: PresenceState = {
+  rawOnlineUsers: [],
+  activeSectionOverrides: {},
+  savedSections: {},
+  itemCellEditors: {},
+  itemRowEditors: {},
+  latestItemMutation: null,
+  isConnected: false,
+}
+
+type PresenceAction =
+  | { type: 'reset' }
+  | { type: 'sync_online_users'; users: QuotationPresenceUser[] }
+  | { type: 'section_signal'; userId: string; section: QuotationPresenceSection | null }
+  | { type: 'item_cell_signal'; key: string; editor: QuotationPresenceUser | null }
+  | { type: 'item_row_signal'; rowId: string; editor: QuotationItemRowEditor | null }
+  | { type: 'item_mutation'; payload: QuotationItemMutationPayload }
+  | { type: 'section_saved'; userId: string; section: QuotationPresenceSection }
+  | { type: 'set_connected'; connected: boolean }
+
+/**
+ * Consolida los 7 estados de presencia en una sola transición por evento, en vez de
+ * varios setState seguidos — así el reset (`!enabled` / cleanup del efecto) es UNA sola
+ * actualización de estado, no varias, evitando el patrón que dispara
+ * react-hooks/set-state-in-effect. `reset` devuelve siempre la misma referencia de
+ * `initialPresenceState`, así que si el estado ya estaba en default, useReducer hace
+ * bail-out del render automáticamente (misma optimización que antes tenían las guardas
+ * manuales por campo).
+ */
+function presenceReducer(state: PresenceState, action: PresenceAction): PresenceState {
+  switch (action.type) {
+    case 'reset':
+      return initialPresenceState
+    case 'sync_online_users':
+      return { ...state, rawOnlineUsers: action.users }
+    case 'section_signal':
+      return {
+        ...state,
+        activeSectionOverrides: { ...state.activeSectionOverrides, [action.userId]: action.section },
+      }
+    case 'item_cell_signal': {
+      const next = { ...state.itemCellEditors }
+      if (action.editor) next[action.key] = action.editor
+      else delete next[action.key]
+      return { ...state, itemCellEditors: next }
+    }
+    case 'item_row_signal': {
+      const next = { ...state.itemRowEditors }
+      if (action.editor) next[action.rowId] = action.editor
+      else delete next[action.rowId]
+      return { ...state, itemRowEditors: next }
+    }
+    case 'item_mutation':
+      return { ...state, latestItemMutation: action.payload }
+    case 'section_saved':
+      return {
+        ...state,
+        activeSectionOverrides: { ...state.activeSectionOverrides, [action.userId]: null },
+        savedSections: {
+          ...state.savedSections,
+          [action.section]: (state.savedSections[action.section] || 0) + 1,
+        },
+      }
+    case 'set_connected':
+      return { ...state, isConnected: action.connected }
+    default:
+      return state
+  }
+}
+
 export function useQuotationPresence({
   cotizacionId,
   enabled,
   currentUser,
 }: UseQuotationPresenceOptions): UseQuotationPresenceResult {
-  const [rawOnlineUsers, setRawOnlineUsers] = useState<QuotationPresenceUser[]>([])
-  const [activeSectionOverrides, setActiveSectionOverrides] = useState<Record<string, QuotationPresenceSection | null>>({})
-  const [savedSections, setSavedSections] = useState<Partial<Record<QuotationPresenceSection, number>>>({})
-  const [itemCellEditors, setItemCellEditors] = useState<Record<string, QuotationPresenceUser>>({})
-  const [itemRowEditors, setItemRowEditors] = useState<Record<string, QuotationItemRowEditor>>({})
-  const [latestItemMutation, setLatestItemMutation] = useState<QuotationItemMutationPayload | null>(null)
-  const [isConnected, setIsConnected] = useState(false)
+  const [state, dispatch] = useReducer(presenceReducer, initialPresenceState)
+  const { rawOnlineUsers, activeSectionOverrides, savedSections, itemCellEditors, itemRowEditors, latestItemMutation, isConnected } = state
   const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
   const presenceKeyRef = useRef('')
@@ -286,13 +361,7 @@ export function useQuotationPresence({
 
   useEffect(() => {
     if (!enabled) {
-      setRawOnlineUsers((prev) => (prev.length ? [] : prev))
-      setActiveSectionOverrides((prev) => (Object.keys(prev).length ? {} : prev))
-      setSavedSections((prev) => (Object.keys(prev).length ? {} : prev))
-      setItemCellEditors((prev) => (Object.keys(prev).length ? {} : prev))
-      setItemRowEditors((prev) => (Object.keys(prev).length ? {} : prev))
-      setLatestItemMutation((prev) => (prev === null ? prev : null))
-      setIsConnected((prev) => (prev ? false : prev))
+      dispatch({ type: 'reset' })
       return
     }
 
@@ -306,21 +375,22 @@ export function useQuotationPresence({
     })
 
     channel.on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState<QuotationPresenceUser>()
-      const users = Object.values(state)
+      const presenceState = channel.presenceState<QuotationPresenceUser>()
+      const users = Object.values(presenceState)
         .flatMap((entries) => entries)
         .filter(Boolean)
-      setRawOnlineUsers(users)
+      dispatch({ type: 'sync_online_users', users })
     })
 
     channel.on('broadcast', { event: 'section_signal' }, ({ payload }) => {
       const signal = payload as SectionSignalPayload | undefined
       if (!signal?.user_id || signal.user_id === identity.userId) return
 
-      setActiveSectionOverrides((prev) => ({
-        ...prev,
-        [signal.user_id]: signal.status === 'editing' ? signal.section : null,
-      }))
+      dispatch({
+        type: 'section_signal',
+        userId: signal.user_id,
+        section: signal.status === 'editing' ? signal.section : null,
+      })
     })
 
     channel.on('broadcast', { event: 'item_cell_signal' }, ({ payload }) => {
@@ -328,24 +398,19 @@ export function useQuotationPresence({
       if (!signal?.user_id || signal.user_id === identity.userId) return
 
       const key = getCellLockKey(signal.row_id, signal.field)
-      if (signal.status === 'editing') {
-        setItemCellEditors((prev) => ({
-          ...prev,
-          [key]: {
-            user_id: signal.user_id,
-            email: signal.email,
-            name: signal.name,
-            active_section: 'partidas',
-            online_at: signal.at,
-          },
-        }))
-        return
-      }
-
-      setItemCellEditors((prev) => {
-        const next = { ...prev }
-        delete next[key]
-        return next
+      dispatch({
+        type: 'item_cell_signal',
+        key,
+        editor:
+          signal.status === 'editing'
+            ? {
+                user_id: signal.user_id,
+                email: signal.email,
+                name: signal.name,
+                active_section: 'partidas',
+                online_at: signal.at,
+              }
+            : null,
       })
     })
 
@@ -353,52 +418,40 @@ export function useQuotationPresence({
       const signal = payload as ItemRowSignalPayload | undefined
       if (!signal?.user_id || signal.user_id === identity.userId) return
 
-      if (signal.status === 'editing') {
-        setItemRowEditors((prev) => ({
-          ...prev,
-          [signal.row_id]: {
-            row_id: signal.row_id,
-            mode: signal.mode,
-            user_id: signal.user_id,
-            email: signal.email,
-            name: signal.name,
-            active_section: 'partidas',
-            online_at: signal.at,
-          },
-        }))
-        return
-      }
-
-      setItemRowEditors((prev) => {
-        const next = { ...prev }
-        delete next[signal.row_id]
-        return next
+      dispatch({
+        type: 'item_row_signal',
+        rowId: signal.row_id,
+        editor:
+          signal.status === 'editing'
+            ? {
+                row_id: signal.row_id,
+                mode: signal.mode,
+                user_id: signal.user_id,
+                email: signal.email,
+                name: signal.name,
+                active_section: 'partidas',
+                online_at: signal.at,
+              }
+            : null,
       })
     })
 
     channel.on('broadcast', { event: 'item_mutation' }, ({ payload }) => {
       const mutation = payload as QuotationItemMutationPayload | undefined
       if (!mutation?.user_id || mutation.user_id === identity.userId) return
-      setLatestItemMutation({ ...mutation })
+      dispatch({ type: 'item_mutation', payload: { ...mutation } })
     })
 
     channel.on('broadcast', { event: 'section_saved' }, ({ payload }) => {
       const saved = payload as SectionSavedPayload | undefined
       if (!saved?.user_id || saved.user_id === identity.userId) return
 
-      setActiveSectionOverrides((prev) => ({
-        ...prev,
-        [saved.user_id]: null,
-      }))
-      setSavedSections((prev) => ({
-        ...prev,
-        [saved.section]: (prev[saved.section] || 0) + 1,
-      }))
+      dispatch({ type: 'section_saved', userId: saved.user_id, section: saved.section })
     })
 
     channel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        setIsConnected(true)
+        dispatch({ type: 'set_connected', connected: true })
         await channel.track({
           user_id: identity.userId,
           email: identity.email,
@@ -410,20 +463,14 @@ export function useQuotationPresence({
       }
 
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        setIsConnected(false)
+        dispatch({ type: 'set_connected', connected: false })
       }
     })
 
     channelRef.current = channel
 
     return () => {
-      setIsConnected(false)
-      setRawOnlineUsers([])
-      setActiveSectionOverrides({})
-      setSavedSections({})
-      setItemCellEditors({})
-      setItemRowEditors({})
-      setLatestItemMutation(null)
+      dispatch({ type: 'reset' })
       void channel.untrack().catch(() => null)
       void supabaseBrowser.removeChannel(channel)
       channelRef.current = null
