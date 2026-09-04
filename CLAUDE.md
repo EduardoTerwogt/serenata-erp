@@ -35,6 +35,18 @@ git reset --hard origin/main
 
 ---
 
+## MCP Supabase — conexiones y regla de producción
+
+Dos conexiones al servidor MCP oficial de Supabase, configuradas como Custom Connectors en claude.ai (Settings → Connectors), no en un archivo del repo:
+- `supabase-test`: lectura y escritura completas — proyecto de prueba, aislado de producción.
+- `supabase-prod`: escritura habilitada, pero bajo la regla siguiente.
+
+**Regla obligatoria sobre producción (mismo nivel de firmeza que el freno de `git push`):**
+- Nunca aplicar un cambio de esquema en producción vía `supabase-prod` sin mostrar antes el SQL/migración exacto en el chat y esperar confirmación explícita del usuario.
+- Cada cambio aplicado a producción se guarda también como archivo de migración numerado en `db/migrations/` y se commitea, para que el historial de migraciones no se desincronice de lo que realmente tiene la base de datos.
+
+---
+
 ## Reglas de trabajo
 
 **Planear antes de tocar código:**
