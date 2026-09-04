@@ -345,16 +345,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   useEffect(() => { descuentoTipoValueRef.current = descuento_tipo }, [descuento_tipo])
   useEffect(() => { descuentoValorValueRef.current = descuento_valor }, [descuento_valor])
 
-  // MEJORA-7: cancelled flag prevents setState on unmounted component
   useEffect(() => {
-    let cancelled = false
-    Promise.all([fetchQuotationDetail(id), fetchResponsables()])
-      .then(([cot, resp]) => {
-        if (cancelled) return
-        applyCotizacionToState(cot); setResponsables(resp); setLoading(false); const pending = sessionStorage.getItem('pdf_drive_result'); if (pending) { sessionStorage.removeItem('pdf_drive_result'); try { const { link } = JSON.parse(pending); setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(link ?? null) } catch {} }
-      })
-      .catch(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
+    Promise.all([fetchQuotationDetail(id), fetchResponsables()]).then(([cot, resp]) => { applyCotizacionToState(cot); setResponsables(resp); setLoading(false); const pending = sessionStorage.getItem('pdf_drive_result'); if (pending) { sessionStorage.removeItem('pdf_drive_result'); try { const { link } = JSON.parse(pending); setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(link ?? null) } catch {} } }).catch(() => setLoading(false))
   }, [id, applyCotizacionToState])
 
   const totales = useMemo(() => calculateQuotationTotals({ items: watchedItems || [], porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }), [watchedItems, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor])
@@ -699,13 +691,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       {error && <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4">{error}</div>}
       {success && <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4 flex items-center justify-between gap-4"><span>{success}</span>{driveLink && <a href={driveLink} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-200 underline text-sm whitespace-nowrap">Ver en Drive →</a>}</div>}
-      {/* BUG-4: autosave visual indicator */}
-      {esEditable && (isSavingNotas || isSavingGeneral || isSavingTotals) && (
-        <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
-          Guardando...
-        </div>
-      )}
 
       {(notasInternas || esEditable) && <div ref={notasSectionRef} className={`bg-gray-800/60 border rounded-xl p-4 mb-6 ${notasLockedByOther ? 'border-orange-600/70 opacity-80' : 'border-gray-700'}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}><SectionEditBadge section="notas" /><p className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-medium">Notas del evento (uso interno)</p>{esEditable ? <textarea value={notasInternas} onChange={e => { handleNotasFocus(); notasDirtyRef.current = true; setNotasInternas(e.target.value) }} rows={3} placeholder="Sin notas..." disabled={notasLockedByOther} className="w-full bg-transparent text-gray-300 text-sm resize-none outline-none placeholder-gray-600 disabled:opacity-50 disabled:cursor-not-allowed" /> : <p className="text-gray-400 text-sm whitespace-pre-wrap">{notasInternas || '—'}</p>}</div>}
 
