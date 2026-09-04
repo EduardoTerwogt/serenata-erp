@@ -28,7 +28,7 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await expect(page.getByText('Factura proveedor subida correctamente')).toBeVisible()
 
   await page.getByRole('button', { name: 'Información', exact: true }).click()
-  await expect(page.getByText('2026-04-08').first()).toBeVisible()
+  await expect(page.getByText('08-Abr-2026').first()).toBeVisible()
 
   await page.getByLabel('Cerrar').click()
 
