@@ -101,6 +101,12 @@ jobs:
       - name: Run live integration tests
         run: npm run test:e2e:live
 
+      - name: Dump Next.js server log on failure
+        if: failure()
+        run: |
+          echo "── next-start.log (servidor Next.js real, incluye console.error de las rutas API) ──"
+          cat next-start.log || echo "(next-start.log no existe)"
+
       - name: Upload Playwright artifacts
         if: failure()
         uses: actions/upload-artifact@v4

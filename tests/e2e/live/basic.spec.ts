@@ -1,8 +1,43 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, Page } from '@playwright/test'
 import { login } from '../utils/auth'
 import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix } from '../utils/live-cleanup'
 
 const LIVE_TEST_CLIENTE_PREFIX = 'E2E-LIVE-'
+
+/**
+ * Hace clic en "Generar Cotizacion" y espera a que pase UNA de dos cosas
+ * reales: navega a /cotizaciones/{id}, o aparece el banner de error rojo de
+ * la página (onGenerarCotizacion cayó en su catch). Diagnostico: 3 corridas
+ * de CI seguidas se quedaron colgadas en /cotizaciones/nueva sin navegar --
+ * subir el timeout no cambió nada (siempre esperaba exactamente el timeout
+ * configurado, sin progreso intermedio), lo que apunta a un error real que
+ * se estaba tragando en silencio, no a una operación lenta. Este helper
+ * saca el texto real del error al log de CI en vez de un timeout genérico.
+ */
+async function clickGenerarCotizacionOrThrow(page: Page, timeoutMs = 60_000) {
+  await page.getByRole('button', { name: 'Generar Cotizacion' }).click()
+
+  const errorBanner = page.locator('.bg-red-900\\/40').first()
+  const deadline = Date.now() + timeoutMs
+
+  while (Date.now() < deadline) {
+    if (/\/cotizaciones\/SH[A-Z0-9-]+/.test(page.url())) return
+
+    if (await errorBanner.isVisible().catch(() => false)) {
+      const text = (await errorBanner.textContent().catch(() => null))?.trim() || '(no se pudo leer el texto del banner)'
+      const message = `"Generar Cotizacion" no navego -- error real mostrado por la app: ${text}`
+      console.log(`[live test] ${message}`)
+      throw new Error(message)
+    }
+
+    await page.waitForTimeout(500)
+  }
+
+  throw new Error(
+    `"Generar Cotizacion" no navego y no aparecio ningun banner de error visible en ${timeoutMs}ms ` +
+    `(posible cuelgue silencioso del lado del cliente o del servidor).`
+  )
+}
 
 const liveEnabled = Boolean(
   process.env.PLAYWRIGHT_BASE_URL &&
@@ -84,8 +119,7 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     // "Generar Cotizacion" encadena crear + generar PDF real + subir PDF a
     // Drive (puede crear carpetas nuevas) antes de navegar -- necesita mucho
     // mas que el default.
-    await page.getByRole('button', { name: 'Generar Cotizacion' }).click()
-    await expect(page).toHaveURL(/\/cotizaciones\/(SH[A-Z0-9-]+)/, { timeout: 60_000 })
+    await clickGenerarCotizacionOrThrow(page, 60_000)
 
     const url = page.url()
     const cotizacionId = url.split('/cotizaciones/')[1]
@@ -175,8 +209,7 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await firstRow.locator('td').nth(3).locator('input').fill('500')
 
     // Mismo costo real que en el flujo feliz: crear + generar PDF + subir a Drive.
-    await page.getByRole('button', { name: 'Generar Cotizacion' }).click()
-    await expect(page).toHaveURL(/\/cotizaciones\/(SH[A-Z0-9-]+)/, { timeout: 60_000 })
+    await clickGenerarCotizacionOrThrow(page, 60_000)
 
     const url = page.url()
     const cotizacionId = url.split('/cotizaciones/')[1]
