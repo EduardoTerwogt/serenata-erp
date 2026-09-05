@@ -51,9 +51,14 @@ jobs:
           if-no-files-found: ignore
 
   live:
-    # Solo se dispara manualmente (Fase 4.5, Punto 3) -- nunca en push/PR.
-    # El Punto 4 decide si esto se vuelve automatico en cada push a main.
-    if: github.event_name == 'workflow_dispatch'
+    # Fase 4.5, Punto 4: corre en cada push a main (ademas de manual via
+    # workflow_dispatch) -- nunca en PR, para no exponer los secretos de
+    # Drive/Supabase de prueba a ramas externas. continue-on-error: true
+    # porque es solo informativo -- una falla real de Drive/Supabase no
+    # debe bloquear ni marcar en rojo el workflow (el deploy a Vercel ya
+    # ocurre por push, independiente de este resultado).
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
