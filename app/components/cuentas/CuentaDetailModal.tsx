@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer } from 'react'
 import { CuentaCobrar, CuentaPagar, DocumentoCuentaCobrar, DocumentoCuentaPagar, OrdenPago, PagoComprobante } from '@/lib/types'
 import { TabDocumentos } from '@/app/components/cuentas/tabs/TabDocumentos'
 import { formatDateDisplay } from '@/lib/format-date'
@@ -27,6 +27,47 @@ interface CuentaPagarDetalle {
   resumen: { monto_pagado: number; saldo_pendiente: number }
 }
 
+interface CuentaDetailState {
+  tab: DetailTab
+  loading: boolean
+  detalleCobrar: CuentaCobrarDetalle | null
+  detallePagar: CuentaPagarDetalle | null
+}
+
+const initialCuentaDetailState: CuentaDetailState = {
+  tab: 'info',
+  loading: false,
+  detalleCobrar: null,
+  detallePagar: null,
+}
+
+type CuentaDetailAction =
+  | { type: 'reset_for_cuenta' }
+  | { type: 'set_tab'; tab: DetailTab }
+  | { type: 'loaded_cobrar'; data: CuentaCobrarDetalle | null }
+  | { type: 'loaded_pagar'; data: CuentaPagarDetalle | null }
+
+/**
+ * Una sola transición por evento en vez de varios setState seguidos --
+ * mismo patrón que hooks/useQuotationPresence.ts. El reset al cambiar de
+ * cuenta (tab + loading + ambos detalles) pasa a ser UN dispatch, no 4
+ * setState sueltos, evitando el patrón que dispara react-hooks/set-state-in-effect.
+ */
+function cuentaDetailReducer(state: CuentaDetailState, action: CuentaDetailAction): CuentaDetailState {
+  switch (action.type) {
+    case 'reset_for_cuenta':
+      return { ...initialCuentaDetailState, loading: true }
+    case 'set_tab':
+      return { ...state, tab: action.tab }
+    case 'loaded_cobrar':
+      return { ...state, detalleCobrar: action.data, loading: false }
+    case 'loaded_pagar':
+      return { ...state, detallePagar: action.data, loading: false }
+    default:
+      return state
+  }
+}
+
 interface Props {
   cuenta: SelectedCuenta | null
   onClose: () => void
@@ -45,29 +86,22 @@ interface Props {
 }
 
 export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions, onRefresh }: Props) {
-  const [tab, setTab] = useState<DetailTab>('info')
-  const [loading, setLoading] = useState(false)
-  const [detalleCobrar, setDetalleCobrar] = useState<CuentaCobrarDetalle | null>(null)
-  const [detallePagar, setDetallePagar] = useState<CuentaPagarDetalle | null>(null)
+  const [{ tab, loading, detalleCobrar, detallePagar }, dispatch] = useReducer(cuentaDetailReducer, initialCuentaDetailState)
 
   useEffect(() => {
     if (!cuenta) return
 
     let cancelled = false
-    setTab('info')
-    setLoading(true)
-    setDetalleCobrar(null)
-    setDetallePagar(null)
+    dispatch({ type: 'reset_for_cuenta' })
 
     const run = async () => {
       if (cuenta.tipo === 'cobrar') {
         const data = await cobrarActions.cargarDetalle(cuenta.id)
-        if (!cancelled) setDetalleCobrar(data)
+        if (!cancelled) dispatch({ type: 'loaded_cobrar', data })
       } else {
         const data = await pagarActions.cargarDetalle(cuenta.id)
-        if (!cancelled) setDetallePagar(data)
+        if (!cancelled) dispatch({ type: 'loaded_pagar', data })
       }
-      if (!cancelled) setLoading(false)
     }
 
     run()
@@ -111,7 +145,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
             ].map((item) => (
               <button
                 key={item.key}
-                onClick={() => setTab(item.key as DetailTab)}
+                onClick={() => dispatch({ type: 'set_tab', tab: item.key as DetailTab })}
                 className={`px-4 py-2.5 rounded-t-lg text-sm font-medium transition-colors border-b-2 ${
                   tab === item.key
                     ? 'border-blue-500 text-blue-400'
@@ -181,7 +215,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                   onSubirComplemento={cobrarActions.subirComplemento}
                   onRefresh={async () => {
                     await onRefresh()
-                    setDetalleCobrar(await cobrarActions.cargarDetalle(cuentaCobrar.id))
+                    dispatch({ type: 'loaded_cobrar', data: await cobrarActions.cargarDetalle(cuentaCobrar.id) })
                   }}
                 />
               )}
@@ -194,7 +228,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                   onSubirFactura={pagarActions.subirFactura}
                   onRefresh={async () => {
                     await onRefresh()
-                    setDetallePagar(await pagarActions.cargarDetalle(cuentaPagar.id))
+                    dispatch({ type: 'loaded_pagar', data: await pagarActions.cargarDetalle(cuentaPagar.id) })
                   }}
                 />
               )}
@@ -208,7 +242,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                   onRegistrarPago={cobrarActions.registrarPago}
                   onRefresh={async () => {
                     await onRefresh()
-                    setDetalleCobrar(await cobrarActions.cargarDetalle(cuentaCobrar.id))
+                    dispatch({ type: 'loaded_cobrar', data: await cobrarActions.cargarDetalle(cuentaCobrar.id) })
                   }}
                 />
               )}
@@ -221,7 +255,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                   onRegistrarPago={pagarActions.registrarPago}
                   onRefresh={async () => {
                     await onRefresh()
-                    setDetallePagar(await pagarActions.cargarDetalle(cuentaPagar.id))
+                    dispatch({ type: 'loaded_pagar', data: await pagarActions.cargarDetalle(cuentaPagar.id) })
                   }}
                 />
               )}

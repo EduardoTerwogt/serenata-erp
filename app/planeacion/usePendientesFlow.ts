@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useReducer, useEffect } from 'react'
 import { ValidatedEventLine } from './usePlaneacionFlow'
 import { ServiceTemplate } from '@/lib/types'
 import { normalizarFechaISO } from '@/lib/parsers/eventInfoParser'
@@ -31,8 +31,72 @@ interface PendientesFlowState {
   totalCount: number
 }
 
+type PendientesFlowAction =
+  | { type: 'load_pendientes_start' }
+  | { type: 'load_pendientes_success'; pendientes: PendienteRow[] }
+  | { type: 'load_pendientes_error'; message: string }
+  | { type: 'load_templates_success'; templates: ServiceTemplate[] }
+  | { type: 'update_line'; lineId: string; updates: Partial<ValidatedEventLine> }
+  | { type: 'delete_line'; lineId: string }
+  | { type: 'set_error'; message: string }
+  | { type: 'go_to_confirmation' }
+  | { type: 'create_quotations_start' }
+  | { type: 'create_quotations_success'; deletedIds: string[]; message: string }
+  | { type: 'create_quotations_error'; message: string }
+  | { type: 'go_back' }
+
+/**
+ * Una sola transición por evento en vez de varios setState seguidos --
+ * mismo patrón que hooks/useQuotationPresence.ts. El estado ya vivía en un
+ * solo objeto, pero via useState: cualquier función invocada desde el
+ * efecto de montaje que internamente llame a un setter de useState dispara
+ * react-hooks/set-state-in-effect, sin importar si el setter está detrás de
+ * un await. Con useReducer, dispatch no cuenta como ese tipo de setter.
+ */
+function pendientesFlowReducer(state: PendientesFlowState, action: PendientesFlowAction): PendientesFlowState {
+  switch (action.type) {
+    case 'load_pendientes_start':
+      return { ...state, loading: true, error: '' }
+    case 'load_pendientes_success':
+      return { ...state, pendientes: action.pendientes, totalCount: action.pendientes.length, loading: false }
+    case 'load_pendientes_error':
+      return { ...state, loading: false, error: action.message }
+    case 'load_templates_success':
+      return { ...state, templates: action.templates }
+    case 'update_line':
+      return {
+        ...state,
+        pendientes: state.pendientes.map(line =>
+          line.id === action.lineId ? { ...line, ...action.updates } : line
+        ),
+      }
+    case 'delete_line':
+      return { ...state, pendientes: state.pendientes.filter(line => line.id !== action.lineId) }
+    case 'set_error':
+      return { ...state, error: action.message }
+    case 'go_to_confirmation':
+      return { ...state, step: 'confirmation', error: '' }
+    case 'create_quotations_start':
+      return { ...state, loading: true, error: '' }
+    case 'create_quotations_success':
+      return {
+        ...state,
+        loading: false,
+        step: 'list',
+        pendientes: state.pendientes.filter(p => !action.deletedIds.includes(p.id)),
+        error: action.message,
+      }
+    case 'create_quotations_error':
+      return { ...state, loading: false, error: action.message }
+    case 'go_back':
+      return { ...state, step: 'list', error: '' }
+    default:
+      return state
+  }
+}
+
 export function usePendientesFlow() {
-  const [state, setState] = useState<PendientesFlowState>({
+  const [state, dispatch] = useReducer(pendientesFlowReducer, {
     step: 'list',
     pendientes: [],
     templates: [],
@@ -41,8 +105,7 @@ export function usePendientesFlow() {
     totalCount: 0,
   })
 
-  const loadPendientes = async () => {
-    setState(s => ({ ...s, loading: true, error: '' }))
+  const fetchPendientes = async () => {
     try {
       const res = await fetch('/api/planeacion/pendientes')
       if (res.ok) {
@@ -59,18 +122,18 @@ export function usePendientesFlow() {
           cliente: p.cliente,
           proyecto: p.proyecto,
         }))
-        setState(s => ({
-          ...s,
-          pendientes,
-          totalCount: pendientes.length,
-          loading: false,
-        }))
+        dispatch({ type: 'load_pendientes_success', pendientes })
       } else {
-        setState(s => ({ ...s, loading: false, error: 'Error cargando pendientes' }))
+        dispatch({ type: 'load_pendientes_error', message: 'Error cargando pendientes' })
       }
     } catch {
-      setState(s => ({ ...s, loading: false, error: 'Error al cargar pendientes' }))
+      dispatch({ type: 'load_pendientes_error', message: 'Error al cargar pendientes' })
     }
+  }
+
+  const loadPendientes = async () => {
+    dispatch({ type: 'load_pendientes_start' })
+    await fetchPendientes()
   }
 
   const loadTemplates = async () => {
@@ -78,7 +141,7 @@ export function usePendientesFlow() {
       const res = await fetch('/api/service-templates')
       if (res.ok) {
         const templates = await res.json()
-        setState(s => ({ ...s, templates }))
+        dispatch({ type: 'load_templates_success', templates })
       }
     } catch {
       // Non-critical
@@ -86,25 +149,17 @@ export function usePendientesFlow() {
   }
 
   useEffect(() => {
-    loadPendientes()
+    fetchPendientes()
     loadTemplates()
   }, [])
 
   const handleLineUpdate = (lineId: string, updates: Partial<ValidatedEventLine>) => {
-    setState(s => ({
-      ...s,
-      pendientes: s.pendientes.map(line =>
-        line.id === lineId ? { ...line, ...updates } : line
-      ),
-    }))
+    dispatch({ type: 'update_line', lineId, updates })
   }
 
   const handleLineDelete = async (lineId: string) => {
     // Remove from UI immediately
-    setState(s => ({
-      ...s,
-      pendientes: s.pendientes.filter(line => line.id !== lineId),
-    }))
+    dispatch({ type: 'delete_line', lineId })
 
     // Persist deletion to BD (soft delete)
     try {
@@ -121,18 +176,11 @@ export function usePendientesFlow() {
     const toConfirm = state.pendientes.filter(line => line.action === 'confirmado')
 
     if (toConfirm.length === 0) {
-      setState(s => ({
-        ...s,
-        error: 'Marca al menos una fila como "Confirmado"',
-      }))
+      dispatch({ type: 'set_error', message: 'Marca al menos una fila como "Confirmado"' })
       return
     }
 
-    setState(s => ({
-      ...s,
-      step: 'confirmation',
-      error: '',
-    }))
+    dispatch({ type: 'go_to_confirmation' })
   }
 
   const getCreationSummary = () => {
@@ -144,14 +192,11 @@ export function usePendientesFlow() {
     const { toCreate } = getCreationSummary()
 
     if (toCreate.length === 0) {
-      setState(s => ({
-        ...s,
-        error: 'Selecciona al menos una fila como "Confirmado"',
-      }))
+      dispatch({ type: 'set_error', message: 'Selecciona al menos una fila como "Confirmado"' })
       return
     }
 
-    setState(s => ({ ...s, loading: true, error: '' }))
+    dispatch({ type: 'create_quotations_start' })
 
     try {
       const createdIds: string[] = []
@@ -226,29 +271,19 @@ export function usePendientesFlow() {
       // Show success message
       const message = `✓ ${createdIds.length} cotizaciones creadas en BORRADOR desde pendientes`
 
-      setState(s => ({
-        ...s,
-        loading: false,
-        step: 'list',
-        pendientes: s.pendientes.filter(p => !deletedIds.includes(p.id)),
-        error: message,
-      }))
+      dispatch({ type: 'create_quotations_success', deletedIds, message })
 
       setTimeout(() => {
         window.location.href = '/cotizaciones'
       }, 1500)
     } catch (err) {
       console.error('Error creating quotations from pendientes:', err)
-      setState(s => ({
-        ...s,
-        loading: false,
-        error: 'Error al crear cotizaciones',
-      }))
+      dispatch({ type: 'create_quotations_error', message: 'Error al crear cotizaciones' })
     }
   }
 
   const goBack = () => {
-    setState(s => ({ ...s, step: 'list', error: '' }))
+    dispatch({ type: 'go_back' })
   }
 
   return {

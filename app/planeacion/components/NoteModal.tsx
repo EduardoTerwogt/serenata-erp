@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useReducer, useEffect } from 'react'
 
 interface NoteModalProps {
   isOpen: boolean
@@ -10,14 +10,41 @@ interface NoteModalProps {
   onSave: (notas: string | null, notasAsociadas?: { [fechaISO: string]: string }) => void
 }
 
+interface DraftState {
+  notas: string
+  asociadas: { [k: string]: string }
+}
+
+type DraftAction =
+  | { type: 'reset'; notas: string; asociadas: { [k: string]: string } }
+  | { type: 'set_notas'; value: string }
+  | { type: 'set_asociada'; fecha: string; value: string }
+
+/**
+ * Una sola transición por evento en vez de varios setState seguidos --
+ * mismo patrón que hooks/useQuotationPresence.ts. Reinicializar el draft al
+ * abrir el modal pasa a ser UN dispatch, no 2 setState sueltos, evitando el
+ * patrón que dispara react-hooks/set-state-in-effect.
+ */
+function draftReducer(state: DraftState, action: DraftAction): DraftState {
+  switch (action.type) {
+    case 'reset':
+      return { notas: action.notas, asociadas: action.asociadas }
+    case 'set_notas':
+      return { ...state, notas: action.value }
+    case 'set_asociada':
+      return { ...state, asociadas: { ...state.asociadas, [action.fecha]: action.value } }
+    default:
+      return state
+  }
+}
+
 export default function NoteModal({ isOpen, onClose, notas, notasAsociadas, onSave }: NoteModalProps) {
-  const [draftNotas, setDraftNotas] = useState(notas || '')
-  const [draftAsociadas, setDraftAsociadas] = useState<{ [k: string]: string }>(notasAsociadas || {})
+  const [draft, dispatch] = useReducer(draftReducer, { notas: notas || '', asociadas: notasAsociadas || {} })
 
   useEffect(() => {
     if (isOpen) {
-      setDraftNotas(notas || '')
-      setDraftAsociadas(notasAsociadas || {})
+      dispatch({ type: 'reset', notas: notas || '', asociadas: notasAsociadas || {} })
     }
   }, [isOpen, notas, notasAsociadas])
 
@@ -31,12 +58,12 @@ export default function NoteModal({ isOpen, onClose, notas, notasAsociadas, onSa
 
   if (!isOpen) return null
 
-  const hasAsociadas = Object.keys(draftAsociadas).length > 0
+  const hasAsociadas = Object.keys(draft.asociadas).length > 0
 
   const handleSave = () => {
     onSave(
-      draftNotas.trim() || null,
-      hasAsociadas ? draftAsociadas : undefined
+      draft.notas.trim() || null,
+      hasAsociadas ? draft.asociadas : undefined
     )
     onClose()
   }
@@ -65,8 +92,8 @@ export default function NoteModal({ isOpen, onClose, notas, notasAsociadas, onSa
         <div className="mb-4">
           <label className="text-xs text-gray-400 mb-1.5 block">Nota del evento</label>
           <textarea
-            value={draftNotas}
-            onChange={e => setDraftNotas(e.target.value)}
+            value={draft.notas}
+            onChange={e => dispatch({ type: 'set_notas', value: e.target.value })}
             rows={3}
             autoFocus
             className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 resize-none"
@@ -79,13 +106,13 @@ export default function NoteModal({ isOpen, onClose, notas, notasAsociadas, onSa
           <div className="mb-5">
             <label className="text-xs text-gray-400 mb-2 block">Contexto por fecha</label>
             <div className="space-y-2">
-              {Object.entries(draftAsociadas).map(([fecha, nota]) => (
+              {Object.entries(draft.asociadas).map(([fecha, nota]) => (
                 <div key={fecha} className="flex gap-2 items-center">
                   <span className="text-xs text-orange-600 font-medium flex-shrink-0 min-w-fit">{fecha}:</span>
                   <input
                     type="text"
                     value={nota}
-                    onChange={e => setDraftAsociadas(prev => ({ ...prev, [fecha]: e.target.value }))}
+                    onChange={e => dispatch({ type: 'set_asociada', fecha, value: e.target.value })}
                     className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500"
                   />
                 </div>
