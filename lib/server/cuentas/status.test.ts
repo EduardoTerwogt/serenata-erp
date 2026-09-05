@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calcularEstadoCuentaCobrarDetallado, calcularEstadoOrdenPago, calcularSaldoPendiente } from '@/lib/server/cuentas/status'
+import { calcularEstadoCuentaCobrarDetallado, calcularSaldoPendiente } from '@/lib/server/cuentas/status'
 import type { EstadoCuentaCobrar } from '@/lib/types'
 
 describe('cuentas/status', () => {
@@ -25,23 +25,6 @@ describe('cuentas/status', () => {
       fechaVencimiento: '2026-01-01',
       today: new Date('2026-04-09T12:00:00Z'),
     })).toBe('VENCIDO')
-  })
-
-  it('calcula estado de orden de pago', () => {
-    expect(calcularEstadoOrdenPago([
-      { x_pagar: 100, monto_pagado: 0 },
-      { x_pagar: 200, monto_pagado: 0 },
-    ])).toBe('GENERADA')
-
-    expect(calcularEstadoOrdenPago([
-      { x_pagar: 100, monto_pagado: 100 },
-      { x_pagar: 200, monto_pagado: 0 },
-    ])).toBe('PARCIALMENTE_PAGADA')
-
-    expect(calcularEstadoOrdenPago([
-      { x_pagar: 100, monto_pagado: 100 },
-      { x_pagar: 200, monto_pagado: 200 },
-    ])).toBe('COMPLETADA')
   })
 
   it('rejects invalid estado PENDIENTE for cuentas cobrar', () => {

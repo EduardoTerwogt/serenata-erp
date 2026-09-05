@@ -1,10 +1,9 @@
 import { requireSection } from '@/lib/api-auth'
-import { createDocumentoCuentaPagar, getCuentasPagar, getProyectoById, updateCuentaPagar, updateOrdenPago } from '@/lib/db'
+import { createDocumentoCuentaPagar, getCuentasPagar, getProyectoById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { supabaseAdmin } from '@/lib/supabase'
-import { calcularEstadoOrdenPago, calcularSaldoPendiente } from '@/lib/server/cuentas/status'
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -55,43 +54,23 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       })
     }
 
-    const nuevoEstado = totalPagado >= cuenta.x_pagar ? 'PAGADO' : 'PENDIENTE'
-
-    const cuentaActualizada = await updateCuentaPagar(id, {
-      estado: nuevoEstado,
-      monto_pagado: totalPagado,
-      fecha_pago: nuevoEstado === 'PAGADO' ? new Date().toISOString().split('T')[0] : cuenta.fecha_pago,
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('registrar_pago_cuenta_pagar', {
+      p_cuenta_id: id,
+      p_monto: monto,
     })
 
-    let ordenPagoActualizada = null
-    if (cuenta.orden_pago_id) {
-      const { data: cuentasOrden, error: cuentasOrdenError } = await supabaseAdmin
-        .from('cuentas_pagar')
-        .select('id, x_pagar, monto_pagado')
-        .eq('orden_pago_id', cuenta.orden_pago_id)
-
-      if (cuentasOrdenError) throw cuentasOrdenError
-
-      const cuentasConEstadoActual = (cuentasOrden || []).map((row) =>
-        row.id === id
-          ? { x_pagar: row.x_pagar, monto_pagado: totalPagado }
-          : { x_pagar: row.x_pagar, monto_pagado: row.monto_pagado ?? undefined }
-      )
-
-      const estadoOrden = calcularEstadoOrdenPago(cuentasConEstadoActual)
-      ordenPagoActualizada = await updateOrdenPago(cuenta.orden_pago_id, { estado: estadoOrden })
+    if (rpcError) {
+      return Response.json({ error: rpcError.message }, { status: 400 })
     }
 
     triggerSheetsSync('cuentas_pagar')
 
     return Response.json({
       success: true,
-      cuenta: cuentaActualizada,
-      orden_pago: ordenPagoActualizada,
       resumen: {
-        monto_pagado_total: totalPagado,
-        saldo_pendiente: calcularSaldoPendiente(cuenta.x_pagar, totalPagado),
-        estado_nuevo: nuevoEstado,
+        monto_pagado_total: rpcResult.monto_pagado_total,
+        saldo_pendiente: rpcResult.saldo_pendiente,
+        estado_nuevo: rpcResult.estado_nuevo,
         comprobante_url: comprobanteUrl,
       },
     })

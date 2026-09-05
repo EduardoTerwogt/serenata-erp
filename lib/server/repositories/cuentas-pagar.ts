@@ -281,17 +281,6 @@ export async function getOrdenesPago() {
   return data as OrdenPago[]
 }
 
-export async function updateOrdenPago(id: string, updates: Partial<OrdenPago>) {
-  const { data, error } = await supabaseAdmin
-    .from('ordenes_pago')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as OrdenPago
-}
-
 export async function getCuentasPagarPendientesEventosRealizados() {
   const hoy = new Date().toISOString().split('T')[0]
   const { data, error } = await supabaseAdmin

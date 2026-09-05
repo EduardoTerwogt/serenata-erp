@@ -1,4 +1,4 @@
-import { EstadoCuentaCobrar, OrdenPago, CuentaPagar } from '@/lib/types'
+import { EstadoCuentaCobrar } from '@/lib/types'
 
 export interface CuentaCobrarStatusInput {
   montoPagado: number
@@ -42,18 +42,4 @@ export function calcularEstadoCuentaCobrarLegacy(montoPagado: number, montoTotal
     montoTotal,
     isFacturada: true,
   })
-}
-
-export function calcularEstadoOrdenPago(
-  cuentas: Pick<CuentaPagar, 'x_pagar' | 'monto_pagado'>[]
-): OrdenPago['estado'] {
-  if (cuentas.length === 0) return 'GENERADA'
-
-  const allPaid = cuentas.every((cuenta) => Number(cuenta.monto_pagado || 0) >= Number(cuenta.x_pagar || 0))
-  if (allPaid) return 'COMPLETADA'
-
-  const anyPaid = cuentas.some((cuenta) => Number(cuenta.monto_pagado || 0) > 0)
-  if (anyPaid) return 'PARCIALMENTE_PAGADA'
-
-  return 'GENERADA'
 }
