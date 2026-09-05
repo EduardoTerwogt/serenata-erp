@@ -1,4 +1,5 @@
-import { Page, Route } from '@playwright/test'
+import { Page } from '@playwright/test'
+import { fulfillJson } from './http'
 
 export const E2E_IDS = {
   cobrarId: 'cc-1',
@@ -8,14 +9,6 @@ export const E2E_IDS = {
 
 function buildFakePdfBuffer() {
   return Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<<>>\n%%EOF', 'utf-8')
-}
-
-async function fulfillJson(route: Route, data: unknown, status = 200) {
-  await route.fulfill({
-    status,
-    contentType: 'application/json',
-    body: JSON.stringify(data),
-  })
 }
 
 export async function mockCuentasApis(page: Page) {

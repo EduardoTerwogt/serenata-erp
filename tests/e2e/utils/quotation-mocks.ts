@@ -1,12 +1,5 @@
-import { Page, Route } from '@playwright/test'
-
-async function fulfillJson(route: Route, data: unknown, status = 200) {
-  await route.fulfill({
-    status,
-    contentType: 'application/json',
-    body: JSON.stringify(data),
-  })
-}
+import { Page } from '@playwright/test'
+import { fulfillJson } from './http'
 
 export async function mockNuevaCotizacionApis(page: Page) {
   await page.route('**/api/folio', async (route) => {
