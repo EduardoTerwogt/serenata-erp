@@ -55,7 +55,7 @@ jobs:
     # El Punto 4 decide si esto se vuelve automatico en cada push a main.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       AUTH_SECRET: live-e2e-secret
       AUTH_TRUST_HOST: 'true'

@@ -22,3 +22,25 @@ export async function cleanupLiveCotizacion(cotizacionId: string) {
   await supabase.from('proyectos').delete().eq('id', cotizacionId)
   await supabase.from('cotizaciones').delete().eq('id', cotizacionId)
 }
+
+/**
+ * Barre y limpia TODAS las cotizaciones cuyo cliente empiece con el prefijo
+ * dado. Más robusto que limpiar por un id capturado en el test: si el test
+ * falla antes de poder leer el id de la URL (timeout, error real, etc.) la
+ * cotización ya quedó creada en Supabase real y quedaría huérfana para
+ * siempre. Se usa antes y después de cada corrida para no acumular basura
+ * entre intentos fallidos de CI.
+ */
+export async function cleanupLiveCotizacionesByPrefix(clientePrefix: string) {
+  const supabase = getLiveSupabaseAdmin()
+  const { data: rows, error } = await supabase
+    .from('cotizaciones')
+    .select('id')
+    .ilike('cliente', `${clientePrefix}%`)
+
+  if (error) throw error
+
+  for (const row of rows ?? []) {
+    await cleanupLiveCotizacion(row.id)
+  }
+}

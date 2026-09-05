@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { login } from '../utils/auth'
-import { cleanupLiveCotizacion } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix } from '../utils/live-cleanup'
+
+const LIVE_TEST_CLIENTE_PREFIX = 'E2E-LIVE-'
 
 const liveEnabled = Boolean(
   process.env.PLAYWRIGHT_BASE_URL &&
@@ -27,6 +29,15 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
   let happyPathId: string | null = null
   let cancelId: string | null = null
 
+  // Barre huérfanas de corridas anteriores fallidas (p.ej. si un test murió
+  // después de crear la cotización real pero antes de poder leer su id de
+  // la URL) para no arrancar sobre basura acumulada.
+  test.beforeAll(async () => {
+    await cleanupLiveCotizacionesByPrefix(LIVE_TEST_CLIENTE_PREFIX).catch((e) =>
+      console.error('[live cleanup] barrido inicial:', e)
+    )
+  })
+
   test.afterEach(async () => {
     if (happyPathId) {
       await cleanupLiveCotizacion(happyPathId).catch((e) => console.error('[live cleanup] happy path:', e))
@@ -38,11 +49,23 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     }
   })
 
+  // Red de seguridad: si un test murió antes de capturar el id (timeout,
+  // error real), esta cotización ya existe en Supabase real y el afterEach
+  // de arriba no la limpia -- el barrido final por prefijo sí.
+  test.afterAll(async () => {
+    await cleanupLiveCotizacionesByPrefix(LIVE_TEST_CLIENTE_PREFIX).catch((e) =>
+      console.error('[live cleanup] barrido final:', e)
+    )
+  })
+
   test('crear -> emitir -> aprobar -> cuentas generadas -> subir factura real a Drive -> registrar pago', async ({ page }) => {
     // Flujo con ~8 llamadas de red reales secuenciales (Supabase + 2 uploads
     // reales a Google Drive + 2 registros de pago) -- el timeout global de
-    // 30s de playwright.config.ts no alcanza.
-    test.setTimeout(120_000)
+    // 30s de playwright.config.ts no alcanza. Ademas "Generar Cotizacion"
+    // encadena crear + generar PDF real + subir PDF real a Drive (puede
+    // crear carpetas nuevas) ANTES de navegar -- cada expect individual de
+    // mas abajo tambien necesita margen generoso, no solo el timeout global.
+    test.setTimeout(300_000)
 
     const suffix = Date.now()
     const cliente = `E2E-LIVE-${suffix}`
@@ -58,8 +81,11 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await firstRow.locator('td').nth(3).locator('input').fill('1000')
     await firstRow.locator('td').nth(6).locator('input').fill('500') // x_pagar
 
+    // "Generar Cotizacion" encadena crear + generar PDF real + subir PDF a
+    // Drive (puede crear carpetas nuevas) antes de navegar -- necesita mucho
+    // mas que el default.
     await page.getByRole('button', { name: 'Generar Cotizacion' }).click()
-    await expect(page).toHaveURL(/\/cotizaciones\/(SH[A-Z0-9-]+)/, { timeout: 20_000 })
+    await expect(page).toHaveURL(/\/cotizaciones\/(SH[A-Z0-9-]+)/, { timeout: 60_000 })
 
     const url = page.url()
     const cotizacionId = url.split('/cotizaciones/')[1]
@@ -69,7 +95,7 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
 
     // 2. Aprobar por el flujo normal de la app (no RPC directo)
     await page.getByRole('button', { name: 'Aprobar Cotización' }).click()
-    await expect(page.getByText('¡Cotización aprobada! Proyecto y cuentas creados.')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('¡Cotización aprobada! Proyecto y cuentas creados.')).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText('APROBADA', { exact: true })).toBeVisible()
 
     // 3. Confirmar por API real que se generaron cuenta por cobrar y por pagar
@@ -93,10 +119,10 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await fileInputs.nth(0).setInputFiles({ name: 'factura.xml', mimeType: 'application/xml', buffer: Buffer.from(facturaXml, 'utf-8') })
     await fileInputs.nth(1).setInputFiles({ name: 'factura.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8') })
     await page.getByRole('button', { name: 'Subir Factura' }).click()
-    await expect(page.getByText('Factura subida correctamente')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('Factura subida correctamente')).toBeVisible({ timeout: 45_000 })
 
     const facturaLink = page.getByRole('link', { name: 'Ver' }).first()
-    await expect(facturaLink).toHaveAttribute('href', /drive\.google\.com/, { timeout: 10_000 })
+    await expect(facturaLink).toHaveAttribute('href', /drive\.google\.com/, { timeout: 15_000 })
 
     // 5. Registrar pago real en Cuentas por Cobrar
     await page.getByRole('button', { name: 'Registrar Pago', exact: true }).click()
@@ -105,7 +131,7 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await cobrarForm.getByText('Fecha de Pago', { exact: true }).locator('xpath=following-sibling::*[1]').click()
     await cobrarForm.locator('input[type="date"]').fill('2026-06-05')
     await cobrarForm.getByRole('button', { name: 'Registrar Pago' }).click()
-    await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText(/PAGADO/i).first()).toBeVisible()
 
     await page.getByLabel('Cerrar').click()
@@ -120,21 +146,21 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await pagarFileInputs.nth(0).setInputFiles({ name: 'factura_proveedor.xml', mimeType: 'application/xml', buffer: Buffer.from(facturaProvXml, 'utf-8') })
     await pagarFileInputs.nth(1).setInputFiles({ name: 'factura_proveedor.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8') })
     await page.getByRole('button', { name: 'Subir Factura Proveedor' }).click()
-    await expect(page.getByText('Factura proveedor subida correctamente')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('Factura proveedor subida correctamente')).toBeVisible({ timeout: 45_000 })
 
     const facturaProvLink = page.getByRole('link', { name: 'Ver' }).first()
-    await expect(facturaProvLink).toHaveAttribute('href', /drive\.google\.com/, { timeout: 10_000 })
+    await expect(facturaProvLink).toHaveAttribute('href', /drive\.google\.com/, { timeout: 15_000 })
 
     // 7. Registrar pago real en Cuentas por Pagar
     await page.getByRole('button', { name: 'Registrar Pago', exact: true }).click()
     const pagarForm = page.locator('form')
     await pagarForm.locator('input[placeholder="0.00"]').fill(String(cuentaPagar!.x_pagar))
     await pagarForm.getByRole('button', { name: 'Registrar Pago' }).click()
-    await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible({ timeout: 30_000 })
   })
 
   test('cancela una cotización real y revierte cuentas/proyecto', async ({ page }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(150_000)
 
     const suffix = Date.now()
     const cliente = `E2E-LIVE-CANCEL-${suffix}`
@@ -148,8 +174,9 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await firstRow.locator('td').nth(1).locator('input').fill('Item a cancelar E2E live')
     await firstRow.locator('td').nth(3).locator('input').fill('500')
 
+    // Mismo costo real que en el flujo feliz: crear + generar PDF + subir a Drive.
     await page.getByRole('button', { name: 'Generar Cotizacion' }).click()
-    await expect(page).toHaveURL(/\/cotizaciones\/(SH[A-Z0-9-]+)/, { timeout: 20_000 })
+    await expect(page).toHaveURL(/\/cotizaciones\/(SH[A-Z0-9-]+)/, { timeout: 60_000 })
 
     const url = page.url()
     const cotizacionId = url.split('/cotizaciones/')[1]
@@ -160,7 +187,7 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     page.once('dialog', (dialog) => dialog.accept())
     await page.getByRole('button', { name: 'Cancelar' }).click()
 
-    await expect(page.getByText('Cotización cancelada. Proyecto y cuentas eliminados.')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('Cotización cancelada. Proyecto y cuentas eliminados.')).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText('CANCELADA', { exact: true })).toBeVisible()
 
     // Confirmar por API real que no quedó ninguna cuenta generada
