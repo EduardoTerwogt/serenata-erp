@@ -1,10 +1,9 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasCobrar, updateCuentaCobrar, createPagoComprobante, getPagosComprobantesByCuenta, createDocumentoCuentaCobrar, getProyectoById } from '@/lib/db'
+import { getCuentasCobrar, getPagosComprobantesByCuenta, createDocumentoCuentaCobrar, getProyectoById } from '@/lib/db'
+import { supabaseAdmin } from '@/lib/supabase'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
-import { calcularEstadoCuentaCobrarDetallado, calcularSaldoPendiente } from '@/lib/server/cuentas/status'
-import type { TipoPago } from '@/lib/types'
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -73,39 +72,28 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       })
     }
 
-    const pagoCobrar = await createPagoComprobante({
-      cuentas_cobrar_id: id,
-      monto,
-      tipo_pago: tipoPago as TipoPago,
-      fecha_pago: fechaPago,
-      comprobante_url: comprobanteUrl || '',
-      archivo_nombre: comprobante?.name || `pago_${fechaPago}`,
-      notas,
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('registrar_pago_cuenta_cobrar', {
+      p_cuenta_id: id,
+      p_monto: monto,
+      p_tipo_pago: tipoPago,
+      p_fecha_pago: fechaPago,
+      p_comprobante_url: comprobanteUrl || '',
+      p_archivo_nombre: comprobante?.name || `pago_${fechaPago}`,
+      p_notas: notas,
     })
 
-    const nuevoEstado = calcularEstadoCuentaCobrarDetallado({
-      montoPagado: nuevoTotal,
-      montoTotal: cuenta.monto_total,
-      fechaVencimiento: cuenta.fecha_vencimiento,
-      isFacturada: true,
-    })
-
-    const cuentaActualizada = await updateCuentaCobrar(id, {
-      estado: nuevoEstado,
-      monto_pagado: nuevoTotal,
-      fecha_pago: nuevoEstado === 'PAGADO' ? fechaPago : cuenta.fecha_pago,
-    })
+    if (rpcError) {
+      return Response.json({ error: rpcError.message }, { status: 400 })
+    }
 
     triggerSheetsSync('cuentas_cobrar')
 
     return Response.json({
       success: true,
-      pago: pagoCobrar,
-      cuenta: cuentaActualizada,
       resumen: {
-        monto_pagado_total: nuevoTotal,
-        monto_pendiente: calcularSaldoPendiente(cuenta.monto_total, nuevoTotal),
-        estado_nuevo: nuevoEstado,
+        monto_pagado_total: rpcResult.monto_pagado_total,
+        monto_pendiente: rpcResult.monto_pendiente,
+        estado_nuevo: rpcResult.estado_nuevo,
       },
     })
   } catch (error) {

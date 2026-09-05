@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-function getLiveSupabaseAdmin() {
+export function getLiveSupabaseAdmin() {
   const url = process.env.TEST_SUPABASE_URL
   const key = process.env.TEST_SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {

@@ -71,16 +71,6 @@ export async function deleteDocumentoCuentaCobrar(id: string) {
   if (error) throw error
 }
 
-export async function createPagoComprobante(pago: Partial<PagoComprobante>) {
-  const { data, error } = await supabaseAdmin
-    .from('pagos_comprobantes')
-    .insert(pago)
-    .select()
-    .single()
-  if (error) throw error
-  return data as PagoComprobante
-}
-
 export async function getPagosComprobantesByCuenta(cuentaId: string) {
   const { data, error } = await supabaseAdmin
     .from('pagos_comprobantes')
