@@ -53,7 +53,7 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await firstRow.locator('td').nth(3).locator('input').fill('1000')
     await firstRow.locator('td').nth(6).locator('input').fill('500') // x_pagar
 
-    await page.getByRole('button', { name: 'Generar Cotización' }).click()
+    await page.getByRole('button', { name: 'Generar Cotizacion' }).click()
     await expect(page).toHaveURL(/\/cotizaciones\/(SH[A-Z0-9-]+)/, { timeout: 20_000 })
 
     const url = page.url()
@@ -141,7 +141,7 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await firstRow.locator('td').nth(1).locator('input').fill('Item a cancelar E2E live')
     await firstRow.locator('td').nth(3).locator('input').fill('500')
 
-    await page.getByRole('button', { name: 'Generar Cotización' }).click()
+    await page.getByRole('button', { name: 'Generar Cotizacion' }).click()
     await expect(page).toHaveURL(/\/cotizaciones\/(SH[A-Z0-9-]+)/, { timeout: 20_000 })
 
     const url = page.url()
