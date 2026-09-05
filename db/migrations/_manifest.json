@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-05T01:45:00.000Z",
-  "count": 29,
+  "generated_at": "2026-09-05T01:56:00.000Z",
+  "count": 30,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -30,6 +30,7 @@
     "20260423_fix_search_indexes_trgm.sql",
     "20260424_fix_cancel_cotizacion_ambiguous_column.sql",
     "20260425_drop_dead_cancel_cotizacion_uuid_overload.sql",
-    "20260905_fix_documentos_cuentas_pagar_y_estado_vencido.sql"
+    "20260905_fix_documentos_cuentas_pagar_y_estado_vencido.sql",
+    "20260905_add_fecha_factura_to_cuentas_pagar.sql"
   ]
 }
