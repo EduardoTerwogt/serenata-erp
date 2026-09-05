@@ -39,6 +39,11 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
   })
 
   test('crear -> emitir -> aprobar -> cuentas generadas -> subir factura real a Drive -> registrar pago', async ({ page }) => {
+    // Flujo con ~8 llamadas de red reales secuenciales (Supabase + 2 uploads
+    // reales a Google Drive + 2 registros de pago) -- el timeout global de
+    // 30s de playwright.config.ts no alcanza.
+    test.setTimeout(120_000)
+
     const suffix = Date.now()
     const cliente = `E2E-LIVE-${suffix}`
     const proyecto = `Live Flow ${suffix}`
@@ -129,6 +134,8 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
   })
 
   test('cancela una cotización real y revierte cuentas/proyecto', async ({ page }) => {
+    test.setTimeout(60_000)
+
     const suffix = Date.now()
     const cliente = `E2E-LIVE-CANCEL-${suffix}`
     const proyecto = `Live Cancel ${suffix}`
