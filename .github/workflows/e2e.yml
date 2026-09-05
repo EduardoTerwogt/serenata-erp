@@ -49,3 +49,64 @@ jobs:
             playwright-report
             test-results
           if-no-files-found: ignore
+
+  live:
+    # Solo se dispara manualmente (Fase 4.5, Punto 3) -- nunca en push/PR.
+    # El Punto 4 decide si esto se vuelve automatico en cada push a main.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AUTH_SECRET: live-e2e-secret
+      AUTH_TRUST_HOST: 'true'
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN_TEST }}
+      GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_DRIVE_FOLDER_ID_CUENTAS: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build app against the test environment
+        run: npm run build
+
+      - name: Start app in background
+        run: nohup npx next start > next-start.log 2>&1 &
+
+      - name: Wait for app to be ready
+        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
+
+      - name: Run live integration tests
+        run: npm run test:e2e:live
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-live-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
