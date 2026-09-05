@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { calcularEstadoCuentaCobrarDetallado, calcularEstadoOrdenPago, calcularSaldoPendiente } from '@/lib/server/cuentas/status'
+import type { EstadoCuentaCobrar } from '@/lib/types'
 
 describe('cuentas/status', () => {
   it('calcula saldo pendiente sin negativos', () => {
@@ -46,6 +47,6 @@ describe('cuentas/status', () => {
   it('rejects invalid estado PENDIENTE for cuentas cobrar', () => {
     // Este test documenta que PENDIENTE es inválido según EstadoCuentaCobrar
     const validEstados: EstadoCuentaCobrar[] = ['FACTURA_PENDIENTE', 'FACTURADO', 'PARCIALMENTE_PAGADO', 'PAGADO', 'VENCIDO']
-    expect(validEstados).not.toContain('PENDIENTE' as any)
+    expect(validEstados as string[]).not.toContain('PENDIENTE')
   })
 })

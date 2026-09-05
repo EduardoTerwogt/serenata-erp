@@ -20,8 +20,14 @@ vi.mock('@/lib/integrations/sheets/trigger', () => ({
   triggerSheetsSync: vi.fn(),
 }))
 
+// Import de solo tipo -- se borra en compilación, no dispara la resolución
+// real del módulo mockeado (a diferencia del import runtime de más abajo).
+import type { supabaseAdmin as SupabaseAdminType } from '@/lib/supabase'
+
+type SupabaseFrom = typeof SupabaseAdminType.from
+
 // Mock Supabase with proper chainable API
-const createChainableMock = (data: any, error: any = null) => {
+const createChainableMock = (data: unknown, error: unknown = null) => {
   const chain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
@@ -31,8 +37,8 @@ const createChainableMock = (data: any, error: any = null) => {
     upsert: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue({ data, error }),
     then: vi.fn((callback) => callback({ data, error })),
-  } as any
-  return chain
+  }
+  return chain as unknown as ReturnType<SupabaseFrom>
 }
 
 vi.mock('@/lib/supabase', () => {
@@ -65,7 +71,7 @@ describe('Cache Invalidation', () => {
       const clientesData = [{ id: '1', nombre: 'ACME', proyectos: [] }]
 
       vi.mocked(supabaseAdmin.from).mockReturnValue(
-        createChainableMock(clientesData) as any,
+        createChainableMock(clientesData),
       )
 
       // First call should make DB query
@@ -91,7 +97,7 @@ describe('Cache Invalidation', () => {
 
       // Mock GET response
       vi.mocked(supabaseAdmin.from).mockReturnValue(
-        createChainableMock(clientesData) as any,
+        createChainableMock(clientesData),
       )
 
       // Populate cache
@@ -102,7 +108,7 @@ describe('Cache Invalidation', () => {
 
       // Mock POST response
       vi.mocked(supabaseAdmin.from).mockReturnValue(
-        createChainableMock(newClientData) as any,
+        createChainableMock(newClientData),
       )
 
       // POST should invalidate cache
@@ -118,7 +124,7 @@ describe('Cache Invalidation', () => {
 
       const updatedData = [...clientesData, newClientData]
       vi.mocked(supabaseAdmin.from).mockReturnValue(
-        createChainableMock(updatedData) as any,
+        createChainableMock(updatedData),
       )
 
       // Next GET should query DB (cache was invalidated), not use cache
@@ -133,7 +139,7 @@ describe('Cache Invalidation', () => {
       const audioData = [{ id: '1', descripcion: 'Audio', precio_unitario: 1000 }]
 
       vi.mocked(supabaseAdmin.from).mockReturnValue(
-        createChainableMock(audioData) as any,
+        createChainableMock(audioData),
       )
 
       // First search: "audio"
@@ -163,7 +169,7 @@ describe('Cache Invalidation', () => {
 
       // Mock GET response
       vi.mocked(supabaseAdmin.from).mockReturnValue(
-        createChainableMock(productosData) as any,
+        createChainableMock(productosData),
       )
 
       // Populate cache
@@ -174,7 +180,7 @@ describe('Cache Invalidation', () => {
 
       // Mock POST response
       vi.mocked(supabaseAdmin.from).mockReturnValue(
-        createChainableMock(newProductData) as any,
+        createChainableMock(newProductData),
       )
 
       // POST should invalidate cache
@@ -189,7 +195,7 @@ describe('Cache Invalidation', () => {
       vi.mocked(supabaseAdmin.from).mockClear()
       const updatedData = [...productosData, newProductData]
       vi.mocked(supabaseAdmin.from).mockReturnValue(
-        createChainableMock(updatedData) as any,
+        createChainableMock(updatedData),
       )
 
       // Next GET should query DB (cache was invalidated)
@@ -239,7 +245,7 @@ describe('Cache Invalidation', () => {
     it('queries DB on each call if previous call had no data to cache', async () => {
       // First call returns empty (simulating no matching records)
       vi.mocked(supabaseAdmin.from).mockReturnValue(
-        createChainableMock([]) as any,
+        createChainableMock([]),
       )
 
       const response1 = await getClientes(new Request('http://localhost/api/clientes'))

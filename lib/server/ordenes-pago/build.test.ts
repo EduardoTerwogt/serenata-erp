@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { buildOrdenPagoPreview } from '@/lib/server/ordenes-pago/build'
+import type { CuentaPagarConJoins } from '@/lib/server/repositories/cuentas-pagar'
 
 describe('ordenes-pago/build', () => {
   it('agrupa por responsable y evento', () => {
-    const result = buildOrdenPagoPreview([
+    const cuentas: CuentaPagarConJoins[] = [
       {
         id: '1',
         cotizacion_id: 'SH001',
@@ -46,7 +47,8 @@ describe('ordenes-pago/build', () => {
         metodo_pago: null,
         notas: null,
       },
-    ] as any)
+    ]
+    const result = buildOrdenPagoPreview(cuentas)
 
     expect(result.resumen.responsables).toBe(1)
     expect(result.resumen.eventos).toBe(1)
