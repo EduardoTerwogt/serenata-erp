@@ -1,6 +1,6 @@
 import { test, expect, Page } from '@playwright/test'
 import { login } from '../utils/auth'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
 
 const LIVE_TEST_CLIENTE_PREFIX = 'E2E-LIVE-'
 
@@ -66,10 +66,15 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
 
   // Barre huérfanas de corridas anteriores fallidas (p.ej. si un test murió
   // después de crear la cotización real pero antes de poder leer su id de
-  // la URL) para no arrancar sobre basura acumulada.
+  // la URL) para no arrancar sobre basura acumulada. También limpia
+  // reservas de folio huérfanas (ver cleanupOrphanedFolioReservations) --
+  // causa real confirmada del fallo "duplicate key ... folio_key" en CI.
   test.beforeAll(async () => {
     await cleanupLiveCotizacionesByPrefix(LIVE_TEST_CLIENTE_PREFIX).catch((e) =>
       console.error('[live cleanup] barrido inicial:', e)
+    )
+    await cleanupOrphanedFolioReservations().catch((e) =>
+      console.error('[live cleanup] reservas de folio huerfanas:', e)
     )
   })
 
