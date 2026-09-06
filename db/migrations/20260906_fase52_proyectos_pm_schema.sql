@@ -43,6 +43,18 @@
 -- índice -- corregido agregando idx_proyecto_tareas_asignado_a abajo
 -- (aplicado como ajuste incremental en test, incluido aquí para que
 -- producción lo reciba completo en una sola pasada).
+--
+-- Aplicado a producción (fwmyoqokcjtldiofuxdg) el 2026-09-06 vía
+-- mcp__Supabase__apply_migration, con confirmación explícita del usuario.
+-- Verificado post-aplicación: 3 tipos x 4 etapas (12 filas). Los 15
+-- proyectos existentes en producción (SH001-SH060) quedaron enlazados a
+-- Grabación con la etapa exacta que corresponde a su `estado` actual
+-- (FINALIZADO→Finalizado, PREPRODUCCION→Preproducción), sin que ningún
+-- `estado` visible cambiara. get_advisors (security + performance)
+-- revisado: 0 hallazgos nuevos de nivel WARN o superior -- los únicos
+-- hallazgos sobre las tablas nuevas son INFO esperados (rls_enabled_no_policy,
+-- mismo patrón sin políticas propias del resto del proyecto; unused_index,
+-- normal en tablas recién creadas sin tráfico aún).
 
 BEGIN;
 
