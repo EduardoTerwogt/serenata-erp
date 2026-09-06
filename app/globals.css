@@ -284,29 +284,36 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 /* Texturas de marca -- degradado de color detrás de un blur fuerte + scrim,
    igual receta que Sidebar.jsx/SectionHero.jsx del kit. Solo tocan background/
-   position, nunca color de texto, para no repetir el bug de .sn-display. */
-.sn-rail-texture {
-  position: relative;
-  overflow: hidden;
-  background: var(--sn-texture-rail);
-}
-.sn-rail-texture::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  backdrop-filter: blur(80px);
-  background: rgba(12, 15, 20, .42);
-}
-.sn-hero-texture {
-  position: relative;
-  overflow: hidden;
-  background: var(--sn-texture);
-  background-size: cover;
-}
-.sn-hero-texture::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  backdrop-filter: blur(48px);
-  background: var(--sn-texture-scrim);
+   position, nunca color de texto, para no repetir el bug de .sn-display.
+   IMPORTANTE -- van dentro de @layer components: el sidebar necesita
+   `fixed` (utilidad de Tailwind) además de esta clase, y sin @layer el
+   `position: relative` de aquí (CSS plano, fuera de capas) le gana a
+   `fixed` sin importar el orden -- pasó en el commit que reinstaló esta
+   textura y rompió el posicionamiento fijo del sidebar en producción. */
+@layer components {
+  .sn-rail-texture {
+    position: relative;
+    overflow: hidden;
+    background: var(--sn-texture-rail);
+  }
+  .sn-rail-texture::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    backdrop-filter: blur(80px);
+    background: rgba(12, 15, 20, .42);
+  }
+  .sn-hero-texture {
+    position: relative;
+    overflow: hidden;
+    background: var(--sn-texture);
+    background-size: cover;
+  }
+  .sn-hero-texture::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    backdrop-filter: blur(48px);
+    background: var(--sn-texture-scrim);
+  }
 }

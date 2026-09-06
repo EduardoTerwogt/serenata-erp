@@ -12,7 +12,7 @@ interface FilterTabsProps<T extends string> {
 
 export function FilterTabs<T extends string>({ tabs, value, onChange }: FilterTabsProps<T>) {
   return (
-    <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-[11px] border border-hairline bg-card p-[5px]">
+    <div className="inline-flex max-w-full self-start gap-1 overflow-x-auto rounded-[11px] border border-hairline bg-card p-[5px]">
       {tabs.map((tab) => (
         <button
           key={tab.value}
