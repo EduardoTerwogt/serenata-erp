@@ -110,6 +110,99 @@ export const ItemPatchSchema = z.object({
   { message: 'Al menos un campo debe enviarse: responsable_id, responsable_nombre o notas' }
 )
 
+// ==================== FASE 5.2 -- TIPOS DE PROYECTO ====================
+
+export const TipoProyectoCreateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre del tipo de proyecto es requerido'),
+})
+
+export const TipoProyectoUpdateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre del tipo de proyecto es requerido').optional(),
+  activo: z.boolean().optional(),
+})
+
+export const TipoProyectoEtapaCreateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre de la etapa es requerido'),
+  orden: z.coerce.number().int().min(1),
+  es_etapa_final: z.boolean().optional().default(false),
+})
+
+export const TipoProyectoEtapaUpdateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre de la etapa es requerido').optional(),
+  orden: z.coerce.number().int().min(1).optional(),
+  es_etapa_final: z.boolean().optional(),
+})
+
+export const TipoProyectoTareaDefaultCreateSchema = z.object({
+  titulo: z.string().min(1, 'El título de la tarea es requerido'),
+  descripcion: z.string().nullable().optional(),
+  es_hito: z.boolean().optional().default(false),
+  dias_antes_entrega: z.coerce.number().int().nullable().optional(),
+  orden: z.coerce.number().int().min(1),
+})
+
+export const TipoProyectoTareaDefaultUpdateSchema = TipoProyectoTareaDefaultCreateSchema.partial()
+
+// ==================== FASE 5.2 -- TAREAS DE PROYECTO ====================
+
+export const ProyectoTareaCreateSchema = z.object({
+  titulo: z.string().min(1, 'El título de la tarea es requerido'),
+  descripcion: z.string().nullable().optional(),
+  asignado_a: z.string().nullable().optional(),
+  es_hito: z.boolean().optional().default(false),
+  fecha_limite: z.string().nullable().optional(),
+})
+
+export const ProyectoTareaUpdateSchema = z.object({
+  titulo: z.string().min(1, 'El título de la tarea es requerido').optional(),
+  descripcion: z.string().nullable().optional(),
+  estado: z.enum(['PENDIENTE', 'EN_PROGRESO', 'COMPLETADA', 'BLOQUEADA']).optional(),
+  asignado_a: z.string().nullable().optional(),
+  es_hito: z.boolean().optional(),
+  fecha_limite: z.string().nullable().optional(),
+})
+
+export const ProyectoTareaChecklistItemCreateSchema = z.object({
+  texto: z.string().min(1, 'El texto del ítem es requerido'),
+  orden: z.coerce.number().int().optional().default(0),
+})
+
+export const ProyectoTareaChecklistItemUpdateSchema = z.object({
+  texto: z.string().min(1, 'El texto del ítem es requerido').optional(),
+  completado: z.boolean().optional(),
+  orden: z.coerce.number().int().optional(),
+})
+
+// ==================== FASE 5.2 -- ASIGNACIÓN DE TIPO / ETAPA ====================
+
+export const ProyectoAsignarTipoSchema = z.object({
+  tipo_proyecto_id: z.string().min(1, 'El tipo de proyecto es requerido'),
+})
+
+export const ProyectoCambiarEtapaSchema = z.object({
+  etapa_id: z.string().min(1, 'La etapa es requerida'),
+})
+
+// ==================== FASE 5.2 -- DOCUMENTOS DE PROYECTO ====================
+
+export const ProyectoDocumentoCreateSchema = z.object({
+  tipo: z.enum([
+    'BRIEF', 'STAKEHOLDERS_RACI', 'RUTA_CRITICA', 'ROADMAP', 'CHARTER',
+    'RIESGOS', 'PLAN_COMUNICACION', 'STATUS_REPORT', 'REPORTE_CIERRE',
+  ]),
+  titulo: z.string().nullable().optional(),
+  contenido: z.record(z.string(), z.unknown()).optional().default({}),
+})
+
+export const ProyectoDocumentoUpdateSchema = z.object({
+  titulo: z.string().nullable().optional(),
+  contenido: z.record(z.string(), z.unknown()).optional(),
+})
+
+export const ProyectoDocumentoRegenerarSchema = z.object({
+  force: z.boolean().optional().default(false),
+})
+
 // ==================== DOCUMENTOS DE CUENTAS (estado_validacion manual) ====================
 
 export const DocumentoEstadoValidacionSchema = z.object({

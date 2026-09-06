@@ -32,6 +32,20 @@ export async function getCuentasPagar() {
   })) as CuentaPagar[]
 }
 
+/**
+ * Cuentas por pagar de un proyecto puntual -- usado por el auto-llenado del
+ * Status Report / Reporte de Cierre (Fase 5.2) para financiero real vs.
+ * cotizado, sin traer las 500 más recientes de todo el sistema.
+ */
+export async function getCuentasPagarByProyecto(proyectoId: string): Promise<CuentaPagar[]> {
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_pagar')
+    .select('*')
+    .eq('proyecto_id', proyectoId)
+  if (error) throw error
+  return data as CuentaPagar[]
+}
+
 export async function updateCuentaPagar(id: string, updates: Partial<CuentaPagar>) {
   const { data, error } = await supabaseAdmin
     .from('cuentas_pagar')

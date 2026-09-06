@@ -152,6 +152,107 @@ export interface Proyecto {
   notas: string | null
   created_at: string
   cotizacion?: Cotizacion
+  // Fase 5.2 Bloque 1 -- aditivo, conviven con `estado` (ver comentarios de
+  // columna en db/migrations/20260906_fase52_proyectos_pm_schema.sql).
+  tipo_proyecto_id?: string | null
+  etapa_id?: string | null
+  fecha_inicio_real?: string | null
+  fecha_cierre_real?: string | null
+}
+
+// ==================== FASE 5.2 -- PROYECTOS COMO PM ====================
+
+export interface TipoProyecto {
+  id: string
+  nombre: string
+  activo: boolean
+  created_at: string
+}
+
+export interface TipoProyectoEtapa {
+  id: string
+  tipo_proyecto_id: string
+  nombre: string
+  orden: number
+  es_etapa_final: boolean
+  created_at: string
+}
+
+export interface TipoProyectoConEtapas extends TipoProyecto {
+  etapas: TipoProyectoEtapa[]
+}
+
+export interface TipoProyectoTareaDefault {
+  id: string
+  tipo_proyecto_id: string
+  titulo: string
+  descripcion: string | null
+  es_hito: boolean
+  dias_antes_entrega: number | null
+  orden: number
+  created_at: string
+}
+
+export type EstadoTareaProyecto = 'PENDIENTE' | 'EN_PROGRESO' | 'COMPLETADA' | 'BLOQUEADA'
+export type OrigenTareaProyecto = 'plantilla' | 'manual'
+
+export interface ProyectoTarea {
+  id: string
+  proyecto_id: string
+  titulo: string
+  descripcion: string | null
+  estado: EstadoTareaProyecto
+  asignado_a: string | null
+  asignado_a_nombre?: string | null
+  es_hito: boolean
+  origen: OrigenTareaProyecto
+  fecha_limite: string | null
+  fecha_completada: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProyectoTareaChecklistItem {
+  id: string
+  tarea_id: string
+  texto: string
+  completado: boolean
+  orden: number
+}
+
+export type TipoProyectoDocumento =
+  | 'BRIEF'
+  | 'STAKEHOLDERS_RACI'
+  | 'RUTA_CRITICA'
+  | 'ROADMAP'
+  | 'CHARTER'
+  | 'RIESGOS'
+  | 'PLAN_COMUNICACION'
+  | 'STATUS_REPORT'
+  | 'REPORTE_CIERRE'
+
+export interface ProyectoDocumento {
+  id: string
+  proyecto_id: string
+  tipo: TipoProyectoDocumento
+  titulo: string | null
+  contenido: Record<string, unknown>
+  archivo_url: string | null
+  archivo_nombre: string | null
+  auto_generado_at: string | null
+  editado_manualmente: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Miembro de equipo resuelto para un proyecto (Stakeholders/RACI, Plan de
+// Comunicación) -- combina responsables de items_cotizacion y de
+// proyecto_tareas.asignado_a, ambos apuntando a `proveedores`.
+export interface MiembroEquipoProyecto {
+  proveedor_id: string
+  nombre: string
+  roles: string[]
+  origen: ('item_cotizacion' | 'tarea')[]
 }
 
 export interface CuentaPagar {
