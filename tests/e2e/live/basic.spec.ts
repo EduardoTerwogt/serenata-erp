@@ -52,7 +52,10 @@ test.describe('live smoke', () => {
   test('logs in and opens cuentas on a live environment', async ({ page }) => {
     await login(page, '/cuentas')
     await expect(page.getByRole('heading', { name: 'Cuentas' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Por Cobrar/i })).toBeVisible()
+    // Anclado al inicio: la vista "Por proyecto" (default) también tiene un
+    // acordeón cuyo botón de header incluye el texto "Por cobrar $X", que
+    // un regex sin anclar también matchea.
+    await expect(page.getByRole('button', { name: /^Cobrar/i })).toBeVisible()
   })
 })
 
@@ -150,6 +153,9 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
 
     // 4. Subir factura real a Drive desde Cuentas por Cobrar
     await page.goto('/cuentas')
+    // Vista "Por proyecto" es la default (Fase 5.3 Bloque 3) -- este flujo
+    // usa la tabla plana de la vista "Lista".
+    await page.getByRole('button', { name: 'Lista' }).click()
     await page.locator('tr').filter({ hasText: proyecto }).first().click()
     await page.getByRole('button', { name: 'Documentos', exact: true }).click()
 
@@ -176,7 +182,7 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await page.getByLabel('Cerrar').click()
 
     // 6. Subir factura de proveedor real a Drive desde Cuentas por Pagar
-    await page.getByRole('button', { name: /Por Pagar/i }).click()
+    await page.getByRole('button', { name: /^Pagar/i }).click()
     await page.locator('tr').filter({ hasText: proyecto }).first().click()
     await page.getByRole('button', { name: 'Documentos', exact: true }).click()
 

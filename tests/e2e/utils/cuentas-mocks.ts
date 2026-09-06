@@ -15,6 +15,7 @@ export async function mockCuentasApis(page: Page) {
   const cobrarCuenta = {
     id: E2E_IDS.cobrarId,
     cotizacion_id: 'SH054',
+    proyecto_id: 'SH054',
     folio: 'CC-2026-00015',
     cliente: 'Walmart México',
     proyecto: 'Show Monterrey',
@@ -254,11 +255,36 @@ export async function mockCuentasApis(page: Page) {
             total_monto: orden.total_monto,
           }
         : null,
+      proveedor: { regimen_fiscal: null },
       resumen: {
         monto_pagado: pagarCuenta.monto_pagado,
         saldo_pendiente: pagarCuenta.x_pagar - pagarCuenta.monto_pagado,
       },
     })
+  })
+
+  // Fase 5.3 Bloque 3: TabInformacion (pagar) carga proveedores para la
+  // reasignación inline y el historial de reasignaciones del item.
+  await page.route('**/api/proveedores', async (route) => {
+    await fulfillJson(route, [
+      {
+        id: 'resp-1',
+        nombre: 'José García',
+        telefono: pagarCuenta.telefono,
+        correo: pagarCuenta.correo,
+        banco: pagarCuenta.banco,
+        clabe: pagarCuenta.clabe,
+        roles: [],
+        notas: null,
+        activo: true,
+        created_at: '2026-01-01',
+        regimen_fiscal: null,
+      },
+    ])
+  })
+
+  await page.route(`**/api/cuentas-pagar/${E2E_IDS.pagarId}/historial-responsable`, async (route) => {
+    await fulfillJson(route, { historial: [] })
   })
 
   await page.route(`**/api/cuentas-pagar/${E2E_IDS.pagarId}/subir-factura`, async (route) => {
@@ -400,5 +426,29 @@ export async function mockCuentasApis(page: Page) {
 
   await page.route('**/api/cuentas-pagar', async (route) => {
     await fulfillJson(route, cuentasPagar)
+  })
+
+  // Fase 5.3 Bloque 3: vista "Por proyecto" es la vista por default de
+  // /cuentas -- sin este mock, ese fetch pasa de largo hacia el servidor
+  // real (Playwright solo intercepta llamadas de red del navegador) y
+  // falla contra el Supabase de prueba (example.supabase.co).
+  await page.route('**/api/cuentas/por-proyecto', async (route) => {
+    await fulfillJson(route, {
+      proyectos: [
+        {
+          proyecto: {
+            id: 'SH054',
+            folio: 'SH054',
+            nombre: 'Show Monterrey',
+            cliente: 'Walmart México',
+            estado: 'RODAJE',
+          },
+          cuentas_cobrar: cuentasCobrar,
+          cuentas_pagar: cuentasPagar,
+          total_cobrar: cobrarCuenta.monto_total,
+          total_pagar: pagarCuenta.x_pagar,
+        },
+      ],
+    })
   })
 }

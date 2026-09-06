@@ -6,7 +6,11 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await mockCuentasApis(page)
   await login(page, '/cuentas')
 
-  await page.getByRole('button', { name: /Por Pagar/i }).click()
+  // Vista "Por proyecto" es la default (Fase 5.3 Bloque 3) -- esta prueba
+  // usa la tabla plana de la vista "Lista".
+  await page.getByRole('button', { name: 'Lista' }).click()
+
+  await page.getByRole('button', { name: /^Pagar/i }).click()
   await expect(page.getByRole('cell', { name: 'José García' }).first()).toBeVisible()
 
   await page.locator('tr').filter({ hasText: 'José García' }).first().click()
@@ -32,7 +36,7 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
 
   await page.getByLabel('Cerrar').click()
 
-  await page.getByRole('button', { name: 'Generar Orden de Pago' }).click()
+  await page.getByRole('button', { name: 'Ficha de órdenes de pago' }).click()
   await expect(page.getByRole('heading', { name: 'Generar Orden de Pago' })).toBeVisible()
   await expect(page.getByText('José García').first()).toBeVisible()
 

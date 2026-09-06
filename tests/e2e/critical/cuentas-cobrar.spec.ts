@@ -6,6 +6,10 @@ test('handles documentos y pagos en cuentas por cobrar', async ({ page }) => {
   await mockCuentasApis(page)
   await login(page, '/cuentas')
 
+  // Vista "Por proyecto" es la default (Fase 5.3 Bloque 3) -- esta prueba
+  // usa la tabla plana de la vista "Lista".
+  await page.getByRole('button', { name: 'Lista' }).click()
+
   await page.locator('tr').filter({ hasText: 'Walmart México' }).first().click()
   await expect(page.getByRole('heading', { name: 'SH054' })).toBeVisible()
 
