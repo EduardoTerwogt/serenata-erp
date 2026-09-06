@@ -28,10 +28,15 @@ export async function updateCuentaCobrar(id: string, updates: Partial<CuentaCobr
 }
 
 export async function createCuentaCobrar(cotizacion: Cotizacion) {
+  // Misma regla que usa approve_cotizacion (RPC) para calcular v_proyecto_id:
+  // si es complementaria, el proyecto es el de la principal; si no, la
+  // principal comparte id con su proyecto.
+  const proyecto_id = cotizacion.es_complementaria_de || cotizacion.id
   const { data, error } = await supabaseAdmin
     .from('cuentas_cobrar')
     .upsert({
       cotizacion_id: cotizacion.id,
+      proyecto_id,
       cliente: cotizacion.cliente,
       proyecto: cotizacion.proyecto,
       monto_total: cotizacion.total,

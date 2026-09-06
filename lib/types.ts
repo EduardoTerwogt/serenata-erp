@@ -38,6 +38,21 @@ export interface HistorialResponsable {
   created_at: string
 }
 
+// Log append-only de reasignaciones de responsable en items_cotizacion.
+// No confundir con HistorialResponsable (snapshot de historial de proyectos
+// por responsable, tabla distinta).
+export interface HistorialCambioResponsableItem {
+  id: string
+  item_id: string
+  cotizacion_id: string
+  responsable_anterior_id: string | null
+  responsable_anterior_nombre: string | null
+  responsable_nuevo_id: string | null
+  responsable_nuevo_nombre: string | null
+  changed_at: string
+  changed_by: string | null
+}
+
 export interface ItemCotizacion {
   id: string
   cotizacion_id: string
@@ -167,6 +182,7 @@ export interface CuentaPagar {
 export interface CuentaCobrar {
   id: string
   cotizacion_id: string
+  proyecto_id: string | null
   cliente: string
   proyecto: string
   monto_total: number
@@ -193,6 +209,8 @@ export interface PagoComprobante {
   created_at: string
 }
 
+export type EstadoValidacionDocumento = 'pendiente' | 'validado' | 'revision'
+
 export interface DocumentoCuentaCobrar {
   id: string
   cuentas_cobrar_id: string
@@ -202,6 +220,7 @@ export interface DocumentoCuentaCobrar {
   archivo_size?: number
   fecha_carga: string
   created_at: string
+  estado_validacion: EstadoValidacionDocumento
 }
 
 export interface DocumentoCuentaPagar {
@@ -212,6 +231,7 @@ export interface DocumentoCuentaPagar {
   archivo_nombre: string
   fecha_carga: string
   created_at: string
+  estado_validacion: EstadoValidacionDocumento
 }
 
 export interface OrdenPago {
