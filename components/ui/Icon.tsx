@@ -20,6 +20,11 @@ import {
   AlertTriangle,
   Link2,
   Check,
+  Upload,
+  Download,
+  Printer,
+  Send,
+  Clock,
 } from 'lucide-react'
 
 // Fase 5.7 (rediseño): wrapper tipado sobre lucide-react (ya era dependencia
@@ -50,6 +55,11 @@ const ICONS = {
   link: Link2,
   check: Check,
   'file-text': FileText,
+  upload: Upload,
+  download: Download,
+  printer: Printer,
+  send: Send,
+  clock: Clock,
 } as const
 
 export type IconName = keyof typeof ICONS

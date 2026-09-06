@@ -35,6 +35,8 @@ const TIPO_DOC_LABEL: Record<string, string> = {
   OTRO: 'Otro',
 }
 
+const FILE_INPUT_CLASS = 'w-full text-content text-subtext file:mr-3 file:py-1.5 file:px-3 file:rounded-control file:border-0 file:text-content file:bg-row file:text-subtext hover:file:bg-row-alt'
+
 export function TabDocumentos(props: TabDocumentosProps) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -118,29 +120,29 @@ export function TabDocumentos(props: TabDocumentosProps) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-white mb-4">Documentos</h3>
+      <h3 className="text-h3 font-semibold text-ink mb-4">Documentos</h3>
 
       {uploadError && (
-        <div className="p-3 bg-red-900/30 border border-red-700 rounded-lg">
-          <p className="text-red-300 text-sm">{uploadError}</p>
+        <div className="rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20 p-3">
+          <p className="text-cancelled-fg text-content">{uploadError}</p>
         </div>
       )}
       {uploadSuccess && (
-        <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
-          <p className="text-green-300 text-sm">{uploadSuccess}</p>
+        <div className="rounded-control border border-approved-bg/60 bg-approved-bg/20 p-3">
+          <p className="text-approved-fg text-content">{uploadSuccess}</p>
         </div>
       )}
 
       <div className="space-y-2">
         {documentos.length === 0 && (
-          <p className="text-gray-500 text-sm italic py-4">No hay documentos cargados</p>
+          <p className="text-faint text-content italic py-4">No hay documentos cargados</p>
         )}
         {documentos.map((doc) => (
-          <div key={doc.id} className="p-3 bg-gray-800 rounded-lg">
+          <div key={doc.id} className="p-3 bg-row rounded-control">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <p className="text-white text-sm font-medium truncate">{doc.archivo_nombre}</p>
-                <p className="text-gray-400 text-xs">
+                <p className="text-body text-content font-medium truncate">{doc.archivo_nombre}</p>
+                <p className="text-subtext text-eyebrow">
                   {TIPO_DOC_LABEL[doc.tipo] || doc.tipo}
                   {' • '}
                   {formatDateDisplay(doc.fecha_carga || doc.created_at)}
@@ -153,13 +155,13 @@ export function TabDocumentos(props: TabDocumentosProps) {
                 href={doc.archivo_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 text-sm whitespace-nowrap"
+                className="text-accent hover:text-accent-pressed text-content whitespace-nowrap"
               >
                 Ver
               </a>
             </div>
             {doc.estado_validacion === 'revision' && doc.detalle_validacion && (
-              <p className="mt-2 text-xs text-red-300 bg-red-900/20 border border-red-800/50 rounded px-2.5 py-1.5">
+              <p className="mt-2 text-eyebrow text-cancelled-fg bg-cancelled-bg/20 border border-cancelled-bg/50 rounded-control px-2.5 py-1.5">
                 {doc.detalle_validacion}
               </p>
             )}
@@ -167,57 +169,57 @@ export function TabDocumentos(props: TabDocumentosProps) {
         ))}
       </div>
 
-      <div className="pt-4 border-t border-gray-800 space-y-4">
+      <div className="pt-4 border-t border-hairline space-y-4">
         {props.tipo === 'cobrar' ? (
           <>
             <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-300">Subir Factura</p>
+              <p className="text-content font-medium text-body">Subir Factura</p>
               <div className="space-y-2">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">XML (requerido)</label>
-                  <input ref={xmlRef} type="file" accept=".xml" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
+                  <label className="block text-eyebrow text-subtext mb-1">XML (requerido)</label>
+                  <input ref={xmlRef} type="file" accept=".xml" className={FILE_INPUT_CLASS} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">PDF (opcional)</label>
-                  <input ref={pdfRef} type="file" accept=".pdf" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
+                  <label className="block text-eyebrow text-subtext mb-1">PDF (opcional)</label>
+                  <input ref={pdfRef} type="file" accept=".pdf" className={FILE_INPUT_CLASS} />
                 </div>
-                <button onClick={handleSubirFacturaCobrar} disabled={uploading} className="w-full py-2 px-3 bg-blue-800 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-blue-200 rounded-lg text-sm font-medium transition-colors">
+                <button onClick={handleSubirFacturaCobrar} disabled={uploading} className="w-full py-2 px-3 bg-accent hover:bg-accent-pressed disabled:opacity-50 text-accent-ink rounded-control text-content font-medium transition-colors">
                   {uploading ? 'Subiendo...' : 'Subir Factura'}
                 </button>
               </div>
             </div>
 
             <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-300">Subir Complemento de Pago</p>
+              <p className="text-content font-medium text-body">Subir Complemento de Pago</p>
               <div className="space-y-2">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">XML (requerido)</label>
-                  <input ref={complementoXmlRef} type="file" accept=".xml" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
+                  <label className="block text-eyebrow text-subtext mb-1">XML (requerido)</label>
+                  <input ref={complementoXmlRef} type="file" accept=".xml" className={FILE_INPUT_CLASS} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">PDF (requerido)</label>
-                  <input ref={complementoPdfRef} type="file" accept=".pdf" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
+                  <label className="block text-eyebrow text-subtext mb-1">PDF (requerido)</label>
+                  <input ref={complementoPdfRef} type="file" accept=".pdf" className={FILE_INPUT_CLASS} />
                 </div>
               </div>
-              <button onClick={handleSubirComplemento} disabled={uploading} className="w-full py-2 px-3 bg-blue-800 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-blue-200 rounded-lg text-sm font-medium transition-colors">
+              <button onClick={handleSubirComplemento} disabled={uploading} className="w-full py-2 px-3 bg-accent hover:bg-accent-pressed disabled:opacity-50 text-accent-ink rounded-control text-content font-medium transition-colors">
                 {uploading ? 'Subiendo...' : 'Subir Complemento'}
               </button>
             </div>
           </>
         ) : (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-300">Subir Factura Proveedor</p>
+            <p className="text-content font-medium text-body">Subir Factura Proveedor</p>
             <div className="space-y-2">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">XML (requerido)</label>
-                <input ref={facturaProvXmlRef} type="file" accept=".xml" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
+                <label className="block text-eyebrow text-subtext mb-1">XML (requerido)</label>
+                <input ref={facturaProvXmlRef} type="file" accept=".xml" className={FILE_INPUT_CLASS} />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">PDF (requerido)</label>
-                <input ref={facturaProvPdfRef} type="file" accept=".pdf" className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600" />
+                <label className="block text-eyebrow text-subtext mb-1">PDF (requerido)</label>
+                <input ref={facturaProvPdfRef} type="file" accept=".pdf" className={FILE_INPUT_CLASS} />
               </div>
             </div>
-            <button onClick={handleSubirFacturaPagar} disabled={uploading} className="w-full py-2 px-3 bg-blue-800 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-blue-200 rounded-lg text-sm font-medium transition-colors">
+            <button onClick={handleSubirFacturaPagar} disabled={uploading} className="w-full py-2 px-3 bg-accent hover:bg-accent-pressed disabled:opacity-50 text-accent-ink rounded-control text-content font-medium transition-colors">
               {uploading ? 'Subiendo...' : 'Subir Factura Proveedor'}
             </button>
           </div>

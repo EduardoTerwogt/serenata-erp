@@ -182,33 +182,33 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-white mb-4">Registrar Pago</h3>
+      <h3 className="text-h3 font-semibold text-ink mb-4">Registrar Pago</h3>
 
       {showOrdenInfo && (
-        <div className="p-3 bg-orange-900/30 border border-orange-700 rounded-lg">
-          <p className="text-orange-300 text-sm">
+        <div className="p-3 rounded-control border border-issued-bg/60 bg-issued-bg/20">
+          <p className="text-issued-fg text-content">
             Esta cuenta está vinculada a una Orden de Pago. Puedes registrar el pago normalmente para completar la orden.
           </p>
         </div>
       )}
 
       {isPagado && (
-        <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
-          <p className="text-green-300 text-sm">
+        <div className="p-3 rounded-control border border-approved-bg/60 bg-approved-bg/20">
+          <p className="text-approved-fg text-content">
             Esta cuenta ya está totalmente pagada.
           </p>
         </div>
       )}
 
       {error && (
-        <div className="p-3 bg-red-900/30 border border-red-700 rounded-lg">
-          <p className="text-red-300 text-sm">{error}</p>
+        <div className="p-3 rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20">
+          <p className="text-cancelled-fg text-content">{error}</p>
         </div>
       )}
 
       {success && (
-        <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
-          <p className="text-green-300 text-sm">Pago registrado correctamente</p>
+        <div className="p-3 rounded-control border border-approved-bg/60 bg-approved-bg/20">
+          <p className="text-approved-fg text-content">Pago registrado correctamente</p>
         </div>
       )}
 
@@ -216,7 +216,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Monto</label>
+              <label className="block text-content font-medium text-body mb-2">Monto</label>
               <input
                 type="number"
                 step="0.01"
@@ -224,18 +224,18 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
                 placeholder="0.00"
                 value={monto}
                 onChange={(e) => setMonto(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 bg-input border border-hairline rounded-control text-body placeholder-faint focus:outline-none focus:border-accent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-content font-medium text-body mb-2">
                 {props.tipo === 'cobrar' ? 'Tipo de Pago' : 'Comprobante'}
               </label>
               {props.tipo === 'cobrar' ? (
                 <select
                   value={tipoPago}
                   onChange={(e) => setTipoPago(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-input border border-hairline rounded-control text-body focus:outline-none focus:border-accent"
                 >
                   <option value="TRANSFERENCIA">Transferencia</option>
                   <option value="EFECTIVO">Efectivo</option>
@@ -244,7 +244,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
                 <input
                   type="file"
                   onChange={(e) => setComprobante(e.target.files?.[0] || null)}
-                  className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
+                  className="w-full text-content text-subtext file:mr-3 file:py-1.5 file:px-3 file:rounded-control file:border-0 file:text-content file:bg-row file:text-subtext hover:file:bg-row-alt"
                 />
               )}
             </div>
@@ -253,43 +253,43 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
           {props.tipo === 'cobrar' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Fecha de Pago</label>
+                <label className="block text-content font-medium text-body mb-2">Fecha de Pago</label>
                 <DateField
                   value={fechaPago}
                   onChange={(e) => setFechaPago(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-input border border-hairline rounded-control text-body focus:outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Comprobante (opcional)</label>
+                <label className="block text-content font-medium text-body mb-2">Comprobante (opcional)</label>
                 <input
                   type="file"
                   onChange={(e) => setComprobante(e.target.files?.[0] || null)}
-                  className="w-full text-sm text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600"
+                  className="w-full text-content text-subtext file:mr-3 file:py-1.5 file:px-3 file:rounded-control file:border-0 file:text-content file:bg-row file:text-subtext hover:file:bg-row-alt"
                 />
-                <p className="text-xs text-gray-500 mt-2">Si adjuntas una imagen pesada, se intentará reducir antes de subirla. PDFs y otros archivos deben ser menores a 4 MB.</p>
+                <p className="text-eyebrow text-faint mt-2">Si adjuntas una imagen pesada, se intentará reducir antes de subirla. PDFs y otros archivos deben ser menores a 4 MB.</p>
               </div>
             </>
           )}
 
           {props.tipo === 'pagar' && (
-            <p className="text-xs text-gray-500 -mt-1">Si adjuntas una imagen pesada, se intentará reducir antes de subirla. PDFs y otros archivos deben ser menores a 4 MB.</p>
+            <p className="text-eyebrow text-faint -mt-1">Si adjuntas una imagen pesada, se intentará reducir antes de subirla. PDFs y otros archivos deben ser menores a 4 MB.</p>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Notas (opcional)</label>
+            <label className="block text-content font-medium text-body mb-2">Notas (opcional)</label>
             <textarea
               placeholder="Agregar notas sobre el pago..."
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 h-20 focus:outline-none focus:border-blue-500 resize-none"
+              className="w-full px-3 py-2 bg-input border border-hairline rounded-control text-body placeholder-faint h-20 focus:outline-none focus:border-accent resize-none"
             />
           </div>
 
           <button
             type="submit"
             disabled={saving}
-            className="w-full py-2.5 px-4 bg-green-700 hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors"
+            className="w-full py-2.5 px-4 bg-accent hover:bg-accent-pressed disabled:opacity-50 text-accent-ink rounded-control text-content font-medium transition-colors"
           >
             {saving ? 'Registrando...' : 'Registrar Pago'}
           </button>
@@ -297,16 +297,16 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
       )}
 
       {props.tipo === 'cobrar' && props.pagos.length > 0 && (
-        <div className="pt-6 border-t border-gray-800">
-          <h4 className="font-semibold text-white mb-3">Historial de Pagos</h4>
+        <div className="pt-6 border-t border-hairline">
+          <h4 className="font-semibold text-ink mb-3">Historial de Pagos</h4>
           <div className="space-y-2">
             {props.pagos.map((pago) => (
-              <div key={pago.id} className="flex justify-between items-center p-3 bg-gray-800 rounded-lg">
+              <div key={pago.id} className="flex justify-between items-center p-3 bg-row rounded-control">
                 <div>
-                  <p className="text-white text-sm font-medium">
+                  <p className="text-ink text-content font-medium">
                     {formatDateDisplay(pago.fecha_pago)}
                   </p>
-                  <p className="text-gray-400 text-xs">
+                  <p className="text-subtext text-eyebrow">
                     ${fmt(pago.monto)} - {pago.tipo_pago === 'TRANSFERENCIA' ? 'Transferencia' : 'Efectivo'}
                     {pago.notas && ` - ${pago.notas}`}
                   </p>
@@ -316,7 +316,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
                     href={pago.comprobante_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 text-sm"
+                    className="text-accent hover:text-accent-pressed text-content"
                   >
                     Ver
                   </a>
