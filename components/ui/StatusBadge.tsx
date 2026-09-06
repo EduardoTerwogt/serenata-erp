@@ -26,7 +26,9 @@ interface StatusBadgeProps {
 
 export function StatusBadge({ tone, children, className = '' }: StatusBadgeProps) {
   return (
-    <span className={`inline-flex items-center whitespace-nowrap rounded-pill px-3 py-1 text-xs font-semibold ${TONE_CLASS[tone]} ${className}`.trim()}>
+    <span
+      className={`inline-flex h-[22px] min-w-[80px] items-center justify-center whitespace-nowrap rounded-pill px-[11px] text-[length:var(--text-sm)] font-medium ${TONE_CLASS[tone]} ${className}`.trim()}
+    >
       {children}
     </span>
   )

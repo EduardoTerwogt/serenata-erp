@@ -79,19 +79,21 @@ export default function CotizacionesPage() {
         action={
           <Link
             href="/cotizaciones/nueva"
-            className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-pressed"
+            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-md)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
           >
-            <Icon name="plus" size={16} />
+            <Icon name="plus" size={15} />
             Nueva Cotización
           </Link>
         }
       />
 
-      <SearchInput
-        placeholder="Buscar por folio, cliente, proyecto, item o responsable..."
-        value={busqueda}
-        onChange={e => setBusqueda(e.target.value)}
-      />
+      <div className="max-w-[420px] min-w-[240px]">
+        <SearchInput
+          placeholder="Buscar por folio, cliente, proyecto, item o responsable..."
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+        />
+      </div>
 
       <FilterTabs tabs={tabs} value={filtro} onChange={setFiltro} />
 
@@ -131,7 +133,7 @@ export default function CotizacionesPage() {
               <thead>
                 <tr className="border-b border-hairline">
                   {['Folio', 'Proyecto', 'Cliente', 'Total', 'Entrega', 'Estatus'].map(h => (
-                    <th key={h} className="sn-label whitespace-nowrap px-6 py-3 text-left font-semibold">{h}</th>
+                    <th key={h} className="sn-label whitespace-nowrap px-6 py-3 text-left font-semibold" style={{ fontSize: 'var(--text-table-head)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -143,12 +145,12 @@ export default function CotizacionesPage() {
                     className="cursor-pointer border-b border-hairline last:border-0 transition-colors hover:bg-row"
                   >
                     <td className="whitespace-nowrap px-6 py-4">
-                      <span className="sn-display text-accent">{cot.id}</span>
+                      <span className="sn-display text-body" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-body">{cot.proyecto}</p>
                       {cot.tipo === 'COMPLEMENTARIA' && (
-                        <p className="mt-0.5 text-xs text-accent-quiet">
+                        <p className="mt-0.5 text-xs text-accent">
                           Complementaria de <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
                         </p>
                       )}
@@ -156,7 +158,7 @@ export default function CotizacionesPage() {
                     <td className="px-6 py-4 text-subtext">{cot.cliente}</td>
                     <td className="whitespace-nowrap px-6 py-4 font-semibold text-body">
                       {(!cot.items || cot.items.length === 0) ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-normal text-accent-quiet">
+                        <span className="inline-flex items-center gap-1 text-xs font-normal text-cancelled-fg">
                           <Icon name="warning" size={13} /> Sin items
                         </span>
                       ) : `$${fmtMoney(cot.total)}`}
@@ -176,18 +178,18 @@ export default function CotizacionesPage() {
             {filtradas.map(cot => (
               <Link key={cot.id} href={`/cotizaciones/${cot.id}`} className="block p-4 transition-colors hover:bg-row">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="sn-display truncate text-sm text-accent">{cot.id}</span>
+                  <span className="sn-display truncate text-sm text-body" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>
                   <StatusBadge tone={toneForCotizacionEstado(cot.estado)} className="flex-shrink-0">{cot.estado}</StatusBadge>
                 </div>
                 <p className="mb-1 break-words text-[15px] font-medium text-body">{cot.proyecto}</p>
                 <p className="mb-3 break-words text-sm text-subtext">{cot.cliente}</p>
                 {cot.tipo === 'COMPLEMENTARIA' && (
-                  <p className="mb-2 break-words text-xs text-accent-quiet">
+                  <p className="mb-2 break-words text-xs text-accent">
                     Complementaria de <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
                   </p>
                 )}
                 {(!cot.items || cot.items.length === 0) && (
-                  <p className="mb-2 flex items-center gap-1 break-words text-xs text-accent-quiet">
+                  <p className="mb-2 flex items-center gap-1 break-words text-xs text-cancelled-fg">
                     <Icon name="warning" size={13} /> Sin items (llenar manualmente)
                   </p>
                 )}
@@ -209,9 +211,9 @@ export default function CotizacionesPage() {
               <p className="mb-6 text-sm text-faint">Crea tu primera cotización para empezar</p>
               <Link
                 href="/cotizaciones/nueva"
-                className="inline-flex items-center gap-1.5 rounded-control bg-accent px-6 py-3 font-semibold text-accent-ink transition-colors hover:bg-accent-pressed"
+                className="inline-flex h-[var(--control-height-lg)] items-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-md)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
               >
-                <Icon name="plus" size={16} />
+                <Icon name="plus" size={15} />
                 Nueva Cotización
               </Link>
             </>

@@ -21,6 +21,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // .claude/skills/** ships throwaway reference JSX (window.* globals via
+    // CDN <script> tags, not ES modules) -- it's design-system documentation,
+    // never compiled or imported by the app, so it isn't real lint surface.
+    ".claude/**",
   ]),
 ]);
 

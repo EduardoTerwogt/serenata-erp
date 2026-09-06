@@ -91,6 +91,90 @@
 
   --tracking-eyebrow: 0.14em;
   --tracking-label: 0.1em;
+
+  /* --- Fase 5.8: aliases semánticos de tokens/colors.css -- antes solo existían
+     los nombres --sn-*; los componentes del skill (Sidebar, Card, Button, etc.)
+     están escritos contra estos nombres semánticos. Son alias 1:1, no cambian
+     ningún valor. --- */
+  --bg-app: var(--sn-app);
+  --bg-topbar: var(--sn-topbar);
+  --surface-card: var(--sn-surface);
+  --surface-row: var(--sn-surface-alt);
+  --surface-row-alt: var(--sn-surface-alt-2);
+  --surface-input: var(--sn-input);
+  --border-subtle: var(--sn-hairline);
+  --accent: var(--sn-orange);
+  --accent-pressed: var(--sn-orange-strong);
+  --accent-quiet: var(--sn-orange-soft);
+  --text-primary: var(--sn-ink);
+  --text-body: var(--sn-ink-body);
+  --text-muted: var(--sn-ink-muted);
+  --text-faint: var(--sn-ink-faint);
+  --focus-ring: rgba(255, 90, 26, .55);
+
+  /* --- tokens/spacing.css: escala + constantes de layout del shell (rail,
+     topbar, controles). Faltaban por completo -- ver nota de Fase 5.8. --- */
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 13px;
+  --space-lg: 19px;
+  --space-xl: 26px;
+  --space-2xl: 32px;
+  --space-3xl: 45px;
+  --sidebar-width: 256px;
+  --sidebar-pad: 19px;
+  --content-pad: 29px;
+  --topbar-height: 84px;
+  --row-pad-y: 12px;
+  --row-pad-x: 19px;
+  --nav-item-height: 38px;
+  --nav-gap: 5px;
+  --control-height: 35px;
+  --control-height-lg: 42px;
+
+  /* --- tokens/typography.css: resto de la escala (arriba solo estaban los
+     tamaños que no chocan con la escala default de Tailwind, ver @theme). --- */
+  --display-stretch: 88%;
+  --display-weight: 800;
+  --display-tracking: -0.02em;
+  --text-xs: 10px;
+  --text-sm: 10px;
+  --text-base: 13.5px;
+  --text-md: 12px;
+  --text-lg: 14px;
+  --lh-tight: 1.02;
+  --lh-snug: 1.25;
+  --lh-body: 1.5;
+  --tracking-tagline: 0.18em;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  /* --- tokens/radius.css: nombres reales del token, como variables CSS planas
+     (no dentro de @theme) -- así no generan/pisan utilidades rounded-sm/md/lg/xl
+     de Tailwind (ver nota arriba de @theme), pero sí quedan disponibles como
+     var(--radius-sm) etc. para clases arbitrarias (rounded-[var(--radius-md)]). --- */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-input: 11px;
+  --radius-lg: 18px;
+  --radius-xl: 19px;
+
+  /* --- tokens/elevation.css: los dos que faltaban (--shadow-raised/overlay/rail/
+     accent/card ya existen vía @theme más abajo). --- */
+  --hairline: 1px solid var(--border-subtle);
+  --shadow-none: none;
+
+  /* --- tokens/motion.css: resto de la escala (--ease-standard ya existe vía
+     @theme más abajo). --- */
+  --ease-out: cubic-bezier(0, 0, .2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 260ms;
+  --transition-control: background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
 
 @theme {

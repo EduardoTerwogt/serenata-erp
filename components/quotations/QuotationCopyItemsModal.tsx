@@ -114,7 +114,7 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
                       className="w-full text-left bg-row hover:bg-row-alt border border-hairline rounded-control px-4 py-3 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <span className="sn-display text-accent text-sm">{c.id}</span>
+                        <span className="sn-display text-body text-sm" style={{ letterSpacing: '0.06em' }}>{c.id}</span>
                         <span className="text-xs text-faint">{(c.items || []).length} partida(s)</span>
                       </div>
                       <p className="text-body text-sm mt-0.5">{c.proyecto}</p>
@@ -134,7 +134,7 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
                 ← Elegir otra cotización
               </button>
               <div className="mb-3">
-                <span className="sn-display text-accent">{selectedCotizacion.id}</span>
+                <span className="sn-display text-body" style={{ letterSpacing: '0.06em' }}>{selectedCotizacion.id}</span>
                 <span className="text-subtext text-sm"> — {selectedCotizacion.proyecto} · {selectedCotizacion.cliente}</span>
               </div>
 

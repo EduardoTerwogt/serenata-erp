@@ -16,8 +16,8 @@ export function NavItem({ href, icon, label, active = false, onClick }: NavItemP
     <Link
       href={href}
       onClick={onClick}
-      className={`flex h-[38px] items-center gap-3 rounded-md px-3.5 text-nav font-medium transition-colors ${
-        active ? 'bg-accent text-accent-ink' : 'text-subtext hover:bg-white/5 hover:text-body'
+      className={`flex h-[var(--nav-item-height)] items-center gap-[var(--space-md)] rounded-[var(--radius-md)] px-3.5 text-nav transition-colors ${
+        active ? 'bg-accent font-semibold text-accent-ink' : 'font-medium text-subtext hover:bg-white/5 hover:text-body'
       }`}
     >
       {icon && <Icon name={icon} size={15} />}

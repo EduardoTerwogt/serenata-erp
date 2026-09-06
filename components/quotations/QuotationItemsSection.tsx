@@ -265,8 +265,8 @@ export function QuotationItemsSection({
           <h2 className="text-base font-semibold text-body">Partidas</h2>
           {editable && (
             <div className="flex gap-2">
-              {onCopyClick && <button type="button" onClick={onCopyClick} className="bg-row hover:bg-row-alt text-body px-3 py-2 rounded-control text-sm transition-colors min-h-[44px] md:min-h-0">Copiar desde otra cotización</button>}
-              <button type="button" onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })} className="bg-row hover:bg-row-alt text-body px-3 py-2 rounded-control text-sm transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>
+              {onCopyClick && <button type="button" onClick={onCopyClick} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-sm transition-colors min-h-[44px] md:min-h-0">Copiar desde otra cotización</button>}
+              <button type="button" onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-sm transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>
             </div>
           )}
         </div>
@@ -276,7 +276,7 @@ export function QuotationItemsSection({
             <thead>
               <tr className="border-b border-hairline">
                 {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'X Pagar', 'Costo + IVA', 'Margen', ...(editable ? [''] : [])].map(h => (
-                  <th key={h} className="sn-label text-left px-4 py-3 whitespace-nowrap">{h}</th>
+                  <th key={h} className="sn-label text-left px-4 py-3 whitespace-nowrap" style={{ fontSize: 'var(--text-table-head)' }}>{h}</th>
                 ))}
               </tr>
             </thead>

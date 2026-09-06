@@ -99,7 +99,7 @@ function NuevaCotizacionContent() {
         <Link href="/cotizaciones" className="text-sm text-faint hover:text-subtext">← Cotizaciones</Link>
         <div className="mt-2 flex flex-wrap items-baseline gap-3">
           <h1 className="sn-display text-2xl text-ink md:text-h2">Nueva Cotizacion</h1>
-          <span className="text-subtext">Folio: <span className="font-mono text-accent font-bold">{folio || '...'}</span></span>
+          <span className="text-subtext">Folio: <span className="sn-display text-body" style={{ fontSize: 13, letterSpacing: '0.06em' }}>{folio || '...'}</span></span>
         </div>
       </div>
 
@@ -184,7 +184,7 @@ function NuevaCotizacionContent() {
           type="button"
           disabled={guardando}
           onClick={onGuardarBorrador}
-          className="bg-row hover:bg-row-alt text-body px-6 py-3 rounded-control font-medium transition-colors disabled:opacity-50 min-h-[44px]"
+          className="border border-hairline bg-input hover:bg-row-alt text-body px-6 py-3 rounded-control font-medium transition-colors disabled:opacity-50 min-h-[44px]"
         >
           {guardando ? 'Guardando...' : 'Guardar Borrador'}
         </button>
