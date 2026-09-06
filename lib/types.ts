@@ -221,6 +221,7 @@ export interface DocumentoCuentaCobrar {
   fecha_carga: string
   created_at: string
   estado_validacion: EstadoValidacionDocumento
+  detalle_validacion?: string | null
 }
 
 export interface DocumentoCuentaPagar {
@@ -232,6 +233,7 @@ export interface DocumentoCuentaPagar {
   fecha_carga: string
   created_at: string
   estado_validacion: EstadoValidacionDocumento
+  detalle_validacion?: string | null
 }
 
 export interface OrdenPago {
