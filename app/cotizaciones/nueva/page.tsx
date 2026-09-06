@@ -95,11 +95,36 @@ function NuevaCotizacionContent() {
 
   return (
     <div className="flex flex-col gap-[19px]">
-      <div>
-        <Link href="/cotizaciones" className="text-content text-faint hover:text-subtext">← Cotizaciones</Link>
-        <div className="mt-2 flex flex-wrap items-baseline gap-3">
-          <h1 className="sn-display text-2xl text-ink md:text-h2">Nueva Cotizacion</h1>
-          <span className="text-subtext">Folio: <span className="sn-display text-body" style={{ fontSize: 13, letterSpacing: '0.06em' }}>{folio || '...'}</span></span>
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex flex-wrap items-baseline gap-3 min-w-0">
+          <Link href="/cotizaciones" className="flex-none text-content text-faint hover:text-subtext">← Cotizaciones</Link>
+          <h1 className="sn-display flex-none text-2xl text-ink md:text-h2">Nueva Cotizacion</h1>
+          <span className="flex-none text-subtext">Folio: <span className="sn-display text-body" style={{ fontSize: 13, letterSpacing: '0.06em' }}>{folio || '...'}</span></span>
+        </div>
+        <div className="flex flex-wrap gap-2 lg:justify-end">
+          <button
+            type="button"
+            disabled={guardando}
+            onClick={onGuardarBorrador}
+            className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]"
+          >
+            {guardando ? 'Guardando...' : 'Guardar Borrador'}
+          </button>
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="text-subtext hover:bg-white/5 hover:text-body px-4 py-3 rounded-control text-content transition-colors min-h-[44px]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={guardando}
+            onClick={onGenerarCotizacion}
+            className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors disabled:opacity-50 min-h-[44px]"
+          >
+            {guardando ? 'Generando...' : 'Generar Cotizacion'}
+          </button>
         </div>
       </div>
 
@@ -178,32 +203,6 @@ function NuevaCotizacionContent() {
         setDescuentoValor={setDescuentoValor}
         estimatedTaxes={estimatedTaxes}
       />
-
-      <div className="flex flex-col md:flex-row gap-3">
-        <button
-          type="button"
-          disabled={guardando}
-          onClick={onGuardarBorrador}
-          className="border border-hairline bg-input hover:bg-row-alt text-body px-6 py-3 rounded-control font-medium transition-colors disabled:opacity-50 min-h-[44px]"
-        >
-          {guardando ? 'Guardando...' : 'Guardar Borrador'}
-        </button>
-        <button
-          type="button"
-          disabled={guardando}
-          onClick={onGenerarCotizacion}
-          className="bg-accent hover:bg-accent-pressed text-accent-ink px-6 py-3 rounded-control font-semibold transition-colors disabled:opacity-50 min-h-[44px]"
-        >
-          {guardando ? 'Generando...' : 'Generar Cotizacion'}
-        </button>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="text-subtext hover:text-body px-4 py-3 rounded-control transition-colors min-h-[44px]"
-        >
-          Cancelar
-        </button>
-      </div>
     </div>
   )
 }

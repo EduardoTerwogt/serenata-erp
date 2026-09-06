@@ -45,7 +45,7 @@ interface Props {
 // Estilo "InlineInput" del design system: sin caja visible hasta que se
 // enfoca (fondo/borde transparentes -> bg-input + borde accent-quiet al
 // enfocar), en vez de una caja siempre visible.
-const INPUT_CLASS = 'w-full bg-transparent border border-transparent rounded-[8px] px-2.5 py-2 text-content text-body text-right placeholder-faint focus:outline-none focus:bg-input focus:border-accent-quiet transition-colors'
+const INPUT_CLASS = 'w-full bg-transparent border border-transparent rounded-[8px] px-2.5 py-2 text-content text-body placeholder-faint focus:outline-none focus:bg-input focus:border-accent-quiet transition-colors'
 const DROPDOWN_CLASS = 'absolute z-50 w-full min-w-[220px] mt-1 bg-card border border-hairline rounded-control shadow-overlay max-h-48 overflow-y-auto'
 const DROPDOWN_ITEM_CLASS = 'px-4 py-3 hover:bg-row cursor-pointer text-body text-content border-b border-hairline last:border-0'
 
@@ -80,13 +80,16 @@ export function QuotationGeneralInfoSection({
   const readOnlyAsText = isReadOnly && readOnlyDisplay === 'text'
 
   return (
-    <div className="rounded-panel border border-hairline bg-card p-4 md:p-6">
-      <h2 className="mb-4 text-base font-semibold text-body">{title}</h2>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+    <div className="rounded-panel border border-hairline bg-card">
+      <div className="p-4 md:p-6 border-b border-hairline">
+        <h2 className="text-base font-semibold text-body">{title}</h2>
+      </div>
+      <div className="p-4 md:p-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[repeat(4,minmax(130px,200px))_1fr_auto] md:items-start">
         <div className="relative">
-          <label className="sn-label mb-1.5 block text-right">Cliente</label>
+          <label className="sn-label mb-1.5 block">Cliente</label>
           {readOnlyAsText ? (
-            <p className="py-2 text-body text-right">{clienteInput || '—'}</p>
+            <p className="py-2 text-body">{clienteInput || '—'}</p>
           ) : isReadOnly ? (
             <input value={clienteInput} readOnly className={`${INPUT_CLASS} cursor-not-allowed opacity-60`} />
           ) : (
@@ -116,9 +119,9 @@ export function QuotationGeneralInfoSection({
         </div>
 
         <div className="relative">
-          <label className="sn-label mb-1.5 block text-right">Proyecto</label>
+          <label className="sn-label mb-1.5 block">Proyecto</label>
           {readOnlyAsText ? (
-            <p className="py-2 text-body text-right">{proyectoInput || '—'}</p>
+            <p className="py-2 text-body">{proyectoInput || '—'}</p>
           ) : isReadOnly ? (
             <input value={proyectoInput} readOnly className={`${INPUT_CLASS} cursor-not-allowed opacity-60`} />
           ) : (
@@ -144,9 +147,9 @@ export function QuotationGeneralInfoSection({
         </div>
 
         <div>
-          <label className="sn-label mb-1.5 block text-right">Fecha de Entrega</label>
+          <label className="sn-label mb-1.5 block">Fecha de Entrega</label>
           {readOnlyAsText ? (
-            <p className="py-2 text-body text-right">{formatDateDisplay(fechaEntregaValue)}</p>
+            <p className="py-2 text-body">{formatDateDisplay(fechaEntregaValue)}</p>
           ) : (
             <DateField {...register('fecha_entrega', onFechaEntregaChange ? {
               onChange: (event) => onFechaEntregaChange(event.target.value),
@@ -155,9 +158,9 @@ export function QuotationGeneralInfoSection({
         </div>
 
         <div>
-          <label className="sn-label mb-1.5 block text-right">Locación</label>
+          <label className="sn-label mb-1.5 block">Locación</label>
           {readOnlyAsText ? (
-            <p className="py-2 text-body text-right">{locacionValue || '—'}</p>
+            <p className="py-2 text-body">{locacionValue || '—'}</p>
           ) : (
             <input {...register('locacion', onLocacionChange ? {
               onChange: (event) => onLocacionChange(event.target.value),
@@ -165,9 +168,14 @@ export function QuotationGeneralInfoSection({
           )}
         </div>
 
+        {/* Espaciador flexible: empuja Fecha de Cotización al borde derecho del panel
+            (grid-template-columns 1fr auto arriba), en vez de repartir el ancho en
+            columnas iguales -- así se ve en la referencia del skill. */}
+        <div className="hidden md:block" />
+
         <div>
-          <label className="sn-label mb-1.5 block text-left">Fecha de Cotización</label>
-          <p className="py-1.5 text-content text-body text-left">{dateLabel}</p>
+          <label className="sn-label mb-1.5 block whitespace-nowrap">Fecha de Cotización</label>
+          <p className="py-1.5 text-content text-body whitespace-nowrap">{dateLabel}</p>
         </div>
       </div>
 
@@ -183,6 +191,7 @@ export function QuotationGeneralInfoSection({
           />
         </div>
       )}
+      </div>
     </div>
   )
 }

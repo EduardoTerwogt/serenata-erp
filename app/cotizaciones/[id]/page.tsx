@@ -700,27 +700,40 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   return (
     <div className="flex flex-col gap-[19px]">
-      <div>
-        <Link href="/cotizaciones" className="text-content text-faint hover:text-subtext">← Cotizaciones</Link>
-      </div>
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <h1 className="sn-display text-2xl text-ink md:text-h2">{cotizacion.id}</h1>
-            <StatusBadge tone={toneForCotizacionEstado(cotizacion.estado)}>{cotizacion.estado}</StatusBadge>
-          </div>
-          <p className="text-subtext">{cotizacion.proyecto} — {cotizacion.cliente}</p>
-          <div className="mt-3">
-            <p className="sn-label mb-2">Colaborando ahora</p>
-            <div className="flex flex-wrap gap-2">
-              {visibleOnlineUsers.length === 0 ? <span className="text-xs text-faint">Solo tú en esta cotización</span> : visibleOnlineUsers.map((user) => { const shortName = getShortName(user.name, user.email); return <span key={user.user_id} className="inline-flex items-center gap-2 rounded-pill border border-hairline bg-row px-2.5 py-1 text-xs text-body"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-row-alt text-[10px] font-semibold text-body">{getInitials(shortName)}</span><span>{shortName}</span>{user.active_section ? <span className="text-faint">· {sectionLabels[user.active_section]}</span> : null}</span> })}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3 min-w-0">
+          <Link href="/cotizaciones" className="flex-none text-content text-faint hover:text-subtext">← Cotizaciones</Link>
+          <h1 className="sn-display flex-none text-2xl text-ink md:text-h2">{cotizacion.id}</h1>
+          <span className="flex-none whitespace-nowrap text-content text-subtext">Cotizada el {formatDateDisplay(cotizacion.fecha_cotizacion)}</span>
+          <StatusBadge tone={toneForCotizacionEstado(cotizacion.estado)}>{cotizacion.estado}</StatusBadge>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+          {visibleOnlineUsers.length > 0 && (
+            <div className="flex flex-none items-center gap-2 rounded-pill border border-hairline bg-row py-1 pl-1 pr-3">
+              <div className="flex -space-x-2">
+                {visibleOnlineUsers.slice(0, 3).map((user) => {
+                  const shortName = getShortName(user.name, user.email)
+                  return <span key={user.user_id} title={shortName} className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-row bg-accent text-[10px] font-semibold text-accent-ink">{getInitials(shortName)}</span>
+                })}
+              </div>
+              <span className="whitespace-nowrap text-xs text-subtext">{visibleOnlineUsers.length} viendo</span>
             </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {cotizacion.estado === 'BORRADOR' && <><button onClick={() => guardar()} disabled={guardando} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarCotizacion} disabled={guardando || generandoPdf} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : guardando ? 'Generando...' : 'Generar Cotización'}</button></>}
+            {cotizacion.estado === 'EMITIDA' && <><button onClick={() => guardar()} disabled={guardando} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarPDF} disabled={generandoPdf} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={cancelarCotizacion} disabled={cancelando} className="text-subtext hover:bg-white/5 hover:text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button><button onClick={aprobar} disabled={aprobando || guardando} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors disabled:opacity-50 min-h-[44px]">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</button></>}
+            {cotizacion.estado === 'APROBADA' && <><button onClick={generarPDF} disabled={generandoPdf} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={cancelarCotizacion} disabled={cancelando} className="text-subtext hover:bg-white/5 hover:text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button><button onClick={crearComplementaria} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors min-h-[44px]">Crear Complementaria</button></>}
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:justify-end">
-          {cotizacion.estado === 'BORRADOR' && <><button onClick={() => guardar()} disabled={guardando} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarCotizacion} disabled={guardando || generandoPdf} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : guardando ? 'Generando...' : 'Generar Cotización'}</button></>}
-          {cotizacion.estado === 'EMITIDA' && <><button onClick={() => guardar()} disabled={guardando} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarPDF} disabled={generandoPdf} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={cancelarCotizacion} disabled={cancelando} className="text-subtext hover:bg-white/5 hover:text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button><button onClick={aprobar} disabled={aprobando || guardando} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors disabled:opacity-50 min-h-[44px]">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</button></>}
-          {cotizacion.estado === 'APROBADA' && <><button onClick={generarPDF} disabled={generandoPdf} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={cancelarCotizacion} disabled={cancelando} className="text-subtext hover:bg-white/5 hover:text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button><button onClick={crearComplementaria} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors min-h-[44px]">Crear Complementaria</button></>}
+      </div>
+
+      <div>
+        <p className="text-subtext">{cotizacion.proyecto} — {cotizacion.cliente}</p>
+        <div className="mt-3">
+          <p className="sn-label mb-2">Colaborando ahora</p>
+          <div className="flex flex-wrap gap-2">
+            {visibleOnlineUsers.length === 0 ? <span className="text-xs text-faint">Solo tú en esta cotización</span> : visibleOnlineUsers.map((user) => { const shortName = getShortName(user.name, user.email); return <span key={user.user_id} className="inline-flex items-center gap-2 rounded-pill border border-hairline bg-row px-2.5 py-1 text-xs text-body"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-row-alt text-[10px] font-semibold text-body">{getInitials(shortName)}</span><span>{shortName}</span>{user.active_section ? <span className="text-faint">· {sectionLabels[user.active_section]}</span> : null}</span> })}
+          </div>
         </div>
       </div>
 

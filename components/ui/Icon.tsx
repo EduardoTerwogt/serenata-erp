@@ -34,6 +34,7 @@ const ICONS = {
   plantillas: Copy,
   'admin-usuarios': UserCog,
   'google-sheets': Table,
+  copy: Copy,
   'log-out': LogOut,
   menu: Menu,
   close: X,
