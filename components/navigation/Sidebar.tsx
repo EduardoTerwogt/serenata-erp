@@ -10,17 +10,15 @@ export interface SidebarNavLink {
 
 interface SidebarProps {
   items: SidebarNavLink[]
-  adminItems?: SidebarNavLink[]
 }
 
-export function Sidebar({ items, adminItems = [] }: SidebarProps) {
+// Fondo del sidebar: sólido (bg-topbar), no la textura de marca del kit --
+// en el canvas real (claude.ai/design) el sidebar es casi plano; la textura
+// vívida de tokens/colors.css quedaba demasiado saturada aplicada a rail completo.
+export function Sidebar({ items }: SidebarProps) {
   return (
-    <aside
-      className="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col border-r border-hairline shadow-rail md:flex"
-      style={{ backgroundImage: 'var(--sn-texture-rail)' }}
-    >
-      <div className="absolute inset-0 backdrop-blur-3xl" style={{ background: 'rgba(12,15,20,.42)' }} />
-      <div className="relative flex h-full flex-col">
+    <aside className="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col border-r border-hairline bg-topbar shadow-rail md:flex">
+      <div className="flex h-full flex-col">
         <div className="flex h-[84px] flex-none items-center px-5">
           <Wordmark variant="mark" size={21} />
         </div>
@@ -30,14 +28,6 @@ export function Sidebar({ items, adminItems = [] }: SidebarProps) {
             <NavItem key={item.href} {...item} />
           ))}
         </nav>
-
-        {adminItems.length > 0 && (
-          <nav className="flex flex-none flex-col gap-[5px] border-t border-hairline px-3 py-3">
-            {adminItems.map((item) => (
-              <NavItem key={item.href} {...item} tone="admin" />
-            ))}
-          </nav>
-        )}
       </div>
     </aside>
   )

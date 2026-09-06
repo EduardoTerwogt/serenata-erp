@@ -116,8 +116,8 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
       )}
 
       <AppShell
-        sidebar={<Sidebar items={withActive(visibleLinks)} adminItems={isAdmin ? withActive(ADMIN_LINKS) : []} />}
-        topbar={<Topbar email={session?.user?.email || ''} onSignOut={handleSignOut} />}
+        sidebar={<Sidebar items={[...withActive(visibleLinks), ...(isAdmin ? withActive(ADMIN_LINKS) : [])]} />}
+        topbar={<Topbar name={session?.user?.name || ''} email={session?.user?.email || ''} onSignOut={handleSignOut} />}
       >
         {children}
       </AppShell>
