@@ -2,7 +2,6 @@
 
 import { UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { AppCard } from '@/components/ui/AppCard'
 import { DateField } from '@/components/ui/DateField'
 import { formatDateDisplay } from '@/lib/format-date'
 
@@ -39,6 +38,10 @@ interface Props {
   locacionValue?: string
 }
 
+const INPUT_CLASS = 'w-full bg-input border border-hairline rounded-control px-3 py-2.5 md:py-2 text-sm text-body placeholder-faint focus:outline-none focus:border-accent transition-colors'
+const DROPDOWN_CLASS = 'absolute z-50 w-full min-w-[220px] mt-1 bg-card border border-hairline rounded-control shadow-overlay max-h-48 overflow-y-auto'
+const DROPDOWN_ITEM_CLASS = 'px-4 py-3 hover:bg-row cursor-pointer text-body text-sm border-b border-hairline last:border-0'
+
 export function QuotationGeneralInfoSection({
   title = 'Información General',
   register,
@@ -69,15 +72,15 @@ export function QuotationGeneralInfoSection({
   const readOnlyAsText = isReadOnly && readOnlyDisplay === 'text'
 
   return (
-    <AppCard className="p-4 md:p-6 mb-6">
-      <h2 className="text-lg font-semibold text-white mb-4">{title}</h2>
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+    <div className="rounded-panel border border-hairline bg-card p-4 md:p-6">
+      <h2 className="mb-4 text-base font-semibold text-body">{title}</h2>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
         <div className="relative">
-          <label className="block text-sm text-gray-400 mb-1">Cliente</label>
+          <label className="sn-label mb-1.5 block">Cliente</label>
           {readOnlyAsText ? (
-            <p className="text-white py-2">{clienteInput || '—'}</p>
+            <p className="py-2 text-body">{clienteInput || '—'}</p>
           ) : isReadOnly ? (
-            <input value={clienteInput} readOnly className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white opacity-60 cursor-not-allowed" />
+            <input value={clienteInput} readOnly className={`${INPUT_CLASS} cursor-not-allowed opacity-60`} />
           ) : (
             <>
               <input value={clienteInput} onChange={e => handleClienteChange(e.target.value)} onFocus={() => clienteSugerencias.length > 0 && setMostrarClienteDropdown(true)} onBlur={() => setTimeout(() => {
@@ -92,33 +95,33 @@ export function QuotationGeneralInfoSection({
                     }
                   }
                 }
-              }, 200)} autoComplete="off" placeholder="Nombre del cliente" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
-              {mostrarClienteDropdown && clienteSugerencias.length > 0 && <div className="absolute z-50 w-full min-w-[220px] mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{clienteSugerencias.map((nombre, i) => <div key={i} onMouseDown={() => {
+              }, 200)} autoComplete="off" placeholder="Nombre del cliente" className={INPUT_CLASS} />
+              {mostrarClienteDropdown && clienteSugerencias.length > 0 && <div className={DROPDOWN_CLASS}>{clienteSugerencias.map((nombre, i) => <div key={i} onMouseDown={() => {
                 if (onClienteSelected) {
                   onClienteSelected(nombre)
                 } else {
                   seleccionarCliente(nombre)
                 }
-              }} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{nombre}</div>)}</div>}
+              }} className={DROPDOWN_ITEM_CLASS}>{nombre}</div>)}</div>}
             </>
           )}
         </div>
 
         <div className="relative">
-          <label className="block text-sm text-gray-400 mb-1">Proyecto</label>
+          <label className="sn-label mb-1.5 block">Proyecto</label>
           {readOnlyAsText ? (
-            <p className="text-white py-2">{proyectoInput || '—'}</p>
+            <p className="py-2 text-body">{proyectoInput || '—'}</p>
           ) : isReadOnly ? (
-            <input value={proyectoInput} readOnly className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white opacity-60 cursor-not-allowed" />
+            <input value={proyectoInput} readOnly className={`${INPUT_CLASS} cursor-not-allowed opacity-60`} />
           ) : (
             <>
               <input value={proyectoInput} onChange={e => handleProyectoChange(e.target.value)} onFocus={() => {
                 const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
                 if (filtrados.length > 0) setMostrarProyectoDropdown(true)
-              }} onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)} autoComplete="off" placeholder="Nombre del proyecto" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+              }} onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)} autoComplete="off" placeholder="Nombre del proyecto" className={INPUT_CLASS} />
               {mostrarProyectoDropdown && (() => {
                 const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
-                return filtrados.length > 0 ? <div className="absolute z-50 w-full min-w-[220px] mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{filtrados.map((proy, i) => <div key={i} onMouseDown={() => {
+                return filtrados.length > 0 ? <div className={DROPDOWN_CLASS}>{filtrados.map((proy, i) => <div key={i} onMouseDown={() => {
                   if (onProyectoSelected) {
                     onProyectoSelected(proy)
                   } else {
@@ -126,39 +129,39 @@ export function QuotationGeneralInfoSection({
                     setValue('proyecto', proy)
                     setMostrarProyectoDropdown(false)
                   }
-                }} className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-white text-sm border-b border-gray-700 last:border-0">{proy}</div>)}</div> : null
+                }} className={DROPDOWN_ITEM_CLASS}>{proy}</div>)}</div> : null
               })()}
             </>
           )}
         </div>
 
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Fecha de Entrega</label>
+          <label className="sn-label mb-1.5 block">Fecha de Entrega</label>
           {readOnlyAsText ? (
-            <p className="text-white py-2">{formatDateDisplay(fechaEntregaValue)}</p>
+            <p className="py-2 text-body">{formatDateDisplay(fechaEntregaValue)}</p>
           ) : (
             <DateField {...register('fecha_entrega', onFechaEntregaChange ? {
               onChange: (event) => onFechaEntregaChange(event.target.value),
-            } : undefined)} value={fechaEntregaValue} readOnly={isReadOnly} className={`w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`} />
+            } : undefined)} value={fechaEntregaValue} readOnly={isReadOnly} className={`w-full min-w-0 ${INPUT_CLASS} ${isReadOnly ? 'cursor-not-allowed opacity-60' : ''}`} />
           )}
         </div>
 
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Locación</label>
+          <label className="sn-label mb-1.5 block">Locación</label>
           {readOnlyAsText ? (
-            <p className="text-white py-2">{locacionValue || '—'}</p>
+            <p className="py-2 text-body">{locacionValue || '—'}</p>
           ) : (
             <input {...register('locacion', onLocacionChange ? {
               onChange: (event) => onLocacionChange(event.target.value),
-            } : undefined)} readOnly={isReadOnly} className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`} placeholder="Lugar del evento" />
+            } : undefined)} readOnly={isReadOnly} className={`${INPUT_CLASS} ${isReadOnly ? 'cursor-not-allowed opacity-60' : ''}`} placeholder="Lugar del evento" />
           )}
         </div>
 
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Fecha de Cotización</label>
-          <p className="text-white py-1.5 text-sm">{dateLabel}</p>
+          <label className="sn-label mb-1.5 block">Fecha de Cotización</label>
+          <p className="py-1.5 text-sm text-body">{dateLabel}</p>
         </div>
       </div>
-    </AppCard>
+    </div>
   )
 }

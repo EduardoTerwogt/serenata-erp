@@ -80,16 +80,16 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        className="bg-card border border-hairline rounded-panel w-full max-w-2xl max-h-[85vh] flex flex-col shadow-overlay"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 md:p-6 border-b border-gray-800 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-white">Copiar desde otra cotización</h2>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-white transition-colors">✕</button>
+        <div className="p-4 md:p-6 border-b border-hairline flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-body">Copiar desde otra cotización</h2>
+          <button type="button" onClick={onClose} className="text-faint hover:text-body transition-colors">✕</button>
         </div>
 
         <div className="p-4 md:p-6 overflow-y-auto flex-1">
-          {error && <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4 text-sm">{error}</div>}
+          {error && <div className="rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20 text-cancelled-fg px-4 py-3 mb-4 text-sm">{error}</div>}
 
           {!selectedCotizacion ? (
             <>
@@ -98,12 +98,12 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar por folio, cliente o proyecto..."
                 autoFocus
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 mb-3"
+                className="w-full bg-input border border-hairline rounded-control px-3 py-2 text-body text-sm focus:outline-none focus:border-accent mb-3"
               />
               {loading ? (
-                <p className="text-gray-500 text-sm py-6 text-center">Cargando cotizaciones...</p>
+                <p className="text-faint text-sm py-6 text-center">Cargando cotizaciones...</p>
               ) : filteredCotizaciones.length === 0 ? (
-                <p className="text-gray-500 text-sm py-6 text-center">No se encontraron cotizaciones</p>
+                <p className="text-faint text-sm py-6 text-center">No se encontraron cotizaciones</p>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {filteredCotizaciones.map((c) => (
@@ -111,14 +111,14 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
                       key={c.id}
                       type="button"
                       onClick={() => setSelectedCotizacionId(c.id)}
-                      className="w-full text-left bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-4 py-3 transition-colors"
+                      className="w-full text-left bg-row hover:bg-row-alt border border-hairline rounded-control px-4 py-3 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <span className="font-mono text-blue-400 font-bold text-sm">{c.id}</span>
-                        <span className="text-xs text-gray-500">{(c.items || []).length} partida(s)</span>
+                        <span className="sn-display text-accent text-sm">{c.id}</span>
+                        <span className="text-xs text-faint">{(c.items || []).length} partida(s)</span>
                       </div>
-                      <p className="text-white text-sm mt-0.5">{c.proyecto}</p>
-                      <p className="text-gray-500 text-xs">{c.cliente}</p>
+                      <p className="text-body text-sm mt-0.5">{c.proyecto}</p>
+                      <p className="text-faint text-xs">{c.cliente}</p>
                     </button>
                   ))}
                 </div>
@@ -129,25 +129,25 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
               <button
                 type="button"
                 onClick={() => { setSelectedCotizacionId(null); setSelectedItemIds(new Set()) }}
-                className="text-gray-500 hover:text-gray-300 text-sm mb-3"
+                className="text-faint hover:text-subtext text-sm mb-3"
               >
                 ← Elegir otra cotización
               </button>
               <div className="mb-3">
-                <span className="font-mono text-blue-400 font-bold">{selectedCotizacion.id}</span>
-                <span className="text-gray-400 text-sm"> — {selectedCotizacion.proyecto} · {selectedCotizacion.cliente}</span>
+                <span className="sn-display text-accent">{selectedCotizacion.id}</span>
+                <span className="text-subtext text-sm"> — {selectedCotizacion.proyecto} · {selectedCotizacion.cliente}</span>
               </div>
 
               {sourceItems.length === 0 ? (
-                <p className="text-gray-500 text-sm py-6 text-center">Esta cotización no tiene partidas</p>
+                <p className="text-faint text-sm py-6 text-center">Esta cotización no tiene partidas</p>
               ) : (
                 <>
-                  <label className="flex items-center gap-2 text-sm text-gray-300 mb-2 cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm text-body mb-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={selectedItemIds.size === sourceItems.length && sourceItems.length > 0}
                       onChange={toggleAll}
-                      className="w-4 h-4 accent-blue-600"
+                      className="w-4 h-4 accent-[--sn-orange]"
                     />
                     Seleccionar todo ({sourceItems.length})
                   </label>
@@ -155,19 +155,19 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
                     {sourceItems.map((item) => (
                       <label
                         key={item.id}
-                        className="flex items-center gap-3 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 cursor-pointer hover:border-gray-600"
+                        className="flex items-center gap-3 bg-row border border-hairline rounded-control px-3 py-2 cursor-pointer hover:border-row-alt"
                       >
                         <input
                           type="checkbox"
                           checked={selectedItemIds.has(item.id)}
                           onChange={() => toggleItem(item.id)}
-                          className="w-4 h-4 accent-blue-600 flex-shrink-0"
+                          className="w-4 h-4 accent-[--sn-orange] flex-shrink-0"
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="text-white text-sm truncate">{item.descripcion || 'Sin descripción'}</p>
-                          <p className="text-gray-500 text-xs">{item.categoria || 'Sin categoría'} · {item.responsable_nombre || 'Sin responsable'}</p>
+                          <p className="text-body text-sm truncate">{item.descripcion || 'Sin descripción'}</p>
+                          <p className="text-faint text-xs">{item.categoria || 'Sin categoría'} · {item.responsable_nombre || 'Sin responsable'}</p>
                         </div>
-                        <span className="text-gray-300 text-sm whitespace-nowrap">${fmtCurrency(item.importe)}</span>
+                        <span className="text-subtext text-sm whitespace-nowrap">${fmtCurrency(item.importe)}</span>
                       </label>
                     ))}
                   </div>
@@ -177,15 +177,15 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
           )}
         </div>
 
-        <div className="p-4 md:p-6 border-t border-gray-800 flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-white px-4 py-2 rounded-lg transition-colors">
+        <div className="p-4 md:p-6 border-t border-hairline flex justify-end gap-3">
+          <button type="button" onClick={onClose} className="text-subtext hover:text-body px-4 py-2 rounded-control transition-colors">
             Cancelar
           </button>
           <button
             type="button"
             onClick={handleImport}
             disabled={!selectedCotizacion || selectedItemIds.size === 0 || importing}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-2 rounded-control text-sm font-semibold transition-colors disabled:opacity-50"
           >
             {importing ? 'Trayendo...' : `Traer a cotización actual${selectedItemIds.size > 0 ? ` (${selectedItemIds.size})` : ''}`}
           </button>

@@ -243,12 +243,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
    (text-sm, text-base, etc.) -- estas son solo para los patrones de marca
    (display condensado, eyebrow, micro-label) que no tienen equivalente. */
 .sn-display {
+  /* Sin color propio a propósito: como no está dentro de las capas de
+     Tailwind, un color fijo aquí le ganaría a cualquier text-* que se le
+     ponga encima (pasó con el folio de la tabla de cotizaciones). El color
+     lo pone quien use la clase. */
   font-family: var(--font-poppins);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.02;
   text-transform: uppercase;
-  color: var(--sn-ink);
 }
 .sn-eyebrow {
   font-family: var(--font-inter);

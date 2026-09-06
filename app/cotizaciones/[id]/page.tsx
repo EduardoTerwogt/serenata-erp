@@ -2,8 +2,10 @@
 
 import { FocusEvent, use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadge'
 import { Cotizacion, ItemCotizacion, Responsable } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
@@ -685,7 +687,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const cancelarCotizacion = async () => { if (!confirm('¿Cancelar esta cotización? Se eliminará el proyecto y las cuentas por cobrar/pagar asociadas.')) return; setCancelando(true); setError(null); setSuccess(null); try { const res = await fetch(`/api/cotizaciones/${id}/cancelar`, { method: 'POST' }); if (!res.ok) { const body = await res.json(); throw new Error(body.error || 'Error al cancelar') } const updated = await res.json(); applyCotizacionToState(updated); setSuccess('Cotización cancelada. Proyecto y cuentas eliminados.'); setTimeout(() => setSuccess(null), 4000) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al cancelar') } finally { setCancelando(false) } }
 
   if (loading) return <SkeletonQuotationDetail />
-  if (!cotizacion) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-gray-500">Cotización no encontrada</div>
+  if (!cotizacion) return <div className="p-8 text-center text-faint">Cotización no encontrada</div>
 
   const currentUserId = (session?.user as { id?: string | null } | undefined)?.id || session?.user?.email || null
   const uniqueOnlineUsers = onlineUsers.filter((user, index, arr) => arr.findIndex((item) => item.user_id === user.user_id) === index)
@@ -694,49 +696,52 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const generalLockedByOther = !!sectionEditors.general
   const totalsLockedByOther = !!sectionEditors.totales
 
-  const SectionEditBadge = ({ section }: { section: QuotationPresenceSection }) => { const editor = sectionEditors[section]; if (!editor) return null; return <p className="text-xs text-orange-300 mb-2">{getShortName(editor.name, editor.email)} está editando esta sección</p> }
+  const SectionEditBadge = ({ section }: { section: QuotationPresenceSection }) => { const editor = sectionEditors[section]; if (!editor) return null; return <p className="text-xs text-accent-quiet mb-2">{getShortName(editor.name, editor.email)} está editando esta sección</p> }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl">
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
+    <div className="flex flex-col gap-[19px]">
+      <div>
+        <Link href="/cotizaciones" className="text-sm text-faint hover:text-subtext">← Cotizaciones</Link>
+      </div>
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <h1 className="text-2xl md:text-3xl font-bold text-white font-mono">{cotizacion.id}</h1>
-            <span className={`text-sm px-3 py-1 rounded-full font-medium ${cotizacion.estado === 'APROBADA' ? 'bg-green-900 text-green-300' : cotizacion.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' : cotizacion.estado === 'CANCELADA' ? 'bg-red-900 text-red-300' : 'bg-yellow-900 text-yellow-300'}`}>{cotizacion.estado}</span>
+            <h1 className="sn-display text-2xl text-ink md:text-h2">{cotizacion.id}</h1>
+            <StatusBadge tone={toneForCotizacionEstado(cotizacion.estado)}>{cotizacion.estado}</StatusBadge>
           </div>
-          <p className="text-gray-400">{cotizacion.proyecto} — {cotizacion.cliente}</p>
+          <p className="text-subtext">{cotizacion.proyecto} — {cotizacion.cliente}</p>
           <div className="mt-3">
-            <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">Colaborando ahora</p>
+            <p className="sn-label mb-2">Colaborando ahora</p>
             <div className="flex flex-wrap gap-2">
-              {visibleOnlineUsers.length === 0 ? <span className="text-xs text-gray-500">Solo tú en esta cotización</span> : visibleOnlineUsers.map((user) => { const shortName = getShortName(user.name, user.email); return <span key={user.user_id} className="inline-flex items-center gap-2 rounded-full border border-gray-700 bg-gray-800 px-2.5 py-1 text-xs text-gray-200"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-700 text-[10px] font-semibold text-gray-100">{getInitials(shortName)}</span><span>{shortName}</span>{user.active_section ? <span className="text-gray-400">· {sectionLabels[user.active_section]}</span> : null}</span> })}
+              {visibleOnlineUsers.length === 0 ? <span className="text-xs text-faint">Solo tú en esta cotización</span> : visibleOnlineUsers.map((user) => { const shortName = getShortName(user.name, user.email); return <span key={user.user_id} className="inline-flex items-center gap-2 rounded-pill border border-hairline bg-row px-2.5 py-1 text-xs text-body"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-row-alt text-[10px] font-semibold text-body">{getInitials(shortName)}</span><span>{shortName}</span>{user.active_section ? <span className="text-faint">· {sectionLabels[user.active_section]}</span> : null}</span> })}
             </div>
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:justify-end">
-          {cotizacion.estado === 'BORRADOR' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarCotizacion} disabled={guardando || generandoPdf} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : guardando ? 'Generando...' : 'Generar Cotización'}</button></>}
-          {cotizacion.estado === 'EMITIDA' && <><button onClick={() => guardar()} disabled={guardando} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarPDF} disabled={generandoPdf} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={aprobar} disabled={aprobando || guardando} className="bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 min-h-[44px]">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</button><button onClick={cancelarCotizacion} disabled={cancelando} className="bg-red-800 hover:bg-red-700 text-red-200 px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button></>}
-          {cotizacion.estado === 'APROBADA' && <><button onClick={generarPDF} disabled={generandoPdf} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={crearComplementaria} className="bg-purple-700 hover:bg-purple-600 text-white px-4 py-3 rounded-lg text-sm transition-colors min-h-[44px]">Crear Complementaria</button><button onClick={cancelarCotizacion} disabled={cancelando} className="bg-red-800 hover:bg-red-700 text-red-200 px-4 py-3 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button></>}
+          {cotizacion.estado === 'BORRADOR' && <><button onClick={() => guardar()} disabled={guardando} className="bg-row hover:bg-row-alt text-body px-4 py-3 rounded-control text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarCotizacion} disabled={guardando || generandoPdf} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-sm font-semibold transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : guardando ? 'Generando...' : 'Generar Cotización'}</button></>}
+          {cotizacion.estado === 'EMITIDA' && <><button onClick={() => guardar()} disabled={guardando} className="bg-row hover:bg-row-alt text-body px-4 py-3 rounded-control text-sm transition-colors disabled:opacity-50 min-h-[44px]">{guardando ? 'Guardando...' : 'Guardar'}</button><button onClick={generarPDF} disabled={generandoPdf} className="bg-row hover:bg-row-alt text-body px-4 py-3 rounded-control text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={aprobar} disabled={aprobando || guardando} className="bg-approved-bg hover:opacity-90 text-approved-fg px-4 py-3 rounded-control text-sm font-medium transition-opacity disabled:opacity-50 min-h-[44px]">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</button><button onClick={cancelarCotizacion} disabled={cancelando} className="bg-cancelled-bg/80 hover:bg-cancelled-bg text-cancelled-fg px-4 py-3 rounded-control text-sm transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button></>}
+          {cotizacion.estado === 'APROBADA' && <><button onClick={generarPDF} disabled={generandoPdf} className="bg-row hover:bg-row-alt text-body px-4 py-3 rounded-control text-sm transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={crearComplementaria} className="bg-issued-bg hover:opacity-90 text-issued-fg px-4 py-3 rounded-control text-sm transition-opacity min-h-[44px]">Crear Complementaria</button><button onClick={cancelarCotizacion} disabled={cancelando} className="bg-cancelled-bg/80 hover:bg-cancelled-bg text-cancelled-fg px-4 py-3 rounded-control text-sm transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button></>}
         </div>
       </div>
 
-      {error && <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4">{error}</div>}
-      {success && <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4 flex items-center justify-between gap-4"><span>{success}</span>{driveLink && <a href={driveLink} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-200 underline text-sm whitespace-nowrap">Ver en Drive →</a>}</div>}
+      {error && <div className="rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20 text-cancelled-fg px-4 py-3">{error}</div>}
+      {success && <div className="rounded-control border border-approved-bg/60 bg-approved-bg/20 text-approved-fg px-4 py-3 flex items-center justify-between gap-4"><span>{success}</span>{driveLink && <a href={driveLink} target="_blank" rel="noopener noreferrer" className="underline text-sm whitespace-nowrap hover:opacity-80">Ver en Drive →</a>}</div>}
 
-      {(notasInternas || esEditable) && <div ref={notasSectionRef} className={`bg-gray-800/60 border rounded-xl p-4 mb-6 ${notasLockedByOther ? 'border-orange-600/70 opacity-80' : 'border-gray-700'}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}><SectionEditBadge section="notas" /><p className="text-xs text-gray-500 mb-2 uppercase tracking-wide font-medium">Notas del evento (uso interno)</p>{esEditable ? <textarea value={notasInternas} onChange={e => { handleNotasFocus(); notasDirtyRef.current = true; setNotasInternas(e.target.value) }} rows={3} placeholder="Sin notas..." disabled={notasLockedByOther} className="w-full bg-transparent text-gray-300 text-sm resize-none outline-none placeholder-gray-600 disabled:opacity-50 disabled:cursor-not-allowed" /> : <p className="text-gray-400 text-sm whitespace-pre-wrap">{notasInternas || '—'}</p>}</div>}
+      {(notasInternas || esEditable) && <div ref={notasSectionRef} className={`bg-row/60 border rounded-panel p-4 ${notasLockedByOther ? 'border-accent-quiet/70 opacity-80' : 'border-hairline'}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}><SectionEditBadge section="notas" /><p className="sn-label mb-2">Notas del evento (uso interno)</p>{esEditable ? <textarea value={notasInternas} onChange={e => { handleNotasFocus(); notasDirtyRef.current = true; setNotasInternas(e.target.value) }} rows={3} placeholder="Sin notas..." disabled={notasLockedByOther} className="w-full bg-transparent text-body text-sm resize-none outline-none placeholder-faint disabled:opacity-50 disabled:cursor-not-allowed" /> : <p className="text-subtext text-sm whitespace-pre-wrap">{notasInternas || '—'}</p>}</div>}
 
-      <div ref={generalSectionRef} className={`rounded-xl ${generalLockedByOther ? 'ring-1 ring-orange-600/70 opacity-80' : ''}`} onFocusCapture={handleGeneralFocus} onBlurCapture={handleGeneralBlur}>
+      <div ref={generalSectionRef} className={`rounded-panel ${generalLockedByOther ? 'ring-1 ring-accent-quiet/70 opacity-80' : ''}`} onFocusCapture={handleGeneralFocus} onBlurCapture={handleGeneralBlur}>
         <div className="px-1"><SectionEditBadge section="general" /></div>
         <QuotationGeneralInfoSection register={register} setValue={setValue} clienteInput={clienteInput} proyectoInput={proyectoInput} clienteSugerencias={clienteSugerencias} mostrarClienteDropdown={mostrarClienteDropdown} setMostrarClienteDropdown={setMostrarClienteDropdown} proyectosDelCliente={proyectosDelCliente} mostrarProyectoDropdown={mostrarProyectoDropdown} setMostrarProyectoDropdown={setMostrarProyectoDropdown} listaClientes={listaClientes} handleClienteChange={trackedHandleClienteChange} handleProyectoChange={trackedHandleProyectoChange} seleccionarCliente={seleccionarCliente} setProyectoInput={setProyectoInput} onClienteSelected={trackedSelectCliente} onProyectoSelected={trackedSelectProyecto} onFechaEntregaChange={trackedHandleFechaEntregaChange} onLocacionChange={trackedHandleLocacionChange} isReadOnly={!esEditable || generalLockedByOther} readOnlyDisplay={esEditable ? 'input' : 'text'} dateLabel={formatDateDisplay(cotizacion.fecha_cotizacion)} fechaEntregaValue={watch('fecha_entrega')} locacionValue={watch('locacion')} />
       </div>
 
-      <div className={`rounded-xl ${sectionEditors.partidas ? 'ring-1 ring-orange-600/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')}>
+      <div className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
         <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} isItemRowActionBlocked={isItemRowActionBlocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} />
       </div>
 
       <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={handleImportItems} />
 
-      <div ref={totalsSectionRef} className={`rounded-xl ${totalsLockedByOther ? 'ring-1 ring-orange-600/70 opacity-80' : ''}`} onFocusCapture={handleTotalsFocus} onBlurCapture={handleTotalsBlur}>
+      <div ref={totalsSectionRef} className={`rounded-panel ${totalsLockedByOther ? 'ring-1 ring-accent-quiet/70 opacity-80' : ''}`} onFocusCapture={handleTotalsFocus} onBlurCapture={handleTotalsBlur}>
         <div className="px-1"><SectionEditBadge section="totales" /></div>
         <QuotationTotalsPanels totals={displayTotales} editable={!!esEditable && !totalsLockedByOther} porcentaje_fee={porcentaje_fee} setPorcentajeFee={trackedSetPorcentajeFee} iva_activo={iva_activo} setIvaActivo={trackedSetIvaActivo} descuento_tipo={descuento_tipo} setDescuentoTipo={trackedSetDescuentoTipo} descuento_valor={descuento_valor} setDescuentoValor={trackedSetDescuentoValor} estimatedTaxes={estimatedTaxes} />
       </div>

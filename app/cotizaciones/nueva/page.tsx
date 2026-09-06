@@ -1,5 +1,6 @@
 'use client'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
 import { Suspense, useState } from 'react'
 import { ItemCotizacion } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
@@ -11,7 +12,7 @@ const QuotationItemsSection = dynamic(
   () => import('@/components/quotations/QuotationItemsSection').then((mod) => mod.QuotationItemsSection),
   {
     ssr: false,
-    loading: () => <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-gray-400">Cargando partidas...</div>,
+    loading: () => <div className="rounded-panel border border-hairline bg-card p-6 text-subtext">Cargando partidas...</div>,
   }
 )
 
@@ -19,7 +20,7 @@ const QuotationTotalsPanels = dynamic(
   () => import('@/components/quotations/QuotationTotalsPanels').then((mod) => mod.QuotationTotalsPanels),
   {
     ssr: false,
-    loading: () => <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-gray-400">Cargando totales...</div>,
+    loading: () => <div className="rounded-panel border border-hairline bg-card p-6 text-subtext">Cargando totales...</div>,
   }
 )
 
@@ -91,20 +92,23 @@ function NuevaCotizacionContent() {
   }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl">
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-white">Nueva Cotizacion</h1>
-        <p className="text-gray-400 mt-1">Folio: <span className="font-mono text-blue-400 font-bold">{folio || '...'}</span></p>
+    <div className="flex flex-col gap-[19px]">
+      <div>
+        <Link href="/cotizaciones" className="text-sm text-faint hover:text-subtext">← Cotizaciones</Link>
+        <div className="mt-2 flex flex-wrap items-baseline gap-3">
+          <h1 className="sn-display text-2xl text-ink md:text-h2">Nueva Cotización</h1>
+          <span className="text-subtext">Folio: <span className="font-mono text-accent font-bold">{folio || '...'}</span></span>
+        </div>
       </div>
 
       {esComplementaria && (
-        <div className="bg-blue-900/40 border border-blue-700 text-blue-300 rounded-lg px-4 py-3 mb-6">
+        <div className="rounded-control border border-issued-bg/60 bg-issued-bg/20 text-issued-fg px-4 py-3">
           Cotizacion complementaria de <span className="font-mono font-bold">{complementaria_de}</span>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-6">
+        <div className="rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20 text-cancelled-fg px-4 py-3">
           {error}
         </div>
       )}
@@ -177,7 +181,7 @@ function NuevaCotizacionContent() {
           type="button"
           disabled={guardando}
           onClick={onGuardarBorrador}
-          className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 min-h-[44px]"
+          className="bg-row hover:bg-row-alt text-body px-6 py-3 rounded-control font-medium transition-colors disabled:opacity-50 min-h-[44px]"
         >
           {guardando ? 'Guardando...' : 'Guardar Borrador'}
         </button>
@@ -185,14 +189,14 @@ function NuevaCotizacionContent() {
           type="button"
           disabled={guardando}
           onClick={onGenerarCotizacion}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 min-h-[44px]"
+          className="bg-accent hover:bg-accent-pressed text-accent-ink px-6 py-3 rounded-control font-semibold transition-colors disabled:opacity-50 min-h-[44px]"
         >
           {guardando ? 'Generando...' : 'Generar Cotizacion'}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
-          className="text-gray-400 hover:text-white px-4 py-3 rounded-lg transition-colors min-h-[44px]"
+          className="text-subtext hover:text-body px-4 py-3 rounded-control transition-colors min-h-[44px]"
         >
           Cancelar
         </button>
@@ -202,5 +206,5 @@ function NuevaCotizacionContent() {
 }
 
 export default function NuevaCotizacionPage() {
-  return <Suspense fallback={<div className="p-8 text-white">Cargando...</div>}><NuevaCotizacionContent /></Suspense>
+  return <Suspense fallback={<div className="p-8 text-body">Cargando...</div>}><NuevaCotizacionContent /></Suspense>
 }

@@ -1,13 +1,24 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 import { Cotizacion, EstadoCotizacion } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
+import { SectionHero } from '@/components/ui/SectionHero'
+import { SearchInput } from '@/components/ui/SearchInput'
+import { FilterTabs, type FilterTab } from '@/components/ui/FilterTabs'
+import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadge'
+import { Icon } from '@/components/ui/Icon'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
 
+function fmtMoney(n: number) {
+  return n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 export default function CotizacionesPage() {
+  const router = useRouter()
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [filtro, setFiltro] = useState<EstadoCotizacion | 'TODAS'>('TODAS')
   const [busqueda, setBusqueda] = useState('')
@@ -54,169 +65,154 @@ export default function CotizacionesPage() {
       })
     : porEstado
 
+  const tabs: FilterTab<EstadoCotizacion | 'TODAS'>[] = useMemo(() => ESTADOS.map(estado => ({
+    value: estado,
+    label: estado,
+    count: estado === 'TODAS' ? cotizaciones.length : cotizaciones.filter(c => c.estado === estado).length,
+  })), [cotizaciones])
+
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 overflow-x-hidden">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between md:mb-8 mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white">Cotizaciones</h1>
-          <p className="text-gray-400 mt-1">Gestiona todas tus cotizaciones</p>
-        </div>
-        <Link
-          href="/cotizaciones/nueva"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-medium transition-colors text-center min-h-[44px] flex items-center justify-center md:min-h-auto"
-        >
-          + Nueva Cotización
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-2 md:flex md:gap-3 gap-2 mb-6 w-full">
-        {ESTADOS.map(estado => (
-          <button
-            key={estado}
-            onClick={() => setFiltro(estado)}
-            className={`w-full md:w-auto px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] flex items-center justify-center text-center ${
-              filtro === estado
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-            }`}
+    <div className="flex flex-col gap-[19px]">
+      <SectionHero
+        title="Cotizaciones"
+        subtitle="Gestiona todas tus cotizaciones"
+        action={
+          <Link
+            href="/cotizaciones/nueva"
+            className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-pressed"
           >
-            {estado}
-          </button>
-        ))}
-      </div>
+            <Icon name="plus" size={16} />
+            Nueva Cotización
+          </Link>
+        }
+      />
 
-      <input
-        type="text"
+      <FilterTabs tabs={tabs} value={filtro} onChange={setFiltro} />
+
+      <SearchInput
         placeholder="Buscar por folio, cliente, proyecto, item o responsable..."
         value={busqueda}
         onChange={e => setBusqueda(e.target.value)}
-        className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 mb-6 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
       />
 
       {loading ? (
         <div className="space-y-3 animate-pulse">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
+            <div key={i} className="rounded-card border border-hairline bg-card p-4 md:p-6">
               <div className="hidden md:flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="h-5 bg-gray-800 rounded w-20" />
+                  <div className="h-5 w-20 rounded bg-row" />
                   <div className="space-y-1">
-                    <div className="h-4 bg-gray-800 rounded w-40" />
-                    <div className="h-3 bg-gray-800 rounded w-28" />
+                    <div className="h-4 w-40 rounded bg-row" />
+                    <div className="h-3 w-28 rounded bg-row" />
                   </div>
                 </div>
                 <div className="flex items-center gap-6">
-                  <div className="h-5 bg-gray-800 rounded w-24" />
-                  <div className="h-6 bg-gray-800 rounded-full w-20" />
+                  <div className="h-5 w-24 rounded bg-row" />
+                  <div className="h-6 w-20 rounded-full bg-row" />
                 </div>
               </div>
               <div className="md:hidden space-y-2">
                 <div className="flex justify-between">
-                  <div className="h-4 bg-gray-800 rounded w-24" />
-                  <div className="h-4 bg-gray-800 rounded-full w-16" />
+                  <div className="h-4 w-24 rounded bg-row" />
+                  <div className="h-4 w-16 rounded-full bg-row" />
                 </div>
-                <div className="h-4 bg-gray-800 rounded w-3/4" />
-                <div className="h-3 bg-gray-800 rounded w-1/2" />
-                <div className="flex justify-between">
-                  <div className="h-5 bg-gray-800 rounded w-28" />
-                  <div className="h-3 bg-gray-800 rounded w-20" />
-                </div>
+                <div className="h-4 w-3/4 rounded bg-row" />
+                <div className="h-3 w-1/2 rounded bg-row" />
               </div>
             </div>
           ))}
         </div>
       ) : filtradas.length > 0 ? (
-        <div className="space-y-3">
-          {filtradas.map(cot => (
-            <Link
-              key={cot.id}
-              href={`/cotizaciones/${cot.id}`}
-              className="block bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6 hover:border-gray-600 transition-colors"
-            >
-              <div className="md:hidden">
-                <div className="flex justify-between items-center mb-2 gap-3">
-                  <span className="font-mono text-blue-400 font-bold text-sm truncate">{cot.id}</span>
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${
-                    cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
-                    cot.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' :
-                    cot.estado === 'CANCELADA' ? 'bg-red-900 text-red-300' :
-                    'bg-yellow-900 text-yellow-300'
-                  }`}>
-                    {cot.estado}
-                  </span>
+        <div className="overflow-hidden rounded-card border border-hairline bg-card">
+          {/* Desktop: tabla */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-hairline">
+                  {['Folio', 'Proyecto', 'Cliente', 'Total', 'Entrega', 'Estatus'].map(h => (
+                    <th key={h} className="sn-label whitespace-nowrap px-6 py-3 text-left font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtradas.map(cot => (
+                  <tr
+                    key={cot.id}
+                    onClick={() => router.push(`/cotizaciones/${cot.id}`)}
+                    className="cursor-pointer border-b border-hairline last:border-0 transition-colors hover:bg-row"
+                  >
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <span className="sn-display text-accent">{cot.id}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-body">{cot.proyecto}</p>
+                      {cot.tipo === 'COMPLEMENTARIA' && (
+                        <p className="mt-0.5 text-xs text-accent-quiet">
+                          Complementaria de <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-subtext">{cot.cliente}</td>
+                    <td className="whitespace-nowrap px-6 py-4 font-semibold text-body">
+                      {(!cot.items || cot.items.length === 0) ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-normal text-accent-quiet">
+                          <Icon name="warning" size={13} /> Sin items
+                        </span>
+                      ) : `$${fmtMoney(cot.total)}`}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-subtext">{formatDateDisplay(cot.fecha_entrega)}</td>
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <StatusBadge tone={toneForCotizacionEstado(cot.estado)}>{cot.estado}</StatusBadge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile: cards -- el kit no cubre mobile, se mantiene el patrón ya usado en el resto de la app */}
+          <div className="divide-y divide-hairline md:hidden">
+            {filtradas.map(cot => (
+              <Link key={cot.id} href={`/cotizaciones/${cot.id}`} className="block p-4 transition-colors hover:bg-row">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="sn-display truncate text-sm text-accent">{cot.id}</span>
+                  <StatusBadge tone={toneForCotizacionEstado(cot.estado)} className="flex-shrink-0">{cot.estado}</StatusBadge>
                 </div>
-                <p className="text-white font-medium text-[15px] mb-1 break-words">{cot.proyecto}</p>
-                <p className="text-gray-500 text-sm mb-3 break-words">{cot.cliente}</p>
+                <p className="mb-1 break-words text-[15px] font-medium text-body">{cot.proyecto}</p>
+                <p className="mb-3 break-words text-sm text-subtext">{cot.cliente}</p>
                 {cot.tipo === 'COMPLEMENTARIA' && (
-                  <p className="text-xs text-purple-300 mb-2 break-words">
+                  <p className="mb-2 break-words text-xs text-accent-quiet">
                     Complementaria de <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
                   </p>
                 )}
                 {(!cot.items || cot.items.length === 0) && (
-                  <p className="text-xs text-orange-300 mb-2 break-words">
-                    ⚠️ Sin items (llenar manualmente)
+                  <p className="mb-2 flex items-center gap-1 break-words text-xs text-accent-quiet">
+                    <Icon name="warning" size={13} /> Sin items (llenar manualmente)
                   </p>
                 )}
-                <div className="flex justify-between items-center gap-3">
-                  <span className="text-white font-bold text-lg break-words">
-                    ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-gray-600 text-xs text-right flex-shrink-0">{formatDateDisplay(cot.fecha_entrega)}</span>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="break-words text-lg font-bold text-body">${fmtMoney(cot.total)}</span>
+                  <span className="flex-shrink-0 text-right text-xs text-faint">{formatDateDisplay(cot.fecha_entrega)}</span>
                 </div>
-              </div>
-
-              <div className="hidden md:flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <span className="font-mono text-blue-400 font-bold text-lg">{cot.id}</span>
-                  <div>
-                    <p className="text-white font-medium">{cot.proyecto}</p>
-                    <p className="text-gray-400 text-sm">{cot.cliente}</p>
-                  </div>
-                  {cot.tipo === 'COMPLEMENTARIA' && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-purple-900 text-purple-300">
-                      Complementaria de{' '}
-                      <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
-                    </span>
-                  )}
-                  {(!cot.items || cot.items.length === 0) && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-orange-900 text-orange-300">
-                      ⚠️ Sin items
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <p className="text-white font-bold">
-                      ${cot.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-gray-500 text-xs">{formatDateDisplay(cot.fecha_entrega)}</p>
-                  </div>
-                  <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                    cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
-                    cot.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' :
-                    cot.estado === 'CANCELADA' ? 'bg-red-900 text-red-300' :
-                    'bg-yellow-900 text-yellow-300'
-                  }`}>
-                    {cot.estado}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            ))}
+          </div>
         </div>
       ) : (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-          <p className="text-gray-400 text-lg mb-2">
+        <div className="rounded-card border border-hairline bg-card p-12 text-center">
+          <p className="mb-2 text-lg text-subtext">
             {filtro === 'TODAS' ? 'No hay cotizaciones aún' : `No hay cotizaciones en estado ${filtro}`}
           </p>
           {filtro === 'TODAS' && (
             <>
-              <p className="text-gray-600 text-sm mb-6">Crea tu primera cotización para empezar</p>
+              <p className="mb-6 text-sm text-faint">Crea tu primera cotización para empezar</p>
               <Link
                 href="/cotizaciones/nueva"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-control bg-accent px-6 py-3 font-semibold text-accent-ink transition-colors hover:bg-accent-pressed"
               >
-                + Nueva Cotización
+                <Icon name="plus" size={16} />
+                Nueva Cotización
               </Link>
             </>
           )}

@@ -13,6 +13,10 @@ import {
   Menu,
   X,
   ChevronDown,
+  Search,
+  Plus,
+  SlidersHorizontal,
+  AlertTriangle,
 } from 'lucide-react'
 
 // Fase 5.7 (rediseño): wrapper tipado sobre lucide-react (ya era dependencia
@@ -34,6 +38,10 @@ const ICONS = {
   menu: Menu,
   close: X,
   'chevron-down': ChevronDown,
+  search: Search,
+  plus: Plus,
+  filter: SlidersHorizontal,
+  warning: AlertTriangle,
 } as const
 
 export type IconName = keyof typeof ICONS
