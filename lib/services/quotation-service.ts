@@ -20,6 +20,10 @@ export async function fetchQuotationDetail(id: string): Promise<Cotizacion> {
   return getJson(`/api/cotizaciones/${id}`, 'Cotización no encontrada')
 }
 
+export async function fetchQuotationsList(): Promise<Cotizacion[]> {
+  return getJson('/api/cotizaciones', 'Error cargando cotizaciones')
+}
+
 export async function saveQuotationNotes(id: string, notasInternas: string | null): Promise<Cotizacion> {
   return sendJson(`/api/cotizaciones/${id}/notas`, {
     notas_internas: notasInternas,

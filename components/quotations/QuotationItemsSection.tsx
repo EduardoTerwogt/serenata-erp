@@ -6,6 +6,7 @@ import { UseFieldArrayAppend, UseFieldArrayRemove, UseFormRegister, UseFormSetVa
 import { Producto, Responsable } from '@/lib/types'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
+import { calculateCostoConIva } from '@/lib/quotations/calculations'
 import { fmtCurrency } from '@/lib/quotations/format'
 import { QuotationItemCellField } from '@/hooks/useQuotationPresence'
 
@@ -50,6 +51,7 @@ interface Props {
   isItemRowLocked?: (index: number) => boolean
   isItemRowActionBlocked?: (index: number) => boolean
   getItemRowStatusText?: (index: number) => string | null
+  onCopyClick?: () => void
 }
 
 export function QuotationItemsSection({
@@ -81,6 +83,7 @@ export function QuotationItemsSection({
   isItemRowLocked,
   isItemRowActionBlocked,
   getItemRowStatusText,
+  onCopyClick,
 }: Props) {
   const descInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const [dropdownPos, setDropdownPos] = useStateReact<Record<number, { top: number; left: number } | null>>({})
@@ -175,6 +178,7 @@ export function QuotationItemsSection({
           <input type="hidden" {...register(`items.${index}.responsable_nombre`)} />
         </td>
         <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => onItemFieldFocus?.(index, 'x_pagar')} onBlur={() => onItemFieldBlur?.(index, 'x_pagar')} onChange={(e) => { onItemFieldChange?.(index, 'x_pagar'); register(`items.${index}.x_pagar`).onChange(e) }} disabled={cellLocked(index, 'x_pagar')} className="w-28 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" /></td>
+        <td className="px-4 py-2 text-gray-400 whitespace-nowrap">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
         <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(margen)}</td>
         <td className="px-4 py-2"><button type="button" onClick={() => (onRemoveRow ? onRemoveRow(index) : remove(index))} disabled={fields.length === 1 || actionBlocked(index)} className="text-gray-500 hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
       </tr>
@@ -190,6 +194,7 @@ export function QuotationItemsSection({
       <td className="px-4 py-3 text-white font-medium">${fmtCurrency(item.importe ?? (item.cantidad * item.precio_unitario))}</td>
       <td className="px-4 py-3">{item.responsable_nombre ? <span className="text-gray-300">{item.responsable_nombre}</span> : <span className="text-gray-500 italic">Sin asignar</span>}</td>
       <td className="px-4 py-3 text-gray-300">${fmtCurrency(item.x_pagar)}</td>
+      <td className="px-4 py-3 text-gray-400">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
       <td className={`px-4 py-3 font-medium ${(item.margen ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(item.margen ?? 0)}</td>
     </tr>
   )
@@ -214,6 +219,7 @@ export function QuotationItemsSection({
           <span className="text-gray-400">X pagar ${fmtCurrency(typeof item.x_pagar === 'number' ? item.x_pagar : 0)}</span>
           <span className={`text-right font-medium ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>Margen ${fmtCurrency(margen)}</span>
         </div>
+        <div className="text-[13px] text-gray-500 mb-2">Costo+IVA ${fmtCurrency(calculateCostoConIva(item.x_pagar))}</div>
         <div className="flex justify-between items-center pt-2 border-t border-gray-700">
           <span className="text-gray-500 text-xs">{item.responsable_nombre || 'Sin responsable'}</span>
           <span className="text-white font-bold">${fmtCurrency(importe)}</span>
@@ -240,6 +246,7 @@ export function QuotationItemsSection({
           <span className="text-gray-400">X pagar ${fmtCurrency(item.x_pagar)}</span>
           <span className="text-right text-gray-500">{item.responsable_nombre || 'Sin responsable'}</span>
         </div>
+        <div className="text-[13px] text-gray-500 mb-2">Costo+IVA ${fmtCurrency(calculateCostoConIva(item.x_pagar))}</div>
         <div className="flex justify-end pt-2 border-t border-gray-700">
           <span className="text-white font-bold">${fmtCurrency(importe)}</span>
         </div>
@@ -252,14 +259,19 @@ export function QuotationItemsSection({
       <div className="bg-gray-900 border border-gray-800 rounded-xl mb-6">
         <div className="p-4 md:p-6 border-b border-gray-800 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-white">Partidas</h2>
-          {editable && <button type="button" onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })} className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>}
+          {editable && (
+            <div className="flex gap-2">
+              {onCopyClick && <button type="button" onClick={onCopyClick} className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0">Copiar desde otra cotización</button>}
+              <button type="button" onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })} className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>
+            </div>
+          )}
         </div>
 
         <div className="hidden md:block" style={{ overflowX: 'auto', overflowY: 'visible' }}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800">
-                {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'X Pagar', 'Margen', ...(editable ? [''] : [])].map(h => (
+                {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'X Pagar', 'Costo + IVA', 'Margen', ...(editable ? [''] : [])].map(h => (
                   <th key={h} className="text-left text-gray-400 font-medium px-4 py-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -300,6 +312,7 @@ export function QuotationItemsSection({
             </div>
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mt-6">
               <div className="flex justify-between mb-2"><span className="text-gray-500 text-sm">Importe</span><span className="text-gray-300 text-sm font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).importe)}</span></div>
+              <div className="flex justify-between mb-2"><span className="text-gray-500 text-sm">Costo + IVA</span><span className="text-gray-300 text-sm font-medium">${fmtCurrency(calculateCostoConIva((watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).x_pagar))}</span></div>
               <div className="flex justify-between"><span className="text-gray-500 text-sm">Margen</span><span className={`text-sm font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
             {fields.length > 1 && <button type="button" onClick={() => { if (onRemoveRow) { onRemoveRow(editingItemIndex) } else { remove(editingItemIndex) } setEditingItemIndex(null) }} disabled={actionBlocked(editingItemIndex)} className="w-full text-red-400 hover:text-red-300 py-3 text-sm mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}

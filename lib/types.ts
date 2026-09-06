@@ -6,6 +6,8 @@ export type EstadoCuentaCobrar = 'FACTURA_PENDIENTE' | 'FACTURADO' | 'PARCIALMEN
 export type EstadoCuentaPagar = 'PENDIENTE' | 'EN_PROCESO_PAGO' | 'PAGADO'
 export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO'
 
+export type RegimenFiscal = 'moral' | 'fisica'
+
 export interface Responsable {
   id: string
   nombre: string
@@ -17,6 +19,10 @@ export interface Responsable {
   notas: string | null
   activo: boolean
   created_at: string
+  // Escenario fiscal del proveedor (Fase 5.1/5.3): 'moral' = IVA 16% acreditable sin
+  // retencion; 'fisica' = persona fisica con honorarios, retencion IVA 2/3 + ISR 10%.
+  // null = no capturado aun -> se trata como 'moral' por default en los calculos.
+  regimen_fiscal: RegimenFiscal | null
 }
 
 export interface HistorialResponsable {

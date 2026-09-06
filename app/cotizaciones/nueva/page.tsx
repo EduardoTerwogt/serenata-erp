@@ -1,8 +1,10 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { Suspense } from 'react'
+import { Suspense, useState } from 'react'
+import { ItemCotizacion } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
+import { QuotationCopyItemsModal } from '@/components/quotations/QuotationCopyItemsModal'
 import { useNuevaCotizacionPage } from '@/app/cotizaciones/nueva/useNuevaCotizacionPage'
 
 const QuotationItemsSection = dynamic(
@@ -64,12 +66,29 @@ function NuevaCotizacionContent() {
     setMostrarProductoDropdown,
     watchedItems,
     totales,
+    estimatedTaxes,
     onGuardarBorrador,
     onGenerarCotizacion,
     esComplementaria,
     complementaria_de,
     router,
   } = useNuevaCotizacionPage()
+
+  const [showCopyModal, setShowCopyModal] = useState(false)
+
+  const handleImportItems = (items: ItemCotizacion[]) => {
+    items.forEach((item) => {
+      append({
+        categoria: item.categoria || '',
+        descripcion: item.descripcion || '',
+        cantidad: item.cantidad || 1,
+        precio_unitario: item.precio_unitario || 0,
+        responsable_id: item.responsable_id || '',
+        responsable_nombre: item.responsable_nombre || '',
+        x_pagar: item.x_pagar || 0,
+      })
+    })
+  }
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl">
@@ -130,6 +149,13 @@ function NuevaCotizacionContent() {
         mostrarProductoDropdown={mostrarProductoDropdown}
         setMostrarProductoDropdown={setMostrarProductoDropdown}
         responsables={responsables}
+        onCopyClick={() => setShowCopyModal(true)}
+      />
+
+      <QuotationCopyItemsModal
+        open={showCopyModal}
+        onClose={() => setShowCopyModal(false)}
+        onImport={handleImportItems}
       />
 
       <QuotationTotalsPanels
@@ -143,6 +169,7 @@ function NuevaCotizacionContent() {
         setDescuentoTipo={setDescuentoTipo}
         descuento_valor={descuento_valor}
         setDescuentoValor={setDescuentoValor}
+        estimatedTaxes={estimatedTaxes}
       />
 
       <div className="flex flex-col md:flex-row gap-3">

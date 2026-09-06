@@ -51,6 +51,18 @@ export interface QuotationTotals {
   utilidad_total: number
 }
 
+// Fase 5.1: panel "Impuestos (estimado)". IVA pagado es siempre 16% del X Pagar de
+// cada partida, sin importar el regimen fiscal del responsable -- la retencion no
+// reduce lo acreditable para Serenata, solo cambia el neto que recibe el proveedor
+// (documento maestro seccion 3; decision confirmada 2026-09-06).
+export interface EstimatedTaxes {
+  ivaCobrado: number
+  ivaPagado: number
+  ivaNeto: number
+  isrEstimado: number
+  utilidadNeta: number
+}
+
 export type PersistedQuotationItem = Omit<import('@/lib/types').ItemCotizacion, 'id'>
 
 export interface QuotationPdfItem {

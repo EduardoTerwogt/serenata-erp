@@ -1,4 +1,4 @@
-import { DescuentoTipo, QuotationComputedItem, QuotationFormItem, QuotationTotals, QuotationTotalsInput } from './types'
+import { DescuentoTipo, EstimatedTaxes, QuotationComputedItem, QuotationFormItem, QuotationTotals, QuotationTotalsInput } from './types'
 
 export function toNumberOrZero(value: number | '' | null | undefined): number {
   return typeof value === 'number' ? value : 0
@@ -75,4 +75,25 @@ export function calculateQuotationTotals({
     margen_total,
     utilidad_total,
   }
+}
+
+// Fase 5.1: columna informativa "Costo + IVA" en Partidas. Siempre 16% fijo sobre
+// X Pagar -- no depende del regimen fiscal del responsable (ver EstimatedTaxes).
+export function calculateCostoConIva(xPagar: number | '' | null | undefined): number {
+  return round2(toNumberOrZero(xPagar as number | '' | null | undefined) * 1.16)
+}
+
+export function calculateEstimatedTaxes(
+  items: QuotationFormItem[],
+  totals: Pick<QuotationTotals, 'iva' | 'utilidad_total'>
+): EstimatedTaxes {
+  const normalizedItems = items.map(normalizeQuotationItem)
+  const ivaCobrado = totals.iva
+  const ivaPagado = round2(normalizedItems.reduce((sum, item) => sum + item.x_pagar * 0.16, 0))
+  const ivaNeto = round2(ivaCobrado - ivaPagado)
+  // No hay ISR sobre una perdida -- se acota a 0 para el estimado.
+  const isrEstimado = round2(Math.max(0, totals.utilidad_total) * 0.30)
+  const utilidadNeta = round2(totals.utilidad_total - isrEstimado)
+
+  return { ivaCobrado, ivaPagado, ivaNeto, isrEstimado, utilidadNeta }
 }

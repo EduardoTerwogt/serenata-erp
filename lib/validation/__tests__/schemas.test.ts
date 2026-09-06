@@ -4,6 +4,8 @@ import {
   CotizacionUpdateSchema,
   ProyectoUpdateSchema,
   ItemPatchSchema,
+  ResponsableCreateSchema,
+  ResponsableUpdateSchema,
   validate,
 } from '../schemas'
 
@@ -180,6 +182,48 @@ describe('ItemPatchSchema', () => {
 
   it('falla con objeto vacío (ningún campo enviado)', () => {
     const result = ItemPatchSchema.safeParse({})
+    expect(result.success).toBe(false)
+  })
+})
+
+// ==================== ResponsableCreateSchema / ResponsableUpdateSchema ====================
+// Fase 5.1: regimen_fiscal ('moral' | 'fisica'), captura única por responsable.
+
+describe('ResponsableCreateSchema', () => {
+  it('acepta payload mínimo sin regimen_fiscal', () => {
+    const result = ResponsableCreateSchema.safeParse({ nombre: 'Julián López' })
+    expect(result.success).toBe(true)
+  })
+
+  it('acepta regimen_fiscal moral', () => {
+    const result = ResponsableCreateSchema.safeParse({ nombre: 'Distrito Sonoro', regimen_fiscal: 'moral' })
+    expect(result.success).toBe(true)
+  })
+
+  it('acepta regimen_fiscal fisica', () => {
+    const result = ResponsableCreateSchema.safeParse({ nombre: 'Julián López', regimen_fiscal: 'fisica' })
+    expect(result.success).toBe(true)
+  })
+
+  it('acepta regimen_fiscal null (no capturado aún)', () => {
+    const result = ResponsableCreateSchema.safeParse({ nombre: 'Julián López', regimen_fiscal: null })
+    expect(result.success).toBe(true)
+  })
+
+  it('rechaza un valor de regimen_fiscal inválido', () => {
+    const result = ResponsableCreateSchema.safeParse({ nombre: 'Julián López', regimen_fiscal: 'persona_fisica' })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('ResponsableUpdateSchema', () => {
+  it('acepta actualizar solo regimen_fiscal', () => {
+    const result = ResponsableUpdateSchema.safeParse({ regimen_fiscal: 'fisica' })
+    expect(result.success).toBe(true)
+  })
+
+  it('rechaza un valor de regimen_fiscal inválido', () => {
+    const result = ResponsableUpdateSchema.safeParse({ regimen_fiscal: 'moral_persona' })
     expect(result.success).toBe(false)
   })
 })

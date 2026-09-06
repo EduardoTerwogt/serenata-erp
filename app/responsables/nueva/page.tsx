@@ -17,6 +17,7 @@ export default function NuevoResponsablePage() {
   const router = useRouter()
   const [roles, setRoles] = useState<string[]>([])
   const [rolInput, setRolInput] = useState('')
+  const [regimenFiscal, setRegimenFiscal] = useState<'' | 'moral' | 'fisica'>('')
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -41,7 +42,7 @@ export default function NuevoResponsablePage() {
       const res = await fetch('/api/responsables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, roles }),
+        body: JSON.stringify({ ...data, roles, regimen_fiscal: regimenFiscal || null }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       const responsable = await res.json()
@@ -166,6 +167,24 @@ export default function NuevoResponsablePage() {
                 maxLength={18}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Fiscal */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Fiscal</h2>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Régimen fiscal</label>
+            <select
+              value={regimenFiscal}
+              onChange={e => setRegimenFiscal(e.target.value as '' | 'moral' | 'fisica')}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="">Aún no se sabe (se asume moral / 16% sin retención)</option>
+              <option value="moral">Persona moral (IVA 16%, sin retención)</option>
+              <option value="fisica">Persona física con honorarios (retención IVA 2/3 + ISR 10%)</option>
+            </select>
+            <p className="text-gray-500 text-xs mt-1">Se captura una sola vez aquí — se usa para estimar impuestos en Cotizaciones y Cuentas por Pagar. Actualízalo cuando llegue la constancia de situación fiscal.</p>
           </div>
         </div>
 

@@ -7,7 +7,7 @@ import { useSession } from 'next-auth/react'
 import { Cotizacion, ItemCotizacion, Responsable } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
-import { calculateQuotationTotals } from '@/lib/quotations/calculations'
+import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchResponsables, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, saveQuotationTotals, updateQuotation } from '@/lib/services/quotation-service'
@@ -15,6 +15,7 @@ import { formatDateDisplay } from '@/lib/format-date'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
 import { QuotationTotalsPanels } from '@/components/quotations/QuotationTotalsPanels'
+import { QuotationCopyItemsModal } from '@/components/quotations/QuotationCopyItemsModal'
 import { SkeletonQuotationDetail } from '@/app/components/ui/SkeletonQuotationDetail'
 
 const sectionLabels: Record<QuotationPresenceSection, string> = {
@@ -120,6 +121,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [driveLink, setDriveLink] = useState<string | null>(null)
   const [notasInternas, setNotasInternas] = useState('')
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
+  const [showCopyModal, setShowCopyModal] = useState(false)
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
   const [iva_activo, setIvaActivo] = useState(true)
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
@@ -351,6 +353,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   const totales = useMemo(() => calculateQuotationTotals({ items: watchedItems || [], porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }), [watchedItems, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor])
   const displayTotales = useMemo(() => esEditable && cotizacion ? totales : (cotizacion ? buildReadOnlyTotals(cotizacion) : totales), [esEditable, cotizacion, totales])
+  const estimatedTaxes = useMemo(() => calculateEstimatedTaxes(watchedItems || [], displayTotales), [watchedItems, displayTotales])
 
   const persistNotasAutosave = useCallback(async () => {
     if (!cotizacion) return
@@ -547,6 +550,33 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }, [append, broadcastItemMutation, createQuotationItemRow, lockLocalItemRow, markSectionSaved, scheduleNewRowOwnershipRelease])
 
+  const handleImportItems = useCallback(async (items: ItemCotizacion[]) => {
+    try {
+      for (const sourceItem of items) {
+        const createdItem = await createQuotationItemRow()
+        if (!createdItem) throw new Error('No se pudo crear la fila')
+        const patchedItem = await patchQuotationItem(createdItem.id, {
+          categoria: sourceItem.categoria || '',
+          descripcion: sourceItem.descripcion || '',
+          cantidad: sourceItem.cantidad || 1,
+          precio_unitario: sourceItem.precio_unitario || 0,
+          x_pagar: sourceItem.x_pagar || 0,
+          responsable_id: sourceItem.responsable_id || '',
+          responsable_nombre: sourceItem.responsable_nombre || '',
+        })
+        const finalItem = patchedItem || createdItem
+        append(mapItemToFormItem(finalItem))
+        setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), finalItem] } : prev)
+        lockLocalItemRow(finalItem.id, 'new_row')
+        scheduleNewRowOwnershipRelease(finalItem.id)
+        broadcastItemMutation({ action: 'upsert', row_id: finalItem.id, item: finalItem })
+      }
+      markSectionSaved('partidas')
+    } catch (importError: unknown) {
+      setError(importError instanceof Error ? importError.message : 'Error copiando partidas')
+    }
+  }, [append, broadcastItemMutation, createQuotationItemRow, lockLocalItemRow, markSectionSaved, patchQuotationItem, scheduleNewRowOwnershipRelease])
+
   const handleRemoveRow = useCallback(async (index: number) => {
     const rowId = getItemRowIdByIndex(index)
     if (!rowId || itemRowEditors[rowId] || hasRemoteCellLockOnRow(rowId)) return
@@ -701,12 +731,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div className={`rounded-xl ${sectionEditors.partidas ? 'ring-1 ring-orange-600/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
-        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} isItemRowActionBlocked={isItemRowActionBlocked} getItemRowStatusText={getItemRowStatusText} />
+        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} isItemRowActionBlocked={isItemRowActionBlocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} />
       </div>
+
+      <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={handleImportItems} />
 
       <div ref={totalsSectionRef} className={`rounded-xl ${totalsLockedByOther ? 'ring-1 ring-orange-600/70 opacity-80' : ''}`} onFocusCapture={handleTotalsFocus} onBlurCapture={handleTotalsBlur}>
         <div className="px-1"><SectionEditBadge section="totales" /></div>
-        <QuotationTotalsPanels totals={displayTotales} editable={!!esEditable && !totalsLockedByOther} porcentaje_fee={porcentaje_fee} setPorcentajeFee={trackedSetPorcentajeFee} iva_activo={iva_activo} setIvaActivo={trackedSetIvaActivo} descuento_tipo={descuento_tipo} setDescuentoTipo={trackedSetDescuentoTipo} descuento_valor={descuento_valor} setDescuentoValor={trackedSetDescuentoValor} />
+        <QuotationTotalsPanels totals={displayTotales} editable={!!esEditable && !totalsLockedByOther} porcentaje_fee={porcentaje_fee} setPorcentajeFee={trackedSetPorcentajeFee} iva_activo={iva_activo} setIvaActivo={trackedSetIvaActivo} descuento_tipo={descuento_tipo} setDescuentoTipo={trackedSetDescuentoTipo} descuento_valor={descuento_valor} setDescuentoValor={trackedSetDescuentoValor} estimatedTaxes={estimatedTaxes} />
       </div>
     </div>
   )

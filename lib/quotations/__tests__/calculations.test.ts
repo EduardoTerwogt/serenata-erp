@@ -4,6 +4,8 @@ import {
   normalizeQuotationItem,
   calculateDiscountAmount,
   calculateQuotationTotals,
+  calculateCostoConIva,
+  calculateEstimatedTaxes,
 } from '../calculations'
 import type { QuotationFormItem } from '../types'
 
@@ -198,5 +200,98 @@ describe('calculateQuotationTotals', () => {
     expect(result.subtotal).toBe(0)
     expect(result.total).toBe(0)
     expect(result.iva).toBe(0)
+  })
+})
+
+// ==================== calculateCostoConIva ====================
+
+describe('calculateCostoConIva', () => {
+  it('calcula 16% fijo sobre x_pagar', () => {
+    expect(calculateCostoConIva(1000)).toBe(1160)
+  })
+
+  it('retorna 0 para x_pagar vacío o nulo', () => {
+    expect(calculateCostoConIva('')).toBe(0)
+    expect(calculateCostoConIva(null)).toBe(0)
+    expect(calculateCostoConIva(undefined)).toBe(0)
+  })
+})
+
+// ==================== calculateEstimatedTaxes ====================
+// Fase 5.1: IVA pagado es siempre 16% del X Pagar sin importar el régimen del
+// responsable -- la retención no reduce lo acreditable para Serenata (decisión
+// confirmada 2026-09-06). Esta sección no necesita el régimen fiscal para nada.
+
+describe('calculateEstimatedTaxes', () => {
+  const items: QuotationFormItem[] = [baseItem()] // x_pagar=800
+
+  it('IVA pagado es 16% del x_pagar total, sin importar régimen', () => {
+    const totals = calculateQuotationTotals({
+      items,
+      porcentaje_fee: 0,
+      iva_activo: true,
+      descuento_tipo: 'monto',
+      descuento_valor: 0,
+    })
+    const result = calculateEstimatedTaxes(items, totals)
+    expect(result.ivaPagado).toBeCloseTo(128) // 800 * 0.16
+  })
+
+  it('IVA cobrado viene de totals.iva y el neto es la diferencia', () => {
+    const totals = calculateQuotationTotals({
+      items,
+      porcentaje_fee: 0,
+      iva_activo: true,
+      descuento_tipo: 'monto',
+      descuento_valor: 0,
+    })
+    const result = calculateEstimatedTaxes(items, totals)
+    expect(result.ivaCobrado).toBeCloseTo(320) // 2000 * 0.16
+    expect(result.ivaNeto).toBeCloseTo(192) // 320 - 128
+  })
+
+  it('ISR estimado es 30% de la utilidad y se resta de utilidad neta', () => {
+    const totals = calculateQuotationTotals({
+      items,
+      porcentaje_fee: 0,
+      iva_activo: false,
+      descuento_tipo: 'monto',
+      descuento_valor: 0,
+    })
+    // utilidad_total = margen_total (1200) + fee_agencia (0) - descuento (0)
+    const result = calculateEstimatedTaxes(items, totals)
+    expect(result.isrEstimado).toBeCloseTo(360) // 1200 * 0.30
+    expect(result.utilidadNeta).toBeCloseTo(840) // 1200 - 360
+  })
+
+  it('no genera ISR negativo cuando la utilidad es una pérdida', () => {
+    const lossItems: QuotationFormItem[] = [{ ...baseItem(), precio_unitario: 100, x_pagar: 500 }]
+    const totals = calculateQuotationTotals({
+      items: lossItems,
+      porcentaje_fee: 0,
+      iva_activo: false,
+      descuento_tipo: 'monto',
+      descuento_valor: 0,
+    })
+    expect(totals.utilidad_total).toBeLessThan(0)
+    const result = calculateEstimatedTaxes(lossItems, totals)
+    expect(result.isrEstimado).toBe(0)
+    expect(result.utilidadNeta).toBe(totals.utilidad_total)
+  })
+
+  it('con items vacíos todo es cero', () => {
+    const totals = calculateQuotationTotals({
+      items: [],
+      porcentaje_fee: 0,
+      iva_activo: true,
+      descuento_tipo: 'monto',
+      descuento_valor: 0,
+    })
+    const result = calculateEstimatedTaxes([], totals)
+    expect(result.ivaCobrado).toBe(0)
+    expect(result.ivaPagado).toBe(0)
+    expect(result.ivaNeto).toBe(0)
+    expect(result.isrEstimado).toBe(0)
+    expect(result.utilidadNeta).toBe(0)
   })
 })

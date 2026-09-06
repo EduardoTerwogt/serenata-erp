@@ -71,7 +71,7 @@ export function QuotationGeneralInfoSection({
   return (
     <AppCard className="p-4 md:p-6 mb-6">
       <h2 className="text-lg font-semibold text-white mb-4">{title}</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="relative">
           <label className="block text-sm text-gray-400 mb-1">Cliente</label>
           {readOnlyAsText ? (
@@ -93,7 +93,7 @@ export function QuotationGeneralInfoSection({
                   }
                 }
               }, 200)} autoComplete="off" placeholder="Nombre del cliente" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
-              {mostrarClienteDropdown && clienteSugerencias.length > 0 && <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{clienteSugerencias.map((nombre, i) => <div key={i} onMouseDown={() => {
+              {mostrarClienteDropdown && clienteSugerencias.length > 0 && <div className="absolute z-50 w-full min-w-[220px] mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{clienteSugerencias.map((nombre, i) => <div key={i} onMouseDown={() => {
                 if (onClienteSelected) {
                   onClienteSelected(nombre)
                 } else {
@@ -118,7 +118,7 @@ export function QuotationGeneralInfoSection({
               }} onBlur={() => setTimeout(() => setMostrarProyectoDropdown(false), 200)} autoComplete="off" placeholder="Nombre del proyecto" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 md:py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
               {mostrarProyectoDropdown && (() => {
                 const filtrados = proyectosDelCliente.filter(p => p.toLowerCase().includes(proyectoInput.toLowerCase()))
-                return filtrados.length > 0 ? <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{filtrados.map((proy, i) => <div key={i} onMouseDown={() => {
+                return filtrados.length > 0 ? <div className="absolute z-50 w-full min-w-[220px] mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">{filtrados.map((proy, i) => <div key={i} onMouseDown={() => {
                   if (onProyectoSelected) {
                     onProyectoSelected(proy)
                   } else {

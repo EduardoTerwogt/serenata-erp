@@ -1,6 +1,6 @@
 'use client'
 
-import { QuotationTotals } from '@/lib/quotations/types'
+import { EstimatedTaxes, QuotationTotals } from '@/lib/quotations/types'
 import { fmtCurrency } from '@/lib/quotations/format'
 import { AppCard } from '@/components/ui/AppCard'
 
@@ -15,6 +15,7 @@ interface Props {
   setDescuentoTipo: (value: 'monto' | 'porcentaje') => void
   descuento_valor: number
   setDescuentoValor: (value: number) => void
+  estimatedTaxes: EstimatedTaxes
 }
 
 export function QuotationTotalsPanels({
@@ -28,9 +29,11 @@ export function QuotationTotalsPanels({
   setDescuentoTipo,
   descuento_valor,
   setDescuentoValor,
+  estimatedTaxes,
 }: Props) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+    <>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
       <AppCard className="p-4 md:p-6">
         <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Totales</h3>
         <div className="space-y-3">
@@ -142,5 +145,33 @@ export function QuotationTotalsPanels({
         </div>
       </AppCard>
     </div>
+
+    <AppCard className="p-4 md:p-6 mb-8">
+      <h3 className="text-sm font-semibold text-gray-400 uppercase mb-1">Impuestos (Estimado)</h3>
+      <p className="text-xs text-gray-500 mb-4">Estimación de impuestos de Serenata (persona moral) para esta cotización. No sustituye el cruce fiscal real de Cuentas.</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+        <div className="flex justify-between text-sm gap-3">
+          <span className="text-gray-400">IVA cobrado</span>
+          <span className="text-white text-right">${fmtCurrency(estimatedTaxes.ivaCobrado)}</span>
+        </div>
+        <div className="flex justify-between text-sm gap-3">
+          <span className="text-gray-400">IVA pagado (a proveedores)</span>
+          <span className="text-white text-right">${fmtCurrency(estimatedTaxes.ivaPagado)}</span>
+        </div>
+        <div className="flex justify-between text-sm gap-3">
+          <span className="text-gray-400">IVA neto a enterar al SAT</span>
+          <span className={`text-right font-medium ${estimatedTaxes.ivaNeto >= 0 ? 'text-yellow-400' : 'text-green-400'}`}>${fmtCurrency(estimatedTaxes.ivaNeto)}</span>
+        </div>
+        <div className="flex justify-between text-sm gap-3">
+          <span className="text-gray-400">ISR estimado (30%)</span>
+          <span className="text-yellow-400 text-right">${fmtCurrency(estimatedTaxes.isrEstimado)}</span>
+        </div>
+        <div className="flex justify-between text-sm gap-3 md:col-span-2 border-t border-gray-700 pt-2 mt-1">
+          <span className="text-gray-300 font-semibold">Utilidad neta después de ISR</span>
+          <span className={`text-right font-bold ${estimatedTaxes.utilidadNeta >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(estimatedTaxes.utilidadNeta)}</span>
+        </div>
+      </div>
+    </AppCard>
+    </>
   )
 }

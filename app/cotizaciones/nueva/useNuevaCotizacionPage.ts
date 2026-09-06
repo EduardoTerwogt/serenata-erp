@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Responsable } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
-import { calculateQuotationTotals } from '@/lib/quotations/calculations'
+import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { fetchNextQuotationFolio, fetchResponsables, generateQuotationPdf, saveNewQuotation } from '@/lib/services/quotation-service'
 
@@ -131,6 +131,7 @@ export function useNuevaCotizacionPage() {
     descuento_tipo,
     descuento_valor,
   })
+  const estimatedTaxes = calculateEstimatedTaxes(watchedItems, totales)
 
   const onGuardarBorrador = handleSubmit(async (data) => {
     if (isSubmitting.current) return
@@ -225,6 +226,7 @@ export function useNuevaCotizacionPage() {
     setMostrarProductoDropdown,
     watchedItems,
     totales,
+    estimatedTaxes,
     onGuardarBorrador,
     onGenerarCotizacion,
     esComplementaria,
