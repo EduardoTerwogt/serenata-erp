@@ -46,6 +46,8 @@ function NuevaCotizacionContent() {
     setDescuentoTipo,
     descuento_valor,
     setDescuentoValor,
+    notasInternas,
+    setNotasInternas,
     calcItem,
     handleClienteChange,
     handleProyectoChange,
@@ -96,7 +98,7 @@ function NuevaCotizacionContent() {
       <div>
         <Link href="/cotizaciones" className="text-sm text-faint hover:text-subtext">← Cotizaciones</Link>
         <div className="mt-2 flex flex-wrap items-baseline gap-3">
-          <h1 className="sn-display text-2xl text-ink md:text-h2">Nueva Cotización</h1>
+          <h1 className="sn-display text-2xl text-ink md:text-h2">Nueva Cotizacion</h1>
           <span className="text-subtext">Folio: <span className="font-mono text-accent font-bold">{folio || '...'}</span></span>
         </div>
       </div>
@@ -134,6 +136,7 @@ function NuevaCotizacionContent() {
         dateLabel={formatDateDisplay(new Date())}
         fechaEntregaValue={watch('fecha_entrega')}
         locacionValue={watch('locacion')}
+        notasField={esComplementaria ? undefined : { value: notasInternas, onChange: setNotasInternas }}
       />
 
       <QuotationItemsSection

@@ -71,7 +71,19 @@
   --sn-status-cancelled-bg: #8B2B2B;
   --sn-status-cancelled-fg: #F7DEDE;
 
-  /* --- textura de marca (placeholder CSS -- reemplazar cuando haya arte real) --- */
+  /* --- textura de marca (placeholder CSS -- reemplazar cuando haya arte real) ---
+     Confirmado contra el canvas real de Claude Design (capturas del 6-sep): el
+     rail del sidebar y los SectionHero SÍ llevan este degradado, pero muy
+     atenuado -- el kit lo logra con blur(80px)/blur(48px) + un scrim oscuro
+     encima (ver .sn-rail-texture / .sn-hero-texture abajo). La primera pasada
+     de Bloque 1 lo había quitado por completo del sidebar por una lectura
+     apresurada de una captura anterior; no se repite ese error. */
+  --sn-texture: radial-gradient(58% 84% at 12% 22%, #FF5A1A 0%, transparent 62%),
+    radial-gradient(48% 70% at 42% 88%, #D7263D 0%, transparent 60%),
+    radial-gradient(52% 78% at 72% 18%, #1F7A72 0%, transparent 62%),
+    radial-gradient(62% 90% at 96% 76%, #1E4E8C 0%, transparent 64%),
+    radial-gradient(40% 60% at 60% 52%, #4B2E83 0%, transparent 66%), var(--sn-app);
+  --sn-texture-scrim: linear-gradient(90deg, rgba(15,19,24,.88) 0%, rgba(15,19,24,.72) 55%, rgba(15,19,24,.6) 100%);
   --sn-texture-rail: radial-gradient(72% 30% at 2% 86%, rgba(255,90,26,.85) 0%, transparent 72%),
     radial-gradient(80% 24% at 0% 64%, rgba(31,122,114,.6) 0%, transparent 74%),
     radial-gradient(84% 26% at 4% 44%, rgba(30,78,140,.5) 0%, transparent 76%),
@@ -268,4 +280,33 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--sn-ink-faint);
+}
+
+/* Texturas de marca -- degradado de color detrás de un blur fuerte + scrim,
+   igual receta que Sidebar.jsx/SectionHero.jsx del kit. Solo tocan background/
+   position, nunca color de texto, para no repetir el bug de .sn-display. */
+.sn-rail-texture {
+  position: relative;
+  overflow: hidden;
+  background: var(--sn-texture-rail);
+}
+.sn-rail-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(80px);
+  background: rgba(12, 15, 20, .42);
+}
+.sn-hero-texture {
+  position: relative;
+  overflow: hidden;
+  background: var(--sn-texture);
+  background-size: cover;
+}
+.sn-hero-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(48px);
+  background: var(--sn-texture-scrim);
 }

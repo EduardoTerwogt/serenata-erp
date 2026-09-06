@@ -87,13 +87,13 @@ export default function CotizacionesPage() {
         }
       />
 
-      <FilterTabs tabs={tabs} value={filtro} onChange={setFiltro} />
-
       <SearchInput
         placeholder="Buscar por folio, cliente, proyecto, item o responsable..."
         value={busqueda}
         onChange={e => setBusqueda(e.target.value)}
       />
+
+      <FilterTabs tabs={tabs} value={filtro} onChange={setFiltro} />
 
       {loading ? (
         <div className="space-y-3 animate-pulse">

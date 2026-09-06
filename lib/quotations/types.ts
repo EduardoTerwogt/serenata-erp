@@ -121,6 +121,7 @@ export interface SaveQuotationOptions {
   tipo?: QuotationKind
   es_complementaria_de?: string
   reservation_token?: string | null
+  notas_internas?: string | null
 }
 
 export interface UpdateQuotationOptions {

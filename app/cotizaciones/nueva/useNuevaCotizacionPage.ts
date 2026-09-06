@@ -28,6 +28,7 @@ export function useNuevaCotizacionPage() {
   const [iva_activo, setIvaActivo] = useState(true)
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
   const [descuento_valor, setDescuentoValor] = useState(0)
+  const [notasInternas, setNotasInternas] = useState('')
   const isSubmitting = useRef(false)
 
   const { register, control, watch, handleSubmit, setValue } = useForm<QuotationFormValues>({
@@ -145,6 +146,7 @@ export function useNuevaCotizacionPage() {
         iva_activo,
         descuento_tipo,
         descuento_valor,
+        notas_internas: notasInternas || null,
         ...(esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {}),
       })
       router.push(`/cotizaciones/${cotizacion.id}`)
@@ -168,6 +170,7 @@ export function useNuevaCotizacionPage() {
         iva_activo,
         descuento_tipo,
         descuento_valor,
+        notas_internas: notasInternas || null,
         ...(esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {}),
       })
       const pdfResult = await generateQuotationPdf(cotizacion, data.items, { skipDownload: true })
@@ -204,6 +207,8 @@ export function useNuevaCotizacionPage() {
     setDescuentoTipo,
     descuento_valor,
     setDescuentoValor,
+    notasInternas,
+    setNotasInternas,
     calcItem,
     handleClienteChange,
     handleProyectoChange,

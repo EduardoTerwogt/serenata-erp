@@ -36,9 +36,16 @@ interface Props {
   dateLabel: string
   fechaEntregaValue?: string
   locacionValue?: string
+  notasField?: {
+    value: string
+    onChange: (value: string) => void
+  }
 }
 
-const INPUT_CLASS = 'w-full bg-input border border-hairline rounded-control px-3 py-2.5 md:py-2 text-sm text-body placeholder-faint focus:outline-none focus:border-accent transition-colors'
+// Estilo "InlineInput" del design system: sin caja visible hasta que se
+// enfoca (fondo/borde transparentes -> bg-input + borde accent-quiet al
+// enfocar), en vez de una caja siempre visible.
+const INPUT_CLASS = 'w-full bg-transparent border border-transparent rounded-[8px] px-2.5 py-2 text-sm text-body placeholder-faint focus:outline-none focus:bg-input focus:border-accent-quiet transition-colors'
 const DROPDOWN_CLASS = 'absolute z-50 w-full min-w-[220px] mt-1 bg-card border border-hairline rounded-control shadow-overlay max-h-48 overflow-y-auto'
 const DROPDOWN_ITEM_CLASS = 'px-4 py-3 hover:bg-row cursor-pointer text-body text-sm border-b border-hairline last:border-0'
 
@@ -68,6 +75,7 @@ export function QuotationGeneralInfoSection({
   dateLabel,
   fechaEntregaValue = '',
   locacionValue = '',
+  notasField,
 }: Props) {
   const readOnlyAsText = isReadOnly && readOnlyDisplay === 'text'
 
@@ -162,6 +170,19 @@ export function QuotationGeneralInfoSection({
           <p className="py-1.5 text-sm text-body">{dateLabel}</p>
         </div>
       </div>
+
+      {notasField && (
+        <div className="mt-4">
+          <label className="sn-label mb-1.5 block">Notas del evento · Uso interno, no sale en el PDF</label>
+          <textarea
+            value={notasField.value}
+            onChange={e => notasField.onChange(e.target.value)}
+            rows={2}
+            placeholder="Sin notas..."
+            className="w-full resize-y rounded-[8px] border border-hairline bg-input px-3 py-2.5 text-sm text-body placeholder-faint focus:outline-none focus:border-accent-quiet"
+          />
+        </div>
+      )}
     </div>
   )
 }

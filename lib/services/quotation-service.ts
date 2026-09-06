@@ -79,6 +79,7 @@ export async function saveNewQuotation(
 
   if (options.tipo) body.tipo = options.tipo
   if (options.es_complementaria_de) body.es_complementaria_de = options.es_complementaria_de
+  if (options.notas_internas !== undefined) body.notas_internas = options.notas_internas
 
   const expectedItemsCount = data.items.length
   const savedQuotation = await sendJson<Cotizacion>('/api/cotizaciones', body, 'Error al guardar')

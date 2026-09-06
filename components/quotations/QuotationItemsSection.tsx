@@ -54,7 +54,8 @@ interface Props {
   onCopyClick?: () => void
 }
 
-const CELL_INPUT_CLASS = 'bg-input border border-hairline rounded px-2 py-1.5 text-body focus:outline-none focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed'
+// Estilo "InlineInput" del design system: transparente hasta que se enfoca.
+const CELL_INPUT_CLASS = 'bg-transparent border border-transparent rounded-[8px] px-2 py-1.5 text-body focus:outline-none focus:bg-input focus:border-accent-quiet disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
 const FULLSCREEN_INPUT_CLASS = 'w-full bg-input border border-hairline rounded-control px-4 py-3.5 text-base text-body focus:outline-none focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed'
 
 export function QuotationItemsSection({

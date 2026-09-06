@@ -18,7 +18,7 @@ interface Props {
 }
 
 const PANEL_CLASS = 'rounded-panel border border-hairline bg-card p-4 md:p-6'
-const MINI_INPUT_CLASS = 'bg-input border border-hairline rounded px-1.5 py-1 text-body text-xs focus:outline-none focus:border-accent'
+const MINI_INPUT_CLASS = 'bg-input border border-hairline rounded-[8px] px-2 py-1.5 text-body text-sm focus:outline-none focus:border-accent-quiet'
 
 export function QuotationTotalsPanels({
   totals,
@@ -34,7 +34,6 @@ export function QuotationTotalsPanels({
   estimatedTaxes,
 }: Props) {
   return (
-    <>
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
       <div className={PANEL_CLASS}>
         <h3 className="sn-label mb-4">Totales</h3>
@@ -144,36 +143,36 @@ export function QuotationTotalsPanels({
               <span className="text-accent text-right">{((totals.margen_total / totals.subtotal) * 100).toFixed(1)}%</span>
             </div>
           )}
-        </div>
-      </div>
-    </div>
 
-    <div className={PANEL_CLASS}>
-      <h3 className="sn-label mb-1">Impuestos (Estimado)</h3>
-      <p className="text-xs text-faint mb-4">Estimación de impuestos de Serenata (persona moral) para esta cotización. No sustituye el cruce fiscal real de Cuentas.</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
-        <div className="flex justify-between text-sm gap-3">
-          <span className="text-subtext">IVA cobrado</span>
-          <span className="text-body text-right">${fmtCurrency(estimatedTaxes.ivaCobrado)}</span>
-        </div>
-        <div className="flex justify-between text-sm gap-3">
-          <span className="text-subtext">IVA pagado (a proveedores)</span>
-          <span className="text-body text-right">${fmtCurrency(estimatedTaxes.ivaPagado)}</span>
-        </div>
-        <div className="flex justify-between text-sm gap-3">
-          <span className="text-subtext">IVA neto a enterar al SAT</span>
-          <span className={`text-right font-medium ${estimatedTaxes.ivaNeto >= 0 ? 'text-yellow-400' : 'text-green-400'}`}>${fmtCurrency(estimatedTaxes.ivaNeto)}</span>
-        </div>
-        <div className="flex justify-between text-sm gap-3">
-          <span className="text-subtext">ISR estimado (30%)</span>
-          <span className="text-yellow-400 text-right">${fmtCurrency(estimatedTaxes.isrEstimado)}</span>
-        </div>
-        <div className="flex justify-between text-sm gap-3 md:col-span-2 border-t border-hairline pt-2 mt-1">
-          <span className="text-body font-semibold">Utilidad neta después de ISR</span>
-          <span className={`text-right font-bold ${estimatedTaxes.utilidadNeta >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(estimatedTaxes.utilidadNeta)}</span>
+          <div className="border-t border-hairline pt-3 mt-3">
+            <p className="sn-label mb-0.5">Impuestos (Estimado)</p>
+            <p className="text-[11px] text-faint mb-3">Estimación de impuestos de Serenata (persona moral). No sustituye el cruce fiscal real de Cuentas.</p>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm gap-3">
+                <span className="text-subtext">IVA cobrado</span>
+                <span className="text-body text-right">${fmtCurrency(estimatedTaxes.ivaCobrado)}</span>
+              </div>
+              <div className="flex justify-between text-sm gap-3">
+                <span className="text-subtext">IVA pagado (a proveedores)</span>
+                <span className="text-body text-right">${fmtCurrency(estimatedTaxes.ivaPagado)}</span>
+              </div>
+              <div className="flex justify-between text-sm gap-3">
+                <span className="text-subtext">IVA neto a enterar al SAT</span>
+                <span className={`text-right font-medium ${estimatedTaxes.ivaNeto >= 0 ? 'text-yellow-400' : 'text-green-400'}`}>${fmtCurrency(estimatedTaxes.ivaNeto)}</span>
+              </div>
+              <div className="flex justify-between text-sm gap-3">
+                <span className="text-subtext">ISR estimado (30%)</span>
+                <span className="text-yellow-400 text-right">${fmtCurrency(estimatedTaxes.isrEstimado)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-hairline pt-2 mt-1 flex justify-between font-bold gap-3">
+            <span className="text-body">Utilidad Neta (después de impuestos)</span>
+            <span className={`text-lg text-right ${estimatedTaxes.utilidadNeta >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(estimatedTaxes.utilidadNeta)}</span>
+          </div>
         </div>
       </div>
     </div>
-    </>
   )
 }

@@ -12,13 +12,13 @@ interface SidebarProps {
   items: SidebarNavLink[]
 }
 
-// Fondo del sidebar: sólido (bg-topbar), no la textura de marca del kit --
-// en el canvas real (claude.ai/design) el sidebar es casi plano; la textura
-// vívida de tokens/colors.css quedaba demasiado saturada aplicada a rail completo.
+// Fondo del sidebar: textura de marca (degradado) muy atenuada por blur(80px) +
+// scrim oscuro encima -- así se ve en el canvas real (confirmado contra
+// capturas del 6-sep), no un bg-topbar plano ni la textura vívida sin atenuar.
 export function Sidebar({ items }: SidebarProps) {
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col border-r border-hairline bg-topbar shadow-rail md:flex">
-      <div className="flex h-full flex-col">
+    <aside className="sn-rail-texture fixed left-0 top-0 z-40 hidden h-full w-64 flex-col border-r border-hairline shadow-rail md:flex">
+      <div className="relative flex h-full flex-col">
         <div className="flex h-[84px] flex-none items-center px-5">
           <Wordmark variant="mark" size={21} />
         </div>
