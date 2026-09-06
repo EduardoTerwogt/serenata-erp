@@ -265,8 +265,8 @@ export function QuotationItemsSection({
           <h2 className="text-base font-semibold text-body">Partidas</h2>
           {editable && (
             <div className="flex gap-2">
-              {onCopyClick && <button type="button" onClick={onCopyClick} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-content transition-colors min-h-[44px] md:min-h-0">Copiar desde otra cotización</button>}
-              <button type="button" onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-content transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>
+              {onCopyClick && <button type="button" onClick={onCopyClick} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0">Copiar desde otra cotización</button>}
+              <button type="button" onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>
             </div>
           )}
         </div>

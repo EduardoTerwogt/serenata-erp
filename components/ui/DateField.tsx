@@ -1,7 +1,6 @@
 'use client'
 
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
 import { formatDateDisplay } from '@/lib/format-date'
 
 interface DateFieldProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'value'> {
@@ -38,7 +37,7 @@ export const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function D
             }
           })
         }}
-        className={cn(className, 'text-left')}
+        className={className}
       >
         {value ? formatDateDisplay(value) : placeholder}
       </button>

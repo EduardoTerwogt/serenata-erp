@@ -10,7 +10,7 @@ export function SearchInput({ className = '', ...rest }: SearchInputProps) {
       <input
         type="text"
         {...rest}
-        className={`w-full rounded-control border border-hairline bg-input py-2.5 pl-11 pr-4 text-sm text-body placeholder-faint transition-colors focus:border-accent focus:outline-none ${className}`}
+        className={`w-full rounded-control border border-hairline bg-input py-2.5 pl-11 pr-4 text-content text-body placeholder-faint transition-colors focus:border-accent focus:outline-none ${className}`}
       />
     </div>
   )
