@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { ItemPatchSchema, validate } from '@/lib/validation/schemas'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { createHistorialCambioResponsableItem } from '@/lib/server/repositories/historial-cambios-responsable'
+import { findOrCreateProveedorByNombre } from '@/lib/server/repositories/proveedores'
 
 export async function PATCH(
   request: Request,
@@ -21,7 +22,17 @@ export async function PATCH(
     }
 
     const parsed = validation.data
-    const { responsable_id, responsable_nombre, notas } = parsed
+    let { responsable_id, responsable_nombre } = parsed
+    const { notas } = parsed
+
+    // Fase 5.3 Bloque 0, punto 2: un nombre de responsable por texto libre
+    // (sin id) siempre debe resolver a un proveedor real, nunca quedarse
+    // en solo texto suelto.
+    if (responsable_nombre && !responsable_id) {
+      const proveedor = await findOrCreateProveedorByNombre(responsable_nombre)
+      responsable_id = proveedor.id
+      responsable_nombre = proveedor.nombre
+    }
 
     const { data: item, error: itemError } = await supabaseAdmin
       .from('items_cotizacion')

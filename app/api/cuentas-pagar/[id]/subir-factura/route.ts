@@ -1,9 +1,11 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasPagar, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar } from '@/lib/db'
+import { getCuentasPagar, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
-import { parseFacturaXML, validarFacturaProveedorXML } from '@/lib/server/xml/factura-parser'
+import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
+import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
+import { RegimenFiscal } from '@/lib/types'
 
 function extractFacturaFechaFromXml(xmlContent: string): string | null {
   const match = xmlContent.match(/\bFecha=["']([^"']+)["']/i)
@@ -70,13 +72,23 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const facturaXmlUrl = await uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, googleEnv.driveFolderIdCuentas || undefined)
     const facturaPdfUrl = await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, googleEnv.driveFolderIdCuentas || undefined)
 
-    // Validación estructural automática: el neto esperado en el XML es
-    // x_pagar + IVA 16% (ver nota en validarFacturaProveedorXML sobre por
-    // qué el régimen fiscal no cambia esta comparación).
+    // Validación fiscal profunda (Fase 5.3 Bloque 0, punto 3): el desglose
+    // de impuestos del XML (traslados/retenciones) debe coincidir con lo
+    // que corresponde al régimen fiscal del proveedor, no solo el Total.
+    let regimenFiscal: RegimenFiscal | null = null
+    if (cuenta.responsable_id) {
+      try {
+        const proveedor = await getProveedorById(cuenta.responsable_id)
+        regimenFiscal = proveedor.regimen_fiscal ?? null
+      } catch {
+        regimenFiscal = null
+      }
+    }
+
     const facturaData = parseFacturaXML(facturaXmlContent)
     const validacionXml = facturaData.error
       ? { estado_validacion: 'revision' as const, detalle_validacion: `No se pudo parsear el XML: ${facturaData.error}` }
-      : validarFacturaProveedorXML(facturaData, Number(cuenta.x_pagar || 0))
+      : validarFacturaFiscalProveedor(facturaData, Number(cuenta.x_pagar || 0), regimenFiscal)
 
     const documentoXml = await createDocumentoCuentaPagar({
       cuentas_pagar_id: id,

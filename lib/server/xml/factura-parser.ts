@@ -6,10 +6,44 @@ export interface FacturaData {
   folio?: string
   fecha_emision?: string
   monto_total?: number
+  subtotal?: number
   rfc_emisor?: string
   rfc_receptor?: string
   uuid_timbrado?: string
+  // Desglose fiscal (Fase 5.3 Bloque 0, punto 3): suma de los nodos
+  // cfdi:Traslado / cfdi:Retencion por tipo de impuesto (002 = IVA,
+  // 001 = ISR). 0 cuando el CFDI no trae el nodo correspondiente --
+  // legítimo para un proveedor persona moral, que no lleva retenciones.
+  iva_trasladado?: number
+  iva_retenido?: number
+  isr_retenido?: number
   error?: string
+}
+
+// Extrae todas las ocurrencias de un tag autocontenido (p. ej.
+// <cfdi:Traslado Impuesto="002" Importe="160.00" />) y regresa sus atributos
+// como objetos, sin depender del orden en que aparezcan los atributos.
+function extractTagAttrs(xmlContent: string, tagName: string): Record<string, string>[] {
+  const tagRegex = new RegExp(`<(?:\\w+:)?${tagName}\\b([^>]*)/?>`, 'gi')
+  const attrRegex = /([\w:]+)\s*=\s*["']([^"']*)["']/g
+  const results: Record<string, string>[] = []
+  let tagMatch: RegExpExecArray | null
+  while ((tagMatch = tagRegex.exec(xmlContent)) !== null) {
+    const attrs: Record<string, string> = {}
+    let attrMatch: RegExpExecArray | null
+    attrRegex.lastIndex = 0
+    while ((attrMatch = attrRegex.exec(tagMatch[1])) !== null) {
+      attrs[attrMatch[1]] = attrMatch[2]
+    }
+    results.push(attrs)
+  }
+  return results
+}
+
+function sumImporteByImpuesto(tags: Record<string, string>[], codigoImpuesto: string): number {
+  return tags
+    .filter((t) => t.Impuesto === codigoImpuesto)
+    .reduce((sum, t) => sum + (parseFloat(t.Importe) || 0), 0)
 }
 
 export interface ResultadoValidacionFactura {
@@ -38,13 +72,27 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
     const montoMatch = xmlContent.match(/(?<![a-zA-Z])Total\s*=\s*["']([^"']+)["']/)
     const monto = montoMatch ? parseFloat(montoMatch[1]) : undefined
 
-    // RFC emisor/receptor y UUID de timbrado -- informativos por ahora (ver
-    // nota en validarFacturaProveedorXML): no hay un RFC esperado guardado
-    // en clientes/proveedores todavía, así que no bloquean la validación,
-    // solo se extraen para mostrarse en el detalle del documento.
+    // SubTotal -- mismo cuidado que Total: no hay substring conflictivo en
+    // este caso, pero se ancla igual por consistencia.
+    const subtotalMatch = xmlContent.match(/(?<![a-zA-Z])SubTotal\s*=\s*["']([^"']+)["']/)
+    const subtotal = subtotalMatch ? parseFloat(subtotalMatch[1]) : undefined
+
+    // RFC emisor/receptor y UUID de timbrado -- informativos por ahora: no
+    // hay un RFC esperado guardado en clientes/proveedores todavía, así que
+    // no bloquean la validación, solo se extraen para mostrarse en el
+    // detalle del documento.
     const rfcEmisorMatch = xmlContent.match(/<cfdi:Emisor\b[^>]*\bRfc\s*=\s*["']([^"']+)["']/i)
     const rfcReceptorMatch = xmlContent.match(/<cfdi:Receptor\b[^>]*\bRfc\s*=\s*["']([^"']+)["']/i)
     const uuidMatch = xmlContent.match(/<tfd:TimbreFiscalDigital\b[^>]*\bUUID\s*=\s*["']([^"']+)["']/i)
+
+    // Desglose fiscal -- Impuesto 002 = IVA, 001 = ISR (catálogo c_Impuesto
+    // del SAT). Ambos nodos son opcionales en el CFDI: un proveedor persona
+    // moral típicamente no trae cfdi:Retenciones.
+    const traslados = extractTagAttrs(xmlContent, 'Traslado')
+    const retenciones = extractTagAttrs(xmlContent, 'Retencion')
+    const ivaTrasladado = sumImporteByImpuesto(traslados, '002')
+    const ivaRetenido = sumImporteByImpuesto(retenciones, '002')
+    const isrRetenido = sumImporteByImpuesto(retenciones, '001')
 
     // Validar que al menos tengamos folio y fecha
     if (!folio || !fecha) {
@@ -57,9 +105,13 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
       folio,
       fecha_emision: fecha,
       monto_total: monto || 0,
+      subtotal,
       rfc_emisor: rfcEmisorMatch?.[1],
       rfc_receptor: rfcReceptorMatch?.[1],
       uuid_timbrado: uuidMatch?.[1],
+      iva_trasladado: ivaTrasladado,
+      iva_retenido: ivaRetenido,
+      isr_retenido: isrRetenido,
     }
   } catch (err) {
     return {
@@ -85,32 +137,6 @@ export function validarFacturaClienteXML(facturaData: FacturaData, montoEsperado
     return {
       estado_validacion: 'revision',
       detalle_validacion: `Monto no coincide: XML $${facturaData.monto_total.toFixed(2)} vs cuenta $${montoEsperado.toFixed(2)}.`,
-    }
-  }
-  return { estado_validacion: 'validado', detalle_validacion: null }
-}
-
-/**
- * Validación estructural automática de una factura de proveedor
- * (FACTURA_PROVEEDOR_XML, cuentas_pagar). El monto esperado en el XML es
- * el neto (x_pagar) + IVA trasladado 16% -- ese 16% es igual en los dos
- * escenarios fiscales del negocio (persona moral y persona física con
- * honorarios, ver readme del skill de diseño); lo que cambia entre
- * regímenes es la retención que Serenata aplica al TRANSFERIR el pago
- * (cruce fiscal en Cuentas), no lo que el proveedor declara como Total en
- * su propio CFDI. Por eso el régimen fiscal no participa de esta
- * comparación -- se valida el mismo monto esperado para ambos.
- */
-export function validarFacturaProveedorXML(facturaData: FacturaData, montoNetoEsperado: number): ResultadoValidacionFactura {
-  if (facturaData.monto_total == null) {
-    return { estado_validacion: 'revision', detalle_validacion: 'No se pudo leer el monto total del XML.' }
-  }
-  const montoEsperadoConIva = Math.round(montoNetoEsperado * 1.16 * 100) / 100
-  const diferencia = Math.abs(facturaData.monto_total - montoEsperadoConIva)
-  if (diferencia > TOLERANCIA_CENTAVOS) {
-    return {
-      estado_validacion: 'revision',
-      detalle_validacion: `Monto no coincide: XML $${facturaData.monto_total.toFixed(2)} vs esperado $${montoEsperadoConIva.toFixed(2)} (neto $${montoNetoEsperado.toFixed(2)} + IVA 16%).`,
     }
   }
   return { estado_validacion: 'validado', detalle_validacion: null }

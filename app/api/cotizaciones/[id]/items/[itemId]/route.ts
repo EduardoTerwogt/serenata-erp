@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCotizacionById, upsertItems } from '@/lib/db'
+import { getCotizacionById, upsertItems, findOrCreateProveedorByNombre } from '@/lib/db'
 import { normalizeQuotationItem } from '@/lib/quotations/calculations'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
@@ -42,6 +42,16 @@ export async function PATCH(
       responsable_nombre: merged.responsable_nombre || '',
       x_pagar: merged.x_pagar,
     })
+
+    // Fase 5.3 Bloque 0, punto 2: un nombre de responsable por texto libre
+    // (sin id -- p. ej. viene de Planeación o de "copiar desde otra
+    // cotización") siempre debe resolver a un proveedor real, nunca
+    // quedarse en solo texto suelto.
+    if (normalized.responsable_nombre && !normalized.responsable_id) {
+      const proveedor = await findOrCreateProveedorByNombre(normalized.responsable_nombre)
+      normalized.responsable_id = proveedor.id
+      normalized.responsable_nombre = proveedor.nombre
+    }
 
     await upsertItems([{
       id: itemId,

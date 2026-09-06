@@ -3,7 +3,6 @@ import {
   parseFacturaXML,
   validarMontoFactura,
   validarFacturaClienteXML,
-  validarFacturaProveedorXML,
   calcularDeadline,
 } from '@/lib/server/xml/factura-parser'
 
@@ -14,6 +13,34 @@ const CFDI_BASICO = `
     <cfdi:Complemento>
       <tfd:TimbreFiscalDigital UUID="11111111-2222-3333-4444-555555555555" />
     </cfdi:Complemento>
+  </cfdi:Comprobante>
+`
+
+const CFDI_PERSONA_MORAL = `
+  <cfdi:Comprobante Folio="M1" Fecha="2026-04-09T10:00:00" SubTotal="1000.00" Total="1160.00">
+    <cfdi:Emisor Rfc="MOR010101AAA" Nombre="Proveedor Moral SA de CV" />
+    <cfdi:Receptor Rfc="SER010101AAA" Nombre="Serenata House" />
+    <cfdi:Impuestos TotalImpuestosTrasladados="160.00">
+      <cfdi:Traslados>
+        <cfdi:Traslado Base="1000.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="160.00" />
+      </cfdi:Traslados>
+    </cfdi:Impuestos>
+  </cfdi:Comprobante>
+`
+
+const CFDI_PERSONA_FISICA = `
+  <cfdi:Comprobante Folio="F1" Fecha="2026-04-09T10:00:00" SubTotal="1000.00" Total="1053.33">
+    <cfdi:Emisor Rfc="FIS010101AAA" Nombre="Proveedor Persona Física" />
+    <cfdi:Receptor Rfc="SER010101AAA" Nombre="Serenata House" />
+    <cfdi:Impuestos TotalImpuestosTrasladados="160.00" TotalImpuestosRetenidos="106.67">
+      <cfdi:Retenciones>
+        <cfdi:Retencion Impuesto="002" Importe="106.67" />
+        <cfdi:Retencion Impuesto="001" Importe="100.00" />
+      </cfdi:Retenciones>
+      <cfdi:Traslados>
+        <cfdi:Traslado Base="1000.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="160.00" />
+      </cfdi:Traslados>
+    </cfdi:Impuestos>
   </cfdi:Comprobante>
 `
 
@@ -73,25 +100,21 @@ describe('xml/factura-parser', () => {
     })
   })
 
-  describe('validarFacturaProveedorXML', () => {
-    it('valida cuando el XML refleja neto + IVA 16%', () => {
-      // neto 1000 -> esperado 1160.00
-      const result = validarFacturaProveedorXML({ monto_total: 1160 }, 1000)
-      expect(result.estado_validacion).toBe('validado')
+  describe('parseFacturaXML - desglose fiscal (traslados/retenciones)', () => {
+    it('extrae subtotal e IVA trasladado de un CFDI de persona moral (sin retenciones)', () => {
+      const result = parseFacturaXML(CFDI_PERSONA_MORAL)
+      expect(result.subtotal).toBe(1000)
+      expect(result.iva_trasladado).toBe(160)
+      expect(result.iva_retenido).toBe(0)
+      expect(result.isr_retenido).toBe(0)
     })
 
-    it('marca revision cuando el XML no incluye el IVA esperado', () => {
-      // factura solo por el neto, sin IVA -- discrepancia real
-      const result = validarFacturaProveedorXML({ monto_total: 1000 }, 1000)
-      expect(result.estado_validacion).toBe('revision')
-      expect(result.detalle_validacion).toContain('IVA 16%')
-    })
-
-    it('el resultado es el mismo sin importar el régimen fiscal del responsable', () => {
-      // El régimen solo afecta la retención al transferir, no el Total del CFDI del proveedor.
-      const moral = validarFacturaProveedorXML({ monto_total: 1160 }, 1000)
-      const fisica = validarFacturaProveedorXML({ monto_total: 1160 }, 1000)
-      expect(moral).toEqual(fisica)
+    it('extrae IVA trasladado y ambas retenciones de un CFDI de persona física', () => {
+      const result = parseFacturaXML(CFDI_PERSONA_FISICA)
+      expect(result.subtotal).toBe(1000)
+      expect(result.iva_trasladado).toBe(160)
+      expect(result.iva_retenido).toBe(106.67)
+      expect(result.isr_retenido).toBe(100)
     })
   })
 
