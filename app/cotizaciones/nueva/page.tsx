@@ -96,7 +96,7 @@ function NuevaCotizacionContent() {
   return (
     <div className="flex flex-col gap-[19px]">
       <div>
-        <Link href="/cotizaciones" className="text-sm text-faint hover:text-subtext">← Cotizaciones</Link>
+        <Link href="/cotizaciones" className="text-content text-faint hover:text-subtext">← Cotizaciones</Link>
         <div className="mt-2 flex flex-wrap items-baseline gap-3">
           <h1 className="sn-display text-2xl text-ink md:text-h2">Nueva Cotizacion</h1>
           <span className="text-subtext">Folio: <span className="sn-display text-body" style={{ fontSize: 13, letterSpacing: '0.06em' }}>{folio || '...'}</span></span>

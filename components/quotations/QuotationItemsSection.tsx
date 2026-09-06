@@ -143,7 +143,7 @@ export function QuotationItemsSection({
                   <div
                     key={i}
                     onMouseDown={() => { if (!actionBlocked(index)) { (onSelectProduct || seleccionarProducto)(index, p) } }}
-                    className={`px-3 py-2 text-sm border-b border-hairline last:border-0 ${actionBlocked(index) ? 'cursor-not-allowed text-faint' : 'hover:bg-row cursor-pointer text-body'}`}
+                    className={`px-3 py-2 text-content border-b border-hairline last:border-0 ${actionBlocked(index) ? 'cursor-not-allowed text-faint' : 'hover:bg-row cursor-pointer text-body'}`}
                   >
                     <div className="font-medium">{p.descripcion}</div>
                     {p.categoria && <div className="text-subtext text-xs">{p.categoria}</div>}
@@ -215,7 +215,7 @@ export function QuotationItemsSection({
             <p className="text-faint text-xs">{item.categoria || 'Sin categoría'}</p>
             {statusText && <p className="mt-1 text-[11px] text-accent-quiet">{statusText}</p>}
           </div>
-          <button type="button" onClick={(e) => { e.stopPropagation(); if (onRemoveRow) { onRemoveRow(index) } else { remove(index) } }} disabled={fields.length === 1 || actionBlocked(index)} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors text-sm">✕</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); if (onRemoveRow) { onRemoveRow(index) } else { remove(index) } }} disabled={fields.length === 1 || actionBlocked(index)} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors text-content">✕</button>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-faint">Cant. {item.cantidad || 0}</span>
@@ -240,9 +240,9 @@ export function QuotationItemsSection({
         <div className="flex justify-between items-start gap-3 mb-2">
           <div className="min-w-0 flex-1">
             <p className="text-body font-medium text-[15px] truncate">{item.descripcion}</p>
-            <p className="text-subtext text-sm">{item.categoria}</p>
+            <p className="text-subtext text-content">{item.categoria}</p>
           </div>
-          <span className={`text-sm font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(margen)}</span>
+          <span className={`text-content font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(margen)}</span>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-faint">Cant. {item.cantidad}</span>
@@ -265,14 +265,14 @@ export function QuotationItemsSection({
           <h2 className="text-base font-semibold text-body">Partidas</h2>
           {editable && (
             <div className="flex gap-2">
-              {onCopyClick && <button type="button" onClick={onCopyClick} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-sm transition-colors min-h-[44px] md:min-h-0">Copiar desde otra cotización</button>}
-              <button type="button" onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-sm transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>
+              {onCopyClick && <button type="button" onClick={onCopyClick} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-content transition-colors min-h-[44px] md:min-h-0">Copiar desde otra cotización</button>}
+              <button type="button" onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-content transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>
             </div>
           )}
         </div>
 
         <div className="hidden md:block" style={{ overflowX: 'auto', overflowY: 'visible' }}>
-          <table className="w-full text-sm">
+          <table className="w-full text-content">
             <thead>
               <tr className="border-b border-hairline">
                 {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'X Pagar', 'Costo + IVA', 'Margen', ...(editable ? [''] : [])].map(h => (
@@ -299,7 +299,7 @@ export function QuotationItemsSection({
         <div className="md:hidden fixed inset-0 bg-app z-50 overflow-y-auto">
           <div className="px-5 pt-12 pb-8">
             <div className="flex justify-between items-center mb-7 gap-3">
-              <button onClick={() => setEditingItemIndex(null)} className="min-h-[44px] px-4 py-2 rounded-control bg-accent hover:bg-accent-pressed text-accent-ink font-medium text-sm transition-colors">Listo</button>
+              <button onClick={() => setEditingItemIndex(null)} className="min-h-[44px] px-4 py-2 rounded-control bg-accent hover:bg-accent-pressed text-accent-ink font-medium text-content transition-colors">Listo</button>
               <span className="text-body font-medium text-[15px] text-right flex-1 min-w-0">{watchedItems[editingItemIndex]?.descripcion ? 'Editar partida' : 'Nueva partida'}</span>
             </div>
             {rowStatus(editingItemIndex) && <div className="mb-4 rounded-control border border-accent-quiet/60 bg-accent-quiet/10 px-3 py-2 text-xs text-accent-quiet">{rowStatus(editingItemIndex)}</div>}
@@ -307,7 +307,7 @@ export function QuotationItemsSection({
               <div className="relative">
                 <label className="sn-label block mb-2">Descripción</label>
                 <input {...register(`items.${editingItemIndex}.descripcion`)} onChange={e => { onItemFieldChange?.(editingItemIndex, 'descripcion'); handleDescripcionChange(editingItemIndex, e.target.value) }} onFocus={() => { onItemFieldFocus?.(editingItemIndex, 'descripcion'); if ((productoSugerencias[editingItemIndex]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: true })) }} onBlur={() => { onItemFieldBlur?.(editingItemIndex, 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: false })), 200) }} disabled={cellLocked(editingItemIndex, 'descripcion')} className={FULLSCREEN_INPUT_CLASS} placeholder="Descripción del item" autoComplete="off" />
-                {mostrarProductoDropdown[editingItemIndex] && !rowLocked(editingItemIndex) && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 rounded-control border border-hairline bg-card shadow-overlay max-h-48 overflow-y-auto">{productoSugerencias[editingItemIndex].map((p, i) => <div key={i} onMouseDown={() => { if (!actionBlocked(editingItemIndex)) { (onSelectProduct || seleccionarProducto)(editingItemIndex, p) } }} className={`px-4 py-3 text-sm border-b border-hairline last:border-0 ${actionBlocked(editingItemIndex) ? 'cursor-not-allowed text-faint' : 'hover:bg-row cursor-pointer text-body'}`}><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-subtext text-xs">{p.categoria}</div>}</div>)}</div>}
+                {mostrarProductoDropdown[editingItemIndex] && !rowLocked(editingItemIndex) && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 rounded-control border border-hairline bg-card shadow-overlay max-h-48 overflow-y-auto">{productoSugerencias[editingItemIndex].map((p, i) => <div key={i} onMouseDown={() => { if (!actionBlocked(editingItemIndex)) { (onSelectProduct || seleccionarProducto)(editingItemIndex, p) } }} className={`px-4 py-3 text-content border-b border-hairline last:border-0 ${actionBlocked(editingItemIndex) ? 'cursor-not-allowed text-faint' : 'hover:bg-row cursor-pointer text-body'}`}><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-subtext text-xs">{p.categoria}</div>}</div>)}</div>}
               </div>
               <div><label className="sn-label block mb-2">Categoría</label><input {...register(`items.${editingItemIndex}.categoria`)} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'categoria')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'categoria')} onChange={(e) => { onItemFieldChange?.(editingItemIndex, 'categoria'); register(`items.${editingItemIndex}.categoria`).onChange(e) }} disabled={cellLocked(editingItemIndex, 'categoria')} className={FULLSCREEN_INPUT_CLASS} placeholder="Categoría" /></div>
               <div className="flex gap-3"><div className="flex-1"><label className="sn-label block mb-2">Cantidad</label><input type="number" min="1" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'cantidad')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'cantidad')} onChange={(e) => { onItemFieldChange?.(editingItemIndex, 'cantidad'); register(`items.${editingItemIndex}.cantidad`).onChange(e) }} disabled={cellLocked(editingItemIndex, 'cantidad')} className={`${FULLSCREEN_INPUT_CLASS} text-center`} /></div><div className="flex-[2]"><label className="sn-label block mb-2">Precio unitario</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'precio_unitario')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'precio_unitario')} onChange={(e) => { onItemFieldChange?.(editingItemIndex, 'precio_unitario'); register(`items.${editingItemIndex}.precio_unitario`).onChange(e) }} disabled={cellLocked(editingItemIndex, 'precio_unitario')} className={FULLSCREEN_INPUT_CLASS} /></div></div>
@@ -315,11 +315,11 @@ export function QuotationItemsSection({
               <div><label className="sn-label block mb-2">Por pagar al responsable</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => onItemFieldFocus?.(editingItemIndex, 'x_pagar')} onBlur={() => onItemFieldBlur?.(editingItemIndex, 'x_pagar')} onChange={(e) => { onItemFieldChange?.(editingItemIndex, 'x_pagar'); register(`items.${editingItemIndex}.x_pagar`).onChange(e) }} disabled={cellLocked(editingItemIndex, 'x_pagar')} className={FULLSCREEN_INPUT_CLASS} /></div>
             </div>
             <div className="rounded-panel border border-hairline bg-card p-4 mt-6">
-              <div className="flex justify-between mb-2"><span className="text-faint text-sm">Importe</span><span className="text-subtext text-sm font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).importe)}</span></div>
-              <div className="flex justify-between mb-2"><span className="text-faint text-sm">Costo + IVA</span><span className="text-subtext text-sm font-medium">${fmtCurrency(calculateCostoConIva((watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).x_pagar))}</span></div>
-              <div className="flex justify-between"><span className="text-faint text-sm">Margen</span><span className={`text-sm font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
+              <div className="flex justify-between mb-2"><span className="text-faint text-content">Importe</span><span className="text-subtext text-content font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).importe)}</span></div>
+              <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo + IVA</span><span className="text-subtext text-content font-medium">${fmtCurrency(calculateCostoConIva((watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).x_pagar))}</span></div>
+              <div className="flex justify-between"><span className="text-faint text-content">Margen</span><span className={`text-content font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
-            {fields.length > 1 && <button type="button" onClick={() => { if (onRemoveRow) { onRemoveRow(editingItemIndex) } else { remove(editingItemIndex) } setEditingItemIndex(null) }} disabled={actionBlocked(editingItemIndex)} className="w-full text-red-400 hover:text-red-300 py-3 text-sm mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
+            {fields.length > 1 && <button type="button" onClick={() => { if (onRemoveRow) { onRemoveRow(editingItemIndex) } else { remove(editingItemIndex) } setEditingItemIndex(null) }} disabled={actionBlocked(editingItemIndex)} className="w-full text-red-400 hover:text-red-300 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
           </div>
         </div>
       )}

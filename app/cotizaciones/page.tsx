@@ -87,13 +87,11 @@ export default function CotizacionesPage() {
         }
       />
 
-      <div className="max-w-[420px] min-w-[240px]">
-        <SearchInput
-          placeholder="Buscar por folio, cliente, proyecto, item o responsable..."
-          value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
-        />
-      </div>
+      <SearchInput
+        placeholder="Buscar por folio, cliente, proyecto, item o responsable..."
+        value={busqueda}
+        onChange={e => setBusqueda(e.target.value)}
+      />
 
       <FilterTabs tabs={tabs} value={filtro} onChange={setFiltro} />
 
@@ -129,7 +127,7 @@ export default function CotizacionesPage() {
         <div className="overflow-hidden rounded-card border border-hairline bg-card">
           {/* Desktop: tabla */}
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full text-sm">
+            <table className="w-full text-content">
               <thead>
                 <tr className="border-b border-hairline">
                   {['Folio', 'Proyecto', 'Cliente', 'Total', 'Entrega', 'Estatus'].map(h => (
@@ -178,11 +176,11 @@ export default function CotizacionesPage() {
             {filtradas.map(cot => (
               <Link key={cot.id} href={`/cotizaciones/${cot.id}`} className="block p-4 transition-colors hover:bg-row">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="sn-display truncate text-sm text-body" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>
+                  <span className="sn-display truncate text-content text-body" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>
                   <StatusBadge tone={toneForCotizacionEstado(cot.estado)} className="flex-shrink-0">{cot.estado}</StatusBadge>
                 </div>
                 <p className="mb-1 break-words text-[15px] font-medium text-body">{cot.proyecto}</p>
-                <p className="mb-3 break-words text-sm text-subtext">{cot.cliente}</p>
+                <p className="mb-3 break-words text-content text-subtext">{cot.cliente}</p>
                 {cot.tipo === 'COMPLEMENTARIA' && (
                   <p className="mb-2 break-words text-xs text-accent">
                     Complementaria de <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
@@ -208,7 +206,7 @@ export default function CotizacionesPage() {
           </p>
           {filtro === 'TODAS' && (
             <>
-              <p className="mb-6 text-sm text-faint">Crea tu primera cotización para empezar</p>
+              <p className="mb-6 text-content text-faint">Crea tu primera cotización para empezar</p>
               <Link
                 href="/cotizaciones/nueva"
                 className="inline-flex h-[var(--control-height-lg)] items-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-md)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"

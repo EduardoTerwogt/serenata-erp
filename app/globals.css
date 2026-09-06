@@ -237,6 +237,14 @@
   --text-h2: 27px;
   --text-h1: 51px;
   --text-hero: 58px;
+
+  /* Ajuste solicitado: +2px sobre el texto de contenido de sección (celdas de
+     tabla, valores de formulario, notas, totales) -- antes usaba el text-sm
+     default de Tailwind (14px). Nombre propio para no tocar la escala
+     default (ver nota de spacing arriba): las secciones migradas usan
+     `text-content` en vez de `text-sm`; esto se vuelve el tamaño base para
+     esta sección y las que se migren después. */
+  --text-content: 16px;
 }
 
 @theme inline {

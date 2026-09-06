@@ -15,6 +15,11 @@ interface SidebarProps {
 // Fondo del sidebar: textura de marca (degradado) muy atenuada por blur(80px) +
 // scrim oscuro encima -- así se ve en el canvas real (confirmado contra
 // capturas del 6-sep), no un bg-topbar plano ni la textura vívida sin atenuar.
+//
+// El nav de escritorio del skill es solo etiquetas, sin iconos (readme.md >
+// Iconography: "Sidebar navigation uses no icons at all"). SidebarNavLink
+// conserva el campo `icon` porque el drawer mobile (fuera del alcance del
+// kit, ver SidebarLayout.tsx) sí los usa; aquí simplemente no se reenvía.
 export function Sidebar({ items }: SidebarProps) {
   return (
     <aside className="sn-rail-texture fixed left-0 top-0 z-40 hidden h-full w-64 flex-col border-r border-hairline shadow-rail md:flex">
@@ -24,7 +29,7 @@ export function Sidebar({ items }: SidebarProps) {
         </div>
 
         <nav className="flex flex-1 flex-col gap-[var(--nav-gap)]">
-          {items.map((item) => (
+          {items.map(({ icon: _icon, ...item }) => (
             <NavItem key={item.href} {...item} />
           ))}
         </nav>

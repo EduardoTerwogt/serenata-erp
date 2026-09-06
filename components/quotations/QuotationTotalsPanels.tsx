@@ -18,7 +18,7 @@ interface Props {
 }
 
 const PANEL_CLASS = 'rounded-panel border border-hairline bg-card p-4 md:p-6'
-const MINI_INPUT_CLASS = 'bg-input border border-hairline rounded-[8px] px-2 py-1.5 text-body text-sm focus:outline-none focus:border-accent-quiet'
+const MINI_INPUT_CLASS = 'bg-input border border-hairline rounded-[8px] px-2 py-1.5 text-body text-content focus:outline-none focus:border-accent-quiet'
 
 export function QuotationTotalsPanels({
   totals,
@@ -38,11 +38,11 @@ export function QuotationTotalsPanels({
       <div className={PANEL_CLASS}>
         <h3 className="sn-label mb-4">Utilidad</h3>
         <div className="space-y-2">
-          <div className="flex justify-between text-sm gap-3">
+          <div className="flex justify-between text-content gap-3">
             <span className="text-subtext">Margen Total</span>
             <span className={`${totals.margen_total >= 0 ? 'text-green-400' : 'text-red-400'} text-right`}>${fmtCurrency(totals.margen_total)}</span>
           </div>
-          <div className="flex justify-between text-sm gap-3">
+          <div className="flex justify-between text-content gap-3">
             <span className="text-subtext">Fee Agencia</span>
             <span className="text-body text-right">${fmtCurrency(totals.fee_agencia)}</span>
           </div>
@@ -51,7 +51,7 @@ export function QuotationTotalsPanels({
             <span className={`${totals.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'} text-right`}>${fmtCurrency(totals.utilidad_total)}</span>
           </div>
           {totals.subtotal > 0 && (
-            <div className="flex justify-between text-sm gap-3">
+            <div className="flex justify-between text-content gap-3">
               <span className="text-subtext">Margen %</span>
               <span className="text-accent text-right">{((totals.margen_total / totals.subtotal) * 100).toFixed(1)}%</span>
             </div>
@@ -61,19 +61,19 @@ export function QuotationTotalsPanels({
             <p className="sn-label mb-0.5">Impuestos (Estimado)</p>
             <p className="text-[11px] text-faint mb-3">Estimación de impuestos de Serenata (persona moral). No sustituye el cruce fiscal real de Cuentas.</p>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm gap-3">
+              <div className="flex justify-between text-content gap-3">
                 <span className="text-subtext">IVA cobrado</span>
                 <span className="text-body text-right">${fmtCurrency(estimatedTaxes.ivaCobrado)}</span>
               </div>
-              <div className="flex justify-between text-sm gap-3">
+              <div className="flex justify-between text-content gap-3">
                 <span className="text-subtext">IVA pagado (a proveedores)</span>
                 <span className="text-body text-right">${fmtCurrency(estimatedTaxes.ivaPagado)}</span>
               </div>
-              <div className="flex justify-between text-sm gap-3">
+              <div className="flex justify-between text-content gap-3">
                 <span className="text-subtext">IVA neto a enterar al SAT</span>
                 <span className={`text-right font-medium ${estimatedTaxes.ivaNeto >= 0 ? 'text-yellow-400' : 'text-green-400'}`}>${fmtCurrency(estimatedTaxes.ivaNeto)}</span>
               </div>
-              <div className="flex justify-between text-sm gap-3">
+              <div className="flex justify-between text-content gap-3">
                 <span className="text-subtext">ISR estimado (30%)</span>
                 <span className="text-yellow-400 text-right">${fmtCurrency(estimatedTaxes.isrEstimado)}</span>
               </div>
@@ -89,11 +89,11 @@ export function QuotationTotalsPanels({
       <div className={PANEL_CLASS}>
         <h3 className="sn-label mb-4">Totales</h3>
         <div className="space-y-3">
-          <div className="flex justify-between text-sm gap-3">
+          <div className="flex justify-between text-content gap-3">
             <span className="text-subtext">Subtotal</span>
             <span className="text-body text-right">${fmtCurrency(totals.subtotal)}</span>
           </div>
-          <div className="flex justify-between text-sm items-start gap-3">
+          <div className="flex justify-between text-content items-start gap-3">
             <span className="text-subtext flex items-center gap-2 flex-wrap flex-1 min-w-0">
               Fee Agencia
               {editable ? (
@@ -115,11 +115,11 @@ export function QuotationTotalsPanels({
             </span>
             <span className="text-body text-right flex-shrink-0">${fmtCurrency(totals.fee_agencia)}</span>
           </div>
-          <div className="flex justify-between text-sm gap-3">
+          <div className="flex justify-between text-content gap-3">
             <span className="text-subtext">General</span>
             <span className="text-body text-right">${fmtCurrency(totals.general)}</span>
           </div>
-          <div className="flex justify-between text-sm items-center gap-3">
+          <div className="flex justify-between text-content items-center gap-3">
             <span className="text-subtext flex items-center gap-2 flex-wrap flex-1 min-w-0">
               IVA (16%)
               {editable && (
@@ -135,7 +135,7 @@ export function QuotationTotalsPanels({
             <span className={`${iva_activo ? 'text-body' : 'text-faint'} text-right flex-shrink-0`}>${fmtCurrency(totals.iva)}</span>
           </div>
           {editable ? (
-            <div className="flex justify-between text-sm items-start gap-3">
+            <div className="flex justify-between text-content items-start gap-3">
               <div className="text-subtext flex-1 min-w-0">
                 <div className="mb-2">Descuento</div>
                 <div className="flex flex-wrap gap-2">
@@ -162,7 +162,7 @@ export function QuotationTotalsPanels({
               </span>
             </div>
           ) : totals.descuento > 0 ? (
-            <div className="flex justify-between text-sm gap-3">
+            <div className="flex justify-between text-content gap-3">
               <span className="text-subtext">Descuento</span>
               <span className="text-yellow-400 text-right">-${fmtCurrency(totals.descuento)}</span>
             </div>
