@@ -46,7 +46,14 @@ test('genera orden de pago PDF y registra pago en cuentas por pagar', async ({ p
   await expect(pdfLink).toHaveAttribute('href', E2E_IDS.pdfPath)
 
   await page.getByRole('button', { name: 'Cerrar', exact: true }).click()
+
+  // Historial de Órdenes ya no vive inline en la página (ajuste pedido por
+  // el usuario tras el Bloque 4): ahora es un popup aparte, con un botón
+  // "Historial" junto a "Ficha de órdenes de pago" que solo aparece cuando
+  // hay al menos una orden -- el refresh tras generar la orden lo revela.
+  await page.getByRole('button', { name: 'Historial' }).click()
   await expect(page.getByText('O.P 18-Abr SH054', { exact: false }).first()).toBeVisible()
+  await page.getByLabel('Cerrar').click()
 
   await page.locator('tr').filter({ hasText: 'José García' }).first().click()
   await page.getByRole('button', { name: 'Registrar Pago', exact: true }).first().click()
