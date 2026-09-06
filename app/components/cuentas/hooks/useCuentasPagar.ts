@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { CuentaPagar, DocumentoCuentaPagar, OrdenPago } from '@/lib/types'
-import { getJson, sendFormData } from '@/lib/client/api'
+import { CuentaPagar, DocumentoCuentaPagar, OrdenPago, RegimenFiscal, HistorialCambioResponsableItem } from '@/lib/types'
+import { getJson, sendFormData, sendJson } from '@/lib/client/api'
 
 interface CuentaPagarDetalle {
   cuenta: CuentaPagar
   documentos: DocumentoCuentaPagar[]
   orden_pago?: OrdenPago | null
+  proveedor?: { regimen_fiscal: RegimenFiscal | null } | null
   resumen: { monto_pagado: number; saldo_pendiente: number }
 }
 
@@ -128,6 +129,21 @@ export function useCuentasPagar() {
     return getJson('/api/cuentas-pagar/ordenes-historial', 'Error al cargar historial')
   }, [])
 
+  // Fase 5.3 Bloque 0 punto 2 / Bloque 3: reasignar responsable desde Cuentas
+  // reusa el mismo endpoint que la reasignación en la partida del proyecto
+  // (PATCH /api/items/:id) -- ahí vive la lógica de sincronizar
+  // items_cotizacion + cuentas_pagar y de loguear el historial. Cuentas
+  // nunca escribe directo a cuentas_pagar para esto, para no desincronizar.
+  const reasignarResponsable = useCallback(async (itemId: string, responsableId: string, responsableNombre: string) => {
+    const result = await sendJson(`/api/items/${itemId}`, { responsable_id: responsableId, responsable_nombre: responsableNombre }, 'Error al reasignar responsable', { method: 'PATCH' })
+    await cargar()
+    return result
+  }, [cargar])
+
+  const cargarHistorialResponsable = useCallback(async (cuentaId: string): Promise<{ historial: HistorialCambioResponsableItem[] }> => {
+    return getJson(`/api/cuentas-pagar/${cuentaId}/historial-responsable`, 'Error al cargar historial de responsable')
+  }, [])
+
   return useMemo(() => ({
     cuentas,
     loading,
@@ -139,5 +155,7 @@ export function useCuentasPagar() {
     registrarPago,
     generarOrdenPago,
     cargarHistorialOrdenes,
-  }), [cuentas, loading, error, cargar, cargarDetalle, cargarPreviewOrdenPago, subirFactura, registrarPago, generarOrdenPago, cargarHistorialOrdenes])
+    reasignarResponsable,
+    cargarHistorialResponsable,
+  }), [cuentas, loading, error, cargar, cargarDetalle, cargarPreviewOrdenPago, subirFactura, registrarPago, generarOrdenPago, cargarHistorialOrdenes, reasignarResponsable, cargarHistorialResponsable])
 }

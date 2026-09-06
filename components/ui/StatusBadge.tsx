@@ -37,3 +37,31 @@ export function StatusBadge({ tone, children, className = '' }: StatusBadgeProps
 export function toneForCotizacionEstado(estado: string): StatusTone {
   return COTIZACION_ESTADO_TONE[estado] || 'draft'
 }
+
+// Fase 5.3 Bloque 3: Cuentas se une al mismo mapeo de 4 tonos -- PAGADO se
+// lee como "aprobada" (verde), VENCIDO como "cancelada" (rojo), y los
+// estados intermedios (facturado, parcialmente pagado, en proceso de pago)
+// como "emitida" (azul).
+const CUENTA_ESTADO_TONE: Record<string, StatusTone> = {
+  PAGADO: 'approved',
+  VENCIDO: 'cancelled',
+  FACTURADO: 'issued',
+  PARCIALMENTE_PAGADO: 'issued',
+  EN_PROCESO_PAGO: 'issued',
+  FACTURA_PENDIENTE: 'draft',
+  PENDIENTE: 'draft',
+}
+
+export function toneForCuentaEstado(estado: string): StatusTone {
+  return CUENTA_ESTADO_TONE[estado] || 'draft'
+}
+
+const VALIDACION_ESTADO_TONE: Record<string, StatusTone> = {
+  validado: 'approved',
+  revision: 'cancelled',
+  pendiente: 'draft',
+}
+
+export function toneForValidacionEstado(estado: string): StatusTone {
+  return VALIDACION_ESTADO_TONE[estado] || 'draft'
+}

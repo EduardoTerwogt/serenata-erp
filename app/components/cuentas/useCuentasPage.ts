@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { OrdenPago } from '@/lib/types'
 import { useCuentasCobrar } from '@/app/components/cuentas/hooks/useCuentasCobrar'
 import { useCuentasPagar } from '@/app/components/cuentas/hooks/useCuentasPagar'
+import { useCuentasPorProyecto } from '@/app/components/cuentas/hooks/useCuentasPorProyecto'
 import {
   AlertaCuentaCobrar,
   SelectedCuenta,
   Tab,
+  Vista,
 } from '@/app/components/cuentas/types'
 import {
   buildCobrarRows,
@@ -22,6 +24,7 @@ import {
 
 export function useCuentasPage() {
   const [tab, setTab] = useState<Tab>('cobrar')
+  const [vista, setVista] = useState<Vista>('proyecto')
   const [busqueda, setBusqueda] = useState('')
   const [selectedCuenta, setSelectedCuenta] = useState<SelectedCuenta | null>(null)
   const [showOrdenModal, setShowOrdenModal] = useState(false)
@@ -33,9 +36,11 @@ export function useCuentasPage() {
 
   const cobrarApi = useCuentasCobrar()
   const pagarApi = useCuentasPagar()
+  const porProyectoApi = useCuentasPorProyecto()
 
   const { cuentas: cuentasCobrar, loading: loadingCobrar, recargar: recargarCobrar, cargarAlertas: fetchAlertas } = cobrarApi
   const { cuentas: cuentasPagar, loading: loadingPagar, recargar: recargarPagar, cargarHistorialOrdenes: fetchHistorialOrdenes } = pagarApi
+  const { recargar: recargarPorProyecto } = porProyectoApi
 
   const cargarAlertas = useCallback(async () => {
     setLoadingAlertas(true)
@@ -63,22 +68,24 @@ export function useCuentasPage() {
     }
   }, [fetchHistorialOrdenes])
 
-  // Fase 2: Refresh selectivo — solo recarga la lista afectada, no ambas
+  // Fase 2: Refresh selectivo — solo recarga la lista afectada, no ambas.
+  // La vista "Por proyecto" (Bloque 3) sí se recarga siempre porque agrupa
+  // ambas listas -- un cambio en cualquiera de las dos la deja desactualizada.
   const refreshCobrar = useCallback(async () => {
-    await recargarCobrar()
+    await Promise.all([recargarCobrar(), recargarPorProyecto()])
     if (alertasLoadedRef.current) {
       alertasLoadedRef.current = false
       await cargarAlertas()
     }
-  }, [recargarCobrar, cargarAlertas])
+  }, [recargarCobrar, cargarAlertas, recargarPorProyecto])
 
   const refreshPagar = useCallback(async () => {
-    await recargarPagar()
-  }, [recargarPagar])
+    await Promise.all([recargarPagar(), recargarPorProyecto()])
+  }, [recargarPagar, recargarPorProyecto])
 
   // refreshAll conservado para OrdenPagoModal que puede afectar ambas listas
   const refreshAll = useCallback(async () => {
-    await Promise.all([recargarCobrar(), recargarPagar()])
+    await Promise.all([recargarCobrar(), recargarPagar(), recargarPorProyecto()])
 
     if (tab === 'cobrar') {
       alertasLoadedRef.current = false
@@ -89,7 +96,7 @@ export function useCuentasPage() {
       historialLoadedRef.current = false
       await cargarHistorialOrdenes()
     }
-  }, [cargarAlertas, cargarHistorialOrdenes, recargarCobrar, recargarPagar, tab])
+  }, [cargarAlertas, cargarHistorialOrdenes, recargarCobrar, recargarPagar, recargarPorProyecto, tab])
 
   useEffect(() => {
     if (tab !== 'cobrar' || alertasLoadedRef.current) return
@@ -119,6 +126,8 @@ export function useCuentasPage() {
   return {
     tab,
     setTab,
+    vista,
+    setVista,
     busqueda,
     setBusqueda,
     selectedCuenta,
@@ -130,6 +139,7 @@ export function useCuentasPage() {
     historialOrdenes,
     cobrarApi,
     pagarApi,
+    porProyectoApi,
     refreshAll,
     refreshCobrar,
     refreshPagar,

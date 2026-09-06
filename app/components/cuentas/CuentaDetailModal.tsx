@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useReducer } from 'react'
-import { CuentaCobrar, CuentaPagar, DocumentoCuentaCobrar, DocumentoCuentaPagar, OrdenPago, PagoComprobante } from '@/lib/types'
+import { CuentaCobrar, CuentaPagar, DocumentoCuentaCobrar, DocumentoCuentaPagar, OrdenPago, PagoComprobante, RegimenFiscal, HistorialCambioResponsableItem } from '@/lib/types'
 import { TabDocumentos } from '@/app/components/cuentas/tabs/TabDocumentos'
 import { formatDateDisplay } from '@/lib/format-date'
 import { TabInformacion } from '@/app/components/cuentas/tabs/TabInformacion'
@@ -24,6 +24,7 @@ interface CuentaPagarDetalle {
   cuenta: CuentaPagar
   documentos: DocumentoCuentaPagar[]
   orden_pago?: OrdenPago | null
+  proveedor?: { regimen_fiscal: RegimenFiscal | null } | null
   resumen: { monto_pagado: number; saldo_pendiente: number }
 }
 
@@ -81,6 +82,8 @@ interface Props {
     cargarDetalle: (id: string) => Promise<CuentaPagarDetalle | null>
     subirFactura: (id: string, xml: File, pdf: File) => Promise<unknown>
     registrarPago: (id: string, data: { monto: number; comprobante?: File }) => Promise<unknown>
+    reasignarResponsable: (itemId: string, responsableId: string, responsableNombre: string) => Promise<unknown>
+    cargarHistorialResponsable: (cuentaId: string) => Promise<{ historial: HistorialCambioResponsableItem[] }>
   }
   onRefresh: () => Promise<void>
 }
@@ -181,7 +184,19 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
 
               {tab === 'info' && cuentaPagar && (
                 <div className="space-y-4">
-                  <TabInformacion tipo="pagar" cuenta={cuentaPagar} resumen={detallePagar?.resumen} />
+                  <TabInformacion
+                    tipo="pagar"
+                    cuenta={cuentaPagar}
+                    resumen={detallePagar?.resumen}
+                    regimenFiscal={detallePagar?.proveedor?.regimen_fiscal ?? null}
+                    onReasignarResponsable={async (responsableId, responsableNombre) => {
+                      if (!cuentaPagar.item_id) return
+                      await pagarActions.reasignarResponsable(cuentaPagar.item_id, responsableId, responsableNombre)
+                      await onRefresh()
+                      dispatch({ type: 'loaded_pagar', data: await pagarActions.cargarDetalle(cuentaPagar.id) })
+                    }}
+                    cargarHistorialResponsable={() => pagarActions.cargarHistorialResponsable(cuentaPagar.id)}
+                  />
                   {detallePagar?.orden_pago && (
                     <div className="pt-4 border-t border-gray-800">
                       <p className="text-gray-400 text-sm mb-2">Orden de Pago Vinculada</p>

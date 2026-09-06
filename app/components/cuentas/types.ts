@@ -1,6 +1,7 @@
 import { CuentaCobrar, CuentaPagar } from '@/lib/types'
 
 export type Tab = 'cobrar' | 'pagar'
+export type Vista = 'proyecto' | 'lista'
 
 export type SelectedCuenta =
   | ({ tipo: 'cobrar' } & CuentaCobrar)

@@ -2,11 +2,16 @@
 
 import dynamic from 'next/dynamic'
 import { CuentasTable } from '@/app/components/cuentas/CuentasTable'
+import { CuentasPorProyecto } from '@/app/components/cuentas/CuentasPorProyecto'
 import { useCuentasPage } from '@/app/components/cuentas/useCuentasPage'
 import { formatCuentasCurrency } from '@/app/components/cuentas/utils'
 import { formatDateDisplay } from '@/lib/format-date'
 import { AppCard } from '@/components/ui/AppCard'
 import { MetricCard } from '@/components/ui/MetricCard'
+import { SectionHero } from '@/components/ui/SectionHero'
+import { FilterTabs } from '@/components/ui/FilterTabs'
+import { Button } from '@/components/ui/Button'
+import { Icon } from '@/components/ui/Icon'
 import { SkeletonTable } from '@/app/components/ui/SkeletonTable'
 
 const CuentaDetailModal = dynamic(
@@ -23,6 +28,8 @@ export function CuentasPage() {
   const {
     tab,
     setTab,
+    vista,
+    setVista,
     busqueda,
     setBusqueda,
     selectedCuenta,
@@ -34,6 +41,7 @@ export function CuentasPage() {
     historialOrdenes,
     cobrarApi,
     pagarApi,
+    porProyectoApi,
     refreshAll,
     refreshCobrar,
     refreshPagar,
@@ -47,6 +55,8 @@ export function CuentasPage() {
     cuentasPagarPendientes,
     loading,
   } = useCuentasPage()
+
+  const termPorProyecto = busqueda.toLowerCase().trim()
 
   const abrirDetalleDesdeAlerta = (alertaId: string) => {
     const cuentaDesdeLista = cobrarFiltradas.find((cuenta) => cuenta.id === alertaId)
@@ -66,52 +76,19 @@ export function CuentasPage() {
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-white">Cuentas</h1>
-        <p className="text-gray-400 mt-1">Control operativo de cobros, pagos, documentos y órdenes de pago.</p>
+      <div className="mb-6">
+        <SectionHero
+          title="Cuentas"
+          subtitle="Control operativo de cobros, pagos, documentos y órdenes de pago."
+          action={
+            <Button variant="primary" size="lg" icon={<Icon name="file-text" size={16} />} onClick={() => setShowOrdenModal(true)}>
+              Ficha de órdenes de pago
+            </Button>
+          }
+        />
       </div>
 
       <div className="flex flex-col gap-4 mb-6">
-        <div className="flex flex-wrap gap-3 justify-between">
-          <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
-            <button
-              onClick={() => setTab('cobrar')}
-              className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === 'cobrar' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Por Cobrar
-              {cuentasCobrarPendientes > 0 && (
-                <span className="ml-2 bg-yellow-600 text-white text-xs rounded-full px-1.5 py-0.5">
-                  {cuentasCobrarPendientes}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setTab('pagar')}
-              className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === 'pagar' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Por Pagar
-              {cuentasPagarPendientes > 0 && (
-                <span className="ml-2 bg-red-700 text-white text-xs rounded-full px-1.5 py-0.5">
-                  {cuentasPagarPendientes}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {tab === 'pagar' && (
-            <button
-              onClick={() => setShowOrdenModal(true)}
-              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              Generar Orden de Pago
-            </button>
-          )}
-        </div>
-
         <input
           type="text"
           placeholder={tab === 'cobrar'
@@ -121,6 +98,25 @@ export function CuentasPage() {
           onChange={(e) => setBusqueda(e.target.value)}
           className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-4 py-2.5 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
         />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <FilterTabs
+            tabs={[
+              { value: 'cobrar' as const, label: 'Cobrar', count: cuentasCobrarPendientes },
+              { value: 'pagar' as const, label: 'Pagar', count: cuentasPagarPendientes },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+          <FilterTabs
+            tabs={[
+              { value: 'proyecto' as const, label: 'Por proyecto' },
+              { value: 'lista' as const, label: 'Lista' },
+            ]}
+            value={vista}
+            onChange={setVista}
+          />
+        </div>
       </div>
 
       {tab === 'cobrar' && (
@@ -209,7 +205,18 @@ export function CuentasPage() {
         </>
       )}
 
-      {loading ? (
+      {vista === 'proyecto' ? (
+        porProyectoApi.loading ? (
+          <SkeletonTable columns={4} rows={6} />
+        ) : (
+          <CuentasPorProyecto
+            proyectos={porProyectoApi.proyectos}
+            term={termPorProyecto}
+            onSelectCobrar={(cuenta) => setSelectedCuenta({ ...cuenta, tipo: 'cobrar' })}
+            onSelectPagar={(cuenta) => setSelectedCuenta({ ...cuenta, tipo: 'pagar' })}
+          />
+        )
+      ) : loading ? (
         <SkeletonTable columns={4} rows={6} />
       ) : (
         <CuentasTable

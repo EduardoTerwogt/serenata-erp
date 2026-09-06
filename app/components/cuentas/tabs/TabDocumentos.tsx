@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { DocumentoCuentaCobrar, DocumentoCuentaPagar } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
+import { StatusBadge, toneForValidacionEstado } from '@/components/ui/StatusBadge'
 
 interface TabDocumentosCobrarProps {
   tipo: 'cobrar'
@@ -135,23 +136,33 @@ export function TabDocumentos(props: TabDocumentosProps) {
           <p className="text-gray-500 text-sm italic py-4">No hay documentos cargados</p>
         )}
         {documentos.map((doc) => (
-          <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-            <div className="min-w-0 flex-1">
-              <p className="text-white text-sm font-medium truncate">{doc.archivo_nombre}</p>
-              <p className="text-gray-400 text-xs">
-                {TIPO_DOC_LABEL[doc.tipo] || doc.tipo}
-                {' • '}
-                {formatDateDisplay(doc.fecha_carga || doc.created_at)}
-              </p>
+          <div key={doc.id} className="p-3 bg-gray-800 rounded-lg">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-white text-sm font-medium truncate">{doc.archivo_nombre}</p>
+                <p className="text-gray-400 text-xs">
+                  {TIPO_DOC_LABEL[doc.tipo] || doc.tipo}
+                  {' • '}
+                  {formatDateDisplay(doc.fecha_carga || doc.created_at)}
+                </p>
+              </div>
+              {doc.estado_validacion && (
+                <StatusBadge tone={toneForValidacionEstado(doc.estado_validacion)}>{doc.estado_validacion}</StatusBadge>
+              )}
+              <a
+                href={doc.archivo_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 text-sm whitespace-nowrap"
+              >
+                Ver
+              </a>
             </div>
-            <a
-              href={doc.archivo_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 text-sm ml-3 whitespace-nowrap"
-            >
-              Ver
-            </a>
+            {doc.estado_validacion === 'revision' && doc.detalle_validacion && (
+              <p className="mt-2 text-xs text-red-300 bg-red-900/20 border border-red-800/50 rounded px-2.5 py-1.5">
+                {doc.detalle_validacion}
+              </p>
+            )}
           </div>
         ))}
       </div>
