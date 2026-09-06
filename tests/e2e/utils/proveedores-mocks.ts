@@ -1,9 +1,9 @@
 import { Page } from '@playwright/test'
 import { fulfillJson } from './http'
 
-export const RESPONSABLE_E2E_ID = 'resp-e2e-1'
+export const PROVEEDOR_E2E_ID = 'resp-e2e-1'
 
-interface ResponsableMock {
+interface ProveedorMock {
   id: string
   nombre: string
   telefono: string | null
@@ -16,9 +16,9 @@ interface ResponsableMock {
   created_at: string
 }
 
-export async function mockResponsablesApis(page: Page) {
-  const responsable: ResponsableMock = {
-    id: RESPONSABLE_E2E_ID,
+export async function mockProveedoresApis(page: Page) {
+  const proveedor: ProveedorMock = {
+    id: PROVEEDOR_E2E_ID,
     nombre: 'Diego Torres',
     telefono: '5555555555',
     correo: 'diego@serenata.test',
@@ -30,12 +30,12 @@ export async function mockResponsablesApis(page: Page) {
     created_at: '2026-01-01T00:00:00Z',
   }
 
-  const responsables: ResponsableMock[] = [responsable]
+  const proveedores: ProveedorMock[] = [proveedor]
 
   const historial = [
     {
       id: 'hist-e2e-1',
-      responsable_id: RESPONSABLE_E2E_ID,
+      responsable_id: PROVEEDOR_E2E_ID,
       cotizacion_id: 'SH010',
       proyecto_nombre: 'Documental Raíces',
       cliente: 'Estudio Manantial',
@@ -47,7 +47,7 @@ export async function mockResponsablesApis(page: Page) {
     },
   ]
 
-  await page.route('**/api/responsables', async (route) => {
+  await page.route('**/api/proveedores', async (route) => {
     if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON() as {
         nombre: string
@@ -70,32 +70,32 @@ export async function mockResponsablesApis(page: Page) {
         activo: true,
         created_at: '2026-05-01T00:00:00Z',
       }
-      responsables.push(created)
+      proveedores.push(created)
       await fulfillJson(route, created, 201)
       return
     }
-    await fulfillJson(route, responsables)
+    await fulfillJson(route, proveedores)
   })
 
-  await page.route(`**/api/responsables/${RESPONSABLE_E2E_ID}`, async (route) => {
+  await page.route(`**/api/proveedores/${PROVEEDOR_E2E_ID}`, async (route) => {
     if (route.request().method() === 'PUT') {
       const body = route.request().postDataJSON() as Record<string, unknown>
-      Object.assign(responsable, body)
-      await fulfillJson(route, responsable)
+      Object.assign(proveedor, body)
+      await fulfillJson(route, proveedor)
       return
     }
-    await fulfillJson(route, responsable)
+    await fulfillJson(route, proveedor)
   })
 
-  await page.route(`**/api/responsables/${RESPONSABLE_E2E_ID}/historial`, async (route) => {
+  await page.route(`**/api/proveedores/${PROVEEDOR_E2E_ID}/historial`, async (route) => {
     await fulfillJson(route, historial)
   })
 
-  await page.route('**/api/responsables/resp-e2e-new', async (route) => {
-    await fulfillJson(route, responsables.find((r) => r.id === 'resp-e2e-new'))
+  await page.route('**/api/proveedores/resp-e2e-new', async (route) => {
+    await fulfillJson(route, proveedores.find((r) => r.id === 'resp-e2e-new'))
   })
 
-  await page.route('**/api/responsables/resp-e2e-new/historial', async (route) => {
+  await page.route('**/api/proveedores/resp-e2e-new/historial', async (route) => {
     await fulfillJson(route, [])
   })
 }

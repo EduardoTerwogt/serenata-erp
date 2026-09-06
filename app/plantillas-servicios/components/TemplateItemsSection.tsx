@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { ServiceTemplateItem, Producto, Responsable } from '@/lib/types'
+import { ServiceTemplateItem, Producto, Proveedor } from '@/lib/types'
 
 interface Props {
   items: ServiceTemplateItem[]
@@ -12,7 +12,7 @@ interface Props {
   setMostrarProductoDropdown: (updater: Record<number, boolean> | ((prev: Record<number, boolean>) => Record<number, boolean>)) => void
   handleDescripcionChange: (index: number, valor: string) => void
   seleccionarProducto: (index: number, producto: Producto) => void
-  responsables: Responsable[]
+  responsables: Proveedor[]
 }
 
 const EMPTY_ITEM: ServiceTemplateItem = {

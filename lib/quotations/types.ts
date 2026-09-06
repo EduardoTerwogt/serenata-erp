@@ -1,4 +1,4 @@
-import { Cotizacion, Responsable } from '@/lib/types'
+import { Cotizacion, Proveedor } from '@/lib/types'
 
 export type DescuentoTipo = 'monto' | 'porcentaje'
 export type QuotationStatus = 'BORRADOR' | 'EMITIDA' | 'APROBADA' | 'CANCELADA'
@@ -130,7 +130,7 @@ export interface UpdateQuotationOptions {
   iva_activo: boolean
   descuento_tipo: DescuentoTipo
   descuento_valor: number
-  responsables: Responsable[]
+  responsables: Proveedor[]
   currentQuotation: Cotizacion | null
   notas_internas?: string | null
 }

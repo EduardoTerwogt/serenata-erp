@@ -1,4 +1,4 @@
-import { ItemCotizacion, Responsable } from '@/lib/types'
+import { ItemCotizacion, Proveedor } from '@/lib/types'
 import {
   ProjectDetailBundle,
   ProjectItemNotasMap,
@@ -16,9 +16,9 @@ export async function fetchProjectDetail(id: string): Promise<ProyectoDetalle> {
 export async function fetchProjectDetailBundle(id: string): Promise<ProjectDetailBundle> {
   const [proyecto, responsables] = await Promise.all([
     fetchProjectDetail(id),
-    fetch('/api/responsables').then(async r => {
+    fetch('/api/proveedores').then(async r => {
       if (!r.ok) throw new Error('Error cargando responsables')
-      return r.json() as Promise<Responsable[]>
+      return r.json() as Promise<Proveedor[]>
     }),
   ])
 
@@ -68,7 +68,7 @@ export async function updateProjectDetail(
 export async function updateProjectItemResponsable(
   itemId: string,
   responsableId: string,
-  responsables: Responsable[]
+  responsables: Proveedor[]
 ): Promise<ProjectItemResponsableUpdate> {
   const responsable = responsables.find(r => r.id === responsableId)
 

@@ -1,7 +1,7 @@
 import { requireSection } from '@/lib/api-auth'
-import { getResponsableById, updateResponsable } from '@/lib/db'
+import { getProveedorById, updateProveedor } from '@/lib/db'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
-import { validate, ResponsableUpdateSchema } from '@/lib/validation/schemas'
+import { validate, ProveedorUpdateSchema } from '@/lib/validation/schemas'
 
 export async function GET(
   _request: Request,
@@ -12,11 +12,11 @@ export async function GET(
 
   try {
     const { id } = await params
-    const responsable = await getResponsableById(id)
-    return Response.json(responsable)
+    const proveedor = await getProveedorById(id)
+    return Response.json(proveedor)
   } catch (error) {
     console.error(error)
-    return Response.json({ error: 'Colaborador no encontrado' }, { status: 404 })
+    return Response.json({ error: 'Proveedor no encontrado' }, { status: 404 })
   }
 }
 
@@ -30,13 +30,13 @@ export async function PUT(
   try {
     const { id } = await params
     const body = await request.json()
-    const validation = validate(ResponsableUpdateSchema, body)
+    const validation = validate(ProveedorUpdateSchema, body)
     if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 })
-    const responsable = await updateResponsable(id, validation.data)
-    triggerSheetsSync('responsables')
-    return Response.json(responsable)
+    const proveedor = await updateProveedor(id, validation.data)
+    triggerSheetsSync('proveedores')
+    return Response.json(proveedor)
   } catch (error) {
     console.error(error)
-    return Response.json({ error: 'Error actualizando colaborador' }, { status: 500 })
+    return Response.json({ error: 'Error actualizando proveedor' }, { status: 500 })
   }
 }

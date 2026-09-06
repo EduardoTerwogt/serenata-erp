@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ServiceTemplateItem, Responsable } from '@/lib/types'
+import { ServiceTemplateItem, Proveedor } from '@/lib/types'
 import { useServiceTemplateForm } from '@/hooks/useServiceTemplateForm'
 import { TemplateItemsSection } from '../components/TemplateItemsSection'
 
@@ -22,7 +22,7 @@ export default function NuevaPlantillaPage() {
   const [nombre, setNombre] = useState('')
   const [descripcionPlantilla, setDescripcionPlantilla] = useState('')
   const [items, setItems] = useState<ServiceTemplateItem[]>([{ ...EMPTY_ITEM }])
-  const [responsables, setResponsables] = useState<Responsable[]>([])
+  const [responsables, setResponsables] = useState<Proveedor[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -35,7 +35,7 @@ export default function NuevaPlantillaPage() {
   } = useServiceTemplateForm(items, setItems)
 
   useEffect(() => {
-    fetch('/api/responsables')
+    fetch('/api/proveedores')
       .then(res => res.json())
       .then(data => setResponsables(Array.isArray(data) ? data : []))
       .catch(() => {})

@@ -62,9 +62,9 @@ export const CotizacionUpdateSchema = CotizacionBaseSchema.partial().extend({
   items: z.array(ItemCotizacionSchema).optional(),
 })
 
-// ==================== RESPONSABLES ====================
+// ==================== PROVEEDORES (antes "responsables") ====================
 
-export const ResponsableCreateSchema = z.object({
+export const ProveedorCreateSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
   telefono: z.string().nullable().optional(),
   correo: z.string().email('Correo inválido').nullable().optional(),
@@ -75,7 +75,7 @@ export const ResponsableCreateSchema = z.object({
   regimen_fiscal: z.enum(['moral', 'fisica']).nullable().optional(),
 })
 
-export const ResponsableUpdateSchema = z.object({
+export const ProveedorUpdateSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido').optional(),
   telefono: z.string().nullable().optional(),
   correo: z.string().email('Correo inválido').nullable().optional(),

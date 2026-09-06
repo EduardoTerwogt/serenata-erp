@@ -105,7 +105,7 @@ ERP para productora audiovisual mexicana (Serenata House). Módulos:
 - **Proyectos**: Evento/producción aprobada. Estados: PREPRODUCCION → RODAJE → POSTPRODUCCION → FINALIZADO. Creado desde la cotización PRINCIPAL aprobada; puede acumular impacto de COMPLEMENTARIA aprobadas.
 - **Cuentas por Cobrar**: Lo que el cliente debe pagar. Generadas al aprobar. Facturas (PDF+XML), complementos de pago, pagos parciales.
 - **Cuentas por Pagar**: Lo que se paga a cada responsable. Item con responsable → cuenta por pagar. Órdenes de pago agrupadas.
-- **Responsables**: Colaboradores/freelancers. Datos bancarios, roles, historial de proyectos.
+- **Proveedores** (antes "Responsables", tabla `proveedores`): Colaboradores/freelancers. Datos bancarios, roles, historial de proyectos.
 - **Planeación**: Extracción AI de eventos desde mensajes informales (email/WhatsApp). Claude Sonnet parsea fechas, locaciones, proyectos. Se validan y convierten en cotizaciones en lote.
 - **Plantillas de Servicios**: Templates reutilizables con items pre-configurados para cotizaciones nuevas.
 - **Google Sheets (espejo)**: Sheets acompaña a Supabase como mirror de consulta externa. **Supabase es fuente de verdad**; las escrituras en la app se sincronizan hacia Sheets automáticamente. Nunca tratar Sheets como origen — siempre escribir contra Supabase.
@@ -134,7 +134,7 @@ app/                          # Next.js App Router
 │   ├── cuentas-cobrar/       # CRUD + documentos + pagos
 │   ├── cuentas-pagar/        # CRUD + documentos + órdenes de pago
 │   ├── proyectos/            # CRUD + hoja de llamado
-│   ├── responsables/         # CRUD + historial
+│   ├── proveedores/          # CRUD + historial (antes responsables/)
 │   ├── planeacion/           # extract-ai, pendientes, match, notas
 │   ├── service-templates/    # CRUD plantillas
 │   ├── clientes/             # Catálogo de clientes
@@ -144,7 +144,7 @@ app/                          # Next.js App Router
 ├── cotizaciones/             # Pages: lista, nueva, [id] detalle
 ├── proyectos/                # Pages: lista, [id] detalle
 ├── cuentas/                  # Page: cobrar + pagar (tabs)
-├── responsables/             # Pages: lista, nueva, [id] detalle
+├── proveedores/              # Pages: lista, nueva, [id] detalle (antes responsables/)
 ├── planeacion/               # Pages: extracción + pendientes
 ├── plantillas-servicios/     # Pages: lista, nueva, [id]/editar
 └── admin/sheets/             # Google Sheets sync
@@ -241,8 +241,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 | `productos` | Catálogo de productos/servicios |
 | `proyectos` | Proyectos (creados al aprobar cotización) |
 | `cuentas_cobrar` | Cuentas por cobrar al cliente |
-| `cuentas_pagar` | Cuentas por pagar a responsables |
-| `responsables` | Colaboradores/freelancers |
+| `cuentas_pagar` | Cuentas por pagar a proveedores |
+| `proveedores` | Colaboradores/freelancers (antes `responsables`) |
 | `plantillas_servicios` | Plantillas de items reutilizables |
 | `planeacion_pendientes` | Eventos pendientes de planeación |
 | `extraction_logs` | Log de uso de Claude API |

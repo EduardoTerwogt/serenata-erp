@@ -6,13 +6,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadge'
-import { Cotizacion, ItemCotizacion, Responsable } from '@/lib/types'
+import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchResponsables, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, saveQuotationTotals, updateQuotation } from '@/lib/services/quotation-service'
+import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, saveQuotationTotals, updateQuotation } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
@@ -112,7 +112,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const { data: session } = useSession()
   const router = useRouter()
   const [cotizacion, setCotizacion] = useState<Cotizacion | null>(null)
-  const [responsables, setResponsables] = useState<Responsable[]>([])
+  const [responsables, setResponsables] = useState<Proveedor[]>([])
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [aprobando, setAprobando] = useState(false)
@@ -350,7 +350,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   useEffect(() => { descuentoValorValueRef.current = descuento_valor }, [descuento_valor])
 
   useEffect(() => {
-    Promise.all([fetchQuotationDetail(id), fetchResponsables()]).then(([cot, resp]) => { applyCotizacionToState(cot); setResponsables(resp); setLoading(false); const pending = sessionStorage.getItem('pdf_drive_result'); if (pending) { sessionStorage.removeItem('pdf_drive_result'); try { const { link } = JSON.parse(pending); setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(link ?? null) } catch {} } }).catch(() => setLoading(false))
+    Promise.all([fetchQuotationDetail(id), fetchProveedores()]).then(([cot, resp]) => { applyCotizacionToState(cot); setResponsables(resp); setLoading(false); const pending = sessionStorage.getItem('pdf_drive_result'); if (pending) { sessionStorage.removeItem('pdf_drive_result'); try { const { link } = JSON.parse(pending); setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(link ?? null) } catch {} } }).catch(() => setLoading(false))
   }, [id, applyCotizacionToState])
 
   const totales = useMemo(() => calculateQuotationTotals({ items: watchedItems || [], porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }), [watchedItems, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor])

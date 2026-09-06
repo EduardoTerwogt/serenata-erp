@@ -54,7 +54,7 @@ export const TABLE_SCHEMAS: TableSchema[] = [
   },
   {
     tab: 'Responsables',
-    table: 'responsables',
+    table: 'proveedores',
     pk: 'id',
     columns: [
       'id', 'nombre', 'telefono', 'correo', 'banco', 'clabe',

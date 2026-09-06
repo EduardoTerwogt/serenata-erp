@@ -151,14 +151,14 @@ export async function generarHistorialProyecto(proyectoId: string, proyecto: Pro
   const hayItemsSinId = itemsConAlgunaReferencia.some(item => !item.responsable_id && item.responsable_nombre)
 
   if (hayItemsSinId) {
-    const { data: responsables, error: responsablesError } = await supabaseAdmin
-      .from('responsables')
+    const { data: proveedores, error: proveedoresError } = await supabaseAdmin
+      .from('proveedores')
       .select('id, nombre')
 
-    if (responsablesError) throw responsablesError
+    if (proveedoresError) throw proveedoresError
 
     responsableIdPorNombre = new Map(
-      (responsables || [])
+      (proveedores || [])
         .filter((responsable: { id: string | null; nombre: string | null }) => !!responsable.id && !!responsable.nombre)
         .map((responsable: { id: string; nombre: string }) => [normalizeResponsableName(responsable.nombre), responsable.id])
     )

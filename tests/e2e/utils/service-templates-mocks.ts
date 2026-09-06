@@ -70,7 +70,7 @@ export async function mockServiceTemplatesApis(page: Page) {
     await fulfillJson(route, template)
   })
 
-  await page.route('**/api/responsables', async (route) => {
+  await page.route('**/api/proveedores', async (route) => {
     await fulfillJson(route, [])
   })
 }

@@ -1,6 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { getProyectoDetalle } from '@/lib/server/projects/service'
-import { getResponsables } from '@/lib/db'
+import { getProveedores } from '@/lib/db'
 import { generateHojaDeLlamadoPdf } from '@/lib/server/pdf/hoja-llamado-pdf'
 
 export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
@@ -16,8 +16,8 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       return new Response('Proyecto no encontrado', { status: 404 })
     }
 
-    // Fetch responsables separately
-    const responsables = await getResponsables()
+    // Fetch responsables (proveedores) separately
+    const responsables = await getProveedores()
 
     // Transform proyecto data to PDF format
     const pdfData = {

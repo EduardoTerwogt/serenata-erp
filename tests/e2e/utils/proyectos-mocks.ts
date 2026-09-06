@@ -58,7 +58,7 @@ export async function mockProyectosApis(page: Page) {
     await fulfillJson(route, proyecto)
   })
 
-  await page.route('**/api/responsables', async (route) => {
+  await page.route('**/api/proveedores', async (route) => {
     await fulfillJson(route, [
       { id: 'resp-1', nombre: 'Sofía Ramírez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Camarógrafa'], notas: null, activo: true, created_at: '2026-01-01' },
     ])

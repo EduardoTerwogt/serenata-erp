@@ -16,7 +16,7 @@ const NAV_LINKS: { href: string; label: string; section: string; icon: IconName 
   { href: '/cotizaciones', label: 'Cotizaciones', section: 'cotizaciones', icon: 'cotizaciones' },
   { href: '/proyectos', label: 'Proyectos', section: 'proyectos', icon: 'proyectos' },
   { href: '/cuentas', label: 'Cuentas', section: 'cuentas', icon: 'cuentas' },
-  { href: '/responsables', label: 'Colaboradores', section: 'responsables', icon: 'responsables' },
+  { href: '/proveedores', label: 'Proveedores', section: 'responsables', icon: 'proveedores' },
   { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion', icon: 'plantillas' },
 ]
 

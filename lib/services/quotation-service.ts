@@ -1,4 +1,4 @@
-import { Cotizacion, Responsable } from '@/lib/types'
+import { Cotizacion, Proveedor } from '@/lib/types'
 import { buildQuotationMutationPayload } from '@/lib/quotations/mappers'
 import {
   QuotationFormValues,
@@ -7,11 +7,11 @@ import {
 } from '@/lib/quotations/types'
 import { getArrayBuffer, getJson, sendJson } from '@/lib/client/api'
 
-export async function fetchResponsables(): Promise<Responsable[]> {
+export async function fetchProveedores(): Promise<Proveedor[]> {
   try {
-    return await getJson('/api/responsables', 'Error cargando responsables')
+    return await getJson('/api/proveedores', 'Error cargando proveedores')
   } catch (error) {
-    console.error('[quotation-service] Error cargando responsables:', error)
+    console.error('[quotation-service] Error cargando proveedores:', error)
     return []
   }
 }

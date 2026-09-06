@@ -2,21 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Responsable } from '@/lib/types'
+import { Proveedor } from '@/lib/types'
 
-export default function ResponsablesPage() {
-  const [responsables, setResponsables] = useState<Responsable[]>([])
+export default function ProveedoresPage() {
+  const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/responsables')
+    fetch('/api/proveedores')
       .then(r => r.json())
-      .then(data => { setResponsables(data); setLoading(false) })
+      .then(data => { setProveedores(data); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 
-  const filtrados = responsables.filter(r =>
+  const filtrados = proveedores.filter(r =>
     r.nombre.toLowerCase().includes(busqueda.toLowerCase())
   )
 
@@ -24,14 +24,14 @@ export default function ResponsablesPage() {
     <div className="px-5 pt-6 pb-6 md:p-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white">Colaboradores</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-white">Proveedores</h1>
           <p className="text-gray-400 mt-1">Gestiona tu equipo de trabajo</p>
         </div>
         <Link
-          href="/responsables/nueva"
+          href="/proveedores/nueva"
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
         >
-          + Nuevo Colaborador
+          + Nuevo Proveedor
         </Link>
       </div>
 
@@ -51,14 +51,14 @@ export default function ResponsablesPage() {
       ) : filtrados.length === 0 ? (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
           <p className="text-gray-400 text-lg mb-2">
-            {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay colaboradores aún'}
+            {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay proveedores aún'}
           </p>
           {!busqueda && (
             <Link
-              href="/responsables/nueva"
+              href="/proveedores/nueva"
               className="inline-block mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
             >
-              + Nuevo Colaborador
+              + Nuevo Proveedor
             </Link>
           )}
         </div>
@@ -67,7 +67,7 @@ export default function ResponsablesPage() {
           {filtrados.map(r => (
             <Link
               key={r.id}
-              href={`/responsables/${r.id}`}
+              href={`/proveedores/${r.id}`}
               className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-gray-600 transition-colors block"
             >
               <div className="flex items-start justify-between mb-3">

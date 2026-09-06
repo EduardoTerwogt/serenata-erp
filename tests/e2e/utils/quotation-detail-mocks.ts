@@ -124,7 +124,7 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     await fulfillJson(route, { fileId: 'drive-e2e-1', webViewLink: 'https://drive.google.com/file/d/drive-e2e-1/view' })
   })
 
-  await page.route('**/api/responsables', async (route) => {
+  await page.route('**/api/proveedores', async (route) => {
     await fulfillJson(route, [
       { id: 'resp-1', nombre: 'Sofía Ramírez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Camarógrafa'], notas: null, activo: true, created_at: '2026-01-01' },
     ])

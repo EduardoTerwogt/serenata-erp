@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(),
-  getResponsablesMock: vi.fn(),
-  createResponsableMock: vi.fn(),
+  getProveedoresMock: vi.fn(),
+  createProveedorMock: vi.fn(),
 }))
 
 vi.mock('@/lib/api-auth', () => ({
@@ -12,8 +12,8 @@ vi.mock('@/lib/api-auth', () => ({
 }))
 
 vi.mock('@/lib/db', () => ({
-  getResponsables: mocks.getResponsablesMock,
-  createResponsable: mocks.createResponsableMock,
+  getProveedores: mocks.getProveedoresMock,
+  createProveedor: mocks.createProveedorMock,
 }))
 
 vi.mock('@/lib/integrations/sheets/trigger', () => ({
@@ -55,15 +55,15 @@ vi.mock('@/lib/supabase', () => {
 // Import after mocks are set up
 import { GET as getClientes, POST as postClientes } from '../clientes/route'
 import { GET as getProductos, POST as postProductos } from '../productos/route'
-import { GET as getResponsables, POST as postResponsables } from '../responsables/route'
+import { GET as getProveedores, POST as postProveedores } from '../proveedores/route'
 import { supabaseAdmin } from '@/lib/supabase'
 
 describe('Cache Invalidation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.requireSectionMock.mockResolvedValue({ response: null })
-    mocks.getResponsablesMock.mockResolvedValue([])
-    mocks.createResponsableMock.mockResolvedValue({ id: 'resp-1', nombre: 'John Doe' })
+    mocks.getProveedoresMock.mockResolvedValue([])
+    mocks.createProveedorMock.mockResolvedValue({ id: 'resp-1', nombre: 'John Doe' })
   })
 
   describe('GET /api/clientes - Cache behavior', () => {
@@ -205,39 +205,39 @@ describe('Cache Invalidation', () => {
     })
   })
 
-  describe('POST /api/responsables - Cache invalidation', () => {
-    it('invalidates responsables cache after successful POST', async () => {
-      const responsablesData = [{ id: 'resp-1', nombre: 'Jane Doe' }]
-      const newResponsable = { id: 'resp-2', nombre: 'John Doe' }
+  describe('POST /api/proveedores - Cache invalidation', () => {
+    it('invalidates proveedores cache after successful POST', async () => {
+      const proveedoresData = [{ id: 'resp-1', nombre: 'Jane Doe' }]
+      const newProveedor = { id: 'resp-2', nombre: 'John Doe' }
 
-      mocks.getResponsablesMock.mockResolvedValue(responsablesData)
-      mocks.createResponsableMock.mockResolvedValue(newResponsable)
+      mocks.getProveedoresMock.mockResolvedValue(proveedoresData)
+      mocks.createProveedorMock.mockResolvedValue(newProveedor)
 
       // Populate cache with GET
-      await getResponsables(new Request('http://localhost/api/responsables'))
+      await getProveedores(new Request('http://localhost/api/proveedores'))
 
       // Reset mock
-      mocks.getResponsablesMock.mockClear()
+      mocks.getProveedoresMock.mockClear()
 
       // POST should invalidate cache
-      await postResponsables(
-        new Request('http://localhost/api/responsables', {
+      await postProveedores(
+        new Request('http://localhost/api/proveedores', {
           method: 'POST',
           body: JSON.stringify({ nombre: 'John Doe' }),
         }),
       )
 
-      // Verify createResponsable was called (roles defaults to [] from schema)
-      expect(mocks.createResponsableMock).toHaveBeenCalledWith({
+      // Verify createProveedor was called (roles defaults to [] from schema)
+      expect(mocks.createProveedorMock).toHaveBeenCalledWith({
         nombre: 'John Doe',
         activo: true,
         roles: [],
       })
 
-      // Next GET should call getResponsables (cache was invalidated)
-      mocks.getResponsablesMock.mockResolvedValue([...responsablesData, newResponsable])
-      await getResponsables(new Request('http://localhost/api/responsables'))
-      expect(mocks.getResponsablesMock).toHaveBeenCalled()
+      // Next GET should call getProveedores (cache was invalidated)
+      mocks.getProveedoresMock.mockResolvedValue([...proveedoresData, newProveedor])
+      await getProveedores(new Request('http://localhost/api/proveedores'))
+      expect(mocks.getProveedoresMock).toHaveBeenCalled()
     })
   })
 

@@ -40,7 +40,7 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
 
     // RFC emisor/receptor y UUID de timbrado -- informativos por ahora (ver
     // nota en validarFacturaProveedorXML): no hay un RFC esperado guardado
-    // en clientes/responsables todavía, así que no bloquean la validación,
+    // en clientes/proveedores todavía, así que no bloquean la validación,
     // solo se extraen para mostrarse en el detalle del documento.
     const rfcEmisorMatch = xmlContent.match(/<cfdi:Emisor\b[^>]*\bRfc\s*=\s*["']([^"']+)["']/i)
     const rfcReceptorMatch = xmlContent.match(/<cfdi:Receptor\b[^>]*\bRfc\s*=\s*["']([^"']+)["']/i)

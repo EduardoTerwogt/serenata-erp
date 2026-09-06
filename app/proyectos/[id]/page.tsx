@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from 'react'
 import { useForm } from 'react-hook-form'
 import Link from 'next/link'
-import { EstadoProyecto, ItemCotizacion, Responsable } from '@/lib/types'
+import { EstadoProyecto, ItemCotizacion, Proveedor } from '@/lib/types'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 import {
   buildItemNotasMap,
@@ -27,7 +27,7 @@ export default function ProyectoDetallePage({
   const { id } = use(params)
   const [proyecto, setProyecto] = useState<ProyectoDetalle | null>(null)
   const [items, setItems] = useState<ItemCotizacion[]>([])
-  const [responsables, setResponsables] = useState<Responsable[]>([])
+  const [responsables, setResponsables] = useState<Proveedor[]>([])
   const [itemNotas, setItemNotas] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)

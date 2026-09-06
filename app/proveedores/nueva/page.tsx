@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
 
-interface ResponsableForm {
+interface ProveedorForm {
   nombre: string
   telefono: string
   correo: string
@@ -13,7 +13,7 @@ interface ResponsableForm {
   notas: string
 }
 
-export default function NuevoResponsablePage() {
+export default function NuevoProveedorPage() {
   const router = useRouter()
   const [roles, setRoles] = useState<string[]>([])
   const [rolInput, setRolInput] = useState('')
@@ -21,7 +21,7 @@ export default function NuevoResponsablePage() {
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<ResponsableForm>()
+  const { register, handleSubmit, formState: { errors } } = useForm<ProveedorForm>()
 
   const agregarRol = () => {
     const rol = rolInput.trim()
@@ -35,18 +35,18 @@ export default function NuevoResponsablePage() {
     setRoles(prev => prev.filter(r => r !== rol))
   }
 
-  const onSubmit = async (data: ResponsableForm) => {
+  const onSubmit = async (data: ProveedorForm) => {
     setGuardando(true)
     setError(null)
     try {
-      const res = await fetch('/api/responsables', {
+      const res = await fetch('/api/proveedores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, roles, regimen_fiscal: regimenFiscal || null }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
-      const responsable = await res.json()
-      router.push(`/responsables/${responsable.id}`)
+      const proveedor = await res.json()
+      router.push(`/proveedores/${proveedor.id}`)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al guardar')
     } finally {
@@ -57,8 +57,8 @@ export default function NuevoResponsablePage() {
   return (
     <div className="px-5 pt-6 pb-6 md:p-8 max-w-2xl">
       <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-white">Nuevo Colaborador</h1>
-        <p className="text-gray-400 mt-1">Agrega un nuevo colaborador al equipo</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-white">Nuevo Proveedor</h1>
+        <p className="text-gray-400 mt-1">Agrega un nuevo proveedor</p>
       </div>
 
       {error && (
@@ -77,7 +77,7 @@ export default function NuevoResponsablePage() {
               <input
                 {...register('nombre', { required: 'El nombre es requerido' })}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                placeholder="Nombre del colaborador"
+                placeholder="Nombre del proveedor"
               />
               {errors.nombre && (
                 <p className="text-red-400 text-xs mt-1">{errors.nombre.message}</p>
@@ -195,7 +195,7 @@ export default function NuevoResponsablePage() {
             {...register('notas')}
             rows={3}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 resize-none"
-            placeholder="Notas adicionales sobre el colaborador..."
+            placeholder="Notas adicionales sobre el proveedor..."
           />
         </div>
 
@@ -205,7 +205,7 @@ export default function NuevoResponsablePage() {
             disabled={guardando}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
           >
-            {guardando ? 'Guardando...' : 'Crear Colaborador'}
+            {guardando ? 'Guardando...' : 'Crear Proveedor'}
           </button>
           <button
             type="button"

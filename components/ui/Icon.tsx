@@ -30,7 +30,7 @@ const ICONS = {
   cotizaciones: FileText,
   proyectos: Briefcase,
   cuentas: Wallet,
-  responsables: Users,
+  proveedores: Users,
   plantillas: Copy,
   'admin-usuarios': UserCog,
   'google-sheets': Table,

@@ -53,7 +53,7 @@ export async function PATCH(
     let responsableData: { telefono?: string | null; correo?: string | null; clabe?: string | null; banco?: string | null } | null = null
     if (responsable_id) {
       const { data } = await supabaseAdmin
-        .from('responsables')
+        .from('proveedores')
         .select('telefono, correo, clabe, banco')
         .eq('id', responsable_id)
         .single()

@@ -39,7 +39,7 @@ export default function CotizacionesPage() {
         Promise.all([
           fetch('/api/clientes?q=').catch(() => {}),
           fetch('/api/productos?q=').catch(() => {}),
-          fetch('/api/responsables').catch(() => {}),
+          fetch('/api/proveedores').catch(() => {}),
           fetch('/api/folio').catch(() => {}),
         ])
       })

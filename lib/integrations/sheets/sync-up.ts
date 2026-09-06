@@ -187,7 +187,7 @@ export async function syncAllUp(spreadsheetId: string): Promise<SyncUpSummary> {
   // Para el DELETE el orden inverso sería el ideal, pero como cada tabla
   // se procesa independientemente, los errores de FK se reportan al usuario.
   const orderedSchemas = [
-    ...TABLE_SCHEMAS.filter(s => ['responsables', 'productos', 'clientes'].includes(s.table)),
+    ...TABLE_SCHEMAS.filter(s => ['proveedores', 'productos', 'clientes'].includes(s.table)),
     ...TABLE_SCHEMAS.filter(s => ['cotizaciones'].includes(s.table)),
     ...TABLE_SCHEMAS.filter(s => ['items_cotizacion', 'proyectos'].includes(s.table)),
     ...TABLE_SCHEMAS.filter(s => ['cuentas_cobrar', 'cuentas_pagar'].includes(s.table)),

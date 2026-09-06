@@ -8,7 +8,11 @@ export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO'
 
 export type RegimenFiscal = 'moral' | 'fisica'
 
-export interface Responsable {
+// Renombrado de "Responsable" a "Proveedor" (Fase 5.3, Bloque 0): la tabla
+// responsables -> proveedores. Serenata contrata por proyecto (sin nómina),
+// así que hoy no hace falta distinguir interno/externo; cuando exista
+// personal en nómina será una sección aparte.
+export interface Proveedor {
   id: string
   nombre: string
   telefono: string | null

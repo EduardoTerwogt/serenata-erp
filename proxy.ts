@@ -14,7 +14,7 @@ const PAGE_SECTION_RULES: SectionRule[] = [
   { prefix: '/cotizaciones', sections: ['cotizaciones'] },
   { prefix: '/proyectos', sections: ['proyectos'] },
   { prefix: '/cuentas', sections: ['cuentas'] },
-  { prefix: '/responsables', sections: ['responsables'] },
+  { prefix: '/proveedores', sections: ['responsables'] },
   { prefix: '/planeacion', sections: ['planeacion'] },
   { prefix: '/plantillas-servicios', sections: ['planeacion'] },
 ]
@@ -28,7 +28,7 @@ const API_SECTION_RULES: SectionRule[] = [
   { prefix: '/api/proyectos', sections: ['proyectos'] },
   { prefix: '/api/items', sections: ['cotizaciones', 'proyectos'] },
   { prefix: '/api/cuentas', sections: ['cuentas'] },
-  { prefix: '/api/responsables', sections: ['responsables'] },
+  { prefix: '/api/proveedores', sections: ['responsables'] },
   { prefix: '/api/service-templates', sections: ['planeacion'] },
   { prefix: '/api/planeacion', sections: ['planeacion'] },
 ]

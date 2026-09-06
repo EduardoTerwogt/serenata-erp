@@ -1,4 +1,4 @@
-import { ItemCotizacion, Proyecto, Responsable } from '@/lib/types'
+import { ItemCotizacion, Proyecto, Proveedor } from '@/lib/types'
 
 export interface ProyectoDetalle extends Proyecto {
   items?: ItemCotizacion[]
@@ -16,7 +16,7 @@ export interface ProyectoFormValues {
 
 export interface ProjectDetailBundle {
   proyecto: ProyectoDetalle
-  responsables: Responsable[]
+  responsables: Proveedor[]
 }
 
 export type ProjectItemNotasMap = Record<string, string>

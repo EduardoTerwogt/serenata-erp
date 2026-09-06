@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ServiceTemplateItem, Responsable } from '@/lib/types'
+import { ServiceTemplateItem, Proveedor } from '@/lib/types'
 import { useServiceTemplateForm } from '@/hooks/useServiceTemplateForm'
 import { TemplateItemsSection } from '../../components/TemplateItemsSection'
 
@@ -14,7 +14,7 @@ export default function EditarPlantillaPage() {
   const [nombre, setNombre] = useState('')
   const [descripcionPlantilla, setDescripcionPlantilla] = useState('')
   const [items, setItems] = useState<ServiceTemplateItem[]>([])
-  const [responsables, setResponsables] = useState<Responsable[]>([])
+  const [responsables, setResponsables] = useState<Proveedor[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -32,7 +32,7 @@ export default function EditarPlantillaPage() {
       try {
         const [templateRes, responsablesRes] = await Promise.all([
           fetch(`/api/service-templates/${id}`),
-          fetch('/api/responsables'),
+          fetch('/api/proveedores'),
         ])
 
         if (templateRes.ok) {

@@ -6,7 +6,7 @@ export async function mockNuevaCotizacionApis(page: Page) {
     await fulfillJson(route, { folio: 'SH123' })
   })
 
-  await page.route('**/api/responsables', async (route) => {
+  await page.route('**/api/proveedores', async (route) => {
     await fulfillJson(route, [
       {
         id: 'resp-1',

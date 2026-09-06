@@ -3,11 +3,11 @@
 import { useEffect, useState, use } from 'react'
 import { useForm } from 'react-hook-form'
 import Link from 'next/link'
-import { Responsable, HistorialResponsable } from '@/lib/types'
+import { Proveedor, HistorialResponsable } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 
-interface ResponsableForm {
+interface ProveedorForm {
   nombre: string
   telefono: string
   correo: string
@@ -21,13 +21,13 @@ function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
 }
 
-export default function ResponsableDetallePage({
+export default function ProveedorDetallePage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
-  const [responsable, setResponsable] = useState<Responsable | null>(null)
+  const [proveedor, setProveedor] = useState<Proveedor | null>(null)
   const [historial, setHistorial] = useState<HistorialResponsable[]>([])
   const [historialError, setHistorialError] = useState<string | null>(null)
   const [roles, setRoles] = useState<string[]>([])
@@ -38,18 +38,18 @@ export default function ResponsableDetallePage({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const { register, handleSubmit, reset } = useForm<ResponsableForm>()
+  const { register, handleSubmit, reset } = useForm<ProveedorForm>()
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/responsables/${id}`).then(r => r.json()),
-      fetch(`/api/responsables/${id}/historial`).then(async r => {
+      fetch(`/api/proveedores/${id}`).then(r => r.json()),
+      fetch(`/api/proveedores/${id}/historial`).then(async r => {
         const json = await r.json()
         if (!r.ok) throw new Error(json.error || `HTTP ${r.status}`)
         return json
       }).catch(e => { setHistorialError(String(e)); return [] }),
     ]).then(([data, hist]) => {
-      setResponsable(data)
+      setProveedor(data)
       setRoles(data.roles || [])
       setRegimenFiscal(data.regimen_fiscal || '')
       setHistorial(Array.isArray(hist) && hist.length > 0 ? hist : (data.historial_responsable || []))
@@ -74,19 +74,19 @@ export default function ResponsableDetallePage({
     }
   }
 
-  const onSubmit = async (data: ResponsableForm) => {
+  const onSubmit = async (data: ProveedorForm) => {
     setGuardando(true)
     setError(null)
     try {
-      const res = await fetch(`/api/responsables/${id}`, {
+      const res = await fetch(`/api/proveedores/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, roles, regimen_fiscal: regimenFiscal || null }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       const updated = await res.json()
-      setResponsable(updated)
-      setSuccess('Colaborador actualizado correctamente')
+      setProveedor(updated)
+      setSuccess('Proveedor actualizado correctamente')
       setTimeout(() => setSuccess(null), 3000)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al guardar')
@@ -96,22 +96,22 @@ export default function ResponsableDetallePage({
   }
 
   if (loading) return <div className="p-8 text-center text-gray-500">Cargando...</div>
-  if (!responsable) return <div className="p-8 text-center text-gray-500">Colaborador no encontrado</div>
+  if (!proveedor) return <div className="p-8 text-center text-gray-500">Proveedor no encontrado</div>
 
   const totalGanado = historial.reduce((s, h) => s + (h.x_pagar || 0), 0)
 
   return (
     <div className="p-8 max-w-3xl">
       <div className="mb-8">
-        <Link href="/responsables" className="text-gray-500 hover:text-gray-300 text-sm">
-          ← Colaboradores
+        <Link href="/proveedores" className="text-gray-500 hover:text-gray-300 text-sm">
+          ← Proveedores
         </Link>
         <div className="flex items-center gap-4 mt-3">
           <div className="w-14 h-14 rounded-full bg-blue-900 flex items-center justify-center text-blue-300 font-bold text-2xl">
-            {responsable.nombre.charAt(0).toUpperCase()}
+            {proveedor.nombre.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-white">{responsable.nombre}</h1>
+            <h1 className="text-3xl font-bold text-white">{proveedor.nombre}</h1>
             <div className="flex gap-1.5 mt-1 flex-wrap">
               {roles.map(rol => (
                 <span key={rol} className="text-xs px-2 py-0.5 bg-blue-900 text-blue-300 rounded-full">{rol}</span>
@@ -160,7 +160,7 @@ export default function ResponsableDetallePage({
               <label className="block text-sm text-gray-400 mb-1">Activo</label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" {...register('activo')} className="w-4 h-4 accent-blue-600" />
-                <span className="text-gray-300 text-sm">Colaborador activo</span>
+                <span className="text-gray-300 text-sm">Proveedor activo</span>
               </label>
             </div>
           </div>

@@ -2,12 +2,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Responsable } from '@/lib/types'
+import { Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { fetchNextQuotationFolio, fetchResponsables, generateQuotationPdf, saveNewQuotation } from '@/lib/services/quotation-service'
+import { fetchNextQuotationFolio, fetchProveedores, generateQuotationPdf, saveNewQuotation } from '@/lib/services/quotation-service'
 
 export function useNuevaCotizacionPage() {
   const router = useRouter()
@@ -21,7 +21,7 @@ export function useNuevaCotizacionPage() {
 
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
   const [folio, setFolio] = useState('')
-  const [responsables, setResponsables] = useState<Responsable[]>([])
+  const [responsables, setResponsables] = useState<Proveedor[]>([])
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
@@ -83,7 +83,7 @@ export function useNuevaCotizacionPage() {
     let idleId: number | null = null
 
     const loadResponsables = () => {
-      void fetchResponsables()
+      void fetchProveedores()
         .then((resp) => {
           if (!cancelled) setResponsables(resp)
         })

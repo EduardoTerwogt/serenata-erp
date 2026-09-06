@@ -1,5 +1,5 @@
 export * from '@/lib/server/repositories/quotations'
-export * from '@/lib/server/repositories/responsables'
+export * from '@/lib/server/repositories/proveedores'
 export * from '@/lib/server/repositories/proyectos'
 export * from '@/lib/server/repositories/cuentas-pagar'
 export * from '@/lib/server/repositories/cuentas-cobrar'

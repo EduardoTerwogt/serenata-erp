@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState as useStateReact, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { UseFieldArrayAppend, UseFieldArrayRemove, UseFormRegister, UseFormSetValue } from 'react-hook-form'
-import { Producto, Responsable } from '@/lib/types'
+import { Producto, Proveedor } from '@/lib/types'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { calculateCostoConIva } from '@/lib/quotations/calculations'
@@ -39,7 +39,7 @@ interface Props {
   productoSugerencias: Record<number, Producto[]>
   mostrarProductoDropdown: Record<number, boolean>
   setMostrarProductoDropdown: (updater: Record<number, boolean> | ((prev: Record<number, boolean>) => Record<number, boolean>)) => void
-  responsables: Responsable[]
+  responsables: Proveedor[]
   readOnlyItems?: ReadOnlyItem[]
   onAddRow?: () => void
   onRemoveRow?: (index: number) => void
