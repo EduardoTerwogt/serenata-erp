@@ -31,6 +31,18 @@
 -- Todo dentro de una transacción: si algo falla, no se aplica nada.
 -- Se prueba primero contra serenata-erp-test antes de producción, con
 -- confirmación explícita del usuario en cada ambiente (regla de CLAUDE.md).
+--
+-- Aplicado a serenata-erp-test (ozrtsludmcguvgqdjicn) el 2026-09-06 vía
+-- mcp__Supabase__apply_migration, con confirmación explícita del usuario.
+-- Verificado: 3 tipos x 4 etapas (12 filas), última etapa de cada tipo
+-- marcada es_etapa_final, el único proyecto existente (SH003, RODAJE)
+-- quedó correctamente enlazado a Grabación -> Rodaje sin cambiar su
+-- `estado` visible. get_advisors revisado: 0 advisories WARN nuevos
+-- (los WARN existentes son de funciones/tablas previas, no de esta
+-- migración); único hallazgo real -- FK proyecto_tareas.asignado_a sin
+-- índice -- corregido agregando idx_proyecto_tareas_asignado_a abajo
+-- (aplicado como ajuste incremental en test, incluido aquí para que
+-- producción lo reciba completo en una sola pasada).
 
 BEGIN;
 
@@ -106,6 +118,7 @@ CREATE TABLE IF NOT EXISTS proyecto_tareas (
 CREATE INDEX IF NOT EXISTS idx_proyecto_tareas_proyecto ON proyecto_tareas(proyecto_id);
 CREATE INDEX IF NOT EXISTS idx_proyecto_tareas_estado ON proyecto_tareas(estado);
 CREATE INDEX IF NOT EXISTS idx_proyecto_tareas_fecha_limite ON proyecto_tareas(fecha_limite);
+CREATE INDEX IF NOT EXISTS idx_proyecto_tareas_asignado_a ON proyecto_tareas(asignado_a);
 
 COMMENT ON COLUMN proyecto_tareas.origen IS
   'plantilla (copiada de tipo_proyecto_tarea_default al crear el proyecto) | manual (agregada a mano). Señal para la futura capa de sugerencias por IA (diferida): tareas manuales repetidas en varios proyectos del mismo tipo son candidatas a pasar a la plantilla default.';
