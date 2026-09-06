@@ -105,7 +105,7 @@ export function OrdenPagoModal({ isOpen, onClose, onRefresh, cargarPreview, gene
               Se incluirán únicamente cuentas pendientes de eventos ya realizados.
             </p>
           </div>
-          <button onClick={onClose} aria-label="Cerrar" className="text-subtext hover:text-body transition-colors">
+          <button onClick={onClose} aria-label="Cerrar ventana" className="text-subtext hover:text-body transition-colors">
             <Icon name="close" size={20} />
           </button>
         </div>

@@ -148,7 +148,7 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
             tabs={[
               { value: 'info' as const, label: 'Información' },
               { value: 'documentos' as const, label: 'Documentos' },
-              { value: 'pago' as const, label: 'Registrar pago' },
+              { value: 'pago' as const, label: 'Registrar Pago' },
             ]}
             value={tab}
             onChange={(value) => dispatch({ type: 'set_tab', tab: value })}
