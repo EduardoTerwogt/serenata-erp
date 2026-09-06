@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-06T04:02:50.171Z",
-  "count": 33,
+  "generated_at": "2026-09-06T09:29:30.273Z",
+  "count": 34,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -34,6 +34,7 @@
     "20260905_atomic_registrar_pago_cuenta_pagar.sql",
     "20260905_drop_confirmed_dead_schema.sql",
     "20260905_fix_documentos_cuentas_pagar_y_estado_vencido.sql",
-    "20260906_add_regimen_fiscal_responsables.sql"
+    "20260906_add_regimen_fiscal_responsables.sql",
+    "20260906_fase53_cuentas_schema.sql"
   ]
 }
