@@ -1,6 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { getCuentasCobrar, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
-import { parseFacturaXML, validarMontoFactura, calcularDeadline } from '@/lib/server/xml/factura-parser'
+import { parseFacturaXML, validarMontoFactura, validarFacturaClienteXML, calcularDeadline } from '@/lib/server/xml/factura-parser'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
@@ -130,6 +130,10 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       nombre: xmlFile.name,
     })
 
+    // Validación estructural automática -- solo aplica al XML (el PDF no se
+    // puede validar estructuralmente, queda en 'pendiente' por default).
+    const validacionXml = validarFacturaClienteXML(facturaData, cotizacion.total)
+
     // Crear registros en BD
     for (const file of uploadedFiles) {
       await createDocumentoCuentaCobrar({
@@ -137,6 +141,10 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         tipo: file.type,
         archivo_url: file.url,
         archivo_nombre: file.nombre,
+        ...(file.type === 'FACTURA_XML' ? {
+          estado_validacion: validacionXml.estado_validacion,
+          detalle_validacion: validacionXml.detalle_validacion,
+        } : {}),
       })
     }
 
@@ -155,6 +163,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       cuenta: cuentaActualizada,
       factura_data: facturaData,
       validacion,
+      validacion_estructural: validacionXml,
       archivos_subidos: uploadedFiles.length,
     })
   } catch (error) {

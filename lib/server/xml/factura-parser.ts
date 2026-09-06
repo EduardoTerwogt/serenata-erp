@@ -6,7 +6,15 @@ export interface FacturaData {
   folio?: string
   fecha_emision?: string
   monto_total?: number
+  rfc_emisor?: string
+  rfc_receptor?: string
+  uuid_timbrado?: string
   error?: string
+}
+
+export interface ResultadoValidacionFactura {
+  estado_validacion: 'validado' | 'revision'
+  detalle_validacion: string | null
 }
 
 /**
@@ -30,6 +38,14 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
     const montoMatch = xmlContent.match(/(?<![a-zA-Z])Total\s*=\s*["']([^"']+)["']/)
     const monto = montoMatch ? parseFloat(montoMatch[1]) : undefined
 
+    // RFC emisor/receptor y UUID de timbrado -- informativos por ahora (ver
+    // nota en validarFacturaProveedorXML): no hay un RFC esperado guardado
+    // en clientes/responsables todavía, así que no bloquean la validación,
+    // solo se extraen para mostrarse en el detalle del documento.
+    const rfcEmisorMatch = xmlContent.match(/<cfdi:Emisor\b[^>]*\bRfc\s*=\s*["']([^"']+)["']/i)
+    const rfcReceptorMatch = xmlContent.match(/<cfdi:Receptor\b[^>]*\bRfc\s*=\s*["']([^"']+)["']/i)
+    const uuidMatch = xmlContent.match(/<tfd:TimbreFiscalDigital\b[^>]*\bUUID\s*=\s*["']([^"']+)["']/i)
+
     // Validar que al menos tengamos folio y fecha
     if (!folio || !fecha) {
       return {
@@ -41,12 +57,63 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
       folio,
       fecha_emision: fecha,
       monto_total: monto || 0,
+      rfc_emisor: rfcEmisorMatch?.[1],
+      rfc_receptor: rfcReceptorMatch?.[1],
+      uuid_timbrado: uuidMatch?.[1],
     }
   } catch (err) {
     return {
       error: `Error parseando XML: ${err instanceof Error ? err.message : 'desconocido'}`
     }
   }
+}
+
+const TOLERANCIA_CENTAVOS = 0.01
+
+/**
+ * Validación estructural automática de una factura al cliente (FACTURA_XML,
+ * cuentas_cobrar): el único monto esperado documentado es el total de la
+ * cuenta -- no hay RFC de cliente guardado todavía (llegará con el Portal de
+ * Proveedores/clientes), así que RFC y UUID solo se muestran, no bloquean.
+ */
+export function validarFacturaClienteXML(facturaData: FacturaData, montoEsperado: number): ResultadoValidacionFactura {
+  if (facturaData.monto_total == null) {
+    return { estado_validacion: 'revision', detalle_validacion: 'No se pudo leer el monto total del XML.' }
+  }
+  const diferencia = Math.abs(facturaData.monto_total - montoEsperado)
+  if (diferencia > TOLERANCIA_CENTAVOS) {
+    return {
+      estado_validacion: 'revision',
+      detalle_validacion: `Monto no coincide: XML $${facturaData.monto_total.toFixed(2)} vs cuenta $${montoEsperado.toFixed(2)}.`,
+    }
+  }
+  return { estado_validacion: 'validado', detalle_validacion: null }
+}
+
+/**
+ * Validación estructural automática de una factura de proveedor
+ * (FACTURA_PROVEEDOR_XML, cuentas_pagar). El monto esperado en el XML es
+ * el neto (x_pagar) + IVA trasladado 16% -- ese 16% es igual en los dos
+ * escenarios fiscales del negocio (persona moral y persona física con
+ * honorarios, ver readme del skill de diseño); lo que cambia entre
+ * regímenes es la retención que Serenata aplica al TRANSFERIR el pago
+ * (cruce fiscal en Cuentas), no lo que el proveedor declara como Total en
+ * su propio CFDI. Por eso el régimen fiscal no participa de esta
+ * comparación -- se valida el mismo monto esperado para ambos.
+ */
+export function validarFacturaProveedorXML(facturaData: FacturaData, montoNetoEsperado: number): ResultadoValidacionFactura {
+  if (facturaData.monto_total == null) {
+    return { estado_validacion: 'revision', detalle_validacion: 'No se pudo leer el monto total del XML.' }
+  }
+  const montoEsperadoConIva = Math.round(montoNetoEsperado * 1.16 * 100) / 100
+  const diferencia = Math.abs(facturaData.monto_total - montoEsperadoConIva)
+  if (diferencia > TOLERANCIA_CENTAVOS) {
+    return {
+      estado_validacion: 'revision',
+      detalle_validacion: `Monto no coincide: XML $${facturaData.monto_total.toFixed(2)} vs esperado $${montoEsperadoConIva.toFixed(2)} (neto $${montoNetoEsperado.toFixed(2)} + IVA 16%).`,
+    }
+  }
+  return { estado_validacion: 'validado', detalle_validacion: null }
 }
 
 /**

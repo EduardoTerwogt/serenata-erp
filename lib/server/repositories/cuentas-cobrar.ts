@@ -68,6 +68,17 @@ export async function getDocumentosCuentaCobrar(cuentaId: string) {
   return data as DocumentoCuentaCobrar[]
 }
 
+export async function updateDocumentoCuentaCobrar(id: string, updates: Partial<DocumentoCuentaCobrar>) {
+  const { data, error } = await supabaseAdmin
+    .from('documentos_cuentas_cobrar')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as DocumentoCuentaCobrar
+}
+
 export async function deleteDocumentoCuentaCobrar(id: string) {
   const { error } = await supabaseAdmin
     .from('documentos_cuentas_cobrar')

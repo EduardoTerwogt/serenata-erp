@@ -110,6 +110,13 @@ export const ItemPatchSchema = z.object({
   { message: 'Al menos un campo debe enviarse: responsable_id, responsable_nombre o notas' }
 )
 
+// ==================== DOCUMENTOS DE CUENTAS (estado_validacion manual) ====================
+
+export const DocumentoEstadoValidacionSchema = z.object({
+  estado_validacion: z.enum(['pendiente', 'validado', 'revision']),
+  detalle_validacion: z.string().nullable().optional(),
+})
+
 // ==================== HELPER ====================
 
 /**

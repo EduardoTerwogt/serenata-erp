@@ -3,6 +3,7 @@ import { getCuentasPagar, createDocumentoCuentaPagar, getProyectoById, updateCue
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { parseFacturaXML, validarFacturaProveedorXML } from '@/lib/server/xml/factura-parser'
 
 function extractFacturaFechaFromXml(xmlContent: string): string | null {
   const match = xmlContent.match(/\bFecha=["']([^"']+)["']/i)
@@ -69,11 +70,21 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const facturaXmlUrl = await uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, googleEnv.driveFolderIdCuentas || undefined)
     const facturaPdfUrl = await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, googleEnv.driveFolderIdCuentas || undefined)
 
+    // Validación estructural automática: el neto esperado en el XML es
+    // x_pagar + IVA 16% (ver nota en validarFacturaProveedorXML sobre por
+    // qué el régimen fiscal no cambia esta comparación).
+    const facturaData = parseFacturaXML(facturaXmlContent)
+    const validacionXml = facturaData.error
+      ? { estado_validacion: 'revision' as const, detalle_validacion: `No se pudo parsear el XML: ${facturaData.error}` }
+      : validarFacturaProveedorXML(facturaData, Number(cuenta.x_pagar || 0))
+
     const documentoXml = await createDocumentoCuentaPagar({
       cuentas_pagar_id: id,
       tipo: 'FACTURA_PROVEEDOR_XML',
       archivo_url: facturaXmlUrl,
       archivo_nombre: facturaXmlFile.name,
+      estado_validacion: validacionXml.estado_validacion,
+      detalle_validacion: validacionXml.detalle_validacion,
     })
 
     const documentoPdf = await createDocumentoCuentaPagar({
@@ -96,6 +107,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       success: true,
       documentos: [documentoXml, documentoPdf],
       fecha_factura: fechaFactura,
+      factura_data: facturaData,
+      validacion_estructural: validacionXml,
       cuenta: {
         id: cuentaActualizada.id,
         cotizacion_id: cuentaActualizada.cotizacion_id,

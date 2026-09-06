@@ -2,6 +2,7 @@ import { requireAnySection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemPatchSchema, validate } from '@/lib/validation/schemas'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { createHistorialCambioResponsableItem } from '@/lib/server/repositories/historial-cambios-responsable'
 
 export async function PATCH(
   request: Request,
@@ -84,6 +85,24 @@ export async function PATCH(
       .eq('item_descripcion', item.descripcion)
 
     if (syncLegacyError) throw syncLegacyError
+
+    if ('responsable_id' in parsed) {
+      const nuevoResponsableId = responsable_id || null
+      if (nuevoResponsableId !== item.responsable_id) {
+        const nuevoResponsableNombre = 'responsable_nombre' in parsed
+          ? (responsable_nombre || null)
+          : (item.responsable_nombre ?? null)
+        await createHistorialCambioResponsableItem({
+          item_id: id,
+          cotizacion_id: item.cotizacion_id,
+          responsable_anterior_id: item.responsable_id ?? null,
+          responsable_anterior_nombre: item.responsable_nombre ?? null,
+          responsable_nuevo_id: nuevoResponsableId,
+          responsable_nuevo_nombre: nuevoResponsableNombre,
+          changed_by: authResult.session?.user?.email ?? null,
+        })
+      }
+    }
 
     triggerSheetsSync('items_cotizacion', 'cuentas_pagar')
     return Response.json({ ok: true })

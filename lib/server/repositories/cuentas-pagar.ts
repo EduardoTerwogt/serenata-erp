@@ -244,6 +244,17 @@ export async function getDocumentosCuentaPagar(cuentaId: string) {
   return data as DocumentoCuentaPagar[]
 }
 
+export async function updateDocumentoCuentaPagar(id: string, updates: Partial<DocumentoCuentaPagar>) {
+  const { data, error } = await supabaseAdmin
+    .from('documentos_cuentas_pagar')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as DocumentoCuentaPagar
+}
+
 export async function deleteDocumentoCuentaPagar(id: string) {
   const { error } = await supabaseAdmin
     .from('documentos_cuentas_pagar')
