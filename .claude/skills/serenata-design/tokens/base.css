@@ -1,0 +1,9 @@
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{margin:0;background:var(--bg-app);color:var(--text-body);font-family:var(--font-ui);font-size:var(--text-base);line-height:var(--lh-body)}
+*,*::before,*::after{box-sizing:border-box}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent-pressed)}
+button,input,select{font:inherit;color:inherit}
+::placeholder{color:var(--text-muted)}
+:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+::selection{background:var(--sn-orange-soft);color:var(--sn-ink)}

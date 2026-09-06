@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Dashboard ejecutivo" description="Vista de resumen: fila de KPIs clicables, balance por periodo en barras agrupadas y paneles de detalle debajo." -->
+<helmet>
+<script src="./ds-base.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>body{margin:0;background:#0F1318}</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:#0F1318;color:#E8EAED;font-family:Manrope,system-ui,sans-serif">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Sidebar" items="{{ nav }}" active-id="inicio" hint-size="256px,100vh"></x-import>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Topbar" user="{{ user }}" hint-size="100%,84px"></x-import>
+<main style="flex:1;min-width:0;padding:6px 29px 19px;display:flex;flex-direction:column;gap:19px">
+
+<x-import component-from-global-scope="SerenataDesignSystem_993393.SectionHero" title="Inicio" action="{{ cta }}" hint-size="100%,106px"></x-import>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px,1fr));gap:19px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Metric" label="Por cobrar" value="{{ porCobrar }}" nota="4 cuentas abiertas" accent="{{ true }}" hint-size="200px,120px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Metric" label="Por pagar" value="{{ porPagar }}" nota="4 responsables" hint-size="200px,120px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Metric" label="Cotizaciones aprobadas" value="2" nota="de 9 emitidas" hint-size="200px,120px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Metric" label="En borrador" value="2" nota="1 sin items" hint-size="200px,120px"></x-import>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px,1fr));gap:19px;align-items:start">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Panel" title="Balance por periodo" eyebrow="Miles de pesos" action="{{ leyenda }}" hint-size="100%,300px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.BarChart" data="{{ balance }}" height="{{ 186 }}" format="{{ formatoK }}" hint-size="100%,220px"></x-import>
+<p style="margin:15px 0 0;font-size:12px;color:#6B7280">Da clic en cualquier mes para abrir la sección de detalle de ese periodo.</p>
+</x-import>
+
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Panel" title="Cruce del periodo" hint-size="100%,300px">
+<div style="display:flex;flex-direction:column;gap:19px">
+<sc-for list="{{ cruce }}" as="fila" hint-placeholder-count="4">
+<div>
+<div style="font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6B7280;margin-bottom:5px">{{ fila.label }}</div>
+<div style="font-family:Archivo,system-ui,sans-serif;font-stretch:88%;font-weight:800;letter-spacing:-0.02em;line-height:1.02;font-size:19px;color:#E8EAED">{{ fila.monto }}</div>
+</div>
+</sc-for>
+<div style="padding-top:13px;border-top:1px solid #1F252D">
+<div style="font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6B7280;margin-bottom:5px">Utilidad antes de ISR</div>
+<div style="font-family:Archivo,system-ui,sans-serif;font-stretch:88%;font-weight:800;letter-spacing:-0.02em;line-height:1.02;font-size:27px;color:#DCF2E7">{{ utilidad }}</div>
+<div style="margin-top:6px;font-size:12px;color:#9AA2AA">ISR 30% sobre utilidad · persona moral</div>
+</div>
+</div>
+</x-import>
+</div>
+
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Panel" title="Actividad del periodo" hint-size="100%,200px">
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px,1fr));gap:19px">
+<sc-for list="{{ actividad }}" as="dato" hint-placeholder-count="4">
+<div style="display:flex;align-items:baseline;gap:13px">
+<span style="flex:1;min-width:0;font-size:13.5px;color:#9AA2AA">{{ dato.label }}</span>
+<span style="font-family:Archivo,system-ui,sans-serif;font-stretch:88%;font-weight:800;letter-spacing:-0.02em;line-height:1.02;font-size:19px;color:#FEFCF9">{{ dato.valor }}</span>
+</div>
+</sc-for>
+</div>
+</x-import>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  ns() { return window.SerenataDesignSystem_993393 || {}; }
+  renderVals() {
+    const { Button, ChartLegend, SERIES_DEFAULT } = this.ns();
+    const mxn = (n) => '$ ' + Math.round(n).toLocaleString('es-MX');
+    const fiscal = { ingresos: 1966500, egresos: 1240000, impuestos: 217950, deudas: 252000 };
+    return {
+      nav: [
+        { id: 'inicio', label: 'Inicio' },
+        { id: 'cotizaciones', label: 'Cotizaciones' },
+        { id: 'proyectos', label: 'Proyectos' },
+        { id: 'cuentas', label: 'Cuentas' },
+        { id: 'responsables', label: 'Responsables' },
+      ],
+      user: { name: 'Carla Mendoza', nickname: '@carlam', initials: 'CM' },
+      cta: Button ? React.createElement(Button, { variant: 'secondary', size: 'lg', iconLeft: 'download' }, 'Exportar balance') : null,
+      leyenda: ChartLegend ? React.createElement(ChartLegend, { series: SERIES_DEFAULT }) : null,
+      porCobrar: mxn(fiscal.ingresos),
+      porPagar: mxn(fiscal.deudas),
+      balance: [
+        { mes: 'Nov', ingresos: 980, egresos: 640 },
+        { mes: 'Dic', ingresos: 1420, egresos: 910 },
+        { mes: 'Ene', ingresos: 760, egresos: 700 },
+        { mes: 'Feb', ingresos: 1180, egresos: 820 },
+        { mes: 'Mar', ingresos: 1640, egresos: 1050 },
+        { mes: 'Abr', ingresos: 1966, egresos: 1240 },
+      ],
+      formatoK: (v) => '$ ' + v.toLocaleString('es-MX') + 'k',
+      cruce: [
+        { label: 'Ingresos', monto: mxn(fiscal.ingresos) },
+        { label: 'Egresos', monto: mxn(fiscal.egresos) },
+        { label: 'Impuestos', monto: mxn(fiscal.impuestos) },
+        { label: 'Deudas', monto: mxn(fiscal.deudas) },
+      ],
+      utilidad: mxn(fiscal.ingresos - fiscal.egresos - fiscal.impuestos),
+      actividad: [
+        { label: 'Proyectos ejecutados', valor: '6' },
+        { label: 'Cotizaciones aprobadas', valor: '2 de 9' },
+        { label: 'Proyectos que cruzan de mes', valor: '2' },
+        { label: 'Ticket promedio', valor: '$ 572,317' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+:root{
+/* The source UI carries almost no shadow: depth comes from surface-on-surface
+   contrast plus a 1px near-invisible hairline. Keep shadows this quiet. */
+--hairline:1px solid var(--border-subtle);
+--shadow-none:none;
+--shadow-card:0 1px 0 rgba(255,255,255,.02) inset;
+--shadow-raised:0 8px 24px rgba(0,0,0,.35);
+--shadow-overlay:0 18px 48px rgba(0,0,0,.5);
+--shadow-rail:14px 0 34px rgba(0,0,0,.45);
+--shadow-accent:0 6px 18px rgba(238,75,2,.28);
+}

@@ -1,0 +1,36 @@
+<!-- @dsCard group="Components" viewport="700x420" name="Patterns — Panel, Metric, Field, Folio, StateBadge, Chart" subtitle="Composiciones de producto: secciones, KPIs, folios, estados y gráficas" -->
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{background:var(--bg-app);padding:20px}#root{display:block}</style></head><body><div id="root"></div>
+<script type="text/babel">
+const { Panel, Metric, Field, Folio, StateBadge, ProgressBar, BarChart, ChartLegend, Button, Select } = window.SerenataDesignSystem_993393;
+const balance = [{mes:'Ene',ingresos:760,egresos:700},{mes:'Feb',ingresos:1180,egresos:820},{mes:'Mar',ingresos:1640,egresos:1050},{mes:'Abr',ingresos:1966,egresos:1240}];
+function Demo(){return(
+<div style={{display:'flex',flexDirection:'column',gap:20}}>
+  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:16}}>
+    <Metric label="Por cobrar" value="$ 1,966,500" nota="4 cuentas abiertas" accent/>
+    <Metric label="Por pagar" value="$ 252,000" nota="4 responsables"/>
+    <Metric label="Aprobadas" value="2" nota="de 9 emitidas"/>
+  </div>
+  <div style={{display:'grid',gridTemplateColumns:'minmax(0,1.3fr) minmax(0,1fr)',gap:16,alignItems:'start'}}>
+    <Panel title="Balance por periodo" eyebrow="Miles de pesos" action={<ChartLegend/>}>
+      <BarChart data={balance} height={120} format={(v)=>'$ '+v+'k'}/>
+    </Panel>
+    <Panel title="Datos generales" action={<Button variant="ghost" size="md">Editar</Button>}>
+      <div style={{display:'flex',flexWrap:'wrap',gap:16}}>
+        <Field label="Folio" nowrapLabel><Folio size={15}>SH014</Folio></Field>
+        <Field label="Cliente" value="Solura" nowrapLabel/>
+        <Field label="Entrega" value="25 abr 2025" nowrapLabel/>
+      </div>
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:16}}>
+        <StateBadge state="RODAJE"/><StateBadge state="VENCIDO"/><StateBadge state="PAGADO"/><StateBadge state="pendiente"/>
+      </div>
+      <div style={{marginTop:16}}><ProgressBar value={62}/></div>
+    </Panel>
+  </div>
+</div>);}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);</script></body></html>

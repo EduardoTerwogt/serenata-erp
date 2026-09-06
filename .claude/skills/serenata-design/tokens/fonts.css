@@ -1,0 +1,7 @@
+/* Serenata webfonts.
+   NO original font binaries were provided with the brief. These are the closest
+   Google Fonts substitutions to the described families — see readme.md > Typography.
+   Display: condensed geometric bold uppercase  -> Archivo (variable width + weight)
+   UI/Body: neutral grotesque (Inter/Helvetica)  -> Manrope
+   Replace with the real Serenata display face when the files are available. */
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=Manrope:wght@400;500;600;700;800&display=swap');

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Vista de detalle" description="Detalle de un registro: barra de contexto con acciones por estado, datos generales en una fila, tabla de partidas a ancho completo y totales debajo." -->
+<helmet>
+<script src="./ds-base.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>body{margin:0;background:#0F1318}</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:#0F1318;color:#E8EAED;font-family:Manrope,system-ui,sans-serif">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Sidebar" items="{{ nav }}" active-id="cotizaciones" hint-size="256px,100vh"></x-import>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Topbar" user="{{ user }}" hint-size="100%,84px"></x-import>
+<main style="flex:1;min-width:0;padding:6px 29px 19px;display:flex;flex-direction:column;gap:19px">
+
+<div style="display:flex;align-items:center;gap:19px;flex-wrap:wrap">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="ghost" size="md" iconLeft="arrow-left" hint-size="140px,35px">Cotizaciones</x-import>
+<div style="display:flex;align-items:baseline;gap:13px;min-width:0">
+<h1 style="margin:0;font-family:Archivo,system-ui,sans-serif;font-stretch:88%;font-weight:800;letter-spacing:-0.02em;line-height:1.02;text-transform:uppercase;font-size:27px;color:#FEFCF9">SH014</h1>
+<span style="font-size:12px;color:#9AA2AA">Cotizada el 02 abr 2025</span>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.StatusBadge" status="emitida" hint-size="80px,22px"></x-import>
+</div>
+<div style="flex:1;min-width:12px"></div>
+<div style="display:flex;gap:13px;flex-wrap:wrap">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="ghost" size="lg" hint-size="100px,42px">Cancelar</x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="secondary" size="lg" iconLeft="printer" hint-size="150px,42px">Generar PDF</x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="primary" size="lg" iconLeft="check" hint-size="180px,42px">Aprobar</x-import>
+</div>
+</div>
+
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Panel" title="Datos generales" hint-size="100%,150px">
+<div style="display:grid;grid-template-columns:repeat(4, minmax(130px,200px)) 1fr auto;gap:19px;align-items:start;min-width:0;overflow-x:auto">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Cliente" value="Solura" nowrapLabel="{{ true }}" hint-size="180px,40px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Proyecto" value="Campaña Verano 2025" nowrapLabel="{{ true }}" hint-size="180px,40px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Fecha de entrega" value="25 abr 2025" nowrapLabel="{{ true }}" hint-size="180px,40px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Locación" value="Hacienda El Carmen, Jalisco" nowrapLabel="{{ true }}" hint-size="180px,40px"></x-import>
+<div></div>
+<div style="text-align:right;min-width:0">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Fecha de cotización" value="02 abr 2025" nowrapLabel="{{ true }}" hint-size="140px,40px"></x-import>
+</div>
+</div>
+</x-import>
+
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Panel" title="Partidas" padding="0" hint-size="100%,360px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.DataTable" columns="{{ columns }}" rows="{{ partidas }}" hint-size="100%,320px"></x-import>
+</x-import>
+
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Panel" title="Totales" hint-size="100%,240px">
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px,1fr));gap:32px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:19px">
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px,1fr));gap:13px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Fee / margen de agencia" value="15 %" hint-size="140px,40px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Descuento" value="$ 0" hint-size="140px,40px"></x-import>
+</div>
+<div style="display:flex;align-items:center;gap:13px;font-size:13.5px;color:#6B7280">
+<span style="flex:1;min-width:0">Margen Serenata estimado</span>
+<span style="color:#9AA2AA">{{ margen }}</span>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:11px">
+<sc-for list="{{ desglose }}" as="fila" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:13px;font-size:13.5px">
+<span style="flex:1;min-width:0;color:#9AA2AA">{{ fila.label }}</span>
+<span style="color:#E8EAED">{{ fila.monto }}</span>
+</div>
+</sc-for>
+<div style="display:flex;align-items:baseline;gap:13px;padding-top:13px;border-top:1px solid #1F252D">
+<span style="flex:1;min-width:0;font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6B7280">Total final</span>
+<span style="font-family:Archivo,system-ui,sans-serif;font-stretch:88%;font-weight:800;letter-spacing:-0.02em;line-height:1.02;font-size:27px;color:#FF5A1A">{{ total }}</span>
+</div>
+</div>
+</div>
+</x-import>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  ns() { return window.SerenataDesignSystem_993393 || {}; }
+  renderVals() {
+    const { StatusBadge } = this.ns();
+    const mxn = (n) => '$ ' + Math.round(n).toLocaleString('es-MX');
+    const partidas = [
+      { categoria: 'Dirección', descripcion: 'Dirección y guion', cantidad: 1, precio: 84000, responsable: 'Julián López', xPagar: 60000 },
+      { categoria: 'Producción', descripcion: 'Equipo de cámara (3 días)', cantidad: 3, precio: 42000, responsable: 'Ana Vidal', xPagar: 96000 },
+      { categoria: 'Producción', descripcion: 'Locaciones y permisos', cantidad: 1, precio: 56000, responsable: 'Marta Quiroz', xPagar: 41000 },
+      { categoria: 'Post', descripcion: 'Postproducción y color', cantidad: 1, precio: 78000, responsable: 'Hugo Peña', xPagar: 55000 },
+      { categoria: 'Post', descripcion: 'Música original', cantidad: 2, precio: 28000, responsable: 'Distrito Sonoro', xPagar: 38000 },
+    ];
+    const subtotal = partidas.reduce((a, p) => a + p.cantidad * p.precio, 0);
+    const fee = subtotal * 0.15;
+    const general = subtotal + fee;
+    const iva = general * 0.16;
+    const xPagar = partidas.reduce((a, p) => a + p.xPagar, 0);
+    return {
+      nav: [
+        { id: 'inicio', label: 'Inicio' },
+        { id: 'cotizaciones', label: 'Cotizaciones' },
+        { id: 'proyectos', label: 'Proyectos' },
+        { id: 'cuentas', label: 'Cuentas' },
+        { id: 'responsables', label: 'Responsables' },
+      ],
+      user: { name: 'Carla Mendoza', nickname: '@carlam', initials: 'CM' },
+      columns: [
+        { key: 'categoria', label: 'Categoría', width: '120px' },
+        { key: 'descripcion', label: 'Descripción', width: '1.7fr', strong: true },
+        { key: 'cantidad', label: 'Cant.', width: '70px', align: 'right' },
+        { key: 'precio', label: 'P. unitario', width: '120px', align: 'right', render: (r) => mxn(r.precio) },
+        { key: 'responsable', label: 'Responsable', width: '1fr' },
+        { key: 'xPagar', label: 'X pagar', width: '120px', align: 'right', render: (r) => mxn(r.xPagar) },
+      ],
+      partidas,
+      desglose: [
+        { label: 'Subtotal', monto: mxn(subtotal) },
+        { label: 'Fee de agencia · 15%', monto: mxn(fee) },
+        { label: 'General', monto: mxn(general) },
+        { label: 'IVA 16%', monto: mxn(iva) },
+      ],
+      total: mxn(general + iva) + ' MXN',
+      margen: mxn(general - xPagar),
+    };
+  }
+}
+</script>
+</body>
+</html>

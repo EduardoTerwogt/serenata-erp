@@ -1,0 +1,44 @@
+:root{
+--font-display:'Archivo','Archivo Expanded',system-ui,sans-serif;
+--font-ui:'Manrope',system-ui,-apple-system,'Helvetica Neue',sans-serif;
+
+/* display axes — the display face is condensed + very heavy, always uppercase */
+--display-stretch:88%;
+--display-weight:800;
+--display-tracking:-0.02em;
+
+--text-eyebrow:11px;
+--text-xs:10px;
+--text-table-head:12px;
+--text-sm:10px;
+--text-base:13.5px;
+--text-md:12px;
+--text-nav:14.5px;
+--text-lg:14px;
+--text-h3:19px;
+--text-h2:27px;
+--text-h1:51px;
+--text-hero:58px;
+
+--lh-tight:1.02; /* @kind font */
+--lh-snug:1.25; /* @kind font */
+--lh-body:1.5; /* @kind font */
+
+--tracking-eyebrow:0.14em;
+--tracking-label:0.1em;
+--tracking-tagline:0.18em;
+
+--weight-regular:400;
+--weight-medium:500;
+--weight-semibold:600;
+--weight-bold:700;
+--weight-black:800;
+}
+.sn-display{font-family:var(--font-display);font-stretch:var(--display-stretch);font-weight:var(--display-weight);letter-spacing:var(--display-tracking);line-height:var(--lh-tight);text-transform:uppercase;color:var(--text-primary)}
+.sn-h1{font-size:var(--text-h1)}
+.sn-h2{font-size:var(--text-h2)}
+.sn-h3{font-size:var(--text-h3)}
+.sn-eyebrow{font-family:var(--font-ui);font-size:var(--text-eyebrow);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-eyebrow);text-transform:uppercase;color:var(--accent)}
+.sn-body{font-family:var(--font-ui);font-size:var(--text-base);font-weight:var(--weight-regular);line-height:var(--lh-body);color:var(--text-body)}
+.sn-lead{font-family:var(--font-ui);font-size:var(--text-lg);line-height:var(--lh-snug);color:var(--text-muted)}
+.sn-label{font-family:var(--font-ui);font-size:var(--text-xs);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-label);text-transform:uppercase;color:var(--text-faint)}

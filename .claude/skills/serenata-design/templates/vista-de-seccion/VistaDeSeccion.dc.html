@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Vista de sección" description="Pantalla base de Serenata: rail con textura, topbar, hero de sección y tabla de lista." -->
+<helmet>
+<script src="./ds-base.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>body{margin:0;background:#0F1318}</style>
+</helmet>
+<div style="display:flex;min-height:100vh;background:#0F1318;color:#E8EAED;font-family:Manrope,system-ui,sans-serif">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Sidebar" items="{{ nav }}" active-id="cotizaciones" hint-size="256px,100vh"></x-import>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Topbar" user="{{ user }}" hint-size="100%,84px"></x-import>
+<main style="flex:1;min-width:0;padding:6px 29px 19px;display:flex;flex-direction:column;gap:19px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.SectionHero" title="Cotizaciones" action="{{ cta }}" hint-size="100%,106px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.SearchInput" size="lg" placeholder="Buscar por folio, proyecto o cliente…" style="width:100%;max-width:420px" hint-size="420px,42px"></x-import>
+<div style="display:flex;align-items:center;gap:13px;flex-wrap:nowrap;min-width:0;overflow-x:auto;padding-bottom:2px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.FilterTabs" tabs="{{ tabs }}" value="todas" style="flex:none" hint-size="430px,42px"></x-import>
+<div style="flex:1;min-width:12px"></div>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.FilterButton" style="flex:none" hint-size="110px,42px"></x-import>
+</div>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Card" padding="0" hint-size="100%,520px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.DataTable" columns="{{ columns }}" rows="{{ rows }}" hint-size="100%,440px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.TableFooter" shown="{{ shown }}" total="{{ total }}" unit="cotizaciones" hint-size="100%,70px"></x-import>
+</x-import>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  ns() { return window.SerenataDesignSystem_993393 || {}; }
+  renderVals() {
+    const { Button, StatusBadge } = this.ns();
+    const mxn = (n) => '$ ' + n.toLocaleString('es-MX') + ' MXN';
+    const rows = [
+      { id: 'COT-0084', proyecto: 'Campaña Verano 2025', cliente: 'Solura', monto: 950000, fecha: '25 abr 2025', estatus: 'aprobada' },
+      { id: 'COT-0083', proyecto: 'Documental Raíces', cliente: 'Canal Norte', monto: 420000, fecha: '23 abr 2025', estatus: 'emitida' },
+      { id: 'COT-0082', proyecto: 'Serie Digital / Episodio 1', cliente: 'Vista Media', monto: 1250000, fecha: '20 abr 2025', estatus: 'borrador' },
+      { id: 'COT-0081', proyecto: 'Video Institucional', cliente: 'Grupo Alba', monto: 310000, fecha: '18 abr 2025', estatus: 'emitida' },
+      { id: 'COT-0080', proyecto: 'Campaña Lanzamiento', cliente: 'Nimbo', monto: 670000, fecha: '15 abr 2025', estatus: 'aprobada' },
+      { id: 'COT-0079', proyecto: 'Contenido Redes Q2', cliente: 'Lúmina', monto: 230000, fecha: '12 abr 2025', estatus: 'cancelada' },
+      { id: 'COT-0078', proyecto: 'Spot TV 30"', cliente: 'Terranova', monto: 980000, fecha: '08 abr 2025', estatus: 'emitida' },
+      { id: 'COT-0077', proyecto: 'Aftermovie Festival', cliente: 'Distrito', monto: 160000, fecha: '05 abr 2025', estatus: 'borrador' },
+    ];
+    return {
+      nav: [
+        { id: 'inicio', label: 'Inicio' },
+        { id: 'proyectos', label: 'Proyectos' },
+        { id: 'cotizaciones', label: 'Cotizaciones' },
+        { id: 'clientes', label: 'Clientes' },
+        { id: 'produccion', label: 'Producción' },
+        { id: 'calendario', label: 'Calendario' },
+        { id: 'recursos', label: 'Recursos' },
+        { id: 'finanzas', label: 'Finanzas' },
+        { id: 'reportes', label: 'Reportes' },
+        { id: 'configuracion', label: 'Configuración' },
+      ],
+      user: { name: 'Carla Mendoza', nickname: '@carlam', initials: 'CM' },
+      tabs: [
+        { id: 'todas', label: 'Todas' },
+        { id: 'borrador', label: 'Borrador' },
+        { id: 'emitida', label: 'Emitida' },
+        { id: 'aprobada', label: 'Aprobada' },
+        { id: 'cancelada', label: 'Cancelada' },
+      ],
+      cta: Button ? React.createElement(Button, { variant: 'primary', size: 'lg' }, 'Nueva cotización') : null,
+      columns: [
+        { key: 'id', label: 'Folio', width: '1fr' },
+        { key: 'proyecto', label: 'Proyecto', width: '1fr' },
+        { key: 'cliente', label: 'Cliente', width: '1fr' },
+        { key: 'monto', label: 'Monto', width: '1fr', render: (r) => mxn(r.monto) },
+        { key: 'fecha', label: 'Fecha', width: '1fr' },
+        { key: 'estatus', label: 'Estatus', width: '120px', align: 'right', render: (r) => (StatusBadge ? React.createElement(StatusBadge, { status: r.estatus }) : r.estatus) },
+      ],
+      rows,
+      shown: rows.length,
+      total: rows.length,
+    };
+  }
+}
+</script>
+</body>
+</html>
