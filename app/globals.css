@@ -1,33 +1,146 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&family=Source+Code+Pro:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
+/*
+ * Fase 5.7 (rediseño): tokens del Serenata Design System.
+ * IMPORTANTE — no se sobreescribe la escala tipográfica (text-xs/sm/base/lg) ni
+ * la de radios (rounded-sm/md/lg/xl) de Tailwind: muchas páginas aún no migradas
+ * dependen de esos nombres con sus valores por default. Solo se agregan tokens
+ * con nombres nuevos que no chocan, para que las pantallas migradas los usen sin
+ * romper el look de las que todavía no se tocan (se van migrando por bloques).
+ */
 :root {
-  /* Colores base para tema oscuro cinematográfico */
+  /* Colores base para tema oscuro cinematográfico (legado, en uso por páginas aún no migradas) */
   --background: #0a0a0a;
   --foreground: #fafafa;
 
-  /* Design tokens tipográficos */
-  --font-inter: 'Inter', system-ui, sans-serif;
-  --font-poppins: 'Poppins', sans-serif;
+  /* Design tokens tipográficos -- Fase 5.7: apuntan a Archivo/Manrope
+     (cargadas vía next/font en app/fonts.ts) en vez de Inter/Poppins. Se
+     mantienen los nombres --font-inter/--font-poppins porque tailwind.config.ts
+     y el resto del código ya los usan (font-sans/font-display) -- así el
+     refresh tipográfico aplica a toda la app sin tocar cada consumidor. */
+  --font-inter: var(--font-ui), system-ui, sans-serif;
+  --font-poppins: var(--font-display), sans-serif;
   --font-source-code: 'Source Code Pro', monospace;
 
-  /* Colores primarios */
+  /* Colores primarios (legado) */
   --color-primary-500: #f97316;
   --color-primary-600: #ea580c;
   --color-secondary-500: #0ea5e9;
   --color-secondary-600: #0284c7;
   --color-accent-500: #22c55e;
 
-  /* Elevación y sombras */
+  /* Elevación y sombras (legado) */
   --shadow-elevation-1: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   --shadow-elevation-2: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   --shadow-elevation-3: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
 
-  /* Transiciones fluidas */
+  /* Transiciones fluidas (legado) */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* --- Serenata Design System: superficies --- */
+  --sn-app: #0F1318;
+  --sn-topbar: #161D26;
+  --sn-surface: #151B22;
+  --sn-surface-alt: #191E25;
+  --sn-surface-alt-2: #1A2027;
+  --sn-input: #10161C;
+  --sn-hairline: #1F252D;
+
+  /* --- marca --- */
+  --sn-orange: #FF5A1A;
+  --sn-orange-strong: #EE4B02;
+  --sn-orange-soft: #C65008;
+  --sn-orange-ink: #FEFCF9;
+
+  /* --- tinta --- */
+  --sn-ink: #FEFCF9;
+  --sn-ink-body: #E8EAED;
+  --sn-ink-muted: #9AA2AA;
+  --sn-ink-faint: #6B7280;
+
+  /* --- estados (badge de 4 tonos, ver components/ui/Badge.tsx) --- */
+  --sn-status-approved-bg: #1F6B54;
+  --sn-status-approved-fg: #DCF2E7;
+  --sn-status-issued-bg: #2A5C9C;
+  --sn-status-issued-fg: #E1ECFA;
+  --sn-status-draft-bg: #4B535E;
+  --sn-status-draft-fg: #E6EAEE;
+  --sn-status-cancelled-bg: #8B2B2B;
+  --sn-status-cancelled-fg: #F7DEDE;
+
+  /* --- textura de marca (placeholder CSS -- reemplazar cuando haya arte real) --- */
+  --sn-texture-rail: radial-gradient(72% 30% at 2% 86%, rgba(255,90,26,.85) 0%, transparent 72%),
+    radial-gradient(80% 24% at 0% 64%, rgba(31,122,114,.6) 0%, transparent 74%),
+    radial-gradient(84% 26% at 4% 44%, rgba(30,78,140,.5) 0%, transparent 76%),
+    radial-gradient(64% 20% at 0% 20%, rgba(215,38,61,.4) 0%, transparent 74%), var(--sn-app);
+
+  --tracking-eyebrow: 0.14em;
+  --tracking-label: 0.1em;
+}
+
+@theme {
+  /* Utilidades nuevas (bg-app, bg-card, text-body, etc.) -- no reemplazan gray/blue */
+  --color-app: var(--sn-app);
+  --color-topbar: var(--sn-topbar);
+  --color-card: var(--sn-surface);
+  --color-row: var(--sn-surface-alt);
+  --color-row-alt: var(--sn-surface-alt-2);
+  --color-input: var(--sn-input);
+  --color-hairline: var(--sn-hairline);
+
+  --color-accent: var(--sn-orange);
+  --color-accent-pressed: var(--sn-orange-strong);
+  --color-accent-quiet: var(--sn-orange-soft);
+  --color-accent-ink: var(--sn-orange-ink);
+
+  --color-ink: var(--sn-ink);
+  --color-body: var(--sn-ink-body);
+  --color-subtext: var(--sn-ink-muted);
+  --color-faint: var(--sn-ink-faint);
+
+  --color-approved-bg: var(--sn-status-approved-bg);
+  --color-approved-fg: var(--sn-status-approved-fg);
+  --color-issued-bg: var(--sn-status-issued-bg);
+  --color-issued-fg: var(--sn-status-issued-fg);
+  --color-draft-bg: var(--sn-status-draft-bg);
+  --color-draft-fg: var(--sn-status-draft-fg);
+  --color-cancelled-bg: var(--sn-status-cancelled-bg);
+  --color-cancelled-fg: var(--sn-status-cancelled-fg);
+
+  /* NOTA: el kit define spacing con nombre (xs/sm/md/lg/xl). NO se agregan aquí
+     con esos nombres -- en Tailwind v4 --spacing-sm/md/lg/xl también alimentan
+     max-w-sm/md/lg/xl (max-w-sm = var(--spacing-sm)), así que hubiera roto ese
+     max-width en TODA la app. Los componentes nuevos usan valores literales
+     (p-[19px], gap-[13px], etc.) tomados directo de tokens/spacing.css del kit
+     en vez de una escala con nombre, hasta decidir un prefijo que no choque. */
+
+  /* Radios que no chocan con rounded-sm/md/lg/xl */
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+  --radius-card: 18px;
+  --radius-panel: 19px;
+  --radius-control: 11px;
+
+  /* Sombras nuevas (el sistema casi no usa sombra: contraste de superficie + hairline) */
+  --shadow-card: 0 1px 0 rgba(255,255,255,.02) inset;
+  --shadow-raised: 0 8px 24px rgba(0,0,0,.35);
+  --shadow-overlay: 0 18px 48px rgba(0,0,0,.5);
+  --shadow-rail: 14px 0 34px rgba(0,0,0,.45);
+  --shadow-accent: 0 6px 18px rgba(238,75,2,.28);
+
+  --ease-standard: cubic-bezier(.2,.8,.2,1);
+
+  /* Tamaños que NO chocan con la escala default de Tailwind (xs/sm/base/lg/...) */
+  --text-eyebrow: 11px;
+  --text-table-head: 12px;
+  --text-nav: 14.5px;
+  --text-h3: 19px;
+  --text-h2: 27px;
+  --text-h1: 51px;
+  --text-hero: 58px;
 }
 
 @theme inline {
@@ -123,4 +236,33 @@ input[type="date"]::-webkit-date-and-time-value {
 
 input[type="date"]::-webkit-calendar-picker-indicator {
   flex-shrink: 0;
+}
+
+/* Serenata Design System -- utilidades tipográficas (Fase 5.7).
+   El cuerpo de texto normal sigue usando las utilidades Tailwind de siempre
+   (text-sm, text-base, etc.) -- estas son solo para los patrones de marca
+   (display condensado, eyebrow, micro-label) que no tienen equivalente. */
+.sn-display {
+  font-family: var(--font-poppins);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+  text-transform: uppercase;
+  color: var(--sn-ink);
+}
+.sn-eyebrow {
+  font-family: var(--font-inter);
+  font-size: var(--text-eyebrow);
+  font-weight: 600;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--sn-orange);
+}
+.sn-label {
+  font-family: var(--font-inter);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--sn-ink-faint);
 }

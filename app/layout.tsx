@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { archivo, manrope } from './fonts'
 import SidebarLayout from './components/SidebarLayout'
 import SessionProviderWrapper from './components/SessionProviderWrapper'
 
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
+    <html lang="es" className={`${archivo.variable} ${manrope.variable}`}>
       <body>
         <SessionProviderWrapper>
           <SidebarLayout>{children}</SidebarLayout>
