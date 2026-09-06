@@ -79,7 +79,7 @@ export default function CotizacionesPage() {
         action={
           <Link
             href="/cotizaciones/nueva"
-            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-md)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
+            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
           >
             <Icon name="plus" size={15} />
             Nueva Cotización
@@ -209,7 +209,7 @@ export default function CotizacionesPage() {
               <p className="mb-6 text-content text-faint">Crea tu primera cotización para empezar</p>
               <Link
                 href="/cotizaciones/nueva"
-                className="inline-flex h-[var(--control-height-lg)] items-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-md)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
+                className="inline-flex h-[var(--control-height-lg)] items-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
               >
                 <Icon name="plus" size={15} />
                 Nueva Cotización

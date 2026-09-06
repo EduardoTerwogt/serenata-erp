@@ -18,7 +18,7 @@ export function FilterTabs<T extends string>({ tabs, value, onChange }: FilterTa
           key={tab.value}
           type="button"
           onClick={() => onChange(tab.value)}
-          className={`flex h-8 flex-none items-center justify-center gap-1.5 rounded-[8px] px-[21px] text-sm transition-colors ${
+          className={`flex h-8 flex-none items-center justify-center gap-1.5 rounded-[8px] px-[21px] text-[15.5px] transition-colors ${
             value === tab.value ? 'bg-accent font-semibold text-accent-ink' : 'font-medium text-subtext hover:text-body'
           }`}
         >

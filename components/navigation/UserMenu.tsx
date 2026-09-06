@@ -34,8 +34,8 @@ export function UserMenu({ name, email, onSignOut, className = '' }: UserMenuPro
       >
         <Avatar initials={initials(name, email)} size={36} />
         <span className="hidden flex-col items-end text-right leading-tight md:flex">
-          <span className="truncate text-sm font-semibold text-ink">{displayName}</span>
-          {name.trim() && <span className="truncate text-xs text-subtext">{email}</span>}
+          <span className="truncate text-[15px] font-semibold text-ink">{displayName}</span>
+          {name.trim() && <span className="truncate text-[13px] text-subtext">{email}</span>}
         </span>
         <Icon name="chevron-down" size={14} className="text-subtext" />
       </button>
