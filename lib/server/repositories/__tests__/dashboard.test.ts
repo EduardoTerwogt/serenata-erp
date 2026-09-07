@@ -91,6 +91,24 @@ describe('getResumenDashboard', () => {
     expect(resumen.kpis).toEqual({ porCobrar: 0, porPagar: 0, cotizacionesAprobadas: 0, cotizacionesBorrador: 0 })
     expect(resumen.cobertura).toEqual({ gastosFijos: [], totalGastosFijos: 0, facturado: 0 })
     expect(resumen.balance).toHaveLength(6)
+    expect(resumen.fuentesConError).toEqual([])
+  })
+
+  it('si una fuente falla, el resto del dashboard sigue calculándose', async () => {
+    mocks.getCotizaciones.mockRejectedValue(new Error('supabase caído'))
+    mocks.getProyectos.mockResolvedValue([] as Proyecto[])
+    mocks.getCuentasCobrar.mockResolvedValue([{ id: 'c1', monto_total: 1000, monto_pagado: 0, estado: 'FACTURADO' } as CuentaCobrar])
+    mocks.getCuentasPagar.mockResolvedValue([] as CuentaPagar[])
+    mocks.getPagosComprobantesEnRango.mockResolvedValue([] as PagoComprobante[])
+    mockGastosFijosActivos([])
+
+    const resumen = await getResumenDashboard({ periodo: 'mes', fecha: '2026-03-15' })
+
+    expect(resumen.fuentesConError).toEqual(['Cotizaciones'])
+    expect(resumen.cotizacionesRecientes).toEqual([])
+    expect(resumen.kpis.cotizacionesAprobadas).toBe(0)
+    // Cuentas por cobrar sí respondió -- el KPI se calcula con normalidad
+    expect(resumen.kpis.porCobrar).toBe(1000)
   })
 
   it('agrega ingresos, egresos, ISR y cobertura del periodo con datos sintéticos', async () => {

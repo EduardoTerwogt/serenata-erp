@@ -161,6 +161,16 @@ export interface ResumenDashboard {
     proyectosEnCurso: number
   }
   cotizacionesRecientes: Array<Pick<Cotizacion, 'id' | 'proyecto' | 'cliente' | 'total' | 'estado' | 'created_at'>>
+  /** Nombres de fuentes que fallaron y se sustituyeron por datos vacíos --
+   * el resto del dashboard sigue calculándose con lo que sí respondió. */
+  fuentesConError: string[]
+}
+
+function resuelto<T>(fuentesConError: string[], nombreFuente: string, resultado: PromiseSettledResult<T>, fallback: T): T {
+  if (resultado.status === 'fulfilled') return resultado.value
+  console.error(`[dashboard] Error obteniendo ${nombreFuente}:`, resultado.reason)
+  fuentesConError.push(nombreFuente)
+  return fallback
 }
 
 /**
@@ -191,7 +201,7 @@ export async function getResumenDashboard({
   const buckets = bucketsDePeriodo(periodo, anchor, 6)
   const rangoInicioTotal = buckets[0].inicio
 
-  const [cuentasCobrar, cuentasPagar, cotizaciones, proyectos, gastosFijosActivos, pagos] = await Promise.all([
+  const [cuentasCobrarR, cuentasPagarR, cotizacionesR, proyectosR, gastosFijosR, pagosR] = await Promise.allSettled([
     getCuentasCobrar(),
     getCuentasPagar(),
     getCotizaciones(),
@@ -199,6 +209,14 @@ export async function getResumenDashboard({
     getGastosFijos(true),
     getPagosComprobantesEnRango(rangoInicioTotal, periodoActual.fin),
   ])
+
+  const fuentesConError: string[] = []
+  const cuentasCobrar = resuelto(fuentesConError, 'Cuentas por cobrar', cuentasCobrarR, [])
+  const cuentasPagar = resuelto(fuentesConError, 'Cuentas por pagar', cuentasPagarR, [])
+  const cotizaciones = resuelto(fuentesConError, 'Cotizaciones', cotizacionesR, [])
+  const proyectos = resuelto(fuentesConError, 'Proyectos', proyectosR, [])
+  const gastosFijosActivos = resuelto(fuentesConError, 'Gastos fijos', gastosFijosR, [])
+  const pagos = resuelto(fuentesConError, 'Pagos', pagosR, [])
 
   const balance = buckets.map((b) => ({
     label: b.label,
@@ -254,5 +272,6 @@ export async function getResumenDashboard({
     },
     actividad: { proyectosCreados, cotizacionesAprobadas, proyectosEnCurso },
     cotizacionesRecientes,
+    fuentesConError,
   }
 }

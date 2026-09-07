@@ -1,162 +1,411 @@
-import { getCotizaciones, getCuentasCobrar, getCuentasPagar } from '@/lib/db'
+'use client'
 
-export default async function DashboardPage() {
-  const [resCot, resCobrar, resPagar] = await Promise.allSettled([
-    getCotizaciones(),
-    getCuentasCobrar(),
-    getCuentasPagar(),
-  ])
+import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { getJson, sendJson } from '@/lib/client/api'
+import { SectionHero } from '@/components/ui/SectionHero'
+import { SectionCard } from '@/components/ui/SectionCard'
+import { Metric } from '@/components/ui/Metric'
+import { BarChart, type BarChartDatum } from '@/components/ui/BarChart'
+import { Modal } from '@/components/ui/Modal'
+import { Icon } from '@/components/ui/Icon'
+import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
+import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadge'
+import type { GastoFijo } from '@/lib/types'
 
-  const queryErrors = [
-    resCot.status === 'rejected' ? `getCotizaciones: ${JSON.stringify(resCot.reason)}` : null,
-    resCobrar.status === 'rejected' ? `getCuentasCobrar: ${JSON.stringify(resCobrar.reason)}` : null,
-    resPagar.status === 'rejected' ? `getCuentasPagar: ${JSON.stringify(resPagar.reason)}` : null,
-  ].filter(Boolean)
+type Periodo = 'mes' | 'trimestre' | 'anio'
 
-  const cotizaciones = resCot.status === 'fulfilled' ? resCot.value : []
-  const cuentasCobrar = resCobrar.status === 'fulfilled' ? resCobrar.value : []
-  const cuentasPagar = resPagar.status === 'fulfilled' ? resPagar.value : []
+const PERIODO_LABEL: Record<Periodo, string> = {
+  mes: 'Este mes',
+  trimestre: 'Este trimestre',
+  anio: 'Este año',
+}
 
-  const totalCobrar = cuentasCobrar
-    ?.filter((c) => c.estado !== 'PAGADO')
-    .reduce((sum, c) => sum + c.monto_total, 0) || 0
+interface ResumenDashboard {
+  periodo: Periodo
+  periodoActual: { label: string; inicio: string; fin: string }
+  kpis: { porCobrar: number; porPagar: number; cotizacionesAprobadas: number; cotizacionesBorrador: number }
+  balance: BarChartDatum[]
+  fiscal: { ingresos: number; egresos: number; impuestos: number; deudas: number; utilidadAntesIsr: number }
+  cobertura: { gastosFijos: Array<{ id: string; nombre: string; monto: number }>; totalGastosFijos: number; facturado: number }
+  actividad: { proyectosCreados: number; cotizacionesAprobadas: number; proyectosEnCurso: number }
+  cotizacionesRecientes: Array<{ id: string; proyecto: string; cliente: string; total: number; estado: string; created_at: string }>
+  fuentesConError: string[]
+}
 
-  const totalPagar = cuentasPagar
-    ?.filter((c) => c.estado !== 'PAGADO')
-    .reduce((sum, c) => sum + c.x_pagar, 0) || 0
+function formatMoney(value: number) {
+  return value.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })
+}
 
-  const cotizacionesAprobadas = cotizaciones?.filter(c => c.estado === 'APROBADA').length || 0
-  const cotizacionesBorrador = cotizaciones?.filter(c => c.estado === 'BORRADOR').length || 0
+function FuenteError({ nombre, onRetry }: { nombre: string; onRetry: () => void }) {
+  return (
+    <div className="flex items-center gap-3 rounded-control bg-cancelled-bg px-4 py-3 text-cancelled-fg">
+      <Icon name="warning" size={17} />
+      <div className="min-w-0 flex-1 text-sm">No se pudo cargar {nombre}. El resto del dashboard sigue disponible.</div>
+      <button type="button" onClick={onRetry} className="flex-none rounded-control border border-hairline px-3 py-1.5 text-sm text-body hover:bg-row-alt transition-colors">
+        Reintentar
+      </button>
+    </div>
+  )
+}
+
+export default function DashboardPage() {
+  const router = useRouter()
+  const [periodo, setPeriodo] = useState<Periodo>('mes')
+  const [resumen, setResumen] = useState<ResumenDashboard | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [modalAbierto, setModalAbierto] = useState(false)
+
+  const cargar = useCallback(async (p: Periodo) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await getJson<ResumenDashboard>(`/api/dashboard/resumen?periodo=${p}`, 'Error obteniendo el resumen del dashboard')
+      setResumen(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error obteniendo el resumen del dashboard')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    cargar(periodo)
+  }, [cargar, periodo])
+
+  if (loading && !resumen) {
+    return (
+      <div className="px-5 pt-6 pb-6 md:p-8">
+        <p className="text-subtext">Cargando dashboard…</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="px-5 pt-6 pb-6 md:p-8">
+        <FuenteError nombre="el dashboard" onRetry={() => cargar(periodo)} />
+      </div>
+    )
+  }
+
+  if (!resumen) return null
+
+  const cobertura = resumen.cobertura.totalGastosFijos > 0
+    ? Math.min(100, (resumen.cobertura.facturado / resumen.cobertura.totalGastosFijos) * 100)
+    : 0
+  const excedente = resumen.cobertura.facturado - resumen.cobertura.totalGastosFijos
+  const fuenteFallo = (nombre: string) => resumen.fuentesConError.includes(nombre)
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-white">Dashboard</h1>
-        <p className="text-gray-400 mt-1">Resumen general de Serenata</p>
+    <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-6">
+      <SectionHero
+        title="Dashboard"
+        subtitle="Resumen ejecutivo de Serenata"
+        action={
+          <select
+            value={periodo}
+            onChange={(e) => setPeriodo(e.target.value as Periodo)}
+            className="h-10 rounded-control border border-hairline bg-input px-3 text-sm text-body focus:outline-none focus:border-accent"
+          >
+            {(Object.keys(PERIODO_LABEL) as Periodo[]).map((p) => (
+              <option key={p} value={p}>{PERIODO_LABEL[p]}</option>
+            ))}
+          </select>
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Metric label="Por Cobrar" value={formatMoney(resumen.kpis.porCobrar)} accent onClick={() => router.push('/cuentas')} />
+        <Metric label="Por Pagar" value={formatMoney(resumen.kpis.porPagar)} onClick={() => router.push('/cuentas')} />
+        <Metric label="Cotizaciones Aprobadas" value={resumen.kpis.cotizacionesAprobadas} nota={resumen.periodoActual.label} onClick={() => router.push('/cotizaciones')} />
+        <Metric label="En Borrador" value={resumen.kpis.cotizacionesBorrador} nota={resumen.periodoActual.label} onClick={() => router.push('/cotizaciones')} />
       </div>
 
-      {queryErrors.length > 0 && (
-        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-4 py-4 mb-6">
-          <p className="font-semibold mb-2">Error en consultas de Supabase — verifica columnas faltantes:</p>
-          {queryErrors.map((e, i) => (
-            <p key={i} className="text-xs font-mono break-all">{e}</p>
-          ))}
-          <p className="text-xs mt-3 text-red-400">
-            Si el error menciona una columna faltante, ejecuta el SQL correspondiente en Supabase.
-          </p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
-          <p className="text-gray-400 text-xs md:text-sm">Por Cobrar</p>
-          <p className="text-xl md:text-2xl font-bold text-green-400 mt-2">
-            ${totalCobrar.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-gray-500 text-xs mt-1">Pendiente de pago</p>
-        </div>
-
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
-          <p className="text-gray-400 text-xs md:text-sm">Por Pagar</p>
-          <p className="text-xl md:text-2xl font-bold text-red-400 mt-2">
-            ${totalPagar.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-gray-500 text-xs mt-1">A colaboradores</p>
-        </div>
-
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
-          <p className="text-gray-400 text-xs md:text-sm">Cotizaciones Aprobadas</p>
-          <p className="text-xl md:text-2xl font-bold text-blue-400 mt-2">{cotizacionesAprobadas}</p>
-          <p className="text-gray-500 text-xs mt-1">Proyectos activos</p>
-        </div>
-
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 md:p-6">
-          <p className="text-gray-400 text-xs md:text-sm">En Borrador</p>
-          <p className="text-xl md:text-2xl font-bold text-yellow-400 mt-2">{cotizacionesBorrador}</p>
-          <p className="text-gray-500 text-xs mt-1">Sin enviar</p>
-        </div>
-      </div>
-
-      <div className="hidden md:block bg-gray-900 border border-gray-800 rounded-xl">
-        <div className="p-6 border-b border-gray-800">
-          <h2 className="text-lg font-semibold text-white">Cotizaciones Recientes</h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-800">
-                <th className="text-left text-gray-400 text-sm font-medium px-6 py-3">Folio</th>
-                <th className="text-left text-gray-400 text-sm font-medium px-6 py-3">Cliente</th>
-                <th className="text-left text-gray-400 text-sm font-medium px-6 py-3">Proyecto</th>
-                <th className="text-left text-gray-400 text-sm font-medium px-6 py-3">Total</th>
-                <th className="text-left text-gray-400 text-sm font-medium px-6 py-3">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cotizaciones?.slice(0, 10).map((cot) => (
-                <tr key={cot.id} className="border-b border-gray-800 hover:bg-gray-800 transition-colors">
-                  <td className="px-6 py-4 text-sm font-mono text-blue-400">{cot.id}</td>
-                  <td className="px-6 py-4 text-sm text-gray-300">{cot.cliente}</td>
-                  <td className="px-6 py-4 text-sm text-gray-300">{cot.proyecto}</td>
-                  <td className="px-6 py-4 text-sm text-white font-medium">
-                    ${(cot.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
-                      cot.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' :
-                      'bg-yellow-900 text-yellow-300'
-                    }`}>
-                      {cot.estado}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {(!cotizaciones || cotizaciones.length === 0) && (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                    No hay cotizaciones aún
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="md:hidden">
-        <h2 className="text-lg font-semibold text-white mb-4">Cotizaciones Recientes</h2>
-        <div className="space-y-3">
-          {cotizaciones?.slice(0, 10).map((cot) => (
-            <a
-              key={cot.id}
-              href={`/cotizaciones/${cot.id}`}
-              className="block bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors"
-            >
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-mono text-blue-400 font-bold text-sm">{cot.id}</span>
-                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                  cot.estado === 'APROBADA' ? 'bg-green-900 text-green-300' :
-                  cot.estado === 'EMITIDA' ? 'bg-blue-900 text-blue-300' :
-                  'bg-yellow-900 text-yellow-300'
-                }`}>
-                  {cot.estado}
-                </span>
-              </div>
-              <p className="text-white font-medium text-[15px] mb-1">{cot.proyecto}</p>
-              <p className="text-gray-500 text-sm mb-3">{cot.cliente}</p>
-              <div className="flex justify-between items-center">
-                <span className="text-white font-bold text-lg">
-                  ${(cot.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-            </a>
-          ))}
-          {(!cotizaciones || cotizaciones.length === 0) && (
-            <p className="text-center text-gray-500 py-6">No hay cotizaciones aún</p>
+      <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+        <SectionCard
+          title={`Balance por periodo · ${resumen.periodoActual.label}`}
+          contentClassName="p-4 md:p-6"
+          actions={
+            <div className="flex items-center gap-3 text-xs text-subtext">
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-approved-bg" />Ingresos</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent" />Egresos</span>
+            </div>
+          }
+        >
+          {fuenteFallo('Pagos') || fuenteFallo('Cuentas por pagar') ? (
+            <FuenteError nombre="el balance" onRetry={() => cargar(periodo)} />
+          ) : (
+            <>
+              <BarChart data={resumen.balance} onBarClick={() => router.push('/cuentas')} format={formatMoney} />
+              <p className="mt-3 text-xs text-faint">Da clic en cualquier periodo para abrir Cuentas.</p>
+            </>
           )}
-        </div>
+        </SectionCard>
+
+        <SectionCard title="Cruce del periodo" contentClassName="p-4 md:p-6">
+          <div className="flex flex-col gap-4">
+            {[
+              { label: 'Ingresos', v: resumen.fiscal.ingresos, className: 'text-ink' },
+              { label: 'Egresos (cuentas liquidadas)', v: resumen.fiscal.egresos, className: 'text-body' },
+              { label: 'Impuestos (ISR 30% estimado)', v: resumen.fiscal.impuestos, className: 'text-body' },
+              { label: 'Deudas', v: resumen.fiscal.deudas, className: 'text-accent' },
+            ].map((r) => (
+              <div key={r.label}>
+                <div className="sn-label mb-1">{r.label}</div>
+                <div className={`sn-display text-h3 ${r.className}`}>{formatMoney(r.v)}</div>
+              </div>
+            ))}
+            <div className="border-t border-hairline pt-3">
+              <div className="sn-label mb-1">Utilidad antes de ISR</div>
+              <div className="sn-display text-h2 text-approved-fg">{formatMoney(resumen.fiscal.utilidadAntesIsr)}</div>
+              <div className="mt-1.5 text-xs text-subtext">ISR 30% sobre utilidad · persona moral (estimado)</div>
+            </div>
+          </div>
+        </SectionCard>
       </div>
+
+      <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+        <SectionCard
+          title="Gastos fijos vs. facturación"
+          contentClassName="p-4 md:p-6"
+          actions={
+            <button type="button" onClick={() => setModalAbierto(true)} className="inline-flex items-center gap-1.5 rounded-control border border-hairline px-3 py-1.5 text-sm text-body hover:bg-row-alt transition-colors">
+              <Icon name="plus" size={15} />
+              Agregar gasto fijo
+            </button>
+          }
+        >
+          {fuenteFallo('Gastos fijos') ? (
+            <FuenteError nombre="los gastos fijos" onRetry={() => cargar(periodo)} />
+          ) : (
+            <div className="flex flex-col gap-5">
+              <div>
+                <div className="mb-2.5 flex items-baseline justify-between">
+                  <div className={`sn-display text-h2 ${excedente >= 0 ? 'text-approved-fg' : 'text-accent'}`}>
+                    {excedente >= 0 ? '+' : '−'}{formatMoney(Math.abs(excedente))}
+                  </div>
+                  <div className="text-sm text-subtext">{Math.round(cobertura)}% cubierto</div>
+                </div>
+                <div className="h-[7px] w-full overflow-hidden rounded-pill bg-row">
+                  <div
+                    className={`h-full rounded-pill ${excedente >= 0 ? 'bg-approved-bg' : 'bg-accent'}`}
+                    style={{ width: `${cobertura}%` }}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {resumen.cobertura.gastosFijos.length === 0 && (
+                  <p className="text-sm text-faint">Sin gastos fijos activos registrados.</p>
+                )}
+                {resumen.cobertura.gastosFijos.map((g) => (
+                  <div key={g.id} className="flex items-center gap-3 text-sm">
+                    <span className="min-w-0 flex-1 text-subtext">{g.nombre}</span>
+                    <span className="text-body">{formatMoney(g.monto)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-3 border-t border-hairline pt-3 text-sm">
+                  <span className="min-w-0 flex-1 font-semibold text-body">Gastos fijos del mes</span>
+                  <span className="font-semibold text-ink">{formatMoney(resumen.cobertura.totalGastosFijos)}</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="min-w-0 flex-1 font-semibold text-body">Facturado al cliente</span>
+                  <span className="font-semibold text-ink">{formatMoney(resumen.cobertura.facturado)}</span>
+                </div>
+              </div>
+              <p className="text-xs leading-snug text-faint">
+                Considera el desfase: un proyecto puede facturarse al cliente en un mes distinto al que sus proveedores facturan.
+              </p>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Actividad del periodo" contentClassName="p-4 md:p-6">
+          {fuenteFallo('Proyectos') && fuenteFallo('Cotizaciones') ? (
+            <FuenteError nombre="la actividad" onRetry={() => cargar(periodo)} />
+          ) : (
+            <div className="flex flex-col gap-4">
+              {[
+                { label: 'Proyectos creados', v: resumen.actividad.proyectosCreados },
+                { label: 'Cotizaciones aprobadas', v: resumen.actividad.cotizacionesAprobadas },
+                { label: 'Proyectos en curso (cruzan de mes)', v: resumen.actividad.proyectosEnCurso },
+              ].map((a) => (
+                <div key={a.label} className="flex items-baseline gap-3">
+                  <span className="min-w-0 flex-1 text-sm text-subtext">{a.label}</span>
+                  <span className="sn-display text-h3 text-ink">{a.v}</span>
+                </div>
+              ))}
+              <p className="text-xs leading-snug text-faint">
+                Los proyectos que cruzan de un mes a otro se cuentan aparte para no perderlos en el corte mensual.
+              </p>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Cotizaciones recientes"
+          contentClassName="p-0"
+          actions={
+            <button type="button" onClick={() => router.push('/cotizaciones')} className="inline-flex items-center gap-1.5 text-sm text-subtext hover:text-body transition-colors">
+              Ver todas
+              <Icon name="arrow-right" size={15} />
+            </button>
+          }
+        >
+          {fuenteFallo('Cotizaciones') ? (
+            <div className="p-4 md:p-6"><FuenteError nombre="Cotizaciones" onRetry={() => cargar(periodo)} /></div>
+          ) : (
+            <ResponsiveTableCard
+              theme="tokens"
+              data={resumen.cotizacionesRecientes}
+              keyExtractor={(c) => c.id}
+              emptyMessage="Sin cotizaciones recientes"
+              columns={[
+                { key: 'folio', label: 'Folio' },
+                { key: 'proyecto', label: 'Proyecto' },
+                { key: 'cliente', label: 'Cliente' },
+                { key: 'total', label: 'Total', align: 'right' },
+                { key: 'estado', label: 'Estatus', align: 'right' },
+              ]}
+              renderDesktopRow={(c) => (
+                <>
+                  <td className="px-6 py-3 text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.id}</td>
+                  <td className="px-6 py-3 font-medium text-ink cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.proyecto}</td>
+                  <td className="px-6 py-3 text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.cliente}</td>
+                  <td className="px-6 py-3 text-right text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{formatMoney(c.total)}</td>
+                  <td className="px-6 py-3 text-right cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>
+                    <StatusBadge tone={toneForCotizacionEstado(c.estado)}>{c.estado}</StatusBadge>
+                  </td>
+                </>
+              )}
+              renderMobileCard={(c) => (
+                <div
+                  className="rounded-control border border-hairline p-3 cursor-pointer hover:bg-row-alt transition-colors"
+                  onClick={() => router.push(`/cotizaciones/${c.id}`)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-ink">{c.proyecto}</span>
+                    <StatusBadge tone={toneForCotizacionEstado(c.estado)}>{c.estado}</StatusBadge>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-sm text-subtext">
+                    <span>{c.cliente}</span>
+                    <span>{formatMoney(c.total)}</span>
+                  </div>
+                </div>
+              )}
+            />
+          )}
+        </SectionCard>
+      </div>
+
+      {modalAbierto && (
+        <GastoFijoModal
+          onClose={() => setModalAbierto(false)}
+          onGuardado={() => {
+            setModalAbierto(false)
+            cargar(periodo)
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+function GastoFijoModal({ onClose, onGuardado }: { onClose: () => void; onGuardado: () => void }) {
+  const [nombre, setNombre] = useState('')
+  const [monto, setMonto] = useState('')
+  const [gastos, setGastos] = useState<GastoFijo[]>([])
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getJson<GastoFijo[]>('/api/dashboard/gastos-fijos', 'Error obteniendo gastos fijos').then(setGastos).catch(() => {})
+  }, [])
+
+  async function crear(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    const montoNumerico = Number(monto)
+    if (!nombre.trim() || !Number.isFinite(montoNumerico) || montoNumerico < 0) {
+      setError('Ingresa un nombre y un monto mensual válido')
+      return
+    }
+    setGuardando(true)
+    try {
+      await sendJson('/api/dashboard/gastos-fijos', { nombre, monto_mensual: montoNumerico }, 'Error creando gasto fijo')
+      setNombre('')
+      setMonto('')
+      onGuardado()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error creando gasto fijo')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  async function alternarActivo(gasto: GastoFijo) {
+    try {
+      await sendJson(`/api/dashboard/gastos-fijos/${gasto.id}`, { activo: !gasto.activo }, 'Error actualizando gasto fijo', { method: 'PATCH' })
+      setGastos((prev) => prev.map((g) => (g.id === gasto.id ? { ...g, activo: !g.activo } : g)))
+      onGuardado()
+    } catch {
+      setError('No se pudo actualizar el gasto fijo')
+    }
+  }
+
+  return (
+    <Modal onClose={onClose} title="Gastos fijos" subtitle="Lista simple recurrente -- aplica cada mes mientras esté activo.">
+      <form onSubmit={crear} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-body mb-1">Nombre</label>
+          <input
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Renta, nómina..."
+            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
+          />
+        </div>
+        <div className="w-full sm:w-40">
+          <label className="block text-sm font-medium text-body mb-1">Monto mensual</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={monto}
+            onChange={(e) => setMonto(e.target.value)}
+            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={guardando}
+          className="h-[42px] flex-none rounded-control bg-accent px-4 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors disabled:opacity-50"
+        >
+          Agregar
+        </button>
+      </form>
+
+      {error && <p className="text-sm text-cancelled-fg">{error}</p>}
+
+      <div className="flex flex-col gap-2">
+        {gastos.length === 0 && <p className="text-sm text-faint">Sin gastos fijos registrados.</p>}
+        {gastos.map((g) => (
+          <div key={g.id} className="flex items-center gap-3 rounded-control border border-hairline px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className={`text-sm font-medium ${g.activo ? 'text-ink' : 'text-faint line-through'}`}>{g.nombre}</p>
+              <p className="text-xs text-subtext">{Number(g.monto_mensual).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} / mes</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => alternarActivo(g)}
+              className="flex-none rounded-control border border-hairline px-3 py-1.5 text-xs text-body hover:bg-row-alt transition-colors"
+            >
+              {g.activo ? 'Desactivar' : 'Reactivar'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </Modal>
   )
 }

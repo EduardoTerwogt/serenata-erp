@@ -29,6 +29,7 @@ import {
   Trash2,
   Pencil,
   RefreshCw,
+  ArrowRight,
 } from 'lucide-react'
 
 // Fase 5.7 (rediseño): wrapper tipado sobre lucide-react (ya era dependencia
@@ -68,6 +69,7 @@ const ICONS = {
   trash: Trash2,
   edit: Pencil,
   refresh: RefreshCw,
+  'arrow-right': ArrowRight,
 } as const
 
 export type IconName = keyof typeof ICONS
