@@ -2,8 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import { SectionHero } from '@/components/ui/SectionHero'
+import { SectionCard } from '@/components/ui/SectionCard'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { StatusBanner } from '@/components/ui/StatusBanner'
+import { Modal } from '@/components/ui/Modal'
+import { Icon } from '@/components/ui/Icon'
+import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 
 const ALL_SECTIONS = [
   { id: 'admin', label: 'Admin' },
@@ -32,6 +37,14 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { name: '', email: '', password: '', sections: [] }
+
+function SeccionPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="whitespace-nowrap rounded-pill border border-hairline bg-row-alt px-2.5 py-0.5 text-xs text-subtext">
+      {children}
+    </span>
+  )
+}
 
 export default function UsuariosPage() {
   const { data: session } = useSession()
@@ -146,162 +159,183 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Usuarios</h1>
-          <p className="text-sm text-gray-400 mt-1">Gestión de acceso al sistema</p>
-        </div>
-        <Button variant="accent" onClick={openCreate}>
-          + Nuevo usuario
-        </Button>
-      </div>
+    <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-6">
+      <SectionHero
+        title="Usuarios"
+        subtitle="Gestión de acceso al sistema"
+        action={
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
+          >
+            <Icon name="plus" size={15} />
+            Nuevo usuario
+          </button>
+        }
+      />
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-900/30 border border-red-800/50 rounded-lg text-red-400 text-sm">
-          {error}
-        </div>
-      )}
+      {error && <StatusBanner tone="error">{error}</StatusBanner>}
 
-      {loading ? (
-        <div className="text-center py-16 text-gray-500">Cargando...</div>
-      ) : usuarios.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          No hay usuarios. Crea el primero.
-        </div>
-      ) : (
-        <div className="rounded-xl border border-gray-800/50 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-800/50 border-b border-gray-800/50">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Nombre</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Correo</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Secciones</th>
-                <th className="text-left px-4 py-3 text-gray-400 font-medium">Estado</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800/30">
-              {usuarios.map(u => (
-                <tr key={u.id} className="hover:bg-gray-800/20 transition-colors">
-                  <td className="px-4 py-3 text-gray-200 font-medium">
-                    {u.name}
-                    {u.id === currentUserId && (
-                      <span className="ml-2 text-xs text-orange-400">(tú)</span>
+      <SectionCard contentClassName="p-0">
+        {loading ? (
+          <div className="py-16 text-center text-faint">Cargando...</div>
+        ) : (
+          <ResponsiveTableCard<Usuario>
+            theme="tokens"
+            data={usuarios}
+            keyExtractor={(u) => u.id}
+            emptyMessage="No hay usuarios. Crea el primero."
+            columns={[
+              { key: 'nombre', label: 'Nombre' },
+              { key: 'correo', label: 'Correo' },
+              { key: 'secciones', label: 'Secciones asignadas' },
+              { key: 'estado', label: 'Estado' },
+              { key: 'acciones', label: '', align: 'right' },
+            ]}
+            renderDesktopRow={(u) => (
+              <>
+                <td className="px-6 py-3 font-medium text-ink">
+                  {u.name}
+                  {u.id === currentUserId && <span className="ml-2 text-faint font-normal">(tú)</span>}
+                </td>
+                <td className="px-6 py-3 text-subtext">{u.email}</td>
+                <td className="px-6 py-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {u.sections.length === 0
+                      ? <span className="text-xs text-faint">Sin secciones</span>
+                      : u.sections.map(s => <SeccionPill key={s}>{s}</SeccionPill>)}
+                  </div>
+                </td>
+                <td className="px-6 py-3">
+                  <StatusBadge tone={u.active ? 'approved' : 'draft'}>{u.active ? 'Activo' : 'Inactivo'}</StatusBadge>
+                </td>
+                <td className="px-6 py-3">
+                  <div className="flex items-center gap-2 justify-end">
+                    <button type="button" onClick={() => openEdit(u)} className="rounded-control px-3 py-1.5 text-sm text-subtext hover:text-body hover:bg-row-alt transition-colors">
+                      Editar
+                    </button>
+                    {u.id !== currentUserId && (
+                      <button
+                        type="button"
+                        onClick={() => toggleActive(u)}
+                        className="rounded-control border border-hairline bg-input px-3 py-1.5 text-sm text-body hover:bg-row-alt transition-colors"
+                      >
+                        {u.active ? 'Desactivar' : 'Activar'}
+                      </button>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-400">{u.email}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {u.sections.length === 0 ? (
-                        <span className="text-gray-600 text-xs">Sin secciones</span>
-                      ) : u.sections.map(s => (
-                        <span key={s} className="px-2 py-0.5 rounded-full bg-blue-900/30 text-blue-400 text-xs border border-blue-800/30">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      u.active
-                        ? 'bg-green-900/30 text-green-400 border border-green-800/30'
-                        : 'bg-gray-800/50 text-gray-500 border border-gray-700/30'
-                    }`}>
-                      {u.active ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(u)}>
-                        Editar
-                      </Button>
-                      {u.id !== currentUserId && (
-                        <Button
-                          variant={u.active ? 'destructive' : 'secondary'}
-                          size="sm"
-                          onClick={() => toggleActive(u)}
-                        >
-                          {u.active ? 'Desactivar' : 'Activar'}
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  </div>
+                </td>
+              </>
+            )}
+            renderMobileCard={(u) => (
+              <div className="rounded-card border border-hairline bg-row p-4">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="font-medium text-ink">
+                    {u.name}
+                    {u.id === currentUserId && <span className="ml-1.5 text-faint font-normal">(tú)</span>}
+                  </span>
+                  <StatusBadge tone={u.active ? 'approved' : 'draft'}>{u.active ? 'Activo' : 'Inactivo'}</StatusBadge>
+                </div>
+                <p className="text-subtext text-sm mb-2">{u.email}</p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {u.sections.map(s => <SeccionPill key={s}>{s}</SeccionPill>)}
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-hairline">
+                  <button type="button" onClick={() => openEdit(u)} className="flex-1 rounded-control px-3 py-2 text-sm text-body hover:bg-row-alt transition-colors">Editar</button>
+                  {u.id !== currentUserId && (
+                    <button type="button" onClick={() => toggleActive(u)} className="flex-1 rounded-control border border-hairline bg-input px-3 py-2 text-sm text-body hover:bg-row-alt transition-colors">
+                      {u.active ? 'Desactivar' : 'Activar'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          />
+        )}
+      </SectionCard>
+
+      <p className="text-sm text-faint">
+        No puedes desactivar tu propio usuario. No hay registro público: las cuentas se crean aquí.
+      </p>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative z-10 bg-gray-900 border border-gray-800/50 rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-white mb-5">
-              {editTarget ? 'Editar usuario' : 'Nuevo usuario'}
-            </h2>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Input
-                label="Nombre"
+        <Modal onClose={closeModal} title={editTarget ? 'Editar usuario' : 'Nuevo usuario'} size="lg">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div>
+              <label className="block text-sm font-medium text-body mb-1.5">Nombre</label>
+              <input
                 required
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="Nombre completo"
+                className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
               />
-              <Input
-                label="Correo"
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-body mb-1.5">Correo</label>
+              <input
                 type="email"
                 required
                 value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 placeholder="correo@ejemplo.com"
+                className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
               />
-              <Input
-                label={editTarget ? 'Nueva contraseña (opcional)' : 'Contraseña'}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-body mb-1.5">
+                {editTarget ? 'Nueva contraseña (opcional)' : 'Contraseña'}
+              </label>
+              <input
                 type="password"
                 required={!editTarget}
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 placeholder={editTarget ? 'Dejar vacío para no cambiar' : 'Mínimo 8 caracteres'}
-                helper="Mínimo 8 caracteres"
+                className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
               />
+              <p className="text-xs text-faint mt-1.5">Mínimo 8 caracteres</p>
+            </div>
 
-              <div>
-                <p className="text-sm font-medium text-gray-200 mb-2">Secciones</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {ALL_SECTIONS.map(section => (
-                    <label key={section.id} className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={form.sections.includes(section.id)}
-                        onChange={() => toggleSection(section.id)}
-                        className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-orange-500 focus:ring-orange-500/30"
-                      />
-                      <span className="text-sm text-gray-300">{section.label}</span>
-                    </label>
-                  ))}
-                </div>
+            <div>
+              <p className="sn-label mb-2.5">Secciones habilitadas</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {ALL_SECTIONS.map(section => (
+                  <label key={section.id} className="flex items-center gap-2 cursor-pointer select-none text-sm text-body">
+                    <input
+                      type="checkbox"
+                      checked={form.sections.includes(section.id)}
+                      onChange={() => toggleSection(section.id)}
+                      className="h-4 w-4 rounded border-hairline bg-input accent-[var(--color-accent)]"
+                    />
+                    {section.label}
+                  </label>
+                ))}
               </div>
+            </div>
 
-              {formError && (
-                <div className="p-3 bg-red-900/30 border border-red-800/50 rounded-lg text-red-400 text-sm">
-                  {formError}
-                </div>
-              )}
+            {formError && <StatusBanner tone="error">{formError}</StatusBanner>}
 
-              <div className="flex gap-3 pt-2">
-                <Button type="button" variant="secondary" fullWidth onClick={closeModal} disabled={saving}>
-                  Cancelar
-                </Button>
-                <Button type="submit" variant="accent" fullWidth isLoading={saving}>
-                  {editTarget ? 'Guardar cambios' : 'Crear usuario'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={closeModal}
+                disabled={saving}
+                className="flex-1 rounded-control border border-hairline bg-input px-4 py-2.5 text-sm font-medium text-body hover:bg-row-alt transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 rounded-control bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Guardando...' : editTarget ? 'Guardar cambios' : 'Crear usuario'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )

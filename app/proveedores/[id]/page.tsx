@@ -2,10 +2,15 @@
 
 import { useEffect, useState, use } from 'react'
 import { useForm } from 'react-hook-form'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Proveedor, HistorialResponsable } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
+import { SectionCard } from '@/components/ui/SectionCard'
+import { StatusBanner } from '@/components/ui/StatusBanner'
+import { Avatar } from '@/components/ui/Avatar'
+import { FilterTabs } from '@/components/ui/FilterTabs'
+import { Icon } from '@/components/ui/Icon'
 
 interface ProveedorForm {
   nombre: string
@@ -14,7 +19,11 @@ interface ProveedorForm {
   banco: string
   clabe: string
   notas: string
-  activo: boolean
+}
+
+function initialsFromName(nombre: string) {
+  const partes = nombre.trim().split(/\s+/)
+  return ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')) || nombre.slice(0, 2)
 }
 
 function fmt(n: number) {
@@ -27,12 +36,14 @@ export default function ProveedorDetallePage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
+  const router = useRouter()
   const [proveedor, setProveedor] = useState<Proveedor | null>(null)
   const [historial, setHistorial] = useState<HistorialResponsable[]>([])
   const [historialError, setHistorialError] = useState<string | null>(null)
   const [roles, setRoles] = useState<string[]>([])
   const [rolInput, setRolInput] = useState('')
   const [regimenFiscal, setRegimenFiscal] = useState<'' | 'moral' | 'fisica'>('')
+  const [activo, setActivo] = useState(true)
   const [loading, setLoading] = useState(true)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,6 +63,7 @@ export default function ProveedorDetallePage({
       setProveedor(data)
       setRoles(data.roles || [])
       setRegimenFiscal(data.regimen_fiscal || '')
+      setActivo(data.activo)
       setHistorial(Array.isArray(hist) && hist.length > 0 ? hist : (data.historial_responsable || []))
       reset({
         nombre: data.nombre,
@@ -60,7 +72,6 @@ export default function ProveedorDetallePage({
         banco: data.banco || '',
         clabe: data.clabe || '',
         notas: data.notas || '',
-        activo: data.activo,
       })
       setLoading(false)
     }).catch(() => setLoading(false))
@@ -81,7 +92,7 @@ export default function ProveedorDetallePage({
       const res = await fetch(`/api/proveedores/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, roles, regimen_fiscal: regimenFiscal || null }),
+        body: JSON.stringify({ ...data, roles, activo, regimen_fiscal: regimenFiscal || null }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
       const updated = await res.json()
@@ -95,148 +106,147 @@ export default function ProveedorDetallePage({
     }
   }
 
-  if (loading) return <div className="p-8 text-center text-gray-500">Cargando...</div>
-  if (!proveedor) return <div className="p-8 text-center text-gray-500">Proveedor no encontrado</div>
+  if (loading) return <div className="p-8 text-center text-faint">Cargando...</div>
+  if (!proveedor) return <div className="p-8 text-center text-faint">Proveedor no encontrado</div>
 
   const totalGanado = historial.reduce((s, h) => s + (h.x_pagar || 0), 0)
 
   return (
-    <div className="p-8 max-w-3xl">
-      <div className="mb-8">
-        <Link href="/proveedores" className="text-gray-500 hover:text-gray-300 text-sm">
-          ← Proveedores
-        </Link>
+    <div className="px-5 pt-6 pb-6 md:p-8 max-w-3xl flex flex-col gap-6">
+      <div>
+        <button type="button" onClick={() => router.push('/proveedores')} className="inline-flex items-center gap-1.5 text-sm text-faint hover:text-body transition-colors">
+          <Icon name="arrow-left" size={14} />
+          Proveedores
+        </button>
         <div className="flex items-center gap-4 mt-3">
-          <div className="w-14 h-14 rounded-full bg-blue-900 flex items-center justify-center text-blue-300 font-bold text-2xl">
-            {proveedor.nombre.charAt(0).toUpperCase()}
-          </div>
+          <Avatar initials={initialsFromName(proveedor.nombre)} size={56} tone={activo ? 'accent' : 'neutral'} className="text-2xl" />
           <div>
-            <h1 className="text-3xl font-bold text-white">{proveedor.nombre}</h1>
-            <div className="flex gap-1.5 mt-1 flex-wrap">
-              {roles.map(rol => (
-                <span key={rol} className="text-xs px-2 py-0.5 bg-blue-900 text-blue-300 rounded-full">{rol}</span>
-              ))}
-            </div>
+            <h1 className="sn-display text-2xl text-ink">{proveedor.nombre}</h1>
+            {roles.length > 0 && (
+              <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                {roles.map(rol => (
+                  <span key={rol} className="text-xs rounded-pill border border-hairline bg-row-alt px-2.5 py-0.5 text-body">{rol}</span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4">{error}</div>
-      )}
-      {success && (
-        <div className="bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4">{success}</div>
-      )}
+      {error && <StatusBanner tone="error">{error}</StatusBanner>}
+      {success && <StatusBanner tone="success">{success}</StatusBanner>}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Información Personal</h2>
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+        <div className="rounded-panel border border-hairline bg-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-h3 font-semibold text-ink">Información personal</h2>
+            <FilterTabs
+              tabs={[{ value: 'activo', label: 'Activo' }, { value: 'inactivo', label: 'Inactivo' }]}
+              value={activo ? 'activo' : 'inactivo'}
+              onChange={(v) => setActivo(v === 'activo')}
+            />
+          </div>
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Nombre completo</label>
+              <label className="block text-sm text-subtext mb-1.5">Nombre completo</label>
               <input
                 {...register('nombre', { required: true })}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Teléfono</label>
+                <label className="block text-sm text-subtext mb-1.5">Teléfono</label>
                 <input
                   {...register('telefono')}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Correo</label>
+                <label className="block text-sm text-subtext mb-1.5">Correo</label>
                 <input
                   type="email"
                   {...register('correo')}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
                 />
               </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Activo</label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" {...register('activo')} className="w-4 h-4 accent-blue-600" />
-                <span className="text-gray-300 text-sm">Proveedor activo</span>
-              </label>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Roles</h2>
+        <div className="rounded-panel border border-hairline bg-card p-6">
+          <h2 className="text-h3 font-semibold text-ink mb-4">Roles</h2>
           <div className="flex gap-2 mb-3">
             <input
               type="text"
               value={rolInput}
               onChange={e => setRolInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregarRol() } }}
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+              className="flex-1 bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
               placeholder="Nuevo rol..."
             />
-            <button type="button" onClick={agregarRol} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors">
+            <button type="button" onClick={agregarRol} className="rounded-control border border-hairline bg-input hover:bg-row-alt text-body px-4 py-2.5 text-sm transition-colors">
               Agregar
             </button>
           </div>
           {roles.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {roles.map(rol => (
-                <span key={rol} className="flex items-center gap-1.5 bg-blue-900 text-blue-300 text-sm px-3 py-1 rounded-full">
+                <span key={rol} className="flex items-center gap-1.5 rounded-pill border border-hairline bg-row-alt text-body text-sm pl-3 pr-2 py-1">
                   {rol}
-                  <button type="button" onClick={() => setRoles(prev => prev.filter(r => r !== rol))} className="hover:text-white">×</button>
+                  <button type="button" onClick={() => setRoles(prev => prev.filter(r => r !== rol))} aria-label={`Quitar ${rol}`} className="text-faint hover:text-body transition-colors flex">
+                    <Icon name="close" size={13} />
+                  </button>
                 </span>
               ))}
             </div>
           )}
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Datos Bancarios</h2>
+        <div className="rounded-panel border border-hairline bg-card p-6">
+          <h2 className="text-h3 font-semibold text-ink mb-4">Datos bancarios</h2>
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Banco</label>
+              <label className="block text-sm text-subtext mb-1.5">Banco</label>
               <input
                 {...register('banco')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">CLABE</label>
+              <label className="block text-sm text-subtext mb-1.5">CLABE</label>
               <input
                 {...register('clabe')}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500"
+                className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body font-mono focus:outline-none focus:border-accent"
                 maxLength={18}
               />
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Fiscal</h2>
+        <div className="rounded-panel border border-hairline bg-card p-6">
+          <h2 className="text-h3 font-semibold text-ink mb-4">Fiscal</h2>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Régimen fiscal</label>
+            <label className="block text-sm text-subtext mb-1.5">Régimen fiscal</label>
             <select
               value={regimenFiscal}
               onChange={e => setRegimenFiscal(e.target.value as '' | 'moral' | 'fisica')}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
             >
               <option value="">Aún no se sabe (se asume moral / 16% sin retención)</option>
               <option value="moral">Persona moral (IVA 16%, sin retención)</option>
               <option value="fisica">Persona física con honorarios (retención IVA 2/3 + ISR 10%)</option>
             </select>
-            <p className="text-gray-500 text-xs mt-1">Se usa para estimar impuestos en Cotizaciones y Cuentas por Pagar. Actualízalo cuando llegue la constancia de situación fiscal.</p>
+            <p className="text-faint text-xs mt-1.5">Se usa para estimar impuestos en Cotizaciones y Cuentas por Pagar. Actualízalo cuando llegue la constancia de situación fiscal.</p>
           </div>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Notas</h2>
+        <div className="rounded-panel border border-hairline bg-card p-6">
+          <h2 className="text-h3 font-semibold text-ink mb-4">Notas</h2>
           <textarea
             {...register('notas')}
             rows={3}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 resize-none"
+            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent resize-none"
           />
         </div>
 
@@ -244,69 +254,65 @@ export default function ProveedorDetallePage({
           <button
             type="submit"
             disabled={guardando}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="rounded-control bg-accent hover:bg-accent-pressed text-accent-ink px-6 py-3 font-medium transition-colors disabled:opacity-50"
           >
-            {guardando ? 'Guardando...' : 'Guardar Cambios'}
+            {guardando ? 'Guardando...' : 'Guardar cambios'}
           </button>
         </div>
       </form>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl mt-8">
-        <div className="p-6 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Historial de Proyectos</h2>
-          {totalGanado > 0 && (
-            <span className="text-green-400 font-bold">${fmt(totalGanado)}</span>
-          )}
-        </div>
-
+      <SectionCard
+        title="Historial de proyectos"
+        actions={totalGanado > 0 ? <span className="text-approved-fg font-bold sn-display text-h3">${fmt(totalGanado)}</span> : undefined}
+        contentClassName="p-0"
+      >
         {historialError && (
-          <div className="mx-6 mb-4 bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
-            Error cargando historial: {historialError}
-          </div>
+          <div className="mx-6 mt-4"><StatusBanner tone="error">Error cargando historial: {historialError}</StatusBanner></div>
         )}
         <div className="relative">
           <ResponsiveTableCard<HistorialResponsable>
+            theme="tokens"
             data={historial}
             columns={[
               { key: 'proyecto', label: 'Proyecto' },
-              { key: 'fecha', label: 'Fecha del Evento' },
+              { key: 'fecha', label: 'Fecha del evento' },
               { key: 'rol', label: 'Rol' },
               { key: 'monto', label: 'Monto', align: 'right' },
             ]}
             renderDesktopRow={(h) => (
               <>
                 <td className="px-6 py-3">
-                  <p className="text-white font-medium">{h.proyecto_nombre}</p>
-                  <p className="text-gray-500 text-xs">{h.cliente}</p>
+                  <p className="text-ink font-medium">{h.proyecto_nombre}</p>
+                  <p className="text-faint text-xs">{h.cliente}</p>
                 </td>
-                <td className="px-6 py-3 text-gray-400">{formatDateDisplay(h.fecha_evento)}</td>
-                <td className="px-6 py-3 text-gray-300">{h.rol_en_proyecto || '—'}</td>
-                <td className="px-6 py-3 text-right text-green-400 font-medium">${fmt(h.x_pagar)}</td>
+                <td className="px-6 py-3 text-subtext">{formatDateDisplay(h.fecha_evento)}</td>
+                <td className="px-6 py-3 text-body">{h.rol_en_proyecto || '—'}</td>
+                <td className="px-6 py-3 text-right text-approved-fg font-medium">${fmt(h.x_pagar)}</td>
               </>
             )}
             renderMobileCard={(h) => (
-              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+              <div className="rounded-card border border-hairline bg-row p-4">
                 <div className="mb-2">
-                  <p className="text-white font-medium text-[15px]">{h.proyecto_nombre}</p>
-                  <p className="text-gray-400 text-sm">{h.cliente}</p>
+                  <p className="text-ink font-medium text-[15px]">{h.proyecto_nombre}</p>
+                  <p className="text-subtext text-sm">{h.cliente}</p>
                 </div>
                 <div className="space-y-2 text-sm">
                   {h.fecha_evento && (
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Fecha:</span>
-                      <span className="text-gray-300">{formatDateDisplay(h.fecha_evento)}</span>
+                      <span className="text-subtext">Fecha:</span>
+                      <span className="text-body">{formatDateDisplay(h.fecha_evento)}</span>
                     </div>
                   )}
                   {h.rol_en_proyecto && (
                     <div className="flex justify-between">
-                      <span className="text-gray-400">Rol:</span>
-                      <span className="text-gray-300">{h.rol_en_proyecto}</span>
+                      <span className="text-subtext">Rol:</span>
+                      <span className="text-body">{h.rol_en_proyecto}</span>
                     </div>
                   )}
                 </div>
-                <div className="flex justify-between items-center pt-3 border-t border-gray-700 mt-3">
-                  <span className="text-gray-400">Monto:</span>
-                  <span className="text-green-400 font-medium">${fmt(h.x_pagar)}</span>
+                <div className="flex justify-between items-center pt-3 border-t border-hairline mt-3">
+                  <span className="text-subtext">Monto:</span>
+                  <span className="text-approved-fg font-medium">${fmt(h.x_pagar)}</span>
                 </div>
               </div>
             )}
@@ -315,26 +321,26 @@ export default function ProveedorDetallePage({
           />
 
           {historial.length > 0 && (
-            <div className="md:hidden bg-gray-900 border border-gray-800 rounded-xl p-4 mt-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Total Ganado</span>
-                <span className="text-green-400 font-bold text-lg">${fmt(totalGanado)}</span>
+            <div className="md:hidden p-4">
+              <div className="flex justify-between items-center rounded-control border border-hairline bg-row p-4">
+                <span className="text-subtext font-medium">Total ganado</span>
+                <span className="text-approved-fg font-bold text-lg">${fmt(totalGanado)}</span>
               </div>
             </div>
           )}
 
           {historial.length > 0 && (
-            <div className="hidden md:block border-t border-gray-700">
+            <div className="hidden md:block border-t border-hairline">
               <div className="px-6 py-3 flex justify-end">
                 <div className="flex gap-12">
-                  <span className="text-gray-400 font-medium">Total:</span>
-                  <span className="text-green-400 font-bold">${fmt(totalGanado)}</span>
+                  <span className="text-subtext font-medium">Total:</span>
+                  <span className="text-approved-fg font-bold">${fmt(totalGanado)}</span>
                 </div>
               </div>
             </div>
           )}
         </div>
-      </div>
+      </SectionCard>
     </div>
   )
 }

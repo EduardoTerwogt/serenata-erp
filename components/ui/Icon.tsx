@@ -30,6 +30,13 @@ import {
   Pencil,
   RefreshCw,
   ArrowRight,
+  ArrowLeft,
+  Phone,
+  Mail,
+  Landmark,
+  Inbox,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 
 // Fase 5.7 (rediseño): wrapper tipado sobre lucide-react (ya era dependencia
@@ -70,6 +77,13 @@ const ICONS = {
   edit: Pencil,
   refresh: RefreshCw,
   'arrow-right': ArrowRight,
+  'arrow-left': ArrowLeft,
+  phone: Phone,
+  mail: Mail,
+  landmark: Landmark,
+  inbox: Inbox,
+  sparkles: Sparkles,
+  loader: Loader2,
 } as const
 
 export type IconName = keyof typeof ICONS

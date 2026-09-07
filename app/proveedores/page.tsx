@@ -1,10 +1,39 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Proveedor } from '@/lib/types'
+import { SectionHero } from '@/components/ui/SectionHero'
+import { SearchInput } from '@/components/ui/SearchInput'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Avatar } from '@/components/ui/Avatar'
+import { Icon } from '@/components/ui/Icon'
+
+function initialsFromName(nombre: string) {
+  const partes = nombre.trim().split(/\s+/)
+  return ((partes[0]?.[0] ?? '') + (partes[1]?.[0] ?? '')) || nombre.slice(0, 2)
+}
+
+function RolPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="whitespace-nowrap rounded-pill border border-hairline bg-row-alt px-2.5 py-0.5 text-xs text-body">
+      {children}
+    </span>
+  )
+}
+
+function ContactoRow({ icon, children }: { icon: 'phone' | 'mail' | 'landmark'; children?: string | null }) {
+  if (!children) return null
+  return (
+    <div className="flex items-center gap-2 text-sm text-subtext min-w-0">
+      <Icon name={icon} size={14} className="text-faint flex-none" />
+      <span className="truncate">{children}</span>
+    </div>
+  )
+}
 
 export default function ProveedoresPage() {
+  const router = useRouter()
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
@@ -21,82 +50,76 @@ export default function ProveedoresPage() {
   )
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white">Proveedores</h1>
-          <p className="text-gray-400 mt-1">Gestiona tu equipo de trabajo</p>
-        </div>
-        <Link
-          href="/proveedores/nueva"
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          + Nuevo Proveedor
-        </Link>
-      </div>
+    <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-6">
+      <SectionHero
+        title="Proveedores"
+        subtitle="Gestiona tu equipo de trabajo"
+        action={
+          <button
+            type="button"
+            onClick={() => router.push('/proveedores/nueva')}
+            className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
+          >
+            <Icon name="plus" size={15} />
+            Nuevo proveedor
+          </button>
+        }
+      />
 
-      {/* Buscador */}
-      <div className="mb-6">
-        <input
-          type="text"
-          placeholder="Buscar por nombre..."
-          value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
-          className="w-full max-w-sm bg-gray-900 border border-gray-800 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-        />
-      </div>
+      <SearchInput
+        value={busqueda}
+        onChange={e => setBusqueda(e.target.value)}
+        placeholder="Buscar por nombre…"
+        className="max-w-[420px]"
+      />
 
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Cargando...</div>
+        <div className="py-12 text-center text-faint">Cargando...</div>
       ) : filtrados.length === 0 ? (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-          <p className="text-gray-400 text-lg mb-2">
+        <div className="rounded-panel border border-hairline bg-card p-12 text-center">
+          <p className="text-lg text-subtext mb-2">
             {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay proveedores aún'}
           </p>
           {!busqueda && (
-            <Link
-              href="/proveedores/nueva"
-              className="inline-block mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            <button
+              type="button"
+              onClick={() => router.push('/proveedores/nueva')}
+              className="inline-flex items-center gap-1.5 mt-4 rounded-control bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
             >
-              + Nuevo Proveedor
-            </Link>
+              <Icon name="plus" size={15} />
+              Nuevo proveedor
+            </button>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
           {filtrados.map(r => (
-            <Link
+            <button
               key={r.id}
-              href={`/proveedores/${r.id}`}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-gray-600 transition-colors block"
+              type="button"
+              onClick={() => router.push(`/proveedores/${r.id}`)}
+              className={`rounded-panel border border-hairline bg-card p-5 text-left flex flex-col gap-3 min-w-0 hover:border-accent-quiet transition-colors ${r.activo ? '' : 'opacity-60'}`}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 rounded-full bg-blue-900 flex items-center justify-center text-blue-300 font-bold text-lg">
-                  {r.nombre.charAt(0).toUpperCase()}
+              <div className="flex items-center gap-3 min-w-0">
+                <Avatar initials={initialsFromName(r.nombre)} size={38} tone={r.activo ? 'accent' : 'neutral'} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-base font-semibold text-ink truncate">{r.nombre}</div>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${r.activo ? 'bg-green-900 text-green-300' : 'bg-gray-800 text-gray-500'}`}>
-                  {r.activo ? 'Activo' : 'Inactivo'}
-                </span>
+                <StatusBadge tone={r.activo ? 'approved' : 'draft'}>{r.activo ? 'Activo' : 'Inactivo'}</StatusBadge>
               </div>
-              <h3 className="text-white font-semibold text-lg mb-1">{r.nombre}</h3>
 
-              {/* Roles como badges */}
               {r.roles && r.roles.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {r.roles.map(rol => (
-                    <span key={rol} className="text-xs px-2 py-0.5 bg-gray-800 text-gray-300 rounded-full">
-                      {rol}
-                    </span>
-                  ))}
+                <div className="flex flex-wrap gap-1.5">
+                  {r.roles.map(rol => <RolPill key={rol}>{rol}</RolPill>)}
                 </div>
               )}
 
-              <div className="space-y-1 text-sm text-gray-400">
-                {r.telefono && <p>📞 {r.telefono}</p>}
-                {r.correo && <p>✉️ {r.correo}</p>}
-                {r.banco && <p>🏦 {r.banco}</p>}
+              <div className="flex flex-col gap-1.5 pt-3 border-t border-hairline">
+                <ContactoRow icon="phone">{r.telefono}</ContactoRow>
+                <ContactoRow icon="mail">{r.correo}</ContactoRow>
+                <ContactoRow icon="landmark">{r.banco}</ContactoRow>
               </div>
-            </Link>
+            </button>
           ))}
         </div>
       )}
