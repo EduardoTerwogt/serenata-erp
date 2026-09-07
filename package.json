@@ -15,7 +15,8 @@
     "test:e2e:live": "playwright test tests/e2e/live",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
-    "check-migrations": "node scripts/check-migrations.mjs"
+    "check-migrations": "node scripts/check-migrations.mjs",
+    "check-css-layers": "node scripts/check-css-layers.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",

@@ -35,6 +35,9 @@ jobs:
           CI: true
         run: npm test
 
+      - name: Check CSS layers (globals.css)
+        run: npm run check-css-layers
+
       - name: Run lint
         # No bloquea el job: hay hallazgos conocidos y documentados (ver reporte
         # de cierre de Fase 1) que no cambian comportamiento — esto es visibilidad,
