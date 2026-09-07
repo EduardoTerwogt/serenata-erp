@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getJson, sendJson } from '@/lib/client/api'
 import { StatusBadge, toneForCuentaEstado } from '@/components/ui/StatusBadge'
@@ -62,13 +63,21 @@ export default function PortalDashboardPage() {
           <h1 className="text-2xl font-bold text-ink">Hola, {me.nombre}</h1>
           <p className="text-content text-subtext">{me.correo}</p>
         </div>
-        <button
-          type="button"
-          onClick={cerrarSesion}
-          className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-2 rounded-control text-sm transition-colors"
-        >
-          Cerrar sesión
-        </button>
+        <div className="flex gap-2">
+          <Link
+            href="/portal/documentos"
+            className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-2 rounded-control text-sm transition-colors"
+          >
+            Documentos
+          </Link>
+          <button
+            type="button"
+            onClick={cerrarSesion}
+            className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-2 rounded-control text-sm transition-colors"
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </div>
 
       <div className="rounded-panel border border-hairline bg-card">
@@ -83,7 +92,11 @@ export default function PortalDashboardPage() {
           ) : (
             <div className="space-y-3">
               {cuentas.map(cuenta => (
-                <div key={cuenta.id} className="flex items-center justify-between rounded-control border border-hairline bg-row p-3.5">
+                <Link
+                  key={cuenta.id}
+                  href={`/portal/cuentas/${cuenta.id}`}
+                  className="flex items-center justify-between rounded-control border border-hairline bg-row p-3.5 hover:border-body transition-colors"
+                >
                   <div className="min-w-0">
                     <p className="text-body font-medium truncate">{cuenta.proyecto_nombre || cuenta.item_descripcion || 'Proyecto'}</p>
                     <p className="text-content text-subtext truncate">{cuenta.item_descripcion}</p>
@@ -92,7 +105,7 @@ export default function PortalDashboardPage() {
                     <StatusBadge tone={toneForCuentaEstado(cuenta.estado)}>{cuenta.estado}</StatusBadge>
                     <p className="mt-1 text-content text-body">{formatMoney(cuenta.saldo_pendiente)} pendiente</p>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
