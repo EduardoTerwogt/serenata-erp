@@ -16,6 +16,8 @@ export async function mockProyectosApis(page: Page) {
     notas: '',
     created_at: '2026-05-01T00:00:00Z',
     ultima_actualizacion: '2026-05-01T00:00:00Z',
+    tipo_proyecto_id: null,
+    etapa_id: null,
     items: [
       {
         id: 'item-e2e-1',
@@ -62,5 +64,21 @@ export async function mockProyectosApis(page: Page) {
     await fulfillJson(route, [
       { id: 'resp-1', nombre: 'Sofía Ramírez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Camarógrafa'], notas: null, activo: true, created_at: '2026-01-01' },
     ])
+  })
+
+  // Fase 5.2 Bloque 3: rutas nuevas que el listado/detalle de proyectos
+  // consultan ahora -- vacías por default, no las ejercitan estos 2 specs
+  // críticos (solo "Información" y el listado plano de antes).
+  await page.route('**/api/tipos-proyecto', async (route) => {
+    await fulfillJson(route, [])
+  })
+  await page.route(`**/api/proyectos/${PROYECTO_E2E_ID}/tareas`, async (route) => {
+    await fulfillJson(route, [])
+  })
+  await page.route(`**/api/proyectos/${PROYECTO_E2E_ID}/documentos`, async (route) => {
+    await fulfillJson(route, [])
+  })
+  await page.route(`**/api/proyectos/${PROYECTO_E2E_ID}/equipo`, async (route) => {
+    await fulfillJson(route, [])
   })
 }

@@ -1,4 +1,5 @@
-import type { EstadoTareaProyecto, Proyecto, ProyectoTarea, TipoProyectoEtapa } from '@/lib/types'
+import { toneForEtapaPosicion, type StatusTone } from '@/components/ui/StatusBadge'
+import type { EstadoTareaProyecto, Proyecto, ProyectoTarea, TipoProyectoConEtapas, TipoProyectoEtapa } from '@/lib/types'
 
 const ORDEN_ESTADOS: EstadoTareaProyecto[] = ['PENDIENTE', 'EN_PROGRESO', 'COMPLETADA', 'BLOQUEADA']
 
@@ -44,4 +45,29 @@ export function groupProyectosByEtapa(
 
 export function proyectosSinTipo(proyectos: Proyecto[]): Proyecto[] {
   return proyectos.filter((p) => !p.tipo_proyecto_id)
+}
+
+export interface EtapaResuelta {
+  label: string
+  tone: StatusTone
+}
+
+/**
+ * Resuelve la etapa actual de un proyecto (nombre + tono posicional) a
+ * partir del catálogo completo de tipos -- reusado por el badge del hero
+ * del detalle de proyecto y por la vista "Lista" del listado general.
+ * Retorna null si el proyecto no tiene tipo/etapa o no se encuentran en el
+ * catálogo (dato inconsistente, no se debería asumir nada).
+ */
+export function resolverEtapaProyecto(proyecto: Proyecto, tipos: TipoProyectoConEtapas[]): EtapaResuelta | null {
+  if (!proyecto.tipo_proyecto_id || !proyecto.etapa_id) return null
+  const tipo = tipos.find((t) => t.id === proyecto.tipo_proyecto_id)
+  if (!tipo) return null
+
+  const etapas = [...tipo.etapas].sort((a, b) => a.orden - b.orden)
+  const index = etapas.findIndex((e) => e.id === proyecto.etapa_id)
+  if (index === -1) return null
+
+  const etapa = etapas[index]
+  return { label: etapa.nombre, tone: toneForEtapaPosicion(index, etapa.es_etapa_final) }
 }

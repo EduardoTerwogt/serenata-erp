@@ -6,7 +6,12 @@ test('lista de proyectos carga y permite buscar', async ({ page }) => {
   await mockProyectosApis(page)
   await login(page, '/proyectos')
 
+  // Tablero (default) muestra el proyecto sin tipo asignado en la sección
+  // "Sin tipo asignado" -- la búsqueda vive en el tab "Lista" (Bloque 3.8).
   await expect(page.getByText('Spot Verano E2E')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Lista' }).click()
+  await expect(page.locator('input[placeholder="Buscar por proyecto, cliente o folio..."]')).toBeVisible()
 
   await page.locator('input[placeholder="Buscar por proyecto, cliente o folio..."]').fill('no-existe-xyz')
   await expect(page.getByText('Spot Verano E2E')).not.toBeVisible()

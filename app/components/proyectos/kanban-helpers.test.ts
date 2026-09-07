@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { groupProyectosByEtapa, groupTareasByEstado, isTareaOverdue, proyectosSinTipo } from './kanban-helpers'
-import type { Proyecto, ProyectoTarea, TipoProyectoEtapa } from '@/lib/types'
+import { groupProyectosByEtapa, groupTareasByEstado, isTareaOverdue, proyectosSinTipo, resolverEtapaProyecto } from './kanban-helpers'
+import type { Proyecto, ProyectoTarea, TipoProyectoConEtapas, TipoProyectoEtapa } from '@/lib/types'
 
 const baseTarea = (overrides: Partial<ProyectoTarea> = {}): ProyectoTarea => ({
   id: overrides.id ?? 'tarea-1',
@@ -97,5 +97,41 @@ describe('proyectosSinTipo', () => {
       baseProyecto({ id: 'SH002', tipo_proyecto_id: null }),
     ]
     expect(proyectosSinTipo(proyectos).map((p) => p.id)).toEqual(['SH002'])
+  })
+})
+
+describe('resolverEtapaProyecto', () => {
+  const tipos: TipoProyectoConEtapas[] = [
+    {
+      id: 't1', nombre: 'Grabación', activo: true, created_at: '',
+      etapas: [
+        { id: 'e1', tipo_proyecto_id: 't1', nombre: 'Preproducción', orden: 1, es_etapa_final: false, created_at: '' },
+        { id: 'e2', tipo_proyecto_id: 't1', nombre: 'Rodaje', orden: 2, es_etapa_final: false, created_at: '' },
+        { id: 'e3', tipo_proyecto_id: 't1', nombre: 'Finalizado', orden: 3, es_etapa_final: true, created_at: '' },
+      ],
+    },
+  ]
+
+  it('retorna null si el proyecto no tiene tipo_proyecto_id/etapa_id', () => {
+    expect(resolverEtapaProyecto(baseProyecto({ tipo_proyecto_id: null, etapa_id: null }), tipos)).toBeNull()
+  })
+
+  it('retorna null si el tipo no está en el catálogo', () => {
+    expect(resolverEtapaProyecto(baseProyecto({ tipo_proyecto_id: 'no-existe', etapa_id: 'e1' }), tipos)).toBeNull()
+  })
+
+  it('resuelve nombre y tono posicional de la primera etapa', () => {
+    const resultado = resolverEtapaProyecto(baseProyecto({ tipo_proyecto_id: 't1', etapa_id: 'e1' }), tipos)
+    expect(resultado).toEqual({ label: 'Preproducción', tone: 'draft' })
+  })
+
+  it('resuelve tono approved para la etapa final', () => {
+    const resultado = resolverEtapaProyecto(baseProyecto({ tipo_proyecto_id: 't1', etapa_id: 'e3' }), tipos)
+    expect(resultado).toEqual({ label: 'Finalizado', tone: 'approved' })
+  })
+
+  it('resuelve tono issued para etapas intermedias', () => {
+    const resultado = resolverEtapaProyecto(baseProyecto({ tipo_proyecto_id: 't1', etapa_id: 'e2' }), tipos)
+    expect(resultado).toEqual({ label: 'Rodaje', tone: 'issued' })
   })
 })
