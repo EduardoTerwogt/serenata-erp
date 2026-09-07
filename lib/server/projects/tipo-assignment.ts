@@ -1,7 +1,8 @@
-import { generarHistorialProyecto, getProyectoById, updateProyecto } from '@/lib/db'
+import { getProyectoById, updateProyecto } from '@/lib/db'
 import { getEtapaById, getTipoProyectoById } from '@/lib/server/repositories/tipos-proyecto'
 import { copyTareasDefaultToProyecto } from '@/lib/server/repositories/proyecto-tareas'
 import { generarDocumentosIniciales } from '@/lib/server/projects/documentos-autofill'
+import { cerrarProyectoSiEsFinal } from '@/lib/server/projects/cierre-proyecto'
 import { estadoLegadoParaEtapa } from '@/lib/server/projects/pm-helpers'
 import type { Proyecto } from '@/lib/types'
 
@@ -83,14 +84,12 @@ export async function cambiarEtapaProyecto(proyectoId: string, etapaId: string):
 
   const proyectoActualizado = await updateProyecto(proyectoId, updates)
 
-  // Mismo efecto lateral que updateProyectoWithRollback al llegar a
-  // FINALIZADO (ver lib/server/projects/service.ts) -- se replica aquí
-  // para que el historial de responsables no dependa de qué endpoint movió
-  // el proyecto a su etapa final. El Reporte de Cierre automático en sí
-  // (Bloque 4) se engancha por separado, en es_etapa_final.
-  if (estadoLegado === 'FINALIZADO' && proyecto.estado !== 'FINALIZADO') {
-    await generarHistorialProyecto(proyectoId, proyectoActualizado)
-  }
+  // Cierre automático (Bloque 4): dispara para cualquier tipo de proyecto
+  // vía etapa.es_etapa_final -- no depende del enum legado (que solo
+  // cubre Grabación). Mismo efecto lateral que updateProyectoWithRollback
+  // al llegar a FINALIZADO (ver lib/server/projects/service.ts), para que
+  // el resultado no dependa de qué endpoint cerró el proyecto.
+  await cerrarProyectoSiEsFinal(proyectoId, etapa.es_etapa_final)
 
   return proyectoActualizado
 }

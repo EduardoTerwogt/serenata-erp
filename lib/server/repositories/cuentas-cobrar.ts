@@ -16,6 +16,20 @@ export async function getCuentasCobrar() {
   return data as CuentaCobrar[]
 }
 
+/**
+ * Cuentas por cobrar de un proyecto puntual -- usado por el Reporte de
+ * Cierre automático (Fase 5.2 Bloque 4) para el "cobrado real", mismo
+ * patrón que getCuentasPagarByProyecto.
+ */
+export async function getCuentasCobrarByProyecto(proyectoId: string): Promise<CuentaCobrar[]> {
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_cobrar')
+    .select('*')
+    .eq('proyecto_id', proyectoId)
+  if (error) throw error
+  return data as CuentaCobrar[]
+}
+
 export async function updateCuentaCobrar(id: string, updates: Partial<CuentaCobrar>) {
   const { data, error } = await supabaseAdmin
     .from('cuentas_cobrar')

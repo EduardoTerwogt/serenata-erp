@@ -9,6 +9,7 @@ import type { ProyectoDocumento, TipoProyectoDocumento } from '@/lib/types'
 
 interface TabDocumentosProps {
   documentosApi: ReturnType<typeof useProyectoDocumentos>
+  onVerReporteCierre: () => void
 }
 
 const DOC_ORDEN: TipoProyectoDocumento[] = [
@@ -40,7 +41,7 @@ const NOMBRE: Record<TipoProyectoDocumento, string> = {
   REPORTE_CIERRE: 'Reporte de cierre',
 }
 
-export function TabDocumentos({ documentosApi }: TabDocumentosProps) {
+export function TabDocumentos({ documentosApi, onVerReporteCierre }: TabDocumentosProps) {
   const [modal, setModal] = useState<{ tipo: TipoProyectoDocumento; documento: ProyectoDocumento | null } | null>(null)
   const [creandoStatusReport, setCreandoStatusReport] = useState(false)
 
@@ -76,7 +77,13 @@ export function TabDocumentos({ documentosApi }: TabDocumentosProps) {
               nombre={NOMBRE[tipo]}
               nota={DOC_META[tipo].nota}
               estado={resolveDocState(tipo, docs)}
-              onAbrir={tipo === 'STATUS_REPORT' ? nuevoStatusReport : () => abrir(tipo)}
+              onAbrir={
+                tipo === 'STATUS_REPORT'
+                  ? nuevoStatusReport
+                  : tipo === 'REPORTE_CIERRE'
+                    ? onVerReporteCierre
+                    : () => abrir(tipo)
+              }
             />
           )
         })}

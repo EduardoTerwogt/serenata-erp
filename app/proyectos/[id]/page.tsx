@@ -301,11 +301,16 @@ export default function ProyectoDetallePage({
       )}
 
       {pm.tab === 'documentos' && pm.tipoAsignado && (
-        <TabDocumentos documentosApi={pm.documentosApi} />
+        <TabDocumentos documentosApi={pm.documentosApi} onVerReporteCierre={() => pm.setTab('cierre')} />
       )}
 
       {pm.tab === 'cierre' && pm.tipoAsignado && (
-        <TabReporteCierre documentos={pm.documentosApi.documentos} equipo={pm.equipoApi.equipo} />
+        <TabReporteCierre
+          proyectoId={id}
+          documentos={pm.documentosApi.documentos}
+          equipo={pm.equipoApi.equipo}
+          documentosApi={pm.documentosApi}
+        />
       )}
     </div>
   )

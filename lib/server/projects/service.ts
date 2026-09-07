@@ -1,5 +1,6 @@
-import { generarHistorialProyecto, getItemsByCotizacion, getProyectoById, updateProyecto } from '@/lib/db'
+import { getItemsByCotizacion, getProyectoById, updateProyecto } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase'
+import { cerrarProyectoSiEsFinal } from '@/lib/server/projects/cierre-proyecto'
 import { ItemCotizacion, Proyecto } from '@/lib/types'
 
 export async function getProyectoDetalle(id: string) {
@@ -66,9 +67,12 @@ export async function updateProyectoWithRollback(
       if (error) throw error
     }
 
-    if (proyecto.estado === 'FINALIZADO') {
-      await generarHistorialProyecto(id, proyecto)
-    }
+    // Bloque 4: mismo cierre automático que cambiarEtapaProyecto (Reporte de
+    // Cierre + historial de responsables) -- este camino legado (estado
+    // 'FINALIZADO' vía la tab "Información") solo aplica a Grabación, pero
+    // el resultado debe ser el mismo sin importar qué endpoint cerró el
+    // proyecto.
+    await cerrarProyectoSiEsFinal(id, proyecto.estado === 'FINALIZADO')
 
     return await getProyectoDetalle(id)
   } catch (error) {

@@ -1,11 +1,16 @@
+import { useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
+import { Icon } from '@/components/ui/Icon'
 import { formatDateDisplay } from '@/lib/format-date'
 import { formatCuentasCurrency } from '@/app/components/cuentas/utils'
+import type { useProyectoDocumentos } from '@/app/components/proyectos/hooks/useProyectoDocumentos'
 import type { MiembroEquipoProyecto, ProyectoDocumento } from '@/lib/types'
 
 interface TabReporteCierreProps {
+  proyectoId: string
   documentos: ProyectoDocumento[]
   equipo: MiembroEquipoProyecto[]
+  documentosApi: ReturnType<typeof useProyectoDocumentos>
 }
 
 interface HitoComparado {
@@ -14,15 +19,7 @@ interface HitoComparado {
   real: string | null
 }
 
-// La generación automática de REPORTE_CIERRE (al llegar a la etapa final
-// del proyecto) es Bloque 4 -- no construido todavía. Este tab solo
-// renderiza un documento ya existente, de forma defensiva
-// (contenido?.campo ?? '—') ya que la forma exacta se confirma cuando
-// exista el generador real.
-// TODO(Bloque 4): confirmar la forma exacta de REPORTE_CIERRE.contenido
-// una vez que exista el generador automático, y ajustar los accesos de
-// abajo si difiere.
-export function TabReporteCierre({ documentos, equipo }: TabReporteCierreProps) {
+export function TabReporteCierre({ proyectoId, documentos, equipo, documentosApi }: TabReporteCierreProps) {
   const documento = documentos.find((d) => d.tipo === 'REPORTE_CIERRE')
 
   if (!documento) {
@@ -35,6 +32,25 @@ export function TabReporteCierre({ documentos, equipo }: TabReporteCierreProps) 
     )
   }
 
+  return (
+    <ReporteCierreContenido
+      key={documento.id}
+      proyectoId={proyectoId}
+      documento={documento}
+      equipo={equipo}
+      documentosApi={documentosApi}
+    />
+  )
+}
+
+interface ReporteCierreContenidoProps {
+  proyectoId: string
+  documento: ProyectoDocumento
+  equipo: MiembroEquipoProyecto[]
+  documentosApi: ReturnType<typeof useProyectoDocumentos>
+}
+
+function ReporteCierreContenido({ proyectoId, documento, equipo, documentosApi }: ReporteCierreContenidoProps) {
   const contenido = documento.contenido as {
     fecha_cierre?: string
     financiero?: { total_cotizado?: number; total_cobrado?: number; total_pagado?: number }
@@ -42,12 +58,67 @@ export function TabReporteCierre({ documentos, equipo }: TabReporteCierreProps) 
     incidencias?: string
   }
 
+  const [incidencias, setIncidencias] = useState(contenido.incidencias ?? '')
+  const [guardando, setGuardando] = useState(false)
+  const [descargando, setDescargando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const guardarIncidencias = async () => {
+    setGuardando(true)
+    setError(null)
+    try {
+      await documentosApi.actualizarDocumento(documento.id, { contenido: { ...contenido, incidencias } })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al guardar')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const descargarPdf = async () => {
+    setDescargando(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/proyectos/${proyectoId}/reporte-cierre/pdf`)
+      if (!res.ok) throw new Error('Error al generar el PDF')
+      const buffer = await res.arrayBuffer()
+      const blob = new Blob([buffer], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'Reporte de Cierre.pdf'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al descargar el PDF')
+    } finally {
+      setDescargando(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2.5 bg-approved-bg/[0.18] border border-approved-bg text-approved-fg rounded-control px-4 py-3 text-content">
+      <div className="flex flex-wrap items-center gap-2.5 bg-approved-bg/[0.18] border border-approved-bg text-approved-fg rounded-control px-4 py-3 text-content">
         <span>✓</span>
-        <span>Proyecto finalizado el {formatDateDisplay(contenido.fecha_cierre ?? null)} -- este reporte se generó solo, en automático.</span>
+        <span className="flex-1">Proyecto finalizado el {formatDateDisplay(contenido.fecha_cierre ?? null)} -- este reporte se generó solo, en automático.</span>
+        <button
+          type="button"
+          onClick={descargarPdf}
+          disabled={descargando}
+          className="flex items-center gap-1.5 py-1.5 px-3 border border-hairline bg-input hover:bg-row-alt disabled:opacity-50 text-body rounded-control font-semibold text-content transition-colors"
+        >
+          <Icon name="download" size={14} />
+          {descargando ? 'Generando...' : 'Descargar PDF'}
+        </button>
       </div>
+
+      {error && (
+        <div className="p-3 rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20">
+          <p className="text-cancelled-fg text-content">{error}</p>
+        </div>
+      )}
 
       <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <div className="rounded-panel border border-hairline bg-card p-[18px]">
@@ -116,8 +187,24 @@ export function TabReporteCierre({ documentos, equipo }: TabReporteCierreProps) 
 
       <div className="rounded-panel border border-hairline bg-card p-5">
         <h3 className="text-content font-semibold text-ink mb-3.5">Incidencias / lecciones aprendidas</h3>
-        <p className="text-body text-content whitespace-pre-wrap">{contenido.incidencias || 'Sin incidencias registradas.'}</p>
-        <p className="mt-2 text-eyebrow text-accent">✎ Este campo es manual -- todo lo demás del reporte se generó solo.</p>
+        <textarea
+          value={incidencias}
+          onChange={(e) => setIncidencias(e.target.value)}
+          rows={4}
+          placeholder="Describe incidencias, aprendizajes o notas de cierre..."
+          className="w-full bg-input border border-hairline rounded-control px-3 py-2 text-content text-body focus:outline-none focus:border-accent resize-none"
+        />
+        <div className="flex items-center justify-between mt-2.5">
+          <p className="text-eyebrow text-accent">✎ Este campo es manual -- todo lo demás del reporte se generó solo.</p>
+          <button
+            type="button"
+            onClick={guardarIncidencias}
+            disabled={guardando}
+            className="py-1.5 px-4 bg-accent hover:bg-accent-pressed disabled:opacity-50 text-accent-ink rounded-control font-bold text-content transition-colors"
+          >
+            {guardando ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
       </div>
     </div>
   )

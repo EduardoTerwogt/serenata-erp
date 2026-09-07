@@ -127,7 +127,7 @@ export async function mockProyectoDetallePMSinTipo(page: Page, proyectoId: strin
 // Mocks para el detalle de un proyecto YA con tipo asignado -- usados por
 // los specs de tareas/documentos/cronograma (Bloque 3.4+), que no
 // necesitan ejercitar el flujo de asignación en sí.
-export async function mockProyectoDetallePMConTipo(page: Page, proyectoId: string) {
+export async function mockProyectoDetallePMConTipo(page: Page, proyectoId: string, extraDocumentos: Record<string, unknown>[] = []) {
   const tipo = buildTipoGrabacion()
   const proyecto: Record<string, unknown> = {
     id: proyectoId,
@@ -173,6 +173,7 @@ export async function mockProyectoDetallePMConTipo(page: Page, proyectoId: strin
       archivo_url: null, archivo_nombre: null, auto_generado_at: '2026-01-01T00:00:00Z', editado_manualmente: false,
       created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
     },
+    ...extraDocumentos,
   ]
 
   await page.route(`**/api/proyectos/${proyectoId}/documentos/*/regenerar`, async (route) => {
