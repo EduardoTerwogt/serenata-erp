@@ -1,7 +1,14 @@
 import { requirePortalSession } from '@/lib/portal-auth'
-import { createProveedorDocumento, getProveedorDocumentos } from '@/lib/db'
+import {
+  createProveedorDocumento,
+  getProveedorDocumentos,
+  getProveedorById,
+  buscarCandidatosMatch,
+  updateProveedor,
+} from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
+import { extraerDatosIdentidad } from '@/lib/server/portal/document-parser'
 import { TipoDocumentoProveedor } from '@/lib/types'
 
 const TIPOS_VALIDOS: TipoDocumentoProveedor[] = [
@@ -10,6 +17,10 @@ const TIPOS_VALIDOS: TipoDocumentoProveedor[] = [
   'COMPROBANTE_DOMICILIO',
   'COMPROBANTE_BANCARIO',
 ]
+
+// Solo estos dos disparan el matching de identidad -- comprobante de
+// domicilio/bancario no traen un nombre legal útil para cruzar.
+const TIPOS_CON_IDENTIDAD: TipoDocumentoProveedor[] = ['INE', 'CONSTANCIA_SITUACION_FISCAL']
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -57,7 +68,31 @@ export async function POST(request: Request) {
       archivo_nombre: file.name,
     })
 
-    return Response.json({ success: true, documento })
+    // Matching de identidad (Fase 5.5): se dispara aquí, no en el signup --
+    // el proveedor se registra ligero (correo/password/alias) y el nombre
+    // legal + el cruce contra proveedores ya cargados por staff llegan
+    // cuando sube su INE/constancia. La lectura del documento nunca bloquea
+    // la subida (ver document-parser.ts) -- si falla, el documento igual
+    // queda guardado, simplemente no se dispara matching esta vez.
+    let requiereConfirmacion = false
+    if (TIPOS_CON_IDENTIDAD.includes(tipo as TipoDocumentoProveedor)) {
+      const proveedorActual = await getProveedorById(portalAuth.proveedorId)
+      if (proveedorActual?.portal_estado === 'activo') {
+        const datos = await extraerDatosIdentidad(file)
+        if (datos.nombre_completo) {
+          const candidatos = await buscarCandidatosMatch(datos.nombre_completo, portalAuth.proveedorId)
+          if (candidatos.length > 0) {
+            await updateProveedor(portalAuth.proveedorId, {
+              portal_estado: 'pendiente_confirmacion',
+              match_candidato_id: candidatos[0].id,
+            })
+            requiereConfirmacion = true
+          }
+        }
+      }
+    }
+
+    return Response.json({ success: true, documento, requiere_confirmacion: requiereConfirmacion })
   } catch (error) {
     console.error('[portal/documentos]', error)
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })

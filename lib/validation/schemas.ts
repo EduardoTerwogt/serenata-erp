@@ -213,7 +213,7 @@ export const DocumentoEstadoValidacionSchema = z.object({
 // ==================== PORTAL DE PROVEEDORES (Fase 5.5) ====================
 
 export const PortalSignupSchema = z.object({
-  nombre: z.string().min(1, 'El nombre completo es requerido'),
+  nombre: z.string().trim().min(1).nullable().optional(),
   correo: z.string().email('Correo inválido'),
   password: z.string().min(8, 'El password debe tener al menos 8 caracteres'),
 })
@@ -228,7 +228,9 @@ export const PortalConfirmarMatchSchema = z.object({
   candidato_id: z.string().uuid().nullable().optional(),
 })
 
-export const PortalPerfilBancarioSchema = z.object({
+export const PortalPerfilSchema = z.object({
+  nombre: z.string().trim().min(1).optional(),
+  telefono: z.string().nullable().optional(),
   banco: z.string().nullable().optional(),
   clabe: z.string().nullable().optional(),
 })
