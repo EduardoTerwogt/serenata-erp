@@ -17,3 +17,7 @@ CREATE INDEX idx_extraction_logs_proyecto_fecha
 
 CREATE INDEX idx_extraction_logs_usuario
   ON extraction_logs(usuario_id, created_at DESC);
+
+-- RLS (mismo patrón sin políticas propias que el resto del proyecto --
+-- todo el acceso va por supabaseAdmin/service_role)
+ALTER TABLE extraction_logs ENABLE ROW LEVEL SECURITY;
