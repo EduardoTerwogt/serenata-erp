@@ -123,3 +123,113 @@ export async function mockProyectoDetallePMSinTipo(page: Page, proyectoId: strin
 
   return { tipo, proyecto }
 }
+
+// Mocks para el detalle de un proyecto YA con tipo asignado -- usados por
+// los specs de tareas/documentos/cronograma (Bloque 3.4+), que no
+// necesitan ejercitar el flujo de asignación en sí.
+export async function mockProyectoDetallePMConTipo(page: Page, proyectoId: string) {
+  const tipo = buildTipoGrabacion()
+  const proyecto: Record<string, unknown> = {
+    id: proyectoId,
+    cliente: 'Cervezas del Bravo',
+    proyecto: 'Spot Verano E2E',
+    fecha_entrega: '2026-06-15',
+    locacion: 'CDMX',
+    horarios: '08:00 - 20:00',
+    punto_encuentro: 'Estudio Central',
+    estado: 'PREPRODUCCION',
+    notas: '',
+    created_at: '2026-05-01T00:00:00Z',
+    tipo_proyecto_id: TIPO_GRABACION_ID,
+    etapa_id: ETAPA_PREPROD_ID,
+    items: [],
+  }
+
+  let tareas: Record<string, unknown>[] = [
+    {
+      id: 'tarea-1', proyecto_id: proyectoId, titulo: 'Confirmar permiso de locación', descripcion: null,
+      estado: 'PENDIENTE', asignado_a: null, asignado_a_nombre: null, es_hito: false, origen: 'plantilla',
+      fecha_limite: '2026-04-20', fecha_completada: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: 'tarea-2', proyecto_id: proyectoId, titulo: 'Grabación día 1', descripcion: null,
+      estado: 'EN_PROGRESO', asignado_a: null, asignado_a_nombre: 'José García', es_hito: true, origen: 'plantilla',
+      fecha_limite: '2026-04-25', fecha_completada: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    },
+  ]
+
+  await page.route('**/api/tipos-proyecto', async (route) => {
+    await fulfillJson(route, [tipo])
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}`, async (route) => {
+    await fulfillJson(route, proyecto)
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}/documentos`, async (route) => {
+    await fulfillJson(route, [])
+  })
+  await page.route(`**/api/proyectos/${proyectoId}/equipo`, async (route) => {
+    await fulfillJson(route, [])
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}/tareas/*/checklist/*`, async (route) => {
+    const method = route.request().method()
+    if (method === 'PUT') {
+      const body = route.request().postDataJSON() as Record<string, unknown>
+      await fulfillJson(route, { id: 'item-1', tarea_id: 'tarea-2', texto: 'Checklist item', orden: 0, completado: false, ...body })
+      return
+    }
+    await fulfillJson(route, { success: true })
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}/tareas/*/checklist`, async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as { texto: string; orden?: number }
+      await fulfillJson(route, { id: 'item-nuevo', tarea_id: 'tarea-2', texto: body.texto, orden: body.orden ?? 0, completado: false }, 201)
+      return
+    }
+    await fulfillJson(route, [])
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}/tareas/*`, async (route) => {
+    const url = route.request().url()
+    const id = url.split('/tareas/')[1]?.split('/')[0]
+    const method = route.request().method()
+
+    if (method === 'PUT') {
+      const body = route.request().postDataJSON() as Record<string, unknown>
+      tareas = tareas.map((t) => (t.id === id ? { ...t, ...body, updated_at: new Date().toISOString() } : t))
+      await fulfillJson(route, tareas.find((t) => t.id === id))
+      return
+    }
+    if (method === 'DELETE') {
+      tareas = tareas.filter((t) => t.id !== id)
+      await fulfillJson(route, { success: true })
+      return
+    }
+    await fulfillJson(route, tareas.find((t) => t.id === id))
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}/tareas`, async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>
+      const nueva = {
+        id: `tarea-${tareas.length + 1}`, proyecto_id: proyectoId, descripcion: null, estado: 'PENDIENTE',
+        asignado_a: null, asignado_a_nombre: null, es_hito: false, origen: 'manual', fecha_limite: null,
+        fecha_completada: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        ...body,
+      }
+      tareas.push(nueva)
+      await fulfillJson(route, nueva, 201)
+      return
+    }
+    await fulfillJson(route, tareas)
+  })
+
+  await page.route('**/api/proveedores', async (route) => {
+    await fulfillJson(route, [])
+  })
+
+  return { tipo, proyecto, tareas: () => tareas }
+}

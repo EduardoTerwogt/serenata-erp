@@ -31,6 +31,6 @@ test('detalle de proyecto: prompt de asignación de tipo aparece en los tabs nue
   expect(asignarRequest.postDataJSON()).toHaveProperty('tipo_proyecto_id')
 
   await expect(page.getByText('¿Qué tipo de proyecto es este?')).not.toBeVisible()
-  await expect(page.getByText('Tablero de tareas -- próximamente')).toBeVisible()
+  await expect(page.getByText('Tareas del proyecto')).toBeVisible()
   await expect(page.getByText('Preproducción').first()).toBeVisible()
 })

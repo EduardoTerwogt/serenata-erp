@@ -24,6 +24,8 @@ export function Modal({ onClose, title, subtitle, size = 'lg', headerExtra, chil
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
         className={`bg-card border border-hairline rounded-panel w-full ${SIZE_CLASS[size]} flex flex-col shadow-overlay overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
