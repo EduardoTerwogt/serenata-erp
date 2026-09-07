@@ -1,6 +1,7 @@
 'use client'
 
 import { useReducer, useEffect } from 'react'
+import { Modal } from '@/components/ui/Modal'
 
 interface NoteModalProps {
   isOpen: boolean
@@ -48,14 +49,6 @@ export default function NoteModal({ isOpen, onClose, notas, notasAsociadas, onSa
     }
   }, [isOpen, notas, notasAsociadas])
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    if (isOpen) document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [isOpen, onClose])
-
   if (!isOpen) return null
 
   const hasAsociadas = Object.keys(draft.asociadas).length > 0
@@ -69,51 +62,32 @@ export default function NoteModal({ isOpen, onClose, notas, notasAsociadas, onSa
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={onClose}
-    >
-      <div
-        className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-lg mx-4 p-6 shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-sm font-semibold text-orange-400">Notas del evento</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-300 transition-colors leading-none"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Nota del evento */}
-        <div className="mb-4">
-          <label className="text-xs text-gray-400 mb-1.5 block">Nota del evento</label>
+    <Modal onClose={onClose} title="Notas del evento">
+      <div className="flex flex-col gap-4">
+        <div>
+          <label className="sn-label block mb-2">Nota del evento</label>
           <textarea
             value={draft.notas}
             onChange={e => dispatch({ type: 'set_notas', value: e.target.value })}
             rows={3}
             autoFocus
-            className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500 resize-none"
+            className="w-full bg-input border border-hairline rounded-control px-3 py-2 text-sm text-body placeholder-faint focus:outline-none focus:border-accent resize-none"
             placeholder="Agrega una nota sobre este evento..."
           />
         </div>
 
-        {/* Contexto por fecha (notasAsociadas) — solo si existen */}
         {hasAsociadas && (
-          <div className="mb-5">
-            <label className="text-xs text-gray-400 mb-2 block">Contexto por fecha</label>
-            <div className="space-y-2">
+          <div>
+            <label className="sn-label block mb-2">Contexto por fecha</label>
+            <div className="flex flex-col gap-2">
               {Object.entries(draft.asociadas).map(([fecha, nota]) => (
                 <div key={fecha} className="flex gap-2 items-center">
-                  <span className="text-xs text-orange-600 font-medium flex-shrink-0 min-w-fit">{fecha}:</span>
+                  <span className="text-xs text-accent font-medium flex-shrink-0 min-w-fit">{fecha}:</span>
                   <input
                     type="text"
                     value={nota}
                     onChange={e => dispatch({ type: 'set_asociada', fecha, value: e.target.value })}
-                    className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500"
+                    className="flex-1 bg-input border border-hairline rounded-control px-2 py-1.5 text-xs text-body placeholder-faint focus:outline-none focus:border-accent"
                   />
                 </div>
               ))}
@@ -121,22 +95,21 @@ export default function NoteModal({ isOpen, onClose, notas, notasAsociadas, onSa
           </div>
         )}
 
-        {/* Footer */}
-        <div className="flex gap-3 justify-end">
+        <div className="flex gap-3 justify-end pt-1">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+            className="rounded-control border border-hairline bg-input hover:bg-row-alt px-4 py-2 text-sm text-body transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 text-sm text-white bg-orange-600 hover:bg-orange-500 rounded-lg transition-colors font-medium"
+            className="rounded-control bg-accent hover:bg-accent-pressed px-4 py-2 text-sm font-medium text-accent-ink transition-colors"
           >
             Guardar
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

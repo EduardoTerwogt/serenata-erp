@@ -1,6 +1,8 @@
 'use client'
 
 import ExtractionStatusBar from './ExtractionStatusBar'
+import { StatusBanner } from '@/components/ui/StatusBanner'
+import { Icon } from '@/components/ui/Icon'
 
 interface InputFormProps {
   proyecto: string
@@ -9,8 +11,6 @@ interface InputFormProps {
   onExtract: () => void
   loading: boolean
   error: string
-  onLoadTemplates?: () => void
-  onGoBack?: () => void
 }
 
 export default function InputForm({
@@ -20,37 +20,28 @@ export default function InputForm({
   onExtract,
   loading,
   error,
-  onLoadTemplates,
-  onGoBack,
 }: InputFormProps) {
-  // No cargar templates automáticamente en mount
-  // Se cargan cuando el usuario confirma cliente
-
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto flex flex-col gap-6">
       {/* Proyecto display */}
       {proyecto && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-400 mb-2">Proyecto seleccionado:</p>
-          <p className="text-lg font-semibold text-white">{proyecto}</p>
+        <div className="rounded-panel border border-hairline bg-card p-4">
+          <p className="text-xs text-subtext mb-2">Proyecto seleccionado:</p>
+          <p className="text-lg font-semibold text-ink">{proyecto}</p>
         </div>
       )}
 
       {/* Main form */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 md:p-8">
-        <h2 className="text-2xl font-bold text-white mb-2">Carga Información de Eventos</h2>
-        <p className="text-gray-400 mb-6">
-          Copia y pega la información de tus correos o WhatsApp para <strong>{proyecto}</strong>. El sistema extraerá fechas y locaciones automáticamente.
+      <div className="rounded-panel border border-hairline bg-card p-6 md:p-8">
+        <h2 className="text-h2 font-bold text-ink mb-2">Carga información de eventos</h2>
+        <p className="text-subtext mb-6">
+          Copia y pega la información de tus correos o WhatsApp para <strong className="text-body">{proyecto}</strong>. El sistema extraerá fechas y locaciones automáticamente.
         </p>
 
-        {error && !error.startsWith('✓') && (
-          <div className="mb-6 p-4 bg-red-900/20 border border-red-900 rounded-lg text-red-400 text-sm">
-            {error}
-          </div>
-        )}
+        {error && !error.startsWith('✓') && <StatusBanner tone="error" className="mb-6">{error}</StatusBanner>}
 
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-3">
+          <label className="block text-sm font-medium text-body mb-3">
             Información del evento *
           </label>
           <textarea
@@ -58,13 +49,13 @@ export default function InputForm({
             onChange={e => onChange(e.target.value)}
             placeholder="Pega aquí el contenido de tu correo o WhatsApp...&#10;&#10;Ejemplo:&#10;8 abril   CDMX, Aragón         Fes Aragón&#10;23 abril  CDMX                YMCA (pendiente)&#10;30 abril  CDMX                Secundaria TEC 31"
             rows={12}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono text-sm"
+            className="w-full bg-input border border-hairline rounded-control px-4 py-3 text-body placeholder-faint focus:outline-none focus:border-accent font-mono text-sm"
           />
         </div>
 
-        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6">
-          <p className="text-xs text-gray-400 mb-2 font-medium">CONSEJOS:</p>
-          <ul className="text-xs text-gray-400 space-y-1">
+        <div className="rounded-control border border-hairline bg-row p-4 mb-6">
+          <p className="text-xs text-subtext mb-2 font-medium">CONSEJOS:</p>
+          <ul className="text-xs text-subtext flex flex-col gap-1">
             <li>• Puedes pegar cualquier formato: tablas, listas, párrafos</li>
             <li>• El sistema busca fechas (ej: 23 abril, 23/04, etc.)</li>
             <li>• El sistema busca locaciones (ej: CDMX, Metro, FES Aragón, etc.)</li>
@@ -75,19 +66,19 @@ export default function InputForm({
         <button
           onClick={onExtract}
           disabled={loading || !value.trim()}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition-colors"
+          className="w-full rounded-control bg-accent hover:bg-accent-pressed disabled:bg-row disabled:text-faint disabled:cursor-not-allowed text-accent-ink font-medium py-3 transition-colors"
         >
-          {loading ? 'Extrayendo información...' : 'Extraer Información'}
+          {loading ? 'Extrayendo información...' : 'Extraer información'}
         </button>
       </div>
 
-      {/* NUEVO: Loading Modal */}
+      {/* Loading Modal */}
       {loading && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center max-w-sm mx-4">
-            <div className="animate-spin mb-6 text-4xl">⚙️</div>
-            <h3 className="text-lg font-semibold text-white mb-2">Analizando eventos...</h3>
-            <p className="text-sm text-gray-400 mb-6">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="rounded-panel border border-hairline bg-card p-8 text-center max-w-sm mx-4">
+            <Icon name="loader" size={32} className="mb-6 mx-auto text-accent animate-spin" />
+            <h3 className="text-h3 font-semibold text-ink mb-2">Analizando eventos...</h3>
+            <p className="text-sm text-subtext mb-6">
               Claude está interpretando tu mensaje para extraer fechas, locaciones y proyectos.
             </p>
             <ExtractionStatusBar method="ai" />

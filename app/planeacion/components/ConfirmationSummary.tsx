@@ -2,6 +2,8 @@
 
 import { ValidatedEventLine } from '../usePlaneacionFlow'
 import { ServiceTemplate } from '@/lib/types'
+import { StatusBanner } from '@/components/ui/StatusBanner'
+import { Icon } from '@/components/ui/Icon'
 
 interface ConfirmationSummaryProps {
   toCreate: ValidatedEventLine[]
@@ -27,41 +29,37 @@ export default function ConfirmationSummary({
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {error && !error.startsWith('✓') && (
-        <div className="p-4 bg-red-900/20 border border-red-900 rounded-lg text-red-400 text-sm">
-          {error}
-        </div>
-      )}
-
-      {error && error.startsWith('✓') && (
-        <div className="p-4 bg-green-900/20 border border-green-900 rounded-lg text-green-400 text-sm">
-          {error}
-        </div>
-      )}
+    <div className="max-w-3xl mx-auto flex flex-col gap-6">
+      {error && !error.startsWith('✓') && <StatusBanner tone="error">{error}</StatusBanner>}
+      {error && error.startsWith('✓') && <StatusBanner tone="success">{error}</StatusBanner>}
 
       {/* Summary card */}
-      <div className="bg-green-900/20 border border-green-800 rounded-xl p-6">
-        <div className="text-3xl font-bold text-green-400">{toCreate.length}</div>
-        <div className="text-lg text-green-300">Cotizaciones a crear</div>
+      <div className="rounded-panel border border-approved-bg/40 bg-approved-bg/10 p-6">
+        <div className="sn-display text-h1 text-approved-fg">{toCreate.length}</div>
+        <div className="text-lg text-approved-fg">Cotizaciones a crear</div>
       </div>
 
       {/* Details */}
       {toCreate.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Detalle de cotizaciones:</h3>
-          <div className="space-y-3">
+        <div className="rounded-panel border border-hairline bg-card p-6">
+          <h3 className="text-h3 font-semibold text-ink mb-4">Detalle de cotizaciones:</h3>
+          <div className="flex flex-col gap-3">
             {toCreate.map(line => (
-              <div key={line.id} className="bg-gray-800/50 border border-gray-700 rounded p-4 text-sm">
+              <div key={line.id} className="rounded-control border border-hairline bg-row p-4 text-sm">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    {line.fecha && <div className="text-gray-300">📅 <span className="font-medium">{line.fecha}</span></div>}
-                    <div className="text-gray-400 mt-1">
+                    {line.fecha && (
+                      <div className="flex items-center gap-1.5 text-body">
+                        <Icon name="clock" size={13} className="text-faint" />
+                        <span className="font-medium">{line.fecha}</span>
+                      </div>
+                    )}
+                    <div className="text-subtext mt-1">
                       {[line.ciudad, line.locacion].filter(Boolean).join(' — ')}
                     </div>
                   </div>
                 </div>
-                <div className="inline-block px-3 py-1 bg-blue-900/30 border border-blue-800 rounded text-xs text-blue-300 font-medium">
+                <div className="inline-block rounded-control border border-issued-bg/40 bg-issued-bg/20 px-3 py-1 text-xs text-issued-fg font-medium">
                   {getTemplateName(line.selectedTemplateId)}
                 </div>
               </div>
@@ -71,9 +69,9 @@ export default function ConfirmationSummary({
       )}
 
       {/* Info box */}
-      <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-        <p className="text-sm text-gray-400">
-          ℹ️ Las cotizaciones se crearán en estado <span className="font-medium text-gray-300">BORRADOR</span> para que puedas revisarlas antes de enviarlas.
+      <div className="rounded-control border border-hairline bg-row p-4">
+        <p className="text-sm text-subtext">
+          Las cotizaciones se crearán en estado <span className="font-medium text-body">BORRADOR</span> para que puedas revisarlas antes de enviarlas.
         </p>
       </div>
 
@@ -81,16 +79,16 @@ export default function ConfirmationSummary({
       <div className="flex gap-3">
         <button
           onClick={onGoBack}
-          className="flex-1 px-4 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+          className="flex-1 rounded-control border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 font-medium transition-colors"
         >
           ← Volver
         </button>
         <button
           onClick={onConfirmCreate}
           disabled={loading || toCreate.length === 0}
-          className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+          className="flex-1 rounded-control bg-accent hover:bg-accent-pressed disabled:opacity-50 disabled:cursor-not-allowed text-accent-ink px-4 py-3 font-medium transition-colors"
         >
-          {loading ? 'Creando cotizaciones...' : 'Confirmar y Crear'}
+          {loading ? 'Creando cotizaciones...' : 'Confirmar y crear'}
         </button>
       </div>
     </div>

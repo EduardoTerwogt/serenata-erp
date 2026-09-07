@@ -11,7 +11,7 @@ test('crea una plantilla de servicio nueva', async ({ page }) => {
   const firstRow = page.locator('table tbody tr').first()
   await firstRow.locator('input[placeholder="Descripción..."]').fill('Renta de audio')
 
-  await page.getByRole('button', { name: 'Guardar Plantilla' }).click()
+  await page.getByRole('button', { name: 'Guardar plantilla' }).click()
 
   await expect(page).toHaveURL(/\/plantillas-servicios$/)
 })
@@ -25,8 +25,8 @@ test('lista de plantillas: duplicar y eliminar', async ({ page }) => {
   await page.getByRole('button', { name: 'Duplicar' }).click()
   await expect(page.getByText('Low Clika (copia)')).toBeVisible()
 
-  page.once('dialog', (dialog) => dialog.accept())
-  await page.getByRole('button', { name: 'Eliminar' }).first().click()
+  await page.getByRole('button', { name: 'Eliminar Low Clika', exact: true }).click()
+  await page.getByRole('button', { name: 'Sí, eliminar' }).click()
 
   await expect(page.getByRole('heading', { name: 'Low Clika', exact: true })).not.toBeVisible()
   await expect(page.getByText('Low Clika (copia)')).toBeVisible()

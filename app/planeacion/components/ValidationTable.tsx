@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { ServiceTemplate } from '@/lib/types'
 import { ValidatedEventLine } from '../usePlaneacionFlow'
 import NoteModal from './NoteModal'
+import { StatusBanner } from '@/components/ui/StatusBanner'
+import { Icon } from '@/components/ui/Icon'
 
 interface ValidationTableProps {
   lines: ValidatedEventLine[]
@@ -14,6 +16,197 @@ interface ValidationTableProps {
   loading: boolean
   error: string
   onGoBack: () => void
+}
+
+const SELECT_TONE_CLASS: Record<string, string> = {
+  confirmado: 'bg-approved-bg/20 text-approved-fg border-approved-bg/50',
+  por_confirmar: 'bg-issued-bg/20 text-issued-fg border-issued-bg/50',
+  cancelado: 'bg-cancelled-bg/20 text-cancelled-fg border-cancelled-bg/50',
+}
+
+const SECTION_TONE = {
+  confirmado: { border: 'border-approved-bg/40', header: 'bg-approved-bg/10 border-approved-bg/40', title: 'text-approved-fg', subtitle: 'text-approved-fg/70' },
+  por_confirmar: { border: 'border-issued-bg/40', header: 'bg-issued-bg/10 border-issued-bg/40', title: 'text-issued-fg', subtitle: 'text-issued-fg/70' },
+  cancelado: { border: 'border-cancelled-bg/40', header: 'bg-cancelled-bg/10 border-cancelled-bg/40', title: 'text-cancelled-fg', subtitle: 'text-cancelled-fg/70' },
+} as const
+
+interface EventRowProps {
+  line: ValidatedEventLine
+  isHighlighted?: boolean
+  templates: ServiceTemplate[]
+  onLineUpdate: (lineId: string, updates: Partial<ValidatedEventLine>) => void
+  onLineDelete: (lineId: string) => void
+  openNoteId: string | null
+  setOpenNoteId: (id: string | null) => void
+  confirmDeleteId: string | null
+  setConfirmDeleteId: (id: string | null) => void
+}
+
+function EventRow({ line, isHighlighted = false, templates, onLineUpdate, onLineDelete, openNoteId, setOpenNoteId, confirmDeleteId, setConfirmDeleteId }: EventRowProps) {
+  const hasNotes = !!(line.notas || (line.notasAsociadas && Object.keys(line.notasAsociadas).length > 0))
+  const notePreview = line.notas ? line.notas.slice(0, 60) + (line.notas.length > 60 ? '…' : '') : ''
+
+  return (
+    <>
+      <tr className={`${isHighlighted ? 'bg-row-alt/40' : 'hover:bg-row-alt/40'} transition-colors`}>
+        <td className="px-4 py-3">
+          <input
+            type="text"
+            value={line.proyecto || ''}
+            onChange={e => onLineUpdate(line.id, { proyecto: e.target.value || undefined })}
+            placeholder="Proyecto"
+            className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-xs text-body placeholder-faint focus:outline-none focus:border-accent"
+          />
+        </td>
+        <td className="px-4 py-3">
+          <input
+            type="text"
+            value={line.fecha || ''}
+            onChange={e => onLineUpdate(line.id, { fecha: e.target.value || null })}
+            className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body focus:outline-none focus:border-accent"
+          />
+        </td>
+        <td className="px-4 py-3">
+          <input
+            type="text"
+            value={line.ciudad || ''}
+            onChange={e => onLineUpdate(line.id, { ciudad: e.target.value || undefined })}
+            placeholder="Ciudad"
+            className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body placeholder-faint focus:outline-none focus:border-accent"
+          />
+        </td>
+        <td className="px-4 py-3">
+          <input
+            type="text"
+            value={line.locacion || ''}
+            onChange={e => onLineUpdate(line.id, { locacion: e.target.value || null })}
+            className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body focus:outline-none focus:border-accent"
+          />
+        </td>
+        <td className="px-4 py-3">
+          <select
+            value={line.selectedTemplateId || ''}
+            onChange={e => onLineUpdate(line.id, { selectedTemplateId: e.target.value || undefined })}
+            className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body focus:outline-none focus:border-accent"
+          >
+            <option value="">— Sin plantilla —</option>
+            {templates.map(template => (
+              <option key={template.id} value={template.id}>
+                {template.nombre} ({template.items.length} items)
+              </option>
+            ))}
+          </select>
+        </td>
+        <td className="px-4 py-3">
+          <select
+            value={line.action}
+            onChange={e => onLineUpdate(line.id, { action: e.target.value as ValidatedEventLine['action'] })}
+            className={`w-full px-2 py-1 rounded-control text-xs font-medium border focus:outline-none focus:border-accent ${SELECT_TONE_CLASS[line.action] || 'bg-input text-body border-hairline'}`}
+          >
+            <option value="confirmado">Confirmado</option>
+            <option value="por_confirmar">Por Confirmar</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+        </td>
+        <td className="px-4 py-3 text-center">
+          <div className="flex items-center justify-center gap-5">
+            <button
+              onClick={() => setOpenNoteId(line.id)}
+              title={hasNotes ? (notePreview || 'Ver notas') : 'Agregar nota'}
+              className={`transition-colors ${hasNotes ? 'text-accent hover:text-accent-pressed' : 'text-faint hover:text-subtext'}`}
+            >
+              <Icon name="file-text" size={17} />
+            </button>
+            {confirmDeleteId === line.id ? (
+              <span className="flex items-center gap-4">
+                <button
+                  onClick={() => { onLineDelete(line.id); setConfirmDeleteId(null) }}
+                  className="text-cancelled-fg hover:opacity-80 text-sm font-bold"
+                  title="Confirmar eliminación"
+                >
+                  Sí
+                </button>
+                <button
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="text-subtext hover:text-body text-sm font-bold"
+                  title="Cancelar"
+                >
+                  No
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setConfirmDeleteId(line.id)}
+                className="text-cancelled-fg hover:opacity-80 transition-opacity"
+                title="Eliminar fila"
+              >
+                <Icon name="trash" size={14} />
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+      <NoteModal
+        isOpen={openNoteId === line.id}
+        onClose={() => setOpenNoteId(null)}
+        notas={line.notas}
+        notasAsociadas={line.notasAsociadas}
+        onSave={(notas, notasAsociadas) => onLineUpdate(line.id, { notas, notasAsociadas })}
+      />
+    </>
+  )
+}
+
+interface SectionProps {
+  tone: keyof typeof SECTION_TONE
+  icon: 'check' | 'clock' | 'warning'
+  label: string
+  subtitle: string
+  rows: ValidatedEventLine[]
+  highlighted?: boolean
+  templates: ServiceTemplate[]
+  onLineUpdate: (lineId: string, updates: Partial<ValidatedEventLine>) => void
+  onLineDelete: (lineId: string) => void
+  openNoteId: string | null
+  setOpenNoteId: (id: string | null) => void
+  confirmDeleteId: string | null
+  setConfirmDeleteId: (id: string | null) => void
+}
+
+function Section({ tone, icon, label, subtitle, rows, highlighted = false, ...rowProps }: SectionProps) {
+  if (rows.length === 0) return null
+  const t = SECTION_TONE[tone]
+  return (
+    <div className={`rounded-panel border ${t.border} bg-card overflow-hidden`}>
+      <div className={`px-4 py-3 border-b ${t.header}`}>
+        <h3 className={`text-sm font-semibold flex items-center gap-1.5 ${t.title}`}>
+          <Icon name={icon} size={14} />
+          {label} ({rows.length})
+        </h3>
+        <p className={`text-xs mt-1 ${t.subtitle}`}>{subtitle}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-row border-b border-hairline">
+            <tr>
+              <th className="px-4 py-3 text-left text-subtext font-medium">Proyecto</th>
+              <th className="px-4 py-3 text-left text-subtext font-medium">Fecha</th>
+              <th className="px-4 py-3 text-left text-subtext font-medium">Ciudad</th>
+              <th className="px-4 py-3 text-left text-subtext font-medium">Locación/Venue</th>
+              <th className="px-4 py-3 text-left text-subtext font-medium">Plantilla</th>
+              <th className="px-4 py-3 text-left text-subtext font-medium">Acción</th>
+              <th className="px-4 py-3 text-center text-subtext font-medium"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-hairline">
+            {rows.map(line => (
+              <EventRow key={line.id} line={line} isHighlighted={highlighted} {...rowProps} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 export default function ValidationTable({
@@ -58,272 +251,40 @@ export default function ValidationTable({
   const tentativas = lines.filter(line => line.action === 'por_confirmar')
   const cancelados = lines.filter(line => line.action === 'cancelado')
 
-
-  const getActionColor = (action: string) => {
-    switch (action) {
-      case 'confirmado':
-        return 'bg-green-900/30 text-green-400 border-green-800'
-      case 'por_confirmar':
-        return 'bg-yellow-900/30 text-yellow-400 border-yellow-800'
-      case 'cancelado':
-        return 'bg-red-900/30 text-red-400 border-red-800'
-      default:
-        return 'bg-gray-800/30 text-gray-400 border-gray-700'
-    }
-  }
-
-  const EventRow = ({ line, isHighlighted = false }: { line: ValidatedEventLine; isHighlighted?: boolean }) => {
-    const hasNotes = !!(line.notas || (line.notasAsociadas && Object.keys(line.notasAsociadas).length > 0))
-    const notePreview = line.notas ? line.notas.slice(0, 60) + (line.notas.length > 60 ? '…' : '') : ''
-
-    return (
-      <>
-        <tr key={line.id} className={`${isHighlighted ? 'bg-gray-800/30' : 'hover:bg-gray-800/50'} transition-colors`}>
-          <td className="px-4 py-3 text-gray-300">
-            <input
-              type="text"
-              value={line.proyecto || ''}
-              onChange={e => onLineUpdate(line.id, { proyecto: e.target.value || undefined })}
-              placeholder="Proyecto"
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-            />
-          </td>
-          <td className="px-4 py-3 text-gray-300">
-            <input
-              type="text"
-              value={line.fecha || ''}
-              onChange={e => onLineUpdate(line.id, { fecha: e.target.value || null })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-            />
-          </td>
-          <td className="px-4 py-3 text-gray-300">
-            <input
-              type="text"
-              value={line.ciudad || ''}
-              onChange={e => onLineUpdate(line.id, { ciudad: e.target.value || undefined })}
-              placeholder="Ciudad"
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
-            />
-          </td>
-          <td className="px-4 py-3 text-gray-300">
-            <input
-              type="text"
-              value={line.locacion || ''}
-              onChange={e => onLineUpdate(line.id, { locacion: e.target.value || null })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-            />
-          </td>
-          <td className="px-4 py-3 text-gray-300">
-            <select
-              value={line.selectedTemplateId || ''}
-              onChange={e => onLineUpdate(line.id, { selectedTemplateId: e.target.value || undefined })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-            >
-              <option value="">— Sin plantilla —</option>
-              {templates.map(template => (
-                <option key={template.id} value={template.id}>
-                  {template.nombre} ({template.items.length} items)
-                </option>
-              ))}
-            </select>
-          </td>
-          <td className="px-4 py-3">
-            <select
-              value={line.action}
-              onChange={e => onLineUpdate(line.id, { action: e.target.value as ValidatedEventLine['action'] })}
-              className={`w-full px-2 py-1 rounded text-xs font-medium border ${getActionColor(line.action)} bg-gray-800 focus:outline-none focus:border-blue-500`}
-            >
-              <option value="confirmado">Confirmado</option>
-              <option value="por_confirmar">Por Confirmar</option>
-              <option value="cancelado">Cancelado</option>
-            </select>
-          </td>
-          <td className="px-4 py-3 text-center">
-            <div className="flex items-center justify-center gap-5">
-              <button
-                onClick={() => setOpenNoteId(line.id)}
-                title={hasNotes ? (notePreview || 'Ver notas') : 'Agregar nota'}
-                className={`transition-colors ${hasNotes ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-600 hover:text-gray-400'}`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-              </button>
-              {confirmDeleteId === line.id ? (
-                <span className="flex items-center gap-4">
-                  <button
-                    onClick={() => { onLineDelete(line.id); setConfirmDeleteId(null) }}
-                    className="text-red-400 hover:text-red-300 text-sm font-bold"
-                    title="Confirmar eliminación"
-                  >
-                    Sí
-                  </button>
-                  <button
-                    onClick={() => setConfirmDeleteId(null)}
-                    className="text-gray-400 hover:text-gray-300 text-sm font-bold"
-                    title="Cancelar"
-                  >
-                    No
-                  </button>
-                </span>
-              ) : (
-                <button
-                  onClick={() => setConfirmDeleteId(line.id)}
-                  className="text-red-400 hover:text-red-300 text-xs"
-                  title="Eliminar fila"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          </td>
-        </tr>
-        <NoteModal
-          isOpen={openNoteId === line.id}
-          onClose={() => setOpenNoteId(null)}
-          notas={line.notas}
-          notasAsociadas={line.notasAsociadas}
-          onSave={(notas, notasAsociadas) => onLineUpdate(line.id, { notas, notasAsociadas })}
-        />
-      </>
-    )
-  }
+  const rowProps = { templates, onLineUpdate, onLineDelete, openNoteId, setOpenNoteId, confirmDeleteId, setConfirmDeleteId }
 
   return (
-    <div className="space-y-6">
-      {error && (
-        <div className="p-4 bg-red-900/20 border border-red-900 rounded-lg text-red-400 text-sm">
-          {error}
-        </div>
-      )}
+    <div className="flex flex-col gap-6">
+      {error && <StatusBanner tone="error">{error}</StatusBanner>}
 
-
-      {/* Confirmados Section */}
-      {confirmados.length > 0 && (
-        <div className="bg-gray-900 border border-green-800/40 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 bg-green-900/20 border-b border-green-800/40">
-            <h3 className="text-sm font-semibold text-green-400">✅ CONFIRMADOS ({confirmados.length})</h3>
-            <p className="text-xs text-green-300/70 mt-1">Listos para crear cotizaciones</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-800 border-b border-gray-700">
-                <tr>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">📌 Proyecto</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Plantilla</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Acción</th>
-                  <th className="px-4 py-3 text-center text-gray-300 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {confirmados.map(line => (
-                  <EventRow key={line.id} line={line} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tentativas Section */}
-      {tentativas.length > 0 && (
-        <div className="bg-gray-900 border border-yellow-800/40 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 bg-yellow-900/20 border-b border-yellow-800/40">
-            <h3 className="text-sm font-semibold text-yellow-400">⏳ PENDIENTES DE CONFIRMACIÓN ({tentativas.length})</h3>
-            <p className="text-xs text-yellow-300/70 mt-1">Requieren confirmación antes de crear cotizaciones</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-800 border-b border-gray-700">
-                <tr>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">📌 Proyecto</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Plantilla</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Acción</th>
-                  <th className="px-4 py-3 text-center text-gray-300 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {tentativas.map(line => (
-                  <EventRow key={line.id} line={line} isHighlighted={true} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Cancelados Section */}
-      {cancelados.length > 0 && (
-        <div className="bg-gray-900 border border-red-800/40 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 bg-red-900/20 border-b border-red-800/40">
-            <h3 className="text-sm font-semibold text-red-400">❌ CANCELADOS ({cancelados.length})</h3>
-            <p className="text-xs text-red-300/70 mt-1">No se crearán cotizaciones para estos eventos</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-800 border-b border-gray-700">
-                <tr>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">📌 Proyecto</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Plantilla</th>
-                  <th className="px-4 py-3 text-left text-gray-300 font-medium">Acción</th>
-                  <th className="px-4 py-3 text-center text-gray-300 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {cancelados.map(line => (
-                  <EventRow key={line.id} line={line} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <Section tone="confirmado" icon="check" label="CONFIRMADOS" subtitle="Listos para crear cotizaciones" rows={confirmados} {...rowProps} />
+      <Section tone="por_confirmar" icon="clock" label="PENDIENTES DE CONFIRMACIÓN" subtitle="Requieren confirmación antes de crear cotizaciones" rows={tentativas} highlighted {...rowProps} />
+      <Section tone="cancelado" icon="warning" label="CANCELADOS" subtitle="No se crearán cotizaciones para estos eventos" rows={cancelados} {...rowProps} />
 
       {/* Usage Badge */}
       {usage && (
-        <div className="bg-blue-900/20 border border-blue-800 rounded-xl p-4">
-          <div className="flex items-center justify-between gap-4">
+        <div className="rounded-panel border border-issued-bg/40 bg-issued-bg/10 p-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-sm font-medium text-blue-300 mb-2">📊 Uso de Claude API</p>
+              <p className="text-sm font-medium text-issued-fg mb-2">Uso de Claude API</p>
               <div className="flex items-center gap-4">
                 <div>
-                  <div className="text-2xl font-bold text-blue-400">{Math.round(usage.percentageUsed)}%</div>
-                  <p className="text-xs text-blue-300/70">{usage.tokensUsed} / {usage.tokensAvailable} tokens</p>
+                  <div className="sn-display text-h2 text-issued-fg">{Math.round(usage.percentageUsed)}%</div>
+                  <p className="text-xs text-issued-fg/70">{usage.tokensUsed} / {usage.tokensAvailable} tokens</p>
                 </div>
                 <div>
-                  <p className="text-xs text-blue-300">
-                    💰 ${usage.costUSD.toFixed(2)} USD (de $5.00)
+                  <p className="text-xs text-issued-fg">
+                    ${usage.costUSD.toFixed(2)} USD (de $5.00)
                   </p>
-                  <p className="text-xs text-blue-300/70">{usage.eventsProcessed} eventos procesados</p>
+                  <p className="text-xs text-issued-fg/70">{usage.eventsProcessed} eventos procesados</p>
                 </div>
               </div>
             </div>
-            <div className="w-32 h-32 relative">
-              <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
+            <div className="w-24 h-24 relative flex-none">
+              <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="54" fill="none" stroke="var(--color-row)" strokeWidth="4" />
                 <circle
-                  cx="60"
-                  cy="60"
-                  r="54"
-                  fill="none"
-                  stroke="#374151"
-                  strokeWidth="4"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="54"
-                  fill="none"
-                  stroke="#3b82f6"
-                  strokeWidth="4"
+                  cx="60" cy="60" r="54" fill="none" stroke="var(--color-issued-fg)" strokeWidth="4"
                   strokeDasharray={`${(usage.percentageUsed / 100) * 2 * Math.PI * 54} ${2 * Math.PI * 54}`}
                   strokeLinecap="round"
                 />
@@ -337,14 +298,14 @@ export default function ValidationTable({
       <div className="flex gap-3">
         <button
           onClick={onGoBack}
-          className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+          className="flex-1 rounded-control border border-hairline bg-input hover:bg-row-alt text-body px-4 py-2 font-medium transition-colors"
         >
           ← Volver
         </button>
         <button
           onClick={onConfirm}
           disabled={loading || confirmados.length === 0}
-          className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+          className="flex-1 rounded-control bg-accent hover:bg-accent-pressed disabled:opacity-50 disabled:cursor-not-allowed text-accent-ink px-4 py-2 font-medium transition-colors"
         >
           {loading ? 'Procesando...' : `Crear ${confirmados.length} cotización${confirmados.length !== 1 ? 'es' : ''} →`}
         </button>

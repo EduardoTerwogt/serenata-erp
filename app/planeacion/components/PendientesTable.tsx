@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { ServiceTemplate } from '@/lib/types'
 import { ValidatedEventLine } from '../usePlaneacionFlow'
 import NoteModal from './NoteModal'
+import { StatusBanner } from '@/components/ui/StatusBanner'
+import { Icon } from '@/components/ui/Icon'
 
 interface PendientesTableProps {
   lines: ValidatedEventLine[]
@@ -14,6 +16,12 @@ interface PendientesTableProps {
   loading: boolean
   error: string
   onGoBack: () => void
+}
+
+const SELECT_TONE_CLASS: Record<string, string> = {
+  confirmado: 'bg-approved-bg/20 text-approved-fg border-approved-bg/50',
+  por_confirmar: 'bg-issued-bg/20 text-issued-fg border-issued-bg/50',
+  cancelado: 'bg-cancelled-bg/20 text-cancelled-fg border-cancelled-bg/50',
 }
 
 export default function PendientesTable({
@@ -29,19 +37,6 @@ export default function PendientesTable({
   const [openNoteId, setOpenNoteId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  const getActionColor = (action: string) => {
-    switch (action) {
-      case 'confirmado':
-        return 'bg-green-900/30 text-green-400 border-green-800'
-      case 'por_confirmar':
-        return 'bg-yellow-900/30 text-yellow-400 border-yellow-800'
-      case 'cancelado':
-        return 'bg-red-900/30 text-red-400 border-red-800'
-      default:
-        return 'bg-gray-800/30 text-gray-400 border-gray-700'
-    }
-  }
-
   const hasConfirmed = lines.some(line => line.action === 'confirmado')
 
   const EventRow = ({ line }: { line: ValidatedEventLine }) => {
@@ -50,46 +45,46 @@ export default function PendientesTable({
 
     return (
       <>
-        <tr key={line.id} className="hover:bg-gray-800/50 transition-colors">
-          <td className="px-4 py-3 text-gray-300">
+        <tr key={line.id} className="hover:bg-row-alt/40 transition-colors">
+          <td className="px-4 py-3">
             <input
               type="text"
               value={line.proyecto || ''}
               onChange={e => onLineUpdate(line.id, { proyecto: e.target.value || undefined })}
               placeholder="Proyecto"
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+              className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-xs text-body placeholder-faint focus:outline-none focus:border-accent"
             />
           </td>
-          <td className="px-4 py-3 text-gray-300">
+          <td className="px-4 py-3">
             <input
               type="text"
               value={line.fecha || ''}
               onChange={e => onLineUpdate(line.id, { fecha: e.target.value || null })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body focus:outline-none focus:border-accent"
             />
           </td>
-          <td className="px-4 py-3 text-gray-300">
+          <td className="px-4 py-3">
             <input
               type="text"
               value={line.ciudad || ''}
               onChange={e => onLineUpdate(line.id, { ciudad: e.target.value || undefined })}
               placeholder="Ciudad"
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+              className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body placeholder-faint focus:outline-none focus:border-accent"
             />
           </td>
-          <td className="px-4 py-3 text-gray-300">
+          <td className="px-4 py-3">
             <input
               type="text"
               value={line.locacion || ''}
               onChange={e => onLineUpdate(line.id, { locacion: e.target.value || null })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body focus:outline-none focus:border-accent"
             />
           </td>
-          <td className="px-4 py-3 text-gray-300">
+          <td className="px-4 py-3">
             <select
               value={line.selectedTemplateId || ''}
               onChange={e => onLineUpdate(line.id, { selectedTemplateId: e.target.value || undefined })}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body focus:outline-none focus:border-accent"
             >
               <option value="">— Sin plantilla —</option>
               {templates.map(template => (
@@ -103,7 +98,7 @@ export default function PendientesTable({
             <select
               value={line.action}
               onChange={e => onLineUpdate(line.id, { action: e.target.value as ValidatedEventLine['action'] })}
-              className={`w-full px-2 py-1 rounded text-xs font-medium border ${getActionColor(line.action)} bg-gray-800 focus:outline-none focus:border-blue-500`}
+              className={`w-full px-2 py-1 rounded-control text-xs font-medium border focus:outline-none focus:border-accent ${SELECT_TONE_CLASS[line.action] || 'bg-input text-body border-hairline'}`}
             >
               <option value="confirmado">Confirmado</option>
               <option value="por_confirmar">Por Confirmar</option>
@@ -115,24 +110,22 @@ export default function PendientesTable({
               <button
                 onClick={() => setOpenNoteId(line.id)}
                 title={hasNotes ? (notePreview || 'Ver notas') : 'Agregar nota'}
-                className={`transition-colors ${hasNotes ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-600 hover:text-gray-400'}`}
+                className={`transition-colors ${hasNotes ? 'text-accent hover:text-accent-pressed' : 'text-faint hover:text-subtext'}`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
+                <Icon name="file-text" size={17} />
               </button>
               {confirmDeleteId === line.id ? (
                 <span className="flex items-center gap-4">
                   <button
                     onClick={() => { onLineDelete(line.id); setConfirmDeleteId(null) }}
-                    className="text-red-400 hover:text-red-300 text-sm font-bold"
+                    className="text-cancelled-fg hover:opacity-80 text-sm font-bold"
                     title="Confirmar eliminación"
                   >
                     Sí
                   </button>
                   <button
                     onClick={() => setConfirmDeleteId(null)}
-                    className="text-gray-400 hover:text-gray-300 text-sm font-bold"
+                    className="text-subtext hover:text-body text-sm font-bold"
                     title="Cancelar"
                   >
                     No
@@ -141,10 +134,10 @@ export default function PendientesTable({
               ) : (
                 <button
                   onClick={() => setConfirmDeleteId(line.id)}
-                  className="text-red-400 hover:text-red-300 text-xs"
+                  className="text-cancelled-fg hover:opacity-80 transition-opacity"
                   title="Eliminar fila"
                 >
-                  ✕
+                  <Icon name="trash" size={14} />
                 </button>
               )}
             </div>
@@ -161,29 +154,25 @@ export default function PendientesTable({
   }
 
   return (
-    <div className="space-y-6">
-      {error && (
-        <div className="p-4 bg-red-900/20 border border-red-900 rounded-lg text-red-400 text-sm">
-          {error}
-        </div>
-      )}
+    <div className="flex flex-col gap-6">
+      {error && <StatusBanner tone="error">{error}</StatusBanner>}
 
       {/* Lines Table */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="rounded-panel border border-hairline bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-800 border-b border-gray-700">
+            <thead className="bg-row border-b border-hairline">
               <tr>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Proyecto</th>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Fecha</th>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Ciudad</th>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Locación/Venue</th>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Plantilla</th>
-                <th className="px-4 py-3 text-left text-gray-300 font-medium">Acción</th>
-                <th className="px-4 py-3 text-center text-gray-300 font-medium"></th>
+                <th className="px-4 py-3 text-left text-subtext font-medium">Proyecto</th>
+                <th className="px-4 py-3 text-left text-subtext font-medium">Fecha</th>
+                <th className="px-4 py-3 text-left text-subtext font-medium">Ciudad</th>
+                <th className="px-4 py-3 text-left text-subtext font-medium">Locación/Venue</th>
+                <th className="px-4 py-3 text-left text-subtext font-medium">Plantilla</th>
+                <th className="px-4 py-3 text-left text-subtext font-medium">Acción</th>
+                <th className="px-4 py-3 text-center text-subtext font-medium"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800">
+            <tbody className="divide-y divide-hairline">
               {lines.map(line => (
                 <EventRow key={line.id} line={line} />
               ))}
@@ -194,13 +183,13 @@ export default function PendientesTable({
         {/* Empty state */}
         {lines.length === 0 && (
           <div className="px-4 py-8 text-center">
-            <p className="text-gray-400">No hay pendientes para mostrar</p>
+            <p className="text-subtext">No hay pendientes para mostrar</p>
           </div>
         )}
 
         {/* Info message */}
         {lines.length > 0 && (
-          <div className="px-4 py-3 bg-gray-800/50 border-t border-gray-700 text-xs text-gray-400">
+          <div className="px-4 py-3 bg-row border-t border-hairline text-xs text-subtext">
             <p>Marca filas como &quot;Confirmado&quot; para crearlas como cotizaciones. Puedes editar los campos y seleccionar plantilla.</p>
           </div>
         )}
@@ -210,16 +199,16 @@ export default function PendientesTable({
       <div className="flex gap-3">
         <button
           onClick={onGoBack}
-          className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+          className="flex-1 rounded-control border border-hairline bg-input hover:bg-row-alt text-body px-4 py-2 font-medium transition-colors"
         >
           ← Volver
         </button>
         <button
           onClick={onConfirm}
           disabled={loading || !hasConfirmed}
-          className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+          className="flex-1 rounded-control bg-accent hover:bg-accent-pressed disabled:opacity-50 disabled:cursor-not-allowed text-accent-ink px-4 py-2 font-medium transition-colors"
         >
-          {loading ? 'Procesando...' : 'Revisar Cambios →'}
+          {loading ? 'Procesando...' : 'Revisar cambios →'}
         </button>
       </div>
     </div>

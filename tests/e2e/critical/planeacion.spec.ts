@@ -7,18 +7,18 @@ test('extracción IA: pega texto, valida y crea cotizaciones', async ({ page }) 
   await login(page, '/planeacion')
 
   await page.locator('textarea[placeholder*="Pega aquí"]').fill('8 abril CDMX, Aragón Fes Aragón')
-  await page.getByRole('button', { name: 'Extraer Información' }).click()
+  await page.getByRole('button', { name: 'Extraer información' }).click()
 
   await page.locator('input[placeholder="Busca o escribe cliente..."]').fill('Estudio Manantial')
   await page.getByRole('button', { name: 'Continuar →' }).click()
 
-  await expect(page.getByText('✅ CONFIRMADOS (1)')).toBeVisible()
+  await expect(page.getByText('CONFIRMADOS (1)')).toBeVisible()
 
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: /Crear 1 cotización/ }).click()
 
   await expect(page.getByText('Cotizaciones a crear')).toBeVisible()
-  await page.getByRole('button', { name: 'Confirmar y Crear' }).click()
+  await page.getByRole('button', { name: 'Confirmar y crear' }).click()
 
   // Nota: el mensaje "✓ N cotizaciones creadas" se guarda en state.error pero
   // el paso vuelve a 'project' en el mismo setState, y ProjectSelector no
@@ -36,9 +36,9 @@ test('pendientes: edita una fila y confirma creación de cotización', async ({ 
 
   await row.locator('select').nth(1).selectOption('confirmado')
 
-  await page.getByRole('button', { name: 'Revisar Cambios →' }).click()
+  await page.getByRole('button', { name: 'Revisar cambios →' }).click()
   await expect(page.getByText('Detalle de pendientes:')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Confirmar y Crear' }).click()
+  await page.getByRole('button', { name: 'Confirmar y crear' }).click()
   await expect(page.getByText(/cotizaciones creadas/)).toBeVisible()
 })

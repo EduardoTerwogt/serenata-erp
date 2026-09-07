@@ -1,10 +1,13 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { usePendientesFlow } from '../usePendientesFlow'
 import PendientesTable from '../components/PendientesTable'
 import PendientesConfirmation from '../components/PendientesConfirmation'
+import { SectionHero } from '@/components/ui/SectionHero'
 
 export default function PendientesPage() {
+  const router = useRouter()
   const {
     state,
     handleLineUpdate,
@@ -21,24 +24,20 @@ export default function PendientesPage() {
     return (
       <div className="px-5 pt-6 pb-6 md:p-8">
         <div className="text-center py-12">
-          <p className="text-gray-400">Cargando pendientes...</p>
+          <p className="text-subtext">Cargando pendientes...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Pendientes de Planeación</h1>
-        <p className="text-gray-400">
-          Revisa y procesa las filas marcadas como &quot;Por Confirmar&quot; o &quot;Cancelado&quot;
-        </p>
-      </div>
+    <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-6">
+      <SectionHero
+        title="Pendientes de planeación"
+        subtitle='Revisa y procesa las filas marcadas como "Por Confirmar" o "Cancelado"'
+      />
 
-      {/* Content based on step */}
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-6xl mx-auto w-full">
         {state.step === 'list' && (
           <PendientesTable
             lines={state.pendientes}
@@ -48,7 +47,7 @@ export default function PendientesPage() {
             onConfirm={handleConfirmSelection}
             loading={state.loading}
             error={state.error}
-            onGoBack={() => (window.location.href = '/planeacion')}
+            onGoBack={() => router.push('/planeacion')}
           />
         )}
 

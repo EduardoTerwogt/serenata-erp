@@ -6,7 +6,7 @@ test('crea un nuevo usuario', async ({ page }) => {
   await mockAdminUsuariosApis(page)
   await login(page, '/admin/usuarios')
 
-  await page.getByRole('button', { name: '+ Nuevo usuario' }).click()
+  await page.getByRole('button', { name: 'Nuevo usuario' }).click()
 
   await page.getByPlaceholder('Nombre completo').fill('Luis Peña')
   await page.getByPlaceholder('correo@ejemplo.com').fill('luis@serenata.test')
@@ -15,14 +15,14 @@ test('crea un nuevo usuario', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Crear usuario' }).click()
 
-  await expect(page.getByText('Luis Peña')).toBeVisible()
+  await expect(page.getByText('Luis Peña').first()).toBeVisible()
 })
 
 test('edita secciones y desactiva un usuario existente', async ({ page }) => {
   await mockAdminUsuariosApis(page)
   await login(page, '/admin/usuarios')
 
-  await expect(page.getByText('Ana Pérez')).toBeVisible()
+  await expect(page.getByText('Ana Pérez').first()).toBeVisible()
 
   await page.getByRole('row', { name: /Ana Pérez/ }).getByRole('button', { name: 'Editar' }).click()
   await page.getByLabel('Proyectos').check()

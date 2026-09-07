@@ -13,7 +13,6 @@ interface ClienteProyectoSelectorProps {
 
 export default function ClienteProyectoSelector({
   onSelectCliente,
-  onSelectProyecto,
   onNext,
   loading,
 }: ClienteProyectoSelectorProps) {
@@ -42,15 +41,15 @@ export default function ClienteProyectoSelector({
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 md:p-8">
-        <h2 className="text-2xl font-bold text-white mb-2">Selecciona el Cliente</h2>
-        <p className="text-gray-400 mb-6">
-          {loading ? 'Claude esta procesando tu informacion...' : 'Indica para quien es esta informacion. El proyecto se toma del mensaje.'}
+      <div className="rounded-panel border border-hairline bg-card p-6 md:p-8">
+        <h2 className="text-h2 font-bold text-ink mb-2">Selecciona el cliente</h2>
+        <p className="text-subtext mb-6">
+          {loading ? 'Claude está procesando tu información...' : 'Indica para quién es esta información. El proyecto se toma del mensaje.'}
         </p>
 
         {/* Cliente Field */}
         <div className="mb-6 relative">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-body mb-2">
             Cliente *
           </label>
           <input
@@ -63,10 +62,10 @@ export default function ClienteProyectoSelector({
             }}
             onFocus={() => setMostrarClienteDropdown(true)}
             placeholder="Busca o escribe cliente..."
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500"
+            className="w-full bg-input border border-hairline rounded-control px-4 py-2.5 text-body placeholder-faint focus:outline-none focus:border-accent"
           />
           {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+            <div className="absolute z-50 w-full mt-1 rounded-control border border-hairline bg-card shadow-overlay max-h-48 overflow-y-auto">
               {clienteSugerencias.map((nombre, i) => (
                 <div
                   key={i}
@@ -74,7 +73,7 @@ export default function ClienteProyectoSelector({
                     handleSelectCliente(nombre)
                     setMostrarClienteDropdown(false)
                   }}
-                  className="px-4 py-3 hover:bg-gray-700 cursor-pointer text-gray-200 text-sm"
+                  className="px-4 py-3 hover:bg-row cursor-pointer text-body text-sm"
                 >
                   {nombre}
                 </div>
@@ -85,8 +84,8 @@ export default function ClienteProyectoSelector({
 
         {/* Selected display */}
         {clienteInput && (
-          <div className="mb-6 p-3 bg-green-900/20 border border-green-800 rounded-lg">
-            <p className="text-sm text-green-400">
+          <div className="mb-6 rounded-control border border-approved-bg/40 bg-approved-bg/10 p-3">
+            <p className="text-sm text-approved-fg">
               Cliente: <span className="font-semibold">{clienteInput}</span>
             </p>
           </div>
@@ -96,9 +95,9 @@ export default function ClienteProyectoSelector({
         <button
           onClick={handleNext}
           disabled={!clienteInput.trim() || loading}
-          className="w-full px-4 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+          className="w-full rounded-control bg-accent hover:bg-accent-pressed disabled:bg-row disabled:text-faint disabled:cursor-not-allowed text-accent-ink px-4 py-3 font-medium transition-colors"
         >
-          {loading ? 'Procesando informacion...' : 'Continuar →'}
+          {loading ? 'Procesando información...' : 'Continuar →'}
         </button>
       </div>
     </div>
