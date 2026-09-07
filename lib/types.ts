@@ -383,3 +383,13 @@ export interface OrdenPago {
   created_at: string
   updated_at?: string
 }
+
+// Fase 5.6 -- Dashboard ejecutivo. Lista simple recurrente (sin variación
+// mes a mes) -- decisión de Eduardo, 2026-09-07.
+export interface GastoFijo {
+  id: string
+  nombre: string
+  monto_mensual: number
+  activo: boolean
+  created_at: string
+}

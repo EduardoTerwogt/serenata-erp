@@ -111,6 +111,21 @@ export async function getPagosComprobantesByCuenta(cuentaId: string) {
   return data as PagoComprobante[]
 }
 
+/**
+ * Todos los abonos con fecha_pago en [desde, hasta) sin importar la cuenta --
+ * usado por el Dashboard ejecutivo (Fase 5.6) para sumar Ingresos reales por
+ * periodo, a diferencia de getPagosComprobantesByCuenta que es por cuenta.
+ */
+export async function getPagosComprobantesEnRango(desde: string, hasta: string) {
+  const { data, error } = await supabaseAdmin
+    .from('pagos_comprobantes')
+    .select('*')
+    .gte('fecha_pago', desde)
+    .lt('fecha_pago', hasta)
+  if (error) throw error
+  return data as PagoComprobante[]
+}
+
 export async function deletePagoComprobante(id: string) {
   const { error } = await supabaseAdmin
     .from('pagos_comprobantes')

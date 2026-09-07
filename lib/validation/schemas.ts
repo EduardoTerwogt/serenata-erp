@@ -235,6 +235,19 @@ export const PortalPerfilSchema = z.object({
   clabe: z.string().nullable().optional(),
 })
 
+// ==================== DASHBOARD EJECUTIVO (Fase 5.6) ====================
+
+export const GastoFijoCreateSchema = z.object({
+  nombre: z.string().trim().min(1, 'El nombre es requerido'),
+  monto_mensual: z.number().nonnegative('El monto no puede ser negativo'),
+})
+
+export const GastoFijoUpdateSchema = z.object({
+  nombre: z.string().trim().min(1).optional(),
+  monto_mensual: z.number().nonnegative().optional(),
+  activo: z.boolean().optional(),
+})
+
 // ==================== HELPER ====================
 
 /**
