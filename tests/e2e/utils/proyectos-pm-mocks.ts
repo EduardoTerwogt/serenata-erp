@@ -166,9 +166,67 @@ export async function mockProyectoDetallePMConTipo(page: Page, proyectoId: strin
     await fulfillJson(route, proyecto)
   })
 
-  await page.route(`**/api/proyectos/${proyectoId}/documentos`, async (route) => {
-    await fulfillJson(route, [])
+  let documentos: Record<string, unknown>[] = [
+    {
+      id: 'doc-brief', proyecto_id: proyectoId, tipo: 'BRIEF', titulo: null,
+      contenido: { cliente: proyecto.cliente, proyecto: proyecto.proyecto, fecha_entrega: proyecto.fecha_entrega, locacion: proyecto.locacion, folio_cotizacion: proyectoId, objetivo: '', mensaje_clave: '' },
+      archivo_url: null, archivo_nombre: null, auto_generado_at: '2026-01-01T00:00:00Z', editado_manualmente: false,
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    },
+  ]
+
+  await page.route(`**/api/proyectos/${proyectoId}/documentos/*/regenerar`, async (route) => {
+    const url = route.request().url()
+    const id = url.split('/documentos/')[1]?.split('/')[0]
+    const doc = documentos.find((d) => d.id === id)
+    if (doc) {
+      // Misma forma que buildStatusReportContenido -- el único tipo que
+      // este helper regenera hoy es STATUS_REPORT (los demás docs ya
+      // vienen precargados desde buildTipoGrabacion/documentos iniciales).
+      doc.contenido = {
+        generado_en: '2026-04-20T00:00:00Z',
+        tareas_completadas: 0,
+        tareas_en_progreso: 1,
+        tareas_pendientes: 1,
+        tareas_bloqueadas: [],
+        proximos_hitos: [],
+        financiero: { total_cotizado: 0, total_comprometido_pagar: 0, total_pagado: 0 },
+        comentario_riesgos: '',
+      }
+      doc.editado_manualmente = false
+    }
+    await fulfillJson(route, doc)
   })
+
+  await page.route(`**/api/proyectos/${proyectoId}/documentos/*`, async (route) => {
+    const url = route.request().url()
+    const id = url.split('/documentos/')[1]?.split('/')[0]
+    const method = route.request().method()
+    if (method === 'PUT') {
+      const body = route.request().postDataJSON() as Record<string, unknown>
+      documentos = documentos.map((d) => (d.id === id ? { ...d, ...body, editado_manualmente: true } : d))
+      await fulfillJson(route, documentos.find((d) => d.id === id))
+      return
+    }
+    await fulfillJson(route, documentos.find((d) => d.id === id))
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}/documentos`, async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as { tipo: string; titulo?: string | null; contenido?: Record<string, unknown> }
+      const nuevo = {
+        id: `doc-${documentos.length + 1}`, proyecto_id: proyectoId, titulo: body.titulo ?? null,
+        contenido: body.contenido ?? {}, archivo_url: null, archivo_nombre: null, auto_generado_at: null,
+        editado_manualmente: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        ...body,
+      }
+      documentos.push(nuevo)
+      await fulfillJson(route, nuevo, 201)
+      return
+    }
+    await fulfillJson(route, documentos)
+  })
+
   await page.route(`**/api/proyectos/${proyectoId}/equipo`, async (route) => {
     await fulfillJson(route, [])
   })
