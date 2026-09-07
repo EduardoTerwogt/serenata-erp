@@ -9,6 +9,7 @@ import {
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { extraerDatosIdentidad } from '@/lib/server/portal/document-parser'
+import { toErrorMessage } from '@/lib/server/portal/error-message'
 import { TipoDocumentoProveedor } from '@/lib/types'
 
 const TIPOS_VALIDOS: TipoDocumentoProveedor[] = [
@@ -33,7 +34,7 @@ export async function GET() {
     return Response.json({ documentos })
   } catch (error) {
     console.error('[portal/documentos]', error)
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
   }
 }
 
@@ -95,6 +96,6 @@ export async function POST(request: Request) {
     return Response.json({ success: true, documento, requiere_confirmacion: requiereConfirmacion })
   } catch (error) {
     console.error('[portal/documentos]', error)
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
   }
 }

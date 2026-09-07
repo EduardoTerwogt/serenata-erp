@@ -62,6 +62,21 @@ export async function confirmarMatch(nuevoId: string, candidatoId: string): Prom
     .single()
   if (nuevoError) throw nuevoError
 
+  // Orden importa: mientras la fila `nuevo` siga existiendo con el mismo
+  // correo (password_hash NOT NULL), copiarle ese correo al candidato
+  // viola el índice único idx_proveedores_correo_portal (dos filas con
+  // password_hash NOT NULL no pueden compartir correo). Por eso primero se
+  // reasignan los documentos y se borra `nuevo`, y solo al final se le
+  // copia el correo/password al candidato -- ya sin conflicto posible.
+  const { error: reasignarDocsError } = await supabaseAdmin
+    .from('proveedor_documentos')
+    .update({ proveedor_id: candidatoId })
+    .eq('proveedor_id', nuevoId)
+  if (reasignarDocsError) throw reasignarDocsError
+
+  const { error: borrarError } = await supabaseAdmin.from('proveedores').delete().eq('id', nuevoId)
+  if (borrarError) throw borrarError
+
   const { data: candidatoActualizado, error: updateError } = await supabaseAdmin
     .from('proveedores')
     .update({
@@ -74,15 +89,6 @@ export async function confirmarMatch(nuevoId: string, candidatoId: string): Prom
     .select()
     .single()
   if (updateError) throw updateError
-
-  const { error: reasignarDocsError } = await supabaseAdmin
-    .from('proveedor_documentos')
-    .update({ proveedor_id: candidatoId })
-    .eq('proveedor_id', nuevoId)
-  if (reasignarDocsError) throw reasignarDocsError
-
-  const { error: borrarError } = await supabaseAdmin.from('proveedores').delete().eq('id', nuevoId)
-  if (borrarError) throw borrarError
 
   return candidatoActualizado as Proveedor
 }

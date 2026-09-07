@@ -1,6 +1,7 @@
 import { requirePortalSession } from '@/lib/portal-auth'
 import { getProveedorById, updateProveedor } from '@/lib/db'
 import { validate, PortalPerfilSchema } from '@/lib/validation/schemas'
+import { toErrorMessage } from '@/lib/server/portal/error-message'
 
 export async function GET() {
   const portalAuth = await requirePortalSession()
@@ -17,7 +18,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error('[portal/perfil]', error)
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
   }
 }
 
@@ -40,6 +41,6 @@ export async function PATCH(request: Request) {
     })
   } catch (error) {
     console.error('[portal/perfil]', error)
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
   }
 }

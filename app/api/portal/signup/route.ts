@@ -2,6 +2,7 @@ import { hashPassword } from '@/lib/auth-utils'
 import { validate, PortalSignupSchema } from '@/lib/validation/schemas'
 import { crearProveedorDesdeSignup, getProveedorByCorreo } from '@/lib/db'
 import { setPortalSessionCookie } from '@/lib/portal-auth'
+import { toErrorMessage } from '@/lib/server/portal/error-message'
 
 /**
  * Registro ligero: correo, password y nombre/alias opcional (ej. "Chok" en
@@ -36,6 +37,6 @@ export async function POST(request: Request) {
     return Response.json({ success: true })
   } catch (error) {
     console.error('[portal/signup]', error)
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
   }
 }

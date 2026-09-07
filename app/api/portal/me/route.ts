@@ -1,6 +1,7 @@
 import { requirePortalSession } from '@/lib/portal-auth'
 import { getProveedorById } from '@/lib/db'
 import { Proveedor } from '@/lib/types'
+import { toErrorMessage } from '@/lib/server/portal/error-message'
 
 export async function GET() {
   const portalAuth = await requirePortalSession()
@@ -27,6 +28,6 @@ export async function GET() {
     })
   } catch (error) {
     console.error('[portal/me]', error)
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
   }
 }

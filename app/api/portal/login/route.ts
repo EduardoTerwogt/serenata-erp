@@ -2,6 +2,7 @@ import { verifyPassword } from '@/lib/auth-utils'
 import { validate, PortalLoginSchema } from '@/lib/validation/schemas'
 import { getProveedorByCorreo } from '@/lib/db'
 import { setPortalSessionCookie } from '@/lib/portal-auth'
+import { toErrorMessage } from '@/lib/server/portal/error-message'
 
 export async function POST(request: Request) {
   try {
@@ -28,6 +29,6 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('[portal/login]', error)
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
   }
 }

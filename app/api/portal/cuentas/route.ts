@@ -1,6 +1,7 @@
 import { requirePortalSession } from '@/lib/portal-auth'
 import { getCuentasPagarPorProveedor } from '@/lib/db'
 import { calcularSaldoPendiente } from '@/lib/server/cuentas/status'
+import { toErrorMessage } from '@/lib/server/portal/error-message'
 
 export async function GET() {
   const portalAuth = await requirePortalSession()
@@ -22,6 +23,6 @@ export async function GET() {
     })
   } catch (error) {
     console.error('[portal/cuentas]', error)
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
   }
 }
