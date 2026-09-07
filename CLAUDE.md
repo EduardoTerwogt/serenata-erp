@@ -41,9 +41,10 @@ Dos conexiones al servidor MCP oficial de Supabase, configuradas como Custom Con
 - `supabase-test`: lectura y escritura completas — proyecto de prueba, aislado de producción.
 - `supabase-prod`: escritura habilitada, pero bajo la regla siguiente.
 
-**Regla obligatoria sobre producción (mismo nivel de firmeza que el freno de `git push`):**
-- Nunca aplicar un cambio de esquema en producción vía `supabase-prod` sin mostrar antes el SQL/migración exacto en el chat y esperar confirmación explícita del usuario.
-- Cada cambio aplicado a producción se guarda también como archivo de migración numerado en `db/migrations/` y se commitea, para que el historial de migraciones no se desincronice de lo que realmente tiene la base de datos.
+**Regla sobre producción (actualizada 2026-09-07):**
+- Los cambios de esquema en producción vía `supabase-prod` están PRE-APROBADOS siempre y cuando no borren/eliminen nada que ya exista (tablas, columnas, filas, constraints, funciones/RPCs) — se puede aplicar el cambio sin esperar confirmación si es aditivo o es una mejora.
+- Borrar algo que ya existe solo está permitido cuando es para SUSTITUIRLO — porque se está agregando o mejorando esa misma pieza (ej. recrear una función/RPC, renombrar una columna). Un borrado que no sustituye nada (elimina una capacidad sin reemplazo) sigue requiriendo mostrar el SQL exacto en el chat y esperar confirmación explícita del usuario.
+- Cada cambio aplicado a producción se sigue guardando como archivo de migración numerado en `db/migrations/` y se commitea, para que el historial de migraciones no se desincronice de lo que realmente tiene la base de datos.
 
 ---
 
@@ -68,10 +69,12 @@ Carpeta de Drive exclusiva para pruebas automáticas (CI / `tests/e2e/live`), se
 
 ## Reglas de trabajo
 
-**Planear antes de tocar código:**
-- Para cambios medianos o riesgosos, proponer approach y confirmar con el usuario ANTES de implementar.
-- Para fixes pequeños y seguros (typos, edits puntuales, cambios de doc), ejecutar directo explicando brevemente lo que se hará.
-- Si hay dudas, hacer las preguntas necesarias hasta tener claridad total.
+**Autonomía de ejecución (vigente desde 2026-09-07):**
+- Todo cambio que requeriría pedir permiso (editar código, correr comandos, tests, build, push) se considera PRE-APROBADO si se cumplen las 4 condiciones: (1) ya se revisó el cambio, (2) no altera funcionalidad existente como efecto secundario, (3) no elimina/pierde features existentes, (4) no bloquea features existentes — y ya corrieron los tests que le correspondan en verde. Cumplido esto, proceder sin pausar a esperar confirmación.
+- Pedir aprobación al usuario SOLO cuando haya una decisión de lógica de negocio, arquitectura, o UX/UI que no esté clara o tenga más de un camino razonable.
+- Si un plan ya fue aprobado (ExitPlanMode aceptado), hay autorización para ejecutar todas sus etapas sin volver a pedir permiso etapa por etapa, siempre y cuando: cada etapa pase los tests previstos antes de avanzar a la siguiente, y se verifique que lo pusheado a `main` quedó en verde y funcionando de verdad (no solo que el push tuvo éxito — confirmar build/deploy/comportamiento real). Si algo no queda en verde o no funciona como se esperaba, diagnosticar la causa raíz de inmediato (sin atajos ni retries ciegos) y no detenerse ni pasar a la siguiente etapa hasta resolverlo.
+- Fixes pequeños y seguros (typos, edits puntuales, cambios de doc) se ejecutan directo, explicando brevemente qué se hará.
+- Si hay dudas genuinas sobre requerimientos, o el caso no encaja claramente en lo anterior, preguntar antes de avanzar.
 - Escribir el plan → ejecutar → replanear si algo cambia.
 
 **No modificar features existentes:**
