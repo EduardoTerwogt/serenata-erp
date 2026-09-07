@@ -24,6 +24,7 @@ import { EtapaSelector } from '@/app/components/proyectos/EtapaSelector'
 import { TabTareas } from '@/app/components/proyectos/tabs/TabTareas'
 import { TabCronograma } from '@/app/components/proyectos/tabs/TabCronograma'
 import { TabDocumentos } from '@/app/components/proyectos/tabs/TabDocumentos'
+import { TabReporteCierre } from '@/app/components/proyectos/tabs/TabReporteCierre'
 import type { ProyectoDetailTab } from '@/app/components/proyectos/types'
 
 const ESTADOS: EstadoProyecto[] = ['PREPRODUCCION', 'RODAJE', 'POSTPRODUCCION', 'FINALIZADO']
@@ -304,9 +305,7 @@ export default function ProyectoDetallePage({
       )}
 
       {pm.tab === 'cierre' && pm.tipoAsignado && (
-        <div className="rounded-panel border border-hairline bg-card p-[19px] text-subtext text-content">
-          Reporte de cierre -- próximamente (Bloque 3.7).
-        </div>
+        <TabReporteCierre documentos={pm.documentosApi.documentos} equipo={pm.equipoApi.equipo} />
       )}
     </div>
   )
