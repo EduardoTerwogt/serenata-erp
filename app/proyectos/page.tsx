@@ -6,6 +6,8 @@ import { FilterTabs, type FilterTab } from '@/components/ui/FilterTabs'
 import { useProyectosListado, type ListadoTab } from '@/app/components/proyectos/useProyectosListado'
 import { TabTablero } from '@/app/components/proyectos/listado/TabTablero'
 import { TabLista } from '@/app/components/proyectos/listado/TabLista'
+import { TabTareas } from '@/app/components/proyectos/listado/TabTareas'
+import { TabEstatus } from '@/app/components/proyectos/listado/TabEstatus'
 
 const TABS: FilterTab<ListadoTab>[] = [
   { value: 'tablero', label: 'Tablero' },
@@ -15,7 +17,10 @@ const TABS: FilterTab<ListadoTab>[] = [
 ]
 
 export default function ProyectosPage() {
-  const { ltab, setLtab, proyectos, loading, tiposApi, tiposActivos, tipoActivoId, setTipoActivoId } = useProyectosListado()
+  const {
+    ltab, setLtab, proyectos, loading, tiposApi, tiposActivos, tipoActivoId, setTipoActivoId,
+    tareasAgregadas, loadingTareas,
+  } = useProyectosListado()
 
   return (
     <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-[19px]">
@@ -51,15 +56,9 @@ export default function ProyectosPage() {
             />
           )}
           {ltab === 'lista' && <TabLista proyectos={proyectos} tipos={tiposApi.tipos} />}
-          {ltab === 'tareas' && (
-            <div className="rounded-panel border border-hairline bg-card p-[19px] text-subtext text-content">
-              Tareas -- próximamente (Bloque 3.9).
-            </div>
-          )}
+          {ltab === 'tareas' && <TabTareas tareas={tareasAgregadas} loading={loadingTareas} />}
           {ltab === 'estatus' && (
-            <div className="rounded-panel border border-hairline bg-card p-[19px] text-subtext text-content">
-              Estatus y cronograma -- próximamente (Bloque 3.9).
-            </div>
+            <TabEstatus proyectos={proyectos} tipos={tiposApi.tipos} tareasAgregadas={tareasAgregadas} loadingTareas={loadingTareas} />
           )}
         </>
       )}

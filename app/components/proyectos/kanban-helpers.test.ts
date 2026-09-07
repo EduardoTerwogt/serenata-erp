@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupProyectosByEtapa, groupTareasByEstado, isTareaOverdue, proyectosSinTipo, resolverEtapaProyecto } from './kanban-helpers'
+import { groupProyectosByEtapa, groupTareasByEstado, isTareaOverdue, progresoEtapaProyecto, proyectosSinTipo, resolverEtapaProyecto } from './kanban-helpers'
 import type { Proyecto, ProyectoTarea, TipoProyectoConEtapas, TipoProyectoEtapa } from '@/lib/types'
 
 const baseTarea = (overrides: Partial<ProyectoTarea> = {}): ProyectoTarea => ({
@@ -133,5 +133,39 @@ describe('resolverEtapaProyecto', () => {
   it('resuelve tono issued para etapas intermedias', () => {
     const resultado = resolverEtapaProyecto(baseProyecto({ tipo_proyecto_id: 't1', etapa_id: 'e2' }), tipos)
     expect(resultado).toEqual({ label: 'Rodaje', tone: 'issued' })
+  })
+})
+
+describe('progresoEtapaProyecto', () => {
+  const tipos: TipoProyectoConEtapas[] = [
+    {
+      id: 't1', nombre: 'Grabación', activo: true, created_at: '',
+      etapas: [
+        { id: 'e1', tipo_proyecto_id: 't1', nombre: 'Preproducción', orden: 1, es_etapa_final: false, created_at: '' },
+        { id: 'e2', tipo_proyecto_id: 't1', nombre: 'Rodaje', orden: 2, es_etapa_final: false, created_at: '' },
+        { id: 'e3', tipo_proyecto_id: 't1', nombre: 'Finalizado', orden: 3, es_etapa_final: true, created_at: '' },
+      ],
+    },
+    {
+      id: 't2', nombre: 'Una sola etapa', activo: true, created_at: '',
+      etapas: [{ id: 'u1', tipo_proyecto_id: 't2', nombre: 'Única', orden: 1, es_etapa_final: true, created_at: '' }],
+    },
+  ]
+
+  it('es 0 en la primera etapa y 1 en la etapa final', () => {
+    expect(progresoEtapaProyecto(baseProyecto({ tipo_proyecto_id: 't1', etapa_id: 'e1' }), tipos)).toBe(0)
+    expect(progresoEtapaProyecto(baseProyecto({ tipo_proyecto_id: 't1', etapa_id: 'e3' }), tipos)).toBe(1)
+  })
+
+  it('es 0.5 en la etapa intermedia de 3', () => {
+    expect(progresoEtapaProyecto(baseProyecto({ tipo_proyecto_id: 't1', etapa_id: 'e2' }), tipos)).toBe(0.5)
+  })
+
+  it('retorna null cuando el tipo tiene una sola etapa (no hay progresión que medir)', () => {
+    expect(progresoEtapaProyecto(baseProyecto({ tipo_proyecto_id: 't2', etapa_id: 'u1' }), tipos)).toBeNull()
+  })
+
+  it('retorna null sin tipo/etapa asignados', () => {
+    expect(progresoEtapaProyecto(baseProyecto({ tipo_proyecto_id: null, etapa_id: null }), tipos)).toBeNull()
   })
 })

@@ -5,7 +5,8 @@
 // porque se usa para posicionar barras, no solo para mostrar texto.
 
 import { toneForTareaEstado } from '@/components/ui/StatusBadge'
-import type { ProyectoTarea } from '@/lib/types'
+import { resolverEtapaProyecto } from './kanban-helpers'
+import type { Proyecto, ProyectoTarea, TipoProyectoConEtapas } from '@/lib/types'
 import type { GanttRow } from './Gantt'
 
 export interface DateRange {
@@ -157,4 +158,43 @@ export function buildGanttRowsFromTareas(tareas: ProyectoTarea[]): GanttTareasRe
   })
 
   return { rows, rulerLabels: buildRulerLabels(range), todayPct: computeTodayPercent(range) }
+}
+
+export interface GanttProyectosResult extends GanttTareasResult {
+  omitidos: number
+}
+
+/**
+ * Construye las filas del Gantt de portafolio (todos los proyectos) --
+ * usa fecha_inicio_real (o created_at si no existe) como inicio y
+ * fecha_entrega (o fecha_cierre_real) como fin. Proyectos sin ninguna
+ * fecha de fin resolvible se omiten y se cuentan en `omitidos` en vez de
+ * dibujarse con datos inventados (decisión 7 del plan de Bloque 3).
+ */
+export function buildGanttRowsFromProyectos(proyectos: Proyecto[], tipos: TipoProyectoConEtapas[]): GanttProyectosResult {
+  const conFin = proyectos.filter((p) => p.fecha_entrega || p.fecha_cierre_real)
+  const omitidos = proyectos.length - conFin.length
+
+  if (conFin.length === 0) {
+    return { rows: [], rulerLabels: [], todayPct: null, omitidos }
+  }
+
+  const finDe = (p: Proyecto) => (p.fecha_entrega ?? p.fecha_cierre_real)!
+  const inicioDe = (p: Proyecto) => p.fecha_inicio_real ?? (p.created_at ? p.created_at.slice(0, 10) : null)
+
+  const range = computeRange(conFin.flatMap((p) => [inicioDe(p), finDe(p)].filter((d): d is string => Boolean(d))))
+
+  const rows: GanttRow[] = conFin.map((proyecto) => {
+    const etapa = resolverEtapaProyecto(proyecto, tipos)
+    const tone = etapa?.tone ?? 'draft'
+    const span = computeBarSpan(inicioDe(proyecto), finDe(proyecto), range)
+
+    return {
+      id: proyecto.id,
+      label: `${proyecto.id} · ${proyecto.proyecto}`,
+      bars: [{ leftPct: span.leftPct, widthPct: span.widthPct, tone, label: etapa?.label ?? proyecto.estado }],
+    }
+  })
+
+  return { rows, rulerLabels: buildRulerLabels(range), todayPct: computeTodayPercent(range), omitidos }
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  buildGanttRowsFromProyectos,
   buildGanttRowsFromTareas,
   buildRulerLabels,
   computeBarSpan,
@@ -8,7 +9,25 @@ import {
   daysBetween,
   percentForDate,
 } from './gantt-helpers'
-import type { ProyectoTarea } from '@/lib/types'
+import type { Proyecto, ProyectoTarea, TipoProyectoConEtapas } from '@/lib/types'
+
+const baseProyecto = (overrides: Partial<Proyecto> = {}): Proyecto => ({
+  id: overrides.id ?? 'SH001',
+  cliente: 'Cliente',
+  proyecto: 'Proyecto',
+  fecha_entrega: null,
+  locacion: null,
+  horarios: null,
+  punto_encuentro: null,
+  estado: 'PREPRODUCCION',
+  notas: null,
+  created_at: '2026-01-01T00:00:00.000Z',
+  tipo_proyecto_id: null,
+  etapa_id: null,
+  fecha_inicio_real: null,
+  fecha_cierre_real: null,
+  ...overrides,
+})
 
 const baseTarea = (overrides: Partial<ProyectoTarea> = {}): ProyectoTarea => ({
   id: overrides.id ?? 'tarea-1',
@@ -189,5 +208,50 @@ describe('buildGanttRowsFromTareas', () => {
     // El marcador de ancho fijo (sin fecha de inicio válida) sería ~8% --
     // un span real de 10 días sobre un rango con poco padding es mucho más ancho.
     expect(rows[0].bars[0].widthPct).toBeGreaterThan(50)
+  })
+})
+
+describe('buildGanttRowsFromProyectos', () => {
+  const tipos: TipoProyectoConEtapas[] = [
+    {
+      id: 't1', nombre: 'Grabación', activo: true, created_at: '',
+      etapas: [
+        { id: 'e1', tipo_proyecto_id: 't1', nombre: 'Preproducción', orden: 1, es_etapa_final: false, created_at: '' },
+        { id: 'e2', tipo_proyecto_id: 't1', nombre: 'Finalizado', orden: 2, es_etapa_final: true, created_at: '' },
+      ],
+    },
+  ]
+
+  it('omite proyectos sin fecha_entrega ni fecha_cierre_real, y los cuenta en omitidos', () => {
+    const proyectos = [
+      baseProyecto({ id: 'sin-fecha' }),
+      baseProyecto({ id: 'con-fecha', fecha_entrega: '2026-06-15' }),
+    ]
+    const { rows, omitidos } = buildGanttRowsFromProyectos(proyectos, tipos)
+    expect(rows.map((r) => r.id)).toEqual(['con-fecha'])
+    expect(omitidos).toBe(1)
+  })
+
+  it('usa fecha_cierre_real como fin cuando no hay fecha_entrega', () => {
+    const proyectos = [baseProyecto({ fecha_entrega: null, fecha_cierre_real: '2026-06-15' })]
+    const { rows } = buildGanttRowsFromProyectos(proyectos, tipos)
+    expect(rows).toHaveLength(1)
+  })
+
+  it('usa el tono de la etapa resuelta cuando el proyecto tiene tipo/etapa asignados', () => {
+    const proyectos = [baseProyecto({ tipo_proyecto_id: 't1', etapa_id: 'e2', fecha_entrega: '2026-06-15' })]
+    const { rows } = buildGanttRowsFromProyectos(proyectos, tipos)
+    expect(rows[0].bars[0].tone).toBe('approved')
+  })
+
+  it('usa tono draft por default cuando el proyecto no tiene etapa resuelta', () => {
+    const proyectos = [baseProyecto({ fecha_entrega: '2026-06-15' })]
+    const { rows } = buildGanttRowsFromProyectos(proyectos, tipos)
+    expect(rows[0].bars[0].tone).toBe('draft')
+  })
+
+  it('retorna vacío con omitidos=0 cuando la lista de proyectos está vacía', () => {
+    const resultado = buildGanttRowsFromProyectos([], tipos)
+    expect(resultado).toEqual({ rows: [], rulerLabels: [], todayPct: null, omitidos: 0 })
   })
 })

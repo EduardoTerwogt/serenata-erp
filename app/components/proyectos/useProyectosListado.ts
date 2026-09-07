@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getJson } from '@/lib/client/api'
 import { useTiposProyecto } from '@/app/components/proyectos/hooks/useTiposProyecto'
+import type { TareaAgregada } from '@/lib/server/repositories/proyecto-tareas'
 import type { Proyecto } from '@/lib/types'
 
 export type ListadoTab = 'tablero' | 'tareas' | 'estatus' | 'lista'
@@ -42,10 +43,36 @@ export function useProyectosListado() {
     setTipoActivoId(tiposActivos[0].id)
   }, [tipoActivoId, tiposActivos])
 
+  // Tareas agregadas (tabs "Tareas" y "Estatus", Bloque 3.9): lazy, una sola
+  // vez, en la primera activación de cualquiera de los dos -- mismo patrón
+  // de *LoadedRef que useCuentasPage.ts para alertas/historial.
+  const [tareasAgregadas, setTareasAgregadas] = useState<TareaAgregada[]>([])
+  const [loadingTareas, setLoadingTareas] = useState(false)
+  const tareasLoadedRef = useRef(false)
+
+  const cargarTareasAgregadas = useCallback(async () => {
+    setLoadingTareas(true)
+    try {
+      const data = await getJson<TareaAgregada[]>('/api/proyectos/tareas', 'Error obteniendo tareas de todos los proyectos')
+      setTareasAgregadas(data)
+      tareasLoadedRef.current = true
+    } catch {
+      setTareasAgregadas([])
+    } finally {
+      setLoadingTareas(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if ((ltab !== 'tareas' && ltab !== 'estatus') || tareasLoadedRef.current) return
+    void cargarTareasAgregadas()
+  }, [ltab, cargarTareasAgregadas])
+
   return {
     ltab, setLtab,
     proyectos, loading, recargarProyectos,
     tiposApi, tiposActivos,
     tipoActivoId, setTipoActivoId,
+    tareasAgregadas, loadingTareas,
   }
 }

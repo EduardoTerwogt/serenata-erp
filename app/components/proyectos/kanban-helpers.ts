@@ -71,3 +71,25 @@ export function resolverEtapaProyecto(proyecto: Proyecto, tipos: TipoProyectoCon
   const etapa = etapas[index]
   return { label: etapa.nombre, tone: toneForEtapaPosicion(index, etapa.es_etapa_final) }
 }
+
+/**
+ * Proxy de avance del proyecto dentro de su pipeline: posición de su etapa
+ * actual sobre el total de etapas de su tipo (0 = primera etapa, 1 =
+ * etapa final). No es "% de tareas completadas" (esa vista vive en el
+ * tablero de tareas de cada proyecto) -- es "qué tan lejos va en su
+ * proceso", usado para el promedio del dashboard de Estatus. Retorna null
+ * en los mismos casos que resolverEtapaProyecto, o si el tipo tiene una
+ * sola etapa (no hay progresión que medir).
+ */
+export function progresoEtapaProyecto(proyecto: Proyecto, tipos: TipoProyectoConEtapas[]): number | null {
+  if (!proyecto.tipo_proyecto_id || !proyecto.etapa_id) return null
+  const tipo = tipos.find((t) => t.id === proyecto.tipo_proyecto_id)
+  if (!tipo) return null
+
+  const etapas = [...tipo.etapas].sort((a, b) => a.orden - b.orden)
+  if (etapas.length < 2) return null
+  const index = etapas.findIndex((e) => e.id === proyecto.etapa_id)
+  if (index === -1) return null
+
+  return index / (etapas.length - 1)
+}

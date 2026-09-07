@@ -291,3 +291,49 @@ export async function mockProyectoDetallePMConTipo(page: Page, proyectoId: strin
 
   return { tipo, proyecto, tareas: () => tareas }
 }
+
+// Mocks para el listado general (Bloque 3.9): 2 proyectos activos con
+// tipo/etapa asignados + tareas agregadas de GET /api/proyectos/tareas
+// (una vencida, una no) para ejercitar los tabs Tareas y Estatus.
+export async function mockProyectosListadoApis(page: Page) {
+  const tipo = buildTipoGrabacion()
+  const proyectos = [
+    {
+      id: 'SH310', cliente: 'Cliente A', proyecto: 'Activación Primavera', fecha_entrega: '2026-06-15',
+      locacion: null, horarios: null, punto_encuentro: null, estado: 'RODAJE', notas: '',
+      created_at: '2026-01-01T00:00:00Z', tipo_proyecto_id: TIPO_GRABACION_ID, etapa_id: ETAPA_RODAJE_ID,
+    },
+    {
+      id: 'SH311', cliente: 'Cliente B', proyecto: 'Video Institucional', fecha_entrega: null,
+      locacion: null, horarios: null, punto_encuentro: null, estado: 'PREPRODUCCION', notas: '',
+      created_at: '2026-01-01T00:00:00Z', tipo_proyecto_id: null, etapa_id: null,
+    },
+  ]
+
+  const tareasAgregadas = [
+    {
+      id: 'ta-1', proyecto_id: 'SH310', proyecto_nombre: 'Activación Primavera', proyecto_cliente: 'Cliente A',
+      titulo: 'Confirmar permiso de locación', descripcion: null, estado: 'PENDIENTE', asignado_a: null,
+      asignado_a_nombre: null, es_hito: false, origen: 'plantilla', fecha_limite: '2020-01-01',
+      fecha_completada: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: 'ta-2', proyecto_id: 'SH310', proyecto_nombre: 'Activación Primavera', proyecto_cliente: 'Cliente A',
+      titulo: 'Enviar guion a cliente', descripcion: null, estado: 'PENDIENTE', asignado_a: null,
+      asignado_a_nombre: null, es_hito: false, origen: 'manual', fecha_limite: '2030-01-01',
+      fecha_completada: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    },
+  ]
+
+  await page.route('**/api/tipos-proyecto', async (route) => {
+    await fulfillJson(route, [tipo])
+  })
+  await page.route('**/api/proyectos', async (route) => {
+    await fulfillJson(route, proyectos)
+  })
+  await page.route('**/api/proyectos/tareas', async (route) => {
+    await fulfillJson(route, tareasAgregadas)
+  })
+
+  return { tipo, proyectos, tareasAgregadas }
+}
