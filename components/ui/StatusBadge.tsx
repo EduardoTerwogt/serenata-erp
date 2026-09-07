@@ -65,3 +65,38 @@ const VALIDACION_ESTADO_TONE: Record<string, StatusTone> = {
 export function toneForValidacionEstado(estado: string): StatusTone {
   return VALIDACION_ESTADO_TONE[estado] || 'draft'
 }
+
+// Fase 5.2 Bloque 3: tareas de proyecto y el enum legado de proyectos.estado
+// se unen al mismo mapeo de 4 tonos.
+const TAREA_ESTADO_TONE: Record<string, StatusTone> = {
+  COMPLETADA: 'approved',
+  EN_PROGRESO: 'issued',
+  PENDIENTE: 'draft',
+  BLOQUEADA: 'cancelled',
+}
+
+export function toneForTareaEstado(estado: string): StatusTone {
+  return TAREA_ESTADO_TONE[estado] || 'draft'
+}
+
+const PROYECTO_ESTADO_TONE: Record<string, StatusTone> = {
+  FINALIZADO: 'approved',
+  RODAJE: 'issued',
+  POSTPRODUCCION: 'issued',
+  PREPRODUCCION: 'draft',
+}
+
+export function toneForProyectoEstado(estado: string): StatusTone {
+  return PROYECTO_ESTADO_TONE[estado] || 'draft'
+}
+
+// Las etapas de tipo_proyecto_etapas tienen nombre libre por tipo (Concierto
+// tiene "Montaje"/"Show", Diseño de Show tiene "Brief"/"Diseño"...) -- el
+// tono se resuelve por posición, no por nombre: la primera etapa es
+// 'draft', la marcada es_etapa_final es 'approved', las de en medio son
+// 'issued'. Ver plan de Bloque 3 (decisión 3).
+export function toneForEtapaPosicion(index: number, esEtapaFinal: boolean): StatusTone {
+  if (esEtapaFinal) return 'approved'
+  if (index === 0) return 'draft'
+  return 'issued'
+}

@@ -25,6 +25,10 @@ import {
   Printer,
   Send,
   Clock,
+  ChevronUp,
+  Trash2,
+  Pencil,
+  RefreshCw,
 } from 'lucide-react'
 
 // Fase 5.7 (rediseño): wrapper tipado sobre lucide-react (ya era dependencia
@@ -60,6 +64,10 @@ const ICONS = {
   printer: Printer,
   send: Send,
   clock: Clock,
+  'chevron-up': ChevronUp,
+  trash: Trash2,
+  edit: Pencil,
+  refresh: RefreshCw,
 } as const
 
 export type IconName = keyof typeof ICONS
