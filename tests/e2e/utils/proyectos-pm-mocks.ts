@@ -63,3 +63,63 @@ export async function mockTiposProyectoApis(page: Page) {
 
   return { tipos }
 }
+
+// Mocks para el detalle de un proyecto SIN tipo asignado -- prueba el
+// prompt de asignación de tipo (Fase 5.2 Bloque 3.3). No usa
+// mockProyectosApis porque necesita `proyecto.tipo_proyecto_id` ausente y
+// asserts sobre el PUT de asignación.
+export async function mockProyectoDetallePMSinTipo(page: Page, proyectoId: string) {
+  const tipo = buildTipoGrabacion()
+  const proyecto: Record<string, unknown> = {
+    id: proyectoId,
+    cliente: 'Cervezas del Bravo',
+    proyecto: 'Spot Verano E2E',
+    fecha_entrega: '2026-06-15',
+    locacion: 'CDMX',
+    horarios: '08:00 - 20:00',
+    punto_encuentro: 'Estudio Central',
+    estado: 'PREPRODUCCION',
+    notas: '',
+    created_at: '2026-05-01T00:00:00Z',
+    tipo_proyecto_id: null,
+    etapa_id: null,
+    items: [],
+  }
+
+  await page.route('**/api/tipos-proyecto', async (route) => {
+    await fulfillJson(route, [tipo])
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}`, async (route) => {
+    await fulfillJson(route, proyecto)
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}/tareas`, async (route) => {
+    await fulfillJson(route, [])
+  })
+  await page.route(`**/api/proyectos/${proyectoId}/documentos`, async (route) => {
+    await fulfillJson(route, [])
+  })
+  await page.route(`**/api/proyectos/${proyectoId}/equipo`, async (route) => {
+    await fulfillJson(route, [])
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}/tipo`, async (route) => {
+    const body = route.request().postDataJSON() as { tipo_proyecto_id: string }
+    proyecto.tipo_proyecto_id = body.tipo_proyecto_id
+    proyecto.etapa_id = tipo.etapas[0].id
+    await fulfillJson(route, proyecto)
+  })
+
+  await page.route(`**/api/proyectos/${proyectoId}/etapa`, async (route) => {
+    const body = route.request().postDataJSON() as { etapa_id: string }
+    proyecto.etapa_id = body.etapa_id
+    await fulfillJson(route, proyecto)
+  })
+
+  await page.route('**/api/proveedores', async (route) => {
+    await fulfillJson(route, [])
+  })
+
+  return { tipo, proyecto }
+}
