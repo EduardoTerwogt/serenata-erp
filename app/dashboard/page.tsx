@@ -302,10 +302,7 @@ export default function DashboardPage() {
       {modalAbierto && (
         <GastoFijoModal
           onClose={() => setModalAbierto(false)}
-          onGuardado={() => {
-            setModalAbierto(false)
-            cargar(periodo)
-          }}
+          onGuardado={() => cargar(periodo)}
         />
       )}
     </div>
@@ -336,7 +333,8 @@ function GastoFijoModal({ onClose, onGuardado }: { onClose: () => void; onGuarda
     }
     setGuardando(true)
     try {
-      await sendJson('/api/dashboard/gastos-fijos', { nombre, monto_mensual: montoNumerico }, 'Error creando gasto fijo')
+      const creado = await sendJson<GastoFijo>('/api/dashboard/gastos-fijos', { nombre, monto_mensual: montoNumerico }, 'Error creando gasto fijo')
+      setGastos((prev) => [creado, ...prev])
       setNombre('')
       setMonto('')
       onGuardado()
