@@ -77,6 +77,25 @@ export async function clearPortalSessionCookie(): Promise<void> {
   cookieStore.delete(COOKIE_NAME)
 }
 
+/** Lee y verifica la cookie de sesión. Usado tanto por API routes como por
+ * Server Components de página (cada uno la envuelve en su propio idioma de
+ * manejo de "no autenticado" -- ver requirePortalSession/getPortalProveedorId). */
+async function readPortalSessionCookie(): Promise<string | null> {
+  const cookieStore = await cookies()
+  const token = cookieStore.get(COOKIE_NAME)?.value
+  if (!token) return null
+  const session = await verifyPortalSession(token)
+  return session?.proveedorId ?? null
+}
+
+/**
+ * Para Server Components de página: `const proveedorId = await getPortalProveedorId()`
+ * y `if (!proveedorId) redirect('/portal/login')`.
+ */
+export async function getPortalProveedorId(): Promise<string | null> {
+  return readPortalSessionCookie()
+}
+
 /**
  * Mismo idioma que `requireSection()` (lib/api-auth.ts): retorna
  * `{ proveedorId, response }`, donde `response` viene seteado si no hay
@@ -85,16 +104,9 @@ export async function clearPortalSessionCookie(): Promise<void> {
 export async function requirePortalSession(): Promise<
   { proveedorId: string; response: null } | { proveedorId: null; response: Response }
 > {
-  const cookieStore = await cookies()
-  const token = cookieStore.get(COOKIE_NAME)?.value
-  if (!token) {
+  const proveedorId = await readPortalSessionCookie()
+  if (!proveedorId) {
     return { proveedorId: null, response: Response.json({ error: 'No autenticado' }, { status: 401 }) }
   }
-
-  const session = await verifyPortalSession(token)
-  if (!session) {
-    return { proveedorId: null, response: Response.json({ error: 'Sesión inválida o expirada' }, { status: 401 }) }
-  }
-
-  return { proveedorId: session.proveedorId, response: null }
+  return { proveedorId, response: null }
 }

@@ -210,6 +210,29 @@ export const DocumentoEstadoValidacionSchema = z.object({
   detalle_validacion: z.string().nullable().optional(),
 })
 
+// ==================== PORTAL DE PROVEEDORES (Fase 5.5) ====================
+
+export const PortalSignupSchema = z.object({
+  nombre: z.string().min(1, 'El nombre completo es requerido'),
+  correo: z.string().email('Correo inválido'),
+  password: z.string().min(8, 'El password debe tener al menos 8 caracteres'),
+})
+
+export const PortalLoginSchema = z.object({
+  correo: z.string().email('Correo inválido'),
+  password: z.string().min(1, 'El password es requerido'),
+})
+
+export const PortalConfirmarMatchSchema = z.object({
+  confirmar: z.boolean(),
+  candidato_id: z.string().uuid().nullable().optional(),
+})
+
+export const PortalPerfilBancarioSchema = z.object({
+  banco: z.string().nullable().optional(),
+  clabe: z.string().nullable().optional(),
+})
+
 // ==================== HELPER ====================
 
 /**

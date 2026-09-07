@@ -41,7 +41,13 @@ function isPublicPath(pathname: string) {
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/keep-alive') ||
     pathname.startsWith('/api/integrations/drive/authorize') ||
-    pathname.startsWith('/api/integrations/drive/callback')
+    pathname.startsWith('/api/integrations/drive/callback') ||
+    // Portal de proveedores (Fase 5.5): auth propia (lib/portal-auth.ts,
+    // cookie portal_session), separada de NextAuth -- no pasa por el check
+    // de sesión interna de abajo. Cada página/route del portal se protege
+    // a sí misma con requirePortalSession()/getPortalProveedorId().
+    pathname.startsWith('/portal') ||
+    pathname.startsWith('/api/portal')
   )
 }
 

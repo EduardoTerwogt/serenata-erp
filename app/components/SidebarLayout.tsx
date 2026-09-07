@@ -39,7 +39,9 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   )
   const isAdmin = userSections.includes('admin')
 
-  if (pathname === '/login') return <>{children}</>
+  // Portal de proveedores (Fase 5.5): experiencia standalone para
+  // proveedores externos, sin el shell interno (sidebar/topbar de staff).
+  if (pathname === '/login' || pathname.startsWith('/portal')) return <>{children}</>
 
   const withActive = (links: { href: string; label: string; icon: IconName }[]): SidebarNavLink[] =>
     links.map((link) => ({ ...link, active: pathname.startsWith(link.href) }))
