@@ -318,6 +318,9 @@ function GastoFijoModal({ onClose, onGuardado }: { onClose: () => void; onGuarda
   const [gastos, setGastos] = useState<GastoFijo[]>([])
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [editNombre, setEditNombre] = useState('')
+  const [editMonto, setEditMonto] = useState('')
 
   useEffect(() => {
     getJson<GastoFijo[]>('/api/dashboard/gastos-fijos', 'Error obteniendo gastos fijos').then(setGastos).catch(() => {})
@@ -351,6 +354,34 @@ function GastoFijoModal({ onClose, onGuardado }: { onClose: () => void; onGuarda
       onGuardado()
     } catch {
       setError('No se pudo actualizar el gasto fijo')
+    }
+  }
+
+  function empezarEdicion(gasto: GastoFijo) {
+    setEditandoId(gasto.id)
+    setEditNombre(gasto.nombre)
+    setEditMonto(String(gasto.monto_mensual))
+  }
+
+  async function guardarEdicion(id: string) {
+    setError(null)
+    const montoNumerico = Number(editMonto)
+    if (!editNombre.trim() || !Number.isFinite(montoNumerico) || montoNumerico < 0) {
+      setError('Ingresa un nombre y un monto mensual válido')
+      return
+    }
+    try {
+      await sendJson(
+        `/api/dashboard/gastos-fijos/${id}`,
+        { nombre: editNombre, monto_mensual: montoNumerico },
+        'Error actualizando gasto fijo',
+        { method: 'PATCH' }
+      )
+      setGastos((prev) => prev.map((g) => (g.id === id ? { ...g, nombre: editNombre, monto_mensual: montoNumerico } : g)))
+      setEditandoId(null)
+      onGuardado()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error actualizando gasto fijo')
     }
   }
 
@@ -390,21 +421,56 @@ function GastoFijoModal({ onClose, onGuardado }: { onClose: () => void; onGuarda
 
       <div className="flex flex-col gap-2">
         {gastos.length === 0 && <p className="text-sm text-faint">Sin gastos fijos registrados.</p>}
-        {gastos.map((g) => (
-          <div key={g.id} className="flex items-center gap-3 rounded-control border border-hairline px-3 py-2.5">
-            <div className="min-w-0 flex-1">
-              <p className={`text-sm font-medium ${g.activo ? 'text-ink' : 'text-faint line-through'}`}>{g.nombre}</p>
-              <p className="text-xs text-subtext">{Number(g.monto_mensual).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} / mes</p>
+        {gastos.map((g) =>
+          editandoId === g.id ? (
+            <div key={g.id} className="flex flex-col gap-2 rounded-control border border-hairline px-3 py-2.5 sm:flex-row sm:items-center">
+              <input
+                value={editNombre}
+                onChange={(e) => setEditNombre(e.target.value)}
+                className="min-w-0 flex-1 bg-input border border-hairline rounded-control px-2.5 py-1.5 text-sm text-body focus:outline-none focus:border-accent"
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editMonto}
+                onChange={(e) => setEditMonto(e.target.value)}
+                className="w-full bg-input border border-hairline rounded-control px-2.5 py-1.5 text-sm text-body focus:outline-none focus:border-accent sm:w-32"
+              />
+              <div className="flex flex-none gap-2">
+                <button type="button" onClick={() => guardarEdicion(g.id)} className="rounded-control bg-accent px-3 py-1.5 text-xs font-medium text-accent-ink hover:bg-accent-pressed transition-colors">
+                  Guardar
+                </button>
+                <button type="button" onClick={() => setEditandoId(null)} className="rounded-control border border-hairline px-3 py-1.5 text-xs text-body hover:bg-row-alt transition-colors">
+                  Cancelar
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => alternarActivo(g)}
-              className="flex-none rounded-control border border-hairline px-3 py-1.5 text-xs text-body hover:bg-row-alt transition-colors"
-            >
-              {g.activo ? 'Desactivar' : 'Reactivar'}
-            </button>
-          </div>
-        ))}
+          ) : (
+            <div key={g.id} className="flex items-center gap-3 rounded-control border border-hairline px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm font-medium ${g.activo ? 'text-ink' : 'text-faint line-through'}`}>{g.nombre}</p>
+                <p className="text-xs text-subtext">{Number(g.monto_mensual).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} / mes</p>
+              </div>
+              <div className="flex flex-none gap-2">
+                <button
+                  type="button"
+                  onClick={() => empezarEdicion(g)}
+                  className="rounded-control border border-hairline px-3 py-1.5 text-xs text-body hover:bg-row-alt transition-colors"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => alternarActivo(g)}
+                  className="rounded-control border border-hairline px-3 py-1.5 text-xs text-body hover:bg-row-alt transition-colors"
+                >
+                  {g.activo ? 'Desactivar' : 'Reactivar'}
+                </button>
+              </div>
+            </div>
+          )
+        )}
       </div>
     </Modal>
   )
