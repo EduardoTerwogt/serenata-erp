@@ -214,7 +214,7 @@ describe('Cache Invalidation', () => {
       mocks.createProveedorMock.mockResolvedValue(newProveedor)
 
       // Populate cache with GET
-      await getProveedores(new Request('http://localhost/api/proveedores'))
+      await getProveedores()
 
       // Reset mock
       mocks.getProveedoresMock.mockClear()
@@ -236,7 +236,7 @@ describe('Cache Invalidation', () => {
 
       // Next GET should call getProveedores (cache was invalidated)
       mocks.getProveedoresMock.mockResolvedValue([...proveedoresData, newProveedor])
-      await getProveedores(new Request('http://localhost/api/proveedores'))
+      await getProveedores()
       expect(mocks.getProveedoresMock).toHaveBeenCalled()
     })
   })
