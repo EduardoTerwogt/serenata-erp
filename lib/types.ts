@@ -8,6 +8,15 @@ export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO'
 
 export type RegimenFiscal = 'moral' | 'fisica'
 
+export type PortalEstado = 'pendiente_confirmacion' | 'activo'
+export type TipoDocumentoProveedor =
+  | 'CONSTANCIA_SITUACION_FISCAL'
+  | 'INE'
+  | 'COMPROBANTE_DOMICILIO'
+  | 'COMPROBANTE_BANCARIO'
+// EstadoValidacionDocumento ya está definido más abajo (junto a
+// DocumentoCuentaCobrar) -- ProveedorDocumento lo reusa tal cual.
+
 // Renombrado de "Responsable" a "Proveedor" (Fase 5.3, Bloque 0): la tabla
 // responsables -> proveedores. Serenata contrata por proyecto (sin nómina),
 // así que hoy no hace falta distinguir interno/externo; cuando exista
@@ -27,6 +36,27 @@ export interface Proveedor {
   // retencion; 'fisica' = persona fisica con honorarios, retencion IVA 2/3 + ISR 10%.
   // null = no capturado aun -> se trata como 'moral' por default en los calculos.
   regimen_fiscal: RegimenFiscal | null
+  // Portal de proveedores (Fase 5.5): la identidad del portal ES esta misma
+  // fila -- nunca una tabla de "usuarios de portal" separada.
+  password_hash: string | null
+  portal_estado: PortalEstado | null
+  match_candidato_id: string | null
+}
+
+export interface ProveedorDocumento {
+  id: string
+  proveedor_id: string
+  tipo: TipoDocumentoProveedor
+  archivo_url: string
+  archivo_nombre: string
+  estado_validacion: EstadoValidacionDocumento
+  created_at: string
+}
+
+export interface CandidatoMatchProveedor {
+  id: string
+  nombre: string
+  score: number
 }
 
 export interface HistorialResponsable {
