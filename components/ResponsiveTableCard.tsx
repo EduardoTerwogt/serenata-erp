@@ -13,6 +13,9 @@ interface ResponsiveTableCardProps<T> {
   renderMobileCard: (item: T, index: number) => ReactNode
   keyExtractor: (item: T, index: number) => string
   emptyMessage?: string
+  /** 'legacy' (default) mantiene el tema gray-9xx de siempre; 'tokens' usa
+   * el Serenata Design System (Fase 5.7) para pantallas ya migradas. */
+  theme?: 'legacy' | 'tokens'
 }
 
 const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
@@ -20,6 +23,21 @@ const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
   center: 'text-center',
   right: 'text-right',
 }
+
+const THEME_CLASSES = {
+  legacy: {
+    empty: 'text-gray-500',
+    headerRow: 'border-b border-gray-800',
+    headerCell: 'text-gray-400',
+    bodyRow: 'border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors',
+  },
+  tokens: {
+    empty: 'text-faint',
+    headerRow: 'border-b border-hairline',
+    headerCell: 'text-subtext',
+    bodyRow: 'border-b border-hairline hover:bg-row-alt transition-colors',
+  },
+} as const
 
 /**
  * Componente genérico que renderiza una tabla en desktop y cards en mobile
@@ -32,10 +50,13 @@ export function ResponsiveTableCard<T>({
   renderMobileCard,
   keyExtractor,
   emptyMessage = 'No hay datos',
+  theme = 'legacy',
 }: ResponsiveTableCardProps<T>) {
+  const t = THEME_CLASSES[theme]
+
   if (data.length === 0) {
     return (
-      <div className="p-12 text-center text-gray-500">
+      <div className={`p-12 text-center ${t.empty}`}>
         {emptyMessage}
       </div>
     )
@@ -46,11 +67,11 @@ export function ResponsiveTableCard<T>({
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800">
+            <tr className={t.headerRow}>
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`${ALIGN_CLASS[col.align ?? 'left']} text-gray-400 font-medium px-6 py-3`}
+                  className={`${ALIGN_CLASS[col.align ?? 'left']} ${t.headerCell} font-medium px-6 py-3`}
                 >
                   {col.label}
                 </th>
@@ -59,7 +80,7 @@ export function ResponsiveTableCard<T>({
           </thead>
           <tbody>
             {data.map((item, index) => (
-              <tr key={keyExtractor(item, index)} className="border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors">
+              <tr key={keyExtractor(item, index)} className={t.bodyRow}>
                 {renderDesktopRow(item, index)}
               </tr>
             ))}
