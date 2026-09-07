@@ -22,6 +22,7 @@ import { useProyectoDetallePM } from '@/app/components/proyectos/useProyectoDeta
 import { TipoAsignacionPrompt } from '@/app/components/proyectos/TipoAsignacionPrompt'
 import { EtapaSelector } from '@/app/components/proyectos/EtapaSelector'
 import { TabTareas } from '@/app/components/proyectos/tabs/TabTareas'
+import { TabCronograma } from '@/app/components/proyectos/tabs/TabCronograma'
 import type { ProyectoDetailTab } from '@/app/components/proyectos/types'
 
 const ESTADOS: EstadoProyecto[] = ['PREPRODUCCION', 'RODAJE', 'POSTPRODUCCION', 'FINALIZADO']
@@ -294,9 +295,7 @@ export default function ProyectoDetallePage({
       )}
 
       {pm.tab === 'cronograma' && pm.tipoAsignado && (
-        <div className="rounded-panel border border-hairline bg-card p-[19px] text-subtext text-content">
-          Cronograma -- próximamente (Bloque 3.5).
-        </div>
+        <TabCronograma tareas={pm.tareasApi.tareas} />
       )}
 
       {pm.tab === 'documentos' && pm.tipoAsignado && (

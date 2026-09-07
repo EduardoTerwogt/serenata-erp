@@ -4,6 +4,10 @@
 // horaria documentado en lib/format-date.ts -- aquí importa doblemente
 // porque se usa para posicionar barras, no solo para mostrar texto.
 
+import { toneForTareaEstado } from '@/components/ui/StatusBadge'
+import type { ProyectoTarea } from '@/lib/types'
+import type { GanttRow } from './Gantt'
+
 export interface DateRange {
   startISO: string
   endISO: string
@@ -114,4 +118,43 @@ export function buildRulerLabels(range: DateRange, maxLabels = 7): { label: stri
     const dia = fromUtcDay(Math.round(inicioDay + (totalDias * i) / tramos))
     return { label: formatShort(dia), widthPct }
   })
+}
+
+export interface GanttTareasResult {
+  rows: GanttRow[]
+  rulerLabels: { label: string; widthPct: number }[]
+  todayPct: number | null
+}
+
+/**
+ * Construye las filas del Gantt de un proyecto a partir de sus tareas.
+ * Tareas sin fecha_limite se omiten (no hay dónde ubicarlas) -- mismo
+ * caveat que declara el preview aprobado. La barra va de created_at a
+ * fecha_limite cuando el rango tiene sentido; si no, computeBarSpan cae en
+ * un marcador de ancho fijo (ver decisión 7 del plan de Bloque 3).
+ */
+export function buildGanttRowsFromTareas(tareas: ProyectoTarea[]): GanttTareasResult {
+  const conFecha = tareas.filter((t): t is ProyectoTarea & { fecha_limite: string } => Boolean(t.fecha_limite))
+
+  if (conFecha.length === 0) {
+    return { rows: [], rulerLabels: [], todayPct: null }
+  }
+
+  const range = computeRange(conFecha.flatMap((t) => [t.created_at.slice(0, 10), t.fecha_limite]))
+
+  const rows: GanttRow[] = conFecha.map((tarea) => {
+    const tone = toneForTareaEstado(tarea.estado)
+    const startISO = tarea.created_at ? tarea.created_at.slice(0, 10) : null
+    const span = computeBarSpan(startISO, tarea.fecha_limite, range)
+
+    return {
+      id: tarea.id,
+      label: tarea.titulo,
+      bars: [{ leftPct: span.leftPct, widthPct: span.widthPct, tone, label: tarea.titulo }],
+      hitoPct: tarea.es_hito ? percentForDate(tarea.fecha_limite, range) : undefined,
+      hitoTone: tarea.es_hito ? tone : undefined,
+    }
+  })
+
+  return { rows, rulerLabels: buildRulerLabels(range), todayPct: computeTodayPercent(range) }
 }

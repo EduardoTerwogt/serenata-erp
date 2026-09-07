@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  buildGanttRowsFromTareas,
   buildRulerLabels,
   computeBarSpan,
   computeRange,
@@ -7,6 +8,23 @@ import {
   daysBetween,
   percentForDate,
 } from './gantt-helpers'
+import type { ProyectoTarea } from '@/lib/types'
+
+const baseTarea = (overrides: Partial<ProyectoTarea> = {}): ProyectoTarea => ({
+  id: overrides.id ?? 'tarea-1',
+  proyecto_id: 'SH001',
+  titulo: 'Tarea',
+  descripcion: null,
+  estado: 'PENDIENTE',
+  asignado_a: null,
+  es_hito: false,
+  origen: 'manual',
+  fecha_limite: null,
+  fecha_completada: null,
+  created_at: '2026-06-01T00:00:00.000Z',
+  updated_at: '2026-06-01T00:00:00.000Z',
+  ...overrides,
+})
 
 describe('daysBetween', () => {
   it('cuenta días entre dos fechas', () => {
@@ -127,5 +145,49 @@ describe('buildRulerLabels', () => {
     const labels = buildRulerLabels(range)
     expect(labels).toHaveLength(1)
     expect(labels[0].widthPct).toBe(100)
+  })
+})
+
+describe('buildGanttRowsFromTareas', () => {
+  it('omite tareas sin fecha_limite', () => {
+    const tareas = [
+      baseTarea({ id: 'sin-fecha', fecha_limite: null }),
+      baseTarea({ id: 'con-fecha', fecha_limite: '2026-06-10' }),
+    ]
+    const { rows } = buildGanttRowsFromTareas(tareas)
+    expect(rows.map((r) => r.id)).toEqual(['con-fecha'])
+  })
+
+  it('retorna vacío (sin rango) cuando ninguna tarea tiene fecha_limite', () => {
+    const resultado = buildGanttRowsFromTareas([baseTarea({ fecha_limite: null })])
+    expect(resultado.rows).toEqual([])
+    expect(resultado.rulerLabels).toEqual([])
+    expect(resultado.todayPct).toBeNull()
+  })
+
+  it('mapea el tono desde el estado de la tarea', () => {
+    const tareas = [baseTarea({ id: 'completada', estado: 'COMPLETADA', fecha_limite: '2026-06-10' })]
+    const { rows } = buildGanttRowsFromTareas(tareas)
+    expect(rows[0].bars[0].tone).toBe('approved')
+  })
+
+  it('agrega hitoPct/hitoTone solo para tareas marcadas es_hito', () => {
+    const tareas = [
+      baseTarea({ id: 'hito', es_hito: true, fecha_limite: '2026-06-10' }),
+      baseTarea({ id: 'normal', es_hito: false, fecha_limite: '2026-06-10' }),
+    ]
+    const { rows } = buildGanttRowsFromTareas(tareas)
+    const hito = rows.find((r) => r.id === 'hito')!
+    const normal = rows.find((r) => r.id === 'normal')!
+    expect(hito.hitoPct).toBeDefined()
+    expect(normal.hitoPct).toBeUndefined()
+  })
+
+  it('usa created_at como inicio de la barra cuando es anterior a fecha_limite (barra ancha, no el marcador de ancho fijo)', () => {
+    const tareas = [baseTarea({ created_at: '2026-06-01T00:00:00.000Z', fecha_limite: '2026-06-11' })]
+    const { rows } = buildGanttRowsFromTareas(tareas)
+    // El marcador de ancho fijo (sin fecha de inicio válida) sería ~8% --
+    // un span real de 10 días sobre un rango con poco padding es mucho más ancho.
+    expect(rows[0].bars[0].widthPct).toBeGreaterThan(50)
   })
 })
