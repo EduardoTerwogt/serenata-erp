@@ -1,13 +1,17 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
-import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
+import { canAutosaveQuotationDraft, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { fetchNextQuotationFolio, fetchProveedores, generateQuotationPdf, saveNewQuotation } from '@/lib/services/quotation-service'
+import { fetchNextQuotationFolio, fetchProveedores, generateQuotationPdf, saveNewQuotation, updateQuotation } from '@/lib/services/quotation-service'
+
+const DRAFT_AUTOSAVE_DELAY_MS = 1000
+
+export type DraftAutosaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 export function useNuevaCotizacionPage() {
   const router = useRouter()
@@ -30,8 +34,14 @@ export function useNuevaCotizacionPage() {
   const [descuento_valor, setDescuentoValor] = useState(0)
   const [notasInternas, setNotasInternas] = useState('')
   const isSubmitting = useRef(false)
+  const [draftId, setDraftId] = useState<string | null>(null)
+  const [autosaveStatus, setAutosaveStatus] = useState<DraftAutosaveStatus>('idle')
+  const draftIdRef = useRef<string | null>(null)
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autosaveInFlightRef = useRef(false)
+  const autosavePendingRef = useRef(false)
 
-  const { register, control, watch, handleSubmit, setValue } = useForm<QuotationFormValues>({
+  const { register, control, watch, handleSubmit, setValue, getValues } = useForm<QuotationFormValues>({
     defaultValues: {
       cliente: clienteParam,
       proyecto: proyectoParam,
@@ -41,6 +51,7 @@ export function useNuevaCotizacionPage() {
     }
   })
 
+  const watchedValues = watch()
   const watchedItems = watch('items')
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const quotationForm = useQuotationForm(setValue, watchedItems)
@@ -134,45 +145,113 @@ export function useNuevaCotizacionPage() {
   })
   const estimatedTaxes = calculateEstimatedTaxes(watchedItems, totales)
 
-  const onGuardarBorrador = handleSubmit(async (data) => {
+  const complementariaFields = useMemo(
+    () => esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {},
+    [complementaria_de, esComplementaria]
+  )
+
+  // Guardado automático del borrador. En cuanto hay proyecto + una partida con
+  // descripción se crea la cotización en BORRADOR (POST, que reserva el folio) y a
+  // partir de ahí cada cambio se persiste con PUT, sin salir de esta pantalla.
+  const persistDraft = useCallback(async () => {
     if (isSubmitting.current) return
-    isSubmitting.current = true
-    setGuardando(true)
-    setError(null)
-    try {
-      const cotizacion = await saveNewQuotation(data, {
-        estado: 'BORRADOR',
-        porcentaje_fee,
-        iva_activo,
-        descuento_tipo,
-        descuento_valor,
-        notas_internas: notasInternas || null,
-        ...(esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {}),
-      })
-      router.push(`/cotizaciones/${cotizacion.id}`)
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error desconocido')
-    } finally {
-      isSubmitting.current = false
-      setGuardando(false)
+    if (autosaveInFlightRef.current) {
+      autosavePendingRef.current = true
+      return
     }
-  })
+
+    const data = getValues()
+    if (!canAutosaveQuotationDraft(data)) return
+
+    autosaveInFlightRef.current = true
+    setAutosaveStatus('saving')
+    try {
+      if (draftIdRef.current) {
+        await updateQuotation(draftIdRef.current, data, {
+          porcentaje_fee,
+          iva_activo,
+          descuento_tipo,
+          descuento_valor,
+          responsables,
+          currentQuotation: null,
+          notas_internas: notasInternas || null,
+        })
+      } else {
+        const cotizacion = await saveNewQuotation(data, {
+          estado: 'BORRADOR',
+          porcentaje_fee,
+          iva_activo,
+          descuento_tipo,
+          descuento_valor,
+          notas_internas: notasInternas || null,
+          ...complementariaFields,
+        })
+        draftIdRef.current = cotizacion.id
+        setDraftId(cotizacion.id)
+        setFolio(cotizacion.id)
+      }
+      setAutosaveStatus('saved')
+    } catch (e: unknown) {
+      setAutosaveStatus('error')
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el borrador')
+    } finally {
+      autosaveInFlightRef.current = false
+      if (autosavePendingRef.current) {
+        autosavePendingRef.current = false
+        void persistDraft()
+      }
+    }
+  }, [complementariaFields, descuento_tipo, descuento_valor, getValues, iva_activo, notasInternas, porcentaje_fee, responsables])
+
+  useEffect(() => {
+    if (!canAutosaveQuotationDraft({ proyecto: watchedValues.proyecto, items: watchedItems || [] })) return
+    if (autosaveTimerRef.current !== null) clearTimeout(autosaveTimerRef.current)
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null
+      void persistDraft()
+    }, DRAFT_AUTOSAVE_DELAY_MS)
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        clearTimeout(autosaveTimerRef.current)
+        autosaveTimerRef.current = null
+      }
+    }
+  }, [persistDraft, watchedItems, watchedValues])
+
+  // Al salir de la pantalla se intenta un último guardado con lo que haya pendiente.
+  useEffect(() => () => {
+    if (autosaveTimerRef.current !== null) clearTimeout(autosaveTimerRef.current)
+  }, [])
 
   const onGenerarCotizacion = handleSubmit(async (data) => {
     if (isSubmitting.current) return
+    if (autosaveTimerRef.current !== null) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null }
     isSubmitting.current = true
     setGuardando(true)
     setError(null)
     try {
-      const cotizacion = await saveNewQuotation(data, {
-        estado: 'EMITIDA',
-        porcentaje_fee,
-        iva_activo,
-        descuento_tipo,
-        descuento_valor,
-        notas_internas: notasInternas || null,
-        ...(esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {}),
-      })
+      // Si el autoguardado ya creó el borrador se emite ESE, no uno nuevo:
+      // crear otro consumiría un segundo folio y dejaría el borrador huérfano.
+      const cotizacion = draftIdRef.current
+        ? await updateQuotation(draftIdRef.current, data, {
+            estado: 'EMITIDA',
+            porcentaje_fee,
+            iva_activo,
+            descuento_tipo,
+            descuento_valor,
+            responsables,
+            currentQuotation: null,
+            notas_internas: notasInternas || null,
+          })
+        : await saveNewQuotation(data, {
+            estado: 'EMITIDA',
+            porcentaje_fee,
+            iva_activo,
+            descuento_tipo,
+            descuento_valor,
+            notas_internas: notasInternas || null,
+            ...complementariaFields,
+          })
       const pdfResult = await generateQuotationPdf(cotizacion, data.items, { skipDownload: true })
       if (pdfResult.savedToDrive) {
         sessionStorage.setItem('pdf_drive_result', JSON.stringify({ link: pdfResult.driveWebViewLink ?? null }))
@@ -232,8 +311,9 @@ export function useNuevaCotizacionPage() {
     watchedItems,
     totales,
     estimatedTaxes,
-    onGuardarBorrador,
     onGenerarCotizacion,
+    draftId,
+    autosaveStatus,
     esComplementaria,
     complementaria_de,
     router,

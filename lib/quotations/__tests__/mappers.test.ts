@@ -4,6 +4,7 @@ import {
   buildQuotationPersistenceData,
   buildReadOnlyTotals,
   isBlankQuotationItem,
+  canAutosaveQuotationDraft,
   EMPTY_QUOTATION_ITEM,
 } from '../mappers'
 import type { ItemCotizacion, Cotizacion } from '@/lib/types'
@@ -237,5 +238,33 @@ describe('isBlankQuotationItem', () => {
     expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, descripcion: '   ' })).toBe(true)
     expect(isBlankQuotationItem(null)).toBe(false)
     expect(isBlankQuotationItem(undefined)).toBe(false)
+  })
+})
+
+
+// ==================== canAutosaveQuotationDraft ====================
+
+describe('canAutosaveQuotationDraft', () => {
+  const withItems = (proyecto: string, descripciones: string[]) => ({
+    proyecto,
+    items: descripciones.map((descripcion) => ({ ...EMPTY_QUOTATION_ITEM, descripcion })),
+  })
+
+  it('guarda cuando hay proyecto y una partida con descripción', () => {
+    expect(canAutosaveQuotationDraft(withItems('Show Monterrey', ['Backline']))).toBe(true)
+  })
+
+  it('no guarda sin nombre de proyecto', () => {
+    expect(canAutosaveQuotationDraft(withItems('', ['Backline']))).toBe(false)
+    expect(canAutosaveQuotationDraft(withItems('   ', ['Backline']))).toBe(false)
+  })
+
+  it('no guarda sin ninguna partida con descripción', () => {
+    expect(canAutosaveQuotationDraft(withItems('Show Monterrey', []))).toBe(false)
+    expect(canAutosaveQuotationDraft(withItems('Show Monterrey', ['', '  ']))).toBe(false)
+  })
+
+  it('basta con que una de varias partidas tenga descripción', () => {
+    expect(canAutosaveQuotationDraft(withItems('Show Monterrey', ['', 'Backline', '']))).toBe(true)
   })
 })

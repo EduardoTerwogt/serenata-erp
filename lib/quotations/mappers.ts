@@ -34,6 +34,15 @@ export function isBlankQuotationItem(item: Partial<QuotationFormItem> | undefine
   )
 }
 
+// Regla de negocio (confirmada 2026-09-08): una cotización nueva se guarda sola
+// como BORRADOR en cuanto tiene nombre de proyecto y al menos una partida con
+// descripción. Antes de eso no se guarda nada, para no consumir folios por
+// pantallas abiertas y abandonadas.
+export function canAutosaveQuotationDraft(values: Pick<QuotationFormValues, 'proyecto' | 'items'>): boolean {
+  if (!String(values.proyecto || '').trim()) return false
+  return (values.items || []).some((item) => String(item?.descripcion || '').trim() !== '')
+}
+
 export function mapQuotationItemsForSave(items: QuotationFormItem[]) {
   return items.map((item, index) => {
     const normalizedItem = normalizeQuotationItem(item)

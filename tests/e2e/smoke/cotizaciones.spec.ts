@@ -9,6 +9,7 @@ test('carga la pantalla de nueva cotización con datos iniciales', async ({ page
   await expect(page.getByRole('heading', { name: 'Nueva Cotizacion' })).toBeVisible()
   await expect(page.getByText('Folio:')).toBeVisible()
   await expect(page.getByText('SH123')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Guardar Borrador' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Generar Cotizacion' })).toBeVisible()
+  // El guardado es automático: ya no existe el botón de guardar borrador.
+  await expect(page.getByRole('button', { name: 'Guardar Borrador' })).toHaveCount(0)
 })

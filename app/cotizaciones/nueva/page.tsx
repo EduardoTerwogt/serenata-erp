@@ -72,11 +72,10 @@ function NuevaCotizacionContent() {
     watchedItems,
     totales,
     estimatedTaxes,
-    onGuardarBorrador,
     onGenerarCotizacion,
+    autosaveStatus,
     esComplementaria,
     complementaria_de,
-    router,
   } = useNuevaCotizacionPage()
 
   const [showCopyModal, setShowCopyModal] = useState(false)
@@ -121,22 +120,12 @@ function NuevaCotizacionContent() {
           <h1 className="sn-display flex-none text-2xl text-ink md:text-h2">Nueva Cotizacion</h1>
           <span className="flex-none text-subtext">Folio: <span className="sn-display text-body" style={{ fontSize: 13, letterSpacing: '0.06em' }}>{folio || '...'}</span></span>
         </div>
-        <div className="flex flex-wrap gap-2 lg:justify-end">
-          <button
-            type="button"
-            disabled={guardando}
-            onClick={onGuardarBorrador}
-            className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]"
-          >
-            {guardando ? 'Guardando...' : 'Guardar Borrador'}
-          </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="text-subtext hover:bg-white/5 hover:text-body px-4 py-3 rounded-control text-content transition-colors min-h-[44px]"
-          >
-            Cancelar
-          </button>
+        <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+          <span className="text-content text-faint" aria-live="polite">
+            {autosaveStatus === 'saving' && 'Guardando borrador…'}
+            {autosaveStatus === 'saved' && 'Borrador guardado'}
+            {autosaveStatus === 'error' && 'No se pudo guardar el borrador'}
+          </span>
           <button
             type="button"
             disabled={guardando}
