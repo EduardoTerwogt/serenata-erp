@@ -57,6 +57,10 @@ export default function ProveedoresPage() {
     r.nombre.toLowerCase().includes(busqueda.toLowerCase())
   )
 
+  const portalActivos = proveedores.filter(r => r.portal_estado === 'activo').length
+  const portalPendientes = proveedores.filter(r => r.portal_estado === 'pendiente_confirmacion').length
+  const portalSinRegistro = proveedores.filter(r => !r.portal_estado).length
+
   return (
     <div className="flex flex-col gap-6">
       <SectionHero
@@ -80,6 +84,36 @@ export default function ProveedoresPage() {
         placeholder="Buscar por nombre…"
         className="max-w-[420px]"
       />
+
+      <div className="w-full max-w-xs rounded-panel border border-hairline bg-card p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="sn-label">Portal de proveedores</h3>
+          <Icon name="link" size={14} className="text-faint flex-none" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-subtext">Activos</span>
+            <span className="font-semibold text-approved-fg">{portalActivos}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-subtext">Pendientes de confirmación</span>
+            <span className="font-semibold text-issued-fg">{portalPendientes}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-subtext">Sin registrar</span>
+            <span className="font-semibold text-faint">{portalSinRegistro}</span>
+          </div>
+        </div>
+        <a
+          href="/portal/login"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-accent transition-colors hover:text-accent-pressed"
+        >
+          Acceder al portal
+          <Icon name="arrow-right" size={14} />
+        </a>
+      </div>
 
       {loading ? (
         <div className="py-12 text-center text-faint">Cargando...</div>
