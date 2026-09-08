@@ -1,9 +1,11 @@
-import { requireSection } from '@/lib/api-auth'
+import { requireAnySection, requireSection } from '@/lib/api-auth'
 import { ServiceTemplateRepository } from '@/lib/server/repositories/service-templates'
 import { ServiceTemplateCreateSchema, validate } from '@/lib/validation/schemas'
 
 export async function GET() {
-  const authResult = await requireSection('planeacion')
+  // Fase 5.8: cotizaciones también consulta plantillas (aplicar plantilla de
+  // servicios en Partidas), no solo planeación.
+  const authResult = await requireAnySection(['planeacion', 'cotizaciones'])
   if (authResult.response) return authResult.response
 
   try {

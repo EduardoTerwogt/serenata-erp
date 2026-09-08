@@ -3,12 +3,13 @@
 import { useRef, useEffect, useState as useStateReact, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { UseFieldArrayAppend, UseFieldArrayRemove, UseFormRegister, UseFormSetValue } from 'react-hook-form'
-import { Producto, Proveedor } from '@/lib/types'
+import { Producto, Proveedor, ServiceTemplate } from '@/lib/types'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { calculateCostoConIva } from '@/lib/quotations/calculations'
 import { fmtCurrency } from '@/lib/quotations/format'
 import { QuotationItemCellField } from '@/hooks/useQuotationPresence'
+import { getJson } from '@/lib/client/api'
 import { Icon } from '@/components/ui/Icon'
 
 interface ReadOnlyItem {
@@ -92,6 +93,32 @@ export function QuotationItemsSection({
 }: Props) {
   const descInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const [dropdownPos, setDropdownPos] = useStateReact<Record<number, { top: number; left: number } | null>>({})
+  const [templates, setTemplates] = useStateReact<ServiceTemplate[]>([])
+
+  useEffect(() => {
+    if (!editable) return
+    getJson<ServiceTemplate[]>('/api/service-templates', 'Error cargando plantillas de servicios')
+      .then(data => setTemplates(data.filter(t => t.activo)))
+      .catch(() => setTemplates([]))
+  }, [editable, setTemplates])
+
+  const handleApplyTemplate = (templateId: string) => {
+    const template = templates.find(t => t.id === templateId)
+    if (!template) return
+    template.items.forEach(item => {
+      append({
+        categoria: item.categoria || '',
+        descripcion: item.descripcion || '',
+        cantidad: item.cantidad || 1,
+        precio_unitario: item.precio_unitario || 0,
+        responsable_id: item.responsable_id || '',
+        responsable_nombre: item.responsable_nombre || '',
+        x_pagar: item.x_pagar || 0,
+      })
+    })
+  }
+
+  const totalXPagar = (editable ? watchedItems : readOnlyItems).reduce((sum, item) => sum + (item.x_pagar || 0), 0)
 
   const updateDropdownPos = useCallback((index: number) => {
     const el = descInputRefs.current[index]
@@ -262,12 +289,21 @@ export function QuotationItemsSection({
   return (
     <>
       <div className="rounded-panel border border-hairline bg-card">
-        <div className="p-4 md:p-6 border-b border-hairline flex items-center justify-between gap-3">
+        <div className="p-4 md:p-6 border-b border-hairline flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-body">Partidas</h2>
           {editable && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {templates.length > 0 && (
+                <select
+                  value=""
+                  onChange={e => { if (e.target.value) handleApplyTemplate(e.target.value) }}
+                  className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0"
+                >
+                  <option value="">Plantilla de servicios…</option>
+                  {templates.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                </select>
+              )}
               {onCopyClick && <button type="button" onClick={onCopyClick} className="flex items-center gap-2 border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0"><Icon name="copy" size={15} />Copiar desde otra cotización</button>}
-              <button type="button" onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })} className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0">+ Agregar fila</button>
             </div>
           )}
         </div>
@@ -293,6 +329,22 @@ export function QuotationItemsSection({
           {editable
             ? fields.map((field, index) => renderEditableMobileCard(field.id, index))
             : readOnlyItems.map(renderReadOnlyMobileCard)}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline p-4 md:px-6 md:py-4">
+          {editable ? (
+            <button
+              type="button"
+              onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })}
+              className="flex items-center gap-1.5 rounded-control px-3 py-2 text-[14.5px] text-body transition-colors hover:bg-row-alt min-h-[44px] md:min-h-0"
+            >
+              <Icon name="plus" size={15} />
+              Agregar fila
+            </button>
+          ) : <span />}
+          <span className="text-sm text-subtext">
+            Total X pagar a responsables <span className="font-semibold text-body">${fmtCurrency(totalXPagar)}</span> · neto, sin impuestos del proveedor
+          </span>
         </div>
       </div>
 
