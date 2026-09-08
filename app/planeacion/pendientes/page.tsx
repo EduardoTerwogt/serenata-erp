@@ -22,7 +22,7 @@ export default function PendientesPage() {
 
   if (state.loading && state.pendientes.length === 0) {
     return (
-      <div className="px-5 pt-6 pb-6 md:p-8">
+      <div>
         <div className="text-center py-12">
           <p className="text-subtext">Cargando pendientes...</p>
         </div>
@@ -31,7 +31,7 @@ export default function PendientesPage() {
   }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <SectionHero
         title="Pendientes de planeación"
         subtitle='Revisa y procesa las filas marcadas como "Por Confirmar" o "Cancelado"'

@@ -58,7 +58,7 @@ export default function NuevoProveedorPage() {
   }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-2xl flex flex-col gap-6">
+    <div className="max-w-2xl flex flex-col gap-6">
       <SectionHero title="Nuevo proveedor" subtitle="Agrega un nuevo colaborador" />
 
       {error && <StatusBanner tone="error">{error}</StatusBanner>}

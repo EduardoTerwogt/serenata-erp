@@ -2,7 +2,7 @@
 
 export function SkeletonQuotationDetail() {
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 space-y-6 animate-pulse">
+    <div className="space-y-6 animate-pulse">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
         <div>

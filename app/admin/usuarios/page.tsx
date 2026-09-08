@@ -159,7 +159,7 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <SectionHero
         title="Usuarios"
         subtitle="Gestión de acceso al sistema"

@@ -90,7 +90,7 @@ export default function SheetsSyncPage() {
   }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-3xl">
+    <div className="max-w-3xl">
       <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">Google Sheets — Sincronización</h1>
       <p className="text-gray-400 mb-8 text-sm">Sincroniza datos entre Supabase y tu Google Sheet de manera bidireccional.</p>
 

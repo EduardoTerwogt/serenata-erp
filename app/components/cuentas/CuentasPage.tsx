@@ -126,7 +126,7 @@ export function CuentasPage() {
   }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8">
+    <div>
       <div className="mb-6">
         <SectionHero
           title="Cuentas"

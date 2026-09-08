@@ -57,7 +57,7 @@ export default function PlaneacionPage() {
   const visibleSteps = ['project', 'validation', 'confirmation'] as const
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <SectionHero
         title="Planeación"
         subtitle="Carga información de tus eventos y crea cotizaciones en lote"

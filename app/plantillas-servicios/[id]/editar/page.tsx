@@ -99,14 +99,14 @@ export default function EditarPlantillaPage() {
 
   if (loading) {
     return (
-      <div className="px-5 pt-6 pb-6 md:p-8">
+      <div>
         <p className="text-subtext">Cargando plantilla...</p>
       </div>
     )
   }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl flex flex-col gap-6">
+    <div className="max-w-7xl flex flex-col gap-6">
       <SectionHero title="Editar plantilla" subtitle={nombre} />
 
       {error && <StatusBanner tone="error">{error}</StatusBanner>}

@@ -23,7 +23,7 @@ export default function ProyectosPage() {
   } = useProyectosListado()
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-[19px]">
+    <div className="flex flex-col gap-[19px]">
       <SectionHero
         title="Proyectos"
         subtitle="Vista general del pipeline completo"

@@ -112,7 +112,7 @@ export default function ProveedorDetallePage({
   const totalGanado = historial.reduce((s, h) => s + (h.x_pagar || 0), 0)
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-3xl flex flex-col gap-6">
+    <div className="max-w-3xl flex flex-col gap-6">
       <div>
         <button type="button" onClick={() => router.push('/proveedores')} className="inline-flex items-center gap-1.5 text-sm text-faint hover:text-body transition-colors">
           <Icon name="arrow-left" size={14} />

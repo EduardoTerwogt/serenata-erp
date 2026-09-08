@@ -81,7 +81,7 @@ export default function NuevaPlantillaPage() {
   }
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-7xl flex flex-col gap-6">
+    <div className="max-w-7xl flex flex-col gap-6">
       <SectionHero title="Nueva plantilla" subtitle="Define los items reutilizables para este paquete de servicios" />
 
       {error && <StatusBanner tone="error">{error}</StatusBanner>}

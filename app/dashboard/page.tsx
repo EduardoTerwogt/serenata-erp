@@ -76,7 +76,7 @@ export default function DashboardPage() {
 
   if (loading && !resumen) {
     return (
-      <div className="px-5 pt-6 pb-6 md:p-8">
+      <div>
         <p className="text-subtext">Cargando dashboard…</p>
       </div>
     )
@@ -84,7 +84,7 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="px-5 pt-6 pb-6 md:p-8">
+      <div>
         <FuenteError nombre="el dashboard" onRetry={() => cargar(periodo)} />
       </div>
     )
@@ -99,7 +99,7 @@ export default function DashboardPage() {
   const fuenteFallo = (nombre: string) => resumen.fuentesConError.includes(nombre)
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <SectionHero
         title="Dashboard"
         subtitle="Resumen ejecutivo de Serenata"

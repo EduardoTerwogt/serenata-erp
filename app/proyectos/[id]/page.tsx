@@ -110,14 +110,14 @@ export default function ProyectoDetallePage({
     }
   }
 
-  if (loading) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-faint">Cargando...</div>
-  if (!proyecto) return <div className="px-5 pt-6 pb-6 md:p-8 text-center text-faint">Proyecto no encontrado</div>
+  if (loading) return <div className="text-center text-faint">Cargando...</div>
+  if (!proyecto) return <div className="text-center text-faint">Proyecto no encontrado</div>
 
   const etapaActual = pm.tipoAsignado?.etapas.find((e) => e.id === proyecto.etapa_id) ?? null
   const etapaIndex = etapaActual ? pm.tipoAsignado!.etapas.slice().sort((a, b) => a.orden - b.orden).findIndex((e) => e.id === etapaActual.id) : -1
 
   return (
-    <div className="px-5 pt-6 pb-6 md:p-8 max-w-5xl">
+    <div className="max-w-5xl">
       <div className="flex items-start justify-between mb-6 flex-col md:flex-row gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
