@@ -2,11 +2,10 @@
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Suspense, useState } from 'react'
-import { ItemCotizacion } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationCopyItemsModal } from '@/components/quotations/QuotationCopyItemsModal'
-import { mergeImportedIntoBlanks } from '@/components/quotations/QuotationItemsSection'
+import { useLocalQuotationItems } from '@/hooks/useQuotationItems'
 import { useNuevaCotizacionPage } from '@/app/cotizaciones/nueva/useNuevaCotizacionPage'
 import { Icon } from '@/components/ui/Icon'
 
@@ -32,7 +31,7 @@ function NuevaCotizacionContent() {
     watch,
     setValue,
     fields,
-    append,
+    getValues,
     replace,
     editingItemIndex,
     setEditingItemIndex,
@@ -80,11 +79,15 @@ function NuevaCotizacionContent() {
 
   const [showCopyModal, setShowCopyModal] = useState(false)
 
-  const handleImportItems = (items: ItemCotizacion[]) => {
-    // Se reutilizan todas las filas en blanco que haya y las que sobren desaparecen,
-    // así importar nunca deja filas vacías colgando.
-    replace(mergeImportedIntoBlanks(watchedItems, items))
-  }
+  // Mismo contrato que usa la pantalla de edición; aquí las partidas viven en memoria
+  // porque la cotización todavía no existe en la base.
+  const itemsController = useLocalQuotationItems({
+    getValues,
+    setValue,
+    replace,
+    seleccionarProducto,
+    responsables,
+  })
 
   return (
     <div className="flex flex-col gap-[19px]">
@@ -153,28 +156,24 @@ function NuevaCotizacionContent() {
       <QuotationItemsSection
         editable
         register={register}
-        setValue={setValue}
         watchedItems={watchedItems}
         fields={fields}
-        append={append}
-        replace={replace}
-        allowRemoveLastRow
         editingItemIndex={editingItemIndex}
         setEditingItemIndex={setEditingItemIndex}
         calcItem={calcItem}
         handleDescripcionChange={handleDescripcionChange}
-        seleccionarProducto={seleccionarProducto}
         productoSugerencias={productoSugerencias}
         mostrarProductoDropdown={mostrarProductoDropdown}
         setMostrarProductoDropdown={setMostrarProductoDropdown}
         responsables={responsables}
         onCopyClick={() => setShowCopyModal(true)}
+        items={itemsController}
       />
 
       <QuotationCopyItemsModal
         open={showCopyModal}
         onClose={() => setShowCopyModal(false)}
-        onImport={handleImportItems}
+        onImport={itemsController.importItems}
       />
 
       <QuotationTotalsPanels

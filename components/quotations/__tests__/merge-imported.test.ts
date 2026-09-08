@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { mergeImportedIntoBlanks } from '../QuotationItemsSection'
+import { mergeImportedIntoBlanks } from '@/hooks/useQuotationItems'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 
-const blanca = (id?: string) => ({ ...EMPTY_QUOTATION_ITEM, ...(id ? { id } : {}) })
-const llena = (descripcion: string) => ({ ...EMPTY_QUOTATION_ITEM, descripcion, precio_unitario: 100 })
+let n = 0
+const nuevoId = () => `local:test-${++n}`
+const blanca = (id?: string) => ({ ...EMPTY_QUOTATION_ITEM, id: id ?? nuevoId() })
+const llena = (descripcion: string) => ({ ...EMPTY_QUOTATION_ITEM, id: nuevoId(), descripcion, precio_unitario: 100 })
 const importado = (descripcion: string) => ({ descripcion, categoria: 'Cat', cantidad: 2, precio_unitario: 500, x_pagar: 200 })
 
 describe('mergeImportedIntoBlanks', () => {

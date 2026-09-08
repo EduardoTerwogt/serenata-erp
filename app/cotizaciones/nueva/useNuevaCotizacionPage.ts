@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { canAutosaveQuotationDraft, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
+import { newLocalRowId } from '@/hooks/useQuotationItems'
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { fetchNextQuotationFolio, fetchProveedores, generateQuotationPdf, saveNewQuotation, updateQuotation } from '@/lib/services/quotation-service'
@@ -47,13 +48,13 @@ export function useNuevaCotizacionPage() {
       proyecto: proyectoParam,
       fecha_entrega: fechaEntregaParam,
       locacion: locacionParam,
-      items: [{ ...EMPTY_QUOTATION_ITEM }],
+      items: [{ ...EMPTY_QUOTATION_ITEM, id: newLocalRowId() }],
     }
   })
 
   const watchedValues = watch()
   const watchedItems = watch('items')
-  const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' })
+  const { fields, append, replace } = useFieldArray({ control, name: 'items' })
   const quotationForm = useQuotationForm(setValue, watchedItems)
 
   const {
@@ -271,8 +272,8 @@ export function useNuevaCotizacionPage() {
     setValue,
     fields,
     append,
-    remove,
     replace,
+    getValues,
     editingItemIndex,
     setEditingItemIndex,
     folio,

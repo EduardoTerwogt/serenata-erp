@@ -9,6 +9,7 @@ import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadg
 import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
+import { ImportableItem, QuotationItemsController, TEMP_ROW_PREFIX } from '@/hooks/useQuotationItems'
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem, reconcileServerItems } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
@@ -34,21 +35,6 @@ const TOTALS_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_IDLE_RELEASE_MS = 5000
 const SECTION_IDLE_RELEASE_MS = 5000
-// Una fila agregada aparece al instante con un id provisional y el POST viaja en
-// segundo plano; `resolveRowId` espera al id real antes de cualquier llamada.
-const TEMP_ROW_PREFIX = 'temp:'
-
-// Forma mínima compartida por ItemCotizacion y ServiceTemplateItem: es lo que
-// necesita `handleImportItems` para copiar partidas de cualquiera de las dos fuentes.
-interface ImportableItem {
-  categoria?: string | null
-  descripcion?: string | null
-  cantidad?: number | null
-  precio_unitario?: number | null
-  x_pagar?: number | null
-  responsable_id?: string | null
-  responsable_nombre?: string | null
-}
 
 interface GeneralSnapshot {
   cliente: string
@@ -806,6 +792,23 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [itemCellEditors, itemRowEditors])
 
 
+  // Mismo contrato que usa la pantalla de nueva cotización; aquí cada operación se
+  // persiste contra la API y se difunde a los demás colaboradores.
+  const itemsController: QuotationItemsController = useMemo(() => ({
+    addRow: () => { void handleAddRow() },
+    removeRow: (rowId) => { void handleRemoveRow(rowId) },
+    importItems: handleImportItems,
+    selectProduct: (rowId, producto) => { void handleSelectProduct(rowId, producto as never) },
+    changeResponsable: (rowId, responsableId) => { void handleResponsableChange(rowId, responsableId) },
+    cellFocus: handleItemFieldFocus,
+    cellBlur: handleItemFieldBlur,
+    cellChange: handleItemFieldChange,
+    isRowBusy: isItemRowLocked,
+    isCellBusy: isItemCellLocked,
+    rowStatusText: getItemRowStatusText,
+    importing: importingItems,
+  }), [getItemRowStatusText, handleAddRow, handleImportItems, handleItemFieldBlur, handleItemFieldChange, handleItemFieldFocus, handleRemoveRow, handleResponsableChange, handleSelectProduct, importingItems, isItemCellLocked, isItemRowLocked])
+
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)
     setError(null)
@@ -907,8 +910,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
-        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} replace={replace} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} onApplyTemplate={handleImportItems} addingRow={importingItems} allowRemoveLastRow />
-      </div>
+        <QuotationItemsSection editable={!!esEditable} register={register} watchedItems={watchedItems} fields={fields} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onCopyClick={() => setShowCopyModal(true)} items={itemsController} />      </div>
 
       <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={handleImportItems} />
 

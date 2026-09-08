@@ -2,13 +2,14 @@
 
 import { useRef, useEffect, useState as useStateReact, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { UseFieldArrayAppend, UseFieldArrayReplace, UseFormRegister, UseFormSetValue } from 'react-hook-form'
+import { UseFormRegister } from 'react-hook-form'
 import { Producto, Proveedor, ServiceTemplate } from '@/lib/types'
-import { EMPTY_QUOTATION_ITEM, isBlankQuotationItem } from '@/lib/quotations/mappers'
+import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { calculateCostoConIva } from '@/lib/quotations/calculations'
 import { fmtCurrency } from '@/lib/quotations/format'
 import { QuotationItemCellField } from '@/hooks/useQuotationPresence'
+import { QuotationItemsController } from '@/hooks/useQuotationItems'
 import { getJson } from '@/lib/client/api'
 import { Icon } from '@/components/ui/Icon'
 
@@ -27,80 +28,30 @@ interface ReadOnlyItem {
 interface Props {
   editable: boolean
   register: UseFormRegister<QuotationFormValues>
-  setValue: UseFormSetValue<QuotationFormValues>
   watchedItems: QuotationFormValues['items']
+  /**
+   * Identidad de render de react-hook-form. Se usa SOLO como `key`: `replace()`
+   * regenera estos ids, lo que fuerza el remonte de los inputs no controlados y hace
+   * que tomen los valores nuevos. Sin esto, reutilizar una fila en blanco conservaba
+   * su id, React no remontaba y el input seguía mostrando el valor viejo.
+   */
   fields: Array<{ id: string }>
-  append: UseFieldArrayAppend<QuotationFormValues, 'items'>
-  // `remove(index)` opera sobre la foto del último render: dos borrados seguidos
-  // desalinean el arreglo de sus valores y dejan filas fantasma. `replace` con la
-  // lista recalculada es inmune a los índices caducos.
-  replace: UseFieldArrayReplace<QuotationFormValues, 'items'>
   editingItemIndex: number | null
   setEditingItemIndex: (value: number | null) => void
   calcItem: (item: QuotationFormValues['items'][number]) => { importe: number; margen: number }
   handleDescripcionChange: (index: number, value: string) => void
-  seleccionarProducto: (index: number, producto: Producto) => void
   productoSugerencias: Record<number, Producto[]>
   mostrarProductoDropdown: Record<number, boolean>
   setMostrarProductoDropdown: (updater: Record<number, boolean> | ((prev: Record<number, boolean>) => Record<number, boolean>)) => void
   responsables: Proveedor[]
   readOnlyItems?: ReadOnlyItem[]
-  // Los handlers del padre se identifican por `rowId`, nunca por índice: el índice
-  // del render caduca en cuanto una fila se agrega o se borra, y usarlo dentro de un
-  // callback asíncrono terminaba operando sobre la fila equivocada.
-  onAddRow?: () => void
-  onRemoveRow?: (rowId: string) => void
-  onSelectProduct?: (rowId: string, producto: Producto) => void
-  onResponsableChange?: (rowId: string, responsableId: string) => void
-  onItemFieldFocus?: (rowId: string, field: QuotationItemCellField) => void
-  onItemFieldBlur?: (rowId: string, field: QuotationItemCellField) => void
-  onItemFieldChange?: (rowId: string, field: QuotationItemCellField) => void
-  isItemCellLocked?: (rowId: string, field: QuotationItemCellField) => boolean
-  isItemRowLocked?: (rowId: string) => boolean
-  getItemRowStatusText?: (rowId: string) => string | null
   onCopyClick?: () => void
-  // En el detalle las partidas viven en la base: aplicar una plantilla tiene que
-  // pasar por el mismo camino que "Copiar desde otra cotización" (crear + parchear
-  // en el servidor). Sin esto las filas nacían sin id y no se guardaban nunca.
-  onApplyTemplate?: (items: ServiceTemplate['items']) => void | Promise<void>
-  addingRow?: boolean
-  allowRemoveLastRow?: boolean
-}
-
-/**
- * Coloca los ítems importados sobre las filas en blanco existentes (en orden) y añade
- * el resto al final. Las filas en blanco que sobren se descartan. Devuelve la lista
- * completa, lista para `replace`.
- */
-export function mergeImportedIntoBlanks(
-  actuales: QuotationFormValues['items'],
-  importados: Array<{ categoria?: string | null; descripcion?: string | null; cantidad?: number | null; precio_unitario?: number | null; x_pagar?: number | null; responsable_id?: string | null; responsable_nombre?: string | null }>
-): QuotationFormValues['items'] {
-  const aFormItem = (source: (typeof importados)[number], base?: QuotationFormValues['items'][number]) => ({
-    ...(base?.id ? { id: base.id } : {}),
-    categoria: source.categoria || '',
-    descripcion: source.descripcion || '',
-    cantidad: source.cantidad || 1,
-    precio_unitario: source.precio_unitario || 0,
-    responsable_id: source.responsable_id || '',
-    responsable_nombre: source.responsable_nombre || '',
-    x_pagar: source.x_pagar || 0,
-  })
-
-  const resultado: QuotationFormValues['items'] = []
-  const pendientes = [...importados]
-
-  for (const actual of actuales) {
-    if (isBlankQuotationItem(actual)) {
-      const siguiente = pendientes.shift()
-      // Una fila en blanco sin ítem que la ocupe simplemente desaparece.
-      if (siguiente) resultado.push(aFormItem(siguiente, actual))
-      continue
-    }
-    resultado.push(actual)
-  }
-
-  return [...resultado, ...pendientes.map((source) => aFormItem(source))]
+  /**
+   * Único punto de contacto con la lógica de partidas. La tabla se comporta igual en
+   * una cotización nueva y en una existente: la diferencia (memoria vs. servidor) vive
+   * detrás de este controlador, no aquí.
+   */
+  items: QuotationItemsController
 }
 
 // Estilo "InlineInput" del design system: transparente hasta que se enfoca.
@@ -110,35 +61,19 @@ const FULLSCREEN_INPUT_CLASS = 'w-full bg-input border border-hairline rounded-c
 export function QuotationItemsSection({
   editable,
   register,
-  setValue,
   watchedItems,
   fields,
-  append,
-  replace,
   editingItemIndex,
   setEditingItemIndex,
   calcItem,
   handleDescripcionChange,
-  seleccionarProducto,
   productoSugerencias,
   mostrarProductoDropdown,
   setMostrarProductoDropdown,
   responsables,
   readOnlyItems = [],
-  onAddRow,
-  onRemoveRow,
-  onSelectProduct,
-  onResponsableChange,
-  onItemFieldFocus,
-  onItemFieldBlur,
-  onItemFieldChange,
-  isItemCellLocked,
-  isItemRowLocked,
-  getItemRowStatusText,
   onCopyClick,
-  onApplyTemplate,
-  addingRow = false,
-  allowRemoveLastRow = false,
+  items,
 }: Props) {
   const descInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const [dropdownPos, setDropdownPos] = useStateReact<Record<number, { top: number; left: number } | null>>({})
@@ -156,21 +91,12 @@ export function QuotationItemsSection({
   const handleApplyTemplate = async (templateId: string) => {
     const template = templates.find(t => t.id === templateId)
     if (!template || applyingTemplate) return
-
-    if (onApplyTemplate) {
-      setApplyingTemplate(true)
-      try {
-        await onApplyTemplate(template.items)
-      } finally {
-        setApplyingTemplate(false)
-      }
-      return
+    setApplyingTemplate(true)
+    try {
+      await items.importItems(template.items)
+    } finally {
+      setApplyingTemplate(false)
     }
-
-    // Sin `onApplyTemplate` (nueva cotización) las partidas son locales: se reutilizan
-    // TODAS las filas en blanco que haya (no solo cuando hay exactamente una) y las que
-    // sobren desaparecen, así no quedan filas vacías colgando tras importar.
-    replace(mergeImportedIntoBlanks(watchedItems, template.items))
   }
 
   const totalXPagar = (editable ? watchedItems : readOnlyItems).reduce((sum, item) => sum + (item.x_pagar || 0), 0)
@@ -194,19 +120,11 @@ export function QuotationItemsSection({
 
   // Modelo Google Sheets: que otra persona esté en una fila o celda se SEÑALA
   // (realce + texto), nunca se bloquea. Nada de esto deshabilita controles.
-  const rowIdAt = (index: number) => watchedItems[index]?.id
-  const rowBusy = (index: number) => { const id = rowIdAt(index); return id ? (isItemRowLocked?.(id) ?? false) : false }
-  const cellBusy = (index: number, field: QuotationItemCellField) => {
-    const id = rowIdAt(index)
-    if (!id) return false
-    return (isItemRowLocked?.(id) ?? false) || (isItemCellLocked?.(id, field) ?? false)
-  }
-  const rowStatus = (index: number) => { const id = rowIdAt(index); return id ? (getItemRowStatusText?.(id) || null) : null }
-  // Los callbacks del padre solo se disparan si la fila tiene id de servidor.
-  const withRowId = (index: number, run: (rowId: string) => void) => { const id = rowIdAt(index); if (id) run(id) }
-  // Borrado local (cotización nueva): se reconstruye la lista completa en vez de
-  // quitar por índice.
-  const removeLocalRow = (index: number) => replace(watchedItems.filter((_, i) => i !== index))
+  const rowIdAt = (index: number) => watchedItems[index]?.id ?? ''
+  const rowBusy = (index: number) => items.isRowBusy(rowIdAt(index))
+  const cellBusy = (index: number, field: QuotationItemCellField) =>
+    items.isRowBusy(rowIdAt(index)) || items.isCellBusy(rowIdAt(index), field)
+  const rowStatus = (index: number) => items.rowStatusText(rowIdAt(index))
 
   const renderEditableDesktopRow = (fieldId: string, index: number) => {
     const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
@@ -215,15 +133,15 @@ export function QuotationItemsSection({
 
     return (
       <tr key={fieldId} className={`border-b border-hairline ${rowBusy(index) ? 'bg-row-alt/40' : ''}`}>
-        <td className="px-4 py-2"><input {...register(`items.${index}.categoria`)} onFocus={() => withRowId(index, (rid) => onItemFieldFocus?.(rid, 'categoria'))} onBlur={() => withRowId(index, (rid) => onItemFieldBlur?.(rid, 'categoria'))} onChange={(e) => { withRowId(index, (rid) => onItemFieldChange?.(rid, 'categoria')); register(`items.${index}.categoria`).onChange(e) }} data-busy={cellBusy(index, 'categoria') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
+        <td className="px-4 py-2"><input {...register(`items.${index}.categoria`)} onFocus={() => items.cellFocus(rowIdAt(index), 'categoria')} onBlur={() => items.cellBlur(rowIdAt(index), 'categoria')} onChange={(e) => { items.cellChange(rowIdAt(index), 'categoria'); register(`items.${index}.categoria`).onChange(e) }} data-busy={cellBusy(index, 'categoria') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
         <td className="px-4 py-2">
           <div className="relative">
             <input
               {...register(`items.${index}.descripcion`)}
               ref={el => { descInputRefs.current[index] = el; register(`items.${index}.descripcion`).ref(el) }}
-              onChange={e => { withRowId(index, (rid) => onItemFieldChange?.(rid, 'descripcion')); handleDescripcionChange(index, e.target.value); register(`items.${index}.descripcion`).onChange(e) }}
-              onFocus={() => { withRowId(index, (rid) => onItemFieldFocus?.(rid, 'descripcion')); updateDropdownPos(index); if ((productoSugerencias[index]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [index]: true })) }}
-              onBlur={() => { withRowId(index, (rid) => onItemFieldBlur?.(rid, 'descripcion')); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200) }}
+              onChange={e => { items.cellChange(rowIdAt(index), 'descripcion'); handleDescripcionChange(index, e.target.value); register(`items.${index}.descripcion`).onChange(e) }}
+              onFocus={() => { items.cellFocus(rowIdAt(index), 'descripcion'); updateDropdownPos(index); if ((productoSugerencias[index]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [index]: true })) }}
+              onBlur={() => { items.cellBlur(rowIdAt(index), 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200) }}
               data-busy={cellBusy(index, 'descripcion') || undefined}
               className={`w-44 ${CELL_INPUT_CLASS}`}
               autoComplete="off"
@@ -236,7 +154,7 @@ export function QuotationItemsSection({
                 {productoSugerencias[index].map((p, i) => (
                   <div
                     key={i}
-                    onMouseDown={() => { const rid = rowIdAt(index); if (onSelectProduct && rid) onSelectProduct(rid, p); else seleccionarProducto(index, p) }}
+                    onMouseDown={() => items.selectProduct(rowIdAt(index), p)}
                     className="px-3 py-2 text-content border-b border-hairline last:border-0 hover:bg-row cursor-pointer text-body"
                   >
                     <div className="font-medium">{p.descripcion}</div>
@@ -249,23 +167,16 @@ export function QuotationItemsSection({
           </div>
           {statusText && <p className="mt-1 text-[11px] text-accent-quiet">{statusText}</p>}
         </td>
-        <td className="px-4 py-2"><input type="number" min="1" {...register(`items.${index}.cantidad`, { valueAsNumber: true })} onFocus={() => withRowId(index, (rid) => onItemFieldFocus?.(rid, 'cantidad'))} onBlur={() => withRowId(index, (rid) => onItemFieldBlur?.(rid, 'cantidad'))} onChange={(e) => { withRowId(index, (rid) => onItemFieldChange?.(rid, 'cantidad')); register(`items.${index}.cantidad`).onChange(e) }} data-busy={cellBusy(index, 'cantidad') || undefined} className={`w-16 ${CELL_INPUT_CLASS}`} /></td>
-        <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => withRowId(index, (rid) => onItemFieldFocus?.(rid, 'precio_unitario'))} onBlur={() => withRowId(index, (rid) => onItemFieldBlur?.(rid, 'precio_unitario'))} onChange={(e) => { withRowId(index, (rid) => onItemFieldChange?.(rid, 'precio_unitario')); register(`items.${index}.precio_unitario`).onChange(e) }} data-busy={cellBusy(index, 'precio_unitario') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
+        <td className="px-4 py-2"><input type="number" min="1" {...register(`items.${index}.cantidad`, { valueAsNumber: true })} onFocus={() => items.cellFocus(rowIdAt(index), 'cantidad')} onBlur={() => items.cellBlur(rowIdAt(index), 'cantidad')} onChange={(e) => { items.cellChange(rowIdAt(index), 'cantidad'); register(`items.${index}.cantidad`).onChange(e) }} data-busy={cellBusy(index, 'cantidad') || undefined} className={`w-16 ${CELL_INPUT_CLASS}`} /></td>
+        <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(index), 'precio_unitario')} onBlur={() => items.cellBlur(rowIdAt(index), 'precio_unitario')} onChange={(e) => { items.cellChange(rowIdAt(index), 'precio_unitario'); register(`items.${index}.precio_unitario`).onChange(e) }} data-busy={cellBusy(index, 'precio_unitario') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
         <td className="px-4 py-2 text-body font-medium whitespace-nowrap">${fmtCurrency(importe)}</td>
         <td className="px-4 py-2">
           <select
             {...register(`items.${index}.responsable_id`)}
-            onFocus={() => withRowId(index, (rid) => onItemFieldFocus?.(rid, 'responsable_id'))}
-            onBlur={() => withRowId(index, (rid) => onItemFieldBlur?.(rid, 'responsable_id'))}
+            onFocus={() => items.cellFocus(rowIdAt(index), 'responsable_id')}
+            onBlur={() => items.cellBlur(rowIdAt(index), 'responsable_id')}
             onChange={e => {
-              const rid = rowIdAt(index)
-              if (onResponsableChange && rid) {
-                onResponsableChange(rid, e.target.value)
-              } else {
-                setValue(`items.${index}.responsable_id`, e.target.value)
-                const r = responsables.find(r => r.id === e.target.value)
-                setValue(`items.${index}.responsable_nombre`, r?.nombre ?? '')
-              }
+              items.changeResponsable(rowIdAt(index), e.target.value)
             }}
             data-busy={cellBusy(index, 'responsable_id') || undefined}
             className={`w-36 ${CELL_INPUT_CLASS}`}
@@ -275,10 +186,10 @@ export function QuotationItemsSection({
           </select>
           <input type="hidden" {...register(`items.${index}.responsable_nombre`)} />
         </td>
-        <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => withRowId(index, (rid) => onItemFieldFocus?.(rid, 'x_pagar'))} onBlur={() => withRowId(index, (rid) => onItemFieldBlur?.(rid, 'x_pagar'))} onChange={(e) => { withRowId(index, (rid) => onItemFieldChange?.(rid, 'x_pagar')); register(`items.${index}.x_pagar`).onChange(e) }} data-busy={cellBusy(index, 'x_pagar') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
+        <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(index), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(index), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(index), 'x_pagar'); register(`items.${index}.x_pagar`).onChange(e) }} data-busy={cellBusy(index, 'x_pagar') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
         <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
         <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(margen)}</td>
-        <td className="px-4 py-2"><button type="button" onClick={() => { const rid = rowIdAt(index); if (onRemoveRow && rid) onRemoveRow(rid); else removeLocalRow(index) }} disabled={!allowRemoveLastRow && fields.length === 1} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
+        <td className="px-4 py-2"><button type="button" onClick={() => items.removeRow(rowIdAt(index))} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
       </tr>
     )
   }
@@ -309,7 +220,7 @@ export function QuotationItemsSection({
             <p className="text-faint text-xs">{item.categoria || 'Sin categoría'}</p>
             {statusText && <p className="mt-1 text-[11px] text-accent-quiet">{statusText}</p>}
           </div>
-          <button type="button" onClick={(e) => { e.stopPropagation(); const rid = rowIdAt(index); if (onRemoveRow && rid) onRemoveRow(rid); else removeLocalRow(index) }} disabled={!allowRemoveLastRow && fields.length === 1} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors text-content">✕</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); items.removeRow(rowIdAt(index)) }} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors text-content">✕</button>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-faint">Cant. {item.cantidad || 0}</span>
@@ -386,7 +297,7 @@ export function QuotationItemsSection({
             </thead>
             <tbody>
               {editable
-                ? fields.map((field, index) => watchedItems[index] ? renderEditableDesktopRow(field.id, index) : null)
+                ? watchedItems.map((item, index) => renderEditableDesktopRow(fields[index]?.id ?? item.id ?? String(index), index))
                 : readOnlyItems.map(renderReadOnlyDesktopRow)}
             </tbody>
           </table>
@@ -394,7 +305,7 @@ export function QuotationItemsSection({
 
         <div className="md:hidden p-4 space-y-3">
           {editable
-            ? fields.map((field, index) => watchedItems[index] ? renderEditableMobileCard(field.id, index) : null)
+            ? watchedItems.map((item, index) => renderEditableMobileCard(fields[index]?.id ?? item.id ?? String(index), index))
             : readOnlyItems.map(renderReadOnlyMobileCard)}
         </div>
 
@@ -402,12 +313,12 @@ export function QuotationItemsSection({
           {editable ? (
             <button
               type="button"
-              onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })}
-              disabled={addingRow}
+              onClick={() => items.addRow()}
+              disabled={items.importing}
               className="flex items-center gap-1.5 rounded-control px-3 py-2 text-[14.5px] text-body transition-colors hover:bg-row-alt disabled:opacity-50 min-h-[44px] md:min-h-0"
             >
               <Icon name="plus" size={15} />
-              {addingRow ? 'Agregando…' : 'Agregar fila'}
+              Agregar fila
             </button>
           ) : <span />}
           <span className="text-sm text-subtext">
@@ -427,20 +338,20 @@ export function QuotationItemsSection({
             <div className="space-y-5">
               <div className="relative">
                 <label className="sn-label block mb-2">Descripción</label>
-                <input {...register(`items.${editingItemIndex}.descripcion`)} onChange={e => { withRowId(editingItemIndex, (rid) => onItemFieldChange?.(rid, 'descripcion')); handleDescripcionChange(editingItemIndex, e.target.value) }} onFocus={() => { withRowId(editingItemIndex, (rid) => onItemFieldFocus?.(rid, 'descripcion')); if ((productoSugerencias[editingItemIndex]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: true })) }} onBlur={() => { withRowId(editingItemIndex, (rid) => onItemFieldBlur?.(rid, 'descripcion')); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: false })), 200) }} data-busy={cellBusy(editingItemIndex, 'descripcion') || undefined} className={FULLSCREEN_INPUT_CLASS} placeholder="Descripción del item" autoComplete="off" />
-                {mostrarProductoDropdown[editingItemIndex] && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 rounded-control border border-hairline bg-card shadow-overlay max-h-48 overflow-y-auto">{productoSugerencias[editingItemIndex].map((p, i) => <div key={i} onMouseDown={() => { const rid = rowIdAt(editingItemIndex); if (onSelectProduct && rid) onSelectProduct(rid, p); else seleccionarProducto(editingItemIndex, p) }} className="px-4 py-3 text-content border-b border-hairline last:border-0 hover:bg-row cursor-pointer text-body"><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-subtext text-xs">{p.categoria}</div>}</div>)}</div>}
+                <input {...register(`items.${editingItemIndex}.descripcion`)} onChange={e => { items.cellChange(rowIdAt(editingItemIndex), 'descripcion'); handleDescripcionChange(editingItemIndex, e.target.value) }} onFocus={() => { items.cellFocus(rowIdAt(editingItemIndex), 'descripcion'); if ((productoSugerencias[editingItemIndex]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: true })) }} onBlur={() => { items.cellBlur(rowIdAt(editingItemIndex), 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: false })), 200) }} data-busy={cellBusy(editingItemIndex, 'descripcion') || undefined} className={FULLSCREEN_INPUT_CLASS} placeholder="Descripción del item" autoComplete="off" />
+                {mostrarProductoDropdown[editingItemIndex] && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 rounded-control border border-hairline bg-card shadow-overlay max-h-48 overflow-y-auto">{productoSugerencias[editingItemIndex].map((p, i) => <div key={i} onMouseDown={() => items.selectProduct(rowIdAt(editingItemIndex), p)} className="px-4 py-3 text-content border-b border-hairline last:border-0 hover:bg-row cursor-pointer text-body"><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-subtext text-xs">{p.categoria}</div>}</div>)}</div>}
               </div>
-              <div><label className="sn-label block mb-2">Categoría</label><input {...register(`items.${editingItemIndex}.categoria`)} onFocus={() => withRowId(editingItemIndex, (rid) => onItemFieldFocus?.(rid, 'categoria'))} onBlur={() => withRowId(editingItemIndex, (rid) => onItemFieldBlur?.(rid, 'categoria'))} onChange={(e) => { withRowId(editingItemIndex, (rid) => onItemFieldChange?.(rid, 'categoria')); register(`items.${editingItemIndex}.categoria`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'categoria') || undefined} className={FULLSCREEN_INPUT_CLASS} placeholder="Categoría" /></div>
-              <div className="flex gap-3"><div className="flex-1"><label className="sn-label block mb-2">Cantidad</label><input type="number" min="1" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })} onFocus={() => withRowId(editingItemIndex, (rid) => onItemFieldFocus?.(rid, 'cantidad'))} onBlur={() => withRowId(editingItemIndex, (rid) => onItemFieldBlur?.(rid, 'cantidad'))} onChange={(e) => { withRowId(editingItemIndex, (rid) => onItemFieldChange?.(rid, 'cantidad')); register(`items.${editingItemIndex}.cantidad`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'cantidad') || undefined} className={`${FULLSCREEN_INPUT_CLASS} text-center`} /></div><div className="flex-[2]"><label className="sn-label block mb-2">Precio unitario</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => withRowId(editingItemIndex, (rid) => onItemFieldFocus?.(rid, 'precio_unitario'))} onBlur={() => withRowId(editingItemIndex, (rid) => onItemFieldBlur?.(rid, 'precio_unitario'))} onChange={(e) => { withRowId(editingItemIndex, (rid) => onItemFieldChange?.(rid, 'precio_unitario')); register(`items.${editingItemIndex}.precio_unitario`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'precio_unitario') || undefined} className={FULLSCREEN_INPUT_CLASS} /></div></div>
-              <div><label className="sn-label block mb-2">Responsable</label><select {...register(`items.${editingItemIndex}.responsable_id`)} onFocus={() => withRowId(editingItemIndex, (rid) => onItemFieldFocus?.(rid, 'responsable_id'))} onBlur={() => withRowId(editingItemIndex, (rid) => onItemFieldBlur?.(rid, 'responsable_id'))} onChange={(e) => { const rid = rowIdAt(editingItemIndex); if (onResponsableChange && rid) { onResponsableChange(rid, e.target.value) } else { setValue(`items.${editingItemIndex}.responsable_id`, e.target.value); const r = responsables.find(r => r.id === e.target.value); setValue(`items.${editingItemIndex}.responsable_nombre`, r?.nombre ?? '') } }} data-busy={cellBusy(editingItemIndex, 'responsable_id') || undefined} className={`${FULLSCREEN_INPUT_CLASS} appearance-none`}><option value="">Sin asignar</option>{responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select><input type="hidden" {...register(`items.${editingItemIndex}.responsable_nombre`)} /></div>
-              <div><label className="sn-label block mb-2">Por pagar al responsable</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => withRowId(editingItemIndex, (rid) => onItemFieldFocus?.(rid, 'x_pagar'))} onBlur={() => withRowId(editingItemIndex, (rid) => onItemFieldBlur?.(rid, 'x_pagar'))} onChange={(e) => { withRowId(editingItemIndex, (rid) => onItemFieldChange?.(rid, 'x_pagar')); register(`items.${editingItemIndex}.x_pagar`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'x_pagar') || undefined} className={FULLSCREEN_INPUT_CLASS} /></div>
+              <div><label className="sn-label block mb-2">Categoría</label><input {...register(`items.${editingItemIndex}.categoria`)} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'categoria')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'categoria')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'categoria'); register(`items.${editingItemIndex}.categoria`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'categoria') || undefined} className={FULLSCREEN_INPUT_CLASS} placeholder="Categoría" /></div>
+              <div className="flex gap-3"><div className="flex-1"><label className="sn-label block mb-2">Cantidad</label><input type="number" min="1" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'cantidad')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'cantidad')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'cantidad'); register(`items.${editingItemIndex}.cantidad`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'cantidad') || undefined} className={`${FULLSCREEN_INPUT_CLASS} text-center`} /></div><div className="flex-[2]"><label className="sn-label block mb-2">Precio unitario</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'precio_unitario')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'precio_unitario')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'precio_unitario'); register(`items.${editingItemIndex}.precio_unitario`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'precio_unitario') || undefined} className={FULLSCREEN_INPUT_CLASS} /></div></div>
+              <div><label className="sn-label block mb-2">Responsable</label><select {...register(`items.${editingItemIndex}.responsable_id`)} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'responsable_id')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'responsable_id')} onChange={(e) => items.changeResponsable(rowIdAt(editingItemIndex), e.target.value)} data-busy={cellBusy(editingItemIndex, 'responsable_id') || undefined} className={`${FULLSCREEN_INPUT_CLASS} appearance-none`}><option value="">Sin asignar</option>{responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select><input type="hidden" {...register(`items.${editingItemIndex}.responsable_nombre`)} /></div>
+              <div><label className="sn-label block mb-2">Por pagar al responsable</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'x_pagar'); register(`items.${editingItemIndex}.x_pagar`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'x_pagar') || undefined} className={FULLSCREEN_INPUT_CLASS} /></div>
             </div>
             <div className="rounded-panel border border-hairline bg-card p-4 mt-6">
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Importe</span><span className="text-subtext text-content font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).importe)}</span></div>
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo + IVA</span><span className="text-subtext text-content font-medium">${fmtCurrency(calculateCostoConIva((watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).x_pagar))}</span></div>
               <div className="flex justify-between"><span className="text-faint text-content">Margen</span><span className={`text-content font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
-            {(allowRemoveLastRow || fields.length > 1) && <button type="button" onClick={() => { const rid = rowIdAt(editingItemIndex); if (onRemoveRow && rid) onRemoveRow(rid); else removeLocalRow(editingItemIndex); setEditingItemIndex(null) }} className="w-full text-red-400 hover:text-red-300 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
+            {<button type="button" onClick={() => { items.removeRow(rowIdAt(editingItemIndex)); setEditingItemIndex(null) }} className="w-full text-red-400 hover:text-red-300 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
           </div>
         </div>
       )}
