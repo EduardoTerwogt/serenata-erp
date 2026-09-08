@@ -188,3 +188,96 @@ test('autoguarda la configuración de totales (fee y descuento)', async ({ page 
 
   expect(request.postDataJSON().porcentaje_fee).toBeCloseTo(0.2, 5)
 })
+
+// Regresión del flujo que reportó Eduardo: agregar filas, borrar varias seguidas y
+// aplicar una plantilla dejaba filas vacías imposibles de borrar (el índice del
+// render caducaba y `useFieldArray.remove` operaba sobre un snapshot viejo).
+test('borrar dos filas seguidas rápido no deja filas fantasma', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-RAFAGA', estado: 'BORRADOR', itemLatencyMs: 200 })
+  await login(page, '/cotizaciones/SH-E2E-RAFAGA')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-RAFAGA' })).toBeVisible()
+
+  const rows = page.locator('table tbody tr')
+  const addRow = page.getByRole('button', { name: /Agregar fila/ })
+
+  for (let i = 0; i < 2; i++) {
+    await addRow.click()
+    await expect(rows).toHaveCount(i + 2)
+  }
+
+  const deleted: string[] = []
+  page.on('request', (req) => {
+    if (/\/items\/([^/]+)$/.test(req.url()) && req.method() === 'DELETE') {
+      deleted.push(req.url().split('/').pop() as string)
+    }
+  })
+
+  // Dos clics sin esperar al repintado, como un usuario real.
+  await rows.nth(2).locator('td').last().locator('button').click()
+  await rows.nth(1).locator('td').last().locator('button').click()
+
+  await expect(rows).toHaveCount(1)
+  await expect(rows.nth(0).locator('td').nth(1).locator('input')).toHaveValue('Renta de cámara')
+  // Se borraron dos filas distintas, no dos veces la misma.
+  await expect.poll(() => new Set(deleted).size).toBe(2)
+})
+
+test('el flujo completo reportado deja la tabla consistente y sin filas vacías', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-FLUJO',
+    estado: 'BORRADOR',
+    itemLatencyMs: 150,
+    templates: [{
+      id: 'tpl-1', nombre: 'Paquete básico', descripcion: null, activo: true,
+      items: [
+        { categoria: 'Producción', descripcion: 'Cámara ARRI', cantidad: 1, precio_unitario: 12000, x_pagar: 5000 },
+        { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 2, precio_unitario: 4000, x_pagar: 1500 },
+      ],
+    }],
+  })
+  await login(page, '/cotizaciones/SH-E2E-FLUJO')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-FLUJO' })).toBeVisible()
+
+  const rows = page.locator('table tbody tr')
+  const addRow = page.getByRole('button', { name: /Agregar fila/ })
+
+  await addRow.click()
+  await expect(rows).toHaveCount(2)
+  await addRow.click()
+  await expect(rows).toHaveCount(3)
+
+  await rows.nth(2).locator('td').last().locator('button').click()
+  await rows.nth(1).locator('td').last().locator('button').click()
+  await expect(rows).toHaveCount(1)
+
+  await page.locator('select').filter({ hasText: 'Plantilla de servicios' }).selectOption('tpl-1')
+  await expect(rows).toHaveCount(3)
+
+  const descripciones = await rows.locator('td:nth-child(2) input').evaluateAll(
+    (els) => els.map((el) => (el as HTMLInputElement).value)
+  )
+  expect(descripciones).toEqual(['Renta de cámara', 'Cámara ARRI', 'Iluminación'])
+
+  // Y todas siguen siendo borrables: ninguna fila quedó huérfana.
+  for (const esperado of [2, 1, 0]) {
+    await rows.last().locator('td').last().locator('button').click()
+    await expect(rows).toHaveCount(esperado)
+  }
+})
+
+test('si el DELETE falla, la sección se resincroniza y la fila vuelve a su lugar', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-DELFAIL', estado: 'BORRADOR', failItemDelete: true })
+  await login(page, '/cotizaciones/SH-E2E-DELFAIL')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-DELFAIL' })).toBeVisible()
+
+  const rows = page.locator('table tbody tr')
+  await page.getByRole('button', { name: /Agregar fila/ }).click()
+  await expect(rows).toHaveCount(2)
+
+  await rows.nth(0).locator('td').last().locator('button').click()
+
+  await expect(page.getByText('Error eliminando partida')).toBeVisible()
+  await expect(rows).toHaveCount(2)
+  // Vuelve a su posición original, no al final.
+  await expect(rows.nth(0).locator('td').nth(1).locator('input')).toHaveValue('Renta de cámara')
+})

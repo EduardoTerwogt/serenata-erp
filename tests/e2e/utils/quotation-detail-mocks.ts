@@ -10,6 +10,10 @@ export interface CotizacionDetailMockOptions {
   items?: CotizacionMockItem[]
   /** Plantillas de servicios que devuelve /api/service-templates. */
   templates?: ServiceTemplateMock[]
+  /** Latencia artificial (ms) en POST/PATCH/DELETE de partidas. */
+  itemLatencyMs?: number
+  /** Fuerza que el DELETE de partidas responda 500. */
+  failItemDelete?: boolean
 }
 
 interface CotizacionMockItem {
@@ -133,12 +137,15 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     await fulfillJson(route, cotizacion)
   })
 
+  const itemLatency = () => options.itemLatencyMs ? new Promise((r) => setTimeout(r, options.itemLatencyMs)) : Promise.resolve()
+
   // POST /items -> crea una partida vacía, igual que el endpoint real
   await page.route(`**/api/cotizaciones/${options.id}/items`, async (route) => {
     if (route.request().method() !== 'POST') {
       await route.fallback()
       return
     }
+    await itemLatency()
     const created = {
       id: `item-detail-${cotizacion.items.length + 1}`,
       cotizacion_id: options.id,
@@ -163,9 +170,14 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
   await page.route(`**/api/cotizaciones/${options.id}/items/*`, async (route) => {
     const method = route.request().method()
     const itemId = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() || '')
+    await itemLatency()
     const index = cotizacion.items.findIndex((item) => item.id === itemId)
 
     if (method === 'DELETE') {
+      if (options.failItemDelete) {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Error eliminando partida' }) })
+        return
+      }
       if (index >= 0) cotizacion.items.splice(index, 1)
       await fulfillJson(route, { ok: true })
       return

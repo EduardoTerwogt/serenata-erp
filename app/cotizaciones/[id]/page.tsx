@@ -33,7 +33,6 @@ const GENERAL_AUTOSAVE_DELAY_MS = 800
 const TOTALS_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_IDLE_RELEASE_MS = 5000
-const ITEM_NEW_ROW_OWNERSHIP_MS = 10000
 const SECTION_IDLE_RELEASE_MS = 5000
 
 // Forma mínima compartida por ItemCotizacion y ServiceTemplateItem: es lo que
@@ -145,10 +144,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [isSavingGeneral, setIsSavingGeneral] = useState(false)
   const [isSavingTotals, setIsSavingTotals] = useState(false)
   const [addingRow, setAddingRow] = useState(false)
-  // Los locks locales de fila viven en estado (no solo en ref) para que la tabla
-  // vuelva a renderizar cuando se toman o se liberan; el ref es el espejo que leen
-  // los callbacks async.
-  const [localItemRowLocks, setLocalItemRowLocks] = useState<Record<string, 'new_row' | 'row_action'>>({})
   const notasSectionRef = useRef<HTMLDivElement | null>(null)
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
   const totalsSectionRef = useRef<HTMLDivElement | null>(null)
@@ -179,8 +174,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const itemSavingCellsRef = useRef<Set<string>>(new Set())
   const itemCellAutosaveTimersRef = useRef<Record<string, number | null>>({})
   const itemCellIdleReleaseTimersRef = useRef<Record<string, number | null>>({})
-  const localItemRowLocksRef = useRef<Record<string, 'new_row' | 'row_action'>>({})
-  const newRowOwnershipTimersRef = useRef<Record<string, number | null>>({})
+  // Cola por fila: encadena PATCH/DELETE de una misma partida para que no se pisen.
+  const rowMutationQueueRef = useRef<Map<string, Promise<unknown>>>(new Map())
+  // Filas ya quitadas en pantalla cuyo DELETE sigue en vuelo. `useFieldArray.remove`
+  // trabaja sobre el snapshot del último render, así que dos borrados seguidos (antes
+  // de que React repinte) dejaban una fila fantasma. Con este conjunto la lista se
+  // recalcula entera y `replace` la aplica de golpe, sin depender de índices.
+  const pendingRowRemovalsRef = useRef<Set<string>>(new Set())
   const lastSavedNotasRef = useRef('')
   const lastSavedGeneralRef = useRef<GeneralSnapshot>(buildGeneralSnapshot({}))
   const lastSavedTotalsRef = useRef<TotalsSnapshot>(buildTotalsSnapshot({}))
@@ -188,7 +188,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const { register, control, watch, reset, setValue, getValues } = useForm<QuotationFormValues>({
     defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
   })
-  const { fields, append, remove } = useFieldArray({ control, name: 'items' })
+  const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' })
   const watchedItems = watch('items')
   const watchedFechaEntrega = watch('fecha_entrega') || ''
   const watchedLocacion = watch('locacion') || ''
@@ -233,8 +233,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     releaseSection,
     lockItemCell,
     releaseItemCell,
-    lockItemRow,
-    releaseItemRow,
     broadcastItemMutation,
     markSectionSaved,
   } = useQuotationPresence({
@@ -250,30 +248,34 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const getCurrentNotasSnapshot = useCallback(() => notasValueRef.current.trim() ? notasValueRef.current : '', [])
   const getCurrentGeneralSnapshot = useCallback(() => buildGeneralSnapshot({ cliente: clienteInputValueRef.current, proyecto: proyectoInputValueRef.current, fecha_entrega: getValues('fecha_entrega') || '', locacion: getValues('locacion') || '' }), [getValues])
   const getCurrentTotalsSnapshot = useCallback(() => buildTotalsSnapshot({ porcentaje_fee: porcentajeFeeValueRef.current, iva_activo: ivaActivoValueRef.current, descuento_tipo: descuentoTipoValueRef.current, descuento_valor: descuentoValorValueRef.current }), [])
-  const getItemRowIdByIndex = useCallback((index: number) => { const items = getValues('items') || []; return items[index]?.id || watchedItems[index]?.id || null }, [getValues, watchedItems])
   const getItemIndexByRowId = useCallback((rowId: string) => { const items = getValues('items') || []; return items.findIndex((item) => item?.id === rowId) }, [getValues])
-  const hasLocalItemActivity = useCallback(() => itemDirtyCellsRef.current.size > 0 || itemFocusedCellsRef.current.size > 0 || itemSavingCellsRef.current.size > 0 || Object.keys(localItemRowLocksRef.current).length > 0, [])
-  const hasLocalItemRowActivity = useCallback((rowId: string) => {
-    if (localItemRowLocksRef.current[rowId]) return true
-    return Array.from(itemDirtyCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemFocusedCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemSavingCellsRef.current).some((key) => key.startsWith(`${rowId}:`))
-  }, [])
-  const hasRemoteCellLockOnRow = useCallback((rowId: string) => Object.keys(itemCellEditors).some((key) => key.startsWith(`${rowId}:`)), [itemCellEditors])
+  const hasLocalItemActivity = useCallback(() => itemDirtyCellsRef.current.size > 0 || itemFocusedCellsRef.current.size > 0 || itemSavingCellsRef.current.size > 0, [])
+  const hasLocalItemRowActivity = useCallback((rowId: string) => (
+    Array.from(itemDirtyCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemFocusedCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemSavingCellsRef.current).some((key) => key.startsWith(`${rowId}:`))
+  ), [])
 
   const clearNotasIdleReleaseTimer = useCallback(() => { if (notasIdleReleaseTimerRef.current !== null) { window.clearTimeout(notasIdleReleaseTimerRef.current); notasIdleReleaseTimerRef.current = null } }, [])
   const clearGeneralIdleReleaseTimer = useCallback(() => { if (generalIdleReleaseTimerRef.current !== null) { window.clearTimeout(generalIdleReleaseTimerRef.current); generalIdleReleaseTimerRef.current = null } }, [])
   const clearTotalsIdleReleaseTimer = useCallback(() => { if (totalsIdleReleaseTimerRef.current !== null) { window.clearTimeout(totalsIdleReleaseTimerRef.current); totalsIdleReleaseTimerRef.current = null } }, [])
   const clearItemCellAutosaveTimer = useCallback((key: string) => { const timer = itemCellAutosaveTimersRef.current[key]; if (timer !== null && timer !== undefined) { window.clearTimeout(timer); delete itemCellAutosaveTimersRef.current[key] } }, [])
   const clearItemCellIdleReleaseTimer = useCallback((key: string) => { const timer = itemCellIdleReleaseTimersRef.current[key]; if (timer !== null && timer !== undefined) { window.clearTimeout(timer); delete itemCellIdleReleaseTimersRef.current[key] } }, [])
-  const clearNewRowOwnershipTimer = useCallback((rowId: string) => { const timer = newRowOwnershipTimersRef.current[rowId]; if (timer !== null && timer !== undefined) { window.clearTimeout(timer); delete newRowOwnershipTimersRef.current[rowId] } }, [])
 
   const scheduleNotasIdleRelease = useCallback(() => { clearNotasIdleReleaseTimer(); if (!notasLockHeldRef.current) return; notasIdleReleaseTimerRef.current = window.setTimeout(() => { notasIdleReleaseTimerRef.current = null; if (!notasLockHeldRef.current || notasDirtyRef.current || isSavingNotas) return; notasLockHeldRef.current = false; releaseSection('notas') }, SECTION_IDLE_RELEASE_MS) }, [clearNotasIdleReleaseTimer, isSavingNotas, releaseSection])
   const scheduleGeneralIdleRelease = useCallback(() => { clearGeneralIdleReleaseTimer(); if (!generalLockHeldRef.current) return; generalIdleReleaseTimerRef.current = window.setTimeout(() => { generalIdleReleaseTimerRef.current = null; if (!generalLockHeldRef.current || generalDirtyRef.current || isSavingGeneral) return; generalLockHeldRef.current = false; releaseSection('general') }, SECTION_IDLE_RELEASE_MS) }, [clearGeneralIdleReleaseTimer, isSavingGeneral, releaseSection])
   const scheduleTotalsIdleRelease = useCallback(() => { clearTotalsIdleReleaseTimer(); if (!totalsLockHeldRef.current) return; totalsIdleReleaseTimerRef.current = window.setTimeout(() => { totalsIdleReleaseTimerRef.current = null; if (!totalsLockHeldRef.current || totalsDirtyRef.current || isSavingTotals) return; totalsLockHeldRef.current = false; releaseSection('totales') }, SECTION_IDLE_RELEASE_MS) }, [clearTotalsIdleReleaseTimer, isSavingTotals, releaseSection])
   const scheduleItemCellIdleRelease = useCallback((rowId: string, field: QuotationItemCellField) => { const key = getItemCellKey(rowId, field); clearItemCellIdleReleaseTimer(key); itemCellIdleReleaseTimersRef.current[key] = window.setTimeout(() => { delete itemCellIdleReleaseTimersRef.current[key]; if (itemDirtyCellsRef.current.has(key) || itemSavingCellsRef.current.has(key)) return; itemFocusedCellsRef.current.delete(key); releaseItemCell(rowId, field) }, ITEM_CELL_IDLE_RELEASE_MS) }, [clearItemCellIdleReleaseTimer, releaseItemCell])
 
-  const lockLocalItemRow = useCallback((rowId: string, mode: 'new_row' | 'row_action') => { localItemRowLocksRef.current[rowId] = mode; setLocalItemRowLocks((prev) => ({ ...prev, [rowId]: mode })); lockItemRow(rowId, mode) }, [lockItemRow])
-  const releaseLocalItemRow = useCallback((rowId: string) => { clearNewRowOwnershipTimer(rowId); delete localItemRowLocksRef.current[rowId]; setLocalItemRowLocks((prev) => { if (!(rowId in prev)) return prev; const next = { ...prev }; delete next[rowId]; return next }); releaseItemRow(rowId) }, [clearNewRowOwnershipTimer, releaseItemRow])
-  const scheduleNewRowOwnershipRelease = useCallback((rowId: string) => { clearNewRowOwnershipTimer(rowId); newRowOwnershipTimersRef.current[rowId] = window.setTimeout(() => { delete newRowOwnershipTimersRef.current[rowId]; if (localItemRowLocksRef.current[rowId] !== 'new_row') return; if (hasLocalItemRowActivity(rowId)) return; releaseLocalItemRow(rowId) }, ITEM_NEW_ROW_OWNERSHIP_MS) }, [clearNewRowOwnershipTimer, hasLocalItemRowActivity, releaseLocalItemRow])
+  // Toda mutación de una fila entra en su propia cola: dos borrados seguidos, o un
+  // PATCH y un DELETE de la misma partida, se ejecutan en orden y nunca se solapan.
+  const enqueueRowMutation = useCallback(<T,>(rowId: string, run: () => Promise<T>): Promise<T> => {
+    const queue = rowMutationQueueRef.current
+    const previous = queue.get(rowId) ?? Promise.resolve()
+    const result = previous.then(run, run)
+    const settled = result.then(() => undefined, () => undefined)
+    queue.set(rowId, settled)
+    void settled.then(() => { if (queue.get(rowId) === settled) queue.delete(rowId) })
+    return result
+  }, [])
 
   const patchQuotationItem = useCallback(async (rowId: string, patch: Record<string, unknown>) => {
     const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
@@ -298,7 +300,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // `preserveLocalEdits` evita que la respuesta del servidor sobreescriba una celda
   // que el usuario sigue editando: si se tecleó durante el debounce + el round-trip,
   // el valor viejo del servidor borraba lo recién escrito.
-  const upsertLocalItemState = useCallback((item: ItemCotizacion, options?: { preserveLocalEdits?: boolean }) => {
+  const upsertLocalItemState = useCallback((item: ItemCotizacion, options?: { preserveLocalEdits?: boolean; allowInsert?: boolean }) => {
     const index = getItemIndexByRowId(item.id)
     const formItem = mapItemToFormItem(item)
     if (index >= 0) {
@@ -318,8 +320,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         setValue(`items.${index}.responsable_id`, formItem.responsable_id)
         setValue(`items.${index}.responsable_nombre`, formItem.responsable_nombre)
       }
-    } else {
+    } else if (options?.allowInsert) {
+      // Solo un cambio remoto puede insertar una fila que aún no tenemos. Un ACK de
+      // una petición propia nunca crea filas: si la fila ya no está en el formulario
+      // es porque se borró, y reañadirla la resucitaba como fila fantasma.
       append(formItem)
+    } else {
+      return
     }
     setCotizacion((prev) => {
       if (!prev) return prev
@@ -334,6 +341,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const removeLocalItemState = useCallback((rowId: string) => {
     const index = getItemIndexByRowId(rowId)
     if (index >= 0) remove(index)
+
     setCotizacion((prev) => prev ? { ...prev, items: (prev.items || []).filter((item) => item.id !== rowId) } : prev)
   }, [getItemIndexByRowId, remove])
 
@@ -368,6 +376,19 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const applyNotasOnly = useCallback((notas: string | null) => { const normalized = notas ?? ''; setNotasInternas(normalized); notasValueRef.current = normalized; lastSavedNotasRef.current = normalized; notasDirtyRef.current = false; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notas } : prev)) }, [])
   const applyGeneralOnly = useCallback((cot: Cotizacion) => { const general = buildGeneralSnapshot({ cliente: cot.cliente, proyecto: cot.proyecto, fecha_entrega: cot.fecha_entrega || '', locacion: cot.locacion || '' }); lastSavedGeneralRef.current = general; generalDirtyRef.current = false; setClienteInput(general.cliente); clienteInputValueRef.current = general.cliente; setProyectoInput(general.proyecto); proyectoInputValueRef.current = general.proyecto; setValue('cliente', general.cliente); setValue('proyecto', general.proyecto); setValue('fecha_entrega', general.fecha_entrega); setValue('locacion', general.locacion); setCotizacion((prev) => prev ? { ...prev, cliente: general.cliente, proyecto: general.proyecto, fecha_entrega: general.fecha_entrega || null, locacion: general.locacion || null } : prev) }, [setClienteInput, setProyectoInput, setValue])
   const applyTotalsOnly = useCallback((cot: Cotizacion) => { const totalsConfig = buildTotalsSnapshot({ porcentaje_fee: cot.porcentaje_fee, iva_activo: cot.iva_activo, descuento_tipo: cot.descuento_tipo, descuento_valor: cot.descuento_valor }); lastSavedTotalsRef.current = totalsConfig; totalsDirtyRef.current = false; setPorcentajeFee(totalsConfig.porcentaje_fee); porcentajeFeeValueRef.current = totalsConfig.porcentaje_fee; setIvaActivo(totalsConfig.iva_activo); ivaActivoValueRef.current = totalsConfig.iva_activo; setDescuentoTipo(totalsConfig.descuento_tipo); descuentoTipoValueRef.current = totalsConfig.descuento_tipo; setDescuentoValor(totalsConfig.descuento_valor); descuentoValorValueRef.current = totalsConfig.descuento_valor; setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: totalsConfig.porcentaje_fee, iva_activo: totalsConfig.iva_activo, descuento_tipo: totalsConfig.descuento_tipo, descuento_valor: totalsConfig.descuento_valor } : prev) }, [])
+
+  // Red de seguridad única: ante cualquier fallo del servidor se vuelve a leer la
+  // cotización y se reconstruye la tabla, en vez de parchear el estado local a mano
+  // (que era lo que dejaba filas fantasma imposibles de borrar).
+  const resyncPartidas = useCallback(async () => {
+    try {
+      const updated = await fetchQuotationDetail(id)
+      pendingRowRemovalsRef.current.clear()
+      applyCotizacionToState(updated)
+    } catch (loadError) {
+      console.error('[cotizaciones/[id]] Error resincronizando partidas:', loadError)
+    }
+  }, [applyCotizacionToState, id])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
   useEffect(() => { notasValueRef.current = notasInternas }, [notasInternas])
@@ -492,7 +513,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       return
     }
     if (latestItemMutation.item) {
-      upsertLocalItemState(latestItemMutation.item)
+      upsertLocalItemState(latestItemMutation.item, { allowInsert: true })
     }
   }, [hasLocalItemRowActivity, latestItemMutation, removeLocalItemState, upsertLocalItemState])
 
@@ -513,7 +534,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     clearNotasIdleReleaseTimer(); clearGeneralIdleReleaseTimer(); clearTotalsIdleReleaseTimer()
     Object.values(itemCellAutosaveTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
     Object.values(itemCellIdleReleaseTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
-    Object.values(newRowOwnershipTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
   }, [clearGeneralIdleReleaseTimer, clearNotasIdleReleaseTimer, clearTotalsIdleReleaseTimer])
 
   const handleNotasFocus = useCallback(() => { if (!esEditable || !!sectionEditors.notas) return; clearNotasIdleReleaseTimer(); notasFocusedRef.current = true; if (!notasLockHeldRef.current) { notasLockHeldRef.current = true; setActiveSection('notas') } }, [clearNotasIdleReleaseTimer, esEditable, sectionEditors.notas, setActiveSection])
@@ -535,18 +555,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const trackedSetDescuentoTipo = useCallback((value: 'monto' | 'porcentaje') => { handleTotalsFocus(); totalsDirtyRef.current = true; descuentoTipoValueRef.current = value; setDescuentoTipo(value) }, [handleTotalsFocus])
   const trackedSetDescuentoValor = useCallback((value: number) => { handleTotalsFocus(); totalsDirtyRef.current = true; descuentoValorValueRef.current = value; setDescuentoValor(value) }, [handleTotalsFocus])
 
-  const handleItemFieldFocus = useCallback((index: number, field: QuotationItemCellField) => {
-    const rowId = getItemRowIdByIndex(index)
-    if (!rowId || itemRowEditors[rowId] || localItemRowLocksRef.current[rowId] === 'row_action') return
+  const handleItemFieldFocus = useCallback((rowId: string, field: QuotationItemCellField) => {
     const key = getItemCellKey(rowId, field)
     clearItemCellIdleReleaseTimer(key)
     itemFocusedCellsRef.current.add(key)
     lockItemCell(rowId, field)
-  }, [clearItemCellIdleReleaseTimer, getItemRowIdByIndex, itemRowEditors, lockItemCell])
+  }, [clearItemCellIdleReleaseTimer, lockItemCell])
 
-  const handleItemFieldChange = useCallback((index: number, field: QuotationItemCellField) => {
-    const rowId = getItemRowIdByIndex(index)
-    if (!rowId) return
+  const handleItemFieldChange = useCallback((rowId: string, field: QuotationItemCellField) => {
     const key = getItemCellKey(rowId, field)
     itemDirtyCellsRef.current.add(key)
     itemFocusedCellsRef.current.add(key)
@@ -554,17 +570,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     clearItemCellIdleReleaseTimer(key)
     clearItemCellAutosaveTimer(key)
     itemCellAutosaveTimersRef.current[key] = window.setTimeout(() => { void persistItemCellAutosave(rowId, field) }, ITEM_CELL_AUTOSAVE_DELAY_MS)
-  }, [clearItemCellAutosaveTimer, clearItemCellIdleReleaseTimer, getItemRowIdByIndex, lockItemCell, persistItemCellAutosave])
+  }, [clearItemCellAutosaveTimer, clearItemCellIdleReleaseTimer, lockItemCell, persistItemCellAutosave])
 
-  const handleItemFieldBlur = useCallback((index: number, field: QuotationItemCellField) => {
-    const rowId = getItemRowIdByIndex(index)
-    if (!rowId) return
+  const handleItemFieldBlur = useCallback((rowId: string, field: QuotationItemCellField) => {
     const key = getItemCellKey(rowId, field)
     itemFocusedCellsRef.current.delete(key)
     clearItemCellAutosaveTimer(key)
     if (itemDirtyCellsRef.current.has(key)) { void persistItemCellAutosave(rowId, field); return }
     scheduleItemCellIdleRelease(rowId, field)
-  }, [clearItemCellAutosaveTimer, getItemRowIdByIndex, persistItemCellAutosave, scheduleItemCellIdleRelease])
+  }, [clearItemCellAutosaveTimer, persistItemCellAutosave, scheduleItemCellIdleRelease])
 
   const handleAddRow = useCallback(async () => {
     if (addingRow) return
@@ -574,16 +588,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (!createdItem) throw new Error('No se pudo crear la fila')
       append(mapItemToFormItem(createdItem))
       setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
-      lockLocalItemRow(createdItem.id, 'new_row')
-      scheduleNewRowOwnershipRelease(createdItem.id)
       broadcastItemMutation({ action: 'upsert', row_id: createdItem.id, item: createdItem })
       markSectionSaved('partidas')
     } catch (createError: unknown) {
       setError(createError instanceof Error ? createError.message : 'Error creando partida')
+      void resyncPartidas()
     } finally {
       setAddingRow(false)
     }
-  }, [addingRow, append, broadcastItemMutation, createQuotationItemRow, lockLocalItemRow, markSectionSaved, scheduleNewRowOwnershipRelease])
+  }, [addingRow, append, broadcastItemMutation, createQuotationItemRow, markSectionSaved, resyncPartidas])
 
   // Sirve tanto para "Copiar desde otra cotización" (ItemCotizacion) como para
   // aplicar una plantilla de servicios (ServiceTemplateItem): las filas en blanco
@@ -609,10 +622,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
         }
 
-        lockLocalItemRow(targetId, 'new_row')
-        scheduleNewRowOwnershipRelease(targetId)
-
-        const patchedItem = await patchQuotationItem(targetId, {
+        const patchedItem = await enqueueRowMutation(targetId, () => patchQuotationItem(targetId as string, {
           categoria: sourceItem.categoria || '',
           descripcion: sourceItem.descripcion || '',
           cantidad: sourceItem.cantidad || 1,
@@ -620,7 +630,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           x_pagar: sourceItem.x_pagar || 0,
           responsable_id: sourceItem.responsable_id || '',
           responsable_nombre: sourceItem.responsable_nombre || '',
-        })
+        }))
         if (patchedItem) {
           upsertLocalItemState(patchedItem)
           broadcastItemMutation({ action: 'upsert', row_id: targetId, item: patchedItem })
@@ -629,39 +639,37 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       markSectionSaved('partidas')
     } catch (importError: unknown) {
       setError(importError instanceof Error ? importError.message : 'Error copiando partidas')
+      void resyncPartidas()
     }
-  }, [append, broadcastItemMutation, createQuotationItemRow, getValues, lockLocalItemRow, markSectionSaved, patchQuotationItem, scheduleNewRowOwnershipRelease, upsertLocalItemState])
+  }, [append, broadcastItemMutation, createQuotationItemRow, enqueueRowMutation, getValues, markSectionSaved, patchQuotationItem, resyncPartidas, upsertLocalItemState])
 
-  // Borrado optimista: la fila desaparece de inmediato y el DELETE (que recalcula
-  // el encabezado y sincroniza Sheets) corre después. Si falla, se restaura.
-  const handleRemoveRow = useCallback(async (index: number) => {
-    const rowId = getItemRowIdByIndex(index)
-    if (!rowId || itemRowEditors[rowId] || hasRemoteCellLockOnRow(rowId)) return
-    const removedItem = (cotizacion?.items || []).find((item) => item.id === rowId) || null
-    const removedFormItem = getValues(`items.${index}`)
-    lockLocalItemRow(rowId, 'row_action')
-    remove(index)
+  // Borrado optimista, identificado por rowId: la fila desaparece al instante y el
+  // DELETE (que recalcula el encabezado y sincroniza Sheets) corre después, encolado
+  // por fila. Si falla, se resincroniza contra el servidor.
+  const handleRemoveRow = useCallback(async (rowId: string) => {
+    if (pendingRowRemovalsRef.current.has(rowId)) return
+    if (getItemIndexByRowId(rowId) < 0) return
+    pendingRowRemovalsRef.current.add(rowId)
+    replace((getValues('items') || []).filter((item) => !item.id || !pendingRowRemovalsRef.current.has(item.id)))
     setCotizacion((prev) => prev ? { ...prev, items: (prev.items || []).filter((item) => item.id !== rowId) } : prev)
     try {
-      await deleteQuotationItemRow(rowId)
+      await enqueueRowMutation(rowId, () => deleteQuotationItemRow(rowId))
+      pendingRowRemovalsRef.current.delete(rowId)
       broadcastItemMutation({ action: 'delete', row_id: rowId })
       markSectionSaved('partidas')
     } catch (deleteError: unknown) {
+      pendingRowRemovalsRef.current.delete(rowId)
       setError(deleteError instanceof Error ? deleteError.message : 'Error eliminando partida')
-      if (removedFormItem) append(removedFormItem)
-      if (removedItem) setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), removedItem] } : prev)
-    } finally {
-      releaseLocalItemRow(rowId)
+      void resyncPartidas()
     }
-  }, [append, broadcastItemMutation, cotizacion, deleteQuotationItemRow, getItemRowIdByIndex, getValues, hasRemoteCellLockOnRow, itemRowEditors, lockLocalItemRow, markSectionSaved, releaseLocalItemRow, remove])
+  }, [broadcastItemMutation, deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, markSectionSaved, replace, resyncPartidas])
 
-  const handleSelectProduct = useCallback(async (index: number, producto: { descripcion: string; categoria: string | null; precio_unitario: number; x_pagar_sugerido: number }) => {
-    const rowId = getItemRowIdByIndex(index)
-    if (!rowId || itemRowEditors[rowId] || hasRemoteCellLockOnRow(rowId)) return
+  const handleSelectProduct = useCallback(async (rowId: string, producto: { descripcion: string; categoria: string | null; precio_unitario: number; x_pagar_sugerido: number }) => {
+    const index = getItemIndexByRowId(rowId)
+    if (index < 0) return
+    seleccionarProducto(index, producto as never)
     try {
-      lockLocalItemRow(rowId, 'row_action')
-      seleccionarProducto(index, producto as never)
-      const updatedItem = await patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 })
+      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem)
         broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
@@ -669,20 +677,18 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       markSectionSaved('partidas')
     } catch (saveError: unknown) {
       setError(saveError instanceof Error ? saveError.message : 'Error aplicando producto')
-    } finally {
-      releaseLocalItemRow(rowId)
+      void resyncPartidas()
     }
-  }, [broadcastItemMutation, getItemRowIdByIndex, hasRemoteCellLockOnRow, itemRowEditors, lockLocalItemRow, markSectionSaved, patchQuotationItem, releaseLocalItemRow, seleccionarProducto, upsertLocalItemState])
+  }, [broadcastItemMutation, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, resyncPartidas, seleccionarProducto, upsertLocalItemState])
 
-  const handleResponsableChange = useCallback(async (index: number, responsableId: string) => {
-    const rowId = getItemRowIdByIndex(index)
-    if (!rowId || itemRowEditors[rowId] || hasRemoteCellLockOnRow(rowId)) return
+  const handleResponsableChange = useCallback(async (rowId: string, responsableId: string) => {
+    const index = getItemIndexByRowId(rowId)
+    if (index < 0) return
     const responsable = responsables.find((item) => item.id === responsableId)
     setValue(`items.${index}.responsable_id`, responsableId)
     setValue(`items.${index}.responsable_nombre`, responsable?.nombre ?? '')
     try {
-      lockLocalItemRow(rowId, 'row_action')
-      const updatedItem = await patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' })
+      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem)
         broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
@@ -690,39 +696,23 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       markSectionSaved('partidas')
     } catch (saveError: unknown) {
       setError(saveError instanceof Error ? saveError.message : 'Error actualizando responsable')
-    } finally {
-      releaseLocalItemRow(rowId)
+      void resyncPartidas()
     }
-  }, [broadcastItemMutation, getItemRowIdByIndex, hasRemoteCellLockOnRow, itemRowEditors, lockLocalItemRow, markSectionSaved, patchQuotationItem, releaseLocalItemRow, responsables, setValue, upsertLocalItemState])
+  }, [broadcastItemMutation, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, resyncPartidas, responsables, setValue, upsertLocalItemState])
 
-  const isItemRowLocked = useCallback((index: number) => {
-    const rowId = getItemRowIdByIndex(index)
-    return rowId ? !!itemRowEditors[rowId] : false
-  }, [getItemRowIdByIndex, itemRowEditors])
+  // Presencia estilo Sheets: saber que alguien más está en una fila o celda sirve para
+  // resaltarla y avisar, nunca para deshabilitar nada.
+  const isItemRowLocked = useCallback((rowId: string) => !!itemRowEditors[rowId], [itemRowEditors])
+  const isItemCellLocked = useCallback((rowId: string, field: QuotationItemCellField) => !!itemCellEditors[getItemCellKey(rowId, field)], [itemCellEditors])
 
-  // El lock local 'new_row' solo avisa a los demás que la fila es tuya: no debe
-  // bloquearte a ti mismo. Solo bloquean los locks remotos y un 'row_action'
-  // propio (petición en vuelo sobre esa misma fila).
-  const isItemRowActionBlocked = useCallback((index: number) => {
-    const rowId = getItemRowIdByIndex(index)
-    if (!rowId) return false
-    return !!itemRowEditors[rowId] || localItemRowLocks[rowId] === 'row_action' || hasRemoteCellLockOnRow(rowId)
-  }, [getItemRowIdByIndex, hasRemoteCellLockOnRow, itemRowEditors, localItemRowLocks])
-
-  const isItemCellLocked = useCallback((index: number, field: QuotationItemCellField) => {
-    const rowId = getItemRowIdByIndex(index)
-    return rowId ? !!itemCellEditors[getItemCellKey(rowId, field)] : false
-  }, [getItemRowIdByIndex, itemCellEditors])
-
-  const getItemRowStatusText = useCallback((index: number) => {
-    const rowId = getItemRowIdByIndex(index)
-    if (!rowId) return null
+  const getItemRowStatusText = useCallback((rowId: string) => {
     const rowEditor = itemRowEditors[rowId]
     if (rowEditor) return `${getShortName(rowEditor.name, rowEditor.email)} está trabajando esta fila`
     const cellEditor = Object.entries(itemCellEditors).find(([key]) => key.startsWith(`${rowId}:`))?.[1]
     if (cellEditor) return `${getShortName(cellEditor.name, cellEditor.email)} está editando una celda de esta fila`
     return null
-  }, [getItemRowIdByIndex, itemCellEditors, itemRowEditors])
+  }, [itemCellEditors, itemRowEditors])
+
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)
@@ -825,7 +815,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
-        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} isItemRowActionBlocked={isItemRowActionBlocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} onApplyTemplate={handleImportItems} addingRow={addingRow} allowRemoveLastRow />
+        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} onApplyTemplate={handleImportItems} addingRow={addingRow} allowRemoveLastRow />
       </div>
 
       <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={handleImportItems} />
