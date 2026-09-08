@@ -96,6 +96,43 @@ function toOperationalDriveError(err: unknown, action: string): Error {
   return err instanceof Error ? err : new Error(extractDriveErrorMessage(err))
 }
 
+function getDriveErrorStatus(err: unknown): number | undefined {
+  const e = err as { code?: number | string; status?: number; response?: { status?: number } }
+  const status = e?.response?.status ?? e?.status ?? e?.code
+  return typeof status === 'number' ? status : Number(status) || undefined
+}
+
+const TRANSIENT_DRIVE_STATUSES = new Set([429, 500, 502, 503, 504])
+
+/**
+ * Google's own client libraries retry transient errors (rate limiting,
+ * momentary backend hiccups) with backoff -- googleapis (the raw REST
+ * wrapper we use here) does not. Sin esto, un solo 429/503 pasajero tira
+ * todo el flujo (visto en vivo: la subida de factura de proveedor hace 3-4
+ * llamadas seguidas a Drive -- list+create de carpeta, más create de
+ * archivo -- y basta que una sola de esas caiga en un rate limit corto
+ * para que el usuario vea un error real por algo que un segundo intento
+ * hubiera resuelto solo). Reintenta solo códigos transitorios; todo lo
+ * demás (401/403/404/400, invalid_grant) se relanza de inmediato.
+ */
+export async function withDriveRetry<T>(action: string, fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      const status = getDriveErrorStatus(err)
+      const isTransient = status !== undefined && TRANSIENT_DRIVE_STATUSES.has(status)
+      if (!isTransient || attempt === attempts) throw err
+      const backoffMs = 400 * 2 ** (attempt - 1) + Math.floor(Math.random() * 200)
+      console.warn(`[Drive] ${action}: intento ${attempt}/${attempts} falló (status ${status}), reintentando en ${backoffMs}ms`)
+      await new Promise(resolve => setTimeout(resolve, backoffMs))
+    }
+  }
+  throw lastErr
+}
+
 export type DriveAuthStatus = 'ok' | 'not_configured' | 'invalid_grant' | 'error'
 
 /**
@@ -136,7 +173,7 @@ class DriveServiceImpl implements DriveService {
     const { drive, env } = instance
 
     try {
-      const res = await drive.files.create({
+      const res = await withDriveRetry('uploadPdf', () => drive.files.create({
         supportsAllDrives: true,
         requestBody: {
           name: fileName,
@@ -147,7 +184,7 @@ class DriveServiceImpl implements DriveService {
           body: base64ToStream(contentBase64),
         },
         fields: 'id,webViewLink',
-      })
+      }))
 
       if (!res.data.id) return null
 
@@ -169,7 +206,7 @@ class DriveServiceImpl implements DriveService {
     const { drive } = instance
 
     try {
-      const res = await drive.files.update({
+      const res = await withDriveRetry('updateFile', () => drive.files.update({
         supportsAllDrives: true,
         fileId,
         requestBody: {
@@ -180,7 +217,7 @@ class DriveServiceImpl implements DriveService {
           body: base64ToStream(contentBase64),
         },
         fields: 'id,webViewLink,trashed',
-      })
+      }))
 
       if (!res.data.id) return null
 
@@ -219,19 +256,19 @@ async function ensureFolderPath(
     let currentParentId = rootFolderId
     for (const folderName of parts) {
       // Search for folder with this name in current parent
-      const res = await drive.files.list({
+      const res = await withDriveRetry('ensureFolderPath.list', () => drive.files.list({
         supportsAllDrives: true,
         q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${currentParentId}' in parents and trashed=false`,
         spaces: 'drive',
         fields: 'files(id, name)',
         pageSize: 1,
-      })
+      }))
 
       let folderId = res.data.files?.[0]?.id
 
       // If folder doesn't exist, create it
       if (!folderId) {
-        const createRes = await drive.files.create({
+        const createRes = await withDriveRetry('ensureFolderPath.create', () => drive.files.create({
           supportsAllDrives: true,
           requestBody: {
             name: folderName,
@@ -239,7 +276,7 @@ async function ensureFolderPath(
             parents: [currentParentId],
           },
           fields: 'id',
-        })
+        }))
         folderId = createRes.data.id ?? undefined
       }
 
@@ -283,7 +320,7 @@ export async function uploadFileToDrive(
     const buffer = Buffer.from(arrayBuffer)
 
     // Upload file to the final folder
-    const res = await drive.files.create({
+    const res = await withDriveRetry('uploadFileToDrive.create', () => drive.files.create({
       supportsAllDrives: true,
       requestBody: {
         name: fileName,
@@ -295,7 +332,7 @@ export async function uploadFileToDrive(
         body: Readable.from([buffer]),
       },
       fields: 'id, webViewLink',
-    })
+    }))
 
     // Return file URL
     return res.data.webViewLink || `https://drive.google.com/file/d/${res.data.id}/view`
