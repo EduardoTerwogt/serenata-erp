@@ -6,6 +6,42 @@ export interface CotizacionDetailMockOptions {
   estado: 'BORRADOR' | 'EMITIDA' | 'APROBADA' | 'CANCELADA'
   cliente?: string
   proyecto?: string
+  /** Partidas iniciales; por defecto una partida ya capturada. */
+  items?: CotizacionMockItem[]
+  /** Plantillas de servicios que devuelve /api/service-templates. */
+  templates?: ServiceTemplateMock[]
+}
+
+interface CotizacionMockItem {
+  id: string
+  cotizacion_id: string
+  categoria: string
+  descripcion: string
+  cantidad: number
+  precio_unitario: number
+  importe: number
+  responsable_nombre: string | null
+  responsable_id: string | null
+  x_pagar: number
+  margen: number
+  orden: number
+  notas: string | null
+}
+
+interface ServiceTemplateMock {
+  id: string
+  nombre: string
+  descripcion: string | null
+  activo: boolean
+  items: Array<{
+    categoria: string
+    descripcion: string
+    cantidad: number
+    precio_unitario: number
+    x_pagar: number
+    responsable_nombre?: string | null
+    responsable_id?: string | null
+  }>
 }
 
 function buildFakePdfBuffer() {
@@ -39,7 +75,7 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     drive_file_id: null as string | null,
     calendar_event_id: null as string | null,
     notas_internas: null as string | null,
-    items: [
+    items: options.items ?? ([
       {
         id: 'item-detail-1',
         cotizacion_id: options.id,
@@ -55,7 +91,7 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
         orden: 1,
         notas: null,
       },
-    ],
+    ] as CotizacionMockItem[]),
   }
 
   await page.route(`**/api/cotizaciones/${options.id}`, async (route) => {
@@ -97,7 +133,53 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     await fulfillJson(route, cotizacion)
   })
 
+  // POST /items -> crea una partida vacía, igual que el endpoint real
+  await page.route(`**/api/cotizaciones/${options.id}/items`, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback()
+      return
+    }
+    const created = {
+      id: `item-detail-${cotizacion.items.length + 1}`,
+      cotizacion_id: options.id,
+      categoria: '',
+      descripcion: '',
+      cantidad: 1,
+      precio_unitario: 0,
+      importe: 0,
+      responsable_nombre: null,
+      responsable_id: null,
+      x_pagar: 0,
+      margen: 0,
+      orden: cotizacion.items.length + 1,
+      notas: null,
+    } satisfies CotizacionMockItem
+    cotizacion.items.push(created)
+    await fulfillJson(route, { item: created })
+  })
+
+  // PATCH/DELETE /items/:itemId -> fusiona o elimina, para que las aserciones vean
+  // el mismo estado que devolvería el servidor real.
   await page.route(`**/api/cotizaciones/${options.id}/items/*`, async (route) => {
+    const method = route.request().method()
+    const itemId = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() || '')
+    const index = cotizacion.items.findIndex((item) => item.id === itemId)
+
+    if (method === 'DELETE') {
+      if (index >= 0) cotizacion.items.splice(index, 1)
+      await fulfillJson(route, { ok: true })
+      return
+    }
+
+    const body = (route.request().postDataJSON() || {}) as Record<string, unknown>
+    if (index >= 0) {
+      const merged = { ...cotizacion.items[index], ...body }
+      merged.importe = Number(merged.cantidad || 0) * Number(merged.precio_unitario || 0)
+      merged.margen = merged.importe - Number(merged.x_pagar || 0)
+      cotizacion.items[index] = merged
+      await fulfillJson(route, { item: merged })
+      return
+    }
     await fulfillJson(route, { item: cotizacion.items[0] })
   })
 
@@ -136,6 +218,10 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
 
   await page.route('**/api/productos**', async (route) => {
     await fulfillJson(route, [])
+  })
+
+  await page.route('**/api/service-templates**', async (route) => {
+    await fulfillJson(route, options.templates ?? [])
   })
 
   return cotizacion

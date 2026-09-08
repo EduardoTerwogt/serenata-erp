@@ -18,6 +18,22 @@ export const EMPTY_QUOTATION_ITEM: QuotationFormItem = {
   x_pagar: '',
 }
 
+// Una fila "en blanco" es la que se crea vacía al abrir el formulario o al pulsar
+// "Agregar fila" y que nadie llenó todavía. Al importar partidas (plantilla o copia
+// de otra cotización) se reusa en vez de dejarla colgando arriba de lo importado.
+export function isBlankQuotationItem(item: Partial<QuotationFormItem> | undefined | null): boolean {
+  if (!item) return false
+  const isEmptyNumber = (value: number | '' | undefined) => value === '' || value === undefined || Number(value) === 0
+  return (
+    !String(item.categoria || '').trim() &&
+    !String(item.descripcion || '').trim() &&
+    !String(item.responsable_id || '').trim() &&
+    !String(item.responsable_nombre || '').trim() &&
+    isEmptyNumber(item.precio_unitario) &&
+    isEmptyNumber(item.x_pagar)
+  )
+}
+
 export function mapQuotationItemsForSave(items: QuotationFormItem[]) {
   return items.map((item, index) => {
     const normalizedItem = normalizeQuotationItem(item)

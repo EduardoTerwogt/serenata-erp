@@ -3,6 +3,8 @@ import {
   buildPersistedQuotationItems,
   buildQuotationPersistenceData,
   buildReadOnlyTotals,
+  isBlankQuotationItem,
+  EMPTY_QUOTATION_ITEM,
 } from '../mappers'
 import type { ItemCotizacion, Cotizacion } from '@/lib/types'
 
@@ -190,5 +192,50 @@ describe('buildReadOnlyTotals', () => {
     const result = buildReadOnlyTotals(empty)
     expect(result.subtotal).toBe(0)
     expect(result.total).toBe(0)
+  })
+})
+
+
+// ==================== isBlankQuotationItem ====================
+
+describe('isBlankQuotationItem', () => {
+  it('considera en blanco la fila vacía que crea el formulario', () => {
+    expect(isBlankQuotationItem(EMPTY_QUOTATION_ITEM)).toBe(true)
+  })
+
+  it('considera en blanco una fila recién creada por el servidor (ceros, no vacíos)', () => {
+    expect(isBlankQuotationItem({
+      id: 'row-1',
+      categoria: '',
+      descripcion: '',
+      cantidad: 1,
+      precio_unitario: 0,
+      responsable_id: '',
+      responsable_nombre: '',
+      x_pagar: 0,
+    })).toBe(true)
+  })
+
+  it('no considera en blanco una fila con descripción', () => {
+    expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, descripcion: 'Backline' })).toBe(false)
+  })
+
+  it('no considera en blanco una fila con solo categoría', () => {
+    expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, categoria: 'Producción' })).toBe(false)
+  })
+
+  it('no considera en blanco una fila con solo precio', () => {
+    expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, precio_unitario: 1500 })).toBe(false)
+  })
+
+  it('no considera en blanco una fila con solo x_pagar o responsable', () => {
+    expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, x_pagar: 800 })).toBe(false)
+    expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, responsable_nombre: 'Ana' })).toBe(false)
+  })
+
+  it('ignora espacios en blanco y maneja null/undefined', () => {
+    expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, descripcion: '   ' })).toBe(true)
+    expect(isBlankQuotationItem(null)).toBe(false)
+    expect(isBlankQuotationItem(undefined)).toBe(false)
   })
 })

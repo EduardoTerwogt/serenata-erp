@@ -4,7 +4,7 @@ import { useRef, useEffect, useState as useStateReact, useCallback } from 'react
 import { createPortal } from 'react-dom'
 import { UseFieldArrayAppend, UseFieldArrayRemove, UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import { Producto, Proveedor, ServiceTemplate } from '@/lib/types'
-import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
+import { EMPTY_QUOTATION_ITEM, isBlankQuotationItem } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { calculateCostoConIva } from '@/lib/quotations/calculations'
 import { fmtCurrency } from '@/lib/quotations/format'
@@ -54,6 +54,12 @@ interface Props {
   isItemRowActionBlocked?: (index: number) => boolean
   getItemRowStatusText?: (index: number) => string | null
   onCopyClick?: () => void
+  // En el detalle las partidas viven en la base: aplicar una plantilla tiene que
+  // pasar por el mismo camino que "Copiar desde otra cotización" (crear + parchear
+  // en el servidor). Sin esto las filas nacían sin id y no se guardaban nunca.
+  onApplyTemplate?: (items: ServiceTemplate['items']) => void | Promise<void>
+  addingRow?: boolean
+  allowRemoveLastRow?: boolean
 }
 
 // Estilo "InlineInput" del design system: transparente hasta que se enfoca.
@@ -90,6 +96,9 @@ export function QuotationItemsSection({
   isItemRowActionBlocked,
   getItemRowStatusText,
   onCopyClick,
+  onApplyTemplate,
+  addingRow = false,
+  allowRemoveLastRow = false,
 }: Props) {
   const descInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const [dropdownPos, setDropdownPos] = useStateReact<Record<number, { top: number; left: number } | null>>({})
@@ -102,10 +111,39 @@ export function QuotationItemsSection({
       .catch(() => setTemplates([]))
   }, [editable, setTemplates])
 
-  const handleApplyTemplate = (templateId: string) => {
+  const [applyingTemplate, setApplyingTemplate] = useStateReact(false)
+
+  const handleApplyTemplate = async (templateId: string) => {
     const template = templates.find(t => t.id === templateId)
-    if (!template) return
-    template.items.forEach(item => {
+    if (!template || applyingTemplate) return
+
+    if (onApplyTemplate) {
+      setApplyingTemplate(true)
+      try {
+        await onApplyTemplate(template.items)
+      } finally {
+        setApplyingTemplate(false)
+      }
+      return
+    }
+
+    // Sin `onApplyTemplate` (nueva cotización) las partidas son locales: se reusa la
+    // fila en blanco para el primer ítem en vez de dejarla vacía arriba.
+    let startIndex = 0
+    if (watchedItems.length === 1 && isBlankQuotationItem(watchedItems[0])) {
+      const first = template.items[0]
+      if (first) {
+        setValue('items.0.categoria', first.categoria || '')
+        setValue('items.0.descripcion', first.descripcion || '')
+        setValue('items.0.cantidad', first.cantidad || 1)
+        setValue('items.0.precio_unitario', first.precio_unitario || 0)
+        setValue('items.0.responsable_id', first.responsable_id || '')
+        setValue('items.0.responsable_nombre', first.responsable_nombre || '')
+        setValue('items.0.x_pagar', first.x_pagar || 0)
+        startIndex = 1
+      }
+    }
+    template.items.slice(startIndex).forEach(item => {
       append({
         categoria: item.categoria || '',
         descripcion: item.descripcion || '',
@@ -212,7 +250,7 @@ export function QuotationItemsSection({
         <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => onItemFieldFocus?.(index, 'x_pagar')} onBlur={() => onItemFieldBlur?.(index, 'x_pagar')} onChange={(e) => { onItemFieldChange?.(index, 'x_pagar'); register(`items.${index}.x_pagar`).onChange(e) }} disabled={cellLocked(index, 'x_pagar')} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
         <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
         <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(margen)}</td>
-        <td className="px-4 py-2"><button type="button" onClick={() => (onRemoveRow ? onRemoveRow(index) : remove(index))} disabled={fields.length === 1 || actionBlocked(index)} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
+        <td className="px-4 py-2"><button type="button" onClick={() => (onRemoveRow ? onRemoveRow(index) : remove(index))} disabled={(!allowRemoveLastRow && fields.length === 1) || actionBlocked(index)} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
       </tr>
     )
   }
@@ -243,7 +281,7 @@ export function QuotationItemsSection({
             <p className="text-faint text-xs">{item.categoria || 'Sin categoría'}</p>
             {statusText && <p className="mt-1 text-[11px] text-accent-quiet">{statusText}</p>}
           </div>
-          <button type="button" onClick={(e) => { e.stopPropagation(); if (onRemoveRow) { onRemoveRow(index) } else { remove(index) } }} disabled={fields.length === 1 || actionBlocked(index)} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors text-content">✕</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); if (onRemoveRow) { onRemoveRow(index) } else { remove(index) } }} disabled={(!allowRemoveLastRow && fields.length === 1) || actionBlocked(index)} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors text-content">✕</button>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-faint">Cant. {item.cantidad || 0}</span>
@@ -296,10 +334,11 @@ export function QuotationItemsSection({
               {templates.length > 0 && (
                 <select
                   value=""
-                  onChange={e => { if (e.target.value) handleApplyTemplate(e.target.value) }}
+                  onChange={e => { if (e.target.value) void handleApplyTemplate(e.target.value) }}
+                  disabled={applyingTemplate}
                   className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0"
                 >
-                  <option value="">Plantilla de servicios…</option>
+                  <option value="">{applyingTemplate ? 'Aplicando plantilla…' : 'Plantilla de servicios…'}</option>
                   {templates.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                 </select>
               )}
@@ -336,10 +375,11 @@ export function QuotationItemsSection({
             <button
               type="button"
               onClick={() => onAddRow ? onAddRow() : append({ ...EMPTY_QUOTATION_ITEM })}
-              className="flex items-center gap-1.5 rounded-control px-3 py-2 text-[14.5px] text-body transition-colors hover:bg-row-alt min-h-[44px] md:min-h-0"
+              disabled={addingRow}
+              className="flex items-center gap-1.5 rounded-control px-3 py-2 text-[14.5px] text-body transition-colors hover:bg-row-alt disabled:opacity-50 min-h-[44px] md:min-h-0"
             >
               <Icon name="plus" size={15} />
-              Agregar fila
+              {addingRow ? 'Agregando…' : 'Agregar fila'}
             </button>
           ) : <span />}
           <span className="text-sm text-subtext">
@@ -372,7 +412,7 @@ export function QuotationItemsSection({
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo + IVA</span><span className="text-subtext text-content font-medium">${fmtCurrency(calculateCostoConIva((watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).x_pagar))}</span></div>
               <div className="flex justify-between"><span className="text-faint text-content">Margen</span><span className={`text-content font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
-            {fields.length > 1 && <button type="button" onClick={() => { if (onRemoveRow) { onRemoveRow(editingItemIndex) } else { remove(editingItemIndex) } setEditingItemIndex(null) }} disabled={actionBlocked(editingItemIndex)} className="w-full text-red-400 hover:text-red-300 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
+            {(allowRemoveLastRow || fields.length > 1) && <button type="button" onClick={() => { if (onRemoveRow) { onRemoveRow(editingItemIndex) } else { remove(editingItemIndex) } setEditingItemIndex(null) }} disabled={actionBlocked(editingItemIndex)} className="w-full text-red-400 hover:text-red-300 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
           </div>
         </div>
       )}

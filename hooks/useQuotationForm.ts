@@ -123,9 +123,10 @@ export function useQuotationForm(
   }, [proyectosDelCliente, setValue])
 
   const handleDescripcionChange = useCallback((index: number, valor: string) => {
+    // Solo se actualiza la descripción: el precio y el x_pagar únicamente cambian
+    // cuando el usuario elige explícitamente una sugerencia (seleccionarProducto).
+    // Limpiarlos aquí borraba precios ya capturados al corregir una descripción.
     setValue(`items.${index}.descripcion`, valor)
-    setValue(`items.${index}.precio_unitario`, '')
-    setValue(`items.${index}.x_pagar`, '')
 
     if (valor.length >= 2) {
       const filtrados = listaProductos

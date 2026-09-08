@@ -10,7 +10,7 @@ import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
-import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
+import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, saveQuotationTotals, updateQuotation } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
@@ -35,6 +35,18 @@ const ITEM_CELL_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_IDLE_RELEASE_MS = 5000
 const ITEM_NEW_ROW_OWNERSHIP_MS = 10000
 const SECTION_IDLE_RELEASE_MS = 5000
+
+// Forma mínima compartida por ItemCotizacion y ServiceTemplateItem: es lo que
+// necesita `handleImportItems` para copiar partidas de cualquiera de las dos fuentes.
+interface ImportableItem {
+  categoria?: string | null
+  descripcion?: string | null
+  cantidad?: number | null
+  precio_unitario?: number | null
+  x_pagar?: number | null
+  responsable_id?: string | null
+  responsable_nombre?: string | null
+}
 
 interface GeneralSnapshot {
   cliente: string
@@ -132,6 +144,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [isSavingNotas, setIsSavingNotas] = useState(false)
   const [isSavingGeneral, setIsSavingGeneral] = useState(false)
   const [isSavingTotals, setIsSavingTotals] = useState(false)
+  const [addingRow, setAddingRow] = useState(false)
+  // Los locks locales de fila viven en estado (no solo en ref) para que la tabla
+  // vuelva a renderizar cuando se toman o se liberan; el ref es el espejo que leen
+  // los callbacks async.
+  const [localItemRowLocks, setLocalItemRowLocks] = useState<Record<string, 'new_row' | 'row_action'>>({})
   const notasSectionRef = useRef<HTMLDivElement | null>(null)
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
   const totalsSectionRef = useRef<HTMLDivElement | null>(null)
@@ -254,8 +271,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const scheduleTotalsIdleRelease = useCallback(() => { clearTotalsIdleReleaseTimer(); if (!totalsLockHeldRef.current) return; totalsIdleReleaseTimerRef.current = window.setTimeout(() => { totalsIdleReleaseTimerRef.current = null; if (!totalsLockHeldRef.current || totalsDirtyRef.current || isSavingTotals) return; totalsLockHeldRef.current = false; releaseSection('totales') }, SECTION_IDLE_RELEASE_MS) }, [clearTotalsIdleReleaseTimer, isSavingTotals, releaseSection])
   const scheduleItemCellIdleRelease = useCallback((rowId: string, field: QuotationItemCellField) => { const key = getItemCellKey(rowId, field); clearItemCellIdleReleaseTimer(key); itemCellIdleReleaseTimersRef.current[key] = window.setTimeout(() => { delete itemCellIdleReleaseTimersRef.current[key]; if (itemDirtyCellsRef.current.has(key) || itemSavingCellsRef.current.has(key)) return; itemFocusedCellsRef.current.delete(key); releaseItemCell(rowId, field) }, ITEM_CELL_IDLE_RELEASE_MS) }, [clearItemCellIdleReleaseTimer, releaseItemCell])
 
-  const lockLocalItemRow = useCallback((rowId: string, mode: 'new_row' | 'row_action') => { localItemRowLocksRef.current[rowId] = mode; lockItemRow(rowId, mode) }, [lockItemRow])
-  const releaseLocalItemRow = useCallback((rowId: string) => { clearNewRowOwnershipTimer(rowId); delete localItemRowLocksRef.current[rowId]; releaseItemRow(rowId) }, [clearNewRowOwnershipTimer, releaseItemRow])
+  const lockLocalItemRow = useCallback((rowId: string, mode: 'new_row' | 'row_action') => { localItemRowLocksRef.current[rowId] = mode; setLocalItemRowLocks((prev) => ({ ...prev, [rowId]: mode })); lockItemRow(rowId, mode) }, [lockItemRow])
+  const releaseLocalItemRow = useCallback((rowId: string) => { clearNewRowOwnershipTimer(rowId); delete localItemRowLocksRef.current[rowId]; setLocalItemRowLocks((prev) => { if (!(rowId in prev)) return prev; const next = { ...prev }; delete next[rowId]; return next }); releaseItemRow(rowId) }, [clearNewRowOwnershipTimer, releaseItemRow])
   const scheduleNewRowOwnershipRelease = useCallback((rowId: string) => { clearNewRowOwnershipTimer(rowId); newRowOwnershipTimersRef.current[rowId] = window.setTimeout(() => { delete newRowOwnershipTimersRef.current[rowId]; if (localItemRowLocksRef.current[rowId] !== 'new_row') return; if (hasLocalItemRowActivity(rowId)) return; releaseLocalItemRow(rowId) }, ITEM_NEW_ROW_OWNERSHIP_MS) }, [clearNewRowOwnershipTimer, hasLocalItemRowActivity, releaseLocalItemRow])
 
   const patchQuotationItem = useCallback(async (rowId: string, patch: Record<string, unknown>) => {
@@ -278,18 +295,29 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     if (!response.ok) throw new Error(data?.error || 'Error eliminando partida')
   }, [id])
 
-  const upsertLocalItemState = useCallback((item: ItemCotizacion) => {
+  // `preserveLocalEdits` evita que la respuesta del servidor sobreescriba una celda
+  // que el usuario sigue editando: si se tecleó durante el debounce + el round-trip,
+  // el valor viejo del servidor borraba lo recién escrito.
+  const upsertLocalItemState = useCallback((item: ItemCotizacion, options?: { preserveLocalEdits?: boolean }) => {
     const index = getItemIndexByRowId(item.id)
     const formItem = mapItemToFormItem(item)
     if (index >= 0) {
+      const preserve = options?.preserveLocalEdits === true
+      const isCellBusy = (field: QuotationItemCellField) => {
+        if (!preserve) return false
+        const key = getItemCellKey(item.id, field)
+        return itemDirtyCellsRef.current.has(key) || itemFocusedCellsRef.current.has(key)
+      }
       setValue(`items.${index}.id`, formItem.id)
-      setValue(`items.${index}.categoria`, formItem.categoria)
-      setValue(`items.${index}.descripcion`, formItem.descripcion)
-      setValue(`items.${index}.cantidad`, formItem.cantidad)
-      setValue(`items.${index}.precio_unitario`, formItem.precio_unitario)
-      setValue(`items.${index}.responsable_id`, formItem.responsable_id)
-      setValue(`items.${index}.responsable_nombre`, formItem.responsable_nombre)
-      setValue(`items.${index}.x_pagar`, formItem.x_pagar)
+      if (!isCellBusy('categoria')) setValue(`items.${index}.categoria`, formItem.categoria)
+      if (!isCellBusy('descripcion')) setValue(`items.${index}.descripcion`, formItem.descripcion)
+      if (!isCellBusy('cantidad')) setValue(`items.${index}.cantidad`, formItem.cantidad)
+      if (!isCellBusy('precio_unitario')) setValue(`items.${index}.precio_unitario`, formItem.precio_unitario)
+      if (!isCellBusy('x_pagar')) setValue(`items.${index}.x_pagar`, formItem.x_pagar)
+      if (!isCellBusy('responsable_id')) {
+        setValue(`items.${index}.responsable_id`, formItem.responsable_id)
+        setValue(`items.${index}.responsable_nombre`, formItem.responsable_nombre)
+      }
     } else {
       append(formItem)
     }
@@ -402,7 +430,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const updatedItem = await patchQuotationItem(rowId, patch)
       itemDirtyCellsRef.current.delete(key)
       if (updatedItem) {
-        upsertLocalItemState(updatedItem)
+        upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
       }
       markSectionSaved('partidas')
@@ -539,6 +567,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [clearItemCellAutosaveTimer, getItemRowIdByIndex, persistItemCellAutosave, scheduleItemCellIdleRelease])
 
   const handleAddRow = useCallback(async () => {
+    if (addingRow) return
+    setAddingRow(true)
     try {
       const createdItem = await createQuotationItemRow()
       if (!createdItem) throw new Error('No se pudo crear la fila')
@@ -550,15 +580,39 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       markSectionSaved('partidas')
     } catch (createError: unknown) {
       setError(createError instanceof Error ? createError.message : 'Error creando partida')
+    } finally {
+      setAddingRow(false)
     }
-  }, [append, broadcastItemMutation, createQuotationItemRow, lockLocalItemRow, markSectionSaved, scheduleNewRowOwnershipRelease])
+  }, [addingRow, append, broadcastItemMutation, createQuotationItemRow, lockLocalItemRow, markSectionSaved, scheduleNewRowOwnershipRelease])
 
-  const handleImportItems = useCallback(async (items: ItemCotizacion[]) => {
+  // Sirve tanto para "Copiar desde otra cotización" (ItemCotizacion) como para
+  // aplicar una plantilla de servicios (ServiceTemplateItem): las filas en blanco
+  // que ya existen se reusan en vez de quedarse vacías arriba de lo importado.
+  const handleImportItems = useCallback(async (items: ImportableItem[]) => {
+    if (items.length === 0) return
     try {
+      const blankRowIds = (getValues('items') || [])
+        .filter((item) => isBlankQuotationItem(item))
+        .map((item) => item.id)
+        .filter((rowId): rowId is string => !!rowId)
+      let blankCursor = 0
+
       for (const sourceItem of items) {
-        const createdItem = await createQuotationItemRow()
-        if (!createdItem) throw new Error('No se pudo crear la fila')
-        const patchedItem = await patchQuotationItem(createdItem.id, {
+        let targetId = blankRowIds[blankCursor]
+        if (targetId) {
+          blankCursor += 1
+        } else {
+          const createdItem = await createQuotationItemRow()
+          if (!createdItem) throw new Error('No se pudo crear la fila')
+          targetId = createdItem.id
+          append(mapItemToFormItem(createdItem))
+          setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
+        }
+
+        lockLocalItemRow(targetId, 'new_row')
+        scheduleNewRowOwnershipRelease(targetId)
+
+        const patchedItem = await patchQuotationItem(targetId, {
           categoria: sourceItem.categoria || '',
           descripcion: sourceItem.descripcion || '',
           cantidad: sourceItem.cantidad || 1,
@@ -567,35 +621,39 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           responsable_id: sourceItem.responsable_id || '',
           responsable_nombre: sourceItem.responsable_nombre || '',
         })
-        const finalItem = patchedItem || createdItem
-        append(mapItemToFormItem(finalItem))
-        setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), finalItem] } : prev)
-        lockLocalItemRow(finalItem.id, 'new_row')
-        scheduleNewRowOwnershipRelease(finalItem.id)
-        broadcastItemMutation({ action: 'upsert', row_id: finalItem.id, item: finalItem })
+        if (patchedItem) {
+          upsertLocalItemState(patchedItem)
+          broadcastItemMutation({ action: 'upsert', row_id: targetId, item: patchedItem })
+        }
       }
       markSectionSaved('partidas')
     } catch (importError: unknown) {
       setError(importError instanceof Error ? importError.message : 'Error copiando partidas')
     }
-  }, [append, broadcastItemMutation, createQuotationItemRow, lockLocalItemRow, markSectionSaved, patchQuotationItem, scheduleNewRowOwnershipRelease])
+  }, [append, broadcastItemMutation, createQuotationItemRow, getValues, lockLocalItemRow, markSectionSaved, patchQuotationItem, scheduleNewRowOwnershipRelease, upsertLocalItemState])
 
+  // Borrado optimista: la fila desaparece de inmediato y el DELETE (que recalcula
+  // el encabezado y sincroniza Sheets) corre después. Si falla, se restaura.
   const handleRemoveRow = useCallback(async (index: number) => {
     const rowId = getItemRowIdByIndex(index)
     if (!rowId || itemRowEditors[rowId] || hasRemoteCellLockOnRow(rowId)) return
+    const removedItem = (cotizacion?.items || []).find((item) => item.id === rowId) || null
+    const removedFormItem = getValues(`items.${index}`)
+    lockLocalItemRow(rowId, 'row_action')
+    remove(index)
+    setCotizacion((prev) => prev ? { ...prev, items: (prev.items || []).filter((item) => item.id !== rowId) } : prev)
     try {
-      lockLocalItemRow(rowId, 'row_action')
       await deleteQuotationItemRow(rowId)
-      remove(index)
-      setCotizacion((prev) => prev ? { ...prev, items: (prev.items || []).filter((item) => item.id !== rowId) } : prev)
       broadcastItemMutation({ action: 'delete', row_id: rowId })
       markSectionSaved('partidas')
     } catch (deleteError: unknown) {
       setError(deleteError instanceof Error ? deleteError.message : 'Error eliminando partida')
+      if (removedFormItem) append(removedFormItem)
+      if (removedItem) setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), removedItem] } : prev)
     } finally {
       releaseLocalItemRow(rowId)
     }
-  }, [broadcastItemMutation, deleteQuotationItemRow, getItemRowIdByIndex, hasRemoteCellLockOnRow, itemRowEditors, lockLocalItemRow, markSectionSaved, releaseLocalItemRow, remove])
+  }, [append, broadcastItemMutation, cotizacion, deleteQuotationItemRow, getItemRowIdByIndex, getValues, hasRemoteCellLockOnRow, itemRowEditors, lockLocalItemRow, markSectionSaved, releaseLocalItemRow, remove])
 
   const handleSelectProduct = useCallback(async (index: number, producto: { descripcion: string; categoria: string | null; precio_unitario: number; x_pagar_sugerido: number }) => {
     const rowId = getItemRowIdByIndex(index)
@@ -642,11 +700,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return rowId ? !!itemRowEditors[rowId] : false
   }, [getItemRowIdByIndex, itemRowEditors])
 
+  // El lock local 'new_row' solo avisa a los demás que la fila es tuya: no debe
+  // bloquearte a ti mismo. Solo bloquean los locks remotos y un 'row_action'
+  // propio (petición en vuelo sobre esa misma fila).
   const isItemRowActionBlocked = useCallback((index: number) => {
     const rowId = getItemRowIdByIndex(index)
     if (!rowId) return false
-    return !!itemRowEditors[rowId] || !!localItemRowLocksRef.current[rowId] || hasRemoteCellLockOnRow(rowId)
-  }, [getItemRowIdByIndex, hasRemoteCellLockOnRow, itemRowEditors])
+    return !!itemRowEditors[rowId] || localItemRowLocks[rowId] === 'row_action' || hasRemoteCellLockOnRow(rowId)
+  }, [getItemRowIdByIndex, hasRemoteCellLockOnRow, itemRowEditors, localItemRowLocks])
 
   const isItemCellLocked = useCallback((index: number, field: QuotationItemCellField) => {
     const rowId = getItemRowIdByIndex(index)
@@ -656,7 +717,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const getItemRowStatusText = useCallback((index: number) => {
     const rowId = getItemRowIdByIndex(index)
     if (!rowId) return null
-    if (localItemRowLocksRef.current[rowId] === 'new_row') return 'Fila reservada temporalmente para ti'
     const rowEditor = itemRowEditors[rowId]
     if (rowEditor) return `${getShortName(rowEditor.name, rowEditor.email)} está trabajando esta fila`
     const cellEditor = Object.entries(itemCellEditors).find(([key]) => key.startsWith(`${rowId}:`))?.[1]
@@ -765,7 +825,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
-        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} isItemRowActionBlocked={isItemRowActionBlocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} />
+        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} isItemRowActionBlocked={isItemRowActionBlocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} onApplyTemplate={handleImportItems} addingRow={addingRow} allowRemoveLastRow />
       </div>
 
       <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={handleImportItems} />
