@@ -25,7 +25,7 @@ export function SectionCard({
     <div className={`bg-card border border-hairline rounded-panel ${className}`.trim()}>
       {(title || description || actions) && (
         <div className={`${borderedHeader ? 'border-b border-hairline ' : ''}p-4 md:p-6 ${headerClassName}`.trim()}>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               {title && <h2 className="text-h3 font-semibold text-ink">{title}</h2>}
               {description && <p className="text-subtext text-content mt-1">{description}</p>}

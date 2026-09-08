@@ -8,12 +8,16 @@ import InputForm from './components/InputForm'
 import ValidationTable from './components/ValidationTable'
 import ConfirmationSummary from './components/ConfirmationSummary'
 import { SectionHero } from '@/components/ui/SectionHero'
+import { SectionCard } from '@/components/ui/SectionCard'
 import { Icon } from '@/components/ui/Icon'
 
-const STEP_LABEL: Record<'project' | 'validation' | 'confirmation', string> = {
+const STEPS = ['input', 'project', 'validation', 'confirmation'] as const
+
+const STEP_LABEL: Record<(typeof STEPS)[number], string> = {
+  input: 'Mensaje',
   project: 'Cliente',
-  validation: 'Validar',
-  confirmation: 'Confirmar',
+  validation: 'Validación',
+  confirmation: 'Confirmación',
 }
 
 export default function PlaneacionPage() {
@@ -53,9 +57,6 @@ export default function PlaneacionPage() {
 
   const { toCreate } = getCreationSummary()
 
-  const allSteps = ['input', 'project', 'validation', 'confirmation'] as const
-  const visibleSteps = ['project', 'validation', 'confirmation'] as const
-
   return (
     <div className="flex flex-col gap-6">
       <SectionHero
@@ -89,75 +90,81 @@ export default function PlaneacionPage() {
         </button>
       )}
 
-      {/* Progress indicator - new flow: input → project → validation → confirmation */}
-      {state.step !== 'input' && (
-        <div className="flex gap-3 md:gap-6 flex-wrap">
-          {visibleSteps.map((step, idx) => (
-            <div key={step} className="flex items-center">
-              <div
-                className={`w-8 h-8 rounded-circle flex items-center justify-center font-bold text-sm ${
-                  state.step === step
-                    ? 'bg-accent text-accent-ink'
-                    : allSteps.indexOf(state.step) > allSteps.indexOf(step)
-                    ? 'bg-approved-bg text-approved-fg'
-                    : 'bg-row-alt text-faint'
-                }`}
-              >
-                {idx + 1}
-              </div>
-              <div className="text-sm font-medium text-subtext ml-2 hidden md:block">
-                {STEP_LABEL[step]}
-              </div>
-              {idx < visibleSteps.length - 1 && <div className="h-px bg-hairline w-6 md:w-12 ml-2 md:ml-6"></div>}
-            </div>
-          ))}
-        </div>
-      )}
+      <SectionCard
+        title="Convertir un mensaje en cotización"
+        contentClassName="p-4 md:p-6"
+        actions={
+          <div className="flex flex-wrap items-center gap-3 md:gap-4">
+            {STEPS.map((step, idx) => {
+              const isActive = state.step === step
+              const isDone = STEPS.indexOf(state.step) > idx
+              return (
+                <div key={step} className="flex items-center gap-2.5">
+                  <span
+                    className={`flex h-[26px] w-[26px] flex-none items-center justify-center rounded-circle text-xs font-bold transition-colors ${
+                      isActive
+                        ? 'bg-accent text-accent-ink'
+                        : isDone
+                        ? 'bg-approved-bg text-approved-fg'
+                        : 'border border-hairline bg-input text-faint'
+                    }`}
+                  >
+                    {isDone ? <Icon name="check" size={13} strokeWidth={3} /> : idx + 1}
+                  </span>
+                  <span className={`hidden text-sm md:inline ${isActive ? 'font-semibold text-ink' : 'font-medium text-subtext'}`}>
+                    {STEP_LABEL[step]}
+                  </span>
+                  {idx < STEPS.length - 1 && <div className="h-px w-6 bg-hairline md:w-10" />}
+                </div>
+              )
+            })}
+          </div>
+        }
+      >
+        {state.step === 'input' && (
+          <InputForm
+            proyecto={state.selectedProyecto}
+            value={state.rawInput}
+            onChange={handleInputChange}
+            onExtract={handleExtractInformation}
+            loading={state.loading}
+            error={state.error}
+          />
+        )}
 
-      {/* Content based on step */}
-      {state.step === 'input' && (
-        <InputForm
-          proyecto={state.selectedProyecto}
-          value={state.rawInput}
-          onChange={handleInputChange}
-          onExtract={handleExtractInformation}
-          loading={state.loading}
-          error={state.error}
-        />
-      )}
+        {state.step === 'project' && (
+          <ProjectSelector
+            onSelectCliente={handleSelectCliente}
+            onSelectProyecto={handleSelectProyecto}
+            onNext={handleNextFromProject}
+            loading={state.loading}
+          />
+        )}
 
-      {state.step === 'project' && (
-        <ProjectSelector
-          onSelectCliente={handleSelectCliente}
-          onSelectProyecto={handleSelectProyecto}
-          onNext={handleNextFromProject}
-          loading={state.loading}
-        />
-      )}
+        {state.step === 'validation' && (
+          <ValidationTable
+            lines={state.extractedLines}
+            onLineUpdate={handleLineUpdate}
+            onLineDelete={handleLineDelete}
+            templates={state.templates}
+            onConfirm={handleConfirmSelection}
+            loading={state.loading}
+            error={state.error}
+            onGoBack={() => goBack('input')}
+          />
+        )}
 
-      {state.step === 'validation' && (
-        <ValidationTable
-          lines={state.extractedLines}
-          onLineUpdate={handleLineUpdate}
-          onLineDelete={handleLineDelete}
-          templates={state.templates}
-          onConfirm={handleConfirmSelection}
-          loading={state.loading}
-          error={state.error}
-          onGoBack={() => goBack('input')}
-        />
-      )}
-
-      {state.step === 'confirmation' && (
-        <ConfirmationSummary
-          toCreate={toCreate}
-          templates={state.templates}
-          onConfirmCreate={handleCreateQuotations}
-          loading={state.loading}
-          error={state.error}
-          onGoBack={() => goBack('validation')}
-        />
-      )}
+        {state.step === 'confirmation' && (
+          <ConfirmationSummary
+            toCreate={toCreate}
+            templates={state.templates}
+            onConfirmCreate={handleCreateQuotations}
+            loading={state.loading}
+            error={state.error}
+            onGoBack={() => goBack('validation')}
+          />
+        )}
+      </SectionCard>
     </div>
   )
 }

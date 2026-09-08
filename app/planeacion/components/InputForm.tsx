@@ -32,10 +32,10 @@ export default function InputForm({
       )}
 
       {/* Main form */}
-      <div className="rounded-panel border border-hairline bg-card p-6 md:p-8">
-        <h2 className="text-h2 font-bold text-ink mb-2">Carga información de eventos</h2>
+      <div>
+        <h2 className="text-h3 font-semibold text-ink mb-2">Carga información de eventos</h2>
         <p className="text-subtext mb-6">
-          Copia y pega la información de tus correos o WhatsApp para <strong className="text-body">{proyecto}</strong>. El sistema extraerá fechas y locaciones automáticamente.
+          Copia y pega la información de tus correos o WhatsApp{proyecto && <> para <strong className="text-body">{proyecto}</strong></>}. El sistema extraerá fechas y locaciones automáticamente.
         </p>
 
         {error && !error.startsWith('✓') && <StatusBanner tone="error" className="mb-6">{error}</StatusBanner>}
