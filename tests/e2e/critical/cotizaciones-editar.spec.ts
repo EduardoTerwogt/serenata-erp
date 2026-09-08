@@ -155,10 +155,10 @@ test('aplicar una plantilla persiste las partidas y reusa la fila en blanco', as
   const rows = page.locator('table tbody tr')
   await expect(rows).toHaveCount(1)
 
-  const patchRequests: Record<string, unknown>[] = []
+  const bulkRequests: Record<string, unknown>[] = []
   page.on('request', (req) => {
-    if (/\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH') {
-      patchRequests.push(req.postDataJSON() || {})
+    if (req.url().endsWith('/items/bulk') && req.method() === 'POST') {
+      bulkRequests.push(req.postDataJSON() || {})
     }
   })
 
@@ -169,8 +169,11 @@ test('aplicar una plantilla persiste las partidas y reusa la fila en blanco', as
   await expect(rows.nth(0).locator('td').nth(1).locator('input')).toHaveValue('Cámara')
   await expect(rows.nth(1).locator('td').nth(1).locator('input')).toHaveValue('Iluminación')
 
-  // Y quedaron persistidas en el servidor (el bug anterior solo las agregaba en memoria).
-  await expect.poll(() => patchRequests.map((body) => body.descripcion)).toEqual(['Cámara', 'Iluminación'])
+  // Quedaron persistidas en el servidor (el bug original solo las agregaba en memoria)
+  // y la fila en blanco se mandó para reutilizarla, no para crear una de más.
+  await expect.poll(() => bulkRequests.length).toBe(1)
+  expect((bulkRequests[0].items as Record<string, unknown>[]).map((i) => i.descripcion)).toEqual(['Cámara', 'Iluminación'])
+  expect(bulkRequests[0].reemplazar_ids).toEqual(['item-blank-1'])
 })
 
 test('autoguarda la configuración de totales (fee y descuento)', async ({ page }) => {
@@ -280,4 +283,66 @@ test('si el DELETE falla, la sección se resincroniza y la fila vuelve a su luga
   await expect(rows).toHaveCount(2)
   // Vuelve a su posición original, no al final.
   await expect(rows.nth(0).locator('td').nth(1).locator('input')).toHaveValue('Renta de cámara')
+})
+
+// Regresión de los tres síntomas al importar en una cotización existente: subtotal
+// que omitía una fila, importación fila por fila y alta lenta.
+test('importar una plantilla deja el subtotal correcto sin recargar y en una sola petición', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-BULK',
+    estado: 'BORRADOR',
+    itemLatencyMs: 150,
+    items: [],
+    templates: [{
+      id: 'tpl-1', nombre: 'Paquete completo', descripcion: null, activo: true,
+      items: [
+        { categoria: 'Producción', descripcion: 'Cámara ARRI', cantidad: 1, precio_unitario: 12000, x_pagar: 5000 },
+        { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 2, precio_unitario: 4000, x_pagar: 1500 },
+        { categoria: 'Arte', descripcion: 'Utilería', cantidad: 3, precio_unitario: 1500, x_pagar: 600 },
+      ],
+    }],
+  })
+  await login(page, '/cotizaciones/SH-E2E-BULK')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-BULK' })).toBeVisible()
+
+  const creaciones: string[] = []
+  page.on('request', (req) => {
+    if (req.method() !== 'POST') return
+    if (req.url().endsWith('/items/bulk')) creaciones.push('bulk')
+    else if (req.url().endsWith('/items')) creaciones.push('individual')
+  })
+
+  await page.locator('select').filter({ hasText: 'Plantilla de servicios' }).selectOption('tpl-1')
+  await expect(page.locator('table tbody tr')).toHaveCount(3)
+
+  // 12000 + 2*4000 + 3*1500 = 24500. Antes la última fila aportaba 0.
+  await expect(page.getByText('$24,500.00').first()).toBeVisible()
+
+  // Una sola petición de creación, no una por fila.
+  expect(creaciones).toEqual(['bulk'])
+})
+
+test('agregar una fila la pinta antes de que responda el servidor', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-OPTIMISTA', estado: 'BORRADOR', itemLatencyMs: 1500 })
+  await login(page, '/cotizaciones/SH-E2E-OPTIMISTA')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-OPTIMISTA' })).toBeVisible()
+
+  const rows = page.locator('table tbody tr')
+  await expect(rows).toHaveCount(1)
+
+  const inicio = Date.now()
+  await page.getByRole('button', { name: /Agregar fila/ }).click()
+  await expect(rows).toHaveCount(2)
+  // Aparece muy por debajo de los 1500 ms que tarda el POST.
+  expect(Date.now() - inicio).toBeLessThan(1000)
+
+  // Y editarla antes de que llegue el id real guarda igual, contra el id definitivo.
+  const nuevaDescripcion = rows.nth(1).locator('td').nth(1).locator('input')
+  await nuevaDescripcion.fill('Escrito antes del id')
+  const [patch] = await Promise.all([
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH'),
+    nuevaDescripcion.blur(),
+  ])
+  expect(patch.url()).not.toContain('temp:')
+  expect(patch.postDataJSON().descripcion).toBe('Escrito antes del id')
 })

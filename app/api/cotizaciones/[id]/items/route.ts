@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById, upsertItems } from '@/lib/db'
 import { normalizeQuotationItem } from '@/lib/quotations/calculations'
@@ -46,7 +47,8 @@ export async function POST(
 
     const updatedQuotation = await recalculateQuotationHeader(id)
     const createdItem = (updatedQuotation.items || []).find((item) => item.id === itemId)
-    await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items')
+    // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
+    after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items') })
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
 
     return Response.json({ item: createdItem })

@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById, upsertItems, findOrCreateProveedorByNombre } from '@/lib/db'
 import { normalizeQuotationItem } from '@/lib/quotations/calculations'
@@ -71,7 +72,8 @@ export async function PATCH(
 
     const updatedQuotation = await recalculateQuotationHeader(id)
     const updatedItem = (updatedQuotation.items || []).find((item) => item.id === itemId)
-    await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, updatedItem ? [updatedItem] : [], 'PATCH /api/cotizaciones/:id/items/:itemId')
+    // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
+    after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, updatedItem ? [updatedItem] : [], 'PATCH /api/cotizaciones/:id/items/:itemId') })
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
 
     return Response.json({ item: updatedItem })

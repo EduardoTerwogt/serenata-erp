@@ -34,6 +34,9 @@ const TOTALS_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_IDLE_RELEASE_MS = 5000
 const SECTION_IDLE_RELEASE_MS = 5000
+// Una fila agregada aparece al instante con un id provisional y el POST viaja en
+// segundo plano; `resolveRowId` espera al id real antes de cualquier llamada.
+const TEMP_ROW_PREFIX = 'temp:'
 
 // Forma mínima compartida por ItemCotizacion y ServiceTemplateItem: es lo que
 // necesita `handleImportItems` para copiar partidas de cualquiera de las dos fuentes.
@@ -143,7 +146,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [isSavingNotas, setIsSavingNotas] = useState(false)
   const [isSavingGeneral, setIsSavingGeneral] = useState(false)
   const [isSavingTotals, setIsSavingTotals] = useState(false)
-  const [addingRow, setAddingRow] = useState(false)
+  const [importingItems, setImportingItems] = useState(false)
   const notasSectionRef = useRef<HTMLDivElement | null>(null)
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
   const totalsSectionRef = useRef<HTMLDivElement | null>(null)
@@ -181,6 +184,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // de que React repinte) dejaban una fila fantasma. Con este conjunto la lista se
   // recalcula entera y `replace` la aplica de golpe, sin depender de índices.
   const pendingRowRemovalsRef = useRef<Set<string>>(new Set())
+  // id provisional -> promesa con el id real que devuelva el POST
+  const pendingRowIdsRef = useRef<Map<string, Promise<string>>>(new Map())
   const lastSavedNotasRef = useRef('')
   const lastSavedGeneralRef = useRef<GeneralSnapshot>(buildGeneralSnapshot({}))
   const lastSavedTotalsRef = useRef<TotalsSnapshot>(buildTotalsSnapshot({}))
@@ -277,12 +282,21 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return result
   }, [])
 
-  const patchQuotationItem = useCallback(async (rowId: string, patch: Record<string, unknown>) => {
+  // Traduce un id provisional al real, esperando al POST si sigue en vuelo.
+  const resolveRowId = useCallback(async (rowId: string): Promise<string> => {
+    if (!rowId.startsWith(TEMP_ROW_PREFIX)) return rowId
+    const pending = pendingRowIdsRef.current.get(rowId)
+    if (!pending) throw new Error('La partida aún no se ha creado')
+    return pending
+  }, [])
+
+  const patchQuotationItem = useCallback(async (tempOrRealId: string, patch: Record<string, unknown>) => {
+    const rowId = await resolveRowId(tempOrRealId)
     const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(data?.error || 'Error actualizando partida')
     return data?.item as ItemCotizacion | undefined
-  }, [id])
+  }, [id, resolveRowId])
 
   const createQuotationItemRow = useCallback(async () => {
     const response = await fetch(`/api/cotizaciones/${id}/items`, { method: 'POST' })
@@ -291,11 +305,12 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return data?.item as ItemCotizacion | undefined
   }, [id])
 
-  const deleteQuotationItemRow = useCallback(async (rowId: string) => {
+  const deleteQuotationItemRow = useCallback(async (tempOrRealId: string) => {
+    const rowId = await resolveRowId(tempOrRealId)
     const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'DELETE' })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(data?.error || 'Error eliminando partida')
-  }, [id])
+  }, [id, resolveRowId])
 
   // `preserveLocalEdits` evita que la respuesta del servidor sobreescriba una celda
   // que el usuario sigue editando: si se tecleó durante el debounce + el round-trip,
@@ -384,6 +399,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       const updated = await fetchQuotationDetail(id)
       pendingRowRemovalsRef.current.clear()
+      pendingRowIdsRef.current.clear()
       applyCotizacionToState(updated)
     } catch (loadError) {
       console.error('[cotizaciones/[id]] Error resincronizando partidas:', loadError)
@@ -403,9 +419,17 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     Promise.all([fetchQuotationDetail(id), fetchProveedores()]).then(([cot, resp]) => { applyCotizacionToState(cot); setResponsables(resp); setLoading(false); const pending = sessionStorage.getItem('pdf_drive_result'); if (pending) { sessionStorage.removeItem('pdf_drive_result'); try { const { link } = JSON.parse(pending); setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(link ?? null) } catch {} } }).catch(() => setLoading(false))
   }, [id, applyCotizacionToState])
 
-  const totales = useMemo(() => calculateQuotationTotals({ items: watchedItems || [], porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }), [watchedItems, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor])
+  // `watch('items')` devuelve los valores con los que se hizo el `append` hasta que el
+  // arreglo se vuelve a registrar, así que una fila recién agregada aportaba 0 al
+  // subtotal. Combinar `fields` con lo observado es el patrón que recomienda
+  // react-hook-form para useFieldArray y deja el total correcto en ambos casos.
+  const itemsParaTotales = useMemo(
+    () => fields.map((field, index) => ({ ...(field as unknown as QuotationFormValues['items'][number]), ...(watchedItems?.[index] ?? {}) })),
+    [fields, watchedItems]
+  )
+  const totales = useMemo(() => calculateQuotationTotals({ items: itemsParaTotales, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }), [itemsParaTotales, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor])
   const displayTotales = useMemo(() => esEditable && cotizacion ? totales : (cotizacion ? buildReadOnlyTotals(cotizacion) : totales), [esEditable, cotizacion, totales])
-  const estimatedTaxes = useMemo(() => calculateEstimatedTaxes(watchedItems || [], displayTotales), [watchedItems, displayTotales])
+  const estimatedTaxes = useMemo(() => calculateEstimatedTaxes(itemsParaTotales, displayTotales), [itemsParaTotales, displayTotales])
 
   const persistNotasAutosave = useCallback(async () => {
     if (!cotizacion) return
@@ -581,67 +605,83 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [clearItemCellAutosaveTimer, persistItemCellAutosave, scheduleItemCellIdleRelease])
 
   const handleAddRow = useCallback(async () => {
-    if (addingRow) return
-    setAddingRow(true)
+    // La fila se pinta de inmediato con un id provisional; el POST viaja detrás. Antes
+    // había que esperar el viaje completo al servidor para verla aparecer.
+    const tempId = `${TEMP_ROW_PREFIX}${crypto.randomUUID()}`
+    append({ ...EMPTY_QUOTATION_ITEM, id: tempId, precio_unitario: 0, x_pagar: 0 })
+
+    const creation = createQuotationItemRow()
+      .then((createdItem) => {
+        if (!createdItem) throw new Error('No se pudo crear la fila')
+        return createdItem.id
+      })
+    pendingRowIdsRef.current.set(tempId, creation)
+
     try {
-      const createdItem = await createQuotationItemRow()
-      if (!createdItem) throw new Error('No se pudo crear la fila')
-      append(mapItemToFormItem(createdItem))
-      setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
-      broadcastItemMutation({ action: 'upsert', row_id: createdItem.id, item: createdItem })
+      const createdId = await creation
+      const index = getItemIndexByRowId(tempId)
+      if (index >= 0) setValue(`items.${index}.id`, createdId)
+      setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), { id: createdId, cotizacion_id: id, categoria: '', descripcion: '', cantidad: 1, precio_unitario: 0, importe: 0, responsable_id: null, responsable_nombre: null, x_pagar: 0, margen: 0, orden: (prev.items || []).length, notas: null } as ItemCotizacion] } : prev)
+      broadcastItemMutation({ action: 'upsert', row_id: createdId })
       markSectionSaved('partidas')
     } catch (createError: unknown) {
+      const index = getItemIndexByRowId(tempId)
+      if (index >= 0) remove(index)
       setError(createError instanceof Error ? createError.message : 'Error creando partida')
       void resyncPartidas()
     } finally {
-      setAddingRow(false)
+      pendingRowIdsRef.current.delete(tempId)
     }
-  }, [addingRow, append, broadcastItemMutation, createQuotationItemRow, markSectionSaved, resyncPartidas])
+  }, [append, broadcastItemMutation, createQuotationItemRow, getItemIndexByRowId, id, markSectionSaved, remove, resyncPartidas, setValue])
 
-  // Sirve tanto para "Copiar desde otra cotización" (ItemCotizacion) como para
-  // aplicar una plantilla de servicios (ServiceTemplateItem): las filas en blanco
-  // que ya existen se reusan en vez de quedarse vacías arriba de lo importado.
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
+    setImportingItems(true)
     try {
-      const blankRowIds = (getValues('items') || [])
+      // Las filas en blanco que ya existen se reutilizan (conservan su posición) y las
+      // que sobren se borran en la misma petición.
+      const reemplazarIds = (getValues('items') || [])
         .filter((item) => isBlankQuotationItem(item))
         .map((item) => item.id)
-        .filter((rowId): rowId is string => !!rowId)
-      let blankCursor = 0
+        .filter((rowId): rowId is string => !!rowId && !rowId.startsWith(TEMP_ROW_PREFIX))
 
-      for (const sourceItem of items) {
-        let targetId = blankRowIds[blankCursor]
-        if (targetId) {
-          blankCursor += 1
-        } else {
-          const createdItem = await createQuotationItemRow()
-          if (!createdItem) throw new Error('No se pudo crear la fila')
-          targetId = createdItem.id
-          append(mapItemToFormItem(createdItem))
-          setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
-        }
+      const response = await fetch(`/api/cotizaciones/${id}/items/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map((sourceItem) => ({
+            categoria: sourceItem.categoria || '',
+            descripcion: sourceItem.descripcion || '',
+            cantidad: sourceItem.cantidad || 1,
+            precio_unitario: sourceItem.precio_unitario || 0,
+            x_pagar: sourceItem.x_pagar || 0,
+            responsable_id: sourceItem.responsable_id || '',
+            responsable_nombre: sourceItem.responsable_nombre || '',
+          })),
+          reemplazar_ids: reemplazarIds,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.error || 'Error copiando partidas')
 
-        const patchedItem = await enqueueRowMutation(targetId, () => patchQuotationItem(targetId as string, {
-          categoria: sourceItem.categoria || '',
-          descripcion: sourceItem.descripcion || '',
-          cantidad: sourceItem.cantidad || 1,
-          precio_unitario: sourceItem.precio_unitario || 0,
-          x_pagar: sourceItem.x_pagar || 0,
-          responsable_id: sourceItem.responsable_id || '',
-          responsable_nombre: sourceItem.responsable_nombre || '',
-        }))
-        if (patchedItem) {
-          upsertLocalItemState(patchedItem)
-          broadcastItemMutation({ action: 'upsert', row_id: targetId, item: patchedItem })
-        }
-      }
+      const updated = data?.cotizacion as Cotizacion | undefined
+      if (!updated) throw new Error('Respuesta inválida al copiar partidas')
+
+      // Se aplica la lista completa de una vez (nada de append + setValue, que era lo
+      // que dejaba una fila fuera del subtotal). Solo se tocan partidas y totales del
+      // encabezado: cliente, proyecto, notas y config de totales pueden estar en
+      // edición en otra sección y no deben pisarse.
+      replace((updated.items || []).map(mapItemToFormItem))
+      setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : updated)
+      broadcastItemMutation({ action: 'upsert', row_id: (updated.items || [])[0]?.id ?? '', item: (updated.items || [])[0] ?? null })
       markSectionSaved('partidas')
     } catch (importError: unknown) {
       setError(importError instanceof Error ? importError.message : 'Error copiando partidas')
       void resyncPartidas()
+    } finally {
+      setImportingItems(false)
     }
-  }, [append, broadcastItemMutation, createQuotationItemRow, enqueueRowMutation, getValues, markSectionSaved, patchQuotationItem, resyncPartidas, upsertLocalItemState])
+  }, [broadcastItemMutation, getValues, id, markSectionSaved, replace, resyncPartidas])
 
   // Borrado optimista, identificado por rowId: la fila desaparece al instante y el
   // DELETE (que recalcula el encabezado y sincroniza Sheets) corre después, encolado
@@ -815,7 +855,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
-        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} onApplyTemplate={handleImportItems} addingRow={addingRow} allowRemoveLastRow />
+        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} onApplyTemplate={handleImportItems} addingRow={importingItems} allowRemoveLastRow />
       </div>
 
       <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={handleImportItems} />

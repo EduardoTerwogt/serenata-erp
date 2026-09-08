@@ -137,6 +137,22 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     await fulfillJson(route, cotizacion)
   })
 
+  const round2 = (value: number) => Math.round(value * 100) / 100
+  const recalcularEncabezado = () => {
+    const subtotal = round2(cotizacion.items.reduce((sum, item) => sum + item.cantidad * item.precio_unitario, 0))
+    const fee = round2(subtotal * cotizacion.porcentaje_fee)
+    const general = round2(subtotal + fee)
+    const iva = cotizacion.iva_activo ? round2(general * 0.16) : 0
+    Object.assign(cotizacion, {
+      subtotal,
+      fee_agencia: fee,
+      general,
+      iva,
+      total: round2(general + iva),
+      margen_total: round2(cotizacion.items.reduce((sum, item) => sum + (item.cantidad * item.precio_unitario - item.x_pagar), 0)),
+    })
+  }
+
   const itemLatency = () => options.itemLatencyMs ? new Promise((r) => setTimeout(r, options.itemLatencyMs)) : Promise.resolve()
 
   // POST /items -> crea una partida vacía, igual que el endpoint real
@@ -164,6 +180,53 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     cotizacion.items.push(created)
     await fulfillJson(route, { item: created })
   })
+
+  // POST /items/bulk -> alta masiva en una sola petición (plantillas y copiar de otra
+  // cotización). Se registra DESPUÉS de /items/* porque en Playwright gana la última
+  // ruta registrada y el comodín también casaría con "bulk".
+  const bulkRoute = async (route: Parameters<Parameters<Page['route']>[1]>[0]) => {
+    const body = (route.request().postDataJSON() || {}) as { items?: Record<string, unknown>[]; reemplazar_ids?: string[] }
+    await itemLatency()
+    const reusables = (body.reemplazar_ids || []).filter((rowId) => cotizacion.items.some((item) => item.id === rowId))
+
+    ;(body.items || []).forEach((source, index) => {
+      const cantidad = Number(source.cantidad) || 1
+      const precio = Number(source.precio_unitario) || 0
+      const xPagar = Number(source.x_pagar) || 0
+      const campos = {
+        categoria: String(source.categoria || ''),
+        descripcion: String(source.descripcion || ''),
+        cantidad,
+        precio_unitario: precio,
+        x_pagar: xPagar,
+        importe: cantidad * precio,
+        margen: cantidad * precio - xPagar,
+      }
+      const reusarId = reusables[index]
+      const existente = reusarId ? cotizacion.items.findIndex((item) => item.id === reusarId) : -1
+      if (existente >= 0) {
+        cotizacion.items[existente] = { ...cotizacion.items[existente], ...campos }
+        return
+      }
+      cotizacion.items.push({
+        id: `item-bulk-${cotizacion.items.length + 1}`,
+        cotizacion_id: options.id,
+        responsable_nombre: null,
+        responsable_id: null,
+        orden: cotizacion.items.length + 1,
+        notas: null,
+        ...campos,
+      })
+    })
+
+    for (const sobrante of reusables.slice((body.items || []).length)) {
+      const index = cotizacion.items.findIndex((item) => item.id === sobrante)
+      if (index >= 0) cotizacion.items.splice(index, 1)
+    }
+
+    recalcularEncabezado()
+    await fulfillJson(route, { cotizacion })
+  }
 
   // PATCH/DELETE /items/:itemId -> fusiona o elimina, para que las aserciones vean
   // el mismo estado que devolvería el servidor real.
@@ -194,6 +257,8 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     }
     await fulfillJson(route, { item: cotizacion.items[0] })
   })
+
+  await page.route(`**/api/cotizaciones/${options.id}/items/bulk`, bulkRoute)
 
   await page.route(`**/api/cotizaciones/${options.id}/aprobar`, async (route) => {
     cotizacion.estado = 'APROBADA'
