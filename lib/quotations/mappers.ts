@@ -43,6 +43,53 @@ export function canAutosaveQuotationDraft(values: Pick<QuotationFormValues, 'pro
   return (values.items || []).some((item) => String(item?.descripcion || '').trim() !== '')
 }
 
+/**
+ * Fusiona las partidas del servidor sobre las locales para un cambio remoto.
+ *
+ * Regla acordada (modelo Google Sheets): gana el último en escribir, pero una celda que
+ * el usuario local tiene sucia o bajo el cursor NUNCA se pisa. Antes, una señal remota
+ * de "partidas guardadas" hacía un reset() completo del formulario y borraba montos y
+ * descripciones que aún no habían salido en el autoguardado.
+ *
+ * Las filas locales que ya no existen en el servidor se descartan, salvo las que
+ * `conservarLocal` marque (filas provisionales o con edición en curso).
+ */
+export function reconcileServerItems(
+  locales: QuotationFormItem[],
+  servidor: QuotationFormItem[],
+  opciones: {
+    celdaOcupada?: (rowId: string, campo: keyof QuotationFormItem) => boolean
+    conservarLocal?: (rowId: string) => boolean
+  } = {}
+): QuotationFormItem[] {
+  const celdaOcupada = opciones.celdaOcupada ?? (() => false)
+  const conservarLocal = opciones.conservarLocal ?? (() => false)
+  const porId = new Map(locales.filter((item) => item.id).map((item) => [item.id as string, item]))
+  const idsServidor = new Set(servidor.map((item) => item.id).filter(Boolean) as string[])
+
+  const CAMPOS = ['categoria', 'descripcion', 'cantidad', 'precio_unitario', 'x_pagar', 'responsable_id'] as const
+
+  const fusionadas = servidor.map((remoto) => {
+    const rowId = remoto.id as string
+    const local = porId.get(rowId)
+    if (!local) return remoto
+
+    const resultado: QuotationFormItem = { ...remoto }
+    for (const campo of CAMPOS) {
+      if (!celdaOcupada(rowId, campo)) continue
+      // La celda está ocupada localmente: se conserva tal cual la tiene el usuario.
+      ;(resultado[campo] as QuotationFormItem[typeof campo]) = local[campo]
+      if (campo === 'responsable_id') resultado.responsable_nombre = local.responsable_nombre
+    }
+    return resultado
+  })
+
+  // Filas locales que el servidor ya no tiene pero que siguen siendo del usuario.
+  const supervivientes = locales.filter((item) => item.id && !idsServidor.has(item.id) && conservarLocal(item.id))
+
+  return [...fusionadas, ...supervivientes]
+}
+
 export function mapQuotationItemsForSave(items: QuotationFormItem[]) {
   return items.map((item, index) => {
     const normalizedItem = normalizeQuotationItem(item)

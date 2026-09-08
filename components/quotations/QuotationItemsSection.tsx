@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState as useStateReact, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { UseFieldArrayAppend, UseFieldArrayRemove, UseFormRegister, UseFormSetValue } from 'react-hook-form'
+import { UseFieldArrayAppend, UseFieldArrayReplace, UseFormRegister, UseFormSetValue } from 'react-hook-form'
 import { Producto, Proveedor, ServiceTemplate } from '@/lib/types'
 import { EMPTY_QUOTATION_ITEM, isBlankQuotationItem } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
@@ -31,7 +31,10 @@ interface Props {
   watchedItems: QuotationFormValues['items']
   fields: Array<{ id: string }>
   append: UseFieldArrayAppend<QuotationFormValues, 'items'>
-  remove: UseFieldArrayRemove
+  // `remove(index)` opera sobre la foto del último render: dos borrados seguidos
+  // desalinean el arreglo de sus valores y dejan filas fantasma. `replace` con la
+  // lista recalculada es inmune a los índices caducos.
+  replace: UseFieldArrayReplace<QuotationFormValues, 'items'>
   editingItemIndex: number | null
   setEditingItemIndex: (value: number | null) => void
   calcItem: (item: QuotationFormValues['items'][number]) => { importe: number; margen: number }
@@ -64,6 +67,42 @@ interface Props {
   allowRemoveLastRow?: boolean
 }
 
+/**
+ * Coloca los ítems importados sobre las filas en blanco existentes (en orden) y añade
+ * el resto al final. Las filas en blanco que sobren se descartan. Devuelve la lista
+ * completa, lista para `replace`.
+ */
+export function mergeImportedIntoBlanks(
+  actuales: QuotationFormValues['items'],
+  importados: Array<{ categoria?: string | null; descripcion?: string | null; cantidad?: number | null; precio_unitario?: number | null; x_pagar?: number | null; responsable_id?: string | null; responsable_nombre?: string | null }>
+): QuotationFormValues['items'] {
+  const aFormItem = (source: (typeof importados)[number], base?: QuotationFormValues['items'][number]) => ({
+    ...(base?.id ? { id: base.id } : {}),
+    categoria: source.categoria || '',
+    descripcion: source.descripcion || '',
+    cantidad: source.cantidad || 1,
+    precio_unitario: source.precio_unitario || 0,
+    responsable_id: source.responsable_id || '',
+    responsable_nombre: source.responsable_nombre || '',
+    x_pagar: source.x_pagar || 0,
+  })
+
+  const resultado: QuotationFormValues['items'] = []
+  const pendientes = [...importados]
+
+  for (const actual of actuales) {
+    if (isBlankQuotationItem(actual)) {
+      const siguiente = pendientes.shift()
+      // Una fila en blanco sin ítem que la ocupe simplemente desaparece.
+      if (siguiente) resultado.push(aFormItem(siguiente, actual))
+      continue
+    }
+    resultado.push(actual)
+  }
+
+  return [...resultado, ...pendientes.map((source) => aFormItem(source))]
+}
+
 // Estilo "InlineInput" del design system: transparente hasta que se enfoca.
 const CELL_INPUT_CLASS = 'bg-transparent border border-transparent rounded-[8px] px-2 py-1.5 text-body focus:outline-none focus:bg-input focus:border-accent-quiet data-[busy]:border-accent-quiet/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
 const FULLSCREEN_INPUT_CLASS = 'w-full bg-input border border-hairline rounded-control px-4 py-3.5 text-base text-body focus:outline-none focus:border-accent data-[busy]:border-accent-quiet/70 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -75,7 +114,7 @@ export function QuotationItemsSection({
   watchedItems,
   fields,
   append,
-  remove,
+  replace,
   editingItemIndex,
   setEditingItemIndex,
   calcItem,
@@ -128,33 +167,10 @@ export function QuotationItemsSection({
       return
     }
 
-    // Sin `onApplyTemplate` (nueva cotización) las partidas son locales: se reusa la
-    // fila en blanco para el primer ítem en vez de dejarla vacía arriba.
-    let startIndex = 0
-    if (watchedItems.length === 1 && isBlankQuotationItem(watchedItems[0])) {
-      const first = template.items[0]
-      if (first) {
-        setValue('items.0.categoria', first.categoria || '')
-        setValue('items.0.descripcion', first.descripcion || '')
-        setValue('items.0.cantidad', first.cantidad || 1)
-        setValue('items.0.precio_unitario', first.precio_unitario || 0)
-        setValue('items.0.responsable_id', first.responsable_id || '')
-        setValue('items.0.responsable_nombre', first.responsable_nombre || '')
-        setValue('items.0.x_pagar', first.x_pagar || 0)
-        startIndex = 1
-      }
-    }
-    template.items.slice(startIndex).forEach(item => {
-      append({
-        categoria: item.categoria || '',
-        descripcion: item.descripcion || '',
-        cantidad: item.cantidad || 1,
-        precio_unitario: item.precio_unitario || 0,
-        responsable_id: item.responsable_id || '',
-        responsable_nombre: item.responsable_nombre || '',
-        x_pagar: item.x_pagar || 0,
-      })
-    })
+    // Sin `onApplyTemplate` (nueva cotización) las partidas son locales: se reutilizan
+    // TODAS las filas en blanco que haya (no solo cuando hay exactamente una) y las que
+    // sobren desaparecen, así no quedan filas vacías colgando tras importar.
+    replace(mergeImportedIntoBlanks(watchedItems, template.items))
   }
 
   const totalXPagar = (editable ? watchedItems : readOnlyItems).reduce((sum, item) => sum + (item.x_pagar || 0), 0)
@@ -188,6 +204,9 @@ export function QuotationItemsSection({
   const rowStatus = (index: number) => { const id = rowIdAt(index); return id ? (getItemRowStatusText?.(id) || null) : null }
   // Los callbacks del padre solo se disparan si la fila tiene id de servidor.
   const withRowId = (index: number, run: (rowId: string) => void) => { const id = rowIdAt(index); if (id) run(id) }
+  // Borrado local (cotización nueva): se reconstruye la lista completa en vez de
+  // quitar por índice.
+  const removeLocalRow = (index: number) => replace(watchedItems.filter((_, i) => i !== index))
 
   const renderEditableDesktopRow = (fieldId: string, index: number) => {
     const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
@@ -259,7 +278,7 @@ export function QuotationItemsSection({
         <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => withRowId(index, (rid) => onItemFieldFocus?.(rid, 'x_pagar'))} onBlur={() => withRowId(index, (rid) => onItemFieldBlur?.(rid, 'x_pagar'))} onChange={(e) => { withRowId(index, (rid) => onItemFieldChange?.(rid, 'x_pagar')); register(`items.${index}.x_pagar`).onChange(e) }} data-busy={cellBusy(index, 'x_pagar') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
         <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
         <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(margen)}</td>
-        <td className="px-4 py-2"><button type="button" onClick={() => { const rid = rowIdAt(index); if (onRemoveRow && rid) onRemoveRow(rid); else remove(index) }} disabled={!allowRemoveLastRow && fields.length === 1} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
+        <td className="px-4 py-2"><button type="button" onClick={() => { const rid = rowIdAt(index); if (onRemoveRow && rid) onRemoveRow(rid); else removeLocalRow(index) }} disabled={!allowRemoveLastRow && fields.length === 1} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
       </tr>
     )
   }
@@ -290,7 +309,7 @@ export function QuotationItemsSection({
             <p className="text-faint text-xs">{item.categoria || 'Sin categoría'}</p>
             {statusText && <p className="mt-1 text-[11px] text-accent-quiet">{statusText}</p>}
           </div>
-          <button type="button" onClick={(e) => { e.stopPropagation(); const rid = rowIdAt(index); if (onRemoveRow && rid) onRemoveRow(rid); else remove(index) }} disabled={!allowRemoveLastRow && fields.length === 1} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors text-content">✕</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); const rid = rowIdAt(index); if (onRemoveRow && rid) onRemoveRow(rid); else removeLocalRow(index) }} disabled={!allowRemoveLastRow && fields.length === 1} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors text-content">✕</button>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-faint">Cant. {item.cantidad || 0}</span>
@@ -421,7 +440,7 @@ export function QuotationItemsSection({
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo + IVA</span><span className="text-subtext text-content font-medium">${fmtCurrency(calculateCostoConIva((watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).x_pagar))}</span></div>
               <div className="flex justify-between"><span className="text-faint text-content">Margen</span><span className={`text-content font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
-            {(allowRemoveLastRow || fields.length > 1) && <button type="button" onClick={() => { const rid = rowIdAt(editingItemIndex); if (onRemoveRow && rid) onRemoveRow(rid); else remove(editingItemIndex); setEditingItemIndex(null) }} className="w-full text-red-400 hover:text-red-300 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
+            {(allowRemoveLastRow || fields.length > 1) && <button type="button" onClick={() => { const rid = rowIdAt(editingItemIndex); if (onRemoveRow && rid) onRemoveRow(rid); else removeLocalRow(editingItemIndex); setEditingItemIndex(null) }} className="w-full text-red-400 hover:text-red-300 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
           </div>
         </div>
       )}

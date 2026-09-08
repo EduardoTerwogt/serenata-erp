@@ -5,6 +5,7 @@ import {
   buildReadOnlyTotals,
   isBlankQuotationItem,
   canAutosaveQuotationDraft,
+  reconcileServerItems,
   EMPTY_QUOTATION_ITEM,
 } from '../mappers'
 import type { ItemCotizacion, Cotizacion } from '@/lib/types'
@@ -266,5 +267,54 @@ describe('canAutosaveQuotationDraft', () => {
 
   it('basta con que una de varias partidas tenga descripción', () => {
     expect(canAutosaveQuotationDraft(withItems('Show Monterrey', ['', 'Backline', '']))).toBe(true)
+  })
+})
+
+// ==================== reconcileServerItems ====================
+
+describe('reconcileServerItems', () => {
+  const fila = (id: string, over: Partial<typeof EMPTY_QUOTATION_ITEM> = {}) => ({
+    ...EMPTY_QUOTATION_ITEM, id, descripcion: `desc-${id}`, precio_unitario: 100, x_pagar: 40, ...over,
+  })
+
+  it('toma los valores del servidor cuando no hay nada en edición', () => {
+    const local = [fila('a'), fila('b')]
+    const servidor = [fila('a', { precio_unitario: 999 }), fila('b')]
+    const out = reconcileServerItems(local, servidor)
+    expect(out.map((i) => i.precio_unitario)).toEqual([999, 100])
+  })
+
+  it('NUNCA pisa una celda que el usuario tiene ocupada', () => {
+    const local = [fila('a', { descripcion: 'lo que estoy escribiendo', precio_unitario: 9000 })]
+    const servidor = [fila('a', { descripcion: 'valor viejo del servidor', precio_unitario: 0 })]
+    const out = reconcileServerItems(local, servidor, {
+      celdaOcupada: (rowId, campo) => rowId === 'a' && (campo === 'descripcion' || campo === 'precio_unitario'),
+    })
+    expect(out[0].descripcion).toBe('lo que estoy escribiendo')
+    expect(out[0].precio_unitario).toBe(9000)
+    // Lo que no está ocupado sí se actualiza.
+    expect(out[0].x_pagar).toBe(40)
+  })
+
+  it('inserta filas nuevas del servidor', () => {
+    const out = reconcileServerItems([fila('a')], [fila('a'), fila('nueva')])
+    expect(out.map((i) => i.id)).toEqual(['a', 'nueva'])
+  })
+
+  it('descarta filas locales que el servidor ya no tiene', () => {
+    const out = reconcileServerItems([fila('a'), fila('borrada')], [fila('a')])
+    expect(out.map((i) => i.id)).toEqual(['a'])
+  })
+
+  it('conserva las filas locales marcadas (provisionales o en edición)', () => {
+    const out = reconcileServerItems([fila('a'), fila('temp:x')], [fila('a')], {
+      conservarLocal: (rowId) => rowId.startsWith('temp:'),
+    })
+    expect(out.map((i) => i.id)).toEqual(['a', 'temp:x'])
+  })
+
+  it('respeta el orden del servidor', () => {
+    const out = reconcileServerItems([fila('a'), fila('b')], [fila('b'), fila('a')])
+    expect(out.map((i) => i.id)).toEqual(['b', 'a'])
   })
 })

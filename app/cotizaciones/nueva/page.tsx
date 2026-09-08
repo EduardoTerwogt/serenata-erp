@@ -3,10 +3,10 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Suspense, useState } from 'react'
 import { ItemCotizacion } from '@/lib/types'
-import { isBlankQuotationItem } from '@/lib/quotations/mappers'
 import { formatDateDisplay } from '@/lib/format-date'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationCopyItemsModal } from '@/components/quotations/QuotationCopyItemsModal'
+import { mergeImportedIntoBlanks } from '@/components/quotations/QuotationItemsSection'
 import { useNuevaCotizacionPage } from '@/app/cotizaciones/nueva/useNuevaCotizacionPage'
 import { Icon } from '@/components/ui/Icon'
 
@@ -33,7 +33,7 @@ function NuevaCotizacionContent() {
     setValue,
     fields,
     append,
-    remove,
+    replace,
     editingItemIndex,
     setEditingItemIndex,
     folio,
@@ -81,32 +81,9 @@ function NuevaCotizacionContent() {
   const [showCopyModal, setShowCopyModal] = useState(false)
 
   const handleImportItems = (items: ItemCotizacion[]) => {
-    // Si la única fila es la vacía de arranque, se reusa para el primer ítem
-    // importado en vez de dejarla colgando arriba.
-    let startIndex = 0
-    if (watchedItems.length === 1 && isBlankQuotationItem(watchedItems[0]) && items[0]) {
-      const first = items[0]
-      setValue('items.0.categoria', first.categoria || '')
-      setValue('items.0.descripcion', first.descripcion || '')
-      setValue('items.0.cantidad', first.cantidad || 1)
-      setValue('items.0.precio_unitario', first.precio_unitario || 0)
-      setValue('items.0.responsable_id', first.responsable_id || '')
-      setValue('items.0.responsable_nombre', first.responsable_nombre || '')
-      setValue('items.0.x_pagar', first.x_pagar || 0)
-      startIndex = 1
-    }
-
-    items.slice(startIndex).forEach((item) => {
-      append({
-        categoria: item.categoria || '',
-        descripcion: item.descripcion || '',
-        cantidad: item.cantidad || 1,
-        precio_unitario: item.precio_unitario || 0,
-        responsable_id: item.responsable_id || '',
-        responsable_nombre: item.responsable_nombre || '',
-        x_pagar: item.x_pagar || 0,
-      })
-    })
+    // Se reutilizan todas las filas en blanco que haya y las que sobren desaparecen,
+    // así importar nunca deja filas vacías colgando.
+    replace(mergeImportedIntoBlanks(watchedItems, items))
   }
 
   return (
@@ -180,7 +157,8 @@ function NuevaCotizacionContent() {
         watchedItems={watchedItems}
         fields={fields}
         append={append}
-        remove={remove}
+        replace={replace}
+        allowRemoveLastRow
         editingItemIndex={editingItemIndex}
         setEditingItemIndex={setEditingItemIndex}
         calcItem={calcItem}

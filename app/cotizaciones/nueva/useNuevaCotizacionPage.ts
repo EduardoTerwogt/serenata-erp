@@ -53,7 +53,7 @@ export function useNuevaCotizacionPage() {
 
   const watchedValues = watch()
   const watchedItems = watch('items')
-  const { fields, append, remove } = useFieldArray({ control, name: 'items' })
+  const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' })
   const quotationForm = useQuotationForm(setValue, watchedItems)
 
   const {
@@ -272,6 +272,7 @@ export function useNuevaCotizacionPage() {
     fields,
     append,
     remove,
+    replace,
     editingItemIndex,
     setEditingItemIndex,
     folio,

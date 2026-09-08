@@ -10,7 +10,7 @@ import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
-import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem } from '@/lib/quotations/mappers'
+import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem, reconcileServerItems } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, saveQuotationTotals, updateQuotation } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
@@ -254,7 +254,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const getCurrentGeneralSnapshot = useCallback(() => buildGeneralSnapshot({ cliente: clienteInputValueRef.current, proyecto: proyectoInputValueRef.current, fecha_entrega: getValues('fecha_entrega') || '', locacion: getValues('locacion') || '' }), [getValues])
   const getCurrentTotalsSnapshot = useCallback(() => buildTotalsSnapshot({ porcentaje_fee: porcentajeFeeValueRef.current, iva_activo: ivaActivoValueRef.current, descuento_tipo: descuentoTipoValueRef.current, descuento_valor: descuentoValorValueRef.current }), [])
   const getItemIndexByRowId = useCallback((rowId: string) => { const items = getValues('items') || []; return items.findIndex((item) => item?.id === rowId) }, [getValues])
-  const hasLocalItemActivity = useCallback(() => itemDirtyCellsRef.current.size > 0 || itemFocusedCellsRef.current.size > 0 || itemSavingCellsRef.current.size > 0, [])
   const hasLocalItemRowActivity = useCallback((rowId: string) => (
     Array.from(itemDirtyCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemFocusedCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemSavingCellsRef.current).some((key) => key.startsWith(`${rowId}:`))
   ), [])
@@ -355,10 +354,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   const removeLocalItemState = useCallback((rowId: string) => {
     const index = getItemIndexByRowId(rowId)
-    if (index >= 0) remove(index)
+    if (index >= 0) replace((getValues('items') || []).filter((item) => item.id !== rowId))
 
     setCotizacion((prev) => prev ? { ...prev, items: (prev.items || []).filter((item) => item.id !== rowId) } : prev)
-  }, [getItemIndexByRowId, remove])
+  }, [getItemIndexByRowId, getValues, replace])
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
@@ -405,6 +404,49 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       console.error('[cotizaciones/[id]] Error resincronizando partidas:', loadError)
     }
   }, [applyCotizacionToState, id])
+
+  // Resync SUAVE tras un cambio remoto: se fusionan las partidas del servidor sobre
+  // las locales sin tocar cliente, proyecto, notas ni totales, y sin pisar ninguna
+  // celda que el usuario tenga sucia o bajo el cursor. Antes esto era un
+  // applyCotizacionToState (reset completo) que borraba lo que estabas escribiendo.
+  const resyncPartidasSuave = useCallback(async () => {
+    try {
+      const updated = await fetchQuotationDetail(id)
+      const locales = getValues('items') || []
+      const servidor = (updated.items || []).map(mapItemToFormItem)
+      const fusionadas = reconcileServerItems(locales, servidor, {
+        celdaOcupada: (rowId, campo) => {
+          const key = getItemCellKey(rowId, campo as QuotationItemCellField)
+          return itemDirtyCellsRef.current.has(key) || itemFocusedCellsRef.current.has(key) || itemSavingCellsRef.current.has(key)
+        },
+        // Las filas provisionales y las que se están borrando siguen siendo del usuario.
+        conservarLocal: (rowId) => rowId.startsWith(TEMP_ROW_PREFIX) || hasLocalItemRowActivity(rowId),
+      })
+
+      const mismasFilas = fusionadas.length === locales.length && fusionadas.every((item, i) => item.id === locales[i]?.id)
+      if (mismasFilas) {
+        // Mismo conjunto de filas: se actualiza celda a celda para NO remontar los
+        // inputs y no robarle el foco a quien está escribiendo.
+        fusionadas.forEach((item, index) => {
+          const local = locales[index]
+          if (item.categoria !== local.categoria) setValue(`items.${index}.categoria`, item.categoria)
+          if (item.descripcion !== local.descripcion) setValue(`items.${index}.descripcion`, item.descripcion)
+          if (item.cantidad !== local.cantidad) setValue(`items.${index}.cantidad`, item.cantidad)
+          if (item.precio_unitario !== local.precio_unitario) setValue(`items.${index}.precio_unitario`, item.precio_unitario)
+          if (item.x_pagar !== local.x_pagar) setValue(`items.${index}.x_pagar`, item.x_pagar)
+          if (item.responsable_id !== local.responsable_id) {
+            setValue(`items.${index}.responsable_id`, item.responsable_id)
+            setValue(`items.${index}.responsable_nombre`, item.responsable_nombre)
+          }
+        })
+      } else {
+        replace(fusionadas)
+      }
+      setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : prev)
+    } catch (loadError) {
+      console.error('[cotizaciones/[id]] Error resincronizando partidas:', loadError)
+    }
+  }, [getValues, hasLocalItemRowActivity, id, replace, setValue])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
   useEffect(() => { notasValueRef.current = notasInternas }, [notasInternas])
@@ -537,16 +579,23 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       return
     }
     if (latestItemMutation.item) {
-      upsertLocalItemState(latestItemMutation.item, { allowInsert: true })
+      // Si ya tenemos la fila, se fusiona celda a celda (sin tocar lo que el usuario
+      // esté editando). Si es una fila nueva de otro colaborador, se inserta con
+      // `replace` sobre la lista completa: un `append` suelto aquí desalineaba el
+      // arreglo de sus valores y hacía que se vieran filas con montos en blanco.
+      if (getItemIndexByRowId(latestItemMutation.item.id) >= 0) {
+        upsertLocalItemState(latestItemMutation.item, { preserveLocalEdits: true })
+      } else {
+        replace([...(getValues('items') || []), mapItemToFormItem(latestItemMutation.item)])
+      }
     }
-  }, [hasLocalItemRowActivity, latestItemMutation, removeLocalItemState, upsertLocalItemState])
+  }, [getItemIndexByRowId, getValues, hasLocalItemRowActivity, latestItemMutation, removeLocalItemState, replace, upsertLocalItemState])
 
   useEffect(() => {
     const remotePartidasSaves = savedSections.partidas || 0
-    if (!remotePartidasSaves || hasLocalItemActivity()) return
-    if (latestItemMutation) return
-    fetchQuotationDetail(id).then((updated) => applyCotizacionToState(updated)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando partidas tras save remoto:', loadError))
-  }, [applyCotizacionToState, hasLocalItemActivity, id, latestItemMutation, savedSections.partidas])
+    if (!remotePartidasSaves) return
+    void resyncPartidasSuave()
+  }, [resyncPartidasSuave, savedSections.partidas])
 
   useEffect(() => { if (!generalLockHeldRef.current) return; if (!areGeneralSnapshotsEqual(currentGeneralSnapshot, lastSavedGeneralRef.current)) generalDirtyRef.current = true }, [currentGeneralSnapshot])
   useEffect(() => { if (!totalsLockHeldRef.current) return; if (!areTotalsSnapshotsEqual(currentTotalsSnapshot, lastSavedTotalsRef.current)) totalsDirtyRef.current = true }, [currentTotalsSnapshot])
@@ -621,8 +670,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const createdId = await creation
       const index = getItemIndexByRowId(tempId)
       if (index >= 0) setValue(`items.${index}.id`, createdId)
-      setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), { id: createdId, cotizacion_id: id, categoria: '', descripcion: '', cantidad: 1, precio_unitario: 0, importe: 0, responsable_id: null, responsable_nombre: null, x_pagar: 0, margen: 0, orden: (prev.items || []).length, notas: null } as ItemCotizacion] } : prev)
-      broadcastItemMutation({ action: 'upsert', row_id: createdId })
+      const filaCreada: ItemCotizacion = { id: createdId, cotizacion_id: id, categoria: '', descripcion: '', cantidad: 1, precio_unitario: 0, importe: 0, responsable_id: null, responsable_nombre: null, x_pagar: 0, margen: 0, orden: (getValues('items') || []).length, notas: null }
+      setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), filaCreada] } : prev)
+      broadcastItemMutation({ action: 'upsert', row_id: createdId, item: filaCreada })
       markSectionSaved('partidas')
     } catch (createError: unknown) {
       const index = getItemIndexByRowId(tempId)
@@ -632,7 +682,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       pendingRowIdsRef.current.delete(tempId)
     }
-  }, [append, broadcastItemMutation, createQuotationItemRow, getItemIndexByRowId, id, markSectionSaved, remove, resyncPartidas, setValue])
+  }, [append, broadcastItemMutation, createQuotationItemRow, getItemIndexByRowId, getValues, id, markSectionSaved, remove, resyncPartidas, setValue])
 
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
@@ -673,7 +723,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       // edición en otra sección y no deben pisarse.
       replace((updated.items || []).map(mapItemToFormItem))
       setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : updated)
-      broadcastItemMutation({ action: 'upsert', row_id: (updated.items || [])[0]?.id ?? '', item: (updated.items || [])[0] ?? null })
+      for (const item of updated.items || []) {
+        broadcastItemMutation({ action: 'upsert', row_id: item.id, item })
+      }
       markSectionSaved('partidas')
     } catch (importError: unknown) {
       setError(importError instanceof Error ? importError.message : 'Error copiando partidas')
@@ -855,7 +907,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
-        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} remove={remove} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} onApplyTemplate={handleImportItems} addingRow={importingItems} allowRemoveLastRow />
+        <QuotationItemsSection editable={!!esEditable} register={register} setValue={setValue} watchedItems={watchedItems} fields={fields} append={append} replace={replace} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} seleccionarProducto={seleccionarProducto} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onAddRow={handleAddRow} onRemoveRow={handleRemoveRow} onSelectProduct={handleSelectProduct} onResponsableChange={handleResponsableChange} onItemFieldFocus={handleItemFieldFocus} onItemFieldBlur={handleItemFieldBlur} onItemFieldChange={handleItemFieldChange} isItemCellLocked={isItemCellLocked} isItemRowLocked={isItemRowLocked} getItemRowStatusText={getItemRowStatusText} onCopyClick={() => setShowCopyModal(true)} onApplyTemplate={handleImportItems} addingRow={importingItems} allowRemoveLastRow />
       </div>
 
       <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={handleImportItems} />
