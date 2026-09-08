@@ -37,6 +37,7 @@ import {
   Inbox,
   Sparkles,
   Loader2,
+  Lock,
 } from 'lucide-react'
 
 // Fase 5.7 (rediseño): wrapper tipado sobre lucide-react (ya era dependencia
@@ -84,6 +85,7 @@ const ICONS = {
   inbox: Inbox,
   sparkles: Sparkles,
   loader: Loader2,
+  lock: Lock,
 } as const
 
 export type IconName = keyof typeof ICONS

@@ -14,6 +14,7 @@ import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mapp
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, saveQuotationTotals, updateQuotation } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
+import { Icon } from '@/components/ui/Icon'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
 import { QuotationTotalsPanels } from '@/components/quotations/QuotationTotalsPanels'
@@ -702,10 +703,18 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     <div className="flex flex-col gap-[19px]">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3 min-w-0">
-          <Link href="/cotizaciones" className="flex-none text-content text-faint hover:text-subtext">← Cotizaciones</Link>
+          <Link href="/cotizaciones" className="flex flex-none items-center gap-1.5 text-content text-faint hover:text-subtext">
+            <Icon name="arrow-left" size={14} />
+            Cotizaciones
+          </Link>
           <h1 className="sn-display flex-none text-2xl text-ink md:text-h2">{cotizacion.id}</h1>
           <span className="flex-none whitespace-nowrap text-content text-subtext">Cotizada el {formatDateDisplay(cotizacion.fecha_cotizacion)}</span>
           <StatusBadge tone={toneForCotizacionEstado(cotizacion.estado)}>{cotizacion.estado}</StatusBadge>
+          {cotizacion.es_complementaria_de && (
+            <span className="flex-none whitespace-nowrap text-content text-accent">
+              Complementaria de <span className="font-mono font-bold">{cotizacion.es_complementaria_de}</span>
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3 lg:justify-end">
           {visibleOnlineUsers.length > 0 && (
@@ -739,6 +748,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       {error && <div className="rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20 text-cancelled-fg px-4 py-3">{error}</div>}
       {success && <div className="rounded-control border border-approved-bg/60 bg-approved-bg/20 text-approved-fg px-4 py-3 flex items-center justify-between gap-4"><span>{success}</span>{driveLink && <a href={driveLink} target="_blank" rel="noopener noreferrer" className="underline text-content whitespace-nowrap hover:opacity-80">Ver en Drive →</a>}</div>}
+
+      {!esEditable && (
+        <div className="flex items-center gap-2.5 rounded-control border border-hairline bg-row px-4 py-3 text-content text-subtext">
+          <Icon name="lock" size={14} className="flex-none text-faint" />
+          Los datos generales y las partidas sólo se editan en Borrador o Emitida.
+        </div>
+      )}
 
       {(notasInternas || esEditable) && <div ref={notasSectionRef} className={`bg-row/60 border rounded-panel p-4 ${notasLockedByOther ? 'border-accent-quiet/70 opacity-80' : 'border-hairline'}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}><SectionEditBadge section="notas" /><p className="sn-label mb-2">Notas del evento (uso interno)</p>{esEditable ? <textarea value={notasInternas} onChange={e => { handleNotasFocus(); notasDirtyRef.current = true; setNotasInternas(e.target.value) }} rows={3} placeholder="Sin notas..." disabled={notasLockedByOther} className="w-full bg-transparent text-body text-content resize-none outline-none placeholder-faint disabled:opacity-50 disabled:cursor-not-allowed" /> : <p className="text-subtext text-content whitespace-pre-wrap">{notasInternas || '—'}</p>}</div>}
 

@@ -7,6 +7,7 @@ import { formatDateDisplay } from '@/lib/format-date'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
 import { QuotationCopyItemsModal } from '@/components/quotations/QuotationCopyItemsModal'
 import { useNuevaCotizacionPage } from '@/app/cotizaciones/nueva/useNuevaCotizacionPage'
+import { Icon } from '@/components/ui/Icon'
 
 const QuotationItemsSection = dynamic(
   () => import('@/components/quotations/QuotationItemsSection').then((mod) => mod.QuotationItemsSection),
@@ -97,7 +98,10 @@ function NuevaCotizacionContent() {
     <div className="flex flex-col gap-[19px]">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex flex-wrap items-baseline gap-3 min-w-0">
-          <Link href="/cotizaciones" className="flex-none text-content text-faint hover:text-subtext">← Cotizaciones</Link>
+          <Link href="/cotizaciones" className="flex flex-none items-center gap-1.5 text-content text-faint hover:text-subtext">
+            <Icon name="arrow-left" size={14} />
+            Cotizaciones
+          </Link>
           <h1 className="sn-display flex-none text-2xl text-ink md:text-h2">Nueva Cotizacion</h1>
           <span className="flex-none text-subtext">Folio: <span className="sn-display text-body" style={{ fontSize: 13, letterSpacing: '0.06em' }}>{folio || '...'}</span></span>
         </div>

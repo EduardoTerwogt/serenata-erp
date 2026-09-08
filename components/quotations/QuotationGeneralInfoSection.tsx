@@ -50,7 +50,7 @@ const DROPDOWN_CLASS = 'absolute z-50 w-full min-w-[220px] mt-1 bg-card border b
 const DROPDOWN_ITEM_CLASS = 'px-4 py-3 hover:bg-row cursor-pointer text-body text-content border-b border-hairline last:border-0'
 
 export function QuotationGeneralInfoSection({
-  title = 'Información General',
+  title = 'Datos generales',
   register,
   setValue,
   clienteInput,

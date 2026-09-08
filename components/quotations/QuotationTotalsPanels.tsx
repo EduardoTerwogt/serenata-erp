@@ -40,7 +40,7 @@ export function QuotationTotalsPanels({
         <div className="space-y-2">
           <div className="flex justify-between text-content gap-3">
             <span className="text-subtext">Margen Total</span>
-            <span className={`${totals.margen_total >= 0 ? 'text-green-400' : 'text-red-400'} text-right`}>${fmtCurrency(totals.margen_total)}</span>
+            <span className={`${totals.margen_total >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'} text-right`}>${fmtCurrency(totals.margen_total)}</span>
           </div>
           <div className="flex justify-between text-content gap-3">
             <span className="text-subtext">Fee Agencia</span>
@@ -48,7 +48,7 @@ export function QuotationTotalsPanels({
           </div>
           <div className="border-t border-hairline pt-2 mt-1 flex justify-between font-semibold gap-3">
             <span className="text-body">Utilidad Total</span>
-            <span className={`${totals.utilidad_total >= 0 ? 'text-green-400' : 'text-red-400'} text-right`}>${fmtCurrency(totals.utilidad_total)}</span>
+            <span className={`${totals.utilidad_total >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'} text-right`}>${fmtCurrency(totals.utilidad_total)}</span>
           </div>
           {totals.subtotal > 0 && (
             <div className="flex justify-between text-content gap-3">
@@ -71,7 +71,7 @@ export function QuotationTotalsPanels({
               </div>
               <div className="flex justify-between text-content gap-3">
                 <span className="text-subtext">IVA neto a enterar al SAT</span>
-                <span className={`text-right font-medium ${estimatedTaxes.ivaNeto >= 0 ? 'text-yellow-400' : 'text-green-400'}`}>${fmtCurrency(estimatedTaxes.ivaNeto)}</span>
+                <span className={`text-right font-medium ${estimatedTaxes.ivaNeto >= 0 ? 'text-yellow-400' : 'text-approved-fg'}`}>${fmtCurrency(estimatedTaxes.ivaNeto)}</span>
               </div>
               <div className="flex justify-between text-content gap-3">
                 <span className="text-subtext">ISR estimado (30%)</span>
@@ -82,7 +82,7 @@ export function QuotationTotalsPanels({
 
           <div className="border-t border-hairline pt-2 mt-1 flex justify-between font-bold gap-3">
             <span className="text-body">Utilidad Neta (después de impuestos)</span>
-            <span className={`text-lg text-right ${estimatedTaxes.utilidadNeta >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(estimatedTaxes.utilidadNeta)}</span>
+            <span className={`text-lg text-right ${estimatedTaxes.utilidadNeta >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(estimatedTaxes.utilidadNeta)}</span>
           </div>
         </div>
       </div>
@@ -167,9 +167,9 @@ export function QuotationTotalsPanels({
               <span className="text-yellow-400 text-right">-${fmtCurrency(totals.descuento)}</span>
             </div>
           ) : null}
-          <div className="border-t border-hairline pt-2 mt-1 flex justify-between font-bold gap-3">
-            <span className="text-body">TOTAL</span>
-            <span className="text-green-400 text-lg text-right">${fmtCurrency(totals.total)}</span>
+          <div className="border-t border-hairline pt-3 mt-1 flex items-baseline justify-between gap-3">
+            <span className="sn-label">Total final</span>
+            <span className="sn-display text-h2 text-accent text-right">${fmtCurrency(totals.total)}</span>
           </div>
         </div>
       </div>
