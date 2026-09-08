@@ -32,18 +32,45 @@ function ContactoRow({ icon, children }: { icon: 'phone' | 'mail' | 'landmark'; 
   )
 }
 
+const PORTAL_STAT_TONE_CLASS = {
+  'approved-fg': 'text-approved-fg',
+  'issued-fg': 'text-issued-fg',
+  'cancelled-fg': 'text-cancelled-fg',
+  faint: 'text-faint',
+} as const
+
+function PortalStat({ label, value, tone }: { label: string; value: number; tone: keyof typeof PORTAL_STAT_TONE_CLASS }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-hairline py-3 last:border-b-0 last:pb-0">
+      <span className="text-content text-body">{label}</span>
+      <span className={`sn-display text-h2 ${PORTAL_STAT_TONE_CLASS[tone]}`}>{value}</span>
+    </div>
+  )
+}
+
+interface DocumentosResumen {
+  incompleta: number
+  conErrores: number
+}
+
 export default function ProveedoresPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
   const [abierto, setAbierto] = useState<Proveedor | null>(null)
   const [nuevo, setNuevo] = useState(false)
+  const [documentosResumen, setDocumentosResumen] = useState<DocumentosResumen | null>(null)
 
   useEffect(() => {
     fetch('/api/proveedores')
       .then(r => r.json())
       .then(data => { setProveedores(data); setLoading(false) })
       .catch(() => setLoading(false))
+
+    fetch('/api/proveedores/documentos-resumen')
+      .then(r => r.json())
+      .then(data => setDocumentosResumen(data))
+      .catch(() => setDocumentosResumen(null))
   }, [])
 
   const handleSaved = (proveedor: Proveedor) => {
@@ -85,86 +112,90 @@ export default function ProveedoresPage() {
         className="max-w-[420px]"
       />
 
-      <div className="w-full max-w-xs rounded-panel border border-hairline bg-card p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="sn-label">Portal de proveedores</h3>
-          <Icon name="link" size={14} className="text-faint flex-none" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-2 text-sm">
-            <span className="text-subtext">Activos</span>
-            <span className="font-semibold text-approved-fg">{portalActivos}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2 text-sm">
-            <span className="text-subtext">Pendientes de confirmación</span>
-            <span className="font-semibold text-issued-fg">{portalPendientes}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2 text-sm">
-            <span className="text-subtext">Sin registrar</span>
-            <span className="font-semibold text-faint">{portalSinRegistro}</span>
-          </div>
-        </div>
-        <a
-          href="/portal/login"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-accent transition-colors hover:text-accent-pressed"
-        >
-          Acceder al portal
-          <Icon name="arrow-right" size={14} />
-        </a>
-      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px] lg:items-start">
+        <div className="lg:order-1">
+          {loading ? (
+            <div className="py-12 text-center text-faint">Cargando...</div>
+          ) : filtrados.length === 0 ? (
+            <div className="rounded-panel border border-hairline bg-card p-12 text-center">
+              <p className="text-lg text-subtext mb-2">
+                {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay proveedores aún'}
+              </p>
+              {!busqueda && (
+                <button
+                  type="button"
+                  onClick={() => setNuevo(true)}
+                  className="inline-flex items-center gap-1.5 mt-4 rounded-control bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
+                >
+                  <Icon name="plus" size={15} />
+                  Nuevo proveedor
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+              {filtrados.map(r => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setAbierto(r)}
+                  className={`rounded-panel border border-hairline bg-card p-5 text-left flex flex-col gap-3 min-w-0 hover:border-accent-quiet transition-colors ${r.activo ? '' : 'opacity-60'}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar initials={initialsFromName(r.nombre)} size={38} tone={r.activo ? 'accent' : 'neutral'} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-semibold text-ink truncate">{r.nombre}</div>
+                    </div>
+                    <StatusBadge tone={r.activo ? 'approved' : 'draft'}>{r.activo ? 'Activo' : 'Inactivo'}</StatusBadge>
+                  </div>
 
-      {loading ? (
-        <div className="py-12 text-center text-faint">Cargando...</div>
-      ) : filtrados.length === 0 ? (
-        <div className="rounded-panel border border-hairline bg-card p-12 text-center">
-          <p className="text-lg text-subtext mb-2">
-            {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay proveedores aún'}
-          </p>
-          {!busqueda && (
-            <button
-              type="button"
-              onClick={() => setNuevo(true)}
-              className="inline-flex items-center gap-1.5 mt-4 rounded-control bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
-            >
-              <Icon name="plus" size={15} />
-              Nuevo proveedor
-            </button>
+                  {r.roles && r.roles.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {r.roles.map(rol => <RolPill key={rol}>{rol}</RolPill>)}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-1.5 pt-3 border-t border-hairline">
+                    <ContactoRow icon="phone">{r.telefono}</ContactoRow>
+                    <ContactoRow icon="mail">{r.correo}</ContactoRow>
+                    <ContactoRow icon="landmark">{r.banco}</ContactoRow>
+                  </div>
+                </button>
+              ))}
+            </div>
           )}
         </div>
-      ) : (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-          {filtrados.map(r => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setAbierto(r)}
-              className={`rounded-panel border border-hairline bg-card p-5 text-left flex flex-col gap-3 min-w-0 hover:border-accent-quiet transition-colors ${r.activo ? '' : 'opacity-60'}`}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <Avatar initials={initialsFromName(r.nombre)} size={38} tone={r.activo ? 'accent' : 'neutral'} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-base font-semibold text-ink truncate">{r.nombre}</div>
-                </div>
-                <StatusBadge tone={r.activo ? 'approved' : 'draft'}>{r.activo ? 'Activo' : 'Inactivo'}</StatusBadge>
-              </div>
 
-              {r.roles && r.roles.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {r.roles.map(rol => <RolPill key={rol}>{rol}</RolPill>)}
-                </div>
-              )}
+        <aside className="lg:sticky lg:top-6 lg:order-2 rounded-panel border border-hairline bg-card p-5 flex flex-col gap-5">
+          <div className="flex items-center gap-2.5">
+            <Icon name="link" size={16} className="text-accent flex-none" />
+            <h3 className="sn-label">Portal de proveedores</h3>
+          </div>
 
-              <div className="flex flex-col gap-1.5 pt-3 border-t border-hairline">
-                <ContactoRow icon="phone">{r.telefono}</ContactoRow>
-                <ContactoRow icon="mail">{r.correo}</ContactoRow>
-                <ContactoRow icon="landmark">{r.banco}</ContactoRow>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+          <div className="flex flex-col">
+            <PortalStat label="Activos" value={portalActivos} tone="approved-fg" />
+            <PortalStat label="Pendientes de confirmación" value={portalPendientes} tone="issued-fg" />
+            <PortalStat label="Sin registrar" value={portalSinRegistro} tone="faint" />
+          </div>
+
+          {documentosResumen && (documentosResumen.incompleta > 0 || documentosResumen.conErrores > 0) && (
+            <div className="flex flex-col border-t border-hairline pt-4">
+              <PortalStat label="Documentación incompleta" value={documentosResumen.incompleta} tone="faint" />
+              <PortalStat label="Documentación con errores" value={documentosResumen.conErrores} tone="cancelled-fg" />
+            </div>
+          )}
+
+          <a
+            href="/portal/login"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 rounded-control bg-accent px-4 py-3 text-content font-semibold text-accent-ink transition-colors hover:bg-accent-pressed"
+          >
+            Acceder al portal
+            <Icon name="arrow-right" size={15} />
+          </a>
+        </aside>
+      </div>
 
       {abierto && (
         <ProveedorModal proveedor={abierto} onClose={() => setAbierto(null)} onSaved={handleSaved} />
