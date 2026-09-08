@@ -2,13 +2,27 @@
 
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Proveedor, HistorialResponsable, RegimenFiscal } from '@/lib/types'
+import { Proveedor, HistorialResponsable, RegimenFiscal, PortalEstado } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 import { Modal } from '@/components/ui/Modal'
 import { StatusBanner } from '@/components/ui/StatusBanner'
+import { StatusBadge, StatusTone } from '@/components/ui/StatusBadge'
 import { FilterTabs } from '@/components/ui/FilterTabs'
 import { Icon } from '@/components/ui/Icon'
+
+type PortalKey = PortalEstado | 'sin_acceso'
+
+const PORTAL_TONE: Record<PortalKey, StatusTone> = {
+  sin_acceso: 'draft',
+  pendiente_confirmacion: 'issued',
+  activo: 'approved',
+}
+const PORTAL_LABEL: Record<PortalKey, string> = {
+  sin_acceso: 'Sin acceso',
+  pendiente_confirmacion: 'Pendiente de confirmación',
+  activo: 'Activo',
+}
 
 interface ProveedorFormValues {
   nombre: string
@@ -43,6 +57,20 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
   const [loadingHistorial, setLoadingHistorial] = useState(!esNuevo)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [linkCopiado, setLinkCopiado] = useState(false)
+
+  const portalKey: PortalKey = proveedor?.portal_estado ?? 'sin_acceso'
+  const portalPath = proveedor?.portal_estado ? '/portal/login' : '/portal/signup'
+
+  const handleCopyPortalLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${portalPath}`)
+      setLinkCopiado(true)
+      setTimeout(() => setLinkCopiado(false), 2000)
+    } catch {
+      // Clipboard API puede no estar disponible (permisos, contexto no seguro) -- no bloquea nada más.
+    }
+  }
 
   const { register, handleSubmit, formState: { errors } } = useForm<ProveedorFormValues>({
     defaultValues: {
@@ -114,6 +142,23 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
       ) : undefined}
     >
       {error && <StatusBanner tone="error">{error}</StatusBanner>}
+
+      {!esNuevo && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-hairline bg-row px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-sm text-subtext">Portal de proveedores</span>
+            <StatusBadge tone={PORTAL_TONE[portalKey]}>{PORTAL_LABEL[portalKey]}</StatusBadge>
+          </div>
+          <button
+            type="button"
+            onClick={handleCopyPortalLink}
+            className="flex items-center gap-1.5 rounded-control border border-hairline bg-input px-3 py-1.5 text-sm text-body transition-colors hover:bg-row-alt"
+          >
+            <Icon name={linkCopiado ? 'check' : 'link'} size={14} />
+            {linkCopiado ? 'Enlace copiado' : 'Copiar enlace del portal'}
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
