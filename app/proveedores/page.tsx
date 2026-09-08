@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Proveedor } from '@/lib/types'
 import { SectionHero } from '@/components/ui/SectionHero'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Avatar } from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/Icon'
+import { ProveedorModal } from '@/app/proveedores/components/ProveedorModal'
 
 function initialsFromName(nombre: string) {
   const partes = nombre.trim().split(/\s+/)
@@ -33,10 +33,11 @@ function ContactoRow({ icon, children }: { icon: 'phone' | 'mail' | 'landmark'; 
 }
 
 export default function ProveedoresPage() {
-  const router = useRouter()
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
+  const [abierto, setAbierto] = useState<Proveedor | null>(null)
+  const [nuevo, setNuevo] = useState(false)
 
   useEffect(() => {
     fetch('/api/proveedores')
@@ -44,6 +45,13 @@ export default function ProveedoresPage() {
       .then(data => { setProveedores(data); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
+
+  const handleSaved = (proveedor: Proveedor) => {
+    setProveedores(prev => {
+      const existe = prev.some(p => p.id === proveedor.id)
+      return existe ? prev.map(p => p.id === proveedor.id ? proveedor : p) : [...prev, proveedor]
+    })
+  }
 
   const filtrados = proveedores.filter(r =>
     r.nombre.toLowerCase().includes(busqueda.toLowerCase())
@@ -57,7 +65,7 @@ export default function ProveedoresPage() {
         action={
           <button
             type="button"
-            onClick={() => router.push('/proveedores/nueva')}
+            onClick={() => setNuevo(true)}
             className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
           >
             <Icon name="plus" size={15} />
@@ -83,7 +91,7 @@ export default function ProveedoresPage() {
           {!busqueda && (
             <button
               type="button"
-              onClick={() => router.push('/proveedores/nueva')}
+              onClick={() => setNuevo(true)}
               className="inline-flex items-center gap-1.5 mt-4 rounded-control bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
             >
               <Icon name="plus" size={15} />
@@ -97,7 +105,7 @@ export default function ProveedoresPage() {
             <button
               key={r.id}
               type="button"
-              onClick={() => router.push(`/proveedores/${r.id}`)}
+              onClick={() => setAbierto(r)}
               className={`rounded-panel border border-hairline bg-card p-5 text-left flex flex-col gap-3 min-w-0 hover:border-accent-quiet transition-colors ${r.activo ? '' : 'opacity-60'}`}
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -122,6 +130,13 @@ export default function ProveedoresPage() {
             </button>
           ))}
         </div>
+      )}
+
+      {abierto && (
+        <ProveedorModal proveedor={abierto} onClose={() => setAbierto(null)} onSaved={handleSaved} />
+      )}
+      {nuevo && (
+        <ProveedorModal proveedor={null} onClose={() => setNuevo(false)} onSaved={handleSaved} />
       )}
     </div>
   )
