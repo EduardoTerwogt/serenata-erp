@@ -53,7 +53,7 @@ export default function TiposProyectoPage() {
           <button
             type="button"
             onClick={() => setMostrarNuevoTipo(true)}
-            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-content font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
+            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
           >
             <Icon name="plus" size={15} />
             Nuevo tipo de proyecto

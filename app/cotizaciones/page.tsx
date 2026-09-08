@@ -13,6 +13,14 @@ import { Icon } from '@/components/ui/Icon'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
 
+const ESTADO_LABEL: Record<EstadoCotizacion | 'TODAS', string> = {
+  TODAS: 'Todas',
+  BORRADOR: 'Borrador',
+  EMITIDA: 'Emitida',
+  APROBADA: 'Aprobada',
+  CANCELADA: 'Cancelada',
+}
+
 function fmtMoney(n: number) {
   return n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
@@ -67,7 +75,7 @@ export default function CotizacionesPage() {
 
   const tabs: FilterTab<EstadoCotizacion | 'TODAS'>[] = useMemo(() => ESTADOS.map(estado => ({
     value: estado,
-    label: estado,
+    label: ESTADO_LABEL[estado],
     count: estado === 'TODAS' ? cotizaciones.length : cotizaciones.filter(c => c.estado === estado).length,
   })), [cotizaciones])
 
@@ -202,7 +210,7 @@ export default function CotizacionesPage() {
       ) : (
         <div className="rounded-card border border-hairline bg-card p-12 text-center">
           <p className="mb-2 text-lg text-subtext">
-            {filtro === 'TODAS' ? 'No hay cotizaciones aún' : `No hay cotizaciones en estado ${filtro}`}
+            {filtro === 'TODAS' ? 'No hay cotizaciones aún' : `No hay cotizaciones en estado ${ESTADO_LABEL[filtro]}`}
           </p>
           {filtro === 'TODAS' && (
             <>

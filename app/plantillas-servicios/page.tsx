@@ -99,7 +99,7 @@ export default function PlantillasServiciosPage() {
           <button
             type="button"
             onClick={() => router.push('/plantillas-servicios/nueva')}
-            className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
+            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
           >
             <Icon name="plus" size={15} />
             Nueva plantilla
@@ -111,7 +111,6 @@ export default function PlantillasServiciosPage() {
         value={busqueda}
         onChange={e => setBusqueda(e.target.value)}
         placeholder="Buscar por nombre…"
-        className="max-w-[420px]"
       />
 
       {error && (
@@ -129,7 +128,7 @@ export default function PlantillasServiciosPage() {
             <button
               type="button"
               onClick={() => router.push('/plantillas-servicios/nueva')}
-              className="inline-flex items-center gap-1.5 mt-4 rounded-control bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
+              className="mt-4 inline-flex h-[var(--control-height-lg)] items-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
             >
               <Icon name="plus" size={15} />
               Nueva plantilla

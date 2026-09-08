@@ -97,7 +97,7 @@ export default function ProveedoresPage() {
           <button
             type="button"
             onClick={() => setNuevo(true)}
-            className="inline-flex items-center gap-1.5 rounded-control bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
+            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
           >
             <Icon name="plus" size={15} />
             Nuevo proveedor
@@ -109,7 +109,6 @@ export default function ProveedoresPage() {
         value={busqueda}
         onChange={e => setBusqueda(e.target.value)}
         placeholder="Buscar por nombre…"
-        className="max-w-[420px]"
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px] lg:items-start">
@@ -125,7 +124,7 @@ export default function ProveedoresPage() {
                 <button
                   type="button"
                   onClick={() => setNuevo(true)}
-                  className="inline-flex items-center gap-1.5 mt-4 rounded-control bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors"
+                  className="mt-4 inline-flex h-[var(--control-height-lg)] items-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
                 >
                   <Icon name="plus" size={15} />
                   Nuevo proveedor
@@ -166,7 +165,7 @@ export default function ProveedoresPage() {
           )}
         </div>
 
-        <aside className="lg:sticky lg:top-6 lg:order-2 rounded-panel border border-hairline bg-card p-5 flex flex-col gap-5">
+        <aside className="lg:sticky lg:top-6 lg:order-2 rounded-panel border border-accent-quiet/30 bg-row p-5 flex flex-col gap-5">
           <div className="flex items-center gap-2.5">
             <Icon name="link" size={16} className="text-accent flex-none" />
             <h3 className="sn-label">Portal de proveedores</h3>
