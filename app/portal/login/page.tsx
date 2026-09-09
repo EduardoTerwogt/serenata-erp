@@ -35,8 +35,8 @@ export default function PortalLoginPage() {
   return (
     <div className="mx-auto w-full max-w-sm">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl font-bold text-ink">Portal de proveedores</h1>
-        <p className="mt-2 text-sm text-subtext">Entra para ver tus cuentas con Serenata</p>
+        <h1 className="sn-display text-h2 text-ink">Portal de proveedores</h1>
+        <p className="mt-2 text-[length:var(--text-base)] text-subtext">Entra para ver tus cuentas con Serenata</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-panel border border-hairline bg-card p-6">

@@ -78,7 +78,7 @@ export default function PlaneacionPage() {
           className="flex items-center gap-3 w-full rounded-control border border-hairline bg-row px-4 py-3.5 text-left hover:bg-row-alt transition-colors"
         >
           <Icon name="inbox" size={16} className="text-accent flex-none" />
-          <span className="flex-1 min-w-0 text-body">
+          <span className="flex-1 min-w-0 text-[length:var(--text-base)] text-body">
             Tienes {pendientesCount} eventos sin completar o confirmar.
           </span>
           <Icon name="chevron-right" size={16} className="text-subtext flex-none" />
@@ -96,7 +96,7 @@ export default function PlaneacionPage() {
               return (
                 <div key={step} className="flex items-center gap-2.5">
                   <span
-                    className={`flex h-[26px] w-[26px] flex-none items-center justify-center rounded-circle text-xs font-bold transition-colors ${
+                    className={`flex h-[26px] w-[26px] flex-none items-center justify-center rounded-circle text-[length:var(--text-xs)] font-bold transition-colors duration-[var(--dur-fast)] ${
                       isActive
                         ? 'bg-accent text-accent-ink'
                         : isDone
@@ -106,7 +106,7 @@ export default function PlaneacionPage() {
                   >
                     {isDone ? <Icon name="check" size={13} strokeWidth={3} /> : idx + 1}
                   </span>
-                  <span className={`hidden text-sm md:inline ${isActive ? 'font-semibold text-ink' : 'font-medium text-subtext'}`}>
+                  <span className={`hidden text-[length:var(--text-md)] md:inline ${isActive ? 'font-semibold text-ink' : 'font-medium text-subtext'}`}>
                     {STEP_LABEL[step]}
                   </span>
                   {idx < STEPS.length - 1 && <div className="h-px w-6 bg-hairline md:w-10" />}

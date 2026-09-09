@@ -8,6 +8,7 @@ import { QuotationCopyItemsModal } from '@/components/quotations/QuotationCopyIt
 import { useLocalQuotationItems } from '@/hooks/useQuotationItems'
 import { useNuevaCotizacionPage } from '@/app/cotizaciones/nueva/useNuevaCotizacionPage'
 import { Icon } from '@/components/ui/Icon'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 
 const QuotationItemsSection = dynamic(
   () => import('@/components/quotations/QuotationItemsSection').then((mod) => mod.QuotationItemsSection),
@@ -194,5 +195,5 @@ function NuevaCotizacionContent() {
 }
 
 export default function NuevaCotizacionPage() {
-  return <Suspense fallback={<div className="p-8 text-body">Cargando...</div>}><NuevaCotizacionContent /></Suspense>
+  return <Suspense fallback={<SectionLoading />}><NuevaCotizacionContent /></Suspense>
 }

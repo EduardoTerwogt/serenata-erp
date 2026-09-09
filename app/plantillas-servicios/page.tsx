@@ -8,6 +8,7 @@ import { SearchInput } from '@/components/ui/SearchInput'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 
 function formatMoney(value: number) {
   return value.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
@@ -115,7 +116,7 @@ export default function PlantillasServiciosPage() {
       )}
 
       {loading ? (
-        <div className="py-12 text-center text-faint">Cargando plantillas...</div>
+        <SectionLoading />
       ) : filtrados.length === 0 ? (
         <div className="rounded-panel border border-hairline bg-card p-12 text-center">
           <p className="text-lg text-subtext mb-2">
@@ -136,19 +137,19 @@ export default function PlantillasServiciosPage() {
               <div className="p-5 border-b border-hairline">
                 <h3 className="text-h3 font-semibold text-ink leading-snug">{template.nombre}</h3>
                 {template.descripcion && (
-                  <p className="mt-1.5 text-sm text-subtext leading-snug">{template.descripcion}</p>
+                  <p className="mt-1.5 text-[length:var(--text-md)] text-subtext leading-snug">{template.descripcion}</p>
                 )}
               </div>
 
               <div className="flex-1 p-5 flex flex-col gap-2.5">
                 {template.items.slice(0, 3).map((item, idx) => (
-                  <div key={idx} className="flex items-baseline gap-3 text-sm min-w-0">
+                  <div key={idx} className="flex items-baseline gap-3 text-[length:var(--text-base)] min-w-0">
                     <span className="flex-1 min-w-0 truncate text-body">{item.descripcion}</span>
                     <span className="flex-none text-subtext">{formatMoney(item.precio_unitario)}</span>
                   </div>
                 ))}
                 {template.items.length > 3 && (
-                  <div className="text-sm text-faint">+{template.items.length - 3} más</div>
+                  <div className="text-[length:var(--text-md)] text-faint">+{template.items.length - 3} más</div>
                 )}
               </div>
 

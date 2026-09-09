@@ -9,6 +9,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { ProveedorModal } from '@/app/proveedores/components/ProveedorModal'
+import { SplashMark } from '@/components/ui/SplashMark'
 
 function initialsFromName(nombre: string) {
   const partes = nombre.trim().split(/\s+/)
@@ -17,7 +18,7 @@ function initialsFromName(nombre: string) {
 
 function RolPill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="whitespace-nowrap rounded-pill border border-hairline bg-row-alt px-2.5 py-0.5 text-xs text-body">
+    <span className="whitespace-nowrap rounded-pill border border-hairline bg-row-alt px-3 py-1 text-[length:var(--text-md)] text-body">
       {children}
     </span>
   )
@@ -26,8 +27,8 @@ function RolPill({ children }: { children: React.ReactNode }) {
 function ContactoRow({ icon, children }: { icon: 'phone' | 'mail' | 'landmark'; children?: string | null }) {
   if (!children) return null
   return (
-    <div className="flex items-center gap-2 text-sm text-subtext min-w-0">
-      <Icon name={icon} size={14} className="text-faint flex-none" />
+    <div className="flex min-w-0 items-center gap-2 text-[length:var(--text-md)] text-subtext">
+      <Icon name={icon} size={14} className="flex-none text-faint" />
       <span className="truncate">{children}</span>
     </div>
   )
@@ -110,7 +111,7 @@ export default function ProveedoresPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px] lg:items-start">
         <div className="lg:order-1">
           {loading ? (
-            <div className="py-12 text-center text-faint">Cargando...</div>
+            <div className="flex justify-center py-12"><SplashMark size={120} /></div>
           ) : filtrados.length === 0 ? (
             <div className="rounded-panel border border-hairline bg-card p-12 text-center">
               <p className="text-lg text-subtext mb-2">
@@ -136,7 +137,7 @@ export default function ProveedoresPage() {
                   <div className="flex items-center gap-3 min-w-0">
                     <Avatar initials={initialsFromName(r.nombre)} size={38} tone={r.activo ? 'accent' : 'neutral'} />
                     <div className="min-w-0 flex-1">
-                      <div className="text-base font-semibold text-ink truncate">{r.nombre}</div>
+                      <div className="truncate text-[length:var(--text-lg)] font-semibold text-ink">{r.nombre}</div>
                     </div>
                     <StatusBadge tone={r.activo ? 'approved' : 'draft'}>{r.activo ? 'Activo' : 'Inactivo'}</StatusBadge>
                   </div>

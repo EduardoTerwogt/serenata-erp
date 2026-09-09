@@ -12,52 +12,29 @@ import { SearchInput } from '@/components/ui/SearchInput'
 import { FilterTabs } from '@/components/ui/FilterTabs'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
-import { Icon } from '@/components/ui/Icon'
+import { Modal } from '@/components/ui/Modal'
 import { SkeletonTable } from '@/app/components/ui/SkeletonTable'
 
-function Metric({ label, value, accent }: { label: string; value: React.ReactNode; accent?: boolean }) {
+// Puerto de patterns/Metric.jsx del kit: sn-label + valor en sn-display
+// text-h2, no un h3 semibold suelto.
+function Metric({ label, value, nota, accent }: { label: string; value: React.ReactNode; nota?: React.ReactNode; accent?: boolean }) {
   return (
     <div className="rounded-panel border border-hairline bg-card p-[19px]">
-      <p className="text-eyebrow uppercase tracking-wide text-subtext">{label}</p>
-      <p className={`mt-1 text-h3 font-semibold ${accent ? 'text-accent' : 'text-ink'}`}>{value}</p>
+      <p className="sn-label">{label}</p>
+      <p className={`sn-display mt-2.5 text-h2 ${accent ? 'text-accent' : 'text-ink'}`}>{value}</p>
+      {nota && <p className="mt-1.5 text-[length:var(--text-md)] text-subtext">{nota}</p>}
     </div>
   )
 }
 
 function HeaderPopupButton({ label, count, onClick }: { label: string; count: number; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control border border-hairline bg-input px-[18px] text-content font-semibold text-body transition-colors hover:bg-row-alt"
-    >
+    <Button variant="secondary" size="lg" onClick={onClick}>
       {label}
-      <span className="flex h-5 min-w-5 items-center justify-center rounded-pill bg-accent px-1.5 text-eyebrow font-bold text-accent-ink">
+      <span className="flex h-5 min-w-5 items-center justify-center rounded-pill bg-accent px-1.5 text-[length:var(--text-eyebrow)] font-bold text-accent-ink">
         {count}
       </span>
-    </button>
-  )
-}
-
-function ListModal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="bg-card border border-hairline rounded-panel w-full max-w-lg max-h-[80vh] flex flex-col shadow-overlay overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="border-b border-hairline p-4 md:p-6 flex justify-between items-start gap-3">
-          <div>
-            <h2 className="text-h3 font-bold text-ink">{title}</h2>
-            <p className="text-subtext text-content mt-1">{subtitle}</p>
-          </div>
-          <button aria-label="Cerrar" onClick={onClose} className="text-subtext hover:text-body transition-colors">
-            <Icon name="close" size={20} />
-          </button>
-        </div>
-        <div className="p-4 md:p-6 space-y-3 overflow-y-auto">{children}</div>
-      </div>
-    </div>
+    </Button>
   )
 }
 
@@ -177,16 +154,16 @@ export function CuentasPage() {
       </div>
 
       {tab === 'cobrar' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Metric label="Pendiente por cobrar" value={`$${formatCuentasCurrency(totalPorCobrar)}`} accent />
+        <div className="mb-6 grid grid-cols-1 gap-[19px] md:grid-cols-3">
+          <Metric label="Pendiente por cobrar" value={`$${formatCuentasCurrency(totalPorCobrar)}`} nota={`${cuentasCobrarPendientes} cuentas`} accent />
           <Metric label="Total cobrado" value={`$${formatCuentasCurrency(totalCobrado)}`} />
-          <Metric label="Alertas activas" value={loadingAlertas ? '...' : alertas.length} />
+          <Metric label="Alertas activas" value={loadingAlertas ? '…' : alertas.length} />
         </div>
       )}
 
       {tab === 'pagar' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <Metric label="Pendiente por pagar" value={`$${formatCuentasCurrency(totalPorPagar)}`} accent />
+        <div className="mb-6 grid grid-cols-1 gap-[19px] md:grid-cols-2">
+          <Metric label="Pendiente por pagar" value={`$${formatCuentasCurrency(totalPorPagar)}`} nota={`${cuentasPagarPendientes} cuentas`} accent />
           <Metric label="Total pagado" value={`$${formatCuentasCurrency(totalPagado)}`} />
         </div>
       )}
@@ -234,7 +211,7 @@ export function CuentasPage() {
       )}
 
       {showAlertasModal && (
-        <ListModal title="Alertas de Cobro" subtitle={`${alertas.length} alerta(s)`} onClose={() => setShowAlertasModal(false)}>
+        <Modal title="Alertas de Cobro" subtitle={`${alertas.length} alerta(s)`} onClose={() => setShowAlertasModal(false)}>
           {alertas.map((alerta) => (
             <button
               key={alerta.id}
@@ -258,11 +235,11 @@ export function CuentasPage() {
               </div>
             </button>
           ))}
-        </ListModal>
+        </Modal>
       )}
 
       {showHistorialModal && (
-        <ListModal title="Historial de Órdenes" subtitle={`${historialOrdenes.length} orden(es)`} onClose={() => setShowHistorialModal(false)}>
+        <Modal title="Historial de Órdenes" subtitle={`${historialOrdenes.length} orden(es)`} onClose={() => setShowHistorialModal(false)}>
           {historialOrdenes.map((orden) => (
             <div key={orden.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-row border border-hairline rounded-control p-4">
               <div>
@@ -285,7 +262,7 @@ export function CuentasPage() {
               </div>
             </div>
           ))}
-        </ListModal>
+        </Modal>
       )}
     </div>
   )

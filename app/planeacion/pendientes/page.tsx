@@ -5,6 +5,7 @@ import { usePendientesFlow } from '../usePendientesFlow'
 import PendientesTable from '../components/PendientesTable'
 import PendientesConfirmation from '../components/PendientesConfirmation'
 import { SectionHero } from '@/components/ui/SectionHero'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 
 export default function PendientesPage() {
   const router = useRouter()
@@ -21,13 +22,7 @@ export default function PendientesPage() {
   const { toCreate } = getCreationSummary()
 
   if (state.loading && state.pendientes.length === 0) {
-    return (
-      <div>
-        <div className="text-center py-12">
-          <p className="text-subtext">Cargando pendientes...</p>
-        </div>
-      </div>
-    )
+    return <SectionLoading />
   }
 
   return (

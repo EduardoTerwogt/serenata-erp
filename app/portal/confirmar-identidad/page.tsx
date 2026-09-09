@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getJson, sendJson } from '@/lib/client/api'
 import { StatusBanner } from '@/components/ui/StatusBanner'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 
 interface MeResponse {
   id: string
@@ -44,7 +45,7 @@ export default function ConfirmarIdentidadPage() {
     }
   }
 
-  if (loading) return <p className="text-center text-subtext">Cargando...</p>
+  if (loading) return <SectionLoading />
   if (!me?.candidato) return null
 
   return (

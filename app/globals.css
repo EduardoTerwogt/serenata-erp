@@ -15,8 +15,8 @@
  * sin tocar la lógica ni las props de ningún componente.
  */
 :root {
-  /* Colores base (legado, en uso por páginas aún no migradas -- error.tsx,
-     login, admin/sheets, skeletons) */
+  /* Colores base: fondo/texto por default de <body> antes de que cualquier
+     clase de token (bg-app, text-ink, etc.) se aplique. */
   --background: #F5F5F7;
   --foreground: #1D1D1F;
 

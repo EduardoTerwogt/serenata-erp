@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { SectionHero } from '@/components/ui/SectionHero'
 import { SectionCard } from '@/components/ui/SectionCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
+import { TextField } from '@/components/ui/TextField'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 
 const ALL_SECTIONS = [
@@ -40,13 +41,13 @@ const EMPTY_FORM: FormState = { name: '', email: '', password: '', sections: [] 
 
 function SeccionPill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="whitespace-nowrap rounded-pill border border-hairline bg-row-alt px-2.5 py-0.5 text-xs text-subtext">
+    <span className="whitespace-nowrap rounded-pill border border-hairline bg-row-alt px-2.5 py-0.5 text-[length:var(--text-xs)] text-subtext">
       {children}
     </span>
   )
 }
 
-export default function UsuariosPage() {
+export function AdminUsuarios() {
   const { data: session } = useSession()
   const currentUserId = (session?.user as { id?: string })?.id
 
@@ -159,21 +160,21 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHero
+    <div className="flex flex-col gap-[19px]">
+      {error && <StatusBanner tone="error">{error}</StatusBanner>}
+
+      <SectionCard
         title="Usuarios"
-        action={
-          <Button onClick={openCreate} iconLeft="plus">
+        borderedHeader
+        contentClassName="p-0"
+        actions={
+          <Button onClick={openCreate} iconLeft="plus" size="md">
             Nuevo usuario
           </Button>
         }
-      />
-
-      {error && <StatusBanner tone="error">{error}</StatusBanner>}
-
-      <SectionCard contentClassName="p-0">
+      >
         {loading ? (
-          <div className="py-16 text-center text-faint">Cargando...</div>
+          <SectionLoading className="min-h-[240px]" />
         ) : (
           <ResponsiveTableCard<Usuario>
             theme="tokens"
@@ -197,7 +198,7 @@ export default function UsuariosPage() {
                 <td className="px-6 py-3">
                   <div className="flex flex-wrap gap-1.5">
                     {u.sections.length === 0
-                      ? <span className="text-xs text-faint">Sin secciones</span>
+                      ? <span className="text-[length:var(--text-xs)] text-faint">Sin secciones</span>
                       : u.sections.map(s => <SeccionPill key={s}>{s}</SeccionPill>)}
                   </div>
                 </td>
@@ -205,42 +206,39 @@ export default function UsuariosPage() {
                   <StatusBadge tone={u.active ? 'approved' : 'draft'}>{u.active ? 'Activo' : 'Inactivo'}</StatusBadge>
                 </td>
                 <td className="px-6 py-3">
-                  <div className="flex items-center gap-2 justify-end">
-                    <button type="button" onClick={() => openEdit(u)} className="rounded-control px-3 py-1.5 text-sm text-subtext hover:text-body hover:bg-row-alt transition-colors">
-                      Editar
-                    </button>
-                    {u.id !== currentUserId && (
-                      <button
-                        type="button"
-                        onClick={() => toggleActive(u)}
-                        className="rounded-control border border-hairline bg-input px-3 py-1.5 text-sm text-body hover:bg-row-alt transition-colors"
-                      >
-                        {u.active ? 'Desactivar' : 'Activar'}
-                      </button>
-                    )}
+                  <div className="flex items-center justify-end gap-[var(--space-sm)]">
+                    <Button variant="ghost" size="md" onClick={() => openEdit(u)}>Editar</Button>
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      disabled={u.id === currentUserId}
+                      onClick={() => toggleActive(u)}
+                    >
+                      {u.active ? 'Desactivar' : 'Activar'}
+                    </Button>
                   </div>
                 </td>
               </>
             )}
             renderMobileCard={(u) => (
               <div className="rounded-card border border-hairline bg-row p-4">
-                <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="mb-1 flex items-center justify-between gap-2">
                   <span className="font-medium text-ink">
                     {u.name}
                     {u.id === currentUserId && <span className="ml-1.5 text-faint font-normal">(tú)</span>}
                   </span>
                   <StatusBadge tone={u.active ? 'approved' : 'draft'}>{u.active ? 'Activo' : 'Inactivo'}</StatusBadge>
                 </div>
-                <p className="text-subtext text-sm mb-2">{u.email}</p>
-                <div className="flex flex-wrap gap-1.5 mb-3">
+                <p className="mb-2 text-[length:var(--text-base)] text-subtext">{u.email}</p>
+                <div className="mb-3 flex flex-wrap gap-1.5">
                   {u.sections.map(s => <SeccionPill key={s}>{s}</SeccionPill>)}
                 </div>
-                <div className="flex items-center gap-2 pt-2 border-t border-hairline">
-                  <button type="button" onClick={() => openEdit(u)} className="flex-1 rounded-control px-3 py-2 text-sm text-body hover:bg-row-alt transition-colors">Editar</button>
+                <div className="flex items-center gap-2 border-t border-hairline pt-2">
+                  <Button variant="ghost" size="md" className="flex-1" onClick={() => openEdit(u)}>Editar</Button>
                   {u.id !== currentUserId && (
-                    <button type="button" onClick={() => toggleActive(u)} className="flex-1 rounded-control border border-hairline bg-input px-3 py-2 text-sm text-body hover:bg-row-alt transition-colors">
+                    <Button variant="secondary" size="md" className="flex-1" onClick={() => toggleActive(u)}>
                       {u.active ? 'Desactivar' : 'Activar'}
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -249,54 +247,43 @@ export default function UsuariosPage() {
         )}
       </SectionCard>
 
-      <p className="text-sm text-faint">
+      <p className="text-[length:var(--text-md)] text-faint">
         No puedes desactivar tu propio usuario. No hay registro público: las cuentas se crean aquí.
       </p>
 
       {modalOpen && (
         <Modal onClose={closeModal} title={editTarget ? 'Editar usuario' : 'Nuevo usuario'} size="lg">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div>
-              <label className="block text-sm font-medium text-body mb-1.5">Nombre</label>
-              <input
-                required
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="Nombre completo"
-                className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-body mb-1.5">Correo</label>
-              <input
-                type="email"
-                required
-                value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="correo@ejemplo.com"
-                className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-body mb-1.5">
-                {editTarget ? 'Nueva contraseña (opcional)' : 'Contraseña'}
-              </label>
-              <input
-                type="password"
-                required={!editTarget}
-                value={form.password}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                placeholder={editTarget ? 'Dejar vacío para no cambiar' : 'Mínimo 8 caracteres'}
-                className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
-              />
-              <p className="text-xs text-faint mt-1.5">Mínimo 8 caracteres</p>
-            </div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-[19px]">
+            <TextField
+              label="Nombre"
+              required
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="Nombre completo"
+            />
+            <TextField
+              label="Correo"
+              type="email"
+              required
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              placeholder="correo@ejemplo.com"
+            />
+            <TextField
+              label={editTarget ? 'Nueva contraseña (opcional)' : 'Contraseña'}
+              type="password"
+              required={!editTarget}
+              value={form.password}
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+              placeholder={editTarget ? 'Dejar vacío para no cambiar' : 'Mínimo 8 caracteres'}
+              hint="Mínimo 8 caracteres"
+            />
 
             <div>
               <p className="sn-label mb-2.5">Secciones habilitadas</p>
               <div className="grid grid-cols-2 gap-2.5">
                 {ALL_SECTIONS.map(section => (
-                  <label key={section.id} className="flex items-center gap-2 cursor-pointer select-none text-sm text-body">
+                  <label key={section.id} className="flex cursor-pointer select-none items-center gap-2 text-[length:var(--text-base)] text-body">
                     <input
                       type="checkbox"
                       checked={form.sections.includes(section.id)}
@@ -312,21 +299,12 @@ export default function UsuariosPage() {
             {formError && <StatusBanner tone="error">{formError}</StatusBanner>}
 
             <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={closeModal}
-                disabled={saving}
-                className="flex-1 rounded-control border border-hairline bg-input px-4 py-2.5 text-sm font-medium text-body hover:bg-row-alt transition-colors disabled:opacity-50"
-              >
+              <Button variant="ghost" size="lg" className="flex-1" onClick={closeModal} disabled={saving}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 rounded-control bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors disabled:opacity-50"
-              >
+              </Button>
+              <Button type="submit" size="lg" className="flex-1" disabled={saving}>
                 {saving ? 'Guardando...' : editTarget ? 'Guardar cambios' : 'Crear usuario'}
-              </button>
+              </Button>
             </div>
           </form>
         </Modal>

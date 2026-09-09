@@ -30,8 +30,7 @@ const NAV_LINKS: { href: string; label: string; section: string; icon: IconName;
 ]
 
 const ADMIN_LINKS: { href: string; label: string; icon: IconName; tone: NavChipTone; group: string }[] = [
-  { href: '/admin/usuarios', label: 'Usuarios', icon: 'admin-usuarios', tone: 'gray', group: 'Sistema' },
-  { href: '/admin/sheets', label: 'Google Sheets', icon: 'google-sheets', tone: 'gray', group: 'Sistema' },
+  { href: '/admin', label: 'Admin', icon: 'admin', tone: 'gray', group: 'Sistema' },
 ]
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {

@@ -370,11 +370,11 @@ export function TemplateItemsSection({
     <>
       <div className="rounded-panel border border-hairline bg-card mb-6">
         <div className="p-4 md:p-6 border-b border-hairline flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-body">Items</h2>
+          <h2 className="sn-label">Items</h2>
           <button
             type="button"
             onClick={addItem}
-            className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-sm transition-colors min-h-[44px] md:min-h-0"
+            className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[length:var(--text-md)] transition-colors min-h-[44px] md:min-h-0"
           >
             + Agregar fila
           </button>

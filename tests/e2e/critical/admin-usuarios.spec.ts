@@ -4,7 +4,7 @@ import { mockAdminUsuariosApis } from '../utils/admin-usuarios-mocks'
 
 test('crea un nuevo usuario', async ({ page }) => {
   await mockAdminUsuariosApis(page)
-  await login(page, '/admin/usuarios')
+  await login(page, '/admin')
 
   await page.getByRole('button', { name: 'Nuevo usuario' }).click()
 
@@ -20,7 +20,7 @@ test('crea un nuevo usuario', async ({ page }) => {
 
 test('edita secciones y desactiva un usuario existente', async ({ page }) => {
   await mockAdminUsuariosApis(page)
-  await login(page, '/admin/usuarios')
+  await login(page, '/admin')
 
   await expect(page.getByText('Ana Pérez').first()).toBeVisible()
 

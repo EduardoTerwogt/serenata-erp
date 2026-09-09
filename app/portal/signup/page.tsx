@@ -31,8 +31,8 @@ export default function PortalSignupPage() {
   return (
     <div className="mx-auto w-full max-w-sm">
       <div className="mb-6 text-center">
-        <h1 className="text-2xl font-bold text-ink">Crea tu cuenta de proveedor</h1>
-        <p className="mt-2 text-sm text-subtext">
+        <h1 className="sn-display text-h2 text-ink">Crea tu cuenta de proveedor</h1>
+        <p className="mt-2 text-[length:var(--text-base)] text-subtext">
           Después de registrarte te pediremos tu documentación para vincular tus cuentas con Serenata.
         </p>
       </div>

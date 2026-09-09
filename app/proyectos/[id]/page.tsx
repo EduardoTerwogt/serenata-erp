@@ -26,6 +26,7 @@ import { TabCronograma } from '@/app/components/proyectos/tabs/TabCronograma'
 import { TabDocumentos } from '@/app/components/proyectos/tabs/TabDocumentos'
 import { TabReporteCierre } from '@/app/components/proyectos/tabs/TabReporteCierre'
 import type { ProyectoDetailTab } from '@/app/components/proyectos/types'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 
 const ESTADOS: EstadoProyecto[] = ['PREPRODUCCION', 'RODAJE', 'POSTPRODUCCION', 'FINALIZADO']
 
@@ -110,7 +111,7 @@ export default function ProyectoDetallePage({
     }
   }
 
-  if (loading) return <div className="text-center text-faint">Cargando...</div>
+  if (loading) return <SectionLoading />
   if (!proyecto) return <div className="text-center text-faint">Proyecto no encontrado</div>
 
   const etapaActual = pm.tipoAsignado?.etapas.find((e) => e.id === proyecto.etapa_id) ?? null

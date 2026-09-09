@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { StatusBadge, toneForCuentaEstado, toneForValidacionEstado } from '@/components/ui/StatusBadge'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 import type { ProveedorDocumento, TipoDocumentoProveedor } from '@/lib/types'
 
 type PortalTab = 'datos' | 'documentos' | 'cuentas'
@@ -113,7 +114,7 @@ export default function PortalPage() {
   const faltaDocumentacion =
     !documentos.some(d => d.tipo === 'INE') || !documentos.some(d => d.tipo === 'CONSTANCIA_SITUACION_FISCAL')
 
-  if (loading || !me) return <p className="text-center text-subtext">Cargando...</p>
+  if (loading || !me) return <SectionLoading />
 
   return (
     <div className="mx-auto w-full max-w-4xl flex flex-col gap-[19px]">

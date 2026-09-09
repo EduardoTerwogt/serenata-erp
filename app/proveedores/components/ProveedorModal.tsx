@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { FilterTabs } from '@/components/ui/FilterTabs'
 import { Icon } from '@/components/ui/Icon'
+import { Button } from '@/components/ui/Button'
 
 interface ProveedorFormValues {
   nombre: string
@@ -26,7 +27,7 @@ interface Props {
 }
 
 const INPUT_CLASS = 'w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent'
-const LABEL_CLASS = 'block text-sm text-subtext mb-1.5'
+const LABEL_CLASS = 'sn-label block mb-1.5'
 
 function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
@@ -147,14 +148,14 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
               className={`flex-1 ${INPUT_CLASS}`}
               placeholder="Ej. Director de Fotografía"
             />
-            <button type="button" onClick={agregarRol} className="rounded-control border border-hairline bg-input hover:bg-row-alt text-body px-4 py-2.5 text-sm transition-colors">
+            <Button type="button" variant="secondary" size="md" onClick={agregarRol}>
               Agregar
-            </button>
+            </Button>
           </div>
           {roles.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {roles.map(rol => (
-                <span key={rol} className="flex items-center gap-1.5 rounded-pill border border-hairline bg-row-alt text-body text-sm pl-3 pr-2 py-1">
+                <span key={rol} className="flex items-center gap-1.5 rounded-pill border border-hairline bg-row-alt text-body text-[length:var(--text-md)] pl-3 pr-2 py-1">
                   {rol}
                   <button type="button" onClick={() => setRoles(prev => prev.filter(r => r !== rol))} aria-label={`Quitar ${rol}`} className="text-faint hover:text-body transition-colors flex">
                     <Icon name="close" size={13} />
@@ -202,7 +203,7 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
               <div className="flex-1" />
               {totalGanado > 0 && (
                 <>
-                  <span className="text-subtext text-sm">Total acumulado</span>
+                  <span className="text-subtext text-[length:var(--text-md)]">Total acumulado</span>
                   <span className="sn-display text-h3 text-accent">${fmt(totalGanado)}</span>
                 </>
               )}
@@ -263,21 +264,12 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
         )}
 
         <div className="flex gap-3 border-t border-hairline pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={guardando}
-            className="flex-1 rounded-control border border-hairline bg-input px-4 py-2.5 text-sm font-medium text-body hover:bg-row-alt transition-colors disabled:opacity-50"
-          >
+          <Button variant="ghost" size="lg" className="flex-1" onClick={onClose} disabled={guardando}>
             Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={guardando}
-            className="flex-1 rounded-control bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors disabled:opacity-50"
-          >
+          </Button>
+          <Button type="submit" size="lg" className="flex-1" disabled={guardando}>
             {guardando ? 'Guardando...' : esNuevo ? 'Crear proveedor' : 'Guardar cambios'}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

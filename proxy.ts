@@ -8,8 +8,7 @@ type SectionRule = {
 }
 
 const PAGE_SECTION_RULES: SectionRule[] = [
-  { prefix: '/admin/usuarios', sections: ['admin'] },
-  { prefix: '/admin/sheets', sections: ['admin'] },
+  { prefix: '/admin', sections: ['admin'] },
   { prefix: '/dashboard', sections: ['dashboard'] },
   { prefix: '/cotizaciones', sections: ['cotizaciones'] },
   { prefix: '/proyectos', sections: ['proyectos'] },

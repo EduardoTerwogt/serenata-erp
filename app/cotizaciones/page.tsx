@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
+const PAGE_SIZE = 10
 
 const ESTADO_LABEL: Record<EstadoCotizacion | 'TODAS', string> = {
   TODAS: 'Todas',
@@ -33,6 +34,7 @@ export default function CotizacionesPage() {
   const [filtro, setFiltro] = useState<EstadoCotizacion | 'TODAS'>('TODAS')
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
+  const [pagina, setPagina] = useState(1)
 
   useEffect(() => {
     fetch('/api/cotizaciones')
@@ -75,6 +77,20 @@ export default function CotizacionesPage() {
       })
     : porEstado
 
+  const pageCount = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE))
+  const paginaActual = Math.min(pagina, pageCount)
+  const paginadas = filtradas.slice((paginaActual - 1) * PAGE_SIZE, paginaActual * PAGE_SIZE)
+
+  const cambiarFiltro = (estado: EstadoCotizacion | 'TODAS') => {
+    setFiltro(estado)
+    setPagina(1)
+  }
+
+  const cambiarBusqueda = (valor: string) => {
+    setBusqueda(valor)
+    setPagina(1)
+  }
+
   const tabs: FilterTab<EstadoCotizacion | 'TODAS'>[] = useMemo(() => ESTADOS.map(estado => ({
     value: estado,
     label: ESTADO_LABEL[estado],
@@ -93,13 +109,13 @@ export default function CotizacionesPage() {
       />
 
       <div className="flex items-center gap-[13px] overflow-x-auto pb-0.5">
-        <FilterTabs tabs={tabs} value={filtro} onChange={setFiltro} />
+        <FilterTabs tabs={tabs} value={filtro} onChange={cambiarFiltro} />
         <div className="ml-auto flex-none">
           <SearchInput
             expandable
             placeholder="Buscar por folio, cliente, proyecto, item o responsable…"
             value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
+            onChange={e => cambiarBusqueda(e.target.value)}
           />
         </div>
       </div>
@@ -145,7 +161,7 @@ export default function CotizacionesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtradas.map(cot => (
+                {paginadas.map(cot => (
                   <tr
                     key={cot.id}
                     onClick={() => router.push(`/cotizaciones/${cot.id}`)}
@@ -182,7 +198,7 @@ export default function CotizacionesPage() {
 
           {/* Mobile: cards -- el kit no cubre mobile, se mantiene el patrón ya usado en el resto de la app */}
           <div className="divide-y divide-hairline md:hidden">
-            {filtradas.map(cot => (
+            {paginadas.map(cot => (
               <Link key={cot.id} href={`/cotizaciones/${cot.id}`} className="block p-4 transition-colors hover:bg-row">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <span className="sn-display truncate text-content text-body" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>
@@ -208,7 +224,14 @@ export default function CotizacionesPage() {
             ))}
           </div>
 
-          <TableFooter shown={filtradas.length} total={cotizaciones.length} unit="cotizaciones" />
+          <TableFooter
+            shown={paginadas.length}
+            total={filtradas.length}
+            unit="cotizaciones"
+            page={paginaActual}
+            pageCount={pageCount}
+            onPageChange={setPagina}
+          />
         </div>
       ) : (
         <div className="rounded-panel border border-hairline bg-card p-12 text-center">

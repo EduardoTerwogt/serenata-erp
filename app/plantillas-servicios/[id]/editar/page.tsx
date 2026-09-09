@@ -6,6 +6,7 @@ import { ServiceTemplateItem, Proveedor } from '@/lib/types'
 import { useServiceTemplateForm } from '@/hooks/useServiceTemplateForm'
 import { TemplateItemsSection } from '../../components/TemplateItemsSection'
 import { StatusBanner } from '@/components/ui/StatusBanner'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 
 export default function EditarPlantillaPage() {
   const router = useRouter()
@@ -97,11 +98,7 @@ export default function EditarPlantillaPage() {
   }
 
   if (loading) {
-    return (
-      <div>
-        <p className="text-subtext">Cargando plantilla...</p>
-      </div>
-    )
+    return <SectionLoading />
   }
 
   return (

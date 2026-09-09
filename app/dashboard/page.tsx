@@ -13,6 +13,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Icon } from '@/components/ui/Icon'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadge'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 import type { GastoFijo } from '@/lib/types'
 
 type Periodo = 'mes' | 'trimestre' | 'anio'
@@ -77,11 +78,7 @@ export default function DashboardPage() {
   }, [cargar, periodo])
 
   if (loading && !resumen) {
-    return (
-      <div>
-        <p className="text-subtext">Cargando dashboard…</p>
-      </div>
-    )
+    return <SectionLoading />
   }
 
   if (error) {
