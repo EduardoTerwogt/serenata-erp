@@ -250,8 +250,11 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     await descripcionB.fill('B sigue escribiendo aquí')
 
     const t0 = Date.now()
-    await pageA.getByRole('button', { name: /Agregar fila/ }).click()
     const marca = (paso: string) => console.log(`[live colab] ${paso}: ${Date.now() - t0}ms`)
+    // El clic también se mide: Playwright espera a que el botón sea accionable, así que
+    // un botón deshabilitado o tapado se ve igual que una petición lenta.
+    await pageA.getByRole('button', { name: /Agregar fila/ }).click()
+    marca('clic en Agregar fila resuelto')
 
     // Los tres eslabones por separado: sin esto, un fallo aquí no distingue "A no
     // creó la fila" de "el servidor no la tiene" de "B no la recibió".
