@@ -6,14 +6,15 @@
 arreglarla y volver a correr. Un test solo se modifica cuando un cambio de producto
 lo justifica — nunca para que deje de fallar.
 
-## Los cuatro niveles
+## Los niveles
 
 | Nivel | Comando | Qué prueba | Dónde corre |
 |---|---|---|---|
-| Unit | `npm test` | Vitest sobre `lib/**/__tests__/*.test.ts` — cálculos, mappers, estados, repositorios. 351 tests / 45 archivos. | Local y CI |
+| Unit | `npm test` | Vitest sobre `lib/**/__tests__/*.test.ts` — cálculos, mappers, estados, repositorios. | Local y CI |
 | E2E smoke | `npm run test:e2e:smoke` | Navegación y carga de pantallas, con las APIs **mockeadas**. | Local y CI |
 | E2E critical | `npm run test:e2e:critical` | Flujos de negocio completos, con las APIs **mockeadas**. | Local y CI |
 | E2E live | `npm run test:e2e:live` | Servidor Next real contra **Supabase y Drive de prueba reales**. | **Solo CI** |
+| Migrations | workflow `Migrations` | Que `db/migrations/*.sql` reconstruye el schema completo desde un Postgres vacío (Fase 4.5) — via Supabase CLI, sin tocar ningún proyecto real. | **Solo CI** |
 
 Además: `npx tsc --noEmit` y `npm run lint` antes de cualquier commit que toque
 código.

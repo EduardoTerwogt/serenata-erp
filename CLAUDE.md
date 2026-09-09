@@ -151,7 +151,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 ## Base de datos
 
 - **Motor:** Supabase (PostgreSQL). `supabaseAdmin` server-side, `supabase` (anon) client-side.
-- **Migraciones:** SQL en `db/migrations/`, se ejecutan **manualmente** en el SQL Editor. `npm run check-migrations` solo lista y valida los nombres; no aplica nada.
+- **Migraciones:** SQL en `db/migrations/`, se ejecutan **manualmente** en el SQL Editor (probar primero en `serenata-erp-test`, luego producción). `npm run check-migrations` solo lista y valida los nombres; no aplica nada. El job `Migrations` de CI (Fase 4.5) sí usa el Supabase CLI para reconstruir el schema completo desde cero en un Postgres local efímero en cada push — solo como gate de reproducibilidad, nunca contra un proyecto real.
 - **RLS:** habilitado en las tablas pero **sin políticas**, así que la llave anónima no lee nada. Por eso la colaboración no usa `postgres_changes`: suscribirse desde el navegador exigiría exponer todas las cotizaciones a la llave pública.
 
 | Tabla | Descripción |

@@ -44,3 +44,10 @@ next-env.d.ts
 
 # claude code local settings
 .claude/settings.local.json
+
+# Fase 4.5 -- supabase/migrations/ se regenera desde db/migrations/ en cada
+# corrida de CI (scripts/build-supabase-migrations.mjs). db/migrations/
+# sigue siendo la fuente de verdad, esto no se commitea.
+/supabase/migrations/
+/supabase/.temp/
+/supabase/.branches/

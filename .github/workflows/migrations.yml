@@ -1,0 +1,53 @@
+name: Migrations
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  fresh-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Auditoría externa 2026-09-09 (Fase 4.5): db/migrations/ sigue siendo
+      # la fuente de verdad -- este job solo verifica que ese conjunto de
+      # SQL reconstruye el schema completo desde una base Postgres vacía.
+      # "Una migración que no puede reconstruir el schema desde cero no
+      # debería entrar a main."
+      - name: Generar supabase/migrations/ desde db/migrations/
+        run: node scripts/build-supabase-migrations.mjs
+
+      - name: Levantar Postgres local y aplicar todas las migraciones
+        run: supabase start --workdir .
+
+      - name: Verificar que el schema reconstruido tiene lo esperado
+        run: |
+          DB_URL=$(supabase status --workdir . -o env | grep '^DB_URL=' | cut -d'=' -f2- | tr -d '"')
+          set -e
+          echo "Verificando tablas y funciones clave..."
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "\d proveedores" | grep -q session_version
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "\d rate_limits" > /dev/null
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "\d idempotency_keys" > /dev/null
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "select 1 from pg_proc where proname = 'check_rate_limit'" | grep -q "1 row"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "select 1 from pg_proc where proname = 'confirmar_match_proveedor'" | grep -q "1 row"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "select 1 from pg_proc where proname = 'approve_cotizacion'" | grep -q "1 row"
+          echo "OK -- el schema se reconstruyó desde cero correctamente."
+
+      - name: Detener Supabase local
+        if: always()
+        run: supabase stop --workdir . || true

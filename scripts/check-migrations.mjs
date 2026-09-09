@@ -1,11 +1,17 @@
 /**
  * Lists db/migrations/ in application order and validates the naming
- * convention (YYYYMMDD_description.sql). Does NOT apply migrations —
- * there is no Supabase CLI configured in this repo, so migrations are
- * still applied by hand in the Supabase SQL Editor.
+ * convention (YYYYMMDD_description.sql). Does NOT apply migrations to any
+ * real project — those se siguen aplicando a mano en el SQL Editor
+ * (probado primero en serenata-erp-test, luego producción).
  *
- * This script exists only to remove ambiguity about "which migrations
- * exist and in what order" before a manual apply session.
+ * Desde Fase 4.5 (auditoría externa 2026-09-09), scripts/build-supabase-migrations.mjs
+ * + el job "Migrations" de CI SÍ usan el Supabase CLI para verificar en cada
+ * push que este mismo conjunto de SQL reconstruye el schema completo desde
+ * una base Postgres vacía — pero solo como gate de CI, nunca contra un
+ * proyecto real.
+ *
+ * Este script sigue existiendo para no tener ambigüedad sobre "qué
+ * migraciones hay y en qué orden" antes de una sesión de aplicación manual.
  *
  * Usage: node scripts/check-migrations.mjs
  */
