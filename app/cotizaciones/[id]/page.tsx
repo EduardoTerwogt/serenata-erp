@@ -176,6 +176,49 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // Instante de la última escritura local por celda. Cualquier dato del servidor
   // pedido ANTES de esa marca llega viejo y no debe aplicarse a esa celda.
   const localWriteAtRef = useRef<Map<string, number>>(new Map())
+  const persistItemCellAutosaveRef = useRef<((rowId: string, field: QuotationItemCellField) => Promise<void>) | null>(null)
+  /**
+   * Al llegar el id definitivo de una fila recién creada hay que mudar TODAS las
+   * marcas que quedaron registradas con el id provisional. Sin esto, lo tecleado
+   * antes de que respondiera el alta se perdía: el autoguardado buscaba la fila por
+   * el id provisional, ya inexistente, y salía sin guardar.
+   */
+  const migrateRowKeys = useCallback((fromRowId: string, toRowId: string) => {
+    const rename = (set: Set<string>) => {
+      for (const key of Array.from(set)) {
+        if (!key.startsWith(`${fromRowId}:`)) continue
+        set.delete(key)
+        set.add(`${toRowId}:${key.slice(fromRowId.length + 1)}`)
+      }
+    }
+    rename(itemDirtyCellsRef.current)
+    rename(itemFocusedCellsRef.current)
+    rename(itemSavingCellsRef.current)
+
+    for (const [key, at] of Array.from(localWriteAtRef.current.entries())) {
+      if (!key.startsWith(`${fromRowId}:`)) continue
+      localWriteAtRef.current.delete(key)
+      localWriteAtRef.current.set(`${toRowId}:${key.slice(fromRowId.length + 1)}`, at)
+    }
+
+    // Los autoguardados pendientes se reprograman contra el id definitivo.
+    for (const [key, timer] of Object.entries(itemCellAutosaveTimersRef.current)) {
+      if (!key.startsWith(`${fromRowId}:`)) continue
+      if (timer) window.clearTimeout(timer)
+      delete itemCellAutosaveTimersRef.current[key]
+      const field = key.slice(fromRowId.length + 1) as QuotationItemCellField
+      const nuevaClave = getItemCellKey(toRowId, field)
+      itemCellAutosaveTimersRef.current[nuevaClave] = window.setTimeout(() => {
+        void persistItemCellAutosaveRef.current?.(toRowId, field)
+      }, ITEM_CELL_AUTOSAVE_DELAY_MS)
+    }
+    for (const [key, timer] of Object.entries(itemCellIdleReleaseTimersRef.current)) {
+      if (!key.startsWith(`${fromRowId}:`)) continue
+      if (timer) window.clearTimeout(timer)
+      delete itemCellIdleReleaseTimersRef.current[key]
+    }
+  }, [])
+
   const markLocalWrite = useCallback((rowId: string, field: QuotationItemCellField) => {
     localWriteAtRef.current.set(getItemCellKey(rowId, field), Date.now())
   }, [])
@@ -531,6 +574,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       itemSavingCellsRef.current.delete(key)
     }
   }, [broadcastItemMutation, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, scheduleItemCellIdleRelease, upsertLocalItemState])
+  persistItemCellAutosaveRef.current = persistItemCellAutosave
 
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
@@ -692,6 +736,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const createdId = await creation
       const index = getItemIndexByRowId(tempId)
       if (index >= 0) setValue(`items.${index}.id`, createdId)
+      migrateRowKeys(tempId, createdId)
       const filaCreada: ItemCotizacion = { id: createdId, cotizacion_id: id, categoria: '', descripcion: '', cantidad: 1, precio_unitario: 0, importe: 0, responsable_id: null, responsable_nombre: null, x_pagar: 0, margen: 0, orden: (getValues('items') || []).length, notas: null }
       setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), filaCreada] } : prev)
       broadcastItemMutation({ action: 'upsert', row_id: createdId, item: filaCreada })
@@ -704,7 +749,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       pendingRowIdsRef.current.delete(tempId)
     }
-  }, [append, broadcastItemMutation, createQuotationItemRow, getItemIndexByRowId, getValues, id, markSectionSaved, remove, resyncPartidas, setValue])
+  }, [append, broadcastItemMutation, createQuotationItemRow, getItemIndexByRowId, getValues, id, markSectionSaved, migrateRowKeys, remove, resyncPartidas, setValue])
 
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
@@ -743,7 +788,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       // que dejaba una fila fuera del subtotal). Solo se tocan partidas y totales del
       // encabezado: cliente, proyecto, notas y config de totales pueden estar en
       // edición en otra sección y no deben pisarse.
-      replace((updated.items || []).map(mapItemToFormItem))
+      // Las filas provisionales siguen siendo del usuario: el servidor aún no las
+      // conoce, y descartarlas las dejaba invisibles hasta recargar.
+      const provisionales = (getValues('items') || []).filter((item) => item.id?.startsWith(TEMP_ROW_PREFIX))
+      replace([...(updated.items || []).map(mapItemToFormItem), ...provisionales])
       setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : updated)
       for (const item of updated.items || []) {
         broadcastItemMutation({ action: 'upsert', row_id: item.id, item })
@@ -785,7 +833,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }))
       if (updatedItem) {
-        upsertLocalItemState(updatedItem)
+        upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
       }
       markSectionSaved('partidas')
@@ -804,7 +852,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' }))
       if (updatedItem) {
-        upsertLocalItemState(updatedItem)
+        upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
       }
       markSectionSaved('partidas')

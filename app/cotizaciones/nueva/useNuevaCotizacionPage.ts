@@ -4,7 +4,7 @@ import { useFieldArray, useForm } from 'react-hook-form'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
-import { canAutosaveQuotationDraft, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
+import { canAutosaveQuotationDraft, draftItemsForSave, EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { newLocalRowId } from '@/hooks/useQuotationItems'
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { QuotationFormValues } from '@/lib/quotations/types'
@@ -41,6 +41,11 @@ export function useNuevaCotizacionPage() {
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autosaveInFlightRef = useRef(false)
   const autosavePendingRef = useRef(false)
+  // Firma del contenido ya guardado. Sin ella el autoguardado se realimentaba: cada
+  // guardado provoca dos renders (estado "guardando" y "guardado"), y como el efecto
+  // dependía de objetos que `watch()` recrea en cada render, se rearmaba el
+  // temporizador y salía otro PUT ~cada segundo mientras la pantalla estuviera abierta.
+  const lastSavedSignatureRef = useRef<string | null>(null)
 
   const { register, control, watch, handleSubmit, setValue, getValues } = useForm<QuotationFormValues>({
     defaultValues: {
@@ -146,6 +151,19 @@ export function useNuevaCotizacionPage() {
   })
   const estimatedTaxes = calculateEstimatedTaxes(watchedItems, totales)
 
+  const draftSignature = useMemo(() => JSON.stringify({
+    cliente: watchedValues.cliente || '',
+    proyecto: watchedValues.proyecto || '',
+    fecha_entrega: watchedValues.fecha_entrega || '',
+    locacion: watchedValues.locacion || '',
+    notas: notasInternas,
+    porcentaje_fee,
+    iva_activo,
+    descuento_tipo,
+    descuento_valor,
+    items: (watchedItems || []).map((item) => [item.categoria, item.descripcion, item.cantidad, item.precio_unitario, item.responsable_id, item.x_pagar]),
+  }), [descuento_tipo, descuento_valor, iva_activo, notasInternas, porcentaje_fee, watchedItems, watchedValues])
+
   const complementariaFields = useMemo(
     () => esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {},
     [complementaria_de, esComplementaria]
@@ -162,13 +180,19 @@ export function useNuevaCotizacionPage() {
     }
 
     const data = getValues()
-    if (!canAutosaveQuotationDraft(data)) return
+    // Con el borrador ya creado se sigue guardando aunque queden cero partidas: de lo
+    // contrario, borrarlas todas no se persistía.
+    if (!draftIdRef.current && !canAutosaveQuotationDraft(data)) return
 
+    // Solo las partidas con descripción: una fila en blanco haría que el servidor
+    // rechazara el guardado completo con un 400.
+    const payload = { ...data, items: draftItemsForSave(data.items) }
+    const firmaEnviada = draftSignature
     autosaveInFlightRef.current = true
     setAutosaveStatus('saving')
     try {
       if (draftIdRef.current) {
-        await updateQuotation(draftIdRef.current, data, {
+        await updateQuotation(draftIdRef.current, payload, {
           porcentaje_fee,
           iva_activo,
           descuento_tipo,
@@ -178,7 +202,7 @@ export function useNuevaCotizacionPage() {
           notas_internas: notasInternas || null,
         })
       } else {
-        const cotizacion = await saveNewQuotation(data, {
+        const cotizacion = await saveNewQuotation(payload, {
           estado: 'BORRADOR',
           porcentaje_fee,
           iva_activo,
@@ -191,6 +215,7 @@ export function useNuevaCotizacionPage() {
         setDraftId(cotizacion.id)
         setFolio(cotizacion.id)
       }
+      lastSavedSignatureRef.current = firmaEnviada
       setAutosaveStatus('saved')
     } catch (e: unknown) {
       setAutosaveStatus('error')
@@ -202,10 +227,12 @@ export function useNuevaCotizacionPage() {
         void persistDraft()
       }
     }
-  }, [complementariaFields, descuento_tipo, descuento_valor, getValues, iva_activo, notasInternas, porcentaje_fee, responsables])
+  }, [complementariaFields, descuento_tipo, descuento_valor, draftSignature, getValues, iva_activo, notasInternas, porcentaje_fee, responsables])
 
   useEffect(() => {
-    if (!canAutosaveQuotationDraft({ proyecto: watchedValues.proyecto, items: watchedItems || [] })) return
+    if (!draftIdRef.current && !canAutosaveQuotationDraft(getValues())) return
+    // Nada que guardar si el contenido no cambió desde el último guardado.
+    if (draftSignature === lastSavedSignatureRef.current) return
     if (autosaveTimerRef.current !== null) clearTimeout(autosaveTimerRef.current)
     autosaveTimerRef.current = setTimeout(() => {
       autosaveTimerRef.current = null
@@ -217,11 +244,18 @@ export function useNuevaCotizacionPage() {
         autosaveTimerRef.current = null
       }
     }
-  }, [persistDraft, watchedItems, watchedValues])
+  }, [draftSignature, getValues, persistDraft])
 
-  // Al salir de la pantalla se intenta un último guardado con lo que haya pendiente.
+  // Al salir de la pantalla se lanza un último guardado si quedaba algo sin guardar:
+  // antes solo se limpiaba el temporizador y se perdía la última edición.
+  const persistDraftRef = useRef(persistDraft)
+  persistDraftRef.current = persistDraft
   useEffect(() => () => {
-    if (autosaveTimerRef.current !== null) clearTimeout(autosaveTimerRef.current)
+    if (autosaveTimerRef.current !== null) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+      void persistDraftRef.current()
+    }
   }, [])
 
   const onGenerarCotizacion = handleSubmit(async (data) => {
@@ -231,6 +265,11 @@ export function useNuevaCotizacionPage() {
     setGuardando(true)
     setError(null)
     try {
+      // Si el alta del borrador sigue en vuelo hay que esperarla: decidir sin esperar
+      // creaba una SEGUNDA cotización con otro folio y dejaba el borrador huérfano.
+      while (autosaveInFlightRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
       // Si el autoguardado ya creó el borrador se emite ESE, no uno nuevo:
       // crear otro consumiría un segundo folio y dejaría el borrador huérfano.
       const cotizacion = draftIdRef.current

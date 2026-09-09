@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { login } from '../utils/auth'
-import { mockNuevaCotizacionApis } from '../utils/quotation-mocks'
+import { mockNuevaCotizacionApis, assertPayloadValido } from '../utils/quotation-mocks'
 import { fulfillJson } from '../utils/http'
 
 const TPL = [
@@ -77,4 +77,90 @@ test('importar sobre filas en blanco las reutiliza todas', async ({ page }) => {
   // Tres en blanco + tres importadas = tres, no seis.
   await expect(rows).toHaveCount(TPL.length)
   expect(await descripciones(page)).toEqual(TPL.map((i) => i.descripcion))
+})
+
+// ==================== Autoguardado del borrador ====================
+
+test('la pantalla quieta guarda UNA vez, no una por segundo', async ({ page }) => {
+  await mockNuevaCotizacionApis(page)
+  const guardados: string[] = []
+  await page.route('**/api/cotizaciones', async (route) => {
+    if (route.request().method() !== 'POST') return fulfillJson(route, [])
+    // Se valida con el schema real: un payload que producción rechazaría falla aquí.
+    assertPayloadValido(route.request().postDataJSON(), 'POST /api/cotizaciones')
+    guardados.push('POST')
+    await fulfillJson(route, { id: 'SH-E2E-LOOP', estado: 'BORRADOR', items: [{ id: 'i1' }] })
+  })
+  await page.route('**/api/cotizaciones/SH-E2E-LOOP', async (route) => {
+    if (route.request().method() === 'PUT') {
+      assertPayloadValido(route.request().postDataJSON(), 'PUT /api/cotizaciones/:id')
+      guardados.push('PUT')
+    }
+    await fulfillJson(route, { id: 'SH-E2E-LOOP', estado: 'BORRADOR', items: [{ id: 'i1' }] })
+  })
+
+  await login(page, '/cotizaciones/nueva')
+  await expect(page.getByRole('heading', { name: 'Nueva Cotizacion' })).toBeVisible()
+
+  await page.locator('input[placeholder="Nombre del cliente"]').fill('Walmart México')
+  await page.locator('input[placeholder="Nombre del proyecto"]').fill('Show Monterrey')
+  await page.locator('table tbody tr').first().locator('td').nth(1).locator('input').fill('Backline')
+
+  await expect(page.getByText('Borrador guardado')).toBeVisible()
+  // Cinco segundos quieto: no debe salir un guardado por segundo.
+  await page.waitForTimeout(5000)
+  expect(guardados).toEqual(['POST'])
+})
+
+test('no intenta guardar sin cliente, porque el servidor lo rechazaría', async ({ page }) => {
+  await mockNuevaCotizacionApis(page)
+  let intentos = 0
+  await page.route('**/api/cotizaciones', async (route) => {
+    if (route.request().method() !== 'POST') return fulfillJson(route, [])
+    intentos += 1
+    assertPayloadValido(route.request().postDataJSON(), 'POST /api/cotizaciones')
+    await fulfillJson(route, { id: 'SH-E2E-SINCLI', estado: 'BORRADOR', items: [] })
+  })
+
+  await login(page, '/cotizaciones/nueva')
+  await page.locator('input[placeholder="Nombre del proyecto"]').fill('Show sin cliente')
+  await page.locator('table tbody tr').first().locator('td').nth(1).locator('input').fill('Backline')
+  await page.waitForTimeout(3000)
+
+  expect(intentos).toBe(0)
+})
+
+test('una fila en blanco no invalida el guardado del borrador', async ({ page }) => {
+  await mockNuevaCotizacionApis(page)
+  const payloads: Record<string, unknown>[] = []
+  await page.route('**/api/cotizaciones', async (route) => {
+    if (route.request().method() !== 'POST') return fulfillJson(route, [])
+    const body = route.request().postDataJSON()
+    assertPayloadValido(body, 'POST /api/cotizaciones')
+    payloads.push(body)
+    await fulfillJson(route, { id: 'SH-E2E-BLANCA', estado: 'BORRADOR', items: [{ id: 'i1' }] })
+  })
+  await page.route('**/api/cotizaciones/SH-E2E-BLANCA', async (route) => {
+    if (route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON()
+      assertPayloadValido(body, 'PUT /api/cotizaciones/:id')
+      payloads.push(body)
+    }
+    await fulfillJson(route, { id: 'SH-E2E-BLANCA', estado: 'BORRADOR', items: [{ id: 'i1' }] })
+  })
+
+  await login(page, '/cotizaciones/nueva')
+  await page.locator('input[placeholder="Nombre del cliente"]').fill('Walmart México')
+  await page.locator('input[placeholder="Nombre del proyecto"]').fill('Show Monterrey')
+  await page.locator('table tbody tr').first().locator('td').nth(1).locator('input').fill('Backline')
+  await expect(page.getByText('Borrador guardado')).toBeVisible()
+
+  // Añadir una fila vacía no debe romper el guardado: la fila en blanco no se envía.
+  await page.getByRole('button', { name: /Agregar fila/ }).click()
+  await page.waitForTimeout(2500)
+
+  await expect(page.getByText('No se pudo guardar el borrador')).toHaveCount(0)
+  for (const body of payloads) {
+    expect((body.items as { descripcion: string }[]).every((i) => i.descripcion.trim() !== '')).toBe(true)
+  }
 })

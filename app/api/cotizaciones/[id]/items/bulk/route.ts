@@ -27,7 +27,8 @@ interface BulkItemInput {
  * veinte peticiones en serie, y de ahí que la tabla se llenara de una en una.
  *
  * `reemplazar_ids` permite además reutilizar filas en blanco que ya existen (las que
- * deja "Agregar fila") y borrar las que sobren, todo en la misma transacción lógica.
+ * deja "Agregar fila") y borrar las que sobren. No es una transacción: el alta va
+ * primero para que un fallo no destruya filas sin haber importado nada.
  */
 export async function POST(
   request: Request,
@@ -108,7 +109,11 @@ export async function POST(
       }
     })
 
-    // Filas en blanco que se pidió reutilizar pero que ya no hacen falta.
+    await upsertItems(rows)
+
+    // Las filas en blanco sobrantes se borran DESPUÉS del alta: si se borraran antes
+    // y el alta fallara, la respuesta sería un 500 con esas filas ya destruidas y
+    // nada importado. Esto no es una transacción; solo acota el daño de un fallo.
     const sobrantes = reusableIds.slice(inputItems.length)
     if (sobrantes.length > 0) {
       const { error: deleteError } = await supabaseAdmin
@@ -118,8 +123,6 @@ export async function POST(
         .in('id', sobrantes)
       if (deleteError) throw deleteError
     }
-
-    await upsertItems(rows)
 
     const updatedQuotation = await recalculateQuotationHeader(id)
     triggerSheetsSync('cotizaciones', 'items_cotizacion')

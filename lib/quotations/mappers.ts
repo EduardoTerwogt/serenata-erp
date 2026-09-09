@@ -38,9 +38,21 @@ export function isBlankQuotationItem(item: Partial<QuotationFormItem> | undefine
 // como BORRADOR en cuanto tiene nombre de proyecto y al menos una partida con
 // descripción. Antes de eso no se guarda nada, para no consumir folios por
 // pantallas abiertas y abandonadas.
-export function canAutosaveQuotationDraft(values: Pick<QuotationFormValues, 'proyecto' | 'items'>): boolean {
+export function canAutosaveQuotationDraft(values: Pick<QuotationFormValues, 'cliente' | 'proyecto' | 'items'>): boolean {
+  // `cliente` y `proyecto` son obligatorios en CotizacionCreateSchema: sin ellos el
+  // servidor devuelve 400 y el borrador no se guardaría nunca, en silencio.
+  if (!String(values.cliente || '').trim()) return false
   if (!String(values.proyecto || '').trim()) return false
-  return (values.items || []).some((item) => String(item?.descripcion || '').trim() !== '')
+  return draftItemsForSave(values.items || []).length > 0
+}
+
+/**
+ * Partidas que se mandan al guardar un borrador. El schema del servidor exige
+ * descripción en CADA partida, así que las filas en blanco (las que deja "Agregar
+ * fila") se omiten: si viajaran, el guardado entero se rechazaría con un 400.
+ */
+export function draftItemsForSave(items: QuotationFormItem[]): QuotationFormItem[] {
+  return (items || []).filter((item) => String(item?.descripcion || '').trim() !== '')
 }
 
 /**

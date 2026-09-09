@@ -1,5 +1,18 @@
 import { Page } from '@playwright/test'
 import { fulfillJson } from './http'
+import { CotizacionCreateSchema } from '@/lib/validation/schemas'
+
+/**
+ * Valida un payload de cotización con el MISMO schema que usa el servidor. Los mocks
+ * respondían 200 a todo, así que un borrador que producción rechazaría con 400 pasaba
+ * las pruebas sin más: así se coló un autoguardado que nunca llegaba a guardar.
+ */
+export function assertPayloadValido(body: unknown, etiqueta: string) {
+  const parsed = CotizacionCreateSchema.safeParse(body)
+  if (!parsed.success) {
+    throw new Error(`${etiqueta}: el servidor rechazaría este payload -> ${parsed.error.issues.map((i) => `${i.path.join('.')} ${i.message}`).join(' | ')}`)
+  }
+}
 
 export async function mockNuevaCotizacionApis(page: Page) {
   await page.route('**/api/folio', async (route) => {

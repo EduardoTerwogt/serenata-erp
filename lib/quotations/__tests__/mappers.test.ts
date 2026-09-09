@@ -5,6 +5,7 @@ import {
   buildReadOnlyTotals,
   isBlankQuotationItem,
   canAutosaveQuotationDraft,
+  draftItemsForSave,
   reconcileServerItems,
   EMPTY_QUOTATION_ITEM,
 } from '../mappers'
@@ -246,27 +247,57 @@ describe('isBlankQuotationItem', () => {
 // ==================== canAutosaveQuotationDraft ====================
 
 describe('canAutosaveQuotationDraft', () => {
-  const withItems = (proyecto: string, descripciones: string[]) => ({
-    proyecto,
-    items: descripciones.map((descripcion) => ({ ...EMPTY_QUOTATION_ITEM, descripcion })),
+  const valores = (over: { cliente?: string; proyecto?: string; descripciones?: string[] } = {}) => ({
+    cliente: over.cliente ?? 'Walmart',
+    proyecto: over.proyecto ?? 'Show Monterrey',
+    items: (over.descripciones ?? ['Backline']).map((descripcion) => ({ ...EMPTY_QUOTATION_ITEM, descripcion })),
   })
 
-  it('guarda cuando hay proyecto y una partida con descripción', () => {
-    expect(canAutosaveQuotationDraft(withItems('Show Monterrey', ['Backline']))).toBe(true)
+  it('guarda cuando hay cliente, proyecto y una partida con descripción', () => {
+    expect(canAutosaveQuotationDraft(valores())).toBe(true)
   })
 
   it('no guarda sin nombre de proyecto', () => {
-    expect(canAutosaveQuotationDraft(withItems('', ['Backline']))).toBe(false)
-    expect(canAutosaveQuotationDraft(withItems('   ', ['Backline']))).toBe(false)
+    expect(canAutosaveQuotationDraft(valores({ proyecto: '' }))).toBe(false)
+    expect(canAutosaveQuotationDraft(valores({ proyecto: '   ' }))).toBe(false)
+  })
+
+  // El servidor exige cliente (CotizacionCreateSchema): sin él respondía 400 y el
+  // borrador no se guardaba nunca, en silencio.
+  it('no guarda sin cliente, porque el servidor lo rechazaría', () => {
+    expect(canAutosaveQuotationDraft(valores({ cliente: '' }))).toBe(false)
+    expect(canAutosaveQuotationDraft(valores({ cliente: '  ' }))).toBe(false)
   })
 
   it('no guarda sin ninguna partida con descripción', () => {
-    expect(canAutosaveQuotationDraft(withItems('Show Monterrey', []))).toBe(false)
-    expect(canAutosaveQuotationDraft(withItems('Show Monterrey', ['', '  ']))).toBe(false)
+    expect(canAutosaveQuotationDraft(valores({ descripciones: [] }))).toBe(false)
+    expect(canAutosaveQuotationDraft(valores({ descripciones: ['', '  '] }))).toBe(false)
   })
 
   it('basta con que una de varias partidas tenga descripción', () => {
-    expect(canAutosaveQuotationDraft(withItems('Show Monterrey', ['', 'Backline', '']))).toBe(true)
+    expect(canAutosaveQuotationDraft(valores({ descripciones: ['', 'Backline', ''] }))).toBe(true)
+  })
+})
+
+// ==================== draftItemsForSave ====================
+
+describe('draftItemsForSave', () => {
+  const item = (descripcion: string) => ({ ...EMPTY_QUOTATION_ITEM, descripcion })
+
+  // Cada partida necesita descripción en el schema del servidor: mandar una fila en
+  // blanco hacía que se rechazara el guardado ENTERO con un 400.
+  it('descarta las filas sin descripción', () => {
+    expect(draftItemsForSave([item('Backline'), item(''), item('Grip')]).map((i) => i.descripcion))
+      .toEqual(['Backline', 'Grip'])
+  })
+
+  it('descarta las que solo tienen espacios', () => {
+    expect(draftItemsForSave([item('   ')])).toEqual([])
+  })
+
+  it('deja intactas las partidas válidas', () => {
+    const items = [item('Backline')]
+    expect(draftItemsForSave(items)).toEqual(items)
   })
 })
 
