@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-09T18:01:24.407Z",
+  "generated_at": "2026-09-09T18:08:24.067Z",
   "count": 46,
   "order": [
     "20260101_base_schema_missing_tables.sql",
@@ -35,8 +35,8 @@
     "20260905_drop_confirmed_dead_schema.sql",
     "20260905_fix_documentos_cuentas_pagar_y_estado_vencido.sql",
     "20260906_add_regimen_fiscal_responsables.sql",
+    "20260906_before_rename_fase53_cuentas_schema.sql",
     "20260906_fase53_bloque0_rename_responsables_a_proveedores.sql",
-    "20260906_fase53_cuentas_schema.sql",
     "20260906_fase53_documentos_detalle_validacion.sql",
     "20260906_post_rename_fase52_proyectos_pm_schema.sql",
     "20260907_fase55_portal_proveedores_schema.sql",
