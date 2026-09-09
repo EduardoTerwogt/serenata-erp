@@ -240,9 +240,21 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     // Primero el canal, luego la pantalla: si el mensaje no llega, el problema es la
     // difusión; si llega y la tabla no cambia, el problema es cómo se aplica.
     if (idNuevo) {
-      await expect
-        .poll(() => framesRecibidosPorB.filter((frame) => frame.includes(idNuevo)).length, { timeout: 20_000 })
-        .toBeGreaterThan(0)
+      try {
+        await expect
+          .poll(() => framesRecibidosPorB.filter((frame) => frame.includes(idNuevo)).length, { timeout: 20_000 })
+          .toBeGreaterThan(0)
+      } catch (error) {
+        // Si el alta de A cayó en su catch, A repinta la fila desde el servidor y por
+        // fuera se ve idéntico a un alta correcta -- salvo por este banner, que es la
+        // única señal de que el aviso nunca se llegó a emitir.
+        const banner = await pageA.locator('.text-cancelled-fg').first().textContent().catch(() => null)
+        const mutaciones = framesRecibidosPorB.filter((frame) => frame.includes('item_mutation'))
+        console.log(`[live colab] banner de error en A: ${banner?.trim() || '(ninguno)'}`)
+        console.log(`[live colab] frames item_mutation recibidos por B: ${mutaciones.length}`)
+        console.log(`[live colab] último item_mutation: ${mutaciones.at(-1)?.slice(0, 800) || '(ninguno)'}`)
+        throw error
+      }
     }
 
     // B ve la fila nueva...
