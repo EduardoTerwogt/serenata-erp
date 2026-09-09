@@ -34,8 +34,8 @@ const THEME_CLASSES = {
   tokens: {
     empty: 'text-faint',
     headerRow: 'border-b border-hairline',
-    headerCell: 'text-subtext',
-    bodyRow: 'border-b border-hairline hover:bg-row-alt transition-colors',
+    headerCell: 'sn-label',
+    bodyRow: 'border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt',
   },
 } as const
 

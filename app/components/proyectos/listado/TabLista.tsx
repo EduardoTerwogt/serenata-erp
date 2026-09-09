@@ -58,7 +58,7 @@ export function TabLista({ proyectos, tipos }: TabListaProps) {
                 {filtrados.map((p) => {
                   const etapa = resolverEtapaProyecto(p, tipos)
                   return (
-                    <tr key={p.id} onClick={() => window.location.assign(`/proyectos/${p.id}`)} className="hover:bg-row transition-colors cursor-pointer">
+                    <tr key={p.id} onClick={() => window.location.assign(`/proyectos/${p.id}`)} className="odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt cursor-pointer">
                       <td className="px-6 py-4 text-accent font-mono text-content">{p.id}</td>
                       <td className="px-6 py-4 text-subtext">{nombreTipo(p)}</td>
                       <td className="px-6 py-4 text-body font-medium">{p.proyecto}</td>

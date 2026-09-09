@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { SectionHero } from '@/components/ui/SectionHero'
+import { Icon } from '@/components/ui/Icon'
 
 interface SyncResult {
   tab: string
@@ -90,117 +92,106 @@ export default function SheetsSyncPage() {
   }
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">Google Sheets — Sincronización</h1>
-      <p className="text-gray-400 mb-8 text-sm">Sincroniza datos entre Supabase y tu Google Sheet de manera bidireccional.</p>
+    <div className="flex max-w-3xl flex-col gap-[19px]">
+      <SectionHero title="Google Sheets" />
 
-      {/* Sección de instrucciones de setup */}
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 mb-6">
-        <h2 className="text-white font-semibold mb-2">Configuración inicial</h2>
-        <ol className="text-gray-400 text-sm space-y-1 list-decimal list-inside">
+      <div className="rounded-panel border border-hairline bg-card p-5">
+        <h2 className="mb-2 font-semibold text-ink">Configuración inicial</h2>
+        <ol className="list-inside list-decimal space-y-1 text-content text-subtext">
           <li>
             Primero re-autoriza Google con el nuevo scope de Sheets:{' '}
-            <a href="/api/integrations/drive/authorize" target="_blank" rel="noopener noreferrer" className="text-orange-400 hover:text-orange-300 underline">
+            <a href="/api/integrations/drive/authorize" target="_blank" rel="noopener noreferrer" className="text-accent underline hover:text-accent-pressed">
               Ir a autorizar →
             </a>
           </li>
-          <li>Copia el nuevo refresh token y actualiza <code className="bg-gray-800 px-1 rounded text-xs">GOOGLE_DRIVE_REFRESH_TOKEN</code> en Vercel</li>
-          <li>Haz click en <strong className="text-white">&quot;Crear Sheet&quot;</strong> abajo para inicializar el spreadsheet</li>
-          <li>Copia el <code className="bg-gray-800 px-1 rounded text-xs">spreadsheetId</code> del resultado y agrégalo a Vercel como <code className="bg-gray-800 px-1 rounded text-xs">GOOGLE_SHEETS_SPREADSHEET_ID</code></li>
+          <li>Copia el nuevo refresh token y actualiza <code className="rounded bg-row px-1 text-xs">GOOGLE_DRIVE_REFRESH_TOKEN</code> en Vercel</li>
+          <li>Haz click en <strong className="text-ink">&quot;Crear Sheet&quot;</strong> abajo para inicializar el spreadsheet</li>
+          <li>Copia el <code className="rounded bg-row px-1 text-xs">spreadsheetId</code> del resultado y agrégalo a Vercel como <code className="rounded bg-row px-1 text-xs">GOOGLE_SHEETS_SPREADSHEET_ID</code></li>
         </ol>
       </div>
 
-      {/* Botones de acción */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <button
           onClick={() => run('setup')}
           disabled={isLoading}
-          className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white px-4 py-3 rounded-lg font-medium text-sm transition-colors flex flex-col items-center gap-1 min-h-[72px] justify-center"
+          className="flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-panel border border-hairline bg-card px-4 py-3 text-content font-medium text-body transition-colors duration-[var(--dur-fast)] hover:bg-row-alt disabled:opacity-50"
         >
-          <span className="text-lg">🗂️</span>
+          <Icon name="google-sheets" size={18} className="text-accent" />
           <span>{isLoading && activeAction === 'setup' ? 'Creando...' : 'Crear Sheet'}</span>
-          <span className="text-xs text-orange-200 font-normal">Inicializa el spreadsheet</span>
+          <span className="text-xs font-normal text-faint">Inicializa el spreadsheet</span>
         </button>
 
         <button
           onClick={() => run('sync-down')}
           disabled={isLoading}
-          className="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white px-4 py-3 rounded-lg font-medium text-sm transition-colors flex flex-col items-center gap-1 min-h-[72px] justify-center"
+          className="flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-panel border border-hairline bg-card px-4 py-3 text-content font-medium text-body transition-colors duration-[var(--dur-fast)] hover:bg-row-alt disabled:opacity-50"
         >
-          <span className="text-lg">⬇️</span>
+          <Icon name="download" size={18} className="text-issued-fg" />
           <span>{isLoading && activeAction === 'sync-down' ? 'Exportando...' : 'Supabase → Sheets'}</span>
-          <span className="text-xs text-blue-200 font-normal">Exportar BD al Sheet</span>
+          <span className="text-xs font-normal text-faint">Exportar BD al Sheet</span>
         </button>
 
         <button
           onClick={() => run('sync-up')}
           disabled={isLoading}
-          className="bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white px-4 py-3 rounded-lg font-medium text-sm transition-colors flex flex-col items-center gap-1 min-h-[72px] justify-center"
+          className="flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-panel border border-hairline bg-card px-4 py-3 text-content font-medium text-body transition-colors duration-[var(--dur-fast)] hover:bg-row-alt disabled:opacity-50"
         >
-          <span className="text-lg">⬆️</span>
+          <Icon name="upload" size={18} className="text-approved-fg" />
           <span>{isLoading && activeAction === 'sync-up' ? 'Importando...' : 'Sheets → Supabase'}</span>
-          <span className="text-xs text-green-200 font-normal">Importar Sheet a la BD</span>
+          <span className="text-xs font-normal text-faint">Importar Sheet a la BD</span>
         </button>
       </div>
 
-      {/* Estado: cargando */}
       {isLoading && (
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-5 text-center text-gray-400 text-sm">
-          <div className="inline-block w-5 h-5 border-2 border-gray-500 border-t-orange-400 rounded-full animate-spin mb-2" />
+        <div className="rounded-panel border border-hairline bg-card p-5 text-center text-content text-subtext">
+          <Icon name="loader" size={20} className="mx-auto mb-2 animate-spin text-accent" />
           <p>Procesando... esto puede tomar unos segundos</p>
         </div>
       )}
 
-      {/* Estado: error */}
       {step === 'error' && errorMsg && (
-        <div className="bg-red-900/40 border border-red-700 text-red-300 rounded-xl px-5 py-4 text-sm">
-          <p className="font-semibold mb-1">Error</p>
+        <div className="rounded-panel bg-cancelled-bg px-5 py-4 text-content text-cancelled-fg">
+          <p className="mb-1 font-semibold">Error</p>
           <p>{errorMsg}</p>
         </div>
       )}
 
-      {/* Estado: resultado */}
       {step === 'done' && result && (
-        <div className="bg-green-900/30 border border-green-700 rounded-xl px-5 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-green-300 font-semibold text-sm">Completado</p>
+        <div className="rounded-panel bg-approved-bg px-5 py-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="font-semibold text-content text-approved-fg">Completado</p>
             {sheetUrl && (
-              <a
-                href={sheetUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-green-400 hover:text-green-200 underline text-sm"
-              >
+              <a href={sheetUrl} target="_blank" rel="noopener noreferrer" className="text-content text-approved-fg underline hover:opacity-80">
                 Abrir Sheet →
               </a>
             )}
           </div>
 
           {getSummaryLine() && (
-            <p className="text-gray-300 text-sm mb-3">{getSummaryLine()}</p>
+            <p className="mb-3 text-content text-body">{getSummaryLine()}</p>
           )}
 
           {result.spreadsheetId && (
-            <div className="bg-gray-900 rounded-lg p-3 mb-3">
-              <p className="text-gray-400 text-xs mb-1">SpreadsheetId (agregar a Vercel como <code>GOOGLE_SHEETS_SPREADSHEET_ID</code>):</p>
-              <code className="text-orange-300 text-sm break-all">{result.spreadsheetId}</code>
+            <div className="mb-3 rounded-control bg-card p-3">
+              <p className="mb-1 text-xs text-subtext">SpreadsheetId (agregar a Vercel como <code>GOOGLE_SHEETS_SPREADSHEET_ID</code>):</p>
+              <code className="break-all text-content text-accent">{result.spreadsheetId}</code>
             </div>
           )}
 
           {getResultsArray().length > 0 && (
-            <table className="w-full text-xs text-gray-300 mt-2">
+            <table className="mt-2 w-full text-xs">
               <thead>
-                <tr className="text-gray-500 border-b border-gray-700">
-                  <th className="text-left pb-1">Pestaña</th>
-                  <th className="text-right pb-1">Filas</th>
-                  <th className="text-right pb-1">Estado</th>
+                <tr className="border-b border-hairline">
+                  <th className="pb-1 text-left sn-label">Pestaña</th>
+                  <th className="pb-1 text-right sn-label">Filas</th>
+                  <th className="pb-1 text-right sn-label">Estado</th>
                 </tr>
               </thead>
               <tbody>
                 {getResultsArray().map((r, i) => (
-                  <tr key={i} className="border-b border-gray-800">
-                    <td className="py-1">{r.tab}</td>
-                    <td className="py-1 text-right">
+                  <tr key={i} className="border-b border-hairline odd:bg-row">
+                    <td className="py-1 text-body">{r.tab}</td>
+                    <td className="py-1 text-right text-body">
                       {r.rows !== undefined
                         ? r.rows
                         : [
@@ -212,9 +203,9 @@ export default function SheetsSyncPage() {
                     </td>
                     <td className="py-1 text-right">
                       {r.ok ? (
-                        <span className="text-green-400">✓</span>
+                        <Icon name="check" size={13} className="ml-auto text-approved-fg" />
                       ) : (
-                        <span className="text-red-400" title={r.error}>✗</span>
+                        <Icon name="close" size={13} className="ml-auto text-cancelled-fg" />
                       )}
                     </td>
                   </tr>

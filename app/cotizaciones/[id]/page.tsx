@@ -2,10 +2,10 @@
 
 import { FocusEvent, use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadge'
+import { Button } from '@/components/ui/Button'
 import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
@@ -1041,10 +1041,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     <div className="flex flex-col gap-[19px]">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3 min-w-0">
-          <Link href="/cotizaciones" className="flex flex-none items-center gap-1.5 text-content text-faint hover:text-subtext">
-            <Icon name="arrow-left" size={14} />
+          <Button href="/cotizaciones" variant="ghost" size="md" iconLeft="arrow-left">
             Cotizaciones
-          </Link>
+          </Button>
           <h1 className="sn-display flex-none text-2xl text-ink md:text-h2">{cotizacion.id}</h1>
           <span className="flex-none whitespace-nowrap text-content text-subtext">Cotizada el {formatDateDisplay(cotizacion.fecha_cotizacion)}</span>
           <StatusBadge tone={toneForCotizacionEstado(cotizacion.estado)}>{cotizacion.estado}</StatusBadge>

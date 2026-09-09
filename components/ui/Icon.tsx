@@ -52,6 +52,7 @@ import {
 const ICONS = {
   dashboard: Home,
   planeacion: Calendar,
+  calendar: Calendar,
   cotizaciones: FileText,
   proyectos: FolderKanban,
   cuentas: Wallet,

@@ -149,7 +149,7 @@ export default function CotizacionesPage() {
                   <tr
                     key={cot.id}
                     onClick={() => router.push(`/cotizaciones/${cot.id}`)}
-                    className="cursor-pointer border-b border-hairline last:border-0 transition-colors hover:bg-row"
+                    className="cursor-pointer border-b border-hairline last:border-0 odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt"
                   >
                     <td className="whitespace-nowrap px-6 py-4">
                       <span className="sn-display text-body" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>

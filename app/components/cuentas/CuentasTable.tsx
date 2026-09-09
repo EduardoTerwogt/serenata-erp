@@ -44,7 +44,7 @@ export function CuentasTable({ tab, cuentas, total, onSelect }: Props) {
               const montoTotal = cuenta.tipo === 'cobrar' ? cuenta.monto_total : cuenta.x_pagar
 
               return (
-                <tr key={`${cuenta.tipo}-${cuenta.id}`} className="hover:bg-row transition-colors cursor-pointer" onClick={() => onSelect(cuenta)}>
+                <tr key={`${cuenta.tipo}-${cuenta.id}`} className="odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt cursor-pointer" onClick={() => onSelect(cuenta)}>
                   <td className="px-6 py-4">
                     <div className="text-accent font-mono text-content">
                       {cuenta.cotizacion_id}

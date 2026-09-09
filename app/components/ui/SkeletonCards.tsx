@@ -7,16 +7,16 @@ interface SkeletonCardsProps {
 
 export function SkeletonCards({ columns = 3, count = 6 }: SkeletonCardsProps) {
   return (
-    <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${columns} gap-4 animate-pulse`}>
+    <div className={`grid animate-pulse grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-${columns}`}>
       {[...Array(count)].map((_, i) => (
-        <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+        <div key={i} className="space-y-3 rounded-panel border border-hairline bg-card p-5">
           <div className="flex justify-between">
-            <div className="h-4 bg-gray-800 rounded w-1/3" />
-            <div className="h-4 bg-gray-800 rounded w-1/4" />
+            <div className="h-4 w-1/3 rounded bg-row-alt" />
+            <div className="h-4 w-1/4 rounded bg-row-alt" />
           </div>
-          <div className="h-5 bg-gray-800 rounded w-3/4" />
-          <div className="h-4 bg-gray-800 rounded w-1/2" />
-          <div className="h-3 bg-gray-800 rounded w-2/3" />
+          <div className="h-5 w-3/4 rounded bg-row-alt" />
+          <div className="h-4 w-1/2 rounded bg-row-alt" />
+          <div className="h-3 w-2/3 rounded bg-row-alt" />
         </div>
       ))}
     </div>
