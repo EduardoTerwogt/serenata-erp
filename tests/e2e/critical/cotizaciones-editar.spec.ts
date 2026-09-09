@@ -486,3 +486,44 @@ test('la fila que llega por reconciliación no me quita el cursor', async ({ pag
   await expect(descripcion).toBeFocused()
   await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
 })
+
+/**
+ * Gemelo del anterior, para el otro sentido: una partida que DESAPARECE del servidor
+ * -otro colaborador la borró- tiene que desaparecer sola de la pantalla, sin aviso
+ * por el canal y sin tocar lo que el usuario está escribiendo en otra fila.
+ */
+test('la fila que borra el otro desaparece por reconciliación', async ({ page }) => {
+  const cotizacion = await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-RECON-DEL',
+    estado: 'BORRADOR',
+    items: [
+      {
+        id: 'item-que-se-queda', cotizacion_id: 'SH-E2E-RECON-DEL', categoria: 'Producción',
+        descripcion: 'Renta de cámara', cantidad: 1, precio_unitario: 15000, importe: 15000,
+        responsable_nombre: null, responsable_id: null, x_pagar: 6000, margen: 9000, orden: 0, notas: null,
+      },
+      {
+        id: 'item-que-borra-el-otro', cotizacion_id: 'SH-E2E-RECON-DEL', categoria: 'Arte',
+        descripcion: 'Partida del otro', cantidad: 1, precio_unitario: 3000, importe: 3000,
+        responsable_nombre: null, responsable_id: null, x_pagar: 1000, margen: 2000, orden: 1, notas: null,
+      },
+    ],
+  })
+  await login(page, '/cotizaciones/SH-E2E-RECON-DEL')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-RECON-DEL' })).toBeVisible()
+
+  const rows = page.locator('table tbody tr')
+  await expect(rows).toHaveCount(2)
+
+  const descripcion = rows.first().locator('td').nth(1).locator('input')
+  await descripcion.click()
+  await descripcion.fill('Estoy escribiendo aquí')
+
+  // El otro colaborador borró la segunda partida. Ningún aviso: la pantalla debe
+  // enterarse sola.
+  cotizacion.items = cotizacion.items.filter((item) => item.id !== 'item-que-borra-el-otro')
+
+  await expect(rows).toHaveCount(1, { timeout: 20_000 })
+  await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
+  await expect(descripcion).toBeFocused()
+})

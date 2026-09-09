@@ -515,19 +515,19 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         const soloSeAgregaronAlFinal =
           fusionadas.length > locales.length &&
           idsLocales.every((idLocal, i) => idLocal === idsFusionadas[i])
-        const soloSeQuitaron =
-          fusionadas.length < locales.length &&
-          idsFusionadas.every((idFusionada) => idsLocales.includes(idFusionada))
 
         if (soloSeAgregaronAlFinal) {
-          // Filas nuevas de otro colaborador: se añaden al final sin tocar las demás.
+          // Filas nuevas al final: se añaden sin tocar las demás, así que nadie pierde
+          // el cursor ni lo que está escribiendo.
           append(fusionadas.slice(locales.length), { shouldFocus: false })
-        } else if (soloSeQuitaron) {
-          const sobrantes = idsLocales
-            .map((idLocal, index) => (idLocal && idsFusionadas.includes(idLocal) ? -1 : index))
-            .filter((index) => index >= 0)
-          if (sobrantes.length > 0) remove(sobrantes)
         } else {
+          // Cualquier otro cambio del conjunto (filas que desaparecieron, reordenes) se
+          // aplica reconstruyendo la lista y devolviendo el foco donde estaba.
+          //
+          // Se intentó quitarlas una a una con `remove` para no remontar la tabla, y
+          // medido con el canal simulado NO funciona: la fila no se va, queda una fila
+          // fantasma sin id -la misma clase de fallo que este módulo ya tuvo- y cada
+          // reconciliación vuelve a intentarlo. `replace` sí la quita.
           const enfocado = typeof document !== 'undefined' ? (document.activeElement as HTMLInputElement | null) : null
           const nombreEnfocado = enfocado?.getAttribute('name') || null
           let seleccion: [number, number] | null = null
@@ -542,14 +542,22 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           replace(fusionadas)
 
           if (nombreEnfocado) {
-            window.requestAnimationFrame(() => {
+            // React remonta los inputs en su propio ciclo, y no basta con enfocar una
+            // vez: medido, el primer intento acierta sobre el input VIEJO -todavía
+            // conectado- y el foco se pierde en cuanto React lo reemplaza. Se insiste
+            // unos frames hasta que el foco quede en el input que de verdad quedó.
+            let frames = 0
+            const devolverFoco = () => {
               const destino = document.querySelector<HTMLInputElement>(`[name="${nombreEnfocado}"]`)
-              if (!destino) return
-              destino.focus()
-              if (seleccion) {
-                try { destino.setSelectionRange(seleccion[0], seleccion[1]) } catch { /* ver arriba */ }
+              if (destino?.isConnected && document.activeElement !== destino) {
+                destino.focus()
+                if (seleccion) {
+                  try { destino.setSelectionRange(seleccion[0], seleccion[1]) } catch { /* ver arriba */ }
+                }
               }
-            })
+              if (frames++ < 12) window.requestAnimationFrame(devolverFoco)
+            }
+            window.requestAnimationFrame(devolverFoco)
           }
         }
       }
@@ -572,7 +580,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       reconciliacionEnCursoRef.current = null
     }
-  }, [append, applyGeneralOnly, applyNotasOnly, applyTotalsOnly, getValues, hasLocalItemRowActivity, id, remove, replace, setValue])
+  }, [append, applyGeneralOnly, applyNotasOnly, applyTotalsOnly, getValues, hasLocalItemRowActivity, id, replace, setValue])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
   useEffect(() => { notasValueRef.current = notasInternas }, [notasInternas])
