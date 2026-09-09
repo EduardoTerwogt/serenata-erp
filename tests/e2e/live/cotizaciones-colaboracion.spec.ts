@@ -46,37 +46,6 @@ function subtotal(page: Page): Locator {
  * fallos que si no parecen magia (p. ej. que el efecto que inserta la fila de otro
  * colaborador lance y esa pantalla deje de reaccionar). Va al log de CI.
  */
-function grabarFramesRealtime(page: Page, destino: string[], direccion: 'framereceived' | 'framesent' = 'framereceived') {
-  // Los frames del canal viajan como Buffer cuando van comprimidos: quedarse solo con
-  // los `string` dejaba el grabador ciego y hacía parecer que no llegaba nada.
-  const guardar = (frame: { payload: string | Buffer }) => {
-    destino.push(typeof frame.payload === 'string' ? frame.payload : frame.payload.toString('utf8'))
-  }
-  page.on('websocket', (ws) => {
-    if (direccion === 'framesent') ws.on('framesent', guardar)
-    else ws.on('framereceived', guardar)
-  })
-}
-
-/**
- * Tiempos de las peticiones de partidas. El test que falla agota 120 s mientras los
- * de al lado tardan medio segundo: hay que saber si el alta de la fila es lenta de
- * verdad o si el tiempo se va en otro lado.
- */
-function vigilarPeticionesDePartidas(page: Page, etiqueta: string) {
-  const inicios = new Map<string, number>()
-  page.on('request', (req) => {
-    if (req.url().includes('/items')) inicios.set(req.url() + req.method(), Date.now())
-  })
-  page.on('response', (res) => {
-    if (!res.url().includes('/items')) return
-    const clave = res.url() + res.request().method()
-    const inicio = inicios.get(clave)
-    const ruta = new URL(res.url()).pathname
-    console.log(`[live colab][${etiqueta}] ${res.request().method()} ${ruta} -> ${res.status()} en ${inicio ? Date.now() - inicio : '?'}ms`)
-  })
-}
-
 function vigilarErrores(page: Page, etiqueta: string) {
   page.on('pageerror', (error) => console.log(`[live colab][${etiqueta}] pageerror: ${error.message}`))
   page.on('console', (msg) => {
@@ -132,12 +101,6 @@ test.describe('live: colaboración real entre dos usuarios', () => {
   let pageB: Page
   let cotizacionId = ''
   let origenId = ''
-  // Frames del canal de tiempo real que RECIBE B. Sirven para distinguir "el mensaje
-  // nunca llegó" de "llegó y la pantalla no reaccionó", que se ven igual desde el DOM.
-  const framesRecibidosPorB: string[] = []
-  // Y los que A EMITE: sin esto no se distingue "el cliente de A no lo mandó" de
-  // "lo mandó y no se repartió".
-  const framesEnviadosPorA: string[] = []
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(180_000)
@@ -151,8 +114,6 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     contextA = await browser.newContext()
     pageA = await contextA.newPage()
     vigilarErrores(pageA, 'A')
-    vigilarPeticionesDePartidas(pageA, 'A')
-    grabarFramesRealtime(pageA, framesEnviadosPorA, 'framesent')
     await login(pageA, '/cotizaciones')
 
     origenId = await crearCotizacion(pageA, `${PREFIJO}ORIGEN-${suffix}`, `Origen colab ${suffix}`, [
@@ -168,8 +129,6 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     contextB = await browser.newContext()
     pageB = await contextB.newPage()
     vigilarErrores(pageB, 'B')
-    vigilarPeticionesDePartidas(pageB, 'B')
-    grabarFramesRealtime(pageB, framesRecibidosPorB)
     await login(pageB, '/cotizaciones', { email: USUARIO_B.email, password: USUARIO_B.password })
 
     await pageA.goto(`/cotizaciones/${cotizacionId}`)
@@ -248,64 +207,17 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     test.setTimeout(120_000)
 
     const antes = await filas(pageA).count()
-    const idsAntes = new Set((await leerCotizacionDelServidor(cotizacionId)).items.map((item) => item.id))
 
     const descripcionB = celda(pageB, 1, COL.descripcion)
     await descripcionB.click()
     await descripcionB.fill('B sigue escribiendo aquí')
 
-    const t0 = Date.now()
-    const marca = (paso: string) => console.log(`[live colab] ${paso}: ${Date.now() - t0}ms`)
-    // El clic también se mide: Playwright espera a que el botón sea accionable, así que
-    // un botón deshabilitado o tapado se ve igual que una petición lenta.
     await pageA.getByRole('button', { name: /Agregar fila/ }).click()
-    marca('clic en Agregar fila resuelto')
 
-    // Los tres eslabones por separado: sin esto, un fallo aquí no distingue "A no
-    // creó la fila" de "el servidor no la tiene" de "B no la recibió".
     await expect(filas(pageA), 'A no llegó a ver la fila que acaba de agregar').toHaveCount(antes + 1, { timeout: 30_000 })
-    marca('A ve su fila nueva')
     await expect
       .poll(async () => (await leerCotizacionDelServidor(cotizacionId)).items.length, { timeout: 30_000 })
       .toBe(antes + 1)
-    marca('el servidor tiene la fila nueva')
-
-    const idNuevo = (await leerCotizacionDelServidor(cotizacionId)).items.find((item) => !idsAntes.has(item.id))?.id
-    expect(idNuevo, 'el servidor no tiene ninguna partida nueva').toBeTruthy()
-
-    // Primero el canal, luego la pantalla: si el mensaje no llega, el problema es la
-    // difusión; si llega y la tabla no cambia, el problema es cómo se aplica.
-    if (idNuevo) {
-      try {
-        await expect
-          .poll(() => framesRecibidosPorB.filter((frame) => frame.includes(idNuevo)).length, { timeout: 15_000 })
-          .toBeGreaterThan(0)
-      } catch {
-        // El diagnóstico va DENTRO del error, no por consola: en el log de CI el
-        // bloque de fallo siempre se ve, y las líneas sueltas de consola quedan
-        // sepultadas cientos de líneas más arriba.
-        const banner = await pageA.locator('.text-cancelled-fg').first().textContent().catch(() => null)
-        const enviadosPorA = framesEnviadosPorA.filter((frame) => frame.includes('item_mutation')).length
-        const recibidosPorB = framesRecibidosPorB.filter((frame) => frame.includes('item_mutation')).length
-        // `broadcastItemMutation` y `markSectionSaved('partidas')` son líneas contiguas:
-        // si tampoco salió el segundo, la ejecución nunca llegó hasta ahí, y entonces
-        // el problema está antes -- no en el envío.
-        const sectionSavedDespues = framesEnviadosPorA.filter((frame) => frame.includes('section_saved')).length
-        const eventos = framesEnviadosPorA
-          .map((frame) => frame.match(/"event":"([a-z_]+)"|(item_mutation|item_cell_signal|section_saved|section_signal|item_row_signal)/)?.[0] || '')
-          .filter(Boolean)
-        throw new Error(
-          `El aviso de la fila nueva (${idNuevo}) no llegó a B.\n` +
-          `  ¿A lo emitió?: ${framesEnviadosPorA.some((frame) => frame.includes(idNuevo))}\n` +
-          `  item_mutation emitidos por A: ${enviadosPorA} (de ${framesEnviadosPorA.length} frames)\n` +
-          `  section_saved emitidos por A: ${sectionSavedDespues}\n` +
-          `  últimos eventos emitidos por A: ${eventos.slice(-6).join(' | ') || '(ninguno)'}\n` +
-          `  filas que A ve ahora: ${await filas(pageA).count()} (esperadas ${antes + 1})\n` +
-          `  item_mutation recibidos por B: ${recibidosPorB} (de ${framesRecibidosPorB.length} frames)\n` +
-          `  banner de error en A: ${banner?.trim() || '(ninguno)'}`
-        )
-      }
-    }
 
     // B ve la fila nueva...
     await expect(filas(pageB), 'el mensaje de la fila nueva llegó al canal de B pero la tabla no la insertó').toHaveCount(antes + 1, { timeout: 30_000 })
@@ -409,6 +321,48 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       const cotizacion = await leerCotizacionDelServidor(cotizacionId)
       return cotizacion.porcentaje_fee
     }, { timeout: 30_000 }).toBeCloseTo(0.2, 5)
+  })
+
+  /**
+   * La prueba del diseño, no de un síntoma: con el canal en tiempo real CAÍDO -ningún
+   * aviso llega ni sale- la pantalla tiene que terminar viendo lo mismo igual.
+   *
+   * Es lo que antes no se cumplía: el estado ajeno viajaba solo empujado por el otro
+   * navegador, con el error tragado, así que un aviso perdido dejaba las dos pantallas
+   * distintas hasta recargar. Si este test pasa, esa clase entera de fallos -incluida
+   * la fila que no aparecía- deja de poder ocurrir en silencio.
+   */
+  test('con el canal en tiempo real caído, la otra pantalla converge igual', async ({ browser }) => {
+    test.setTimeout(180_000)
+
+    const contextC = await browser.newContext()
+    const pageC = await contextC.newPage()
+    // Se intercepta el WebSocket y no se conecta a nadie: esta pantalla nunca va a
+    // recibir un solo aviso.
+    await pageC.routeWebSocket(/realtime/, () => {})
+
+    try {
+      await login(pageC, `/cotizaciones/${cotizacionId}`, { email: USUARIO_B.email, password: USUARIO_B.password })
+      await expect(filas(pageC)).toHaveCount(await filas(pageA).count(), { timeout: 30_000 })
+
+      const marcaUnica = `Sin canal ${Date.now()}`
+      const descripcionA = celda(pageA, 0, COL.descripcion)
+      await descripcionA.click()
+      await descripcionA.fill(marcaUnica)
+      await descripcionA.blur()
+
+      await expect
+        .poll(async () => (await leerCotizacionDelServidor(cotizacionId)).items[0].descripcion, { timeout: 30_000 })
+        .toBe(marcaUnica)
+
+      // Sin avisos, la única vía posible es la reconciliación contra el servidor.
+      await expect(
+        celda(pageC, 0, COL.descripcion),
+        'la pantalla sin canal nunca se puso al día: la convergencia sigue dependiendo de que llegue el aviso'
+      ).toHaveValue(marcaUnica, { timeout: 60_000 })
+    } finally {
+      await contextC.close()
+    }
   })
 
   test('las notas del evento se sincronizan entre los dos colaboradores', async () => {

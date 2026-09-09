@@ -34,6 +34,10 @@ const GENERAL_AUTOSAVE_DELAY_MS = 800
 const TOTALS_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_IDLE_RELEASE_MS = 5000
+// Cada cuánto se relee la cotización mientras la pantalla está abierta y visible.
+// Es la red que hace que un aviso perdido deje de importar: aunque no llegue
+// ninguno, las dos pantallas convergen dentro de este plazo.
+const RECONCILIACION_MS = 5000
 const SECTION_IDLE_RELEASE_MS = 5000
 
 interface GeneralSnapshot {
@@ -443,13 +447,31 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }, [applyCotizacionToState, id])
 
-  // Resync SUAVE tras un cambio remoto: se fusionan las partidas del servidor sobre
-  // las locales sin tocar cliente, proyecto, notas ni totales, y sin pisar ninguna
-  // celda que el usuario tenga sucia o bajo el cursor. Antes esto era un
-  // applyCotizacionToState (reset completo) que borraba lo que estabas escribiendo.
-  const resyncPartidasSuave = useCallback(async () => {
-    const pedidoEn = Date.now()
-    try {
+  /**
+   * Reconciliación con el servidor: la ÚNICA garantía de que las dos pantallas
+   * terminen viendo lo mismo.
+   *
+   * Antes, el estado ajeno llegaba solo empujado por el navegador del otro
+   * (`item_mutation`): un aviso sin acuse, sin reintento y con el error tragado
+   * -los siete envíos del canal terminan en `.catch(() => null)`-. Si ese aviso se
+   * perdía, las dos pantallas quedaban distintas hasta recargar y nadie se enteraba.
+   * Ahora el aviso es solo una pista para que el cambio se vea al instante; quien
+   * garantiza la convergencia es esto, que lee de la base a través de nuestro propio
+   * servidor (el que sí valida la sesión).
+   *
+   * Nada de esto pisa lo que el usuario está escribiendo: las celdas sucias, bajo el
+   * cursor o con guardado en vuelo se conservan, y una respuesta que salió antes de
+   * una escritura local pierde contra ella.
+   */
+  const reconciliacionEnCursoRef = useRef<Promise<void> | null>(null)
+  const reconciliarConServidor = useCallback(async () => {
+    // Varias pistas seguidas, o pista y latido a la vez, no deben abrir lecturas
+    // paralelas que luego compitan entre sí al aplicarse.
+    if (reconciliacionEnCursoRef.current) return reconciliacionEnCursoRef.current
+
+    const trabajo = (async () => {
+      const pedidoEn = Date.now()
+      try {
       const updated = await fetchQuotationDetail(id)
       const locales = getValues('items') || []
       const servidor = (updated.items || []).map(mapItemToFormItem)
@@ -488,10 +510,25 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         replace(fusionadas)
       }
       setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : prev)
-    } catch (loadError) {
-      console.error('[cotizaciones/[id]] Error resincronizando partidas:', loadError)
+        // Las tres secciones restantes solo se aplican si el usuario NO las tiene
+        // ocupadas: applyGeneralOnly y compañía pisan el valor y además limpian la
+        // marca de "sin guardar", así que aplicarlas a ciegas borraba la edición en
+        // curso -- el mismo defecto que se arregló en las partidas, otra sección.
+        if (!notasLockHeldRef.current && !notasDirtyRef.current) applyNotasOnly(updated.notas_internas ?? null)
+        if (!generalLockHeldRef.current && !generalDirtyRef.current) applyGeneralOnly(updated)
+        if (!totalsLockHeldRef.current && !totalsDirtyRef.current) applyTotalsOnly(updated)
+      } catch (loadError) {
+        console.error('[cotizaciones/[id]] Error reconciliando con el servidor:', loadError)
+      }
+    })()
+
+    reconciliacionEnCursoRef.current = trabajo
+    try {
+      await trabajo
+    } finally {
+      reconciliacionEnCursoRef.current = null
     }
-  }, [getValues, hasLocalItemRowActivity, id, replace, setValue])
+  }, [applyGeneralOnly, applyNotasOnly, applyTotalsOnly, getValues, hasLocalItemRowActivity, id, replace, setValue])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
   useEffect(() => { notasValueRef.current = notasInternas }, [notasInternas])
@@ -646,8 +683,29 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   useEffect(() => {
     const acabaDeReconectar = isConnected && !estabaConectadoRef.current
     estabaConectadoRef.current = isConnected
-    if (acabaDeReconectar) void resyncPartidasSuave()
-  }, [isConnected, resyncPartidasSuave])
+    if (acabaDeReconectar) void reconciliarConServidor()
+  }, [isConnected, reconciliarConServidor])
+
+  // Latido de reconciliación. No depende de la presencia ni del canal: si dependiera,
+  // un fallo de esos mismos mecanismos volvería a dejar las pantallas divergentes sin
+  // que nadie se entere, que es exactamente lo que pasaba antes.
+  useEffect(() => {
+    if (!esEditable) return
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      void reconciliarConServidor()
+    }
+    const timer = window.setInterval(tick, RECONCILIACION_MS)
+    return () => window.clearInterval(timer)
+  }, [esEditable, reconciliarConServidor])
+
+  // Volver a la pestaña es el momento en que más se nota quedarse con datos viejos.
+  useEffect(() => {
+    if (!esEditable || typeof document === 'undefined') return
+    const alVolver = () => { if (document.visibilityState === 'visible') void reconciliarConServidor() }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => document.removeEventListener('visibilitychange', alVolver)
+  }, [esEditable, reconciliarConServidor])
 
   useEffect(() => { if (!generalLockHeldRef.current) return; if (!areGeneralSnapshotsEqual(currentGeneralSnapshot, lastSavedGeneralRef.current)) generalDirtyRef.current = true }, [currentGeneralSnapshot])
   useEffect(() => { if (!totalsLockHeldRef.current) return; if (!areTotalsSnapshotsEqual(currentTotalsSnapshot, lastSavedTotalsRef.current)) totalsDirtyRef.current = true }, [currentTotalsSnapshot])
