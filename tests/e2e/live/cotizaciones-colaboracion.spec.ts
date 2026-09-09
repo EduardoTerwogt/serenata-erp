@@ -287,10 +287,20 @@ test.describe('live: colaboración real entre dos usuarios', () => {
         const banner = await pageA.locator('.text-cancelled-fg').first().textContent().catch(() => null)
         const enviadosPorA = framesEnviadosPorA.filter((frame) => frame.includes('item_mutation')).length
         const recibidosPorB = framesRecibidosPorB.filter((frame) => frame.includes('item_mutation')).length
+        // `broadcastItemMutation` y `markSectionSaved('partidas')` son líneas contiguas:
+        // si tampoco salió el segundo, la ejecución nunca llegó hasta ahí, y entonces
+        // el problema está antes -- no en el envío.
+        const sectionSavedDespues = framesEnviadosPorA.filter((frame) => frame.includes('section_saved')).length
+        const eventos = framesEnviadosPorA
+          .map((frame) => frame.match(/"event":"([a-z_]+)"|(item_mutation|item_cell_signal|section_saved|section_signal|item_row_signal)/)?.[0] || '')
+          .filter(Boolean)
         throw new Error(
           `El aviso de la fila nueva (${idNuevo}) no llegó a B.\n` +
           `  ¿A lo emitió?: ${framesEnviadosPorA.some((frame) => frame.includes(idNuevo))}\n` +
           `  item_mutation emitidos por A: ${enviadosPorA} (de ${framesEnviadosPorA.length} frames)\n` +
+          `  section_saved emitidos por A: ${sectionSavedDespues}\n` +
+          `  últimos eventos emitidos por A: ${eventos.slice(-6).join(' | ') || '(ninguno)'}\n` +
+          `  filas que A ve ahora: ${await filas(pageA).count()} (esperadas ${antes + 1})\n` +
           `  item_mutation recibidos por B: ${recibidosPorB} (de ${framesRecibidosPorB.length} frames)\n` +
           `  banner de error en A: ${banner?.trim() || '(ninguno)'}`
         )
