@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabaseBrowser } from '@/lib/supabase-browser'
+import { authorizeRealtime, createPrivateChannel, scheduleTokenRefresh } from '@/lib/realtime/authorize'
 import type { ItemCotizacion } from '@/lib/types'
 
 export type QuotationPresenceSection = 'notas' | 'general' | 'partidas' | 'totales'
@@ -368,10 +369,14 @@ export function useQuotationPresence({
     const random = Math.random().toString(36).slice(2, 8)
     presenceKeyRef.current = `${identity.userId}-${random}`
 
-    const channel = supabaseBrowser.channel(`cotizacion:${cotizacionId}`, {
-      config: {
-        presence: { key: presenceKeyRef.current },
-      },
+    // Canal PRIVADO: requiere autorizar la sesión de Realtime (JWT corto
+    // derivado de la sesión de NextAuth) antes de unirse -- ver
+    // lib/realtime/authorize.ts y db/migrations/20260909_realtime_broadcast_authorization.sql.
+    // Antes de este cambio, este canal era público: cualquiera con la anon
+    // key podía unirse a "cotizacion:*" y ver/enviar broadcasts de cualquier
+    // cotización.
+    const channel = createPrivateChannel(`cotizacion:${cotizacionId}`, {
+      presence: { key: presenceKeyRef.current },
     })
 
     channel.on('presence', { event: 'sync' }, () => {
@@ -449,27 +454,48 @@ export function useQuotationPresence({
       dispatch({ type: 'section_saved', userId: saved.user_id, section: saved.section })
     })
 
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        dispatch({ type: 'set_connected', connected: true })
-        await channel.track({
-          user_id: identity.userId,
-          email: identity.email,
-          name: identity.name,
-          active_section: activeSectionRef.current,
-          online_at: new Date().toISOString(),
-        })
-        return
-      }
+    let cancelled = false
+    let cancelTokenRefresh: (() => void) | null = null
 
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        dispatch({ type: 'set_connected', connected: false })
+    const join = async () => {
+      // Si autorizar falla (red, endpoint caído), igual se intenta unir: el
+      // join simplemente lo rechaza la política RLS -- mismo modo de falla
+      // que ya se toleraba con el canal público (`channel.send()` cayendo a
+      // REST con 403 silencioso). El polling de 5s en la pantalla de detalle
+      // sigue siendo la garantía real de convergencia, no este canal.
+      try {
+        const ttlSeconds = await authorizeRealtime()
+        if (!cancelled) cancelTokenRefresh = scheduleTokenRefresh(ttlSeconds)
+      } catch (e) {
+        console.error('[useQuotationPresence] No se pudo autorizar el canal de Realtime', e)
       }
-    })
+      if (cancelled) return
+
+      channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          dispatch({ type: 'set_connected', connected: true })
+          await channel.track({
+            user_id: identity.userId,
+            email: identity.email,
+            name: identity.name,
+            active_section: activeSectionRef.current,
+            online_at: new Date().toISOString(),
+          })
+          return
+        }
+
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          dispatch({ type: 'set_connected', connected: false })
+        }
+      })
+    }
 
     channelRef.current = channel
+    void join()
 
     return () => {
+      cancelled = true
+      cancelTokenRefresh?.()
       dispatch({ type: 'reset' })
       void channel.untrack().catch(() => null)
       void supabaseBrowser.removeChannel(channel)

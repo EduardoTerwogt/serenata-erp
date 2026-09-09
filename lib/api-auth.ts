@@ -18,11 +18,20 @@ async function shouldBypassForE2E() {
   return cookieStore.get(E2E_BYPASS_COOKIE)?.value === '1'
 }
 
-export async function requireAnySection(requiredSections: AppSection[]) {
+/**
+ * Solo exige sesión válida, sin sección específica -- lo usa el endpoint de
+ * token de Realtime (cualquier staff autenticado puede unirse a un canal, la
+ * autorización de qué canal es una capa aparte, resuelta por RLS con el
+ * claim `sections`). `requireAnySection`/`requireSection` construyen sobre
+ * este mismo chequeo, así que el bypass de E2E y el 401 quedan en un solo
+ * lugar.
+ */
+export async function requireAuthenticated() {
   if (await shouldBypassForE2E()) {
     return {
       session: {
         user: {
+          id: 'e2e-bypass-user',
           email: 'e2e@serenata.test',
           name: 'E2E User',
           sections: ALL_SECTIONS,
@@ -42,7 +51,14 @@ export async function requireAnySection(requiredSections: AppSection[]) {
     }
   }
 
-  const sections = getUserSections(session.user as { sections?: string[] })
+  return { session, response: null }
+}
+
+export async function requireAnySection(requiredSections: AppSection[]) {
+  const { session, response } = await requireAuthenticated()
+  if (response) return { session, response }
+
+  const sections = getUserSections(session!.user as { sections?: string[] })
 
   if (!hasAnySection(sections, requiredSections)) {
     return {

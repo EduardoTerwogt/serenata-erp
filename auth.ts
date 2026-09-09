@@ -61,7 +61,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     session({ session, token }) {
       if (session.user) {
-        (session.user as { sections?: AppSection[] }).sections = normalizeUserSections(token.sections as string[] | undefined)
+        const user = session.user as { sections?: AppSection[]; id?: string }
+        user.sections = normalizeUserSections(token.sections as string[] | undefined)
+        // `token.sub` ya trae el id (NextAuth lo fija en el jwt callback por
+        // default a partir del `id` que devuelve `authorize()`). Sin esto,
+        // session.user.id queda undefined y el resto del código que ya lo
+        // esperaba (app/cotizaciones/[id]/page.tsx) caía al fallback de email.
+        user.id = token.sub
       }
       return session
     },

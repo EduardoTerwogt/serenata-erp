@@ -8,11 +8,31 @@ vi.mock('@/auth', () => ({
   auth: mocks.authMock,
 }))
 
-import { requireAnySection, requireSection } from '../api-auth'
+import { requireAnySection, requireAuthenticated, requireSection } from '../api-auth'
 
 describe('api-auth guards', () => {
   beforeEach(() => {
     mocks.authMock.mockReset()
+  })
+
+  it('requireAuthenticated: retorna 401 cuando no hay sesión', async () => {
+    mocks.authMock.mockResolvedValue(null)
+
+    const result = await requireAuthenticated()
+
+    expect(result.session).toBeNull()
+    expect(result.response?.status).toBe(401)
+    await expect(result.response?.json()).resolves.toEqual({ error: 'No autenticado' })
+  })
+
+  it('requireAuthenticated: retorna la sesión sin exigir ninguna sección', async () => {
+    const session = { user: { sections: [] as string[] } }
+    mocks.authMock.mockResolvedValue(session)
+
+    const result = await requireAuthenticated()
+
+    expect(result.response).toBeNull()
+    expect(result.session).toEqual(session)
   })
 
   it('retorna 401 cuando no hay sesión', async () => {
