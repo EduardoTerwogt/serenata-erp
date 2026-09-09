@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { login } from '../utils/auth'
 import { mockCotizacionDetailApis } from '../utils/quotation-detail-mocks'
+import { mockRealtimeChannel } from '../utils/realtime-mock'
 
 test('edita información general de una cotización en BORRADOR (autosave)', async ({ page }) => {
   await mockCotizacionDetailApis(page, { id: 'SH-E2E-EDITAR', estado: 'BORRADOR' })
@@ -345,4 +346,103 @@ test('agregar una fila la pinta antes de que responda el servidor', async ({ pag
   ])
   expect(patch.url()).not.toContain('temp:')
   expect(patch.postDataJSON().descripcion).toBe('Escrito antes del id')
+})
+
+// ==================== Colaboración ====================
+// Regresión de la carrera que borraba montos: la señal de "otro guardó partidas"
+// disparaba una relectura completa que viajaba con una foto anterior al guardado
+// local y, al volver, escribía el valor viejo encima.
+test('un guardado de otro colaborador no borra el monto recién capturado', async ({ page }) => {
+  const cotizacion = await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-COLAB',
+    estado: 'BORRADOR',
+    detailLatencyMs: 1200,
+  })
+  const realtime = await mockRealtimeChannel(page)
+  await login(page, '/cotizaciones/SH-E2E-COLAB')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-COLAB' })).toBeVisible()
+  expect(realtime.conectado()).toBe(true)
+
+  const precio = page.locator('table tbody tr').first().locator('td').nth(3).locator('input')
+  await precio.fill('9000')
+
+  const [patch] = await Promise.all([
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH'),
+    precio.blur(),
+  ])
+  expect(patch.postDataJSON().precio_unitario).toBe(9000)
+
+  // El otro colaborador guarda justo ahora.
+  realtime.emit('section_saved', { section: 'partidas' })
+  await page.waitForTimeout(2500)
+
+  await expect(precio).toHaveValue('9000')
+  expect(cotizacion.items[0].precio_unitario).toBe(9000)
+})
+
+test('un guardado ajeno no provoca una relectura de la cotización', async ({ page }) => {
+  const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-SINGET', estado: 'BORRADOR' })
+  const realtime = await mockRealtimeChannel(page)
+  await login(page, '/cotizaciones/SH-E2E-SINGET')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-SINGET' })).toBeVisible()
+  await page.waitForTimeout(300)
+
+  const antes = (cotizacion as unknown as { __getsDeCotizacion: number }).__getsDeCotizacion
+  realtime.emit('section_saved', { section: 'partidas' })
+  await page.waitForTimeout(1200)
+
+  // El cambio ajeno llega por la mutación, no releyendo toda la cotización.
+  expect((cotizacion as unknown as { __getsDeCotizacion: number }).__getsDeCotizacion).toBe(antes)
+})
+
+test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-FOCO', estado: 'BORRADOR' })
+  const realtime = await mockRealtimeChannel(page)
+  await login(page, '/cotizaciones/SH-E2E-FOCO')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-FOCO' })).toBeVisible()
+
+  const rows = page.locator('table tbody tr')
+  const descripcion = rows.first().locator('td').nth(1).locator('input')
+  await descripcion.click()
+  await descripcion.fill('Estoy escribiendo aquí')
+
+  realtime.emit('item_mutation', {
+    action: 'upsert',
+    row_id: 'item-remota-1',
+    item: {
+      id: 'item-remota-1', cotizacion_id: 'SH-E2E-FOCO', categoria: 'Arte', descripcion: 'Partida del otro',
+      cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
+      x_pagar: 1000, margen: 2000, orden: 2, notas: null,
+    },
+  })
+
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(1).locator('td').nth(1).locator('input')).toHaveValue('Partida del otro')
+  // Ni se pierde el foco ni se pisa lo que estaba escribiendo.
+  await expect(descripcion).toBeFocused()
+  await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
+})
+
+test('escribir en Datos generales mientras otro está en la sección sí guarda', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-SECCION', estado: 'BORRADOR' })
+  const realtime = await mockRealtimeChannel(page)
+  await login(page, '/cotizaciones/SH-E2E-SECCION')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-SECCION' })).toBeVisible()
+
+  // El otro colaborador entra a Datos generales. (No se afirma sobre el aviso visual:
+  // llega por presencia y su momento es variable; lo que fija este test es que la
+  // presencia ajena ya no deja el campo en solo lectura ni detiene el autoguardado.)
+  realtime.emit('section_signal', { status: 'editing', section: 'general' })
+  await page.waitForTimeout(300)
+
+  // El campo sigue siendo editable y lo que escriba se guarda.
+  const proyecto = page.locator('input[placeholder="Nombre del proyecto"]')
+  await expect(proyecto).toBeEditable()
+  await proyecto.fill('Editado pese a la presencia ajena')
+
+  const [request] = await Promise.all([
+    page.waitForRequest((req) => req.url().includes('/general') && req.method() === 'PATCH'),
+    page.locator('textarea[placeholder="Sin notas..."]').click(),
+  ])
+  expect(request.postDataJSON().proyecto).toBe('Editado pese a la presencia ajena')
 })

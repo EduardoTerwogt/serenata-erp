@@ -60,9 +60,20 @@ export function reconcileServerItems(
   opciones: {
     celdaOcupada?: (rowId: string, campo: keyof QuotationFormItem) => boolean
     conservarLocal?: (rowId: string) => boolean
+    /**
+     * Una respuesta del servidor viaja con la foto del instante en que se pidió. Si
+     * mientras viajaba hubo una escritura local en esa celda, la respuesta está vieja
+     * y no debe aplicarse: la precedencia la decide CUÁNDO SE ESCRIBIÓ, no cuándo
+     * llegó la respuesta. Sin esta regla, un guardado ajeno disparaba una relectura
+     * que al volver borraba el monto que acababas de capturar.
+     */
+    escrituraLocalPosterior?: (rowId: string, campo: keyof QuotationFormItem) => boolean
   } = {}
 ): QuotationFormItem[] {
-  const celdaOcupada = opciones.celdaOcupada ?? (() => false)
+  const ocupadaOMasNueva = (rowId: string, campo: keyof QuotationFormItem) =>
+    (opciones.celdaOcupada ?? (() => false))(rowId, campo) ||
+    (opciones.escrituraLocalPosterior ?? (() => false))(rowId, campo)
+  const celdaOcupada = ocupadaOMasNueva
   const conservarLocal = opciones.conservarLocal ?? (() => false)
   const porId = new Map(locales.filter((item) => item.id).map((item) => [item.id as string, item]))
   const idsServidor = new Set(servidor.map((item) => item.id).filter(Boolean) as string[])

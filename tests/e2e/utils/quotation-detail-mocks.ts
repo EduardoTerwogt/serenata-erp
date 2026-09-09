@@ -14,6 +14,8 @@ export interface CotizacionDetailMockOptions {
   itemLatencyMs?: number
   /** Fuerza que el DELETE de partidas responda 500. */
   failItemDelete?: boolean
+  /** Latencia (ms) del GET de la cotización, para provocar respuestas obsoletas. */
+  detailLatencyMs?: number
 }
 
 interface CotizacionMockItem {
@@ -98,8 +100,13 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     ] as CotizacionMockItem[]),
   }
 
+  let getsDeCotizacion = 0
   await page.route(`**/api/cotizaciones/${options.id}`, async (route) => {
     const method = route.request().method()
+    if (method === 'GET') {
+      getsDeCotizacion += 1
+      if (options.detailLatencyMs) await new Promise((r) => setTimeout(r, options.detailLatencyMs))
+    }
     if (method === 'PUT') {
       const body = route.request().postDataJSON() as Record<string, unknown>
       Object.assign(cotizacion, {
@@ -301,5 +308,5 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     await fulfillJson(route, options.templates ?? [])
   })
 
-  return cotizacion
+  return Object.assign(cotizacion, { get __getsDeCotizacion() { return getsDeCotizacion } })
 }

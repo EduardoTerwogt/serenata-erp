@@ -136,6 +136,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const notasSectionRef = useRef<HTMLDivElement | null>(null)
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
   const totalsSectionRef = useRef<HTMLDivElement | null>(null)
+  const partidasSectionRef = useRef<HTMLDivElement | null>(null)
   const notasAutosaveTimerRef = useRef<number | null>(null)
   const generalAutosaveTimerRef = useRef<number | null>(null)
   const totalsAutosaveTimerRef = useRef<number | null>(null)
@@ -172,6 +173,12 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const pendingRowRemovalsRef = useRef<Set<string>>(new Set())
   // id provisional -> promesa con el id real que devuelva el POST
   const pendingRowIdsRef = useRef<Map<string, Promise<string>>>(new Map())
+  // Instante de la última escritura local por celda. Cualquier dato del servidor
+  // pedido ANTES de esa marca llega viejo y no debe aplicarse a esa celda.
+  const localWriteAtRef = useRef<Map<string, number>>(new Map())
+  const markLocalWrite = useCallback((rowId: string, field: QuotationItemCellField) => {
+    localWriteAtRef.current.set(getItemCellKey(rowId, field), Date.now())
+  }, [])
   const lastSavedNotasRef = useRef('')
   const lastSavedGeneralRef = useRef<GeneralSnapshot>(buildGeneralSnapshot({}))
   const lastSavedTotalsRef = useRef<TotalsSnapshot>(buildTotalsSnapshot({}))
@@ -226,6 +233,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     releaseItemCell,
     broadcastItemMutation,
     markSectionSaved,
+    isConnected,
   } = useQuotationPresence({
     cotizacionId: id,
     enabled: !!esEditable,
@@ -321,10 +329,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         setValue(`items.${index}.responsable_nombre`, formItem.responsable_nombre)
       }
     } else if (options?.allowInsert) {
+      // Nunca robar el foco por un cambio ajeno (ver nota en el efecto de mutaciones).
       // Solo un cambio remoto puede insertar una fila que aún no tenemos. Un ACK de
       // una petición propia nunca crea filas: si la fila ya no está en el formulario
       // es porque se borró, y reañadirla la resucitaba como fila fantasma.
-      append(formItem)
+      append(formItem, { shouldFocus: false })
     } else {
       return
     }
@@ -340,10 +349,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   const removeLocalItemState = useCallback((rowId: string) => {
     const index = getItemIndexByRowId(rowId)
-    if (index >= 0) replace((getValues('items') || []).filter((item) => item.id !== rowId))
+    if (index >= 0) remove(index)
 
     setCotizacion((prev) => prev ? { ...prev, items: (prev.items || []).filter((item) => item.id !== rowId) } : prev)
-  }, [getItemIndexByRowId, getValues, replace])
+  }, [getItemIndexByRowId, remove])
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
@@ -396,6 +405,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // celda que el usuario tenga sucia o bajo el cursor. Antes esto era un
   // applyCotizacionToState (reset completo) que borraba lo que estabas escribiendo.
   const resyncPartidasSuave = useCallback(async () => {
+    const pedidoEn = Date.now()
     try {
       const updated = await fetchQuotationDetail(id)
       const locales = getValues('items') || []
@@ -404,6 +414,12 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         celdaOcupada: (rowId, campo) => {
           const key = getItemCellKey(rowId, campo as QuotationItemCellField)
           return itemDirtyCellsRef.current.has(key) || itemFocusedCellsRef.current.has(key) || itemSavingCellsRef.current.has(key)
+        },
+        // Una escritura local posterior a la petición gana: el servidor respondió
+        // con una foto anterior y aplicarla borraría lo recién capturado.
+        escrituraLocalPosterior: (rowId, campo) => {
+          const at = localWriteAtRef.current.get(getItemCellKey(rowId, campo as QuotationItemCellField))
+          return at !== undefined && at >= pedidoEn
         },
         // Las filas provisionales y las que se están borrando siguen siendo del usuario.
         conservarLocal: (rowId) => rowId.startsWith(TEMP_ROW_PREFIX) || hasLocalItemRowActivity(rowId),
@@ -501,6 +517,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         : field === 'x_pagar' ? { x_pagar: item.x_pagar === '' ? 0 : Number(item.x_pagar) || 0 }
         : { responsable_id: item.responsable_id || '', responsable_nombre: item.responsable_nombre || '' }
       const updatedItem = await patchQuotationItem(rowId, patch)
+      markLocalWrite(rowId, field)
       itemDirtyCellsRef.current.delete(key)
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
@@ -513,31 +530,28 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       itemSavingCellsRef.current.delete(key)
     }
-  }, [broadcastItemMutation, getItemIndexByRowId, getValues, markSectionSaved, patchQuotationItem, scheduleItemCellIdleRelease, upsertLocalItemState])
+  }, [broadcastItemMutation, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, scheduleItemCellIdleRelease, upsertLocalItemState])
 
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
-    if (sectionEditors.notas) return
     if (notasAutosaveTimerRef.current !== null) window.clearTimeout(notasAutosaveTimerRef.current)
     notasAutosaveTimerRef.current = window.setTimeout(() => { void persistNotasAutosave() }, NOTAS_AUTOSAVE_DELAY_MS)
     return () => { if (notasAutosaveTimerRef.current !== null) { window.clearTimeout(notasAutosaveTimerRef.current); notasAutosaveTimerRef.current = null } }
-  }, [esEditable, isSavingNotas, notasInternas, persistNotasAutosave, sectionEditors.notas])
+  }, [esEditable, isSavingNotas, notasInternas, persistNotasAutosave])
 
   useEffect(() => {
     if (!esEditable || !generalLockHeldRef.current || !generalDirtyRef.current || isSavingGeneral) return
-    if (sectionEditors.general) return
     if (generalAutosaveTimerRef.current !== null) window.clearTimeout(generalAutosaveTimerRef.current)
     generalAutosaveTimerRef.current = window.setTimeout(() => { void persistGeneralAutosave() }, GENERAL_AUTOSAVE_DELAY_MS)
     return () => { if (generalAutosaveTimerRef.current !== null) { window.clearTimeout(generalAutosaveTimerRef.current); generalAutosaveTimerRef.current = null } }
-  }, [currentGeneralSnapshot, esEditable, isSavingGeneral, persistGeneralAutosave, sectionEditors.general])
+  }, [currentGeneralSnapshot, esEditable, isSavingGeneral, persistGeneralAutosave])
 
   useEffect(() => {
     if (!esEditable || !totalsLockHeldRef.current || !totalsDirtyRef.current || isSavingTotals) return
-    if (sectionEditors.totales) return
     if (totalsAutosaveTimerRef.current !== null) window.clearTimeout(totalsAutosaveTimerRef.current)
     totalsAutosaveTimerRef.current = window.setTimeout(() => { void persistTotalsAutosave() }, TOTALS_AUTOSAVE_DELAY_MS)
     return () => { if (totalsAutosaveTimerRef.current !== null) { window.clearTimeout(totalsAutosaveTimerRef.current); totalsAutosaveTimerRef.current = null } }
-  }, [currentTotalsSnapshot, esEditable, isSavingTotals, persistTotalsAutosave, sectionEditors.totales])
+  }, [currentTotalsSnapshot, esEditable, isSavingTotals, persistTotalsAutosave])
 
   useEffect(() => {
     const remoteNotasSaves = savedSections.notas || 0
@@ -572,16 +586,24 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (getItemIndexByRowId(latestItemMutation.item.id) >= 0) {
         upsertLocalItemState(latestItemMutation.item, { preserveLocalEdits: true })
       } else {
-        replace([...(getValues('items') || []), mapItemToFormItem(latestItemMutation.item)])
+        // `shouldFocus: false` es imprescindible: react-hook-form enfoca por defecto
+        // la fila recién añadida, así que la fila de otro colaborador te robaba el
+        // cursor mientras escribías.
+        append(mapItemToFormItem(latestItemMutation.item), { shouldFocus: false })
       }
     }
-  }, [getItemIndexByRowId, getValues, hasLocalItemRowActivity, latestItemMutation, removeLocalItemState, replace, upsertLocalItemState])
+  }, [append, getItemIndexByRowId, hasLocalItemRowActivity, latestItemMutation, removeLocalItemState, upsertLocalItemState])
 
+  // El cambio ajeno llega completo por `item_mutation`, que es un dato empujado por su
+  // autor. Antes cada guardado ajeno disparaba además una relectura completa: esa
+  // relectura viajaba con una foto vieja y al volver borraba lo recién capturado.
+  // El resync completo queda solo como red de seguridad al reconectar el canal.
+  const estabaConectadoRef = useRef(isConnected)
   useEffect(() => {
-    const remotePartidasSaves = savedSections.partidas || 0
-    if (!remotePartidasSaves) return
-    void resyncPartidasSuave()
-  }, [resyncPartidasSuave, savedSections.partidas])
+    const acabaDeReconectar = isConnected && !estabaConectadoRef.current
+    estabaConectadoRef.current = isConnected
+    if (acabaDeReconectar) void resyncPartidasSuave()
+  }, [isConnected, resyncPartidasSuave])
 
   useEffect(() => { if (!generalLockHeldRef.current) return; if (!areGeneralSnapshotsEqual(currentGeneralSnapshot, lastSavedGeneralRef.current)) generalDirtyRef.current = true }, [currentGeneralSnapshot])
   useEffect(() => { if (!totalsLockHeldRef.current) return; if (!areTotalsSnapshotsEqual(currentTotalsSnapshot, lastSavedTotalsRef.current)) totalsDirtyRef.current = true }, [currentTotalsSnapshot])
@@ -595,13 +617,26 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     Object.values(itemCellIdleReleaseTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
   }, [clearGeneralIdleReleaseTimer, clearNotasIdleReleaseTimer, clearTotalsIdleReleaseTimer])
 
-  const handleNotasFocus = useCallback(() => { if (!esEditable || !!sectionEditors.notas) return; clearNotasIdleReleaseTimer(); notasFocusedRef.current = true; if (!notasLockHeldRef.current) { notasLockHeldRef.current = true; setActiveSection('notas') } }, [clearNotasIdleReleaseTimer, esEditable, sectionEditors.notas, setActiveSection])
-  const handleGeneralFocus = useCallback(() => { if (!esEditable || !!sectionEditors.general) return; clearGeneralIdleReleaseTimer(); generalFocusedRef.current = true; if (!generalLockHeldRef.current) { generalLockHeldRef.current = true; setActiveSection('general') } }, [clearGeneralIdleReleaseTimer, esEditable, sectionEditors.general, setActiveSection])
-  const handleTotalsFocus = useCallback(() => { if (!esEditable || !!sectionEditors.totales) return; clearTotalsIdleReleaseTimer(); totalsFocusedRef.current = true; if (!totalsLockHeldRef.current) { totalsLockHeldRef.current = true; setActiveSection('totales') } }, [clearTotalsIdleReleaseTimer, esEditable, sectionEditors.totales, setActiveSection])
+  const handleNotasFocus = useCallback(() => { if (!esEditable) return; clearNotasIdleReleaseTimer(); notasFocusedRef.current = true; if (!notasLockHeldRef.current) { notasLockHeldRef.current = true; setActiveSection('notas') } }, [clearNotasIdleReleaseTimer, esEditable, setActiveSection])
+  const handleGeneralFocus = useCallback(() => { if (!esEditable) return; clearGeneralIdleReleaseTimer(); generalFocusedRef.current = true; if (!generalLockHeldRef.current) { generalLockHeldRef.current = true; setActiveSection('general') } }, [clearGeneralIdleReleaseTimer, esEditable, setActiveSection])
+  const handleTotalsFocus = useCallback(() => { if (!esEditable) return; clearTotalsIdleReleaseTimer(); totalsFocusedRef.current = true; if (!totalsLockHeldRef.current) { totalsLockHeldRef.current = true; setActiveSection('totales') } }, [clearTotalsIdleReleaseTimer, esEditable, setActiveSection])
 
   const handleNotasBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && notasSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && notasSectionRef.current?.contains(activeElement)) return; notasFocusedRef.current = false; clearNotasIdleReleaseTimer(); if (notasDirtyRef.current) { void persistNotasAutosave(); return } notasLockHeldRef.current = false; releaseSection('notas') }, 0) }, [clearNotasIdleReleaseTimer, esEditable, persistNotasAutosave, releaseSection])
   const handleGeneralBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && generalSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && generalSectionRef.current?.contains(activeElement)) return; generalFocusedRef.current = false; clearGeneralIdleReleaseTimer(); if (generalDirtyRef.current) { void persistGeneralAutosave(); return } generalLockHeldRef.current = false; releaseSection('general') }, 0) }, [clearGeneralIdleReleaseTimer, esEditable, persistGeneralAutosave, releaseSection])
   const handleTotalsBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && totalsSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && totalsSectionRef.current?.contains(activeElement)) return; totalsFocusedRef.current = false; clearTotalsIdleReleaseTimer(); if (totalsDirtyRef.current) { void persistTotalsAutosave(); return } totalsLockHeldRef.current = false; releaseSection('totales') }, 0) }, [clearTotalsIdleReleaseTimer, esEditable, persistTotalsAutosave, releaseSection])
+
+  // Sin esto, tocar la tabla una vez te dejaba marcado como editor de Partidas para
+  // los demás indefinidamente: era la única sección sin liberación al salir.
+  const handlePartidasBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    if (!esEditable) return
+    const nextTarget = event.relatedTarget as Node | null
+    if (nextTarget && partidasSectionRef.current?.contains(nextTarget)) return
+    window.setTimeout(() => {
+      const activeElement = document.activeElement
+      if (activeElement && partidasSectionRef.current?.contains(activeElement)) return
+      releaseSection('partidas')
+    }, 0)
+  }, [esEditable, releaseSection])
 
   const trackedHandleClienteChange = useCallback((value: string) => { handleGeneralFocus(); generalDirtyRef.current = true; handleClienteChange(value) }, [handleClienteChange, handleGeneralFocus])
   const trackedHandleProyectoChange = useCallback((value: string) => { handleGeneralFocus(); generalDirtyRef.current = true; handleProyectoChange(value) }, [handleGeneralFocus, handleProyectoChange])
@@ -623,13 +658,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   const handleItemFieldChange = useCallback((rowId: string, field: QuotationItemCellField) => {
     const key = getItemCellKey(rowId, field)
+    markLocalWrite(rowId, field)
     itemDirtyCellsRef.current.add(key)
     itemFocusedCellsRef.current.add(key)
     lockItemCell(rowId, field)
     clearItemCellIdleReleaseTimer(key)
     clearItemCellAutosaveTimer(key)
     itemCellAutosaveTimersRef.current[key] = window.setTimeout(() => { void persistItemCellAutosave(rowId, field) }, ITEM_CELL_AUTOSAVE_DELAY_MS)
-  }, [clearItemCellAutosaveTimer, clearItemCellIdleReleaseTimer, lockItemCell, persistItemCellAutosave])
+  }, [clearItemCellAutosaveTimer, clearItemCellIdleReleaseTimer, lockItemCell, markLocalWrite, persistItemCellAutosave])
 
   const handleItemFieldBlur = useCallback((rowId: string, field: QuotationItemCellField) => {
     const key = getItemCellKey(rowId, field)
@@ -838,9 +874,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const currentUserId = (session?.user as { id?: string | null } | undefined)?.id || session?.user?.email || null
   const uniqueOnlineUsers = onlineUsers.filter((user, index, arr) => arr.findIndex((item) => item.user_id === user.user_id) === index)
   const visibleOnlineUsers = uniqueOnlineUsers.filter((user) => user.user_id !== currentUserId)
-  const notasLockedByOther = !!sectionEditors.notas
-  const generalLockedByOther = !!sectionEditors.general
-  const totalsLockedByOther = !!sectionEditors.totales
+  // Modelo Google Sheets: la presencia ajena resalta la sección y dice quién edita,
+  // pero nunca deja un campo en solo lectura ni detiene el autoguardado.
 
   const SectionEditBadge = ({ section }: { section: QuotationPresenceSection }) => { const editor = sectionEditors[section]; if (!editor) return null; return <p className="text-xs text-accent-quiet mb-2">{getShortName(editor.name, editor.email)} está editando esta sección</p> }
 
@@ -901,22 +936,22 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      {(notasInternas || esEditable) && <div ref={notasSectionRef} className={`bg-row/60 border rounded-panel p-4 ${notasLockedByOther ? 'border-accent-quiet/70 opacity-80' : 'border-hairline'}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}><SectionEditBadge section="notas" /><p className="sn-label mb-2">Notas del evento (uso interno)</p>{esEditable ? <textarea value={notasInternas} onChange={e => { handleNotasFocus(); notasDirtyRef.current = true; setNotasInternas(e.target.value) }} rows={3} placeholder="Sin notas..." disabled={notasLockedByOther} className="w-full bg-transparent text-body text-content resize-none outline-none placeholder-faint disabled:opacity-50 disabled:cursor-not-allowed" /> : <p className="text-subtext text-content whitespace-pre-wrap">{notasInternas || '—'}</p>}</div>}
+      {(notasInternas || esEditable) && <div ref={notasSectionRef} className={`bg-row/60 border rounded-panel p-4 ${sectionEditors.notas ? 'border-accent-quiet/70' : 'border-hairline'}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}><SectionEditBadge section="notas" /><p className="sn-label mb-2">Notas del evento (uso interno)</p>{esEditable ? <textarea value={notasInternas} onChange={e => { handleNotasFocus(); notasDirtyRef.current = true; setNotasInternas(e.target.value) }} rows={3} placeholder="Sin notas..." className="w-full bg-transparent text-body text-content resize-none outline-none placeholder-faint disabled:opacity-50 disabled:cursor-not-allowed" /> : <p className="text-subtext text-content whitespace-pre-wrap">{notasInternas || '—'}</p>}</div>}
 
-      <div ref={generalSectionRef} className={`rounded-panel ${generalLockedByOther ? 'ring-1 ring-accent-quiet/70 opacity-80' : ''}`} onFocusCapture={handleGeneralFocus} onBlurCapture={handleGeneralBlur}>
+      <div ref={generalSectionRef} className={`rounded-panel ${sectionEditors.general ? 'ring-1 ring-accent-quiet/70' : ''}`} onFocusCapture={handleGeneralFocus} onBlurCapture={handleGeneralBlur}>
         <div className="px-1"><SectionEditBadge section="general" /></div>
-        <QuotationGeneralInfoSection register={register} setValue={setValue} clienteInput={clienteInput} proyectoInput={proyectoInput} clienteSugerencias={clienteSugerencias} mostrarClienteDropdown={mostrarClienteDropdown} setMostrarClienteDropdown={setMostrarClienteDropdown} proyectosDelCliente={proyectosDelCliente} mostrarProyectoDropdown={mostrarProyectoDropdown} setMostrarProyectoDropdown={setMostrarProyectoDropdown} listaClientes={listaClientes} handleClienteChange={trackedHandleClienteChange} handleProyectoChange={trackedHandleProyectoChange} seleccionarCliente={seleccionarCliente} setProyectoInput={setProyectoInput} onClienteSelected={trackedSelectCliente} onProyectoSelected={trackedSelectProyecto} onFechaEntregaChange={trackedHandleFechaEntregaChange} onLocacionChange={trackedHandleLocacionChange} isReadOnly={!esEditable || generalLockedByOther} readOnlyDisplay={esEditable ? 'input' : 'text'} dateLabel={formatDateDisplay(cotizacion.fecha_cotizacion)} fechaEntregaValue={watch('fecha_entrega')} locacionValue={watch('locacion')} />
+        <QuotationGeneralInfoSection register={register} setValue={setValue} clienteInput={clienteInput} proyectoInput={proyectoInput} clienteSugerencias={clienteSugerencias} mostrarClienteDropdown={mostrarClienteDropdown} setMostrarClienteDropdown={setMostrarClienteDropdown} proyectosDelCliente={proyectosDelCliente} mostrarProyectoDropdown={mostrarProyectoDropdown} setMostrarProyectoDropdown={setMostrarProyectoDropdown} listaClientes={listaClientes} handleClienteChange={trackedHandleClienteChange} handleProyectoChange={trackedHandleProyectoChange} seleccionarCliente={seleccionarCliente} setProyectoInput={setProyectoInput} onClienteSelected={trackedSelectCliente} onProyectoSelected={trackedSelectProyecto} onFechaEntregaChange={trackedHandleFechaEntregaChange} onLocacionChange={trackedHandleLocacionChange} isReadOnly={!esEditable} readOnlyDisplay={esEditable ? 'input' : 'text'} dateLabel={formatDateDisplay(cotizacion.fecha_cotizacion)} fechaEntregaValue={watch('fecha_entrega')} locacionValue={watch('locacion')} />
       </div>
 
-      <div className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')}>
+      <div ref={partidasSectionRef} className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')} onBlurCapture={handlePartidasBlur}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
         <QuotationItemsSection editable={!!esEditable} register={register} watchedItems={watchedItems} fields={fields} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onCopyClick={() => setShowCopyModal(true)} items={itemsController} />      </div>
 
       <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={handleImportItems} />
 
-      <div ref={totalsSectionRef} className={`rounded-panel ${totalsLockedByOther ? 'ring-1 ring-accent-quiet/70 opacity-80' : ''}`} onFocusCapture={handleTotalsFocus} onBlurCapture={handleTotalsBlur}>
+      <div ref={totalsSectionRef} className={`rounded-panel ${sectionEditors.totales ? 'ring-1 ring-accent-quiet/70' : ''}`} onFocusCapture={handleTotalsFocus} onBlurCapture={handleTotalsBlur}>
         <div className="px-1"><SectionEditBadge section="totales" /></div>
-        <QuotationTotalsPanels totals={displayTotales} editable={!!esEditable && !totalsLockedByOther} porcentaje_fee={porcentaje_fee} setPorcentajeFee={trackedSetPorcentajeFee} iva_activo={iva_activo} setIvaActivo={trackedSetIvaActivo} descuento_tipo={descuento_tipo} setDescuentoTipo={trackedSetDescuentoTipo} descuento_valor={descuento_valor} setDescuentoValor={trackedSetDescuentoValor} estimatedTaxes={estimatedTaxes} />
+        <QuotationTotalsPanels totals={displayTotales} editable={!!esEditable} porcentaje_fee={porcentaje_fee} setPorcentajeFee={trackedSetPorcentajeFee} iva_activo={iva_activo} setIvaActivo={trackedSetIvaActivo} descuento_tipo={descuento_tipo} setDescuentoTipo={trackedSetDescuentoTipo} descuento_valor={descuento_valor} setDescuentoValor={trackedSetDescuentoValor} estimatedTaxes={estimatedTaxes} />
       </div>
     </div>
   )
