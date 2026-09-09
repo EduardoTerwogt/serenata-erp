@@ -278,24 +278,22 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     if (idNuevo) {
       try {
         await expect
-          .poll(() => framesRecibidosPorB.filter((frame) => frame.includes(idNuevo)).length, { timeout: 20_000 })
+          .poll(() => framesRecibidosPorB.filter((frame) => frame.includes(idNuevo)).length, { timeout: 15_000 })
           .toBeGreaterThan(0)
-      } catch (error) {
-        // Si el alta de A cayó en su catch, A repinta la fila desde el servidor y por
-        // fuera se ve idéntico a un alta correcta -- salvo por este banner, que es la
-        // única señal de que el aviso nunca se llegó a emitir.
+      } catch {
+        // El diagnóstico va DENTRO del error, no por consola: en el log de CI el
+        // bloque de fallo siempre se ve, y las líneas sueltas de consola quedan
+        // sepultadas cientos de líneas más arriba.
         const banner = await pageA.locator('.text-cancelled-fg').first().textContent().catch(() => null)
-        const mutaciones = framesRecibidosPorB.filter((frame) => frame.includes('item_mutation'))
-        console.log(`[live colab] banner de error en A: ${banner?.trim() || '(ninguno)'}`)
-        console.log(`[live colab] frames totales enviados por A: ${framesEnviadosPorA.length}`)
-        console.log(`[live colab] A emitió el aviso de la fila nueva: ${framesEnviadosPorA.some((frame) => frame.includes(idNuevo))}`)
-        console.log(`[live colab] item_mutation enviados por A: ${framesEnviadosPorA.filter((frame) => frame.includes('item_mutation')).length}`)
-        console.log(`[live colab] frames totales recibidos por B: ${framesRecibidosPorB.length}`)
-        console.log(`[live colab] frames item_mutation recibidos por B: ${mutaciones.length}`)
-        console.log(`[live colab] ids de partida vistos por B: ${Array.from(new Set(framesRecibidosPorB.join(' ').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g) || [])).join(', ') || '(ninguno)'}`)
-        console.log(`[live colab] id de la fila nueva: ${idNuevo}`)
-        console.log(`[live colab] último item_mutation: ${mutaciones.at(-1)?.slice(0, 800) || '(ninguno)'}`)
-        throw error
+        const enviadosPorA = framesEnviadosPorA.filter((frame) => frame.includes('item_mutation')).length
+        const recibidosPorB = framesRecibidosPorB.filter((frame) => frame.includes('item_mutation')).length
+        throw new Error(
+          `El aviso de la fila nueva (${idNuevo}) no llegó a B.\n` +
+          `  ¿A lo emitió?: ${framesEnviadosPorA.some((frame) => frame.includes(idNuevo))}\n` +
+          `  item_mutation emitidos por A: ${enviadosPorA} (de ${framesEnviadosPorA.length} frames)\n` +
+          `  item_mutation recibidos por B: ${recibidosPorB} (de ${framesRecibidosPorB.length} frames)\n` +
+          `  banner de error en A: ${banner?.trim() || '(ninguno)'}`
+        )
       }
     }
 
