@@ -3,6 +3,7 @@ import { requireSection } from '@/lib/api-auth'
 import { findOrCreateProveedorByNombre } from '@/lib/db'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemCotizacion } from '@/lib/types'
 
@@ -59,6 +60,14 @@ export async function PATCH(
     // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
     after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, updatedItem ? [updatedItem] : [], 'PATCH /api/cotizaciones/:id/items/:itemId') })
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
+    // Evento confirmado por servidor tras el commit -- payload chico (ids +
+    // timestamp, nunca la partida completa). Nadie lo consume del lado UI
+    // todavía; es la prueba end-to-end de la infraestructura de Fase 1.
+    void sendRealtimeBroadcast([{
+      topic: `cotizacion:${id}`,
+      event: 'item_confirmed',
+      payload: { cotizacion_id: id, item_id: itemId, at: new Date().toISOString() },
+    }])
 
     return Response.json({ item: updatedItem })
   } catch (error) {
