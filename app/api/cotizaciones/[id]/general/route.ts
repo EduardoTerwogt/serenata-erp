@@ -1,12 +1,21 @@
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
-import {
-  buildUpdateCotizacionPayload,
-  createOrReplaceCotizacion,
-  runQuotationNonCriticalAutosaves,
-} from '@/lib/server/quotations/persistence'
+import { runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { supabaseAdmin } from '@/lib/supabase'
+import { Cotizacion } from '@/lib/types'
 
+/**
+ * Guarda SOLO los datos generales.
+ *
+ * Antes pasaba por `save_cotizacion`, que borraba todas las partidas y las
+ * reinsertaba con ids nuevos. Como esto se dispara con el autoguardado 800 ms
+ * después de teclear el cliente o el proyecto, cada tecleo le cambiaba la identidad
+ * a todas las partidas: la otra pantalla -o la tuya misma, con un guardado de celda
+ * en vuelo- quedaba apuntando a ids inexistentes, sus ediciones respondían 404 y sus
+ * borrados no borraban nada. Era la causa raíz de "se borran los montos" y "no puedo
+ * borrar las filas".
+ */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -16,24 +25,25 @@ export async function PATCH(
 
   try {
     const { id } = await params
-    const previousCotizacion = await getCotizacionById(id)
     const body = await request.json().catch(() => ({}))
 
-    const payload = await buildUpdateCotizacionPayload(
-      id,
-      previousCotizacion,
-      {
-        cliente: typeof body?.cliente === 'string' ? body.cliente : previousCotizacion.cliente,
-        proyecto: typeof body?.proyecto === 'string' ? body.proyecto : previousCotizacion.proyecto,
-        fecha_entrega: typeof body?.fecha_entrega === 'string' || body?.fecha_entrega === null ? body.fecha_entrega : previousCotizacion.fecha_entrega,
-        locacion: typeof body?.locacion === 'string' || body?.locacion === null ? body.locacion : previousCotizacion.locacion,
-      },
-      null,
-      {}
-    )
+    // Solo viajan las claves que llegaron: la RPC conserva el resto de la fila.
+    const patch: Record<string, unknown> = {
+      ...(typeof body?.cliente === 'string' ? { cliente: body.cliente } : {}),
+      ...(typeof body?.proyecto === 'string' ? { proyecto: body.proyecto } : {}),
+      ...(typeof body?.fecha_entrega === 'string' || body?.fecha_entrega === null ? { fecha_entrega: body.fecha_entrega ?? '' } : {}),
+      ...(typeof body?.locacion === 'string' || body?.locacion === null ? { locacion: body.locacion ?? '' } : {}),
+    }
 
-    await createOrReplaceCotizacion(payload)
-    await runQuotationNonCriticalAutosaves(payload.cliente, payload.proyecto, [], 'PATCH /api/cotizaciones/:id/general')
+    const { data, error } = await supabaseAdmin.rpc('patch_cotizacion_general', {
+      p_cotizacion_id: id,
+      p_patch: patch,
+    })
+    if (error) throw error
+    if (!data) return Response.json({ error: 'Cotización no encontrada' }, { status: 404 })
+
+    const actualizada = data as Cotizacion
+    await runQuotationNonCriticalAutosaves(actualizada.cliente, actualizada.proyecto, [], 'PATCH /api/cotizaciones/:id/general')
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
 
     return Response.json(await getCotizacionById(id))

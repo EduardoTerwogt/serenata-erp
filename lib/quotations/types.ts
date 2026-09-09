@@ -63,7 +63,11 @@ export interface EstimatedTaxes {
   utilidadNeta: number
 }
 
-export type PersistedQuotationItem = Omit<import('@/lib/types').ItemCotizacion, 'id'>
+// El id viaja SOLO cuando la partida ya es de esta cotización, para que el guardado
+// completo conserve su identidad en vez de borrarla y recrearla con un id nuevo (ver
+// buildPersistedQuotationItems). Antes el tipo lo omitía siempre, que era justo el
+// defecto: cada guardado le cambiaba la identidad a todas las partidas.
+export type PersistedQuotationItem = Omit<import('@/lib/types').ItemCotizacion, 'id'> & { id?: string }
 
 export interface QuotationPdfItem {
   categoria: string

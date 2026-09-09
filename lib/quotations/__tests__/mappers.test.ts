@@ -349,3 +349,29 @@ describe('reconcileServerItems', () => {
     expect(out.map((i) => i.id)).toEqual(['b', 'a'])
   })
 })
+
+/**
+ * Causa raíz de "se borran los montos" y "no puedo borrar las filas": el guardado
+ * completo mandaba las partidas sin id, así que la base las borraba y las reinsertaba
+ * con ids nuevos. La otra pantalla quedaba apuntando a partidas inexistentes.
+ */
+describe('buildPersistedQuotationItems: identidad de las partidas', () => {
+  it('conserva el id de una partida que ya es de esta cotización', () => {
+    const [fila] = buildPersistedQuotationItems('SH001', [{ id: 'item-1', descripcion: 'Uno editado', cantidad: 1, precio_unitario: 100 }], {
+      previousItems: [{ id: 'item-1', descripcion: 'Uno' }] as never,
+    })
+    expect(fila.id).toBe('item-1')
+  })
+
+  it('NO conserva el id de una partida ajena (copiada de otra cotización)', () => {
+    const [fila] = buildPersistedQuotationItems('SH001', [{ id: 'item-de-otra', descripcion: 'Copiada', cantidad: 1, precio_unitario: 100 }], {
+      previousItems: [{ id: 'item-1', descripcion: 'Uno' }] as never,
+    })
+    expect(fila.id).toBeUndefined()
+  })
+
+  it('una partida nueva viaja sin id', () => {
+    const [fila] = buildPersistedQuotationItems('SH001', [{ descripcion: 'Nueva', cantidad: 1, precio_unitario: 100 }])
+    expect(fila.id).toBeUndefined()
+  })
+})

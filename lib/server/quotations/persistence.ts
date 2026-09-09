@@ -1,4 +1,4 @@
-import { getCotizacionById, updateCotizacion as updateCotizacionRecord } from '@/lib/db'
+import { getCotizacionById } from '@/lib/db'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemCotizacion } from '@/lib/types'
@@ -107,17 +107,17 @@ export async function saveNotasInternas(id: string, notas: string | null) {
   if (error) throw error
 }
 
+/**
+ * Recalcula el encabezado DENTRO de la base, en una sentencia.
+ *
+ * Antes se leía la cotización, se calculaban los totales en JS y se escribían de
+ * vuelta: dos guardados simultáneos podían leer ambos la misma foto y dejar el
+ * encabezado sin uno de los cambios. Las fórmulas de la RPC son las mismas de
+ * lib/quotations/calculations.ts (ver la migración, que las documenta).
+ */
 export async function recalculateQuotationHeader(cotizacionId: string) {
-  const cotizacion = await getCotizacionById(cotizacionId)
-  const persistenceData = buildQuotationPersistenceData(
-    cotizacion.items || [],
-    cotizacion.porcentaje_fee ?? 0.15,
-    cotizacion.iva_activo ?? true,
-    cotizacion.descuento_tipo ?? 'monto',
-    cotizacion.descuento_valor ?? 0
-  )
-
-  await updateCotizacionRecord(cotizacionId, persistenceData)
+  const { error } = await supabaseAdmin.rpc('recalcular_totales_cotizacion', { p_cotizacion_id: cotizacionId })
+  if (error) throw error
   return getCotizacionById(cotizacionId)
 }
 

@@ -206,6 +206,11 @@ export function buildPersistedQuotationItems(
     })
 
     return {
+      // El id solo viaja para partidas que YA son de esta cotización: así el guardado
+      // completo deja de cambiarles la identidad (lo que rompía a la otra pantalla),
+      // y una partida copiada de otra cotización llega sin id y recibe uno nuevo en
+      // vez de robarle la fila a su cotización de origen.
+      ...(item.id && previousItemsById.has(item.id) ? { id: item.id } : {}),
       cotizacion_id: cotizacionId,
       categoria: normalizedItem.categoria,
       descripcion: normalizedItem.descripcion,

@@ -1,11 +1,17 @@
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
-import {
-  buildUpdateCotizacionPayload,
-  createOrReplaceCotizacion,
-} from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { supabaseAdmin } from '@/lib/supabase'
 
+/**
+ * Guarda SOLO la configuración de totales (fee, IVA, descuento) y deja que la base
+ * recalcule el encabezado con las partidas que haya en ese momento.
+ *
+ * Antes pasaba por `save_cotizacion` -que borraba y reinsertaba todas las partidas
+ * con ids nuevos- y además calculaba los totales en JS a partir de una lectura
+ * previa, así que dos guardados simultáneos podían dejar el encabezado con una foto
+ * vieja. Ahora el recálculo ocurre dentro de la base, en una sentencia.
+ */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -15,23 +21,22 @@ export async function PATCH(
 
   try {
     const { id } = await params
-    const previousCotizacion = await getCotizacionById(id)
     const body = await request.json().catch(() => ({}))
 
-    const payload = await buildUpdateCotizacionPayload(
-      id,
-      previousCotizacion,
-      {},
-      null,
-      {
-        porcentaje_fee: typeof body?.porcentaje_fee === 'number' ? body.porcentaje_fee : previousCotizacion.porcentaje_fee,
-        iva_activo: typeof body?.iva_activo === 'boolean' ? body.iva_activo : previousCotizacion.iva_activo,
-        descuento_tipo: body?.descuento_tipo === 'monto' || body?.descuento_tipo === 'porcentaje' ? body.descuento_tipo : previousCotizacion.descuento_tipo,
-        descuento_valor: typeof body?.descuento_valor === 'number' ? body.descuento_valor : previousCotizacion.descuento_valor,
-      }
-    )
+    const patch: Record<string, unknown> = {
+      ...(typeof body?.porcentaje_fee === 'number' ? { porcentaje_fee: body.porcentaje_fee } : {}),
+      ...(typeof body?.iva_activo === 'boolean' ? { iva_activo: body.iva_activo } : {}),
+      ...(body?.descuento_tipo === 'monto' || body?.descuento_tipo === 'porcentaje' ? { descuento_tipo: body.descuento_tipo } : {}),
+      ...(typeof body?.descuento_valor === 'number' ? { descuento_valor: body.descuento_valor } : {}),
+    }
 
-    await createOrReplaceCotizacion(payload)
+    const { data, error } = await supabaseAdmin.rpc('patch_cotizacion_totales', {
+      p_cotizacion_id: id,
+      p_patch: patch,
+    })
+    if (error) throw error
+    if (!data) return Response.json({ error: 'Cotización no encontrada' }, { status: 404 })
+
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
 
     return Response.json(await getCotizacionById(id))
