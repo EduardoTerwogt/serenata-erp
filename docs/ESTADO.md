@@ -1,6 +1,6 @@
 # Estado real del proyecto
 
-**Última actualización:** 2026-09-09 · `main` en `3d18c6c`
+**Última actualización:** 2026-09-09 · `main` en `d203044`, branch `claude/eloquent-lamport-h7effg` activa
 
 Este documento es la foto honesta del repo: qué funciona de verdad, qué está a
 medias y qué está roto ahora mismo. Si vas a retomar el trabajo, léelo antes que
@@ -25,7 +25,7 @@ cualquier otra cosa.
 | Admin de usuarios y sync a Google Sheets | Funciona | `critical/admin-usuarios.spec.ts` |
 | Dashboard (incluye gastos fijos) | Funciona | `lib/server/repositories/dashboard.ts` + sus tests |
 
-**Suites en verde hoy:** 351 unit (Vitest, 45 archivos) y 66 e2e mockeados
+**Suites en verde hoy:** 378 unit (Vitest, 50 archivos) y 66 e2e mockeados
 (smoke + critical). Ambas corren en cada push.
 
 ---
@@ -96,7 +96,74 @@ Los tres se detectaron con el nivel `live`; ningún mock los habría visto.
 
 ---
 
-## 3. Features parciales — preguntar antes de tocar
+## 3. Rediseño de colaboración en tiempo real — Fase 0/1 en curso
+
+Iniciativa de alto riesgo (Realtime, RPCs, seguridad, concurrencia) ejecutada
+en branch dedicada `claude/eloquent-lamport-h7effg` + PR draft + Vercel
+Preview, como excepción explícita aprobada a la regla de "siempre `main`" —
+ver la política git de la sección "Git — setup y reglas" de `CLAUDE.md`. El
+Preview de esta branch apunta al proyecto Supabase de prueba
+(`serenata-erp-test`), no a producción.
+
+### Fase 0 — Baseline (cerrada)
+
+Batería completa corrida sobre esta branch antes de tocar nada:
+
+| Comando | Resultado |
+|---|---|
+| `npx tsc --noEmit` | Verde |
+| `npm run lint` | Verde (0 errores, 9 warnings preexistentes) |
+| `npm test` | 378/378 verde |
+| `npm run build` | Verde |
+| `npm run test:e2e:smoke` | 21/21 verde |
+| `npm run test:e2e:critical` | 45/45 verde (incluye los 4 casos de colaboración mockeados de `cotizaciones-editar.spec.ts` vía `tests/e2e/utils/realtime-mock.ts`) |
+| `npm run check-migrations` | Verde, 46 migraciones |
+| `npm run test:e2e:live` | No corrible en este sandbox (sin salida de red a `ozrtsludmcguvgqdjicn.supabase.co`); se dispara vía `workflow_dispatch` del job `live` en CI |
+
+Nota de entorno: el sandbox de código no tiene salida de red directa al
+proyecto Supabase de prueba (confirmado arriba, en la sección 2), pero el
+**servidor MCP de Supabase sí tiene acceso directo** a ambos proyectos
+(`serenata-erp-test` y `serenata-erp`) — se usó para verificar en vivo el
+estado de RLS de `realtime.messages` y para aplicar la migración de Fase 1.
+Es un canal distinto del `fetch`/Playwright de la app, que sigue bloqueado.
+
+El caso de colaboración que falla hoy en CI (documentado en la sección 2,
+línea ~282 de `cotizaciones-colaboracion.spec.ts`) sigue así a propósito —
+no se toca en Fase 0/1, se resuelve solo cuando el modelo de sección-lock se
+retire en una fase posterior del rediseño.
+
+Mapa de archivos de la colaboración actual (para quien retome esto):
+`hooks/useQuotationPresence.ts`, `lib/supabase-browser.ts`, `lib/supabase.ts`,
+`app/cotizaciones/[id]/page.tsx` (`RECONCILIACION_MS`, `reconcileServerItems`),
+las 3 rutas PATCH de cotizaciones (`items/[itemId]`, `general`, `totales`) y
+sus RPCs (`patch_item_cotizacion`, `patch_cotizacion_general`,
+`patch_cotizacion_totales`), `tests/e2e/live/cotizaciones-colaboracion.spec.ts`,
+`tests/e2e/utils/realtime-mock.ts`, `tests/e2e/utils/live-helpers.ts`.
+
+### Fase 1 — Infraestructura Realtime segura (en curso)
+
+Objetivo: cerrar el hueco de seguridad real — hoy cualquiera con la anon key
+pública puede unirse al canal `cotizacion:*` de cualquier cotización, porque
+`useQuotationPresence.ts` usa un canal público sin autenticación. No toca
+todavía el protocolo de mutación (conflicto por campo, `revision` — eso es
+Fase 2) ni el grid de partidas.
+
+**Criterios de éxito, congelados por escrito:**
+
+1. Dos clientes autorizados (sesión NextAuth real, sección `cotizaciones`)
+   que se unen al mismo canal privado `cotizacion:<id>` reciben un evento de
+   prueba emitido por el servidor.
+2. Un cliente sin la sección `cotizaciones`, y otro con un token
+   expirado/con firma inválida, NO pueden unirse.
+3. Con el WebSocket completamente cortado (mismo mecanismo que el caso 8 de
+   `cotizaciones-colaboracion.spec.ts`), la reconciliación de 5s converge
+   exactamente igual que hoy — Fase 1 no toca ese mecanismo.
+
+Ver el detalle de implementación en el plan de ejecución de la sesión.
+
+---
+
+## 4. Features parciales — preguntar antes de tocar
 
 - **Google Calendar desde Proyectos:** la UI existe, el flujo end-to-end no está
   cerrado. En planeación sí funciona; no asumir que es lo mismo.
@@ -116,7 +183,7 @@ consultar.
 
 ---
 
-## 4. Deuda conocida
+## 5. Deuda conocida
 
 - Las migraciones se aplican **a mano** en el SQL Editor de Supabase; no hay CLI ni
   aplicación automática. `npm run check-migrations` solo lista y valida nombres.
