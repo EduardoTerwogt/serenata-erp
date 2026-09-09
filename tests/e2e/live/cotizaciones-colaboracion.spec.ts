@@ -49,7 +49,10 @@ function subtotal(page: Page): Locator {
 function grabarFramesRealtime(page: Page, destino: string[]) {
   page.on('websocket', (ws) => {
     ws.on('framereceived', (frame) => {
-      if (typeof frame.payload === 'string') destino.push(frame.payload)
+      // Los frames del canal llegan como Buffer cuando viajan comprimidos: quedarse
+      // solo con los `string` dejaba el grabador ciego y hacía parecer que no llegaba
+      // nada. Se guardan ambos.
+      destino.push(typeof frame.payload === 'string' ? frame.payload : frame.payload.toString('utf8'))
     })
   })
 }
@@ -251,7 +254,10 @@ test.describe('live: colaboración real entre dos usuarios', () => {
         const banner = await pageA.locator('.text-cancelled-fg').first().textContent().catch(() => null)
         const mutaciones = framesRecibidosPorB.filter((frame) => frame.includes('item_mutation'))
         console.log(`[live colab] banner de error en A: ${banner?.trim() || '(ninguno)'}`)
+        console.log(`[live colab] frames totales recibidos por B: ${framesRecibidosPorB.length}`)
         console.log(`[live colab] frames item_mutation recibidos por B: ${mutaciones.length}`)
+        console.log(`[live colab] ids de partida vistos por B: ${Array.from(new Set(framesRecibidosPorB.join(' ').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g) || [])).join(', ') || '(ninguno)'}`)
+        console.log(`[live colab] id de la fila nueva: ${idNuevo}`)
         console.log(`[live colab] último item_mutation: ${mutaciones.at(-1)?.slice(0, 800) || '(ninguno)'}`)
         throw error
       }
