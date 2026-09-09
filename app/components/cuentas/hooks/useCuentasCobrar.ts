@@ -89,6 +89,9 @@ export function useCuentasCobrar() {
     formData.append('fecha_pago', data.fecha_pago)
     if (data.notas) formData.append('notas', data.notas)
     if (data.comprobante) formData.append('comprobante', data.comprobante)
+    // Fase 3.3: una key nueva por intento -- protege contra doble
+    // click/retry sin bloquear un reintento real con datos distintos.
+    formData.append('idempotency_key', crypto.randomUUID())
 
     const result = await sendFormData(`/api/cuentas-cobrar/${id}/registrar-pago`, formData, 'Error al registrar pago')
     await cargar()

@@ -3,6 +3,7 @@ import { createDocumentoCuentaPagar, getCuentasPagar, getProyectoById } from '@/
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { withIdempotency } from '@/lib/server/idempotency'
 import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
@@ -15,6 +16,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     const monto = parseFloat(formData.get('monto') as string)
     const comprobante = formData.get('comprobante') as File | null
+    const idempotencyKey = formData.get('idempotency_key') as string | null
 
     if (!Number.isFinite(monto) || monto <= 0) {
       return Response.json({ error: 'Monto debe ser mayor a 0' }, { status: 400 })
@@ -34,46 +36,56 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
-    let comprobanteUrl = null
-    if (comprobante) {
-      const googleEnv = getGoogleEnv()
-      if (!googleEnv) {
-        return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
+    // Fase 3.3: protege contra doble click/retry -- con la misma
+    // idempotency_key, una segunda request recibe la misma respuesta en vez
+    // de subir el comprobante otra vez y duplicar el pago.
+    const { status, body } = await withIdempotency(`cuentas-pagar:${id}:registrar-pago`, idempotencyKey, async () => {
+      let comprobanteUrl = null
+      if (comprobante) {
+        const googleEnv = getGoogleEnv()
+        if (!googleEnv) {
+          return { status: 500, body: { error: 'Google Drive no configurado' } }
+        }
+
+        const proyecto = await getProyectoById(cuenta.proyecto_id)
+        const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
+        const fileName = comprobante.name
+        comprobanteUrl = await uploadFileToDrive(comprobante, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
+
+        await createDocumentoCuentaPagar({
+          cuentas_pagar_id: id,
+          tipo: 'COMPROBANTE_PAGO',
+          archivo_url: comprobanteUrl,
+          archivo_nombre: comprobante.name,
+        })
       }
 
-      const proyecto = await getProyectoById(cuenta.proyecto_id)
-      const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
-      const fileName = comprobante.name
-      comprobanteUrl = await uploadFileToDrive(comprobante, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
-
-      await createDocumentoCuentaPagar({
-        cuentas_pagar_id: id,
-        tipo: 'COMPROBANTE_PAGO',
-        archivo_url: comprobanteUrl,
-        archivo_nombre: comprobante.name,
+      const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('registrar_pago_cuenta_pagar', {
+        p_cuenta_id: id,
+        p_monto: monto,
       })
-    }
 
-    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('registrar_pago_cuenta_pagar', {
-      p_cuenta_id: id,
-      p_monto: monto,
+      if (rpcError) {
+        return { status: 400, body: { error: rpcError.message } }
+      }
+
+      triggerSheetsSync('cuentas_pagar')
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          resumen: {
+            monto_pagado_total: rpcResult.monto_pagado_total,
+            saldo_pendiente: rpcResult.saldo_pendiente,
+            estado_nuevo: rpcResult.estado_nuevo,
+            comprobante_url: comprobanteUrl,
+          },
+        },
+      }
     })
 
-    if (rpcError) {
-      return Response.json({ error: rpcError.message }, { status: 400 })
-    }
-
-    triggerSheetsSync('cuentas_pagar')
-
-    return Response.json({
-      success: true,
-      resumen: {
-        monto_pagado_total: rpcResult.monto_pagado_total,
-        saldo_pendiente: rpcResult.saldo_pendiente,
-        estado_nuevo: rpcResult.estado_nuevo,
-        comprobante_url: comprobanteUrl,
-      },
-    })
+    return Response.json(body, { status })
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     console.error('[cuentas-pagar/registrar-pago]', msg)
