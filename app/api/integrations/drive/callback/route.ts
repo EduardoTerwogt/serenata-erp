@@ -4,10 +4,16 @@
 // Exchanges the authorization code for access + refresh tokens, then
 // displays the refresh token so it can be copied to GOOGLE_DRIVE_REFRESH_TOKEN.
 //
-// This route is intentionally NOT protected by session auth because Google
-// calls it directly without any user session.  The authorization code is
-// single-use and short-lived, so there is no meaningful security risk.
+// Auditoría externa 2026-09-09 (Fase 3.4): requiere sección admin. El
+// comentario viejo decía que Google llama esta ruta "sin sesión de
+// usuario" -- no es así: Google redirige el propio navegador del admin que
+// visitó /authorize, así que sus cookies de sesión sí viajan. Se aprovecha
+// para mostrar el refresh token completo aquí (una sola vez, a un admin
+// autenticado) en vez de imprimirlo en los logs de Vercel, que persisten y
+// son legibles por cualquiera con acceso al dashboard -- superficie más
+// amplia que "quién es admin en la app".
 
+import { requireSection } from '@/lib/api-auth'
 import { google } from 'googleapis'
 
 const REDIRECT_URI =
@@ -15,6 +21,9 @@ const REDIRECT_URI =
   'https://serenata-erp.vercel.app/api/integrations/drive/callback'
 
 export async function GET(req: Request) {
+  const authResult = await requireSection('admin')
+  if (authResult.response) return authResult.response
+
   const { searchParams } = new URL(req.url)
   const code  = searchParams.get('code')
   const error = searchParams.get('error')
@@ -69,25 +78,22 @@ export async function GET(req: Request) {
           <li>Revoca el acceso de esta aplicaci\u00f3n</li>
           <li>Visita <a href="/api/integrations/drive/authorize">/api/integrations/drive/authorize</a> de nuevo</li>
         </ol>
-        <p style="color:#888;font-size:0.85em">Por seguridad los tokens no se muestran aquí. Revisa los logs de Vercel (Functions tab) si los necesitas.</p>
       `),
       { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
     )
   }
 
-  const tokenPreview = refreshToken.substring(0, 12) + '...' + refreshToken.slice(-4)
-  // Token completo solo en logs del servidor (nunca en HTML visible al browser)
-  console.log('[Drive/callback] Refresh token generado. Copialo desde este log de Vercel (Functions tab):', refreshToken)
-
+  // El token completo solo aparece aquí, una vez, en una respuesta que solo
+  // ve el admin que autenticó este request -- nunca en logs del servidor
+  // (Fase 3.4).
   return new Response(
     html('Autorización exitosa ✓', `
       <p style="color:green; font-size:1.1em">¡Autorización completa!</p>
-      <p>Vista previa: <code>${escHtml(tokenPreview)}</code></p>
-      <p style="color:#f59e0b">&#9888; Por seguridad el token completo no se muestra aquí.
-      Cópialo desde los <strong>logs de Vercel</strong> (Functions tab) donde aparece una sola vez.</p>
+      <p style="color:#f59e0b">&#9888; Copia este token ahora -- no vuelve a mostrarse ni queda en ningún log.</p>
+      <textarea readonly rows="3" style="width:100%;padding:8px;font-family:monospace;font-size:0.9em;color:#e5e5e5;">${escHtml(refreshToken)}</textarea>
       <h2>Pasos siguientes</h2>
       <ol>
-        <li>En Vercel → Settings → Environment Variables, agrega <code>GOOGLE_DRIVE_REFRESH_TOKEN</code>.</li>
+        <li>En Vercel → Settings → Environment Variables, agrega <code>GOOGLE_DRIVE_REFRESH_TOKEN</code> con el valor de arriba.</li>
         <li>Haz un <em>Redeploy</em> para que la variable tome efecto.</li>
       </ol>
       <p style="color:#888;font-size:0.85em">El refresh token no expira mientras la app siga autorizada en tu cuenta Google.</p>
