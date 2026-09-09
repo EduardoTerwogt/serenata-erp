@@ -507,7 +507,51 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           }
         })
       } else {
-        replace(fusionadas)
+        // Cambió el conjunto de filas. `replace` remonta la tabla entera y le quita el
+        // cursor a quien está escribiendo -- la molestia que este mismo módulo ya había
+        // arreglado-, así que solo se usa como último recurso y conservando el foco.
+        const idsLocales = locales.map((item) => item.id)
+        const idsFusionadas = fusionadas.map((item) => item.id)
+        const soloSeAgregaronAlFinal =
+          fusionadas.length > locales.length &&
+          idsLocales.every((idLocal, i) => idLocal === idsFusionadas[i])
+        const soloSeQuitaron =
+          fusionadas.length < locales.length &&
+          idsFusionadas.every((idFusionada) => idsLocales.includes(idFusionada))
+
+        if (soloSeAgregaronAlFinal) {
+          // Filas nuevas de otro colaborador: se añaden al final sin tocar las demás.
+          append(fusionadas.slice(locales.length), { shouldFocus: false })
+        } else if (soloSeQuitaron) {
+          const sobrantes = idsLocales
+            .map((idLocal, index) => (idLocal && idsFusionadas.includes(idLocal) ? -1 : index))
+            .filter((index) => index >= 0)
+          if (sobrantes.length > 0) remove(sobrantes)
+        } else {
+          const enfocado = typeof document !== 'undefined' ? (document.activeElement as HTMLInputElement | null) : null
+          const nombreEnfocado = enfocado?.getAttribute('name') || null
+          let seleccion: [number, number] | null = null
+          try {
+            if (nombreEnfocado && enfocado?.selectionStart !== null && enfocado?.selectionEnd !== null) {
+              seleccion = [enfocado!.selectionStart as number, enfocado!.selectionEnd as number]
+            }
+          } catch {
+            // Los input[type=number] no exponen selección en todos los navegadores.
+          }
+
+          replace(fusionadas)
+
+          if (nombreEnfocado) {
+            window.requestAnimationFrame(() => {
+              const destino = document.querySelector<HTMLInputElement>(`[name="${nombreEnfocado}"]`)
+              if (!destino) return
+              destino.focus()
+              if (seleccion) {
+                try { destino.setSelectionRange(seleccion[0], seleccion[1]) } catch { /* ver arriba */ }
+              }
+            })
+          }
+        }
       }
       setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : prev)
         // Las tres secciones restantes solo se aplican si el usuario NO las tiene
@@ -528,7 +572,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       reconciliacionEnCursoRef.current = null
     }
-  }, [applyGeneralOnly, applyNotasOnly, applyTotalsOnly, getValues, hasLocalItemRowActivity, id, replace, setValue])
+  }, [append, applyGeneralOnly, applyNotasOnly, applyTotalsOnly, getValues, hasLocalItemRowActivity, id, remove, replace, setValue])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
   useEffect(() => { notasValueRef.current = notasInternas }, [notasInternas])

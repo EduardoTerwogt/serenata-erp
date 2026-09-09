@@ -446,3 +446,43 @@ test('escribir en Datos generales mientras otro está en la sección sí guarda'
   ])
   expect(request.postDataJSON().proyecto).toBe('Editado pese a la presencia ajena')
 })
+
+/**
+ * La fila ajena que llega por RECONCILIACIÓN (sin aviso por el canal) tampoco puede
+ * quitarte el cursor. Reconstruir la tabla entera para insertarla remonta los inputs
+ * y te lo quita: es la misma molestia que este módulo ya había arreglado para el
+ * camino del aviso, y la reconciliación la reintrodujo hasta que se corrigió.
+ */
+test('la fila que llega por reconciliación no me quita el cursor', async ({ page }) => {
+  const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-RECON', estado: 'BORRADOR' })
+  await login(page, '/cotizaciones/SH-E2E-RECON')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-RECON' })).toBeVisible()
+
+  const rows = page.locator('table tbody tr')
+  const descripcion = rows.first().locator('td').nth(1).locator('input')
+  await descripcion.click()
+  await descripcion.fill('Estoy escribiendo aquí')
+
+  // Otro colaborador agregó una partida. No se emite ningún aviso: la pantalla debe
+  // enterarse sola al reconciliar contra el servidor.
+  cotizacion.items = [...cotizacion.items, {
+    id: 'item-por-reconciliacion',
+    cotizacion_id: 'SH-E2E-RECON',
+    categoria: 'Arte',
+    descripcion: 'Partida del otro',
+    cantidad: 1,
+    precio_unitario: 3000,
+    importe: 3000,
+    responsable_nombre: null,
+    responsable_id: null,
+    x_pagar: 1000,
+    margen: 2000,
+    orden: 2,
+    notas: null,
+  }]
+
+  await expect(rows).toHaveCount(2, { timeout: 20_000 })
+  await expect(rows.nth(1).locator('td').nth(1).locator('input')).toHaveValue('Partida del otro')
+  await expect(descripcion).toBeFocused()
+  await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
+})
