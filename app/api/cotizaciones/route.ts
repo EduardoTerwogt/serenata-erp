@@ -26,6 +26,9 @@ export async function GET() {
     const { data, error } = await supabaseAdmin
       .from('cotizaciones')
       .select('*, items_cotizacion(*)')
+      // Las partidas SIEMPRE ordenadas por `orden`: sin esto Postgres las devuelve en
+      // orden arbitrario, que además cambia cuando una fila se actualiza.
+      .order('orden', { referencedTable: 'items_cotizacion', ascending: true })
       .order('created_at', { ascending: false })
     if (error) throw error
     const mapped = ((data || []) as CotizacionRawRow[]).map((d) => ({ ...d, items: d.items_cotizacion }))

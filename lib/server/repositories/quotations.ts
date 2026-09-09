@@ -17,6 +17,12 @@ export async function getCotizacionById(id: string) {
   const { data, error } = await supabaseAdmin
     .from('cotizaciones')
     .select('*, items_cotizacion(*)')
+    // Sin ORDER BY, Postgres devuelve las partidas en orden arbitrario -- y ese orden
+    // CAMBIA cuando una fila se actualiza (se mueve de posición física). La columna
+    // `orden` existe justo para esto, pero la consulta no la usaba: cada relectura
+    // podía barajar las filas en pantalla. Se veía poco porque casi no se releía; con
+    // la reconciliación periódica se volvió constante.
+    .order('orden', { referencedTable: 'items_cotizacion', ascending: true })
     .eq('id', id)
     .single()
   if (error) throw error
