@@ -39,10 +39,10 @@ jobs:
         run: npm run check-css-layers
 
       - name: Run lint
-        # No bloquea el job: hay hallazgos conocidos y documentados (ver reporte
-        # de cierre de Fase 1) que no cambian comportamiento — esto es visibilidad,
-        # no gate. Un hallazgo NUEVO no aparece salvo que se revise el log manualmente.
-        continue-on-error: true
+        # Auditoría externa 2026-09-09 (Fase 4.2): antes no bloqueaba el job aunque
+        # lint tronara -- un error nuevo pasaba a main sin que nadie lo viera acá.
+        # Hoy el lint real da 0 errores (solo warnings ya conocidos), así que
+        # bloquear no rompe nada existente.
         run: npm run lint
 
       - name: Run build
