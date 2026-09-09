@@ -1,10 +1,10 @@
 import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
-import { getCotizacionById, upsertItems, findOrCreateProveedorByNombre } from '@/lib/db'
-import { normalizeQuotationItem } from '@/lib/quotations/calculations'
+import { findOrCreateProveedorByNombre } from '@/lib/db'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { supabaseAdmin } from '@/lib/supabase'
+import { ItemCotizacion } from '@/lib/types'
 
 export async function PATCH(
   request: Request,
@@ -15,63 +15,47 @@ export async function PATCH(
 
   try {
     const { id, itemId } = await params
-    const cotizacion = await getCotizacionById(id)
-    const existingItem = (cotizacion.items || []).find((item) => item.id === itemId)
-    if (!existingItem) {
-      return Response.json({ error: 'Partida no encontrada' }, { status: 404 })
+    const body = await request.json().catch(() => ({}))
+
+    // Un nombre de responsable por texto libre (sin id -- p. ej. viene de Planeación o
+    // de "copiar desde otra cotización") siempre debe resolver a un proveedor real,
+    // nunca quedarse en texto suelto (Fase 5.3 Bloque 0, punto 2). Se resuelve ANTES
+    // de la RPC para que al patch viajen ya los dos campos.
+    let responsableId = body?.responsable_id !== undefined ? (body.responsable_id ? String(body.responsable_id) : '') : undefined
+    let responsableNombre = body?.responsable_nombre !== undefined ? (body.responsable_nombre ? String(body.responsable_nombre) : '') : undefined
+    if (responsableNombre && !responsableId) {
+      const proveedor = await findOrCreateProveedorByNombre(responsableNombre)
+      responsableId = proveedor.id
+      responsableNombre = proveedor.nombre
     }
 
-    const body = await request.json().catch(() => ({}))
-    const merged = {
-      ...existingItem,
+    // Solo viajan las claves que llegaron: la RPC conserva el resto de la fila. Antes
+    // se leía la cotización entera, se fusionaba el campo sobre esa copia y se
+    // reescribía la fila completa, así que dos personas editando celdas distintas de
+    // la misma fila se pisaban (la de A se perdía y ganaba la de B). Ver
+    // db/migrations/20260909_patch_item_cotizacion_rpc.sql.
+    const patch: Record<string, unknown> = {
       ...(body?.categoria !== undefined ? { categoria: String(body.categoria || '') } : {}),
       ...(body?.descripcion !== undefined ? { descripcion: String(body.descripcion || '') } : {}),
       ...(body?.cantidad !== undefined ? { cantidad: Number(body.cantidad) || 0 } : {}),
       ...(body?.precio_unitario !== undefined ? { precio_unitario: Number(body.precio_unitario) || 0 } : {}),
       ...(body?.x_pagar !== undefined ? { x_pagar: Number(body.x_pagar) || 0 } : {}),
-      ...(body?.responsable_id !== undefined ? { responsable_id: body.responsable_id ? String(body.responsable_id) : '' } : {}),
-      ...(body?.responsable_nombre !== undefined ? { responsable_nombre: body.responsable_nombre ? String(body.responsable_nombre) : '' } : {}),
+      ...(responsableId !== undefined ? { responsable_id: responsableId } : {}),
+      ...(responsableNombre !== undefined ? { responsable_nombre: responsableNombre } : {}),
     }
 
-    const normalized = normalizeQuotationItem({
-      id: itemId,
-      categoria: merged.categoria,
-      descripcion: merged.descripcion,
-      cantidad: merged.cantidad,
-      precio_unitario: merged.precio_unitario,
-      responsable_id: merged.responsable_id || '',
-      responsable_nombre: merged.responsable_nombre || '',
-      x_pagar: merged.x_pagar,
+    const { data: itemPatcheado, error: patchError } = await supabaseAdmin.rpc('patch_item_cotizacion', {
+      p_cotizacion_id: id,
+      p_item_id: itemId,
+      p_patch: patch,
     })
-
-    // Fase 5.3 Bloque 0, punto 2: un nombre de responsable por texto libre
-    // (sin id -- p. ej. viene de Planeación o de "copiar desde otra
-    // cotización") siempre debe resolver a un proveedor real, nunca
-    // quedarse en solo texto suelto.
-    if (normalized.responsable_nombre && !normalized.responsable_id) {
-      const proveedor = await findOrCreateProveedorByNombre(normalized.responsable_nombre)
-      normalized.responsable_id = proveedor.id
-      normalized.responsable_nombre = proveedor.nombre
+    if (patchError) throw patchError
+    if (!itemPatcheado) {
+      return Response.json({ error: 'Partida no encontrada' }, { status: 404 })
     }
-
-    await upsertItems([{
-      id: itemId,
-      cotizacion_id: id,
-      categoria: normalized.categoria,
-      descripcion: normalized.descripcion,
-      cantidad: normalized.cantidad,
-      precio_unitario: normalized.precio_unitario,
-      importe: normalized.importe,
-      responsable_id: normalized.responsable_id || null,
-      responsable_nombre: normalized.responsable_nombre || null,
-      x_pagar: normalized.x_pagar,
-      margen: normalized.margen,
-      orden: existingItem.orden,
-      notas: existingItem.notas ?? null,
-    }])
 
     const updatedQuotation = await recalculateQuotationHeader(id)
-    const updatedItem = (updatedQuotation.items || []).find((item) => item.id === itemId)
+    const updatedItem = (updatedQuotation.items || []).find((item) => item.id === itemId) ?? (itemPatcheado as ItemCotizacion)
     // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
     after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, updatedItem ? [updatedItem] : [], 'PATCH /api/cotizaciones/:id/items/:itemId') })
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
