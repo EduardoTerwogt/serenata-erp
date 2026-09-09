@@ -126,3 +126,11 @@ consultar.
   cotizaciones a la llave pública).
 - `lib/db.ts` es solo una fachada de compatibilidad que reexporta los repositorios.
   No volver a meterle lógica.
+- **Rate limiting (`lib/server/rate-limit.ts`) está implementado sobre Postgres**,
+  no sobre un store dedicado (Upstash/Vercel KV) -- no hay cuenta de pago de Vercel
+  hoy. Funciona bien al volumen actual (un `INSERT ... ON CONFLICT ... RETURNING`
+  atómico por intento), pero cada intento de login/signup del portal le pega a la
+  base. **Recomendación futura:** si el volumen de tráfico del portal crece,
+  migrar a Upstash Redis o Vercel KV (latencia menor, no compite con las queries
+  de negocio) -- la interfaz (`checkRateLimit(key, max, windowSeconds)`) ya está
+  aislada para que ese cambio no toque los callers.

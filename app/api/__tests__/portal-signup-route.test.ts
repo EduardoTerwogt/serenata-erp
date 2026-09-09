@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   crearProveedorDesdeSignupMock: vi.fn(),
   getProveedorByCorreoMock: vi.fn(),
   setPortalSessionCookieMock: vi.fn(),
+  checkRateLimitMock: vi.fn(),
 }))
 
 vi.mock('@/lib/auth-utils', () => ({
@@ -20,6 +21,11 @@ vi.mock('@/lib/portal-auth', () => ({
   setPortalSessionCookie: mocks.setPortalSessionCookieMock,
 }))
 
+vi.mock('@/lib/server/rate-limit', () => ({
+  checkRateLimit: mocks.checkRateLimitMock,
+  getClientIp: () => '127.0.0.1',
+}))
+
 import { POST } from '../portal/signup/route'
 
 function req(body: unknown) {
@@ -32,6 +38,14 @@ describe('POST /api/portal/signup', () => {
     mocks.getProveedorByCorreoMock.mockResolvedValue(null)
     mocks.hashPasswordMock.mockResolvedValue('hash123')
     mocks.crearProveedorDesdeSignupMock.mockResolvedValue({ id: 'prov-1', nombre: 'Chok', session_version: 0 })
+    mocks.checkRateLimitMock.mockResolvedValue(true)
+  })
+
+  it('Fase 2.4 -- 429 si se excede el rate limit por IP', async () => {
+    mocks.checkRateLimitMock.mockResolvedValueOnce(false)
+    const response = await POST(req({ correo: 'jose@correo.com', password: 'password123' }))
+    expect(response.status).toBe(429)
+    expect(mocks.crearProveedorDesdeSignupMock).not.toHaveBeenCalled()
   })
 
   it('retorna 400 con correo inválido', async () => {

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getProveedorByCorreoMock: vi.fn(),
   updateProveedorMock: vi.fn(),
   setPortalSessionCookieMock: vi.fn(),
+  checkRateLimitMock: vi.fn(),
 }))
 
 vi.mock('@/lib/auth-utils', () => ({
@@ -24,6 +25,11 @@ vi.mock('@/lib/portal-auth', () => ({
   setPortalSessionCookie: mocks.setPortalSessionCookieMock,
 }))
 
+vi.mock('@/lib/server/rate-limit', () => ({
+  checkRateLimit: mocks.checkRateLimitMock,
+  getClientIp: () => '127.0.0.1',
+}))
+
 import { POST } from '../portal/login/route'
 
 function req(body: unknown) {
@@ -33,6 +39,14 @@ function req(body: unknown) {
 describe('POST /api/portal/login', () => {
   beforeEach(() => {
     Object.values(mocks).forEach(m => m.mockReset())
+    mocks.checkRateLimitMock.mockResolvedValue(true)
+  })
+
+  it('Fase 2.4 -- 429 si el rate limit por IP o por correo se excede', async () => {
+    mocks.checkRateLimitMock.mockResolvedValueOnce(false) // IP
+    const response = await POST(req({ correo: 'jose@correo.com', password: 'password123' }))
+    expect(response.status).toBe(429)
+    expect(mocks.getProveedorByCorreoMock).not.toHaveBeenCalled()
   })
 
   it('retorna 401 si el correo no tiene cuenta de portal', async () => {

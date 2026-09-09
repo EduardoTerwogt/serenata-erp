@@ -2,6 +2,7 @@ import { hashPassword, needsRehash, verifyPassword } from '@/lib/auth-utils'
 import { validate, PortalLoginSchema } from '@/lib/validation/schemas'
 import { getProveedorByCorreo, updateProveedor } from '@/lib/db'
 import { setPortalSessionCookie } from '@/lib/portal-auth'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { toErrorMessage } from '@/lib/server/portal/error-message'
 
 export async function POST(request: Request) {
@@ -10,6 +11,17 @@ export async function POST(request: Request) {
     const parsed = validate(PortalLoginSchema, body)
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
     const { correo, password } = parsed.data
+
+    // Fase 2.4: por IP (frena enumeración probando muchos correos desde un
+    // mismo origen) y por identidad (frena fuerza bruta sobre una cuenta).
+    const ip = getClientIp(request)
+    const [ipOk, emailOk] = await Promise.all([
+      checkRateLimit(`portal-login:ip:${ip}`, 20, 15 * 60),
+      checkRateLimit(`portal-login:email:${correo.toLowerCase()}`, 5, 15 * 60),
+    ])
+    if (!ipOk || !emailOk) {
+      return Response.json({ error: 'Demasiados intentos. Espera unos minutos e intenta de nuevo.' }, { status: 429 })
+    }
 
     const proveedor = await getProveedorByCorreo(correo)
     if (!proveedor || proveedor.portal_estado === null) {

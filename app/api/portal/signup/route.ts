@@ -2,6 +2,7 @@ import { hashPassword } from '@/lib/auth-utils'
 import { validate, PortalSignupSchema } from '@/lib/validation/schemas'
 import { crearProveedorDesdeSignup, getProveedorByCorreo } from '@/lib/db'
 import { setPortalSessionCookie } from '@/lib/portal-auth'
+import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
 import { toErrorMessage } from '@/lib/server/portal/error-message'
 
 /**
@@ -18,6 +19,13 @@ export async function POST(request: Request) {
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
     const { correo, password } = parsed.data
     const nombre = parsed.data.nombre?.trim() || correo.split('@')[0]
+
+    // Fase 2.4: por IP -- frena creación masiva de cuentas.
+    const ip = getClientIp(request)
+    const ipOk = await checkRateLimit(`portal-signup:ip:${ip}`, 5, 60 * 60)
+    if (!ipOk) {
+      return Response.json({ error: 'Demasiados registros desde esta conexión. Intenta más tarde.' }, { status: 429 })
+    }
 
     const existente = await getProveedorByCorreo(correo)
     if (existente) {
