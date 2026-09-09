@@ -11,7 +11,17 @@ export function getPlaywrightCredentials() {
   }
 }
 
-export async function login(page: Page, callbackUrl = '/cuentas') {
+/**
+ * `credentials` permite entrar como un usuario distinto al del entorno — lo necesitan
+ * las pruebas de colaboración real, que abren dos sesiones simultáneas con dos
+ * usuarios diferentes. Sin él, todas las llamadas usan las credenciales de entorno,
+ * como hasta ahora.
+ */
+export async function login(
+  page: Page,
+  callbackUrl = '/cuentas',
+  credentials?: { email: string; password: string }
+) {
   const escaped = callbackUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
   if (process.env.PLAYWRIGHT_E2E_BYPASS === 'true') {
@@ -27,7 +37,7 @@ export async function login(page: Page, callbackUrl = '/cuentas') {
     return
   }
 
-  const { email, password } = getPlaywrightCredentials()
+  const { email, password } = credentials || getPlaywrightCredentials()
 
   await page.goto(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
   await page.locator('input[type="email"]').fill(email)

@@ -1,50 +1,9 @@
-import { test, expect, Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 import { login } from '../utils/auth'
+import { clickGenerarCotizacionOrThrow, liveEnabled } from '../utils/live-helpers'
 import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
 
 const LIVE_TEST_CLIENTE_PREFIX = 'E2E-LIVE-'
-
-/**
- * Hace clic en "Generar Cotizacion" y espera a que pase UNA de dos cosas
- * reales: navega a /cotizaciones/{id}, o aparece el banner de error rojo de
- * la página (onGenerarCotizacion cayó en su catch). Diagnostico: 3 corridas
- * de CI seguidas se quedaron colgadas en /cotizaciones/nueva sin navegar --
- * subir el timeout no cambió nada (siempre esperaba exactamente el timeout
- * configurado, sin progreso intermedio), lo que apunta a un error real que
- * se estaba tragando en silencio, no a una operación lenta. Este helper
- * saca el texto real del error al log de CI en vez de un timeout genérico.
- */
-async function clickGenerarCotizacionOrThrow(page: Page, timeoutMs = 60_000) {
-  await page.getByRole('button', { name: 'Generar Cotizacion' }).click()
-
-  const errorBanner = page.locator('.bg-red-900\\/40').first()
-  const deadline = Date.now() + timeoutMs
-
-  while (Date.now() < deadline) {
-    if (/\/cotizaciones\/SH[A-Z0-9-]+/.test(page.url())) return
-
-    if (await errorBanner.isVisible().catch(() => false)) {
-      const text = (await errorBanner.textContent().catch(() => null))?.trim() || '(no se pudo leer el texto del banner)'
-      const message = `"Generar Cotizacion" no navego -- error real mostrado por la app: ${text}`
-      console.log(`[live test] ${message}`)
-      throw new Error(message)
-    }
-
-    await page.waitForTimeout(500)
-  }
-
-  throw new Error(
-    `"Generar Cotizacion" no navego y no aparecio ningun banner de error visible en ${timeoutMs}ms ` +
-    `(posible cuelgue silencioso del lado del cliente o del servidor).`
-  )
-}
-
-const liveEnabled = Boolean(
-  process.env.PLAYWRIGHT_BASE_URL &&
-  process.env.PLAYWRIGHT_TEST_EMAIL &&
-  process.env.PLAYWRIGHT_TEST_PASSWORD &&
-  process.env.PLAYWRIGHT_E2E_BYPASS !== 'true'
-)
 
 test.describe('live smoke', () => {
   test.skip(!liveEnabled, 'Live smoke tests are disabled until PLAYWRIGHT_BASE_URL and live credentials are configured')

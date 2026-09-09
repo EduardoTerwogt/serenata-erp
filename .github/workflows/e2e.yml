@@ -53,12 +53,14 @@ jobs:
   live:
     # Fase 4.5, Punto 4: corre en cada push a main (ademas de manual via
     # workflow_dispatch) -- nunca en PR, para no exponer los secretos de
-    # Drive/Supabase de prueba a ramas externas. continue-on-error: true
-    # porque es solo informativo -- una falla real de Drive/Supabase no
-    # debe bloquear ni marcar en rojo el workflow (el deploy a Vercel ya
-    # ocurre por push, independiente de este resultado).
+    # Drive/Supabase de prueba a ramas externas.
+    #
+    # Ya NO es informativo: este es el unico nivel que prueba contra servidor y
+    # base reales (los otros dos mockean las APIs), asi que un fallo aqui es lo
+    # unico que puede delatar un bug de colaboracion o de persistencia. Con
+    # continue-on-error el workflow salia verde aunque encontrara uno. El deploy
+    # a Vercel no se bloquea: se dispara por el push, no por este workflow.
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
-    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -78,6 +80,11 @@ jobs:
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
       PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
       PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      # Sin esto, si faltara una credencial Playwright marcaria los tests como
+      # "skipped" y el job quedaria VERDE sin haber probado nada. Con la variable
+      # puesta, el guard de tests/e2e/live/cotizaciones-colaboracion.spec.ts falla
+      # y nombra lo que falta.
+      PLAYWRIGHT_LIVE_REQUIRED: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
