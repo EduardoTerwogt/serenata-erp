@@ -1,26 +1,26 @@
-/* Datos de muestra para el kit Fase 5. Todo es ficticio pero respeta las reglas
+/* Datos de muestra para el kit de UI. Todo es ficticio pero respeta las reglas
    de negocio del brief: "X Pagar" es neto al proveedor, el fee de agencia es
    15% por default, y el IVA del cliente es 16% sobre subtotal+fee. */
 window.SN5 = {
   user: { name: 'Carla Mendoza', nickname: '@carlam', initials: 'CM' },
 
   nav: [
-    { id: 'inicio', label: 'Inicio' },
-    { id: 'cotizaciones', label: 'Cotizaciones' },
-    { id: 'proyectos', label: 'Proyectos' },
-    { id: 'cuentas', label: 'Cuentas' },
-    { id: 'portal', label: 'Portal' },
-    { id: 'responsables', label: 'Responsables' },
-    { id: 'planeacion', label: 'Planeación' },
-    { id: 'plantillas', label: 'Plantillas' },
-    { id: 'admin', label: 'Admin' },
+    { id: 'inicio', label: 'Inicio', icon: 'home', tone: 'gray', group: 'Principal' },
+    { id: 'cotizaciones', label: 'Cotizaciones', icon: 'file-text', tone: 'gray', group: 'Principal' },
+    { id: 'proyectos', label: 'Proyectos', icon: 'folder-kanban', tone: 'blue', group: 'Principal' },
+    { id: 'cuentas', label: 'Cuentas', icon: 'wallet', tone: 'green', group: 'Negocio' },
+    { id: 'portal', label: 'Portal', icon: 'users', tone: 'purple', group: 'Negocio' },
+    { id: 'responsables', label: 'Responsables', icon: 'user-cog', tone: 'indigo', group: 'Operación' },
+    { id: 'planeacion', label: 'Planeación', icon: 'calendar', tone: 'red', group: 'Operación' },
+    { id: 'plantillas', label: 'Plantillas', icon: 'layout-template', tone: 'teal', group: 'Operación' },
+    { id: 'admin', label: 'Admin', icon: 'settings', tone: 'gray', group: 'Sistema' },
   ],
 
   pendientes: {
-    responsables: 'Responsables · Fase 5 no prevé cambios de fondo. La pantalla actual se conserva: grilla de tarjetas con inicial como avatar, roles como etiquetas y datos bancarios, más historial de proyectos con total acumulado.',
-    planeacion: 'Planeación · Fase 5 no prevé cambios de fondo. Se conserva el wizard de 4 pasos que convierte mensajes informales en cotizaciones con extracción por IA.',
-    plantillas: 'Plantillas de Servicios · Fase 5 no prevé cambios de fondo. Se conserva la grilla con preview de los primeros 3 items y la tabla editable de partidas. Pendiente confirmar cómo integra con cotizaciones complementarias.',
-    admin: 'Admin · Usuarios y Sincronización con Google Sheets. Fase 5 no prevé cambios de fondo.',
+    responsables: 'Responsables · grilla de tarjetas con inicial como avatar, roles como etiquetas y datos bancarios, más historial de proyectos con total acumulado.',
+    planeacion: 'Planeación · wizard de 4 pasos que convierte mensajes informales en cotizaciones con extracción por IA.',
+    plantillas: 'Plantillas de Servicios · grilla con preview de los primeros 3 items y la tabla editable de partidas. Pendiente confirmar cómo integra con cotizaciones complementarias.',
+    admin: 'Admin · Usuarios y Sincronización con Google Sheets.',
   },
 
   cotizaciones: [

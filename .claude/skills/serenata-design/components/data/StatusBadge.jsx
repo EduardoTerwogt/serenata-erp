@@ -15,9 +15,9 @@ export function StatusBadge({ status = 'borrador', children, style, ...rest }) {
     <span
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        minWidth: 80, height: 22, padding: '0 11px',
+        minWidth: 80, height: 22, padding: '0 10px',
         borderRadius: 'var(--radius-pill)', background: tone.bg, color: tone.fg,
-        fontFamily: 'var(--font-ui)', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-medium)',
+        fontFamily: 'var(--font-ui)', fontSize: 'var(--text-eyebrow)', fontWeight: 'var(--weight-semibold)',
         whiteSpace: 'nowrap', ...style,
       }}
       {...rest}

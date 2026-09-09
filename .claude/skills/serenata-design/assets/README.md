@@ -1,12 +1,15 @@
 # assets/
 
-Intentionally empty.
+- `logo-mark.png` — el isotipo real: cuadrado naranja con la "S" blanca, tal como lo proporcionó el usuario. Lo usa `Wordmark` (`variant="mark"`, embebido como data URI vía `components/core/brand-assets.js`).
+- `logo-mark-alpha.png` — derivado del anterior: sólo la silueta blanca de la "S", con transparencia generada por interpolación de distancia de color contra el naranja de fondo muestreado. Lo usa `SplashMark` como máscara CSS para recolorear/animar la forma.
 
-No logo files, brand-texture artwork, icon set, imagery or font binaries were supplied with the source brief (`uploads/design.md`), and a real brand mark must never be redrawn from a written description. Until the real files arrive:
+El naranja de marca (`--accent` / `--sn-orange` en `tokens/colors.css`, `#FE7B01`) está muestreado directamente del fondo de `logo-mark.png` — es la fuente de verdad del color, no al revés.
 
-- the wordmark and isotipo are rendered as plain display type by `components/core/Wordmark.jsx`;
-- the brand gradient is a CSS stand-in (`--sn-texture` in `tokens/colors.css`);
-- icons come from Lucide via CDN (`components/core/Icon.jsx`);
-- fonts load from Google Fonts (`tokens/fonts.css`).
+Lo que sigue sin archivos reales:
 
-Drop the real SVG/PNG/woff2 files here and update those four places.
+- el wordmark tipografiado "SERENATA" — no se proporcionó por separado, así que `Wordmark` sigue componiéndolo en la display face;
+- la textura de marca — `--sn-texture` en `tokens/colors.css` es un stand-in en CSS con los matices que describe el brief (naranja, rojo, teal, azul);
+- el set de iconos — Lucide vía CDN (`components/core/Icon.jsx`);
+- las fuentes — el sistema usa la fuente del sistema operativo (SF Pro en Apple) con **Inter** como fallback multiplataforma, vía Google Fonts (`tokens/fonts.css`); sustituye eso si Serenata tiene binarios de marca propios.
+
+Envía esos archivos cuando estén disponibles y los integro de la misma forma.

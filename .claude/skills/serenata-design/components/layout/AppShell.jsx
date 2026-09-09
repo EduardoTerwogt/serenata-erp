@@ -7,8 +7,8 @@ export function AppShell({ sidebar, topbar, children, style, ...rest }) {
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         {topbar}
         <main style={{
-          flex: 1, minWidth: 0, padding: 'var(--space-sm) var(--content-pad) var(--space-lg)',
-          display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)',
+          flex: 1, minWidth: 0, padding: '26px var(--content-pad)',
+          display: 'flex', flexDirection: 'column', gap: '16px',
         }}>{children}</main>
       </div>
     </div>

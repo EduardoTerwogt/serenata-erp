@@ -1,8 +1,8 @@
-# Serenata · Fase 5 — UI kit
+# Serenata — UI kit
 
-Recreación navegable de las secciones que Fase 5 rediseña. Un shell (`index.html`) une las pantallas; cada sección también existe como archivo suelto para revisarla aislada y para el handoff por partes.
+Recreación navegable de las once secciones del producto. Un shell (`index.html`) une las pantallas; cada sección también existe como archivo suelto para revisarla aislada y para el handoff por partes.
 
-Autorado para **1920px**, dark-only, en español (México). Todo se compone con los primitivos de `components/` — este kit no reimplementa botones, tablas ni badges.
+Autorado para **1920px**, en español (México). Todo se compone con los primitivos de `components/` — este kit no reimplementa botones, tablas ni badges. Incluye tema claro y oscuro conmutables (botón sol/luna en el topbar y en el login) — ver "Tema claro/oscuro" abajo.
 
 ## Archivos
 
@@ -36,7 +36,7 @@ JSX: `App.jsx` (shell y ruteo), `parts.jsx` (piezas compartidas), un archivo por
 
 **5 Dashboard Ejecutivo** (vista Inicio) — cuatro KPI clicables, balance por periodo en barras agrupadas donde cada mes navega a Cuentas, cruce del periodo con utilidad antes de ISR, cobertura de gastos fijos vs. facturación, actividad del periodo, y cotizaciones recientes con un control para ver el estado de error por fuente.
 
-**11 Login** — tarjeta centrada sobre la textura de marca, error de credenciales, estado de carga, sin registro público.
+**11 Login** — abre con una animación de textura de marca real distorsionada (filtro SVG feTurbulence + feDisplacementMap) y el wordmark blanco revelándose al centro, que se difumina para mostrar la tarjeta de acceso. Al enviar, la pantalla cambia a un estado de bienvenida sobre el mismo fondo animado: el isotipo "S" llenándose del degradado (`SplashMark`) y "Bienvenido, {nombre}" — el nombre sale del correo escrito, no es un dato fijo.
 
 **6 Responsables** — buscador por nombre y grilla de tarjetas con inicial como avatar, badge Activo/Inactivo, roles como etiquetas y datos de contacto. El detalle abre el mismo formulario que el alta (nombre requerido, teléfono, correo, roles agregados y removibles uno por uno, banco, CLABE de 18 dígitos, notas) más el toggle Activo/Inactivo y el historial de proyectos con proyecto, cliente, fecha del evento, rol desempeñado y monto, con el total acumulado del colaborador.
 
@@ -59,7 +59,15 @@ JSX: `App.jsx` (shell y ruteo), `parts.jsx` (piezas compartidas), un archivo por
 
 ## Cobertura
 
-Están las once secciones del brief. Las que Fase 5 no rediseña de fondo (6, 7, 8, 9 y 10) se diseñaron conservando lo que ya existe hoy, sin agregarles funcionalidad nueva.
+Están las once secciones del brief.
+
+## Carga entre secciones
+
+Cada navegación por el rail (y los enlaces "Ir a…" dentro de las pantallas) muestra brevemente `SplashMark` en el área de contenido antes de pintar la sección nueva — pensado para las vistas con más datos (Cuentas, Proyectos). En este kit la duración es fija (~600ms) porque no hay una carga real que medir; en producción, ese estado debe mostrarse mientras dura el fetch real y no un tiempo fijo.
+
+## Tema claro/oscuro
+
+El botón sol/luna del topbar (y uno propio en `login.html`) alterna `data-theme="dark"` en `<html>`, persistido en `localStorage`. Todo el kit responde — rail, login, contenido — sin lista de excepciones: la textura de marca y las sombras se readaptan vía tokens, no hay overrides sueltos por pantalla.
 
 ## Decisiones que tomé y conviene revisar
 
@@ -68,5 +76,5 @@ Están las once secciones del brief. Las que Fase 5 no rediseña de fondo (6, 7,
 - **Folio como código.** Se resuelve con la display face a 13px con tracking abierto, no con una fuente monoespaciada — el sistema no tiene una.
 - **Detalle de proyecto y de cuenta como modal**, no como panel lateral: el sistema no tiene precedente de drawer.
 - **Orden de descuento.** Lo aplico sobre subtotal + fee, antes del IVA, así que queda entre el fee y el renglón "General". El brief no lo especifica.
-- **Activo/Inactivo.** El sistema no tiene componente Switch (el toggle Light/Dark se retiró), así que el estado se cambia con el mismo control segmentado de los filtros.
-- **Plantillas y complementarias.** El brief pide confirmar esa integración antes de rediseñarla, así que la dejé fuera del editor y lo anoté en el archivo.
+- **Activo/Inactivo.** El sistema no tiene un componente Switch genérico (el botón sol/luna de tema es un icon-button, no un Switch), así que el estado se cambia con el mismo control segmentado de los filtros.
+- **Plantillas y complementarias.** Confirmar esa integración antes de rediseñarla; queda fuera del editor por ahora.

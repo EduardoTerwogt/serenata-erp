@@ -1,0 +1,42 @@
+/* Dark theme — an Apple-neutral dark (not the old cinematic near-black); same
+   orange accent, brightened slightly for contrast. Toggle with data-theme="dark"
+   on any ancestor (typically <html> or <body>); omit it and the system stays
+   light, the default. This replaces the old data-theme="light" override file —
+   light is now the base defined in colors.css. */
+[data-theme="dark"]{
+--sn-app:#1C1C1E;
+--sn-sidebar-glass:rgba(38,38,40,.78);
+--sn-topbar-glass:rgba(28,28,30,.7);
+--sn-surface:#2C2C2E;
+--sn-surface-alt:#262628;
+--sn-surface-alt-2:#232325;
+--sn-input:rgba(255,255,255,.08);
+--sn-toggle-track:rgba(255,255,255,.14);
+--sn-hairline:#3A3A3C;
+
+--sn-orange:#FE7B01;
+--sn-orange-strong:#FF8F1F;
+--sn-orange-soft:#E0812B;
+--sn-orange-ink:#FFFFFF;
+
+--sn-ink:#F5F5F7;
+--sn-ink-body:#E5E5E7;
+--sn-ink-muted:#98989D;
+--sn-ink-faint:#6E6E73;
+
+--sn-status-approved-bg:rgba(47,168,79,.2);
+--sn-status-approved-fg:#4ADE80;
+--sn-status-issued-bg:rgba(46,127,224,.22);
+--sn-status-issued-fg:#6FA8F5;
+--sn-status-draft-bg:rgba(180,180,186,.2);
+--sn-status-draft-fg:#C7C7CC;
+--sn-status-cancelled-bg:rgba(224,71,46,.22);
+--sn-status-cancelled-fg:#FF8266;
+
+--sn-texture:radial-gradient(70% 100% at 8% 18%,var(--sn-texture-orange) 0%,color-mix(in srgb,var(--sn-texture-orange) 45%,transparent) 38%,transparent 72%),radial-gradient(64% 92% at 30% 94%,var(--sn-texture-red) 0%,color-mix(in srgb,var(--sn-texture-red) 40%,transparent) 40%,transparent 74%),radial-gradient(66% 96% at 78% 10%,var(--sn-texture-teal) 0%,color-mix(in srgb,var(--sn-texture-teal) 42%,transparent) 40%,transparent 76%),radial-gradient(76% 108% at 100% 82%,var(--sn-texture-blue) 0%,color-mix(in srgb,var(--sn-texture-blue) 40%,transparent) 42%,transparent 78%),radial-gradient(54% 78% at 54% 46%,var(--sn-texture-purple) 0%,color-mix(in srgb,var(--sn-texture-purple) 38%,transparent) 38%,transparent 74%),#1C1C1E;
+--sn-texture-scrim:linear-gradient(90deg,rgba(28,28,30,.88) 0%,rgba(28,28,30,.72) 55%,rgba(28,28,30,.6) 100%); /* @kind color */
+
+--accent-tint:rgba(254,123,1,.18);
+--focus-ring:rgba(254,123,1,.5);
+--hover-overlay:rgba(255,255,255,.06);
+}

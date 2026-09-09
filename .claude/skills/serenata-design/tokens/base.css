@@ -6,4 +6,4 @@ a:hover{color:var(--accent-pressed)}
 button,input,select{font:inherit;color:inherit}
 ::placeholder{color:var(--text-muted)}
 :focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
-::selection{background:var(--sn-orange-soft);color:var(--sn-ink)}
+::selection{background:var(--sn-orange-soft);color:var(--sn-orange-ink)}

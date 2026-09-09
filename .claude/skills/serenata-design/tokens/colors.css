@@ -1,51 +1,59 @@
 :root{
-/* --- base surfaces (dark theme is the product default) --- */
---sn-app:#0F1318;
---sn-topbar:#161D26;
---sn-surface:#151B22;
---sn-surface-alt:#191E25;
---sn-surface-alt-2:#1A2027;
---sn-input:#10161C;
---sn-toggle-track:#2A303A;
---sn-hairline:#1F252D;
+/* --- base surfaces (light theme is the product default now; dark is a toggle) --- */
+--sn-app:#F5F5F7;
+--sn-sidebar-glass:rgba(237,237,240,.78);
+--sn-topbar-glass:rgba(245,245,247,.72);
+--sn-surface:#FFFFFF;
+--sn-surface-alt:#FAFAFB;
+--sn-surface-alt-2:#F0F0F2;
+--sn-input:rgba(120,120,128,.12);
+--sn-toggle-track:rgba(120,120,128,.16);
+--sn-hairline:#DEDEE2;
 
 /* --- brand --- */
---sn-orange:#FF5A1A;
---sn-orange-strong:#EE4B02;
---sn-orange-soft:#C65008;
---sn-orange-ink:#FEFCF9;
+--sn-orange:#FE7B01;
+--sn-orange-strong:#E06D00;
+--sn-orange-soft:#B85800;
+--sn-orange-ink:#FFFFFF;
 
 /* --- ink --- */
---sn-ink:#FEFCF9;
---sn-ink-body:#E8EAED;
---sn-ink-muted:#9AA2AA;
---sn-ink-faint:#6B7280;
+--sn-ink:#1D1D1F;
+--sn-ink-body:#3A3A3C;
+--sn-ink-muted:#6E6E73;
+--sn-ink-faint:#98989D;
 
-/* --- status pairs (soft badge pattern) --- */
---sn-status-approved-bg:#1F6B54;
---sn-status-approved-fg:#DCF2E7;
---sn-status-issued-bg:#2A5C9C;
---sn-status-issued-fg:#E1ECFA;
---sn-status-draft-bg:#4B535E;
---sn-status-draft-fg:#E6EAEE;
---sn-status-cancelled-bg:#8B2B2B;
---sn-status-cancelled-fg:#F7DEDE;
+/* --- status pairs (soft pill: light tint bg, saturated fg) --- */
+--sn-status-approved-bg:rgba(47,168,79,.15);
+--sn-status-approved-fg:#218C3E;
+--sn-status-issued-bg:rgba(46,127,224,.15);
+--sn-status-issued-fg:#1C63B7;
+--sn-status-draft-bg:rgba(142,142,147,.18);
+--sn-status-draft-fg:#6E6E73;
+--sn-status-cancelled-bg:rgba(224,71,46,.15);
+--sn-status-cancelled-fg:#C13A20;
 
-/* --- brand texture (abstract blurred gradient behind wordmark & section heroes).
-   The original artwork was not supplied; this is a CSS stand-in built from the
-   hues named in the brief: orange, red, teal, blue, a touch of purple. --- */
---sn-texture-orange:#FF5A1A;
+/* --- nav icon chips: iOS-style filled squares, same hues in both themes --- */
+--sn-chip-gray:#8E8E93;
+--sn-chip-blue:#2E7FE0;
+--sn-chip-purple:#8E5FE0;
+--sn-chip-red:#E0472E;
+--sn-chip-teal:#2FA88C;
+--sn-chip-green:#2FA84F;
+--sn-chip-indigo:#5B6BD6;
+
+/* --- brand texture: kept for optional hero/loader use, not used by default nav/topbar anymore --- */
+--sn-texture-orange:#FE7B01;
 --sn-texture-red:#D7263D;
 --sn-texture-teal:#1F7A72;
 --sn-texture-blue:#1E4E8C;
 --sn-texture-purple:#4B2E83;
---sn-texture:radial-gradient(58% 84% at 12% 22%,var(--sn-texture-orange) 0%,transparent 62%),radial-gradient(48% 70% at 42% 88%,var(--sn-texture-red) 0%,transparent 60%),radial-gradient(52% 78% at 72% 18%,var(--sn-texture-teal) 0%,transparent 62%),radial-gradient(62% 90% at 96% 76%,var(--sn-texture-blue) 0%,transparent 64%),radial-gradient(40% 60% at 60% 52%,var(--sn-texture-purple) 0%,transparent 66%),#12161C;
---sn-texture-rail:radial-gradient(72% 30% at 2% 86%,rgba(255,90,26,.85) 0%,transparent 72%),radial-gradient(80% 24% at 0% 64%,rgba(31,122,114,.6) 0%,transparent 74%),radial-gradient(84% 26% at 4% 44%,rgba(30,78,140,.5) 0%,transparent 76%),radial-gradient(64% 20% at 0% 20%,rgba(215,38,61,.4) 0%,transparent 74%),var(--sn-app); /* @kind color */
---sn-texture-scrim:linear-gradient(90deg,rgba(15,19,24,.88) 0%,rgba(15,19,24,.72) 55%,rgba(15,19,24,.6) 100%); /* @kind color */
+--sn-texture:radial-gradient(70% 100% at 8% 18%,var(--sn-texture-orange) 0%,color-mix(in srgb,var(--sn-texture-orange) 45%,transparent) 38%,transparent 72%),radial-gradient(64% 92% at 30% 94%,var(--sn-texture-red) 0%,color-mix(in srgb,var(--sn-texture-red) 40%,transparent) 40%,transparent 74%),radial-gradient(66% 96% at 78% 10%,var(--sn-texture-teal) 0%,color-mix(in srgb,var(--sn-texture-teal) 42%,transparent) 40%,transparent 76%),radial-gradient(76% 108% at 100% 82%,var(--sn-texture-blue) 0%,color-mix(in srgb,var(--sn-texture-blue) 40%,transparent) 42%,transparent 78%),radial-gradient(54% 78% at 54% 46%,var(--sn-texture-purple) 0%,color-mix(in srgb,var(--sn-texture-purple) 38%,transparent) 38%,transparent 74%),radial-gradient(46% 64% at 20% 58%,var(--sn-texture-red) 0%,color-mix(in srgb,var(--sn-texture-red) 30%,transparent) 36%,transparent 70%),radial-gradient(50% 70% at 86% 46%,var(--sn-texture-teal) 0%,color-mix(in srgb,var(--sn-texture-teal) 30%,transparent) 36%,transparent 70%),#F5F5F7;
+--sn-texture-scrim:linear-gradient(90deg,rgba(245,245,247,.88) 0%,rgba(245,245,247,.72) 55%,rgba(245,245,247,.6) 100%); /* @kind color */
 
 /* --- semantic aliases: use these in components --- */
 --bg-app:var(--sn-app);
---bg-topbar:var(--sn-topbar);
+--surface-sidebar:var(--sn-sidebar-glass);
+--surface-topbar:var(--sn-topbar-glass);
 --surface-card:var(--sn-surface);
 --surface-row:var(--sn-surface-alt);
 --surface-row-alt:var(--sn-surface-alt-2);
@@ -54,9 +62,14 @@
 --accent:var(--sn-orange);
 --accent-pressed:var(--sn-orange-strong);
 --accent-quiet:var(--sn-orange-soft);
+--accent-tint:rgba(254,123,1,.12); /* @kind color */
 --text-primary:var(--sn-ink);
 --text-body:var(--sn-ink-body);
 --text-muted:var(--sn-ink-muted);
 --text-faint:var(--sn-ink-faint);
---focus-ring:rgba(255,90,26,.55);
+--focus-ring:rgba(254,123,1,.45);
+--hover-overlay:rgba(0,0,0,.05); /* @kind color */
+--control-track:rgba(120,120,128,.14); /* @kind color */
+--blur-strong:blur(24px) saturate(1.4); /* @kind other */
+--blur-soft:blur(20px) saturate(1.3); /* @kind other */
 }

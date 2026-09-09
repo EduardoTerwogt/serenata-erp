@@ -1,7 +1,7 @@
-/* Serenata webfonts.
-   NO original font binaries were provided with the brief. These are the closest
-   Google Fonts substitutions to the described families — see readme.md > Typography.
-   Display: condensed geometric bold uppercase  -> Archivo (variable width + weight)
-   UI/Body: neutral grotesque (Inter/Helvetica)  -> Manrope
-   Replace with the real Serenata display face when the files are available. */
-@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=Manrope:wght@400;500;600;700;800&display=swap');
+/* Serenata webfonts — Apple restyle.
+   The system now uses one neutral family everywhere: the OS system font
+   (-apple-system / SF Pro on Apple devices) with Inter loaded as the
+   cross-platform fallback (closest metric match to SF Pro on Windows/Linux/
+   Android). No condensed/display face, no uppercase treatment — see
+   readme.md > Typography. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');

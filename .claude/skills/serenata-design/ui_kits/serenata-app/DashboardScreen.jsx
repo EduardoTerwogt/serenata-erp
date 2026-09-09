@@ -1,8 +1,7 @@
-/* 5 · Dashboard Ejecutivo (Fase 5.6). Cada gráfica y tarjeta navega a su
+/* 5 · Dashboard Ejecutivo. Cada gráfica y tarjeta navega a su
    sección de detalle. El manejo de error es por fuente: si una falla, el resto
    del dashboard sigue funcionando. */
 const { Card, Button, Icon, Select, DataTable, StatusBadge } = window.SerenataDesignSystem_993393;
-const { SectionHero } = window.SerenataDesignSystem_993393;
 
 function FuenteError({ nombre, onRetry }) {
   return (
@@ -70,15 +69,13 @@ function DashboardScreen({ onGo }) {
 
   return (
     <React.Fragment>
-      <SectionHero
-        title="Inicio"
-        action={(
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'wrap', minWidth: 0 }}>
-            <Select size="md" value={periodo} onChange={(e) => setPeriodo(e.target.value)} options={[{ value: 'mes', label: 'Abril 2025' }, { value: 'trim', label: 'Q2 2025' }, { value: 'anio', label: 'Año 2025' }]} />
-            <Button variant="secondary" size="lg" iconLeft="download">Exportar balance</Button>
-          </div>
-        )}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div className="sn-display" style={{ fontSize: 22 }}>Inicio</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'wrap', minWidth: 0 }}>
+          <Select size="md" value={periodo} onChange={(e) => setPeriodo(e.target.value)} options={[{ value: 'mes', label: 'Abril 2025' }, { value: 'trim', label: 'Q2 2025' }, { value: 'anio', label: 'Año 2025' }]} />
+          <Button variant="secondary" size="lg" iconLeft="download">Exportar balance</Button>
+        </div>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px,1fr))', gap: 'var(--space-lg)' }}>
         {d.kpis.map((k) => (

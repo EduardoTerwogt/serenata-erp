@@ -197,7 +197,7 @@ function CotizacionDetalleScreen({ cotizacion, onBack, onGo }) {
                 <Cell align="right">P. unitario</Cell><Cell>Responsable</Cell><Cell align="right">X pagar</Cell><Cell />
               </div>
               {partidas.map((p, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: GRID, gap: 'var(--space-md)', alignItems: 'center', padding: '7px var(--row-pad-x)', borderBottom: '1px solid var(--border-subtle)' }}>
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: GRID, gap: 'var(--space-md)', alignItems: 'center', padding: '7px var(--row-pad-x)', borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 1 ? 'var(--surface-row)' : 'transparent' }}>
                   <Cell>
                     {editable
                       ? <Select size="sm" value={p.categoria} onChange={(e) => set(i, 'categoria', e.target.value)} options={SN5_CATEGORIAS} style={{ width: '100%' }} />

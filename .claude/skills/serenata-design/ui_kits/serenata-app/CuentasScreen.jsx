@@ -1,4 +1,4 @@
-/* 3 · Cuentas por Cobrar y por Pagar (Fase 5.3). Vista agrupada por proyecto
+/* 3 · Cuentas por Cobrar y por Pagar. Vista agrupada por proyecto
    como navegación principal, lista plana como alternativa, cruce fiscal
    proyectado vs. real con los dos escenarios de proveedor, y la ficha semanal
    de órdenes de pago para contabilidad.
@@ -7,7 +7,7 @@
    Escenario B · persona física con honorarios: IVA 16%, retención de IVA de
    2/3 (10.6667%) y retención de ISR de 10%, ambas sobre el subtotal.
    La base siempre es "X Pagar" (neto); el proveedor agrega sus impuestos. */
-const { Button, Card, Icon, Avatar, Select, SearchInput, FilterButton, FilterTabs, DataTable, TableFooter, TextField, SectionHero } = window.SerenataDesignSystem_993393;
+const { Button, Card, Icon, Avatar, Select, SearchInput, FilterTabs, DataTable, TableFooter, TextField } = window.SerenataDesignSystem_993393;
 
 function sn5Fiscal(neto, regimen) {
   const iva = neto * 0.16;
@@ -338,15 +338,9 @@ function CuentasScreen() {
 
   return (
     <React.Fragment>
-      <SectionHero
-        title="Cuentas"
-        action={<Button variant="primary" size="lg" iconLeft="file-text" onClick={() => setFicha(true)}>Ficha de órdenes de pago</Button>}
-      />
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'wrap', minWidth: 0 }}>
-        <SearchInput size="lg" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por folio, proyecto o responsable…" style={{ flex: '0 1 420px', minWidth: 240 }} />
-        <div style={{ flex: 1, minWidth: 12 }} />
-        <FilterButton style={{ flex: 'none' }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="sn-display" style={{ fontSize: 22 }}>Cuentas</div>
+        <Button variant="primary" size="lg" iconLeft="file-text" onClick={() => setFicha(true)}>Ficha de órdenes de pago</Button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'nowrap', minWidth: 0, overflowX: 'auto', paddingBottom: 2 }}>
@@ -359,6 +353,9 @@ function CuentasScreen() {
           tabs={[{ id: 'proyecto', label: 'Por proyecto' }, { id: 'lista', label: 'Lista' }]}
           value={vista} onChange={setVista} style={{ flex: 'none' }}
         />
+        <div style={{ marginLeft: 12 }}>
+          <SearchInput expandable size="lg" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por folio, proyecto o responsable…" />
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px,1fr))', gap: 'var(--space-lg)' }}>

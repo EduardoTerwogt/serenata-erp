@@ -14,7 +14,7 @@ export function TextField({ label, hint, value, defaultValue, onChange, placehol
           background: 'var(--surface-input)',
           border: '1px solid ' + (focus ? 'var(--accent-quiet)' : 'var(--border-subtle)'),
           borderRadius: 'var(--radius-sm)', outline: 'none',
-          fontFamily: 'var(--font-ui)', fontSize: 'var(--text-base)', color: 'var(--text-body)',
+          fontFamily: 'var(--font-ui)', fontSize: 'var(--text-md)', color: 'var(--text-body)',
           opacity: disabled ? 0.5 : 1, transition: 'var(--transition-control)',
         }}
         {...rest}

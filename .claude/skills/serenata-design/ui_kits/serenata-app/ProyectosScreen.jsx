@@ -1,8 +1,8 @@
-/* 2 · Proyectos (Fase 5.2). Tablero / Lista / Calendario sobre los mismos
+/* 2 · Proyectos. Tablero / Lista / Calendario sobre los mismos
    datos, y un panel de detalle que conserva todos los campos actuales y agrega
    plantillas auto-llenables, documentos, reporte de cierre y el asistente
    sobre historial de proyectos. */
-const { Button, Card, Icon, Avatar, Select, SearchInput, FilterButton, DataTable, TableFooter, FilterTabs, SectionHero } = window.SerenataDesignSystem_993393;
+const { Button, Card, Icon, Avatar, Select, SearchInput, DataTable, TableFooter, FilterTabs } = window.SerenataDesignSystem_993393;
 
 function ProyectoCard({ p, onOpen }) {
   const [hover, setHover] = React.useState(false);
@@ -276,13 +276,9 @@ function ProyectosScreen() {
 
   return (
     <React.Fragment>
-      <SectionHero
-        title="Proyectos"
-        action={<Button variant="primary" size="lg" iconLeft="plus">Nuevo proyecto</Button>}
-      />
-
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <SearchInput size="lg" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por proyecto, cliente o folio…" style={{ flex: '0 1 420px', minWidth: 240 }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="sn-display" style={{ fontSize: 22 }}>Proyectos</div>
+        <Button variant="primary" size="lg" iconLeft="plus">Nuevo proyecto</Button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'nowrap', minWidth: 0, overflowX: 'auto', paddingBottom: 2 }}>
@@ -290,8 +286,9 @@ function ProyectosScreen() {
           tabs={[{ id: 'tablero', label: 'Tablero' }, { id: 'lista', label: 'Lista' }, { id: 'calendario', label: 'Calendario' }]}
           value={vista} onChange={setVista} style={{ flex: 'none' }}
         />
-        <div style={{ flex: 1, minWidth: 12 }} />
-        <FilterButton style={{ flex: 'none' }} />
+        <div style={{ marginLeft: 'auto' }}>
+          <SearchInput expandable size="lg" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por proyecto, cliente o folio…" />
+        </div>
       </div>
 
       {vista === 'tablero' ? <Tablero proyectos={proyectos} onOpen={setOpen} /> : null}

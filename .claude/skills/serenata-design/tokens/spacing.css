@@ -8,14 +8,14 @@
 --space-3xl:45px;
 
 /* layout constants observed in the app shell */
---sidebar-width:256px;
---sidebar-pad:19px;
---content-pad:29px;
---topbar-height:84px;
+--sidebar-width:250px;
+--sidebar-pad:12px;
+--content-pad:30px;
+--topbar-height:56px;
 --row-pad-y:12px;
---row-pad-x:19px;
---nav-item-height:38px;
---nav-gap:5px;
---control-height:35px;
---control-height-lg:42px;
+--row-pad-x:18px;
+--nav-item-height:32px;
+--nav-gap:2px;
+--control-height:32px;
+--control-height-lg:36px;
 }

@@ -1,10 +1,9 @@
 /* 8 · Plantillas de Servicios. Grilla con preview de los primeros items y un
    editor con la misma tabla editable que usan las partidas de una cotización.
-   Fase 5 no cambia el fondo de esta pantalla.
 
    Pendiente confirmar con el dueño del producto: hoy la integración de
    plantillas con cotizaciones complementarias es parcial. */
-const { Button, Card, Icon, Select, SearchInput, TextField, SectionHero } = window.SerenataDesignSystem_993393;
+const { Button, Card, Icon, Select, SearchInput, TextField } = window.SerenataDesignSystem_993393;
 
 const SN5_GRID_ITEMS = '112px minmax(0,1.7fr) 62px 118px minmax(0,1fr) 118px 34px';
 
@@ -19,7 +18,7 @@ function ItemsEditor({ items, onChange }) {
           <div style={{ textAlign: 'right' }}>P. unitario</div><div>Responsable</div><div style={{ textAlign: 'right' }}>X pagar</div><div />
         </div>
         {items.map((p, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: SN5_GRID_ITEMS, gap: 'var(--space-md)', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: SN5_GRID_ITEMS, gap: 'var(--space-md)', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 1 ? 'var(--surface-row)' : 'transparent' }}>
             <Select size="sm" value={p.categoria} onChange={(e) => set(i, 'categoria', e.target.value)} options={window.SN5_CATEGORIAS} style={{ width: '100%' }} />
             <II value={p.descripcion} onChange={(v) => set(i, 'descripcion', v)} suggestions={window.SN5_CATALOGO} placeholder="Buscar en catálogo…" />
             <II value={p.cantidad} onChange={(v) => set(i, 'cantidad', v)} align="right" />
@@ -98,10 +97,10 @@ function PlantillasScreen() {
 
   return (
     <React.Fragment>
-      <SectionHero
-        title="Plantillas"
-        action={<Button variant="primary" size="lg" iconLeft="plus" onClick={() => setNueva(true)}>Nueva plantilla</Button>}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="sn-display" style={{ fontSize: 22 }}>Plantillas</div>
+        <Button variant="primary" size="lg" iconLeft="plus" onClick={() => setNueva(true)}>Nueva plantilla</Button>
+      </div>
 
       <SearchInput size="lg" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…" style={{ alignSelf: 'flex-start', width: '100%', maxWidth: 420 }} />
 

@@ -7,23 +7,24 @@
 </head>
 <body>
 <x-dc>
-<!-- @template name="Vista de sección" description="Pantalla base de Serenata: rail con textura, topbar, hero de sección y tabla de lista." -->
+<!-- @template name="Vista de sección" description="Pantalla base de Serenata: rail agrupado con vidrio esmerilado, topbar, título con acción y tabla de lista." -->
 <helmet>
 <script src="./ds-base.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-<style>body{margin:0;background:#0F1318}</style>
+<style>body{margin:0}</style>
 </helmet>
-<div style="display:flex;min-height:100vh;background:#0F1318;color:#E8EAED;font-family:Manrope,system-ui,sans-serif">
-<x-import component-from-global-scope="SerenataDesignSystem_993393.Sidebar" items="{{ nav }}" active-id="cotizaciones" hint-size="256px,100vh"></x-import>
+<div style="display:flex;min-height:100vh;background:var(--bg-app);color:var(--text-body);font-family:var(--font-ui)">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Sidebar" items="{{ nav }}" active-id="cotizaciones" hint-size="250px,100vh"></x-import>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column">
-<x-import component-from-global-scope="SerenataDesignSystem_993393.Topbar" user="{{ user }}" hint-size="100%,84px"></x-import>
-<main style="flex:1;min-width:0;padding:6px 29px 19px;display:flex;flex-direction:column;gap:19px">
-<x-import component-from-global-scope="SerenataDesignSystem_993393.SectionHero" title="Cotizaciones" action="{{ cta }}" hint-size="100%,106px"></x-import>
-<x-import component-from-global-scope="SerenataDesignSystem_993393.SearchInput" size="lg" placeholder="Buscar por folio, proyecto o cliente…" style="width:100%;max-width:420px" hint-size="420px,42px"></x-import>
-<div style="display:flex;align-items:center;gap:13px;flex-wrap:nowrap;min-width:0;overflow-x:auto;padding-bottom:2px">
-<x-import component-from-global-scope="SerenataDesignSystem_993393.FilterTabs" tabs="{{ tabs }}" value="todas" style="flex:none" hint-size="430px,42px"></x-import>
-<div style="flex:1;min-width:12px"></div>
-<x-import component-from-global-scope="SerenataDesignSystem_993393.FilterButton" style="flex:none" hint-size="110px,42px"></x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Topbar" user="{{ user }}" hint-size="100%,56px"></x-import>
+<main style="flex:1;min-width:0;padding:26px 30px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+<div class="sn-display" style="font-size:22px">Cotizaciones</div>
+{{ cta }}
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+{{ tabsEl }}
+<div style="margin-left:auto">{{ searchEl }}</div>
 </div>
 <x-import component-from-global-scope="SerenataDesignSystem_993393.Card" padding="0" hint-size="100%,520px">
 <x-import component-from-global-scope="SerenataDesignSystem_993393.DataTable" columns="{{ columns }}" rows="{{ rows }}" hint-size="100%,440px"></x-import>
@@ -37,8 +38,8 @@
 class Component extends DCLogic {
   ns() { return window.SerenataDesignSystem_993393 || {}; }
   renderVals() {
-    const { Button, StatusBadge } = this.ns();
-    const mxn = (n) => '$ ' + n.toLocaleString('es-MX') + ' MXN';
+    const { Button, StatusBadge, FilterTabs, SearchInput } = this.ns();
+    const mxn = (n) => '$' + n.toLocaleString('es-MX');
     const rows = [
       { id: 'COT-0084', proyecto: 'Campaña Verano 2025', cliente: 'Solura', monto: 950000, fecha: '25 abr 2025', estatus: 'aprobada' },
       { id: 'COT-0083', proyecto: 'Documental Raíces', cliente: 'Canal Norte', monto: 420000, fecha: '23 abr 2025', estatus: 'emitida' },
@@ -51,26 +52,26 @@ class Component extends DCLogic {
     ];
     return {
       nav: [
-        { id: 'inicio', label: 'Inicio' },
-        { id: 'proyectos', label: 'Proyectos' },
-        { id: 'cotizaciones', label: 'Cotizaciones' },
-        { id: 'clientes', label: 'Clientes' },
-        { id: 'produccion', label: 'Producción' },
-        { id: 'calendario', label: 'Calendario' },
-        { id: 'recursos', label: 'Recursos' },
-        { id: 'finanzas', label: 'Finanzas' },
-        { id: 'reportes', label: 'Reportes' },
-        { id: 'configuracion', label: 'Configuración' },
+        { id: 'inicio', label: 'Inicio', icon: 'home', tone: 'gray', group: 'Principal' },
+        { id: 'proyectos', label: 'Proyectos', icon: 'folder-kanban', tone: 'blue', group: 'Principal' },
+        { id: 'cotizaciones', label: 'Cotizaciones', icon: 'file-text', tone: 'gray', group: 'Principal' },
+        { id: 'clientes', label: 'Clientes', icon: 'users', tone: 'purple', group: 'Principal' },
+        { id: 'produccion', label: 'Producción', icon: 'clapperboard', tone: 'red', group: 'Operación' },
+        { id: 'calendario', label: 'Calendario', icon: 'calendar', tone: 'red', group: 'Operación' },
+        { id: 'recursos', label: 'Recursos', icon: 'boxes', tone: 'teal', group: 'Operación' },
+        { id: 'finanzas', label: 'Finanzas', icon: 'wallet', tone: 'green', group: 'Negocio' },
+        { id: 'reportes', label: 'Reportes', icon: 'bar-chart-2', tone: 'indigo', group: 'Negocio' },
+        { id: 'configuracion', label: 'Configuración', icon: 'settings', tone: 'gray', group: 'Sistema' },
       ],
       user: { name: 'Carla Mendoza', nickname: '@carlam', initials: 'CM' },
-      tabs: [
-        { id: 'todas', label: 'Todas' },
-        { id: 'borrador', label: 'Borrador' },
-        { id: 'emitida', label: 'Emitida' },
-        { id: 'aprobada', label: 'Aprobada' },
-        { id: 'cancelada', label: 'Cancelada' },
-      ],
-      cta: Button ? React.createElement(Button, { variant: 'primary', size: 'lg' }, 'Nueva cotización') : null,
+      cta: Button ? React.createElement(Button, { variant: 'primary', size: 'lg', iconLeft: 'plus' }, 'Nueva cotización') : null,
+      tabsEl: FilterTabs ? React.createElement(FilterTabs, {
+        tabs: [
+          { id: 'todas', label: 'Todas' }, { id: 'borrador', label: 'Borrador' },
+          { id: 'emitida', label: 'Emitida' }, { id: 'aprobada', label: 'Aprobada' }, { id: 'cancelada', label: 'Cancelada' },
+        ], value: 'todas',
+      }) : null,
+      searchEl: SearchInput ? React.createElement(SearchInput, { expandable: true, size: 'lg', placeholder: 'Buscar por folio, proyecto o cliente…' }) : null,
       columns: [
         { key: 'id', label: 'Folio', width: '1fr' },
         { key: 'proyecto', label: 'Proyecto', width: '1fr' },

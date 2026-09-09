@@ -2,7 +2,6 @@ Frame for every authenticated screen.
 
 ```jsx
 <AppShell sidebar={<Sidebar … />} topbar={<Topbar … />}>
-  <SectionHero … />
   <Card>…</Card>
 </AppShell>
 ```

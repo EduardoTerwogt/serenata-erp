@@ -2,8 +2,8 @@ import React from 'react';
 import { Icon } from './Icon.jsx';
 
 const SIZES = {
-  md: { height: 'var(--control-height)', padding: '0 16px', font: 'var(--text-base)', radius: 'var(--radius-md)' },
-  lg: { height: 'var(--control-height-lg)', padding: '0 26px', font: 'var(--text-md)', radius: 'var(--radius-input)' },
+  md: { height: 'var(--control-height)', padding: '0 14px', font: 'var(--text-md)', radius: 'var(--radius-md)' },
+  lg: { height: 'var(--control-height-lg)', padding: '0 18px', font: 'var(--text-md)', radius: 'var(--radius-md)' },
 };
 
 export function Button({
@@ -19,7 +19,7 @@ export function Button({
       background: down || hover ? 'var(--accent-pressed)' : 'var(--accent)',
       color: 'var(--sn-orange-ink)',
       border: '1px solid transparent',
-      fontWeight: 'var(--weight-bold)',
+      fontWeight: 'var(--weight-semibold)',
     },
     secondary: {
       background: hover ? 'var(--surface-row-alt)' : 'var(--surface-input)',
@@ -28,7 +28,7 @@ export function Button({
       fontWeight: 'var(--weight-medium)',
     },
     ghost: {
-      background: hover ? 'rgba(255,255,255,.05)' : 'transparent',
+      background: hover ? 'var(--hover-overlay)' : 'transparent',
       color: hover ? 'var(--text-body)' : 'var(--text-muted)',
       border: '1px solid transparent',
       fontWeight: 'var(--weight-medium)',

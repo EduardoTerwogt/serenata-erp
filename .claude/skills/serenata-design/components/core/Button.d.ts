@@ -8,7 +8,7 @@ export interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonE
   children?: React.ReactNode;
   /** primary = orange CTA, secondary = surface + hairline, ghost = text only. */
   variant?: 'primary' | 'secondary' | 'ghost';
-  /** lg (48px) for CTAs and heroes, md (42px) for toolbars and table controls. */
+  /** lg (36px) for CTAs and toolbars, md (32px) for compact controls. */
   size?: 'md' | 'lg';
   /** Lucide icon name rendered before the label. */
   iconLeft?: string;

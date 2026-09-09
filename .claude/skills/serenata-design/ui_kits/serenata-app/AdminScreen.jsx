@@ -1,6 +1,5 @@
-/* 9 · Admin · Usuarios y 10 · Admin · Sincronización con Google Sheets.
-   Fase 5 no cambia el fondo de ninguna de las dos. */
-const { Button, Card, Icon, TextField, FilterTabs, StatusBadge, DataTable, SectionHero } = window.SerenataDesignSystem_993393;
+/* 9 · Admin · Usuarios y 10 · Admin · Sincronización con Google Sheets. */
+const { Button, Card, Icon, TextField, FilterTabs, StatusBadge, DataTable } = window.SerenataDesignSystem_993393;
 
 function UsuarioModal({ u, onClose, nuevo }) {
   const [nombre, setNombre] = React.useState(u ? u.nombre : '');
@@ -219,7 +218,7 @@ function AdminScreen() {
   const [tab, setTab] = React.useState('usuarios');
   return (
     <React.Fragment>
-      <SectionHero title="Admin" />
+      <div className="sn-display" style={{ fontSize: 22 }}>Admin</div>
       <FilterTabs
         tabs={[{ id: 'usuarios', label: 'Usuarios' }, { id: 'sync', label: 'Google Sheets' }]}
         value={tab} onChange={setTab} style={{ alignSelf: 'flex-start' }}

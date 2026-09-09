@@ -6,8 +6,9 @@ export function Topbar({ user = { name: 'Usuario' }, left, right, style, ...rest
     <header
       style={{
         display: 'flex', alignItems: 'center', gap: 'var(--space-lg)',
-        minHeight: 'var(--topbar-height)', padding: 'var(--space-lg) var(--content-pad)',
-        background: 'transparent', ...style,
+        height: 'var(--topbar-height)', flex: 'none', padding: '0 var(--content-pad)',
+        background: 'var(--surface-topbar)', backdropFilter: 'var(--blur-soft)', WebkitBackdropFilter: 'var(--blur-soft)',
+        borderBottom: '1px solid var(--border-subtle)', ...style,
       }}
       {...rest}
     >

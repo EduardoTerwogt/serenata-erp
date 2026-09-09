@@ -1,0 +1,27 @@
+<!-- @dsCard group="Colors" viewport="700x230" name="Theme toggle" subtitle="Claro es el default; data-theme=&quot;dark&quot; en cualquier ancestro activa el oscuro" -->
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>body{margin:0;padding:18px;font-family:var(--font-ui)}
+.swatch{height:56px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle)}
+.lbl{margin-top:6px;font-size:10px;color:var(--text-faint);letter-spacing:.04em;text-transform:uppercase}
+</style></head><body>
+<div style="display:flex;gap:18px">
+  <div style="flex:1;padding:16px;border-radius:var(--radius-lg);background:var(--sn-app);border:1px solid var(--sn-hairline)">
+    <div style="font-size:10px;color:var(--sn-ink-faint);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">Claro (default)</div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:1"><div class="swatch" style="background:#F5F5F7;border-color:#DEDEE2"></div><div class="lbl">App #F5F5F7</div></div>
+      <div style="flex:1"><div class="swatch" style="background:#FFFFFF;border-color:#DEDEE2"></div><div class="lbl">Card #FFFFFF</div></div>
+      <div style="flex:1"><div class="swatch" style="background:#FE7B01"></div><div class="lbl">Accent</div></div>
+      <div style="flex:1"><div class="swatch" style="background:#1D1D1F;border-color:#DEDEE2"></div><div class="lbl">Ink #1D1D1F</div></div>
+    </div>
+  </div>
+  <div data-theme="dark" style="flex:1;padding:16px;border-radius:var(--radius-lg);background:var(--sn-app);border:1px solid var(--sn-hairline)">
+    <div style="font-size:10px;color:var(--sn-ink-faint);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">Oscuro — data-theme="dark"</div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:1"><div class="swatch" style="background:#1C1C1E"></div><div class="lbl">App #1C1C1E</div></div>
+      <div style="flex:1"><div class="swatch" style="background:#2C2C2E"></div><div class="lbl">Card #2C2C2E</div></div>
+      <div style="flex:1"><div class="swatch" style="background:#FF9736"></div><div class="lbl">Accent</div></div>
+      <div style="flex:1"><div class="swatch" style="background:#F5F5F7"></div><div class="lbl">Ink #F5F5F7</div></div>
+    </div>
+  </div>
+</div>
+</body></html>

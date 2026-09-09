@@ -1,7 +1,6 @@
 /* 6 · Responsables (colaboradores / freelancers). Lista en grilla, alta y
-   detalle con historial de proyectos y total acumulado. Fase 5 no cambia el
-   fondo de esta pantalla: se conserva tal cual está hoy. */
-const { Button, Card, Icon, Avatar, SearchInput, TextField, FilterTabs, StatusBadge, DataTable, SectionHero } = window.SerenataDesignSystem_993393;
+   detalle con historial de proyectos y total acumulado. */
+const { Button, Card, Icon, Avatar, SearchInput, TextField, FilterTabs, StatusBadge, DataTable } = window.SerenataDesignSystem_993393;
 
 function ContactoRow({ icon, children }) {
   if (!children) return null;
@@ -125,10 +124,10 @@ function ResponsablesScreen() {
 
   return (
     <React.Fragment>
-      <SectionHero
-        title="Responsables"
-        action={<Button variant="primary" size="lg" iconLeft="plus" onClick={() => setNuevo(true)}>Nuevo colaborador</Button>}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="sn-display" style={{ fontSize: 22 }}>Responsables</div>
+        <Button variant="primary" size="lg" iconLeft="plus" onClick={() => setNuevo(true)}>Nuevo colaborador</Button>
+      </div>
 
       <SearchInput size="lg" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…" style={{ alignSelf: 'flex-start', width: '100%', maxWidth: 420 }} />
 

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Components" viewport="700x420" name="Patterns — Panel, Metric, Field, Folio, StateBadge, Chart" subtitle="Composiciones de producto: secciones, KPIs, folios, estados y gráficas" -->
+<!-- @dsCard group="Components" viewport="700x420" name="Patterns — Panel, Metric, Field, Folio, StateBadge, Chart, SplashMark" subtitle="Composiciones de producto: secciones, KPIs, folios, estados y gráficas" -->
 <!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
@@ -7,7 +7,7 @@
 <script src="../../_ds_bundle.js"></script>
 <style>body{background:var(--bg-app);padding:20px}#root{display:block}</style></head><body><div id="root"></div>
 <script type="text/babel">
-const { Panel, Metric, Field, Folio, StateBadge, ProgressBar, BarChart, ChartLegend, Button, Select } = window.SerenataDesignSystem_993393;
+const { Panel, Metric, Field, Folio, StateBadge, ProgressBar, BarChart, ChartLegend, SplashMark, Button, Select } = window.SerenataDesignSystem_993393;
 const balance = [{mes:'Ene',ingresos:760,egresos:700},{mes:'Feb',ingresos:1180,egresos:820},{mes:'Mar',ingresos:1640,egresos:1050},{mes:'Abr',ingresos:1966,egresos:1240}];
 function Demo(){return(
 <div style={{display:'flex',flexDirection:'column',gap:20}}>
@@ -30,6 +30,12 @@ function Demo(){return(
         <StateBadge state="RODAJE"/><StateBadge state="VENCIDO"/><StateBadge state="PAGADO"/><StateBadge state="pendiente"/>
       </div>
       <div style={{marginTop:16}}><ProgressBar value={62}/></div>
+    </Panel>
+    <Panel title="SplashMark">
+      <div style={{display:'flex',alignItems:'center',gap:24}}>
+        <SplashMark size={110}/>
+        <span style={{fontSize:12,color:'#9AA2AA'}}>Isotipo &quot;S&quot; llenándose con el degradado de textura. Para esperas largas: login, cambio de sección.</span>
+      </div>
     </Panel>
   </div>
 </div>);}

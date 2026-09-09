@@ -20,7 +20,7 @@ export function Select({ value, defaultValue, onChange, options = [], size = 'sm
           appearance: 'none', background: 'transparent', border: 0, outline: 'none',
           padding: '0 32px 0 13px', height: '100%', cursor: 'pointer', width: '100%', minWidth: 0,
           textOverflow: 'ellipsis',
-          fontFamily: 'var(--font-ui)', fontSize: 'var(--text-base)', color: 'var(--text-body)',
+          fontFamily: 'var(--font-ui)', fontSize: 'var(--text-md)', color: 'var(--text-body)',
         }}
         {...rest}
       >

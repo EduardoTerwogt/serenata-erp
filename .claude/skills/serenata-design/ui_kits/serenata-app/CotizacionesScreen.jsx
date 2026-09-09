@@ -1,6 +1,6 @@
 /* 1.1 · Lista de Cotizaciones. Filtro por estado con conteo, buscador por
    folio/cliente/proyecto, etiqueta de complementaria y alerta "Sin items". */
-const { Button, SearchInput, FilterButton, FilterTabs, Card, Icon, DataTable, TableFooter, StatusBadge, SectionHero } = window.SerenataDesignSystem_993393;
+const { Button, SearchInput, FilterTabs, Card, Icon, DataTable, TableFooter, StatusBadge } = window.SerenataDesignSystem_993393;
 
 function CotizacionesScreen({ onOpen, onNueva }) {
   const all = window.SN5.cotizaciones;
@@ -33,35 +33,28 @@ function CotizacionesScreen({ onOpen, onNueva }) {
         ) : null}
       </div>
     ) },
-    { key: 'cliente', label: 'Cliente', width: '1fr' },
-    { key: 'total', label: 'Total', width: '1fr', align: 'right', render: (r) => (
+    { key: 'cliente', label: 'Cliente', width: '1fr', muted: true },
+    { key: 'total', label: 'Total', width: '1fr', render: (r) => (
       r.sinItems
         ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--sn-status-cancelled-fg)', fontSize: 'var(--text-md)' }}><Icon name="alert-triangle" size={14} />Sin items</span>
-        : <span style={{ color: 'var(--text-primary)', fontWeight: 'var(--weight-medium)' }}>{window.SN5_MXN(r.total)}</span>
+        : <span style={{ color: 'var(--text-primary)', fontWeight: 'var(--weight-regular)' }}>{window.SN5_MXN(r.total)}</span>
     ) },
-    { key: 'entrega', label: 'Entrega', width: '1fr' },
+    { key: 'entrega', label: 'Entrega', width: '1fr', muted: true },
     { key: 'estatus', label: 'Estatus', width: '124px', align: 'right', render: (r) => <StatusBadge status={r.estatus} /> },
   ];
 
   return (
     <React.Fragment>
-      <SectionHero
-        title="Cotizaciones"
-        action={<Button variant="primary" size="lg" iconLeft="plus" onClick={onNueva}>Nueva cotización</Button>}
-      />
-
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <SearchInput
-          size="lg" value={q} onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por folio, cliente o proyecto…"
-          style={{ flex: '0 1 420px', minWidth: 240 }}
-        />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="sn-display" style={{ fontSize: 22 }}>Cotizaciones</div>
+        <Button variant="primary" size="lg" iconLeft="plus" onClick={onNueva}>Nueva cotización</Button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'nowrap', minWidth: 0, overflowX: 'auto', paddingBottom: 2 }}>
         <FilterTabs tabs={tabs} value={tab} onChange={setTab} style={{ flex: 'none' }} />
-        <div style={{ flex: 1, minWidth: 12 }} />
-        <FilterButton style={{ flex: 'none' }} />
+        <div style={{ marginLeft: 'auto' }}>
+          <SearchInput expandable size="lg" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por folio, cliente o proyecto…" />
+        </div>
       </div>
 
       <Card padding="0">

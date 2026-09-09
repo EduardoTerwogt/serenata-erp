@@ -14,8 +14,9 @@ export function DataTable({ columns = [], rows = [], onRowClick, emptyLabel = 'S
     <div style={{ overflowX: 'auto', ...style }}>
     <div style={{ display: 'flex', flexDirection: 'column', minWidth }} {...rest}>
       <div style={{
-        display: 'grid', gridTemplateColumns: template, gap: 'var(--space-md)',
-        padding: '14px ' + padX, borderBottom: '1px solid var(--border-subtle)',
+        display: 'grid', gridTemplateColumns: template, gap: 12,
+        padding: '0 ' + padX, minHeight: 36, alignItems: 'center',
+        borderBottom: '1px solid var(--border-subtle)',
         fontSize: 'var(--text-table-head)', fontWeight: 'var(--weight-semibold)',
         letterSpacing: 'var(--tracking-label)', textTransform: 'uppercase', color: 'var(--text-faint)',
       }}>
@@ -30,12 +31,12 @@ export function DataTable({ columns = [], rows = [], onRowClick, emptyLabel = 'S
           onClick={() => onRowClick && onRowClick(row)}
           onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}
           style={{
-            display: 'grid', gridTemplateColumns: template, gap: 'var(--space-md)', alignItems: 'center',
-            padding: 'var(--row-pad-y) ' + padX,
+            display: 'grid', gridTemplateColumns: template, gap: 12, alignItems: 'center',
+            padding: '0 ' + padX, minHeight: 46,
             borderBottom: i === rows.length - 1 ? '1px solid transparent' : '1px solid var(--border-subtle)',
-            background: hover === i ? 'var(--surface-row-alt)' : 'transparent',
+            background: hover === i ? 'var(--surface-row-alt)' : (i % 2 === 1 ? 'var(--surface-row)' : 'transparent'),
             cursor: onRowClick ? 'pointer' : 'default',
-            fontSize: 'var(--text-base)', color: 'var(--text-body)',
+            fontSize: 'var(--text-md)', color: 'var(--text-primary)',
             transition: 'background-color var(--dur-fast) var(--ease-standard)',
           }}
         >
@@ -43,7 +44,8 @@ export function DataTable({ columns = [], rows = [], onRowClick, emptyLabel = 'S
             <div key={c.key} style={{
               textAlign: c.align || 'left', minWidth: 0,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              fontWeight: c.strong ? 'var(--weight-medium)' : 'var(--weight-regular)',
+              color: c.muted ? 'var(--text-muted)' : 'inherit',
+              fontWeight: c.strong ? 'var(--weight-semibold)' : 'var(--weight-regular)',
             }}>
               {c.render ? c.render(row) : row[c.key]}
             </div>

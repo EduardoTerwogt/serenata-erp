@@ -11,19 +11,19 @@
 <helmet>
 <script src="./ds-base.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-<style>body{margin:0;background:#0F1318}</style>
+<style>body{margin:0}</style>
 </helmet>
-<div style="display:flex;min-height:100vh;background:#0F1318;color:#E8EAED;font-family:Manrope,system-ui,sans-serif">
-<x-import component-from-global-scope="SerenataDesignSystem_993393.Sidebar" items="{{ nav }}" active-id="cotizaciones" hint-size="256px,100vh"></x-import>
+<div style="display:flex;min-height:100vh;background:var(--bg-app);color:var(--text-body);font-family:var(--font-ui)">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Sidebar" items="{{ nav }}" active-id="cotizaciones" hint-size="250px,100vh"></x-import>
 <div style="flex:1;min-width:0;display:flex;flex-direction:column">
-<x-import component-from-global-scope="SerenataDesignSystem_993393.Topbar" user="{{ user }}" hint-size="100%,84px"></x-import>
-<main style="flex:1;min-width:0;padding:6px 29px 19px;display:flex;flex-direction:column;gap:19px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Topbar" user="{{ user }}" hint-size="100%,56px"></x-import>
+<main style="flex:1;min-width:0;padding:26px 30px;display:flex;flex-direction:column;gap:19px">
 
 <div style="display:flex;align-items:center;gap:19px;flex-wrap:wrap">
 <x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="ghost" size="md" iconLeft="arrow-left" hint-size="140px,35px">Cotizaciones</x-import>
 <div style="display:flex;align-items:baseline;gap:13px;min-width:0">
-<h1 style="margin:0;font-family:Archivo,system-ui,sans-serif;font-stretch:88%;font-weight:800;letter-spacing:-0.02em;line-height:1.02;text-transform:uppercase;font-size:27px;color:#FEFCF9">SH014</h1>
-<span style="font-size:12px;color:#9AA2AA">Cotizada el 02 abr 2025</span>
+<h1 class="sn-display" style="margin:0;font-size:22px">SH014</h1>
+<span style="font-size:12px;color:var(--text-muted)">Cotizada el 02 abr 2025</span>
 <x-import component-from-global-scope="SerenataDesignSystem_993393.StatusBadge" status="emitida" hint-size="80px,22px"></x-import>
 </div>
 <div style="flex:1;min-width:12px"></div>
@@ -58,21 +58,21 @@
 <x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Fee / margen de agencia" value="15 %" hint-size="140px,40px"></x-import>
 <x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Descuento" value="$ 0" hint-size="140px,40px"></x-import>
 </div>
-<div style="display:flex;align-items:center;gap:13px;font-size:13.5px;color:#6B7280">
+<div style="display:flex;align-items:center;gap:13px;font-size:13.5px;color:var(--text-faint)">
 <span style="flex:1;min-width:0">Margen Serenata estimado</span>
-<span style="color:#9AA2AA">{{ margen }}</span>
+<span style="color:var(--text-muted)">{{ margen }}</span>
 </div>
 </div>
 <div style="display:flex;flex-direction:column;gap:11px">
 <sc-for list="{{ desglose }}" as="fila" hint-placeholder-count="4">
 <div style="display:flex;align-items:center;gap:13px;font-size:13.5px">
-<span style="flex:1;min-width:0;color:#9AA2AA">{{ fila.label }}</span>
-<span style="color:#E8EAED">{{ fila.monto }}</span>
+<span style="flex:1;min-width:0;color:var(--text-muted)">{{ fila.label }}</span>
+<span style="color:var(--text-body)">{{ fila.monto }}</span>
 </div>
 </sc-for>
-<div style="display:flex;align-items:baseline;gap:13px;padding-top:13px;border-top:1px solid #1F252D">
-<span style="flex:1;min-width:0;font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#6B7280">Total final</span>
-<span style="font-family:Archivo,system-ui,sans-serif;font-stretch:88%;font-weight:800;letter-spacing:-0.02em;line-height:1.02;font-size:27px;color:#FF5A1A">{{ total }}</span>
+<div style="display:flex;align-items:baseline;gap:13px;padding-top:13px;border-top:1px solid var(--border-subtle)">
+<span class="sn-label" style="flex:1;min-width:0">Total final</span>
+<span class="sn-display" style="font-size:22px;color:var(--accent)">{{ total }}</span>
 </div>
 </div>
 </div>
@@ -86,8 +86,7 @@
 class Component extends DCLogic {
   ns() { return window.SerenataDesignSystem_993393 || {}; }
   renderVals() {
-    const { StatusBadge } = this.ns();
-    const mxn = (n) => '$ ' + Math.round(n).toLocaleString('es-MX');
+    const mxn = (n) => '$' + Math.round(n).toLocaleString('es-MX');
     const partidas = [
       { categoria: 'Dirección', descripcion: 'Dirección y guion', cantidad: 1, precio: 84000, responsable: 'Julián López', xPagar: 60000 },
       { categoria: 'Producción', descripcion: 'Equipo de cámara (3 días)', cantidad: 3, precio: 42000, responsable: 'Ana Vidal', xPagar: 96000 },
@@ -102,11 +101,11 @@ class Component extends DCLogic {
     const xPagar = partidas.reduce((a, p) => a + p.xPagar, 0);
     return {
       nav: [
-        { id: 'inicio', label: 'Inicio' },
-        { id: 'cotizaciones', label: 'Cotizaciones' },
-        { id: 'proyectos', label: 'Proyectos' },
-        { id: 'cuentas', label: 'Cuentas' },
-        { id: 'responsables', label: 'Responsables' },
+        { id: 'inicio', label: 'Inicio', icon: 'home', tone: 'gray' },
+        { id: 'cotizaciones', label: 'Cotizaciones', icon: 'file-text', tone: 'gray' },
+        { id: 'proyectos', label: 'Proyectos', icon: 'folder-kanban', tone: 'blue' },
+        { id: 'cuentas', label: 'Cuentas', icon: 'wallet', tone: 'green' },
+        { id: 'responsables', label: 'Responsables', icon: 'users', tone: 'purple' },
       ],
       user: { name: 'Carla Mendoza', nickname: '@carlam', initials: 'CM' },
       columns: [
@@ -124,7 +123,7 @@ class Component extends DCLogic {
         { label: 'General', monto: mxn(general) },
         { label: 'IVA 16%', monto: mxn(iva) },
       ],
-      total: mxn(general + iva) + ' MXN',
+      total: mxn(general + iva),
       margen: mxn(general - xPagar),
     };
   }

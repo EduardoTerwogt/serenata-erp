@@ -1,8 +1,7 @@
 /* 7 · Planeación. Wizard de 4 pasos que convierte mensajes informales de email
-   o WhatsApp en cotizaciones usando IA para extraer los datos. Fase 5 no
-   cambia el fondo de esta pantalla. El descarte de un evento pendiente es
+   o WhatsApp en cotizaciones usando IA para extraer los datos. El descarte de un evento pendiente es
    soft-delete: no se borra, se marca como eliminado y deja de listarse. */
-const { Button, Card, Icon, Select, TextField, SearchInput, DataTable, SectionHero } = window.SerenataDesignSystem_993393;
+const { Button, Card, Icon, Select, TextField, SearchInput, DataTable } = window.SerenataDesignSystem_993393;
 
 const SN5_PASOS = ['Proyecto', 'Mensaje', 'Validación', 'Confirmación'];
 
@@ -97,10 +96,10 @@ function PlaneacionScreen() {
 
   return (
     <React.Fragment>
-      <SectionHero
-        title="Planeación"
-        action={<Button variant="secondary" size="lg" iconRight="arrow-right" onClick={() => setVista('pendientes')}>Eventos pendientes · {pendientes.length}</Button>}
-      />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div className="sn-display" style={{ fontSize: 22 }}>Planeación</div>
+        <Button variant="secondary" size="lg" iconRight="arrow-right" onClick={() => setVista('pendientes')}>Eventos pendientes · {pendientes.length}</Button>
+      </div>
 
       {pendientes.length ? (
         <button

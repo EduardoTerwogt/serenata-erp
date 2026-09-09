@@ -1,7 +1,7 @@
-/* 4 · Portal de Colaboradores (Fase 5.5). Autoservicio: el colaborador captura
+/* 4 · Portal de Colaboradores. Autoservicio: el colaborador captura
    sus propios datos, sube documentación legal/fiscal y sube facturas con
    validación automática visible al momento contra su cuenta por pagar. */
-const { Button, Card, Icon, Avatar, Select, TextField, FilterTabs, DataTable, SectionHero } = window.SerenataDesignSystem_993393;
+const { Button, Card, Icon, Avatar, Select, TextField, FilterTabs, DataTable } = window.SerenataDesignSystem_993393;
 
 function DropZone({ label, hint, onDrop }) {
   const [over, setOver] = React.useState(false);
@@ -80,18 +80,16 @@ function PortalScreen() {
 
   return (
     <React.Fragment>
-      <SectionHero
-        title="Portal"
-        action={(
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-            <Avatar initials={c.initials} size={38} />
-            <div>
-              <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--weight-semibold)', color: 'var(--text-primary)' }}>{c.nombre}</div>
-              <div style={{ fontSize: 'var(--text-md)', color: 'var(--text-muted)' }}>Colaboradora externa</div>
-            </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div className="sn-display" style={{ fontSize: 22 }}>Portal</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+          <Avatar initials={c.initials} size={38} />
+          <div>
+            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 'var(--weight-semibold)', color: 'var(--text-primary)' }}>{c.nombre}</div>
+            <div style={{ fontSize: 'var(--text-md)', color: 'var(--text-muted)' }}>Colaboradora externa</div>
           </div>
-        )}
-      />
+        </div>
+      </div>
 
       <FilterTabs
         tabs={[

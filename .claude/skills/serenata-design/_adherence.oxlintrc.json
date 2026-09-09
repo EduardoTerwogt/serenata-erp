@@ -40,8 +40,8 @@
         "message": "Raw px value — use a design-system spacing token via var()."
       },
       {
-        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Archivo|Manrope))/i]",
-        "message": "Font not provided by the design system. Available: Archivo, Manrope."
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Inter))/i]",
+        "message": "Font not provided by the design system. Available: Inter."
       },
       {
         "selector": "JSXOpeningElement[name.name='AppShell'] > JSXAttribute > JSXIdentifier[name!=/^(?:sidebar|topbar|children|style|key|ref|className|style|children)$/]",
@@ -92,10 +92,6 @@
         "message": "<Field> doesn't accept that prop. Declared props: label, value, children, span, nowrapLabel, style."
       },
       {
-        "selector": "JSXOpeningElement[name.name='FilterButton'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|count|onClick|style|key|ref|className|style|children)$/]",
-        "message": "<FilterButton> doesn't accept that prop. Declared props: children, count, onClick, style."
-      },
-      {
         "selector": "JSXOpeningElement[name.name='FilterTab'] > JSXAttribute > JSXIdentifier[name!=/^(?:id|label|count|key|ref|className|style|children)$/]",
         "message": "<FilterTab> doesn't accept that prop. Declared props: id, label, count."
       },
@@ -136,16 +132,16 @@
         "message": "<SearchInput> size must be one of 'md' | 'lg'."
       },
       {
-        "selector": "JSXOpeningElement[name.name='SectionHero'] > JSXAttribute > JSXIdentifier[name!=/^(?:eyebrow|title|subtitle|action|minHeight|style|key|ref|className|style|children)$/]",
-        "message": "<SectionHero> doesn't accept that prop. Declared props: eyebrow, title, subtitle, action, minHeight, style."
-      },
-      {
         "selector": "JSXOpeningElement[name.name='SelectOption'] > JSXAttribute > JSXIdentifier[name!=/^(?:value|label|key|ref|className|style|children)$/]",
         "message": "<SelectOption> doesn't accept that prop. Declared props: value, label."
       },
       {
         "selector": "JSXOpeningElement[name.name='SidebarNavItem'] > JSXAttribute > JSXIdentifier[name!=/^(?:id|label|icon|key|ref|className|style|children)$/]",
         "message": "<SidebarNavItem> doesn't accept that prop. Declared props: id, label, icon."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='SplashMark'] > JSXAttribute > JSXIdentifier[name!=/^(?:size|style|key|ref|className|style|children)$/]",
+        "message": "<SplashMark> doesn't accept that prop. Declared props: size, style."
       },
       {
         "selector": "JSXOpeningElement[name.name='StateBadge'] > JSXAttribute > JSXIdentifier[name!=/^(?:state|children|style|key|ref|className|style|children)$/]",
@@ -222,9 +218,6 @@
       "Field": {
         "replaces": []
       },
-      "FilterButton": {
-        "replaces": []
-      },
       "FilterTab": {
         "replaces": []
       },
@@ -252,13 +245,13 @@
       "SearchInput": {
         "replaces": []
       },
-      "SectionHero": {
-        "replaces": []
-      },
       "SelectOption": {
         "replaces": []
       },
       "SidebarNavItem": {
+        "replaces": []
+      },
+      "SplashMark": {
         "replaces": []
       },
       "StateBadge": {
@@ -287,15 +280,15 @@
       "--accent",
       "--accent-pressed",
       "--accent-quiet",
+      "--accent-tint",
       "--bg-app",
-      "--bg-topbar",
+      "--blur-soft",
+      "--blur-strong",
       "--border-subtle",
       "--content-pad",
       "--control-height",
       "--control-height-lg",
-      "--display-stretch",
-      "--display-tracking",
-      "--display-weight",
+      "--control-track",
       "--dur-base",
       "--dur-fast",
       "--dur-slow",
@@ -305,6 +298,7 @@
       "--font-display",
       "--font-ui",
       "--hairline",
+      "--hover-overlay",
       "--lh-body",
       "--lh-snug",
       "--lh-tight",
@@ -325,9 +319,17 @@
       "--shadow-overlay",
       "--shadow-rail",
       "--shadow-raised",
+      "--shadow-segment",
       "--sidebar-pad",
       "--sidebar-width",
       "--sn-app",
+      "--sn-chip-blue",
+      "--sn-chip-gray",
+      "--sn-chip-green",
+      "--sn-chip-indigo",
+      "--sn-chip-purple",
+      "--sn-chip-red",
+      "--sn-chip-teal",
       "--sn-hairline",
       "--sn-ink",
       "--sn-ink-body",
@@ -338,6 +340,7 @@
       "--sn-orange-ink",
       "--sn-orange-soft",
       "--sn-orange-strong",
+      "--sn-sidebar-glass",
       "--sn-status-approved-bg",
       "--sn-status-approved-fg",
       "--sn-status-cancelled-bg",
@@ -353,12 +356,11 @@
       "--sn-texture-blue",
       "--sn-texture-orange",
       "--sn-texture-purple",
-      "--sn-texture-rail",
       "--sn-texture-red",
       "--sn-texture-scrim",
       "--sn-texture-teal",
       "--sn-toggle-track",
-      "--sn-topbar",
+      "--sn-topbar-glass",
       "--space-2xl",
       "--space-3xl",
       "--space-lg",
@@ -370,8 +372,11 @@
       "--surface-input",
       "--surface-row",
       "--surface-row-alt",
+      "--surface-sidebar",
+      "--surface-topbar",
       "--text-base",
       "--text-body",
+      "--text-caption",
       "--text-eyebrow",
       "--text-faint",
       "--text-h1",
@@ -399,7 +404,8 @@
     ],
     "tokenKinds": {
       "--sn-app": "color",
-      "--sn-topbar": "color",
+      "--sn-sidebar-glass": "color",
+      "--sn-topbar-glass": "color",
       "--sn-surface": "color",
       "--sn-surface-alt": "color",
       "--sn-surface-alt-2": "color",
@@ -422,16 +428,23 @@
       "--sn-status-draft-fg": "color",
       "--sn-status-cancelled-bg": "color",
       "--sn-status-cancelled-fg": "color",
+      "--sn-chip-gray": "color",
+      "--sn-chip-blue": "color",
+      "--sn-chip-purple": "color",
+      "--sn-chip-red": "color",
+      "--sn-chip-teal": "color",
+      "--sn-chip-green": "color",
+      "--sn-chip-indigo": "color",
       "--sn-texture-orange": "color",
       "--sn-texture-red": "color",
       "--sn-texture-teal": "color",
       "--sn-texture-blue": "color",
       "--sn-texture-purple": "color",
       "--sn-texture": "color",
-      "--sn-texture-rail": "color",
       "--sn-texture-scrim": "color",
       "--bg-app": "color",
-      "--bg-topbar": "color",
+      "--surface-sidebar": "color",
+      "--surface-topbar": "color",
       "--surface-card": "color",
       "--surface-row": "color",
       "--surface-row-alt": "color",
@@ -440,16 +453,18 @@
       "--accent": "color",
       "--accent-pressed": "color",
       "--accent-quiet": "color",
+      "--accent-tint": "color",
       "--text-primary": "font",
       "--text-body": "font",
       "--text-muted": "font",
       "--text-faint": "font",
       "--focus-ring": "color",
+      "--hover-overlay": "color",
+      "--control-track": "color",
+      "--blur-strong": "other",
+      "--blur-soft": "other",
       "--font-display": "font",
       "--font-ui": "font",
-      "--display-stretch": "spacing",
-      "--display-weight": "font",
-      "--display-tracking": "font",
       "--text-eyebrow": "font",
       "--text-xs": "font",
       "--text-table-head": "font",
@@ -458,6 +473,7 @@
       "--text-md": "font",
       "--text-nav": "font",
       "--text-lg": "font",
+      "--text-caption": "font",
       "--text-h3": "font",
       "--text-h2": "font",
       "--text-h1": "font",
@@ -504,6 +520,7 @@
       "--shadow-overlay": "shadow",
       "--shadow-rail": "shadow",
       "--shadow-accent": "shadow",
+      "--shadow-segment": "shadow",
       "--ease-standard": "other",
       "--ease-out": "other",
       "--dur-fast": "other",
@@ -512,8 +529,7 @@
       "--transition-control": "color"
     },
     "fontFamilies": [
-      "Archivo",
-      "Manrope"
+      "Inter"
     ]
   }
 }
