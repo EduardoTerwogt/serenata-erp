@@ -57,6 +57,25 @@ function grabarFramesRealtime(page: Page, destino: string[]) {
   })
 }
 
+/**
+ * Tiempos de las peticiones de partidas. El test que falla agota 120 s mientras los
+ * de al lado tardan medio segundo: hay que saber si el alta de la fila es lenta de
+ * verdad o si el tiempo se va en otro lado.
+ */
+function vigilarPeticionesDePartidas(page: Page, etiqueta: string) {
+  const inicios = new Map<string, number>()
+  page.on('request', (req) => {
+    if (req.url().includes('/items')) inicios.set(req.url() + req.method(), Date.now())
+  })
+  page.on('response', (res) => {
+    if (!res.url().includes('/items')) return
+    const clave = res.url() + res.request().method()
+    const inicio = inicios.get(clave)
+    const ruta = new URL(res.url()).pathname
+    console.log(`[live colab][${etiqueta}] ${res.request().method()} ${ruta} -> ${res.status()} en ${inicio ? Date.now() - inicio : '?'}ms`)
+  })
+}
+
 function vigilarErrores(page: Page, etiqueta: string) {
   page.on('pageerror', (error) => console.log(`[live colab][${etiqueta}] pageerror: ${error.message}`))
   page.on('console', (msg) => {
@@ -128,6 +147,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     contextA = await browser.newContext()
     pageA = await contextA.newPage()
     vigilarErrores(pageA, 'A')
+    vigilarPeticionesDePartidas(pageA, 'A')
     await login(pageA, '/cotizaciones')
 
     origenId = await crearCotizacion(pageA, `${PREFIJO}ORIGEN-${suffix}`, `Origen colab ${suffix}`, [
@@ -143,6 +163,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     contextB = await browser.newContext()
     pageB = await contextB.newPage()
     vigilarErrores(pageB, 'B')
+    vigilarPeticionesDePartidas(pageB, 'B')
     grabarFramesRealtime(pageB, framesRecibidosPorB)
     await login(pageB, '/cotizaciones', { email: USUARIO_B.email, password: USUARIO_B.password })
 
@@ -228,14 +249,18 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     await descripcionB.click()
     await descripcionB.fill('B sigue escribiendo aquí')
 
+    const t0 = Date.now()
     await pageA.getByRole('button', { name: /Agregar fila/ }).click()
+    const marca = (paso: string) => console.log(`[live colab] ${paso}: ${Date.now() - t0}ms`)
 
     // Los tres eslabones por separado: sin esto, un fallo aquí no distingue "A no
     // creó la fila" de "el servidor no la tiene" de "B no la recibió".
     await expect(filas(pageA), 'A no llegó a ver la fila que acaba de agregar').toHaveCount(antes + 1, { timeout: 30_000 })
+    marca('A ve su fila nueva')
     await expect
       .poll(async () => (await leerCotizacionDelServidor(cotizacionId)).items.length, { timeout: 30_000 })
       .toBe(antes + 1)
+    marca('el servidor tiene la fila nueva')
 
     const idNuevo = (await leerCotizacionDelServidor(cotizacionId)).items.find((item) => !idsAntes.has(item.id))?.id
     expect(idNuevo, 'el servidor no tiene ninguna partida nueva').toBeTruthy()
