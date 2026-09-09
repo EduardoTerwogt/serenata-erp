@@ -41,6 +41,18 @@ function subtotal(page: Page): Locator {
   return page.getByText('Subtotal', { exact: true }).locator('xpath=following-sibling::*[1]')
 }
 
+/**
+ * Un error de JS en la pantalla no rompe ninguna aserción por sí solo, pero explica
+ * fallos que si no parecen magia (p. ej. que el efecto que inserta la fila de otro
+ * colaborador lance y esa pantalla deje de reaccionar). Va al log de CI.
+ */
+function vigilarErrores(page: Page, etiqueta: string) {
+  page.on('pageerror', (error) => console.log(`[live colab][${etiqueta}] pageerror: ${error.message}`))
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') console.log(`[live colab][${etiqueta}] console.error: ${msg.text()}`)
+  })
+}
+
 async function crearCotizacion(page: Page, cliente: string, proyecto: string, descripciones: Array<{ descripcion: string; precio: number }>) {
   const response = await page.request.post('/api/cotizaciones', {
     data: {
@@ -101,6 +113,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
 
     contextA = await browser.newContext()
     pageA = await contextA.newPage()
+    vigilarErrores(pageA, 'A')
     await login(pageA, '/cotizaciones')
 
     origenId = await crearCotizacion(pageA, `${PREFIJO}ORIGEN-${suffix}`, `Origen colab ${suffix}`, [
@@ -115,6 +128,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
 
     contextB = await browser.newContext()
     pageB = await contextB.newPage()
+    vigilarErrores(pageB, 'B')
     await login(pageB, '/cotizaciones', { email: USUARIO_B.email, password: USUARIO_B.password })
 
     await pageA.goto(`/cotizaciones/${cotizacionId}`)
@@ -192,14 +206,23 @@ test.describe('live: colaboración real entre dos usuarios', () => {
   test('la fila que agrega el otro no te roba el cursor ni lo que estás escribiendo', async () => {
     test.setTimeout(120_000)
 
+    const antes = await filas(pageA).count()
+
     const descripcionB = celda(pageB, 1, COL.descripcion)
     await descripcionB.click()
     await descripcionB.fill('B sigue escribiendo aquí')
 
     await pageA.getByRole('button', { name: /Agregar fila/ }).click()
 
+    // Los tres eslabones por separado: sin esto, un fallo aquí no distingue "A no
+    // creó la fila" de "el servidor no la tiene" de "B no la recibió".
+    await expect(filas(pageA), 'A no llegó a ver la fila que acaba de agregar').toHaveCount(antes + 1, { timeout: 30_000 })
+    await expect
+      .poll(async () => (await leerCotizacionDelServidor(cotizacionId)).items.length, { timeout: 30_000 })
+      .toBe(antes + 1)
+
     // B ve la fila nueva...
-    await expect(filas(pageB)).toHaveCount(4, { timeout: 30_000 })
+    await expect(filas(pageB), 'la fila nueva de A nunca llegó a la pantalla de B').toHaveCount(antes + 1, { timeout: 30_000 })
     // ...sin perder el foco ni el texto a medio escribir.
     await expect(descripcionB).toHaveValue('B sigue escribiendo aquí')
     expect(
