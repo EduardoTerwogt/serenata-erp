@@ -4,99 +4,69 @@
 
 - **App:** https://serenata-erp.vercel.app
 - **Repo:** https://github.com/EduardoTerwogt/serenata-erp
-- **Rama:** `main`
+- **Rama:** `main` (única)
 - **Stack:** Next.js 16 (App Router) + TypeScript + React 19 + Supabase (PostgreSQL, cliente directo + RPCs) + Tailwind CSS v4 + Vercel
-- **Nota:** `prisma` aparece en `package.json` pero NO es la capa activa de datos. No usarlo — todo el acceso va por `supabaseAdmin` / `supabase` y RPCs.
+- **Nota:** `prisma` aparece en `package.json` pero NO es la capa de datos activa. No usarlo — todo va por `supabaseAdmin` / `supabase` y RPCs.
+
+**Antes de tocar nada, leer [`docs/ESTADO.md`](docs/ESTADO.md):** qué está terminado, qué está a medias y qué está en rojo ahora mismo.
 
 ---
 
-## Git — Setup y reglas
+## Git — setup y reglas
 
-### Setup al inicio de cada sesión
+### Al inicio de cada sesión
 ```bash
 git config --global user.name "EduardoTerwogt"
 git config --global user.email "eduardoterwogt@gmail.com"
 source /home/user/serenata-erp/.env.local.tokens 2>/dev/null
 git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/serenata-erp.git
 
-# GitHub main es fuente de verdad — forzar local = origin/main SIEMPRE
+# GitHub main es la fuente de verdad — forzar local = origin/main SIEMPRE
 git fetch origin main
 git checkout main
 git reset --hard origin/main
 ```
 
+`.env.local.tokens` está cubierto por `.gitignore` (`.env*`) y **no viaja en el repo**: en un entorno nuevo hay que crearlo con el `GITHUB_TOKEN` que dé el usuario. Si el token falla → pedir uno nuevo y actualizar ese archivo.
+
 ### Reglas
 - Siempre `main`. Nunca ramas. Nunca PRs.
-- **GitHub `main` = verdad absoluta.** El `main` local del sandbox es desechable. Nunca preservar divergencias. Nunca `git push` sin haber reseteado primero a `origin/main` al inicio de la sesión.
-- Commit + push después de cada cambio funcional.
-- Push a `main` dispara deploy automático en Vercel.
-- Si el token falla → pedir al usuario uno nuevo y actualizar `.env.local.tokens`.
-- **Ejecución entre sesiones:** una sesión nueva con tareas pendientes en cola de una sesión anterior NUNCA las ejecuta ni pushea automáticamente al abrir — siempre confirma primero con el usuario qué se va a hacer (ver incidente del 3-sep en el historial del proyecto). `.claude/hooks/pre-push-gate.mjs` (registrado en `.claude/settings.json`) es el control técnico de esta regla: bloquea el primer `git push` de cada sesión para forzar una pausa explícita; el segundo intento en la misma sesión pasa normalmente.
+- **GitHub `main` = verdad absoluta.** El `main` local del sandbox es desechable: puede traer commits legacy del proxy git. Nunca preservar divergencias, nunca hacer cherry-pick para "rescatar" commits locales, nunca pushear sin haber reseteado antes a `origin/main`.
+- Commit + push después de cada cambio funcional. Push a `main` dispara deploy en Vercel.
+- **Ejecución entre sesiones:** una sesión nueva con tareas en cola de una sesión anterior NUNCA las ejecuta ni pushea automáticamente al abrir — confirmar primero con el usuario qué se va a hacer. `.claude/hooks/pre-push-gate.mjs` (registrado en `.claude/settings.json`) es el control técnico: bloquea el primer `git push` de cada sesión para forzar una pausa explícita; el segundo intento en la misma sesión pasa.
 
 ---
 
 ## MCP Supabase — conexiones y regla de producción
 
 Dos conexiones al servidor MCP oficial de Supabase, configuradas como Custom Connectors en claude.ai (Settings → Connectors), no en un archivo del repo:
-- `supabase-test`: lectura y escritura completas — proyecto de prueba, aislado de producción.
-- `supabase-prod`: escritura habilitada, pero bajo la regla siguiente.
+- `supabase-test`: lectura y escritura completas — proyecto de prueba (`serenata-erp-test`), aislado de producción.
+- `supabase-prod`: escritura habilitada, bajo la regla siguiente.
 
-**Regla sobre producción (actualizada 2026-09-07):**
-- Los cambios de esquema en producción vía `supabase-prod` están PRE-APROBADOS siempre y cuando no borren/eliminen nada que ya exista (tablas, columnas, filas, constraints, funciones/RPCs) — se puede aplicar el cambio sin esperar confirmación si es aditivo o es una mejora.
-- Borrar algo que ya existe solo está permitido cuando es para SUSTITUIRLO — porque se está agregando o mejorando esa misma pieza (ej. recrear una función/RPC, renombrar una columna). Un borrado que no sustituye nada (elimina una capacidad sin reemplazo) sigue requiriendo mostrar el SQL exacto en el chat y esperar confirmación explícita del usuario.
-- Cada cambio aplicado a producción se sigue guardando como archivo de migración numerado en `db/migrations/` y se commitea, para que el historial de migraciones no se desincronice de lo que realmente tiene la base de datos.
-
----
-
-## Ambiente de prueba — Google Drive (Fase 4.5)
-
-Carpeta de Drive exclusiva para pruebas automáticas (CI / `tests/e2e/live`), separada de las carpetas reales de producción — `DRIVE_TEST_FOLDER_ID`: `1cofExiUSPDRq9CeH6oU-WSBev1I56m-a`. Reemplaza tanto a `GOOGLE_DRIVE_FOLDER_ID` como a `GOOGLE_DRIVE_FOLDER_ID_CUENTAS` en el ambiente de prueba — un solo folder para ambos; el código ya organiza subcarpetas por tipo/cuenta dentro del folder raíz (`ensureFolderPath` en `lib/integrations/google/drive.ts`).
-
-**No hizo falta tocar código.** `lib/integrations/google/env.ts` ya lee el folder desde variables de entorno planas (`GOOGLE_DRIVE_FOLDER_ID` / `GOOGLE_DRIVE_FOLDER_ID_CUENTAS`) — el aislamiento prueba/producción se logra en la capa de configuración de CI, no en el código de la app: el job de e2e en vivo (Punto 4) exporta esas dos variables con el valor de `DRIVE_TEST_FOLDER_ID` **solo dentro de ese job**. La app nunca ve ni conoce el folder real de producción en ese contexto — no existe ruta de código por la que un test pudiera escribir ahí, sin importar qué refresh token use.
-
-**Refresh token:** se recomienda uno separado del de producción (`GOOGLE_DRIVE_REFRESH_TOKEN_TEST`), por mínimo privilegio (si se filtra el de CI no compromete la cuenta completa de producción) y cuota independiente. No es estrictamente necesario para el aislamiento del folder (eso ya lo garantiza no exponer el folder ID real a CI), pero es la opción más segura. Mismo flujo que el de producción: `/api/integrations/drive/authorize` → consentir → copiar el token de los logs de Vercel (Functions tab) → guardarlo como secreto de GitHub Actions (nunca en Vercel).
-
-**Secretos de GitHub Actions** (Settings → Secrets and variables → Actions → New repository secret) — listos para que el job del Punto 4 los use:
-
-| Nombre | Valor |
-|---|---|
-| `DRIVE_TEST_FOLDER_ID` | `1cofExiUSPDRq9CeH6oU-WSBev1I56m-a` |
-| `GOOGLE_CLIENT_ID` | mismo valor que ya está en Vercel |
-| `GOOGLE_CLIENT_SECRET` | mismo valor que ya está en Vercel |
-| `GOOGLE_DRIVE_REFRESH_TOKEN_TEST` | token nuevo (recomendado) — no reusar el de producción |
+**Regla sobre producción:**
+- Los cambios de esquema en producción están PRE-APROBADOS mientras no borren nada existente (tablas, columnas, filas, constraints, funciones/RPCs): si es aditivo o es una mejora, aplicar sin esperar confirmación.
+- Borrar algo existente solo se permite cuando es para SUSTITUIRLO (recrear una función/RPC, renombrar una columna). Un borrado que elimina una capacidad sin reemplazo requiere mostrar el SQL exacto en el chat y esperar confirmación explícita.
+- Cada cambio aplicado a producción se guarda como migración numerada en `db/migrations/` y se commitea, para que el historial no se desincronice de lo que la base tiene de verdad.
 
 ---
 
 ## Reglas de trabajo
 
-**Autonomía de ejecución (vigente desde 2026-09-07):**
-- Todo cambio que requeriría pedir permiso (editar código, correr comandos, tests, build, push) se considera PRE-APROBADO si se cumplen las 4 condiciones: (1) ya se revisó el cambio, (2) no altera funcionalidad existente como efecto secundario, (3) no elimina/pierde features existentes, (4) no bloquea features existentes — y ya corrieron los tests que le correspondan en verde. Cumplido esto, proceder sin pausar a esperar confirmación.
-- Pedir aprobación al usuario SOLO cuando haya una decisión de lógica de negocio, arquitectura, o UX/UI que no esté clara o tenga más de un camino razonable.
-- Si un plan ya fue aprobado (ExitPlanMode aceptado), hay autorización para ejecutar todas sus etapas sin volver a pedir permiso etapa por etapa, siempre y cuando: cada etapa pase los tests previstos antes de avanzar a la siguiente, y se verifique que lo pusheado a `main` quedó en verde y funcionando de verdad (no solo que el push tuvo éxito — confirmar build/deploy/comportamiento real). Si algo no queda en verde o no funciona como se esperaba, diagnosticar la causa raíz de inmediato (sin atajos ni retries ciegos) y no detenerse ni pasar a la siguiente etapa hasta resolverlo.
-- Fixes pequeños y seguros (typos, edits puntuales, cambios de doc) se ejecutan directo, explicando brevemente qué se hará.
-- Si hay dudas genuinas sobre requerimientos, o el caso no encaja claramente en lo anterior, preguntar antes de avanzar.
-- Escribir el plan → ejecutar → replanear si algo cambia.
+**Autonomía de ejecución.** Todo cambio que requeriría pedir permiso (editar código, correr comandos, tests, build, push) está PRE-APROBADO si se cumplen las 4 condiciones: (1) ya se revisó el cambio, (2) no altera funcionalidad existente como efecto secundario, (3) no elimina features, (4) no bloquea features — y los tests que le corresponden ya corrieron en verde. Cumplido eso, proceder sin pausar.
 
-**No modificar features existentes:**
-- Solo modificar lo que se planea cambiar. Nunca alterar funcionalidad existente como efecto secundario.
-- Antes de push, verificar que ningún feature existente fue afectado.
+Pedir aprobación SOLO cuando haya una decisión de negocio, arquitectura o UX/UI que no esté clara o tenga más de un camino razonable. Fixes pequeños y seguros (typos, edits puntuales, doc) van directo, explicando brevemente qué se hará.
 
-**Usar herramientas disponibles:**
-- Usar /simplify después de implementar para revisar calidad y reuso.
-- Usar subagents para problemas complejos — desglosar, delegar, mantener contexto limpio.
+Si un plan ya fue aprobado, hay autorización para ejecutar todas sus etapas sin volver a pedir permiso — siempre que cada etapa pase sus tests antes de avanzar y que se verifique que lo pusheado a `main` quedó **en verde y funcionando de verdad** (no solo que el push tuvo éxito: confirmar build, deploy y comportamiento real, incluido el job `live` de CI). Si algo no queda en verde, diagnosticar la causa raíz de inmediato y no avanzar hasta resolverlo.
 
-**Respuestas concisas:**
-- Usar la menor cantidad de palabras posible manteniendo claridad. Optimizar uso de tokens.
+**No modificar features existentes.** Solo tocar lo que se planea cambiar. Antes del push, verificar que ningún feature existente se vio afectado.
 
-**Si el usuario debe ejecutar algo manualmente** (Supabase, Vercel, etc.) → dar paso a paso exacto.
+**Bugs = acción inmediata.** Trazar → causa raíz → arreglar. Sin atajos ni retries ciegos. Si algo falla, diagnosticar por qué antes de intentar otra cosa.
 
-**Bugs = acción inmediata:**
-- Trazar → encontrar causa raíz → arreglar. Sin atajos ni retries ciegos.
-- Si algo falla, diagnosticar por qué antes de intentar otra cosa.
+**Aprender de errores en sesión.** Si un approach falla, documentar por qué y no repetirlo.
 
-**Aprender de errores en sesión:**
-- Si un approach falla, documentar por qué y no repetirlo.
-- Cada error es información para la siguiente decisión.
+**Respuestas concisas.** La menor cantidad de palabras posible manteniendo claridad.
+
+**Si el usuario debe ejecutar algo manualmente** (Supabase, Vercel, GitHub Secrets) → dar el paso a paso exacto.
 
 ---
 
@@ -104,169 +74,117 @@ Carpeta de Drive exclusiva para pruebas automáticas (CI / `tests/e2e/live`), se
 
 ERP para productora audiovisual mexicana (Serenata House). Módulos:
 
-- **Cotizaciones**: Items desglosados con folio auto-incremental (SH001, SH002...). Tipos: PRINCIPAL y COMPLEMENTARIA. Estados: BORRADOR → EMITIDA → APROBADA | CANCELADA. Al aprobar → crea Proyecto + Cuentas cobrar/pagar automáticamente.
-- **Proyectos**: Evento/producción aprobada. Estados: PREPRODUCCION → RODAJE → POSTPRODUCCION → FINALIZADO. Creado desde la cotización PRINCIPAL aprobada; puede acumular impacto de COMPLEMENTARIA aprobadas.
-- **Cuentas por Cobrar**: Lo que el cliente debe pagar. Generadas al aprobar. Facturas (PDF+XML), complementos de pago, pagos parciales.
-- **Cuentas por Pagar**: Lo que se paga a cada responsable. Item con responsable → cuenta por pagar. Órdenes de pago agrupadas.
-- **Proveedores** (antes "Responsables", tabla `proveedores`): Colaboradores/freelancers. Datos bancarios, roles, historial de proyectos.
-- **Planeación**: Extracción AI de eventos desde mensajes informales (email/WhatsApp). Claude Sonnet parsea fechas, locaciones, proyectos. Se validan y convierten en cotizaciones en lote.
-- **Plantillas de Servicios**: Templates reutilizables con items pre-configurados para cotizaciones nuevas.
-- **Google Sheets (espejo)**: Sheets acompaña a Supabase como mirror de consulta externa. **Supabase es fuente de verdad**; las escrituras en la app se sincronizan hacia Sheets automáticamente. Nunca tratar Sheets como origen — siempre escribir contra Supabase.
-
----
-
-## Features parciales / pendientes
-
-Antes de modificar cualquiera de estos, PREGUNTAR al usuario:
-
-- **Google Calendar desde Proyectos**: UI presente pero el flow end-to-end no está completo. No asumir que funciona como en planeación.
-- **Complementos de pago (CFDI)**: Upload y registro funcional, pero la conciliación automática con cuentas por cobrar no está completa.
-- **Órdenes de pago**: CRUD funciona, pero flujos de aprobación/firma pueden estar pendientes.
-- **Plantillas de servicios**: Completas para cotizaciones nuevas; integración con cotizaciones complementarias es parcial.
-
-Si se detecta otro feature a medias, documentarlo aquí en lugar de "arreglarlo" sin consultar.
+- **Cotizaciones**: items desglosados, folio auto-incremental (SH001, SH002…). Tipos PRINCIPAL y COMPLEMENTARIA. Estados BORRADOR → EMITIDA → APROBADA | CANCELADA. Al aprobar → crea Proyecto + cuentas por cobrar/pagar.
+- **Proyectos**: evento/producción aprobada. PREPRODUCCION → RODAJE → POSTPRODUCCION → FINALIZADO. Incluye tareas, cronograma, tipos de proyecto, hoja de llamado y reporte de cierre.
+- **Cuentas por cobrar**: lo que el cliente debe. Facturas (PDF+XML), complementos de pago, pagos parciales.
+- **Cuentas por pagar**: lo que se paga a cada proveedor. Órdenes de pago agrupadas con PDF real en Drive.
+- **Proveedores** (antes "responsables", tabla `proveedores`): colaboradores/freelancers. Datos bancarios, régimen fiscal, roles, historial.
+- **Portal de proveedores**: signup, confirmación de identidad y carga de facturas por parte del proveedor. Sesión propia, independiente de NextAuth.
+- **Planeación**: extracción AI de eventos desde mensajes informales (email/WhatsApp) con Claude. Se validan y se convierten en cotizaciones en lote.
+- **Plantillas de servicios**: templates reutilizables de items.
+- **Dashboard**: métricas y gastos fijos.
+- **Google Sheets (espejo)**: mirror de consulta externa. **Supabase es la fuente de verdad**; nunca escribir contra Sheets como origen.
 
 ---
 
 ## Arquitectura
 
-```
-app/                          # Next.js App Router
-├── api/                      # API routes (REST)
-│   ├── cotizaciones/         # CRUD + aprobar + cancelar + PDF
-│   ├── cuentas-cobrar/       # CRUD + documentos + pagos
-│   ├── cuentas-pagar/        # CRUD + documentos + órdenes de pago
-│   ├── proyectos/            # CRUD + hoja de llamado
-│   ├── proveedores/          # CRUD + historial (antes responsables/)
-│   ├── planeacion/           # extract-ai, pendientes, match, notas
-│   ├── service-templates/    # CRUD plantillas
-│   ├── clientes/             # Catálogo de clientes
-│   ├── productos/            # Catálogo de productos
-│   ├── integrations/         # Google Drive y Sheets activos; Calendar parcial
-│   └── auth/                 # NextAuth
-├── cotizaciones/             # Pages: lista, nueva, [id] detalle
-├── proyectos/                # Pages: lista, [id] detalle
-├── cuentas/                  # Page: cobrar + pagar (tabs)
-├── proveedores/              # Pages: lista, nueva, [id] detalle (antes responsables/)
-├── planeacion/               # Pages: extracción + pendientes
-├── plantillas-servicios/     # Pages: lista, nueva, [id]/editar
-└── admin/sheets/             # Google Sheets sync
+Ver [`ARCHITECTURE.md`](ARCHITECTURE.md) para el mapa completo del repo y las capas. Resumen:
 
-components/                   # Componentes reutilizables
-├── quotations/               # Secciones del formulario de cotización
-└── ui/                       # Primitivos (Button, Input, Badge, Card, Alert...)
-
-hooks/                        # Custom hooks
-├── useQuotationForm.ts       # Estado de formulario + autocomplete con cache
-├── useServiceTemplateForm.ts # Estado de plantillas
-└── usePrefetch.ts            # Prefetch de datos
-
-lib/                          # Lógica de negocio y utilidades
-├── api-auth.ts               # requireSection() para proteger API routes
-├── authz.ts                  # Utilidades de permisos por sección
-├── db.ts                     # Fachada que re-exporta todos los repositories
-├── supabase.ts               # Cliente Supabase (admin + browser)
-├── types.ts                  # Interfaces TypeScript de todo el dominio
-├── validation/schemas.ts     # Schemas Zod para validación de payloads
-├── client/api.ts             # Helpers fetch: getJson, postJson, putJson, etc.
-├── quotations/               # Cálculos, formateo, mappers de cotizaciones
-├── parsers/                  # eventInfoParser (regex fallback)
-├── integrations/             # Google Drive y Sheets activos; Calendar parcial
-└── server/                   # Lógica server-only
-    ├── pdf/                  # Generación PDF (jspdf + autotable)
-    ├── quotations/           # Approval, cancel, folio, persistence
-    ├── repositories/         # Data access layer por dominio
-    └── cuentas/              # Helpers de estado de cuentas
-
-db/migrations/                # SQL para ejecutar en Supabase
-```
+- `app/` — App Router: páginas y API routes REST.
+- `components/`, `hooks/` — reutilizables de UI y estado de formularios/presencia.
+- `lib/` — dominio: `client/api.ts` (fetch), `validation/schemas.ts` (Zod), `quotations/`, `integrations/google/`.
+- `lib/server/` — server-only: `repositories/` (acceso a datos por dominio), `quotations/`, `cuentas/`, `projects/`, `pdf/`.
+- `lib/db.ts` — **solo fachada** que reexporta repositorios. No meterle lógica.
+- `db/migrations/` — SQL numerado, se aplica **a mano** en el SQL Editor de Supabase.
 
 ---
 
 ## Patrones clave
 
 **Auth en API routes:**
-```typescript
+```ts
 const authResult = await requireSection('cotizaciones')
 if (authResult.response) return authResult.response
 ```
-Secciones: `admin`, `dashboard`, `cotizaciones`, `proyectos`, `cuentas`, `responsables`, `planeacion`.
+Secciones: `admin`, `dashboard`, `cotizaciones`, `proyectos`, `cuentas`, `responsables`, `planeacion`. Algunas rutas usan `requireAnySection()`; seguir el patrón que ya exista, no inventar otro.
 
 **Validación de payloads:**
-```typescript
+```ts
 const validation = validate(CotizacionCreateSchema, body)
 if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 })
 const parsed = validation.data
 ```
 
-**Route params en Next.js 16 — params es Promise:**
-```typescript
+**Route params en Next.js 16 — `params` es Promise:**
+```ts
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 }
 ```
 
-**Formularios:** react-hook-form + Zod resolvers. `useQuotationForm` cachea catálogos a nivel módulo (5min TTL).
+**Formularios:** react-hook-form + resolvers de Zod. `useQuotationForm` cachea catálogos a nivel módulo (TTL 5 min).
 
-**PDF:** jspdf + jspdf-autotable. Archivos en `lib/server/pdf/`. Se suben a Google Drive.
+**PDF:** jspdf + jspdf-autotable en `lib/server/pdf/`. Se suben a Google Drive.
 
-**Soft delete:** `planeacion_pendientes` usa columna `eliminada: boolean`. GET filtra `eliminada = false`.
+**Soft delete:** `planeacion_pendientes.eliminada: boolean`. GET filtra `eliminada = false`.
 
 ---
 
 ## Gotchas (trampas del repo)
 
-- **Aprobar / cancelar cotizaciones usa RPCs con efectos laterales.** Aprobar crea Proyecto + Cuentas por cobrar + Cuentas por pagar en una transacción. Cancelar revierte. **Nunca recrear manualmente** — siempre llamar la RPC existente en `lib/server/quotations/`.
-- **Reservar folio es atómico vía RPC.** No generar folios en JS — race conditions garantizadas.
-- **Escribir en cotizaciones/proyectos/cuentas dispara sync a Google Sheets.** Si algo rompe el sync, revisar `lib/integrations/` antes de culpar al write.
-- **Actualizar un PDF reusa `drive_file_id`.** Si existe, se actualiza el archivo de Drive en vez de crear uno nuevo. No borrar el campo sin entender el flow.
-- **Cotizaciones COMPLEMENTARIA afectan al Proyecto del padre.** Al aprobarse, suman al proyecto/cuentas de la PRINCIPAL. No tratarlas como independientes.
-- **Planeación guarda `planeacion_pendientes` + `planeacion_event_notas`.** Las notas contextuales son extraídas por Claude AI y asociadas por evento/fecha — no confundir con notas de usuario.
-- **`planeacion_pendientes.eliminada` es soft delete.** GET debe filtrar `eliminada = false`. No usar DELETE físico.
-- **`params` es Promise en Next.js 16.** Siempre `await params` antes de usar.
-- **Prisma está en deps pero NO se usa.** Ver nota en Stack. Todo va por Supabase + RPCs.
-- **El `main` local del entorno sandbox NO es fuente de verdad.** Puede tener commits legacy de estado persistente del proxy git. Al inicio de sesión SIEMPRE `git fetch origin main && git reset --hard origin/main`. Nunca hacer cherry-pick para "rescatar" commits locales — son basura. Si hay duda sobre qué está en local, resetear y volver a empezar desde `origin/main`.
+- **Aprobar / cancelar cotizaciones usa RPCs con efectos laterales.** Aprobar crea Proyecto + cuentas por cobrar + cuentas por pagar en una transacción; cancelar revierte. **Nunca recrear eso manualmente** — llamar la RPC existente en `lib/server/quotations/`.
+- **Reservar folio es atómico vía RPC.** No generar folios en JS: race conditions garantizadas.
+- **Guardar la cotización preserva los ids de las partidas.** `save_cotizacion` antes borraba y recreaba todo con ids nuevos, y esa era la causa raíz de que se perdieran ediciones ajenas. No revertir ese comportamiento.
+- **Las escrituras de la pantalla de detalle van por sección**, no por guardado total: `PATCH /api/cotizaciones/[id]/{general,totales,notas}` y `.../items/[itemId]`. Cada una toca solo lo suyo y aplica **solo las claves recibidas**, con bloqueo de fila en el RPC. No sustituirlas por un save completo.
+- **Leer partidas siempre con `ORDER BY orden`.** Sin eso, Postgres las devuelve en orden arbitrario y ese orden cambia al actualizar una fila.
+- **La colaboración no depende de los avisos de Realtime.** `channel.send()` cae a REST cuando el canal no está unido, eso da 403 y el error se traga. La convergencia la garantiza la reconciliación contra la base cada 5 s. Detalle en `docs/ESTADO.md`.
+- **Escribir en cotizaciones/proyectos/cuentas dispara sync a Google Sheets.** Si el sync rompe, revisar `lib/integrations/` antes de culpar al write.
+- **Actualizar un PDF reusa `drive_file_id`.** Si existe, se actualiza el archivo en Drive en vez de crear uno nuevo. No borrar el campo sin entender el flow.
+- **Cotizaciones COMPLEMENTARIA afectan al Proyecto del padre.** Al aprobarse suman al proyecto/cuentas de la PRINCIPAL. No tratarlas como independientes.
+- **`params` es Promise en Next.js 16.**
+- **Prisma está en deps pero NO se usa.**
+- **El `main` local del sandbox NO es fuente de verdad.** Al inicio de sesión siempre `git fetch origin main && git reset --hard origin/main`.
 
 ---
 
 ## Base de datos
 
-- **Motor:** Supabase (PostgreSQL)
-- **Clientes:** `supabaseAdmin` para server-side, `supabase` (anon) para client-side
-- **Migraciones:** SQL en `db/migrations/`. Se ejecutan manualmente en Supabase SQL Editor.
-- **RPCs:** Operaciones complejas (aprobar cotización, reservar folio, cancelar) usan funciones PostgreSQL.
+- **Motor:** Supabase (PostgreSQL). `supabaseAdmin` server-side, `supabase` (anon) client-side.
+- **Migraciones:** SQL en `db/migrations/`, se ejecutan **manualmente** en el SQL Editor. `npm run check-migrations` solo lista y valida los nombres; no aplica nada.
+- **RLS:** habilitado en las tablas pero **sin políticas**, así que la llave anónima no lee nada. Por eso la colaboración no usa `postgres_changes`: suscribirse desde el navegador exigiría exponer todas las cotizaciones a la llave pública.
 
 | Tabla | Descripción |
-|-------|-------------|
-| `cotizaciones` | Cotizaciones (id=folio texto SH001) |
-| `items_cotizacion` | Items de cada cotización |
-| `clientes` | Catálogo de clientes |
-| `productos` | Catálogo de productos/servicios |
-| `proyectos` | Proyectos (creados al aprobar cotización) |
-| `cuentas_cobrar` | Cuentas por cobrar al cliente |
-| `cuentas_pagar` | Cuentas por pagar a proveedores |
+|---|---|
+| `cotizaciones` | Cotizaciones (id = folio texto SH001) |
+| `items_cotizacion` | Partidas de cada cotización |
+| `clientes`, `productos` | Catálogos |
+| `proyectos` | Creados al aprobar una cotización |
+| `cuentas_cobrar`, `cuentas_pagar` | Cuentas por cobrar y por pagar |
 | `proveedores` | Colaboradores/freelancers (antes `responsables`) |
-| `plantillas_servicios` | Plantillas de items reutilizables |
-| `planeacion_pendientes` | Eventos pendientes de planeación |
-| `extraction_logs` | Log de uso de Claude API |
+| `plantillas_servicios` | Plantillas de items |
+| `planeacion_pendientes`, `planeacion_event_notas` | Planeación (soft delete en `eliminada`) |
+| `usuarios` | Usuarios del portal |
+| `extraction_logs` | Log de uso de la API de Claude |
 
 ---
 
 ## Testing
 
-**Antes de push a `main`, correr lo que aplique al cambio:**
+Detalle completo en [`TESTING.md`](TESTING.md). Lo mínimo:
+
 ```bash
-npm test                  # Vitest — siempre que el cambio toque código (no solo docs)
-npm run build             # Si el cambio toca TS/TSX, config de Next o rutas
-npm run test:e2e:smoke    # Si el cambio afecta flujos cubiertos por smoke
-npm run test:e2e:critical # Si el cambio afecta flujos críticos (cotizaciones, cuentas, proyectos)
+npx tsc --noEmit
+npm run lint
+npm test                  # Vitest — 351 tests
+npm run test:e2e:smoke    # Playwright con APIs mockeadas
+npm run test:e2e:critical # Playwright con APIs mockeadas
+npm run build             # si toca TS/TSX, rutas o config de Next
 ```
 
-Regla de oro: **no pushear con tests en rojo**. Si algo falla → diagnosticar, arreglar, re-ejecutar. Si una suite e2e está inestable por entorno (no por el cambio), documentarlo en el commit y avisar al usuario.
+`npm run test:e2e:live` corre contra Supabase y Drive de prueba **reales** y solo funciona en CI (necesita secretos). Es el único nivel que puede delatar un bug de persistencia o de colaboración.
 
-- Unit tests: `lib/**/__tests__/*.test.ts`
-- E2E tests: `tests/e2e/{smoke,critical,live}/*.spec.ts`
-- CI: GitHub Actions ejecuta tests en cada push a main.
+**Regla de oro: no pushear con tests en rojo.** Y un test solo se modifica cuando un cambio de producto lo justifica — nunca para que deje de fallar.
 
 ---
 
@@ -292,7 +210,7 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=
 
-# Google Drive (PDFs de cotizaciones, órdenes de pago, etc.)
+# Google Drive (PDFs de cotizaciones, órdenes de pago, facturas)
 GOOGLE_DRIVE_REFRESH_TOKEN=
 GOOGLE_DRIVE_FOLDER_ID=
 GOOGLE_DRIVE_FOLDER_ID_CUENTAS=
@@ -303,24 +221,28 @@ GOOGLE_SHEETS_SPREADSHEET_ID=
 # Google Calendar (parcial — solo desde planeación)
 GOOGLE_CALENDAR_ID=
 
-# Cron (keep-alive endpoint)
+# Cron (keep-alive)
 CRON_SECRET=
 
-# Ambiente de prueba (Fase 4.5) — solo GitHub Actions secrets, NUNCA en Vercel
+# Ambiente de prueba — SOLO secretos de GitHub Actions, NUNCA en Vercel
 TEST_SUPABASE_URL=
 TEST_SUPABASE_ANON_KEY=
 TEST_SUPABASE_SERVICE_ROLE_KEY=
-DRIVE_TEST_FOLDER_ID=
+DRIVE_TEST_FOLDER_ID=            # 1cofExiUSPDRq9CeH6oU-WSBev1I56m-a
 GOOGLE_DRIVE_REFRESH_TOKEN_TEST=
+PLAYWRIGHT_TEST_EMAIL=
+PLAYWRIGHT_TEST_PASSWORD=
 ```
+
+El folder de Drive de prueba es exclusivo de CI y reemplaza a los dos folders reales dentro del job `live`, así que ningún test puede escribir en las carpetas de producción.
 
 ---
 
 ## Convenciones
 
-- **UI:** Tema oscuro. Fondo `gray-900`/`gray-800`, texto `gray-300`/`white`, acentos naranja `#ff8000` (orange-500/600).
-- **Imports:** Alias `@/` = raíz. Ej: `import { supabaseAdmin } from '@/lib/supabase'`
+- **UI:** tema oscuro con los tokens de `app/globals.css` (`bg-app`, `bg-surface`, `bg-row`, `text-content`, `border-hairline`, `rounded-panel`, acento `#FF5A1A`). **No usar `gray-*` ni `#f97316`**: son del estilo anterior. Ver [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
+- **Imports:** alias `@/` = raíz. Ej: `import { supabaseAdmin } from '@/lib/supabase'`.
 - **Tipos:** `lib/types.ts`. Schemas: `lib/validation/schemas.ts`.
-- **API routes:** Siempre `requireSection()` para auth. Retornar `Response.json()`.
-- **Idioma código:** Español/inglés mixto (como existe). UI en español.
-- **No crear archivos innecesarios:** Preferir editar existentes.
+- **API routes:** siempre `requireSection()` / `requireAnySection()`. Retornar `Response.json()`.
+- **Idioma:** código español/inglés mixto (como ya existe); UI en español.
+- **No crear archivos innecesarios:** preferir editar los existentes.

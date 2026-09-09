@@ -1,256 +1,64 @@
-# Serenata ERP — Design System
-## UI/UX Profesional para Audiovisual
+# Design System
 
----
+La fuente de verdad son los **tokens CSS en `app/globals.css`** (Fase 5.7/5.8), no
+este documento. Aquí solo está el mapa para saber qué usar y qué queda pendiente.
 
-## 📋 Visión General
+El diseño completo — especímenes, componentes de referencia y el UI kit de las once
+secciones — vive en el skill `.claude/skills/serenata-design/`. Ese kit es
+**especificación visual, no código de producción**: se copian los valores, no los
+componentes.
 
-Este design system implementa principios de **UI UX Pro Max** adaptados para la industria audiovisual/filmográfica. Proporciona componentes reutilizables, patrones UX coherentes y una paleta de colores profesional.
+## Tema
 
-**Stack:** Next.js 16 + React 19 + Tailwind CSS v4 + TypeScript
+Oscuro, cinematográfico. Naranja de marca sobre superficies casi negras.
 
----
+| Rol | Token semántico | Valor |
+|---|---|---|
+| Fondo de app | `--bg-app` | `#0F1318` |
+| Topbar | `--bg-topbar` | `#161D26` |
+| Tarjeta | `--surface-card` | `#151B22` |
+| Fila / fila alterna | `--surface-row` / `--surface-row-alt` | `#191E25` / `#1A2027` |
+| Input | `--surface-input` | `#10161C` |
+| Hairline (bordes) | `--border-subtle` | `#1F252D` |
+| Acento de marca | `--accent` | `#FF5A1A` |
+| Acento presionado / discreto | `--accent-pressed` / `--accent-quiet` | `#EE4B02` / `#C65008` |
+| Tinta: título / cuerpo / apagado / tenue | `--text-primary` / `--text-body` / `--text-muted` / `--text-faint` | `#FEFCF9` · `#E8EAED` · `#9AA2AA` · `#6B7280` |
 
-## 🎨 Paleta de Colores
+Los estados de badge (aprobado, emitido, borrador, cancelado) tienen sus propios
+pares `--sn-status-*-bg` / `-fg`; ver `components/ui/Badge.tsx`.
 
-### Colores Primarios
-- **Naranja Serenata** (`#f97316`): Acento principal, energía y creatividad
-- **Azul Profesional** (`#0ea5e9`): Confianza y estabilidad
-- **Gris Cinematográfico** (`#0a0a0a` → `#fafafa`): Base tema oscuro
+También hay tokens de espaciado y de layout del shell (`--sidebar-width`,
+`--topbar-height`, `--control-height`, la escala `--space-*`). Usarlos en vez de
+inventar números.
 
-### Uso en Componentes
-```
-Primary Button → Naranja Serenata (CTA principal)
-Secondary Button → Azul Profesional (Acciones secundarias)
-States → Verde (éxito), Rojo (error), Amarillo (warning)
-Backgrounds → Grises oscuros cinematográficos
-```
+## Tipografía
 
----
+Cargadas con `next/font` en `app/fonts.ts`:
 
-## 📝 Tipografía
+- **Archivo** → display, condensada, títulos y eyebrows (`font-display`).
+- **Manrope** → UI y cuerpo (`font-sans`).
 
-### Fuentes
-- **Inter** (Regular): Interfaz, body text, data
-- **Poppins** (Display): Títulos, headings, logos
-- **Source Code Pro** (Mono): Código, moneda, números
+Son sustitutos de las fuentes de marca originales, que nunca se entregaron. Las
+variables `--font-inter` / `--font-poppins` siguen existiendo por compatibilidad,
+pero **apuntan a Manrope y Archivo**: los nombres son legado, los valores no.
 
-### Escala Tipográfica
-- `text-xs`: 0.75rem (etiquetas, helper text)
-- `text-sm`: 0.875rem (descripción, metadata)
-- `text-base`: 1rem (body text)
-- `text-lg`: 1.125rem (subtítulos)
-- `text-xl`: 1.25rem (headings nivel 3)
-- `text-2xl`: 1.5rem (headings nivel 2)
-- `text-3xl`: 1.875rem (headings nivel 1)
+## Cómo escribir UI nueva
 
----
+Con las clases que consumen los tokens (`bg-app`, `bg-surface`, `bg-row`,
+`text-content`, `text-body`, `border-hairline`, `rounded-panel`,
+`text-accent-quiet`, `sn-label`…), como en `app/cotizaciones/[id]/page.tsx`,
+`app/dashboard/page.tsx` o `app/portal/page.tsx`. **No** usar `gray-*`, `#f97316`
+ni el azul secundario: son del estilo anterior.
 
-## 🧩 Componentes
+## Migración pendiente
 
-### Button
-Componente versátil con múltiples variantes.
+El rediseño se aplicó por bloques y no terminó. Siguen en el estilo viejo:
 
-```tsx
-import { Button } from '@/components/ui/Button'
+- `app/login/page.tsx`
+- `app/admin/sheets/page.tsx`
+- Los primitivos `components/ui/{Alert,AppCard,Badge,Button,Input,MetricCard}.tsx`,
+  `components/ResponsiveTableCard.tsx` y `app/components/ui/Skeleton*.tsx`
 
-<Button variant="primary" size="md">Acción</Button>
-<Button variant="secondary" size="sm">Cancelar</Button>
-<Button variant="ghost" isLoading>Guardando...</Button>
-<Button variant="destructive">Eliminar</Button>
-```
-
-**Variantes:**
-- `primary`: Acción principal (naranja)
-- `secondary`: Acción secundaria
-- `accent`: Acción destacada (naranja oscuro)
-- `success`: Acción exitosa (verde)
-- `destructive`: Acción destructiva (rojo)
-- `ghost`: Sin borde, mínimo
-- `glass`: Glassmorphism (frosted glass)
-- `outline`: Borde solo
-
-**Tamaños:** `xs`, `sm`, `md`, `lg`, `xl`, `icon`, `icon-sm`, `icon-lg`
-
-### Input
-Campo de entrada con validación visual y ayuda.
-
-```tsx
-import { Input } from '@/components/ui/Input'
-
-<Input 
-  label="Nombre del proyecto"
-  placeholder="Ej: Cortometraje 2026"
-  error={errors?.name}
-  required
-/>
-```
-
-**Props:**
-- `label`: Etiqueta del campo
-- `description`: Texto descriptivo
-- `error`: Mensaje de error (activa estilo rojo)
-- `helper`: Texto de ayuda
-- `icon`: Ícono a la izquierda
-- `required`: Marca campo requerido
-
-### Badge
-Etiqueta para estados, categorías y tags.
-
-```tsx
-import { Badge } from '@/components/ui/Badge'
-
-<Badge variant="success">En Producción</Badge>
-<Badge variant="warning" removable onRemove={() => {}}>4K</Badge>
-```
-
-**Variantes:** `default`, `primary`, `success`, `warning`, `error`, `info`, `accent`, `outline`
-
-### Alert
-Mensaje de estado o notificación.
-
-```tsx
-import { Alert } from '@/components/ui/Alert'
-
-<Alert variant="success" title="¡Guardado!" closeable>
-  Los cambios se guardaron correctamente.
-</Alert>
-```
-
-**Variantes:** `default`, `success`, `warning`, `error`, `info`, `primary`
-
-### SectionCard
-Contenedor de sección con encabezado opcional.
-
-```tsx
-import { SectionCard } from '@/components/ui/SectionCard'
-
-<SectionCard 
-  title="Información General" 
-  description="Detalles del proyecto"
-  actions={<Button>Editar</Button>}
->
-  {/* contenido */}
-</SectionCard>
-```
-
----
-
-## ✨ Efectos Visuales
-
-### Glassmorphism
-Efecto de cristal esmerilado para profundidad.
-
-```tsx
-className="bg-white/10 backdrop-blur-lg border border-white/20"
-```
-
-### Elevación (Sombras)
-Jerarquía visual mediante sombras.
-
-```
---shadow-elevation-1: 0 1px 3px
---shadow-elevation-2: 0 4px 6px
---shadow-elevation-3: 0 10px 15px
---shadow-elevation-4: 0 20px 25px
-```
-
-### Transiciones
-Animaciones ágiles y suaves.
-
-```
---transition-fast: 150ms
---transition-base: 200ms
---transition-smooth: 300ms
-```
-
----
-
-## 🎯 Patrones UX para ERP
-
-### 1. Estados Visuales Claros
-- **Activo**: Fondo + color de acento + sombra glow
-- **Hover**: Cambio de fondo + cursor pointer
-- **Focus**: Ring de 2px + offset
-- **Disabled**: Opacity 50% + cursor not-allowed
-
-### 2. Validación en Tiempo Real
-- Borde rojo para errores
-- Ring rojo en focus
-- Ícono de error + mensaje debajo del campo
-
-### 3. Feedback Visual
-- Loading spinner en botones
-- Badges para estados
-- Alerts para confirmaciones
-
-### 4. Accesibilidad
-- Contraste ≥ 4.5:1
-- Focus indicators visibles
-- Labels semánticos
-- ARIA donde sea necesario
-
----
-
-## 🔧 Utilities
-
-### `cn()` — Merge de clases Tailwind
-```tsx
-import { cn } from '@/lib/utils'
-
-className={cn(
-  'base-classes',
-  condition && 'conditional-classes',
-  customClassName
-)}
-```
-
----
-
-## 🌙 Modo Oscuro
-El sistema está optimizado para **tema oscuro cinematográfico**. Las CSS variables se definen en `app/globals.css`:
-
-```css
-:root {
-  --background: #0a0a0a;
-  --foreground: #fafafa;
-  --color-primary-500: #f97316;
-  --color-secondary-500: #0ea5e9;
-}
-```
-
----
-
-## 📱 Responsivo
-Todos los componentes son mobile-first con breakpoints:
-- `sm`: 640px
-- `md`: 768px
-- `lg`: 1024px
-- `xl`: 1280px
-- `2xl`: 1536px
-
----
-
-## 🚀 Buenas Prácticas
-
-1. **Usa componentes**, no clases inline
-2. **Respeta la escala tipográfica**
-3. **Mantén coherencia en espaciados** (scale de 4px)
-4. **Evita colores arbitrarios** — usa la paleta
-5. **Asegura accesibilidad** — contrast + focus states
-6. **Test en mobile y desktop**
-7. **Documenta cambios** en este archivo
-
----
-
-## 📚 Referencias
-
-- [Tailwind CSS v4](https://tailwindcss.com/)
-- [Class Variance Authority](https://cva.style/)
-- [Lucide React Icons](https://lucide.dev/)
-- UI UX Pro Max Principles: Glassmorphism, Claymorphism, Design Systems
-
----
-
-**Última actualización:** April 9, 2026
-**Principios:** UI UX Pro Max, ERP best practices, Professional Cinematography aesthetic
+`app/globals.css` conserva a propósito la escala de Tailwind (`text-xs/sm/base/lg`,
+`rounded-sm/md/lg/xl`) sin sobreescribir, justo para que esas pantallas no se rompan
+mientras se migran. No tocar eso sin migrar antes a sus consumidores.

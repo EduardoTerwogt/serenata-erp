@@ -1,8 +1,8 @@
 /**
  * Lists db/migrations/ in application order and validates the naming
  * convention (YYYYMMDD_description.sql). Does NOT apply migrations —
- * there is no Supabase CLI wired up in this repo (see FASE_5b_INDEXES_README.md),
- * so migrations are still applied by hand in the Supabase SQL Editor.
+ * there is no Supabase CLI configured in this repo, so migrations are
+ * still applied by hand in the Supabase SQL Editor.
  *
  * This script exists only to remove ambiguity about "which migrations
  * exist and in what order" before a manual apply session.

@@ -1,70 +1,82 @@
-# TESTING
+# Testing
 
-## Objetivo
-Este documento describe cómo validar el repo y qué tipo de cobertura existe hoy.
+## Regla de oro
 
-## Scripts disponibles
-Según `package.json`, los scripts activos son:
-- `npm run lint`
-- `npm test`
-- `npm run test:e2e`
-- `npm run test:e2e:smoke`
-- `npm run test:e2e:critical`
-- `npm run test:e2e:live`
-- `npm run test:e2e:headed`
-- `npm run test:e2e:ui`
-- `npm run build`
+**No se pushea con tests en rojo.** Si algo falla: diagnosticar la causa raíz,
+arreglarla y volver a correr. Un test solo se modifica cuando un cambio de producto
+lo justifica — nunca para que deje de fallar.
 
-## Niveles de validación
-### 1. Build
-`npm run build`
-Valida compilación de Next.js y typecheck. Cuando se trabaja directo contra GitHub, este paso suele reflejarse en el build de Vercel.
+## Los cuatro niveles
 
-### 2. Lint
-`npm run lint`
-Valida reglas de ESLint del repo.
+| Nivel | Comando | Qué prueba | Dónde corre |
+|---|---|---|---|
+| Unit | `npm test` | Vitest sobre `lib/**/__tests__/*.test.ts` — cálculos, mappers, estados, repositorios. 351 tests / 45 archivos. | Local y CI |
+| E2E smoke | `npm run test:e2e:smoke` | Navegación y carga de pantallas, con las APIs **mockeadas**. | Local y CI |
+| E2E critical | `npm run test:e2e:critical` | Flujos de negocio completos, con las APIs **mockeadas**. | Local y CI |
+| E2E live | `npm run test:e2e:live` | Servidor Next real contra **Supabase y Drive de prueba reales**. | **Solo CI** |
 
-### 3. Unit / integration liviano
-`npm test`
-Corre Vitest.
+Además: `npx tsc --noEmit` y `npm run lint` antes de cualquier commit que toque
+código.
 
-### 4. E2E smoke
-`npm run test:e2e:smoke`
-Cubre humo básico de flujos críticos. Hoy incluye al menos nueva cotización con mocks de APIs iniciales.
+## Por qué el nivel live importa
 
-### 5. E2E critical
-`npm run test:e2e:critical`
-Se usa para validar rutas críticas del negocio con mayor cuidado antes de dar una fase por cerrada.
+Los niveles mockeados responden siempre 200: no pueden decir si el servidor y la
+base se comportan como se espera. Los tres defectos de persistencia y colaboración
+arreglados el 2026-09-09 (ids de partidas recreados en cada guardado, PATCH que
+pisaba el campo del otro, partidas sin `ORDER BY`) los cazó **solo** el nivel live.
 
-### 6. E2E live
-`npm run test:e2e:live`
-Pensado para escenarios conectados o más cercanos a integración real. No debe ser la primera barrera para refactors mecánicos.
+`live` corre en cada push a `main` y **falla el workflow** — ya no es informativo.
+El deploy a Vercel no se bloquea por eso: lo dispara el push, no este workflow.
 
-## Utilidades E2E relevantes
-`tests/e2e/utils/auth.ts` permite dos modos:
-- login real con credenciales Playwright
-- bypass con cookie `e2e-bypass` cuando `PLAYWRIGHT_E2E_BYPASS=true`
+## Correr live: qué hace falta
 
-## Orden recomendado de validación
-Para cambios normales:
-1. `npm run lint`
-2. `npm test`
-3. `npm run test:e2e:smoke`
-4. `npm run test:e2e:critical`
-5. `npm run build`
+No corre en local sin credenciales; `liveEnabled` lo salta entero. En CI se
+configura con secretos de GitHub Actions (Settings → Secrets and variables →
+Actions):
 
-Para cambios de bajo riesgo puramente documentales:
-- `npm run build` y checks remotos suelen ser suficientes si el trabajo fue directo contra GitHub sin entorno local.
+| Secreto | Para qué |
+|---|---|
+| `TEST_SUPABASE_URL` / `TEST_SUPABASE_ANON_KEY` / `TEST_SUPABASE_SERVICE_ROLE_KEY` | Proyecto Supabase de prueba (`serenata-erp-test`), aislado de producción |
+| `PLAYWRIGHT_TEST_EMAIL` / `PLAYWRIGHT_TEST_PASSWORD` | Usuario de prueba |
+| `DRIVE_TEST_FOLDER_ID` | Carpeta de Drive exclusiva de pruebas: `1cofExiUSPDRq9CeH6oU-WSBev1I56m-a` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Mismos valores que Vercel |
+| `GOOGLE_DRIVE_REFRESH_TOKEN_TEST` | Token separado del de producción (mínimo privilegio y cuota aparte) |
 
-## Criterio de cierre de una fase
-Una fase se considera cerrada solo cuando:
-- el commit real ya existe en `main`
-- los checks remotos quedan verdes
-- no se introdujeron cambios fuera del alcance congelado
-- el resultado es compatible con Vercel, smoke-and-critical y test suite
+El job de `live` exporta `GOOGLE_DRIVE_FOLDER_ID` y `GOOGLE_DRIVE_FOLDER_ID_CUENTAS`
+con el valor de `DRIVE_TEST_FOLDER_ID` **solo dentro de ese job**, así que no existe
+ruta de código por la que un test pueda escribir en las carpetas reales.
 
-## Nota operativa importante
-Cuando el trabajo se hace directo en GitHub real, puede no existir validación local intermedia. En ese caso, el control de calidad real pasa a ser:
-- build de Vercel
-- checks automáticos del repo
-- revisión puntual del diff
+### El guard que evita el falso verde
+
+Si faltara una credencial, Playwright marcaría todo como *skipped* y el job quedaría
+**verde sin haber probado nada**. Por eso el job define `PLAYWRIGHT_LIVE_REQUIRED=true`
+y `tests/e2e/live/cotizaciones-colaboracion.spec.ts` falla explícitamente nombrando
+lo que falta. No quitar esa variable.
+
+## Modo bypass (solo smoke y critical)
+
+Con `PLAYWRIGHT_E2E_BYPASS=true` más la cookie `e2e-bypass=1` que pone
+`tests/e2e/utils/auth.ts`, se salta el login real. Nunca se activa en el nivel live:
+ahí se entra con credenciales de verdad, y `login()` acepta un usuario distinto para
+poder abrir dos sesiones simultáneas en las pruebas de colaboración.
+
+## Orden recomendado
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm test
+npm run test:e2e:smoke
+npm run test:e2e:critical
+npm run build     # si el cambio toca TS/TSX, rutas o config de Next
+```
+
+Y después del push, **confirmar que CI quedó en verde de verdad** — incluido el job
+`live`. Que el push tenga éxito no prueba nada.
+
+## Limitación del sandbox
+
+En el entorno de agente actual el nivel live no se puede correr en local: la salida
+de red hacia `*.supabase.co` está bloqueada. Mientras eso no cambie, cada iteración
+sobre un test live cuesta ~20 min de CI. Reproducir primero en la suite mockeada
+(segundos) siempre que el escenario lo permita.
