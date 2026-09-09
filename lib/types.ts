@@ -41,6 +41,9 @@ export interface Proveedor {
   password_hash: string | null
   portal_estado: PortalEstado | null
   match_candidato_id: string | null
+  // Fase 2.5: se bumpea al cambiar credenciales -- invalida cualquier
+  // cookie de sesión firmada con una versión vieja, sin esperar a que expire.
+  session_version: number
 }
 
 export interface ProveedorDocumento {

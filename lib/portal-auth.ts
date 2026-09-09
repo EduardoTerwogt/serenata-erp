@@ -10,7 +10,11 @@
 import { cookies } from 'next/headers'
 
 const COOKIE_NAME = 'portal_session'
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 60 // 60 días
+// Fase 2.5 (auditoría externa 2026-09-09): eran 60 días. Un portal de uso
+// esporádico (subir una factura de vez en cuando) no necesita sesiones tan
+// largas -- 7 días balancea no pedir login constantemente con no dejar una
+// cookie viva casi dos meses.
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7 // 7 días
 
 function getSecret(): string {
   const secret = process.env.AUTH_SECRET
@@ -39,29 +43,30 @@ function constantTimeEqual(a: string, b: string): boolean {
   return result === 0
 }
 
-export async function signPortalSession(proveedorId: string): Promise<string> {
+export async function signPortalSession(proveedorId: string, sessionVersion: number): Promise<string> {
   const exp = Date.now() + SESSION_MAX_AGE_SECONDS * 1000
-  const payload = `${proveedorId}.${exp}`
+  const payload = `${proveedorId}.${sessionVersion}.${exp}`
   const signature = await hmac(payload)
   return `${payload}.${signature}`
 }
 
-export async function verifyPortalSession(token: string): Promise<{ proveedorId: string } | null> {
+export async function verifyPortalSession(token: string): Promise<{ proveedorId: string; sessionVersion: number } | null> {
   const parts = token.split('.')
-  if (parts.length !== 3) return null
-  const [proveedorId, expStr, signature] = parts
+  if (parts.length !== 4) return null
+  const [proveedorId, sessionVersionStr, expStr, signature] = parts
+  const sessionVersion = Number(sessionVersionStr)
   const exp = Number(expStr)
-  if (!proveedorId || !Number.isFinite(exp)) return null
+  if (!proveedorId || !Number.isFinite(sessionVersion) || !Number.isFinite(exp)) return null
   if (Date.now() > exp) return null
 
-  const expected = await hmac(`${proveedorId}.${expStr}`)
+  const expected = await hmac(`${proveedorId}.${sessionVersionStr}.${expStr}`)
   if (!constantTimeEqual(expected, signature)) return null
 
-  return { proveedorId }
+  return { proveedorId, sessionVersion }
 }
 
-export async function setPortalSessionCookie(proveedorId: string): Promise<void> {
-  const token = await signPortalSession(proveedorId)
+export async function setPortalSessionCookie(proveedorId: string, sessionVersion: number): Promise<void> {
+  const token = await signPortalSession(proveedorId, sessionVersion)
   const cookieStore = await cookies()
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
@@ -79,13 +84,29 @@ export async function clearPortalSessionCookie(): Promise<void> {
 
 /** Lee y verifica la cookie de sesión. Usado tanto por API routes como por
  * Server Components de página (cada uno la envuelve en su propio idioma de
- * manejo de "no autenticado" -- ver requirePortalSession/getPortalProveedorId). */
+ * manejo de "no autenticado" -- ver requirePortalSession/getPortalProveedorId).
+ *
+ * Fase 2.5: además de firma y expiración, comprueba contra la fila real del
+ * proveedor que la sesión no fue invalidada (cambio de credenciales, o el
+ * proveedor quedó inactivo) -- session_version desincronizado o activo=false
+ * tira la sesión aunque el token siga siendo válido criptográficamente.
+ */
 async function readPortalSessionCookie(): Promise<string | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get(COOKIE_NAME)?.value
   if (!token) return null
   const session = await verifyPortalSession(token)
-  return session?.proveedorId ?? null
+  if (!session) return null
+
+  try {
+    const { getProveedorSessionState } = await import('@/lib/server/repositories/proveedores')
+    const estado = await getProveedorSessionState(session.proveedorId)
+    if (!estado || !estado.activo || estado.session_version !== session.sessionVersion) return null
+  } catch {
+    return null
+  }
+
+  return session.proveedorId
 }
 
 /**

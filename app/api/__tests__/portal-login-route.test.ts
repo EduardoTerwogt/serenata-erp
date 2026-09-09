@@ -50,17 +50,17 @@ describe('POST /api/portal/login', () => {
   })
 
   it('crea la sesión y avisa si sigue pendiente de confirmación', async () => {
-    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'pendiente_confirmacion', password_hash: 'hash' })
+    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'pendiente_confirmacion', password_hash: 'hash', session_version: 3 })
     mocks.verifyPasswordMock.mockResolvedValue(true)
 
     const response = await POST(req({ correo: 'jose@correo.com', password: 'password123' }))
 
-    expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('prov-1')
+    expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('prov-1', 3)
     await expect(response.json()).resolves.toEqual({ success: true, requiere_confirmacion: true })
   })
 
   it('login exitoso normal cuando la cuenta ya está activa', async () => {
-    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', password_hash: 'hash' })
+    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', password_hash: 'hash', session_version: 0 })
     mocks.verifyPasswordMock.mockResolvedValue(true)
     mocks.needsRehashMock.mockReturnValue(false)
 
@@ -71,7 +71,7 @@ describe('POST /api/portal/login', () => {
   })
 
   it('re-hashea a Argon2id tras un login exitoso con un hash PBKDF2 viejo (Fase 2.3)', async () => {
-    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', password_hash: 'saltHex:hashHex' })
+    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', password_hash: 'saltHex:hashHex', session_version: 0 })
     mocks.verifyPasswordMock.mockResolvedValue(true)
     mocks.needsRehashMock.mockReturnValue(true)
     mocks.hashPasswordMock.mockResolvedValue('$argon2id$v=19$m=19456,t=2,p=1$salt$hash')
@@ -85,7 +85,7 @@ describe('POST /api/portal/login', () => {
   })
 
   it('el login no falla si el rehash-on-login truena', async () => {
-    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', password_hash: 'saltHex:hashHex' })
+    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', password_hash: 'saltHex:hashHex', session_version: 0 })
     mocks.verifyPasswordMock.mockResolvedValue(true)
     mocks.needsRehashMock.mockReturnValue(true)
     mocks.updateProveedorMock.mockRejectedValue(new Error('boom'))
@@ -93,6 +93,6 @@ describe('POST /api/portal/login', () => {
     const response = await POST(req({ correo: 'jose@correo.com', password: 'password123' }))
 
     expect(response.status).toBe(200)
-    expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('prov-1')
+    expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('prov-1', 0)
   })
 })

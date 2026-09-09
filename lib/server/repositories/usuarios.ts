@@ -20,19 +20,29 @@ export async function getUsuarios(): Promise<UsuarioRow[]> {
   return data as UsuarioRow[]
 }
 
-export async function getUsuariosForAuth(): Promise<AuthUser[]> {
+/**
+ * Auditoría externa 2026-09-09 (Fase 2.2): antes se traían todos los
+ * usuarios activos (con sus password_hash) en cada intento de login y se
+ * filtraba en JS. Consultar por email evita traer hashes ajenos que no
+ * hacen falta para esa autenticación.
+ */
+export async function getUsuarioForAuthByEmail(email: string): Promise<AuthUser | null> {
   const { data, error } = await supabaseAdmin
     .from('usuarios')
     .select('id, email, name, password_hash, sections')
+    .eq('email', email)
     .eq('active', true)
+    .maybeSingle()
   if (error) throw error
-  return (data as UsuarioRow[]).map(u => ({
+  if (!data) return null
+  const u = data as UsuarioRow
+  return {
     id: u.id,
     email: u.email,
     name: u.name,
     passwordHash: u.password_hash,
     sections: u.sections,
-  }))
+  }
 }
 
 export async function getUsuarioById(id: string): Promise<UsuarioRow | null> {

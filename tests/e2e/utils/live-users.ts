@@ -10,7 +10,7 @@ import { getLiveSupabaseAdmin } from './live-cleanup'
  * pedir secretos nuevos de CI, el propio test siembra el segundo usuario con el
  * service-role que el job ya tiene.
  *
- * `getAuthUsers()` lee la tabla `usuarios` en CADA intento de login, así que un
+ * `getAuthUser()` lee la tabla `usuarios` en CADA intento de login, así que un
  * usuario recién insertado sirve de inmediato: no hace falta reiniciar la app.
  */
 export interface LiveUserSeed {

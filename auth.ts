@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
-import { getAuthUsers, hashPassword, needsRehash, verifyPassword } from '@/lib/auth-utils'
+import { getAuthUser, hashPassword, needsRehash, verifyPassword } from '@/lib/auth-utils'
 import { normalizeUserSections } from '@/lib/authz'
 
 export type AppSection = 'admin' | 'dashboard' | 'cotizaciones' | 'proyectos' | 'cuentas' | 'responsables' | 'planeacion'
@@ -12,15 +12,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
-        let users
+        let user
         try {
-          users = await getAuthUsers()
+          user = await getAuthUser(String(credentials.email))
         } catch (e) {
-          console.error('[auth] Error loading users from AUTH_USERS:', e)
+          console.error('[auth] Error loading user:', e)
           return null
         }
-
-        const user = users.find(u => u.email === credentials.email)
         if (!user) return null
 
         const valid = await verifyPassword(String(credentials.password), user.passwordHash)

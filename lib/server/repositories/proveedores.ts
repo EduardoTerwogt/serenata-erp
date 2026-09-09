@@ -31,6 +31,21 @@ export async function getProveedorById(id: string) {
   return data
 }
 
+/**
+ * Query específica para validar la sesión del portal (Fase 2.5) en cada
+ * request -- no trae `*` ni el join de historial_responsable, que
+ * getProveedorById sí trae y aquí no hace falta.
+ */
+export async function getProveedorSessionState(id: string): Promise<{ activo: boolean; session_version: number } | null> {
+  const { data, error } = await supabaseAdmin
+    .from('proveedores')
+    .select('activo, session_version')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
 export async function createProveedor(proveedor: Partial<Proveedor>) {
   const { data, error } = await supabaseAdmin
     .from('proveedores')

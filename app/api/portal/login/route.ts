@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       }
     }
 
-    await setPortalSessionCookie(proveedor.id)
+    await setPortalSessionCookie(proveedor.id, proveedor.session_version)
 
     return Response.json({
       success: true,

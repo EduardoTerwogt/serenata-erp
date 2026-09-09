@@ -31,7 +31,7 @@ describe('POST /api/portal/signup', () => {
     Object.values(mocks).forEach(m => m.mockReset())
     mocks.getProveedorByCorreoMock.mockResolvedValue(null)
     mocks.hashPasswordMock.mockResolvedValue('hash123')
-    mocks.crearProveedorDesdeSignupMock.mockResolvedValue({ id: 'prov-1', nombre: 'Chok' })
+    mocks.crearProveedorDesdeSignupMock.mockResolvedValue({ id: 'prov-1', nombre: 'Chok', session_version: 0 })
   })
 
   it('retorna 400 con correo inválido', async () => {
@@ -61,7 +61,7 @@ describe('POST /api/portal/signup', () => {
       password_hash: 'hash123',
       regimen_fiscal: null,
     })
-    expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('prov-1')
+    expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('prov-1', 0)
   })
 
   it('usa el prefijo del correo como nombre cuando no se da alias', async () => {

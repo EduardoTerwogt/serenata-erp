@@ -132,7 +132,8 @@ export interface AuthUser {
 }
 
 /**
- * Carga usuarios desde la tabla `usuarios` en Supabase.
+ * Busca el usuario para autenticar por email en la tabla `usuarios` de
+ * Supabase (Fase 2.2: por email, no trayendo todos los usuarios activos).
  *
  * Auditoría externa 2026-09-09 (Fase 2.1): antes, cualquier falla de Supabase
  * (o la tabla devolviendo 0 filas -- un truncado accidental, una policy mal
@@ -143,24 +144,24 @@ export interface AuthUser {
  * desarrollo/test, detrás de una bandera explícita que no puede quedar
  * activa en producción.
  */
-export async function getAuthUsers(): Promise<AuthUser[]> {
+export async function getAuthUser(email: string): Promise<AuthUser | null> {
   try {
-    const { getUsuariosForAuth } = await import('@/lib/server/repositories/usuarios')
-    return await getUsuariosForAuth()
+    const { getUsuarioForAuthByEmail } = await import('@/lib/server/repositories/usuarios')
+    return await getUsuarioForAuthByEmail(email)
   } catch (e) {
     console.error('[auth] Error consultando usuarios en Supabase:', e)
 
     const fallbackHabilitado = process.env.AUTH_USERS_DEV_FALLBACK === 'true' && process.env.NODE_ENV !== 'production'
-    if (!fallbackHabilitado) return []
+    if (!fallbackHabilitado) return null
 
     const raw = process.env.AUTH_USERS
-    if (!raw) return []
+    if (!raw) return null
     try {
       const parsed = JSON.parse(raw)
-      if (!Array.isArray(parsed)) return []
-      return parsed as AuthUser[]
+      if (!Array.isArray(parsed)) return null
+      return (parsed as AuthUser[]).find(u => u.email === email) ?? null
     } catch {
-      return []
+      return null
     }
   }
 }

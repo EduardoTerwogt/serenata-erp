@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       regimen_fiscal: null,
     })
 
-    await setPortalSessionCookie(proveedor.id)
+    await setPortalSessionCookie(proveedor.id, proveedor.session_version)
 
     return Response.json({ success: true })
   } catch (error) {

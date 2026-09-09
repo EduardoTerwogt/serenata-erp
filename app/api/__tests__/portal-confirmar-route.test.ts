@@ -37,7 +37,7 @@ describe('POST /api/portal/signup/confirmar', () => {
   })
 
   it('fusiona hacia el candidato (derivado server-side) y re-firma la sesión cuando confirmar=true', async () => {
-    mocks.confirmarMatchMock.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', nombre: 'Antonio Gutierrez' })
+    mocks.confirmarMatchMock.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', nombre: 'Antonio Gutierrez', session_version: 1 })
 
     // El cliente NO manda candidato_id -- lo derivamos server-side dentro de
     // la RPC confirmar_match_proveedor. Un candidato_id en el body, si
@@ -45,9 +45,9 @@ describe('POST /api/portal/signup/confirmar', () => {
     const response = await POST(req({ confirmar: true, candidato_id: 'uuid-de-otro-proveedor-cualquiera' }))
 
     expect(mocks.confirmarMatchMock).toHaveBeenCalledWith('nuevo-1')
-    expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111')
+    expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', 1)
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ success: true, proveedor: { id: '11111111-1111-4111-8111-111111111111', nombre: 'Antonio Gutierrez' } })
+    await expect(response.json()).resolves.toEqual({ success: true, proveedor: { id: '11111111-1111-4111-8111-111111111111', nombre: 'Antonio Gutierrez', session_version: 1 } })
   })
 
   it('activa la cuenta propia (sin fusión) cuando confirmar=false', async () => {

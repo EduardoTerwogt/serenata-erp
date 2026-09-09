@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       const proveedorFinal = await confirmarMatch(portalAuth.proveedorId)
       // La fila original del signup se borró en la fusión -- la sesión debe
       // re-firmarse apuntando al proveedor sobreviviente (el candidato).
-      await setPortalSessionCookie(proveedorFinal.id)
+      await setPortalSessionCookie(proveedorFinal.id, proveedorFinal.session_version)
       return Response.json({ success: true, proveedor: proveedorFinal })
     }
 
