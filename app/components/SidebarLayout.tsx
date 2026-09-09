@@ -7,23 +7,31 @@ import { useSession, signOut } from 'next-auth/react'
 import { AppShell } from '@/components/layout/AppShell'
 import { Sidebar, type SidebarNavLink } from '@/components/navigation/Sidebar'
 import { Topbar } from '@/components/navigation/Topbar'
+import { ThemeToggle } from '@/components/navigation/ThemeToggle'
 import { Wordmark } from '@/components/ui/Wordmark'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import type { NavChipTone } from '@/components/navigation/NavItem'
 
-const NAV_LINKS: { href: string; label: string; section: string; icon: IconName; tone: NavChipTone }[] = [
-  { href: '/dashboard', label: 'Dashboard', section: 'dashboard', icon: 'dashboard', tone: 'blue' },
-  { href: '/planeacion', label: 'Planeación', section: 'planeacion', icon: 'planeacion', tone: 'purple' },
-  { href: '/cotizaciones', label: 'Cotizaciones', section: 'cotizaciones', icon: 'cotizaciones', tone: 'indigo' },
-  { href: '/proyectos', label: 'Proyectos', section: 'proyectos', icon: 'proyectos', tone: 'teal' },
-  { href: '/cuentas', label: 'Cuentas', section: 'cuentas', icon: 'cuentas', tone: 'green' },
-  { href: '/proveedores', label: 'Proveedores', section: 'responsables', icon: 'proveedores', tone: 'gray' },
-  { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion', icon: 'plantillas', tone: 'red' },
+// Orden, agrupación, ícono y tono siguen exactamente data.js > SN5.nav del
+// skill (Principal: Inicio/Cotizaciones/Proyectos -- Negocio: Cuentas --
+// Operación: Responsables/Planeación/Plantillas -- Sistema: Admin). "Portal"
+// del kit no tiene equivalente aquí a propósito: el Portal de Proveedores es
+// una experiencia standalone fuera de este shell (ver más abajo), no un
+// destino del sidebar de staff. "Proveedores" conserva su nombre (decisión
+// de negocio previa, ver CLAUDE.md) aunque el kit lo llame "Responsables".
+const NAV_LINKS: { href: string; label: string; section: string; icon: IconName; tone: NavChipTone; group: string }[] = [
+  { href: '/dashboard', label: 'Inicio', section: 'dashboard', icon: 'dashboard', tone: 'gray', group: 'Principal' },
+  { href: '/cotizaciones', label: 'Cotizaciones', section: 'cotizaciones', icon: 'cotizaciones', tone: 'gray', group: 'Principal' },
+  { href: '/proyectos', label: 'Proyectos', section: 'proyectos', icon: 'proyectos', tone: 'blue', group: 'Principal' },
+  { href: '/cuentas', label: 'Cuentas', section: 'cuentas', icon: 'cuentas', tone: 'green', group: 'Negocio' },
+  { href: '/proveedores', label: 'Proveedores', section: 'responsables', icon: 'proveedores', tone: 'indigo', group: 'Operación' },
+  { href: '/planeacion', label: 'Planeación', section: 'planeacion', icon: 'planeacion', tone: 'red', group: 'Operación' },
+  { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion', icon: 'plantillas', tone: 'teal', group: 'Operación' },
 ]
 
-const ADMIN_LINKS: { href: string; label: string; icon: IconName; tone: NavChipTone }[] = [
-  { href: '/admin/usuarios', label: 'Usuarios', icon: 'admin-usuarios', tone: 'gray' },
-  { href: '/admin/sheets', label: 'Google Sheets', icon: 'google-sheets', tone: 'teal' },
+const ADMIN_LINKS: { href: string; label: string; icon: IconName; tone: NavChipTone; group: string }[] = [
+  { href: '/admin/usuarios', label: 'Usuarios', icon: 'admin-usuarios', tone: 'gray', group: 'Sistema' },
+  { href: '/admin/sheets', label: 'Google Sheets', icon: 'google-sheets', tone: 'gray', group: 'Sistema' },
 ]
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
@@ -44,10 +52,16 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   // proveedores externos, sin el shell interno (sidebar/topbar de staff).
   if (pathname === '/login' || pathname.startsWith('/portal')) return <>{children}</>
 
-  const withActive = (links: { href: string; label: string; icon: IconName; tone: NavChipTone }[]): SidebarNavLink[] =>
+  const withActive = (links: { href: string; label: string; icon: IconName; tone: NavChipTone; group: string }[]): SidebarNavLink[] =>
     links.map((link) => ({ ...link, active: pathname.startsWith(link.href) }))
 
   const handleSignOut = () => signOut({ callbackUrl: '/login' })
+
+  // Miga de pan en el topbar: nombre de la sección activa, como en App.jsx
+  // del kit (crumbLabel a la izquierda del Topbar).
+  const activeLabel = [...visibleLinks, ...(isAdmin ? ADMIN_LINKS : [])].find((link) =>
+    pathname.startsWith(link.href)
+  )?.label
 
   return (
     <>
@@ -120,7 +134,15 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
       <AppShell
         sidebar={<Sidebar items={[...withActive(visibleLinks), ...(isAdmin ? withActive(ADMIN_LINKS) : [])]} />}
-        topbar={<Topbar name={session?.user?.name || ''} email={session?.user?.email || ''} onSignOut={handleSignOut} />}
+        topbar={
+          <Topbar
+            name={session?.user?.name || ''}
+            email={session?.user?.email || ''}
+            onSignOut={handleSignOut}
+            left={activeLabel && <span className="text-sm font-semibold text-ink">{activeLabel}</span>}
+            right={<ThemeToggle />}
+          />
+        }
       >
         {children}
       </AppShell>

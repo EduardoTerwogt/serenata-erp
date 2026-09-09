@@ -1,14 +1,17 @@
 import type { LucideProps } from 'lucide-react'
 import {
-  LayoutDashboard,
-  ClipboardList,
+  Home,
+  Calendar,
   FileText,
-  Briefcase,
+  FolderKanban,
   Wallet,
-  Users,
   Copy,
   UserCog,
+  LayoutTemplate,
+  Settings,
   Table,
+  Sun,
+  Moon,
   LogOut,
   Menu,
   X,
@@ -40,21 +43,24 @@ import {
   Lock,
 } from 'lucide-react'
 
-// Fase 5.7 (rediseño): wrapper tipado sobre lucide-react (ya era dependencia
-// del proyecto, sin usar). Reemplaza al Icon.jsx del kit, que dependía de
-// window.lucide cargado por <script> CDN -- aquí son imports reales, así el
-// bundler solo empaqueta los íconos que de verdad se usan.
-// Agregar aquí cada ícono nuevo que se necesite al migrar cada pantalla.
+// Rediseño Apple-style: los íconos y tonos del nav siguen exactamente
+// data.js > SN5.nav del skill (home/gray, file-text/gray, folder-kanban/blue,
+// wallet/green, user-cog/indigo, calendar/red, layout-template/teal,
+// settings/gray) -- ver components/navigation/NavItem.tsx para el chip de
+// color. 'google-sheets' no tiene equivalente en el kit (Admin es una sola
+// entrada ahí); se deja Table por ser la más descriptiva.
 const ICONS = {
-  dashboard: LayoutDashboard,
-  planeacion: ClipboardList,
+  dashboard: Home,
+  planeacion: Calendar,
   cotizaciones: FileText,
-  proyectos: Briefcase,
+  proyectos: FolderKanban,
   cuentas: Wallet,
-  proveedores: Users,
-  plantillas: Copy,
-  'admin-usuarios': UserCog,
+  proveedores: UserCog,
+  plantillas: LayoutTemplate,
+  'admin-usuarios': Settings,
   'google-sheets': Table,
+  'theme-light': Sun,
+  'theme-dark': Moon,
   copy: Copy,
   'log-out': LogOut,
   menu: Menu,

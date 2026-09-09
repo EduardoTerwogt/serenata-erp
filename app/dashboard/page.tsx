@@ -101,7 +101,7 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <SectionHero
-        title="Dashboard"
+        title="Inicio"
         subtitle="Resumen ejecutivo de Serenata"
         action={
           <select
