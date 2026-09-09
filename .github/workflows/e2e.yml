@@ -31,6 +31,17 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Quitar el repo apt de Google Chrome preinstalado en el runner
+        # Causa raíz de que "Install Playwright browsers" fallara: el runner
+        # de GitHub trae preconfigurado /etc/apt/sources.list.d/google-chrome.list,
+        # y `playwright install --with-deps` corre `apt-get update` contra
+        # TODOS los repos configurados -- no solo los que necesita. Ese repo
+        # de Google (que no usamos: solo instalamos `chromium`, no
+        # `google-chrome-stable`) viene sirviendo un Packages.gz con hash
+        # mismatch desde el mirror de Azure. Quitarlo antes del apt-get
+        # update elimina la causa, no solo reintenta contra el mismo repo roto.
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -97,6 +108,17 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Quitar el repo apt de Google Chrome preinstalado en el runner
+        # Causa raíz de que "Install Playwright browsers" fallara: el runner
+        # de GitHub trae preconfigurado /etc/apt/sources.list.d/google-chrome.list,
+        # y `playwright install --with-deps` corre `apt-get update` contra
+        # TODOS los repos configurados -- no solo los que necesita. Ese repo
+        # de Google (que no usamos: solo instalamos `chromium`, no
+        # `google-chrome-stable`) viene sirviendo un Packages.gz con hash
+        # mismatch desde el mirror de Azure. Quitarlo antes del apt-get
+        # update elimina la causa, no solo reintenta contra el mismo repo roto.
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
