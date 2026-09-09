@@ -46,6 +46,14 @@ function subtotal(page: Page): Locator {
  * fallos que si no parecen magia (p. ej. que el efecto que inserta la fila de otro
  * colaborador lance y esa pantalla deje de reaccionar). Va al log de CI.
  */
+function grabarFramesRealtime(page: Page, destino: string[]) {
+  page.on('websocket', (ws) => {
+    ws.on('framereceived', (frame) => {
+      if (typeof frame.payload === 'string') destino.push(frame.payload)
+    })
+  })
+}
+
 function vigilarErrores(page: Page, etiqueta: string) {
   page.on('pageerror', (error) => console.log(`[live colab][${etiqueta}] pageerror: ${error.message}`))
   page.on('console', (msg) => {
@@ -101,6 +109,9 @@ test.describe('live: colaboración real entre dos usuarios', () => {
   let pageB: Page
   let cotizacionId = ''
   let origenId = ''
+  // Frames del canal de tiempo real que RECIBE B. Sirven para distinguir "el mensaje
+  // nunca llegó" de "llegó y la pantalla no reaccionó", que se ven igual desde el DOM.
+  const framesRecibidosPorB: string[] = []
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(180_000)
@@ -129,6 +140,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     contextB = await browser.newContext()
     pageB = await contextB.newPage()
     vigilarErrores(pageB, 'B')
+    grabarFramesRealtime(pageB, framesRecibidosPorB)
     await login(pageB, '/cotizaciones', { email: USUARIO_B.email, password: USUARIO_B.password })
 
     await pageA.goto(`/cotizaciones/${cotizacionId}`)
@@ -207,6 +219,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     test.setTimeout(120_000)
 
     const antes = await filas(pageA).count()
+    const idsAntes = new Set((await leerCotizacionDelServidor(cotizacionId)).items.map((item) => item.id))
 
     const descripcionB = celda(pageB, 1, COL.descripcion)
     await descripcionB.click()
@@ -221,8 +234,19 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       .poll(async () => (await leerCotizacionDelServidor(cotizacionId)).items.length, { timeout: 30_000 })
       .toBe(antes + 1)
 
+    const idNuevo = (await leerCotizacionDelServidor(cotizacionId)).items.find((item) => !idsAntes.has(item.id))?.id
+    expect(idNuevo, 'el servidor no tiene ninguna partida nueva').toBeTruthy()
+
+    // Primero el canal, luego la pantalla: si el mensaje no llega, el problema es la
+    // difusión; si llega y la tabla no cambia, el problema es cómo se aplica.
+    if (idNuevo) {
+      await expect
+        .poll(() => framesRecibidosPorB.filter((frame) => frame.includes(idNuevo)).length, { timeout: 20_000 })
+        .toBeGreaterThan(0)
+    }
+
     // B ve la fila nueva...
-    await expect(filas(pageB), 'la fila nueva de A nunca llegó a la pantalla de B').toHaveCount(antes + 1, { timeout: 30_000 })
+    await expect(filas(pageB), 'el mensaje de la fila nueva llegó al canal de B pero la tabla no la insertó').toHaveCount(antes + 1, { timeout: 30_000 })
     // ...sin perder el foco ni el texto a medio escribir.
     await expect(descripcionB).toHaveValue('B sigue escribiendo aquí')
     expect(
