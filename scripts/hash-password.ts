@@ -1,5 +1,5 @@
 /**
- * Utility to generate a secure scrypt hash for a password.
+ * Utility to generate an Argon2id hash for a password (see lib/auth-utils.ts).
  * Usage: npx tsx scripts/hash-password.ts <password>
  *
  * Use the output as the "passwordHash" value in AUTH_USERS env var.

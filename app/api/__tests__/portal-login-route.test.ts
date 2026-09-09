@@ -2,16 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   verifyPasswordMock: vi.fn(),
+  needsRehashMock: vi.fn(),
+  hashPasswordMock: vi.fn(),
   getProveedorByCorreoMock: vi.fn(),
+  updateProveedorMock: vi.fn(),
   setPortalSessionCookieMock: vi.fn(),
 }))
 
 vi.mock('@/lib/auth-utils', () => ({
   verifyPassword: mocks.verifyPasswordMock,
+  needsRehash: mocks.needsRehashMock,
+  hashPassword: mocks.hashPasswordMock,
 }))
 
 vi.mock('@/lib/db', () => ({
   getProveedorByCorreo: mocks.getProveedorByCorreoMock,
+  updateProveedor: mocks.updateProveedorMock,
 }))
 
 vi.mock('@/lib/portal-auth', () => ({
@@ -56,9 +62,37 @@ describe('POST /api/portal/login', () => {
   it('login exitoso normal cuando la cuenta ya está activa', async () => {
     mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', password_hash: 'hash' })
     mocks.verifyPasswordMock.mockResolvedValue(true)
+    mocks.needsRehashMock.mockReturnValue(false)
 
     const response = await POST(req({ correo: 'jose@correo.com', password: 'password123' }))
 
     await expect(response.json()).resolves.toEqual({ success: true, requiere_confirmacion: false })
+    expect(mocks.updateProveedorMock).not.toHaveBeenCalled()
+  })
+
+  it('re-hashea a Argon2id tras un login exitoso con un hash PBKDF2 viejo (Fase 2.3)', async () => {
+    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', password_hash: 'saltHex:hashHex' })
+    mocks.verifyPasswordMock.mockResolvedValue(true)
+    mocks.needsRehashMock.mockReturnValue(true)
+    mocks.hashPasswordMock.mockResolvedValue('$argon2id$v=19$m=19456,t=2,p=1$salt$hash')
+
+    const response = await POST(req({ correo: 'jose@correo.com', password: 'password123' }))
+
+    expect(mocks.hashPasswordMock).toHaveBeenCalledWith('password123')
+    expect(mocks.updateProveedorMock).toHaveBeenCalledWith('prov-1', { password_hash: '$argon2id$v=19$m=19456,t=2,p=1$salt$hash' })
+    // El rehash nunca bloquea el login, aunque falle.
+    expect(response.status).toBe(200)
+  })
+
+  it('el login no falla si el rehash-on-login truena', async () => {
+    mocks.getProveedorByCorreoMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', password_hash: 'saltHex:hashHex' })
+    mocks.verifyPasswordMock.mockResolvedValue(true)
+    mocks.needsRehashMock.mockReturnValue(true)
+    mocks.updateProveedorMock.mockRejectedValue(new Error('boom'))
+
+    const response = await POST(req({ correo: 'jose@correo.com', password: 'password123' }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('prov-1')
   })
 })

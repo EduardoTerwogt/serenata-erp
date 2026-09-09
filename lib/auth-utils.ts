@@ -1,11 +1,31 @@
 /**
- * Utilidades de autenticación usando Web Crypto API (PBKDF2).
- * Compatible con Edge Runtime, Node.js 18+ y navegadores modernos.
- * No depende de módulos Node.js como 'crypto' o 'util'.
+ * Utilidades de autenticación: hashing de passwords con Argon2id
+ * (auditoría externa 2026-09-09, Fase 2.3) y verificación retrocompatible
+ * de hashes PBKDF2 viejos.
+ *
+ * Por qué Argon2id y no solo subir las iteraciones de PBKDF2: Argon2id es
+ * memory-hard -- un atacante que le robe un hash filtrado no puede
+ * paralelizarlo barato en GPU/ASIC como sí puede con PBKDF2, por muchas
+ * iteraciones que tenga. Es la recomendación #1 de OWASP cuando está
+ * disponible. Se usa `hash-wasm` (WebAssembly puro, sin bindings nativos de
+ * Node) para no depender de un runtime específico.
+ *
+ * Los hashes viejos ("saltHex:hashHex", PBKDF2-SHA256) se siguen
+ * verificando -- `needsRehash()` le dice al caller cuándo debe volver a
+ * hashear con Argon2id tras un login exitoso (rehash-on-login: nadie se
+ * desloguea ni resetea password para migrar).
  */
+import { argon2id, argon2Verify } from 'hash-wasm'
 
 const PBKDF2_ITERATIONS = 100_000
 const HASH_LENGTH_BITS = 256
+
+// Perfil "mínimo recomendado" de OWASP para Argon2id (~19 MiB) -- pensado
+// para correr bien en funciones serverless, no solo en un servidor propio.
+const ARGON2_MEMORY_KIB = 19_456
+const ARGON2_TIME_COST = 2
+const ARGON2_PARALLELISM = 1
+const ARGON2_HASH_LENGTH = 32
 
 function hexToBytes(hex: string): Uint8Array {
   const pairs = hex.match(/.{2}/g)
@@ -17,7 +37,7 @@ function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function deriveKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
+async function derivePbkdf2Key(password: string, salt: Uint8Array): Promise<Uint8Array> {
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(password),
@@ -45,27 +65,59 @@ function constantTimeEqual(a: string, b: string): boolean {
   return result === 0
 }
 
-/**
- * Hashea un password con PBKDF2 + salt aleatorio.
- * Retorna "saltHex:hashHex".
- */
-export async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16))
-  const hash = await deriveKey(password, salt)
-  return `${bytesToHex(salt)}:${bytesToHex(hash)}`
+/** Los hashes Argon2id de hash-wasm vienen en formato PHC: "$argon2id$...". */
+function isLegacyPbkdf2Hash(stored: string): boolean {
+  return !stored.startsWith('$argon2')
 }
 
 /**
- * Verifica un password contra un hash almacenado "saltHex:hashHex".
- * Usa comparación en tiempo constante para evitar timing attacks.
+ * true si `stored` sigue en el formato PBKDF2 viejo -- el caller debe
+ * volver a hashear el password (que ya tiene en texto plano porque el
+ * login fue exitoso) con `hashPassword()` y persistir el resultado.
  */
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+export function needsRehash(stored: string): boolean {
+  return isLegacyPbkdf2Hash(stored)
+}
+
+/**
+ * Hashea un password con Argon2id + salt aleatorio.
+ * Retorna el hash en formato PHC ("$argon2id$v=19$m=...,t=...,p=...$salt$hash").
+ */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  return argon2id({
+    password,
+    salt,
+    parallelism: ARGON2_PARALLELISM,
+    iterations: ARGON2_TIME_COST,
+    memorySize: ARGON2_MEMORY_KIB,
+    hashLength: ARGON2_HASH_LENGTH,
+    outputType: 'encoded',
+  })
+}
+
+async function verifyLegacyPbkdf2Password(password: string, stored: string): Promise<boolean> {
   const [saltHex, hashHex] = stored.split(':')
   if (!saltHex || !hashHex) return false
   try {
     const salt = hexToBytes(saltHex)
-    const derived = await deriveKey(password, salt)
+    const derived = await derivePbkdf2Key(password, salt)
     return constantTimeEqual(bytesToHex(derived), hashHex)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Verifica un password contra un hash almacenado -- Argon2id (formato PHC)
+ * o, retrocompatible, el PBKDF2 viejo ("saltHex:hashHex").
+ */
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  if (isLegacyPbkdf2Hash(stored)) {
+    return verifyLegacyPbkdf2Password(password, stored)
+  }
+  try {
+    return await argon2Verify({ password, hash: stored })
   } catch {
     return false
   }

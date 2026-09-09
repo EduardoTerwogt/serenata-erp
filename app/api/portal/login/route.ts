@@ -1,6 +1,6 @@
-import { verifyPassword } from '@/lib/auth-utils'
+import { hashPassword, needsRehash, verifyPassword } from '@/lib/auth-utils'
 import { validate, PortalLoginSchema } from '@/lib/validation/schemas'
-import { getProveedorByCorreo } from '@/lib/db'
+import { getProveedorByCorreo, updateProveedor } from '@/lib/db'
 import { setPortalSessionCookie } from '@/lib/portal-auth'
 import { toErrorMessage } from '@/lib/server/portal/error-message'
 
@@ -19,6 +19,16 @@ export async function POST(request: Request) {
     const valido = await verifyPassword(password, proveedor.password_hash as string)
     if (!valido) {
       return Response.json({ error: 'Correo o contraseña incorrectos' }, { status: 401 })
+    }
+
+    if (needsRehash(proveedor.password_hash as string)) {
+      // Rehash-on-login (Fase 2.3): mismo criterio que auth.ts.
+      try {
+        const newHash = await hashPassword(password)
+        await updateProveedor(proveedor.id, { password_hash: newHash })
+      } catch (e) {
+        console.error('[portal/login] No se pudo re-hashear el password a Argon2id:', e)
+      }
     }
 
     await setPortalSessionCookie(proveedor.id)
