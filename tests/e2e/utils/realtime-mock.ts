@@ -6,8 +6,13 @@ import { Page } from '@playwright/test'
  * señales que envía OTRO colaborador, sin necesidad de un segundo navegador.
  */
 export interface RealtimeMock {
-  /** Envía una señal como si viniera de otro usuario. */
-  emit: (event: string, payload: Record<string, unknown>) => void
+  /**
+   * Envía una señal como si viniera de otro usuario. Espera a que el canal se haya
+   * unido: en CI el enlace tarda más que en local y emitir antes se perdía.
+   */
+  emit: (event: string, payload: Record<string, unknown>) => Promise<void>
+  /** Espera a que el canal esté unido. */
+  esperarConexion: (timeoutMs?: number) => Promise<void>
   conectado: () => boolean
 }
 
@@ -46,11 +51,20 @@ export async function mockRealtimeChannel(page: Page): Promise<RealtimeMock> {
     })
   })
 
+  const esperarConexion = async (timeoutMs = 15_000) => {
+    const limite = Date.now() + timeoutMs
+    while (!ws || !topic) {
+      if (Date.now() > limite) throw new Error('El canal simulado no llegó a conectarse')
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+  }
+
   return {
     conectado: () => !!ws && !!topic,
-    emit: (event, payload) => {
-      if (!ws || !topic) throw new Error('El canal simulado no llegó a conectarse')
-      ws.send(JSON.stringify([joinRef, null, topic, 'broadcast', {
+    esperarConexion,
+    emit: async (event, payload) => {
+      await esperarConexion()
+      ws!.send(JSON.stringify([joinRef, null, topic, 'broadcast', {
         event,
         type: 'broadcast',
         payload: { user_id: 'otro-colaborador', email: 'otro@serenata.test', name: 'Otro', at: new Date().toISOString(), ...payload },

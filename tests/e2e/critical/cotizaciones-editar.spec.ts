@@ -361,7 +361,7 @@ test('un guardado de otro colaborador no borra el monto recién capturado', asyn
   const realtime = await mockRealtimeChannel(page)
   await login(page, '/cotizaciones/SH-E2E-COLAB')
   await expect(page.getByRole('heading', { name: 'SH-E2E-COLAB' })).toBeVisible()
-  expect(realtime.conectado()).toBe(true)
+  await realtime.esperarConexion()
 
   const precio = page.locator('table tbody tr').first().locator('td').nth(3).locator('input')
   await precio.fill('9000')
@@ -373,7 +373,7 @@ test('un guardado de otro colaborador no borra el monto recién capturado', asyn
   expect(patch.postDataJSON().precio_unitario).toBe(9000)
 
   // El otro colaborador guarda justo ahora.
-  realtime.emit('section_saved', { section: 'partidas' })
+  await realtime.emit('section_saved', { section: 'partidas' })
   await page.waitForTimeout(2500)
 
   await expect(precio).toHaveValue('9000')
@@ -388,7 +388,7 @@ test('un guardado ajeno no provoca una relectura de la cotización', async ({ pa
   await page.waitForTimeout(300)
 
   const antes = (cotizacion as unknown as { __getsDeCotizacion: number }).__getsDeCotizacion
-  realtime.emit('section_saved', { section: 'partidas' })
+  await realtime.emit('section_saved', { section: 'partidas' })
   await page.waitForTimeout(1200)
 
   // El cambio ajeno llega por la mutación, no releyendo toda la cotización.
@@ -406,7 +406,7 @@ test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', as
   await descripcion.click()
   await descripcion.fill('Estoy escribiendo aquí')
 
-  realtime.emit('item_mutation', {
+  await realtime.emit('item_mutation', {
     action: 'upsert',
     row_id: 'item-remota-1',
     item: {
@@ -432,7 +432,7 @@ test('escribir en Datos generales mientras otro está en la sección sí guarda'
   // El otro colaborador entra a Datos generales. (No se afirma sobre el aviso visual:
   // llega por presencia y su momento es variable; lo que fija este test es que la
   // presencia ajena ya no deja el campo en solo lectura ni detiene el autoguardado.)
-  realtime.emit('section_signal', { status: 'editing', section: 'general' })
+  await realtime.emit('section_signal', { status: 'editing', section: 'general' })
   await page.waitForTimeout(300)
 
   // El campo sigue siendo editable y lo que escriba se guarda.
