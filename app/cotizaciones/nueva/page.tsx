@@ -118,13 +118,13 @@ function NuevaCotizacionContent() {
       </div>
 
       {esComplementaria && (
-        <div className="rounded-control border border-issued-bg/60 bg-issued-bg/20 text-issued-fg px-4 py-3">
+        <div className="rounded-control border border-issued-fg/30 bg-issued-bg text-issued-fg px-4 py-3">
           Cotizacion complementaria de <span className="font-mono font-bold">{complementaria_de}</span>
         </div>
       )}
 
       {error && (
-        <div className="rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20 text-cancelled-fg px-4 py-3">
+        <div className="rounded-control border border-cancelled-fg/30 bg-cancelled-bg text-cancelled-fg px-4 py-3">
           {error}
         </div>
       )}

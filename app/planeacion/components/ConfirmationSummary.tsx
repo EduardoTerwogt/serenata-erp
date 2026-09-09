@@ -34,7 +34,7 @@ export default function ConfirmationSummary({
       {error && error.startsWith('✓') && <StatusBanner tone="success">{error}</StatusBanner>}
 
       {/* Summary card */}
-      <div className="rounded-panel border border-approved-bg/40 bg-approved-bg/10 p-6">
+      <div className="rounded-panel border border-approved-fg/20 bg-approved-bg p-6">
         <div className="sn-display text-h1 text-approved-fg">{toCreate.length}</div>
         <div className="text-lg text-approved-fg">Cotizaciones a crear</div>
       </div>
@@ -59,7 +59,7 @@ export default function ConfirmationSummary({
                     </div>
                   </div>
                 </div>
-                <div className="inline-block rounded-control border border-issued-bg/40 bg-issued-bg/20 px-3 py-1 text-xs text-issued-fg font-medium">
+                <div className="inline-block rounded-control border border-issued-fg/20 bg-issued-bg px-3 py-1 text-xs text-issued-fg font-medium">
                   {getTemplateName(line.selectedTemplateId)}
                 </div>
               </div>

@@ -14,11 +14,13 @@ interface KanbanBoardProps<T> {
   keyExtractor: (item: T) => string
 }
 
+// bg-*-bg es un tinte translúcido (pensado para un pill con texto encima) --
+// un punto sólido sin texto necesita el tono saturado (-fg) o se ve lavado.
 const DOT_CLASS: Record<StatusTone, string> = {
-  approved: 'bg-approved-bg',
-  issued: 'bg-issued-bg',
-  draft: 'bg-draft-bg',
-  cancelled: 'bg-cancelled-bg',
+  approved: 'bg-approved-fg',
+  issued: 'bg-issued-fg',
+  draft: 'bg-draft-fg',
+  cancelled: 'bg-cancelled-fg',
 }
 
 // Kanban genérico (Fase 5.2 Bloque 3.4) -- reusado por el tablero de

@@ -10,7 +10,10 @@ interface TopbarProps {
 
 export function Topbar({ name, email, onSignOut, left }: TopbarProps) {
   return (
-    <header className="hidden h-[84px] flex-none items-center justify-between px-[29px] md:flex">
+    <header
+      className="hidden h-[var(--topbar-height)] flex-none items-center justify-between border-b border-hairline px-[var(--content-pad)] md:flex"
+      style={{ background: 'var(--surface-topbar)', backdropFilter: 'var(--blur-soft)', WebkitBackdropFilter: 'var(--blur-soft)' }}
+    >
       <div className="min-w-0">{left}</div>
       <UserMenu name={name} email={email} onSignOut={onSignOut} />
     </header>

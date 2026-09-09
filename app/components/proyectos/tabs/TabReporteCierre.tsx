@@ -100,7 +100,7 @@ function ReporteCierreContenido({ proyectoId, documento, equipo, documentosApi }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2.5 bg-approved-bg/[0.18] border border-approved-bg text-approved-fg rounded-control px-4 py-3 text-content">
+      <div className="flex flex-wrap items-center gap-2.5 bg-approved-bg border border-approved-fg/30 text-approved-fg rounded-control px-4 py-3 text-content">
         <span>✓</span>
         <span className="flex-1">Proyecto finalizado el {formatDateDisplay(contenido.fecha_cierre ?? null)} -- este reporte se generó solo, en automático.</span>
         <button
@@ -115,7 +115,7 @@ function ReporteCierreContenido({ proyectoId, documento, equipo, documentosApi }
       </div>
 
       {error && (
-        <div className="p-3 rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20">
+        <div className="p-3 rounded-control border border-cancelled-fg/30 bg-cancelled-bg">
           <p className="text-cancelled-fg text-content">{error}</p>
         </div>
       )}

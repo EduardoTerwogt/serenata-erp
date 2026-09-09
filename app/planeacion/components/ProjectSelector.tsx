@@ -83,7 +83,7 @@ export default function ClienteProyectoSelector({
 
       {/* Selected display */}
       {clienteInput && (
-        <div className="mb-6 rounded-control border border-approved-bg/40 bg-approved-bg/10 p-3">
+        <div className="mb-6 rounded-control border border-approved-fg/20 bg-approved-bg p-3">
           <p className="text-sm text-approved-fg">
             Cliente: <span className="font-semibold">{clienteInput}</span>
           </p>

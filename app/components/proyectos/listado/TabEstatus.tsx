@@ -5,11 +5,14 @@ import type { StatusTone } from '@/components/ui/StatusBadge'
 import type { TareaAgregada } from '@/lib/server/repositories/proyecto-tareas'
 import type { Proyecto, TipoProyectoConEtapas } from '@/lib/types'
 
+// bg-*-bg es un tinte translúcido (pensado para un pill con texto encima) --
+// la barra de distribución y el punto de leyenda no llevan texto, necesitan
+// el tono saturado (-fg) o se ven lavados.
 const BAR_BG_CLASS: Record<StatusTone, string> = {
-  approved: 'bg-approved-bg',
-  issued: 'bg-issued-bg',
-  draft: 'bg-draft-bg',
-  cancelled: 'bg-cancelled-bg',
+  approved: 'bg-approved-fg',
+  issued: 'bg-issued-fg',
+  draft: 'bg-draft-fg',
+  cancelled: 'bg-cancelled-fg',
 }
 
 interface TabEstatusProps {

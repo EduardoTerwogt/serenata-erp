@@ -34,7 +34,7 @@ export default function PendientesConfirmation({
       {error && error.startsWith('✓') && <StatusBanner tone="success">{error}</StatusBanner>}
 
       {/* Summary card */}
-      <div className="rounded-panel border border-issued-bg/40 bg-issued-bg/10 p-6">
+      <div className="rounded-panel border border-issued-fg/20 bg-issued-bg p-6">
         <div className="sn-display text-h1 text-issued-fg">{toCreate.length}</div>
         <div className="text-lg text-issued-fg">Pendientes a convertir en cotizaciones</div>
       </div>
@@ -59,7 +59,7 @@ export default function PendientesConfirmation({
                     </div>
                   </div>
                 </div>
-                <div className="inline-block rounded-control border border-issued-bg/40 bg-issued-bg/20 px-3 py-1 text-xs text-issued-fg font-medium">
+                <div className="inline-block rounded-control border border-issued-fg/20 bg-issued-bg px-3 py-1 text-xs text-issued-fg font-medium">
                   {getTemplateName(line.selectedTemplateId)}
                 </div>
               </div>

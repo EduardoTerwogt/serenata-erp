@@ -18,10 +18,12 @@ interface PendientesTableProps {
   onGoBack: () => void
 }
 
+// bg-*-bg ya es un tinte translúcido en el sistema nuevo -- un modificador de
+// opacidad extra lo diluye dos veces y lo deja casi invisible.
 const SELECT_TONE_CLASS: Record<string, string> = {
-  confirmado: 'bg-approved-bg/20 text-approved-fg border-approved-bg/50',
-  por_confirmar: 'bg-issued-bg/20 text-issued-fg border-issued-bg/50',
-  cancelado: 'bg-cancelled-bg/20 text-cancelled-fg border-cancelled-bg/50',
+  confirmado: 'bg-approved-bg text-approved-fg border-approved-fg/30',
+  por_confirmar: 'bg-issued-bg text-issued-fg border-issued-fg/30',
+  cancelado: 'bg-cancelled-bg text-cancelled-fg border-cancelled-fg/30',
 }
 
 export default function PendientesTable({

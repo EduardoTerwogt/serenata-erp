@@ -18,7 +18,7 @@ export default function ExtractionStatusBar({
 
   return (
     <div className={`flex items-center gap-3 px-4 py-3 rounded-control text-sm ${
-      isAI ? 'bg-approved-bg/15 border border-approved-bg/40 text-approved-fg' : 'bg-issued-bg/15 border border-issued-bg/40 text-issued-fg'
+      isAI ? 'bg-approved-bg border border-approved-fg/30 text-approved-fg' : 'bg-issued-bg border border-issued-fg/30 text-issued-fg'
     }`}>
       <div className="flex items-center gap-2">
         <Icon name={isAI ? 'check' : 'warning'} size={16} />

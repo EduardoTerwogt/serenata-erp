@@ -30,7 +30,7 @@ export function UserMenu({ name, email, onSignOut, className = '' }: UserMenuPro
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-3 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-white/5"
+        className="flex items-center gap-3 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-[var(--hover-overlay)]"
       >
         <Avatar initials={initials(name, email)} size={36} />
         <span className="hidden flex-col items-end text-right leading-tight md:flex">
@@ -51,7 +51,7 @@ export function UserMenu({ name, email, onSignOut, className = '' }: UserMenuPro
             <button
               type="button"
               onClick={onSignOut}
-              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-subtext transition-colors hover:bg-white/5 hover:text-cancelled-fg"
+              className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-subtext transition-colors hover:bg-[var(--hover-overlay)] hover:text-cancelled-fg"
             >
               <Icon name="log-out" size={15} />
               Cerrar sesión

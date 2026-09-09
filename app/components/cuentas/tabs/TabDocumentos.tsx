@@ -123,12 +123,12 @@ export function TabDocumentos(props: TabDocumentosProps) {
       <h3 className="text-h3 font-semibold text-ink mb-4">Documentos</h3>
 
       {uploadError && (
-        <div className="rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20 p-3">
+        <div className="rounded-control border border-cancelled-fg/30 bg-cancelled-bg p-3">
           <p className="text-cancelled-fg text-content">{uploadError}</p>
         </div>
       )}
       {uploadSuccess && (
-        <div className="rounded-control border border-approved-bg/60 bg-approved-bg/20 p-3">
+        <div className="rounded-control border border-approved-fg/30 bg-approved-bg p-3">
           <p className="text-approved-fg text-content">{uploadSuccess}</p>
         </div>
       )}
@@ -161,7 +161,7 @@ export function TabDocumentos(props: TabDocumentosProps) {
               </a>
             </div>
             {doc.estado_validacion === 'revision' && doc.detalle_validacion && (
-              <p className="mt-2 text-eyebrow text-cancelled-fg bg-cancelled-bg/20 border border-cancelled-bg/50 rounded-control px-2.5 py-1.5">
+              <p className="mt-2 text-eyebrow text-cancelled-fg bg-cancelled-bg border border-cancelled-fg/30 rounded-control px-2.5 py-1.5">
                 {doc.detalle_validacion}
               </p>
             )}

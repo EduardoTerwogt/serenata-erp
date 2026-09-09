@@ -1,19 +1,23 @@
-import { Archivo, Manrope } from 'next/font/google'
+import { Inter } from 'next/font/google'
 
-// Fase 5.7 (rediseño): tipografía del Serenata Design System.
-// Archivo (display, condensada/uppercase) + Manrope (UI/cuerpo) — sustitutos de
-// Google Fonts hasta que exista la tipografía real de marca (ver tokens/fonts.css
-// del kit). Auto-hospedadas vía next/font (sin CDN, sin FOUC).
-export const archivo = Archivo({
+// Rediseño Apple-style: una sola familia neutral en toda la app -- el kit pide
+// la fuente de sistema (-apple-system/SF Pro) con Inter como fallback
+// multiplataforma (ver tokens/fonts.css del kit). Sin fuente display aparte,
+// sin tratamiento en mayúsculas. Auto-hospedada vía next/font (sin CDN, sin
+// FOUC). Se mantienen las variables --font-display/--font-ui apuntando ambas
+// a Inter porque tailwind.config.ts y el resto del código ya las usan
+// (font-sans/font-display) -- así el cambio tipográfico aplica a toda la app
+// sin tocar cada consumidor.
+export const archivo = Inter({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-display',
   display: 'swap',
 })
 
-export const manrope = Manrope({
+export const manrope = Inter({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-ui',
   display: 'swap',
 })

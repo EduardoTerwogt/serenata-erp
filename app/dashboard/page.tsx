@@ -129,7 +129,7 @@ export default function DashboardPage() {
           contentClassName="p-4 md:p-6"
           actions={
             <div className="flex items-center gap-3 text-xs text-subtext">
-              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-approved-bg" />Ingresos</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: 'var(--sn-status-approved-fg)' }} />Ingresos</span>
               <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent" />Egresos</span>
             </div>
           }
@@ -190,8 +190,8 @@ export default function DashboardPage() {
                 </div>
                 <div className="h-[7px] w-full overflow-hidden rounded-pill bg-row">
                   <div
-                    className={`h-full rounded-pill ${excedente >= 0 ? 'bg-approved-bg' : 'bg-accent'}`}
-                    style={{ width: `${cobertura}%` }}
+                    className="h-full rounded-pill"
+                    style={{ width: `${cobertura}%`, background: excedente >= 0 ? 'var(--sn-status-approved-fg)' : 'var(--accent)' }}
                   />
                 </div>
               </div>

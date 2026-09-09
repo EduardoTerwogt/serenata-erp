@@ -114,14 +114,14 @@ export function OrdenPagoModal({ isOpen, onClose, onRefresh, cargarPreview, gene
           {loading && <div className="text-center py-10 text-faint">Cargando preview...</div>}
 
           {!loading && error && (
-            <div className="p-4 rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20 text-cancelled-fg text-content">
+            <div className="p-4 rounded-control border border-cancelled-fg/30 bg-cancelled-bg text-cancelled-fg text-content">
               {error}
             </div>
           )}
 
           {!loading && !error && preview && (
             <>
-              <div className="p-4 rounded-control border border-issued-bg/60 bg-issued-bg/20 text-issued-fg text-content">
+              <div className="p-4 rounded-control border border-issued-fg/30 bg-issued-bg text-issued-fg text-content">
                 <strong>{preview.resumen.items_totales}</strong> cuentas elegibles · <strong>{preview.resumen.responsables}</strong> responsables · Total general <strong>${fmt(preview.resumen.total_general)}</strong>
               </div>
 
@@ -175,7 +175,7 @@ export function OrdenPagoModal({ isOpen, onClose, onRefresh, cargarPreview, gene
               )}
 
               {successUrl && (
-                <div className="p-4 rounded-control border border-approved-bg/60 bg-approved-bg/20 text-approved-fg text-content">
+                <div className="p-4 rounded-control border border-approved-fg/30 bg-approved-bg text-approved-fg text-content">
                   Orden generada correctamente.{' '}
                   <a href={successUrl} target="_blank" rel="noopener noreferrer" className="underline font-medium">
                     Abrir PDF

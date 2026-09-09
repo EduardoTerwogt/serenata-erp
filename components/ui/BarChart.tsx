@@ -28,9 +28,12 @@ export function BarChart({ data, height = 186, onBarClick, format = (v) => `$${v
           className="flex h-full flex-1 flex-col items-center justify-end gap-2 rounded-md px-1 pt-2 transition-colors enabled:hover:bg-row-alt enabled:cursor-pointer"
         >
           <div className="flex flex-1 items-end gap-1">
+            {/* bg-approved-bg/bg-cancelled-bg etc. son tintes translúcidos pensados
+                para el fondo de un pill de estado (ver StatusBadge) -- una barra
+                sólida necesita el tono saturado (fg), no el tinte, o se ve lavada. */}
             <div
-              className="w-3 rounded-t-sm bg-approved-bg md:w-4"
-              style={{ height: `${Math.max((d.ingresos / max) * 100, d.ingresos > 0 ? 2 : 0)}%` }}
+              className="w-3 rounded-t-sm md:w-4"
+              style={{ background: 'var(--sn-status-approved-fg)', height: `${Math.max((d.ingresos / max) * 100, d.ingresos > 0 ? 2 : 0)}%` }}
             />
             <div
               className="w-3 rounded-t-sm bg-accent md:w-4"

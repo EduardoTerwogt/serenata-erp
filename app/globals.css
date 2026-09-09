@@ -1,30 +1,37 @@
 @import "tailwindcss";
 
 /*
- * Fase 5.7 (rediseño): tokens del Serenata Design System.
- * IMPORTANTE — no se sobreescribe la escala tipográfica (text-xs/sm/base/lg) ni
- * la de radios (rounded-sm/md/lg/xl) de Tailwind: muchas páginas aún no migradas
- * dependen de esos nombres con sus valores por default. Solo se agregan tokens
- * con nombres nuevos que no chocan, para que las pantallas migradas los usen sin
- * romper el look de las que todavía no se tocan (se van migrando por bloques).
+ * Rediseño Apple-style (skill serenata-design v2): tokens del Serenata Design
+ * System. IMPORTANTE — no se sobreescribe la escala tipográfica (text-xs/sm/
+ * base/lg) ni la de radios (rounded-sm/md/lg/xl) de Tailwind: muchas páginas
+ * aún no migradas dependen de esos nombres con sus valores por default. Solo
+ * se agregan tokens con nombres nuevos que no chocan, para que las pantallas
+ * migradas los usen sin romper el look de las que todavía no se tocan.
+ *
+ * Los NOMBRES de los tokens semánticos (--bg-app, --text-ink, etc.) se
+ * mantienen idénticos a la versión anterior (cinematográfica oscura) --
+ * cambian solo los VALORES, tomados de tokens/*.css del skill nuevo. Así el
+ * cambio de diseño llega a toda la app (que ya consumía estos mismos nombres)
+ * sin tocar la lógica ni las props de ningún componente.
  */
 :root {
-  /* Colores base para tema oscuro cinematográfico (legado, en uso por páginas aún no migradas) */
-  --background: #0a0a0a;
-  --foreground: #fafafa;
+  /* Colores base (legado, en uso por páginas aún no migradas -- error.tsx,
+     login, admin/sheets, skeletons) */
+  --background: #F5F5F7;
+  --foreground: #1D1D1F;
 
-  /* Design tokens tipográficos -- Fase 5.7: apuntan a Archivo/Manrope
-     (cargadas vía next/font en app/fonts.ts) en vez de Inter/Poppins. Se
-     mantienen los nombres --font-inter/--font-poppins porque tailwind.config.ts
-     y el resto del código ya los usan (font-sans/font-display) -- así el
-     refresh tipográfico aplica a toda la app sin tocar cada consumidor. */
-  --font-inter: var(--font-ui), system-ui, sans-serif;
-  --font-poppins: var(--font-display), sans-serif;
+  /* Design tokens tipográficos -- apuntan a Inter (cargada vía next/font en
+     app/fonts.ts) para las dos variables: el sistema Apple-style usa una
+     sola familia neutral, sin fuente display aparte. Se mantienen los
+     nombres --font-inter/--font-poppins porque tailwind.config.ts y el
+     resto del código ya los usan (font-sans/font-display). */
+  --font-inter: var(--font-ui), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-poppins: var(--font-display), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-source-code: 'Source Code Pro', monospace;
 
   /* Colores primarios (legado) */
-  --color-primary-500: #f97316;
-  --color-primary-600: #ea580c;
+  --color-primary-500: #FE7B01;
+  --color-primary-600: #E06D00;
   --color-secondary-500: #0ea5e9;
   --color-secondary-600: #0284c7;
   --color-accent-500: #22c55e;
@@ -40,64 +47,76 @@
   --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* --- Serenata Design System: superficies --- */
-  --sn-app: #0F1318;
-  --sn-topbar: #161D26;
-  --sn-surface: #151B22;
-  --sn-surface-alt: #191E25;
-  --sn-surface-alt-2: #1A2027;
-  --sn-input: #10161C;
-  --sn-hairline: #1F252D;
+  /* --- Serenata Design System: superficies (claro por default, ver
+     [data-theme="dark"] más abajo para el toggle -- no hay control de UI
+     para el toggle todavía, queda listo para cuando se agregue) --- */
+  --sn-app: #F5F5F7;
+  --sn-sidebar-glass: rgba(237, 237, 240, .78);
+  --sn-topbar-glass: rgba(245, 245, 247, .72);
+  --sn-surface: #FFFFFF;
+  --sn-surface-alt: #FAFAFB;
+  --sn-surface-alt-2: #F0F0F2;
+  --sn-input: rgba(120, 120, 128, .12);
+  --sn-toggle-track: rgba(120, 120, 128, .16);
+  --sn-hairline: #DEDEE2;
 
   /* --- marca --- */
-  --sn-orange: #FF5A1A;
-  --sn-orange-strong: #EE4B02;
-  --sn-orange-soft: #C65008;
-  --sn-orange-ink: #FEFCF9;
+  --sn-orange: #FE7B01;
+  --sn-orange-strong: #E06D00;
+  --sn-orange-soft: #B85800;
+  --sn-orange-ink: #FFFFFF;
 
   /* --- tinta --- */
-  --sn-ink: #FEFCF9;
-  --sn-ink-body: #E8EAED;
-  --sn-ink-muted: #9AA2AA;
-  --sn-ink-faint: #6B7280;
+  --sn-ink: #1D1D1F;
+  --sn-ink-body: #3A3A3C;
+  --sn-ink-muted: #6E6E73;
+  --sn-ink-faint: #98989D;
 
-  /* --- estados (badge de 4 tonos, ver components/ui/Badge.tsx) --- */
-  --sn-status-approved-bg: #1F6B54;
-  --sn-status-approved-fg: #DCF2E7;
-  --sn-status-issued-bg: #2A5C9C;
-  --sn-status-issued-fg: #E1ECFA;
-  --sn-status-draft-bg: #4B535E;
-  --sn-status-draft-fg: #E6EAEE;
-  --sn-status-cancelled-bg: #8B2B2B;
-  --sn-status-cancelled-fg: #F7DEDE;
+  /* --- estados (pill suave: fondo tenue + texto saturado) --- */
+  --sn-status-approved-bg: rgba(47, 168, 79, .15);
+  --sn-status-approved-fg: #218C3E;
+  --sn-status-issued-bg: rgba(46, 127, 224, .15);
+  --sn-status-issued-fg: #1C63B7;
+  --sn-status-draft-bg: rgba(142, 142, 147, .18);
+  --sn-status-draft-fg: #6E6E73;
+  --sn-status-cancelled-bg: rgba(224, 71, 46, .15);
+  --sn-status-cancelled-fg: #C13A20;
 
-  /* --- textura de marca (placeholder CSS -- reemplazar cuando haya arte real) ---
-     Confirmado contra el canvas real de Claude Design (capturas del 6-sep): el
-     rail del sidebar y los SectionHero SÍ llevan este degradado, pero muy
-     atenuado -- el kit lo logra con blur(80px)/blur(48px) + un scrim oscuro
-     encima (ver .sn-rail-texture / .sn-hero-texture abajo). La primera pasada
-     de Bloque 1 lo había quitado por completo del sidebar por una lectura
-     apresurada de una captura anterior; no se repite ese error. */
-  --sn-texture: radial-gradient(58% 84% at 12% 22%, #FF5A1A 0%, transparent 62%),
-    radial-gradient(48% 70% at 42% 88%, #D7263D 0%, transparent 60%),
-    radial-gradient(52% 78% at 72% 18%, #1F7A72 0%, transparent 62%),
-    radial-gradient(62% 90% at 96% 76%, #1E4E8C 0%, transparent 64%),
-    radial-gradient(40% 60% at 60% 52%, #4B2E83 0%, transparent 66%), var(--sn-app);
-  --sn-texture-scrim: linear-gradient(90deg, rgba(15,19,24,.88) 0%, rgba(15,19,24,.72) 55%, rgba(15,19,24,.6) 100%);
-  --sn-texture-rail: radial-gradient(72% 30% at 2% 86%, rgba(255,90,26,.85) 0%, transparent 72%),
-    radial-gradient(80% 24% at 0% 64%, rgba(31,122,114,.6) 0%, transparent 74%),
-    radial-gradient(84% 26% at 4% 44%, rgba(30,78,140,.5) 0%, transparent 76%),
-    radial-gradient(64% 20% at 0% 20%, rgba(215,38,61,.4) 0%, transparent 74%), var(--sn-app);
+  /* --- chips de icono del sidebar: cuadros rellenos estilo iOS, mismos tonos
+     en ambos temas --- */
+  --sn-chip-gray: #8E8E93;
+  --sn-chip-blue: #2E7FE0;
+  --sn-chip-purple: #8E5FE0;
+  --sn-chip-red: #E0472E;
+  --sn-chip-teal: #2FA88C;
+  --sn-chip-green: #2FA84F;
+  --sn-chip-indigo: #5B6BD6;
 
-  --tracking-eyebrow: 0.14em;
-  --tracking-label: 0.1em;
+  /* --- textura de marca: ya no decora el sidebar/topbar por default en el
+     sistema nuevo (ver readme del skill) -- se deja el token por si algún
+     loader/splash la vuelve a usar más adelante. --- */
+  --sn-texture-orange: #FE7B01;
+  --sn-texture-red: #D7263D;
+  --sn-texture-teal: #1F7A72;
+  --sn-texture-blue: #1E4E8C;
+  --sn-texture-purple: #4B2E83;
+  --sn-texture: radial-gradient(70% 100% at 8% 18%, var(--sn-texture-orange) 0%, transparent 60%),
+    radial-gradient(64% 92% at 30% 94%, var(--sn-texture-red) 0%, transparent 62%),
+    radial-gradient(66% 96% at 78% 10%, var(--sn-texture-teal) 0%, transparent 62%),
+    radial-gradient(76% 108% at 100% 82%, var(--sn-texture-blue) 0%, transparent 64%),
+    radial-gradient(54% 78% at 54% 46%, var(--sn-texture-purple) 0%, transparent 60%), var(--sn-app);
+  --sn-texture-scrim: linear-gradient(90deg, rgba(245,245,247,.88) 0%, rgba(245,245,247,.72) 55%, rgba(245,245,247,.6) 100%);
 
-  /* --- Fase 5.8: aliases semánticos de tokens/colors.css -- antes solo existían
-     los nombres --sn-*; los componentes del skill (Sidebar, Card, Button, etc.)
-     están escritos contra estos nombres semánticos. Son alias 1:1, no cambian
-     ningún valor. --- */
+  --tracking-eyebrow: 0.08em;
+  --tracking-label: 0.03em;
+
+  /* --- aliases semánticos: los componentes del shell (Sidebar, Card, Button,
+     etc.) están escritos contra estos nombres semánticos. Son alias 1:1, no
+     cambian ningún valor. --- */
   --bg-app: var(--sn-app);
-  --bg-topbar: var(--sn-topbar);
+  --bg-topbar: var(--sn-topbar-glass);
+  --surface-sidebar: var(--sn-sidebar-glass);
+  --surface-topbar: var(--sn-topbar-glass);
   --surface-card: var(--sn-surface);
   --surface-row: var(--sn-surface-alt);
   --surface-row-alt: var(--sn-surface-alt-2);
@@ -106,14 +125,19 @@
   --accent: var(--sn-orange);
   --accent-pressed: var(--sn-orange-strong);
   --accent-quiet: var(--sn-orange-soft);
+  --accent-tint: rgba(254, 123, 1, .12);
   --text-primary: var(--sn-ink);
   --text-body: var(--sn-ink-body);
   --text-muted: var(--sn-ink-muted);
   --text-faint: var(--sn-ink-faint);
-  --focus-ring: rgba(255, 90, 26, .55);
+  --focus-ring: rgba(254, 123, 1, .45);
+  --hover-overlay: rgba(0, 0, 0, .05);
+  --control-track: rgba(120, 120, 128, .14);
+  --blur-strong: blur(24px) saturate(1.4);
+  --blur-soft: blur(20px) saturate(1.3);
 
   /* --- tokens/spacing.css: escala + constantes de layout del shell (rail,
-     topbar, controles). Faltaban por completo -- ver nota de Fase 5.8. --- */
+     topbar, controles). --- */
   --space-xs: 4px;
   --space-sm: 6px;
   --space-md: 13px;
@@ -121,49 +145,50 @@
   --space-xl: 26px;
   --space-2xl: 32px;
   --space-3xl: 45px;
-  --sidebar-width: 256px;
-  --sidebar-pad: 19px;
-  --content-pad: 29px;
-  --topbar-height: 84px;
+  --sidebar-width: 250px;
+  --sidebar-pad: 12px;
+  --content-pad: 30px;
+  --topbar-height: 56px;
   --row-pad-y: 12px;
-  --row-pad-x: 19px;
-  --nav-item-height: 38px;
-  --nav-gap: 5px;
-  --control-height: 35px;
-  --control-height-lg: 42px;
+  --row-pad-x: 18px;
+  --nav-item-height: 32px;
+  --nav-gap: 2px;
+  --control-height: 32px;
+  --control-height-lg: 36px;
 
   /* --- tokens/typography.css: resto de la escala (arriba solo estaban los
      tamaños que no chocan con la escala default de Tailwind, ver @theme). --- */
-  --display-stretch: 88%;
-  --display-weight: 800;
-  --display-tracking: -0.02em;
+  --display-stretch: 100%;
+  --display-weight: 700;
+  --display-tracking: -0.01em;
   --text-xs: 10px;
   --text-sm: 10px;
   --text-base: 13.5px;
-  --text-md: 12px;
+  --text-md: 12.5px;
   --text-lg: 14px;
-  --lh-tight: 1.02;
-  --lh-snug: 1.25;
+  --lh-tight: 1.15;
+  --lh-snug: 1.3;
   --lh-body: 1.5;
-  --tracking-tagline: 0.18em;
+  --tracking-tagline: 0.1em;
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
   --weight-bold: 700;
-  --weight-black: 800;
+  --weight-black: 700;
 
   /* --- tokens/radius.css: nombres reales del token, como variables CSS planas
      (no dentro de @theme) -- así no generan/pisan utilidades rounded-sm/md/lg/xl
      de Tailwind (ver nota arriba de @theme), pero sí quedan disponibles como
      var(--radius-sm) etc. para clases arbitrarias (rounded-[var(--radius-md)]). --- */
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-input: 11px;
-  --radius-lg: 18px;
-  --radius-xl: 19px;
+  --radius-sm: 7px;
+  --radius-md: 8px;
+  --radius-input: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
-  /* --- tokens/elevation.css: los dos que faltaban (--shadow-raised/overlay/rail/
-     accent/card ya existen vía @theme más abajo). --- */
+  /* --- tokens/elevation.css: profundidad por vidrio/hairline, casi sin
+     sombra -- los que faltaban (--shadow-raised/overlay/rail/accent/card ya
+     existen vía @theme más abajo). --- */
   --hairline: 1px solid var(--border-subtle);
   --shadow-none: none;
 
@@ -175,6 +200,49 @@
   --dur-slow: 260ms;
   --transition-control: background-color var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+
+/* tokens/theme-dark.css del skill: un oscuro Apple-neutral (no el cinematográfico
+   anterior), mismo naranja de acento. Se alterna con data-theme="dark" en un
+   ancestro (<html> o <body>) -- no hay todavía un control de UI que lo active,
+   queda listo para cuando se agregue. Sin este atributo la app se queda en el
+   claro definido arriba. */
+[data-theme='dark'] {
+  --sn-app: #1C1C1E;
+  --sn-sidebar-glass: rgba(38, 38, 40, .78);
+  --sn-topbar-glass: rgba(28, 28, 30, .7);
+  --sn-surface: #2C2C2E;
+  --sn-surface-alt: #262628;
+  --sn-surface-alt-2: #232325;
+  --sn-input: rgba(255, 255, 255, .08);
+  --sn-toggle-track: rgba(255, 255, 255, .14);
+  --sn-hairline: #3A3A3C;
+
+  --sn-orange: #FE7B01;
+  --sn-orange-strong: #FF8F1F;
+  --sn-orange-soft: #E0812B;
+  --sn-orange-ink: #FFFFFF;
+
+  --sn-ink: #F5F5F7;
+  --sn-ink-body: #E5E5E7;
+  --sn-ink-muted: #98989D;
+  --sn-ink-faint: #6E6E73;
+
+  --sn-status-approved-bg: rgba(47, 168, 79, .2);
+  --sn-status-approved-fg: #4ADE80;
+  --sn-status-issued-bg: rgba(46, 127, 224, .22);
+  --sn-status-issued-fg: #6FA8F5;
+  --sn-status-draft-bg: rgba(180, 180, 186, .2);
+  --sn-status-draft-fg: #C7C7CC;
+  --sn-status-cancelled-bg: rgba(224, 71, 46, .22);
+  --sn-status-cancelled-fg: #FF8266;
+
+  --accent-tint: rgba(254, 123, 1, .18);
+  --focus-ring: rgba(254, 123, 1, .5);
+  --hover-overlay: rgba(255, 255, 255, .06);
+
+  --background: #1C1C1E;
+  --foreground: #F5F5F7;
 }
 
 @theme {
@@ -213,39 +281,41 @@
      (p-[19px], gap-[13px], etc.) tomados directo de tokens/spacing.css del kit
      en vez de una escala con nombre, hasta decidir un prefijo que no choque. */
 
-  /* Radios que no chocan con rounded-sm/md/lg/xl */
+  /* Radios que no chocan con rounded-sm/md/lg/xl -- mapeados a tokens/radius.css
+     del skill nuevo: cards/paneles usan --radius-lg (12px), controles
+     (botones/inputs/nav) usan --radius-input (9px, ya unificado bajo un solo
+     nombre en el código en vez de diferenciar botón/input como hace el kit). */
   --radius-pill: 999px;
   --radius-circle: 50%;
-  --radius-card: 18px;
-  --radius-panel: 19px;
-  --radius-control: 11px;
+  --radius-card: var(--radius-lg);
+  --radius-panel: var(--radius-lg);
+  --radius-control: var(--radius-input);
 
-  /* Sombras nuevas (el sistema casi no usa sombra: contraste de superficie + hairline) */
-  --shadow-card: 0 1px 0 rgba(255,255,255,.02) inset;
-  --shadow-raised: 0 8px 24px rgba(0,0,0,.35);
-  --shadow-overlay: 0 18px 48px rgba(0,0,0,.5);
-  --shadow-rail: 14px 0 34px rgba(0,0,0,.45);
-  --shadow-accent: 0 6px 18px rgba(238,75,2,.28);
+  /* Sombras nuevas: el sistema Apple-style casi no usa sombra -- profundidad
+     por vidrio esmerilado + hairline, no drop shadow (ver tokens/elevation.css). */
+  --shadow-card: 0 1px 2px rgba(0,0,0,.05);
+  --shadow-raised: 0 8px 24px rgba(0,0,0,.12);
+  --shadow-overlay: 0 18px 48px rgba(0,0,0,.22);
+  --shadow-rail: none;
+  --shadow-accent: 0 6px 18px rgba(224,109,0,.22);
+  --shadow-segment: 0 1px 2px rgba(0,0,0,.12);
 
   --ease-standard: cubic-bezier(.2,.8,.2,1);
 
   /* Tamaños que NO chocan con la escala default de Tailwind (xs/sm/base/lg/...) */
   --text-eyebrow: 11px;
-  --text-table-head: 12px;
-  --text-nav: 14.5px;
-  --text-h3: 19px;
-  --text-h2: 27px;
-  --text-h1: 51px;
-  --text-hero: 58px;
+  --text-table-head: 11px;
+  --text-nav: 13px;
+  --text-h3: 17px;
+  --text-h2: 22px;
+  --text-h1: 27px;
+  --text-hero: 34px;
 
-  /* Ajuste solicitado: +1px sobre el texto de contenido de sección (celdas de
-     tabla, valores de formulario, notas, totales) -- antes usaba el text-sm
-     default de Tailwind (14px; una primera pasada probó +2px/16px y se bajó
-     a +1px). Nombre propio para no tocar la escala default (ver nota de
-     spacing arriba): las secciones migradas usan `text-content` en vez de
-     `text-sm`; esto se vuelve el tamaño base para esta sección y las que se
-     migren después. */
-  --text-content: 15px;
+  /* Texto de contenido de sección (celdas de tabla, valores de formulario,
+     notas, totales) -- se mantiene un nombre propio para no tocar la escala
+     default de Tailwind (text-sm), alineado ahora a --text-lg (14px) del
+     kit nuevo en vez del +1px sobre el texto plano de la versión anterior. */
+  --text-content: 14px;
 }
 
 @theme inline {
@@ -281,12 +351,10 @@
   --color-blue-900: #78350f;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #fafafa;
-  }
-}
+/* Rediseño Apple-style: claro por default, sin auto-dark por preferencia de
+   SO -- el sistema nuevo alterna con data-theme="dark" en un ancestro (ver
+   tokens/theme-dark.css), no con prefers-color-scheme. No hay todavía un
+   control de UI para ese toggle. */
 
 /* Estilos base mejorados */
 * {
@@ -343,20 +411,19 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   flex-shrink: 0;
 }
 
-/* Serenata Design System -- utilidades tipográficas (Fase 5.7).
+/* Serenata Design System -- utilidades tipográficas (rediseño Apple-style).
    El cuerpo de texto normal sigue usando las utilidades Tailwind de siempre
    (text-sm, text-base, etc.) -- estas son solo para los patrones de marca
-   (display condensado, eyebrow, micro-label) que no tienen equivalente. */
+   (display, eyebrow, micro-label) que no tienen equivalente. */
 .sn-display {
   /* Sin color propio a propósito: como no está dentro de las capas de
      Tailwind, un color fijo aquí le ganaría a cualquier text-* que se le
      ponga encima (pasó con el folio de la tabla de cotizaciones). El color
      lo pone quien use la clase. */
   font-family: var(--font-poppins);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.02;
-  text-transform: uppercase;
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.01em;
+  line-height: var(--lh-tight);
 }
 .sn-eyebrow {
   font-family: var(--font-inter);
@@ -368,45 +435,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .sn-label {
   font-family: var(--font-inter);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--sn-ink-faint);
-}
-
-/* Texturas de marca -- degradado de color detrás de un blur fuerte + scrim,
-   igual receta que Sidebar.jsx/SectionHero.jsx del kit. Solo tocan background/
-   position, nunca color de texto, para no repetir el bug de .sn-display.
-   IMPORTANTE -- van dentro de @layer components: el sidebar necesita
-   `fixed` (utilidad de Tailwind) además de esta clase, y sin @layer el
-   `position: relative` de aquí (CSS plano, fuera de capas) le gana a
-   `fixed` sin importar el orden -- pasó en el commit que reinstaló esta
-   textura y rompió el posicionamiento fijo del sidebar en producción. */
-@layer components {
-  .sn-rail-texture {
-    position: relative;
-    overflow: hidden;
-    background: var(--sn-texture-rail);
-  }
-  .sn-rail-texture::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    backdrop-filter: blur(80px);
-    background: rgba(12, 15, 20, .42);
-  }
-  .sn-hero-texture {
-    position: relative;
-    overflow: hidden;
-    background: var(--sn-texture);
-    background-size: cover;
-  }
-  .sn-hero-texture::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    backdrop-filter: blur(48px);
-    background: var(--sn-texture-scrim);
-  }
 }

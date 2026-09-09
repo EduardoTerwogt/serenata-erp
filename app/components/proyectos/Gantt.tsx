@@ -36,11 +36,14 @@ const BAR_CLASS: Record<StatusTone, string> = {
   cancelled: 'bg-cancelled-bg text-cancelled-fg',
 }
 
+// bg-*-bg es un tinte translúcido (pensado para un pill con texto encima, ver
+// BAR_CLASS) -- un punto sólido sin texto necesita el tono saturado (-fg) o
+// se ve lavado contra la tarjeta.
 const DOT_CLASS: Record<StatusTone, string> = {
-  approved: 'bg-approved-bg',
-  issued: 'bg-issued-bg',
-  draft: 'bg-draft-bg',
-  cancelled: 'bg-cancelled-bg',
+  approved: 'bg-approved-fg',
+  issued: 'bg-issued-fg',
+  draft: 'bg-draft-fg',
+  cancelled: 'bg-cancelled-fg',
 }
 
 // Gantt genérico, hecho a mano con divs posicionados por porcentaje (sin

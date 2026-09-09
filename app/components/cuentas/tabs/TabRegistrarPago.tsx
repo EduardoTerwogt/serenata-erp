@@ -185,7 +185,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
       <h3 className="text-h3 font-semibold text-ink mb-4">Registrar Pago</h3>
 
       {showOrdenInfo && (
-        <div className="p-3 rounded-control border border-issued-bg/60 bg-issued-bg/20">
+        <div className="p-3 rounded-control border border-issued-fg/30 bg-issued-bg">
           <p className="text-issued-fg text-content">
             Esta cuenta está vinculada a una Orden de Pago. Puedes registrar el pago normalmente para completar la orden.
           </p>
@@ -193,7 +193,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
       )}
 
       {isPagado && (
-        <div className="p-3 rounded-control border border-approved-bg/60 bg-approved-bg/20">
+        <div className="p-3 rounded-control border border-approved-fg/30 bg-approved-bg">
           <p className="text-approved-fg text-content">
             Esta cuenta ya está totalmente pagada.
           </p>
@@ -201,13 +201,13 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
       )}
 
       {error && (
-        <div className="p-3 rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20">
+        <div className="p-3 rounded-control border border-cancelled-fg/30 bg-cancelled-bg">
           <p className="text-cancelled-fg text-content">{error}</p>
         </div>
       )}
 
       {success && (
-        <div className="p-3 rounded-control border border-approved-bg/60 bg-approved-bg/20">
+        <div className="p-3 rounded-control border border-approved-fg/30 bg-approved-bg">
           <p className="text-approved-fg text-content">Pago registrado correctamente</p>
         </div>
       )}

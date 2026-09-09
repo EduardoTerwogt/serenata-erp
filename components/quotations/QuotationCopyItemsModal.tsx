@@ -89,7 +89,7 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
         </div>
 
         <div className="p-4 md:p-6 overflow-y-auto flex-1">
-          {error && <div className="rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20 text-cancelled-fg px-4 py-3 mb-4 text-content">{error}</div>}
+          {error && <div className="rounded-control border border-cancelled-fg/30 bg-cancelled-bg text-cancelled-fg px-4 py-3 mb-4 text-content">{error}</div>}
 
           {!selectedCotizacion ? (
             <>

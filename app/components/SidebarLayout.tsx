@@ -9,20 +9,21 @@ import { Sidebar, type SidebarNavLink } from '@/components/navigation/Sidebar'
 import { Topbar } from '@/components/navigation/Topbar'
 import { Wordmark } from '@/components/ui/Wordmark'
 import { Icon, type IconName } from '@/components/ui/Icon'
+import type { NavChipTone } from '@/components/navigation/NavItem'
 
-const NAV_LINKS: { href: string; label: string; section: string; icon: IconName }[] = [
-  { href: '/dashboard', label: 'Dashboard', section: 'dashboard', icon: 'dashboard' },
-  { href: '/planeacion', label: 'Planeación', section: 'planeacion', icon: 'planeacion' },
-  { href: '/cotizaciones', label: 'Cotizaciones', section: 'cotizaciones', icon: 'cotizaciones' },
-  { href: '/proyectos', label: 'Proyectos', section: 'proyectos', icon: 'proyectos' },
-  { href: '/cuentas', label: 'Cuentas', section: 'cuentas', icon: 'cuentas' },
-  { href: '/proveedores', label: 'Proveedores', section: 'responsables', icon: 'proveedores' },
-  { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion', icon: 'plantillas' },
+const NAV_LINKS: { href: string; label: string; section: string; icon: IconName; tone: NavChipTone }[] = [
+  { href: '/dashboard', label: 'Dashboard', section: 'dashboard', icon: 'dashboard', tone: 'blue' },
+  { href: '/planeacion', label: 'Planeación', section: 'planeacion', icon: 'planeacion', tone: 'purple' },
+  { href: '/cotizaciones', label: 'Cotizaciones', section: 'cotizaciones', icon: 'cotizaciones', tone: 'indigo' },
+  { href: '/proyectos', label: 'Proyectos', section: 'proyectos', icon: 'proyectos', tone: 'teal' },
+  { href: '/cuentas', label: 'Cuentas', section: 'cuentas', icon: 'cuentas', tone: 'green' },
+  { href: '/proveedores', label: 'Proveedores', section: 'responsables', icon: 'proveedores', tone: 'gray' },
+  { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion', icon: 'plantillas', tone: 'red' },
 ]
 
-const ADMIN_LINKS: { href: string; label: string; icon: IconName }[] = [
-  { href: '/admin/usuarios', label: 'Usuarios', icon: 'admin-usuarios' },
-  { href: '/admin/sheets', label: 'Google Sheets', icon: 'google-sheets' },
+const ADMIN_LINKS: { href: string; label: string; icon: IconName; tone: NavChipTone }[] = [
+  { href: '/admin/usuarios', label: 'Usuarios', icon: 'admin-usuarios', tone: 'gray' },
+  { href: '/admin/sheets', label: 'Google Sheets', icon: 'google-sheets', tone: 'teal' },
 ]
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
@@ -43,7 +44,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   // proveedores externos, sin el shell interno (sidebar/topbar de staff).
   if (pathname === '/login' || pathname.startsWith('/portal')) return <>{children}</>
 
-  const withActive = (links: { href: string; label: string; icon: IconName }[]): SidebarNavLink[] =>
+  const withActive = (links: { href: string; label: string; icon: IconName; tone: NavChipTone }[]): SidebarNavLink[] =>
     links.map((link) => ({ ...link, active: pathname.startsWith(link.href) }))
 
   const handleSignOut = () => signOut({ callbackUrl: '/login' })

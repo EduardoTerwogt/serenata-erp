@@ -18,16 +18,20 @@ interface ValidationTableProps {
   onGoBack: () => void
 }
 
+// bg-*-bg ya es un tinte translúcido en el sistema nuevo (pensado para un
+// pill con texto encima) -- aplicarle un modificador de opacidad extra lo
+// diluye dos veces y lo deja casi invisible. Se usa a fuerza completa, con
+// el borde en el tono saturado (-fg) para que siga siendo legible.
 const SELECT_TONE_CLASS: Record<string, string> = {
-  confirmado: 'bg-approved-bg/20 text-approved-fg border-approved-bg/50',
-  por_confirmar: 'bg-issued-bg/20 text-issued-fg border-issued-bg/50',
-  cancelado: 'bg-cancelled-bg/20 text-cancelled-fg border-cancelled-bg/50',
+  confirmado: 'bg-approved-bg text-approved-fg border-approved-fg/30',
+  por_confirmar: 'bg-issued-bg text-issued-fg border-issued-fg/30',
+  cancelado: 'bg-cancelled-bg text-cancelled-fg border-cancelled-fg/30',
 }
 
 const SECTION_TONE = {
-  confirmado: { border: 'border-approved-bg/40', header: 'bg-approved-bg/10 border-approved-bg/40', title: 'text-approved-fg', subtitle: 'text-approved-fg/70' },
-  por_confirmar: { border: 'border-issued-bg/40', header: 'bg-issued-bg/10 border-issued-bg/40', title: 'text-issued-fg', subtitle: 'text-issued-fg/70' },
-  cancelado: { border: 'border-cancelled-bg/40', header: 'bg-cancelled-bg/10 border-cancelled-bg/40', title: 'text-cancelled-fg', subtitle: 'text-cancelled-fg/70' },
+  confirmado: { border: 'border-approved-fg/25', header: 'bg-approved-bg border-approved-fg/25', title: 'text-approved-fg', subtitle: 'text-approved-fg/70' },
+  por_confirmar: { border: 'border-issued-fg/25', header: 'bg-issued-bg border-issued-fg/25', title: 'text-issued-fg', subtitle: 'text-issued-fg/70' },
+  cancelado: { border: 'border-cancelled-fg/25', header: 'bg-cancelled-bg border-cancelled-fg/25', title: 'text-cancelled-fg', subtitle: 'text-cancelled-fg/70' },
 } as const
 
 interface EventRowProps {
@@ -263,7 +267,7 @@ export default function ValidationTable({
 
       {/* Usage Badge */}
       {usage && (
-        <div className="rounded-panel border border-issued-bg/40 bg-issued-bg/10 p-4">
+        <div className="rounded-panel border border-issued-fg/20 bg-issued-bg p-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="text-sm font-medium text-issued-fg mb-2">Uso de Claude API</p>

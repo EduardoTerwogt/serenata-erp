@@ -188,7 +188,7 @@ export function TareaFormModal({ onClose, tareaExistente, tareasApi }: TareaForm
       )}
 
       {error && (
-        <div className="p-3 rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20">
+        <div className="p-3 rounded-control border border-cancelled-fg/30 bg-cancelled-bg">
           <p className="text-cancelled-fg text-content">{error}</p>
         </div>
       )}
@@ -207,7 +207,7 @@ export function TareaFormModal({ onClose, tareaExistente, tareasApi }: TareaForm
             type="button"
             onClick={eliminar}
             disabled={busy}
-            className="py-2.5 px-4 border border-hairline bg-input hover:bg-cancelled-bg/20 hover:border-cancelled-bg text-cancelled-fg rounded-control font-medium transition-colors"
+            className="py-2.5 px-4 border border-hairline bg-input hover:bg-cancelled-bg hover:border-cancelled-fg/40 text-cancelled-fg rounded-control font-medium transition-colors"
           >
             Eliminar
           </button>

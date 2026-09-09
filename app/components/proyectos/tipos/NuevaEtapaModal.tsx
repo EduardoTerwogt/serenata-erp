@@ -49,7 +49,7 @@ export function NuevaEtapaModal({ onClose, siguienteOrden, onCrear }: NuevaEtapa
       </label>
 
       {error && (
-        <div className="p-3 rounded-control border border-cancelled-bg/60 bg-cancelled-bg/20">
+        <div className="p-3 rounded-control border border-cancelled-fg/30 bg-cancelled-bg">
           <p className="text-cancelled-fg text-content">{error}</p>
         </div>
       )}

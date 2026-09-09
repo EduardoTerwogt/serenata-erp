@@ -73,7 +73,7 @@ export function EtapaChip({ etapa, isFirst, isLast, proyectosEnEtapa, onRenombra
     <span
       className={`flex items-center gap-2 rounded-pill border px-2.5 py-1.5 text-content font-semibold ${
         etapa.es_etapa_final
-          ? 'border-approved-bg bg-approved-bg/15 text-approved-fg'
+          ? 'border-approved-fg/40 bg-approved-bg text-approved-fg'
           : 'border-hairline bg-row text-body'
       }`}
     >
