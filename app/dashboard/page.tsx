@@ -6,6 +6,8 @@ import { getJson, sendJson } from '@/lib/client/api'
 import { SectionHero } from '@/components/ui/SectionHero'
 import { SectionCard } from '@/components/ui/SectionCard'
 import { Metric } from '@/components/ui/Metric'
+import { Select } from '@/components/ui/Select'
+import { Button } from '@/components/ui/Button'
 import { BarChart, type BarChartDatum } from '@/components/ui/BarChart'
 import { Modal } from '@/components/ui/Modal'
 import { Icon } from '@/components/ui/Icon'
@@ -102,17 +104,12 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-6">
       <SectionHero
         title="Inicio"
-        subtitle="Resumen ejecutivo de Serenata"
         action={
-          <select
-            value={periodo}
-            onChange={(e) => setPeriodo(e.target.value as Periodo)}
-            className="h-10 rounded-control border border-hairline bg-input px-3 text-sm text-body focus:outline-none focus:border-accent"
-          >
+          <Select size="lg" value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
             {(Object.keys(PERIODO_LABEL) as Periodo[]).map((p) => (
               <option key={p} value={p}>{PERIODO_LABEL[p]}</option>
             ))}
-          </select>
+          </Select>
         }
       />
 
@@ -171,10 +168,9 @@ export default function DashboardPage() {
           title="Gastos fijos vs. facturación"
           contentClassName="p-4 md:p-6"
           actions={
-            <button type="button" onClick={() => setModalAbierto(true)} className="inline-flex items-center gap-1.5 rounded-control border border-hairline px-3 py-1.5 text-sm text-body hover:bg-row-alt transition-colors">
-              <Icon name="plus" size={15} />
+            <Button variant="secondary" size="md" onClick={() => setModalAbierto(true)} iconLeft="plus">
               Agregar gasto fijo
-            </button>
+            </Button>
           }
         >
           {fuenteFallo('Gastos fijos') ? (

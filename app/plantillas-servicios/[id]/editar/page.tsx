@@ -5,7 +5,6 @@ import { useRouter, useParams } from 'next/navigation'
 import { ServiceTemplateItem, Proveedor } from '@/lib/types'
 import { useServiceTemplateForm } from '@/hooks/useServiceTemplateForm'
 import { TemplateItemsSection } from '../../components/TemplateItemsSection'
-import { SectionHero } from '@/components/ui/SectionHero'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 
 export default function EditarPlantillaPage() {
@@ -107,7 +106,10 @@ export default function EditarPlantillaPage() {
 
   return (
     <div className="max-w-7xl flex flex-col gap-6">
-      <SectionHero title="Editar plantilla" subtitle={nombre} />
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h1 className="sn-display text-[22px] text-ink">Editar plantilla</h1>
+        {nombre && <span className="text-[length:var(--text-md)] text-subtext">{nombre}</span>}
+      </div>
 
       {error && <StatusBanner tone="error">{error}</StatusBanner>}
 

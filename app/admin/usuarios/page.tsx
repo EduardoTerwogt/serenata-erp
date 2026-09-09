@@ -7,7 +7,7 @@ import { SectionCard } from '@/components/ui/SectionCard'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { Modal } from '@/components/ui/Modal'
-import { Icon } from '@/components/ui/Icon'
+import { Button } from '@/components/ui/Button'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 
 const ALL_SECTIONS = [
@@ -162,16 +162,10 @@ export default function UsuariosPage() {
     <div className="flex flex-col gap-6">
       <SectionHero
         title="Usuarios"
-        subtitle="Gestión de acceso al sistema"
         action={
-          <button
-            type="button"
-            onClick={openCreate}
-            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
-          >
-            <Icon name="plus" size={15} />
+          <Button onClick={openCreate} iconLeft="plus">
             Nuevo usuario
-          </button>
+          </Button>
         }
       />
 

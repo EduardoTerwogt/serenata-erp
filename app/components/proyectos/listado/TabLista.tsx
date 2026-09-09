@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { TableFooter } from '@/components/ui/TableFooter'
 import { formatDateDisplay } from '@/lib/format-date'
 import { resolverEtapaProyecto } from '@/app/components/proyectos/kanban-helpers'
 import type { Proyecto, TipoProyectoConEtapas } from '@/lib/types'
@@ -29,11 +30,14 @@ export function TabLista({ proyectos, tipos }: TabListaProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <SearchInput
-        placeholder="Buscar por proyecto, cliente o folio..."
-        value={busqueda}
-        onChange={(e) => setBusqueda(e.target.value)}
-      />
+      <div className="flex justify-end">
+        <SearchInput
+          expandable
+          placeholder="Buscar por proyecto, cliente o folio…"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+      </div>
 
       {filtrados.length === 0 ? (
         <div className="rounded-panel border border-hairline bg-card p-12 text-center">
@@ -43,10 +47,10 @@ export function TabLista({ proyectos, tipos }: TabListaProps) {
         <div className="rounded-panel border border-hairline bg-card overflow-hidden">
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-content">
-              <thead className="bg-row-alt">
-                <tr>
+              <thead>
+                <tr className="border-b border-hairline">
                   {['Folio', 'Tipo', 'Proyecto', 'Cliente', 'Entrega', 'Etapa'].map((h) => (
-                    <th key={h} className="text-left px-6 py-3 text-table-head font-semibold text-subtext">{h}</th>
+                    <th key={h} className="sn-label text-left px-6 py-3">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -85,6 +89,8 @@ export function TabLista({ proyectos, tipos }: TabListaProps) {
               )
             })}
           </div>
+
+          <TableFooter shown={filtrados.length} total={proyectos.length} unit="proyectos" />
         </div>
       )}
     </div>

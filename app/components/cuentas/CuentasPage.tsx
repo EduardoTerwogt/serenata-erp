@@ -11,6 +11,7 @@ import { SectionHero } from '@/components/ui/SectionHero'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { FilterTabs } from '@/components/ui/FilterTabs'
 import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { SkeletonTable } from '@/app/components/ui/SkeletonTable'
 
@@ -130,7 +131,6 @@ export function CuentasPage() {
       <div className="mb-6">
         <SectionHero
           title="Cuentas"
-          subtitle="Control operativo de cobros, pagos, documentos y órdenes de pago."
           action={
             <div className="flex flex-wrap items-center gap-3">
               {tab === 'cobrar' && !loadingAlertas && alertas.length > 0 && (
@@ -139,44 +139,39 @@ export function CuentasPage() {
               {tab === 'pagar' && historialOrdenes.length > 0 && (
                 <HeaderPopupButton label="Historial" count={historialOrdenes.length} onClick={() => setShowHistorialModal(true)} />
               )}
-              <button
-                type="button"
-                onClick={() => setShowOrdenModal(true)}
-                className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-content font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
-              >
-                <Icon name="file-text" size={16} />
+              <Button onClick={() => setShowOrdenModal(true)} iconLeft="file-text">
                 Ficha de órdenes de pago
-              </button>
+              </Button>
             </div>
           }
         />
       </div>
 
-      <div className="flex flex-col gap-4 mb-6">
-        <SearchInput
-          placeholder={tab === 'cobrar'
-            ? 'Buscar por folio, cliente o proyecto...'
-            : 'Buscar por folio, responsable, proyecto o descripción...'}
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
+      <div className="mb-6 flex items-center gap-[13px] overflow-x-auto pb-0.5">
+        <FilterTabs
+          tabs={[
+            { value: 'cobrar' as const, label: 'Cobrar', count: cuentasCobrarPendientes },
+            { value: 'pagar' as const, label: 'Pagar', count: cuentasPagarPendientes },
+          ]}
+          value={tab}
+          onChange={setTab}
         />
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <FilterTabs
-            tabs={[
-              { value: 'cobrar' as const, label: 'Cobrar', count: cuentasCobrarPendientes },
-              { value: 'pagar' as const, label: 'Pagar', count: cuentasPagarPendientes },
-            ]}
-            value={tab}
-            onChange={setTab}
-          />
-          <FilterTabs
-            tabs={[
-              { value: 'proyecto' as const, label: 'Por proyecto' },
-              { value: 'lista' as const, label: 'Lista' },
-            ]}
-            value={vista}
-            onChange={setVista}
+        <FilterTabs
+          tabs={[
+            { value: 'proyecto' as const, label: 'Por proyecto' },
+            { value: 'lista' as const, label: 'Lista' },
+          ]}
+          value={vista}
+          onChange={setVista}
+        />
+        <div className="ml-auto flex-none">
+          <SearchInput
+            expandable
+            placeholder={tab === 'cobrar'
+              ? 'Buscar por folio, cliente o proyecto…'
+              : 'Buscar por folio, responsable, proyecto o descripción…'}
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
           />
         </div>
       </div>
@@ -213,6 +208,7 @@ export function CuentasPage() {
         <CuentasTable
           tab={tab}
           cuentas={tab === 'cobrar' ? cobrarFiltradas : pagarFiltradas}
+          total={tab === 'cobrar' ? cobrarApi.cuentas.length : pagarApi.cuentas.length}
           onSelect={(cuenta) => setSelectedCuenta(cuenta)}
         />
       )}

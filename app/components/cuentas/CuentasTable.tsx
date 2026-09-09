@@ -3,6 +3,7 @@
 import { CuentaCobrar, CuentaPagar } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { StatusBadge, toneForCuentaEstado } from '@/components/ui/StatusBadge'
+import { TableFooter } from '@/components/ui/TableFooter'
 
 type CuentaListItem =
   | ({ tipo: 'cobrar' } & CuentaCobrar)
@@ -11,6 +12,7 @@ type CuentaListItem =
 interface Props {
   tab: 'cobrar' | 'pagar'
   cuentas: CuentaListItem[]
+  total: number
   onSelect: (cuenta: CuentaListItem) => void
 }
 
@@ -18,7 +20,7 @@ function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
 }
 
-export function CuentasTable({ tab, cuentas, onSelect }: Props) {
+export function CuentasTable({ tab, cuentas, total, onSelect }: Props) {
   const columns = tab === 'cobrar'
     ? ['Folio', 'Cliente', 'Proyecto', 'Pagado / Total', 'Vencimiento', 'Estado']
     : ['Folio', 'Proyecto', 'Responsable', 'Descripción', 'Pagado / Total', 'Estado']
@@ -27,10 +29,10 @@ export function CuentasTable({ tab, cuentas, onSelect }: Props) {
     <div className="rounded-panel border border-hairline bg-card overflow-hidden">
       <div className="hidden lg:block overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-row-alt">
-            <tr>
+          <thead>
+            <tr className="border-b border-hairline">
               {columns.map((column) => (
-                <th key={column} className="px-6 py-3 text-left text-table-head font-semibold text-subtext">
+                <th key={column} className="sn-label px-6 py-3 text-left">
                   {column}
                 </th>
               ))}
@@ -123,6 +125,8 @@ export function CuentasTable({ tab, cuentas, onSelect }: Props) {
           )
         })}
       </div>
+
+      <TableFooter shown={cuentas.length} total={total} unit="cuentas" />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { SectionHero } from '@/components/ui/SectionHero'
+import { Button } from '@/components/ui/Button'
 import { FilterTabs, type FilterTab } from '@/components/ui/FilterTabs'
 import { useProyectosListado, type ListadoTab } from '@/app/components/proyectos/useProyectosListado'
 import { TabTablero } from '@/app/components/proyectos/listado/TabTablero'
@@ -26,14 +26,10 @@ export default function ProyectosPage() {
     <div className="flex flex-col gap-[19px]">
       <SectionHero
         title="Proyectos"
-        subtitle="Vista general del pipeline completo"
         action={
-          <Link
-            href="/proyectos/tipos"
-            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control border border-hairline bg-input px-[18px] text-content font-semibold text-body transition-colors hover:bg-row-alt"
-          >
-            Configurar tipos de proyecto →
-          </Link>
+          <Button variant="secondary" href="/proyectos/tipos" iconRight="arrow-right">
+            Configurar tipos de proyecto
+          </Button>
         }
       />
 

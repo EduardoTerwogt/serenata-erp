@@ -6,6 +6,7 @@ import { SectionHero } from '@/components/ui/SectionHero'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Avatar } from '@/components/ui/Avatar'
+import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { ProveedorModal } from '@/app/proveedores/components/ProveedorModal'
 
@@ -92,16 +93,10 @@ export default function ProveedoresPage() {
     <div className="flex flex-col gap-6">
       <SectionHero
         title="Proveedores"
-        subtitle="Gestiona tu equipo de trabajo"
         action={
-          <button
-            type="button"
-            onClick={() => setNuevo(true)}
-            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
-          >
-            <Icon name="plus" size={15} />
+          <Button onClick={() => setNuevo(true)} iconLeft="plus">
             Nuevo proveedor
-          </button>
+          </Button>
         }
       />
 
@@ -109,6 +104,7 @@ export default function ProveedoresPage() {
         value={busqueda}
         onChange={e => setBusqueda(e.target.value)}
         placeholder="Buscar por nombre…"
+        className="w-full max-w-[420px] self-start"
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px] lg:items-start">
@@ -121,14 +117,11 @@ export default function ProveedoresPage() {
                 {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay proveedores aún'}
               </p>
               {!busqueda && (
-                <button
-                  type="button"
-                  onClick={() => setNuevo(true)}
-                  className="mt-4 inline-flex h-[var(--control-height-lg)] items-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
-                >
-                  <Icon name="plus" size={15} />
-                  Nuevo proveedor
-                </button>
+                <div className="mt-4">
+                  <Button onClick={() => setNuevo(true)} iconLeft="plus">
+                    Nuevo proveedor
+                  </Button>
+                </div>
               )}
             </div>
           ) : (
@@ -184,15 +177,9 @@ export default function ProveedoresPage() {
             </div>
           )}
 
-          <a
-            href="/portal/login"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 rounded-control bg-accent px-4 py-3 text-content font-semibold text-accent-ink transition-colors hover:bg-accent-pressed"
-          >
+          <Button href="/portal/login" target="_blank" rel="noopener noreferrer" iconRight="arrow-right" fullWidth>
             Acceder al portal
-            <Icon name="arrow-right" size={15} />
-          </a>
+          </Button>
         </aside>
       </div>
 

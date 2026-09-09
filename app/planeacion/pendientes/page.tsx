@@ -32,10 +32,7 @@ export default function PendientesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHero
-        title="Pendientes de planeación"
-        subtitle='Revisa y procesa las filas marcadas como "Por Confirmar" o "Cancelado"'
-      />
+      <SectionHero title="Pendientes de planeación" />
 
       <div className="max-w-6xl mx-auto w-full">
         {state.step === 'list' && (

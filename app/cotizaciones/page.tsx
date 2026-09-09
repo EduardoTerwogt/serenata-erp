@@ -9,6 +9,8 @@ import { SectionHero } from '@/components/ui/SectionHero'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { FilterTabs, type FilterTab } from '@/components/ui/FilterTabs'
 import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadge'
+import { TableFooter } from '@/components/ui/TableFooter'
+import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
@@ -83,30 +85,29 @@ export default function CotizacionesPage() {
     <div className="flex flex-col gap-[19px]">
       <SectionHero
         title="Cotizaciones"
-        subtitle="Gestiona todas tus cotizaciones"
         action={
-          <Link
-            href="/cotizaciones/nueva"
-            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
-          >
-            <Icon name="plus" size={15} />
-            Nueva Cotización
-          </Link>
+          <Button href="/cotizaciones/nueva" iconLeft="plus">
+            Nueva cotización
+          </Button>
         }
       />
 
-      <SearchInput
-        placeholder="Buscar por folio, cliente, proyecto, item o responsable..."
-        value={busqueda}
-        onChange={e => setBusqueda(e.target.value)}
-      />
-
-      <FilterTabs tabs={tabs} value={filtro} onChange={setFiltro} />
+      <div className="flex items-center gap-[13px] overflow-x-auto pb-0.5">
+        <FilterTabs tabs={tabs} value={filtro} onChange={setFiltro} />
+        <div className="ml-auto flex-none">
+          <SearchInput
+            expandable
+            placeholder="Buscar por folio, cliente, proyecto, item o responsable…"
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+          />
+        </div>
+      </div>
 
       {loading ? (
         <div className="space-y-3 animate-pulse">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="rounded-card border border-hairline bg-card p-4 md:p-6">
+            <div key={i} className="rounded-panel border border-hairline bg-card p-4 md:p-6">
               <div className="hidden md:flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="h-5 w-20 rounded bg-row" />
@@ -132,14 +133,14 @@ export default function CotizacionesPage() {
           ))}
         </div>
       ) : filtradas.length > 0 ? (
-        <div className="overflow-hidden rounded-card border border-hairline bg-card">
+        <div className="overflow-hidden rounded-panel border border-hairline bg-card">
           {/* Desktop: tabla */}
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-content">
               <thead>
                 <tr className="border-b border-hairline">
                   {['Folio', 'Proyecto', 'Cliente', 'Total', 'Entrega', 'Estatus'].map(h => (
-                    <th key={h} className="sn-label whitespace-nowrap px-6 py-3 text-left font-semibold" style={{ fontSize: 'var(--text-table-head)' }}>{h}</th>
+                    <th key={h} className="sn-label whitespace-nowrap px-6 py-3 text-left">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -206,22 +207,20 @@ export default function CotizacionesPage() {
               </Link>
             ))}
           </div>
+
+          <TableFooter shown={filtradas.length} total={cotizaciones.length} unit="cotizaciones" />
         </div>
       ) : (
-        <div className="rounded-card border border-hairline bg-card p-12 text-center">
+        <div className="rounded-panel border border-hairline bg-card p-12 text-center">
           <p className="mb-2 text-lg text-subtext">
             {filtro === 'TODAS' ? 'No hay cotizaciones aún' : `No hay cotizaciones en estado ${ESTADO_LABEL[filtro]}`}
           </p>
           {filtro === 'TODAS' && (
             <>
               <p className="mb-6 text-content text-faint">Crea tu primera cotización para empezar</p>
-              <Link
-                href="/cotizaciones/nueva"
-                className="inline-flex h-[var(--control-height-lg)] items-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
-              >
-                <Icon name="plus" size={15} />
-                Nueva Cotización
-              </Link>
+              <Button href="/cotizaciones/nueva" iconLeft="plus">
+                Nueva cotización
+              </Button>
             </>
           )}
         </div>

@@ -9,6 +9,7 @@ import ValidationTable from './components/ValidationTable'
 import ConfirmationSummary from './components/ConfirmationSummary'
 import { SectionHero } from '@/components/ui/SectionHero'
 import { SectionCard } from '@/components/ui/SectionCard'
+import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 
 const STEPS = ['input', 'project', 'validation', 'confirmation'] as const
@@ -61,17 +62,11 @@ export default function PlaneacionPage() {
     <div className="flex flex-col gap-6">
       <SectionHero
         title="Planeación"
-        subtitle="Carga información de tus eventos y crea cotizaciones en lote"
         action={
           pendientesCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => router.push('/planeacion/pendientes')}
-              className="inline-flex items-center gap-1.5 rounded-control border border-hairline bg-input hover:bg-row-alt px-4 py-2.5 text-sm font-medium text-body transition-colors"
-            >
+            <Button variant="secondary" onClick={() => router.push('/planeacion/pendientes')} iconRight="arrow-right">
               Eventos pendientes · {pendientesCount}
-              <Icon name="arrow-right" size={15} />
-            </button>
+            </Button>
           ) : undefined
         }
       />

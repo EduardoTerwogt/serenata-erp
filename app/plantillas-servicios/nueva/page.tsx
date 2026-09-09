@@ -82,7 +82,7 @@ export default function NuevaPlantillaPage() {
 
   return (
     <div className="max-w-7xl flex flex-col gap-6">
-      <SectionHero title="Nueva plantilla" subtitle="Define los items reutilizables para este paquete de servicios" />
+      <SectionHero title="Nueva plantilla" />
 
       {error && <StatusBanner tone="error">{error}</StatusBanner>}
 

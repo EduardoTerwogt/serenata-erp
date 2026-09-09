@@ -7,6 +7,7 @@ import { SectionHero } from '@/components/ui/SectionHero'
 import { SectionCard } from '@/components/ui/SectionCard'
 import { FilterTabs, type FilterTab } from '@/components/ui/FilterTabs'
 import { Avatar } from '@/components/ui/Avatar'
+import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { StatusBadge, toneForCuentaEstado, toneForValidacionEstado } from '@/components/ui/StatusBadge'
@@ -118,7 +119,6 @@ export default function PortalPage() {
     <div className="mx-auto w-full max-w-4xl flex flex-col gap-[19px]">
       <SectionHero
         title="Portal"
-        subtitle={faltaDocumentacion ? 'Sube tu documentación para completar tu perfil' : undefined}
         action={
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -126,16 +126,19 @@ export default function PortalPage() {
               <p className="text-content text-subtext">Proveedor</p>
             </div>
             <Avatar initials={initialsFromName(me.nombre)} size={38} />
-            <button
-              type="button"
-              onClick={cerrarSesion}
-              className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-sm transition-colors"
-            >
+            <Button variant="secondary" onClick={cerrarSesion}>
               Salir
-            </button>
+            </Button>
           </div>
         }
       />
+
+      {faltaDocumentacion && (
+        <div className="flex items-center gap-3 rounded-control bg-issued-bg border border-issued-fg/30 px-4 py-3 text-issued-fg">
+          <Icon name="warning" size={16} />
+          <span className="text-content">Sube tu documentación para completar tu perfil</span>
+        </div>
+      )}
 
       <FilterTabs tabs={TABS} value={tab} onChange={setTab} />
 

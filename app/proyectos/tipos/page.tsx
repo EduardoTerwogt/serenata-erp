@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { SectionHero } from '@/components/ui/SectionHero'
-import { Icon } from '@/components/ui/Icon'
+import { Button } from '@/components/ui/Button'
 import { getJson } from '@/lib/client/api'
 import { useTiposProyecto } from '@/app/components/proyectos/hooks/useTiposProyecto'
 import { TipoCard } from '@/app/components/proyectos/tipos/TipoCard'
@@ -48,16 +48,10 @@ export default function TiposProyectoPage() {
     <div className="flex flex-col gap-[19px]">
       <SectionHero
         title="Tipos de proyecto"
-        subtitle="Cada tipo define sus propias etapas -- se aplican solas a cada proyecto nuevo de ese tipo"
         action={
-          <button
-            type="button"
-            onClick={() => setMostrarNuevoTipo(true)}
-            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
-          >
-            <Icon name="plus" size={15} />
+          <Button onClick={() => setMostrarNuevoTipo(true)} iconLeft="plus">
             Nuevo tipo de proyecto
-          </button>
+          </Button>
         }
       />
 

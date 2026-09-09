@@ -16,6 +16,9 @@ test('lista de cuentas: toggle Cobrar/Pagar y búsqueda', async ({ page }) => {
   await expect(page.getByRole('cell', { name: 'José García' })).toBeVisible()
   await expect(page.getByRole('cell', { name: 'Walmart México' })).not.toBeVisible()
 
+  // El buscador es "expandable" (rediseño Apple-style): arranca colapsado
+  // en un botón de solo ícono y hay que abrirlo antes de poder escribir.
+  await page.getByRole('button', { name: 'Buscar' }).click()
   await page.locator('input[placeholder*="Buscar por folio"]').fill('no-existe-xyz')
   await expect(page.getByRole('cell', { name: 'José García' })).not.toBeVisible()
 })

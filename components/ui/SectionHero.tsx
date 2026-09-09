@@ -2,21 +2,19 @@ import { ReactNode } from 'react'
 
 interface SectionHeroProps {
   title: string
-  subtitle?: string
   action?: ReactNode
 }
 
-// Rediseño Apple-style: sin textura de marca por default (ver readme.md del
-// skill > "Backgrounds & texture" -- "no photography, no illustration, no
-// repeating pattern in the product UI"). Superficie plana con hairline, igual
-// criterio que el resto de las tarjetas del sistema.
-export function SectionHero({ title, subtitle, action }: SectionHeroProps) {
+// Encabezado de sección: título plano + acción, sin tarjeta ni subtítulo --
+// así aparece en TODAS las pantallas del kit (CotizacionesScreen.jsx,
+// ProyectosScreen.jsx, CuentasScreen.jsx, DashboardScreen.jsx...): un simple
+// flex row con `<div className="sn-display" style={{fontSize:22}}>`, nunca
+// envuelto en Card/SectionHero-con-borde. El nombre del componente se
+// conserva por no tocar cada import, pero ya no es un "hero".
+export function SectionHero({ title, action }: SectionHeroProps) {
   return (
-    <div className="flex min-h-[90px] flex-col justify-center gap-4 rounded-panel border border-hairline bg-card px-[19px] py-[19px] md:flex-row md:items-center md:justify-between md:px-[26px]">
-      <div className="min-w-0">
-        <h1 className="sn-display text-2xl text-ink md:text-h1">{title}</h1>
-        {subtitle && <p className="mt-2 text-sm text-subtext">{subtitle}</p>}
-      </div>
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <h1 className="sn-display min-w-0 truncate text-[22px] text-ink">{title}</h1>
       {action && <div className="flex-none">{action}</div>}
     </div>
   )

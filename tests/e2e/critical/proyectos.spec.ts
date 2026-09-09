@@ -11,9 +11,13 @@ test('lista de proyectos carga y permite buscar', async ({ page }) => {
   await expect(page.getByText('Spot Verano E2E')).toBeVisible()
 
   await page.getByRole('button', { name: 'Lista' }).click()
-  await expect(page.locator('input[placeholder="Buscar por proyecto, cliente o folio..."]')).toBeVisible()
 
-  await page.locator('input[placeholder="Buscar por proyecto, cliente o folio..."]').fill('no-existe-xyz')
+  // El buscador es "expandable" (rediseño Apple-style): arranca colapsado
+  // en un botón de solo ícono y hay que abrirlo antes de poder escribir.
+  await page.getByRole('button', { name: 'Buscar' }).click()
+  await expect(page.locator('input[placeholder="Buscar por proyecto, cliente o folio…"]')).toBeVisible()
+
+  await page.locator('input[placeholder="Buscar por proyecto, cliente o folio…"]').fill('no-existe-xyz')
   await expect(page.getByText('Spot Verano E2E')).not.toBeVisible()
 })
 

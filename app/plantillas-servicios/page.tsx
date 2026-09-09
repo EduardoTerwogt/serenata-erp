@@ -6,6 +6,7 @@ import { ServiceTemplate } from '@/lib/types'
 import { SectionHero } from '@/components/ui/SectionHero'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 
 function formatMoney(value: number) {
@@ -96,14 +97,9 @@ export default function PlantillasServiciosPage() {
       <SectionHero
         title="Plantillas"
         action={
-          <button
-            type="button"
-            onClick={() => router.push('/plantillas-servicios/nueva')}
-            className="flex h-[var(--control-height-lg)] items-center justify-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
-          >
-            <Icon name="plus" size={15} />
+          <Button onClick={() => router.push('/plantillas-servicios/nueva')} iconLeft="plus">
             Nueva plantilla
-          </button>
+          </Button>
         }
       />
 
@@ -111,6 +107,7 @@ export default function PlantillasServiciosPage() {
         value={busqueda}
         onChange={e => setBusqueda(e.target.value)}
         placeholder="Buscar por nombre…"
+        className="w-full max-w-[420px] self-start"
       />
 
       {error && (
@@ -125,14 +122,11 @@ export default function PlantillasServiciosPage() {
             {busqueda ? `Sin resultados para "${busqueda}"` : 'No hay plantillas aún'}
           </p>
           {!busqueda && (
-            <button
-              type="button"
-              onClick={() => router.push('/plantillas-servicios/nueva')}
-              className="mt-4 inline-flex h-[var(--control-height-lg)] items-center gap-2 rounded-control bg-accent px-[26px] text-[length:var(--text-base)] font-bold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed"
-            >
-              <Icon name="plus" size={15} />
-              Nueva plantilla
-            </button>
+            <div className="mt-4">
+              <Button onClick={() => router.push('/plantillas-servicios/nueva')} iconLeft="plus">
+                Nueva plantilla
+              </Button>
+            </div>
           )}
         </div>
       ) : (
@@ -159,21 +153,12 @@ export default function PlantillasServiciosPage() {
               </div>
 
               <div className="flex items-center gap-2 p-4 border-t border-hairline flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => router.push(`/plantillas-servicios/${template.id}/editar`)}
-                  className="rounded-control border border-hairline bg-input px-3 py-2 text-sm text-body hover:bg-row-alt transition-colors"
-                >
+                <Button variant="secondary" size="md" onClick={() => router.push(`/plantillas-servicios/${template.id}/editar`)}>
                   Editar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDuplicate(template)}
-                  className="inline-flex items-center gap-1.5 rounded-control px-3 py-2 text-sm text-subtext hover:text-body hover:bg-row-alt transition-colors"
-                >
-                  <Icon name="copy" size={14} />
+                </Button>
+                <Button variant="ghost" size="md" iconLeft="copy" onClick={() => handleDuplicate(template)}>
                   Duplicar
-                </button>
+                </Button>
                 <div className="flex-1" />
                 <button
                   type="button"
@@ -195,22 +180,12 @@ export default function PlantillasServiciosPage() {
             Se eliminan los {borrar.items.length} items de esta plantilla. Las cotizaciones que ya la usaron conservan sus partidas.
           </p>
           <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setBorrar(null)}
-              disabled={eliminando}
-              className="rounded-control border border-hairline bg-input px-4 py-2.5 text-sm font-medium text-body hover:bg-row-alt transition-colors disabled:opacity-50"
-            >
+            <Button variant="ghost" onClick={() => setBorrar(null)} disabled={eliminando}>
               Mantener
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={eliminando}
-              className="rounded-control bg-accent px-4 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-pressed transition-colors disabled:opacity-50"
-            >
+            </Button>
+            <Button onClick={handleDelete} disabled={eliminando}>
               {eliminando ? 'Eliminando...' : 'Sí, eliminar'}
-            </button>
+            </Button>
           </div>
         </Modal>
       )}
