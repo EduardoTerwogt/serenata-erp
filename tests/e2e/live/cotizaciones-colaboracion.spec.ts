@@ -46,14 +46,15 @@ function subtotal(page: Page): Locator {
  * fallos que si no parecen magia (p. ej. que el efecto que inserta la fila de otro
  * colaborador lance y esa pantalla deje de reaccionar). Va al log de CI.
  */
-function grabarFramesRealtime(page: Page, destino: string[]) {
+function grabarFramesRealtime(page: Page, destino: string[], direccion: 'framereceived' | 'framesent' = 'framereceived') {
+  // Los frames del canal viajan como Buffer cuando van comprimidos: quedarse solo con
+  // los `string` dejaba el grabador ciego y hacía parecer que no llegaba nada.
+  const guardar = (frame: { payload: string | Buffer }) => {
+    destino.push(typeof frame.payload === 'string' ? frame.payload : frame.payload.toString('utf8'))
+  }
   page.on('websocket', (ws) => {
-    ws.on('framereceived', (frame) => {
-      // Los frames del canal llegan como Buffer cuando viajan comprimidos: quedarse
-      // solo con los `string` dejaba el grabador ciego y hacía parecer que no llegaba
-      // nada. Se guardan ambos.
-      destino.push(typeof frame.payload === 'string' ? frame.payload : frame.payload.toString('utf8'))
-    })
+    if (direccion === 'framesent') ws.on('framesent', guardar)
+    else ws.on('framereceived', guardar)
   })
 }
 
@@ -134,6 +135,9 @@ test.describe('live: colaboración real entre dos usuarios', () => {
   // Frames del canal de tiempo real que RECIBE B. Sirven para distinguir "el mensaje
   // nunca llegó" de "llegó y la pantalla no reaccionó", que se ven igual desde el DOM.
   const framesRecibidosPorB: string[] = []
+  // Y los que A EMITE: sin esto no se distingue "el cliente de A no lo mandó" de
+  // "lo mandó y no se repartió".
+  const framesEnviadosPorA: string[] = []
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(180_000)
@@ -148,6 +152,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     pageA = await contextA.newPage()
     vigilarErrores(pageA, 'A')
     vigilarPeticionesDePartidas(pageA, 'A')
+    grabarFramesRealtime(pageA, framesEnviadosPorA, 'framesent')
     await login(pageA, '/cotizaciones')
 
     origenId = await crearCotizacion(pageA, `${PREFIJO}ORIGEN-${suffix}`, `Origen colab ${suffix}`, [
@@ -282,6 +287,9 @@ test.describe('live: colaboración real entre dos usuarios', () => {
         const banner = await pageA.locator('.text-cancelled-fg').first().textContent().catch(() => null)
         const mutaciones = framesRecibidosPorB.filter((frame) => frame.includes('item_mutation'))
         console.log(`[live colab] banner de error en A: ${banner?.trim() || '(ninguno)'}`)
+        console.log(`[live colab] frames totales enviados por A: ${framesEnviadosPorA.length}`)
+        console.log(`[live colab] A emitió el aviso de la fila nueva: ${framesEnviadosPorA.some((frame) => frame.includes(idNuevo))}`)
+        console.log(`[live colab] item_mutation enviados por A: ${framesEnviadosPorA.filter((frame) => frame.includes('item_mutation')).length}`)
         console.log(`[live colab] frames totales recibidos por B: ${framesRecibidosPorB.length}`)
         console.log(`[live colab] frames item_mutation recibidos por B: ${mutaciones.length}`)
         console.log(`[live colab] ids de partida vistos por B: ${Array.from(new Set(framesRecibidosPorB.join(' ').match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g) || [])).join(', ') || '(ninguno)'}`)
