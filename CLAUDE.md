@@ -199,8 +199,11 @@ SUPABASE_SERVICE_ROLE_KEY=
 # Auth (NextAuth v5)
 AUTH_SECRET=
 AUTH_TRUST_HOST=true
-AUTH_USERS='[{"id":"...","email":"...","passwordHash":"...","name":"...","sections":["..."]}]'
 NEXTAUTH_URL=
+# AUTH_USERS + AUTH_USERS_DEV_FALLBACK=true -- SOLO desarrollo/test. Nunca en
+# producción: si Supabase falla, el login falla (no cae a esta lista). Ver
+# lib/auth-utils.ts.
+AUTH_USERS='[{"id":"...","email":"...","passwordHash":"...","name":"...","sections":["..."]}]'
 
 # AI (Planeación)
 ANTHROPIC_API_KEY=

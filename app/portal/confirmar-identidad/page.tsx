@@ -36,7 +36,7 @@ export default function ConfirmarIdentidadPage() {
     setEnviando(true)
     setError(null)
     try {
-      await sendJson('/api/portal/signup/confirmar', { confirmar, candidato_id: me?.candidato?.id ?? null }, 'Error al confirmar')
+      await sendJson('/api/portal/signup/confirmar', { confirmar }, 'Error al confirmar')
       router.replace('/portal')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al confirmar')

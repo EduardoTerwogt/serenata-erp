@@ -81,24 +81,34 @@ export interface AuthUser {
 
 /**
  * Carga usuarios desde la tabla `usuarios` en Supabase.
- * Si la tabla no existe o falla, hace fallback al env var AUTH_USERS.
+ *
+ * Auditoría externa 2026-09-09 (Fase 2.1): antes, cualquier falla de Supabase
+ * (o la tabla devolviendo 0 filas -- un truncado accidental, una policy mal
+ * puesta, un outage) caía en silencio al env var AUTH_USERS, una lista de
+ * usuarios completamente distinta y sin auditar. En producción eso ya no
+ * pasa: si Supabase falla, el login falla -- no cambia de fuente de
+ * identidad sin que nadie se entere. El fallback solo existe para
+ * desarrollo/test, detrás de una bandera explícita que no puede quedar
+ * activa en producción.
  */
 export async function getAuthUsers(): Promise<AuthUser[]> {
   try {
     const { getUsuariosForAuth } = await import('@/lib/server/repositories/usuarios')
-    const users = await getUsuariosForAuth()
-    if (users.length > 0) return users
-  } catch {
-    // fallback al env var si la tabla aún no existe
-  }
+    return await getUsuariosForAuth()
+  } catch (e) {
+    console.error('[auth] Error consultando usuarios en Supabase:', e)
 
-  const raw = process.env.AUTH_USERS
-  if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed as AuthUser[]
-  } catch {
-    return []
+    const fallbackHabilitado = process.env.AUTH_USERS_DEV_FALLBACK === 'true' && process.env.NODE_ENV !== 'production'
+    if (!fallbackHabilitado) return []
+
+    const raw = process.env.AUTH_USERS
+    if (!raw) return []
+    try {
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return []
+      return parsed as AuthUser[]
+    } catch {
+      return []
+    }
   }
 }

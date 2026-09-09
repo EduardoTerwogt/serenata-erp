@@ -223,9 +223,11 @@ export const PortalLoginSchema = z.object({
   password: z.string().min(1, 'El password es requerido'),
 })
 
+// candidato_id NO se acepta del cliente -- el servidor lo deriva de
+// proveedores.match_candidato_id dentro de la RPC confirmar_match_proveedor.
+// Ver db/migrations/20260909_confirmar_match_proveedor_rpc.sql.
 export const PortalConfirmarMatchSchema = z.object({
   confirmar: z.boolean(),
-  candidato_id: z.string().uuid().nullable().optional(),
 })
 
 export const PortalPerfilSchema = z.object({

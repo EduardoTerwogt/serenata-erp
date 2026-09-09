@@ -31,26 +31,23 @@ describe('POST /api/portal/signup/confirmar', () => {
 
   it('retorna 401 sin sesión de portal', async () => {
     mocks.requirePortalSessionMock.mockResolvedValue({ proveedorId: null, response: Response.json({ error: 'No autenticado' }, { status: 401 }) })
-    const response = await POST(req({ confirmar: true, candidato_id: '11111111-1111-4111-8111-111111111111' }))
+    const response = await POST(req({ confirmar: true }))
     expect(response.status).toBe(401)
     expect(mocks.confirmarMatchMock).not.toHaveBeenCalled()
   })
 
-  it('fusiona hacia el candidato y re-firma la sesión cuando confirmar=true', async () => {
+  it('fusiona hacia el candidato (derivado server-side) y re-firma la sesión cuando confirmar=true', async () => {
     mocks.confirmarMatchMock.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', nombre: 'Antonio Gutierrez' })
 
-    const response = await POST(req({ confirmar: true, candidato_id: '11111111-1111-4111-8111-111111111111' }))
+    // El cliente NO manda candidato_id -- lo derivamos server-side dentro de
+    // la RPC confirmar_match_proveedor. Un candidato_id en el body, si
+    // llegara, se ignora por completo (el schema ya no lo acepta).
+    const response = await POST(req({ confirmar: true, candidato_id: 'uuid-de-otro-proveedor-cualquiera' }))
 
-    expect(mocks.confirmarMatchMock).toHaveBeenCalledWith('nuevo-1', '11111111-1111-4111-8111-111111111111')
+    expect(mocks.confirmarMatchMock).toHaveBeenCalledWith('nuevo-1')
     expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111')
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({ success: true, proveedor: { id: '11111111-1111-4111-8111-111111111111', nombre: 'Antonio Gutierrez' } })
-  })
-
-  it('retorna 400 si confirmar=true sin candidato_id', async () => {
-    const response = await POST(req({ confirmar: true }))
-    expect(response.status).toBe(400)
-    expect(mocks.confirmarMatchMock).not.toHaveBeenCalled()
   })
 
   it('activa la cuenta propia (sin fusión) cuando confirmar=false', async () => {

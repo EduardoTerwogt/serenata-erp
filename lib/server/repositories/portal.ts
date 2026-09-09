@@ -49,48 +49,19 @@ export async function buscarCandidatosMatch(nombre: string, excluirId: string): 
 }
 
 // Fusiona la fila recién creada del signup (`nuevoId`, sin historial todavía)
-// hacia el proveedor existente que el usuario confirmó como "soy yo"
-// (`candidatoId`, que sí trae cuentas/historial). El candidato es el que
-// sobrevive -- se le copian las credenciales y documentos del signup, y la
-// fila nueva se borra (no queda ninguna otra referencia a ella: se creó
-// segundos antes, en el mismo request de signup).
-export async function confirmarMatch(nuevoId: string, candidatoId: string): Promise<Proveedor> {
-  const { data: nuevo, error: nuevoError } = await supabaseAdmin
-    .from('proveedores')
-    .select('correo, password_hash')
-    .eq('id', nuevoId)
-    .single()
-  if (nuevoError) throw nuevoError
-
-  // Orden importa: mientras la fila `nuevo` siga existiendo con el mismo
-  // correo (password_hash NOT NULL), copiarle ese correo al candidato
-  // viola el índice único idx_proveedores_correo_portal (dos filas con
-  // password_hash NOT NULL no pueden compartir correo). Por eso primero se
-  // reasignan los documentos y se borra `nuevo`, y solo al final se le
-  // copia el correo/password al candidato -- ya sin conflicto posible.
-  const { error: reasignarDocsError } = await supabaseAdmin
-    .from('proveedor_documentos')
-    .update({ proveedor_id: candidatoId })
-    .eq('proveedor_id', nuevoId)
-  if (reasignarDocsError) throw reasignarDocsError
-
-  const { error: borrarError } = await supabaseAdmin.from('proveedores').delete().eq('id', nuevoId)
-  if (borrarError) throw borrarError
-
-  const { data: candidatoActualizado, error: updateError } = await supabaseAdmin
-    .from('proveedores')
-    .update({
-      correo: nuevo.correo,
-      password_hash: nuevo.password_hash,
-      portal_estado: 'activo',
-      match_candidato_id: null,
-    })
-    .eq('id', candidatoId)
-    .select()
-    .single()
-  if (updateError) throw updateError
-
-  return candidatoActualizado as Proveedor
+// hacia el proveedor existente que el propio servidor ofreció como match
+// (`proveedores.match_candidato_id`, nunca un id que mande el cliente --
+// ver hallazgo de auditoría externa 2026-09-09, Fase 1.2: el navegador podía
+// mandar el uuid de OTRO proveedor y terminar con las credenciales del
+// signup escritas sobre esa fila). Toda la lógica -- incluida la validación
+// de estados y el orden de las operaciones -- vive en la RPC
+// confirmar_match_proveedor (db/migrations/20260909_confirmar_match_proveedor_rpc.sql).
+export async function confirmarMatch(nuevoId: string): Promise<Proveedor> {
+  const { data, error } = await supabaseAdmin.rpc('confirmar_match_proveedor', {
+    p_proveedor_id: nuevoId,
+  })
+  if (error) throw error
+  return data as Proveedor
 }
 
 export async function getCuentasPagarPorProveedor(proveedorId: string): Promise<CuentaPagar[]> {

@@ -11,13 +11,10 @@ export async function POST(request: Request) {
     const body = await request.json()
     const parsed = validate(PortalConfirmarMatchSchema, body)
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
-    const { confirmar, candidato_id } = parsed.data
+    const { confirmar } = parsed.data
 
     if (confirmar) {
-      if (!candidato_id) {
-        return Response.json({ error: 'Falta el id del candidato a confirmar' }, { status: 400 })
-      }
-      const proveedorFinal = await confirmarMatch(portalAuth.proveedorId, candidato_id)
+      const proveedorFinal = await confirmarMatch(portalAuth.proveedorId)
       // La fila original del signup se borró en la fusión -- la sesión debe
       // re-firmarse apuntando al proveedor sobreviviente (el candidato).
       await setPortalSessionCookie(proveedorFinal.id)
