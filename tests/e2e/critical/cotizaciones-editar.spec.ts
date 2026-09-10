@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { login } from '../utils/auth'
 import { mockCotizacionDetailApis } from '../utils/quotation-detail-mocks'
 import { mockRealtimeChannel } from '../utils/realtime-mock'
+import { fulfillJson } from '../utils/http'
 
 test('edita información general de una cotización en BORRADOR (autosave)', async ({ page }) => {
   await mockCotizacionDetailApis(page, { id: 'SH-E2E-EDITAR', estado: 'BORRADOR' })
@@ -151,6 +152,43 @@ test('cambiar el responsable de una partida persiste el cambio', async ({ page }
   expect(patch.responsable_id).toBe('resp-2')
   expect(patch.responsable_nombre).toBe('Juan Pérez')
   await expect(responsableSelect).toHaveValue('resp-2')
+})
+
+test('copiar partidas seleccionadas desde otra cotización las trae a la actual', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-COPIAR', estado: 'BORRADOR' })
+  await page.route('**/api/cotizaciones', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return }
+    await fulfillJson(route, [
+      {
+        id: 'SH-OTRA',
+        cliente: 'Otro Cliente',
+        proyecto: 'Otro Proyecto',
+        estado: 'EMITIDA',
+        items: [
+          { id: 'otra-item-1', cotizacion_id: 'SH-OTRA', categoria: 'Audio', descripcion: 'Boom más micrófono', cantidad: 1, precio_unitario: 5000, importe: 5000, responsable_nombre: null, responsable_id: null, x_pagar: 2000, margen: 3000, orden: 1, notas: null },
+        ],
+      },
+    ])
+  })
+  await login(page, '/cotizaciones/SH-E2E-COPIAR')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-COPIAR' })).toBeVisible()
+
+  await page.getByRole('button', { name: /Copiar desde otra cotización/ }).click()
+  await page.getByText('SH-OTRA').click()
+  await page.getByLabel(/Boom más micrófono/).click()
+
+  const [request] = await Promise.all([
+    page.waitForRequest((req) => req.url().includes('/items/bulk') && req.method() === 'POST'),
+    page.getByRole('button', { name: /Traer a cotización actual/ }).click(),
+  ])
+  const body = request.postDataJSON()
+  expect(body.items).toHaveLength(1)
+  expect(body.items[0].descripcion).toBe('Boom más micrófono')
+
+  // La partida original no estaba en blanco, así que la copiada se agrega al final.
+  const rows = page.locator('table tbody tr')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(1).locator('td').nth(1).locator('input')).toHaveValue('Boom más micrófono')
 })
 
 test('agregar y borrar una partida responde de inmediato', async ({ page }) => {

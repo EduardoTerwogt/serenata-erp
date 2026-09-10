@@ -361,6 +361,59 @@ los merges de las Fases 1 y 2.
 
 ---
 
+### Fase 4 — El grid no pierde capacidades existentes (en curso)
+
+Objetivo: demostrar que el grid nuevo de Partidas (Fase 3) no perdió
+ninguna capacidad de captura que el usuario ya tenía. La mayoría de
+estas capacidades ya existían antes de esta iniciativa; esta fase es
+sobre todo verificación, no funcionalidad nueva.
+
+**Hallazgo de arranque:** ninguna de las 3 capacidades más directamente
+tocadas por Fase 3 (combobox de producto, cambio de responsable, copiar
+partidas de otra cotización) tenía cobertura e2e — un cambio ahí podía
+romperse sin que ningún test lo detectara. Se cerraron los tres huecos:
+
+- `tests/e2e/critical/cotizaciones-editar.spec.ts`: nuevo test
+  "seleccionar una sugerencia de producto autocompleta categoría, precio
+  y x_pagar" — confirma que el combobox de Descripción sigue mandando
+  un solo PATCH atómico con los 4 campos, ahora que usa `rowId` en vez
+  de índice (Fase 3, Bloque 1).
+- Nuevo test "cambiar el responsable de una partida persiste el
+  cambio" — `handleResponsableChange` no lo tocó Fase 3, pero tampoco
+  tenía cobertura.
+- Nuevo test "copiar partidas seleccionadas desde otra cotización las
+  trae a la actual" — ejercita `QuotationCopyItemsModal` de punta a
+  punta (buscar, elegir cotización origen, elegir partidas, importar).
+  Confirma que sigue funcionando sobre el mismo `handleImportItems` ya
+  probado por las plantillas.
+- `tests/e2e/utils/quotation-detail-mocks.ts` gana las opciones
+  `productos`/`responsables` para fijar el catálogo mockeado por test
+  (antes siempre vacío o de un solo responsable fijo).
+
+**Fix de CI pedido por el usuario, no parte del plan original:** el job
+`live` (único nivel que prueba contra Supabase/Drive de prueba reales)
+corría solo en `push` a `main` o por `workflow_dispatch` manual —nunca
+en PR, a propósito, para no exponer secretos de prueba a "ramas
+externas". Ese riesgo no aplica: este repo es privado, sin
+colaboradores externos, y son credenciales de `serenata-erp-test`, no
+de producción. Sin este fix, cada rama/PR de esta iniciativa necesitaba
+que alguien disparara `live` a mano, porque la integración de GitHub de
+Claude Code no tiene permiso de `workflow_dispatch`/`rerun-failed-jobs`
+(403 verificado repetidas veces). Ahora `e2e.yml` también corre `live`
+en `pull_request` — verificado en vivo en
+[PR #16](https://github.com/EduardoTerwogt/serenata-erp/pull/16): el
+job corrió solo, sin intervención manual, por primera vez.
+
+**Verificado:** con las mismas env vars fake que ya usa el job
+`smoke-and-critical` de CI (no son secretos reales, están en el propio
+`e2e.yml`), se pudo correr localmente por primera vez en esta sesión:
+`npm run build`, `npm run test:e2e:smoke` (21/21) y
+`npm run test:e2e:critical` (48/48, incluidos los 3 tests nuevos) —
+verde. `npx tsc --noEmit`, `npm run lint` (mismos warnings
+preexistentes) y `npm test` (402/402) también en verde.
+
+---
+
 ## 4. Features parciales — preguntar antes de tocar
 
 - **Google Calendar desde Proyectos:** la UI existe, el flujo end-to-end no está
