@@ -158,6 +158,21 @@ export async function DELETE(
 
     await recalculateQuotationHeader(id)
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
+    // Evento confirmado por servidor tras el commit -- la fila ya no existe,
+    // así que no hay revision que mandar.
+    void sendRealtimeBroadcast([{
+      topic: `cotizacion:${id}`,
+      event: 'item_confirmed',
+      payload: {
+        cotizacion_id: id,
+        item_id: itemId,
+        revision: null,
+        mutation_id: null,
+        operation: 'delete',
+        at: new Date().toISOString(),
+      },
+      private: true,
+    }])
     return Response.json({ ok: true })
   } catch (error) {
     console.error('[DELETE /api/cotizaciones/:id/items/:itemId] Error eliminando item:', error)

@@ -1,6 +1,7 @@
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
 import { saveNotasInternas } from '@/lib/server/quotations/persistence'
+import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 
 export async function PATCH(
   request: Request,
@@ -19,6 +20,15 @@ export async function PATCH(
         : String(body.notas_internas)
 
     await saveNotasInternas(id, notas)
+    // Evento confirmado por servidor tras el commit -- antes Notas solo se
+    // refrescaba vía `section_saved` (aviso del navegador que guardó, sin
+    // acuse del servidor).
+    void sendRealtimeBroadcast([{
+      topic: `cotizacion:${id}`,
+      event: 'notas_confirmed',
+      payload: { cotizacion_id: id, at: new Date().toISOString() },
+      private: true,
+    }])
     return Response.json(await getCotizacionById(id))
   } catch (error) {
     console.error('[PATCH /api/cotizaciones/:id/notas] Error guardando notas:', error)

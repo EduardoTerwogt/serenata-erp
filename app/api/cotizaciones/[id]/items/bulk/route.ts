@@ -4,6 +4,7 @@ import { getCotizacionById, upsertItems, findOrCreateProveedorByNombre } from '@
 import { normalizeQuotationItem } from '@/lib/quotations/calculations'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemCotizacion } from '@/lib/types'
 
@@ -126,6 +127,22 @@ export async function POST(
 
     const updatedQuotation = await recalculateQuotationHeader(id)
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
+    // Evento confirmado por servidor tras el commit -- una sola señal para
+    // toda la alta masiva (importar plantilla o copiar de otra cotización),
+    // no una por fila: el cliente reconcilia leyendo la cotización completa.
+    void sendRealtimeBroadcast([{
+      topic: `cotizacion:${id}`,
+      event: 'item_confirmed',
+      payload: {
+        cotizacion_id: id,
+        item_id: null,
+        revision: null,
+        mutation_id: null,
+        operation: 'bulk',
+        at: new Date().toISOString(),
+      },
+      private: true,
+    }])
 
     // Autoguardados de catálogo: explícitamente no críticos, no deben retrasar la
     // respuesta que el usuario está esperando para ver sus partidas.

@@ -48,6 +48,7 @@ interface UseQuotationPresenceResult {
   latestItemConfirmed: ItemConfirmedPayload | null
   latestGeneralConfirmed: SectionConfirmedPayload | null
   latestTotalesConfirmed: SectionConfirmedPayload | null
+  latestNotasConfirmed: SectionConfirmedPayload | null
   savedSections: Partial<Record<QuotationPresenceSection, number>>
   setActiveSection: (section: QuotationPresenceSection | null) => void
   releaseSection: (section?: QuotationPresenceSection) => void
@@ -101,10 +102,19 @@ interface ItemCellSignalPayload {
  */
 export interface ItemConfirmedPayload {
   cotizacion_id: string
-  item_id: string
+  /** `null` en operaciones que ya no tienen una fila puntual, como `bulk`. */
+  item_id: string | null
   revision: number | null
   mutation_id: string | null
   at: string
+  /**
+   * Ausente = 'update' (compatibilidad con clientes/servidores previos a Fase
+   * 6A, que solo emitían esto desde el PATCH). No cambia cómo reacciona el
+   * cliente hoy -- `reconciliarConServidor()` ya reconstruye altas/bajas con
+   * una relectura completa + merge, sin importar qué operación las causó --
+   * pero deja la intención explícita en el evento para consumidores futuros.
+   */
+  operation?: 'create' | 'update' | 'delete' | 'bulk'
 }
 
 export interface SectionConfirmedPayload {
@@ -125,6 +135,7 @@ interface PresenceState {
   latestItemConfirmed: ItemConfirmedPayload | null
   latestGeneralConfirmed: SectionConfirmedPayload | null
   latestTotalesConfirmed: SectionConfirmedPayload | null
+  latestNotasConfirmed: SectionConfirmedPayload | null
   isConnected: boolean
 }
 
@@ -137,6 +148,7 @@ const initialPresenceState: PresenceState = {
   latestItemConfirmed: null,
   latestGeneralConfirmed: null,
   latestTotalesConfirmed: null,
+  latestNotasConfirmed: null,
   isConnected: false,
 }
 
@@ -149,6 +161,7 @@ type PresenceAction =
   | { type: 'item_confirmed'; payload: ItemConfirmedPayload }
   | { type: 'general_confirmed'; payload: SectionConfirmedPayload }
   | { type: 'totales_confirmed'; payload: SectionConfirmedPayload }
+  | { type: 'notas_confirmed'; payload: SectionConfirmedPayload }
   | { type: 'section_saved'; userId: string; section: QuotationPresenceSection }
   | { type: 'set_connected'; connected: boolean }
 
@@ -186,6 +199,8 @@ function presenceReducer(state: PresenceState, action: PresenceAction): Presence
       return { ...state, latestGeneralConfirmed: action.payload }
     case 'totales_confirmed':
       return { ...state, latestTotalesConfirmed: action.payload }
+    case 'notas_confirmed':
+      return { ...state, latestNotasConfirmed: action.payload }
     case 'section_saved':
       return {
         ...state,
@@ -208,7 +223,7 @@ export function useQuotationPresence({
   currentUser,
 }: UseQuotationPresenceOptions): UseQuotationPresenceResult {
   const [state, dispatch] = useReducer(presenceReducer, initialPresenceState)
-  const { rawOnlineUsers, activeSectionOverrides, savedSections, itemCellEditors, latestItemMutation, latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, isConnected } = state
+  const { rawOnlineUsers, activeSectionOverrides, savedSections, itemCellEditors, latestItemMutation, latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, latestNotasConfirmed, isConnected } = state
   const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
   const presenceKeyRef = useRef('')
@@ -429,6 +444,12 @@ export function useQuotationPresence({
       dispatch({ type: 'totales_confirmed', payload: { ...confirmed } })
     })
 
+    channel.on('broadcast', { event: 'notas_confirmed' }, ({ payload }) => {
+      const confirmed = payload as SectionConfirmedPayload | undefined
+      if (!confirmed?.cotizacion_id) return
+      dispatch({ type: 'notas_confirmed', payload: { ...confirmed } })
+    })
+
     channel.on('broadcast', { event: 'section_saved' }, ({ payload }) => {
       const saved = payload as SectionSavedPayload | undefined
       if (!saved?.user_id || saved.user_id === identity.userId) return
@@ -516,6 +537,7 @@ export function useQuotationPresence({
     latestItemConfirmed,
     latestGeneralConfirmed,
     latestTotalesConfirmed,
+    latestNotasConfirmed,
     savedSections,
     setActiveSection,
     releaseSection,

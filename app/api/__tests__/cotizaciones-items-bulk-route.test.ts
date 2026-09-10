@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   triggerSheetsSyncMock: vi.fn(),
   deleteMock: vi.fn(),
   afterMock: vi.fn(),
+  sendRealtimeBroadcastMock: vi.fn(async () => undefined),
 }))
 
 vi.mock('next/server', () => ({ after: mocks.afterMock }))
@@ -24,6 +25,7 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
   runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
 }))
 vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
+vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
     from: () => ({ delete: () => ({ eq: () => ({ in: mocks.deleteMock }) }) }),
@@ -128,5 +130,24 @@ describe('POST /api/cotizaciones/[id]/items/bulk', () => {
     const res = await POST(req({ items: [] }), { params })
     expect(res.status).toBe(400)
     expect(mocks.upsertItemsMock).not.toHaveBeenCalled()
+  })
+
+  it('emite un único item_confirmed operation=bulk tras el commit, sin partidas en el payload', async () => {
+    await POST(req({ items: [item(), item({ descripcion: 'Luz' })] }), { params })
+
+    expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledTimes(1)
+    expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([{
+      topic: 'cotizacion:SH001',
+      event: 'item_confirmed',
+      payload: {
+        cotizacion_id: 'SH001',
+        item_id: null,
+        revision: null,
+        mutation_id: null,
+        operation: 'bulk',
+        at: expect.any(String),
+      },
+      private: true,
+    }])
   })
 })
