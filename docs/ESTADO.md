@@ -1,6 +1,6 @@
 # Estado real del proyecto
 
-**Última actualización:** 2026-09-09 · `main` en `d203044`, branch `claude/eloquent-lamport-h7effg` activa
+**Última actualización:** 2026-09-10 · `main` en `0b3cea3` · Fase 6 (reabierta, 6A-6F) cerrada y mergeada -- sigue Fase 7
 
 Este documento es la foto honesta del repo: qué funciona de verdad, qué está a
 medias y qué está roto ahora mismo. Si vas a retomar el trabajo, léelo antes que
@@ -31,6 +31,14 @@ cualquier otra cosa.
 ---
 
 ## 2. Edición colaborativa de cotizaciones — trabajo en curso
+
+> **Esta sección describe el diseño previo a la Fase 6 (reabierta).** Con el
+> cierre de 6A-6F (sección 3 más abajo), `section_signal`/`item_cell_signal`/
+> `item_mutation` cliente→cliente ya no existen y el heartbeat pasó de 5s como
+> garantía primaria a 20s como red de última instancia detrás de los eventos
+> `*_confirmed`. Se deja este texto como registro de por qué se construyó así
+> originalmente; para el diseño vigente ver la sección 3, subsección "Fase 6
+> (reabierta) — cierre real".
 
 Es el frente activo. Dos personas pueden tener abierta la misma cotización
 (`/cotizaciones/[id]`) y editarla a la vez.
@@ -75,21 +83,16 @@ Los tres se detectaron con el nivel `live`; ningún mock los habría visto.
 
 ### Lo que falta
 
-- **[ROJO] Un test live falla:** `cotizaciones-colaboracion.spec.ts:282` —
-  *"estar en una sección la señala pero no impide que el otro escriba en ella"*.
-  La aserción que falla es que a B le aparezca el aviso *"… está editando esta
-  sección"* (`SectionEditBadge`, `app/cotizaciones/[id]/page.tsx:1038`). El resto
-  del test (que el cambio de A llegue a B, y que B pueda guardar su propio campo)
-  no llegó a evaluarse.
-  **Diagnóstico pendiente, y hay que decidir entre dos lecturas:**
-  a) es un defecto de producto — la señal de presencia no se emite o no llega
-  (plausible: es el mismo `send()` → REST → 403 medido arriba), y entonces se
-  arregla el producto; o
-  b) el aviso es, por diseño, una pista best-effort que no se garantiza, y
-  entonces el test debe afirmar el comportamiento sustantivo (que ambos escriban
-  sin pisarse) en vez de la insignia.
-  **No se vale cambiar el test solo para que pase.** Últimas corridas de CI: run
-  292 → 14 pasan, 1 falla, 3 no llegan a correr.
+- ~~**[ROJO] Un test live falla:** `cotizaciones-colaboracion.spec.ts:282`~~ —
+  **arreglado de raíz en la Fase 6 (reabierta), lectura (a) confirmada: era un
+  defecto de producto.** La causa no era solo el `send()` → REST → 403 medido
+  aquí (eso se resolvió al pasar a `channel.track()` puro en 6E) sino, además,
+  algo más profundo encontrado mientras se cerraba esta fase en CI real: el
+  canal de Presence de un colaborador podía caer a `CLOSED` sin que nada lo
+  reconectara, dejando esa sesión sin awareness por el resto de la vida de la
+  pestaña. Ver el detalle completo, con los logs que lo probaron, en la
+  sección 3 → "Fase 6 (reabierta)". El test pasó 9/9 dos veces seguidas en CI
+  (`live`) con el fix de reconexión, incluido el caso de esta línea.
 - Verificar en local antes de pushear sigue siendo imposible sin abrir la salida de
   red a `ozrtsludmcguvgqdjicn.supabase.co` (el sandbox la tiene bloqueada). Mientras
   tanto, el ciclo es empujar y esperar ~20 min de CI, con el costo que eso tiene.
@@ -773,6 +776,64 @@ escenarios), no como brecha silenciosa.
 
 Ver el mensaje de PR/merge de cada sub-fase para el detalle línea por línea
 de cada cambio y su verificación local.
+
+**Cierre real, con los 3 bugs que aparecieron llevando el PR a verde (ninguno
+visible en local, los tres encontrados y arreglados sobre datos/CI reales):**
+
+1. **Conflicto de merge genuino en el PR.** La branch traía un commit
+   pre-squash (`6ad957a`, contenido idéntico al squash-merge `53e87ff` que ya
+   estaba en `main`, ambos hijos del mismo padre) que producía un conflicto
+   real de 3-way merge pese a que los árboles eran idénticos en contenido.
+   Se resolvió con `git rebase --onto origin/main 6ad957a <tip>` (deja caer
+   el commit duplicado, replica solo lo neto-nuevo) y se confirmó sin
+   conflicto vía `git merge-tree` antes de forzar el push. Esto también
+   explicó por qué CI había dejado de dispararse en varios pushes previos.
+2. **`patch_cotizacion_general`/`totales`/`patch_item_cotizacion` rechazaban
+   con 409 un guardado sin conflicto real.** `to_jsonb(fila) -> campo` para
+   una columna SQL NULL no devuelve SQL NULL -- devuelve el jsonb `'null'`,
+   así que `coalesce()` nunca sustituía y el chequeo de conflicto comparaba
+   `null` contra `""` como si fueran valores distintos. Se reprodujo en vivo
+   contra `serenata-erp-test` vía el MCP de Supabase (fila de prueba
+   `SH-DEBUG-TEST-1`, creada y borrada después de verificar) antes de
+   confiar en el fix. Corregido con una función auxiliar
+   (`jsonb_null_as_empty_string`) que normaliza `'null'::jsonb` a `'""'`
+   explícitamente -- migración
+   `db/migrations/20260910_fix_null_vs_empty_conflict_false_positive.sql`,
+   aplicada a `serenata-erp-test` y `serenata-erp` (aditiva, `create or
+   replace function`).
+3. **El canal de Presence podía caer a `CLOSED` sin que nada lo
+   reconectara.** Confirmado con evidencia directa de log de CI (no
+   supuesto): tras dos corridas de `live` seguidas fallando en el mismo
+   badge de sección pese a reintentos de `track()`, se agregó logging
+   explícito al estado del canal y la siguiente corrida mostró
+   `[useQuotationPresence] canal de Realtime perdió la conexión CLOSED`
+   para ambos colaboradores, minutos antes de que corriera el test --
+   nada volvía a llamar `channel.subscribe()`. La ruta de datos no lo
+   sufría porque `RECONCILIACION_MS` es un poll de 20s independiente del
+   canal; Presence no tenía ningún respaldo así. Fix real:
+   `hooks/useQuotationPresence.ts` reconecta (backoff 1s/2s/4s/8s, tope
+   10s) cuando el canal entra en `CHANNEL_ERROR`/`TIMED_OUT`/`CLOSED`,
+   reusando la misma autorización y los mismos 5 listeners.
+
+**Resultado final, verificado dos veces en `live` real (no solo en local):**
+`cotizaciones-colaboracion.spec.ts` **9/9 en verde**, incluido el caso de la
+línea ~282 que era conocido desde la Fase 0. `smoke-and-critical` y
+`Migrations` también en verde. Mergeado a `main` (squash) como
+[PR #20](https://github.com/EduardoTerwogt/serenata-erp/pull/20), commit
+`0b3cea3`. Confirmado en verde **sobre el propio push a `main`** (no solo en
+el PR): `Test Suite`, `Migrations` y `E2E` (los dos jobs, `live` y
+`smoke-and-critical`) los tres en success sobre `0b3cea3`.
+
+**Desviación del plan original y su justificación:** el plan de Fase 6
+reabierta no anticipaba estos 3 bugs porque ninguno era visible sin CI/datos
+reales -- el conflicto de merge solo aparece al abrir el PR contra el
+`main` real, el bug de NULL-vs-"" solo se dispara con una columna que nunca
+tuvo valor (no cubierto por los datos de prueba unitarios existentes), y el
+canal caído es un modo de falla de infraestructura de Realtime bajo CI que
+ningún mock reproduce. Los tres se diagnosticaron con causa raíz verificada
+(rebase + `merge-tree`, reproducción directa por SQL, logging + 2 corridas
+de log de CI) antes de aplicar cada fix, siguiendo la misma disciplina de
+"no adivinar, medir" que ya regía el resto de esta iniciativa.
 
 - **Google Calendar desde Proyectos:** la UI existe, el flujo end-to-end no está
   cerrado. En planeación sí funciona; no asumir que es lo mismo.
