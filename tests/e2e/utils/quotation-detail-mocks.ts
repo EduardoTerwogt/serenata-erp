@@ -189,15 +189,19 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
 
   const itemLatency = () => options.itemLatencyMs ? new Promise((r) => setTimeout(r, options.itemLatencyMs)) : Promise.resolve()
 
-  // POST /items -> crea una partida vacía, igual que el endpoint real
+  // POST /items -> crea una partida vacía, igual que el endpoint real. Fase 6B:
+  // el cliente manda su propio id (crypto.randomUUID(), ya pintado en pantalla
+  // antes de que esto responda) -- el mock lo respeta, igual que la ruta real,
+  // para que el id nunca cambie entre lo optimista y lo confirmado.
   await page.route(`**/api/cotizaciones/${options.id}/items`, async (route) => {
     if (route.request().method() !== 'POST') {
       await route.fallback()
       return
     }
+    const body = (route.request().postDataJSON() || {}) as { id?: string }
     await itemLatency()
     const created = {
-      id: `item-detail-${cotizacion.items.length + 1}`,
+      id: body.id || `item-detail-${cotizacion.items.length + 1}`,
       cotizacion_id: options.id,
       categoria: '',
       descripcion: '',

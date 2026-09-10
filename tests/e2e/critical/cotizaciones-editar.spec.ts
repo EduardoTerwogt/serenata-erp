@@ -432,19 +432,27 @@ test('agregar una fila la pinta antes de que responda el servidor', async ({ pag
   await expect(rows).toHaveCount(1)
 
   const inicio = Date.now()
-  await page.getByRole('button', { name: /Agregar fila/ }).click()
+  const [creacion] = await Promise.all([
+    page.waitForRequest((req) => req.url().endsWith('/items') && req.method() === 'POST'),
+    page.getByRole('button', { name: /Agregar fila/ }).click(),
+  ])
   await expect(rows).toHaveCount(2)
   // Aparece muy por debajo de los 1500 ms que tarda el POST.
   expect(Date.now() - inicio).toBeLessThan(1000)
 
-  // Y editarla antes de que llegue el id real guarda igual, contra el id definitivo.
+  // Fase 6B: la fila nace con su id definitivo (el que el propio POST manda) --
+  // no hay un id provisional que luego cambie.
+  const idDefinitivo = creacion.postDataJSON().id as string
+  expect(idDefinitivo).toMatch(/^[0-9a-f-]{36}$/i)
+
+  // Editarla antes de que responda el servidor guarda igual, contra ese mismo id:
+  // el PATCH espera a que el alta termine (awaitRowCreation) en vez de fallar.
   const nuevaDescripcion = rows.nth(1).locator('td').nth(1).locator('input')
   await nuevaDescripcion.fill('Escrito antes del id')
   const [patch] = await Promise.all([
-    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH'),
+    page.waitForRequest((req) => req.url().endsWith(`/items/${idDefinitivo}`) && req.method() === 'PATCH'),
     nuevaDescripcion.blur(),
   ])
-  expect(patch.url()).not.toContain('temp:')
   expect(patch.postDataJSON().descripcion).toBe('Escrito antes del id')
 })
 
