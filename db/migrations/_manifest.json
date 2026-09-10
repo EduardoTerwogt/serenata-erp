@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-10T19:19:13.300Z",
-  "count": 51,
+  "generated_at": "2026-09-10T19:54:50.109Z",
+  "count": 52,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -52,6 +52,7 @@
     "20260910_cotizacion_general_totales_revision_conflict.sql",
     "20260910_emitir_cotizacion_rpc.sql",
     "20260910_fix_null_vs_empty_conflict_false_positive.sql",
-    "20260910_item_cotizacion_revision_conflict.sql"
+    "20260910_item_cotizacion_revision_conflict.sql",
+    "20260910_upsert_items_cotizacion_guarded.sql"
   ]
 }
