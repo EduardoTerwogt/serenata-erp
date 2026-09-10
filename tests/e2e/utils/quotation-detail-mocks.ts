@@ -284,7 +284,10 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
       return
     }
 
-    const body = (route.request().postDataJSON() || {}) as Record<string, unknown>
+    // base/mutation_id son protocolo de conflicto (Fase 2/6C), nunca campos de la
+    // partida: si se fusionaran tal cual, ensuciarían el objeto que este mock reusa
+    // como "la cotización" real.
+    const { base: _base, mutation_id: _mutationId, ...body } = (route.request().postDataJSON() || {}) as Record<string, unknown>
     if (index >= 0) {
       const merged = { ...cotizacion.items[index], ...body }
       merged.importe = Number(merged.cantidad || 0) * Number(merged.precio_unitario || 0)

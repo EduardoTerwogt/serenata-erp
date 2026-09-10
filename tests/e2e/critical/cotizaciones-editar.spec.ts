@@ -120,6 +120,11 @@ test('seleccionar una sugerencia de producto autocompleta categoría, precio y x
   expect(patch.categoria).toBe('Grip')
   expect(patch.precio_unitario).toBe(25000)
   expect(patch.x_pagar).toBe(12000)
+  // Fase 6C: el autofill manda "base" para los 4 campos que toca -- si alguien más
+  // ya editó alguno (p. ej. Precio) desde el último valor confirmado, el servidor
+  // rechaza la operación completa en vez de pisarlo en silencio.
+  expect(Object.keys(patch.base || {}).sort()).toEqual(['categoria', 'descripcion', 'precio_unitario', 'x_pagar'])
+  expect(typeof patch.mutation_id).toBe('string')
 
   await expect(descripcion).toHaveValue('Renta de grúa Technocrane')
   await expect(firstRow.locator('td').nth(0).locator('input')).toHaveValue('Grip')
@@ -151,6 +156,10 @@ test('cambiar el responsable de una partida persiste el cambio', async ({ page }
   const patch = request.postDataJSON()
   expect(patch.responsable_id).toBe('resp-2')
   expect(patch.responsable_nombre).toBe('Juan Pérez')
+  // Fase 6C: manda "base" de responsable_id -- protege contra un cambio de
+  // responsable concurrente pisando en silencio lo que otro colaborador ya guardó.
+  expect(patch.base).toEqual({ responsable_id: 'resp-1', responsable_nombre: 'Sofía Ramírez' })
+  expect(typeof patch.mutation_id).toBe('string')
   await expect(responsableSelect).toHaveValue('resp-2')
 })
 

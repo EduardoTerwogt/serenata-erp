@@ -137,6 +137,17 @@ function buildItemFieldBase(server: ItemCotizacion | undefined, field: Quotation
   }
 }
 
+/**
+ * Igual que `buildItemFieldBase`, pero para una operación multi-campo (seleccionar
+ * producto, cambiar responsable): junta la base de cada campo que la operación toca
+ * en un solo objeto, para que la RPC evalúe conflicto de forma atómica sobre todos
+ * a la vez -- si cualquiera está desactualizado, se rechaza la operación completa.
+ */
+function buildItemFieldsBase(server: ItemCotizacion | undefined, fields: QuotationItemCellField[]): Record<string, unknown> | null {
+  if (!server) return null
+  return fields.reduce<Record<string, unknown>>((acc, field) => ({ ...acc, ...(buildItemFieldBase(server, field) ?? {}) }), {})
+}
+
 function mapItemToFormItem(item: ItemCotizacion): QuotationFormValues['items'][number] {
   return {
     id: item.id,
@@ -1302,41 +1313,83 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }, [broadcastItemMutation, deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, markSectionSaved, replace, resyncPartidas])
 
+  // Operación atómica multi-campo: manda "base" para los 4 campos que el autofill
+  // toca, así la RPC la rechaza completa (ningún campo se aplica a medias) si
+  // cualquiera de ellos cambió en el servidor desde el último valor confirmado que
+  // este cliente conoce -- p. ej. si alguien más ya editó Precio mientras se elegía
+  // el producto, el autofill NUNCA lo pisa en silencio.
   const handleSelectProduct = useCallback(async (rowId: string, producto: { descripcion: string; categoria: string | null; precio_unitario: number; x_pagar_sugerido: number }) => {
     const index = getItemIndexByRowId(rowId)
     if (index < 0) return
+    const fields: QuotationItemCellField[] = ['descripcion', 'categoria', 'precio_unitario', 'x_pagar']
+    const base = buildItemFieldsBase(itemsServerRef.current[rowId], fields)
+    for (const field of fields) { if (base) itemCellBaseRef.current[getItemCellKey(rowId, field)] = base }
     seleccionarProducto(rowId, producto as never)
     try {
-      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }))
+      const mutationId = crypto.randomUUID()
+      rememberOwnItemMutationId(mutationId)
+      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }, { base: base ?? undefined, mutationId }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
+        for (const field of fields) clearItemCellConflict(rowId, field)
       }
       markSectionSaved('partidas')
     } catch (saveError: unknown) {
+      if (saveError instanceof PatchConflictError) {
+        // El mismo banner de conflicto por celda que usan las ediciones normales --
+        // deja elegir, campo por campo, entre lo que sugirió el producto (attempted)
+        // y lo que hay ahora en el servidor (current). Nada se descarta en silencio:
+        // como la RPC es atómica, si hubo conflicto ningún campo se guardó.
+        setItemCellConflicts((prev) => {
+          const next = { ...prev }
+          for (const field of fields) {
+            const detail = saveError.fields[field]
+            if (detail) next[getItemCellKey(rowId, field)] = { ...next[getItemCellKey(rowId, field)], [field]: detail }
+          }
+          return next
+        })
+        return
+      }
       setError(saveError instanceof Error ? saveError.message : 'Error aplicando producto')
       void resyncPartidas()
     }
-  }, [broadcastItemMutation, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, resyncPartidas, seleccionarProducto, upsertLocalItemState])
+  }, [broadcastItemMutation, clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, upsertLocalItemState])
 
   const handleResponsableChange = useCallback(async (rowId: string, responsableId: string) => {
     const index = getItemIndexByRowId(rowId)
     if (index < 0) return
     const responsable = responsables.find((item) => item.id === responsableId)
+    const fields: QuotationItemCellField[] = ['responsable_id']
+    const base = buildItemFieldsBase(itemsServerRef.current[rowId], fields)
+    if (base) itemCellBaseRef.current[getItemCellKey(rowId, 'responsable_id')] = base
     setValue(`items.${index}.responsable_id`, responsableId)
     setValue(`items.${index}.responsable_nombre`, responsable?.nombre ?? '')
     try {
-      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' }))
+      const mutationId = crypto.randomUUID()
+      rememberOwnItemMutationId(mutationId)
+      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' }, { base: base ?? undefined, mutationId }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
+        clearItemCellConflict(rowId, 'responsable_id')
       }
       markSectionSaved('partidas')
     } catch (saveError: unknown) {
+      if (saveError instanceof PatchConflictError) {
+        const detail = saveError.fields.responsable_id
+        if (detail) {
+          setItemCellConflicts((prev) => ({
+            ...prev,
+            [getItemCellKey(rowId, 'responsable_id')]: { ...prev[getItemCellKey(rowId, 'responsable_id')], responsable_id: detail },
+          }))
+        }
+        return
+      }
       setError(saveError instanceof Error ? saveError.message : 'Error actualizando responsable')
       void resyncPartidas()
     }
-  }, [broadcastItemMutation, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, resyncPartidas, responsables, setValue, upsertLocalItemState])
+  }, [broadcastItemMutation, clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, responsables, setValue, upsertLocalItemState])
 
   // Presencia estilo Sheets: saber que alguien más está en una celda sirve para
   // resaltarla y avisar, nunca para deshabilitar nada.
