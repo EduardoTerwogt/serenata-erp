@@ -298,100 +298,130 @@ export function useQuotationPresence({
       return
     }
 
-    const random = Math.random().toString(36).slice(2, 8)
-    presenceKeyRef.current = `${identity.userId}-${random}`
-
-    // Canal PRIVADO: requiere autorizar la sesión de Realtime (JWT corto
-    // derivado de la sesión de NextAuth) antes de unirse -- ver
-    // lib/realtime/authorize.ts y db/migrations/20260909_realtime_broadcast_authorization.sql.
-    const channel = createPrivateChannel(`cotizacion:${cotizacionId}`, {
-      presence: { key: presenceKeyRef.current },
-    })
-
-    channel.on('presence', { event: 'sync' }, () => {
-      const presenceState = channel.presenceState<QuotationPresenceUser>()
-      const users = Object.values(presenceState)
-        .flatMap((entries) => entries)
-        .filter(Boolean)
-      dispatchAwareness({ type: 'sync_online_users', users })
-    })
-
-    channel.on('broadcast', { event: 'item_confirmed' }, ({ payload }) => {
-      const confirmed = payload as ItemConfirmedPayload | undefined
-      if (!confirmed?.item_id) return
-      dispatchConfirmedEvent({ type: 'item_confirmed', payload: { ...confirmed } })
-    })
-
-    channel.on('broadcast', { event: 'general_confirmed' }, ({ payload }) => {
-      const confirmed = payload as SectionConfirmedPayload | undefined
-      if (!confirmed?.cotizacion_id) return
-      dispatchConfirmedEvent({ type: 'general_confirmed', payload: { ...confirmed } })
-    })
-
-    channel.on('broadcast', { event: 'totales_confirmed' }, ({ payload }) => {
-      const confirmed = payload as SectionConfirmedPayload | undefined
-      if (!confirmed?.cotizacion_id) return
-      dispatchConfirmedEvent({ type: 'totales_confirmed', payload: { ...confirmed } })
-    })
-
-    channel.on('broadcast', { event: 'notas_confirmed' }, ({ payload }) => {
-      const confirmed = payload as SectionConfirmedPayload | undefined
-      if (!confirmed?.cotizacion_id) return
-      dispatchConfirmedEvent({ type: 'notas_confirmed', payload: { ...confirmed } })
-    })
-
     let cancelled = false
     let cancelTokenRefresh: (() => void) | null = null
+    let reconnectTimer: number | null = null
+    let reconnectAttempt = 0
 
-    const join = async () => {
-      // Si autorizar falla (red, endpoint caído), igual se intenta unir: el
-      // join simplemente lo rechaza la política RLS -- Presence sencillamente no
-      // tiene nada que trackear, sin la ventana de "se mandó pero se perdió en
-      // silencio" que tenía el broadcast ad-hoc que este canal usaba antes.
-      try {
-        const ttlSeconds = await authorizeRealtime()
-        if (!cancelled) cancelTokenRefresh = scheduleTokenRefresh(ttlSeconds)
-      } catch (e) {
-        console.error('[useQuotationPresence] No se pudo autorizar el canal de Realtime', e)
-      }
+    // Root cause confirmado en vivo (CI, 2026-09-10): el canal de un colaborador se
+    // cae a CLOSED apenas arranca la sesión y, sin esto, se queda muerto para
+    // siempre -- nada volvía a llamar `channel.subscribe()`. La ruta de DATOS
+    // sobrevive porque RECONCILIACION_MS (page.tsx) es un poll de 20s independiente
+    // del canal; Presence no tiene ningún respaldo así, así que un canal muerto
+    // significa badges que nunca vuelven a aparecer por el resto de la sesión.
+    // Reintentos de `trackPresence` (más abajo) no alcanzan solos: reintentar un
+    // `track()` contra un canal ya CLOSED nunca va a funcionar.
+    const connect = () => {
       if (cancelled) return
 
-      channel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          dispatchAwareness({ type: 'set_connected', connected: true })
-          await channel.track({
-            user_id: identity.userId,
-            email: identity.email,
-            name: identity.name,
-            active_section: activeSectionRef.current,
-            entity_id: activeCellRef.current?.rowId ?? null,
-            field: activeCellRef.current?.field ?? null,
-            online_at: new Date().toISOString(),
-          })
-          return
-        }
+      const random = Math.random().toString(36).slice(2, 8)
+      presenceKeyRef.current = `${identity.userId}-${random}`
 
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          // Nunca vimos esto en logs de CI durante el badge de Presence que falla
-          // intermitentemente (tests/e2e/live/cotizaciones-colaboracion.spec.ts:282)
-          // -- este log es lo que confirmaría o descartaría un canal caído como causa
-          // la próxima vez que se reproduzca.
-          console.error('[useQuotationPresence] canal de Realtime perdió la conexión', status)
-          dispatchAwareness({ type: 'set_connected', connected: false })
-        }
+      // Canal PRIVADO: requiere autorizar la sesión de Realtime (JWT corto
+      // derivado de la sesión de NextAuth) antes de unirse -- ver
+      // lib/realtime/authorize.ts y db/migrations/20260909_realtime_broadcast_authorization.sql.
+      const channel = createPrivateChannel(`cotizacion:${cotizacionId}`, {
+        presence: { key: presenceKeyRef.current },
       })
+
+      channel.on('presence', { event: 'sync' }, () => {
+        const presenceState = channel.presenceState<QuotationPresenceUser>()
+        const users = Object.values(presenceState)
+          .flatMap((entries) => entries)
+          .filter(Boolean)
+        dispatchAwareness({ type: 'sync_online_users', users })
+      })
+
+      channel.on('broadcast', { event: 'item_confirmed' }, ({ payload }) => {
+        const confirmed = payload as ItemConfirmedPayload | undefined
+        if (!confirmed?.item_id) return
+        dispatchConfirmedEvent({ type: 'item_confirmed', payload: { ...confirmed } })
+      })
+
+      channel.on('broadcast', { event: 'general_confirmed' }, ({ payload }) => {
+        const confirmed = payload as SectionConfirmedPayload | undefined
+        if (!confirmed?.cotizacion_id) return
+        dispatchConfirmedEvent({ type: 'general_confirmed', payload: { ...confirmed } })
+      })
+
+      channel.on('broadcast', { event: 'totales_confirmed' }, ({ payload }) => {
+        const confirmed = payload as SectionConfirmedPayload | undefined
+        if (!confirmed?.cotizacion_id) return
+        dispatchConfirmedEvent({ type: 'totales_confirmed', payload: { ...confirmed } })
+      })
+
+      channel.on('broadcast', { event: 'notas_confirmed' }, ({ payload }) => {
+        const confirmed = payload as SectionConfirmedPayload | undefined
+        if (!confirmed?.cotizacion_id) return
+        dispatchConfirmedEvent({ type: 'notas_confirmed', payload: { ...confirmed } })
+      })
+
+      const scheduleReconnect = () => {
+        if (cancelled || reconnectTimer !== null) return
+        reconnectAttempt += 1
+        const delayMs = Math.min(1_000 * 2 ** (reconnectAttempt - 1), 10_000)
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = null
+          void supabaseBrowser.removeChannel(channel)
+          if (channelRef.current === channel) channelRef.current = null
+          connect()
+        }, delayMs)
+      }
+
+      const join = async () => {
+        // Si autorizar falla (red, endpoint caído), igual se intenta unir: el
+        // join simplemente lo rechaza la política RLS -- Presence sencillamente no
+        // tiene nada que trackear, sin la ventana de "se mandó pero se perdió en
+        // silencio" que tenía el broadcast ad-hoc que este canal usaba antes.
+        try {
+          const ttlSeconds = await authorizeRealtime()
+          if (!cancelled) cancelTokenRefresh = scheduleTokenRefresh(ttlSeconds)
+        } catch (e) {
+          console.error('[useQuotationPresence] No se pudo autorizar el canal de Realtime', e)
+        }
+        if (cancelled) return
+
+        channel.subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            reconnectAttempt = 0
+            dispatchAwareness({ type: 'set_connected', connected: true })
+            await channel.track({
+              user_id: identity.userId,
+              email: identity.email,
+              name: identity.name,
+              active_section: activeSectionRef.current,
+              entity_id: activeCellRef.current?.rowId ?? null,
+              field: activeCellRef.current?.field ?? null,
+              online_at: new Date().toISOString(),
+            })
+            return
+          }
+
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.error('[useQuotationPresence] canal de Realtime perdió la conexión, reconectando', status)
+            dispatchAwareness({ type: 'set_connected', connected: false })
+            scheduleReconnect()
+          }
+        })
+      }
+
+      channelRef.current = channel
+      void join()
     }
 
-    channelRef.current = channel
-    void join()
+    connect()
 
     return () => {
       cancelled = true
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer)
       cancelTokenRefresh?.()
       dispatchAwareness({ type: 'reset' })
       dispatchConfirmedEvent({ type: 'reset' })
-      void channel.untrack().catch(() => null)
-      void supabaseBrowser.removeChannel(channel)
+      const channel = channelRef.current
+      if (channel) {
+        void channel.untrack().catch(() => null)
+        void supabaseBrowser.removeChannel(channel)
+      }
       channelRef.current = null
     }
   }, [cotizacionId, enabled, identity.email, identity.name, identity.userId])
