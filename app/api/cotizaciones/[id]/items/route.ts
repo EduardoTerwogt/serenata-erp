@@ -71,9 +71,7 @@ export async function POST(
     after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items') })
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
     // Evento confirmado por servidor tras el commit -- payload chico (ids +
-    // revision + timestamp, nunca la partida completa). Antes el alta solo se
-    // enteraba del otro lado vía `item_mutation` (empuje del navegador, sin
-    // acuse del servidor).
+    // revision + timestamp, nunca la partida completa).
     void sendRealtimeBroadcast([{
       topic: `cotizacion:${id}`,
       event: 'item_confirmed',

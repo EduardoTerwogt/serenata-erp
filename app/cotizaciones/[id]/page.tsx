@@ -352,7 +352,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     onlineUsers,
     sectionEditors,
     itemCellEditors,
-    latestItemMutation,
     latestItemConfirmed,
     latestGeneralConfirmed,
     latestTotalesConfirmed,
@@ -362,7 +361,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     releaseSection,
     lockItemCell,
     releaseItemCell,
-    broadcastItemMutation,
     markSectionSaved,
     isConnected,
   } = useQuotationPresence({
@@ -524,13 +522,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     })
   }, [append, getItemIndexByRowId, recordServerItem, setValue])
 
-  const removeLocalItemState = useCallback((rowId: string) => {
-    const index = getItemIndexByRowId(rowId)
-    if (index >= 0) remove(index)
-
-    setCotizacion((prev) => prev ? { ...prev, items: (prev.items || []).filter((item) => item.id !== rowId) } : prev)
-  }, [getItemIndexByRowId, remove])
-
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
     const notas = cot.notas_internas ?? ''
@@ -622,15 +613,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   /**
    * Reconciliación con el servidor: la ÚNICA garantía de que las dos pantallas
-   * terminen viendo lo mismo.
+   * terminen viendo lo mismo. PostgreSQL es la única fuente de verdad -- esto lee de
+   * la base a través de nuestro propio servidor (el que sí valida la sesión), nunca
+   * de un dato que otro navegador haya empujado directamente.
    *
-   * Antes, el estado ajeno llegaba solo empujado por el navegador del otro
-   * (`item_mutation`): un aviso sin acuse, sin reintento y con el error tragado
-   * -los siete envíos del canal terminan en `.catch(() => null)`-. Si ese aviso se
-   * perdía, las dos pantallas quedaban distintas hasta recargar y nadie se enteraba.
-   * Ahora el aviso es solo una pista para que el cambio se vea al instante; quien
-   * garantiza la convergencia es esto, que lee de la base a través de nuestro propio
-   * servidor (el que sí valida la sesión).
+   * La dispara cada evento server-confirmed (`item_confirmed`/`general_confirmed`/
+   * `totales_confirmed`/`notas_confirmed`, emitidos DESPUÉS de que Postgres commitea
+   * -- ver `lib/server/realtime/broadcast.ts`), reconectar el canal, volver a la
+   * pestaña, y un latido periódico como red de seguridad si algo de lo anterior se
+   * pierde.
    *
    * Nada de esto pisa lo que el usuario está escribiendo: las celdas sucias, bajo el
    * cursor o con guardado en vuelo se conservan, y una respuesta que salió antes de
@@ -1005,7 +996,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       clearItemCellConflict(rowId, field)
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
-        broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
       }
       markSectionSaved('partidas')
       scheduleItemCellIdleRelease(rowId, field)
@@ -1020,7 +1010,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       itemSavingCellsRef.current.delete(key)
     }
-  }, [broadcastItemMutation, clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState])
+  }, [clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState])
 
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
@@ -1054,33 +1044,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     fetchQuotationDetail(id).then((updated) => applyTotalsOnly(updated)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando totales tras save remoto:', loadError))
   }, [applyTotalsOnly, id, savedSections.totales])
 
-  useEffect(() => {
-    if (!latestItemMutation) return
-    if (hasLocalItemRowActivity(latestItemMutation.row_id)) return
-    if (latestItemMutation.action === 'delete') {
-      removeLocalItemState(latestItemMutation.row_id)
-      return
-    }
-    if (latestItemMutation.item) {
-      // Si ya tenemos la fila, se fusiona celda a celda (sin tocar lo que el usuario
-      // esté editando). Si es una fila nueva de otro colaborador, se inserta con
-      // `replace` sobre la lista completa: un `append` suelto aquí desalineaba el
-      // arreglo de sus valores y hacía que se vieran filas con montos en blanco.
-      if (getItemIndexByRowId(latestItemMutation.item.id) >= 0) {
-        upsertLocalItemState(latestItemMutation.item, { preserveLocalEdits: true })
-      } else {
-        // `shouldFocus: false` es imprescindible: react-hook-form enfoca por defecto
-        // la fila recién añadida, así que la fila de otro colaborador te robaba el
-        // cursor mientras escribías.
-        append(mapItemToFormItem(latestItemMutation.item), { shouldFocus: false })
-      }
-    }
-  }, [append, getItemIndexByRowId, hasLocalItemRowActivity, latestItemMutation, removeLocalItemState, upsertLocalItemState])
-
-  // El cambio ajeno llega completo por `item_mutation`, que es un dato empujado por su
-  // autor. Antes cada guardado ajeno disparaba además una relectura completa: esa
-  // relectura viajaba con una foto vieja y al volver borraba lo recién capturado.
-  // El resync completo queda solo como red de seguridad al reconectar el canal.
+  // Alta/edición/baja/bulk de otro colaborador llegan por `item_confirmed` (más abajo):
+  // el servidor confirma DESPUÉS de commitear en Postgres y dispara una relectura
+  // completa vía `reconciliarConServidor()`, que ya reconstruye altas y bajas sola. Este
+  // efecto reconecta el canal como red de seguridad si se perdió la conexión.
   const estabaConectadoRef = useRef(isConnected)
   useEffect(() => {
     const acabaDeReconectar = isConnected && !estabaConectadoRef.current
@@ -1089,8 +1056,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [isConnected, reconciliarConServidor])
 
   // `item_confirmed`/`general_confirmed`/`totales_confirmed`: los emite el servidor
-  // recién commiteado el PATCH (ver lib/server/realtime/broadcast.ts), a diferencia de
-  // `item_mutation` que es un aviso sin acuse del navegador del autor. Sirven para
+  // recién commiteado el PATCH (ver lib/server/realtime/broadcast.ts). Sirven para
   // reconciliar de inmediato en vez de esperar el heartbeat de 5s -- nunca reemplazan
   // la reconciliación periódica, solo la adelantan.
   useEffect(() => {
@@ -1225,7 +1191,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (!createdItem) throw new Error('No se pudo crear la fila')
       recordServerItem(createdItem)
       setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
-      broadcastItemMutation({ action: 'upsert', row_id: rowId, item: createdItem })
       markSectionSaved('partidas')
     } catch (createError: unknown) {
       const index = getItemIndexByRowId(rowId)
@@ -1235,7 +1200,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       pendingRowCreationsRef.current.delete(rowId)
     }
-  }, [append, broadcastItemMutation, createQuotationItemRow, getItemIndexByRowId, markSectionSaved, recordServerItem, remove, resyncPartidas])
+  }, [append, createQuotationItemRow, getItemIndexByRowId, markSectionSaved, recordServerItem, remove, resyncPartidas])
 
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
@@ -1281,7 +1246,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : updated)
       for (const item of updated.items || []) {
         recordServerItem(item)
-        broadcastItemMutation({ action: 'upsert', row_id: item.id, item })
       }
       markSectionSaved('partidas')
     } catch (importError: unknown) {
@@ -1290,7 +1254,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       setImportingItems(false)
     }
-  }, [broadcastItemMutation, getValues, id, markSectionSaved, recordServerItem, replace, resyncPartidas])
+  }, [getValues, id, markSectionSaved, recordServerItem, replace, resyncPartidas])
 
   // Borrado optimista, identificado por rowId: la fila desaparece al instante y el
   // DELETE (que recalcula el encabezado y sincroniza Sheets) corre después, encolado
@@ -1304,14 +1268,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       await enqueueRowMutation(rowId, () => deleteQuotationItemRow(rowId))
       pendingRowRemovalsRef.current.delete(rowId)
-      broadcastItemMutation({ action: 'delete', row_id: rowId })
       markSectionSaved('partidas')
     } catch (deleteError: unknown) {
       pendingRowRemovalsRef.current.delete(rowId)
       setError(deleteError instanceof Error ? deleteError.message : 'Error eliminando partida')
       void resyncPartidas()
     }
-  }, [broadcastItemMutation, deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, markSectionSaved, replace, resyncPartidas])
+  }, [deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, markSectionSaved, replace, resyncPartidas])
 
   // Operación atómica multi-campo: manda "base" para los 4 campos que el autofill
   // toca, así la RPC la rechaza completa (ningún campo se aplica a medias) si
@@ -1331,7 +1294,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }, { base: base ?? undefined, mutationId }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
-        broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
         for (const field of fields) clearItemCellConflict(rowId, field)
       }
       markSectionSaved('partidas')
@@ -1354,7 +1316,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       setError(saveError instanceof Error ? saveError.message : 'Error aplicando producto')
       void resyncPartidas()
     }
-  }, [broadcastItemMutation, clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, upsertLocalItemState])
+  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, upsertLocalItemState])
 
   const handleResponsableChange = useCallback(async (rowId: string, responsableId: string) => {
     const index = getItemIndexByRowId(rowId)
@@ -1371,7 +1333,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' }, { base: base ?? undefined, mutationId }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
-        broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
         clearItemCellConflict(rowId, 'responsable_id')
       }
       markSectionSaved('partidas')
@@ -1389,7 +1350,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       setError(saveError instanceof Error ? saveError.message : 'Error actualizando responsable')
       void resyncPartidas()
     }
-  }, [broadcastItemMutation, clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, responsables, setValue, upsertLocalItemState])
+  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, responsables, setValue, upsertLocalItemState])
 
   // Presencia estilo Sheets: saber que alguien más está en una celda sirve para
   // resaltarla y avisar, nunca para deshabilitar nada.

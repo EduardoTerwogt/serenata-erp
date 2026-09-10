@@ -528,7 +528,17 @@ verde y `live` con el mismo fallo conocido de siempre en
 403 de rate-limit de Drive visto en el push de Fase 4 -- nada nuevo que
 vigilar.
 
-### Fase 6 — Retirada de arquitectura antigua (cerrada, alcance conservador)
+### Fase 6 — Retirada de arquitectura antigua (alcance conservador, PR #18 -- REABIERTA)
+
+> **Reabierta.** El usuario no consideró cerrada la Fase 6 con este alcance
+> conservador -- el PR #18 fue una limpieza válida (se conserva, no se
+> revierte) pero no el cierre de la fase. Todo lo que esta sección describe
+> como "diseño actual" (`item_mutation`/`broadcastItemMutation` cliente→cliente,
+> `TEMP_ROW_PREFIX`/`migrateRowKeys`, el heartbeat de 5s como garantía
+> primaria) se retiró o se está retirando en las sub-fases 6A-6F que siguen a
+> esta sección. Se deja el registro histórico tal cual se escribió, para no
+> reescribir lo ya pasado, pero **no es** el diseño vigente -- ver más abajo
+> el cierre real de la Fase 6.
 
 Objetivo del plan: "reducir complejidad, no dejar dos motores vivos" --
 eliminar broadcasts de negocio del cliente, reconciliación vieja,

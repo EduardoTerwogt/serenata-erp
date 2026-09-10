@@ -513,7 +513,7 @@ test('un guardado ajeno no provoca una relectura de la cotización', async ({ pa
 })
 
 test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', async ({ page }) => {
-  await mockCotizacionDetailApis(page, { id: 'SH-E2E-FOCO', estado: 'BORRADOR' })
+  const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-FOCO', estado: 'BORRADOR' })
   const realtime = await mockRealtimeChannel(page)
   await login(page, '/cotizaciones/SH-E2E-FOCO')
   await expect(page.getByRole('heading', { name: 'SH-E2E-FOCO' })).toBeVisible()
@@ -523,14 +523,17 @@ test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', as
   await descripcion.click()
   await descripcion.fill('Estoy escribiendo aquí')
 
-  await realtime.emit('item_mutation', {
-    action: 'upsert',
-    row_id: 'item-remota-1',
-    item: {
-      id: 'item-remota-1', cotizacion_id: 'SH-E2E-FOCO', categoria: 'Arte', descripcion: 'Partida del otro',
-      cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
-      x_pagar: 1000, margen: 2000, orden: 2, notas: null,
-    },
+  // Fase 6D: el aviso del navegador (`item_mutation`) ya no existe. El otro
+  // colaborador guardó su fila en el servidor (simulado sobre el estado del mock,
+  // igual que un GET la vería) y el servidor confirma con `item_confirmed`, que
+  // dispara una reconciliación inmediata en vez de esperar el heartbeat de 5s.
+  cotizacion.items = [...cotizacion.items, {
+    id: 'item-remota-1', cotizacion_id: 'SH-E2E-FOCO', categoria: 'Arte', descripcion: 'Partida del otro',
+    cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
+    x_pagar: 1000, margen: 2000, orden: 2, notas: null,
+  }]
+  await realtime.emit('item_confirmed', {
+    cotizacion_id: 'SH-E2E-FOCO', item_id: 'item-remota-1', revision: 0, mutation_id: null, operation: 'create',
   })
 
   await expect(rows).toHaveCount(2)
