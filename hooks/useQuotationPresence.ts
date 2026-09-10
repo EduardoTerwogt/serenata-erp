@@ -334,7 +334,15 @@ export function useQuotationPresence({
 
       channel.on('broadcast', { event: 'item_confirmed' }, ({ payload }) => {
         const confirmed = payload as ItemConfirmedPayload | undefined
-        if (!confirmed?.item_id) return
+        // `bulk` representa varias filas a la vez y por eso viaja sin item_id --
+        // Fase 8: esto se descartaba aquí mismo antes de llegar al reducer, así
+        // que el import masivo nunca disparaba reconciliación por esta vía en
+        // los DEMÁS colaboradores (el propio emisor se actualiza solo con la
+        // respuesta HTTP de su POST, sin depender de este evento). Terminaba
+        // convergiendo igual por el poll de 20s -- pero eso es la red de
+        // seguridad, no el camino primario.
+        if (!confirmed?.cotizacion_id) return
+        if (!confirmed.item_id && confirmed.operation !== 'bulk') return
         dispatchConfirmedEvent({ type: 'item_confirmed', payload: { ...confirmed } })
       })
 
