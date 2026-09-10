@@ -214,6 +214,19 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // "base" ya capturado por celda (al enfocarla), listo para el próximo PATCH.
   const itemCellBaseRef = useRef<Record<string, Record<string, unknown>>>({})
   const [itemCellConflicts, setItemCellConflicts] = useState<Record<string, Record<string, ItemFieldConflictDetail>>>({})
+  // mutation_id de los PATCH de partida que este cliente mismo mandó -- así al
+  // recibir el `item_confirmed` del servidor se distingue "confirmó lo mío" (no hace
+  // falta reconciliar, ya se aplicó al recibir la respuesta del PATCH) de "confirmó lo
+  // de alguien más" (sí conviene reconciliar ya, sin esperar el heartbeat de 5s).
+  const ownItemMutationIdsRef = useRef<Set<string>>(new Set())
+  const rememberOwnItemMutationId = useCallback((mutationId: string) => {
+    const set = ownItemMutationIdsRef.current
+    set.add(mutationId)
+    if (set.size > 50) {
+      const oldest = set.values().next().value
+      if (oldest !== undefined) set.delete(oldest)
+    }
+  }, [])
   // Cola por fila: encadena PATCH/DELETE de una misma partida para que no se pisen.
   const rowMutationQueueRef = useRef<Map<string, Promise<unknown>>>(new Map())
   // Filas ya quitadas en pantalla cuyo DELETE sigue en vuelo. `useFieldArray.remove`
@@ -336,6 +349,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     itemCellEditors,
     itemRowEditors,
     latestItemMutation,
+    latestItemConfirmed,
+    latestGeneralConfirmed,
+    latestTotalesConfirmed,
     savedSections,
     setActiveSection,
     releaseSection,
@@ -725,7 +741,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         : field === 'x_pagar' ? { x_pagar: item.x_pagar === '' ? 0 : Number(item.x_pagar) || 0 }
         : { responsable_id: item.responsable_id || '', responsable_nombre: item.responsable_nombre || '' }
       const base = itemCellBaseRef.current[key]
-      const updatedItem = await patchQuotationItem(rowId, patch, { base, mutationId: crypto.randomUUID() })
+      const mutationId = crypto.randomUUID()
+      rememberOwnItemMutationId(mutationId)
+      const updatedItem = await patchQuotationItem(rowId, patch, { base, mutationId })
       markLocalWrite(rowId, field)
       itemDirtyCellsRef.current.delete(key)
       clearItemCellConflict(rowId, field)
@@ -746,7 +764,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       itemSavingCellsRef.current.delete(key)
     }
-  }, [broadcastItemMutation, clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, scheduleItemCellIdleRelease, upsertLocalItemState])
+  }, [broadcastItemMutation, clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState])
   persistItemCellAutosaveRef.current = persistItemCellAutosave
 
   useEffect(() => {
@@ -821,6 +839,29 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     estabaConectadoRef.current = isConnected
     if (acabaDeReconectar) void reconciliarConServidor()
   }, [isConnected, reconciliarConServidor])
+
+  // `item_confirmed`/`general_confirmed`/`totales_confirmed`: los emite el servidor
+  // recién commiteado el PATCH (ver lib/server/realtime/broadcast.ts), a diferencia de
+  // `item_mutation` que es un aviso sin acuse del navegador del autor. Sirven para
+  // reconciliar de inmediato en vez de esperar el heartbeat de 5s -- nunca reemplazan
+  // la reconciliación periódica, solo la adelantan.
+  useEffect(() => {
+    if (!latestItemConfirmed) return
+    // Confirmó un PATCH propio: ya se aplicó al recibir la respuesta del fetch: no
+    // hace falta reconciliar otra vez. Sin mutation_id (ajeno, o un cliente viejo) sí.
+    if (latestItemConfirmed.mutation_id && ownItemMutationIdsRef.current.has(latestItemConfirmed.mutation_id)) return
+    void reconciliarConServidor()
+  }, [latestItemConfirmed, reconciliarConServidor])
+
+  useEffect(() => {
+    if (!latestGeneralConfirmed) return
+    void reconciliarConServidor()
+  }, [latestGeneralConfirmed, reconciliarConServidor])
+
+  useEffect(() => {
+    if (!latestTotalesConfirmed) return
+    void reconciliarConServidor()
+  }, [latestTotalesConfirmed, reconciliarConServidor])
 
   // Latido de reconciliación. No depende de la presencia ni del canal: si dependiera,
   // un fallo de esos mismos mecanismos volvería a dejar las pantallas divergentes sin

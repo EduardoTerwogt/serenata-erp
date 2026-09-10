@@ -325,9 +325,27 @@ a diferencia de sesiones anteriores de esta misma iniciativa; se dejó
 correr en su lugar el job `smoke-and-critical` del PR draft
 ([#15](https://github.com/EduardoTerwogt/serenata-erp/pull/15)).
 
-**Pendiente de esta fase:** consumir el evento `item_confirmed` del
-servidor (hoy se emite pero ningún cliente lo escucha), y el ciclo final
-de verificación completa + merge.
+**Bloque 3 — consumir `item_confirmed`/`general_confirmed`/`totales_confirmed`:**
+`useQuotationPresence.ts` ya escuchaba 5 eventos de broadcast, todos
+browser→browser sin acuse; ahora suma 3 listeners para los eventos que
+manda el SERVIDOR justo después de comprometer el PATCH en Postgres (ver
+`lib/server/realtime/broadcast.ts` y las 3 rutas). `page.tsx` los usa como
+señal para reconciliar de inmediato en vez de esperar el heartbeat de 5s
+— nunca lo reemplazan, solo lo adelantan. `item_confirmed` trae
+`mutation_id`; el cliente que generó ese id (guardado en
+`ownItemMutationIdsRef`, un `Set` acotado a 50 entradas) reconoce su
+propia confirmación y no reconcilia de más — ya aplicó el resultado al
+recibir la respuesta de su propio PATCH. `general_confirmed`/
+`totales_confirmed` no llevan forma de distinguir autor, así que toda
+confirmación (propia o ajena) dispara la reconciliación; inofensivo,
+solo repite una lectura que de todas formas iba a pasar en el próximo
+heartbeat. El mecanismo viejo (`item_mutation`/`broadcastItemMutation`,
+browser→browser sin acuse) sigue intacto: esto es un convergence signal
+adicional, no un reemplazo.
+
+**Pendiente de esta fase:** el ciclo final de verificación completa +
+merge (task #19) — correr la batería completa, abrir/actualizar el PR y
+el job `live` de CI, y mergear a `main`.
 
 ---
 
