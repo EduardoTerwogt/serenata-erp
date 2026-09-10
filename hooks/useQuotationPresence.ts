@@ -214,11 +214,17 @@ export function useQuotationPresence({
     return { userId, email, name }
   }, [cotizacionId, currentUser?.email, currentUser?.id, currentUser?.name])
 
+  // `channel.track()` manda un push por el WebSocket y espera un ack; sin red de
+  // reintento, un timeout/blip aislado (nunca vimos un error de la app en logs de CI,
+  // solo el badge que no aparece -- consistente con una promesa rechazada y tragada
+  // en silencio) deja al otro colaborador sin enterarse hasta el próximo cambio real
+  // o el heartbeat de PRESENCE_HEARTBEAT_MS. Reintentar de inmediato, un par de veces,
+  // cierra esa ventana sin cambiar qué se envía ni introducir un mecanismo nuevo.
   const trackPresence = useCallback((section: QuotationPresenceSection | null, cell: { rowId: string; field: QuotationItemCellField } | null) => {
     const channel = channelRef.current
     if (!channel) return
 
-    void channel.track({
+    const payload = {
       user_id: identity.userId,
       email: identity.email,
       name: identity.name,
@@ -226,7 +232,18 @@ export function useQuotationPresence({
       entity_id: cell?.rowId ?? null,
       field: cell?.field ?? null,
       online_at: new Date().toISOString(),
-    }).catch(() => null)
+    }
+
+    const intentar = (intentosRestantes: number): void => {
+      void channel.track(payload).catch((error) => {
+        if (intentosRestantes <= 0) {
+          console.error('[useQuotationPresence] track() agotó reintentos', error)
+          return
+        }
+        window.setTimeout(() => intentar(intentosRestantes - 1), 1_000)
+      })
+    }
+    intentar(2)
   }, [identity.email, identity.name, identity.userId])
 
   const setActiveSection = useCallback((section: QuotationPresenceSection | null) => {
@@ -355,6 +372,11 @@ export function useQuotationPresence({
         }
 
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          // Nunca vimos esto en logs de CI durante el badge de Presence que falla
+          // intermitentemente (tests/e2e/live/cotizaciones-colaboracion.spec.ts:282)
+          // -- este log es lo que confirmaría o descartaría un canal caído como causa
+          // la próxima vez que se reproduzca.
+          console.error('[useQuotationPresence] canal de Realtime perdió la conexión', status)
           dispatchAwareness({ type: 'set_connected', connected: false })
         }
       })
