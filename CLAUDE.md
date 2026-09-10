@@ -17,7 +17,7 @@
 ### Al inicio de cada sesión
 ```bash
 git config --global user.name "EduardoTerwogt"
-git config --global user.email "eduardoterwogt@gmail.com"
+git config --global user.email "eduardoterwogth@gmail.com"
 source /home/user/serenata-erp/.env.local.tokens 2>/dev/null
 git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/serenata-erp.git
 
