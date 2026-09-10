@@ -132,7 +132,7 @@ export function QuotationItemsSection({
     const statusText = rowStatus(index)
 
     return (
-      <tr key={fieldId} className={`border-b border-hairline ${rowBusy(index) ? 'bg-row-alt/40' : ''}`}>
+      <tr key={fieldId} className={`border-b border-hairline transition-colors duration-[var(--dur-fast)] ${rowBusy(index) ? 'bg-row-alt/40' : 'odd:bg-row'}`}>
         <td className="px-4 py-2"><input {...register(`items.${index}.categoria`)} onFocus={() => items.cellFocus(rowIdAt(index), 'categoria')} onBlur={() => items.cellBlur(rowIdAt(index), 'categoria')} onChange={(e) => { items.cellChange(rowIdAt(index), 'categoria'); register(`items.${index}.categoria`).onChange(e) }} data-busy={cellBusy(index, 'categoria') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
         <td className="px-4 py-2">
           <div className="relative">
@@ -188,14 +188,14 @@ export function QuotationItemsSection({
         </td>
         <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(index), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(index), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(index), 'x_pagar'); register(`items.${index}.x_pagar`).onChange(e) }} data-busy={cellBusy(index, 'x_pagar') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /></td>
         <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
-        <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(margen)}</td>
-        <td className="px-4 py-2"><button type="button" onClick={() => items.removeRow(rowIdAt(index))} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors">✕</button></td>
+        <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(margen)}</td>
+        <td className="px-4 py-2"><button type="button" onClick={() => items.removeRow(rowIdAt(index))} className="text-faint hover:text-cancelled-fg disabled:opacity-30 transition-colors">✕</button></td>
       </tr>
     )
   }
 
   const renderReadOnlyDesktopRow = (item: ReadOnlyItem) => (
-    <tr key={item.id} className="border-b border-hairline">
+    <tr key={item.id} className="border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt">
       <td className="px-4 py-3 text-subtext">{item.categoria}</td>
       <td className="px-4 py-3 text-body">{item.descripcion}</td>
       <td className="px-4 py-3 text-subtext">{item.cantidad}</td>
@@ -204,7 +204,7 @@ export function QuotationItemsSection({
       <td className="px-4 py-3">{item.responsable_nombre ? <span className="text-subtext">{item.responsable_nombre}</span> : <span className="text-faint italic">Sin asignar</span>}</td>
       <td className="px-4 py-3 text-subtext">${fmtCurrency(item.x_pagar)}</td>
       <td className="px-4 py-3 text-subtext">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
-      <td className={`px-4 py-3 font-medium ${(item.margen ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(item.margen ?? 0)}</td>
+      <td className={`px-4 py-3 font-medium ${(item.margen ?? 0) >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(item.margen ?? 0)}</td>
     </tr>
   )
 
@@ -220,13 +220,13 @@ export function QuotationItemsSection({
             <p className="text-faint text-xs">{item.categoria || 'Sin categoría'}</p>
             {statusText && <p className="mt-1 text-[11px] text-accent-quiet">{statusText}</p>}
           </div>
-          <button type="button" onClick={(e) => { e.stopPropagation(); items.removeRow(rowIdAt(index)) }} className="text-faint hover:text-red-400 disabled:opacity-30 transition-colors text-content">✕</button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); items.removeRow(rowIdAt(index)) }} className="text-faint hover:text-cancelled-fg disabled:opacity-30 transition-colors text-content">✕</button>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-faint">Cant. {item.cantidad || 0}</span>
           <span className="text-faint text-right">P. Unit. ${fmtCurrency(typeof item.precio_unitario === 'number' ? item.precio_unitario : 0)}</span>
           <span className="text-subtext">X pagar ${fmtCurrency(typeof item.x_pagar === 'number' ? item.x_pagar : 0)}</span>
-          <span className={`text-right font-medium ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>Margen ${fmtCurrency(margen)}</span>
+          <span className={`text-right font-medium ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>Margen ${fmtCurrency(margen)}</span>
         </div>
         <div className="text-[13px] text-faint mb-2">Costo+IVA ${fmtCurrency(calculateCostoConIva(item.x_pagar))}</div>
         <div className="flex justify-between items-center pt-2 border-t border-hairline">
@@ -247,7 +247,7 @@ export function QuotationItemsSection({
             <p className="text-body font-medium text-[15px] truncate">{item.descripcion}</p>
             <p className="text-subtext text-content">{item.categoria}</p>
           </div>
-          <span className={`text-content font-medium whitespace-nowrap ${margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(margen)}</span>
+          <span className={`text-content font-medium whitespace-nowrap ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(margen)}</span>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-faint">Cant. {item.cantidad}</span>
@@ -289,9 +289,9 @@ export function QuotationItemsSection({
         <div className="hidden md:block" style={{ overflowX: 'auto', overflowY: 'visible' }}>
           <table className="w-full text-content">
             <thead>
-              <tr className="border-b border-hairline">
+              <tr className="h-9 border-b border-hairline">
                 {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'X Pagar', 'Costo + IVA', 'Margen', ...(editable ? [''] : [])].map(h => (
-                  <th key={h} className="sn-label text-left px-4 py-3 whitespace-nowrap" style={{ fontSize: 'var(--text-table-head)' }}>{h}</th>
+                  <th key={h} className="sn-table-head text-left px-4 py-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -349,9 +349,9 @@ export function QuotationItemsSection({
             <div className="rounded-panel border border-hairline bg-card p-4 mt-6">
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Importe</span><span className="text-subtext text-content font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).importe)}</span></div>
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo + IVA</span><span className="text-subtext text-content font-medium">${fmtCurrency(calculateCostoConIva((watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).x_pagar))}</span></div>
-              <div className="flex justify-between"><span className="text-faint text-content">Margen</span><span className={`text-content font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-green-400' : 'text-red-400'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
+              <div className="flex justify-between"><span className="text-faint text-content">Margen</span><span className={`text-content font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
-            {<button type="button" onClick={() => { items.removeRow(rowIdAt(editingItemIndex)); setEditingItemIndex(null) }} className="w-full text-red-400 hover:text-red-300 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
+            {<button type="button" onClick={() => { items.removeRow(rowIdAt(editingItemIndex)); setEditingItemIndex(null) }} className="w-full text-cancelled-fg hover:opacity-80 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
           </div>
         </div>
       )}

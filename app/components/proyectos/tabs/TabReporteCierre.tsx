@@ -157,24 +157,30 @@ function ReporteCierreContenido({ proyectoId, documento, equipo, documentosApi }
         {!contenido.hitos || contenido.hitos.length === 0 ? (
           <p className="text-faint text-content italic">Sin hitos registrados.</p>
         ) : (
-          <table className="w-full text-content">
+          <table className="w-full table-fixed text-[length:var(--text-md)]">
+            <colgroup>
+              <col style={{ width: '34%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '22%' }} />
+            </colgroup>
             <thead>
-              <tr className="border-b border-hairline">
-                <th className="text-left py-2 text-eyebrow text-subtext font-semibold">Hito</th>
-                <th className="text-left py-2 text-eyebrow text-subtext font-semibold">Planeado</th>
-                <th className="text-left py-2 text-eyebrow text-subtext font-semibold">Real</th>
-                <th className="text-left py-2 text-eyebrow text-subtext font-semibold">Diferencia</th>
+              <tr className="h-9 border-b border-hairline">
+                <th className="sn-table-head truncate text-left px-[var(--row-pad-x)] align-middle">Hito</th>
+                <th className="sn-table-head truncate text-left px-[var(--row-pad-x)] align-middle">Planeado</th>
+                <th className="sn-table-head truncate text-left px-[var(--row-pad-x)] align-middle">Real</th>
+                <th className="sn-table-head truncate text-left px-[var(--row-pad-x)] align-middle">Diferencia</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-hairline">
+            <tbody>
               {contenido.hitos.map((h, i) => {
                 const aTiempo = h.planeado && h.real && h.planeado === h.real
                 return (
-                  <tr key={i}>
-                    <td className="py-2 text-body">{h.titulo}</td>
-                    <td className="py-2 text-subtext">{formatDateDisplay(h.planeado)}</td>
-                    <td className="py-2 text-subtext">{formatDateDisplay(h.real)}</td>
-                    <td className={`py-2 font-semibold ${aTiempo ? 'text-approved-fg' : 'text-cancelled-fg'}`}>
+                  <tr key={i} className="h-[46px] odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt">
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-ink">{h.titulo}</td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{formatDateDisplay(h.planeado)}</td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{formatDateDisplay(h.real)}</td>
+                    <td className={`truncate px-[var(--row-pad-x)] align-middle font-semibold ${aTiempo ? 'text-approved-fg' : 'text-cancelled-fg'}`}>
                       {aTiempo ? 'A tiempo' : h.real && h.planeado ? 'Con diferencia' : '—'}
                     </td>
                   </tr>

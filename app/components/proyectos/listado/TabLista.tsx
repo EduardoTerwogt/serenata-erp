@@ -46,11 +46,19 @@ export function TabLista({ proyectos, tipos }: TabListaProps) {
       ) : (
         <div className="rounded-panel border border-hairline bg-card overflow-hidden">
           <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full text-content">
+            <table className="w-full table-fixed text-[length:var(--text-md)]">
+              <colgroup>
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '26%' }} />
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '14%' }} />
+              </colgroup>
               <thead>
-                <tr className="border-b border-hairline">
+                <tr className="h-9">
                   {['Folio', 'Tipo', 'Proyecto', 'Cliente', 'Entrega', 'Etapa'].map((h) => (
-                    <th key={h} className="sn-label text-left px-6 py-3">{h}</th>
+                    <th key={h} className="sn-table-head truncate text-left px-[var(--row-pad-x)] align-middle">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -58,13 +66,13 @@ export function TabLista({ proyectos, tipos }: TabListaProps) {
                 {filtrados.map((p) => {
                   const etapa = resolverEtapaProyecto(p, tipos)
                   return (
-                    <tr key={p.id} onClick={() => window.location.assign(`/proyectos/${p.id}`)} className="odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt cursor-pointer">
-                      <td className="px-6 py-4 text-accent font-mono text-content">{p.id}</td>
-                      <td className="px-6 py-4 text-subtext">{nombreTipo(p)}</td>
-                      <td className="px-6 py-4 text-body font-medium">{p.proyecto}</td>
-                      <td className="px-6 py-4 text-subtext">{p.cliente}</td>
-                      <td className="px-6 py-4 text-subtext">{formatDateDisplay(p.fecha_entrega)}</td>
-                      <td className="px-6 py-4">
+                    <tr key={p.id} onClick={() => window.location.assign(`/proyectos/${p.id}`)} className="h-[46px] odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt cursor-pointer">
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-accent font-mono">{p.id}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{nombreTipo(p)}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-ink font-semibold">{p.proyecto}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{p.cliente}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{formatDateDisplay(p.fecha_entrega)}</td>
+                      <td className="px-[var(--row-pad-x)] align-middle">
                         {etapa ? <StatusBadge tone={etapa.tone}>{etapa.label}</StatusBadge> : <span className="text-faint">—</span>}
                       </td>
                     </tr>

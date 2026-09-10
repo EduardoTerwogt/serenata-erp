@@ -4,6 +4,10 @@ interface Column {
   key: string
   label: string
   align?: 'left' | 'center' | 'right'
+  /** Ancho fijo (ej. '20%', '120px') -- si TODAS las columnas lo traen, la
+   * tabla se pone table-fixed + colgroup para que los anchos no cambien
+   * al cambiar el conjunto de filas visible (filtro/paginación). */
+  width?: string
 }
 
 interface ResponsiveTableCardProps<T> {
@@ -13,9 +17,6 @@ interface ResponsiveTableCardProps<T> {
   renderMobileCard: (item: T, index: number) => ReactNode
   keyExtractor: (item: T, index: number) => string
   emptyMessage?: string
-  /** 'legacy' (default) mantiene el tema gray-9xx de siempre; 'tokens' usa
-   * el Serenata Design System (Fase 5.7) para pantallas ya migradas. */
-  theme?: 'legacy' | 'tokens'
 }
 
 const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
@@ -24,24 +25,12 @@ const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
   right: 'text-right',
 }
 
-const THEME_CLASSES = {
-  legacy: {
-    empty: 'text-gray-500',
-    headerRow: 'border-b border-gray-800',
-    headerCell: 'text-gray-400',
-    bodyRow: 'border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors',
-  },
-  tokens: {
-    empty: 'text-faint',
-    headerRow: 'border-b border-hairline',
-    headerCell: 'sn-label',
-    bodyRow: 'border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt',
-  },
-} as const
-
 /**
- * Componente genérico que renderiza una tabla en desktop y cards en mobile
- * Reutilizable en múltiples páginas para evitar duplicación de código
+ * Componente genérico que renderiza una tabla en desktop y cards en mobile.
+ * Reutilizable en múltiples páginas para evitar duplicación de código.
+ * Recipe de fila/header sigue tokens/spacing.css y tokens/typography.css
+ * del skill serenata-design (DataTable.jsx): fila 46px, header 36px,
+ * padding horizontal 18px, texto de header 11px, texto de body 12.5px.
  */
 export function ResponsiveTableCard<T>({
   data,
@@ -50,28 +39,32 @@ export function ResponsiveTableCard<T>({
   renderMobileCard,
   keyExtractor,
   emptyMessage = 'No hay datos',
-  theme = 'legacy',
 }: ResponsiveTableCardProps<T>) {
-  const t = THEME_CLASSES[theme]
-
   if (data.length === 0) {
     return (
-      <div className={`p-12 text-center ${t.empty}`}>
+      <div className="p-12 text-center text-faint">
         {emptyMessage}
       </div>
     )
   }
 
+  const allWidthsSet = columns.every((col) => col.width)
+
   return (
     <>
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className={`w-full text-[length:var(--text-md)] ${allWidthsSet ? 'table-fixed' : ''}`}>
+          {allWidthsSet && (
+            <colgroup>
+              {columns.map((col) => <col key={col.key} style={{ width: col.width }} />)}
+            </colgroup>
+          )}
           <thead>
-            <tr className={t.headerRow}>
+            <tr className="h-9 border-b border-hairline">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`${ALIGN_CLASS[col.align ?? 'left']} ${t.headerCell} font-medium px-6 py-3`}
+                  className={`${ALIGN_CLASS[col.align ?? 'left']} sn-table-head truncate px-[var(--row-pad-x)] align-middle`}
                 >
                   {col.label}
                 </th>
@@ -80,7 +73,7 @@ export function ResponsiveTableCard<T>({
           </thead>
           <tbody>
             {data.map((item, index) => (
-              <tr key={keyExtractor(item, index)} className={t.bodyRow}>
+              <tr key={keyExtractor(item, index)} className="h-[46px] border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt">
                 {renderDesktopRow(item, index)}
               </tr>
             ))}

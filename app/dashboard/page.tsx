@@ -250,24 +250,23 @@ export default function DashboardPage() {
             <div className="p-4 md:p-6"><FuenteError nombre="Cotizaciones" onRetry={() => cargar(periodo)} /></div>
           ) : (
             <ResponsiveTableCard
-              theme="tokens"
               data={resumen.cotizacionesRecientes}
               keyExtractor={(c) => c.id}
               emptyMessage="Sin cotizaciones recientes"
               columns={[
-                { key: 'folio', label: 'Folio' },
-                { key: 'proyecto', label: 'Proyecto' },
-                { key: 'cliente', label: 'Cliente' },
-                { key: 'total', label: 'Total', align: 'right' },
-                { key: 'estado', label: 'Estatus', align: 'right' },
+                { key: 'folio', label: 'Folio', width: '12%' },
+                { key: 'proyecto', label: 'Proyecto', width: '30%' },
+                { key: 'cliente', label: 'Cliente', width: '22%' },
+                { key: 'total', label: 'Total', align: 'right', width: '18%' },
+                { key: 'estado', label: 'Estatus', align: 'right', width: '18%' },
               ]}
               renderDesktopRow={(c) => (
                 <>
-                  <td className="px-6 py-3 text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.id}</td>
-                  <td className="px-6 py-3 font-medium text-ink cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.proyecto}</td>
-                  <td className="px-6 py-3 text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.cliente}</td>
-                  <td className="px-6 py-3 text-right text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{formatMoney(c.total)}</td>
-                  <td className="px-6 py-3 text-right cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>
+                  <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.id}</td>
+                  <td className="truncate px-[var(--row-pad-x)] align-middle font-semibold text-ink cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.proyecto}</td>
+                  <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.cliente}</td>
+                  <td className="truncate px-[var(--row-pad-x)] align-middle text-right text-ink cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{formatMoney(c.total)}</td>
+                  <td className="px-[var(--row-pad-x)] align-middle text-right cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>
                     <StatusBadge tone={toneForCotizacionEstado(c.estado)}>{c.estado}</StatusBadge>
                   </td>
                 </>

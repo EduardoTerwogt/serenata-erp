@@ -177,35 +177,34 @@ export function AdminUsuarios() {
           <SectionLoading className="min-h-[240px]" />
         ) : (
           <ResponsiveTableCard<Usuario>
-            theme="tokens"
             data={usuarios}
             keyExtractor={(u) => u.id}
             emptyMessage="No hay usuarios. Crea el primero."
             columns={[
-              { key: 'nombre', label: 'Nombre' },
-              { key: 'correo', label: 'Correo' },
-              { key: 'secciones', label: 'Secciones asignadas' },
-              { key: 'estado', label: 'Estado' },
-              { key: 'acciones', label: '', align: 'right' },
+              { key: 'nombre', label: 'Nombre', width: '18%' },
+              { key: 'correo', label: 'Correo', width: '20%' },
+              { key: 'secciones', label: 'Secciones asignadas', width: '30%' },
+              { key: 'estado', label: 'Estado', width: '10%' },
+              { key: 'acciones', label: '', align: 'right', width: '22%' },
             ]}
             renderDesktopRow={(u) => (
               <>
-                <td className="px-6 py-3 font-medium text-ink">
+                <td className="truncate px-[var(--row-pad-x)] align-middle font-medium text-ink">
                   {u.name}
                   {u.id === currentUserId && <span className="ml-2 text-faint font-normal">(tú)</span>}
                 </td>
-                <td className="px-6 py-3 text-subtext">{u.email}</td>
-                <td className="px-6 py-3">
+                <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{u.email}</td>
+                <td className="px-[var(--row-pad-x)] align-middle">
                   <div className="flex flex-wrap gap-1.5">
                     {u.sections.length === 0
                       ? <span className="text-[length:var(--text-xs)] text-faint">Sin secciones</span>
                       : u.sections.map(s => <SeccionPill key={s}>{s}</SeccionPill>)}
                   </div>
                 </td>
-                <td className="px-6 py-3">
+                <td className="px-[var(--row-pad-x)] align-middle">
                   <StatusBadge tone={u.active ? 'approved' : 'draft'}>{u.active ? 'Activo' : 'Inactivo'}</StatusBadge>
                 </td>
-                <td className="px-6 py-3">
+                <td className="px-[var(--row-pad-x)] align-middle">
                   <div className="flex items-center justify-end gap-[var(--space-sm)]">
                     <Button variant="ghost" size="md" onClick={() => openEdit(u)}>Editar</Button>
                     <Button

@@ -12,6 +12,7 @@ import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadg
 import { TableFooter } from '@/components/ui/TableFooter'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
 const PAGE_SIZE = 10
@@ -121,42 +122,27 @@ export default function CotizacionesPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3 animate-pulse">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="rounded-panel border border-hairline bg-card p-4 md:p-6">
-              <div className="hidden md:flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="h-5 w-20 rounded bg-row" />
-                  <div className="space-y-1">
-                    <div className="h-4 w-40 rounded bg-row" />
-                    <div className="h-3 w-28 rounded bg-row" />
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  <div className="h-5 w-24 rounded bg-row" />
-                  <div className="h-6 w-20 rounded-full bg-row" />
-                </div>
-              </div>
-              <div className="md:hidden space-y-2">
-                <div className="flex justify-between">
-                  <div className="h-4 w-24 rounded bg-row" />
-                  <div className="h-4 w-16 rounded-full bg-row" />
-                </div>
-                <div className="h-4 w-3/4 rounded bg-row" />
-                <div className="h-3 w-1/2 rounded bg-row" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <SectionLoading />
       ) : filtradas.length > 0 ? (
         <div className="overflow-hidden rounded-panel border border-hairline bg-card">
-          {/* Desktop: tabla */}
+          {/* Desktop: tabla -- table-fixed + colgroup para que los anchos de
+              columna no cambien al paginar o filtrar (proporciones de
+              CotizacionesScreen.jsx del kit: Folio 150px, Proyecto 1.5fr,
+              Cliente/Total/Entrega 1fr, Estatus 124px). */}
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full text-content">
+            <table className="w-full table-fixed text-[length:var(--text-md)]">
+              <colgroup>
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '24%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '17%' }} />
+                <col style={{ width: '12%' }} />
+              </colgroup>
               <thead>
-                <tr className="border-b border-hairline">
+                <tr className="h-9">
                   {['Folio', 'Proyecto', 'Cliente', 'Total', 'Entrega', 'Estatus'].map(h => (
-                    <th key={h} className="sn-label whitespace-nowrap px-6 py-3 text-left">{h}</th>
+                    <th key={h} className="sn-table-head truncate px-[var(--row-pad-x)] text-left align-middle">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -165,29 +151,29 @@ export default function CotizacionesPage() {
                   <tr
                     key={cot.id}
                     onClick={() => router.push(`/cotizaciones/${cot.id}`)}
-                    className="cursor-pointer border-b border-hairline last:border-0 odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt"
+                    className="h-[46px] cursor-pointer border-b border-hairline last:border-0 odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt"
                   >
-                    <td className="whitespace-nowrap px-6 py-4">
-                      <span className="sn-display text-body" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle">
+                      <span className="sn-display text-ink" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>
                     </td>
-                    <td className="px-6 py-4">
-                      <p className="text-body">{cot.proyecto}</p>
+                    <td className="px-[var(--row-pad-x)] align-middle">
+                      <p className="truncate text-ink">{cot.proyecto}</p>
                       {cot.tipo === 'COMPLEMENTARIA' && (
-                        <p className="mt-0.5 text-xs text-accent">
-                          Complementaria de <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
+                        <p className="mt-0.5 truncate text-[length:var(--text-xs)] text-accent">
+                          Complementaria de <span className="font-mono font-semibold">{cot.es_complementaria_de}</span>
                         </p>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-subtext">{cot.cliente}</td>
-                    <td className="whitespace-nowrap px-6 py-4 font-semibold text-body">
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{cot.cliente}</td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle font-semibold text-ink">
                       {(!cot.items || cot.items.length === 0) ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-normal text-cancelled-fg">
+                        <span className="inline-flex items-center gap-1 text-[length:var(--text-xs)] font-normal text-cancelled-fg">
                           <Icon name="warning" size={13} /> Sin items
                         </span>
                       ) : `$${fmtMoney(cot.total)}`}
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-subtext">{formatDateDisplay(cot.fecha_entrega)}</td>
-                    <td className="whitespace-nowrap px-6 py-4">
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{formatDateDisplay(cot.fecha_entrega)}</td>
+                    <td className="px-[var(--row-pad-x)] align-middle">
                       <StatusBadge tone={toneForCotizacionEstado(cot.estado)}>{cot.estado}</StatusBadge>
                     </td>
                   </tr>

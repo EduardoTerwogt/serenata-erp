@@ -136,7 +136,7 @@ export function AdminSheets() {
           {ACCIONES.map(a => (
             <div
               key={a.id}
-              className="flex flex-wrap items-center gap-[var(--space-md)] rounded-[var(--radius-sm)] border border-hairline bg-row px-[19px] py-[var(--space-md)]"
+              className="flex flex-wrap items-center gap-[var(--space-md)] rounded-[var(--radius-sm)] border border-hairline bg-row px-[var(--row-pad-x)] py-[var(--space-md)]"
             >
               <div className="min-w-[160px] flex-1">
                 <div className="text-[length:var(--text-base)] font-medium text-ink">{a.label}</div>
@@ -209,7 +209,7 @@ export function AdminSheets() {
                 {getResultsArray().map((r, i) => (
                   <div
                     key={r.tab + i}
-                    className="flex flex-wrap items-center gap-[var(--space-md)] border-b border-hairline px-[19px] py-2.5 last:border-0"
+                    className="flex flex-wrap items-center gap-[var(--space-md)] border-b border-hairline px-[var(--row-pad-x)] py-2.5 last:border-0"
                   >
                     {r.ok ? (
                       <Icon name="check" size={15} strokeWidth={2.5} className="text-approved-fg" />

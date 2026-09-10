@@ -442,3 +442,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   text-transform: uppercase;
   color: var(--sn-ink-faint);
 }
+/* Encabezado de tabla (DataTable.jsx del kit): 11px, no los 10px de
+   .sn-label -- clase dedicada para no tocar el resto de usos de .sn-label
+   (pills, labels de formulario) que sí son 10px. */
+.sn-table-head {
+  font-family: var(--font-inter);
+  font-size: var(--text-table-head);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--sn-ink-faint);
+}

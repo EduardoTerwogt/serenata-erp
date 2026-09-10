@@ -13,7 +13,7 @@ import { FilterTabs } from '@/components/ui/FilterTabs'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { SkeletonTable } from '@/app/components/ui/SkeletonTable'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 
 // Puerto de patterns/Metric.jsx del kit: sn-label + valor en sn-display
 // text-h2, no un h3 semibold suelto.
@@ -170,7 +170,7 @@ export function CuentasPage() {
 
       {vista === 'proyecto' ? (
         porProyectoApi.loading ? (
-          <SkeletonTable columns={4} rows={6} />
+          <SectionLoading />
         ) : (
           <CuentasPorProyecto
             proyectos={porProyectoApi.proyectos}
@@ -180,7 +180,7 @@ export function CuentasPage() {
           />
         )
       ) : loading ? (
-        <SkeletonTable columns={4} rows={6} />
+        <SectionLoading />
       ) : (
         <CuentasTable
           tab={tab}

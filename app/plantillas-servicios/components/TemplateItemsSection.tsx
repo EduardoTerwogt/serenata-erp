@@ -86,7 +86,7 @@ export function TemplateItemsSection({
   // ── Desktop row ──────────────────────────────────────────────────────────
 
   const renderDesktopRow = (item: ServiceTemplateItem, index: number) => (
-    <tr key={index} className="border-b border-hairline">
+    <tr key={index} className="border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)]">
       {/* Categoría */}
       <td className="px-4 py-2">
         <input
@@ -384,9 +384,9 @@ export function TemplateItemsSection({
         <div className="hidden md:block" style={{ overflowX: 'auto', overflowY: 'visible' }}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-hairline">
+              <tr className="h-9 border-b border-hairline">
                 {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Responsable', 'X Pagar', ''].map(h => (
-                  <th key={h} className="sn-label text-left px-4 py-3 whitespace-nowrap" style={{ fontSize: 'var(--text-table-head)' }}>{h}</th>
+                  <th key={h} className="sn-table-head text-left px-4 py-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
