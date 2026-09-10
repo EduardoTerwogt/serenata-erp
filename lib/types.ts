@@ -104,6 +104,7 @@ export interface ItemCotizacion {
   margen: number
   orden: number
   notas?: string | null
+  revision?: number
 }
 
 export interface Producto {

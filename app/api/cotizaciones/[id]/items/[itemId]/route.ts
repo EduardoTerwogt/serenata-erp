@@ -4,6 +4,7 @@ import { findOrCreateProveedorByNombre } from '@/lib/db'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
+import { withIdempotency, type IdempotentResult } from '@/lib/server/idempotency'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ItemCotizacion } from '@/lib/types'
 
@@ -14,10 +15,21 @@ export async function PATCH(
   const authResult = await requireSection('cotizaciones')
   if (authResult.response) return authResult.response
 
-  try {
-    const { id, itemId } = await params
-    const body = await request.json().catch(() => ({}))
+  const { id, itemId } = await params
+  const body = await request.json().catch(() => ({}))
+  // Ninguno de los dos es obligatorio: la UI actual (react-hook-form,
+  // patchQuotationItem) no los manda y debe seguir funcionando exactamente
+  // igual -- sin base no hay comparación posible, así que la RPC sobreescribe
+  // como siempre. El grid nuevo (fase posterior) es quien empezará a mandarlos.
+  const base: Record<string, unknown> | undefined = body?.base && typeof body.base === 'object' ? body.base : undefined
+  const mutationId: string | undefined = typeof body?.mutation_id === 'string' ? body.mutation_id : undefined
 
+  // La RPC (el único paso que puede generar un conflicto real o duplicar un
+  // efecto) es lo único que corre bajo withIdempotency: si algo de aquí en
+  // adelante lanza, el catch de withIdempotency borra la idempotency key y
+  // relanza, así un reintento real (no un duplicado) puede volver a intentar
+  // limpio en vez de quedar repitiendo un 500 guardado para siempre.
+  const handler = async (): Promise<IdempotentResult> => {
     // Un nombre de responsable por texto libre (sin id -- p. ej. viene de Planeación o
     // de "copiar desde otra cotización") siempre debe resolver a un proveedor real,
     // nunca quedarse en texto suelto (Fase 5.3 Bloque 0, punto 2). Se resuelve ANTES
@@ -45,32 +57,75 @@ export async function PATCH(
       ...(responsableNombre !== undefined ? { responsable_nombre: responsableNombre } : {}),
     }
 
-    const { data: itemPatcheado, error: patchError } = await supabaseAdmin.rpc('patch_item_cotizacion', {
+    // db/migrations/20260910_item_cotizacion_revision_conflict.sql: la RPC
+    // ahora devuelve jsonb, con 3 formas posibles -- null (no encontrada),
+    // { conflict: {...} } (base desactualizada), o la fila completa.
+    const { data, error: patchError } = await supabaseAdmin.rpc('patch_item_cotizacion', {
       p_cotizacion_id: id,
       p_item_id: itemId,
       p_patch: patch,
+      p_base: base ?? null,
     })
     if (patchError) throw patchError
-    if (!itemPatcheado) {
-      return Response.json({ error: 'Partida no encontrada' }, { status: 404 })
+    if (!data) {
+      return { status: 404, body: { error: 'Partida no encontrada' } }
+    }
+    if (typeof data === 'object' && data !== null && 'conflict' in data) {
+      return {
+        status: 409,
+        body: {
+          error: 'conflict',
+          entity: 'item_cotizacion',
+          id: itemId,
+          fields: (data as { conflict: unknown }).conflict,
+        },
+      }
     }
 
-    const updatedQuotation = await recalculateQuotationHeader(id)
-    const updatedItem = (updatedQuotation.items || []).find((item) => item.id === itemId) ?? (itemPatcheado as ItemCotizacion)
-    // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
-    after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, updatedItem ? [updatedItem] : [], 'PATCH /api/cotizaciones/:id/items/:itemId') })
+    const itemPatcheado = data as ItemCotizacion
+
+    // El patch ya se confirmó en Postgres en este punto. Recalcular el
+    // encabezado es best-effort: si falla, no queremos que el catch de
+    // withIdempotency borre la idempotency key y deje que un reintento del
+    // mismo mutation_id vuelva a llamar a la RPC -- esa segunda llamada
+    // fallaría con un conflicto falso, porque la base que manda el cliente
+    // ya no coincide con el valor que su propio primer intento acaba de
+    // escribir.
+    let updatedItem: ItemCotizacion = itemPatcheado
+    try {
+      const updatedQuotation = await recalculateQuotationHeader(id)
+      updatedItem = (updatedQuotation.items || []).find((item) => item.id === itemId) ?? itemPatcheado
+      // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
+      after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, [updatedItem], 'PATCH /api/cotizaciones/:id/items/:itemId') })
+    } catch (recalcError) {
+      console.error('[PATCH /api/cotizaciones/:id/items/:itemId] El patch se guardó pero falló el recálculo del encabezado:', recalcError)
+    }
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
     // Evento confirmado por servidor tras el commit -- payload chico (ids +
-    // timestamp, nunca la partida completa). Nadie lo consume del lado UI
-    // todavía; es la prueba end-to-end de la infraestructura de Fase 1.
+    // revision + timestamp, nunca la partida completa).
     void sendRealtimeBroadcast([{
       topic: `cotizacion:${id}`,
       event: 'item_confirmed',
-      payload: { cotizacion_id: id, item_id: itemId, at: new Date().toISOString() },
+      payload: {
+        cotizacion_id: id,
+        item_id: itemId,
+        revision: updatedItem.revision ?? null,
+        mutation_id: mutationId ?? null,
+        at: new Date().toISOString(),
+      },
       private: true,
     }])
 
-    return Response.json({ item: updatedItem })
+    return { status: 200, body: { item: updatedItem } }
+  }
+
+  try {
+    // Sin mutation_id (cliente viejo), withIdempotency corre el handler
+    // directo -- mismo comportamiento de siempre. Con mutation_id, un retry
+    // de red no vuelve a aplicar el patch: devuelve la misma respuesta ya
+    // guardada.
+    const result = await withIdempotency(`cotizacion-item-patch:${id}:${itemId}`, mutationId, handler)
+    return Response.json(result.body, { status: result.status })
   } catch (error) {
     console.error('[PATCH /api/cotizaciones/:id/items/:itemId] Error actualizando item:', error)
     return Response.json({ error: 'Error actualizando partida' }, { status: 500 })
@@ -86,6 +141,13 @@ export async function DELETE(
 
   try {
     const { id, itemId } = await params
+    // No necesita su propio RPC con FOR UPDATE: un DELETE ya toma el lock de
+    // fila que corresponde, así que si corre a la vez que un PATCH (que sí
+    // usa FOR UPDATE dentro de patch_item_cotizacion) Postgres serializa las
+    // dos transacciones -- cualquiera que llegue primero gana, la otra ve el
+    // resultado ya aplicado (el DELETE borra la fila con los últimos valores
+    // si el PATCH ganó primero; el PATCH recibe "no encontrada" -> 404 si el
+    // DELETE ganó primero). No hay ventana de carrera que pierda un cambio.
     const { error } = await supabaseAdmin
       .from('items_cotizacion')
       .delete()

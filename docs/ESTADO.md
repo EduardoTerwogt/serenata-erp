@@ -188,8 +188,64 @@ lo entrega a un socket unido en modo privado. Corregido en
 
 **Pasos manuales completados por el usuario:** JWT Secret cargado en Vercel
 (scope Preview) y en el secret `TEST_SUPABASE_JWT_SECRET` de GitHub Actions;
-"Allow public access" apagado en `serenata-erp-test` (producción sigue en
-canal público hasta que esta branch se mergee).
+"Allow public access" apagado en `serenata-erp-test`. Mergeado a `main`
+(commit `c56a3c1`) y también asegurado en producción: `SUPABASE_JWT_SECRET`
+propio de `serenata-erp` cargado como un segundo valor de la misma variable
+en Vercel (scope Production, distinto del de Preview/test) y "Allow public
+access" apagado en `serenata-erp` — confirmado sin `JwtSignatureError` en los
+logs de Realtime de producción tras el redeploy.
+
+### Fase 2 — Protocolo de mutación y conflictos de Partidas (cerrada)
+
+Objetivo: endurecer `patch_item_cotizacion` con detección de conflicto real
+por campo, sin tocar la UI actual (`app/cotizaciones/[id]/page.tsx` sigue
+llamando la ruta exactamente igual, sin `base` ni `mutation_id` — eso lo usa
+recién el grid nuevo de una fase posterior). Solo Partidas; Información
+General y Totales quedan para una fase posterior, junto con la UI del grid.
+
+**Cambios:**
+- `db/migrations/20260910_item_cotizacion_revision_conflict.sql`: columna
+  `revision` en `items_cotizacion` (se incrementa en cada patch aplicado);
+  `patch_item_cotizacion` gana un 4º parámetro opcional `p_base` — sin él,
+  sobreescribe igual que siempre (retrocompatible); con él, compara cada
+  campo del patch contra el valor base recibido y devuelve
+  `{"conflict": {...}}` si alguno no coincide, sin aplicar nada (atómico:
+  un conflicto en cualquier campo rechaza la operación completa).
+- `app/api/cotizaciones/[id]/items/[itemId]/route.ts`: acepta `base` y
+  `mutation_id` opcionales en el body. Un conflicto de la RPC se traduce a
+  `409 { error: 'conflict', entity, id, fields }`. Con `mutation_id`, el
+  patch corre envuelto en `withIdempotency()` (ya existente, reusado de
+  `lib/server/idempotency.ts` — mismo mecanismo que ya usa
+  `registrar-pago`), así un retry de red no vuelve a aplicar el patch. El
+  recálculo del encabezado corre en su propio try/catch: si falla después
+  de que el patch ya se confirmó, no se relanza (evita que un reintento
+  legítimo del mismo `mutation_id` dispare un conflicto falso contra su
+  propio valor recién escrito). El broadcast (`item_confirmed`) ahora
+  incluye `revision` y `mutation_id` en el payload.
+- `DELETE` no cambió: un `DELETE` normal ya toma el lock de fila que le
+  corresponde, así que corriendo a la vez que un `PATCH` (que usa
+  `FOR UPDATE` dentro de la RPC) Postgres serializa las dos transacciones
+  sin ventana de carrera — ver el comentario en el propio route.
+
+**Verificado con SQL real contra `serenata-erp-test`** (fila descartable,
+limpiada después) antes de tocar el código de la app:
+1. Sin `base` → sobreescribe sin comparar, `revision` sube igual (retrocompat).
+2. Con `base` correcta → aplica y sube `revision`.
+3. Con `base` desactualizada → devuelve `{"conflict": {...}}` exacto, NO
+   aplica, `revision` no cambia.
+4. Dos campos distintos, cada uno con su `base` correcta → ambos sobreviven.
+5. Item inexistente → sigue devolviendo `null` (ruta responde 404 igual que
+   antes).
+
+Aplicada y verificada en `serenata-erp-test` y `serenata-erp` (aditivo puro:
+agrega columna y agrega una firma nueva de la función, después de tirar
+explícitamente la firma vieja de 3 argumentos para no dejar una sobrecarga
+ambigua). Unit tests nuevos en
+`app/api/__tests__/cotizacion-item-patch-route.test.ts` (16/16, cubren
+`base`, conflicto 409, `mutation_id`/idempotencia, y que un fallo del
+recálculo de encabezado no relanza). `npx tsc --noEmit`, `npm run lint`
+(mismos 9 warnings preexistentes), `npm test` (402/402) y `npm run build`
+en verde.
 
 ---
 
