@@ -352,7 +352,12 @@ esta iniciativa (`realtime-channel-authorization`, concurrencia de
 cuentas por cobrar/pagar, smoke básico) pasaron completos.
 
 **Mergeada a `main`** vía PR
-[#15](https://github.com/EduardoTerwogt/serenata-erp/pull/15).
+[#15](https://github.com/EduardoTerwogt/serenata-erp/pull/15) (commit
+`090f507`), y confirmada en verde real tras el merge: `Test Suite` y
+`Migrations` en verde sobre `main`; `E2E` con el mismo resultado de
+siempre (19/23 en `cotizaciones-colaboracion.spec.ts`, mismo caso
+conocido de la línea ~282, sin regresión) — igual que en el PR y que en
+los merges de las Fases 1 y 2.
 
 ---
 
