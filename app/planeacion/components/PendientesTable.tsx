@@ -47,7 +47,7 @@ export default function PendientesTable({
 
     return (
       <>
-        <tr key={line.id} className="hover:bg-row-alt/40 transition-colors">
+        <tr key={line.id} className="h-[46px] odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt">
           <td className="px-4 py-3">
             <input
               type="text"
@@ -162,16 +162,16 @@ export default function PendientesTable({
       {/* Lines Table */}
       <div className="rounded-panel border border-hairline bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-row border-b border-hairline">
-              <tr>
-                <th className="px-4 py-3 text-left text-subtext font-medium">Proyecto</th>
-                <th className="px-4 py-3 text-left text-subtext font-medium">Fecha</th>
-                <th className="px-4 py-3 text-left text-subtext font-medium">Ciudad</th>
-                <th className="px-4 py-3 text-left text-subtext font-medium">Locación/Venue</th>
-                <th className="px-4 py-3 text-left text-subtext font-medium">Plantilla</th>
-                <th className="px-4 py-3 text-left text-subtext font-medium">Acción</th>
-                <th className="px-4 py-3 text-center text-subtext font-medium"></th>
+          <table className="w-full text-[length:var(--text-md)]">
+            <thead>
+              <tr className="h-9 border-b border-hairline">
+                <th className="sn-table-head px-4 text-left align-middle">Proyecto</th>
+                <th className="sn-table-head px-4 text-left align-middle">Fecha</th>
+                <th className="sn-table-head px-4 text-left align-middle">Ciudad</th>
+                <th className="sn-table-head px-4 text-left align-middle">Locación/Venue</th>
+                <th className="sn-table-head px-4 text-left align-middle">Plantilla</th>
+                <th className="sn-table-head px-4 text-left align-middle">Acción</th>
+                <th className="sn-table-head px-4 text-center align-middle"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
@@ -191,7 +191,7 @@ export default function PendientesTable({
 
         {/* Info message */}
         {lines.length > 0 && (
-          <div className="px-4 py-3 bg-row border-t border-hairline text-xs text-subtext">
+          <div className="px-4 py-3 bg-row border-t border-hairline text-[length:var(--text-xs)] text-subtext">
             <p>Marca filas como &quot;Confirmado&quot; para crearlas como cotizaciones. Puedes editar los campos y seleccionar plantilla.</p>
           </div>
         )}

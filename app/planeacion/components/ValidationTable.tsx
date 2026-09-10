@@ -52,7 +52,7 @@ function EventRow({ line, isHighlighted = false, templates, onLineUpdate, onLine
 
   return (
     <>
-      <tr className={`${isHighlighted ? 'bg-row-alt/40' : 'hover:bg-row-alt/40'} transition-colors`}>
+      <tr className={`h-[46px] transition-colors duration-[var(--dur-fast)] ${isHighlighted ? 'bg-row-alt' : 'odd:bg-row hover:bg-row-alt'}`}>
         <td className="px-4 py-3">
           <input
             type="text"
@@ -183,23 +183,23 @@ function Section({ tone, icon, label, subtitle, rows, highlighted = false, ...ro
   return (
     <div className={`rounded-panel border ${t.border} bg-card overflow-hidden`}>
       <div className={`px-4 py-3 border-b ${t.header}`}>
-        <h3 className={`text-sm font-semibold flex items-center gap-1.5 ${t.title}`}>
+        <h3 className={`text-[length:var(--text-base)] font-semibold flex items-center gap-1.5 ${t.title}`}>
           <Icon name={icon} size={14} />
           {label} ({rows.length})
         </h3>
-        <p className={`text-xs mt-1 ${t.subtitle}`}>{subtitle}</p>
+        <p className={`text-[length:var(--text-xs)] mt-1 ${t.subtitle}`}>{subtitle}</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-row border-b border-hairline">
-            <tr>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Proyecto</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Fecha</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Ciudad</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Locación/Venue</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Plantilla</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Acción</th>
-              <th className="px-4 py-3 text-center text-subtext font-medium"></th>
+        <table className="w-full text-[length:var(--text-md)]">
+          <thead>
+            <tr className="h-9 border-b border-hairline">
+              <th className="sn-table-head px-4 text-left align-middle">Proyecto</th>
+              <th className="sn-table-head px-4 text-left align-middle">Fecha</th>
+              <th className="sn-table-head px-4 text-left align-middle">Ciudad</th>
+              <th className="sn-table-head px-4 text-left align-middle">Locación/Venue</th>
+              <th className="sn-table-head px-4 text-left align-middle">Plantilla</th>
+              <th className="sn-table-head px-4 text-left align-middle">Acción</th>
+              <th className="sn-table-head px-4 text-center align-middle"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-hairline">

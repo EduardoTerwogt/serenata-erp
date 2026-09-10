@@ -241,28 +241,27 @@ export default function ProyectoDetallePage({
 
           <SectionCard title="Partidas del Proyecto" description="Asigna responsables y agrega notas por partida" borderedHeader>
             <ResponsiveTableCard<ItemCotizacion>
-              theme="tokens"
               data={items}
               columns={[
-                { key: 'descripcion', label: 'Descripción' },
-                { key: 'categoria', label: 'Categoría' },
-                { key: 'cantidad', label: 'Cant.' },
-                { key: 'responsable', label: 'Responsable' },
-                { key: 'notas', label: 'Notas' },
+                { key: 'descripcion', label: 'Descripción', width: '26%' },
+                { key: 'categoria', label: 'Categoría', width: '16%' },
+                { key: 'cantidad', label: 'Cant.', width: '10%' },
+                { key: 'responsable', label: 'Responsable', width: '24%' },
+                { key: 'notas', label: 'Notas', width: '24%' },
               ]}
               renderDesktopRow={(item) => (
                 <>
-                  <td className="px-6 py-3 text-body">{item.descripcion}</td>
-                  <td className="px-6 py-3 text-subtext">{item.categoria}</td>
-                  <td className="px-6 py-3 text-body">{item.cantidad}</td>
-                  <td className="px-6 py-3">
-                    <select value={item.responsable_id || ''} onChange={e => actualizarResponsableItem(item.id, e.target.value)} className="w-full bg-input border border-hairline rounded-control px-2 py-1.5 text-body text-sm focus:outline-none focus:border-accent">
+                  <td className="truncate px-[var(--row-pad-x)] align-middle text-ink">{item.descripcion}</td>
+                  <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{item.categoria}</td>
+                  <td className="truncate px-[var(--row-pad-x)] align-middle text-ink">{item.cantidad}</td>
+                  <td className="px-[var(--row-pad-x)] align-middle">
+                    <select value={item.responsable_id || ''} onChange={e => actualizarResponsableItem(item.id, e.target.value)} className="w-full bg-input border border-hairline rounded-control px-2 py-1.5 text-body text-[length:var(--text-md)] focus:outline-none focus:border-accent">
                       <option value="">Sin asignar</option>
                       {responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
                     </select>
                   </td>
-                  <td className="px-6 py-3">
-                    <input type="text" value={itemNotas[item.id] ?? ''} onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))} className="w-full bg-input border border-hairline rounded-control px-2 py-1.5 text-body text-sm focus:outline-none focus:border-accent" placeholder="Notas..." />
+                  <td className="px-[var(--row-pad-x)] align-middle">
+                    <input type="text" value={itemNotas[item.id] ?? ''} onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))} className="w-full bg-input border border-hairline rounded-control px-2 py-1.5 text-body text-[length:var(--text-md)] focus:outline-none focus:border-accent" placeholder="Notas..." />
                   </td>
                 </>
               )}

@@ -211,23 +211,22 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
             {historialError && <StatusBanner tone="error">Error cargando historial: {historialError}</StatusBanner>}
             <div className="rounded-panel border border-hairline overflow-hidden">
               <ResponsiveTableCard<HistorialResponsable>
-                theme="tokens"
                 data={historial}
                 columns={[
-                  { key: 'proyecto', label: 'Proyecto' },
-                  { key: 'fecha', label: 'Fecha del evento' },
-                  { key: 'rol', label: 'Rol' },
-                  { key: 'monto', label: 'X pagar', align: 'right' },
+                  { key: 'proyecto', label: 'Proyecto', width: '32%' },
+                  { key: 'fecha', label: 'Fecha del evento', width: '22%' },
+                  { key: 'rol', label: 'Rol', width: '26%' },
+                  { key: 'monto', label: 'X pagar', align: 'right', width: '20%' },
                 ]}
                 renderDesktopRow={(h) => (
                   <>
-                    <td className="px-4 py-3">
-                      <p className="text-ink font-medium">{h.proyecto_nombre}</p>
-                      <p className="text-faint text-xs">{h.cliente}</p>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle">
+                      <p className="truncate font-medium text-ink">{h.proyecto_nombre}</p>
+                      <p className="truncate text-[length:var(--text-xs)] text-faint">{h.cliente}</p>
                     </td>
-                    <td className="px-4 py-3 text-subtext">{formatDateDisplay(h.fecha_evento)}</td>
-                    <td className="px-4 py-3 text-body">{h.rol_en_proyecto || '—'}</td>
-                    <td className="px-4 py-3 text-right text-approved-fg font-medium">${fmt(h.x_pagar)}</td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{formatDateDisplay(h.fecha_evento)}</td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-ink">{h.rol_en_proyecto || '—'}</td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-right font-semibold text-approved-fg">${fmt(h.x_pagar)}</td>
                   </>
                 )}
                 renderMobileCard={(h) => (

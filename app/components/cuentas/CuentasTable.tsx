@@ -20,19 +20,28 @@ function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
 }
 
+// Anchos de columna (CuentasScreen.jsx del kit) traducidos a % fijos vía
+// colgroup + table-fixed -- así no cambian al filtrar/paginar.
+const COL_WIDTHS_COBRAR = ['9%', '17%', '23%', '20%', '17%', '14%']
+const COL_WIDTHS_PAGAR = ['9%', '21%', '16%', '21%', '20%', '13%']
+
 export function CuentasTable({ tab, cuentas, total, onSelect }: Props) {
   const columns = tab === 'cobrar'
     ? ['Folio', 'Cliente', 'Proyecto', 'Pagado / Total', 'Vencimiento', 'Estado']
     : ['Folio', 'Proyecto', 'Responsable', 'Descripción', 'Pagado / Total', 'Estado']
+  const widths = tab === 'cobrar' ? COL_WIDTHS_COBRAR : COL_WIDTHS_PAGAR
 
   return (
     <div className="rounded-panel border border-hairline bg-card overflow-hidden">
       <div className="hidden lg:block overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full table-fixed text-[length:var(--text-md)]">
+          <colgroup>
+            {widths.map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
           <thead>
-            <tr className="border-b border-hairline">
+            <tr className="h-9">
               {columns.map((column) => (
-                <th key={column} className="sn-label px-6 py-3 text-left">
+                <th key={column} className="sn-table-head truncate px-[var(--row-pad-x)] text-left align-middle">
                   {column}
                 </th>
               ))}
@@ -44,36 +53,36 @@ export function CuentasTable({ tab, cuentas, total, onSelect }: Props) {
               const montoTotal = cuenta.tipo === 'cobrar' ? cuenta.monto_total : cuenta.x_pagar
 
               return (
-                <tr key={`${cuenta.tipo}-${cuenta.id}`} className="odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt cursor-pointer" onClick={() => onSelect(cuenta)}>
-                  <td className="px-6 py-4">
-                    <div className="text-accent font-mono text-content">
+                <tr key={`${cuenta.tipo}-${cuenta.id}`} className="h-[46px] odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt cursor-pointer" onClick={() => onSelect(cuenta)}>
+                  <td className="truncate px-[var(--row-pad-x)] align-middle">
+                    <div className="text-accent font-mono">
                       {cuenta.cotizacion_id}
                     </div>
                   </td>
 
                   {cuenta.tipo === 'cobrar' ? (
                     <>
-                      <td className="px-6 py-4 text-body font-medium">{cuenta.cliente}</td>
-                      <td className="px-6 py-4 text-subtext">{cuenta.proyecto}</td>
-                      <td className="px-6 py-4 text-ink font-bold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
-                      <td className="px-6 py-4 text-subtext">{formatDateDisplay(cuenta.fecha_vencimiento)}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-ink font-semibold">{cuenta.cliente}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{cuenta.proyecto}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-ink font-semibold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{formatDateDisplay(cuenta.fecha_vencimiento)}</td>
                     </>
                   ) : (
                     <>
-                      <td className="px-6 py-4 text-body font-medium">{cuenta.proyecto_nombre || '—'}</td>
-                      <td className="px-6 py-4 text-subtext">
-                        <div>{cuenta.responsable_nombre}</div>
-                        {cuenta.correo && <div className="text-faint text-eyebrow mt-1">{cuenta.correo}</div>}
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-ink font-semibold">{cuenta.proyecto_nombre || '—'}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">
+                        <div className="truncate">{cuenta.responsable_nombre}</div>
+                        {cuenta.correo && <div className="truncate text-[length:var(--text-xs)] text-faint">{cuenta.correo}</div>}
                       </td>
-                      <td className="px-6 py-4 text-subtext">
-                        <div>{cuenta.item_descripcion || '—'}</div>
-                        {cuenta.cantidad > 1 && <div className="text-faint text-eyebrow mt-1">Cantidad: {cuenta.cantidad}</div>}
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">
+                        <div className="truncate">{cuenta.item_descripcion || '—'}</div>
+                        {cuenta.cantidad > 1 && <div className="truncate text-[length:var(--text-xs)] text-faint">Cantidad: {cuenta.cantidad}</div>}
                       </td>
-                      <td className="px-6 py-4 text-ink font-bold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
+                      <td className="truncate px-[var(--row-pad-x)] align-middle text-ink font-semibold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
                     </>
                   )}
 
-                  <td className="px-6 py-4">
+                  <td className="px-[var(--row-pad-x)] align-middle">
                     <StatusBadge tone={toneForCuentaEstado(cuenta.estado)}>{cuenta.estado}</StatusBadge>
                   </td>
                 </tr>

@@ -40,7 +40,7 @@ export function BarChart({ data, height = 186, onBarClick, format = (v) => `$${v
               style={{ height: `${Math.max((d.egresos / max) * 100, d.egresos > 0 ? 2 : 0)}%` }}
             />
           </div>
-          <span className="text-xs text-faint whitespace-nowrap">{d.label}</span>
+          <span className="text-[length:var(--text-xs)] text-faint whitespace-nowrap">{d.label}</span>
         </button>
       ))}
     </div>
