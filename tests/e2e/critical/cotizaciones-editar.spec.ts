@@ -489,27 +489,15 @@ test('un guardado de otro colaborador no borra el monto recién capturado', asyn
   ])
   expect(patch.postDataJSON().precio_unitario).toBe(9000)
 
-  // El otro colaborador guarda justo ahora.
-  await realtime.emit('section_saved', { section: 'partidas' })
+  // El otro colaborador confirma un cambio ajeno justo ahora (item_confirmed,
+  // server-confirmed -- Fase 6E retiró el aviso de navegador `section_saved`).
+  await realtime.emit('item_confirmed', {
+    cotizacion_id: 'SH-E2E-COLAB', item_id: 'item-detail-1', revision: 1, mutation_id: null, operation: 'update',
+  })
   await page.waitForTimeout(2500)
 
   await expect(precio).toHaveValue('9000')
   expect(cotizacion.items[0].precio_unitario).toBe(9000)
-})
-
-test('un guardado ajeno no provoca una relectura de la cotización', async ({ page }) => {
-  const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-SINGET', estado: 'BORRADOR' })
-  const realtime = await mockRealtimeChannel(page)
-  await login(page, '/cotizaciones/SH-E2E-SINGET')
-  await expect(page.getByRole('heading', { name: 'SH-E2E-SINGET' })).toBeVisible()
-  await page.waitForTimeout(300)
-
-  const antes = (cotizacion as unknown as { __getsDeCotizacion: number }).__getsDeCotizacion
-  await realtime.emit('section_saved', { section: 'partidas' })
-  await page.waitForTimeout(1200)
-
-  // El cambio ajeno llega por la mutación, no releyendo toda la cotización.
-  expect((cotizacion as unknown as { __getsDeCotizacion: number }).__getsDeCotizacion).toBe(antes)
 })
 
 test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', async ({ page }) => {
@@ -526,7 +514,8 @@ test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', as
   // Fase 6D: el aviso del navegador (`item_mutation`) ya no existe. El otro
   // colaborador guardó su fila en el servidor (simulado sobre el estado del mock,
   // igual que un GET la vería) y el servidor confirma con `item_confirmed`, que
-  // dispara una reconciliación inmediata en vez de esperar el heartbeat de 5s.
+  // dispara una reconciliación inmediata en vez de esperar el heartbeat, que desde
+  // Fase 6E ya no es la garantía primaria.
   cotizacion.items = [...cotizacion.items, {
     id: 'item-remota-1', cotizacion_id: 'SH-E2E-FOCO', categoria: 'Arte', descripcion: 'Partida del otro',
     cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
@@ -549,10 +538,11 @@ test('escribir en Datos generales mientras otro está en la sección sí guarda'
   await login(page, '/cotizaciones/SH-E2E-SECCION')
   await expect(page.getByRole('heading', { name: 'SH-E2E-SECCION' })).toBeVisible()
 
-  // El otro colaborador entra a Datos generales. (No se afirma sobre el aviso visual:
-  // llega por presencia y su momento es variable; lo que fija este test es que la
-  // presencia ajena ya no deja el campo en solo lectura ni detiene el autoguardado.)
-  await realtime.emit('section_signal', { status: 'editing', section: 'general' })
+  // El otro colaborador entra a Datos generales (Presence real -- Fase 6E, ya no
+  // un broadcast `section_signal` aparte). No se afirma sobre el aviso visual: su
+  // momento es variable; lo que fija este test es que la presencia ajena ya no deja
+  // el campo en solo lectura ni detiene el autoguardado.
+  await realtime.emitPresence({ active_section: 'general' })
   await page.waitForTimeout(300)
 
   // El campo sigue siendo editable y lo que escriba se guarda.
@@ -574,6 +564,10 @@ test('escribir en Datos generales mientras otro está en la sección sí guarda'
  * camino del aviso, y la reconciliación la reintrodujo hasta que se corrigió.
  */
 test('la fila que llega por reconciliación no me quita el cursor', async ({ page }) => {
+  // Fase 6E: el heartbeat ya no es la garantía primaria y se hizo mucho menos
+  // frecuente (RECONCILIACION_MS) -- este test prueba justo esa red de última
+  // instancia, sin ningún aviso de por medio, así que necesita más margen.
+  test.slow()
   const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-RECON', estado: 'BORRADOR' })
   await login(page, '/cotizaciones/SH-E2E-RECON')
   await expect(page.getByRole('heading', { name: 'SH-E2E-RECON' })).toBeVisible()
@@ -601,7 +595,7 @@ test('la fila que llega por reconciliación no me quita el cursor', async ({ pag
     notas: null,
   }]
 
-  await expect(rows).toHaveCount(2, { timeout: 20_000 })
+  await expect(rows).toHaveCount(2, { timeout: 30_000 })
   await expect(rows.nth(1).locator('td').nth(1).locator('input')).toHaveValue('Partida del otro')
   await expect(descripcion).toBeFocused()
   await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
@@ -613,6 +607,9 @@ test('la fila que llega por reconciliación no me quita el cursor', async ({ pag
  * por el canal y sin tocar lo que el usuario está escribiendo en otra fila.
  */
 test('la fila que borra el otro desaparece por reconciliación', async ({ page }) => {
+  // Fase 6E: mismo motivo que el gemelo de arriba -- red de última instancia, sin
+  // aviso, con un intervalo deliberadamente más largo que antes.
+  test.slow()
   const cotizacion = await mockCotizacionDetailApis(page, {
     id: 'SH-E2E-RECON-DEL',
     estado: 'BORRADOR',
@@ -643,7 +640,7 @@ test('la fila que borra el otro desaparece por reconciliación', async ({ page }
   // enterarse sola.
   cotizacion.items = cotizacion.items.filter((item) => item.id !== 'item-que-borra-el-otro')
 
-  await expect(rows).toHaveCount(1, { timeout: 20_000 })
+  await expect(rows).toHaveCount(1, { timeout: 30_000 })
   await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
   await expect(descripcion).toBeFocused()
 })

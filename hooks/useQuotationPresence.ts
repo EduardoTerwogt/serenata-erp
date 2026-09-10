@@ -14,11 +14,23 @@ interface CurrentUser {
   name?: string | null
 }
 
+/**
+ * Un registro de Presence real (Supabase Realtime), no un dato de negocio: cada
+ * cliente publica el suyo propio vía `channel.track()` y Supabase lo sincroniza a
+ * todos los demás. Puramente informativo -- quién está conectado, en qué sección,
+ * sobre qué celda -- nunca decide conflictos, nunca bloquea una edición, nunca es
+ * la fuente de verdad de ningún dato de la cotización (esa es siempre PostgreSQL,
+ * vía los eventos `*_confirmed` más abajo).
+ */
 export interface QuotationPresenceUser {
   user_id: string
   email: string
   name: string
   active_section: QuotationPresenceSection | null
+  /** Fila que este usuario tiene enfocada ahora mismo, si está en Partidas. */
+  entity_id: string | null
+  /** Campo de esa fila, si `entity_id` no es null. */
+  field: QuotationItemCellField | null
   online_at: string
 }
 
@@ -36,42 +48,11 @@ interface UseQuotationPresenceResult {
   latestGeneralConfirmed: SectionConfirmedPayload | null
   latestTotalesConfirmed: SectionConfirmedPayload | null
   latestNotasConfirmed: SectionConfirmedPayload | null
-  savedSections: Partial<Record<QuotationPresenceSection, number>>
   setActiveSection: (section: QuotationPresenceSection | null) => void
   releaseSection: (section?: QuotationPresenceSection) => void
   lockItemCell: (rowId: string, field: QuotationItemCellField) => void
   releaseItemCell: (rowId: string, field: QuotationItemCellField) => void
-  markSectionSaved: (section: QuotationPresenceSection) => void
   isConnected: boolean
-}
-
-type SectionSignalStatus = 'editing' | 'released'
-
-interface SectionSignalPayload {
-  status: SectionSignalStatus
-  section: QuotationPresenceSection
-  user_id: string
-  email: string
-  name: string
-  at: string
-}
-
-interface SectionSavedPayload {
-  section: QuotationPresenceSection
-  user_id: string
-  email: string
-  name: string
-  at: string
-}
-
-interface ItemCellSignalPayload {
-  status: SectionSignalStatus
-  row_id: string
-  field: QuotationItemCellField
-  user_id: string
-  email: string
-  name: string
-  at: string
 }
 
 /**
@@ -107,15 +88,12 @@ export interface SectionConfirmedPayload {
   at: string
 }
 
-function getCellLockKey(rowId: string, field: QuotationItemCellField) {
-  return `${rowId}:${field}`
+function getCellKey(entityId: string, field: QuotationItemCellField) {
+  return `${entityId}:${field}`
 }
 
 interface PresenceState {
   rawOnlineUsers: QuotationPresenceUser[]
-  activeSectionOverrides: Record<string, QuotationPresenceSection | null>
-  savedSections: Partial<Record<QuotationPresenceSection, number>>
-  itemCellEditors: Record<string, QuotationPresenceUser>
   latestItemConfirmed: ItemConfirmedPayload | null
   latestGeneralConfirmed: SectionConfirmedPayload | null
   latestTotalesConfirmed: SectionConfirmedPayload | null
@@ -125,9 +103,6 @@ interface PresenceState {
 
 const initialPresenceState: PresenceState = {
   rawOnlineUsers: [],
-  activeSectionOverrides: {},
-  savedSections: {},
-  itemCellEditors: {},
   latestItemConfirmed: null,
   latestGeneralConfirmed: null,
   latestTotalesConfirmed: null,
@@ -138,23 +113,19 @@ const initialPresenceState: PresenceState = {
 type PresenceAction =
   | { type: 'reset' }
   | { type: 'sync_online_users'; users: QuotationPresenceUser[] }
-  | { type: 'section_signal'; userId: string; section: QuotationPresenceSection | null }
-  | { type: 'item_cell_signal'; key: string; editor: QuotationPresenceUser | null }
   | { type: 'item_confirmed'; payload: ItemConfirmedPayload }
   | { type: 'general_confirmed'; payload: SectionConfirmedPayload }
   | { type: 'totales_confirmed'; payload: SectionConfirmedPayload }
   | { type: 'notas_confirmed'; payload: SectionConfirmedPayload }
-  | { type: 'section_saved'; userId: string; section: QuotationPresenceSection }
   | { type: 'set_connected'; connected: boolean }
 
 /**
- * Consolida los 7 estados de presencia en una sola transición por evento, en vez de
+ * Consolida los estados de presencia en una sola transición por evento, en vez de
  * varios setState seguidos — así el reset (`!enabled` / cleanup del efecto) es UNA sola
  * actualización de estado, no varias, evitando el patrón que dispara
  * react-hooks/set-state-in-effect. `reset` devuelve siempre la misma referencia de
  * `initialPresenceState`, así que si el estado ya estaba en default, useReducer hace
- * bail-out del render automáticamente (misma optimización que antes tenían las guardas
- * manuales por campo).
+ * bail-out del render automáticamente.
  */
 function presenceReducer(state: PresenceState, action: PresenceAction): PresenceState {
   switch (action.type) {
@@ -162,17 +133,6 @@ function presenceReducer(state: PresenceState, action: PresenceAction): Presence
       return initialPresenceState
     case 'sync_online_users':
       return { ...state, rawOnlineUsers: action.users }
-    case 'section_signal':
-      return {
-        ...state,
-        activeSectionOverrides: { ...state.activeSectionOverrides, [action.userId]: action.section },
-      }
-    case 'item_cell_signal': {
-      const next = { ...state.itemCellEditors }
-      if (action.editor) next[action.key] = action.editor
-      else delete next[action.key]
-      return { ...state, itemCellEditors: next }
-    }
     case 'item_confirmed':
       return { ...state, latestItemConfirmed: action.payload }
     case 'general_confirmed':
@@ -181,15 +141,6 @@ function presenceReducer(state: PresenceState, action: PresenceAction): Presence
       return { ...state, latestTotalesConfirmed: action.payload }
     case 'notas_confirmed':
       return { ...state, latestNotasConfirmed: action.payload }
-    case 'section_saved':
-      return {
-        ...state,
-        activeSectionOverrides: { ...state.activeSectionOverrides, [action.userId]: null },
-        savedSections: {
-          ...state.savedSections,
-          [action.section]: (state.savedSections[action.section] || 0) + 1,
-        },
-      }
     case 'set_connected':
       return { ...state, isConnected: action.connected }
     default:
@@ -197,15 +148,29 @@ function presenceReducer(state: PresenceState, action: PresenceAction): Presence
   }
 }
 
+/**
+ * Presence pura -- awareness, nunca datos. Un solo `channel.track()` por cliente
+ * lleva sección activa + celda enfocada (si aplica); Supabase Realtime sincroniza
+ * ese estado a todos los demás clientes de forma confiable (protocolo de Presence,
+ * no un broadcast ad-hoc). Antes (Fase 3-6D) "quién edita qué sección/celda" viajaba
+ * por un `channel.send()` de broadcast aparte (`section_signal`/`item_cell_signal`):
+ * ese envío cae a REST con 403 silencioso cuando el canal todavía no terminó de
+ * unirse (`.catch(() => null)` se traga el error) -- la causa raíz, documentada desde
+ * Fase 0, del test live que fallaba de forma intermitente esperando ese aviso. Fase
+ * 6E lo retira: ya no hay un segundo canal de awareness que pueda perderse en
+ * silencio, solo Presence, que si el join falla simplemente no tiene con qué
+ * trackear -- no hay ventana donde el track "salga" pero se pierda.
+ */
 export function useQuotationPresence({
   cotizacionId,
   enabled,
   currentUser,
 }: UseQuotationPresenceOptions): UseQuotationPresenceResult {
   const [state, dispatch] = useReducer(presenceReducer, initialPresenceState)
-  const { rawOnlineUsers, activeSectionOverrides, savedSections, itemCellEditors, latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, latestNotasConfirmed, isConnected } = state
+  const { rawOnlineUsers, latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, latestNotasConfirmed, isConnected } = state
   const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
+  const activeCellRef = useRef<{ rowId: string; field: QuotationItemCellField } | null>(null)
   const presenceKeyRef = useRef('')
 
   const identity = useMemo(() => {
@@ -215,7 +180,7 @@ export function useQuotationPresence({
     return { userId, email, name }
   }, [cotizacionId, currentUser?.email, currentUser?.id, currentUser?.name])
 
-  const trackPresence = useCallback((section: QuotationPresenceSection | null) => {
+  const trackPresence = useCallback((section: QuotationPresenceSection | null, cell: { rowId: string; field: QuotationItemCellField } | null) => {
     const channel = channelRef.current
     if (!channel) return
 
@@ -224,105 +189,41 @@ export function useQuotationPresence({
       email: identity.email,
       name: identity.name,
       active_section: section,
+      entity_id: cell?.rowId ?? null,
+      field: cell?.field ?? null,
       online_at: new Date().toISOString(),
     }).catch(() => null)
   }, [identity.email, identity.name, identity.userId])
 
-  const sendSectionSignal = useCallback((status: SectionSignalStatus, section: QuotationPresenceSection) => {
-    const channel = channelRef.current
-    if (!channel) return
-
-    void channel.send({
-      type: 'broadcast',
-      event: 'section_signal',
-      payload: {
-        status,
-        section,
-        user_id: identity.userId,
-        email: identity.email,
-        name: identity.name,
-        at: new Date().toISOString(),
-      } satisfies SectionSignalPayload,
-    }).catch(() => null)
-  }, [identity.email, identity.name, identity.userId])
-
-  const sendItemCellSignal = useCallback((status: SectionSignalStatus, rowId: string, field: QuotationItemCellField) => {
-    const channel = channelRef.current
-    if (!channel) return
-
-    void channel.send({
-      type: 'broadcast',
-      event: 'item_cell_signal',
-      payload: {
-        status,
-        row_id: rowId,
-        field,
-        user_id: identity.userId,
-        email: identity.email,
-        name: identity.name,
-        at: new Date().toISOString(),
-      } satisfies ItemCellSignalPayload,
-    }).catch(() => null)
-  }, [identity.email, identity.name, identity.userId])
-
-  const markSectionSaved = useCallback((section: QuotationPresenceSection) => {
-    const channel = channelRef.current
-    if (!channel) return
-
-    void channel.send({
-      type: 'broadcast',
-      event: 'section_saved',
-      payload: {
-        section,
-        user_id: identity.userId,
-        email: identity.email,
-        name: identity.name,
-        at: new Date().toISOString(),
-      } satisfies SectionSavedPayload,
-    }).catch(() => null)
-  }, [identity.email, identity.name, identity.userId])
-
   const setActiveSection = useCallback((section: QuotationPresenceSection | null) => {
-    const previous = activeSectionRef.current
     activeSectionRef.current = section
     if (!enabled) return
-
-    if (previous && previous !== section) {
-      sendSectionSignal('released', previous)
-    }
-
-    if (section) {
-      sendSectionSignal('editing', section)
-    }
-
-    trackPresence(section)
-  }, [enabled, sendSectionSignal, trackPresence])
+    trackPresence(section, activeCellRef.current)
+  }, [enabled, trackPresence])
 
   const releaseSection = useCallback((section?: QuotationPresenceSection) => {
     const previous = activeSectionRef.current
-    const sectionToRelease = section || previous
-
-    if (section && previous !== section) {
-      return
-    }
+    if (section && previous !== section) return
 
     activeSectionRef.current = null
     if (!enabled) return
-    if (sectionToRelease) {
-      sendSectionSignal('released', sectionToRelease)
-    }
-    trackPresence(null)
-  }, [enabled, sendSectionSignal, trackPresence])
+    trackPresence(null, activeCellRef.current)
+  }, [enabled, trackPresence])
 
   const lockItemCell = useCallback((rowId: string, field: QuotationItemCellField) => {
+    activeCellRef.current = { rowId, field }
     if (!enabled) return
-    sendItemCellSignal('editing', rowId, field)
-  }, [enabled, sendItemCellSignal])
+    trackPresence(activeSectionRef.current, activeCellRef.current)
+  }, [enabled, trackPresence])
 
   const releaseItemCell = useCallback((rowId: string, field: QuotationItemCellField) => {
+    const current = activeCellRef.current
+    if (current && (current.rowId !== rowId || current.field !== field)) return
+
+    activeCellRef.current = null
     if (!enabled) return
-    sendItemCellSignal('released', rowId, field)
-  }, [enabled, sendItemCellSignal])
+    trackPresence(activeSectionRef.current, null)
+  }, [enabled, trackPresence])
 
   useEffect(() => {
     if (!enabled) {
@@ -336,9 +237,6 @@ export function useQuotationPresence({
     // Canal PRIVADO: requiere autorizar la sesión de Realtime (JWT corto
     // derivado de la sesión de NextAuth) antes de unirse -- ver
     // lib/realtime/authorize.ts y db/migrations/20260909_realtime_broadcast_authorization.sql.
-    // Antes de este cambio, este canal era público: cualquiera con la anon
-    // key podía unirse a "cotizacion:*" y ver/enviar broadcasts de cualquier
-    // cotización.
     const channel = createPrivateChannel(`cotizacion:${cotizacionId}`, {
       presence: { key: presenceKeyRef.current },
     })
@@ -349,38 +247,6 @@ export function useQuotationPresence({
         .flatMap((entries) => entries)
         .filter(Boolean)
       dispatch({ type: 'sync_online_users', users })
-    })
-
-    channel.on('broadcast', { event: 'section_signal' }, ({ payload }) => {
-      const signal = payload as SectionSignalPayload | undefined
-      if (!signal?.user_id || signal.user_id === identity.userId) return
-
-      dispatch({
-        type: 'section_signal',
-        userId: signal.user_id,
-        section: signal.status === 'editing' ? signal.section : null,
-      })
-    })
-
-    channel.on('broadcast', { event: 'item_cell_signal' }, ({ payload }) => {
-      const signal = payload as ItemCellSignalPayload | undefined
-      if (!signal?.user_id || signal.user_id === identity.userId) return
-
-      const key = getCellLockKey(signal.row_id, signal.field)
-      dispatch({
-        type: 'item_cell_signal',
-        key,
-        editor:
-          signal.status === 'editing'
-            ? {
-                user_id: signal.user_id,
-                email: signal.email,
-                name: signal.name,
-                active_section: 'partidas',
-                online_at: signal.at,
-              }
-            : null,
-      })
     })
 
     channel.on('broadcast', { event: 'item_confirmed' }, ({ payload }) => {
@@ -407,22 +273,14 @@ export function useQuotationPresence({
       dispatch({ type: 'notas_confirmed', payload: { ...confirmed } })
     })
 
-    channel.on('broadcast', { event: 'section_saved' }, ({ payload }) => {
-      const saved = payload as SectionSavedPayload | undefined
-      if (!saved?.user_id || saved.user_id === identity.userId) return
-
-      dispatch({ type: 'section_saved', userId: saved.user_id, section: saved.section })
-    })
-
     let cancelled = false
     let cancelTokenRefresh: (() => void) | null = null
 
     const join = async () => {
       // Si autorizar falla (red, endpoint caído), igual se intenta unir: el
-      // join simplemente lo rechaza la política RLS -- mismo modo de falla
-      // que ya se toleraba con el canal público (`channel.send()` cayendo a
-      // REST con 403 silencioso). El polling de 5s en la pantalla de detalle
-      // sigue siendo la garantía real de convergencia, no este canal.
+      // join simplemente lo rechaza la política RLS -- Presence sencillamente no
+      // tiene nada que trackear, sin la ventana de "se mandó pero se perdió en
+      // silencio" que tenía el broadcast ad-hoc que este canal usaba antes.
       try {
         const ttlSeconds = await authorizeRealtime()
         if (!cancelled) cancelTokenRefresh = scheduleTokenRefresh(ttlSeconds)
@@ -439,6 +297,8 @@ export function useQuotationPresence({
             email: identity.email,
             name: identity.name,
             active_section: activeSectionRef.current,
+            entity_id: activeCellRef.current?.rowId ?? null,
+            field: activeCellRef.current?.field ?? null,
             online_at: new Date().toISOString(),
           })
           return
@@ -463,14 +323,7 @@ export function useQuotationPresence({
     }
   }, [cotizacionId, enabled, identity.email, identity.name, identity.userId])
 
-  const onlineUsers = useMemo(() => {
-    return rawOnlineUsers.map((user) => ({
-      ...user,
-      active_section: Object.prototype.hasOwnProperty.call(activeSectionOverrides, user.user_id)
-        ? activeSectionOverrides[user.user_id]
-        : user.active_section,
-    }))
-  }, [activeSectionOverrides, rawOnlineUsers])
+  const onlineUsers = rawOnlineUsers
 
   const sectionEditors = useMemo(() => {
     const editors: Partial<Record<QuotationPresenceSection, QuotationPresenceUser>> = {}
@@ -486,6 +339,19 @@ export function useQuotationPresence({
     return editors
   }, [identity.userId, onlineUsers])
 
+  const itemCellEditors = useMemo(() => {
+    const editors: Record<string, QuotationPresenceUser> = {}
+
+    onlineUsers.forEach((user) => {
+      if (!user.entity_id || !user.field) return
+      if (user.user_id === identity.userId) return
+      const key = getCellKey(user.entity_id, user.field)
+      if (!editors[key]) editors[key] = user
+    })
+
+    return editors
+  }, [identity.userId, onlineUsers])
+
   return {
     onlineUsers,
     sectionEditors,
@@ -494,12 +360,10 @@ export function useQuotationPresence({
     latestGeneralConfirmed,
     latestTotalesConfirmed,
     latestNotasConfirmed,
-    savedSections,
     setActiveSection,
     releaseSection,
     lockItemCell,
     releaseItemCell,
-    markSectionSaved,
     isConnected,
   }
 }

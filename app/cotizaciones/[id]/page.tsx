@@ -34,10 +34,16 @@ const GENERAL_AUTOSAVE_DELAY_MS = 800
 const TOTALS_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_IDLE_RELEASE_MS = 5000
-// Cada cuánto se relee la cotización mientras la pantalla está abierta y visible.
-// Es la red que hace que un aviso perdido deje de importar: aunque no llegue
-// ninguno, las dos pantallas convergen dentro de este plazo.
-const RECONCILIACION_MS = 5000
+// Fase 6E: la garantía PRIMARIA de convergencia ya no es este latido -- son los 4
+// eventos server-confirmed (item/general/totales/notas, emitidos por Postgres vía
+// sendRealtimeBroadcast) más reconectar el canal y volver a la pestaña, todos
+// gatillando reconciliarConServidor() de inmediato. Este intervalo queda solo como
+// red de última instancia por si alguno de esos avisos se pierde (p. ej. un
+// broadcast que no llega durante una reconexión que el cliente no detectó a
+// tiempo) -- deliberadamente mucho menos frecuente que antes (antes 5s, la única
+// garantía real) para que quede claro en el propio código que ya no es el
+// mecanismo principal.
+const RECONCILIACION_MS = 20_000
 const SECTION_IDLE_RELEASE_MS = 5000
 
 interface GeneralSnapshot {
@@ -356,12 +362,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     latestGeneralConfirmed,
     latestTotalesConfirmed,
     latestNotasConfirmed,
-    savedSections,
     setActiveSection,
     releaseSection,
     lockItemCell,
     releaseItemCell,
-    markSectionSaved,
     isConnected,
   } = useQuotationPresence({
     cotizacionId: id,
@@ -778,9 +782,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const notasToSave = getCurrentNotasSnapshot(); const previousNotas = lastSavedNotasRef.current
     if (notasToSave === previousNotas) { notasDirtyRef.current = false; if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } scheduleNotasIdleRelease(); return }
     setIsSavingNotas(true)
-    try { await saveQuotationNotes(id, notasToSave || null); lastSavedNotasRef.current = notasToSave; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev)); markSectionSaved('notas') } catch (saveError: unknown) { setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas'); notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } finally { setIsSavingNotas(false) }
+    try { await saveQuotationNotes(id, notasToSave || null); lastSavedNotasRef.current = notasToSave; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev)) } catch (saveError: unknown) { setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas'); notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } finally { setIsSavingNotas(false) }
     const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; notasDirtyRef.current = hasPendingChanges; if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } if (!hasPendingChanges) scheduleNotasIdleRelease()
-  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, markSectionSaved, releaseSection, scheduleNotasIdleRelease])
+  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, releaseSection, scheduleNotasIdleRelease])
 
   const getGeneralFieldValue = useCallback((field: QuotationGeneralField): unknown => {
     switch (field) {
@@ -825,7 +829,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         generalServerRef.current = buildGeneralSnapshot({ cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega || '', locacion: updated.locacion || '' })
         setCotizacion((prev) => prev ? { ...prev, cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega, locacion: updated.locacion } : prev)
       }
-      markSectionSaved('general')
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
         // Nunca se descarta en silencio lo que el usuario tecleó: el campo queda
@@ -845,7 +848,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (generalFieldDirtyRef.current.size === 0) { generalLockHeldRef.current = false; releaseSection('general'); return }
     }
     if (generalFieldDirtyRef.current.size === 0) scheduleGeneralIdleRelease()
-  }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, markSectionSaved, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease])
+  }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease])
 
   const persistTotalsField = useCallback(async (field: QuotationTotalsField) => {
     if (!cotizacion) return
@@ -863,7 +866,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
         setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor } : prev)
       }
-      markSectionSaved('totales')
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
         setTotalsFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
@@ -881,7 +883,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (totalsFieldDirtyRef.current.size === 0) { totalsLockHeldRef.current = false; releaseSection('totales'); return }
     }
     if (totalsFieldDirtyRef.current.size === 0) scheduleTotalsIdleRelease()
-  }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, markSectionSaved, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease])
+  }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease])
 
   const persistGeneralFieldRef = useRef(persistGeneralField)
   persistGeneralFieldRef.current = persistGeneralField
@@ -997,7 +999,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
       }
-      markSectionSaved('partidas')
       scheduleItemCellIdleRelease(rowId, field)
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
@@ -1010,7 +1011,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       itemSavingCellsRef.current.delete(key)
     }
-  }, [clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState])
+  }, [clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState])
 
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
@@ -1023,26 +1024,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // `markTotalsFieldDirty` programan su propio timeout por campo en cuanto se
   // detecta la edición (ver los `tracked*` handlers más abajo).
 
-  useEffect(() => {
-    const remoteNotasSaves = savedSections.notas || 0
-    if (!remoteNotasSaves || notasLockHeldRef.current || isSavingNotas) return
-    fetchQuotationDetail(id).then((updated) => applyNotasOnly(updated.notas_internas ?? null)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando notas tras save remoto:', loadError))
-  }, [applyNotasOnly, id, isSavingNotas, savedSections.notas])
-
-  // Ya no se bloquea por sección completa (`generalLockHeldRef`/`isSavingGeneral`):
-  // `applyGeneralOnly`/`applyTotalsOnly` protegen campo a campo, así que un save
-  // ajeno a "Locación" refresca aunque el usuario tenga "Fecha" a medio teclear.
-  useEffect(() => {
-    const remoteGeneralSaves = savedSections.general || 0
-    if (!remoteGeneralSaves) return
-    fetchQuotationDetail(id).then((updated) => applyGeneralOnly(updated)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando general tras save remoto:', loadError))
-  }, [applyGeneralOnly, id, savedSections.general])
-
-  useEffect(() => {
-    const remoteTotalsSaves = savedSections.totales || 0
-    if (!remoteTotalsSaves) return
-    fetchQuotationDetail(id).then((updated) => applyTotalsOnly(updated)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando totales tras save remoto:', loadError))
-  }, [applyTotalsOnly, id, savedSections.totales])
+  // Fase 6E: el refresco de notas/general/totales tras un guardado ajeno ya no
+  // depende de un aviso del navegador que guardó (`section_saved`, retirado --
+  // Presence ahora es pura awareness, sin ese canal). `latestNotasConfirmed`/
+  // `latestGeneralConfirmed`/`latestTotalesConfirmed` (más abajo) cubren exactamente
+  // el mismo caso desde el SERVIDOR, disparando reconciliarConServidor() -- que ya
+  // aplica notas/general/totales con las mismas guardas de dirty/foco que tenían
+  // applyNotasOnly/applyGeneralOnly/applyTotalsOnly aquí, así que no hay pérdida de
+  // cobertura, solo una fuente de verdad menos redundante.
 
   // Alta/edición/baja/bulk de otro colaborador llegan por `item_confirmed` (más abajo):
   // el servidor confirma DESPUÉS de commitear en Postgres y dispara una relectura
@@ -1077,18 +1066,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     void reconciliarConServidor()
   }, [latestTotalesConfirmed, reconciliarConServidor])
 
-  // Notas gana su propio evento server-confirmed en Fase 6A: antes solo se refrescaba
-  // vía `section_saved` (aviso del navegador que guardó, sin acuse del servidor). Ese
-  // camino sigue vivo por ahora (se retira en Fase 6E); este es el que de verdad
-  // garantiza que llegue aunque el otro se pierda.
+  // Notas gana su propio evento server-confirmed desde Fase 6A -- es el único camino
+  // que refresca notas tras un guardado ajeno desde que Fase 6E retiró `section_saved`.
   useEffect(() => {
     if (!latestNotasConfirmed) return
     void reconciliarConServidor()
   }, [latestNotasConfirmed, reconciliarConServidor])
 
-  // Latido de reconciliación. No depende de la presencia ni del canal: si dependiera,
-  // un fallo de esos mismos mecanismos volvería a dejar las pantallas divergentes sin
-  // que nadie se entere, que es exactamente lo que pasaba antes.
+  // Red de última instancia, NO la garantía primaria (ver RECONCILIACION_MS arriba).
+  // No depende de la presencia ni del canal: si dependiera, un fallo de esos mismos
+  // mecanismos volvería a dejar las pantallas divergentes sin que nadie se entere.
   useEffect(() => {
     if (!esEditable) return
     const tick = () => {
@@ -1191,7 +1178,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (!createdItem) throw new Error('No se pudo crear la fila')
       recordServerItem(createdItem)
       setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
-      markSectionSaved('partidas')
     } catch (createError: unknown) {
       const index = getItemIndexByRowId(rowId)
       if (index >= 0) remove(index)
@@ -1200,7 +1186,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       pendingRowCreationsRef.current.delete(rowId)
     }
-  }, [append, createQuotationItemRow, getItemIndexByRowId, markSectionSaved, recordServerItem, remove, resyncPartidas])
+  }, [append, createQuotationItemRow, getItemIndexByRowId, recordServerItem, remove, resyncPartidas])
 
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
@@ -1247,14 +1233,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       for (const item of updated.items || []) {
         recordServerItem(item)
       }
-      markSectionSaved('partidas')
     } catch (importError: unknown) {
       setError(importError instanceof Error ? importError.message : 'Error copiando partidas')
       void resyncPartidas()
     } finally {
       setImportingItems(false)
     }
-  }, [getValues, id, markSectionSaved, recordServerItem, replace, resyncPartidas])
+  }, [getValues, id, recordServerItem, replace, resyncPartidas])
 
   // Borrado optimista, identificado por rowId: la fila desaparece al instante y el
   // DELETE (que recalcula el encabezado y sincroniza Sheets) corre después, encolado
@@ -1268,13 +1253,12 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       await enqueueRowMutation(rowId, () => deleteQuotationItemRow(rowId))
       pendingRowRemovalsRef.current.delete(rowId)
-      markSectionSaved('partidas')
     } catch (deleteError: unknown) {
       pendingRowRemovalsRef.current.delete(rowId)
       setError(deleteError instanceof Error ? deleteError.message : 'Error eliminando partida')
       void resyncPartidas()
     }
-  }, [deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, markSectionSaved, replace, resyncPartidas])
+  }, [deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, replace, resyncPartidas])
 
   // Operación atómica multi-campo: manda "base" para los 4 campos que el autofill
   // toca, así la RPC la rechaza completa (ningún campo se aplica a medias) si
@@ -1296,7 +1280,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         for (const field of fields) clearItemCellConflict(rowId, field)
       }
-      markSectionSaved('partidas')
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
         // El mismo banner de conflicto por celda que usan las ediciones normales --
@@ -1316,7 +1299,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       setError(saveError instanceof Error ? saveError.message : 'Error aplicando producto')
       void resyncPartidas()
     }
-  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, upsertLocalItemState])
+  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, upsertLocalItemState])
 
   const handleResponsableChange = useCallback(async (rowId: string, responsableId: string) => {
     const index = getItemIndexByRowId(rowId)
@@ -1335,7 +1318,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         clearItemCellConflict(rowId, 'responsable_id')
       }
-      markSectionSaved('partidas')
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
         const detail = saveError.fields.responsable_id
@@ -1350,7 +1332,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       setError(saveError instanceof Error ? saveError.message : 'Error actualizando responsable')
       void resyncPartidas()
     }
-  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, responsables, setValue, upsertLocalItemState])
+  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, responsables, setValue, upsertLocalItemState])
 
   // Presencia estilo Sheets: saber que alguien más está en una celda sirve para
   // resaltarla y avisar, nunca para deshabilitar nada.
