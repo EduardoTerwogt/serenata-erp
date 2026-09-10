@@ -260,7 +260,7 @@ con mocks. `Test Suite`, `Migrations` y `smoke-and-critical` en verde en
 
 ---
 
-### Fase 3 — Grid nuevo de Partidas (en curso)
+### Fase 3 — Grid nuevo de Partidas (cerrada)
 
 Objetivo: usar el protocolo de la Fase 2 desde la UI real de
 `app/cotizaciones/[id]/page.tsx`, sin tocar Información General ni Totales
@@ -317,14 +317,6 @@ fila. `seleccionarProducto`/`handleDescripcionChange` ahora reciben el
   (cotización nueva, sin servidor aún) los implementa como no-op — no
   puede haber conflicto real sin PATCH.
 
-**Verificado:** `npx tsc --noEmit`, `npm run lint` (mismos warnings
-preexistentes) y `npm test` (402/402) en verde. E2E local no se pudo
-correr en este sandbox — el contenedor de esta sesión no tenía
-`.env.local` con los secretos de la app (`AUTH_SECRET`, Supabase, etc.),
-a diferencia de sesiones anteriores de esta misma iniciativa; se dejó
-correr en su lugar el job `smoke-and-critical` del PR draft
-([#15](https://github.com/EduardoTerwogt/serenata-erp/pull/15)).
-
 **Bloque 3 — consumir `item_confirmed`/`general_confirmed`/`totales_confirmed`:**
 `useQuotationPresence.ts` ya escuchaba 5 eventos de broadcast, todos
 browser→browser sin acuse; ahora suma 3 listeners para los eventos que
@@ -343,9 +335,24 @@ heartbeat. El mecanismo viejo (`item_mutation`/`broadcastItemMutation`,
 browser→browser sin acuse) sigue intacto: esto es un convergence signal
 adicional, no un reemplazo.
 
-**Pendiente de esta fase:** el ciclo final de verificación completa +
-merge (task #19) — correr la batería completa, abrir/actualizar el PR y
-el job `live` de CI, y mergear a `main`.
+**Verificado:** `npx tsc --noEmit`, `npm run lint` (mismos warnings
+preexistentes) y `npm test` (402/402) en verde en local en cada bloque.
+`npm run build` y `test:e2e:*` no se pudieron correr en este sandbox —
+el contenedor de esta sesión no tenía `.env.local` con los secretos de
+la app (`AUTH_SECRET`, Supabase, etc.), a diferencia de sesiones
+anteriores de esta misma iniciativa; se verificó en su lugar vía CI real
+en el PR draft [#15](https://github.com/EduardoTerwogt/serenata-erp/pull/15):
+`E2E` (`smoke-and-critical`, que sí corre el build) y `Migrations` en
+verde para el commit final. El job `live` (disparado manualmente, ver
+[comentario en el PR](https://github.com/EduardoTerwogt/serenata-erp/pull/15#issuecomment-5612357483))
+dio 19/23 — el mismo caso conocido de la línea ~282 sigue fallando por
+la misma razón de siempre (badge de presencia por sección, `channel.send()`
+cae a REST con 403 silencioso), sin regresión; los 3 suites nuevos de
+esta iniciativa (`realtime-channel-authorization`, concurrencia de
+cuentas por cobrar/pagar, smoke básico) pasaron completos.
+
+**Mergeada a `main`** vía PR
+[#15](https://github.com/EduardoTerwogt/serenata-erp/pull/15).
 
 ---
 
