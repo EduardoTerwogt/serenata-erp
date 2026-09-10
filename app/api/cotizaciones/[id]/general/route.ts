@@ -35,13 +35,20 @@ export async function PATCH(
       ...(typeof body?.fecha_entrega === 'string' || body?.fecha_entrega === null ? { fecha_entrega: body.fecha_entrega ?? '' } : {}),
       ...(typeof body?.locacion === 'string' || body?.locacion === null ? { locacion: body.locacion ?? '' } : {}),
     }
+    // Igual que en items: sin "base" no hay comparación posible y la RPC
+    // sobreescribe como siempre (retrocompatible).
+    const base: Record<string, unknown> | undefined = body?.base && typeof body.base === 'object' ? body.base : undefined
 
     const { data, error } = await supabaseAdmin.rpc('patch_cotizacion_general', {
       p_cotizacion_id: id,
       p_patch: patch,
+      p_base: base ?? null,
     })
     if (error) throw error
     if (!data) return Response.json({ error: 'Cotización no encontrada' }, { status: 404 })
+    if (typeof data === 'object' && data !== null && 'conflict' in data) {
+      return Response.json({ error: 'conflict', entity: 'cotizacion_general', id, fields: (data as { conflict: unknown }).conflict }, { status: 409 })
+    }
 
     const actualizada = data as Cotizacion
     await runQuotationNonCriticalAutosaves(actualizada.cliente, actualizada.proyecto, [], 'PATCH /api/cotizaciones/:id/general')

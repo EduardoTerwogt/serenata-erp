@@ -10,6 +10,44 @@ interface ClienteOption {
   proyectos: string[]
 }
 
+type QuotationGeneralField = 'cliente' | 'proyecto' | 'fecha_entrega' | 'locacion'
+
+interface QuotationGeneralFieldConflict {
+  current: unknown
+  attempted: unknown
+}
+
+function formatConflictValue(value: unknown): string {
+  return value === null || value === undefined || value === '' ? '(vacío)' : String(value)
+}
+
+/**
+ * Alguien más guardó este campo entre que se capturó el "base" y que se intentó
+ * guardar el propio. Nunca se descarta en silencio lo tecleado: el banner deja
+ * elegir entre eso y el valor actual del servidor. Mismo patrón que
+ * `ItemFieldConflictBanner` en QuotationItemsSection, para General/Totales.
+ */
+function GeneralFieldConflictBanner({ field, conflict, onResolve }: {
+  field: QuotationGeneralField
+  conflict?: QuotationGeneralFieldConflict
+  onResolve?: (field: QuotationGeneralField, resolution: 'theirs' | 'mine') => void
+}) {
+  if (!conflict || !onResolve) return null
+  return (
+    <div className="mt-1 space-y-1 rounded-control border border-accent-quiet/60 bg-accent-quiet/10 px-2 py-1.5 text-[11px] text-accent-quiet">
+      <p>Alguien más lo cambió a &quot;{formatConflictValue(conflict.current)}&quot; mientras editabas.</p>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onResolve(field, 'theirs')} className="underline hover:text-accent">
+          Usar &quot;{formatConflictValue(conflict.current)}&quot;
+        </button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onResolve(field, 'mine')} className="underline hover:text-accent">
+          Mantener &quot;{formatConflictValue(conflict.attempted)}&quot;
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface Props {
   title?: string
   register: UseFormRegister<QuotationFormValues>
@@ -40,6 +78,8 @@ interface Props {
     value: string
     onChange: (value: string) => void
   }
+  conflicts?: Partial<Record<QuotationGeneralField, QuotationGeneralFieldConflict>>
+  onResolveConflict?: (field: QuotationGeneralField, resolution: 'theirs' | 'mine') => void
 }
 
 // Estilo "InlineInput" del design system: sin caja visible hasta que se
@@ -76,6 +116,8 @@ export function QuotationGeneralInfoSection({
   fechaEntregaValue = '',
   locacionValue = '',
   notasField,
+  conflicts,
+  onResolveConflict,
 }: Props) {
   const readOnlyAsText = isReadOnly && readOnlyDisplay === 'text'
 
@@ -116,6 +158,7 @@ export function QuotationGeneralInfoSection({
               }} className={DROPDOWN_ITEM_CLASS}>{nombre}</div>)}</div>}
             </>
           )}
+          <GeneralFieldConflictBanner field="cliente" conflict={conflicts?.cliente} onResolve={onResolveConflict} />
         </div>
 
         <div className="relative">
@@ -144,6 +187,7 @@ export function QuotationGeneralInfoSection({
               })()}
             </>
           )}
+          <GeneralFieldConflictBanner field="proyecto" conflict={conflicts?.proyecto} onResolve={onResolveConflict} />
         </div>
 
         <div>
@@ -155,6 +199,7 @@ export function QuotationGeneralInfoSection({
               onChange: (event) => onFechaEntregaChange(event.target.value),
             } : undefined)} value={fechaEntregaValue} readOnly={isReadOnly} className={`w-full min-w-0 ${INPUT_CLASS} ${isReadOnly ? 'cursor-not-allowed opacity-60' : ''}`} />
           )}
+          <GeneralFieldConflictBanner field="fecha_entrega" conflict={conflicts?.fecha_entrega} onResolve={onResolveConflict} />
         </div>
 
         <div>
@@ -166,6 +211,7 @@ export function QuotationGeneralInfoSection({
               onChange: (event) => onLocacionChange(event.target.value),
             } : undefined)} readOnly={isReadOnly} className={`${INPUT_CLASS} ${isReadOnly ? 'cursor-not-allowed opacity-60' : ''}`} placeholder="Lugar del evento" />
           )}
+          <GeneralFieldConflictBanner field="locacion" conflict={conflicts?.locacion} onResolve={onResolveConflict} />
         </div>
 
         {/* Espaciador flexible: empuja Fecha de Cotización al borde derecho del panel

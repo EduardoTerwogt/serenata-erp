@@ -30,13 +30,18 @@ export async function PATCH(
       ...(body?.descuento_tipo === 'monto' || body?.descuento_tipo === 'porcentaje' ? { descuento_tipo: body.descuento_tipo } : {}),
       ...(typeof body?.descuento_valor === 'number' ? { descuento_valor: body.descuento_valor } : {}),
     }
+    const base: Record<string, unknown> | undefined = body?.base && typeof body.base === 'object' ? body.base : undefined
 
     const { data, error } = await supabaseAdmin.rpc('patch_cotizacion_totales', {
       p_cotizacion_id: id,
       p_patch: patch,
+      p_base: base ?? null,
     })
     if (error) throw error
     if (!data) return Response.json({ error: 'Cotización no encontrada' }, { status: 404 })
+    if (typeof data === 'object' && data !== null && 'conflict' in data) {
+      return Response.json({ error: 'conflict', entity: 'cotizacion_totales', id, fields: (data as { conflict: unknown }).conflict }, { status: 409 })
+    }
 
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
     void sendRealtimeBroadcast([{
