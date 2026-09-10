@@ -11,12 +11,24 @@ export interface RealtimeMock {
    * unido: en CI el enlace tarda más que en local y emitir antes se perdía.
    */
   emit: (event: string, payload: Record<string, unknown>) => Promise<void>
+  /**
+   * Simula que otro colaborador actualizó su registro de Presence (p. ej. entró a
+   * una sección o enfocó una celda) -- Fase 6E: la awareness ya no viaja por un
+   * broadcast aparte (`section_signal`/`item_cell_signal`, retirados), así que para
+   * simularla hay que reenviar un `presence_state` con un `phx_ref` nuevo. El
+   * protocolo de Phoenix Presence diffea por ref, no por contenido: repetir el
+   * mismo ref con campos distintos no dispara ningún cambio, así que cada llamada
+   * usa uno nuevo -- igual que un `channel.track()` real, que el servidor siempre
+   * re-referencia.
+   */
+  emitPresence: (patch: Record<string, unknown>) => Promise<void>
   /** Espera a que el canal esté unido. */
   esperarConexion: (timeoutMs?: number) => Promise<void>
   conectado: () => boolean
 }
 
 const OTRO = { user_id: 'otro-colaborador', email: 'otro@serenata.test', name: 'Otro' }
+const OTRO_PRESENCE_BASE = { active_section: null, entity_id: null, field: null }
 
 export async function mockRealtimeChannel(page: Page): Promise<RealtimeMock> {
   let ws: { send: (data: string) => void } | null = null
@@ -39,9 +51,9 @@ export async function mockRealtimeChannel(page: Page): Promise<RealtimeMock> {
         topic = t
         joinRef = jr
         reply({ status: 'ok', response: {} })
-        // Presencia con el otro colaborador dentro: el aviso de "quién edita" se
-        // calcula a partir de la presencia, no solo de la señal de sección.
-        const presencia = { 'otro-colaborador': { metas: [{ ...OTRO, active_section: null, online_at: new Date().toISOString(), phx_ref: 'ref-otro' }] } }
+        // Presencia con el otro colaborador dentro: quién edita qué sección/celda se
+        // calcula ENTERO a partir de esto (Fase 6E) -- ya no hay un broadcast aparte.
+        const presencia = { 'otro-colaborador': { metas: [{ ...OTRO, ...OTRO_PRESENCE_BASE, online_at: new Date().toISOString(), phx_ref: 'ref-otro' }] } }
         route.send(JSON.stringify(arr ? [jr, null, t, 'presence_state', presencia] : { topic: t, event: 'presence_state', payload: presencia }))
         return
       }
@@ -59,6 +71,8 @@ export async function mockRealtimeChannel(page: Page): Promise<RealtimeMock> {
     }
   }
 
+  let refDePresenciaOtro = 0
+
   return {
     conectado: () => !!ws && !!topic,
     esperarConexion,
@@ -69,6 +83,13 @@ export async function mockRealtimeChannel(page: Page): Promise<RealtimeMock> {
         type: 'broadcast',
         payload: { user_id: 'otro-colaborador', email: 'otro@serenata.test', name: 'Otro', at: new Date().toISOString(), ...payload },
       }]))
+    },
+    emitPresence: async (patch) => {
+      await esperarConexion()
+      refDePresenciaOtro += 1
+      const meta = { ...OTRO, ...OTRO_PRESENCE_BASE, online_at: new Date().toISOString(), phx_ref: `ref-otro-${refDePresenciaOtro}`, ...patch }
+      const presencia = { 'otro-colaborador': { metas: [meta] } }
+      ws!.send(JSON.stringify([joinRef, null, topic, 'presence_state', presencia]))
     },
   }
 }

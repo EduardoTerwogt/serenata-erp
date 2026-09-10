@@ -6,8 +6,10 @@ import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const authResult = await requireSection('cotizaciones')
@@ -15,10 +17,27 @@ export async function POST(
 
   try {
     const { id } = await params
+    const body = await request.json().catch(() => ({}))
+    // Fase 6B: el cliente genera el id definitivo de la fila ANTES de pintarla
+    // (crypto.randomUUID()) y lo manda aquí -- la identidad de la fila nunca
+    // cambia durante su vida. `upsertItems` es upsert por id, así que un
+    // reintento con el mismo id (red que reintenta, doble click) converge al
+    // mismo estado en vez de crear una fila duplicada. Sin id en el body
+    // (compatibilidad con un cliente viejo) se sigue generando en servidor.
+    const clientId = typeof body?.id === 'string' && UUID_RE.test(body.id) ? body.id : null
     const cotizacion = await getCotizacionById(id)
     const previousItems = cotizacion.items || []
+
+    // Reintento de una creación que ya se confirmó (red que reintenta tras
+    // perder la respuesta, doble click): la fila ya existe, se devuelve tal
+    // cual -- sin volver a escribir ni a emitir el evento confirmado.
+    if (clientId) {
+      const yaExiste = previousItems.find((item) => item.id === clientId)
+      if (yaExiste) return Response.json({ item: yaExiste })
+    }
+
     const nextOrder = previousItems.reduce((max, item) => Math.max(max, item.orden ?? 0), -1) + 1
-    const itemId = crypto.randomUUID()
+    const itemId = clientId ?? crypto.randomUUID()
     const normalized = normalizeQuotationItem({
       id: itemId,
       categoria: '',
@@ -52,9 +71,7 @@ export async function POST(
     after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items') })
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
     // Evento confirmado por servidor tras el commit -- payload chico (ids +
-    // revision + timestamp, nunca la partida completa). Antes el alta solo se
-    // enteraba del otro lado vía `item_mutation` (empuje del navegador, sin
-    // acuse del servidor).
+    // revision + timestamp, nunca la partida completa).
     void sendRealtimeBroadcast([{
       topic: `cotizacion:${id}`,
       event: 'item_confirmed',

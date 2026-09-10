@@ -120,6 +120,11 @@ test('seleccionar una sugerencia de producto autocompleta categoría, precio y x
   expect(patch.categoria).toBe('Grip')
   expect(patch.precio_unitario).toBe(25000)
   expect(patch.x_pagar).toBe(12000)
+  // Fase 6C: el autofill manda "base" para los 4 campos que toca -- si alguien más
+  // ya editó alguno (p. ej. Precio) desde el último valor confirmado, el servidor
+  // rechaza la operación completa en vez de pisarlo en silencio.
+  expect(Object.keys(patch.base || {}).sort()).toEqual(['categoria', 'descripcion', 'precio_unitario', 'x_pagar'])
+  expect(typeof patch.mutation_id).toBe('string')
 
   await expect(descripcion).toHaveValue('Renta de grúa Technocrane')
   await expect(firstRow.locator('td').nth(0).locator('input')).toHaveValue('Grip')
@@ -151,6 +156,10 @@ test('cambiar el responsable de una partida persiste el cambio', async ({ page }
   const patch = request.postDataJSON()
   expect(patch.responsable_id).toBe('resp-2')
   expect(patch.responsable_nombre).toBe('Juan Pérez')
+  // Fase 6C: manda "base" de responsable_id -- protege contra un cambio de
+  // responsable concurrente pisando en silencio lo que otro colaborador ya guardó.
+  expect(patch.base).toEqual({ responsable_id: 'resp-1', responsable_nombre: 'Sofía Ramírez' })
+  expect(typeof patch.mutation_id).toBe('string')
   await expect(responsableSelect).toHaveValue('resp-2')
 })
 
@@ -432,19 +441,27 @@ test('agregar una fila la pinta antes de que responda el servidor', async ({ pag
   await expect(rows).toHaveCount(1)
 
   const inicio = Date.now()
-  await page.getByRole('button', { name: /Agregar fila/ }).click()
+  const [creacion] = await Promise.all([
+    page.waitForRequest((req) => req.url().endsWith('/items') && req.method() === 'POST'),
+    page.getByRole('button', { name: /Agregar fila/ }).click(),
+  ])
   await expect(rows).toHaveCount(2)
   // Aparece muy por debajo de los 1500 ms que tarda el POST.
   expect(Date.now() - inicio).toBeLessThan(1000)
 
-  // Y editarla antes de que llegue el id real guarda igual, contra el id definitivo.
+  // Fase 6B: la fila nace con su id definitivo (el que el propio POST manda) --
+  // no hay un id provisional que luego cambie.
+  const idDefinitivo = creacion.postDataJSON().id as string
+  expect(idDefinitivo).toMatch(/^[0-9a-f-]{36}$/i)
+
+  // Editarla antes de que responda el servidor guarda igual, contra ese mismo id:
+  // el PATCH espera a que el alta termine (awaitRowCreation) en vez de fallar.
   const nuevaDescripcion = rows.nth(1).locator('td').nth(1).locator('input')
   await nuevaDescripcion.fill('Escrito antes del id')
   const [patch] = await Promise.all([
-    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH'),
+    page.waitForRequest((req) => req.url().endsWith(`/items/${idDefinitivo}`) && req.method() === 'PATCH'),
     nuevaDescripcion.blur(),
   ])
-  expect(patch.url()).not.toContain('temp:')
   expect(patch.postDataJSON().descripcion).toBe('Escrito antes del id')
 })
 
@@ -472,31 +489,19 @@ test('un guardado de otro colaborador no borra el monto recién capturado', asyn
   ])
   expect(patch.postDataJSON().precio_unitario).toBe(9000)
 
-  // El otro colaborador guarda justo ahora.
-  await realtime.emit('section_saved', { section: 'partidas' })
+  // El otro colaborador confirma un cambio ajeno justo ahora (item_confirmed,
+  // server-confirmed -- Fase 6E retiró el aviso de navegador `section_saved`).
+  await realtime.emit('item_confirmed', {
+    cotizacion_id: 'SH-E2E-COLAB', item_id: 'item-detail-1', revision: 1, mutation_id: null, operation: 'update',
+  })
   await page.waitForTimeout(2500)
 
   await expect(precio).toHaveValue('9000')
   expect(cotizacion.items[0].precio_unitario).toBe(9000)
 })
 
-test('un guardado ajeno no provoca una relectura de la cotización', async ({ page }) => {
-  const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-SINGET', estado: 'BORRADOR' })
-  const realtime = await mockRealtimeChannel(page)
-  await login(page, '/cotizaciones/SH-E2E-SINGET')
-  await expect(page.getByRole('heading', { name: 'SH-E2E-SINGET' })).toBeVisible()
-  await page.waitForTimeout(300)
-
-  const antes = (cotizacion as unknown as { __getsDeCotizacion: number }).__getsDeCotizacion
-  await realtime.emit('section_saved', { section: 'partidas' })
-  await page.waitForTimeout(1200)
-
-  // El cambio ajeno llega por la mutación, no releyendo toda la cotización.
-  expect((cotizacion as unknown as { __getsDeCotizacion: number }).__getsDeCotizacion).toBe(antes)
-})
-
 test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', async ({ page }) => {
-  await mockCotizacionDetailApis(page, { id: 'SH-E2E-FOCO', estado: 'BORRADOR' })
+  const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-FOCO', estado: 'BORRADOR' })
   const realtime = await mockRealtimeChannel(page)
   await login(page, '/cotizaciones/SH-E2E-FOCO')
   await expect(page.getByRole('heading', { name: 'SH-E2E-FOCO' })).toBeVisible()
@@ -506,14 +511,18 @@ test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', as
   await descripcion.click()
   await descripcion.fill('Estoy escribiendo aquí')
 
-  await realtime.emit('item_mutation', {
-    action: 'upsert',
-    row_id: 'item-remota-1',
-    item: {
-      id: 'item-remota-1', cotizacion_id: 'SH-E2E-FOCO', categoria: 'Arte', descripcion: 'Partida del otro',
-      cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
-      x_pagar: 1000, margen: 2000, orden: 2, notas: null,
-    },
+  // Fase 6D: el aviso del navegador (`item_mutation`) ya no existe. El otro
+  // colaborador guardó su fila en el servidor (simulado sobre el estado del mock,
+  // igual que un GET la vería) y el servidor confirma con `item_confirmed`, que
+  // dispara una reconciliación inmediata en vez de esperar el heartbeat, que desde
+  // Fase 6E ya no es la garantía primaria.
+  cotizacion.items = [...cotizacion.items, {
+    id: 'item-remota-1', cotizacion_id: 'SH-E2E-FOCO', categoria: 'Arte', descripcion: 'Partida del otro',
+    cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
+    x_pagar: 1000, margen: 2000, orden: 2, notas: null,
+  }]
+  await realtime.emit('item_confirmed', {
+    cotizacion_id: 'SH-E2E-FOCO', item_id: 'item-remota-1', revision: 0, mutation_id: null, operation: 'create',
   })
 
   await expect(rows).toHaveCount(2)
@@ -529,10 +538,11 @@ test('escribir en Datos generales mientras otro está en la sección sí guarda'
   await login(page, '/cotizaciones/SH-E2E-SECCION')
   await expect(page.getByRole('heading', { name: 'SH-E2E-SECCION' })).toBeVisible()
 
-  // El otro colaborador entra a Datos generales. (No se afirma sobre el aviso visual:
-  // llega por presencia y su momento es variable; lo que fija este test es que la
-  // presencia ajena ya no deja el campo en solo lectura ni detiene el autoguardado.)
-  await realtime.emit('section_signal', { status: 'editing', section: 'general' })
+  // El otro colaborador entra a Datos generales (Presence real -- Fase 6E, ya no
+  // un broadcast `section_signal` aparte). No se afirma sobre el aviso visual: su
+  // momento es variable; lo que fija este test es que la presencia ajena ya no deja
+  // el campo en solo lectura ni detiene el autoguardado.
+  await realtime.emitPresence({ active_section: 'general' })
   await page.waitForTimeout(300)
 
   // El campo sigue siendo editable y lo que escriba se guarda.
@@ -554,6 +564,10 @@ test('escribir en Datos generales mientras otro está en la sección sí guarda'
  * camino del aviso, y la reconciliación la reintrodujo hasta que se corrigió.
  */
 test('la fila que llega por reconciliación no me quita el cursor', async ({ page }) => {
+  // Fase 6E: el heartbeat ya no es la garantía primaria y se hizo mucho menos
+  // frecuente (RECONCILIACION_MS) -- este test prueba justo esa red de última
+  // instancia, sin ningún aviso de por medio, así que necesita más margen.
+  test.slow()
   const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-RECON', estado: 'BORRADOR' })
   await login(page, '/cotizaciones/SH-E2E-RECON')
   await expect(page.getByRole('heading', { name: 'SH-E2E-RECON' })).toBeVisible()
@@ -581,10 +595,47 @@ test('la fila que llega por reconciliación no me quita el cursor', async ({ pag
     notas: null,
   }]
 
-  await expect(rows).toHaveCount(2, { timeout: 20_000 })
+  await expect(rows).toHaveCount(2, { timeout: 30_000 })
   await expect(rows.nth(1).locator('td').nth(1).locator('input')).toHaveValue('Partida del otro')
   await expect(descripcion).toBeFocused()
   await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
+})
+
+/**
+ * Fase 6E: volver a la pestaña es uno de los caminos PRIMARIOS de convergencia
+ * (junto a los eventos server-confirmed y reconectar el canal), no solo el
+ * heartbeat de última instancia. Sin ningún aviso por el canal, debe converger
+ * mucho más rápido que el intervalo del heartbeat con solo volver a la pestaña.
+ */
+test('volver a la pestaña converge sin esperar el heartbeat', async ({ page }) => {
+  const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-VISIBLE', estado: 'BORRADOR' })
+  await login(page, '/cotizaciones/SH-E2E-VISIBLE')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-VISIBLE' })).toBeVisible()
+
+  const rows = page.locator('table tbody tr')
+
+  // Otro colaborador agregó una partida mientras la pestaña estaba oculta. Sin
+  // ningún aviso por el canal -- lo mismo que ejercen los dos tests de arriba, pero
+  // aquí la convergencia la dispara volver a la pestaña, no el heartbeat.
+  cotizacion.items = [...cotizacion.items, {
+    id: 'item-tras-volver', cotizacion_id: 'SH-E2E-VISIBLE', categoria: 'Arte', descripcion: 'Partida al volver',
+    cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
+    x_pagar: 1000, margen: 2000, orden: 2, notas: null,
+  }]
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+
+  // Converge casi de inmediato -- mucho antes de que el heartbeat (20s) llegara a
+  // dispararse por su cuenta.
+  await expect(rows).toHaveCount(2, { timeout: 5_000 })
+  await expect(rows.nth(1).locator('td').nth(1).locator('input')).toHaveValue('Partida al volver')
 })
 
 /**
@@ -593,6 +644,9 @@ test('la fila que llega por reconciliación no me quita el cursor', async ({ pag
  * por el canal y sin tocar lo que el usuario está escribiendo en otra fila.
  */
 test('la fila que borra el otro desaparece por reconciliación', async ({ page }) => {
+  // Fase 6E: mismo motivo que el gemelo de arriba -- red de última instancia, sin
+  // aviso, con un intervalo deliberadamente más largo que antes.
+  test.slow()
   const cotizacion = await mockCotizacionDetailApis(page, {
     id: 'SH-E2E-RECON-DEL',
     estado: 'BORRADOR',
@@ -623,7 +677,7 @@ test('la fila que borra el otro desaparece por reconciliación', async ({ page }
   // enterarse sola.
   cotizacion.items = cotizacion.items.filter((item) => item.id !== 'item-que-borra-el-otro')
 
-  await expect(rows).toHaveCount(1, { timeout: 20_000 })
+  await expect(rows).toHaveCount(1, { timeout: 30_000 })
   await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
   await expect(descripcion).toBeFocused()
 })

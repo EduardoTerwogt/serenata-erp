@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
-import { ImportableItem, QuotationItemsController, TEMP_ROW_PREFIX } from '@/hooks/useQuotationItems'
+import { ImportableItem, QuotationItemsController } from '@/hooks/useQuotationItems'
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem, reconcileServerItems } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
@@ -34,10 +34,16 @@ const GENERAL_AUTOSAVE_DELAY_MS = 800
 const TOTALS_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_AUTOSAVE_DELAY_MS = 800
 const ITEM_CELL_IDLE_RELEASE_MS = 5000
-// Cada cuánto se relee la cotización mientras la pantalla está abierta y visible.
-// Es la red que hace que un aviso perdido deje de importar: aunque no llegue
-// ninguno, las dos pantallas convergen dentro de este plazo.
-const RECONCILIACION_MS = 5000
+// Fase 6E: la garantía PRIMARIA de convergencia ya no es este latido -- son los 4
+// eventos server-confirmed (item/general/totales/notas, emitidos por Postgres vía
+// sendRealtimeBroadcast) más reconectar el canal y volver a la pestaña, todos
+// gatillando reconciliarConServidor() de inmediato. Este intervalo queda solo como
+// red de última instancia por si alguno de esos avisos se pierde (p. ej. un
+// broadcast que no llega durante una reconexión que el cliente no detectó a
+// tiempo) -- deliberadamente mucho menos frecuente que antes (antes 5s, la única
+// garantía real) para que quede claro en el propio código que ya no es el
+// mecanismo principal.
+const RECONCILIACION_MS = 20_000
 const SECTION_IDLE_RELEASE_MS = 5000
 
 interface GeneralSnapshot {
@@ -137,6 +143,17 @@ function buildItemFieldBase(server: ItemCotizacion | undefined, field: Quotation
   }
 }
 
+/**
+ * Igual que `buildItemFieldBase`, pero para una operación multi-campo (seleccionar
+ * producto, cambiar responsable): junta la base de cada campo que la operación toca
+ * en un solo objeto, para que la RPC evalúe conflicto de forma atómica sobre todos
+ * a la vez -- si cualquiera está desactualizado, se rechaza la operación completa.
+ */
+function buildItemFieldsBase(server: ItemCotizacion | undefined, fields: QuotationItemCellField[]): Record<string, unknown> | null {
+  if (!server) return null
+  return fields.reduce<Record<string, unknown>>((acc, field) => ({ ...acc, ...(buildItemFieldBase(server, field) ?? {}) }), {})
+}
+
 function mapItemToFormItem(item: ItemCotizacion): QuotationFormValues['items'][number] {
   return {
     id: item.id,
@@ -231,58 +248,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // de que React repinte) dejaban una fila fantasma. Con este conjunto la lista se
   // recalcula entera y `replace` la aplica de golpe, sin depender de índices.
   const pendingRowRemovalsRef = useRef<Set<string>>(new Set())
-  // id provisional -> promesa con el id real que devuelva el POST
-  const pendingRowIdsRef = useRef<Map<string, Promise<string>>>(new Map())
+  // Fase 6B: la fila nace con su id definitivo (crypto.randomUUID() en el cliente,
+  // ver handleAddRow) y ese id NUNCA cambia -- no hay id provisional que migrar.
+  // Esto solo trackea si el POST de alta de una fila sigue en vuelo, para que un
+  // PATCH/DELETE disparado en la ventana entre "se pintó" y "el servidor la
+  // conoce" espere en vez de fallar con 404.
+  const pendingRowCreationsRef = useRef<Map<string, Promise<void>>>(new Map())
   // Instante de la última escritura local por celda. Cualquier dato del servidor
   // pedido ANTES de esa marca llega viejo y no debe aplicarse a esa celda.
   const localWriteAtRef = useRef<Map<string, number>>(new Map())
-  const persistItemCellAutosaveRef = useRef<((rowId: string, field: QuotationItemCellField) => Promise<void>) | null>(null)
-  /**
-   * Al llegar el id definitivo de una fila recién creada hay que mudar TODAS las
-   * marcas que quedaron registradas con el id provisional. Sin esto, lo tecleado
-   * antes de que respondiera el alta se perdía: el autoguardado buscaba la fila por
-   * el id provisional, ya inexistente, y salía sin guardar.
-   */
-  const migrateRowKeys = useCallback((fromRowId: string, toRowId: string) => {
-    const rename = (set: Set<string>) => {
-      for (const key of Array.from(set)) {
-        if (!key.startsWith(`${fromRowId}:`)) continue
-        set.delete(key)
-        set.add(`${toRowId}:${key.slice(fromRowId.length + 1)}`)
-      }
-    }
-    rename(itemDirtyCellsRef.current)
-    rename(itemFocusedCellsRef.current)
-    rename(itemSavingCellsRef.current)
-
-    for (const [key, at] of Array.from(localWriteAtRef.current.entries())) {
-      if (!key.startsWith(`${fromRowId}:`)) continue
-      localWriteAtRef.current.delete(key)
-      localWriteAtRef.current.set(`${toRowId}:${key.slice(fromRowId.length + 1)}`, at)
-    }
-
-    // Los autoguardados pendientes se reprograman contra el id definitivo.
-    for (const [key, timer] of Object.entries(itemCellAutosaveTimersRef.current)) {
-      if (!key.startsWith(`${fromRowId}:`)) continue
-      if (timer) window.clearTimeout(timer)
-      delete itemCellAutosaveTimersRef.current[key]
-      const field = key.slice(fromRowId.length + 1) as QuotationItemCellField
-      const nuevaClave = getItemCellKey(toRowId, field)
-      itemCellAutosaveTimersRef.current[nuevaClave] = window.setTimeout(() => {
-        void persistItemCellAutosaveRef.current?.(toRowId, field)
-      }, ITEM_CELL_AUTOSAVE_DELAY_MS)
-    }
-    for (const [key, timer] of Object.entries(itemCellIdleReleaseTimersRef.current)) {
-      if (!key.startsWith(`${fromRowId}:`)) continue
-      if (timer) window.clearTimeout(timer)
-      delete itemCellIdleReleaseTimersRef.current[key]
-    }
-    for (const [key, base] of Object.entries(itemCellBaseRef.current)) {
-      if (!key.startsWith(`${fromRowId}:`)) continue
-      delete itemCellBaseRef.current[key]
-      itemCellBaseRef.current[`${toRowId}:${key.slice(fromRowId.length + 1)}`] = base
-    }
-  }, [])
 
   const markLocalWrite = useCallback((rowId: string, field: QuotationItemCellField) => {
     localWriteAtRef.current.set(getItemCellKey(rowId, field), Date.now())
@@ -384,18 +358,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     onlineUsers,
     sectionEditors,
     itemCellEditors,
-    latestItemMutation,
     latestItemConfirmed,
     latestGeneralConfirmed,
     latestTotalesConfirmed,
     latestNotasConfirmed,
-    savedSections,
     setActiveSection,
     releaseSection,
     lockItemCell,
     releaseItemCell,
-    broadcastItemMutation,
-    markSectionSaved,
     isConnected,
   } = useQuotationPresence({
     cotizacionId: id,
@@ -436,20 +406,21 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return result
   }, [])
 
-  // Traduce un id provisional al real, esperando al POST si sigue en vuelo.
-  const resolveRowId = useCallback(async (rowId: string): Promise<string> => {
-    if (!rowId.startsWith(TEMP_ROW_PREFIX)) return rowId
-    const pending = pendingRowIdsRef.current.get(rowId)
-    if (!pending) throw new Error('La partida aún no se ha creado')
-    return pending
+  // Si el POST de alta de esta fila sigue en vuelo, espera a que termine antes de
+  // seguir: el id ya es el definitivo (Fase 6B), pero el servidor puede no
+  // conocerlo todavía si el usuario edita en la ventana entre "se pintó" y "el
+  // POST respondió".
+  const awaitRowCreation = useCallback(async (rowId: string): Promise<void> => {
+    const pending = pendingRowCreationsRef.current.get(rowId)
+    if (pending) await pending
   }, [])
 
   const patchQuotationItem = useCallback(async (
-    tempOrRealId: string,
+    rowId: string,
     patch: Record<string, unknown>,
     options?: { base?: Record<string, unknown> | null; mutationId?: string }
   ) => {
-    const rowId = await resolveRowId(tempOrRealId)
+    await awaitRowCreation(rowId)
     const body: Record<string, unknown> = { ...patch }
     if (options?.base) body.base = options.base
     if (options?.mutationId) body.mutation_id = options.mutationId
@@ -460,7 +431,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
     if (!response.ok) throw new Error(data?.error || 'Error actualizando partida')
     return data?.item as ItemCotizacion | undefined
-  }, [id, resolveRowId])
+  }, [awaitRowCreation, id])
 
   // Fetch crudo (no sendJson/getJson): esos helpers colapsan cualquier respuesta
   // no-2xx en un Error genérico y perderían el payload {fields} del 409, igual
@@ -495,19 +466,22 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return data as Cotizacion | undefined
   }, [id])
 
-  const createQuotationItemRow = useCallback(async () => {
-    const response = await fetch(`/api/cotizaciones/${id}/items`, { method: 'POST' })
+  // El id ya lo generó el cliente (Fase 6B, ver handleAddRow) -- el POST solo lo
+  // valida y lo usa como llave del insert. `upsertItems` en el servidor hace que
+  // reintentar con el mismo id converja al mismo estado, no cree una fila doble.
+  const createQuotationItemRow = useCallback(async (rowId: string) => {
+    const response = await fetch(`/api/cotizaciones/${id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: rowId }) })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(data?.error || 'Error creando partida')
     return data?.item as ItemCotizacion | undefined
   }, [id])
 
-  const deleteQuotationItemRow = useCallback(async (tempOrRealId: string) => {
-    const rowId = await resolveRowId(tempOrRealId)
+  const deleteQuotationItemRow = useCallback(async (rowId: string) => {
+    await awaitRowCreation(rowId)
     const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'DELETE' })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(data?.error || 'Error eliminando partida')
-  }, [id, resolveRowId])
+  }, [awaitRowCreation, id])
 
   // `preserveLocalEdits` evita que la respuesta del servidor sobreescriba una celda
   // que el usuario sigue editando: si se tecleó durante el debounce + el round-trip,
@@ -551,13 +525,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       return { ...prev, items }
     })
   }, [append, getItemIndexByRowId, recordServerItem, setValue])
-
-  const removeLocalItemState = useCallback((rowId: string) => {
-    const index = getItemIndexByRowId(rowId)
-    if (index >= 0) remove(index)
-
-    setCotizacion((prev) => prev ? { ...prev, items: (prev.items || []).filter((item) => item.id !== rowId) } : prev)
-  }, [getItemIndexByRowId, remove])
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
@@ -641,7 +608,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       const updated = await fetchQuotationDetail(id)
       pendingRowRemovalsRef.current.clear()
-      pendingRowIdsRef.current.clear()
+      pendingRowCreationsRef.current.clear()
       applyCotizacionToState(updated)
     } catch (loadError) {
       console.error('[cotizaciones/[id]] Error resincronizando partidas:', loadError)
@@ -650,19 +617,29 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   /**
    * Reconciliación con el servidor: la ÚNICA garantía de que las dos pantallas
-   * terminen viendo lo mismo.
+   * terminen viendo lo mismo. PostgreSQL es la única fuente de verdad -- esto lee de
+   * la base a través de nuestro propio servidor (el que sí valida la sesión), nunca
+   * de un dato que otro navegador haya empujado directamente.
    *
-   * Antes, el estado ajeno llegaba solo empujado por el navegador del otro
-   * (`item_mutation`): un aviso sin acuse, sin reintento y con el error tragado
-   * -los siete envíos del canal terminan en `.catch(() => null)`-. Si ese aviso se
-   * perdía, las dos pantallas quedaban distintas hasta recargar y nadie se enteraba.
-   * Ahora el aviso es solo una pista para que el cambio se vea al instante; quien
-   * garantiza la convergencia es esto, que lee de la base a través de nuestro propio
-   * servidor (el que sí valida la sesión).
+   * La dispara cada evento server-confirmed (`item_confirmed`/`general_confirmed`/
+   * `totales_confirmed`/`notas_confirmed`, emitidos DESPUÉS de que Postgres commitea
+   * -- ver `lib/server/realtime/broadcast.ts`), reconectar el canal, volver a la
+   * pestaña, y un latido periódico como red de seguridad si algo de lo anterior se
+   * pierde.
    *
    * Nada de esto pisa lo que el usuario está escribiendo: las celdas sucias, bajo el
    * cursor o con guardado en vuelo se conservan, y una respuesta que salió antes de
    * una escritura local pierde contra ella.
+   *
+   * Fase 6.7 pedía simplificar esta función una vez que IDs temporales y datos
+   * empujados por otro navegador dejaran de existir -- eso ya pasó en Fase 6B (IDs
+   * estables, sin `migrateRowKeys`) y 6D (`item_mutation` retirado), y esa era la
+   * complejidad real que arrastraba. Lo que queda -- `celdaOcupada` (dirty/foco/
+   * guardando), `escrituraLocalPosterior` (`localWriteAtRef`) y `conservarLocal`
+   * (`pendingRowCreationsRef`) -- no es legacy: sigue siendo necesario para no
+   * pisar una edición en curso o una fila cuya alta todavía no confirmó el
+   * servidor. RHF/FieldArray tampoco decide verdad colaborativa aquí: solo pinta
+   * lo que esta función ya reconcilió contra el servidor.
    */
   const reconciliacionEnCursoRef = useRef<Promise<void> | null>(null)
   const reconciliarConServidor = useCallback(async () => {
@@ -688,8 +665,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           const at = localWriteAtRef.current.get(getItemCellKey(rowId, campo as QuotationItemCellField))
           return at !== undefined && at >= pedidoEn
         },
-        // Las filas provisionales y las que se están borrando siguen siendo del usuario.
-        conservarLocal: (rowId) => rowId.startsWith(TEMP_ROW_PREFIX) || hasLocalItemRowActivity(rowId),
+        // Las filas cuya alta sigue en vuelo y las que se están borrando siguen
+        // siendo del usuario.
+        conservarLocal: (rowId) => pendingRowCreationsRef.current.has(rowId) || hasLocalItemRowActivity(rowId),
       })
 
       const mismasFilas = fusionadas.length === locales.length && fusionadas.every((item, i) => item.id === locales[i]?.id)
@@ -814,9 +792,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const notasToSave = getCurrentNotasSnapshot(); const previousNotas = lastSavedNotasRef.current
     if (notasToSave === previousNotas) { notasDirtyRef.current = false; if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } scheduleNotasIdleRelease(); return }
     setIsSavingNotas(true)
-    try { await saveQuotationNotes(id, notasToSave || null); lastSavedNotasRef.current = notasToSave; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev)); markSectionSaved('notas') } catch (saveError: unknown) { setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas'); notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } finally { setIsSavingNotas(false) }
+    try { await saveQuotationNotes(id, notasToSave || null); lastSavedNotasRef.current = notasToSave; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev)) } catch (saveError: unknown) { setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas'); notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } finally { setIsSavingNotas(false) }
     const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; notasDirtyRef.current = hasPendingChanges; if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } if (!hasPendingChanges) scheduleNotasIdleRelease()
-  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, markSectionSaved, releaseSection, scheduleNotasIdleRelease])
+  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, releaseSection, scheduleNotasIdleRelease])
 
   const getGeneralFieldValue = useCallback((field: QuotationGeneralField): unknown => {
     switch (field) {
@@ -861,7 +839,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         generalServerRef.current = buildGeneralSnapshot({ cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega || '', locacion: updated.locacion || '' })
         setCotizacion((prev) => prev ? { ...prev, cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega, locacion: updated.locacion } : prev)
       }
-      markSectionSaved('general')
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
         // Nunca se descarta en silencio lo que el usuario tecleó: el campo queda
@@ -881,7 +858,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (generalFieldDirtyRef.current.size === 0) { generalLockHeldRef.current = false; releaseSection('general'); return }
     }
     if (generalFieldDirtyRef.current.size === 0) scheduleGeneralIdleRelease()
-  }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, markSectionSaved, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease])
+  }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease])
 
   const persistTotalsField = useCallback(async (field: QuotationTotalsField) => {
     if (!cotizacion) return
@@ -899,7 +876,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
         setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor } : prev)
       }
-      markSectionSaved('totales')
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
         setTotalsFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
@@ -917,7 +893,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (totalsFieldDirtyRef.current.size === 0) { totalsLockHeldRef.current = false; releaseSection('totales'); return }
     }
     if (totalsFieldDirtyRef.current.size === 0) scheduleTotalsIdleRelease()
-  }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, markSectionSaved, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease])
+  }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease])
 
   const persistGeneralFieldRef = useRef(persistGeneralField)
   persistGeneralFieldRef.current = persistGeneralField
@@ -1032,9 +1008,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       clearItemCellConflict(rowId, field)
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
-        broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
       }
-      markSectionSaved('partidas')
       scheduleItemCellIdleRelease(rowId, field)
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
@@ -1047,8 +1021,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       itemSavingCellsRef.current.delete(key)
     }
-  }, [broadcastItemMutation, clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState])
-  persistItemCellAutosaveRef.current = persistItemCellAutosave
+  }, [clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState])
 
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
@@ -1061,54 +1034,19 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // `markTotalsFieldDirty` programan su propio timeout por campo en cuanto se
   // detecta la edición (ver los `tracked*` handlers más abajo).
 
-  useEffect(() => {
-    const remoteNotasSaves = savedSections.notas || 0
-    if (!remoteNotasSaves || notasLockHeldRef.current || isSavingNotas) return
-    fetchQuotationDetail(id).then((updated) => applyNotasOnly(updated.notas_internas ?? null)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando notas tras save remoto:', loadError))
-  }, [applyNotasOnly, id, isSavingNotas, savedSections.notas])
+  // Fase 6E: el refresco de notas/general/totales tras un guardado ajeno ya no
+  // depende de un aviso del navegador que guardó (`section_saved`, retirado --
+  // Presence ahora es pura awareness, sin ese canal). `latestNotasConfirmed`/
+  // `latestGeneralConfirmed`/`latestTotalesConfirmed` (más abajo) cubren exactamente
+  // el mismo caso desde el SERVIDOR, disparando reconciliarConServidor() -- que ya
+  // aplica notas/general/totales con las mismas guardas de dirty/foco que tenían
+  // applyNotasOnly/applyGeneralOnly/applyTotalsOnly aquí, así que no hay pérdida de
+  // cobertura, solo una fuente de verdad menos redundante.
 
-  // Ya no se bloquea por sección completa (`generalLockHeldRef`/`isSavingGeneral`):
-  // `applyGeneralOnly`/`applyTotalsOnly` protegen campo a campo, así que un save
-  // ajeno a "Locación" refresca aunque el usuario tenga "Fecha" a medio teclear.
-  useEffect(() => {
-    const remoteGeneralSaves = savedSections.general || 0
-    if (!remoteGeneralSaves) return
-    fetchQuotationDetail(id).then((updated) => applyGeneralOnly(updated)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando general tras save remoto:', loadError))
-  }, [applyGeneralOnly, id, savedSections.general])
-
-  useEffect(() => {
-    const remoteTotalsSaves = savedSections.totales || 0
-    if (!remoteTotalsSaves) return
-    fetchQuotationDetail(id).then((updated) => applyTotalsOnly(updated)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando totales tras save remoto:', loadError))
-  }, [applyTotalsOnly, id, savedSections.totales])
-
-  useEffect(() => {
-    if (!latestItemMutation) return
-    if (hasLocalItemRowActivity(latestItemMutation.row_id)) return
-    if (latestItemMutation.action === 'delete') {
-      removeLocalItemState(latestItemMutation.row_id)
-      return
-    }
-    if (latestItemMutation.item) {
-      // Si ya tenemos la fila, se fusiona celda a celda (sin tocar lo que el usuario
-      // esté editando). Si es una fila nueva de otro colaborador, se inserta con
-      // `replace` sobre la lista completa: un `append` suelto aquí desalineaba el
-      // arreglo de sus valores y hacía que se vieran filas con montos en blanco.
-      if (getItemIndexByRowId(latestItemMutation.item.id) >= 0) {
-        upsertLocalItemState(latestItemMutation.item, { preserveLocalEdits: true })
-      } else {
-        // `shouldFocus: false` es imprescindible: react-hook-form enfoca por defecto
-        // la fila recién añadida, así que la fila de otro colaborador te robaba el
-        // cursor mientras escribías.
-        append(mapItemToFormItem(latestItemMutation.item), { shouldFocus: false })
-      }
-    }
-  }, [append, getItemIndexByRowId, hasLocalItemRowActivity, latestItemMutation, removeLocalItemState, upsertLocalItemState])
-
-  // El cambio ajeno llega completo por `item_mutation`, que es un dato empujado por su
-  // autor. Antes cada guardado ajeno disparaba además una relectura completa: esa
-  // relectura viajaba con una foto vieja y al volver borraba lo recién capturado.
-  // El resync completo queda solo como red de seguridad al reconectar el canal.
+  // Alta/edición/baja/bulk de otro colaborador llegan por `item_confirmed` (más abajo):
+  // el servidor confirma DESPUÉS de commitear en Postgres y dispara una relectura
+  // completa vía `reconciliarConServidor()`, que ya reconstruye altas y bajas sola. Este
+  // efecto reconecta el canal como red de seguridad si se perdió la conexión.
   const estabaConectadoRef = useRef(isConnected)
   useEffect(() => {
     const acabaDeReconectar = isConnected && !estabaConectadoRef.current
@@ -1117,8 +1055,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [isConnected, reconciliarConServidor])
 
   // `item_confirmed`/`general_confirmed`/`totales_confirmed`: los emite el servidor
-  // recién commiteado el PATCH (ver lib/server/realtime/broadcast.ts), a diferencia de
-  // `item_mutation` que es un aviso sin acuse del navegador del autor. Sirven para
+  // recién commiteado el PATCH (ver lib/server/realtime/broadcast.ts). Sirven para
   // reconciliar de inmediato en vez de esperar el heartbeat de 5s -- nunca reemplazan
   // la reconciliación periódica, solo la adelantan.
   useEffect(() => {
@@ -1139,18 +1076,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     void reconciliarConServidor()
   }, [latestTotalesConfirmed, reconciliarConServidor])
 
-  // Notas gana su propio evento server-confirmed en Fase 6A: antes solo se refrescaba
-  // vía `section_saved` (aviso del navegador que guardó, sin acuse del servidor). Ese
-  // camino sigue vivo por ahora (se retira en Fase 6E); este es el que de verdad
-  // garantiza que llegue aunque el otro se pierda.
+  // Notas gana su propio evento server-confirmed desde Fase 6A -- es el único camino
+  // que refresca notas tras un guardado ajeno desde que Fase 6E retiró `section_saved`.
   useEffect(() => {
     if (!latestNotasConfirmed) return
     void reconciliarConServidor()
   }, [latestNotasConfirmed, reconciliarConServidor])
 
-  // Latido de reconciliación. No depende de la presencia ni del canal: si dependiera,
-  // un fallo de esos mismos mecanismos volvería a dejar las pantallas divergentes sin
-  // que nadie se entere, que es exactamente lo que pasaba antes.
+  // Red de última instancia, NO la garantía primaria (ver RECONCILIACION_MS arriba).
+  // No depende de la presencia ni del canal: si dependiera, un fallo de esos mismos
+  // mecanismos volvería a dejar las pantallas divergentes sin que nadie se entere.
   useEffect(() => {
     if (!esEditable) return
     const tick = () => {
@@ -1239,37 +1174,29 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [clearItemCellAutosaveTimer, persistItemCellAutosave, scheduleItemCellIdleRelease])
 
   const handleAddRow = useCallback(async () => {
-    // La fila se pinta de inmediato con un id provisional; el POST viaja detrás. Antes
-    // había que esperar el viaje completo al servidor para verla aparecer.
-    const tempId = `${TEMP_ROW_PREFIX}${crypto.randomUUID()}`
-    append({ ...EMPTY_QUOTATION_ITEM, id: tempId, precio_unitario: 0, x_pagar: 0 })
+    // Fase 6B: la fila nace con su id definitivo -- nunca cambia durante su vida.
+    // Se pinta de inmediato con ese id; el POST (que lo valida y lo usa como
+    // llave del insert) viaja detrás.
+    const rowId = crypto.randomUUID()
+    append({ ...EMPTY_QUOTATION_ITEM, id: rowId, precio_unitario: 0, x_pagar: 0 })
 
-    const creation = createQuotationItemRow()
-      .then((createdItem) => {
-        if (!createdItem) throw new Error('No se pudo crear la fila')
-        return createdItem.id
-      })
-    pendingRowIdsRef.current.set(tempId, creation)
+    const creation = createQuotationItemRow(rowId)
+    pendingRowCreationsRef.current.set(rowId, creation.then(() => undefined, () => undefined))
 
     try {
-      const createdId = await creation
-      const index = getItemIndexByRowId(tempId)
-      if (index >= 0) setValue(`items.${index}.id`, createdId)
-      migrateRowKeys(tempId, createdId)
-      const filaCreada: ItemCotizacion = { id: createdId, cotizacion_id: id, categoria: '', descripcion: '', cantidad: 1, precio_unitario: 0, importe: 0, responsable_id: null, responsable_nombre: null, x_pagar: 0, margen: 0, orden: (getValues('items') || []).length, notas: null }
-      recordServerItem(filaCreada)
-      setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), filaCreada] } : prev)
-      broadcastItemMutation({ action: 'upsert', row_id: createdId, item: filaCreada })
-      markSectionSaved('partidas')
+      const createdItem = await creation
+      if (!createdItem) throw new Error('No se pudo crear la fila')
+      recordServerItem(createdItem)
+      setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
     } catch (createError: unknown) {
-      const index = getItemIndexByRowId(tempId)
+      const index = getItemIndexByRowId(rowId)
       if (index >= 0) remove(index)
       setError(createError instanceof Error ? createError.message : 'Error creando partida')
       void resyncPartidas()
     } finally {
-      pendingRowIdsRef.current.delete(tempId)
+      pendingRowCreationsRef.current.delete(rowId)
     }
-  }, [append, broadcastItemMutation, createQuotationItemRow, getItemIndexByRowId, getValues, id, markSectionSaved, migrateRowKeys, recordServerItem, remove, resyncPartidas, setValue])
+  }, [append, createQuotationItemRow, getItemIndexByRowId, recordServerItem, remove, resyncPartidas])
 
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
@@ -1280,7 +1207,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const reemplazarIds = (getValues('items') || [])
         .filter((item) => isBlankQuotationItem(item))
         .map((item) => item.id)
-        .filter((rowId): rowId is string => !!rowId && !rowId.startsWith(TEMP_ROW_PREFIX))
+        .filter((rowId): rowId is string => !!rowId && !pendingRowCreationsRef.current.has(rowId))
 
       const response = await fetch(`/api/cotizaciones/${id}/items/bulk`, {
         method: 'POST',
@@ -1308,23 +1235,21 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       // que dejaba una fila fuera del subtotal). Solo se tocan partidas y totales del
       // encabezado: cliente, proyecto, notas y config de totales pueden estar en
       // edición en otra sección y no deben pisarse.
-      // Las filas provisionales siguen siendo del usuario: el servidor aún no las
-      // conoce, y descartarlas las dejaba invisibles hasta recargar.
-      const provisionales = (getValues('items') || []).filter((item) => item.id?.startsWith(TEMP_ROW_PREFIX))
+      // Las filas cuya alta sigue en vuelo siguen siendo del usuario: el servidor
+      // aún no las conoce, y descartarlas las dejaba invisibles hasta recargar.
+      const provisionales = (getValues('items') || []).filter((item) => item.id && pendingRowCreationsRef.current.has(item.id))
       replace([...(updated.items || []).map(mapItemToFormItem), ...provisionales])
       setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : updated)
       for (const item of updated.items || []) {
         recordServerItem(item)
-        broadcastItemMutation({ action: 'upsert', row_id: item.id, item })
       }
-      markSectionSaved('partidas')
     } catch (importError: unknown) {
       setError(importError instanceof Error ? importError.message : 'Error copiando partidas')
       void resyncPartidas()
     } finally {
       setImportingItems(false)
     }
-  }, [broadcastItemMutation, getValues, id, markSectionSaved, recordServerItem, replace, resyncPartidas])
+  }, [getValues, id, recordServerItem, replace, resyncPartidas])
 
   // Borrado optimista, identificado por rowId: la fila desaparece al instante y el
   // DELETE (que recalcula el encabezado y sincroniza Sheets) corre después, encolado
@@ -1338,50 +1263,86 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       await enqueueRowMutation(rowId, () => deleteQuotationItemRow(rowId))
       pendingRowRemovalsRef.current.delete(rowId)
-      broadcastItemMutation({ action: 'delete', row_id: rowId })
-      markSectionSaved('partidas')
     } catch (deleteError: unknown) {
       pendingRowRemovalsRef.current.delete(rowId)
       setError(deleteError instanceof Error ? deleteError.message : 'Error eliminando partida')
       void resyncPartidas()
     }
-  }, [broadcastItemMutation, deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, markSectionSaved, replace, resyncPartidas])
+  }, [deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, replace, resyncPartidas])
 
+  // Operación atómica multi-campo: manda "base" para los 4 campos que el autofill
+  // toca, así la RPC la rechaza completa (ningún campo se aplica a medias) si
+  // cualquiera de ellos cambió en el servidor desde el último valor confirmado que
+  // este cliente conoce -- p. ej. si alguien más ya editó Precio mientras se elegía
+  // el producto, el autofill NUNCA lo pisa en silencio.
   const handleSelectProduct = useCallback(async (rowId: string, producto: { descripcion: string; categoria: string | null; precio_unitario: number; x_pagar_sugerido: number }) => {
     const index = getItemIndexByRowId(rowId)
     if (index < 0) return
+    const fields: QuotationItemCellField[] = ['descripcion', 'categoria', 'precio_unitario', 'x_pagar']
+    const base = buildItemFieldsBase(itemsServerRef.current[rowId], fields)
+    for (const field of fields) { if (base) itemCellBaseRef.current[getItemCellKey(rowId, field)] = base }
     seleccionarProducto(rowId, producto as never)
     try {
-      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }))
+      const mutationId = crypto.randomUUID()
+      rememberOwnItemMutationId(mutationId)
+      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }, { base: base ?? undefined, mutationId }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
-        broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
+        for (const field of fields) clearItemCellConflict(rowId, field)
       }
-      markSectionSaved('partidas')
     } catch (saveError: unknown) {
+      if (saveError instanceof PatchConflictError) {
+        // El mismo banner de conflicto por celda que usan las ediciones normales --
+        // deja elegir, campo por campo, entre lo que sugirió el producto (attempted)
+        // y lo que hay ahora en el servidor (current). Nada se descarta en silencio:
+        // como la RPC es atómica, si hubo conflicto ningún campo se guardó.
+        setItemCellConflicts((prev) => {
+          const next = { ...prev }
+          for (const field of fields) {
+            const detail = saveError.fields[field]
+            if (detail) next[getItemCellKey(rowId, field)] = { ...next[getItemCellKey(rowId, field)], [field]: detail }
+          }
+          return next
+        })
+        return
+      }
       setError(saveError instanceof Error ? saveError.message : 'Error aplicando producto')
       void resyncPartidas()
     }
-  }, [broadcastItemMutation, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, resyncPartidas, seleccionarProducto, upsertLocalItemState])
+  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, upsertLocalItemState])
 
   const handleResponsableChange = useCallback(async (rowId: string, responsableId: string) => {
     const index = getItemIndexByRowId(rowId)
     if (index < 0) return
     const responsable = responsables.find((item) => item.id === responsableId)
+    const fields: QuotationItemCellField[] = ['responsable_id']
+    const base = buildItemFieldsBase(itemsServerRef.current[rowId], fields)
+    if (base) itemCellBaseRef.current[getItemCellKey(rowId, 'responsable_id')] = base
     setValue(`items.${index}.responsable_id`, responsableId)
     setValue(`items.${index}.responsable_nombre`, responsable?.nombre ?? '')
     try {
-      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' }))
+      const mutationId = crypto.randomUUID()
+      rememberOwnItemMutationId(mutationId)
+      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' }, { base: base ?? undefined, mutationId }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
-        broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
+        clearItemCellConflict(rowId, 'responsable_id')
       }
-      markSectionSaved('partidas')
     } catch (saveError: unknown) {
+      if (saveError instanceof PatchConflictError) {
+        const detail = saveError.fields.responsable_id
+        if (detail) {
+          setItemCellConflicts((prev) => ({
+            ...prev,
+            [getItemCellKey(rowId, 'responsable_id')]: { ...prev[getItemCellKey(rowId, 'responsable_id')], responsable_id: detail },
+          }))
+        }
+        return
+      }
       setError(saveError instanceof Error ? saveError.message : 'Error actualizando responsable')
       void resyncPartidas()
     }
-  }, [broadcastItemMutation, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, resyncPartidas, responsables, setValue, upsertLocalItemState])
+  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, responsables, setValue, upsertLocalItemState])
 
   // Presencia estilo Sheets: saber que alguien más está en una celda sirve para
   // resaltarla y avisar, nunca para deshabilitar nada.

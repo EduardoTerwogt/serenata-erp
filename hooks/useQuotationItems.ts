@@ -11,18 +11,14 @@ import { QuotationItemCellField } from '@/hooks/useQuotationPresence'
  * Toda fila tiene identificador, siempre.
  *
  * `local:` — cotización que aún no existe en la base: la fila solo vive en memoria.
- * `temp:`  — fila ya enviada al servidor cuyo id definitivo todavía no ha llegado.
  *
- * Que no haya filas sin id es lo que permite que la tabla se comporte igual en las dos
- * pantallas: antes, en una cotización nueva las filas no tenían id y el componente
- * necesitaba una rama distinta para cada operación.
+ * En la pantalla de detalle (cotización ya guardada) la fila nace con su id
+ * definitivo -- crypto.randomUUID() en el cliente, Fase 6B -- así que no existe
+ * un segundo prefijo para "fila enviada cuyo id definitivo todavía no llegó".
  */
 export const LOCAL_ROW_PREFIX = 'local:'
-export const TEMP_ROW_PREFIX = 'temp:'
 
 export const newLocalRowId = () => `${LOCAL_ROW_PREFIX}${crypto.randomUUID()}`
-export const isPersistedRowId = (rowId: string) =>
-  !rowId.startsWith(LOCAL_ROW_PREFIX) && !rowId.startsWith(TEMP_ROW_PREFIX)
 
 /** Forma mínima que comparten ItemCotizacion y ServiceTemplateItem. */
 export interface ImportableItem {

@@ -27,7 +27,12 @@ vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks
 import { POST } from '../cotizaciones/[id]/items/route'
 
 const params = Promise.resolve({ id: 'SH001' })
-const req = () => new Request('http://x/api/cotizaciones/SH001/items', { method: 'POST' })
+const req = (body?: unknown) => new Request('http://x/api/cotizaciones/SH001/items', {
+  method: 'POST',
+  ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+})
+
+const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 
 const itemVacioDelServidor = {
   id: 'nueva-fila-id',
@@ -77,5 +82,39 @@ describe('POST /api/cotizaciones/[id]/items', () => {
 
     const row = mocks.upsertItemsMock.mock.calls[0][0][0]
     expect(row.orden).toBe(8)
+  })
+
+  describe('Fase 6B -- id estable generado por el cliente', () => {
+    it('usa el id que manda el cliente en vez de generar uno propio', async () => {
+      const res = await POST(req({ id: CLIENT_ID }), { params })
+
+      expect(res.status).toBe(200)
+      const row = mocks.upsertItemsMock.mock.calls[0][0][0]
+      expect(row.id).toBe(CLIENT_ID)
+      const body = await res.json()
+      expect(body.item.id).toBe(CLIENT_ID)
+    })
+
+    it('ignora un id que no tiene forma de UUID y genera uno propio', async () => {
+      await POST(req({ id: 'no-es-un-uuid' }), { params })
+
+      const row = mocks.upsertItemsMock.mock.calls[0][0][0]
+      expect(row.id).not.toBe('no-es-un-uuid')
+    })
+
+    it('reintentar con el mismo id no crea una fila duplicada ni re-emite el evento', async () => {
+      mocks.getCotizacionByIdMock.mockResolvedValue({
+        id: 'SH001', cliente: 'ACME', proyecto: 'Spot',
+        items: [{ id: CLIENT_ID, categoria: '', descripcion: 'ya creada', cantidad: 1, precio_unitario: 0, x_pagar: 0, orden: 0 }],
+      })
+
+      const res = await POST(req({ id: CLIENT_ID }), { params })
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.item).toEqual({ id: CLIENT_ID, categoria: '', descripcion: 'ya creada', cantidad: 1, precio_unitario: 0, x_pagar: 0, orden: 0 })
+      expect(mocks.upsertItemsMock).not.toHaveBeenCalled()
+      expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
+    })
   })
 })
