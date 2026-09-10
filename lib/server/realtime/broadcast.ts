@@ -2,6 +2,14 @@ export interface RealtimeBroadcastMessage {
   topic: string
   event: string
   payload: Record<string, unknown>
+  /**
+   * Casi siempre `true`: el canal "cotizacion:*" que consume esto es
+   * privado (config.private: true en el cliente). Sin este flag, Supabase
+   * trata el mensaje como broadcast público y NO lo entrega a un socket que
+   * se unió en modo privado -- medido: la suscripción autoriza bien pero el
+   * evento nunca llega. Ver tests/e2e/live/realtime-channel-authorization.spec.ts.
+   */
+  private?: boolean
 }
 
 /**

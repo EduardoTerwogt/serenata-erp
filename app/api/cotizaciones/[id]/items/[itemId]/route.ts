@@ -67,6 +67,7 @@ export async function PATCH(
       topic: `cotizacion:${id}`,
       event: 'item_confirmed',
       payload: { cotizacion_id: id, item_id: itemId, at: new Date().toISOString() },
+      private: true,
     }])
 
     return Response.json({ item: updatedItem })

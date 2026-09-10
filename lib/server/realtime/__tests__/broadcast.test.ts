@@ -22,7 +22,7 @@ describe('sendRealtimeBroadcast', () => {
     global.fetch = fetchMock as unknown as typeof fetch
 
     await sendRealtimeBroadcast([
-      { topic: 'cotizacion:SH001', event: 'item_confirmed', payload: { cotizacion_id: 'SH001' } },
+      { topic: 'cotizacion:SH001', event: 'item_confirmed', payload: { cotizacion_id: 'SH001' }, private: true },
     ])
 
     expect(fetchMock).toHaveBeenCalledWith('https://proyecto.supabase.co/realtime/v1/api/broadcast', {
@@ -33,7 +33,7 @@ describe('sendRealtimeBroadcast', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        messages: [{ topic: 'cotizacion:SH001', event: 'item_confirmed', payload: { cotizacion_id: 'SH001' } }],
+        messages: [{ topic: 'cotizacion:SH001', event: 'item_confirmed', payload: { cotizacion_id: 'SH001' }, private: true }],
       }),
     })
   })
