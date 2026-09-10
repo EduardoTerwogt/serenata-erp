@@ -597,6 +597,21 @@ de CI: `npm run build`, `npm run test:e2e:smoke` (21/21) y
 `npm run test:e2e:critical` (48/48) en verde -- sin cambios de
 comportamiento en ningún flujo existente.
 
+**Mergeada a `main`** vía PR
+[#18](https://github.com/EduardoTerwogt/serenata-erp/pull/18) (commit
+`c94b764`). `Test Suite` y `Migrations` en verde. `E2E` mostró 2
+fallos, ninguno regresión de esta fase:
+- `live`: el caso conocido de siempre (línea ~282), sin cambios.
+- `smoke-and-critical`: `planeacion.spec.ts` ("extracción IA...") falló
+  por el mismo timeout de siempre esperando el redirect -- exactamente
+  el mismo síntoma ya documentado en el push de Fase 4, en un módulo
+  que esta iniciativa tampoco tocó en esta fase. Mismo commit había
+  pasado 48/48 en el PR minutos antes: inestabilidad de CI, no
+  regresión. Segunda vez que se ve este flake específico -- si
+  reaparece una tercera, vale la pena investigar por qué justo ese test
+  es el que more flakea (¿carga del runner al final de la suite?, ¿algo
+  del propio test?) en vez de seguir tratándolo caso por caso.
+
 ---
 
 ## 4. Features parciales — preguntar antes de tocar
