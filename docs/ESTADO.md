@@ -361,7 +361,7 @@ los merges de las Fases 1 y 2.
 
 ---
 
-### Fase 4 — El grid no pierde capacidades existentes (en curso)
+### Fase 4 — El grid no pierde capacidades existentes (cerrada)
 
 Objetivo: demostrar que el grid nuevo de Partidas (Fase 3) no perdió
 ninguna capacidad de captura que el usuario ya tenía. La mayoría de
@@ -411,6 +411,25 @@ job corrió solo, sin intervención manual, por primera vez.
 `npm run test:e2e:critical` (48/48, incluidos los 3 tests nuevos) —
 verde. `npx tsc --noEmit`, `npm run lint` (mismos warnings
 preexistentes) y `npm test` (402/402) también en verde.
+
+**Mergeada a `main`** vía PR
+[#16](https://github.com/EduardoTerwogt/serenata-erp/pull/16) (commit
+`26b5a2c`). `Test Suite` y `Migrations` en verde sobre `main`. `E2E`
+mostró dos fallos, ninguno regresión de esta fase:
+- `live`: el caso conocido de siempre (línea ~282), sin cambios.
+- `smoke-and-critical`: `planeacion.spec.ts` ("extracción IA...") falló
+  por timeout esperando un redirect -- un módulo que esta iniciativa
+  nunca tocó. Prueba de que es inestabilidad de CI y no una regresión:
+  el mismo commit, sin ninguna diferencia de código, ya había pasado
+  48/48 en el PR minutos antes.
+
+**Deuda nueva a vigilar** (efecto colateral del fix de `live` en PR,
+no de esta fase en sí): correr `live` en cada push (PR + `main`) subió
+la frecuencia de golpes reales contra la cuota de la API de Google
+Drive del proyecto de prueba -- ya se vio un `403 User rate limit
+exceeded` al crear una carpeta en Drive durante iteración rápida. Si se
+vuelve frecuente, considerar espaciar los pushes que disparan `live` o
+agregar retry/backoff específico para ese caso en el propio test.
 
 ---
 
