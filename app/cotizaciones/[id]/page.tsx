@@ -13,7 +13,7 @@ import { ImportableItem, QuotationItemsController, TEMP_ROW_PREFIX } from '@/hoo
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem, reconcileServerItems } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationGeneral, saveQuotationNotes, saveQuotationTotals, updateQuotation } from '@/lib/services/quotation-service'
+import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationNotes, updateQuotation } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
 import { Icon } from '@/components/ui/Icon'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
@@ -54,6 +54,9 @@ interface TotalsSnapshot {
   descuento_valor: number
 }
 
+type QuotationGeneralField = keyof GeneralSnapshot
+type QuotationTotalsField = keyof TotalsSnapshot
+
 function getInitials(value: string) {
   const parts = value.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return 'U'
@@ -78,10 +81,6 @@ function buildGeneralSnapshot(values: Partial<GeneralSnapshot>): GeneralSnapshot
   }
 }
 
-function areGeneralSnapshotsEqual(a: GeneralSnapshot, b: GeneralSnapshot) {
-  return a.cliente === b.cliente && a.proyecto === b.proyecto && a.fecha_entrega === b.fecha_entrega && a.locacion === b.locacion
-}
-
 function buildTotalsSnapshot(values: Partial<TotalsSnapshot>): TotalsSnapshot {
   return {
     porcentaje_fee: typeof values.porcentaje_fee === 'number' ? values.porcentaje_fee : 0.15,
@@ -91,31 +90,31 @@ function buildTotalsSnapshot(values: Partial<TotalsSnapshot>): TotalsSnapshot {
   }
 }
 
-function areTotalsSnapshotsEqual(a: TotalsSnapshot, b: TotalsSnapshot) {
-  return a.porcentaje_fee === b.porcentaje_fee && a.iva_activo === b.iva_activo && a.descuento_tipo === b.descuento_tipo && a.descuento_valor === b.descuento_valor
-}
-
 function getItemCellKey(rowId: string, field: QuotationItemCellField) {
   return `${rowId}:${field}`
 }
 
-/** Detalle de un campo en conflicto, tal como lo devuelve patch_item_cotizacion. */
-interface ItemFieldConflictDetail {
+/**
+ * Detalle de un campo en conflicto, tal como lo devuelven las RPCs
+ * patch_item_cotizacion / patch_cotizacion_general / patch_cotizacion_totales.
+ */
+interface FieldConflictDetail {
   base: unknown
   current: unknown
   attempted: unknown
 }
 
 /**
- * El PATCH de una partida rechazó el intento porque el valor cambió en el
- * servidor desde que se capturó el "base" (alguien más lo editó primero).
- * `fields` viene indexado por la clave del patch (p. ej. "descripcion").
+ * El PATCH (de una partida, de General o de Totales) rechazó el intento
+ * porque el valor cambió en el servidor desde que se capturó el "base"
+ * (alguien más lo editó primero). `fields` viene indexado por la clave del
+ * patch (p. ej. "descripcion", "locacion", "descuento_valor").
  */
-class ItemPatchConflictError extends Error {
-  fields: Record<string, ItemFieldConflictDetail>
-  constructor(fields: Record<string, ItemFieldConflictDetail>) {
+class PatchConflictError extends Error {
+  fields: Record<string, FieldConflictDetail>
+  constructor(fields: Record<string, FieldConflictDetail>) {
     super('conflict')
-    this.name = 'ItemPatchConflictError'
+    this.name = 'PatchConflictError'
     this.fields = fields
   }
 }
@@ -181,8 +180,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const totalsSectionRef = useRef<HTMLDivElement | null>(null)
   const partidasSectionRef = useRef<HTMLDivElement | null>(null)
   const notasAutosaveTimerRef = useRef<number | null>(null)
-  const generalAutosaveTimerRef = useRef<number | null>(null)
-  const totalsAutosaveTimerRef = useRef<number | null>(null)
   const notasIdleReleaseTimerRef = useRef<number | null>(null)
   const generalIdleReleaseTimerRef = useRef<number | null>(null)
   const totalsIdleReleaseTimerRef = useRef<number | null>(null)
@@ -213,7 +210,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const itemsServerRef = useRef<Record<string, ItemCotizacion>>({})
   // "base" ya capturado por celda (al enfocarla), listo para el próximo PATCH.
   const itemCellBaseRef = useRef<Record<string, Record<string, unknown>>>({})
-  const [itemCellConflicts, setItemCellConflicts] = useState<Record<string, Record<string, ItemFieldConflictDetail>>>({})
+  const [itemCellConflicts, setItemCellConflicts] = useState<Record<string, Record<string, FieldConflictDetail>>>({})
   // mutation_id de los PATCH de partida que este cliente mismo mandó -- así al
   // recibir el `item_confirmed` del servidor se distingue "confirmó lo mío" (no hace
   // falta reconciliar, ya se aplicó al recibir la respuesta del PATCH) de "confirmó lo
@@ -302,17 +299,60 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       return next
     })
   }, [])
+  const clearGeneralFieldConflict = useCallback((field: QuotationGeneralField) => {
+    setGeneralFieldConflicts((prev) => {
+      if (!(field in prev)) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }, [])
+  const clearTotalsFieldConflict = useCallback((field: QuotationTotalsField) => {
+    setTotalsFieldConflicts((prev) => {
+      if (!(field in prev)) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }, [])
+  const clearGeneralFieldTimer = useCallback((field: QuotationGeneralField) => {
+    const timer = generalFieldTimersRef.current[field]
+    if (timer) window.clearTimeout(timer)
+    generalFieldTimersRef.current[field] = null
+  }, [])
+  const clearTotalsFieldTimer = useCallback((field: QuotationTotalsField) => {
+    const timer = totalsFieldTimersRef.current[field]
+    if (timer) window.clearTimeout(timer)
+    totalsFieldTimersRef.current[field] = null
+  }, [])
   const lastSavedNotasRef = useRef('')
-  const lastSavedGeneralRef = useRef<GeneralSnapshot>(buildGeneralSnapshot({}))
-  const lastSavedTotalsRef = useRef<TotalsSnapshot>(buildTotalsSnapshot({}))
+  // Último valor de General/Totales confirmado por el servidor -- la fuente del
+  // "base" que se manda en cada PATCH de campo para detectar conflictos. Mismo
+  // patrón que itemsServerRef para partidas: nunca se pisa con lo que el usuario
+  // está tecleando (eso vive solo en el form / en los *ValueRef de abajo).
+  const generalServerRef = useRef<GeneralSnapshot>(buildGeneralSnapshot({}))
+  const totalsServerRef = useRef<TotalsSnapshot>(buildTotalsSnapshot({}))
+  // Campos de General/Totales con una edición local sin confirmar. Reemplaza el
+  // booleano de sección única: dos campos de la misma sección ahora se guardan
+  // (y detectan conflicto) de forma independiente, así "A edita Fecha y B edita
+  // Locación" ya no puede pisarse -- cada PATCH manda solo su propio campo.
+  const generalFieldDirtyRef = useRef<Set<QuotationGeneralField>>(new Set())
+  const totalsFieldDirtyRef = useRef<Set<QuotationTotalsField>>(new Set())
+  const generalFieldSavingRef = useRef<Set<QuotationGeneralField>>(new Set())
+  const totalsFieldSavingRef = useRef<Set<QuotationTotalsField>>(new Set())
+  // "base" capturado por campo (al empezar a editarlo), listo para el próximo PATCH.
+  const generalFieldBaseRef = useRef<Partial<Record<QuotationGeneralField, unknown>>>({})
+  const totalsFieldBaseRef = useRef<Partial<Record<QuotationTotalsField, unknown>>>({})
+  const generalFieldTimersRef = useRef<Partial<Record<QuotationGeneralField, number | null>>>({})
+  const totalsFieldTimersRef = useRef<Partial<Record<QuotationTotalsField, number | null>>>({})
+  const [generalFieldConflicts, setGeneralFieldConflicts] = useState<Partial<Record<QuotationGeneralField, FieldConflictDetail>>>({})
+  const [totalsFieldConflicts, setTotalsFieldConflicts] = useState<Partial<Record<QuotationTotalsField, FieldConflictDetail>>>({})
 
   const { register, control, watch, reset, setValue, getValues } = useForm<QuotationFormValues>({
     defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
   })
   const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' })
   const watchedItems = watch('items')
-  const watchedFechaEntrega = watch('fecha_entrega') || ''
-  const watchedLocacion = watch('locacion') || ''
   const quotationForm = useQuotationForm(setValue, watchedItems)
   const {
     refreshCatalogos,
@@ -338,9 +378,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     mostrarProductoDropdown,
     setMostrarProductoDropdown,
   } = quotationForm
-
-  const currentGeneralSnapshot = useMemo(() => buildGeneralSnapshot({ cliente: clienteInput, proyecto: proyectoInput, fecha_entrega: watchedFechaEntrega, locacion: watchedLocacion }), [clienteInput, proyectoInput, watchedFechaEntrega, watchedLocacion])
-  const currentTotalsSnapshot = useMemo(() => buildTotalsSnapshot({ porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }), [descuento_tipo, descuento_valor, iva_activo, porcentaje_fee])
 
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'EMITIDA'
   const {
@@ -371,8 +408,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   })
 
   const getCurrentNotasSnapshot = useCallback(() => notasValueRef.current.trim() ? notasValueRef.current : '', [])
-  const getCurrentGeneralSnapshot = useCallback(() => buildGeneralSnapshot({ cliente: clienteInputValueRef.current, proyecto: proyectoInputValueRef.current, fecha_entrega: getValues('fecha_entrega') || '', locacion: getValues('locacion') || '' }), [getValues])
-  const getCurrentTotalsSnapshot = useCallback(() => buildTotalsSnapshot({ porcentaje_fee: porcentajeFeeValueRef.current, iva_activo: ivaActivoValueRef.current, descuento_tipo: descuentoTipoValueRef.current, descuento_valor: descuentoValorValueRef.current }), [])
   const getItemIndexByRowId = useCallback((rowId: string) => { const items = getValues('items') || []; return items.findIndex((item) => item?.id === rowId) }, [getValues])
   const hasLocalItemRowActivity = useCallback((rowId: string) => (
     Array.from(itemDirtyCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemFocusedCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemSavingCellsRef.current).some((key) => key.startsWith(`${rowId}:`))
@@ -421,11 +456,44 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await response.json().catch(() => ({}))
     if (response.status === 409 && data?.error === 'conflict') {
-      throw new ItemPatchConflictError((data?.fields || {}) as Record<string, ItemFieldConflictDetail>)
+      throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
     }
     if (!response.ok) throw new Error(data?.error || 'Error actualizando partida')
     return data?.item as ItemCotizacion | undefined
   }, [id, resolveRowId])
+
+  // Fetch crudo (no sendJson/getJson): esos helpers colapsan cualquier respuesta
+  // no-2xx en un Error genérico y perderían el payload {fields} del 409, igual
+  // que patchQuotationItem arriba.
+  const patchQuotationGeneral = useCallback(async (
+    patch: Record<string, unknown>,
+    options?: { base?: Record<string, unknown> | null }
+  ) => {
+    const body: Record<string, unknown> = { ...patch }
+    if (options?.base) body.base = options.base
+    const response = await fetch(`/api/cotizaciones/${id}/general`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await response.json().catch(() => ({}))
+    if (response.status === 409 && data?.error === 'conflict') {
+      throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
+    }
+    if (!response.ok) throw new Error(data?.error || 'Error actualizando información general')
+    return data as Cotizacion | undefined
+  }, [id])
+
+  const patchQuotationTotales = useCallback(async (
+    patch: Record<string, unknown>,
+    options?: { base?: Record<string, unknown> | null }
+  ) => {
+    const body: Record<string, unknown> = { ...patch }
+    if (options?.base) body.base = options.base
+    const response = await fetch(`/api/cotizaciones/${id}/totales`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await response.json().catch(() => ({}))
+    if (response.status === 409 && data?.error === 'conflict') {
+      throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
+    }
+    if (!response.ok) throw new Error(data?.error || 'Error actualizando configuración de totales')
+    return data as Cotizacion | undefined
+  }, [id])
 
   const createQuotationItemRow = useCallback(async () => {
     const response = await fetch(`/api/cotizaciones/${id}/items`, { method: 'POST' })
@@ -500,10 +568,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     notasValueRef.current = notas
     lastSavedNotasRef.current = notas
     notasDirtyRef.current = false
-    lastSavedGeneralRef.current = general
+    generalServerRef.current = general
     generalDirtyRef.current = false
-    lastSavedTotalsRef.current = totalsConfig
+    generalFieldDirtyRef.current.clear()
+    generalFieldBaseRef.current = {}
+    setGeneralFieldConflicts({})
+    totalsServerRef.current = totalsConfig
     totalsDirtyRef.current = false
+    totalsFieldDirtyRef.current.clear()
+    totalsFieldBaseRef.current = {}
+    setTotalsFieldConflicts({})
     setClienteInput(cot.cliente || '')
     clienteInputValueRef.current = cot.cliente || ''
     setProyectoInput(cot.proyecto || '')
@@ -521,8 +595,44 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [recordServerItem, reset, setClienteInput, setProyectoInput])
 
   const applyNotasOnly = useCallback((notas: string | null) => { const normalized = notas ?? ''; setNotasInternas(normalized); notasValueRef.current = normalized; lastSavedNotasRef.current = normalized; notasDirtyRef.current = false; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notas } : prev)) }, [])
-  const applyGeneralOnly = useCallback((cot: Cotizacion) => { const general = buildGeneralSnapshot({ cliente: cot.cliente, proyecto: cot.proyecto, fecha_entrega: cot.fecha_entrega || '', locacion: cot.locacion || '' }); lastSavedGeneralRef.current = general; generalDirtyRef.current = false; setClienteInput(general.cliente); clienteInputValueRef.current = general.cliente; setProyectoInput(general.proyecto); proyectoInputValueRef.current = general.proyecto; setValue('cliente', general.cliente); setValue('proyecto', general.proyecto); setValue('fecha_entrega', general.fecha_entrega); setValue('locacion', general.locacion); setCotizacion((prev) => prev ? { ...prev, cliente: general.cliente, proyecto: general.proyecto, fecha_entrega: general.fecha_entrega || null, locacion: general.locacion || null } : prev) }, [setClienteInput, setProyectoInput, setValue])
-  const applyTotalsOnly = useCallback((cot: Cotizacion) => { const totalsConfig = buildTotalsSnapshot({ porcentaje_fee: cot.porcentaje_fee, iva_activo: cot.iva_activo, descuento_tipo: cot.descuento_tipo, descuento_valor: cot.descuento_valor }); lastSavedTotalsRef.current = totalsConfig; totalsDirtyRef.current = false; setPorcentajeFee(totalsConfig.porcentaje_fee); porcentajeFeeValueRef.current = totalsConfig.porcentaje_fee; setIvaActivo(totalsConfig.iva_activo); ivaActivoValueRef.current = totalsConfig.iva_activo; setDescuentoTipo(totalsConfig.descuento_tipo); descuentoTipoValueRef.current = totalsConfig.descuento_tipo; setDescuentoValor(totalsConfig.descuento_valor); descuentoValorValueRef.current = totalsConfig.descuento_valor; setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: totalsConfig.porcentaje_fee, iva_activo: totalsConfig.iva_activo, descuento_tipo: totalsConfig.descuento_tipo, descuento_valor: totalsConfig.descuento_valor } : prev) }, [])
+  // Refresco tras un save remoto: NUNCA pisa un campo con una edición o un guardado
+  // propio en vuelo (mismo criterio que `isCellBusy` en partidas). Antes esto se
+  // saltaba la sección COMPLETA si cualquier campo estaba sucio -- con eso, editar
+  // Fecha dejaba a Locación viendo una foto vieja aunque nadie la estuviera tocando.
+  const applyGeneralOnly = useCallback((cot: Cotizacion) => {
+    const general = buildGeneralSnapshot({ cliente: cot.cliente, proyecto: cot.proyecto, fecha_entrega: cot.fecha_entrega || '', locacion: cot.locacion || '' })
+    generalServerRef.current = general
+    const isFieldBusy = (field: QuotationGeneralField) => generalFieldDirtyRef.current.has(field) || generalFieldSavingRef.current.has(field)
+    if (!isFieldBusy('cliente')) { setClienteInput(general.cliente); clienteInputValueRef.current = general.cliente; setValue('cliente', general.cliente) }
+    if (!isFieldBusy('proyecto')) { setProyectoInput(general.proyecto); proyectoInputValueRef.current = general.proyecto; setValue('proyecto', general.proyecto) }
+    if (!isFieldBusy('fecha_entrega')) setValue('fecha_entrega', general.fecha_entrega)
+    if (!isFieldBusy('locacion')) setValue('locacion', general.locacion)
+    generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
+    setCotizacion((prev) => prev ? {
+      ...prev,
+      cliente: isFieldBusy('cliente') ? prev.cliente : general.cliente,
+      proyecto: isFieldBusy('proyecto') ? prev.proyecto : general.proyecto,
+      fecha_entrega: isFieldBusy('fecha_entrega') ? prev.fecha_entrega : (general.fecha_entrega || null),
+      locacion: isFieldBusy('locacion') ? prev.locacion : (general.locacion || null),
+    } : prev)
+  }, [setClienteInput, setProyectoInput, setValue])
+  const applyTotalsOnly = useCallback((cot: Cotizacion) => {
+    const totalsConfig = buildTotalsSnapshot({ porcentaje_fee: cot.porcentaje_fee, iva_activo: cot.iva_activo, descuento_tipo: cot.descuento_tipo, descuento_valor: cot.descuento_valor })
+    totalsServerRef.current = totalsConfig
+    const isFieldBusy = (field: QuotationTotalsField) => totalsFieldDirtyRef.current.has(field) || totalsFieldSavingRef.current.has(field)
+    if (!isFieldBusy('porcentaje_fee')) { setPorcentajeFee(totalsConfig.porcentaje_fee); porcentajeFeeValueRef.current = totalsConfig.porcentaje_fee }
+    if (!isFieldBusy('iva_activo')) { setIvaActivo(totalsConfig.iva_activo); ivaActivoValueRef.current = totalsConfig.iva_activo }
+    if (!isFieldBusy('descuento_tipo')) { setDescuentoTipo(totalsConfig.descuento_tipo); descuentoTipoValueRef.current = totalsConfig.descuento_tipo }
+    if (!isFieldBusy('descuento_valor')) { setDescuentoValor(totalsConfig.descuento_valor); descuentoValorValueRef.current = totalsConfig.descuento_valor }
+    totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
+    setCotizacion((prev) => prev ? {
+      ...prev,
+      porcentaje_fee: isFieldBusy('porcentaje_fee') ? prev.porcentaje_fee : totalsConfig.porcentaje_fee,
+      iva_activo: isFieldBusy('iva_activo') ? prev.iva_activo : totalsConfig.iva_activo,
+      descuento_tipo: isFieldBusy('descuento_tipo') ? prev.descuento_tipo : totalsConfig.descuento_tipo,
+      descuento_valor: isFieldBusy('descuento_valor') ? prev.descuento_valor : totalsConfig.descuento_valor,
+    } : prev)
+  }, [])
 
   // Red de seguridad única: ante cualquier fallo del servidor se vuelve a leer la
   // cotización y se reconstruye la tabla, en vez de parchear el estado local a mano
@@ -708,23 +818,196 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; notasDirtyRef.current = hasPendingChanges; if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } if (!hasPendingChanges) scheduleNotasIdleRelease()
   }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, markSectionSaved, releaseSection, scheduleNotasIdleRelease])
 
-  const persistGeneralAutosave = useCallback(async () => {
-    if (!cotizacion) return
-    const snapshot = getCurrentGeneralSnapshot(); const previousSnapshot = lastSavedGeneralRef.current
-    if (areGeneralSnapshotsEqual(snapshot, previousSnapshot)) { generalDirtyRef.current = false; if (!generalFocusedRef.current) { clearGeneralIdleReleaseTimer(); generalLockHeldRef.current = false; releaseSection('general'); return } scheduleGeneralIdleRelease(); return }
-    setIsSavingGeneral(true)
-    try { await saveQuotationGeneral(id, { cliente: snapshot.cliente, proyecto: snapshot.proyecto, fecha_entrega: snapshot.fecha_entrega || null, locacion: snapshot.locacion || null }); lastSavedGeneralRef.current = snapshot; setCotizacion((prev) => prev ? { ...prev, cliente: snapshot.cliente, proyecto: snapshot.proyecto, fecha_entrega: snapshot.fecha_entrega || null, locacion: snapshot.locacion || null } : prev); markSectionSaved('general') } catch (saveError: unknown) { setError(saveError instanceof Error ? saveError.message : 'Error guardando información general'); generalDirtyRef.current = !areGeneralSnapshotsEqual(getCurrentGeneralSnapshot(), lastSavedGeneralRef.current); clearGeneralIdleReleaseTimer(); generalLockHeldRef.current = false; releaseSection('general'); return } finally { setIsSavingGeneral(false) }
-    const hasPendingChanges = !areGeneralSnapshotsEqual(getCurrentGeneralSnapshot(), lastSavedGeneralRef.current); generalDirtyRef.current = hasPendingChanges; if (!generalFocusedRef.current) { clearGeneralIdleReleaseTimer(); generalLockHeldRef.current = false; releaseSection('general'); return } if (!hasPendingChanges) scheduleGeneralIdleRelease()
-  }, [clearGeneralIdleReleaseTimer, cotizacion, getCurrentGeneralSnapshot, id, markSectionSaved, releaseSection, scheduleGeneralIdleRelease])
+  const getGeneralFieldValue = useCallback((field: QuotationGeneralField): unknown => {
+    switch (field) {
+      case 'cliente': return clienteInputValueRef.current
+      case 'proyecto': return proyectoInputValueRef.current
+      case 'fecha_entrega': return getValues('fecha_entrega') || ''
+      case 'locacion': return getValues('locacion') || ''
+    }
+  }, [getValues])
 
-  const persistTotalsAutosave = useCallback(async () => {
+  const getTotalsFieldValue = useCallback((field: QuotationTotalsField): unknown => {
+    switch (field) {
+      case 'porcentaje_fee': return porcentajeFeeValueRef.current
+      case 'iva_activo': return ivaActivoValueRef.current
+      case 'descuento_tipo': return descuentoTipoValueRef.current
+      case 'descuento_valor': return descuentoValorValueRef.current
+    }
+  }, [])
+
+  /**
+   * PATCH de UN SOLO campo de General, con su propio "base" y su propio conflicto.
+   * Reemplaza el guardado de sección completa: antes, editar Fecha reenviaba
+   * también Cliente/Proyecto/Locación tal cual estuvieran en pantalla en ese
+   * instante, así que la edición de Locación de otro colaborador -- que ya había
+   * sido confirmada por el servidor mientras el debounce de 800 ms de Fecha seguía
+   * corriendo -- podía quedar pisada por ese PATCH. Con un campo por PATCH esto ya
+   * no es posible: cada uno solo toca su propia columna.
+   */
+  const persistGeneralField = useCallback(async (field: QuotationGeneralField) => {
     if (!cotizacion) return
-    const snapshot = getCurrentTotalsSnapshot(); const previousSnapshot = lastSavedTotalsRef.current
-    if (areTotalsSnapshotsEqual(snapshot, previousSnapshot)) { totalsDirtyRef.current = false; if (!totalsFocusedRef.current) { clearTotalsIdleReleaseTimer(); totalsLockHeldRef.current = false; releaseSection('totales'); return } scheduleTotalsIdleRelease(); return }
+    generalFieldSavingRef.current.add(field)
+    setIsSavingGeneral(true)
+    try {
+      const value = getGeneralFieldValue(field)
+      const patch: Record<string, unknown> = { [field]: value }
+      const baseValue = generalFieldBaseRef.current[field]
+      const base = baseValue !== undefined ? { [field]: baseValue } : undefined
+      const updated = await patchQuotationGeneral(patch, { base })
+      generalFieldDirtyRef.current.delete(field)
+      clearGeneralFieldConflict(field)
+      if (updated) {
+        generalServerRef.current = buildGeneralSnapshot({ cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega || '', locacion: updated.locacion || '' })
+        setCotizacion((prev) => prev ? { ...prev, cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega, locacion: updated.locacion } : prev)
+      }
+      markSectionSaved('general')
+    } catch (saveError: unknown) {
+      if (saveError instanceof PatchConflictError) {
+        // Nunca se descarta en silencio lo que el usuario tecleó: el campo queda
+        // tal cual, se muestra el conflicto y el usuario decide con qué valor seguir.
+        setGeneralFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
+        return
+      }
+      setError(saveError instanceof Error ? saveError.message : 'Error guardando información general')
+      return
+    } finally {
+      generalFieldSavingRef.current.delete(field)
+      setIsSavingGeneral(generalFieldSavingRef.current.size > 0)
+    }
+    generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
+    if (!generalFocusedRef.current) {
+      clearGeneralIdleReleaseTimer()
+      if (generalFieldDirtyRef.current.size === 0) { generalLockHeldRef.current = false; releaseSection('general'); return }
+    }
+    if (generalFieldDirtyRef.current.size === 0) scheduleGeneralIdleRelease()
+  }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, markSectionSaved, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease])
+
+  const persistTotalsField = useCallback(async (field: QuotationTotalsField) => {
+    if (!cotizacion) return
+    totalsFieldSavingRef.current.add(field)
     setIsSavingTotals(true)
-    try { await saveQuotationTotals(id, snapshot); lastSavedTotalsRef.current = snapshot; setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: snapshot.porcentaje_fee, iva_activo: snapshot.iva_activo, descuento_tipo: snapshot.descuento_tipo, descuento_valor: snapshot.descuento_valor } : prev); markSectionSaved('totales') } catch (saveError: unknown) { setError(saveError instanceof Error ? saveError.message : 'Error guardando configuración de totales'); totalsDirtyRef.current = !areTotalsSnapshotsEqual(getCurrentTotalsSnapshot(), lastSavedTotalsRef.current); clearTotalsIdleReleaseTimer(); totalsLockHeldRef.current = false; releaseSection('totales'); return } finally { setIsSavingTotals(false) }
-    const hasPendingChanges = !areTotalsSnapshotsEqual(getCurrentTotalsSnapshot(), lastSavedTotalsRef.current); totalsDirtyRef.current = hasPendingChanges; if (!totalsFocusedRef.current) { clearTotalsIdleReleaseTimer(); totalsLockHeldRef.current = false; releaseSection('totales'); return } if (!hasPendingChanges) scheduleTotalsIdleRelease()
-  }, [clearTotalsIdleReleaseTimer, cotizacion, getCurrentTotalsSnapshot, id, markSectionSaved, releaseSection, scheduleTotalsIdleRelease])
+    try {
+      const value = getTotalsFieldValue(field)
+      const patch: Record<string, unknown> = { [field]: value }
+      const baseValue = totalsFieldBaseRef.current[field]
+      const base = baseValue !== undefined ? { [field]: baseValue } : undefined
+      const updated = await patchQuotationTotales(patch, { base })
+      totalsFieldDirtyRef.current.delete(field)
+      clearTotalsFieldConflict(field)
+      if (updated) {
+        totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
+        setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor } : prev)
+      }
+      markSectionSaved('totales')
+    } catch (saveError: unknown) {
+      if (saveError instanceof PatchConflictError) {
+        setTotalsFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
+        return
+      }
+      setError(saveError instanceof Error ? saveError.message : 'Error guardando configuración de totales')
+      return
+    } finally {
+      totalsFieldSavingRef.current.delete(field)
+      setIsSavingTotals(totalsFieldSavingRef.current.size > 0)
+    }
+    totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
+    if (!totalsFocusedRef.current) {
+      clearTotalsIdleReleaseTimer()
+      if (totalsFieldDirtyRef.current.size === 0) { totalsLockHeldRef.current = false; releaseSection('totales'); return }
+    }
+    if (totalsFieldDirtyRef.current.size === 0) scheduleTotalsIdleRelease()
+  }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, markSectionSaved, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease])
+
+  const persistGeneralFieldRef = useRef(persistGeneralField)
+  persistGeneralFieldRef.current = persistGeneralField
+  const persistTotalsFieldRef = useRef(persistTotalsField)
+  persistTotalsFieldRef.current = persistTotalsField
+
+  /**
+   * Marca un campo de General como sucio y programa su propio autoguardado
+   * debounced -- mismo patrón que `handleItemFieldChange` para celdas de
+   * partidas, pero sin necesitar wiring por-input en el componente hijo: el
+   * "base" se captura la PRIMERA vez que el campo se ensucia desde el último
+   * valor confirmado por el servidor (`generalServerRef`), no en un focus
+   * separado, porque `QuotationGeneralInfoSection` solo expone focus/blur a
+   * nivel de sección.
+   */
+  const markGeneralFieldDirty = useCallback((field: QuotationGeneralField) => {
+    if (!generalFieldDirtyRef.current.has(field)) {
+      generalFieldBaseRef.current[field] = generalServerRef.current[field]
+      generalFieldDirtyRef.current.add(field)
+    }
+    generalDirtyRef.current = true
+    clearGeneralFieldTimer(field)
+    generalFieldTimersRef.current[field] = window.setTimeout(() => { void persistGeneralFieldRef.current(field) }, GENERAL_AUTOSAVE_DELAY_MS)
+  }, [clearGeneralFieldTimer])
+
+  const markTotalsFieldDirty = useCallback((field: QuotationTotalsField) => {
+    if (!totalsFieldDirtyRef.current.has(field)) {
+      totalsFieldBaseRef.current[field] = totalsServerRef.current[field]
+      totalsFieldDirtyRef.current.add(field)
+    }
+    totalsDirtyRef.current = true
+    clearTotalsFieldTimer(field)
+    totalsFieldTimersRef.current[field] = window.setTimeout(() => { void persistTotalsFieldRef.current(field) }, TOTALS_AUTOSAVE_DELAY_MS)
+  }, [clearTotalsFieldTimer])
+
+  // Al salir de la sección se guardan de inmediato todos los campos sucios en vez
+  // de esperar su debounce individual -- mismo criterio que tenía el guardado de
+  // sección completa al perder el foco.
+  const flushGeneralDirtyFields = useCallback(() => {
+    for (const field of Array.from(generalFieldDirtyRef.current)) {
+      clearGeneralFieldTimer(field)
+      void persistGeneralField(field)
+    }
+  }, [clearGeneralFieldTimer, persistGeneralField])
+
+  const flushTotalsDirtyFields = useCallback(() => {
+    for (const field of Array.from(totalsFieldDirtyRef.current)) {
+      clearTotalsFieldTimer(field)
+      void persistTotalsField(field)
+    }
+  }, [clearTotalsFieldTimer, persistTotalsField])
+
+  const resolveGeneralFieldConflict = useCallback((field: QuotationGeneralField, resolution: 'theirs' | 'mine') => {
+    const detail = generalFieldConflicts[field]
+    if (!detail) return
+    clearGeneralFieldConflict(field)
+    // El "current" que devolvió la RPC es la verdad del servidor a partir de ahora,
+    // gane el valor ajeno o el propio -- ambos casos parten de ahí para el próximo PATCH.
+    generalServerRef.current = { ...generalServerRef.current, [field]: detail.current } as GeneralSnapshot
+    generalFieldBaseRef.current[field] = detail.current
+    if (resolution === 'theirs') {
+      const value = String(detail.current ?? '')
+      if (field === 'cliente') { setClienteInput(value); clienteInputValueRef.current = value }
+      else if (field === 'proyecto') { setProyectoInput(value); proyectoInputValueRef.current = value }
+      else setValue(field, value)
+      generalFieldDirtyRef.current.delete(field)
+      generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
+      return
+    }
+    // "mine": lo tecleado se conserva tal cual, se reintenta con el base ya corregido.
+    void persistGeneralField(field)
+  }, [clearGeneralFieldConflict, generalFieldConflicts, persistGeneralField, setClienteInput, setProyectoInput, setValue])
+
+  const resolveTotalsFieldConflict = useCallback((field: QuotationTotalsField, resolution: 'theirs' | 'mine') => {
+    const detail = totalsFieldConflicts[field]
+    if (!detail) return
+    clearTotalsFieldConflict(field)
+    totalsServerRef.current = { ...totalsServerRef.current, [field]: detail.current } as TotalsSnapshot
+    totalsFieldBaseRef.current[field] = detail.current
+    if (resolution === 'theirs') {
+      if (field === 'porcentaje_fee') { const v = Number(detail.current) || 0; porcentajeFeeValueRef.current = v; setPorcentajeFee(v) }
+      else if (field === 'iva_activo') { const v = Boolean(detail.current); ivaActivoValueRef.current = v; setIvaActivo(v) }
+      else if (field === 'descuento_tipo') { const v = detail.current === 'porcentaje' ? 'porcentaje' : 'monto'; descuentoTipoValueRef.current = v; setDescuentoTipo(v) }
+      else { const v = Number(detail.current) || 0; descuentoValorValueRef.current = v; setDescuentoValor(v) }
+      totalsFieldDirtyRef.current.delete(field)
+      totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
+      return
+    }
+    void persistTotalsField(field)
+  }, [clearTotalsFieldConflict, persistTotalsField, totalsFieldConflicts])
 
   const persistItemCellAutosave = useCallback(async (rowId: string, field: QuotationItemCellField) => {
     const key = getItemCellKey(rowId, field)
@@ -754,7 +1037,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       markSectionSaved('partidas')
       scheduleItemCellIdleRelease(rowId, field)
     } catch (saveError: unknown) {
-      if (saveError instanceof ItemPatchConflictError) {
+      if (saveError instanceof PatchConflictError) {
         // Nunca se descarta en silencio lo que el usuario tecleó: la fila queda tal
         // cual, se muestra el conflicto y el usuario decide con qué valor seguir.
         setItemCellConflicts((prev) => ({ ...prev, [key]: saveError.fields }))
@@ -774,19 +1057,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return () => { if (notasAutosaveTimerRef.current !== null) { window.clearTimeout(notasAutosaveTimerRef.current); notasAutosaveTimerRef.current = null } }
   }, [esEditable, isSavingNotas, notasInternas, persistNotasAutosave])
 
-  useEffect(() => {
-    if (!esEditable || !generalLockHeldRef.current || !generalDirtyRef.current || isSavingGeneral) return
-    if (generalAutosaveTimerRef.current !== null) window.clearTimeout(generalAutosaveTimerRef.current)
-    generalAutosaveTimerRef.current = window.setTimeout(() => { void persistGeneralAutosave() }, GENERAL_AUTOSAVE_DELAY_MS)
-    return () => { if (generalAutosaveTimerRef.current !== null) { window.clearTimeout(generalAutosaveTimerRef.current); generalAutosaveTimerRef.current = null } }
-  }, [currentGeneralSnapshot, esEditable, isSavingGeneral, persistGeneralAutosave])
-
-  useEffect(() => {
-    if (!esEditable || !totalsLockHeldRef.current || !totalsDirtyRef.current || isSavingTotals) return
-    if (totalsAutosaveTimerRef.current !== null) window.clearTimeout(totalsAutosaveTimerRef.current)
-    totalsAutosaveTimerRef.current = window.setTimeout(() => { void persistTotalsAutosave() }, TOTALS_AUTOSAVE_DELAY_MS)
-    return () => { if (totalsAutosaveTimerRef.current !== null) { window.clearTimeout(totalsAutosaveTimerRef.current); totalsAutosaveTimerRef.current = null } }
-  }, [currentTotalsSnapshot, esEditable, isSavingTotals, persistTotalsAutosave])
+  // General y Totales ya no tienen un debounce por sección: `markGeneralFieldDirty`/
+  // `markTotalsFieldDirty` programan su propio timeout por campo en cuanto se
+  // detecta la edición (ver los `tracked*` handlers más abajo).
 
   useEffect(() => {
     const remoteNotasSaves = savedSections.notas || 0
@@ -794,17 +1067,20 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     fetchQuotationDetail(id).then((updated) => applyNotasOnly(updated.notas_internas ?? null)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando notas tras save remoto:', loadError))
   }, [applyNotasOnly, id, isSavingNotas, savedSections.notas])
 
+  // Ya no se bloquea por sección completa (`generalLockHeldRef`/`isSavingGeneral`):
+  // `applyGeneralOnly`/`applyTotalsOnly` protegen campo a campo, así que un save
+  // ajeno a "Locación" refresca aunque el usuario tenga "Fecha" a medio teclear.
   useEffect(() => {
     const remoteGeneralSaves = savedSections.general || 0
-    if (!remoteGeneralSaves || generalLockHeldRef.current || isSavingGeneral) return
+    if (!remoteGeneralSaves) return
     fetchQuotationDetail(id).then((updated) => applyGeneralOnly(updated)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando general tras save remoto:', loadError))
-  }, [applyGeneralOnly, id, isSavingGeneral, savedSections.general])
+  }, [applyGeneralOnly, id, savedSections.general])
 
   useEffect(() => {
     const remoteTotalsSaves = savedSections.totales || 0
-    if (!remoteTotalsSaves || totalsLockHeldRef.current || isSavingTotals) return
+    if (!remoteTotalsSaves) return
     fetchQuotationDetail(id).then((updated) => applyTotalsOnly(updated)).catch((loadError) => console.error('[cotizaciones/[id]] Error refrescando totales tras save remoto:', loadError))
-  }, [applyTotalsOnly, id, isSavingTotals, savedSections.totales])
+  }, [applyTotalsOnly, id, savedSections.totales])
 
   useEffect(() => {
     if (!latestItemMutation) return
@@ -884,16 +1160,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return () => document.removeEventListener('visibilitychange', alVolver)
   }, [esEditable, reconciliarConServidor])
 
-  useEffect(() => { if (!generalLockHeldRef.current) return; if (!areGeneralSnapshotsEqual(currentGeneralSnapshot, lastSavedGeneralRef.current)) generalDirtyRef.current = true }, [currentGeneralSnapshot])
-  useEffect(() => { if (!totalsLockHeldRef.current) return; if (!areTotalsSnapshotsEqual(currentTotalsSnapshot, lastSavedTotalsRef.current)) totalsDirtyRef.current = true }, [currentTotalsSnapshot])
-
   useEffect(() => () => {
     if (notasAutosaveTimerRef.current !== null) window.clearTimeout(notasAutosaveTimerRef.current)
-    if (generalAutosaveTimerRef.current !== null) window.clearTimeout(generalAutosaveTimerRef.current)
-    if (totalsAutosaveTimerRef.current !== null) window.clearTimeout(totalsAutosaveTimerRef.current)
     clearNotasIdleReleaseTimer(); clearGeneralIdleReleaseTimer(); clearTotalsIdleReleaseTimer()
     Object.values(itemCellAutosaveTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
     Object.values(itemCellIdleReleaseTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
+    Object.values(generalFieldTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
+    Object.values(totalsFieldTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
   }, [clearGeneralIdleReleaseTimer, clearNotasIdleReleaseTimer, clearTotalsIdleReleaseTimer])
 
   const handleNotasFocus = useCallback(() => { if (!esEditable) return; clearNotasIdleReleaseTimer(); notasFocusedRef.current = true; if (!notasLockHeldRef.current) { notasLockHeldRef.current = true; setActiveSection('notas') } }, [clearNotasIdleReleaseTimer, esEditable, setActiveSection])
@@ -901,8 +1174,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const handleTotalsFocus = useCallback(() => { if (!esEditable) return; clearTotalsIdleReleaseTimer(); totalsFocusedRef.current = true; if (!totalsLockHeldRef.current) { totalsLockHeldRef.current = true; setActiveSection('totales') } }, [clearTotalsIdleReleaseTimer, esEditable, setActiveSection])
 
   const handleNotasBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && notasSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && notasSectionRef.current?.contains(activeElement)) return; notasFocusedRef.current = false; clearNotasIdleReleaseTimer(); if (notasDirtyRef.current) { void persistNotasAutosave(); return } notasLockHeldRef.current = false; releaseSection('notas') }, 0) }, [clearNotasIdleReleaseTimer, esEditable, persistNotasAutosave, releaseSection])
-  const handleGeneralBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && generalSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && generalSectionRef.current?.contains(activeElement)) return; generalFocusedRef.current = false; clearGeneralIdleReleaseTimer(); if (generalDirtyRef.current) { void persistGeneralAutosave(); return } generalLockHeldRef.current = false; releaseSection('general') }, 0) }, [clearGeneralIdleReleaseTimer, esEditable, persistGeneralAutosave, releaseSection])
-  const handleTotalsBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && totalsSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && totalsSectionRef.current?.contains(activeElement)) return; totalsFocusedRef.current = false; clearTotalsIdleReleaseTimer(); if (totalsDirtyRef.current) { void persistTotalsAutosave(); return } totalsLockHeldRef.current = false; releaseSection('totales') }, 0) }, [clearTotalsIdleReleaseTimer, esEditable, persistTotalsAutosave, releaseSection])
+  const handleGeneralBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && generalSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && generalSectionRef.current?.contains(activeElement)) return; generalFocusedRef.current = false; clearGeneralIdleReleaseTimer(); if (generalFieldDirtyRef.current.size > 0) { flushGeneralDirtyFields(); return } generalLockHeldRef.current = false; releaseSection('general') }, 0) }, [clearGeneralIdleReleaseTimer, esEditable, flushGeneralDirtyFields, releaseSection])
+  const handleTotalsBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && totalsSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && totalsSectionRef.current?.contains(activeElement)) return; totalsFocusedRef.current = false; clearTotalsIdleReleaseTimer(); if (totalsFieldDirtyRef.current.size > 0) { flushTotalsDirtyFields(); return } totalsLockHeldRef.current = false; releaseSection('totales') }, 0) }, [clearTotalsIdleReleaseTimer, esEditable, flushTotalsDirtyFields, releaseSection])
 
   // Sin esto, tocar la tabla una vez te dejaba marcado como editor de Partidas para
   // los demás indefinidamente: era la única sección sin liberación al salir.
@@ -917,16 +1190,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }, 0)
   }, [esEditable, releaseSection])
 
-  const trackedHandleClienteChange = useCallback((value: string) => { handleGeneralFocus(); generalDirtyRef.current = true; handleClienteChange(value) }, [handleClienteChange, handleGeneralFocus])
-  const trackedHandleProyectoChange = useCallback((value: string) => { handleGeneralFocus(); generalDirtyRef.current = true; handleProyectoChange(value) }, [handleGeneralFocus, handleProyectoChange])
-  const trackedSelectCliente = useCallback((value: string) => { handleGeneralFocus(); generalDirtyRef.current = true; seleccionarCliente(value) }, [handleGeneralFocus, seleccionarCliente])
-  const trackedSelectProyecto = useCallback((value: string) => { handleGeneralFocus(); generalDirtyRef.current = true; seleccionarProyecto(value) }, [handleGeneralFocus, seleccionarProyecto])
-  const trackedHandleFechaEntregaChange = useCallback(() => { handleGeneralFocus(); generalDirtyRef.current = true }, [handleGeneralFocus])
-  const trackedHandleLocacionChange = useCallback(() => { handleGeneralFocus(); generalDirtyRef.current = true }, [handleGeneralFocus])
-  const trackedSetPorcentajeFee = useCallback((value: number) => { handleTotalsFocus(); totalsDirtyRef.current = true; porcentajeFeeValueRef.current = value; setPorcentajeFee(value) }, [handleTotalsFocus])
-  const trackedSetIvaActivo = useCallback((value: boolean | ((prev: boolean) => boolean)) => { handleTotalsFocus(); totalsDirtyRef.current = true; const nextValue = typeof value === 'function' ? value(ivaActivoValueRef.current) : value; ivaActivoValueRef.current = nextValue; setIvaActivo(nextValue) }, [handleTotalsFocus])
-  const trackedSetDescuentoTipo = useCallback((value: 'monto' | 'porcentaje') => { handleTotalsFocus(); totalsDirtyRef.current = true; descuentoTipoValueRef.current = value; setDescuentoTipo(value) }, [handleTotalsFocus])
-  const trackedSetDescuentoValor = useCallback((value: number) => { handleTotalsFocus(); totalsDirtyRef.current = true; descuentoValorValueRef.current = value; setDescuentoValor(value) }, [handleTotalsFocus])
+  const trackedHandleClienteChange = useCallback((value: string) => { handleGeneralFocus(); markGeneralFieldDirty('cliente'); handleClienteChange(value) }, [handleClienteChange, handleGeneralFocus, markGeneralFieldDirty])
+  const trackedHandleProyectoChange = useCallback((value: string) => { handleGeneralFocus(); markGeneralFieldDirty('proyecto'); handleProyectoChange(value) }, [handleGeneralFocus, handleProyectoChange, markGeneralFieldDirty])
+  const trackedSelectCliente = useCallback((value: string) => { handleGeneralFocus(); markGeneralFieldDirty('cliente'); seleccionarCliente(value) }, [handleGeneralFocus, markGeneralFieldDirty, seleccionarCliente])
+  const trackedSelectProyecto = useCallback((value: string) => { handleGeneralFocus(); markGeneralFieldDirty('proyecto'); seleccionarProyecto(value) }, [handleGeneralFocus, markGeneralFieldDirty, seleccionarProyecto])
+  const trackedHandleFechaEntregaChange = useCallback(() => { handleGeneralFocus(); markGeneralFieldDirty('fecha_entrega') }, [handleGeneralFocus, markGeneralFieldDirty])
+  const trackedHandleLocacionChange = useCallback(() => { handleGeneralFocus(); markGeneralFieldDirty('locacion') }, [handleGeneralFocus, markGeneralFieldDirty])
+  const trackedSetPorcentajeFee = useCallback((value: number) => { handleTotalsFocus(); markTotalsFieldDirty('porcentaje_fee'); porcentajeFeeValueRef.current = value; setPorcentajeFee(value) }, [handleTotalsFocus, markTotalsFieldDirty])
+  const trackedSetIvaActivo = useCallback((value: boolean | ((prev: boolean) => boolean)) => { handleTotalsFocus(); markTotalsFieldDirty('iva_activo'); const nextValue = typeof value === 'function' ? value(ivaActivoValueRef.current) : value; ivaActivoValueRef.current = nextValue; setIvaActivo(nextValue) }, [handleTotalsFocus, markTotalsFieldDirty])
+  const trackedSetDescuentoTipo = useCallback((value: 'monto' | 'porcentaje') => { handleTotalsFocus(); markTotalsFieldDirty('descuento_tipo'); descuentoTipoValueRef.current = value; setDescuentoTipo(value) }, [handleTotalsFocus, markTotalsFieldDirty])
+  const trackedSetDescuentoValor = useCallback((value: number) => { handleTotalsFocus(); markTotalsFieldDirty('descuento_valor'); descuentoValorValueRef.current = value; setDescuentoValor(value) }, [handleTotalsFocus, markTotalsFieldDirty])
 
   const handleItemFieldFocus = useCallback((rowId: string, field: QuotationItemCellField) => {
     const key = getItemCellKey(rowId, field)
@@ -1257,7 +1530,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div ref={generalSectionRef} className={`rounded-panel ${sectionEditors.general ? 'ring-1 ring-accent-quiet/70' : ''}`} onFocusCapture={handleGeneralFocus} onBlurCapture={handleGeneralBlur}>
         <div className="px-1"><SectionEditBadge section="general" /></div>
-        <QuotationGeneralInfoSection register={register} setValue={setValue} clienteInput={clienteInput} proyectoInput={proyectoInput} clienteSugerencias={clienteSugerencias} mostrarClienteDropdown={mostrarClienteDropdown} setMostrarClienteDropdown={setMostrarClienteDropdown} proyectosDelCliente={proyectosDelCliente} mostrarProyectoDropdown={mostrarProyectoDropdown} setMostrarProyectoDropdown={setMostrarProyectoDropdown} listaClientes={listaClientes} handleClienteChange={trackedHandleClienteChange} handleProyectoChange={trackedHandleProyectoChange} seleccionarCliente={seleccionarCliente} setProyectoInput={setProyectoInput} onClienteSelected={trackedSelectCliente} onProyectoSelected={trackedSelectProyecto} onFechaEntregaChange={trackedHandleFechaEntregaChange} onLocacionChange={trackedHandleLocacionChange} isReadOnly={!esEditable} readOnlyDisplay={esEditable ? 'input' : 'text'} dateLabel={formatDateDisplay(cotizacion.fecha_cotizacion)} fechaEntregaValue={watch('fecha_entrega')} locacionValue={watch('locacion')} />
+        <QuotationGeneralInfoSection register={register} setValue={setValue} clienteInput={clienteInput} proyectoInput={proyectoInput} clienteSugerencias={clienteSugerencias} mostrarClienteDropdown={mostrarClienteDropdown} setMostrarClienteDropdown={setMostrarClienteDropdown} proyectosDelCliente={proyectosDelCliente} mostrarProyectoDropdown={mostrarProyectoDropdown} setMostrarProyectoDropdown={setMostrarProyectoDropdown} listaClientes={listaClientes} handleClienteChange={trackedHandleClienteChange} handleProyectoChange={trackedHandleProyectoChange} seleccionarCliente={seleccionarCliente} setProyectoInput={setProyectoInput} onClienteSelected={trackedSelectCliente} onProyectoSelected={trackedSelectProyecto} onFechaEntregaChange={trackedHandleFechaEntregaChange} onLocacionChange={trackedHandleLocacionChange} isReadOnly={!esEditable} readOnlyDisplay={esEditable ? 'input' : 'text'} dateLabel={formatDateDisplay(cotizacion.fecha_cotizacion)} fechaEntregaValue={watch('fecha_entrega')} locacionValue={watch('locacion')} conflicts={generalFieldConflicts} onResolveConflict={resolveGeneralFieldConflict} />
       </div>
 
       <div ref={partidasSectionRef} className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')} onBlurCapture={handlePartidasBlur}>
@@ -1268,7 +1541,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div ref={totalsSectionRef} className={`rounded-panel ${sectionEditors.totales ? 'ring-1 ring-accent-quiet/70' : ''}`} onFocusCapture={handleTotalsFocus} onBlurCapture={handleTotalsBlur}>
         <div className="px-1"><SectionEditBadge section="totales" /></div>
-        <QuotationTotalsPanels totals={displayTotales} editable={!!esEditable} porcentaje_fee={porcentaje_fee} setPorcentajeFee={trackedSetPorcentajeFee} iva_activo={iva_activo} setIvaActivo={trackedSetIvaActivo} descuento_tipo={descuento_tipo} setDescuentoTipo={trackedSetDescuentoTipo} descuento_valor={descuento_valor} setDescuentoValor={trackedSetDescuentoValor} estimatedTaxes={estimatedTaxes} />
+        <QuotationTotalsPanels totals={displayTotales} editable={!!esEditable} porcentaje_fee={porcentaje_fee} setPorcentajeFee={trackedSetPorcentajeFee} iva_activo={iva_activo} setIvaActivo={trackedSetIvaActivo} descuento_tipo={descuento_tipo} setDescuentoTipo={trackedSetDescuentoTipo} descuento_valor={descuento_valor} setDescuentoValor={trackedSetDescuentoValor} estimatedTaxes={estimatedTaxes} conflicts={totalsFieldConflicts} onResolveConflict={resolveTotalsFieldConflict} />
       </div>
     </div>
   )

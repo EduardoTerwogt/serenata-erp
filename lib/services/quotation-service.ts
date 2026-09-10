@@ -30,30 +30,6 @@ export async function saveQuotationNotes(id: string, notasInternas: string | nul
   }, 'Error guardando notas internas', { method: 'PATCH' })
 }
 
-export async function saveQuotationGeneral(
-  id: string,
-  payload: {
-    cliente: string
-    proyecto: string
-    fecha_entrega: string | null
-    locacion: string | null
-  }
-): Promise<Cotizacion> {
-  return sendJson(`/api/cotizaciones/${id}/general`, payload, 'Error guardando información general', { method: 'PATCH' })
-}
-
-export async function saveQuotationTotals(
-  id: string,
-  payload: {
-    porcentaje_fee: number
-    iva_activo: boolean
-    descuento_tipo: 'monto' | 'porcentaje'
-    descuento_valor: number
-  }
-): Promise<Cotizacion> {
-  return sendJson(`/api/cotizaciones/${id}/totales`, payload, 'Error guardando configuración de totales', { method: 'PATCH' })
-}
-
 export async function fetchNextQuotationFolio(complementariaDe?: string): Promise<{ folio: string }> {
   const folioUrl = complementariaDe
     ? `/api/folio?complementaria_de=${encodeURIComponent(complementariaDe)}`

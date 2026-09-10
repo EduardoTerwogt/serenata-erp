@@ -3,6 +3,43 @@
 import { EstimatedTaxes, QuotationTotals } from '@/lib/quotations/types'
 import { fmtCurrency } from '@/lib/quotations/format'
 
+type QuotationTotalsField = 'porcentaje_fee' | 'iva_activo' | 'descuento_tipo' | 'descuento_valor'
+
+interface QuotationTotalsFieldConflict {
+  current: unknown
+  attempted: unknown
+}
+
+function formatConflictValue(value: unknown): string {
+  return value === null || value === undefined || value === '' ? '(vacío)' : String(value)
+}
+
+/**
+ * Mismo patrón que `ItemFieldConflictBanner` (partidas) y
+ * `GeneralFieldConflictBanner` (General): nunca se descarta en silencio lo
+ * tecleado -- el banner deja elegir entre eso y el valor actual del servidor.
+ */
+function TotalsFieldConflictBanner({ field, conflict, onResolve }: {
+  field: QuotationTotalsField
+  conflict?: QuotationTotalsFieldConflict
+  onResolve?: (field: QuotationTotalsField, resolution: 'theirs' | 'mine') => void
+}) {
+  if (!conflict || !onResolve) return null
+  return (
+    <div className="mt-1 w-full space-y-1 rounded-control border border-accent-quiet/60 bg-accent-quiet/10 px-2 py-1.5 text-[11px] text-accent-quiet">
+      <p>Alguien más lo cambió a &quot;{formatConflictValue(conflict.current)}&quot; mientras editabas.</p>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onResolve(field, 'theirs')} className="underline hover:text-accent">
+          Usar &quot;{formatConflictValue(conflict.current)}&quot;
+        </button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onResolve(field, 'mine')} className="underline hover:text-accent">
+          Mantener &quot;{formatConflictValue(conflict.attempted)}&quot;
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface Props {
   totals: QuotationTotals
   editable: boolean
@@ -15,6 +52,8 @@ interface Props {
   descuento_valor: number
   setDescuentoValor: (value: number) => void
   estimatedTaxes: EstimatedTaxes
+  conflicts?: Partial<Record<QuotationTotalsField, QuotationTotalsFieldConflict>>
+  onResolveConflict?: (field: QuotationTotalsField, resolution: 'theirs' | 'mine') => void
 }
 
 const PANEL_CLASS = 'rounded-panel border border-hairline bg-card p-4 md:p-6'
@@ -32,6 +71,8 @@ export function QuotationTotalsPanels({
   descuento_valor,
   setDescuentoValor,
   estimatedTaxes,
+  conflicts,
+  onResolveConflict,
 }: Props) {
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -115,6 +156,7 @@ export function QuotationTotalsPanels({
             </span>
             <span className="text-body text-right flex-shrink-0">${fmtCurrency(totals.fee_agencia)}</span>
           </div>
+          <TotalsFieldConflictBanner field="porcentaje_fee" conflict={conflicts?.porcentaje_fee} onResolve={onResolveConflict} />
           <div className="flex justify-between text-content gap-3">
             <span className="text-subtext">General</span>
             <span className="text-body text-right">${fmtCurrency(totals.general)}</span>
@@ -134,6 +176,7 @@ export function QuotationTotalsPanels({
             </span>
             <span className={`${iva_activo ? 'text-body' : 'text-faint'} text-right flex-shrink-0`}>${fmtCurrency(totals.iva)}</span>
           </div>
+          <TotalsFieldConflictBanner field="iva_activo" conflict={conflicts?.iva_activo} onResolve={onResolveConflict} />
           {editable ? (
             <div className="flex justify-between text-content items-start gap-3">
               <div className="text-subtext flex-1 min-w-0">
@@ -156,6 +199,8 @@ export function QuotationTotalsPanels({
                     className={`w-24 ${MINI_INPUT_CLASS}`}
                   />
                 </div>
+                <TotalsFieldConflictBanner field="descuento_tipo" conflict={conflicts?.descuento_tipo} onResolve={onResolveConflict} />
+                <TotalsFieldConflictBanner field="descuento_valor" conflict={conflicts?.descuento_valor} onResolve={onResolveConflict} />
               </div>
               <span className={`${totals.descuento > 0 ? 'text-yellow-400' : 'text-faint'} text-right flex-shrink-0 pt-0.5`}>
                 {totals.descuento > 0 ? `-$${fmtCurrency(totals.descuento)}` : '$0.00'}

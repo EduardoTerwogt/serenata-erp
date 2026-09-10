@@ -46,7 +46,7 @@ describe('PATCH /api/cotizaciones/[id]/general', () => {
     expect(res.status).toBe(200)
     const [fn, args] = mocks.rpcMock.mock.calls[0]
     expect(fn).toBe('patch_cotizacion_general')
-    expect(args).toEqual({ p_cotizacion_id: 'SH001', p_patch: { proyecto: 'Nuevo nombre' } })
+    expect(args).toEqual({ p_cotizacion_id: 'SH001', p_patch: { proyecto: 'Nuevo nombre' }, p_base: null })
     expect(JSON.stringify(args)).not.toContain('items')
   })
 
@@ -60,6 +60,35 @@ describe('PATCH /api/cotizaciones/[id]/general', () => {
     const res = await PATCH_GENERAL(req('general', { proyecto: 'x' }), { params })
     expect(res.status).toBe(404)
   })
+
+  describe('Fase 5 -- base y conflicto por campo', () => {
+    it('manda p_base a la RPC cuando el body lo trae', async () => {
+      await PATCH_GENERAL(req('general', { locacion: 'Tijuana', base: { locacion: 'CDMX' } }), { params })
+
+      expect(mocks.rpcMock.mock.calls[0][1]).toEqual({
+        p_cotizacion_id: 'SH001',
+        p_patch: { locacion: 'Tijuana' },
+        p_base: { locacion: 'CDMX' },
+      })
+    })
+
+    it('responde 409 estructurado cuando la RPC devuelve un conflicto', async () => {
+      mocks.rpcMock.mockResolvedValue({
+        data: { conflict: { locacion: { base: 'CDMX', current: 'Puebla', attempted: 'Tijuana' } } },
+        error: null,
+      })
+
+      const res = await PATCH_GENERAL(req('general', { locacion: 'Tijuana', base: { locacion: 'CDMX' } }), { params })
+
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({
+        error: 'conflict',
+        entity: 'cotizacion_general',
+        id: 'SH001',
+        fields: { locacion: { base: 'CDMX', current: 'Puebla', attempted: 'Tijuana' } },
+      })
+    })
+  })
 })
 
 describe('PATCH /api/cotizaciones/[id]/totales', () => {
@@ -69,7 +98,7 @@ describe('PATCH /api/cotizaciones/[id]/totales', () => {
     expect(res.status).toBe(200)
     const [fn, args] = mocks.rpcMock.mock.calls[0]
     expect(fn).toBe('patch_cotizacion_totales')
-    expect(args).toEqual({ p_cotizacion_id: 'SH001', p_patch: { porcentaje_fee: 0.2 } })
+    expect(args).toEqual({ p_cotizacion_id: 'SH001', p_patch: { porcentaje_fee: 0.2 }, p_base: null })
     expect(JSON.stringify(args)).not.toContain('items')
   })
 
@@ -82,5 +111,34 @@ describe('PATCH /api/cotizaciones/[id]/totales', () => {
     mocks.rpcMock.mockResolvedValue({ data: null, error: null })
     const res = await PATCH_TOTALES(req('totales', { porcentaje_fee: 0.2 }), { params })
     expect(res.status).toBe(404)
+  })
+
+  describe('Fase 5 -- base y conflicto por campo', () => {
+    it('manda p_base a la RPC cuando el body lo trae', async () => {
+      await PATCH_TOTALES(req('totales', { descuento_valor: 500, base: { descuento_valor: 0 } }), { params })
+
+      expect(mocks.rpcMock.mock.calls[0][1]).toEqual({
+        p_cotizacion_id: 'SH001',
+        p_patch: { descuento_valor: 500 },
+        p_base: { descuento_valor: 0 },
+      })
+    })
+
+    it('responde 409 estructurado cuando la RPC devuelve un conflicto', async () => {
+      mocks.rpcMock.mockResolvedValue({
+        data: { conflict: { descuento_valor: { base: 0, current: 200, attempted: 500 } } },
+        error: null,
+      })
+
+      const res = await PATCH_TOTALES(req('totales', { descuento_valor: 500, base: { descuento_valor: 0 } }), { params })
+
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({
+        error: 'conflict',
+        entity: 'cotizacion_totales',
+        id: 'SH001',
+        fields: { descuento_valor: { base: 0, current: 200, attempted: 500 } },
+      })
+    })
   })
 })

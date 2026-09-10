@@ -96,7 +96,7 @@ Los tres se detectaron con el nivel `live`; ningún mock los habría visto.
 
 ---
 
-## 3. Rediseño de colaboración en tiempo real — Fase 0/1 en curso
+## 3. Rediseño de colaboración en tiempo real — Fase 5 cerrada, sigue Fase 6
 
 Iniciativa de alto riesgo (Realtime, RPCs, seguridad, concurrencia) ejecutada
 en branch dedicada `claude/eloquent-lamport-h7effg` + PR draft + Vercel
@@ -430,6 +430,93 @@ Drive del proyecto de prueba -- ya se vio un `403 User rate limit
 exceeded` al crear una carpeta en Drive durante iteración rápida. Si se
 vuelve frecuente, considerar espaciar los pushes que disparan `live` o
 agregar retry/backoff específico para ese caso en el propio test.
+
+### Fase 5 — Información General y Totales con protocolo base/conflict (cerrada)
+
+Objetivo del plan: "quitar locks de sección y pasar a campos
+independientes" en Información General (cliente, proyecto, fecha de
+entrega, locación) y Totales (fee, IVA, tipo/valor de descuento).
+
+**Bug de correctness encontrado antes de tocar nada (prioridad sobre
+Presence):** `persistGeneralAutosave`/`persistTotalsAutosave` mandaban
+SIEMPRE la sección completa (los 4 campos) en cada PATCH, comparando
+contra una foto de "última guardada" de toda la sección, no campo por
+campo -- a pesar de que la RPC y la ruta ya soportaban parches
+parciales de verdad. Dos ediciones concurrentes a campos *distintos* de
+la misma sección (A edita Fecha, B edita Locación) podían pisarse en
+last-writer-wins silencioso, exactamente lo que el criterio de salida
+del plan pide que nunca pase. Se corrigió de raíz, no se parchó el
+síntoma.
+
+**Base de datos:** migración
+`db/migrations/20260910_cotizacion_general_totales_revision_conflict.sql`
+-- mismo patrón que `patch_item_cotizacion` (Fase 2): columna
+`revision` en `cotizaciones`, y `patch_cotizacion_general`/
+`patch_cotizacion_totales` ganan un tercer parámetro `p_base jsonb
+default null`; sin "base" siguen sobreescribiendo igual que siempre
+(retrocompatible). Con "base", comparan campo por campo contra la fila
+bajo `FOR UPDATE` y devuelven `{"conflict": {...}}` si algo cambió
+desde que el cliente leyó ese campo. Aplicada y verificada con SQL real
+contra `serenata-erp-test` y producción (incluida una prueba de
+conflicto real sobre la fila `SH004`, restaurada a sus valores
+originales después).
+
+**Rutas:** `general/route.ts` y `totales/route.ts` ahora leen `base`
+del body, se lo pasan a la RPC, y responden `409 {error: 'conflict',
+entity, id, fields}` cuando la RPC devuelve un conflicto -- mismo
+contrato que ya usa la ruta de partidas.
+
+**Cliente (`app/cotizaciones/[id]/page.tsx`):** rediseño de autosave de
+sección completa a campo por campo, mismo patrón que ya probó Fase 3
+para celdas de Partidas:
+- `generalServerRef`/`totalsServerRef`: última foto confirmada por el
+  servidor por sección (reemplaza a los antiguos
+  `lastSavedGeneralRef`/`lastSavedTotalsRef`, que conflaban "confirmado
+  por el servidor" con "lo último que mandé yo").
+- Un `Set` de campos sucios, un timer de autoguardado y un "base" por
+  campo (no por sección) para General y para Totales.
+- `patchQuotationGeneral`/`patchQuotationTotales`: `fetch` crudo (no
+  `sendJson`/`getJson`, que colapsan cualquier respuesta no-2xx en un
+  `Error` genérico y perderían el payload `{fields}` del 409) --
+  reemplazan a `saveQuotationGeneral`/`saveQuotationTotals`, que se
+  borraron de `quotation-service.ts` por quedar sin caller.
+- `PatchConflictError` (renombrado desde `ItemPatchConflictError`, que
+  ya no era específico de partidas) y `FieldConflictDetail` (desde
+  `ItemFieldConflictDetail`) ahora son genéricos y los comparte
+  Partidas/General/Totales.
+- Banner de conflicto igual al de Partidas ("Usar 'X'" / "Mantener
+  'Y'"), agregado a `QuotationGeneralInfoSection` y
+  `QuotationTotalsPanels` como props opcionales `conflicts`/
+  `onResolveConflict` -- nunca se descarta en silencio lo que el
+  usuario tecleó.
+- Corrección secundaria (parte del mismo objetivo "quitar locks de
+  sección"): `applyGeneralOnly`/`applyTotalsOnly` antes se saltaban LA
+  SECCIÓN COMPLETA si cualquier campo estaba sucio; ahora protegen
+  campo por campo (mismo criterio que `isCellBusy` en Partidas), así
+  que refrescar el campo de otro colaborador ya no espera a que el
+  usuario termine de editar uno propio en la misma sección.
+- El lock de sección para Presence (badge "X está editando esta
+  sección") se mantiene sin cambios -- Presence por campo individual
+  queda fuera de alcance de esta fase porque `QuotationGeneralInfoSection`
+  y `QuotationTotalsPanels` solo exponen focus/blur a nivel de sección;
+  ampliarlo requeriría además re-cablear esos componentes hijos, igual
+  que Fase 3 dejó fuera de alcance el protocolo de conflicto para
+  `handleSelectProduct`/`handleResponsableChange`.
+
+**Verificado:** `npx tsc --noEmit`, `npm run lint` (mismos warnings
+preexistentes) y `npm test` (406/406, incluidos 4 tests nuevos de
+base/conflicto en `cotizacion-secciones-route.test.ts`) en verde. Con
+las env vars fake de CI: `npm run build`, `npm run test:e2e:smoke`
+(21/21) y `npm run test:e2e:critical` (48/48) en verde -- sin cambios
+de comportamiento en ningún flujo existente.
+
+El criterio de salida del plan ("A edita Fecha y B Locación
+simultáneamente -> ambos sobreviven") ya tenía cobertura en
+`tests/e2e/live/cotizaciones-colaboracion.spec.ts` ("estar en una
+sección la señala pero no impide que el otro escriba en ella") --
+sigue el mismo caso conocido de la Fase 0 (badge de presencia, no
+pérdida de datos) y corre automáticamente en el job `live` de CI desde
+el fix de Fase 4.
 
 ---
 
