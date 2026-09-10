@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-10T04:51:44.680Z",
-  "count": 49,
+  "generated_at": "2026-09-10T13:27:24.748Z",
+  "count": 50,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -50,6 +50,7 @@
     "20260909_rate_limits.sql",
     "20260909_realtime_broadcast_authorization.sql",
     "20260910_cotizacion_general_totales_revision_conflict.sql",
+    "20260910_fix_null_vs_empty_conflict_false_positive.sql",
     "20260910_item_cotizacion_revision_conflict.sql"
   ]
 }
