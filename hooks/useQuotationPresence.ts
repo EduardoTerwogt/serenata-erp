@@ -92,47 +92,76 @@ function getCellKey(entityId: string, field: QuotationItemCellField) {
   return `${entityId}:${field}`
 }
 
-interface PresenceState {
+// ============================================================================
+// Awareness -- estado de Presence puro. Nunca datos de negocio, nunca decide
+// conflictos, nunca bloquea una edición. Separado a propósito (Fase 6E/6.8) del
+// estado de "eventos confirmados" más abajo: son dos conceptos distintos que
+// comparten el mismo canal de Realtime por eficiencia (un solo join por
+// cotización), no por acoplamiento -- cada uno tiene su propio reducer y su
+// propio ciclo de vida de estado, y ninguno lee el estado del otro.
+// ============================================================================
+
+interface AwarenessState {
   rawOnlineUsers: QuotationPresenceUser[]
+  isConnected: boolean
+}
+
+const initialAwarenessState: AwarenessState = {
+  rawOnlineUsers: [],
+  isConnected: false,
+}
+
+type AwarenessAction =
+  | { type: 'reset' }
+  | { type: 'sync_online_users'; users: QuotationPresenceUser[] }
+  | { type: 'set_connected'; connected: boolean }
+
+function awarenessReducer(state: AwarenessState, action: AwarenessAction): AwarenessState {
+  switch (action.type) {
+    case 'reset':
+      return initialAwarenessState
+    case 'sync_online_users':
+      return { ...state, rawOnlineUsers: action.users }
+    case 'set_connected':
+      return { ...state, isConnected: action.connected }
+    default:
+      return state
+  }
+}
+
+// ============================================================================
+// Eventos confirmados por el SERVIDOR -- la señal de "hay datos nuevos en
+// Postgres, reconcilia ya" (ver ItemConfirmedPayload arriba). Nunca cargan la
+// partida/cotización completa, solo identidad + revisión; quien los consume
+// (reconciliarConServidor en page.tsx) siempre relee contra la API, nunca aplica
+// este payload como si fuera el dato real.
+// ============================================================================
+
+interface ConfirmedEventsState {
   latestItemConfirmed: ItemConfirmedPayload | null
   latestGeneralConfirmed: SectionConfirmedPayload | null
   latestTotalesConfirmed: SectionConfirmedPayload | null
   latestNotasConfirmed: SectionConfirmedPayload | null
-  isConnected: boolean
 }
 
-const initialPresenceState: PresenceState = {
-  rawOnlineUsers: [],
+const initialConfirmedEventsState: ConfirmedEventsState = {
   latestItemConfirmed: null,
   latestGeneralConfirmed: null,
   latestTotalesConfirmed: null,
   latestNotasConfirmed: null,
-  isConnected: false,
 }
 
-type PresenceAction =
+type ConfirmedEventsAction =
   | { type: 'reset' }
-  | { type: 'sync_online_users'; users: QuotationPresenceUser[] }
   | { type: 'item_confirmed'; payload: ItemConfirmedPayload }
   | { type: 'general_confirmed'; payload: SectionConfirmedPayload }
   | { type: 'totales_confirmed'; payload: SectionConfirmedPayload }
   | { type: 'notas_confirmed'; payload: SectionConfirmedPayload }
-  | { type: 'set_connected'; connected: boolean }
 
-/**
- * Consolida los estados de presencia en una sola transición por evento, en vez de
- * varios setState seguidos — así el reset (`!enabled` / cleanup del efecto) es UNA sola
- * actualización de estado, no varias, evitando el patrón que dispara
- * react-hooks/set-state-in-effect. `reset` devuelve siempre la misma referencia de
- * `initialPresenceState`, así que si el estado ya estaba en default, useReducer hace
- * bail-out del render automáticamente.
- */
-function presenceReducer(state: PresenceState, action: PresenceAction): PresenceState {
+function confirmedEventsReducer(state: ConfirmedEventsState, action: ConfirmedEventsAction): ConfirmedEventsState {
   switch (action.type) {
     case 'reset':
-      return initialPresenceState
-    case 'sync_online_users':
-      return { ...state, rawOnlineUsers: action.users }
+      return initialConfirmedEventsState
     case 'item_confirmed':
       return { ...state, latestItemConfirmed: action.payload }
     case 'general_confirmed':
@@ -141,8 +170,6 @@ function presenceReducer(state: PresenceState, action: PresenceAction): Presence
       return { ...state, latestTotalesConfirmed: action.payload }
     case 'notas_confirmed':
       return { ...state, latestNotasConfirmed: action.payload }
-    case 'set_connected':
-      return { ...state, isConnected: action.connected }
     default:
       return state
   }
@@ -166,8 +193,10 @@ export function useQuotationPresence({
   enabled,
   currentUser,
 }: UseQuotationPresenceOptions): UseQuotationPresenceResult {
-  const [state, dispatch] = useReducer(presenceReducer, initialPresenceState)
-  const { rawOnlineUsers, latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, latestNotasConfirmed, isConnected } = state
+  const [awareness, dispatchAwareness] = useReducer(awarenessReducer, initialAwarenessState)
+  const { rawOnlineUsers, isConnected } = awareness
+  const [confirmedEvents, dispatchConfirmedEvent] = useReducer(confirmedEventsReducer, initialConfirmedEventsState)
+  const { latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, latestNotasConfirmed } = confirmedEvents
   const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
   const activeCellRef = useRef<{ rowId: string; field: QuotationItemCellField } | null>(null)
@@ -227,7 +256,8 @@ export function useQuotationPresence({
 
   useEffect(() => {
     if (!enabled) {
-      dispatch({ type: 'reset' })
+      dispatchAwareness({ type: 'reset' })
+      dispatchConfirmedEvent({ type: 'reset' })
       return
     }
 
@@ -246,31 +276,31 @@ export function useQuotationPresence({
       const users = Object.values(presenceState)
         .flatMap((entries) => entries)
         .filter(Boolean)
-      dispatch({ type: 'sync_online_users', users })
+      dispatchAwareness({ type: 'sync_online_users', users })
     })
 
     channel.on('broadcast', { event: 'item_confirmed' }, ({ payload }) => {
       const confirmed = payload as ItemConfirmedPayload | undefined
       if (!confirmed?.item_id) return
-      dispatch({ type: 'item_confirmed', payload: { ...confirmed } })
+      dispatchConfirmedEvent({ type: 'item_confirmed', payload: { ...confirmed } })
     })
 
     channel.on('broadcast', { event: 'general_confirmed' }, ({ payload }) => {
       const confirmed = payload as SectionConfirmedPayload | undefined
       if (!confirmed?.cotizacion_id) return
-      dispatch({ type: 'general_confirmed', payload: { ...confirmed } })
+      dispatchConfirmedEvent({ type: 'general_confirmed', payload: { ...confirmed } })
     })
 
     channel.on('broadcast', { event: 'totales_confirmed' }, ({ payload }) => {
       const confirmed = payload as SectionConfirmedPayload | undefined
       if (!confirmed?.cotizacion_id) return
-      dispatch({ type: 'totales_confirmed', payload: { ...confirmed } })
+      dispatchConfirmedEvent({ type: 'totales_confirmed', payload: { ...confirmed } })
     })
 
     channel.on('broadcast', { event: 'notas_confirmed' }, ({ payload }) => {
       const confirmed = payload as SectionConfirmedPayload | undefined
       if (!confirmed?.cotizacion_id) return
-      dispatch({ type: 'notas_confirmed', payload: { ...confirmed } })
+      dispatchConfirmedEvent({ type: 'notas_confirmed', payload: { ...confirmed } })
     })
 
     let cancelled = false
@@ -291,7 +321,7 @@ export function useQuotationPresence({
 
       channel.subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          dispatch({ type: 'set_connected', connected: true })
+          dispatchAwareness({ type: 'set_connected', connected: true })
           await channel.track({
             user_id: identity.userId,
             email: identity.email,
@@ -305,7 +335,7 @@ export function useQuotationPresence({
         }
 
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          dispatch({ type: 'set_connected', connected: false })
+          dispatchAwareness({ type: 'set_connected', connected: false })
         }
       })
     }
@@ -316,7 +346,8 @@ export function useQuotationPresence({
     return () => {
       cancelled = true
       cancelTokenRefresh?.()
-      dispatch({ type: 'reset' })
+      dispatchAwareness({ type: 'reset' })
+      dispatchConfirmedEvent({ type: 'reset' })
       void channel.untrack().catch(() => null)
       void supabaseBrowser.removeChannel(channel)
       channelRef.current = null

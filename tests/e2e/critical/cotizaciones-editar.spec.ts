@@ -602,6 +602,43 @@ test('la fila que llega por reconciliación no me quita el cursor', async ({ pag
 })
 
 /**
+ * Fase 6E: volver a la pestaña es uno de los caminos PRIMARIOS de convergencia
+ * (junto a los eventos server-confirmed y reconectar el canal), no solo el
+ * heartbeat de última instancia. Sin ningún aviso por el canal, debe converger
+ * mucho más rápido que el intervalo del heartbeat con solo volver a la pestaña.
+ */
+test('volver a la pestaña converge sin esperar el heartbeat', async ({ page }) => {
+  const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-VISIBLE', estado: 'BORRADOR' })
+  await login(page, '/cotizaciones/SH-E2E-VISIBLE')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-VISIBLE' })).toBeVisible()
+
+  const rows = page.locator('table tbody tr')
+
+  // Otro colaborador agregó una partida mientras la pestaña estaba oculta. Sin
+  // ningún aviso por el canal -- lo mismo que ejercen los dos tests de arriba, pero
+  // aquí la convergencia la dispara volver a la pestaña, no el heartbeat.
+  cotizacion.items = [...cotizacion.items, {
+    id: 'item-tras-volver', cotizacion_id: 'SH-E2E-VISIBLE', categoria: 'Arte', descripcion: 'Partida al volver',
+    cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
+    x_pagar: 1000, margen: 2000, orden: 2, notas: null,
+  }]
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+
+  // Converge casi de inmediato -- mucho antes de que el heartbeat (20s) llegara a
+  // dispararse por su cuenta.
+  await expect(rows).toHaveCount(2, { timeout: 5_000 })
+  await expect(rows.nth(1).locator('td').nth(1).locator('input')).toHaveValue('Partida al volver')
+})
+
+/**
  * Gemelo del anterior, para el otro sentido: una partida que DESAPARECE del servidor
  * -otro colaborador la borró- tiene que desaparecer sola de la pantalla, sin aviso
  * por el canal y sin tocar lo que el usuario está escribiendo en otra fila.

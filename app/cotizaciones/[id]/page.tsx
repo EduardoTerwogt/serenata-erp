@@ -630,6 +630,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
    * Nada de esto pisa lo que el usuario está escribiendo: las celdas sucias, bajo el
    * cursor o con guardado en vuelo se conservan, y una respuesta que salió antes de
    * una escritura local pierde contra ella.
+   *
+   * Fase 6.7 pedía simplificar esta función una vez que IDs temporales y datos
+   * empujados por otro navegador dejaran de existir -- eso ya pasó en Fase 6B (IDs
+   * estables, sin `migrateRowKeys`) y 6D (`item_mutation` retirado), y esa era la
+   * complejidad real que arrastraba. Lo que queda -- `celdaOcupada` (dirty/foco/
+   * guardando), `escrituraLocalPosterior` (`localWriteAtRef`) y `conservarLocal`
+   * (`pendingRowCreationsRef`) -- no es legacy: sigue siendo necesario para no
+   * pisar una edición en curso o una fila cuya alta todavía no confirmó el
+   * servidor. RHF/FieldArray tampoco decide verdad colaborativa aquí: solo pinta
+   * lo que esta función ya reconcilió contra el servidor.
    */
   const reconciliacionEnCursoRef = useRef<Promise<void> | null>(null)
   const reconciliarConServidor = useCallback(async () => {

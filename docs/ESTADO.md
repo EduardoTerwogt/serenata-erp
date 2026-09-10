@@ -622,9 +622,157 @@ fallos, ninguno regresión de esta fase:
   es el que more flakea (¿carga del runner al final de la suite?, ¿algo
   del propio test?) en vez de seguir tratándolo caso por caso.
 
----
+### Fase 6 (reabierta) — cierre real: modelo único server-authoritative (6A-6F)
 
-## 4. Features parciales — preguntar antes de tocar
+El usuario no aceptó la sección anterior como el cierre de la Fase 6: el PR
+#18 fue una limpieza válida (se conserva), pero varios de los mecanismos que
+esa sección documentaba como "diseño actual, no remanente oculto" --
+`item_mutation` cliente→cliente, IDs temporales con `migrateRowKeys`, el
+heartbeat de 5s como única garantía real -- eran justo lo que había que
+retirar. Se redefinió el alcance completo y se ejecutó en 6 sub-fases
+secuenciales sobre la misma branch, cada una verificada localmente antes de
+la siguiente.
+
+**Regla que gobierna todo lo que sigue:** PostgreSQL es la única fuente de
+verdad. Todo cambio de datos va `usuario → mutación API/RPC → PostgreSQL
+confirma → el SERVIDOR emite un evento Realtime confirmado (identidad +
+revisión, nunca el dato completo) → los demás clientes releen contra la
+API`. Ningún navegador le manda a otro un dato de negocio para que lo
+persista o decida un conflicto. Lo único que viaja navegador→navegador es
+Presence (awareness efímera: quién está conectado, en qué sección, sobre
+qué celda) -- nunca guarda datos, nunca hace merge, nunca decide
+conflictos, nunca bloquea.
+
+**6A -- eventos server-confirmed para las mutaciones que no los tenían.**
+`POST /items` (alta), `DELETE /items/:itemId` (baja) y `POST /items/bulk`
+(importar/copiar) ganan `item_confirmed` con un campo `operation` nuevo
+(`'create' | 'update' | 'delete' | 'bulk'`, ausente = `'update'` por
+compatibilidad). `PATCH /notas` gana `notas_confirmed`, mismo patrón que
+`general_confirmed`/`totales_confirmed` (vivos desde Fase 1/5). El listener
+de `item_confirmed` ya disparaba una reconciliación completa sin importar
+la operación, así que create/delete/bulk no necesitaron ningún cambio de
+cliente -- solo Notas, que antes no tenía ningún evento confirmado.
+
+**6B -- IDs estables desde el nacimiento de la fila.** Cada fila nace con
+un UUID generado en el CLIENTE (`crypto.randomUUID()`) y esa es su
+identidad para siempre; `POST /items` lo acepta y valida (con fallback a
+generarlo en servidor). Retry con el mismo id no duplica ni re-emite el
+evento (el id ya existente hace de llave de idempotencia). Esto elimina
+por completo el modelo de dos fases "id temporal → id real":
+`TEMP_ROW_PREFIX`, `migrateRowKeys` (el remapeo de ~6 refs de tracking por
+celda) y `pendingRowIdsRef`/`resolveRowId` desaparecen, reemplazados por
+`pendingRowCreationsRef`/`awaitRowCreation`, que solo esperan a que el
+alta termine -- no traducen identidad, porque ya no hay que traducirla.
+
+**6C -- base/conflict para seleccionar producto y cambiar responsable.**
+Estas dos operaciones aplicaban su patch sin "base", así que siempre
+pisaban en silencio una edición concurrente sobre los mismos campos (el
+caso que describió el usuario: alguien edita Precio mientras otro
+selecciona un producto cuyo autofill también toca Precio). Ahora mandan
+base de los 4 campos que el autofill toca (o de `responsable_id`), con
+`mutation_id`, y son atómicas -- si cualquier campo está desactualizado,
+`patch_item_cotizacion` (ya atómica desde Fase 2) rechaza la operación
+completa. El conflicto reusa el banner por celda que ya existía para el
+autoguardado normal: no hizo falta UI nueva, y el usuario elige "mine"
+(reintenta con base corregida) o "theirs" (adopta el valor del servidor).
+
+**6D -- eliminar `item_mutation` navegador→navegador.** Con 6A + 6B dando
+cobertura completa de eventos server-confirmed, el único camino que
+quedaba donde un navegador le mandaba a otro la partida completa
+directamente (sin pasar por Postgres) se retira entero: tipos, estado,
+reducer, la función `broadcastItemMutation` y su listener, y las 6 llamadas
+repartidas en autoguardado, alta, importar, borrar, seleccionar producto y
+cambiar responsable.
+
+**6E -- Presence solo-awareness + retirar el polling como garantía
+primaria.** `section_signal`/`item_cell_signal` (broadcast aparte para
+"quién edita qué sección/celda") y `section_saved` (aviso de guardado
+ajeno, redundante con los eventos `*_confirmed`) se retiran. Presence pasa
+a ser UN solo mecanismo: cada cliente hace `channel.track()` con
+`{user_id, name, active_section, entity_id, field, online_at}` y Supabase
+sincroniza ese registro a todos -- `sectionEditors`/`itemCellEditors` se
+derivan directo de ahí. Esta no es solo una simplificación: es la
+corrección de raíz del test live que fallaba de forma intermitente desde
+Fase 0 (`cotizaciones-colaboracion.spec.ts`, "está editando esta sección").
+La causa, ya documentada en el repo, era que `channel.send()` (broadcast)
+cae a REST con 403 silencioso cuando el canal no terminó de unirse --
+exactamente el transporte que usaban `section_signal`/`item_cell_signal`.
+`channel.track()` (Presence) no comparte ese modo de falla. El heartbeat de
+reconciliación deja de ser la garantía primaria (ahora lo son los 4
+eventos `*_confirmed` + reconectar el canal + volver a la pestaña, todos
+disparando una reconciliación inmediata) y se hizo deliberadamente menos
+frecuente (5s → 20s) como red de última instancia, justificada y probada:
+dos tests ejercen esa red sin ningún aviso de por medio y siguen en verde
+con el intervalo nuevo, y uno nuevo prueba que volver a la pestaña
+converge sin necesidad de que el heartbeat llegue a dispararse.
+
+**6F -- separar Presence de datos-confirmados, documentar y cerrar.**
+`useQuotationPresence` mezclaba awareness (Presence) con eventos
+confirmados del servidor en un solo reducer. Se separó en dos reducers
+independientes (`awarenessReducer`/`confirmedEventsReducer`), cada uno con
+su propio estado y ciclo de vida, compartiendo el mismo canal por
+eficiencia (un solo join por cotización) pero sin leer el estado del otro
+-- la separación conceptual que pedía el plan, sin forzar dos hooks que
+tuvieran que coordinar quién crea/destruye el canal (riesgo real de doble
+join o de listeners perdidos entre hooks hermanos, evaluado y descartado).
+`reconciliarConServidor` no se reescribió a fondo: su complejidad real
+(IDs temporales, datos empujados por otro navegador) ya se había retirado
+en 6B/6D: lo que queda (`celdaOcupada`, `escrituraLocalPosterior` vía
+`localWriteAtRef`, `conservarLocal` vía `pendingRowCreationsRef`) sigue
+siendo necesario, no legacy.
+
+**Qué representa Presence ahora:** awareness pura, nunca datos. Nunca
+guarda nada, nunca hace merge, nunca decide un conflicto, nunca bloquea
+una edición -- si alguien más "tiene" una sección o celda señalada, quien
+escribe ahí igual puede escribir y guardar; la señal es solo informativa.
+
+**Camino autoritativo de cada mutación (partidas, general, totales,
+notas):** `usuario edita → PATCH/POST/DELETE con base+mutation_id cuando
+aplica → RPC atómica en Postgres (conflicto por campo si la base no
+coincide) → si confirma, el servidor emite `*_confirmed` (identidad +
+revisión, nunca el dato) → los demás clientes reconcilian releyendo la API
+→ RHF/FieldArray solo pinta lo que la reconciliación ya decidió`.
+
+**Qué garantiza la convergencia:** los eventos `*_confirmed` (server-
+confirmed, primarios), reconectar el canal, volver a la pestaña, y un
+heartbeat de 20s como red de última instancia -- nunca la fuente primaria.
+
+**Legacy que queda, y por qué:** RHF/`useFieldArray` siguen siendo el
+motor del formulario de partidas (el plan no pedía retirarlos, solo que no
+decidan verdad colaborativa -- y no la deciden: solo pintan lo que
+`reconciliarConServidor` ya resolvió). `LOCAL_ROW_PREFIX`/`newLocalRowId`
+en `useQuotationItems.ts` siguen vivos -- son de la pantalla de "cotización
+nueva, todavía sin guardar en la base", un flujo sin servidor ni
+colaboración, fuera del alcance de esta iniciativa.
+
+**Tests nuevos/actualizados en esta iniciativa (6A-6F):** unitarios para
+cada evento confirmado nuevo y el contrato de id estable (6A/6B); dos
+aserciones nuevas sobre el "base" que mandan producto/responsable (6C,
+crítico); reescritura del test de "fila ajena no roba el foco" sobre
+`item_confirmed` en vez de `item_mutation` (6D); `emitPresence()` nuevo en
+el mock de Realtime + reescritura de los tests de presencia/guardado-ajeno
+sobre Presence real en vez de `section_signal`/`section_saved` (6E); test
+nuevo de convergencia por `visibilitychange` sin heartbeat (6F). Se retiró
+un test ("un guardado ajeno no provoca una relectura de la cotización")
+que afirmaba justo la propiedad opuesta a la que el diseño nuevo persigue
+a propósito -- una relectura completa en cada confirmación, no una
+optimización para evitarla.
+
+**Cobertura live no añadida en esta pasada, con justificación:** los 12
+escenarios mínimos que pidió el usuario están cubiertos en su mayoría por
+la suite live ya existente (`cotizaciones-colaboracion.spec.ts`, ver más
+abajo) más lo nuevo de 6A-6F a nivel crítico/unitario. Dos escenarios
+concretos -- conflicto por mismo campo con 409 en vivo, y seleccionar
+producto/cambiar responsable contra una edición concurrente EN VIVO (el
+caso de ejemplo exacto del usuario) -- no ganaron un test `live` nuevo en
+esta pasada: requieren sembrar catálogos reales (productos/proveedores) en
+`serenata-erp-test` y no podían verificarse localmente, solo vía CI con
+varios ciclos de ida y vuelta. Se documenta como pendiente explícito para
+la Fase 7 (que de por sí amplía la prueba en vivo a más usuarios y
+escenarios), no como brecha silenciosa.
+
+Ver el mensaje de PR/merge de cada sub-fase para el detalle línea por línea
+de cada cambio y su verificación local.
 
 - **Google Calendar desde Proyectos:** la UI existe, el flujo end-to-end no está
   cerrado. En planeación sí funciona; no asumir que es lo mismo.
