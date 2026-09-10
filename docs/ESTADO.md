@@ -260,6 +260,102 @@ con mocks. `Test Suite`, `Migrations` y `smoke-and-critical` en verde en
 
 ---
 
+### Fase 3 — Grid nuevo de Partidas (cerrada)
+
+Objetivo: usar el protocolo de la Fase 2 desde la UI real de
+`app/cotizaciones/[id]/page.tsx`, sin tocar Información General ni Totales
+(quedan para una fase posterior).
+
+**Rama de trabajo:** esta fase, igual que 0/1/2, vive en
+`claude/eloquent-lamport-h7effg` + PR draft (el PR de la fase anterior ya se
+mergeó, así que la rama se reseteó desde `origin/main` antes de empezar).
+
+**Bloque 1 — sugerencias de producto atadas a rowId, no a índice:**
+`hooks/useQuotationForm.ts` y `hooks/useQuotationItems.ts` keyeaban
+`productoSugerencias`/`mostrarProductoDropdown` por índice de array;
+insertar, reordenar o borrar una fila movía la sugerencia activa a otra
+fila. `seleccionarProducto`/`handleDescripcionChange` ahora reciben el
+`rowId` (id estable de la partida) en vez del índice, y lo resuelven a
+índice internamente solo para llamar a `setValue`. Afecta también
+`useLocalQuotationItems` (pantalla de cotización nueva) y
+`app/cotizaciones/[id]/page.tsx` (`handleSelectProduct` ya resolvía el
+índice para su propio uso, pero seguía pasándoselo a `seleccionarProducto`
+— ahora le pasa el `rowId` directo).
+
+**Bloque 2 — protocolo `base`/`mutation_id` + UI de conflicto por celda:**
+- Nuevo `itemsServerRef` (ref, no state) en `page.tsx`: guarda el último
+  valor de cada partida confirmado por el servidor — se alimenta desde
+  `applyCotizacionToState`, `upsertLocalItemState` (ACK propio o broadcast
+  ajeno), `handleAddRow`, `handleImportItems` y la reconciliación de 5s.
+  Nunca se pisa con lo que el usuario está tecleando (eso vive solo en el
+  form de react-hook-form).
+- Al enfocar una celda (`handleItemFieldFocus`) se captura el `base` para
+  ESE campo desde `itemsServerRef` y se guarda en `itemCellBaseRef`
+  (keyeado por celda, con la misma migración temp→real id que ya tenían
+  los demás refs de celda). Sin base conocida (fila recién creada cuya
+  alta sigue en vuelo) no se manda `base` — mismo comportamiento
+  retrocompatible de siempre, sin conflicto posible.
+- `persistItemCellAutosave` manda `base` + un `mutation_id` nuevo
+  (`crypto.randomUUID()`) en cada intento. Un 409 de la RPC
+  (`ItemPatchConflictError`) NO se trata como error genérico: nunca se
+  descarta en silencio lo tecleado por el usuario. Se guarda en
+  `itemCellConflicts` (state) y `QuotationItemsSection` pinta un banner
+  bajo la celda con dos botones — "Usar «valor del servidor»" (pisa el
+  form con lo que hay en la base ahora, sin reintentar guardar) y
+  "Mantener «lo tecleado»" (conserva el valor local y reintenta el PATCH
+  con el `base` ya corregido al valor que devolvió el conflicto).
+- **Alcance deliberado:** el protocolo cubre las 5 celdas de texto/número
+  que pasan por `persistItemCellAutosave` (categoria, descripcion,
+  cantidad, precio_unitario, x_pagar). `handleSelectProduct` (elegir
+  producto de la lista) y `handleResponsableChange` (`<select>` de
+  responsable) siguen aplicando de inmediato sin `base`, igual que antes
+  — son acciones de un solo paso, no una sesión de tecleo con ventana de
+  carrera real, y añadir el protocolo ahí queda para si se decide que vale
+  la pena en una iteración posterior.
+- `hooks/useQuotationItems.ts`: `QuotationItemsController` gana
+  `getCellConflict`/`resolveCellConflict`; `useLocalQuotationItems`
+  (cotización nueva, sin servidor aún) los implementa como no-op — no
+  puede haber conflicto real sin PATCH.
+
+**Bloque 3 — consumir `item_confirmed`/`general_confirmed`/`totales_confirmed`:**
+`useQuotationPresence.ts` ya escuchaba 5 eventos de broadcast, todos
+browser→browser sin acuse; ahora suma 3 listeners para los eventos que
+manda el SERVIDOR justo después de comprometer el PATCH en Postgres (ver
+`lib/server/realtime/broadcast.ts` y las 3 rutas). `page.tsx` los usa como
+señal para reconciliar de inmediato en vez de esperar el heartbeat de 5s
+— nunca lo reemplazan, solo lo adelantan. `item_confirmed` trae
+`mutation_id`; el cliente que generó ese id (guardado en
+`ownItemMutationIdsRef`, un `Set` acotado a 50 entradas) reconoce su
+propia confirmación y no reconcilia de más — ya aplicó el resultado al
+recibir la respuesta de su propio PATCH. `general_confirmed`/
+`totales_confirmed` no llevan forma de distinguir autor, así que toda
+confirmación (propia o ajena) dispara la reconciliación; inofensivo,
+solo repite una lectura que de todas formas iba a pasar en el próximo
+heartbeat. El mecanismo viejo (`item_mutation`/`broadcastItemMutation`,
+browser→browser sin acuse) sigue intacto: esto es un convergence signal
+adicional, no un reemplazo.
+
+**Verificado:** `npx tsc --noEmit`, `npm run lint` (mismos warnings
+preexistentes) y `npm test` (402/402) en verde en local en cada bloque.
+`npm run build` y `test:e2e:*` no se pudieron correr en este sandbox —
+el contenedor de esta sesión no tenía `.env.local` con los secretos de
+la app (`AUTH_SECRET`, Supabase, etc.), a diferencia de sesiones
+anteriores de esta misma iniciativa; se verificó en su lugar vía CI real
+en el PR draft [#15](https://github.com/EduardoTerwogt/serenata-erp/pull/15):
+`E2E` (`smoke-and-critical`, que sí corre el build) y `Migrations` en
+verde para el commit final. El job `live` (disparado manualmente, ver
+[comentario en el PR](https://github.com/EduardoTerwogt/serenata-erp/pull/15#issuecomment-5612357483))
+dio 19/23 — el mismo caso conocido de la línea ~282 sigue fallando por
+la misma razón de siempre (badge de presencia por sección, `channel.send()`
+cae a REST con 403 silencioso), sin regresión; los 3 suites nuevos de
+esta iniciativa (`realtime-channel-authorization`, concurrencia de
+cuentas por cobrar/pagar, smoke básico) pasaron completos.
+
+**Mergeada a `main`** vía PR
+[#15](https://github.com/EduardoTerwogt/serenata-erp/pull/15).
+
+---
+
 ## 4. Features parciales — preguntar antes de tocar
 
 - **Google Calendar desde Proyectos:** la UI existe, el flujo end-to-end no está

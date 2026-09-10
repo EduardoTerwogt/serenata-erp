@@ -52,6 +52,9 @@ interface UseQuotationPresenceResult {
   itemCellEditors: Record<string, QuotationPresenceUser>
   itemRowEditors: Record<string, QuotationItemRowEditor>
   latestItemMutation: QuotationItemMutationPayload | null
+  latestItemConfirmed: ItemConfirmedPayload | null
+  latestGeneralConfirmed: SectionConfirmedPayload | null
+  latestTotalesConfirmed: SectionConfirmedPayload | null
   savedSections: Partial<Record<QuotationPresenceSection, number>>
   setActiveSection: (section: QuotationPresenceSection | null) => void
   releaseSection: (section?: QuotationPresenceSection) => void
@@ -103,6 +106,31 @@ interface ItemRowSignalPayload {
   at: string
 }
 
+/**
+ * Eventos emitidos por el servidor tras confirmar un PATCH (ver
+ * lib/server/realtime/broadcast.ts y las 3 rutas de cotizaciones). A
+ * diferencia de `item_mutation` (empujado por el navegador del autor, sin
+ * acuse), este lo manda el servidor DESPUÉS de commitear en Postgres -- es
+ * la señal para reconciliar de inmediato en vez de esperar el heartbeat de
+ * 5s. No llevan `user_id`: `item_confirmed` sí lleva `mutation_id`, así que
+ * quien generó ese id puede reconocer su propia confirmación y no
+ * re-reconciliar contra sí mismo; general/totales no tienen forma de
+ * distinguir autor, así que toda confirmación (propia o ajena) dispara la
+ * reconciliación -- inofensivo, solo repite una lectura que ya iba a pasar.
+ */
+export interface ItemConfirmedPayload {
+  cotizacion_id: string
+  item_id: string
+  revision: number | null
+  mutation_id: string | null
+  at: string
+}
+
+export interface SectionConfirmedPayload {
+  cotizacion_id: string
+  at: string
+}
+
 function getCellLockKey(rowId: string, field: QuotationItemCellField) {
   return `${rowId}:${field}`
 }
@@ -114,6 +142,9 @@ interface PresenceState {
   itemCellEditors: Record<string, QuotationPresenceUser>
   itemRowEditors: Record<string, QuotationItemRowEditor>
   latestItemMutation: QuotationItemMutationPayload | null
+  latestItemConfirmed: ItemConfirmedPayload | null
+  latestGeneralConfirmed: SectionConfirmedPayload | null
+  latestTotalesConfirmed: SectionConfirmedPayload | null
   isConnected: boolean
 }
 
@@ -124,6 +155,9 @@ const initialPresenceState: PresenceState = {
   itemCellEditors: {},
   itemRowEditors: {},
   latestItemMutation: null,
+  latestItemConfirmed: null,
+  latestGeneralConfirmed: null,
+  latestTotalesConfirmed: null,
   isConnected: false,
 }
 
@@ -134,6 +168,9 @@ type PresenceAction =
   | { type: 'item_cell_signal'; key: string; editor: QuotationPresenceUser | null }
   | { type: 'item_row_signal'; rowId: string; editor: QuotationItemRowEditor | null }
   | { type: 'item_mutation'; payload: QuotationItemMutationPayload }
+  | { type: 'item_confirmed'; payload: ItemConfirmedPayload }
+  | { type: 'general_confirmed'; payload: SectionConfirmedPayload }
+  | { type: 'totales_confirmed'; payload: SectionConfirmedPayload }
   | { type: 'section_saved'; userId: string; section: QuotationPresenceSection }
   | { type: 'set_connected'; connected: boolean }
 
@@ -171,6 +208,12 @@ function presenceReducer(state: PresenceState, action: PresenceAction): Presence
     }
     case 'item_mutation':
       return { ...state, latestItemMutation: action.payload }
+    case 'item_confirmed':
+      return { ...state, latestItemConfirmed: action.payload }
+    case 'general_confirmed':
+      return { ...state, latestGeneralConfirmed: action.payload }
+    case 'totales_confirmed':
+      return { ...state, latestTotalesConfirmed: action.payload }
     case 'section_saved':
       return {
         ...state,
@@ -193,7 +236,7 @@ export function useQuotationPresence({
   currentUser,
 }: UseQuotationPresenceOptions): UseQuotationPresenceResult {
   const [state, dispatch] = useReducer(presenceReducer, initialPresenceState)
-  const { rawOnlineUsers, activeSectionOverrides, savedSections, itemCellEditors, itemRowEditors, latestItemMutation, isConnected } = state
+  const { rawOnlineUsers, activeSectionOverrides, savedSections, itemCellEditors, itemRowEditors, latestItemMutation, latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, isConnected } = state
   const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
   const presenceKeyRef = useRef('')
@@ -447,6 +490,24 @@ export function useQuotationPresence({
       dispatch({ type: 'item_mutation', payload: { ...mutation } })
     })
 
+    channel.on('broadcast', { event: 'item_confirmed' }, ({ payload }) => {
+      const confirmed = payload as ItemConfirmedPayload | undefined
+      if (!confirmed?.item_id) return
+      dispatch({ type: 'item_confirmed', payload: { ...confirmed } })
+    })
+
+    channel.on('broadcast', { event: 'general_confirmed' }, ({ payload }) => {
+      const confirmed = payload as SectionConfirmedPayload | undefined
+      if (!confirmed?.cotizacion_id) return
+      dispatch({ type: 'general_confirmed', payload: { ...confirmed } })
+    })
+
+    channel.on('broadcast', { event: 'totales_confirmed' }, ({ payload }) => {
+      const confirmed = payload as SectionConfirmedPayload | undefined
+      if (!confirmed?.cotizacion_id) return
+      dispatch({ type: 'totales_confirmed', payload: { ...confirmed } })
+    })
+
     channel.on('broadcast', { event: 'section_saved' }, ({ payload }) => {
       const saved = payload as SectionSavedPayload | undefined
       if (!saved?.user_id || saved.user_id === identity.userId) return
@@ -532,6 +593,9 @@ export function useQuotationPresence({
     itemCellEditors,
     itemRowEditors,
     latestItemMutation,
+    latestItemConfirmed,
+    latestGeneralConfirmed,
+    latestTotalesConfirmed,
     savedSections,
     setActiveSection,
     releaseSection,

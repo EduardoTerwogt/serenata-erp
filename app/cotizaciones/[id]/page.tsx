@@ -99,6 +99,45 @@ function getItemCellKey(rowId: string, field: QuotationItemCellField) {
   return `${rowId}:${field}`
 }
 
+/** Detalle de un campo en conflicto, tal como lo devuelve patch_item_cotizacion. */
+interface ItemFieldConflictDetail {
+  base: unknown
+  current: unknown
+  attempted: unknown
+}
+
+/**
+ * El PATCH de una partida rechazó el intento porque el valor cambió en el
+ * servidor desde que se capturó el "base" (alguien más lo editó primero).
+ * `fields` viene indexado por la clave del patch (p. ej. "descripcion").
+ */
+class ItemPatchConflictError extends Error {
+  fields: Record<string, ItemFieldConflictDetail>
+  constructor(fields: Record<string, ItemFieldConflictDetail>) {
+    super('conflict')
+    this.name = 'ItemPatchConflictError'
+    this.fields = fields
+  }
+}
+
+/**
+ * Construye el "base" a mandar en el próximo PATCH de este campo: el valor
+ * confirmado por el servidor en el momento en que el usuario empezó a
+ * editarlo. Sin esto (fila recién creada cuyo alta sigue en vuelo) no hay
+ * base posible -- ese PATCH sobreescribe sin comparar, igual que siempre.
+ */
+function buildItemFieldBase(server: ItemCotizacion | undefined, field: QuotationItemCellField): Record<string, unknown> | null {
+  if (!server) return null
+  switch (field) {
+    case 'categoria': return { categoria: server.categoria ?? '' }
+    case 'descripcion': return { descripcion: server.descripcion ?? '' }
+    case 'cantidad': return { cantidad: server.cantidad ?? 0 }
+    case 'precio_unitario': return { precio_unitario: server.precio_unitario ?? 0 }
+    case 'x_pagar': return { x_pagar: server.x_pagar ?? 0 }
+    case 'responsable_id': return { responsable_id: server.responsable_id ?? '', responsable_nombre: server.responsable_nombre ?? '' }
+  }
+}
+
 function mapItemToFormItem(item: ItemCotizacion): QuotationFormValues['items'][number] {
   return {
     id: item.id,
@@ -168,6 +207,26 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const itemSavingCellsRef = useRef<Set<string>>(new Set())
   const itemCellAutosaveTimersRef = useRef<Record<string, number | null>>({})
   const itemCellIdleReleaseTimersRef = useRef<Record<string, number | null>>({})
+  // Último valor de cada partida confirmado por el servidor -- la fuente del "base"
+  // que se manda en cada PATCH para detectar conflictos. Nunca se pisa con lo que el
+  // usuario está tecleando (eso vive solo en el form).
+  const itemsServerRef = useRef<Record<string, ItemCotizacion>>({})
+  // "base" ya capturado por celda (al enfocarla), listo para el próximo PATCH.
+  const itemCellBaseRef = useRef<Record<string, Record<string, unknown>>>({})
+  const [itemCellConflicts, setItemCellConflicts] = useState<Record<string, Record<string, ItemFieldConflictDetail>>>({})
+  // mutation_id de los PATCH de partida que este cliente mismo mandó -- así al
+  // recibir el `item_confirmed` del servidor se distingue "confirmó lo mío" (no hace
+  // falta reconciliar, ya se aplicó al recibir la respuesta del PATCH) de "confirmó lo
+  // de alguien más" (sí conviene reconciliar ya, sin esperar el heartbeat de 5s).
+  const ownItemMutationIdsRef = useRef<Set<string>>(new Set())
+  const rememberOwnItemMutationId = useCallback((mutationId: string) => {
+    const set = ownItemMutationIdsRef.current
+    set.add(mutationId)
+    if (set.size > 50) {
+      const oldest = set.values().next().value
+      if (oldest !== undefined) set.delete(oldest)
+    }
+  }, [])
   // Cola por fila: encadena PATCH/DELETE de una misma partida para que no se pisen.
   const rowMutationQueueRef = useRef<Map<string, Promise<unknown>>>(new Map())
   // Filas ya quitadas en pantalla cuyo DELETE sigue en vuelo. `useFieldArray.remove`
@@ -221,10 +280,27 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (timer) window.clearTimeout(timer)
       delete itemCellIdleReleaseTimersRef.current[key]
     }
+    for (const [key, base] of Object.entries(itemCellBaseRef.current)) {
+      if (!key.startsWith(`${fromRowId}:`)) continue
+      delete itemCellBaseRef.current[key]
+      itemCellBaseRef.current[`${toRowId}:${key.slice(fromRowId.length + 1)}`] = base
+    }
   }, [])
 
   const markLocalWrite = useCallback((rowId: string, field: QuotationItemCellField) => {
     localWriteAtRef.current.set(getItemCellKey(rowId, field), Date.now())
+  }, [])
+  const recordServerItem = useCallback((item: ItemCotizacion) => {
+    itemsServerRef.current[item.id] = item
+  }, [])
+  const clearItemCellConflict = useCallback((rowId: string, field: QuotationItemCellField) => {
+    const key = getItemCellKey(rowId, field)
+    setItemCellConflicts((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
   }, [])
   const lastSavedNotasRef = useRef('')
   const lastSavedGeneralRef = useRef<GeneralSnapshot>(buildGeneralSnapshot({}))
@@ -273,6 +349,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     itemCellEditors,
     itemRowEditors,
     latestItemMutation,
+    latestItemConfirmed,
+    latestGeneralConfirmed,
+    latestTotalesConfirmed,
     savedSections,
     setActiveSection,
     releaseSection,
@@ -330,10 +409,20 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return pending
   }, [])
 
-  const patchQuotationItem = useCallback(async (tempOrRealId: string, patch: Record<string, unknown>) => {
+  const patchQuotationItem = useCallback(async (
+    tempOrRealId: string,
+    patch: Record<string, unknown>,
+    options?: { base?: Record<string, unknown> | null; mutationId?: string }
+  ) => {
     const rowId = await resolveRowId(tempOrRealId)
-    const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+    const body: Record<string, unknown> = { ...patch }
+    if (options?.base) body.base = options.base
+    if (options?.mutationId) body.mutation_id = options.mutationId
+    const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await response.json().catch(() => ({}))
+    if (response.status === 409 && data?.error === 'conflict') {
+      throw new ItemPatchConflictError((data?.fields || {}) as Record<string, ItemFieldConflictDetail>)
+    }
     if (!response.ok) throw new Error(data?.error || 'Error actualizando partida')
     return data?.item as ItemCotizacion | undefined
   }, [id, resolveRowId])
@@ -356,6 +445,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // que el usuario sigue editando: si se tecleó durante el debounce + el round-trip,
   // el valor viejo del servidor borraba lo recién escrito.
   const upsertLocalItemState = useCallback((item: ItemCotizacion, options?: { preserveLocalEdits?: boolean; allowInsert?: boolean }) => {
+    recordServerItem(item)
     const index = getItemIndexByRowId(item.id)
     const formItem = mapItemToFormItem(item)
     if (index >= 0) {
@@ -392,7 +482,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       else items.push(item)
       return { ...prev, items }
     })
-  }, [append, getItemIndexByRowId, setValue])
+  }, [append, getItemIndexByRowId, recordServerItem, setValue])
 
   const removeLocalItemState = useCallback((rowId: string) => {
     const index = getItemIndexByRowId(rowId)
@@ -426,8 +516,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     descuentoTipoValueRef.current = totalsConfig.descuento_tipo
     setDescuentoValor(totalsConfig.descuento_valor)
     descuentoValorValueRef.current = totalsConfig.descuento_valor
+    for (const item of cot.items || []) recordServerItem(item)
     reset({ cliente: cot.cliente, proyecto: cot.proyecto, fecha_entrega: cot.fecha_entrega || '', locacion: cot.locacion || '', items: (cot.items || []).map(mapItemToFormItem) })
-  }, [reset, setClienteInput, setProyectoInput])
+  }, [recordServerItem, reset, setClienteInput, setProyectoInput])
 
   const applyNotasOnly = useCallback((notas: string | null) => { const normalized = notas ?? ''; setNotasInternas(normalized); notasValueRef.current = normalized; lastSavedNotasRef.current = normalized; notasDirtyRef.current = false; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notas } : prev)) }, [])
   const applyGeneralOnly = useCallback((cot: Cotizacion) => { const general = buildGeneralSnapshot({ cliente: cot.cliente, proyecto: cot.proyecto, fecha_entrega: cot.fecha_entrega || '', locacion: cot.locacion || '' }); lastSavedGeneralRef.current = general; generalDirtyRef.current = false; setClienteInput(general.cliente); clienteInputValueRef.current = general.cliente; setProyectoInput(general.proyecto); proyectoInputValueRef.current = general.proyecto; setValue('cliente', general.cliente); setValue('proyecto', general.proyecto); setValue('fecha_entrega', general.fecha_entrega); setValue('locacion', general.locacion); setCotizacion((prev) => prev ? { ...prev, cliente: general.cliente, proyecto: general.proyecto, fecha_entrega: general.fecha_entrega || null, locacion: general.locacion || null } : prev) }, [setClienteInput, setProyectoInput, setValue])
@@ -473,6 +564,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const pedidoEn = Date.now()
       try {
       const updated = await fetchQuotationDetail(id)
+      for (const item of updated.items || []) recordServerItem(item)
       const locales = getValues('items') || []
       const servidor = (updated.items || []).map(mapItemToFormItem)
       const fusionadas = reconcileServerItems(locales, servidor, {
@@ -580,7 +672,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       reconciliacionEnCursoRef.current = null
     }
-  }, [append, applyGeneralOnly, applyNotasOnly, applyTotalsOnly, getValues, hasLocalItemRowActivity, id, replace, setValue])
+  }, [append, applyGeneralOnly, applyNotasOnly, applyTotalsOnly, getValues, hasLocalItemRowActivity, id, recordServerItem, replace, setValue])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
   useEffect(() => { notasValueRef.current = notasInternas }, [notasInternas])
@@ -648,9 +740,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         : field === 'precio_unitario' ? { precio_unitario: item.precio_unitario === '' ? 0 : Number(item.precio_unitario) || 0 }
         : field === 'x_pagar' ? { x_pagar: item.x_pagar === '' ? 0 : Number(item.x_pagar) || 0 }
         : { responsable_id: item.responsable_id || '', responsable_nombre: item.responsable_nombre || '' }
-      const updatedItem = await patchQuotationItem(rowId, patch)
+      const base = itemCellBaseRef.current[key]
+      const mutationId = crypto.randomUUID()
+      rememberOwnItemMutationId(mutationId)
+      const updatedItem = await patchQuotationItem(rowId, patch, { base, mutationId })
       markLocalWrite(rowId, field)
       itemDirtyCellsRef.current.delete(key)
+      clearItemCellConflict(rowId, field)
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         broadcastItemMutation({ action: 'upsert', row_id: rowId, item: updatedItem })
@@ -658,11 +754,17 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       markSectionSaved('partidas')
       scheduleItemCellIdleRelease(rowId, field)
     } catch (saveError: unknown) {
+      if (saveError instanceof ItemPatchConflictError) {
+        // Nunca se descarta en silencio lo que el usuario tecleó: la fila queda tal
+        // cual, se muestra el conflicto y el usuario decide con qué valor seguir.
+        setItemCellConflicts((prev) => ({ ...prev, [key]: saveError.fields }))
+        return
+      }
       setError(saveError instanceof Error ? saveError.message : 'Error guardando partida')
     } finally {
       itemSavingCellsRef.current.delete(key)
     }
-  }, [broadcastItemMutation, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, scheduleItemCellIdleRelease, upsertLocalItemState])
+  }, [broadcastItemMutation, clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, markSectionSaved, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState])
   persistItemCellAutosaveRef.current = persistItemCellAutosave
 
   useEffect(() => {
@@ -738,6 +840,29 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     if (acabaDeReconectar) void reconciliarConServidor()
   }, [isConnected, reconciliarConServidor])
 
+  // `item_confirmed`/`general_confirmed`/`totales_confirmed`: los emite el servidor
+  // recién commiteado el PATCH (ver lib/server/realtime/broadcast.ts), a diferencia de
+  // `item_mutation` que es un aviso sin acuse del navegador del autor. Sirven para
+  // reconciliar de inmediato en vez de esperar el heartbeat de 5s -- nunca reemplazan
+  // la reconciliación periódica, solo la adelantan.
+  useEffect(() => {
+    if (!latestItemConfirmed) return
+    // Confirmó un PATCH propio: ya se aplicó al recibir la respuesta del fetch: no
+    // hace falta reconciliar otra vez. Sin mutation_id (ajeno, o un cliente viejo) sí.
+    if (latestItemConfirmed.mutation_id && ownItemMutationIdsRef.current.has(latestItemConfirmed.mutation_id)) return
+    void reconciliarConServidor()
+  }, [latestItemConfirmed, reconciliarConServidor])
+
+  useEffect(() => {
+    if (!latestGeneralConfirmed) return
+    void reconciliarConServidor()
+  }, [latestGeneralConfirmed, reconciliarConServidor])
+
+  useEffect(() => {
+    if (!latestTotalesConfirmed) return
+    void reconciliarConServidor()
+  }, [latestTotalesConfirmed, reconciliarConServidor])
+
   // Latido de reconciliación. No depende de la presencia ni del canal: si dependiera,
   // un fallo de esos mismos mecanismos volvería a dejar las pantallas divergentes sin
   // que nadie se entere, que es exactamente lo que pasaba antes.
@@ -808,6 +933,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     clearItemCellIdleReleaseTimer(key)
     itemFocusedCellsRef.current.add(key)
     lockItemCell(rowId, field)
+    const base = buildItemFieldBase(itemsServerRef.current[rowId], field)
+    if (base) itemCellBaseRef.current[key] = base
   }, [clearItemCellIdleReleaseTimer, lockItemCell])
 
   const handleItemFieldChange = useCallback((rowId: string, field: QuotationItemCellField) => {
@@ -848,6 +975,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (index >= 0) setValue(`items.${index}.id`, createdId)
       migrateRowKeys(tempId, createdId)
       const filaCreada: ItemCotizacion = { id: createdId, cotizacion_id: id, categoria: '', descripcion: '', cantidad: 1, precio_unitario: 0, importe: 0, responsable_id: null, responsable_nombre: null, x_pagar: 0, margen: 0, orden: (getValues('items') || []).length, notas: null }
+      recordServerItem(filaCreada)
       setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), filaCreada] } : prev)
       broadcastItemMutation({ action: 'upsert', row_id: createdId, item: filaCreada })
       markSectionSaved('partidas')
@@ -859,7 +987,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       pendingRowIdsRef.current.delete(tempId)
     }
-  }, [append, broadcastItemMutation, createQuotationItemRow, getItemIndexByRowId, getValues, id, markSectionSaved, migrateRowKeys, remove, resyncPartidas, setValue])
+  }, [append, broadcastItemMutation, createQuotationItemRow, getItemIndexByRowId, getValues, id, markSectionSaved, migrateRowKeys, recordServerItem, remove, resyncPartidas, setValue])
 
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
@@ -904,6 +1032,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       replace([...(updated.items || []).map(mapItemToFormItem), ...provisionales])
       setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : updated)
       for (const item of updated.items || []) {
+        recordServerItem(item)
         broadcastItemMutation({ action: 'upsert', row_id: item.id, item })
       }
       markSectionSaved('partidas')
@@ -913,7 +1042,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       setImportingItems(false)
     }
-  }, [broadcastItemMutation, getValues, id, markSectionSaved, replace, resyncPartidas])
+  }, [broadcastItemMutation, getValues, id, markSectionSaved, recordServerItem, replace, resyncPartidas])
 
   // Borrado optimista, identificado por rowId: la fila desaparece al instante y el
   // DELETE (que recalcula el encabezado y sincroniza Sheets) corre después, encolado
@@ -939,7 +1068,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const handleSelectProduct = useCallback(async (rowId: string, producto: { descripcion: string; categoria: string | null; precio_unitario: number; x_pagar_sugerido: number }) => {
     const index = getItemIndexByRowId(rowId)
     if (index < 0) return
-    seleccionarProducto(index, producto as never)
+    seleccionarProducto(rowId, producto as never)
     try {
       const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }))
       if (updatedItem) {
@@ -985,6 +1114,35 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return null
   }, [itemCellEditors, itemRowEditors])
 
+  // Conflicto por celda: alguien más guardó este campo entre que se capturó el
+  // "base" y que se intentó guardar. `attempted` es lo que el usuario tecleó,
+  // nunca se pierde -- el banner deja elegir entre eso y lo que hay ahora.
+  const getItemCellConflict = useCallback((rowId: string, field: QuotationItemCellField) => {
+    const detail = itemCellConflicts[getItemCellKey(rowId, field)]?.[field]
+    return detail ? { current: detail.current, attempted: detail.attempted } : null
+  }, [itemCellConflicts])
+
+  const resolveItemCellConflict = useCallback((rowId: string, field: QuotationItemCellField, resolution: 'theirs' | 'mine') => {
+    const key = getItemCellKey(rowId, field)
+    const detail = itemCellConflicts[key]?.[field]
+    if (!detail) return
+    clearItemCellConflict(rowId, field)
+    // El "current" que devolvió la RPC es la verdad del servidor a partir de ahora,
+    // gane el valor ajeno o el propio -- ambos casos parten de ahí para el próximo PATCH.
+    itemsServerRef.current[rowId] = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)), [field]: detail.current }
+    itemCellBaseRef.current[key] = { [field]: detail.current }
+
+    if (resolution === 'theirs') {
+      const index = getItemIndexByRowId(rowId)
+      if (index >= 0) setValue(`items.${index}.${field}` as never, detail.current as never)
+      itemDirtyCellsRef.current.delete(key)
+      scheduleItemCellIdleRelease(rowId, field)
+      return
+    }
+
+    // "mine": lo tecleado se conserva tal cual, se reintenta con el base ya corregido.
+    void persistItemCellAutosave(rowId, field)
+  }, [clearItemCellConflict, getItemIndexByRowId, itemCellConflicts, persistItemCellAutosave, scheduleItemCellIdleRelease, setValue])
 
   // Mismo contrato que usa la pantalla de nueva cotización; aquí cada operación se
   // persiste contra la API y se difunde a los demás colaboradores.
@@ -1000,8 +1158,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     isRowBusy: isItemRowLocked,
     isCellBusy: isItemCellLocked,
     rowStatusText: getItemRowStatusText,
+    getCellConflict: getItemCellConflict,
+    resolveCellConflict: resolveItemCellConflict,
     importing: importingItems,
-  }), [getItemRowStatusText, handleAddRow, handleImportItems, handleItemFieldBlur, handleItemFieldChange, handleItemFieldFocus, handleRemoveRow, handleResponsableChange, handleSelectProduct, importingItems, isItemCellLocked, isItemRowLocked])
+  }), [getItemCellConflict, getItemRowStatusText, handleAddRow, handleImportItems, handleItemFieldBlur, handleItemFieldChange, handleItemFieldFocus, handleRemoveRow, handleResponsableChange, handleSelectProduct, importingItems, isItemCellLocked, isItemRowLocked, resolveItemCellConflict])
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)

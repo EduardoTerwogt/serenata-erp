@@ -26,8 +26,10 @@ export function useQuotationForm(
   const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
   const [proyectoInput, setProyectoInput] = useState('')
   const [mostrarProyectoDropdown, setMostrarProyectoDropdown] = useState(false)
-  const [productoSugerencias, setProductoSugerencias] = useState<Record<number, Producto[]>>({})
-  const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<number, boolean>>({})
+  // Keyed por rowId (id estable de la partida), no por índice de array: reordenar,
+  // insertar o borrar filas no debe mover la sugerencia activa a otra fila.
+  const [productoSugerencias, setProductoSugerencias] = useState<Record<string, Producto[]>>({})
+  const [mostrarProductoDropdown, setMostrarProductoDropdown] = useState<Record<string, boolean>>({})
 
   const refreshCatalogos = useCallback(async (force = false) => {
     // Servir desde caché si está vigente y no se fuerza actualización
@@ -122,7 +124,11 @@ export function useQuotationForm(
     setMostrarProyectoDropdown(tieneSugerencias)
   }, [proyectosDelCliente, setValue])
 
-  const handleDescripcionChange = useCallback((index: number, valor: string) => {
+  const indexOfRow = useCallback((rowId: string) => watchedItems.findIndex((item) => item.id === rowId), [watchedItems])
+
+  const handleDescripcionChange = useCallback((rowId: string, valor: string) => {
+    const index = indexOfRow(rowId)
+    if (index < 0) return
     // Solo se actualiza la descripción: el precio y el x_pagar únicamente cambian
     // cuando el usuario elige explícitamente una sugerencia (seleccionarProducto).
     // Limpiarlos aquí borraba precios ya capturados al corregir una descripción.
@@ -132,16 +138,18 @@ export function useQuotationForm(
       const filtrados = listaProductos
         .filter((producto) => producto.descripcion.toLowerCase().includes(valor.toLowerCase()))
         .slice(0, 8)
-      setProductoSugerencias((prev) => ({ ...prev, [index]: filtrados }))
-      setMostrarProductoDropdown((prev) => ({ ...prev, [index]: filtrados.length > 0 }))
+      setProductoSugerencias((prev) => ({ ...prev, [rowId]: filtrados }))
+      setMostrarProductoDropdown((prev) => ({ ...prev, [rowId]: filtrados.length > 0 }))
       return
     }
 
-    setProductoSugerencias((prev) => ({ ...prev, [index]: [] }))
-    setMostrarProductoDropdown((prev) => ({ ...prev, [index]: false }))
-  }, [listaProductos, setValue])
+    setProductoSugerencias((prev) => ({ ...prev, [rowId]: [] }))
+    setMostrarProductoDropdown((prev) => ({ ...prev, [rowId]: false }))
+  }, [indexOfRow, listaProductos, setValue])
 
-  const seleccionarProducto = useCallback((index: number, producto: Producto) => {
+  const seleccionarProducto = useCallback((rowId: string, producto: Producto) => {
+    const index = indexOfRow(rowId)
+    if (index < 0) return
     setValue(`items.${index}.descripcion`, producto.descripcion)
     setValue(`items.${index}.categoria`, producto.categoria || '')
     if (producto.precio_unitario > 0) {
@@ -150,9 +158,9 @@ export function useQuotationForm(
     if ((producto.x_pagar_sugerido || 0) > 0) {
       setValue(`items.${index}.x_pagar`, producto.x_pagar_sugerido || 0)
     }
-    setProductoSugerencias((prev) => ({ ...prev, [index]: [] }))
-    setMostrarProductoDropdown((prev) => ({ ...prev, [index]: false }))
-  }, [setValue])
+    setProductoSugerencias((prev) => ({ ...prev, [rowId]: [] }))
+    setMostrarProductoDropdown((prev) => ({ ...prev, [rowId]: false }))
+  }, [indexOfRow, setValue])
 
   const seleccionarCliente = useCallback((cliente: string) => {
     setClienteInput(cliente)
