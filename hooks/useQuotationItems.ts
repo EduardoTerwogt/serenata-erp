@@ -97,7 +97,7 @@ interface LocalControllerOptions {
   getValues: UseFormGetValues<QuotationFormValues>
   setValue: UseFormSetValue<QuotationFormValues>
   replace: UseFieldArrayReplace<QuotationFormValues, 'items'>
-  seleccionarProducto: (index: number, producto: Producto) => void
+  seleccionarProducto: (rowId: string, producto: Producto) => void
   responsables: { id: string; nombre: string }[]
 }
 
@@ -131,9 +131,8 @@ export function useLocalQuotationItems({
   }, [items, replace])
 
   const selectProduct = useCallback((rowId: string, producto: Producto) => {
-    const index = indexOf(rowId)
-    if (index >= 0) seleccionarProducto(index, producto)
-  }, [indexOf, seleccionarProducto])
+    seleccionarProducto(rowId, producto)
+  }, [seleccionarProducto])
 
   const changeResponsable = useCallback((rowId: string, responsableId: string) => {
     const index = indexOf(rowId)

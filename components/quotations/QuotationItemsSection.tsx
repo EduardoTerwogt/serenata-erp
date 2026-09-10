@@ -39,10 +39,11 @@ interface Props {
   editingItemIndex: number | null
   setEditingItemIndex: (value: number | null) => void
   calcItem: (item: QuotationFormValues['items'][number]) => { importe: number; margen: number }
-  handleDescripcionChange: (index: number, value: string) => void
-  productoSugerencias: Record<number, Producto[]>
-  mostrarProductoDropdown: Record<number, boolean>
-  setMostrarProductoDropdown: (updater: Record<number, boolean> | ((prev: Record<number, boolean>) => Record<number, boolean>)) => void
+  /** Keyed por rowId (id estable de la partida), no por índice. */
+  handleDescripcionChange: (rowId: string, value: string) => void
+  productoSugerencias: Record<string, Producto[]>
+  mostrarProductoDropdown: Record<string, boolean>
+  setMostrarProductoDropdown: (updater: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)) => void
   responsables: Proveedor[]
   readOnlyItems?: ReadOnlyItem[]
   onCopyClick?: () => void
@@ -139,19 +140,19 @@ export function QuotationItemsSection({
             <input
               {...register(`items.${index}.descripcion`)}
               ref={el => { descInputRefs.current[index] = el; register(`items.${index}.descripcion`).ref(el) }}
-              onChange={e => { items.cellChange(rowIdAt(index), 'descripcion'); handleDescripcionChange(index, e.target.value); register(`items.${index}.descripcion`).onChange(e) }}
-              onFocus={() => { items.cellFocus(rowIdAt(index), 'descripcion'); updateDropdownPos(index); if ((productoSugerencias[index]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [index]: true })) }}
-              onBlur={() => { items.cellBlur(rowIdAt(index), 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [index]: false })), 200) }}
+              onChange={e => { items.cellChange(rowIdAt(index), 'descripcion'); handleDescripcionChange(rowIdAt(index), e.target.value); register(`items.${index}.descripcion`).onChange(e) }}
+              onFocus={() => { items.cellFocus(rowIdAt(index), 'descripcion'); updateDropdownPos(index); if ((productoSugerencias[rowIdAt(index)]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [rowIdAt(index)]: true })) }}
+              onBlur={() => { items.cellBlur(rowIdAt(index), 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [rowIdAt(index)]: false })), 200) }}
               data-busy={cellBusy(index, 'descripcion') || undefined}
               className={`w-44 ${CELL_INPUT_CLASS}`}
               autoComplete="off"
             />
-            {mostrarProductoDropdown[index] && (productoSugerencias[index]?.length ?? 0) > 0 && dropdownPos[index] && typeof document !== 'undefined' && createPortal(
+            {mostrarProductoDropdown[rowIdAt(index)] && (productoSugerencias[rowIdAt(index)]?.length ?? 0) > 0 && dropdownPos[index] && typeof document !== 'undefined' && createPortal(
               <div
                 className="fixed z-[9999] w-64 rounded-control border border-hairline bg-card shadow-overlay max-h-48 overflow-y-auto"
                 style={{ top: dropdownPos[index]!.top, left: dropdownPos[index]!.left }}
               >
-                {productoSugerencias[index].map((p, i) => (
+                {productoSugerencias[rowIdAt(index)].map((p, i) => (
                   <div
                     key={i}
                     onMouseDown={() => items.selectProduct(rowIdAt(index), p)}
@@ -338,8 +339,8 @@ export function QuotationItemsSection({
             <div className="space-y-5">
               <div className="relative">
                 <label className="sn-label block mb-2">Descripción</label>
-                <input {...register(`items.${editingItemIndex}.descripcion`)} onChange={e => { items.cellChange(rowIdAt(editingItemIndex), 'descripcion'); handleDescripcionChange(editingItemIndex, e.target.value) }} onFocus={() => { items.cellFocus(rowIdAt(editingItemIndex), 'descripcion'); if ((productoSugerencias[editingItemIndex]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: true })) }} onBlur={() => { items.cellBlur(rowIdAt(editingItemIndex), 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [editingItemIndex]: false })), 200) }} data-busy={cellBusy(editingItemIndex, 'descripcion') || undefined} className={FULLSCREEN_INPUT_CLASS} placeholder="Descripción del item" autoComplete="off" />
-                {mostrarProductoDropdown[editingItemIndex] && (productoSugerencias[editingItemIndex]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 rounded-control border border-hairline bg-card shadow-overlay max-h-48 overflow-y-auto">{productoSugerencias[editingItemIndex].map((p, i) => <div key={i} onMouseDown={() => items.selectProduct(rowIdAt(editingItemIndex), p)} className="px-4 py-3 text-content border-b border-hairline last:border-0 hover:bg-row cursor-pointer text-body"><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-subtext text-xs">{p.categoria}</div>}</div>)}</div>}
+                <input {...register(`items.${editingItemIndex}.descripcion`)} onChange={e => { items.cellChange(rowIdAt(editingItemIndex), 'descripcion'); handleDescripcionChange(rowIdAt(editingItemIndex), e.target.value) }} onFocus={() => { items.cellFocus(rowIdAt(editingItemIndex), 'descripcion'); if ((productoSugerencias[rowIdAt(editingItemIndex)]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [rowIdAt(editingItemIndex)]: true })) }} onBlur={() => { items.cellBlur(rowIdAt(editingItemIndex), 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [rowIdAt(editingItemIndex)]: false })), 200) }} data-busy={cellBusy(editingItemIndex, 'descripcion') || undefined} className={FULLSCREEN_INPUT_CLASS} placeholder="Descripción del item" autoComplete="off" />
+                {mostrarProductoDropdown[rowIdAt(editingItemIndex)] && (productoSugerencias[rowIdAt(editingItemIndex)]?.length ?? 0) > 0 && <div className="absolute z-50 w-full mt-1 rounded-control border border-hairline bg-card shadow-overlay max-h-48 overflow-y-auto">{productoSugerencias[rowIdAt(editingItemIndex)].map((p, i) => <div key={i} onMouseDown={() => items.selectProduct(rowIdAt(editingItemIndex), p)} className="px-4 py-3 text-content border-b border-hairline last:border-0 hover:bg-row cursor-pointer text-body"><div className="font-medium">{p.descripcion}</div>{p.categoria && <div className="text-subtext text-xs">{p.categoria}</div>}</div>)}</div>}
               </div>
               <div><label className="sn-label block mb-2">Categoría</label><input {...register(`items.${editingItemIndex}.categoria`)} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'categoria')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'categoria')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'categoria'); register(`items.${editingItemIndex}.categoria`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'categoria') || undefined} className={FULLSCREEN_INPUT_CLASS} placeholder="Categoría" /></div>
               <div className="flex gap-3"><div className="flex-1"><label className="sn-label block mb-2">Cantidad</label><input type="number" min="1" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'cantidad')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'cantidad')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'cantidad'); register(`items.${editingItemIndex}.cantidad`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'cantidad') || undefined} className={`${FULLSCREEN_INPUT_CLASS} text-center`} /></div><div className="flex-[2]"><label className="sn-label block mb-2">Precio unitario</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'precio_unitario')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'precio_unitario')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'precio_unitario'); register(`items.${editingItemIndex}.precio_unitario`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'precio_unitario') || undefined} className={FULLSCREEN_INPUT_CLASS} /></div></div>

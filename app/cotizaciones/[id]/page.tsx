@@ -939,7 +939,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const handleSelectProduct = useCallback(async (rowId: string, producto: { descripcion: string; categoria: string | null; precio_unitario: number; x_pagar_sugerido: number }) => {
     const index = getItemIndexByRowId(rowId)
     if (index < 0) return
-    seleccionarProducto(index, producto as never)
+    seleccionarProducto(rowId, producto as never)
     try {
       const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }))
       if (updatedItem) {
