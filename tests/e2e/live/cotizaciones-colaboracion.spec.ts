@@ -429,7 +429,11 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     await precioB.fill(valorB)
     await precioB.blur()
 
-    const banner = pageB.getByText(/Alguien más lo cambió a/)
+    // Acotado a la fila 0: el banner de conflicto es por-celda (ver
+    // ItemFieldConflictBanner), así que un `getByText` de página completa
+    // también matchearía el banner de OTRA fila si quedó uno sin resolver de
+    // un test anterior -- "strict mode violation" real visto en CI.
+    const banner = filas(pageB).nth(0).getByText(/Alguien más lo cambió a/)
     await expect(banner).toBeVisible({ timeout: 15_000 })
     await expect(banner).toContainText(valorA)
 
