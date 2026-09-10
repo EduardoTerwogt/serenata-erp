@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import { supabaseBrowser } from '@/lib/supabase-browser'
-import { authorizeRealtime, createPrivateChannel, scheduleTokenRefresh } from '@/lib/realtime/authorize'
+import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
 
 export type QuotationPresenceSection = 'notas' | 'general' | 'partidas' | 'totales'
 export type QuotationItemCellField = 'categoria' | 'descripcion' | 'cantidad' | 'precio_unitario' | 'responsable_id' | 'x_pagar'
@@ -202,14 +201,12 @@ export function useQuotationPresence({
   const { rawOnlineUsers, isConnected } = awareness
   const [confirmedEvents, dispatchConfirmedEvent] = useReducer(confirmedEventsReducer, initialConfirmedEventsState)
   const { latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, latestNotasConfirmed } = confirmedEvents
-  const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
   const activeCellRef = useRef<{ rowId: string; field: QuotationItemCellField } | null>(null)
-  const presenceKeyRef = useRef('')
   // Fase 8 (hardening pre-Proyectos): ids de los `setTimeout` de reintento de
   // `trackPresence` todavía pendientes -- sin esto, un reintento programado
   // justo antes de un unmount/reconexión sobrevivía y podía disparar `.track()`
-  // sobre un canal ya reemplazado. Se limpian en el cleanup del efecto de canal.
+  // sobre un canal ya reemplazado. Se limpian en `onSessionEnd`, más abajo.
   const pendingTrackRetriesRef = useRef<Set<number>>(new Set())
 
   const identity = useMemo(() => {
@@ -218,6 +215,90 @@ export function useQuotationPresence({
     const name = currentUser?.name || currentUser?.email || 'Usuario'
     return { userId, email, name }
   }, [cotizacionId, currentUser?.email, currentUser?.id, currentUser?.name])
+
+  // Infraestructura de canal (conexión, autorización, reconexión con backoff,
+  // refresco de token, cleanup) -- extraída a lib/realtime/useRealtimeChannel.ts
+  // (Fase 8) porque no tiene nada específico de cotizaciones. Este hook solo le
+  // pasa QUÉ escuchar (presence sync + los 4 broadcasts `*_confirmed`) y CUÁNDO
+  // reaccionar (subscribed/disconnected/session-end) -- el protocolo de
+  // Presence y de mutaciones sigue siendo específico de cotizaciones, no se
+  // extrae todavía (deuda intencional hasta tener un segundo consumidor real).
+  const handleChannelCreated = useCallback((channel: RealtimeChannel) => {
+    channel.on('presence', { event: 'sync' }, () => {
+      const presenceState = channel.presenceState<QuotationPresenceUser>()
+      const users = Object.values(presenceState)
+        .flatMap((entries) => entries)
+        .filter(Boolean)
+      dispatchAwareness({ type: 'sync_online_users', users })
+    })
+
+    channel.on('broadcast', { event: 'item_confirmed' }, ({ payload }) => {
+      const confirmed = payload as ItemConfirmedPayload | undefined
+      // `bulk` representa varias filas a la vez y por eso viaja sin item_id --
+      // Fase 8: esto se descartaba aquí mismo antes de llegar al reducer, así
+      // que el import masivo nunca disparaba reconciliación por esta vía en
+      // los DEMÁS colaboradores (el propio emisor se actualiza solo con la
+      // respuesta HTTP de su POST, sin depender de este evento). Terminaba
+      // convergiendo igual por el poll de 20s -- pero eso es la red de
+      // seguridad, no el camino primario.
+      if (!confirmed?.cotizacion_id) return
+      if (!confirmed.item_id && confirmed.operation !== 'bulk') return
+      dispatchConfirmedEvent({ type: 'item_confirmed', payload: { ...confirmed } })
+    })
+
+    channel.on('broadcast', { event: 'general_confirmed' }, ({ payload }) => {
+      const confirmed = payload as SectionConfirmedPayload | undefined
+      if (!confirmed?.cotizacion_id) return
+      dispatchConfirmedEvent({ type: 'general_confirmed', payload: { ...confirmed } })
+    })
+
+    channel.on('broadcast', { event: 'totales_confirmed' }, ({ payload }) => {
+      const confirmed = payload as SectionConfirmedPayload | undefined
+      if (!confirmed?.cotizacion_id) return
+      dispatchConfirmedEvent({ type: 'totales_confirmed', payload: { ...confirmed } })
+    })
+
+    channel.on('broadcast', { event: 'notas_confirmed' }, ({ payload }) => {
+      const confirmed = payload as SectionConfirmedPayload | undefined
+      if (!confirmed?.cotizacion_id) return
+      dispatchConfirmedEvent({ type: 'notas_confirmed', payload: { ...confirmed } })
+    })
+  }, [])
+
+  const handleSubscribed = useCallback(async (channel: RealtimeChannel) => {
+    dispatchAwareness({ type: 'set_connected', connected: true })
+    await channel.track({
+      user_id: identity.userId,
+      email: identity.email,
+      name: identity.name,
+      active_section: activeSectionRef.current,
+      entity_id: activeCellRef.current?.rowId ?? null,
+      field: activeCellRef.current?.field ?? null,
+      online_at: new Date().toISOString(),
+    })
+  }, [identity.email, identity.name, identity.userId])
+
+  const handleDisconnected = useCallback(() => {
+    dispatchAwareness({ type: 'set_connected', connected: false })
+  }, [])
+
+  const handleSessionEnd = useCallback(() => {
+    const pendingTrackRetries = pendingTrackRetriesRef.current
+    pendingTrackRetries.forEach((timeoutId) => window.clearTimeout(timeoutId))
+    pendingTrackRetries.clear()
+    dispatchAwareness({ type: 'reset' })
+    dispatchConfirmedEvent({ type: 'reset' })
+  }, [])
+
+  const { channelRef } = useRealtimeChannel({
+    topic: enabled ? `cotizacion:${cotizacionId}` : null,
+    enabled,
+    presenceKeyPrefix: identity.userId,
+    onChannelCreated: handleChannelCreated,
+    onSubscribed: handleSubscribed,
+    onDisconnected: handleDisconnected,
+    onSessionEnd: handleSessionEnd,
+  })
 
   // `channel.track()` manda un push por el WebSocket y espera un ack; sin red de
   // reintento, un timeout/blip aislado (nunca vimos un error de la app en logs de CI,
@@ -253,7 +334,7 @@ export function useQuotationPresence({
       })
     }
     intentar(2)
-  }, [identity.email, identity.name, identity.userId])
+  }, [channelRef, identity.email, identity.name, identity.userId])
 
   const setActiveSection = useCallback((section: QuotationPresenceSection | null) => {
     activeSectionRef.current = section
@@ -299,173 +380,6 @@ export function useQuotationPresence({
     }, PRESENCE_HEARTBEAT_MS)
     return () => window.clearInterval(heartbeat)
   }, [enabled, trackPresence])
-
-  useEffect(() => {
-    if (!enabled) {
-      dispatchAwareness({ type: 'reset' })
-      dispatchConfirmedEvent({ type: 'reset' })
-      return
-    }
-
-    let cancelled = false
-    let cancelTokenRefresh: (() => void) | null = null
-    let reconnectTimer: number | null = null
-    let reconnectAttempt = 0
-
-    // Root cause confirmado en vivo (CI, 2026-09-10): el canal de un colaborador se
-    // cae a CLOSED apenas arranca la sesión y, sin esto, se queda muerto para
-    // siempre -- nada volvía a llamar `channel.subscribe()`. La ruta de DATOS
-    // sobrevive porque RECONCILIACION_MS (page.tsx) es un poll de 20s independiente
-    // del canal; Presence no tiene ningún respaldo así, así que un canal muerto
-    // significa badges que nunca vuelven a aparecer por el resto de la sesión.
-    // Reintentos de `trackPresence` (más abajo) no alcanzan solos: reintentar un
-    // `track()` contra un canal ya CLOSED nunca va a funcionar.
-    const connect = () => {
-      if (cancelled) return
-
-      // Fase 8: `cancelTokenRefresh` es del closure del efecto, compartida entre
-      // todas las llamadas a `connect()` -- cada reconexión la SOBREESCRIBÍA
-      // (más abajo) sin cancelar la anterior, y como `scheduleTokenRefresh` se
-      // reprograma sola indefinidamente, cada reconexión dejaba viva una cadena
-      // de refresco de token adicional que nunca se cancelaba hasta el unmount
-      // final. Cancelar la actual ANTES de pedir una nueva corta esa fuga.
-      cancelTokenRefresh?.()
-      cancelTokenRefresh = null
-
-      const random = Math.random().toString(36).slice(2, 8)
-      presenceKeyRef.current = `${identity.userId}-${random}`
-
-      // Canal PRIVADO: requiere autorizar la sesión de Realtime (JWT corto
-      // derivado de la sesión de NextAuth) antes de unirse -- ver
-      // lib/realtime/authorize.ts y db/migrations/20260909_realtime_broadcast_authorization.sql.
-      const channel = createPrivateChannel(`cotizacion:${cotizacionId}`, {
-        presence: { key: presenceKeyRef.current },
-      })
-
-      channel.on('presence', { event: 'sync' }, () => {
-        const presenceState = channel.presenceState<QuotationPresenceUser>()
-        const users = Object.values(presenceState)
-          .flatMap((entries) => entries)
-          .filter(Boolean)
-        dispatchAwareness({ type: 'sync_online_users', users })
-      })
-
-      channel.on('broadcast', { event: 'item_confirmed' }, ({ payload }) => {
-        const confirmed = payload as ItemConfirmedPayload | undefined
-        // `bulk` representa varias filas a la vez y por eso viaja sin item_id --
-        // Fase 8: esto se descartaba aquí mismo antes de llegar al reducer, así
-        // que el import masivo nunca disparaba reconciliación por esta vía en
-        // los DEMÁS colaboradores (el propio emisor se actualiza solo con la
-        // respuesta HTTP de su POST, sin depender de este evento). Terminaba
-        // convergiendo igual por el poll de 20s -- pero eso es la red de
-        // seguridad, no el camino primario.
-        if (!confirmed?.cotizacion_id) return
-        if (!confirmed.item_id && confirmed.operation !== 'bulk') return
-        dispatchConfirmedEvent({ type: 'item_confirmed', payload: { ...confirmed } })
-      })
-
-      channel.on('broadcast', { event: 'general_confirmed' }, ({ payload }) => {
-        const confirmed = payload as SectionConfirmedPayload | undefined
-        if (!confirmed?.cotizacion_id) return
-        dispatchConfirmedEvent({ type: 'general_confirmed', payload: { ...confirmed } })
-      })
-
-      channel.on('broadcast', { event: 'totales_confirmed' }, ({ payload }) => {
-        const confirmed = payload as SectionConfirmedPayload | undefined
-        if (!confirmed?.cotizacion_id) return
-        dispatchConfirmedEvent({ type: 'totales_confirmed', payload: { ...confirmed } })
-      })
-
-      channel.on('broadcast', { event: 'notas_confirmed' }, ({ payload }) => {
-        const confirmed = payload as SectionConfirmedPayload | undefined
-        if (!confirmed?.cotizacion_id) return
-        dispatchConfirmedEvent({ type: 'notas_confirmed', payload: { ...confirmed } })
-      })
-
-      const scheduleReconnect = () => {
-        if (cancelled || reconnectTimer !== null) return
-        reconnectAttempt += 1
-        const delayMs = Math.min(1_000 * 2 ** (reconnectAttempt - 1), 10_000)
-        reconnectTimer = window.setTimeout(async () => {
-          reconnectTimer = null
-          // Fase 8: root cause real de "cannot add presence callbacks after
-          // joining a channel" (visto en logs de CI) -- `RealtimeClient.channel()`
-          // REUSA el objeto de canal existente para el mismo topic si no se
-          // liberó todavía, y `removeChannel()` es async. Sin este `await`,
-          // `connect()` podía pedir un canal para el mismo topic y recibir de
-          // vuelta ESTE MISMO objeto (ya `isJoined()`), y el primer `.on('presence',
-          // ...)` de la reconexión lanzaba esa excepción -- abortando el intento
-          // de reconexión a medias, sin llegar nunca a `channel.subscribe()`.
-          await supabaseBrowser.removeChannel(channel).catch(() => null)
-          if (channelRef.current === channel) channelRef.current = null
-          if (!cancelled) connect()
-        }, delayMs)
-      }
-
-      const join = async () => {
-        // Si autorizar falla (red, endpoint caído), igual se intenta unir: el
-        // join simplemente lo rechaza la política RLS -- Presence sencillamente no
-        // tiene nada que trackear, sin la ventana de "se mandó pero se perdió en
-        // silencio" que tenía el broadcast ad-hoc que este canal usaba antes.
-        try {
-          const ttlSeconds = await authorizeRealtime()
-          if (!cancelled) cancelTokenRefresh = scheduleTokenRefresh(ttlSeconds)
-        } catch (e) {
-          console.error('[useQuotationPresence] No se pudo autorizar el canal de Realtime', e)
-        }
-        if (cancelled) return
-
-        channel.subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            reconnectAttempt = 0
-            dispatchAwareness({ type: 'set_connected', connected: true })
-            await channel.track({
-              user_id: identity.userId,
-              email: identity.email,
-              name: identity.name,
-              active_section: activeSectionRef.current,
-              entity_id: activeCellRef.current?.rowId ?? null,
-              field: activeCellRef.current?.field ?? null,
-              online_at: new Date().toISOString(),
-            })
-            return
-          }
-
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.error('[useQuotationPresence] canal de Realtime perdió la conexión, reconectando', status)
-            dispatchAwareness({ type: 'set_connected', connected: false })
-            scheduleReconnect()
-          }
-        })
-      }
-
-      channelRef.current = channel
-      void join()
-    }
-
-    connect()
-
-    return () => {
-      cancelled = true
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer)
-      cancelTokenRefresh?.()
-      // No es un ref de nodo DOM -- es un Set estable que este mismo hook crea y
-      // muta en el sitio (nunca se reasigna), así que leer `.current` aquí en el
-      // cleanup es seguro; la regla solo conoce el patrón de refs de nodos.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      const pendingTrackRetries = pendingTrackRetriesRef.current
-      pendingTrackRetries.forEach((timeoutId) => window.clearTimeout(timeoutId))
-      pendingTrackRetries.clear()
-      dispatchAwareness({ type: 'reset' })
-      dispatchConfirmedEvent({ type: 'reset' })
-      const channel = channelRef.current
-      if (channel) {
-        void channel.untrack().catch(() => null)
-        void supabaseBrowser.removeChannel(channel)
-      }
-      channelRef.current = null
-    }
-  }, [cotizacionId, enabled, identity.email, identity.name, identity.userId])
 
   const onlineUsers = rawOnlineUsers
 
