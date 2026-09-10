@@ -12,6 +12,7 @@ import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadg
 import { TableFooter } from '@/components/ui/TableFooter'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
+import { SectionLoading } from '@/components/ui/SectionLoading'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
 const PAGE_SIZE = 10
@@ -121,33 +122,7 @@ export default function CotizacionesPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3 animate-pulse">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="rounded-panel border border-hairline bg-card p-4 md:p-6">
-              <div className="hidden md:flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="h-5 w-20 rounded bg-row" />
-                  <div className="space-y-1">
-                    <div className="h-4 w-40 rounded bg-row" />
-                    <div className="h-3 w-28 rounded bg-row" />
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  <div className="h-5 w-24 rounded bg-row" />
-                  <div className="h-6 w-20 rounded-full bg-row" />
-                </div>
-              </div>
-              <div className="md:hidden space-y-2">
-                <div className="flex justify-between">
-                  <div className="h-4 w-24 rounded bg-row" />
-                  <div className="h-4 w-16 rounded-full bg-row" />
-                </div>
-                <div className="h-4 w-3/4 rounded bg-row" />
-                <div className="h-3 w-1/2 rounded bg-row" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <SectionLoading />
       ) : filtradas.length > 0 ? (
         <div className="overflow-hidden rounded-panel border border-hairline bg-card">
           {/* Desktop: tabla */}
@@ -156,7 +131,7 @@ export default function CotizacionesPage() {
               <thead>
                 <tr className="border-b border-hairline">
                   {['Folio', 'Proyecto', 'Cliente', 'Total', 'Entrega', 'Estatus'].map(h => (
-                    <th key={h} className="sn-label whitespace-nowrap px-6 py-3 text-left">{h}</th>
+                    <th key={h} className="sn-label sn-th whitespace-nowrap text-left">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -167,10 +142,10 @@ export default function CotizacionesPage() {
                     onClick={() => router.push(`/cotizaciones/${cot.id}`)}
                     className="cursor-pointer border-b border-hairline last:border-0 odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt"
                   >
-                    <td className="whitespace-nowrap px-6 py-4">
+                    <td className="sn-td whitespace-nowrap">
                       <span className="sn-display text-body" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="sn-td">
                       <p className="text-body">{cot.proyecto}</p>
                       {cot.tipo === 'COMPLEMENTARIA' && (
                         <p className="mt-0.5 text-xs text-accent">
@@ -178,16 +153,16 @@ export default function CotizacionesPage() {
                         </p>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-subtext">{cot.cliente}</td>
-                    <td className="whitespace-nowrap px-6 py-4 font-semibold text-body">
+                    <td className="sn-td text-subtext">{cot.cliente}</td>
+                    <td className="sn-td whitespace-nowrap font-semibold text-body">
                       {(!cot.items || cot.items.length === 0) ? (
                         <span className="inline-flex items-center gap-1 text-xs font-normal text-cancelled-fg">
                           <Icon name="warning" size={13} /> Sin items
                         </span>
                       ) : `$${fmtMoney(cot.total)}`}
                     </td>
-                    <td className="whitespace-nowrap px-6 py-4 text-subtext">{formatDateDisplay(cot.fecha_entrega)}</td>
-                    <td className="whitespace-nowrap px-6 py-4">
+                    <td className="sn-td whitespace-nowrap text-subtext">{formatDateDisplay(cot.fecha_entrega)}</td>
+                    <td className="sn-td whitespace-nowrap">
                       <StatusBadge tone={toneForCotizacionEstado(cot.estado)}>{cot.estado}</StatusBadge>
                     </td>
                   </tr>

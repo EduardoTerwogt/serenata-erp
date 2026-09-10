@@ -50,7 +50,7 @@ export function TabLista({ proyectos, tipos }: TabListaProps) {
               <thead>
                 <tr className="border-b border-hairline">
                   {['Folio', 'Tipo', 'Proyecto', 'Cliente', 'Entrega', 'Etapa'].map((h) => (
-                    <th key={h} className="sn-label text-left px-6 py-3">{h}</th>
+                    <th key={h} className="sn-label sn-th text-left">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -59,12 +59,12 @@ export function TabLista({ proyectos, tipos }: TabListaProps) {
                   const etapa = resolverEtapaProyecto(p, tipos)
                   return (
                     <tr key={p.id} onClick={() => window.location.assign(`/proyectos/${p.id}`)} className="odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt cursor-pointer">
-                      <td className="px-6 py-4 text-accent font-mono text-content">{p.id}</td>
-                      <td className="px-6 py-4 text-subtext">{nombreTipo(p)}</td>
-                      <td className="px-6 py-4 text-body font-medium">{p.proyecto}</td>
-                      <td className="px-6 py-4 text-subtext">{p.cliente}</td>
-                      <td className="px-6 py-4 text-subtext">{formatDateDisplay(p.fecha_entrega)}</td>
-                      <td className="px-6 py-4">
+                      <td className="sn-td text-accent font-mono text-content">{p.id}</td>
+                      <td className="sn-td text-subtext">{nombreTipo(p)}</td>
+                      <td className="sn-td text-body font-medium">{p.proyecto}</td>
+                      <td className="sn-td text-subtext">{p.cliente}</td>
+                      <td className="sn-td text-subtext">{formatDateDisplay(p.fecha_entrega)}</td>
+                      <td className="sn-td">
                         {etapa ? <StatusBadge tone={etapa.tone}>{etapa.label}</StatusBadge> : <span className="text-faint">—</span>}
                       </td>
                     </tr>

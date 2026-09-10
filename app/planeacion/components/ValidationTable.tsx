@@ -53,7 +53,7 @@ function EventRow({ line, isHighlighted = false, templates, onLineUpdate, onLine
   return (
     <>
       <tr className={`${isHighlighted ? 'bg-row-alt/40' : 'hover:bg-row-alt/40'} transition-colors`}>
-        <td className="px-4 py-3">
+        <td className="sn-td">
           <input
             type="text"
             value={line.proyecto || ''}
@@ -62,7 +62,7 @@ function EventRow({ line, isHighlighted = false, templates, onLineUpdate, onLine
             className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-xs text-body placeholder-faint focus:outline-none focus:border-accent"
           />
         </td>
-        <td className="px-4 py-3">
+        <td className="sn-td">
           <input
             type="text"
             value={line.fecha || ''}
@@ -70,7 +70,7 @@ function EventRow({ line, isHighlighted = false, templates, onLineUpdate, onLine
             className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body focus:outline-none focus:border-accent"
           />
         </td>
-        <td className="px-4 py-3">
+        <td className="sn-td">
           <input
             type="text"
             value={line.ciudad || ''}
@@ -79,7 +79,7 @@ function EventRow({ line, isHighlighted = false, templates, onLineUpdate, onLine
             className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body placeholder-faint focus:outline-none focus:border-accent"
           />
         </td>
-        <td className="px-4 py-3">
+        <td className="sn-td">
           <input
             type="text"
             value={line.locacion || ''}
@@ -87,7 +87,7 @@ function EventRow({ line, isHighlighted = false, templates, onLineUpdate, onLine
             className="w-full bg-input border border-hairline rounded-control px-2 py-1 text-sm text-body focus:outline-none focus:border-accent"
           />
         </td>
-        <td className="px-4 py-3">
+        <td className="sn-td">
           <select
             value={line.selectedTemplateId || ''}
             onChange={e => onLineUpdate(line.id, { selectedTemplateId: e.target.value || undefined })}
@@ -101,7 +101,7 @@ function EventRow({ line, isHighlighted = false, templates, onLineUpdate, onLine
             ))}
           </select>
         </td>
-        <td className="px-4 py-3">
+        <td className="sn-td">
           <select
             value={line.action}
             onChange={e => onLineUpdate(line.id, { action: e.target.value as ValidatedEventLine['action'] })}
@@ -112,7 +112,7 @@ function EventRow({ line, isHighlighted = false, templates, onLineUpdate, onLine
             <option value="cancelado">Cancelado</option>
           </select>
         </td>
-        <td className="px-4 py-3 text-center">
+        <td className="sn-td text-center">
           <div className="flex items-center justify-center gap-5">
             <button
               onClick={() => setOpenNoteId(line.id)}
@@ -193,13 +193,13 @@ function Section({ tone, icon, label, subtitle, rows, highlighted = false, ...ro
         <table className="w-full text-sm">
           <thead className="bg-row border-b border-hairline">
             <tr>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Proyecto</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Fecha</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Ciudad</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Locación/Venue</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Plantilla</th>
-              <th className="px-4 py-3 text-left text-subtext font-medium">Acción</th>
-              <th className="px-4 py-3 text-center text-subtext font-medium"></th>
+              <th className="sn-label sn-th text-left">Proyecto</th>
+              <th className="sn-label sn-th text-left">Fecha</th>
+              <th className="sn-label sn-th text-left">Ciudad</th>
+              <th className="sn-label sn-th text-left">Locación/Venue</th>
+              <th className="sn-label sn-th text-left">Plantilla</th>
+              <th className="sn-label sn-th text-left">Acción</th>
+              <th className="sn-label sn-th text-center"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-hairline">

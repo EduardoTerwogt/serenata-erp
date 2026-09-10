@@ -250,7 +250,6 @@ export default function DashboardPage() {
             <div className="p-4 md:p-6"><FuenteError nombre="Cotizaciones" onRetry={() => cargar(periodo)} /></div>
           ) : (
             <ResponsiveTableCard
-              theme="tokens"
               data={resumen.cotizacionesRecientes}
               keyExtractor={(c) => c.id}
               emptyMessage="Sin cotizaciones recientes"
@@ -263,11 +262,11 @@ export default function DashboardPage() {
               ]}
               renderDesktopRow={(c) => (
                 <>
-                  <td className="px-6 py-3 text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.id}</td>
-                  <td className="px-6 py-3 font-medium text-ink cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.proyecto}</td>
-                  <td className="px-6 py-3 text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.cliente}</td>
-                  <td className="px-6 py-3 text-right text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{formatMoney(c.total)}</td>
-                  <td className="px-6 py-3 text-right cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>
+                  <td className="sn-td text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.id}</td>
+                  <td className="sn-td font-medium text-ink cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.proyecto}</td>
+                  <td className="sn-td text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{c.cliente}</td>
+                  <td className="sn-td text-right text-body cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>{formatMoney(c.total)}</td>
+                  <td className="sn-td text-right cursor-pointer" onClick={() => router.push(`/cotizaciones/${c.id}`)}>
                     <StatusBadge tone={toneForCotizacionEstado(c.estado)}>{c.estado}</StatusBadge>
                   </td>
                 </>

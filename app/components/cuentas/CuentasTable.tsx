@@ -32,7 +32,7 @@ export function CuentasTable({ tab, cuentas, total, onSelect }: Props) {
           <thead>
             <tr className="border-b border-hairline">
               {columns.map((column) => (
-                <th key={column} className="sn-label px-6 py-3 text-left">
+                <th key={column} className="sn-label sn-th text-left">
                   {column}
                 </th>
               ))}
@@ -45,7 +45,7 @@ export function CuentasTable({ tab, cuentas, total, onSelect }: Props) {
 
               return (
                 <tr key={`${cuenta.tipo}-${cuenta.id}`} className="odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt cursor-pointer" onClick={() => onSelect(cuenta)}>
-                  <td className="px-6 py-4">
+                  <td className="sn-td">
                     <div className="text-accent font-mono text-content">
                       {cuenta.cotizacion_id}
                     </div>
@@ -53,27 +53,27 @@ export function CuentasTable({ tab, cuentas, total, onSelect }: Props) {
 
                   {cuenta.tipo === 'cobrar' ? (
                     <>
-                      <td className="px-6 py-4 text-body font-medium">{cuenta.cliente}</td>
-                      <td className="px-6 py-4 text-subtext">{cuenta.proyecto}</td>
-                      <td className="px-6 py-4 text-ink font-bold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
-                      <td className="px-6 py-4 text-subtext">{formatDateDisplay(cuenta.fecha_vencimiento)}</td>
+                      <td className="sn-td text-body font-medium">{cuenta.cliente}</td>
+                      <td className="sn-td text-subtext">{cuenta.proyecto}</td>
+                      <td className="sn-td text-ink font-bold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
+                      <td className="sn-td text-subtext">{formatDateDisplay(cuenta.fecha_vencimiento)}</td>
                     </>
                   ) : (
                     <>
-                      <td className="px-6 py-4 text-body font-medium">{cuenta.proyecto_nombre || '—'}</td>
-                      <td className="px-6 py-4 text-subtext">
+                      <td className="sn-td text-body font-medium">{cuenta.proyecto_nombre || '—'}</td>
+                      <td className="sn-td text-subtext">
                         <div>{cuenta.responsable_nombre}</div>
                         {cuenta.correo && <div className="text-faint text-eyebrow mt-1">{cuenta.correo}</div>}
                       </td>
-                      <td className="px-6 py-4 text-subtext">
+                      <td className="sn-td text-subtext">
                         <div>{cuenta.item_descripcion || '—'}</div>
                         {cuenta.cantidad > 1 && <div className="text-faint text-eyebrow mt-1">Cantidad: {cuenta.cantidad}</div>}
                       </td>
-                      <td className="px-6 py-4 text-ink font-bold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
+                      <td className="sn-td text-ink font-bold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
                     </>
                   )}
 
-                  <td className="px-6 py-4">
+                  <td className="sn-td">
                     <StatusBadge tone={toneForCuentaEstado(cuenta.estado)}>{cuenta.estado}</StatusBadge>
                   </td>
                 </tr>
