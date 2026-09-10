@@ -1,6 +1,6 @@
 # Estado real del proyecto
 
-**Última actualización:** 2026-09-10 · `main` en `0b3cea3` · Fase 6 (reabierta, 6A-6F) cerrada y mergeada -- sigue Fase 7
+**Última actualización:** 2026-09-10 · `main` en `824590e` · Fase 7 (escalamiento multiusuario) cerrada -- sigue Fase 8
 
 Este documento es la foto honesta del repo: qué funciona de verdad, qué está a
 medias y qué está roto ahora mismo. Si vas a retomar el trabajo, léelo antes que
@@ -99,7 +99,7 @@ Los tres se detectaron con el nivel `live`; ningún mock los habría visto.
 
 ---
 
-## 3. Rediseño de colaboración en tiempo real — Fase 6 cerrada, sigue Fase 7
+## 3. Rediseño de colaboración en tiempo real — Fase 7 cerrada, sigue Fase 8
 
 Iniciativa de alto riesgo (Realtime, RPCs, seguridad, concurrencia) ejecutada
 en branch dedicada `claude/eloquent-lamport-h7effg` + PR draft + Vercel
@@ -834,6 +834,30 @@ ningún mock reproduce. Los tres se diagnosticaron con causa raíz verificada
 (rebase + `merge-tree`, reproducción directa por SQL, logging + 2 corridas
 de log de CI) antes de aplicar cada fix, siguiendo la misma disciplina de
 "no adivinar, medir" que ya regía el resto de esta iniciativa.
+
+### Fase 7 — Pruebas de escalamiento multiusuario (cerrada)
+
+Generaliza `cotizaciones-colaboracion.spec.ts` (2 usuarios) a N sesiones
+concurrentes reales contra Supabase/Realtime de prueba. Nuevo archivo:
+`tests/e2e/live/cotizaciones-colaboracion-escala.spec.ts`, recogido por el
+mismo job `live` sin cambios de workflow. No mide throughput ni latencia --
+es correctitud a escala: N participantes (1 del entorno + hasta 9
+sembrados) abren la misma cotización con N items, cada uno edita SU PROPIO
+item a la vez que todos los demás vía `Promise.all`, y se verifica (1) que
+cada pantalla ve exactamente a las N-1 restantes en "Colaborando ahora"
+(conteo exacto, no solo "no estoy solo"), (2) que el servidor -- autoridad
+real -- termina con las N escrituras sin perder ninguna, y (3) que la
+reconciliación converge en TODAS las pantallas, no solo en quien escribió.
+
+**Resultado, primera corrida en CI real (PR #21, mergeado como `824590e`):
+las 4 variantes pasaron limpio, sin ningún reintento ni fix necesario** --
+2 sesiones en 9.3s, 3 en 10.3s, 5 en 15.3s, 10 en 27.5s, escalando de forma
+predecible con N y sin ninguna escritura perdida ni colaborador invisible
+en Presence a ninguna escala. Confirma en vivo que el cierre de Fase 6
+(protocolo base/conflict + Presence con reconexión automática del canal)
+aguanta hasta 10 conexiones simultáneas al mismo canal `cotizacion:{id}`
+sin degradarse. `Test Suite`, `Migrations` y `E2E` (los dos jobs) en verde
+también sobre el push a `main`, no solo en el PR.
 
 - **Google Calendar desde Proyectos:** la UI existe, el flujo end-to-end no está
   cerrado. En planeación sí funciona; no asumir que es lo mismo.
