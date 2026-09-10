@@ -7,16 +7,31 @@
 -- app/cotizaciones/[id]/page.tsx, buildItemFieldBase para responsable_id): un campo
 -- nunca escrito llega al "base" del PATCH como "" (jsonb). Pero locacion/fecha_entrega
 -- (general) y responsable_id (items) se escriben con nullif(x, '') -- una cadena vacía
--- se guarda como SQL NULL, que to_jsonb() serializa como json null, NO como "". La
--- comparación "v_actual_valor is distinct from v_base_valor" veía null distinto de ""
--- y rechazaba con 409 un PATCH que en realidad no tenía ningún conflicto real -- el
--- caso reproducido: B asigna Locación por primera vez (nunca antes tenía valor) y su
--- propio guardado, sin nadie más tocando ese campo, se rechazaba solo.
+-- se guarda como SQL NULL. El caso reproducido: B asigna Locación por primera vez
+-- (nunca antes tenía valor) y su propio guardado, sin nadie más tocando ese campo, se
+-- rechazaba solo con 409.
 --
--- Fix: antes de comparar, tratar json null como "" -- exactamente la misma
--- equivalencia que el propio PATCH ya aplica al escribir (nullif(x,'') / coalesce(x,'')).
--- No cambia qué se considera un conflicto REAL entre dos valores con contenido
--- distinto; solo deja de inventar uno donde antes no lo había.
+-- Primer intento de este fix (mismo archivo, corregido antes de mergear -- nunca llegó
+-- a producción con el bug) usaba coalesce(to_jsonb(fila) -> campo, '""'::jsonb): NO
+-- funciona. `to_jsonb(fila) -> campo` para una columna SQL NULL no devuelve SQL NULL --
+-- devuelve el valor jsonb 'null' (el literal JSON null es un dato jsonb válido, no
+-- ausencia de valor), así que coalesce() nunca disparaba su reemplazo. Reproducido en
+-- vivo contra serenata-erp-test: `select patch_cotizacion_general(...)` seguía
+-- devolviendo `"current": null` pese al coalesce.
+--
+-- Fix real: una función auxiliar que compara explícitamente contra el literal
+-- 'null'::jsonb y solo ahí sustituye por "" -- la misma equivalencia que el propio
+-- PATCH ya aplica al escribir (nullif(x,'') / coalesce(x,'')). No cambia qué se
+-- considera un conflicto REAL entre dos valores con contenido distinto; solo deja de
+-- inventar uno donde antes no lo había.
+
+create or replace function jsonb_null_as_empty_string(p_valor jsonb)
+returns jsonb
+language sql
+immutable
+as $$
+  select case when p_valor = 'null'::jsonb then '""'::jsonb else p_valor end;
+$$;
 
 create or replace function patch_cotizacion_general(
   p_cotizacion_id text,
@@ -47,8 +62,8 @@ begin
     for v_campo in select jsonb_object_keys(p_patch) loop
       if p_base ? v_campo then
         v_base_valor := p_base -> v_campo;
-        v_actual_valor := coalesce(to_jsonb(v_cotizacion) -> v_campo, '""'::jsonb);
-        if v_actual_valor is distinct from coalesce(v_base_valor, '""'::jsonb) then
+        v_actual_valor := to_jsonb(v_cotizacion) -> v_campo;
+        if jsonb_null_as_empty_string(v_actual_valor) is distinct from jsonb_null_as_empty_string(v_base_valor) then
           v_conflictos := v_conflictos || jsonb_build_object(
             v_campo,
             jsonb_build_object('base', v_base_valor, 'current', v_actual_valor, 'attempted', p_patch -> v_campo)
@@ -104,8 +119,8 @@ begin
     for v_campo in select jsonb_object_keys(p_patch) loop
       if p_base ? v_campo then
         v_base_valor := p_base -> v_campo;
-        v_actual_valor := coalesce(to_jsonb(v_cotizacion) -> v_campo, '""'::jsonb);
-        if v_actual_valor is distinct from coalesce(v_base_valor, '""'::jsonb) then
+        v_actual_valor := to_jsonb(v_cotizacion) -> v_campo;
+        if jsonb_null_as_empty_string(v_actual_valor) is distinct from jsonb_null_as_empty_string(v_base_valor) then
           v_conflictos := v_conflictos || jsonb_build_object(
             v_campo,
             jsonb_build_object('base', v_base_valor, 'current', v_actual_valor, 'attempted', p_patch -> v_campo)
@@ -176,8 +191,8 @@ begin
     for v_campo in select jsonb_object_keys(p_patch) loop
       if p_base ? v_campo then
         v_base_valor := p_base -> v_campo;
-        v_actual_valor := coalesce(to_jsonb(v_item) -> v_campo, '""'::jsonb);
-        if v_actual_valor is distinct from coalesce(v_base_valor, '""'::jsonb) then
+        v_actual_valor := to_jsonb(v_item) -> v_campo;
+        if jsonb_null_as_empty_string(v_actual_valor) is distinct from jsonb_null_as_empty_string(v_base_valor) then
           v_conflictos := v_conflictos || jsonb_build_object(
             v_campo,
             jsonb_build_object('base', v_base_valor, 'current', v_actual_valor, 'attempted', p_patch -> v_campo)
