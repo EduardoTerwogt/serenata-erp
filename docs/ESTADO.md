@@ -140,7 +140,7 @@ sus RPCs (`patch_item_cotizacion`, `patch_cotizacion_general`,
 `patch_cotizacion_totales`), `tests/e2e/live/cotizaciones-colaboracion.spec.ts`,
 `tests/e2e/utils/realtime-mock.ts`, `tests/e2e/utils/live-helpers.ts`.
 
-### Fase 1 — Infraestructura Realtime segura (en curso)
+### Fase 1 — Infraestructura Realtime segura (cerrada)
 
 Objetivo: cerrar el hueco de seguridad real — hoy cualquiera con la anon key
 pública puede unirse al canal `cotizacion:*` de cualquier cotización, porque
@@ -161,27 +161,35 @@ Fase 2) ni el grid de partidas.
 
 Ver el detalle de implementación en el plan de ejecución de la sesión.
 
-**Estado:** código completo y pusheado (PR draft
-[#13](https://github.com/EduardoTerwogt/serenata-erp/pull/13)). Migración de
-políticas RLS aplicada y verificada en `serenata-erp-test` y `serenata-erp`.
-`npx tsc --noEmit`, `npm run lint`, `npm test` (394/394) y `npm run build` en
-verde.
+**Estado:** verificada en CI real (run
+[34426390153](https://github.com/EduardoTerwogt/serenata-erp/actions/runs/34426390153),
+PR draft [#13](https://github.com/EduardoTerwogt/serenata-erp/pull/13)) contra
+`serenata-erp-test` con "Allow public access" apagado:
 
-**Pendiente — pasos manuales (le corresponden al usuario, ver CLAUDE.md):**
+- `tests/e2e/live/realtime-channel-authorization.spec.ts`: **4/4 verde** — un
+  staff con sección `cotizaciones` se une al canal privado y recibe el evento
+  confirmado real; sin esa sección, con firma inválida, o con token expirado,
+  el join es rechazado. Los 3 criterios de éxito de arriba quedaron
+  demostrados con Realtime real, no mockeado.
+- `tests/e2e/live/cotizaciones-colaboracion.spec.ts`: **igual que el
+  baseline** — el caso de la línea ~282 sigue fallando por la misma razón ya
+  documentada (no una regresión de esta fase); los demás casos, incluido el
+  8 (WebSocket cortado → converge por polling), siguen en verde.
+- `smoke-and-critical` y `migrations`: verde.
+- Unit (`npm test`), `npx tsc --noEmit`, `npm run lint`, `npm run build`: verde.
 
-1. Obtener el JWT Secret legacy de `serenata-erp-test` (Dashboard → Settings
-   → API) y cargarlo como `SUPABASE_JWT_SECRET` en Vercel (scope Preview) y
-   como secret `TEST_SUPABASE_JWT_SECRET` en GitHub Actions (ya wireado en
-   `.github/workflows/e2e.yml`, job `live`).
-2. Recién con eso configurado, desactivar "Allow public access" en Realtime
-   Settings de `serenata-erp-test` (solo ahí, nunca en producción todavía).
-3. Disparar el job `live` (`workflow_dispatch`) y confirmar: el nuevo
-   `tests/e2e/live/realtime-channel-authorization.spec.ts` en verde, y
-   `cotizaciones-colaboracion.spec.ts` sigue en 8/9 (mismo caso conocido).
+**Bug encontrado y arreglado durante esta verificación:** el primer intento
+del job `live` mostró que el cliente se autorizaba y suscribía bien al canal
+privado, pero nunca recibía el broadcast del servidor. Causa raíz:
+`sendRealtimeBroadcast()` no marcaba `private: true` en el mensaje enviado al
+endpoint REST — sin ese flag, Supabase lo trata como broadcast público y no
+lo entrega a un socket unido en modo privado. Corregido en
+`lib/server/realtime/broadcast.ts` y los 3 call-sites.
 
-Sin el paso 1, `/api/realtime/token` responde 500 en producción/Preview
-real (aunque en CI mockeado y en el sandbox de desarrollo no importa, ya
-que ese endpoint solo se ejercita con sesión real).
+**Pasos manuales completados por el usuario:** JWT Secret cargado en Vercel
+(scope Preview) y en el secret `TEST_SUPABASE_JWT_SECRET` de GitHub Actions;
+"Allow public access" apagado en `serenata-erp-test` (producción sigue en
+canal público hasta que esta branch se mergee).
 
 ---
 
