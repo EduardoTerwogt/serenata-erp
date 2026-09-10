@@ -8,6 +8,11 @@ import { authorizeRealtime, createPrivateChannel, scheduleTokenRefresh } from '@
 export type QuotationPresenceSection = 'notas' | 'general' | 'partidas' | 'totales'
 export type QuotationItemCellField = 'categoria' | 'descripcion' | 'cantidad' | 'precio_unitario' | 'responsable_id' | 'x_pagar'
 
+// Cada cuánto se re-afirma el registro de Presence propio mientras el canal está
+// habilitado -- red de última instancia contra un diff perdido en el transporte, no
+// el camino primario (ver comentario en el useEffect que lo usa).
+const PRESENCE_HEARTBEAT_MS = 15_000
+
 interface CurrentUser {
   id?: string | null
   email?: string | null
@@ -252,6 +257,21 @@ export function useQuotationPresence({
     activeCellRef.current = null
     if (!enabled) return
     trackPresence(activeSectionRef.current, null)
+  }, [enabled, trackPresence])
+
+  // Red de última instancia para Presence, mismo espíritu que RECONCILIACION_MS en
+  // page.tsx para los datos: `channel.track()` es fire-and-forget (`.catch(() =>
+  // null)`), así que un diff perdido en el transporte (WebSocket bajo carga, blip de
+  // red) puede dejar a otro colaborador sin enterarse de una sección/celda activa
+  // hasta el próximo cambio real. Re-afirmar el estado actual cada cierto tiempo
+  // autocura eso sin volver a depender de un polling de DATOS -- esto solo repite la
+  // MISMA awareness que ya se trackeó, nunca relee ni decide nada.
+  useEffect(() => {
+    if (!enabled) return
+    const heartbeat = window.setInterval(() => {
+      trackPresence(activeSectionRef.current, activeCellRef.current)
+    }, PRESENCE_HEARTBEAT_MS)
+    return () => window.clearInterval(heartbeat)
   }, [enabled, trackPresence])
 
   useEffect(() => {
