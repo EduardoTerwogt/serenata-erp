@@ -146,12 +146,10 @@ export function QuotationItemsSection({
     return () => window.removeEventListener('scroll', handler, true)
   }, [mostrarProductoDropdown, updateDropdownPos])
 
-  // Modelo Google Sheets: que otra persona esté en una fila o celda se SEÑALA
+  // Modelo Google Sheets: que otra persona esté en una celda se SEÑALA
   // (realce + texto), nunca se bloquea. Nada de esto deshabilita controles.
   const rowIdAt = (index: number) => watchedItems[index]?.id ?? ''
-  const rowBusy = (index: number) => items.isRowBusy(rowIdAt(index))
-  const cellBusy = (index: number, field: QuotationItemCellField) =>
-    items.isRowBusy(rowIdAt(index)) || items.isCellBusy(rowIdAt(index), field)
+  const cellBusy = (index: number, field: QuotationItemCellField) => items.isCellBusy(rowIdAt(index), field)
   const rowStatus = (index: number) => items.rowStatusText(rowIdAt(index))
 
   const renderEditableDesktopRow = (fieldId: string, index: number) => {
@@ -160,7 +158,7 @@ export function QuotationItemsSection({
     const statusText = rowStatus(index)
 
     return (
-      <tr key={fieldId} className={`border-b border-hairline ${rowBusy(index) ? 'bg-row-alt/40' : ''}`}>
+      <tr key={fieldId} className="border-b border-hairline">
         <td className="px-4 py-2"><input {...register(`items.${index}.categoria`)} onFocus={() => items.cellFocus(rowIdAt(index), 'categoria')} onBlur={() => items.cellBlur(rowIdAt(index), 'categoria')} onChange={(e) => { items.cellChange(rowIdAt(index), 'categoria'); register(`items.${index}.categoria`).onChange(e) }} data-busy={cellBusy(index, 'categoria') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /><ItemFieldConflictBanner rowId={rowIdAt(index)} field="categoria" items={items} /></td>
         <td className="px-4 py-2">
           <div className="relative">
@@ -242,7 +240,7 @@ export function QuotationItemsSection({
     const { importe, margen } = calcItem(item)
     const statusText = rowStatus(index)
     return (
-      <div key={fieldId} className={`rounded-card border border-hairline bg-row p-4 ${rowBusy(index) ? 'border-accent-quiet/60' : ''} cursor-pointer hover:border-row-alt transition-colors`} onClick={() => setEditingItemIndex(index)}>
+      <div key={fieldId} className="rounded-card border border-hairline bg-row p-4 cursor-pointer hover:border-row-alt transition-colors" onClick={() => setEditingItemIndex(index)}>
         <div className="flex justify-between items-start gap-3 mb-2">
           <div className="min-w-0">
             <p className="text-body font-medium text-[15px] truncate">{item.descripcion || 'Sin descripción'}</p>

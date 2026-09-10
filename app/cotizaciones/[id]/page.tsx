@@ -384,7 +384,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     onlineUsers,
     sectionEditors,
     itemCellEditors,
-    itemRowEditors,
     latestItemMutation,
     latestItemConfirmed,
     latestGeneralConfirmed,
@@ -1374,18 +1373,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }, [broadcastItemMutation, enqueueRowMutation, getItemIndexByRowId, markSectionSaved, patchQuotationItem, resyncPartidas, responsables, setValue, upsertLocalItemState])
 
-  // Presencia estilo Sheets: saber que alguien más está en una fila o celda sirve para
+  // Presencia estilo Sheets: saber que alguien más está en una celda sirve para
   // resaltarla y avisar, nunca para deshabilitar nada.
-  const isItemRowLocked = useCallback((rowId: string) => !!itemRowEditors[rowId], [itemRowEditors])
   const isItemCellLocked = useCallback((rowId: string, field: QuotationItemCellField) => !!itemCellEditors[getItemCellKey(rowId, field)], [itemCellEditors])
 
   const getItemRowStatusText = useCallback((rowId: string) => {
-    const rowEditor = itemRowEditors[rowId]
-    if (rowEditor) return `${getShortName(rowEditor.name, rowEditor.email)} está trabajando esta fila`
     const cellEditor = Object.entries(itemCellEditors).find(([key]) => key.startsWith(`${rowId}:`))?.[1]
     if (cellEditor) return `${getShortName(cellEditor.name, cellEditor.email)} está editando una celda de esta fila`
     return null
-  }, [itemCellEditors, itemRowEditors])
+  }, [itemCellEditors])
 
   // Conflicto por celda: alguien más guardó este campo entre que se capturó el
   // "base" y que se intentó guardar. `attempted` es lo que el usuario tecleó,
@@ -1428,13 +1424,12 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     cellFocus: handleItemFieldFocus,
     cellBlur: handleItemFieldBlur,
     cellChange: handleItemFieldChange,
-    isRowBusy: isItemRowLocked,
     isCellBusy: isItemCellLocked,
     rowStatusText: getItemRowStatusText,
     getCellConflict: getItemCellConflict,
     resolveCellConflict: resolveItemCellConflict,
     importing: importingItems,
-  }), [getItemCellConflict, getItemRowStatusText, handleAddRow, handleImportItems, handleItemFieldBlur, handleItemFieldChange, handleItemFieldFocus, handleRemoveRow, handleResponsableChange, handleSelectProduct, importingItems, isItemCellLocked, isItemRowLocked, resolveItemCellConflict])
+  }), [getItemCellConflict, getItemRowStatusText, handleAddRow, handleImportItems, handleItemFieldBlur, handleItemFieldChange, handleItemFieldFocus, handleRemoveRow, handleResponsableChange, handleSelectProduct, importingItems, isItemCellLocked, resolveItemCellConflict])
 
   const guardar = async (estado?: string): Promise<boolean> => {
     setGuardando(true)

@@ -8,7 +8,6 @@ import type { ItemCotizacion } from '@/lib/types'
 
 export type QuotationPresenceSection = 'notas' | 'general' | 'partidas' | 'totales'
 export type QuotationItemCellField = 'categoria' | 'descripcion' | 'cantidad' | 'precio_unitario' | 'responsable_id' | 'x_pagar'
-export type QuotationItemRowMode = 'new_row' | 'row_action'
 export type QuotationItemMutationAction = 'upsert' | 'delete'
 
 interface CurrentUser {
@@ -23,11 +22,6 @@ export interface QuotationPresenceUser {
   name: string
   active_section: QuotationPresenceSection | null
   online_at: string
-}
-
-export interface QuotationItemRowEditor extends QuotationPresenceUser {
-  row_id: string
-  mode: QuotationItemRowMode
 }
 
 export interface QuotationItemMutationPayload {
@@ -50,7 +44,6 @@ interface UseQuotationPresenceResult {
   onlineUsers: QuotationPresenceUser[]
   sectionEditors: Partial<Record<QuotationPresenceSection, QuotationPresenceUser>>
   itemCellEditors: Record<string, QuotationPresenceUser>
-  itemRowEditors: Record<string, QuotationItemRowEditor>
   latestItemMutation: QuotationItemMutationPayload | null
   latestItemConfirmed: ItemConfirmedPayload | null
   latestGeneralConfirmed: SectionConfirmedPayload | null
@@ -60,8 +53,6 @@ interface UseQuotationPresenceResult {
   releaseSection: (section?: QuotationPresenceSection) => void
   lockItemCell: (rowId: string, field: QuotationItemCellField) => void
   releaseItemCell: (rowId: string, field: QuotationItemCellField) => void
-  lockItemRow: (rowId: string, mode: QuotationItemRowMode) => void
-  releaseItemRow: (rowId: string) => void
   broadcastItemMutation: (payload: { action: QuotationItemMutationAction; row_id: string; item?: ItemCotizacion | null }) => void
   markSectionSaved: (section: QuotationPresenceSection) => void
   isConnected: boolean
@@ -90,16 +81,6 @@ interface ItemCellSignalPayload {
   status: SectionSignalStatus
   row_id: string
   field: QuotationItemCellField
-  user_id: string
-  email: string
-  name: string
-  at: string
-}
-
-interface ItemRowSignalPayload {
-  status: SectionSignalStatus
-  row_id: string
-  mode: QuotationItemRowMode
   user_id: string
   email: string
   name: string
@@ -140,7 +121,6 @@ interface PresenceState {
   activeSectionOverrides: Record<string, QuotationPresenceSection | null>
   savedSections: Partial<Record<QuotationPresenceSection, number>>
   itemCellEditors: Record<string, QuotationPresenceUser>
-  itemRowEditors: Record<string, QuotationItemRowEditor>
   latestItemMutation: QuotationItemMutationPayload | null
   latestItemConfirmed: ItemConfirmedPayload | null
   latestGeneralConfirmed: SectionConfirmedPayload | null
@@ -153,7 +133,6 @@ const initialPresenceState: PresenceState = {
   activeSectionOverrides: {},
   savedSections: {},
   itemCellEditors: {},
-  itemRowEditors: {},
   latestItemMutation: null,
   latestItemConfirmed: null,
   latestGeneralConfirmed: null,
@@ -166,7 +145,6 @@ type PresenceAction =
   | { type: 'sync_online_users'; users: QuotationPresenceUser[] }
   | { type: 'section_signal'; userId: string; section: QuotationPresenceSection | null }
   | { type: 'item_cell_signal'; key: string; editor: QuotationPresenceUser | null }
-  | { type: 'item_row_signal'; rowId: string; editor: QuotationItemRowEditor | null }
   | { type: 'item_mutation'; payload: QuotationItemMutationPayload }
   | { type: 'item_confirmed'; payload: ItemConfirmedPayload }
   | { type: 'general_confirmed'; payload: SectionConfirmedPayload }
@@ -200,12 +178,6 @@ function presenceReducer(state: PresenceState, action: PresenceAction): Presence
       else delete next[action.key]
       return { ...state, itemCellEditors: next }
     }
-    case 'item_row_signal': {
-      const next = { ...state.itemRowEditors }
-      if (action.editor) next[action.rowId] = action.editor
-      else delete next[action.rowId]
-      return { ...state, itemRowEditors: next }
-    }
     case 'item_mutation':
       return { ...state, latestItemMutation: action.payload }
     case 'item_confirmed':
@@ -236,7 +208,7 @@ export function useQuotationPresence({
   currentUser,
 }: UseQuotationPresenceOptions): UseQuotationPresenceResult {
   const [state, dispatch] = useReducer(presenceReducer, initialPresenceState)
-  const { rawOnlineUsers, activeSectionOverrides, savedSections, itemCellEditors, itemRowEditors, latestItemMutation, latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, isConnected } = state
+  const { rawOnlineUsers, activeSectionOverrides, savedSections, itemCellEditors, latestItemMutation, latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, isConnected } = state
   const channelRef = useRef<RealtimeChannel | null>(null)
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
   const presenceKeyRef = useRef('')
@@ -295,25 +267,6 @@ export function useQuotationPresence({
         name: identity.name,
         at: new Date().toISOString(),
       } satisfies ItemCellSignalPayload,
-    }).catch(() => null)
-  }, [identity.email, identity.name, identity.userId])
-
-  const sendItemRowSignal = useCallback((status: SectionSignalStatus, rowId: string, mode: QuotationItemRowMode) => {
-    const channel = channelRef.current
-    if (!channel) return
-
-    void channel.send({
-      type: 'broadcast',
-      event: 'item_row_signal',
-      payload: {
-        status,
-        row_id: rowId,
-        mode,
-        user_id: identity.userId,
-        email: identity.email,
-        name: identity.name,
-        at: new Date().toISOString(),
-      } satisfies ItemRowSignalPayload,
     }).catch(() => null)
   }, [identity.email, identity.name, identity.userId])
 
@@ -393,16 +346,6 @@ export function useQuotationPresence({
     sendItemCellSignal('released', rowId, field)
   }, [enabled, sendItemCellSignal])
 
-  const lockItemRow = useCallback((rowId: string, mode: QuotationItemRowMode) => {
-    if (!enabled) return
-    sendItemRowSignal('editing', rowId, mode)
-  }, [enabled, sendItemRowSignal])
-
-  const releaseItemRow = useCallback((rowId: string) => {
-    if (!enabled) return
-    sendItemRowSignal('released', rowId, 'row_action')
-  }, [enabled, sendItemRowSignal])
-
   useEffect(() => {
     if (!enabled) {
       dispatch({ type: 'reset' })
@@ -452,28 +395,6 @@ export function useQuotationPresence({
         editor:
           signal.status === 'editing'
             ? {
-                user_id: signal.user_id,
-                email: signal.email,
-                name: signal.name,
-                active_section: 'partidas',
-                online_at: signal.at,
-              }
-            : null,
-      })
-    })
-
-    channel.on('broadcast', { event: 'item_row_signal' }, ({ payload }) => {
-      const signal = payload as ItemRowSignalPayload | undefined
-      if (!signal?.user_id || signal.user_id === identity.userId) return
-
-      dispatch({
-        type: 'item_row_signal',
-        rowId: signal.row_id,
-        editor:
-          signal.status === 'editing'
-            ? {
-                row_id: signal.row_id,
-                mode: signal.mode,
                 user_id: signal.user_id,
                 email: signal.email,
                 name: signal.name,
@@ -591,7 +512,6 @@ export function useQuotationPresence({
     onlineUsers,
     sectionEditors,
     itemCellEditors,
-    itemRowEditors,
     latestItemMutation,
     latestItemConfirmed,
     latestGeneralConfirmed,
@@ -601,8 +521,6 @@ export function useQuotationPresence({
     releaseSection,
     lockItemCell,
     releaseItemCell,
-    lockItemRow,
-    releaseItemRow,
     broadcastItemMutation,
     markSectionSaved,
     isConnected,
