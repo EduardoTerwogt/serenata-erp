@@ -161,6 +161,28 @@ Fase 2) ni el grid de partidas.
 
 Ver el detalle de implementación en el plan de ejecución de la sesión.
 
+**Estado:** código completo y pusheado (PR draft
+[#13](https://github.com/EduardoTerwogt/serenata-erp/pull/13)). Migración de
+políticas RLS aplicada y verificada en `serenata-erp-test` y `serenata-erp`.
+`npx tsc --noEmit`, `npm run lint`, `npm test` (394/394) y `npm run build` en
+verde.
+
+**Pendiente — pasos manuales (le corresponden al usuario, ver CLAUDE.md):**
+
+1. Obtener el JWT Secret legacy de `serenata-erp-test` (Dashboard → Settings
+   → API) y cargarlo como `SUPABASE_JWT_SECRET` en Vercel (scope Preview) y
+   como secret `TEST_SUPABASE_JWT_SECRET` en GitHub Actions (ya wireado en
+   `.github/workflows/e2e.yml`, job `live`).
+2. Recién con eso configurado, desactivar "Allow public access" en Realtime
+   Settings de `serenata-erp-test` (solo ahí, nunca en producción todavía).
+3. Disparar el job `live` (`workflow_dispatch`) y confirmar: el nuevo
+   `tests/e2e/live/realtime-channel-authorization.spec.ts` en verde, y
+   `cotizaciones-colaboracion.spec.ts` sigue en 8/9 (mismo caso conocido).
+
+Sin el paso 1, `/api/realtime/token` responde 500 en producción/Preview
+real (aunque en CI mockeado y en el sandbox de desarrollo no importa, ya
+que ese endpoint solo se ejercita con sesión real).
+
 ---
 
 ## 4. Features parciales — preguntar antes de tocar

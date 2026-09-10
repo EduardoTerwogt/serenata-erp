@@ -195,6 +195,10 @@ npm run build             # si toca TS/TSX, rutas o config de Next
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+# JWT Secret legacy del proyecto (Dashboard -> Settings -> API). Firma los
+# tokens cortos de app/api/realtime/token que autorizan canales privados de
+# Realtime -- ver db/migrations/20260909_realtime_broadcast_authorization.sql.
+SUPABASE_JWT_SECRET=
 
 # Auth (NextAuth v5)
 AUTH_SECRET=
@@ -231,6 +235,7 @@ CRON_SECRET=
 TEST_SUPABASE_URL=
 TEST_SUPABASE_ANON_KEY=
 TEST_SUPABASE_SERVICE_ROLE_KEY=
+TEST_SUPABASE_JWT_SECRET=        # JWT Secret legacy de serenata-erp-test, para el job `live`
 DRIVE_TEST_FOLDER_ID=            # 1cofExiUSPDRq9CeH6oU-WSBev1I56m-a
 GOOGLE_DRIVE_REFRESH_TOKEN_TEST=
 PLAYWRIGHT_TEST_EMAIL=
