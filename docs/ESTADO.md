@@ -247,6 +247,17 @@ recálculo de encabezado no relanza). `npx tsc --noEmit`, `npm run lint`
 (mismos 9 warnings preexistentes), `npm test` (402/402) y `npm run build`
 en verde.
 
+**Mergeado a `main`** (commit `eebe220`, vía PR
+[#14](https://github.com/EduardoTerwogt/serenata-erp/pull/14)) y verificado
+en el job `live` real de CI dos veces (antes y después del merge, mismo
+resultado ambas): `cotizaciones-colaboracion.spec.ts` sigue en 19/23 — el
+caso conocido de la línea ~282 sigue fallando por la misma razón de siempre,
+sin regresión — y los 4 casos de `realtime-channel-authorization.spec.ts`
+(Fase 1) siguen en verde. El cambio de tipo de retorno del RPC (de fila a
+`jsonb`) quedó confirmado con el round-trip real Next.js → Supabase, no solo
+con mocks. `Test Suite`, `Migrations` y `smoke-and-critical` en verde en
+`main`.
+
 ---
 
 ## 4. Features parciales — preguntar antes de tocar
