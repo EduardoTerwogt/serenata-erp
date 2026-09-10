@@ -184,8 +184,17 @@ test.describe('live: autorización del canal privado de Realtime', () => {
     canalesAbiertos.push(canalEmisor)
     expect(await esperarEstadoSuscripcion(canalEmisor, 15_000)).toBe(true)
 
+    // Confirmado contra el servidor real de Realtime (CI, 2026-09-10): cuando
+    // RLS deniega el INSERT de un broadcast, el servidor no manda ningún ack
+    // de vuelta por el socket -- ni 'ok' ni un 'error' explícito -- así que
+    // `push.receive('error', ...)` nunca dispara y `send()` resuelve 'timed
+    // out' cuando expira el timeout del canal (10s por defecto en
+    // supabase-js). 'error' solo ocurriría si el servidor respondiera
+    // explícitamente; con RLS lo correcto es asumir CUALQUIERA de los dos
+    // como "no se aceptó" -- la aserción real de rechazo es que
+    // `recibioBroadcastForjado` siga en `false`, más abajo.
     const resultado = await canalEmisor.send({ type: 'broadcast', event: 'broadcast_forjado_desde_navegador', payload: {} })
-    expect(resultado, 'RLS debería rechazar el INSERT de un broadcast desde el navegador (solo presence permitido)').toBe('error')
+    expect(['error', 'timed out'], 'RLS debería rechazar el INSERT de un broadcast desde el navegador (solo presence permitido)').toContain(resultado)
 
     await new Promise((resolve) => setTimeout(resolve, 3_000))
     expect(recibioBroadcastForjado, 'ningún colaborador debería recibir un broadcast emitido directamente desde el navegador').toBe(false)

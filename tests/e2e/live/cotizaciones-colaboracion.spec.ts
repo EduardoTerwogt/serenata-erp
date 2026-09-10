@@ -451,13 +451,21 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     await descripcionB.click()
     await descripcionB.evaluate((el) => el.scrollIntoView({ block: 'center' }))
     await descripcionB.fill('Grúa E2E Fase8')
-    // El dropdown de sugerencias queda abierto -- todavía no se hizo click en la
-    // sugerencia, para que la carrera con el precio de A sea real.
+
+    // El filtrado de sugerencias es 100% client-side contra un catálogo que
+    // `useQuotationForm` carga en un `requestIdleCallback` (hasta 1.5s de
+    // demora) -- nada que ver con la carrera que este test quiere probar.
+    // Esperar a que la sugerencia esté visible antes de arrancar el
+    // Promise.all deja la carrera real acotada a la única parte que importa:
+    // la confirmación del servidor de precioA vs. el click del autofill, con
+    // el dropdown de B ya listo (queda abierto, sin clickear todavía).
+    const sugerencia = pageB.getByText(PRODUCTO_AUTOFILL.descripcion, { exact: true })
+    await expect(sugerencia).toBeVisible({ timeout: 15_000 })
 
     const nuevoPrecioA = '9999'
     await Promise.all([
       (async () => { await precioA.click(); await precioA.fill(nuevoPrecioA); await precioA.blur() })(),
-      pageB.getByText(PRODUCTO_AUTOFILL.descripcion, { exact: true }).click(),
+      sugerencia.click(),
     ])
 
     // Esperar a que ambas operaciones asienten (éxito o conflicto, cualquiera).
