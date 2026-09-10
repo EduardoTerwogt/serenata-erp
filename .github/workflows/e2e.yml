@@ -17,6 +17,11 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: test-anon-key
       SUPABASE_SERVICE_ROLE_KEY: test-service-role-key
+      # No necesita ser el secreto real: tests/e2e/utils/realtime-mock.ts
+      # intercepta el WebSocket a nivel de transporte y nunca valida el JWT.
+      # Solo evita que /api/realtime/token responda 500 en estos tests, para
+      # ejercitar la ruta de código real de mint en vez de saltarla.
+      SUPABASE_JWT_SECRET: e2e-fake-realtime-secret
       PLAYWRIGHT_E2E_BYPASS: 'true'
     steps:
       - name: Checkout
@@ -81,7 +86,12 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      # JWT Secret legacy de serenata-erp-test (Supabase Dashboard -> Settings
+      # -> API) -- firma los tokens cortos de app/api/realtime/token, que las
+      # políticas RLS de realtime.messages verifican contra el mismo secreto.
+      SUPABASE_JWT_SECRET: ${{ secrets.TEST_SUPABASE_JWT_SECRET }}
       TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}

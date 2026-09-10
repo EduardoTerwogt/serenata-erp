@@ -1,6 +1,7 @@
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { supabaseAdmin } from '@/lib/supabase'
 
 /**
@@ -38,6 +39,12 @@ export async function PATCH(
     if (!data) return Response.json({ error: 'Cotización no encontrada' }, { status: 404 })
 
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
+    void sendRealtimeBroadcast([{
+      topic: `cotizacion:${id}`,
+      event: 'totales_confirmed',
+      payload: { cotizacion_id: id, at: new Date().toISOString() },
+      private: true,
+    }])
 
     return Response.json(await getCotizacionById(id))
   } catch (error) {
