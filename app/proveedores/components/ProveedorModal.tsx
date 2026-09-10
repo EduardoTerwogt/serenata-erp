@@ -211,6 +211,7 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
             {historialError && <StatusBanner tone="error">Error cargando historial: {historialError}</StatusBanner>}
             <div className="rounded-panel border border-hairline overflow-hidden">
               <ResponsiveTableCard<HistorialResponsable>
+                theme="tokens"
                 data={historial}
                 columns={[
                   { key: 'proyecto', label: 'Proyecto' },
@@ -220,13 +221,13 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
                 ]}
                 renderDesktopRow={(h) => (
                   <>
-                    <td className="sn-td">
+                    <td className="px-4 py-3">
                       <p className="text-ink font-medium">{h.proyecto_nombre}</p>
                       <p className="text-faint text-xs">{h.cliente}</p>
                     </td>
-                    <td className="sn-td text-subtext">{formatDateDisplay(h.fecha_evento)}</td>
-                    <td className="sn-td text-body">{h.rol_en_proyecto || '—'}</td>
-                    <td className="sn-td text-right text-approved-fg font-medium">${fmt(h.x_pagar)}</td>
+                    <td className="px-4 py-3 text-subtext">{formatDateDisplay(h.fecha_evento)}</td>
+                    <td className="px-4 py-3 text-body">{h.rol_en_proyecto || '—'}</td>
+                    <td className="px-4 py-3 text-right text-approved-fg font-medium">${fmt(h.x_pagar)}</td>
                   </>
                 )}
                 renderMobileCard={(h) => (

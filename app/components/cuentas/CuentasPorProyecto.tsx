@@ -78,71 +78,47 @@ export function CuentasPorProyecto({ proyectos, term, onSelectCobrar, onSelectPa
             {abrir && (
               <div className="grid grid-cols-1 gap-4 border-t border-hairline p-4 md:grid-cols-2">
                 <div>
-                  <p className="sn-label mb-2">Por cobrar</p>
-                  <div className="overflow-hidden rounded-control border border-hairline bg-card">
+                  <p className="mb-2 text-eyebrow font-medium uppercase tracking-wide text-subtext">Por cobrar</p>
+                  <div className="overflow-hidden rounded-control border border-hairline">
                     {grupo.cuentas_cobrar.length === 0 ? (
                       <p className="p-4 text-content italic text-faint">Sin cuentas por cobrar</p>
                     ) : (
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-hairline">
-                            <th className="sn-label sn-th text-left">Cliente</th>
-                            <th className="sn-label sn-th text-right">Pagado / total</th>
-                            <th className="sn-label sn-th text-right">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-hairline">
-                          {grupo.cuentas_cobrar.map((cuenta) => (
-                            <tr
-                              key={cuenta.id}
-                              onClick={() => onSelectCobrar(cuenta)}
-                              className="cursor-pointer odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt"
-                            >
-                              <td className="sn-td max-w-0 truncate font-medium text-ink">{cuenta.cliente}</td>
-                              <td className="sn-td whitespace-nowrap text-right text-subtext">
-                                ${fmt(cuenta.monto_pagado || 0)} / ${fmt(cuenta.monto_total)}
-                              </td>
-                              <td className="sn-td text-right">
-                                <StatusBadge tone={toneForCuentaEstado(cuenta.estado)}>{cuenta.estado}</StatusBadge>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      grupo.cuentas_cobrar.map((cuenta) => (
+                        <button
+                          key={cuenta.id}
+                          type="button"
+                          onClick={() => onSelectCobrar(cuenta)}
+                          className="flex w-full items-center gap-3 border-b border-hairline px-4 py-2.5 text-left last:border-b-0 hover:bg-row"
+                        >
+                          <span className="min-w-0 flex-1 truncate text-content font-medium text-ink">{cuenta.cliente}</span>
+                          <span className="whitespace-nowrap text-content text-subtext">
+                            ${fmt(cuenta.monto_pagado || 0)} / ${fmt(cuenta.monto_total)}
+                          </span>
+                          <StatusBadge tone={toneForCuentaEstado(cuenta.estado)}>{cuenta.estado}</StatusBadge>
+                        </button>
+                      ))
                     )}
                   </div>
                 </div>
 
                 <div>
-                  <p className="sn-label mb-2">Por pagar</p>
-                  <div className="overflow-hidden rounded-control border border-hairline bg-card">
+                  <p className="mb-2 text-eyebrow font-medium uppercase tracking-wide text-subtext">Por pagar</p>
+                  <div className="overflow-hidden rounded-control border border-hairline">
                     {grupo.cuentas_pagar.length === 0 ? (
                       <p className="p-4 text-content italic text-faint">Sin cuentas por pagar</p>
                     ) : (
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-hairline">
-                            <th className="sn-label sn-th text-left">Responsable</th>
-                            <th className="sn-label sn-th text-right">X pagar</th>
-                            <th className="sn-label sn-th text-right">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-hairline">
-                          {grupo.cuentas_pagar.map((cuenta) => (
-                            <tr
-                              key={cuenta.id}
-                              onClick={() => onSelectPagar(cuenta)}
-                              className="cursor-pointer odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt"
-                            >
-                              <td className="sn-td max-w-0 truncate font-medium text-ink">{cuenta.responsable_nombre}</td>
-                              <td className="sn-td whitespace-nowrap text-right text-subtext">${fmt(cuenta.x_pagar)}</td>
-                              <td className="sn-td text-right">
-                                <StatusBadge tone={toneForCuentaEstado(cuenta.estado)}>{cuenta.estado}</StatusBadge>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      grupo.cuentas_pagar.map((cuenta) => (
+                        <button
+                          key={cuenta.id}
+                          type="button"
+                          onClick={() => onSelectPagar(cuenta)}
+                          className="flex w-full items-center gap-3 border-b border-hairline px-4 py-2.5 text-left last:border-b-0 hover:bg-row"
+                        >
+                          <span className="min-w-0 flex-1 truncate text-content font-medium text-ink">{cuenta.responsable_nombre}</span>
+                          <span className="whitespace-nowrap text-content text-subtext">${fmt(cuenta.x_pagar)}</span>
+                          <StatusBadge tone={toneForCuentaEstado(cuenta.estado)}>{cuenta.estado}</StatusBadge>
+                        </button>
+                      ))
                     )}
                   </div>
                 </div>

@@ -52,17 +52,13 @@ ni el azul secundario: son del estilo anterior.
 
 ## Migración pendiente
 
-El rediseño se aplicó por bloques. A la fecha, `app/login/page.tsx`,
-`app/admin/sheets/*`, `components/ResponsiveTableCard.tsx` y
-`app/components/ui/Skeleton*.tsx` ya usan los tokens `--sn-*`. Los primitivos
-`Alert`, `AppCard`, `Badge`, `Input` y `MetricCard` (`components/ui/`) seguían
-en `gray-*`/`#f97316` viejo y sin ningún consumidor real en la app -- se
-borraron en vez de migrarse. El remapeo de `gray-*`/`blue-*` de Tailwind al
-naranja/gris viejo (`app/globals.css`, bloque `@theme inline`) y la paleta
-`neutral/primary/secondary/accent` de `tailwind.config.ts` también se
-quitaron: sin consumidores, solo quedaban como trampa para quien tipeara
-`bg-blue-500`/`text-gray-400` esperando el azul/gris real de Tailwind.
+El rediseño se aplicó por bloques y no terminó. Siguen en el estilo viejo:
+
+- `app/login/page.tsx`
+- `app/admin/sheets/page.tsx`
+- Los primitivos `components/ui/{Alert,AppCard,Badge,Button,Input,MetricCard}.tsx`,
+  `components/ResponsiveTableCard.tsx` y `app/components/ui/Skeleton*.tsx`
 
 `app/globals.css` conserva a propósito la escala de Tailwind (`text-xs/sm/base/lg`,
-`rounded-sm/md/lg/xl`) sin sobreescribir, justo para que pantallas aún no migradas
-no se rompan. No tocar eso sin migrar antes a sus consumidores.
+`rounded-sm/md/lg/xl`) sin sobreescribir, justo para que esas pantallas no se rompan
+mientras se migran. No tocar eso sin migrar antes a sus consumidores.

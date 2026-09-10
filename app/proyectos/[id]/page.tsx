@@ -241,6 +241,7 @@ export default function ProyectoDetallePage({
 
           <SectionCard title="Partidas del Proyecto" description="Asigna responsables y agrega notas por partida" borderedHeader>
             <ResponsiveTableCard<ItemCotizacion>
+              theme="tokens"
               data={items}
               columns={[
                 { key: 'descripcion', label: 'Descripción' },
@@ -251,16 +252,16 @@ export default function ProyectoDetallePage({
               ]}
               renderDesktopRow={(item) => (
                 <>
-                  <td className="sn-td text-body">{item.descripcion}</td>
-                  <td className="sn-td text-subtext">{item.categoria}</td>
-                  <td className="sn-td text-body">{item.cantidad}</td>
-                  <td className="sn-td">
+                  <td className="px-6 py-3 text-body">{item.descripcion}</td>
+                  <td className="px-6 py-3 text-subtext">{item.categoria}</td>
+                  <td className="px-6 py-3 text-body">{item.cantidad}</td>
+                  <td className="px-6 py-3">
                     <select value={item.responsable_id || ''} onChange={e => actualizarResponsableItem(item.id, e.target.value)} className="w-full bg-input border border-hairline rounded-control px-2 py-1.5 text-body text-sm focus:outline-none focus:border-accent">
                       <option value="">Sin asignar</option>
                       {responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
                     </select>
                   </td>
-                  <td className="sn-td">
+                  <td className="px-6 py-3">
                     <input type="text" value={itemNotas[item.id] ?? ''} onChange={e => setItemNotas(prev => ({ ...prev, [item.id]: e.target.value }))} className="w-full bg-input border border-hairline rounded-control px-2 py-1.5 text-body text-sm focus:outline-none focus:border-accent" placeholder="Notas..." />
                   </td>
                 </>

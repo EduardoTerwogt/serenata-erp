@@ -867,21 +867,10 @@ también sobre el push a `main`, no solo en el PR.
   existen.
 - **Plantillas de servicios:** completas para cotizaciones nuevas; la integración
   con cotizaciones COMPLEMENTARIA es parcial.
-- **Rediseño visual (Fase 5.7):** toda la app usa ya los tokens `--sn-*`.
-  Sesión de revisión de diseño (2026-09-10, branch
-  `claude/design-review-skill-md-kwuci9`): se corrigió el alto de fila/
-  encabezado de todas las tablas y la tipografía de columnas contra el skill
-  (`--row-pad-y`/`--row-pad-x`/`.sn-th`/`.sn-td` nuevos en `app/globals.css`,
-  `.sn-label` ahora usa `--text-table-head` de 11px); se unificó la animación
-  de carga (`SectionLoading`/`SplashMark`) en cotizaciones, proyectos, cuentas
-  y proveedores (antes cada una tenía su propio spinner/skeleton ad hoc); la
-  vista "Por proyecto" de Cuentas ganó encabezados de tabla reales en el panel
-  expandido (antes era una lista de botones sin encabezado); se borraron los
-  primitivos `components/ui/{Alert,AppCard,Badge,Input,MetricCard}.tsx` y
-  `app/components/ui/SkeletonTable.tsx` (sin consumidores, seguían en
-  `gray-*`/`#f97316` viejo) y el remapeo de `gray-*`/`blue-*` de Tailwind al
-  naranja viejo en `app/globals.css` + la paleta `neutral/primary/secondary/
-  accent` de `tailwind.config.ts` (sin consumidores). Ver `DESIGN_SYSTEM.md`.
+- **Rediseño visual (Fase 5.7):** casi toda la app usa ya los tokens `--sn-*`.
+  Quedan en el estilo viejo (`gray-*` de Tailwind): `app/login/page.tsx`,
+  `app/admin/sheets/page.tsx` y los primitivos `components/ui/*` +
+  `app/components/ui/Skeleton*`. Ver `DESIGN_SYSTEM.md`.
 
 Si aparece otro feature a medias, documentarlo aquí en vez de "arreglarlo" sin
 consultar.

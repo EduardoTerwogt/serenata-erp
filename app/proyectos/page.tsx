@@ -8,7 +8,6 @@ import { TabTablero } from '@/app/components/proyectos/listado/TabTablero'
 import { TabLista } from '@/app/components/proyectos/listado/TabLista'
 import { TabTareas } from '@/app/components/proyectos/listado/TabTareas'
 import { TabEstatus } from '@/app/components/proyectos/listado/TabEstatus'
-import { SectionLoading } from '@/components/ui/SectionLoading'
 
 const TABS: FilterTab<ListadoTab>[] = [
   { value: 'tablero', label: 'Tablero' },
@@ -37,7 +36,11 @@ export default function ProyectosPage() {
       <FilterTabs tabs={TABS} value={ltab} onChange={setLtab} />
 
       {loading || tiposApi.loading ? (
-        <SectionLoading />
+        <div className="space-y-3 animate-pulse">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="rounded-panel border border-hairline bg-card h-32" />
+          ))}
+        </div>
       ) : (
         <>
           {ltab === 'tablero' && (

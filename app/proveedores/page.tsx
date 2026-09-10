@@ -9,7 +9,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { ProveedorModal } from '@/app/proveedores/components/ProveedorModal'
-import { SectionLoading } from '@/components/ui/SectionLoading'
+import { SplashMark } from '@/components/ui/SplashMark'
 
 function initialsFromName(nombre: string) {
   const partes = nombre.trim().split(/\s+/)
@@ -111,7 +111,7 @@ export default function ProveedoresPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px] lg:items-start">
         <div className="lg:order-1">
           {loading ? (
-            <SectionLoading />
+            <div className="flex justify-center py-12"><SplashMark size={120} /></div>
           ) : filtrados.length === 0 ? (
             <div className="rounded-panel border border-hairline bg-card p-12 text-center">
               <p className="text-lg text-subtext mb-2">

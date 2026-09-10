@@ -177,6 +177,7 @@ export function AdminUsuarios() {
           <SectionLoading className="min-h-[240px]" />
         ) : (
           <ResponsiveTableCard<Usuario>
+            theme="tokens"
             data={usuarios}
             keyExtractor={(u) => u.id}
             emptyMessage="No hay usuarios. Crea el primero."
@@ -189,22 +190,22 @@ export function AdminUsuarios() {
             ]}
             renderDesktopRow={(u) => (
               <>
-                <td className="sn-td font-medium text-ink">
+                <td className="px-6 py-3 font-medium text-ink">
                   {u.name}
                   {u.id === currentUserId && <span className="ml-2 text-faint font-normal">(tú)</span>}
                 </td>
-                <td className="sn-td text-subtext">{u.email}</td>
-                <td className="sn-td">
+                <td className="px-6 py-3 text-subtext">{u.email}</td>
+                <td className="px-6 py-3">
                   <div className="flex flex-wrap gap-1.5">
                     {u.sections.length === 0
                       ? <span className="text-[length:var(--text-xs)] text-faint">Sin secciones</span>
                       : u.sections.map(s => <SeccionPill key={s}>{s}</SeccionPill>)}
                   </div>
                 </td>
-                <td className="sn-td">
+                <td className="px-6 py-3">
                   <StatusBadge tone={u.active ? 'approved' : 'draft'}>{u.active ? 'Activo' : 'Inactivo'}</StatusBadge>
                 </td>
-                <td className="sn-td">
+                <td className="px-6 py-3">
                   <div className="flex items-center justify-end gap-[var(--space-sm)]">
                     <Button variant="ghost" size="md" onClick={() => openEdit(u)}>Editar</Button>
                     <Button

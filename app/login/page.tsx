@@ -1,6 +1,6 @@
 'use client'
 import { Suspense, useState } from 'react'
-import { signIn, getSession } from 'next-auth/react'
+import { signIn } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { Icon } from '@/components/ui/Icon'
 import { TextField } from '@/components/ui/TextField'
@@ -37,7 +37,7 @@ function WarpFilter() {
     <svg width="0" height="0" style={{ position: 'absolute' }}>
       <filter id="sn-warp" x="-20%" y="-20%" width="140%" height="140%" colorInterpolationFilters="sRGB">
         <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves={2} seed={7} result="sn-noise">
-          <animate attributeName="baseFrequency" values="0.008 0.012;0.013 0.007;0.008 0.012" dur="9s" repeatCount="indefinite" />
+          <animate attributeName="baseFrequency" values="0.008 0.012;0.013 0.007;0.008 0.012" dur="6s" repeatCount="indefinite" />
         </feTurbulence>
         <feDisplacementMap in="SourceGraphic" in2="sn-noise" scale={70} xChannelSelector="R" yChannelSelector="G" />
       </filter>
@@ -56,7 +56,6 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [welcomeName, setWelcomeName] = useState('')
   const searchParams = useSearchParams()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,12 +67,6 @@ function LoginForm() {
       setLoading(false)
       setError('Correo o contraseña incorrectos')
     } else {
-      // Primer nombre del usuario autenticado (`usuarios.name` real vía la
-      // sesión) -- no el correo: antes de esto se mostraba un apodo derivado
-      // de la parte local del email, que no tiene relación con el nombre real.
-      const session = await getSession()
-      const fullName = session?.user?.name?.trim()
-      setWelcomeName(fullName ? fullName.split(/\s+/)[0] : nicknameFromCorreo(email))
       const callbackUrl = searchParams.get('callbackUrl') ?? '/'
       window.location.assign(callbackUrl)
     }
@@ -89,7 +82,7 @@ function LoginForm() {
         <div className="relative flex flex-col items-center gap-[19px]">
           <SplashMark size={100} />
           <div className="text-center">
-            <div className="sn-display text-h2 text-white">Bienvenido, {welcomeName || nicknameFromCorreo(email)}</div>
+            <div className="sn-display text-h2 text-white">Bienvenido, {nicknameFromCorreo(email)}</div>
             <div className="mt-2.5 text-xs font-semibold uppercase tracking-[0.1em] text-white/70">Entrando a Serenata…</div>
           </div>
         </div>
