@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   afterMock: vi.fn(),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
   withIdempotencyMock: vi.fn(async (_scope: string, _key: string | null | undefined, handler: () => Promise<{ status: number; body: unknown }>) => handler()),
+  deleteEqMock: vi.fn(async (): Promise<{ error: Error | null }> => ({ error: null })),
 }))
 
 vi.mock('next/server', () => ({ after: mocks.afterMock }))
@@ -22,9 +23,14 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
 vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('@/lib/server/idempotency', () => ({ withIdempotency: mocks.withIdempotencyMock }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
+vi.mock('@/lib/supabase', () => ({
+  supabaseAdmin: {
+    rpc: mocks.rpcMock,
+    from: () => ({ delete: () => ({ eq: () => ({ eq: mocks.deleteEqMock }) }) }),
+  },
+}))
 
-import { PATCH } from '../cotizaciones/[id]/items/[itemId]/route'
+import { PATCH, DELETE } from '../cotizaciones/[id]/items/[itemId]/route'
 
 const ITEM_ID = '11111111-1111-4111-8111-111111111111'
 const params = Promise.resolve({ id: 'SH001', itemId: ITEM_ID })
@@ -238,5 +244,37 @@ describe('PATCH /api/cotizaciones/[id]/items/[itemId]', () => {
       expect(res.status).toBe(500)
       expect((erroDentroDelHandler as Error)?.message).toBe('boom')
     })
+  })
+})
+
+describe('DELETE /api/cotizaciones/[id]/items/[itemId]', () => {
+  it('borra la fila y emite item_confirmed operation=delete tras el commit', async () => {
+    const res = await DELETE(new Request(`http://x/api/cotizaciones/SH001/items/${ITEM_ID}`, { method: 'DELETE' }), { params })
+
+    expect(res.status).toBe(200)
+    expect(mocks.deleteEqMock).toHaveBeenCalledWith('id', ITEM_ID)
+    expect(mocks.recalculateQuotationHeaderMock).toHaveBeenCalledTimes(1)
+    expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([{
+      topic: 'cotizacion:SH001',
+      event: 'item_confirmed',
+      payload: {
+        cotizacion_id: 'SH001',
+        item_id: ITEM_ID,
+        revision: null,
+        mutation_id: null,
+        operation: 'delete',
+        at: expect.any(String),
+      },
+      private: true,
+    }])
+  })
+
+  it('si falla el borrado en Supabase, responde 500 y no emite el evento', async () => {
+    mocks.deleteEqMock.mockResolvedValueOnce({ error: new Error('boom') })
+
+    const res = await DELETE(new Request(`http://x/api/cotizaciones/SH001/items/${ITEM_ID}`, { method: 'DELETE' }), { params })
+
+    expect(res.status).toBe(500)
+    expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
   })
 })

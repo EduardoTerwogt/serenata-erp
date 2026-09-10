@@ -388,6 +388,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     latestItemConfirmed,
     latestGeneralConfirmed,
     latestTotalesConfirmed,
+    latestNotasConfirmed,
     savedSections,
     setActiveSection,
     releaseSection,
@@ -1137,6 +1138,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     if (!latestTotalesConfirmed) return
     void reconciliarConServidor()
   }, [latestTotalesConfirmed, reconciliarConServidor])
+
+  // Notas gana su propio evento server-confirmed en Fase 6A: antes solo se refrescaba
+  // vía `section_saved` (aviso del navegador que guardó, sin acuse del servidor). Ese
+  // camino sigue vivo por ahora (se retira en Fase 6E); este es el que de verdad
+  // garantiza que llegue aunque el otro se pierda.
+  useEffect(() => {
+    if (!latestNotasConfirmed) return
+    void reconciliarConServidor()
+  }, [latestNotasConfirmed, reconciliarConServidor])
 
   // Latido de reconciliación. No depende de la presencia ni del canal: si dependiera,
   // un fallo de esos mismos mecanismos volvería a dejar las pantallas divergentes sin

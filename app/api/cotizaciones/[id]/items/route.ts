@@ -4,6 +4,7 @@ import { getCotizacionById, upsertItems } from '@/lib/db'
 import { normalizeQuotationItem } from '@/lib/quotations/calculations'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 
 export async function POST(
   _request: Request,
@@ -50,6 +51,23 @@ export async function POST(
     // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
     after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items') })
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
+    // Evento confirmado por servidor tras el commit -- payload chico (ids +
+    // revision + timestamp, nunca la partida completa). Antes el alta solo se
+    // enteraba del otro lado vía `item_mutation` (empuje del navegador, sin
+    // acuse del servidor).
+    void sendRealtimeBroadcast([{
+      topic: `cotizacion:${id}`,
+      event: 'item_confirmed',
+      payload: {
+        cotizacion_id: id,
+        item_id: itemId,
+        revision: createdItem?.revision ?? null,
+        mutation_id: null,
+        operation: 'create',
+        at: new Date().toISOString(),
+      },
+      private: true,
+    }])
 
     return Response.json({ item: createdItem })
   } catch (error) {
