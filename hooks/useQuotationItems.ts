@@ -54,8 +54,6 @@ export interface QuotationItemsController {
   cellFocus: (rowId: string, field: QuotationItemCellField) => void
   cellBlur: (rowId: string, field: QuotationItemCellField) => void
   cellChange: (rowId: string, field: QuotationItemCellField) => void
-  /** Otro colaborador está en esta fila: se resalta, nunca se bloquea. */
-  isRowBusy: (rowId: string) => boolean
   isCellBusy: (rowId: string, field: QuotationItemCellField) => boolean
   rowStatusText: (rowId: string) => string | null
   getCellConflict: (rowId: string, field: QuotationItemCellField) => ItemCellConflict | null
@@ -161,7 +159,6 @@ export function useLocalQuotationItems({
     cellFocus: noop,
     cellBlur: noop,
     cellChange: noop,
-    isRowBusy: () => false,
     isCellBusy: () => false,
     rowStatusText: () => null,
     // Sin cotización en la base no hay PATCH ni "base" que comparar -- no puede haber

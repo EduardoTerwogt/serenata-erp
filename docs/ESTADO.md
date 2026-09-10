@@ -96,7 +96,7 @@ Los tres se detectaron con el nivel `live`; ningún mock los habría visto.
 
 ---
 
-## 3. Rediseño de colaboración en tiempo real — Fase 5 cerrada, sigue Fase 6
+## 3. Rediseño de colaboración en tiempo real — Fase 6 cerrada, sigue Fase 7
 
 Iniciativa de alto riesgo (Realtime, RPCs, seguridad, concurrencia) ejecutada
 en branch dedicada `claude/eloquent-lamport-h7effg` + PR draft + Vercel
@@ -527,6 +527,75 @@ verde y `live` con el mismo fallo conocido de siempre en
 `cotizaciones-colaboracion.spec.ts:282` (badge de presencia), sin el
 403 de rate-limit de Drive visto en el push de Fase 4 -- nada nuevo que
 vigilar.
+
+### Fase 6 — Retirada de arquitectura antigua (cerrada, alcance conservador)
+
+Objetivo del plan: "reducir complejidad, no dejar dos motores vivos" --
+eliminar broadcasts de negocio del cliente, reconciliación vieja,
+polling fijo si ya no hace falta, temp IDs/migradores, simplificar
+`useQuotationPresence`, y código muerto.
+
+**Decisión de alcance, confirmada con el usuario antes de tocar nada:**
+investigar primero mostró que la mayoría de lo que el plan llama
+"arquitectura antigua" ya dejó de ser insegura/no-autoritativa en las
+Fases 1-5 de esta misma iniciativa, no algo heredado de antes:
+
+- El canal ya es privado y autenticado (Fase 1) -- ya no es el problema
+  original ("cualquiera con la anon key se une a cualquier cotización").
+- `item_mutation`/`section_signal`/`item_cell_signal` (broadcast
+  cliente→cliente) ya están documentados en el propio código, desde
+  Fase 3, como "solo una pista para verse al instante" -- la única
+  garantía real de convergencia es `reconciliarConServidor()` (gatillada
+  por los eventos `*_confirmed` del servidor) más el heartbeat de 5s.
+  Esto YA es el diseño nuevo, no un fallback oculto al motor viejo.
+- El heartbeat de 5s **no es legacy**: es la garantía de convergencia
+  explícitamente documentada (`useQuotationPresence.ts`: "El polling de
+  5s en la pantalla de detalle sigue siendo la garantía real de
+  convergencia, no este canal"). Quitarlo violaría ese invariante, no lo
+  simplificaría.
+- Temp IDs/migradores (`TEMP_ROW_PREFIX`, `migrateRowKeys`) tampoco son
+  legacy: son el mecanismo actual de UI optimista para filas nuevas (el
+  POST es async, la fila se pinta antes de que responda). No hay una
+  alternativa más simple sin cambiar el comportamiento.
+
+Retirar de verdad los broadcasts de negocio (dejar que TODO cambio ajeno
+se entere solo por reconciliación/fetch) es posible pero cambia la UX
+perceptible -- los cambios de otro colaborador tardarían un round-trip
+de fetch en vez de verse al instante -- y obliga a revalidar varios
+tests `live` ya afinados a esa velocidad. Se le presentó esta disyuntiva
+al usuario (conservador vs. agresivo) y eligió **conservador**: no tocar
+UX ni el modelo de convergencia, solo limpiar lo que sea código muerto
+de verdad.
+
+**Código muerto encontrado y eliminado** (el único remanente real de
+"dos motores" -- una función completa que nunca se activaba):
+`lockItemRow`/`releaseItemRow` y toda la señal `item_row_signal` en
+`hooks/useQuotationPresence.ts` no los invocaba nadie en todo el repo
+-- `itemRowEditors` quedaba siempre `{}` en producción, así que
+`isItemRowLocked`/`isRowBusy` siempre devolvían `false`. Era un
+"row lock" diseñado pero jamás cableado a ninguna acción de UI. Se
+retiró por completo: tipo `QuotationItemRowMode`, interfaz
+`QuotationItemRowEditor`/`ItemRowSignalPayload`, el estado
+`itemRowEditors`, el reducer case, `sendItemRowSignal`, el listener del
+canal, y `isRowBusy` de `QuotationItemsController` (interfaz +
+las 2 implementaciones + su uso en `QuotationItemsSection.tsx`). Cero
+tests lo referenciaban. Sin cambio de comportamiento: `isRowBusy`
+siempre devolvía `false`, así que las clases condicionales que dependían
+de él nunca se aplicaban.
+
+**Criterio de salida del plan** ("el nuevo sistema funciona sin fallback
+oculto al motor viejo"): cumplido -- no queda ningún camino donde un
+fallo de autenticación/autoridad del canal privado (Fase 1) o del
+protocolo base/conflict (Fase 2/3/5) deje a la app dependiendo en
+silencio del canal público o de un broadcast tratado como fuente de
+verdad. Lo que sigue vivo (broadcasts como pista + heartbeat de 5s) es
+diseño actual, documentado, no un remanente oculto.
+
+**Verificado:** `npx tsc --noEmit`, `npm run lint` (mismos warnings
+preexistentes) y `npm test` (406/406) en verde. Con las env vars fake
+de CI: `npm run build`, `npm run test:e2e:smoke` (21/21) y
+`npm run test:e2e:critical` (48/48) en verde -- sin cambios de
+comportamiento en ningún flujo existente.
 
 ---
 
