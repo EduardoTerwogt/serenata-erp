@@ -260,6 +260,77 @@ con mocks. `Test Suite`, `Migrations` y `smoke-and-critical` en verde en
 
 ---
 
+### Fase 3 — Grid nuevo de Partidas (en curso)
+
+Objetivo: usar el protocolo de la Fase 2 desde la UI real de
+`app/cotizaciones/[id]/page.tsx`, sin tocar Información General ni Totales
+(quedan para una fase posterior).
+
+**Rama de trabajo:** esta fase, igual que 0/1/2, vive en
+`claude/eloquent-lamport-h7effg` + PR draft (el PR de la fase anterior ya se
+mergeó, así que la rama se reseteó desde `origin/main` antes de empezar).
+
+**Bloque 1 — sugerencias de producto atadas a rowId, no a índice:**
+`hooks/useQuotationForm.ts` y `hooks/useQuotationItems.ts` keyeaban
+`productoSugerencias`/`mostrarProductoDropdown` por índice de array;
+insertar, reordenar o borrar una fila movía la sugerencia activa a otra
+fila. `seleccionarProducto`/`handleDescripcionChange` ahora reciben el
+`rowId` (id estable de la partida) en vez del índice, y lo resuelven a
+índice internamente solo para llamar a `setValue`. Afecta también
+`useLocalQuotationItems` (pantalla de cotización nueva) y
+`app/cotizaciones/[id]/page.tsx` (`handleSelectProduct` ya resolvía el
+índice para su propio uso, pero seguía pasándoselo a `seleccionarProducto`
+— ahora le pasa el `rowId` directo).
+
+**Bloque 2 — protocolo `base`/`mutation_id` + UI de conflicto por celda:**
+- Nuevo `itemsServerRef` (ref, no state) en `page.tsx`: guarda el último
+  valor de cada partida confirmado por el servidor — se alimenta desde
+  `applyCotizacionToState`, `upsertLocalItemState` (ACK propio o broadcast
+  ajeno), `handleAddRow`, `handleImportItems` y la reconciliación de 5s.
+  Nunca se pisa con lo que el usuario está tecleando (eso vive solo en el
+  form de react-hook-form).
+- Al enfocar una celda (`handleItemFieldFocus`) se captura el `base` para
+  ESE campo desde `itemsServerRef` y se guarda en `itemCellBaseRef`
+  (keyeado por celda, con la misma migración temp→real id que ya tenían
+  los demás refs de celda). Sin base conocida (fila recién creada cuya
+  alta sigue en vuelo) no se manda `base` — mismo comportamiento
+  retrocompatible de siempre, sin conflicto posible.
+- `persistItemCellAutosave` manda `base` + un `mutation_id` nuevo
+  (`crypto.randomUUID()`) en cada intento. Un 409 de la RPC
+  (`ItemPatchConflictError`) NO se trata como error genérico: nunca se
+  descarta en silencio lo tecleado por el usuario. Se guarda en
+  `itemCellConflicts` (state) y `QuotationItemsSection` pinta un banner
+  bajo la celda con dos botones — "Usar «valor del servidor»" (pisa el
+  form con lo que hay en la base ahora, sin reintentar guardar) y
+  "Mantener «lo tecleado»" (conserva el valor local y reintenta el PATCH
+  con el `base` ya corregido al valor que devolvió el conflicto).
+- **Alcance deliberado:** el protocolo cubre las 5 celdas de texto/número
+  que pasan por `persistItemCellAutosave` (categoria, descripcion,
+  cantidad, precio_unitario, x_pagar). `handleSelectProduct` (elegir
+  producto de la lista) y `handleResponsableChange` (`<select>` de
+  responsable) siguen aplicando de inmediato sin `base`, igual que antes
+  — son acciones de un solo paso, no una sesión de tecleo con ventana de
+  carrera real, y añadir el protocolo ahí queda para si se decide que vale
+  la pena en una iteración posterior.
+- `hooks/useQuotationItems.ts`: `QuotationItemsController` gana
+  `getCellConflict`/`resolveCellConflict`; `useLocalQuotationItems`
+  (cotización nueva, sin servidor aún) los implementa como no-op — no
+  puede haber conflicto real sin PATCH.
+
+**Verificado:** `npx tsc --noEmit`, `npm run lint` (mismos warnings
+preexistentes) y `npm test` (402/402) en verde. E2E local no se pudo
+correr en este sandbox — el contenedor de esta sesión no tenía
+`.env.local` con los secretos de la app (`AUTH_SECRET`, Supabase, etc.),
+a diferencia de sesiones anteriores de esta misma iniciativa; se dejó
+correr en su lugar el job `smoke-and-critical` del PR draft
+([#15](https://github.com/EduardoTerwogt/serenata-erp/pull/15)).
+
+**Pendiente de esta fase:** consumir el evento `item_confirmed` del
+servidor (hoy se emite pero ningún cliente lo escucha), y el ciclo final
+de verificación completa + merge.
+
+---
+
 ## 4. Features parciales — preguntar antes de tocar
 
 - **Google Calendar desde Proyectos:** la UI existe, el flujo end-to-end no está

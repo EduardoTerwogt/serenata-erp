@@ -35,6 +35,12 @@ export interface ImportableItem {
   responsable_nombre?: string | null
 }
 
+/** Otro colaborador guardó este campo entre que se capturó el "base" y el intento propio. */
+export interface ItemCellConflict {
+  current: unknown
+  attempted: unknown
+}
+
 /**
  * Contrato único de la tabla de partidas. `QuotationItemsSection` habla solo con esto,
  * sin saber si la cotización ya existe en la base o no.
@@ -52,6 +58,8 @@ export interface QuotationItemsController {
   isRowBusy: (rowId: string) => boolean
   isCellBusy: (rowId: string, field: QuotationItemCellField) => boolean
   rowStatusText: (rowId: string) => string | null
+  getCellConflict: (rowId: string, field: QuotationItemCellField) => ItemCellConflict | null
+  resolveCellConflict: (rowId: string, field: QuotationItemCellField, resolution: 'theirs' | 'mine') => void
   importing: boolean
 }
 
@@ -156,6 +164,10 @@ export function useLocalQuotationItems({
     isRowBusy: () => false,
     isCellBusy: () => false,
     rowStatusText: () => null,
+    // Sin cotización en la base no hay PATCH ni "base" que comparar -- no puede haber
+    // conflicto real. Se resuelve como no-op por si algo llega a invocarla igual.
+    getCellConflict: () => null,
+    resolveCellConflict: noop,
     importing: false,
   }), [addRow, changeResponsable, importItems, noop, removeRow, selectProduct])
 }
