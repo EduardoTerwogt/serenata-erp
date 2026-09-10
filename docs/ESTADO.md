@@ -518,6 +518,16 @@ sigue el mismo caso conocido de la Fase 0 (badge de presencia, no
 pérdida de datos) y corre automáticamente en el job `live` de CI desde
 el fix de Fase 4.
 
+**Mergeada a `main`** vía PR
+[#17](https://github.com/EduardoTerwogt/serenata-erp/pull/17) (commit
+`9f35b14`). Confirmado en verde tras el merge (run
+[34440891955](https://github.com/EduardoTerwogt/serenata-erp/actions/runs/34440891955)):
+`Test Suite` y `Migrations` en verde; `E2E` con `smoke-and-critical`
+verde y `live` con el mismo fallo conocido de siempre en
+`cotizaciones-colaboracion.spec.ts:282` (badge de presencia), sin el
+403 de rate-limit de Drive visto en el push de Fase 4 -- nada nuevo que
+vigilar.
+
 ---
 
 ## 4. Features parciales — preguntar antes de tocar
