@@ -206,6 +206,11 @@ export function useQuotationPresence({
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
   const activeCellRef = useRef<{ rowId: string; field: QuotationItemCellField } | null>(null)
   const presenceKeyRef = useRef('')
+  // Fase 8 (hardening pre-Proyectos): ids de los `setTimeout` de reintento de
+  // `trackPresence` todavía pendientes -- sin esto, un reintento programado
+  // justo antes de un unmount/reconexión sobrevivía y podía disparar `.track()`
+  // sobre un canal ya reemplazado. Se limpian en el cleanup del efecto de canal.
+  const pendingTrackRetriesRef = useRef<Set<number>>(new Set())
 
   const identity = useMemo(() => {
     const userId = currentUser?.id || currentUser?.email || `anon:${cotizacionId}`
@@ -240,7 +245,11 @@ export function useQuotationPresence({
           console.error('[useQuotationPresence] track() agotó reintentos', error)
           return
         }
-        window.setTimeout(() => intentar(intentosRestantes - 1), 1_000)
+        const timeoutId = window.setTimeout(() => {
+          pendingTrackRetriesRef.current.delete(timeoutId)
+          intentar(intentosRestantes - 1)
+        }, 1_000)
+        pendingTrackRetriesRef.current.add(timeoutId)
       })
     }
     intentar(2)
@@ -314,6 +323,15 @@ export function useQuotationPresence({
     const connect = () => {
       if (cancelled) return
 
+      // Fase 8: `cancelTokenRefresh` es del closure del efecto, compartida entre
+      // todas las llamadas a `connect()` -- cada reconexión la SOBREESCRIBÍA
+      // (más abajo) sin cancelar la anterior, y como `scheduleTokenRefresh` se
+      // reprograma sola indefinidamente, cada reconexión dejaba viva una cadena
+      // de refresco de token adicional que nunca se cancelaba hasta el unmount
+      // final. Cancelar la actual ANTES de pedir una nueva corta esa fuga.
+      cancelTokenRefresh?.()
+      cancelTokenRefresh = null
+
       const random = Math.random().toString(36).slice(2, 8)
       presenceKeyRef.current = `${identity.userId}-${random}`
 
@@ -368,11 +386,19 @@ export function useQuotationPresence({
         if (cancelled || reconnectTimer !== null) return
         reconnectAttempt += 1
         const delayMs = Math.min(1_000 * 2 ** (reconnectAttempt - 1), 10_000)
-        reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = window.setTimeout(async () => {
           reconnectTimer = null
-          void supabaseBrowser.removeChannel(channel)
+          // Fase 8: root cause real de "cannot add presence callbacks after
+          // joining a channel" (visto en logs de CI) -- `RealtimeClient.channel()`
+          // REUSA el objeto de canal existente para el mismo topic si no se
+          // liberó todavía, y `removeChannel()` es async. Sin este `await`,
+          // `connect()` podía pedir un canal para el mismo topic y recibir de
+          // vuelta ESTE MISMO objeto (ya `isJoined()`), y el primer `.on('presence',
+          // ...)` de la reconexión lanzaba esa excepción -- abortando el intento
+          // de reconexión a medias, sin llegar nunca a `channel.subscribe()`.
+          await supabaseBrowser.removeChannel(channel).catch(() => null)
           if (channelRef.current === channel) channelRef.current = null
-          connect()
+          if (!cancelled) connect()
         }, delayMs)
       }
 
@@ -423,6 +449,13 @@ export function useQuotationPresence({
       cancelled = true
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer)
       cancelTokenRefresh?.()
+      // No es un ref de nodo DOM -- es un Set estable que este mismo hook crea y
+      // muta en el sitio (nunca se reasigna), así que leer `.current` aquí en el
+      // cleanup es seguro; la regla solo conoce el patrón de refs de nodos.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const pendingTrackRetries = pendingTrackRetriesRef.current
+      pendingTrackRetries.forEach((timeoutId) => window.clearTimeout(timeoutId))
+      pendingTrackRetries.clear()
       dispatchAwareness({ type: 'reset' })
       dispatchConfirmedEvent({ type: 'reset' })
       const channel = channelRef.current

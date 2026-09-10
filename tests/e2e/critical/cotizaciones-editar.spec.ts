@@ -714,3 +714,32 @@ test('la fila que borra el otro desaparece por reconciliación', async ({ page }
   await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
   await expect(descripcion).toBeFocused()
 })
+
+// Fase 8 (hardening pre-Proyectos): root cause real de un error visto en logs de
+// CI ("cannot add presence callbacks after joining a channel") durante el test
+// live que corta el WebSocket -- `RealtimeClient.channel()` (supabase-js real,
+// solo el transporte WS está interceptado aquí) reusa el objeto de canal existente
+// para el mismo topic si `removeChannel()` (async) no terminó, y `scheduleReconnect`
+// llamaba `connect()` sin esperarlo. Cada intento de reconexión abortado a medias
+// por esa excepción retrasaba la siguiente ronda. Este test fuerza el mismo
+// escenario (WS que nunca responde al join -> TIMED_OUT/CLOSED repetido, varios
+// reintentos de backoff en pocos segundos) y confirma que ningún `pageerror` se
+// dispara durante ese lapso.
+test('el canal caído reconecta en varios intentos sin lanzar errores de lifecycle', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-CANAL-CAIDO', estado: 'BORRADOR' })
+  // A diferencia de mockRealtimeChannel (que responde 'ok' al join), aquí el
+  // WebSocket no contesta nada -- el mismo truco que usa el test live equivalente
+  // para forzar que supabase-js nunca reciba un join exitoso.
+  await page.routeWebSocket(/realtime/, () => {})
+
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+
+  await login(page, '/cotizaciones/SH-E2E-CANAL-CAIDO')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-CANAL-CAIDO' })).toBeVisible()
+
+  // Suficiente para varias rondas de backoff (1s/2s/4s/8s) del reconnect real.
+  await page.waitForTimeout(12_000)
+
+  expect(pageErrors.filter((m) => m.includes('cannot add presence callbacks'))).toEqual([])
+})
