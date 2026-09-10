@@ -1,6 +1,6 @@
 import { test, expect, BrowserContext, Locator, Page } from '@playwright/test'
 import { login } from '../utils/auth'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations, ensureLiveProducto } from '../utils/live-cleanup'
 import { esperarCanalColaborativo, faltantesDelEntornoLive, leerCotizacionDelServidor, liveEnabled } from '../utils/live-helpers'
 import { cleanupLiveUser, ensureLiveUser } from '../utils/live-users'
 import { fmtCurrency } from '@/lib/quotations/format'
@@ -28,6 +28,16 @@ const USUARIO_B = {
 const NOMBRE_CORTO_B = 'Colab Bravo'
 
 const COL = { categoria: 0, descripcion: 1, cantidad: 2, precio: 3, xPagar: 6 } as const
+
+// Fase 8: producto real sembrado en `productos` para probar el conflicto entre
+// el autofill de "seleccionar producto" y una edición manual concurrente de
+// precio (punto B de la auditoría de colaboración).
+const PRODUCTO_AUTOFILL = {
+  descripcion: 'Grúa E2E Fase8 Autofill',
+  categoria: 'Grip',
+  precio_unitario: 55555,
+  x_pagar_sugerido: 20000,
+}
 
 function filas(page: Page) {
   return page.locator('table tbody tr')
@@ -108,6 +118,9 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     await cleanupLiveCotizacionesByPrefix(PREFIJO).catch((e) => console.error('[live colab] barrido inicial:', e))
     await cleanupOrphanedFolioReservations().catch((e) => console.error('[live colab] reservas huérfanas:', e))
     await ensureLiveUser(USUARIO_B)
+    // Fase 8: producto real para el conflicto autofill-vs-edición-manual (punto B
+    // de la auditoría) -- necesita un producto de verdad en la tabla, no mockeado.
+    await ensureLiveProducto(PRODUCTO_AUTOFILL)
 
     const suffix = Date.now()
 
@@ -151,6 +164,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     if (origenId) await cleanupLiveCotizacion(origenId).catch((e) => console.error('[live colab] cleanup origen:', e))
     await cleanupLiveCotizacionesByPrefix(PREFIJO).catch((e) => console.error('[live colab] barrido final:', e))
     await cleanupLiveUser(USUARIO_B.email).catch((e) => console.error('[live colab] cleanup usuario B:', e))
+    await cleanupLiveProducto(PRODUCTO_AUTOFILL.descripcion).catch((e) => console.error('[live colab] cleanup producto:', e))
   })
 
   test('editar celdas distintas de la misma fila a la vez no borra lo del otro', async () => {
@@ -380,5 +394,117 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       const cotizacion = await leerCotizacionDelServidor(cotizacionId)
       return cotizacion.notas_internas
     }, { timeout: 30_000 }).toBe(notaA)
+  })
+
+  // Fase 8 (hardening pre-Proyectos): las 3 pruebas que siguen son las que la
+  // auditoría de colaboración marcó como faltantes -- hasta ahora esta suite
+  // solo probaba campos DISTINTOS editados a la vez, nunca un conflicto real
+  // por el MISMO campo, ni el camino de Generar/Aprobar bajo edición ajena
+  // concurrente.
+
+  test('mismo campo editado por A y B a la vez: el segundo ve el conflicto real, no un overwrite silencioso', async () => {
+    test.setTimeout(60_000)
+
+    const precioA = celda(pageA, 0, COL.precio)
+    const precioB = celda(pageB, 0, COL.precio)
+
+    // Ambos enfocan el MISMO campo antes de que nadie lo haya tocado -- capturan
+    // el mismo "base" (1000, el precio con el que se creó la partida).
+    await precioA.click()
+    await precioB.click()
+
+    const valorA = '4321'
+    const valorB = '8765'
+
+    await precioA.fill(valorA)
+    await precioA.blur()
+
+    // A debe quedar confirmado en el servidor antes de que B intente guardar con
+    // su base ya vieja -- así el conflicto es determinista, no una carrera real.
+    await expect.poll(async () => {
+      const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+      return cotizacion.items[0].precio_unitario
+    }, { timeout: 20_000 }).toBe(Number(valorA))
+
+    await precioB.fill(valorB)
+    await precioB.blur()
+
+    const banner = pageB.getByText(/Alguien más lo cambió a/)
+    await expect(banner).toBeVisible({ timeout: 15_000 })
+    await expect(banner).toContainText(valorA)
+
+    // El valor de A sigue mandando -- B no lo pisó en silencio con su 409.
+    const cotizacionTrasConflicto = await leerCotizacionDelServidor(cotizacionId)
+    expect(cotizacionTrasConflicto.items[0].precio_unitario).toBe(Number(valorA))
+
+    await pageB.getByRole('button', { name: new RegExp(`Usar\\s+"${valorA}"`) }).click()
+    await expect(banner).toBeHidden()
+    await expect(precioB).toHaveValue(valorA)
+  })
+
+  test('seleccionar producto (autofill) mientras otro edita precio a mano: nunca queda un estado parcial', async () => {
+    test.setTimeout(60_000)
+
+    const descripcionB = celda(pageB, 1, COL.descripcion)
+    const precioA = celda(pageA, 1, COL.precio)
+
+    await descripcionB.click()
+    await descripcionB.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+    await descripcionB.fill('Grúa E2E Fase8')
+    // El dropdown de sugerencias queda abierto -- todavía no se hizo click en la
+    // sugerencia, para que la carrera con el precio de A sea real.
+
+    const nuevoPrecioA = '9999'
+    await Promise.all([
+      (async () => { await precioA.click(); await precioA.fill(nuevoPrecioA); await precioA.blur() })(),
+      pageB.getByText(PRODUCTO_AUTOFILL.descripcion, { exact: true }).click(),
+    ])
+
+    // Esperar a que ambas operaciones asienten (éxito o conflicto, cualquiera).
+    await pageA.waitForTimeout(2_000)
+
+    const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+    const item = cotizacion.items[1]
+    const productoAplicado = item.descripcion === PRODUCTO_AUTOFILL.descripcion
+
+    if (productoAplicado) {
+      // El autofill de B ganó la carrera y se aplicó -- atómico: los 4 campos
+      // deben ser consistentes entre sí (todos del producto), nunca una mezcla.
+      expect(item.precio_unitario).toBe(PRODUCTO_AUTOFILL.precio_unitario)
+    } else {
+      // El autofill de B fue rechazado por conflicto (precio ya no coincidía
+      // con su "base") -- el precio de A manda, y NINGÚN campo del producto se
+      // aplicó a medias.
+      expect(item.precio_unitario).toBe(Number(nuevoPrecioA))
+      expect(item.descripcion).not.toBe(PRODUCTO_AUTOFILL.descripcion)
+    }
+  })
+
+  test('generar cotización mientras otro colaborador edita una partida no revierte su cambio', async () => {
+    test.setTimeout(90_000)
+
+    // B empieza a editar una partida (sin soltar el foco todavía) justo antes de
+    // que A pulse "Generar Cotización" -- el PATCH de B puede seguir en vuelo,
+    // o recién confirmado, cuando A dispara la transición de estado.
+    const descripcionB = celda(pageB, 2, COL.descripcion)
+    const nuevaDescripcion = `Descripción B Fase8 ${Date.now()}`
+    await descripcionB.click()
+    await descripcionB.fill(nuevaDescripcion)
+
+    await Promise.all([
+      descripcionB.blur(),
+      pageA.getByRole('button', { name: 'Generar Cotización' }).click(),
+    ])
+
+    // La transición de estado confirma que "Generar" sí corrió de punta a punta
+    // (PDF generado, botones cambian a Aprobar/Cancelar).
+    await expect(pageA.getByRole('button', { name: 'Aprobar Cotización' })).toBeVisible({ timeout: 60_000 })
+
+    const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+    expect(cotizacion.estado).toBe('EMITIDA')
+    // El punto central de la Fase 8: el cambio de B NO se revirtió. Antes de este
+    // fix, "Generar Cotización" mandaba un PUT completo con el snapshot que A
+    // tenía en memoria, y podía pisar justo esta edición.
+    expect(cotizacion.items[2].descripcion).toBe(nuevaDescripcion)
   })
 })
