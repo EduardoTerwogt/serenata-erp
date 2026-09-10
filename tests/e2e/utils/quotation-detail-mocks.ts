@@ -16,6 +16,33 @@ export interface CotizacionDetailMockOptions {
   failItemDelete?: boolean
   /** Latencia (ms) del GET de la cotización, para provocar respuestas obsoletas. */
   detailLatencyMs?: number
+  /** Catálogo de productos que devuelve /api/productos (combobox de Descripción). */
+  productos?: ProductoMock[]
+  /** Catálogo de proveedores/responsables que devuelve /api/proveedores. */
+  responsables?: ResponsableMock[]
+}
+
+interface ProductoMock {
+  id: string
+  descripcion: string
+  categoria: string | null
+  precio_unitario: number
+  x_pagar_sugerido: number
+  activo: boolean
+  created_at: string
+}
+
+interface ResponsableMock {
+  id: string
+  nombre: string
+  telefono: string | null
+  correo: string | null
+  banco: string | null
+  clabe: string | null
+  roles: string[]
+  notas: string | null
+  activo: boolean
+  created_at: string
 }
 
 interface CotizacionMockItem {
@@ -291,7 +318,7 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
   })
 
   await page.route('**/api/proveedores', async (route) => {
-    await fulfillJson(route, [
+    await fulfillJson(route, options.responsables ?? [
       { id: 'resp-1', nombre: 'Sofía Ramírez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Camarógrafa'], notas: null, activo: true, created_at: '2026-01-01' },
     ])
   })
@@ -301,7 +328,7 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
   })
 
   await page.route('**/api/productos**', async (route) => {
-    await fulfillJson(route, [])
+    await fulfillJson(route, options.productos ?? [])
   })
 
   await page.route('**/api/service-templates**', async (route) => {

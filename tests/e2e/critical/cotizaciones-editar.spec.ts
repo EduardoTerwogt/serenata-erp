@@ -91,6 +91,68 @@ test('autoguarda cada celda de una partida sin pisar lo que se sigue escribiendo
   expect(pagarRequest.postDataJSON().x_pagar).toBe(7500)
 })
 
+test('seleccionar una sugerencia de producto autocompleta categoría, precio y x_pagar', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-PRODUCTO',
+    estado: 'BORRADOR',
+    productos: [
+      { id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' },
+    ],
+  })
+  await login(page, '/cotizaciones/SH-E2E-PRODUCTO')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-PRODUCTO' })).toBeVisible()
+
+  const firstRow = page.locator('table tbody tr').first()
+  const descripcion = firstRow.locator('td').nth(1).locator('input')
+  // El dropdown de sugerencias es position:fixed, anclado justo debajo del input: si la
+  // fila queda al ras del borde inferior del viewport, el dropdown se pinta fuera de
+  // pantalla y Playwright nunca puede hacerle click. Centrar la fila deja espacio abajo.
+  await descripcion.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+  await descripcion.fill('grúa Techno')
+
+  const [request] = await Promise.all([
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH' && 'categoria' in (req.postDataJSON() || {})),
+    page.getByText('Renta de grúa Technocrane').click(),
+  ])
+  const patch = request.postDataJSON()
+  expect(patch.descripcion).toBe('Renta de grúa Technocrane')
+  expect(patch.categoria).toBe('Grip')
+  expect(patch.precio_unitario).toBe(25000)
+  expect(patch.x_pagar).toBe(12000)
+
+  await expect(descripcion).toHaveValue('Renta de grúa Technocrane')
+  await expect(firstRow.locator('td').nth(0).locator('input')).toHaveValue('Grip')
+  await expect(firstRow.locator('td').nth(3).locator('input')).toHaveValue('25000')
+  await expect(firstRow.locator('td').nth(6).locator('input')).toHaveValue('12000')
+})
+
+test('cambiar el responsable de una partida persiste el cambio', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-RESPONSABLE',
+    estado: 'BORRADOR',
+    responsables: [
+      { id: 'resp-1', nombre: 'Sofía Ramírez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Camarógrafa'], notas: null, activo: true, created_at: '2026-01-01' },
+      { id: 'resp-2', nombre: 'Juan Pérez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Gaffer'], notas: null, activo: true, created_at: '2026-01-01' },
+    ],
+  })
+  await login(page, '/cotizaciones/SH-E2E-RESPONSABLE')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-RESPONSABLE' })).toBeVisible()
+
+  const firstRow = page.locator('table tbody tr').first()
+  const responsableSelect = firstRow.locator('td').nth(5).locator('select')
+  await expect(responsableSelect).toHaveValue('resp-1')
+
+  const [request] = await Promise.all([
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH' && 'responsable_id' in (req.postDataJSON() || {})),
+    responsableSelect.selectOption('resp-2'),
+  ])
+
+  const patch = request.postDataJSON()
+  expect(patch.responsable_id).toBe('resp-2')
+  expect(patch.responsable_nombre).toBe('Juan Pérez')
+  await expect(responsableSelect).toHaveValue('resp-2')
+})
+
 test('agregar y borrar una partida responde de inmediato', async ({ page }) => {
   await mockCotizacionDetailApis(page, { id: 'SH-E2E-FILAS', estado: 'BORRADOR' })
   await login(page, '/cotizaciones/SH-E2E-FILAS')

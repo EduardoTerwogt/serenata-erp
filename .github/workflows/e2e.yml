@@ -67,16 +67,21 @@ jobs:
           if-no-files-found: ignore
 
   live:
-    # Fase 4.5, Punto 4: corre en cada push a main (ademas de manual via
-    # workflow_dispatch) -- nunca en PR, para no exponer los secretos de
-    # Drive/Supabase de prueba a ramas externas.
+    # Corre en cada push a main, en cada push a un PR y por workflow_dispatch
+    # manual. Antes excluia pull_request para no exponer los secretos de
+    # Drive/Supabase de PRUEBA a ramas externas -- pero este repo es privado,
+    # sin colaboradores externos, y son credenciales de serenata-erp-test, no
+    # de produccion, asi que ese riesgo no aplica aqui. Sin este cambio, cada
+    # rama/PR necesitaba un workflow_dispatch manual (la integracion de
+    # GitHub de Claude no tiene ese permiso) solo para confirmar el nivel que
+    # realmente prueba contra servidor y base reales.
     #
     # Ya NO es informativo: este es el unico nivel que prueba contra servidor y
     # base reales (los otros dos mockean las APIs), asi que un fallo aqui es lo
     # unico que puede delatar un bug de colaboracion o de persistencia. Con
     # continue-on-error el workflow salia verde aunque encontrara uno. El deploy
     # a Vercel no se bloquea: se dispara por el push, no por este workflow.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
