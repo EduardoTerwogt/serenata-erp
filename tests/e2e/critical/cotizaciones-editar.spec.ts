@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { login } from '../utils/auth'
 import { mockCotizacionDetailApis } from '../utils/quotation-detail-mocks'
 import { mockRealtimeChannel } from '../utils/realtime-mock'
+import { fulfillJson } from '../utils/http'
 
 test('edita información general de una cotización en BORRADOR (autosave)', async ({ page }) => {
   await mockCotizacionDetailApis(page, { id: 'SH-E2E-EDITAR', estado: 'BORRADOR' })
@@ -89,6 +90,105 @@ test('autoguarda cada celda de una partida sin pisar lo que se sigue escribiendo
     xPagar.blur(),
   ])
   expect(pagarRequest.postDataJSON().x_pagar).toBe(7500)
+})
+
+test('seleccionar una sugerencia de producto autocompleta categoría, precio y x_pagar', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-PRODUCTO',
+    estado: 'BORRADOR',
+    productos: [
+      { id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' },
+    ],
+  })
+  await login(page, '/cotizaciones/SH-E2E-PRODUCTO')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-PRODUCTO' })).toBeVisible()
+
+  const firstRow = page.locator('table tbody tr').first()
+  const descripcion = firstRow.locator('td').nth(1).locator('input')
+  // El dropdown de sugerencias es position:fixed, anclado justo debajo del input: si la
+  // fila queda al ras del borde inferior del viewport, el dropdown se pinta fuera de
+  // pantalla y Playwright nunca puede hacerle click. Centrar la fila deja espacio abajo.
+  await descripcion.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+  await descripcion.fill('grúa Techno')
+
+  const [request] = await Promise.all([
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH' && 'categoria' in (req.postDataJSON() || {})),
+    page.getByText('Renta de grúa Technocrane').click(),
+  ])
+  const patch = request.postDataJSON()
+  expect(patch.descripcion).toBe('Renta de grúa Technocrane')
+  expect(patch.categoria).toBe('Grip')
+  expect(patch.precio_unitario).toBe(25000)
+  expect(patch.x_pagar).toBe(12000)
+
+  await expect(descripcion).toHaveValue('Renta de grúa Technocrane')
+  await expect(firstRow.locator('td').nth(0).locator('input')).toHaveValue('Grip')
+  await expect(firstRow.locator('td').nth(3).locator('input')).toHaveValue('25000')
+  await expect(firstRow.locator('td').nth(6).locator('input')).toHaveValue('12000')
+})
+
+test('cambiar el responsable de una partida persiste el cambio', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-RESPONSABLE',
+    estado: 'BORRADOR',
+    responsables: [
+      { id: 'resp-1', nombre: 'Sofía Ramírez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Camarógrafa'], notas: null, activo: true, created_at: '2026-01-01' },
+      { id: 'resp-2', nombre: 'Juan Pérez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Gaffer'], notas: null, activo: true, created_at: '2026-01-01' },
+    ],
+  })
+  await login(page, '/cotizaciones/SH-E2E-RESPONSABLE')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-RESPONSABLE' })).toBeVisible()
+
+  const firstRow = page.locator('table tbody tr').first()
+  const responsableSelect = firstRow.locator('td').nth(5).locator('select')
+  await expect(responsableSelect).toHaveValue('resp-1')
+
+  const [request] = await Promise.all([
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH' && 'responsable_id' in (req.postDataJSON() || {})),
+    responsableSelect.selectOption('resp-2'),
+  ])
+
+  const patch = request.postDataJSON()
+  expect(patch.responsable_id).toBe('resp-2')
+  expect(patch.responsable_nombre).toBe('Juan Pérez')
+  await expect(responsableSelect).toHaveValue('resp-2')
+})
+
+test('copiar partidas seleccionadas desde otra cotización las trae a la actual', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-COPIAR', estado: 'BORRADOR' })
+  await page.route('**/api/cotizaciones', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return }
+    await fulfillJson(route, [
+      {
+        id: 'SH-OTRA',
+        cliente: 'Otro Cliente',
+        proyecto: 'Otro Proyecto',
+        estado: 'EMITIDA',
+        items: [
+          { id: 'otra-item-1', cotizacion_id: 'SH-OTRA', categoria: 'Audio', descripcion: 'Boom más micrófono', cantidad: 1, precio_unitario: 5000, importe: 5000, responsable_nombre: null, responsable_id: null, x_pagar: 2000, margen: 3000, orden: 1, notas: null },
+        ],
+      },
+    ])
+  })
+  await login(page, '/cotizaciones/SH-E2E-COPIAR')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-COPIAR' })).toBeVisible()
+
+  await page.getByRole('button', { name: /Copiar desde otra cotización/ }).click()
+  await page.getByText('SH-OTRA').click()
+  await page.getByLabel(/Boom más micrófono/).click()
+
+  const [request] = await Promise.all([
+    page.waitForRequest((req) => req.url().includes('/items/bulk') && req.method() === 'POST'),
+    page.getByRole('button', { name: /Traer a cotización actual/ }).click(),
+  ])
+  const body = request.postDataJSON()
+  expect(body.items).toHaveLength(1)
+  expect(body.items[0].descripcion).toBe('Boom más micrófono')
+
+  // La partida original no estaba en blanco, así que la copiada se agrega al final.
+  const rows = page.locator('table tbody tr')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(1).locator('td').nth(1).locator('input')).toHaveValue('Boom más micrófono')
 })
 
 test('agregar y borrar una partida responde de inmediato', async ({ page }) => {
