@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   triggerSheetsSyncMock: vi.fn(),
   rpcMock: vi.fn(),
   afterMock: vi.fn(),
+  sendRealtimeBroadcastMock: vi.fn(async () => undefined),
+  withIdempotencyMock: vi.fn(async (_scope: string, _key: string | null | undefined, handler: () => Promise<{ status: number; body: unknown }>) => handler()),
 }))
 
 vi.mock('next/server', () => ({ after: mocks.afterMock }))
@@ -18,6 +20,8 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
   runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
 }))
 vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
+vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
+vi.mock('@/lib/server/idempotency', () => ({ withIdempotency: mocks.withIdempotencyMock }))
 vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 
 import { PATCH } from '../cotizaciones/[id]/items/[itemId]/route'
@@ -66,6 +70,7 @@ describe('PATCH /api/cotizaciones/[id]/items/[itemId]', () => {
       p_cotizacion_id: 'SH001',
       p_item_id: ITEM_ID,
       p_patch: { descripcion: 'Cámara escrita por A' },
+      p_base: null,
     })
     expect(Object.keys(args.p_patch)).not.toContain('precio_unitario')
     expect(Object.keys(args.p_patch)).not.toContain('cantidad')
@@ -135,5 +140,103 @@ describe('PATCH /api/cotizaciones/[id]/items/[itemId]', () => {
     expect(mocks.triggerSheetsSyncMock).toHaveBeenCalledWith('cotizaciones', 'items_cotizacion')
     expect(mocks.afterMock).toHaveBeenCalledTimes(1)
     expect(await res.json()).toEqual({ item: itemDelServidor })
+  })
+
+  describe('Fase 2 -- base, conflicto, mutation_id', () => {
+    it('manda p_base a la RPC cuando el body lo trae', async () => {
+      await PATCH(req({ precio_unitario: 8500, base: { precio_unitario: 8000 } }), { params })
+
+      expect(mocks.rpcMock.mock.calls[0][1]).toEqual({
+        p_cotizacion_id: 'SH001',
+        p_item_id: ITEM_ID,
+        p_patch: { precio_unitario: 8500 },
+        p_base: { precio_unitario: 8000 },
+      })
+    })
+
+    it('responde 409 estructurado cuando la RPC devuelve un conflicto, sin recalcular el encabezado', async () => {
+      mocks.rpcMock.mockResolvedValue({
+        data: { conflict: { precio_unitario: { base: 8000, current: 8500, attempted: 7500 } } },
+        error: null,
+      })
+
+      const res = await PATCH(req({ precio_unitario: 7500, base: { precio_unitario: 8000 } }), { params })
+
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({
+        error: 'conflict',
+        entity: 'item_cotizacion',
+        id: ITEM_ID,
+        fields: { precio_unitario: { base: 8000, current: 8500, attempted: 7500 } },
+      })
+      expect(mocks.recalculateQuotationHeaderMock).not.toHaveBeenCalled()
+      expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
+    })
+
+    it('sin base, sigue sobreescribiendo sin comparar (retrocompatible con la UI actual)', async () => {
+      await PATCH(req({ precio_unitario: 8500 }), { params })
+
+      expect(mocks.rpcMock.mock.calls[0][1].p_base).toBeNull()
+    })
+
+    it('con mutation_id, envuelve el handler con withIdempotency usando un scope por cotización+item', async () => {
+      await PATCH(req({ descripcion: 'x', mutation_id: 'mut-123' }), { params })
+
+      expect(mocks.withIdempotencyMock).toHaveBeenCalledWith(
+        `cotizacion-item-patch:SH001:${ITEM_ID}`,
+        'mut-123',
+        expect.any(Function)
+      )
+    })
+
+    it('sin mutation_id, withIdempotency recibe undefined como key (corre el handler directo)', async () => {
+      await PATCH(req({ descripcion: 'x' }), { params })
+
+      expect(mocks.withIdempotencyMock.mock.calls[0][1]).toBeUndefined()
+    })
+
+    it('emite el broadcast con la revision y el mutation_id en el payload', async () => {
+      mocks.recalculateQuotationHeaderMock.mockResolvedValue({
+        id: 'SH001', cliente: 'ACME', proyecto: 'Spot', items: [{ ...itemDelServidor, revision: 3 }],
+      })
+
+      await PATCH(req({ descripcion: 'x', mutation_id: 'mut-abc' }), { params })
+
+      expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([
+        expect.objectContaining({
+          topic: 'cotizacion:SH001',
+          event: 'item_confirmed',
+          private: true,
+          payload: expect.objectContaining({ cotizacion_id: 'SH001', item_id: ITEM_ID, revision: 3, mutation_id: 'mut-abc' }),
+        }),
+      ])
+    })
+
+    it('si el recálculo de encabezado falla, igual responde 200 con la partida ya patcheada (no relanza)', async () => {
+      mocks.recalculateQuotationHeaderMock.mockRejectedValue(new Error('recalculo caído'))
+
+      const res = await PATCH(req({ descripcion: 'x' }), { params })
+
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ item: itemDelServidor })
+    })
+
+    it('si la RPC lanza, el error sale del handler para que withIdempotency pueda limpiar la key (no lo atrapa el handler)', async () => {
+      mocks.rpcMock.mockResolvedValue({ data: null, error: new Error('boom') })
+      let erroDentroDelHandler: unknown = 'no-lanzo'
+      mocks.withIdempotencyMock.mockImplementationOnce(async (_scope, _key, handler) => {
+        try {
+          return await handler()
+        } catch (e) {
+          erroDentroDelHandler = e
+          throw e
+        }
+      })
+
+      const res = await PATCH(req({ descripcion: 'x' }), { params })
+
+      expect(res.status).toBe(500)
+      expect((erroDentroDelHandler as Error)?.message).toBe('boom')
+    })
   })
 })
