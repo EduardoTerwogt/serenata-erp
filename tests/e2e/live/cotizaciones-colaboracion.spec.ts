@@ -452,7 +452,17 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     const descripcionB = celda(pageB, 1, COL.descripcion)
     const precioA = celda(pageA, 1, COL.precio)
 
-    await descripcionB.click()
+    // El dropdown de sugerencias es position:fixed, con su posición calculada
+    // en `onFocus` (updateDropdownPos) y NUNCA recalculada en `onChange`. Un
+    // `.click()` antes de scrollear enfoca el input en la posición VIEJA
+    // (pre-scroll); el `scrollIntoView` posterior mueve la fila pero nada
+    // vuelve a pedir la posición nueva (el listener de scroll solo actualiza
+    // dropdowns que ya están abiertos), así que el `.fill()` de después abre
+    // el dropdown en coordenadas obsoletas -- nunca aparece donde Playwright
+    // lo busca ("element(s) not found" real visto en CI, dos rondas). Mismo
+    // patrón ya probado en cotizaciones-editar.spec.ts (critical): scrollear
+    // ANTES de cualquier foco, y dejar que `.fill()` enfoque una sola vez, ya
+    // en la posición final.
     await descripcionB.evaluate((el) => el.scrollIntoView({ block: 'center' }))
     await descripcionB.fill('Grúa E2E Fase8')
 
