@@ -830,13 +830,33 @@ test.describe('live: colaboración real -- causas E-I (Fase 8.7.2)', () => {
     const onResponse = async (response: Response) => {
       const request = response.request()
       if (request.method() !== 'PATCH' || !response.url().includes('/items/')) return
-      const body = request.postDataJSON() as { precio_unitario?: number } | null
+      let body: { precio_unitario?: number } | null = null
+      try {
+        body = request.postDataJSON() as { precio_unitario?: number } | null
+      } catch (e) {
+        console.log(`[live colab][diag causa F] postDataJSON() falló: ${e instanceof Error ? e.message : e} -- raw: ${request.postData()}`)
+      }
+      // Diagnóstico: loguear CADA PATCH visto a esta celda, tenga o no
+      // precio_unitario reconocible -- si el segundo PATCH nunca aparece acá
+      // tampoco, no llegó a salir del navegador; si aparece con otra forma,
+      // el bug es de forma/parseo, no de que nunca se mandó.
+      console.log(`[live colab][diag causa F] PATCH ${response.url()} status=${response.status()} body=${request.postData()}`)
       const precio = body?.precio_unitario
       if (typeof precio === 'number') {
         respuestas.push({ precio, status: response.status() })
       }
     }
     pageA.on('response', onResponse)
+
+    // Diagnóstico adicional: loguear cuando el navegador DISPARA el PATCH,
+    // no solo cuando llega su respuesta -- si el segundo PATCH nunca sale
+    // del cliente (el bug estaría en el drenado de React, no en la red),
+    // esto lo muestra aunque nunca llegue a `onResponse`.
+    const onRequest = (request: import('@playwright/test').Request) => {
+      if (request.method() !== 'PATCH' || !request.url().includes('/items/')) return
+      console.log(`[live colab][diag causa F] PATCH disparado -> ${request.url()} body=${request.postData()}`)
+    }
+    pageA.on('request', onRequest)
 
     let firstPatchDelayed = false
     const delayedPatchHandler: Parameters<typeof pageA.route>[1] = async (route) => {
@@ -870,6 +890,7 @@ test.describe('live: colaboración real -- causas E-I (Fase 8.7.2)', () => {
       // de otros tests/beforeEach sobre el mismo patrón.
       await pageA.unroute(patronRuta, delayedPatchHandler)
       pageA.off('response', onResponse)
+      pageA.off('request', onRequest)
     }
 
     await expect.poll(async () => {
