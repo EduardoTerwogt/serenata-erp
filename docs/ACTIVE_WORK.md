@@ -12,11 +12,11 @@ Cerrar los huecos que dejó la auditoría de Fase 8 y dejar Cotizaciones oficial
 READY, antes de empezar Engineering Hardening. Cotizaciones es el módulo de
 referencia: lo que quede a medias aquí se va a replicar en Proyectos y en Cuentas.
 
-## Regla de ejecución
+## Rama
 
-Branch dedicada + PR + Vercel Preview. **No trabajar directo sobre `main`** en esta
-fase — es la excepción a la regla general de `CLAUDE.md`, por el riesgo de tocar el
-motor de colaboración.
+`fase-8.7-collaboration`. Rama + PR + Vercel Preview, como toda iniciativa
+(`CLAUDE.md`, "Rama + PR, merge al final"). El merge a `main` ocurre **una sola vez**,
+cuando los cinco bloques estén cerrados y todas las suites verdes.
 
 ## Bloques aprobados
 
@@ -78,9 +78,14 @@ Eliminar lo que ya no es cierto: broadcasts de negocio desde el browser,
 `channel.send()` como mecanismo colaborativo, y last-write-wins sin detección de
 conflictos.
 
-**Hallazgo confirmado el 2026-09-11:** `ARCHITECTURE.md` dice que la reconciliación
-corre **cada 5 s**; el código usa `RECONCILIACION_MS = 20_000`
-(`app/cotizaciones/[id]/page.tsx:46`). Corregir también esto.
+**Adelantado el 2026-09-11:** ya se corrigieron en `ARCHITECTURE.md` los 5 s contra
+los 20 s reales de `RECONCILIACION_MS`, el "READY" prematuro, el broadcast confirmado
+como mecanismo primario y el `409` como detección real de conflicto — dejar en pie una
+afirmación que ya se sabe falsa contradice la regla del propio flujo. También se
+alineó `docs/decisions/002`.
+
+**Lo que queda de este bloque:** verificar al cerrar la fase que la descripción sigue
+siendo cierta después de los bloques 1-4, y quitar el aviso de "todavía no es READY".
 
 **No documentar todavía** una capa genérica `base`/`conflict`: sigue siendo deuda
 intencional hasta que Proyectos exista como segundo consumidor real.

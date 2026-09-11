@@ -20,11 +20,18 @@ En este orden, y solo esto:
 No leer `docs/archive/` salvo que haga falta entender el origen de una decisión.
 No leer el roadmap completo: la fase actual es la que importa.
 
-## 2. Inspeccionar `main`
+## 2. Situarse en la rama de trabajo
+
+**Nunca `git reset --hard`.** Verificar primero y no destruir nada:
 
 ```bash
-git fetch origin main && git reset --hard origin/main
+git status                                  # ¿hay trabajo sin commitear?
+git fetch origin main
+git switch main && git pull --ff-only origin main
+git switch -c <rama-de-fase>                # o git switch <rama> si ya existe
 ```
+
+Si el árbol está sucio o la rama ya tiene commits, preguntar antes de tocar nada.
 
 Leer el código real del área. **Nunca asumir desde memoria de una conversación
 anterior ni desde lo que dice un documento** — el código manda.

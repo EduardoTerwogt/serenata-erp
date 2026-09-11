@@ -10,6 +10,10 @@ de abajo solo apuntan a `docs/ACTIVE_WORK.md`: es lo único que cambia entre ses
 
 ---
 
+> **Se trabaja en rama, nunca directo sobre `main`.** El merge ocurre una sola vez,
+> cuando la iniciativa está terminada y todas las suites pasaron en el PR. Ver
+> `CLAUDE.md`, "Rama + PR, merge al final".
+
 > **Nota sobre los slash commands.** El registro de comandos se arma al arrancar la
 > sesión. Si tu entorno actualiza el repo después de ese momento,
 > `/serenata-iniciar-fase` puede no salir en el autocompletado aunque el archivo
@@ -96,6 +100,7 @@ debugging resuelto y commitea.
 | Claude tomó un camino equivocado | `/rewind` al punto anterior y aclarar la dirección — mejor que acumular "no, deshaz eso" |
 | El contexto se llenó pero la tarea es la misma | `/compact`, indicando qué conservar (arquitectura aprobada, archivos modificados, decisiones) y qué descartar (debugging resuelto, hipótesis descartadas) |
 | Cambió la tarea, el módulo o la subfase | Sesión nueva. No mantener una sesión durante semanas |
+| Terminó la iniciativa completa y todo está verde | Merge del PR a `main`. Es el único momento en que se toca `main` |
 | Dudas laterales durante la implementación | Chat aparte, para no llenar el hilo principal |
 
 ---

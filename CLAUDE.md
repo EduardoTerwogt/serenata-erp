@@ -67,28 +67,42 @@ El detalle completo de cada uno está en `.claude/rules/`.
 
 ```bash
 git config --global user.name "EduardoTerwogt"
-git config --global user.email "eduardoterwogt@gmail.com"
+git config --global user.email "eduardoterwogth@gmail.com"
 source /home/user/serenata-erp/.env.local.tokens 2>/dev/null
 git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/serenata-erp.git
-
-# GitHub main es la fuente de verdad — forzar local = origin/main SIEMPRE
-git fetch origin main && git checkout main && git reset --hard origin/main
 ```
+
+**El correo lleva "h" al final.** `eduardoterwogt@gmail.com` (sin "h") no corresponde
+a ninguna cuenta de GitHub y Vercel rechaza el deploy con "could not be matched to a
+GitHub account". Ya pasó una vez; no volver a quitarla.
 
 `.env.local.tokens` está en `.gitignore` y no viaja en el repo: en un entorno nuevo
 hay que crearlo con el `GITHUB_TOKEN` que dé el usuario.
 
-- Siempre `main`. Nunca ramas. Nunca PRs.
-- **GitHub `main` = verdad absoluta.** El `main` local del sandbox es desechable:
-  nunca preservar divergencias, nunca cherry-pick para "rescatar" commits locales,
-  nunca pushear sin resetear antes a `origin/main`.
-- Commit + push después de cada cambio funcional terminado.
+### Rama + PR, merge al final
+
+**Se trabaja en rama dedicada, nunca directo sobre `main`.** El merge a `main` ocurre
+solo cuando el trabajo está terminado y todas las suites pasaron. `main` siempre debe
+ser una versión desplegable.
+
+```bash
+git fetch origin main
+git switch main && git pull --ff-only origin main
+git switch -c <rama-de-trabajo>      # o git switch <rama> si ya existe
+```
+
+- **Nunca `git reset --hard` automático.** Destruye trabajo local sin aviso. Si el
+  árbol está sucio, `git status` primero y preguntar.
+- Commit + push a la rama después de cada cambio funcional terminado. Pushear a una
+  rama es seguro: no despliega ni mergea nada.
+- **Antes del merge:** todas las suites verdes en el PR y el Preview de Vercel
+  desplegando bien. Que el push haya tenido éxito no prueba nada.
+- `origin/main` es la verdad para el punto de partida de una rama, no para
+  sobrescribir la rama en la que estás trabajando.
 - **Ejecución entre sesiones:** una sesión nueva con tareas en cola de una sesión
   anterior NUNCA las ejecuta ni pushea al abrir — confirmar primero.
-  `.claude/hooks/pre-push-gate.mjs` bloquea el primer `git push` de cada sesión para
-  forzar esa pausa; el segundo intento pasa.
-
----
+  `.claude/hooks/pre-push-gate.mjs` bloquea el primer push **a `main`** de cada sesión
+  para forzar esa pausa; los pushes a ramas pasan sin fricción.
 
 ## Autonomía de ejecución
 

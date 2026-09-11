@@ -86,16 +86,28 @@ reservar folio, registrar pago, guardar cotización y los PATCH por sección.
 
 `app/cotizaciones/[id]/page.tsx` + `hooks/useQuotationPresence.ts`.
 
-- Canal de Supabase Realtime por cotización: presence + broadcast. Los avisos son
-  **best-effort**: si el canal no está unido, `send()` cae a REST, devuelve 403 y
-  el error se traga.
-- La convergencia real la da la **reconciliación contra la base** cada 5 s, al
-  reconectar y al volver la pestaña al frente. Preserva lo que el usuario está
-  escribiendo y el cursor.
+- **PostgreSQL es la única autoridad.** El navegador solo hace mutaciones vía
+  API/RPC y emite Presence; nunca broadcasts de negocio. La política RLS de
+  `realtime.messages` solo permite `presence` a `authenticated`.
+- **El servidor emite el broadcast confirmado después del commit.** Ese evento es el
+  mecanismo **primario** de invalidación y reconciliación.
+- **El polling es fallback, no la garantía primaria.** Corre cada 20 s
+  (`RECONCILIACION_MS`, `app/cotizaciones/[id]/page.tsx`), al reconectar y al volver
+  la pestaña al frente. Preserva lo que el usuario está escribiendo y el cursor.
+- Los avisos son **best-effort**: si el canal no está unido, `send()` cae a REST,
+  devuelve 403 y el error se traga — medido, no supuesto.
 - Las escrituras van por sección (`general`, `totales`, `notas`, `items/[itemId]`)
-  y los RPCs bloquean fila y aplican solo las claves recibidas.
-- No hay OT ni CRDT, y no hacen falta: son campos de un registro, no texto
-  compartido. El modelo es último-en-escribir-gana por campo.
+  y los RPCs bloquean fila y aplican solo las claves recibidas. Cada fila tiene un
+  UUID estable.
+- **Conflictos por campo con `409`.** No es last-write-wins ciego: se compara contra
+  la base del campo y un conflicto real devuelve `409` al caller.
+- No hay OT ni CRDT, y no hacen falta: son campos de un registro, no texto compartido.
+- Reconexión, auth y refresh de token están en la infraestructura genérica
+  `lib/realtime/useRealtimeChannel.ts`; `useQuotationPresence` es un wrapper fino.
+
+**Aún no generalizado a propósito:** el protocolo `base`/`mutation_id`/conflict sigue
+siendo específico de Cotizaciones. Se decide su forma genérica cuando Proyectos exista
+como segundo consumidor real, no antes.
 
 Por qué se construyó así: [`docs/decisions/002`](docs/decisions/002-modelo-de-conflictos-por-campo.md)
 y [`docs/decisions/003`](docs/decisions/003-realtime-solo-presence.md). El recorrido
@@ -134,8 +146,10 @@ evidencia, no cuenta como terminado.
 | Admin de usuarios y sync a Google Sheets | `critical/admin-usuarios.spec.ts` |
 | Dashboard (incluye gastos fijos) | `lib/server/repositories/dashboard.ts` + sus tests |
 
-**Edición colaborativa de cotizaciones:** cerrada y en verde. La arquitectura quedó
-READY para ser reutilizada por otro módulo sin deuda bloqueante.
+**Edición colaborativa de cotizaciones:** funciona y está cubierta por pruebas de
+concurrencia. **Todavía no es READY**: la auditoría de Fase 8 dejó cinco huecos
+abiertos que se cierran en la Fase 8.7 — ver `docs/ACTIVE_WORK.md`. No tomarla como
+template técnico para otro módulo hasta entonces.
 
 Lo que está construido **a medias a propósito** vive en `docs/ROADMAP.md`.
 

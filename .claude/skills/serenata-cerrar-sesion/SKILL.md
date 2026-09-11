@@ -59,7 +59,12 @@ Solo decisiones duraderas. No hace falta documentar cada decisión pequeña.
 Actualizar `docs/ROADMAP.md` y mover la bitácora larga —si la hubo— a
 `docs/archive/`.
 
-## 6. Commit
+## 6. Commit y push a la rama
 
-Commitear la documentación junto con el trabajo. Confirmar que CI quedó en verde de
-verdad, no solo que el push tuvo éxito.
+Commitear la documentación junto con el trabajo y pushear **a la rama**, no a `main`.
+
+Confirmar que CI quedó en verde de verdad — no solo que el push tuvo éxito.
+
+**El merge a `main` no es parte de cerrar sesión.** Ocurre una sola vez, cuando la
+iniciativa completa está terminada, todas las suites pasaron en el PR y el Preview de
+Vercel desplegó bien. Si el trabajo sigue abierto, la rama se queda como está.
