@@ -86,13 +86,14 @@ solo cuando el trabajo está terminado y todas las suites pasaron. `main` siempr
 ser una versión desplegable.
 
 **Excepción — solo documentación:** si el diff completo toca **únicamente archivos
-`.md`** (`CLAUDE.md`, `README.md`, `ARCHITECTURE.md`, `TESTING.md`,
-`DESIGN_SYSTEM.md`, cualquier cosa bajo `docs/` o `.claude/skills/*/SKILL.md`) — cero
-código de la app, migraciones, config o scripts — se commitea y pushea **directo a
-`main`**, sin rama ni PR. Un `.md` no lo ejecuta el build ni los tests, así que no hay
-CI real que perderse. Si el diff toca aunque sea un archivo que no sea `.md`, deja de
-aplicar la excepción y todo el cambio (incluida la parte de documentación) sigue el
-flujo normal de rama + PR.
+`.md`** — cualquiera del repo, sin excepción: `CLAUDE.md`, `README.md`,
+`ARCHITECTURE.md`, `TESTING.md`, `DESIGN_SYSTEM.md`, lo que sea bajo `docs/`,
+`.claude/skills/*/SKILL.md`, `.claude/rules/*.md`, etc. — cero código de la app,
+migraciones, config o scripts — se commitea y pushea **directo a `main`**, sin rama
+ni PR. Un `.md` no lo ejecuta el build ni los tests, así que no hay CI real que
+perderse. Si el diff toca aunque sea un archivo que no sea `.md`, deja de aplicar la
+excepción y todo el cambio (incluida la parte de documentación) sigue el flujo
+normal de rama + PR.
 
 ```bash
 git fetch origin main

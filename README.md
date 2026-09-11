@@ -52,7 +52,7 @@ en GitHub Actions, porque necesita secretos que no viven en el repo. Detalles en
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Hacia dónde va el producto y qué está a medias a propósito. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Cómo está organizado el código, qué módulos funcionan, las tablas y los gotchas. |
 | [`docs/decisions/`](docs/decisions/) | Decisiones duraderas y por qué se tomaron. |
-| [`TESTING.md`](TESTING.md) | Los cuatro niveles de prueba, qué corre dónde y con qué secretos. |
+| [`TESTING.md`](TESTING.md) | Los niveles de prueba (unit, E2E smoke/critical/live) más el workflow de Migrations, qué corre dónde y con qué secretos. |
 | [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) | Tokens visuales reales y estado de la migración de UI. |
 | [`docs/ENV.md`](docs/ENV.md) | Variables de entorno. |
 | [`docs/PROMPTS.md`](docs/PROMPTS.md) | Prompts reutilizables para trabajar el repo desde Claude Code. |

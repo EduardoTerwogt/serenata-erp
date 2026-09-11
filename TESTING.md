@@ -26,8 +26,11 @@ base se comportan como se espera. Los tres defectos de persistencia y colaboraci
 arreglados el 2026-09-09 (ids de partidas recreados en cada guardado, PATCH que
 pisaba el campo del otro, partidas sin `ORDER BY`) los cazó **solo** el nivel live.
 
-`live` corre en cada push a `main` y **falla el workflow** — ya no es informativo.
-El deploy a Vercel no se bloquea por eso: lo dispara el push, no este workflow.
+`live` corre en cada evento de Pull Request y en cada push a `main` (igual que
+`test` y `smoke-and-critical`), y **falla el workflow** — ya no es informativo. El
+deploy a Vercel no se bloquea por eso: lo dispara el push, no este workflow. Como
+corre también en el PR, ya da señal real antes del merge — no hay que esperar a que
+el cambio llegue a `main` para saber si `live` sigue en verde.
 
 ## Correr live: qué hace falta
 
