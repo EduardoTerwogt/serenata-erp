@@ -4,7 +4,20 @@
 
 ## Estado
 
-**Ninguna iniciativa activa.** Fase 8.7.1 (Serializar mutaciones de partidas contra
+**Ninguna iniciativa activa.**
+
+**Ajuste puntual (fuera de roadmap):** se reforzó la documentación del flujo de
+sesión — no tocó código ni arquitectura, así que no entra a `docs/ROADMAP.md`.
+Cambios: `CLAUDE.md` y `serenata-iniciar-fase` ahora dicen explícitamente que un
+push a una rama sin PR abierto no dispara `test.yml`/`e2e.yml`/`migrations.yml`, y
+que el PR debe abrirse en borrador con el primer commit útil (no al final);
+`serenata-cerrar-sesion` ahora exige confirmar que ese PR existe antes de dar por
+válido un "CI en verde"; `serenata-iniciar-fase` ganó un paso 0 que clasifica el
+pedido de la sesión contra el roadmap (ya priorizado / nuevo → se agrega al roadmap
+antes de arrancar / fuera de roadmap → se documenta aquí al cerrar), y
+`docs/ROADMAP.md` documenta esa misma regla en su sección "Cómo se mantiene".
+
+Fase 8.7.1 (Serializar mutaciones de partidas contra
 Generar/Aprobar) cerró completa y se mergeó a `main` en el commit `2a04241` (PR #24)
 — las 4 suites de CI real en verde (`test`, `fresh-db`/Migrations,
 `smoke-and-critical`, `live`) y el Preview de Vercel desplegando bien. Detalle

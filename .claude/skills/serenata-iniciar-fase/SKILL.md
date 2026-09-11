@@ -8,6 +8,25 @@ user-invocable: true
 
 Procedimiento fijo para arrancar. **No implementar nada en este paso.**
 
+## 0. Preguntar qué se va a trabajar y clasificarlo contra el roadmap
+
+Antes de leer nada más: preguntar al usuario qué quiere trabajar esta sesión (si no
+lo dijo ya) y cruzarlo contra `docs/ROADMAP.md`. Clasificar:
+
+- **Ya priorizado** — aparece en "Siguiente" o "Después" del roadmap → seguir el
+  flujo normal (pasos 1 en adelante).
+- **Nuevo** — no está en el roadmap y tiene alcance de iniciativa (toma más de una
+  sesión, agrega un módulo/feature, o cambia una capa/arquitectura) → agregarlo
+  primero a `docs/ROADMAP.md` (sección "Siguiente" o "Después", según indique el
+  usuario) **antes** de crear `docs/ACTIVE_WORK.md`. Así queda registrado y no se
+  pierde si la sesión no termina.
+- **Fuera de roadmap** — ajuste puntual, fix chico o tarea administrativa de una
+  sola sesión → se trabaja directo, sin tocar `ROADMAP.md`. Se documenta el
+  resultado al cerrar sesión en `ACTIVE_WORK.md` ("Completado"), no antes.
+
+Esta es una heurística de tamaño, no una regla mecánica: si el caso no es obvio,
+proponer la clasificación al usuario y esperar su confirmación en vez de asumir.
+
 ## 1. Leer el contexto mínimo
 
 En este orden, y solo esto:
@@ -32,6 +51,11 @@ git switch -c <rama-de-fase>                # o git switch <rama> si ya existe
 ```
 
 Si el árbol está sucio o la rama ya tiene commits, preguntar antes de tocar nada.
+
+En cuanto exista el primer commit útil de la rama, abrir el PR hacia `main` **en
+borrador** — no esperar a terminar el trabajo. Los workflows de CI (`test.yml`,
+`e2e.yml`, `migrations.yml`) solo se disparan por evento de PR o push a `main`; sin
+PR abierto, los pushes a la rama no corren ningún test real.
 
 Leer el código real del área. **Nunca asumir desde memoria de una conversación
 anterior ni desde lo que dice un documento** — el código manda.

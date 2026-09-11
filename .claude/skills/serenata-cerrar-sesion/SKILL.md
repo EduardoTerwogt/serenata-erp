@@ -63,6 +63,10 @@ Actualizar `docs/ROADMAP.md` y mover la bitácora larga —si la hubo— a
 
 Commitear la documentación junto con el trabajo y pushear **a la rama**, no a `main`.
 
+**Confirmar que existe un PR abierto para esta rama.** Si no se abrió al iniciar
+sesión, abrirlo ahora (en borrador) antes de seguir — sin PR, ningún push a la rama
+dispara `test.yml`, `e2e.yml` ni `migrations.yml`, así que no hay CI que confirmar.
+
 Confirmar que CI quedó en verde de verdad — no solo que el push tuvo éxito.
 
 **El merge a `main` no es parte de cerrar sesión.** Ocurre una sola vez, cuando la
