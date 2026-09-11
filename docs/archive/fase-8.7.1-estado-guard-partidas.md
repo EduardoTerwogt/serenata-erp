@@ -1,6 +1,6 @@
 # Fase 8.7.1 — Serializar mutaciones de partidas contra Generar/Aprobar (bitácora)
 
-**Cerrada:** 2026-09-11.
+**Cerrada:** 2026-09-11. Mergeada a `main` en el commit `2a04241` (PR #24).
 
 ## Objetivo
 
@@ -75,8 +75,24 @@ Dos tests nuevos en `tests/e2e/live/cotizaciones-colaboracion.spec.ts`:
 - Aprobar y un PATCH concurrente disparados de verdad con `Promise.all` (sin forzar
   quién gana) contra una cotización propia -- la aserción rama según quién ganó, y en
   ambos casos confirma que `cuentas_pagar` corresponde exactamente al snapshot de
-  `items_cotizacion` que quedó vigente. No se puede ejecutar en este entorno (faltan
-  credenciales de `serenata-erp-test`); queda para el job `live` de CI real.
+  `items_cotizacion` que quedó vigente.
+
+No se pudieron ejecutar en el sandbox de desarrollo (sin credenciales de
+`serenata-erp-test`); corrieron en el job `live` del PR #24 contra Supabase real y
+pasaron los dos, junto con el resto de la suite live (36 tests).
+
+## Regresión real encontrada por el job `live` del PR (no del bug que se arreglaba)
+
+`upsert_items_cotizacion` cambió su forma de retorno (`setof items_cotizacion` →
+`jsonb`, Bloque 1) -- `tests/e2e/live/items-cotizacion-uuid-guard.spec.ts` (Fase 8.7
+Bloque 4) llama esa RPC directo vía `supabase-js`, sin pasar por `upsertItems()` (que
+sí se actualizó), y esperaba el array de filas crudo de antes. El primer push del PR
+falló ahí (`TypeError: Cannot read properties of undefined (reading 'id')`);
+corregido en el mismo PR (commit `aedbc7b`) desenvolviendo `.items` en ese test, sin
+tocar la RPC ni el caso que sí prueba (nunca se encontró un problema con el guard en
+sí). Confirma exactamente el punto ciego que un sandbox sin credenciales de
+`serenata-erp-test` no puede cubrir -- de ahí que el job `live` real, no solo el
+crítico mockeado, sea condición para mergear.
 
 ## Bloque 4 — Documentación
 
