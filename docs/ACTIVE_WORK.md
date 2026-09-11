@@ -51,6 +51,6 @@ _(la siguiente acción concreta)_
   contexto ni explicar el proyecto.
 - **Al cerrar sesión:** `/serenata-cerrar-sesion` lo reescribe con lo completado,
   decisiones, tests, pendientes y siguiente paso.
-- **Lo que NO va aquí:** dirección futura (→ `docs/ROADMAP.md`), estado general de la
-  app (→ `docs/ESTADO.md`), decisiones duraderas (→ `docs/decisions/`), debugging ya
-  resuelto (se purga).
+- **Lo que NO va aquí:** dirección futura y features a medias (→ `docs/ROADMAP.md`),
+  cómo está construido (→ `ARCHITECTURE.md`), decisiones duraderas (→
+  `docs/decisions/`), debugging ya resuelto (se purga).

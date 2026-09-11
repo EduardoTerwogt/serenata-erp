@@ -26,3 +26,5 @@ paths:
 - No exponer errores internos al cliente. Fallar explícito, nunca en silencio.
 - Toda transición financiera va por un endpoint explícito, nunca por un `PUT` genérico.
 - El portal de proveedores tiene sesión propia, independiente de NextAuth.
+- Cálculos de dinero e impuestos: reutilizar `lib/server/validation/factura-fiscal.ts`
+  y las fórmulas de `docs/decisions/006-reglas-de-negocio-invariables.md`. No duplicar.

@@ -19,8 +19,7 @@ Este archivo es **manual de entrada + índice**. Lo específico vive en su lugar
 |---|---|
 | ¿Qué estamos haciendo ahora? | `docs/ACTIVE_WORK.md` ← **empezar aquí cada sesión** |
 | ¿Hacia dónde vamos? | `docs/ROADMAP.md` |
-| ¿En qué estado está la app? | `docs/ESTADO.md` |
-| ¿Cómo está construido? | `ARCHITECTURE.md` |
+| ¿Cómo está construido y qué funciona hoy? | `ARCHITECTURE.md` |
 | ¿Por qué se decidió así? | `docs/decisions/` |
 | ¿Cómo se valida? | `TESTING.md` |
 | ¿Qué reglas visuales? | `DESIGN_SYSTEM.md` |
@@ -44,6 +43,9 @@ Las reglas por tipo de archivo (API, migraciones, Realtime, UI, PDF) viven en
 6. **Bugs = causa raíz.** Trazar → diagnosticar → arreglar. Sin atajos ni retries ciegos.
 7. **Buscar antes de crear.** Si ya existe infraestructura parecida, se extiende; no
    se construye un segundo motor en paralelo.
+8. **"X Pagar" siempre es el monto neto al proveedor.** Todo cálculo de utilidad,
+   margen o impuestos parte de ahí. Fórmulas completas, modelo fiscal y glosario en
+   `docs/decisions/006-reglas-de-negocio-invariables.md`.
 
 ---
 

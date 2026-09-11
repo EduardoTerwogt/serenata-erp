@@ -51,7 +51,7 @@ lib/
 
 db/migrations/                # SQL numerado; se aplica A MANO en Supabase
 tests/e2e/{smoke,critical,live}/
-docs/                         # ESTADO.md
+docs/                         # ACTIVE_WORK · ROADMAP · decisions/ · archive/
 ```
 
 ## Capas
@@ -97,7 +97,10 @@ reservar folio, registrar pago, guardar cotización y los PATCH por sección.
 - No hay OT ni CRDT, y no hacen falta: son campos de un registro, no texto
   compartido. El modelo es último-en-escribir-gana por campo.
 
-Detalle completo, defectos arreglados y lo que falta: [`docs/ESTADO.md`](docs/ESTADO.md).
+Por qué se construyó así: [`docs/decisions/002`](docs/decisions/002-modelo-de-conflictos-por-campo.md)
+y [`docs/decisions/003`](docs/decisions/003-realtime-solo-presence.md). El recorrido
+completo, con los defectos que se encontraron en el camino:
+[`docs/archive/fases-colaboracion-0-8.md`](docs/archive/fases-colaboracion-0-8.md).
 
 ## Reglas que se respetan
 
@@ -110,6 +113,31 @@ Detalle completo, defectos arreglados y lo que falta: [`docs/ESTADO.md`](docs/ES
 6. Un cambio de esquema en producción se guarda **siempre** como migración numerada
    en `db/migrations/` y se commitea, para que el historial no se desincronice de
    lo que la base tiene de verdad.
+
+## Módulos y cobertura
+
+Lo que existe y funciona hoy, con la prueba que lo respalda. Si un módulo no tiene
+evidencia, no cuenta como terminado.
+
+| Módulo | Evidencia |
+|---|---|
+| Cotizaciones (CRUD, folio atómico, PDF, emitir) | `tests/e2e/critical/cotizaciones-*.spec.ts`, live `basic.spec.ts` |
+| Aprobar / cancelar cotización (RPC transaccional) | live: crear → emitir → aprobar → cuentas → cancelar y revertir |
+| Cuentas por cobrar (factura, complemento, pagos parciales) | crítico + live de concurrencia |
+| Cuentas por pagar (factura, pagos, órdenes de pago con PDF real) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia |
+| Registrar pago sin carreras (cobrar y pagar) | `tests/e2e/live/cuentas-*-concurrency.spec.ts` |
+| Proyectos (detalle, tareas, cronograma, tipos, reporte de cierre) | smoke de proyectos |
+| Proveedores (lista + modal, historial, régimen fiscal) | `tests/e2e/critical/proveedores.spec.ts` |
+| Portal de proveedores (signup, login, confirmar identidad, subir factura) | `smoke/portal-signup.spec.ts`, `critical/portal-factura.spec.ts` |
+| Planeación (extracción AI, pendientes, soft delete) | `critical/planeacion.spec.ts` |
+| Plantillas de servicios (cotizaciones nuevas) | `critical/plantillas-servicios.spec.ts` |
+| Admin de usuarios y sync a Google Sheets | `critical/admin-usuarios.spec.ts` |
+| Dashboard (incluye gastos fijos) | `lib/server/repositories/dashboard.ts` + sus tests |
+
+**Edición colaborativa de cotizaciones:** cerrada y en verde. La arquitectura quedó
+READY para ser reutilizada por otro módulo sin deuda bloqueante.
+
+Lo que está construido **a medias a propósito** vive en `docs/ROADMAP.md`.
 
 ## Tablas
 
@@ -145,4 +173,6 @@ Trampas reales, no teóricas. Cada una costó un bug:
   `checkRateLimit(key, max, windowSeconds)` está aislada para poder migrar a Redis
   sin tocar los callers.
 - **`lib/db.ts` es solo fachada** que reexporta repositorios. No meterle lógica.
+- **Las migraciones se aplican a mano** en el SQL Editor de Supabase; no hay CLI ni
+  aplicación automática. `npm run check-migrations` solo lista y valida nombres.
 - **No mezclar refactors de UI con cambios de schema/RPC/SQL** en el mismo bloque.

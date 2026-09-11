@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase'
  * Auditoría externa 2026-09-09 (Fase 2.4). Sin Upstash/Vercel KV disponible
  * (no hay cuenta de pago), se implementa con lo que ya se tiene: una tabla
  * en Supabase + la RPC check_rate_limit (INSERT ... ON CONFLICT ...
- * RETURNING, atómica). Ver docs/ESTADO.md para la recomendación de migrar
+ * RETURNING, atómica). Ver docs/ROADMAP.md para la recomendación de migrar
  * a un store dedicado si el volumen lo justifica.
  *
  * Si la RPC falla (la tabla no responde, etc.) se falla CERRADO -- se

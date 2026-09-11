@@ -33,14 +33,25 @@ inventar números.
 
 ## Tipografía
 
-Cargadas con `next/font` en `app/fonts.ts`:
+**Una sola familia en toda la app: Inter**, auto-hospedada con `next/font` en
+`app/fonts.ts`. Sin familia display aparte y sin tratamiento en mayúsculas — el kit
+pide la fuente de sistema (`-apple-system`/SF Pro) con Inter como fallback
+multiplataforma.
 
-- **Archivo** → display, condensada, títulos y eyebrows (`font-display`).
-- **Manrope** → UI y cuerpo (`font-sans`).
+La cadena de variables es legado y conviene conocerla antes de tocarla:
 
-Son sustitutos de las fuentes de marca originales, que nunca se entregaron. Las
-variables `--font-inter` / `--font-poppins` siguen existiendo por compatibilidad,
-pero **apuntan a Manrope y Archivo**: los nombres son legado, los valores no.
+```
+app/fonts.ts   →  --font-display  y  --font-ui   (ambas = Inter)
+app/globals.css →  --font-inter    ← --font-ui
+                   --font-poppins  ← --font-display
+tailwind.config.ts → font-sans     ← --font-inter
+                     font-display  ← --font-poppins
+```
+
+Los nombres `inter`/`poppins`/`archivo`/`manrope` que aparecen en el código son
+**etiquetas históricas**; el valor real es Inter en todos los casos. Se conservan
+para no tocar cada consumidor de `font-sans`/`font-display`. Al escribir UI nueva,
+usar `font-sans` y `font-display` y no asumir nada por el nombre de la variable.
 
 ## Cómo escribir UI nueva
 

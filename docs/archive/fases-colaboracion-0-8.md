@@ -5,7 +5,7 @@
 > 2026-09-11 (`main` en `6d47adf`). Se conserva porque explica **por qué** la
 > arquitectura quedó como quedó, incluidos los caminos que se descartaron.
 >
-> **No es contexto de trabajo.** Para el estado vigente ver `docs/ESTADO.md`;
+> **No es contexto de trabajo.** Para cómo funciona hoy ver `ARCHITECTURE.md`;
 > para las decisiones que siguen siendo obligatorias, `docs/decisions/`.
 > Leer este archivo solo cuando haga falta entender el origen de una decisión.
 

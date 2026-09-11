@@ -20,3 +20,5 @@ paths:
 - Extraer primitivos de UI solo ante repetición real, no por anticipación.
 - La especificación visual completa vive en el skill `.claude/skills/serenata-design/`:
   se copian los valores, no los componentes.
+- Toda pantalla que muestre dinero respeta las fórmulas de
+  `docs/decisions/006-reglas-de-negocio-invariables.md`. "X Pagar" es neto.

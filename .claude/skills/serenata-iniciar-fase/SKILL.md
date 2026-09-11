@@ -14,7 +14,7 @@ En este orden, y solo esto:
 1. `docs/ACTIVE_WORK.md` — qué se está construyendo y qué bloque sigue.
 2. `ARCHITECTURE.md` — cómo está construido hoy.
 3. `docs/decisions/` — solo las decisiones que toquen el área en cuestión.
-4. `docs/ESTADO.md` — solo si hace falta saber qué está a medias en esa área.
+4. `docs/ROADMAP.md` — solo si hace falta saber qué está a medias en esa área.
 
 No leer `docs/archive/` salvo que haga falta entender el origen de una decisión.
 No leer el roadmap completo: la fase actual es la que importa.

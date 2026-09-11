@@ -19,9 +19,28 @@ de una sesión de trabajo. Para lo que se está construyendo ahora,
 
 _(pendiente de priorizar con Eduardo)_
 
-## Candidatos conocidos
+## Features a medias
 
-Pendientes reales ya documentados, sin orden asignado todavía:
+Están construidos parcialmente **a propósito**. No "arreglarlos" de paso sin
+confirmar: cerrarlos es una iniciativa con alcance propio, no un fix incidental.
+
+- **Google Calendar desde Proyectos** — la UI existe, el flujo end-to-end no cierra.
+  En Planeación sí funciona; no asumir que es lo mismo.
+- **Complementos de pago (CFDI)** — se suben y se registran, pero el XML no se parsea
+  y la conciliación automática contra cuentas por cobrar no está hecha.
+- **Órdenes de pago** — el CRUD y el PDF funcionan; los flujos de aprobación y firma
+  no existen.
+- **Plantillas de servicios** — completas para cotizaciones nuevas; la integración con
+  cotizaciones COMPLEMENTARIA es parcial.
+- **Rediseño visual (Fase 5.7)** — casi toda la app usa los tokens `--sn-*`. Siguen en
+  estilo viejo: `app/login/page.tsx`, `app/admin/sheets/page.tsx` y los primitivos
+  `components/ui/*` + `app/components/ui/Skeleton*`. Ver `DESIGN_SYSTEM.md`.
+
+Si aparece otro feature a medias, documentarlo aquí.
+
+## Otros candidatos
+
+Sin orden asignado todavía:
 
 - **Colaboración en Proyectos** — segundo consumidor de `useRealtimeChannel`. Es lo
   que la Fase 8 dejó habilitado, y el que definiría si el protocolo
@@ -29,16 +48,10 @@ Pendientes reales ya documentados, sin orden asignado todavía:
   (deuda intencional, ver decisión 003).
 - **Editor visual de plantillas de PDF** — hoy todo PDF se genera por código
   (`lib/server/pdf/`); cualquier ajuste de formato requiere tocar código.
-- **Conciliación automática de complementos de pago (CFDI)** — el XML se sube pero
-  no se parsea ni se concilia contra cuentas por cobrar.
-- **Flujos de aprobación/firma de órdenes de pago** — el CRUD y el PDF existen.
-- **Google Calendar desde Proyectos** — la UI existe, el flujo end-to-end no cierra.
-  En Planeación sí funciona.
-- **Plantillas de servicios en cotizaciones COMPLEMENTARIA** — integración parcial.
-- **Cerrar la migración visual** — `app/login`, `app/admin/sheets` y los primitivos
-  `components/ui/*` siguen en el estilo viejo.
-- **Rate limiting a un store dedicado** — hoy sobre Postgres; migrar si el tráfico
-  del portal crece.
+- **Rate limiting a un store dedicado** — hoy corre sobre Postgres (no hay cuenta de
+  pago de Vercel). Funciona al volumen actual; migrar a Upstash o Vercel KV si el
+  tráfico del portal crece. La interfaz `checkRateLimit()` ya está aislada para que
+  ese cambio no toque los callers.
 
 ---
 

@@ -44,11 +44,14 @@ Si sí, crear un archivo nuevo en `docs/decisions/` con el formato:
 
 Solo decisiones duraderas. No hace falta documentar cada decisión pequeña.
 
-## 4. ¿Cambió el estado de la app?
+## 4. ¿Cambió lo que la app hace o cómo lo hace?
 
-Si se cerró un módulo, apareció un feature a medias o se descubrió deuda nueva,
-actualizar `docs/ESTADO.md`. Mantenerlo corto: responde "¿en qué estado está hoy?",
-no "¿cómo llegamos aquí?".
+- Si un módulo nuevo quedó funcionando y probado → agregarlo a "Módulos y cobertura"
+  en `ARCHITECTURE.md`, con la prueba que lo respalda.
+- Si apareció un feature construido a medias a propósito → documentarlo en
+  `docs/ROADMAP.md`, sección "Features a medias".
+- Si se descubrió una trampa del repo que costará un bug a futuro → gotchas de
+  `ARCHITECTURE.md`.
 
 ## 5. ¿Terminó una iniciativa completa?
 

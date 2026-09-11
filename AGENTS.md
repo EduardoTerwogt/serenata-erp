@@ -8,7 +8,7 @@ Orden de lectura:
 
 1. [`CLAUDE.md`](CLAUDE.md) — principios críticos, git, autonomía, e índice del resto.
 2. [`docs/ACTIVE_WORK.md`](docs/ACTIVE_WORK.md) — qué se está construyendo ahora.
-3. [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`docs/ESTADO.md`](docs/ESTADO.md) · [`docs/decisions/`](docs/decisions/) — según lo que vayas a tocar.
+3. [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`docs/decisions/`](docs/decisions/) · [`docs/ROADMAP.md`](docs/ROADMAP.md) — según lo que vayas a tocar.
 
 Las reglas por tipo de archivo viven en `.claude/rules/` y se cargan solas.
 
