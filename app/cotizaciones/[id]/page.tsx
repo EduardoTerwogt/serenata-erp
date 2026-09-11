@@ -2007,17 +2007,21 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const fKey = getItemCellKey(rowId, f)
       const detail = record[f]
       clearItemCellConflict(rowId, f)
+      // `itemsServerRef`/`base` se refrescan al valor real SIEMPRE, gane
+      // "Usar" o "Mantener" -- `retryItemGroupPatch` arma su propia `base`
+      // leyendo `itemsServerRef.current[rowId]` (buildItemFieldsBase), así
+      // que si esto solo corriera en la rama "theirs", el reintento de
+      // "mine" mandaría la base VIEJA y volvería a chocar contra el mismo
+      // conflicto que se acaba de resolver.
+      nextServer[f] = detail.current as never
+      itemCellBaseRef.current[fKey] = { [f]: detail.current }
       if (resolution === 'theirs') {
-        nextServer[f] = detail.current as never
-        itemCellBaseRef.current[fKey] = { [f]: detail.current }
         if (index >= 0) setValue(`items.${index}.${f}` as never, detail.current as never)
         itemDirtyCellsRef.current.delete(fKey)
-      } else {
-        // "mine": lo que hay en el form (lo intentado) no se toca aquí --
-        // solo se refresca `base` al valor real recién confirmado, para que
-        // el reintento de abajo compare contra el servidor de verdad.
-        itemCellBaseRef.current[fKey] = { [f]: detail.current }
       }
+      // "mine": lo que hay en el form (lo intentado) no se toca -- solo se
+      // refrescó `base`/`itemsServerRef` arriba, para que el reintento de
+      // abajo compare contra el servidor de verdad.
     }
     itemsServerRef.current[rowId] = nextServer
 
