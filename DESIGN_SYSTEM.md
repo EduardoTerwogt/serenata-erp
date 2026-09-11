@@ -25,7 +25,7 @@ Oscuro, cinematográfico. Naranja de marca sobre superficies casi negras.
 | Tinta: título / cuerpo / apagado / tenue | `--text-primary` / `--text-body` / `--text-muted` / `--text-faint` | `#FEFCF9` · `#E8EAED` · `#9AA2AA` · `#6B7280` |
 
 Los estados de badge (aprobado, emitido, borrador, cancelado) tienen sus propios
-pares `--sn-status-*-bg` / `-fg`; ver `components/ui/Badge.tsx`.
+pares `--sn-status-*-bg` / `-fg`; ver `components/ui/StatusBadge.tsx`.
 
 También hay tokens de espaciado y de layout del shell (`--sidebar-width`,
 `--topbar-height`, `--control-height`, la escala `--space-*`). Usarlos en vez de
@@ -61,15 +61,18 @@ Con las clases que consumen los tokens (`bg-app`, `bg-surface`, `bg-row`,
 `app/dashboard/page.tsx` o `app/portal/page.tsx`. **No** usar `gray-*`, `#f97316`
 ni el azul secundario: son del estilo anterior.
 
-## Migración pendiente
+## Migración de Fase 5.7
 
-El rediseño se aplicó por bloques y no terminó. Siguen en el estilo viejo:
+El rediseño se aplicó por bloques. Las pantallas y primitivos que este documento
+marcaba como pendientes (`app/login/page.tsx`, `app/admin/components/AdminSheets.tsx`
+— la ruta vieja `app/admin/sheets/page.tsx` no existe, `components/ui/Button.tsx`,
+`components/ResponsiveTableCard.tsx`, `app/components/ui/Skeleton*.tsx`) **ya usan
+los tokens nuevos** — verificado el 2026-09-11, cero clases `gray-*`/`f97316`/azul
+secundario en ninguno. Los primitivos viejos `Alert`/`AppCard`/`Badge`/`Input`/
+`MetricCard` ya no existen bajo esos nombres (renombrados o reemplazados, ver la
+lista real en `components/ui/`).
 
-- `app/login/page.tsx`
-- `app/admin/sheets/page.tsx`
-- Los primitivos `components/ui/{Alert,AppCard,Badge,Button,Input,MetricCard}.tsx`,
-  `components/ResponsiveTableCard.tsx` y `app/components/ui/Skeleton*.tsx`
-
-`app/globals.css` conserva a propósito la escala de Tailwind (`text-xs/sm/base/lg`,
-`rounded-sm/md/lg/xl`) sin sobreescribir, justo para que esas pantallas no se rompan
-mientras se migran. No tocar eso sin migrar antes a sus consumidores.
+Esto cubre los archivos que se habían identificado como pendientes; no implica una
+auditoría exhaustiva de todo el árbol de `app/` y `components/` en busca de otros
+consumidores sueltos de la escala vieja de Tailwind que `app/globals.css` todavía
+conserva por compatibilidad.

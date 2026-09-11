@@ -71,9 +71,10 @@ confirmar: cerrarlos es una iniciativa con alcance propio, no un fix incidental.
   no existen.
 - **Plantillas de servicios** — completas para cotizaciones nuevas; la integración con
   cotizaciones COMPLEMENTARIA es parcial.
-- **Rediseño visual (Fase 5.7)** — casi toda la app usa los tokens `--sn-*`. Siguen en
-  estilo viejo: `app/login/page.tsx`, `app/admin/sheets/page.tsx` y los primitivos
-  `components/ui/*` + `app/components/ui/Skeleton*`. Ver `DESIGN_SYSTEM.md`.
+
+**Rediseño visual (Fase 5.7)** salió de esta lista el 2026-09-11: verificado que las
+pantallas y primitivos que quedaban pendientes ya usan los tokens `--sn-*`. Detalle
+en `DESIGN_SYSTEM.md`.
 
 Si aparece otro feature a medias, documentarlo aquí.
 

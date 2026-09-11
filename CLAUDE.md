@@ -70,6 +70,12 @@ git config --global user.name "EduardoTerwogt"
 git config --global user.email "eduardoterwogth@gmail.com"
 source /home/user/serenata-erp/.env.local.tokens 2>/dev/null
 git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/serenata-erp.git
+
+# main local siempre = main real de GitHub, nunca al revés. Seguro porque bajo este
+# flujo main local no debe cargar commits propios (todo pasa por rama+PR o por el
+# push directo de la excepción de doc-only, que nunca toca la rama local `main`).
+git fetch origin main
+git branch -f main origin/main
 ```
 
 **El correo lleva "h" al final.** `eduardoterwogt@gmail.com` (sin "h") no corresponde
@@ -97,8 +103,8 @@ normal de rama + PR.
 
 ```bash
 git fetch origin main
-git switch main && git pull --ff-only origin main
-git switch -c <rama-de-trabajo>      # o git switch <rama> si ya existe
+git branch -f main origin/main       # por si el setup de sesión no corrió antes
+git switch -c <rama-de-trabajo> origin/main   # o git switch <rama> si ya existe
 ```
 
 **Un push a la rama sin PR abierto no corre CI.** `test.yml`, `e2e.yml` y

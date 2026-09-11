@@ -70,6 +70,16 @@ suya.
 - El helper de idempotencia trata **cualquier** error del INSERT como duplicado. Solo
   `23505 unique_violation` lo es; una DB caída o un timeout se traga como éxito.
 - `idempotency_keys` y `rate_limits` no tienen política de retención.
+- **(2026-09-11)** `.claude/rules/api.md` dice "toda transición financiera va por un
+  endpoint explícito, nunca por un `PUT` genérico" — pero `app/api/cuentas-pagar/route.ts`
+  tiene un `PUT` genérico que sí actualiza `estado`, `fecha_pago` y `monto_pagado` vía
+  `allowedKeys`, pese a que ya existe `app/api/cuentas-pagar/[id]/registrar-pago/route.ts`
+  específicamente para eso. Dos vías para el mismo cambio de estado financiero es
+  exactamente el patrón que la regla busca evitar: la vía genérica puede no aplicar las
+  mismas invariantes/efectos secundarios que el endpoint dedicado. Encontrado auditando
+  contradicciones de documentación (no se investigó la ruta a fondo) — cerrar este
+  frente incluye decidir si el `PUT` genérico se recorta a campos no financieros o se
+  elimina en favor del endpoint dedicado.
 
 ### D. Mantenibilidad — P1/P2
 

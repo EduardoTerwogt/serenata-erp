@@ -9,9 +9,9 @@ paths:
   `text-content`, `text-body`, `border-hairline`, `rounded-panel`, `sn-label`,
   acento `#FF5A1A`.
 - **No usar `gray-*`, `#f97316` ni el azul secundario** — son del estilo anterior.
-- Pantallas que siguen en estilo viejo a propósito (no romperlas al pasar cerca):
-  `app/login/page.tsx`, `app/admin/sheets/page.tsx`, los primitivos
-  `components/ui/*` y `app/components/ui/Skeleton*`. Ver `DESIGN_SYSTEM.md`.
+- La migración de Fase 5.7 (login, `AdminSheets`, primitivos de `components/ui/*`,
+  `ResponsiveTableCard`, `Skeleton*`) ya está aplicada — verificado 2026-09-11. Ver
+  `DESIGN_SYSTEM.md` antes de asumir que algún archivo sigue en estilo viejo.
 - Formularios: react-hook-form + resolvers de Zod. `useQuotationForm` cachea
   catálogos a nivel módulo (TTL 5 min).
 - Las llamadas al servidor pasan por `lib/client/api.ts` — no duplicar el manejo de

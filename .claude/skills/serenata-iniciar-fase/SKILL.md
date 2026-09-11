@@ -50,8 +50,8 @@ No leer el roadmap completo: la fase actual es la que importa.
 ```bash
 git status                                  # ¿hay trabajo sin commitear?
 git fetch origin main
-git switch main && git pull --ff-only origin main
-git switch -c <rama-de-fase>                # o git switch <rama> si ya existe
+git branch -f main origin/main              # main local siempre = main real
+git switch -c <rama-de-fase> origin/main    # o git switch <rama> si ya existe
 ```
 
 Si el árbol está sucio o la rama ya tiene commits, preguntar antes de tocar nada.
