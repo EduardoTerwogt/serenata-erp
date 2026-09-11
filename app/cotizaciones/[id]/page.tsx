@@ -1105,7 +1105,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const base = itemCellBaseRef.current[key]
     const mutationId = crypto.randomUUID()
     rememberOwnItemMutationId(mutationId)
-    console.error('[DIAG-B1-CELL]', JSON.stringify({ rowId, field, patch, base, hasBase: base !== undefined }))
     const p = trackMutation(patchQuotationItem(rowId, patch, { base, mutationId }))
     p.then(
       (updatedItem) => {
@@ -1431,12 +1430,22 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     if (index < 0) return
     const fields: QuotationItemCellField[] = ['descripcion', 'categoria', 'precio_unitario', 'x_pagar']
     const base = buildItemFieldsBase(itemsServerRef.current[rowId], fields)
-    for (const field of fields) { if (base) itemCellBaseRef.current[getItemCellKey(rowId, field)] = base }
+    for (const field of fields) {
+      const key = getItemCellKey(rowId, field)
+      if (base) itemCellBaseRef.current[key] = base
+      // Si alguno de estos 4 campos venía dirty de una edición manual sin blur
+      // (p. ej. el usuario tecleó en descripción y eligió una sugerencia antes de
+      // que el input perdiera el foco), el patch atómico de abajo ya lo cubre --
+      // sin este cleanup, el blur que sigue encuentra la celda todavía dirty y
+      // handleItemFieldBlur dispara su propio PATCH suelto de un solo campo,
+      // corriendo en paralelo al combinado y rompiendo la atomicidad efectiva.
+      clearItemCellAutosaveTimer(key)
+      itemDirtyCellsRef.current.delete(key)
+    }
     seleccionarProducto(rowId, producto as never)
     try {
       const mutationId = crypto.randomUUID()
       rememberOwnItemMutationId(mutationId)
-      console.error('[DIAG-B1-PRODUCT]', JSON.stringify({ rowId, base, hasBase: base !== null }))
       const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }, { base: base ?? undefined, mutationId }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
@@ -1461,7 +1470,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       setError(saveError instanceof Error ? saveError.message : 'Error aplicando producto')
       void resyncPartidas()
     }
-  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, upsertLocalItemState])
+  }, [clearItemCellAutosaveTimer, clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, upsertLocalItemState])
 
   const handleResponsableChange = useCallback(async (rowId: string, responsableId: string) => {
     const index = getItemIndexByRowId(rowId)

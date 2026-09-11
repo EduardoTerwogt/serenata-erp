@@ -109,6 +109,16 @@ test('seleccionar una sugerencia de producto autocompleta categoría, precio y x
   // fila queda al ras del borde inferior del viewport, el dropdown se pinta fuera de
   // pantalla y Playwright nunca puede hacerle click. Centrar la fila deja espacio abajo.
   await descripcion.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+
+  // Fase 8.7: capturar TODOS los PATCH a /items/:id durante el flujo -- ver assert
+  // final. Escribir a mano sin blur (como hace el .fill de abajo) deja "descripcion"
+  // dirty; elegir la sugerencia antes de que pase el debounce debe producir
+  // exactamente un PATCH (el combinado del autofill), nunca uno suelto adicional.
+  const itemPatchRequests: Record<string, unknown>[] = []
+  page.on('request', (req) => {
+    if (/\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH') itemPatchRequests.push(req.postDataJSON())
+  })
+
   await descripcion.fill('grúa Techno')
 
   const [request] = await Promise.all([
@@ -130,6 +140,16 @@ test('seleccionar una sugerencia de producto autocompleta categoría, precio y x
   await expect(firstRow.locator('td').nth(0).locator('input')).toHaveValue('Grip')
   await expect(firstRow.locator('td').nth(3).locator('input')).toHaveValue('25000')
   await expect(firstRow.locator('td').nth(6).locator('input')).toHaveValue('12000')
+
+  // Bug preexistente (confirmado con payloads reales de un run de CI): si el click en
+  // la sugerencia dispara el blur del input de "descripcion" mientras la celda seguía
+  // dirty de la escritura manual, handleItemFieldBlur disparaba su propio PATCH suelto
+  // de un solo campo -- corriendo en paralelo al combinado y rompiendo la atomicidad
+  // efectiva del autofill (visible en producción como "descripcion" del producto pero
+  // "precio_unitario" de otra edición). Esperar más que el debounce de 800ms para
+  // descartar también un disparo tardío.
+  await page.waitForTimeout(1000)
+  expect(itemPatchRequests).toHaveLength(1)
 })
 
 test('cambiar el responsable de una partida persiste el cambio', async ({ page }) => {

@@ -134,6 +134,21 @@ canal, sin pageerror", fuerza una caída real (cierre de WebSocket del lado serv
 confirma que Presence vuelve a funcionar tras reconectar. `tsc`, lint, unit (417),
 build, smoke (21) y critical (60, incluido el nuevo) verdes localmente bajo Node 24.
 
+**Fix preexistente (fuera de los bloques, ya cerrado):** el test `live`
+"seleccionar producto (autofill) mientras otro edita precio a mano" fallaba de forma
+intermitente desde antes de Fase 8.7 (reproduce igual en `main`/`09f880b`, confirmado
+por fecha de CI y, ahora, por mecanismo real). Causa raíz: `handleSelectProduct`
+nunca limpiaba `itemDirtyCellsRef`/el timer de autosave de los 4 campos que parchea
+atómicamente -- si el usuario seguía con una celda (p. ej. `descripcion`) dirty por
+una edición manual sin blur, el blur disparado al elegir la sugerencia hacía que
+`handleItemFieldBlur` mandara un segundo PATCH suelto de un solo campo, corriendo en
+paralelo al combinado. La RPC nunca fue parcial: eran dos llamadas atómicas
+independientes, una de las cuales nunca debió dispararse. Arreglado limpiando dirty
++ timer de los 4 campos antes de aplicar la selección. Cobertura nueva en el test
+crítico mockeado ya existente ("seleccionar una sugerencia de producto..."), que
+ahora falla si se dispara más de un PATCH a `/items/:id` -- confirmado que reproduce
+sin el fix y pasa con él.
+
 Bloques 3-5: sin empezar.
 
 ## Próximo paso
