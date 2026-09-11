@@ -112,13 +112,25 @@ export async function getItemsByCotizacion(cotizacionId: string) {
   return data as ItemCotizacion[]
 }
 
+// Fase 8 (hardening pre-Proyectos): el id viene del CLIENTE (Fase 6B), así que
+// un `.upsert()` genérico sin guardia dejaba que un id reusado deliberadamente
+// (o por un bug futuro) -- perteneciente a una partida de OTRA cotización --
+// secuestrara esa fila vía ON CONFLICT DO UPDATE. `upsert_items_cotizacion`
+// (RPC) solo actualiza si la fila conflictuante ya pertenece a esta misma
+// cotización -- mismo patrón que ya usa `save_cotizacion`. Todas las filas de
+// un mismo llamado ya comparten `cotizacion_id` (ambos callers actuales lo
+// fijan al id de la URL antes de llamar), así que se toma del primer item.
 export async function upsertItems(items: Partial<ItemCotizacion>[]) {
-  const { data, error } = await supabaseAdmin
-    .from('items_cotizacion')
-    .upsert(items)
-    .select()
+  if (items.length === 0) return []
+  const cotizacionId = items[0].cotizacion_id
+  if (!cotizacionId) throw new Error('upsertItems: cotizacion_id requerido en cada item')
+
+  const { data, error } = await supabaseAdmin.rpc('upsert_items_cotizacion', {
+    p_cotizacion_id: cotizacionId,
+    p_items: items,
+  })
   if (error) throw error
-  return data
+  return data as ItemCotizacion[]
 }
 
 export async function deleteItemsByCotizacion(cotizacionId: string) {

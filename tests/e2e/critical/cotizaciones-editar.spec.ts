@@ -532,6 +532,39 @@ test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', as
   await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
 })
 
+// Fase 8 (hardening pre-Proyectos): el evento `item_confirmed` de una importación
+// masiva viaja con `item_id: null` (representa varias filas, no una) -- el listener
+// lo descartaba antes de llegar al reducer, así que el SEGUNDO navegador (que no
+// hizo el import) nunca reconciliaba por esta vía y dependía en silencio del poll de
+// 20s. Esta prueba lo demuestra: si el fix no está, falla por timeout esperando las
+// filas nuevas mucho antes de que el poll llegara a disparar.
+test('un import masivo de otro colaborador (bulk, item_id null) reconcilia sin esperar el poll', async ({ page }) => {
+  const cotizacion = await mockCotizacionDetailApis(page, { id: 'SH-E2E-BULK-OTRO', estado: 'BORRADOR' })
+  const realtime = await mockRealtimeChannel(page)
+  await login(page, '/cotizaciones/SH-E2E-BULK-OTRO')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-BULK-OTRO' })).toBeVisible()
+  await realtime.esperarConexion()
+
+  const rows = page.locator('table tbody tr')
+  const antes = await rows.count()
+
+  // El otro colaborador importó 2 partidas -- el mock simula el estado que un GET
+  // vería después de ese bulk import real.
+  cotizacion.items = [...cotizacion.items,
+    { id: 'item-bulk-1', cotizacion_id: 'SH-E2E-BULK-OTRO', categoria: 'Grip', descripcion: 'Grúa importada por otro', cantidad: 1, precio_unitario: 4000, importe: 4000, responsable_nombre: null, responsable_id: null, x_pagar: 1500, margen: 2500, orden: antes, notas: null },
+    { id: 'item-bulk-2', cotizacion_id: 'SH-E2E-BULK-OTRO', categoria: 'Grip', descripcion: 'Dolly importado por otro', cantidad: 1, precio_unitario: 2500, importe: 2500, responsable_nombre: null, responsable_id: null, x_pagar: 900, margen: 1600, orden: antes + 1, notas: null },
+  ]
+  await realtime.emit('item_confirmed', {
+    cotizacion_id: 'SH-E2E-BULK-OTRO', item_id: null, revision: null, mutation_id: null, operation: 'bulk',
+  })
+
+  // Bien por debajo de RECONCILIACION_MS (20s): si esto solo convergiera por el
+  // poll, la aserción fallaría por timeout mucho antes de que el poll dispare.
+  await expect(rows).toHaveCount(antes + 2, { timeout: 5_000 })
+  await expect(rows.nth(antes).locator('td').nth(1).locator('input')).toHaveValue('Grúa importada por otro')
+  await expect(rows.nth(antes + 1).locator('td').nth(1).locator('input')).toHaveValue('Dolly importado por otro')
+})
+
 test('escribir en Datos generales mientras otro está en la sección sí guarda', async ({ page }) => {
   await mockCotizacionDetailApis(page, { id: 'SH-E2E-SECCION', estado: 'BORRADOR' })
   const realtime = await mockRealtimeChannel(page)
@@ -680,4 +713,33 @@ test('la fila que borra el otro desaparece por reconciliación', async ({ page }
   await expect(rows).toHaveCount(1, { timeout: 30_000 })
   await expect(descripcion).toHaveValue('Estoy escribiendo aquí')
   await expect(descripcion).toBeFocused()
+})
+
+// Fase 8 (hardening pre-Proyectos): root cause real de un error visto en logs de
+// CI ("cannot add presence callbacks after joining a channel") durante el test
+// live que corta el WebSocket -- `RealtimeClient.channel()` (supabase-js real,
+// solo el transporte WS está interceptado aquí) reusa el objeto de canal existente
+// para el mismo topic si `removeChannel()` (async) no terminó, y `scheduleReconnect`
+// llamaba `connect()` sin esperarlo. Cada intento de reconexión abortado a medias
+// por esa excepción retrasaba la siguiente ronda. Este test fuerza el mismo
+// escenario (WS que nunca responde al join -> TIMED_OUT/CLOSED repetido, varios
+// reintentos de backoff en pocos segundos) y confirma que ningún `pageerror` se
+// dispara durante ese lapso.
+test('el canal caído reconecta en varios intentos sin lanzar errores de lifecycle', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-CANAL-CAIDO', estado: 'BORRADOR' })
+  // A diferencia de mockRealtimeChannel (que responde 'ok' al join), aquí el
+  // WebSocket no contesta nada -- el mismo truco que usa el test live equivalente
+  // para forzar que supabase-js nunca reciba un join exitoso.
+  await page.routeWebSocket(/realtime/, () => {})
+
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+
+  await login(page, '/cotizaciones/SH-E2E-CANAL-CAIDO')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-CANAL-CAIDO' })).toBeVisible()
+
+  // Suficiente para varias rondas de backoff (1s/2s/4s/8s) del reconnect real.
+  await page.waitForTimeout(12_000)
+
+  expect(pageErrors.filter((m) => m.includes('cannot add presence callbacks'))).toEqual([])
 })

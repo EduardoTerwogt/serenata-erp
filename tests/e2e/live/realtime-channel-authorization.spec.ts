@@ -154,6 +154,55 @@ test.describe('live: autorización del canal privado de Realtime', () => {
     await client.removeChannel(channel)
   })
 
+  // Fase 8 (hardening pre-Proyectos): la arquitectura dice que el navegador solo
+  // debe usar Presence -- los datos de negocio SIEMPRE llegan por Broadcast
+  // CONFIRMADO desde el servidor (service_role, bypassa RLS). Hasta ahora eso
+  // dependía solo de que ningún código llamara `channel.send({type:'broadcast'})`
+  // desde el navegador; esta prueba confirma que además la plataforma lo
+  // impide: ni siquiera un staff autorizado en "cotizaciones" puede insertar un
+  // broadcast, con o sin la app de por medio.
+  test('un staff autorizado no puede emitir un broadcast desde el navegador -- solo Presence', async () => {
+    test.setTimeout(30_000)
+
+    const tokenReceptor = await fetchRealtimeToken(page)
+    const receptor = anonClient()
+    await receptor.realtime.setAuth(tokenReceptor)
+    const canalReceptor = receptor.channel(`cotizacion:${cotizacionId}`, { config: { private: true } })
+    canalesAbiertos.push(canalReceptor)
+
+    let recibioBroadcastForjado = false
+    canalReceptor.on('broadcast', { event: 'broadcast_forjado_desde_navegador' }, () => { recibioBroadcastForjado = true })
+    expect(await esperarEstadoSuscripcion(canalReceptor, 15_000)).toBe(true)
+
+    const tokenEmisor = await fetchRealtimeToken(page)
+    const emisor = anonClient()
+    await emisor.realtime.setAuth(tokenEmisor)
+    // `broadcast.ack: true` para que `send()` espere la confirmación del
+    // servidor en vez de resolver 'ok' de inmediato (comportamiento por
+    // defecto de supabase-js para broadcasts, que no refleja si RLS aceptó).
+    const canalEmisor = emisor.channel(`cotizacion:${cotizacionId}`, { config: { private: true, broadcast: { ack: true } } })
+    canalesAbiertos.push(canalEmisor)
+    expect(await esperarEstadoSuscripcion(canalEmisor, 15_000)).toBe(true)
+
+    // Confirmado contra el servidor real de Realtime (CI, 2026-09-10): cuando
+    // RLS deniega el INSERT de un broadcast, el servidor no manda ningún ack
+    // de vuelta por el socket -- ni 'ok' ni un 'error' explícito -- así que
+    // `push.receive('error', ...)` nunca dispara y `send()` resuelve 'timed
+    // out' cuando expira el timeout del canal (10s por defecto en
+    // supabase-js). 'error' solo ocurriría si el servidor respondiera
+    // explícitamente; con RLS lo correcto es asumir CUALQUIERA de los dos
+    // como "no se aceptó" -- la aserción real de rechazo es que
+    // `recibioBroadcastForjado` siga en `false`, más abajo.
+    const resultado = await canalEmisor.send({ type: 'broadcast', event: 'broadcast_forjado_desde_navegador', payload: {} })
+    expect(['error', 'timed out'], 'RLS debería rechazar el INSERT de un broadcast desde el navegador (solo presence permitido)').toContain(resultado)
+
+    await new Promise((resolve) => setTimeout(resolve, 3_000))
+    expect(recibioBroadcastForjado, 'ningún colaborador debería recibir un broadcast emitido directamente desde el navegador').toBe(false)
+
+    await emisor.removeChannel(canalEmisor)
+    await receptor.removeChannel(canalReceptor)
+  })
+
   test('un staff sin la sección "cotizaciones" no puede unirse al canal', async () => {
     test.setTimeout(60_000)
 

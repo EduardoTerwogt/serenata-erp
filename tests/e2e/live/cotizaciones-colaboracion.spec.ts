@@ -1,6 +1,6 @@
 import { test, expect, BrowserContext, Locator, Page } from '@playwright/test'
 import { login } from '../utils/auth'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
 import { esperarCanalColaborativo, faltantesDelEntornoLive, leerCotizacionDelServidor, liveEnabled } from '../utils/live-helpers'
 import { cleanupLiveUser, ensureLiveUser } from '../utils/live-users'
 import { fmtCurrency } from '@/lib/quotations/format'
@@ -28,6 +28,16 @@ const USUARIO_B = {
 const NOMBRE_CORTO_B = 'Colab Bravo'
 
 const COL = { categoria: 0, descripcion: 1, cantidad: 2, precio: 3, xPagar: 6 } as const
+
+// Fase 8: producto real sembrado en `productos` para probar el conflicto entre
+// el autofill de "seleccionar producto" y una edición manual concurrente de
+// precio (punto B de la auditoría de colaboración).
+const PRODUCTO_AUTOFILL = {
+  descripcion: 'Grúa E2E Fase8 Autofill',
+  categoria: 'Grip',
+  precio_unitario: 55555,
+  x_pagar_sugerido: 20000,
+}
 
 function filas(page: Page) {
   return page.locator('table tbody tr')
@@ -116,6 +126,18 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     vigilarErrores(pageA, 'A')
     await login(pageA, '/cotizaciones')
 
+    // Fase 8: producto real para el conflicto autofill-vs-edición-manual (punto
+    // B de la auditoría) -- necesita un producto de verdad en la tabla, no
+    // mockeado. Se crea vía el POST real (no un upsert directo a Supabase):
+    // GET /api/productos cachea 5 min en el servidor (CacheManager) y solo el
+    // propio POST la invalida (`cache.invalidate('productos:')`); un insert
+    // directo deja esa caché sirviendo la lista vieja el resto del job entero
+    // si algún test anterior (basic.spec.ts, etc.) ya la calentó -- exactamente
+    // lo que pasó en CI: el dropdown nunca aparecía, no por un problema de
+    // timing sino porque el producto nunca llegaba al cliente.
+    const productoResponse = await pageA.request.post('/api/productos', { data: PRODUCTO_AUTOFILL })
+    expect(productoResponse.ok(), `no se pudo crear el producto de prueba: ${await productoResponse.text()}`).toBeTruthy()
+
     origenId = await crearCotizacion(pageA, `${PREFIJO}ORIGEN-${suffix}`, `Origen colab ${suffix}`, [
       { descripcion: 'Grúa importada', precio: 4000 },
       { descripcion: 'Dolly importado', precio: 2500 },
@@ -151,6 +173,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     if (origenId) await cleanupLiveCotizacion(origenId).catch((e) => console.error('[live colab] cleanup origen:', e))
     await cleanupLiveCotizacionesByPrefix(PREFIJO).catch((e) => console.error('[live colab] barrido final:', e))
     await cleanupLiveUser(USUARIO_B.email).catch((e) => console.error('[live colab] cleanup usuario B:', e))
+    await cleanupLiveProducto(PRODUCTO_AUTOFILL.descripcion).catch((e) => console.error('[live colab] cleanup producto:', e))
   })
 
   test('editar celdas distintas de la misma fila a la vez no borra lo del otro', async () => {
@@ -380,5 +403,139 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       const cotizacion = await leerCotizacionDelServidor(cotizacionId)
       return cotizacion.notas_internas
     }, { timeout: 30_000 }).toBe(notaA)
+  })
+
+  // Fase 8 (hardening pre-Proyectos): las 3 pruebas que siguen son las que la
+  // auditoría de colaboración marcó como faltantes -- hasta ahora esta suite
+  // solo probaba campos DISTINTOS editados a la vez, nunca un conflicto real
+  // por el MISMO campo, ni el camino de Generar/Aprobar bajo edición ajena
+  // concurrente.
+
+  test('mismo campo editado por A y B a la vez: el segundo ve el conflicto real, no un overwrite silencioso', async () => {
+    test.setTimeout(60_000)
+
+    const precioA = celda(pageA, 0, COL.precio)
+    const precioB = celda(pageB, 0, COL.precio)
+
+    // Ambos enfocan el MISMO campo antes de que nadie lo haya tocado -- capturan
+    // el mismo "base" (1000, el precio con el que se creó la partida).
+    await precioA.click()
+    await precioB.click()
+
+    const valorA = '4321'
+    const valorB = '8765'
+
+    await precioA.fill(valorA)
+    await precioA.blur()
+
+    // A debe quedar confirmado en el servidor antes de que B intente guardar con
+    // su base ya vieja -- así el conflicto es determinista, no una carrera real.
+    await expect.poll(async () => {
+      const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+      return cotizacion.items[0].precio_unitario
+    }, { timeout: 20_000 }).toBe(Number(valorA))
+
+    await precioB.fill(valorB)
+    await precioB.blur()
+
+    // Acotado a la fila 0: el banner de conflicto es por-celda (ver
+    // ItemFieldConflictBanner), así que un `getByText` de página completa
+    // también matchearía el banner de OTRA fila si quedó uno sin resolver de
+    // un test anterior -- "strict mode violation" real visto en CI.
+    const banner = filas(pageB).nth(0).getByText(/Alguien más lo cambió a/)
+    await expect(banner).toBeVisible({ timeout: 15_000 })
+    await expect(banner).toContainText(valorA)
+
+    // El valor de A sigue mandando -- B no lo pisó en silencio con su 409.
+    const cotizacionTrasConflicto = await leerCotizacionDelServidor(cotizacionId)
+    expect(cotizacionTrasConflicto.items[0].precio_unitario).toBe(Number(valorA))
+
+    await pageB.getByRole('button', { name: new RegExp(`Usar\\s+"${valorA}"`) }).click()
+    await expect(banner).toBeHidden()
+    await expect(precioB).toHaveValue(valorA)
+  })
+
+  test('seleccionar producto (autofill) mientras otro edita precio a mano: nunca queda un estado parcial', async () => {
+    test.setTimeout(60_000)
+
+    const descripcionB = celda(pageB, 1, COL.descripcion)
+    const precioA = celda(pageA, 1, COL.precio)
+
+    // El dropdown de sugerencias es position:fixed, con su posición calculada
+    // en `onFocus` (updateDropdownPos) y NUNCA recalculada en `onChange`. Un
+    // `.click()` antes de scrollear enfoca el input en la posición VIEJA
+    // (pre-scroll); el `scrollIntoView` posterior mueve la fila pero nada
+    // vuelve a pedir la posición nueva (el listener de scroll solo actualiza
+    // dropdowns que ya están abiertos), así que el `.fill()` de después abre
+    // el dropdown en coordenadas obsoletas -- nunca aparece donde Playwright
+    // lo busca ("element(s) not found" real visto en CI, dos rondas). Mismo
+    // patrón ya probado en cotizaciones-editar.spec.ts (critical): scrollear
+    // ANTES de cualquier foco, y dejar que `.fill()` enfoque una sola vez, ya
+    // en la posición final.
+    await descripcionB.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+    await descripcionB.fill('Grúa E2E Fase8')
+
+    // El filtrado de sugerencias es 100% client-side contra un catálogo que
+    // `useQuotationForm` carga en un `requestIdleCallback` (hasta 1.5s de
+    // demora) -- nada que ver con la carrera que este test quiere probar.
+    // Esperar a que la sugerencia esté visible antes de arrancar el
+    // Promise.all deja la carrera real acotada a la única parte que importa:
+    // la confirmación del servidor de precioA vs. el click del autofill, con
+    // el dropdown de B ya listo (queda abierto, sin clickear todavía).
+    const sugerencia = pageB.getByText(PRODUCTO_AUTOFILL.descripcion, { exact: true })
+    await expect(sugerencia).toBeVisible({ timeout: 15_000 })
+
+    const nuevoPrecioA = '9999'
+    await Promise.all([
+      (async () => { await precioA.click(); await precioA.fill(nuevoPrecioA); await precioA.blur() })(),
+      sugerencia.click(),
+    ])
+
+    // Esperar a que ambas operaciones asienten (éxito o conflicto, cualquiera).
+    await pageA.waitForTimeout(2_000)
+
+    const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+    const item = cotizacion.items[1]
+    const productoAplicado = item.descripcion === PRODUCTO_AUTOFILL.descripcion
+
+    if (productoAplicado) {
+      // El autofill de B ganó la carrera y se aplicó -- atómico: los 4 campos
+      // deben ser consistentes entre sí (todos del producto), nunca una mezcla.
+      expect(item.precio_unitario).toBe(PRODUCTO_AUTOFILL.precio_unitario)
+    } else {
+      // El autofill de B fue rechazado por conflicto (precio ya no coincidía
+      // con su "base") -- el precio de A manda, y NINGÚN campo del producto se
+      // aplicó a medias.
+      expect(item.precio_unitario).toBe(Number(nuevoPrecioA))
+      expect(item.descripcion).not.toBe(PRODUCTO_AUTOFILL.descripcion)
+    }
+  })
+
+  test('generar cotización mientras otro colaborador edita una partida no revierte su cambio', async () => {
+    test.setTimeout(90_000)
+
+    // B empieza a editar una partida (sin soltar el foco todavía) justo antes de
+    // que A pulse "Generar Cotización" -- el PATCH de B puede seguir en vuelo,
+    // o recién confirmado, cuando A dispara la transición de estado.
+    const descripcionB = celda(pageB, 2, COL.descripcion)
+    const nuevaDescripcion = `Descripción B Fase8 ${Date.now()}`
+    await descripcionB.click()
+    await descripcionB.fill(nuevaDescripcion)
+
+    await Promise.all([
+      descripcionB.blur(),
+      pageA.getByRole('button', { name: 'Generar Cotización' }).click(),
+    ])
+
+    // La transición de estado confirma que "Generar" sí corrió de punta a punta
+    // (PDF generado, botones cambian a Aprobar/Cancelar).
+    await expect(pageA.getByRole('button', { name: 'Aprobar Cotización' })).toBeVisible({ timeout: 60_000 })
+
+    const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+    expect(cotizacion.estado).toBe('EMITIDA')
+    // El punto central de la Fase 8: el cambio de B NO se revirtió. Antes de este
+    // fix, "Generar Cotización" mandaba un PUT completo con el snapshot que A
+    // tenía en memoria, y podía pisar justo esta edición.
+    expect(cotizacion.items[2].descripcion).toBe(nuevaDescripcion)
   })
 })

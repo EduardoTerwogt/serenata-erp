@@ -13,7 +13,7 @@ import { ImportableItem, QuotationItemsController } from '@/hooks/useQuotationIt
 import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem, reconcileServerItems } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { approveQuotation, buildComplementariaUrl, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationNotes, updateQuotation } from '@/lib/services/quotation-service'
+import { approveQuotation, buildComplementariaUrl, emitirCotizacion, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationNotes } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
 import { Icon } from '@/components/ui/Icon'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
@@ -258,6 +258,28 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // pedido ANTES de esa marca llega viejo y no debe aplicarse a esa celda.
   const localWriteAtRef = useRef<Map<string, number>>(new Map())
 
+  // Fase 8 (hardening pre-Proyectos): todo PATCH saliente (partidas, general,
+  // totales, notas) se registra aquí mientras está en vuelo. `flushPendingSaves`
+  // lo usa antes de Emitir/Aprobar -- sin esto, un PATCH disparado por un blur
+  // justo antes de pulsar el botón podía seguir en vuelo cuando se leía el
+  // estado "canónico" del servidor, y esa lectura llegaba más vieja que el
+  // propio cambio del usuario que está aprobando. Deliberadamente simple: no es
+  // una cola ni un tracker global, solo una foto de "lo que ya estaba en
+  // camino" en el instante exacto del click -- lo que se dispare después no se
+  // espera aquí.
+  const pendingMutationsRef = useRef<Set<Promise<unknown>>>(new Set())
+  const trackMutation = useCallback(<T,>(promise: Promise<T>): Promise<T> => {
+    pendingMutationsRef.current.add(promise)
+    promise.finally(() => { pendingMutationsRef.current.delete(promise) })
+    return promise
+  }, [])
+  const flushPendingSaves = useCallback(async (): Promise<boolean> => {
+    const enVuelo = Array.from(pendingMutationsRef.current)
+    if (enVuelo.length === 0) return true
+    const resultados = await Promise.allSettled(enVuelo)
+    return resultados.every((r) => r.status === 'fulfilled')
+  }, [])
+
   const markLocalWrite = useCallback((rowId: string, field: QuotationItemCellField) => {
     localWriteAtRef.current.set(getItemCellKey(rowId, field), Date.now())
   }, [])
@@ -424,14 +446,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const body: Record<string, unknown> = { ...patch }
     if (options?.base) body.base = options.base
     if (options?.mutationId) body.mutation_id = options.mutationId
-    const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const response = await trackMutation(fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))
     const data = await response.json().catch(() => ({}))
     if (response.status === 409 && data?.error === 'conflict') {
       throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
     }
     if (!response.ok) throw new Error(data?.error || 'Error actualizando partida')
     return data?.item as ItemCotizacion | undefined
-  }, [awaitRowCreation, id])
+  }, [awaitRowCreation, id, trackMutation])
 
   // Fetch crudo (no sendJson/getJson): esos helpers colapsan cualquier respuesta
   // no-2xx en un Error genérico y perderían el payload {fields} del 409, igual
@@ -442,14 +464,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   ) => {
     const body: Record<string, unknown> = { ...patch }
     if (options?.base) body.base = options.base
-    const response = await fetch(`/api/cotizaciones/${id}/general`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const response = await trackMutation(fetch(`/api/cotizaciones/${id}/general`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))
     const data = await response.json().catch(() => ({}))
     if (response.status === 409 && data?.error === 'conflict') {
       throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
     }
     if (!response.ok) throw new Error(data?.error || 'Error actualizando información general')
     return data as Cotizacion | undefined
-  }, [id])
+  }, [id, trackMutation])
 
   const patchQuotationTotales = useCallback(async (
     patch: Record<string, unknown>,
@@ -457,14 +479,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   ) => {
     const body: Record<string, unknown> = { ...patch }
     if (options?.base) body.base = options.base
-    const response = await fetch(`/api/cotizaciones/${id}/totales`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const response = await trackMutation(fetch(`/api/cotizaciones/${id}/totales`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))
     const data = await response.json().catch(() => ({}))
     if (response.status === 409 && data?.error === 'conflict') {
       throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
     }
     if (!response.ok) throw new Error(data?.error || 'Error actualizando configuración de totales')
     return data as Cotizacion | undefined
-  }, [id])
+  }, [id, trackMutation])
 
   // El id ya lo generó el cliente (Fase 6B, ver handleAddRow) -- el POST solo lo
   // valida y lo usa como llave del insert. `upsertItems` en el servidor hace que
@@ -792,9 +814,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const notasToSave = getCurrentNotasSnapshot(); const previousNotas = lastSavedNotasRef.current
     if (notasToSave === previousNotas) { notasDirtyRef.current = false; if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } scheduleNotasIdleRelease(); return }
     setIsSavingNotas(true)
-    try { await saveQuotationNotes(id, notasToSave || null); lastSavedNotasRef.current = notasToSave; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev)) } catch (saveError: unknown) { setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas'); notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } finally { setIsSavingNotas(false) }
+    try { await trackMutation(saveQuotationNotes(id, notasToSave || null)); lastSavedNotasRef.current = notasToSave; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev)) } catch (saveError: unknown) { setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas'); notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } finally { setIsSavingNotas(false) }
     const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; notasDirtyRef.current = hasPendingChanges; if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } if (!hasPendingChanges) scheduleNotasIdleRelease()
-  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, releaseSection, scheduleNotasIdleRelease])
+  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, releaseSection, scheduleNotasIdleRelease, trackMutation])
 
   const getGeneralFieldValue = useCallback((field: QuotationGeneralField): unknown => {
     switch (field) {
@@ -1402,26 +1424,45 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     importing: importingItems,
   }), [getItemCellConflict, getItemRowStatusText, handleAddRow, handleImportItems, handleItemFieldBlur, handleItemFieldChange, handleItemFieldFocus, handleRemoveRow, handleResponsableChange, handleSelectProduct, importingItems, isItemCellLocked, resolveItemCellConflict])
 
-  const guardar = async (estado?: string): Promise<boolean> => {
-    setGuardando(true)
-    setError(null)
+  // Fase 8 (hardening pre-Proyectos): Aprobar/Generar YA NO mandan un PUT
+  // completo de la cotización (`updateQuotation`/`save_cotizacion`) -- ese
+  // camino no comparaba `revision` ni `base` contra nada, así que podía
+  // revertir en silencio una partida que otro colaborador acababa de guardar
+  // por PATCH un instante antes. Ambas transiciones son ahora: esperar las
+  // mutaciones locales en vuelo -> ejecutar la transición de estado dedicada
+  // (que opera contra Postgres, no contra lo que el cliente tenga en memoria)
+  // -> releer canónico. `approve_cotizacion` ya existía con su propia
+  // transacción; `emitir_cotizacion` es nueva, mismo patrón `FOR UPDATE`.
+  const aprobar = async () => {
+    setAprobando(true); setError(null); setSuccess(null)
     try {
-      const refreshedCotizacion = await updateQuotation(id, { cliente: watch('cliente'), proyecto: watch('proyecto'), fecha_entrega: watch('fecha_entrega'), locacion: watch('locacion'), items: watchedItems }, { porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, responsables, currentQuotation: cotizacion, notas_internas: notasInternas || null, ...(estado ? { estado: estado as 'BORRADOR' | 'EMITIDA' | 'APROBADA' } : {}) })
-      applyCotizacionToState(refreshedCotizacion)
+      const flushOk = await flushPendingSaves()
+      if (!flushOk) { setError('Hay cambios recientes que no se guardaron correctamente. Revisa antes de aprobar.'); return }
+      const fullCot = await approveQuotation(id)
+      applyCotizacionToState(fullCot)
       await refreshCatalogos()
-      setSuccess('Guardado correctamente')
-      setTimeout(() => setSuccess(null), 3000)
-      return true
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error al guardar')
-      return false
-    } finally { setGuardando(false) }
+      setSuccess('¡Cotización aprobada! Proyecto y cuentas creados.')
+      setTimeout(() => setSuccess(null), 4000)
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al aprobar') } finally { setAprobando(false) }
   }
-
-  const aprobar = async () => { setAprobando(true); setError(null); setSuccess(null); try { const ok = await guardar(); if (!ok) return; const fullCot = await approveQuotation(id); applyCotizacionToState(fullCot); await refreshCatalogos(); setSuccess('¡Cotización aprobada! Proyecto y cuentas creados.'); setTimeout(() => setSuccess(null), 4000) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al aprobar') } finally { setAprobando(false) } }
   const handlePdfResult = (result: { savedToDrive: boolean; driveWebViewLink?: string; driveError?: string }) => { if (result.savedToDrive) { setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(result.driveWebViewLink ?? null) } else if (result.driveError) { setError(`Error al guardar en Drive: ${result.driveError}`); setDriveLink(null) } else { setError('No se pudo guardar el PDF en Drive'); setDriveLink(null) } setTimeout(() => { setSuccess(null); setError(null); setDriveLink(null) }, 10000) }
   const generarPDF = async () => { if (!cotizacion) return; setGenerandoPdf(true); setError(null); setSuccess(null); setDriveLink(null); try { const result = await generateQuotationPdf(cotizacion, undefined, { skipDownload: true }); handlePdfResult(result) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al generar PDF') } finally { setGenerandoPdf(false) } }
-  const generarCotizacion = async () => { const ok = await guardar('EMITIDA'); if (!ok) return; const refreshedCotizacion = await fetchQuotationDetail(id); applyCotizacionToState(refreshedCotizacion); setGenerandoPdf(true); setError(null); setSuccess(null); setDriveLink(null); try { const result = await generateQuotationPdf(refreshedCotizacion, watchedItems, { skipDownload: true }); handlePdfResult(result) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al generar PDF') } finally { setGenerandoPdf(false) } }
+  const generarCotizacion = async () => {
+    setGuardando(true); setError(null)
+    try {
+      const flushOk = await flushPendingSaves()
+      if (!flushOk) { setError('Hay cambios recientes que no se guardaron correctamente. Revisa antes de generar.'); return }
+      const refreshedCotizacion = await emitirCotizacion(id)
+      applyCotizacionToState(refreshedCotizacion)
+      setGenerandoPdf(true); setSuccess(null); setDriveLink(null)
+      try {
+        const result = await generateQuotationPdf(refreshedCotizacion, watchedItems, { skipDownload: true })
+        handlePdfResult(result)
+      } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al generar PDF') } finally { setGenerandoPdf(false) }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al generar cotización')
+    } finally { setGuardando(false) }
+  }
   const crearComplementaria = () => { if (cotizacion) router.push(buildComplementariaUrl(id, cotizacion)) }
   const cancelarCotizacion = async () => { if (!confirm('¿Cancelar esta cotización? Se eliminará el proyecto y las cuentas por cobrar/pagar asociadas.')) return; setCancelando(true); setError(null); setSuccess(null); try { const res = await fetch(`/api/cotizaciones/${id}/cancelar`, { method: 'POST' }); if (!res.ok) { const body = await res.json(); throw new Error(body.error || 'Error al cancelar') } const updated = await res.json(); applyCotizacionToState(updated); setSuccess('Cotización cancelada. Proyecto y cuentas eliminados.'); setTimeout(() => setSuccess(null), 4000) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al cancelar') } finally { setCancelando(false) } }
 

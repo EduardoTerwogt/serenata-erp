@@ -109,6 +109,16 @@ export async function approveQuotation(id: string): Promise<Cotizacion> {
   return fetchQuotationDetail(id)
 }
 
+/**
+ * BORRADOR -> EMITIDA vía `emitir_cotizacion` (RPC dedicada, solo toca
+ * `estado`). Reemplaza el PUT completo que usaba `guardar('EMITIDA')` --
+ * ver hallazgo de la auditoría de Fase 8 en docs/ESTADO.md.
+ */
+export async function emitirCotizacion(id: string): Promise<Cotizacion> {
+  await getJson(`/api/cotizaciones/${id}/emitir`, 'Error emitiendo cotización', { method: 'POST' })
+  return fetchQuotationDetail(id)
+}
+
 export interface GeneratePdfResult {
   savedToDrive: boolean
   driveWebViewLink?: string

@@ -98,6 +98,7 @@ interface CotizacionServidor {
   id: string
   cliente: string
   proyecto: string
+  estado: string
   locacion: string | null
   notas_internas: string | null
   subtotal: number
@@ -114,7 +115,7 @@ export async function leerCotizacionDelServidor(cotizacionId: string): Promise<C
   const supabase = getLiveSupabaseAdmin()
   const { data, error } = await supabase
     .from('cotizaciones')
-    .select('id, cliente, proyecto, locacion, notas_internas, subtotal, porcentaje_fee, items_cotizacion(id, descripcion, cantidad, precio_unitario, x_pagar, importe, orden)')
+    .select('id, cliente, proyecto, estado, locacion, notas_internas, subtotal, porcentaje_fee, items_cotizacion(id, descripcion, cantidad, precio_unitario, x_pagar, importe, orden)')
     .eq('id', cotizacionId)
     .single()
   if (error) throw error

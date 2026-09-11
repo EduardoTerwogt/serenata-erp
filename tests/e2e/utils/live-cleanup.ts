@@ -81,3 +81,33 @@ export async function cleanupLiveCotizacionesByPrefix(clientePrefix: string) {
     await cleanupLiveCotizacion(row.id)
   }
 }
+
+/**
+ * Siembra un producto real en `productos` para probar el autofill de la
+ * sugerencia de descripción contra Supabase real (Fase 8: el conflicto entre
+ * seleccionar un producto -que autocompleta categoría/precio/x_pagar- y que
+ * otro colaborador edite precio a mano en la misma partida). `descripcion`
+ * es `unique`, así que esto es idempotente: un reintento con la misma
+ * descripción actualiza la fila existente en vez de fallar.
+ */
+export async function ensureLiveProducto(producto: {
+  descripcion: string
+  categoria: string
+  precio_unitario: number
+  x_pagar_sugerido: number
+}) {
+  const supabase = getLiveSupabaseAdmin()
+  const { data, error } = await supabase
+    .from('productos')
+    .upsert({ ...producto, activo: true }, { onConflict: 'descripcion' })
+    .select('id')
+    .single()
+  if (error) throw error
+  return data.id as string
+}
+
+export async function cleanupLiveProducto(descripcion: string) {
+  const supabase = getLiveSupabaseAdmin()
+  const { error } = await supabase.from('productos').delete().eq('descripcion', descripcion)
+  if (error) throw error
+}
