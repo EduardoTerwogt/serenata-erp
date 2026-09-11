@@ -20,7 +20,7 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Supabase
 
 ```bash
 npm install
-# Crear .env.local con las variables listadas en CLAUDE.md ("Variables de entorno").
+# Crear .env.local con las variables listadas en docs/ENV.md.
 # No hay .env.example en el repo: los valores reales viven en Vercel.
 npm run dev   # http://localhost:3000
 ```
@@ -30,7 +30,7 @@ npm run dev   # http://localhost:3000
 ```bash
 npx tsc --noEmit
 npm run lint
-npm test                   # Vitest — 351 tests
+npm test                   # Vitest
 npm run test:e2e:smoke     # Playwright, APIs mockeadas
 npm run test:e2e:critical  # Playwright, APIs mockeadas
 ```
@@ -43,8 +43,13 @@ en GitHub Actions, porque necesita secretos que no viven en el repo. Detalles en
 
 | Archivo | Para qué sirve |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Manual de operación para agentes: reglas de git, permisos, gotchas, variables de entorno. **Empezar aquí.** |
-| [`docs/ESTADO.md`](docs/ESTADO.md) | Qué está hecho de verdad y qué falta. Punto de partida para retomar el trabajo. |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Cómo está organizado el código y por qué. |
+| [`CLAUDE.md`](CLAUDE.md) | Manual de entrada e índice: principios críticos, git, autonomía. **Empezar aquí.** |
+| [`docs/ACTIVE_WORK.md`](docs/ACTIVE_WORK.md) | Qué se está construyendo ahora mismo. Punto de partida de cada sesión. |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Hacia dónde va el producto. |
+| [`docs/ESTADO.md`](docs/ESTADO.md) | Qué funciona hoy, qué está a medias, qué deuda hay. |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Cómo está organizado el código, las tablas y los gotchas del repo. |
+| [`docs/decisions/`](docs/decisions/) | Decisiones duraderas y por qué se tomaron. |
 | [`TESTING.md`](TESTING.md) | Los cuatro niveles de prueba, qué corre dónde y con qué secretos. |
 | [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) | Tokens visuales reales y estado de la migración de UI. |
+| [`docs/ENV.md`](docs/ENV.md) | Variables de entorno. |
+| [`docs/archive/`](docs/archive/) | Historia cerrada. No es contexto de trabajo. |

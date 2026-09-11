@@ -6,9 +6,11 @@ Antes eran dos documentos casi idénticos que se desincronizaron entre sí. Se d
 
 Orden de lectura:
 
-1. [`CLAUDE.md`](CLAUDE.md) — reglas de git, permisos, gotchas, patrones, variables de entorno.
-2. [`docs/ESTADO.md`](docs/ESTADO.md) — qué está hecho, qué está a medias, qué está en rojo.
-3. [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`TESTING.md`](TESTING.md) · [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) — según lo que vayas a tocar.
+1. [`CLAUDE.md`](CLAUDE.md) — principios críticos, git, autonomía, e índice del resto.
+2. [`docs/ACTIVE_WORK.md`](docs/ACTIVE_WORK.md) — qué se está construyendo ahora.
+3. [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`docs/ESTADO.md`](docs/ESTADO.md) · [`docs/decisions/`](docs/decisions/) — según lo que vayas a tocar.
+
+Las reglas por tipo de archivo viven en `.claude/rules/` y se cargan solas.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

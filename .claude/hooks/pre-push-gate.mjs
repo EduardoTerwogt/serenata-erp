@@ -10,6 +10,7 @@
 // Non-fatal by design: any unexpected error here falls open (exit 0) rather
 // than blocking legitimate work because of a hook bug.
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs'
+import { execSync } from 'child_process'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -23,6 +24,31 @@ import { join } from 'path'
 function looksLikeGitPush(command) {
   const withoutHeredocs = command.replace(/<<[-~]?\s*['"]?(\w+)['"]?[\s\S]*?^\1$/gm, '')
   return /(^|&&|\|\||;|\||\n)\s*git\s+push\b/.test(withoutHeredocs)
+}
+
+/**
+ * Returns true when the commits about to be pushed touch app/lib/db code but
+ * leave docs/ACTIVE_WORK.md untouched. That combination means the session is
+ * shipping real changes without persisting its state in the repo, which breaks
+ * the "Git recuerda, la sesión no" loop (see CLAUDE.md "Cierre de sesión").
+ * Advisory only: this never blocks on its own, it just adds a line to the
+ * stderr message of the once-per-session gate.
+ */
+function shipsCodeWithoutActiveWork() {
+  try {
+    const range = 'origin/main..HEAD'
+    const changed = execSync(`git diff --name-only ${range}`, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    if (!changed.trim()) return false
+    const files = changed.split('\n').filter(Boolean)
+    const touchesCode = files.some((f) => /^(app|lib|db|components|hooks)\//.test(f))
+    const touchesActiveWork = files.some((f) => f === 'docs/ACTIVE_WORK.md')
+    return touchesCode && !touchesActiveWork
+  } catch {
+    return false
+  }
 }
 
 function main() {
@@ -53,14 +79,24 @@ function main() {
     process.exit(0)
   }
 
-  process.stderr.write(
+  let message =
     'Freno de seguridad (primer `git push` de esta sesión): antes de continuar, ' +
     'confirma explícitamente con el usuario qué cambios se van a pushear a main — ' +
     'especialmente si esta sesión retomó tareas en cola de una sesión anterior. ' +
     'Ver CLAUDE.md "Ejecución entre sesiones". Si ya lo confirmaste o el usuario ' +
     'ya aprobó este cambio en la conversación, reintenta el push — este freno solo ' +
-    'aplica una vez por sesión.\n'
-  )
+    'aplica una vez por sesión.'
+
+  if (shipsCodeWithoutActiveWork()) {
+    message +=
+      '\n\nAviso adicional: estos commits tocan código pero no actualizan ' +
+      'docs/ACTIVE_WORK.md. Si esta sesión avanzó trabajo real, corre ' +
+      '/serenata-cerrar-sesion antes de pushear para que el estado quede en el ' +
+      'repo y no solo en la conversación. Si el cambio no lo amerita, ignora este ' +
+      'aviso y reintenta.'
+  }
+
+  process.stderr.write(message + '\n')
   process.exit(2)
 }
 

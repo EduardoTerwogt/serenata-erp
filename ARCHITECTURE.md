@@ -110,3 +110,39 @@ Detalle completo, defectos arreglados y lo que falta: [`docs/ESTADO.md`](docs/ES
 6. Un cambio de esquema en producción se guarda **siempre** como migración numerada
    en `db/migrations/` y se commitea, para que el historial no se desincronice de
    lo que la base tiene de verdad.
+
+## Tablas
+
+El schema real es la suma de `db/migrations/*.sql` — esa es la referencia
+autoritativa, no una tabla en un documento. Agrupadas por dominio:
+
+| Dominio | Tablas |
+|---|---|
+| Cotizaciones | `cotizaciones` (id = folio texto SH001), `items_cotizacion`, `cotizacion_folio_reservations`, `cotizacion_collaboration_events` |
+| Catálogos | `clientes`, `productos`, `service_templates` |
+| Proyectos | `proyectos`, `tipos_proyecto`, `tipo_proyecto_etapas`, `tipo_proyecto_tarea_default`, `proyecto_tareas`, `proyecto_tarea_checklist`, `proyecto_documentos` |
+| Cuentas | `cuentas_cobrar`, `cuentas_pagar`, `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`, `pagos_comprobantes`, `ordenes_pago` |
+| Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable`, `historial_cambios_responsable_item` |
+| Planeación | `planeacion_pendientes`, `planeacion_event_notas` (soft delete en `eliminada`), `extraction_logs` |
+| Dashboard | `gastos_fijos` |
+| Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys` |
+
+**RLS** está habilitado en las tablas pero **sin políticas de lectura**, así que la
+llave anónima no lee nada. Es la razón de que la colaboración no use
+`postgres_changes` — ver `docs/decisions/003-realtime-solo-presence.md`.
+
+## Gotchas del repo
+
+Trampas reales, no teóricas. Cada una costó un bug:
+
+- **Cotizaciones COMPLEMENTARIA afectan al Proyecto de la PRINCIPAL.** Al aprobarse
+  suman al proyecto y las cuentas del padre. No tratarlas como independientes.
+- **Escribir en cotizaciones / proyectos / cuentas dispara sync a Google Sheets.** Si
+  el sync rompe, revisar `lib/integrations/` antes de culpar al write.
+- **Reservar folio es atómico vía RPC.** Generar folios en JS garantiza carreras.
+- **Rate limiting corre sobre Postgres**, no sobre un store dedicado (no hay cuenta
+  de pago de Vercel). Funciona al volumen actual; la interfaz
+  `checkRateLimit(key, max, windowSeconds)` está aislada para poder migrar a Redis
+  sin tocar los callers.
+- **`lib/db.ts` es solo fachada** que reexporta repositorios. No meterle lógica.
+- **No mezclar refactors de UI con cambios de schema/RPC/SQL** en el mismo bloque.
