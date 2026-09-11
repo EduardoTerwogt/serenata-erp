@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { login } from '../utils/auth'
 import { clickGenerarCotizacionOrThrow, liveEnabled } from '../utils/live-helpers'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations, cleanupOrphanedTestProductos } from '../utils/live-cleanup'
 
 const LIVE_TEST_CLIENTE_PREFIX = 'E2E-LIVE-'
 
@@ -37,6 +37,9 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     )
     await cleanupOrphanedFolioReservations().catch((e) =>
       console.error('[live cleanup] reservas de folio huerfanas:', e)
+    )
+    await cleanupOrphanedTestProductos().catch((e) =>
+      console.error('[live cleanup] productos huerfanos:', e)
     )
   })
 

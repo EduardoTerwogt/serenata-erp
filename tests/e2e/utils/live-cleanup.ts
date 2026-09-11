@@ -111,3 +111,33 @@ export async function cleanupLiveProducto(descripcion: string) {
   const { error } = await supabase.from('productos').delete().eq('descripcion', descripcion)
   if (error) throw error
 }
+
+/**
+ * Fase 8.7.2: cada partida con `descripcion` nueva se auto-aprende como
+ * producto (`runQuotationNonCriticalAutosaves` -> upsert en `productos`,
+ * `onConflict: 'descripcion'`) -- deliberado en producción, para que el
+ * catálogo de autofill crezca solo. Pero decenas de specs live escriben
+ * descripciones únicas por corrida (sufijo `Date.now()`, contadores de
+ * escala, etc.) precisamente para no chocar entre sí -- cada una nunca
+ * colisiona con `onConflict`, así que nunca se actualiza una fila existente:
+ * siempre crea una nueva, permanente, que ningún cleanup por descripción
+ * exacta cubre. Confirmado en vivo: 1241 filas acumuladas en
+ * `serenata-erp-test` (creciendo ~180/día), todas de corridas de test según
+ * su `created_at` -- ninguna dato de catálogo real, porque este proyecto es
+ * exclusivamente de CI. Al pasar de 1000 activos, `GET /api/productos?q=`
+ * (sin límite explícito cuando `q` está vacío) empezó a truncarse en el
+ * `db-max-rows` default de PostgREST, dejando fuera alfabéticamente al
+ * producto que el test de autofill necesitaba -- la fila causa real del
+ * "el dropdown nunca aparece" (Fase 8.7.2), no timing ni caché.
+ *
+ * Cualquier producto de más de un día es, en este proyecto, basura de una
+ * corrida de CI ya terminada -- nada legítimo necesita sobrevivir tanto.
+ * Se corre en el mismo `beforeAll` que ya limpia reservas de folio huérfanas,
+ * para que la tabla nunca vuelva a acercarse al límite de PostgREST.
+ */
+export async function cleanupOrphanedTestProductos() {
+  const supabase = getLiveSupabaseAdmin()
+  const unDiaAtras = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { error } = await supabase.from('productos').delete().lt('created_at', unDiaAtras)
+  if (error) throw error
+}

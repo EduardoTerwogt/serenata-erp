@@ -1280,7 +1280,19 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const semantic = rawPatch.then(
       (updatedItem) => {
         markLocalWrite(rowId, field)
-        itemDirtyCellsRef.current.delete(key)
+        // Causa F (hueco de la ronda de revisión): si ya hay un reintento
+        // encolado (`itemCellRetryNeededRef`), esta ronda que acaba de
+        // resolver ya está desactualizada frente a una edición más nueva --
+        // limpiar `itemDirtyCellsRef` acá dejaría a `upsertLocalItemState`
+        // (justo abajo, con `preserveLocalEdits: true`) creer que la celda
+        // ya no está "ocupada" y pisar el valor recién tecleado con el
+        // `updatedItem` de ESTA ronda (viejo). El drenado de
+        // `persistItemCellAutosave` va a mandar la ronda siguiente con el
+        // valor correcto -- recién esa, al no encontrar más reintentos
+        // pendientes, limpia el dirty de verdad.
+        if (!itemCellRetryNeededRef.current.has(key)) {
+          itemDirtyCellsRef.current.delete(key)
+        }
         clearItemCellConflict(rowId, field)
         // El valor canónico es `updatedItem` (lo que el servidor confirmó),
         // no el `patch` que se mandó -- evita que una diferencia de
@@ -1304,7 +1316,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           if (detail && normalizeItemFieldValue(field, detail.attempted) === normalizeItemFieldValue(field, detail.current)) {
             itemsServerRef.current[rowId] = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)), [field]: detail.current }
             itemCellBaseRef.current[key] = { [field]: detail.current }
-            itemDirtyCellsRef.current.delete(key)
+            // Mismo motivo que la rama de éxito de arriba: no limpiar dirty
+            // si ya hay un reintento encolado con un valor más nuevo.
+            if (!itemCellRetryNeededRef.current.has(key)) {
+              itemDirtyCellsRef.current.delete(key)
+            }
             scheduleItemCellIdleRelease(rowId, field)
             return undefined
           }

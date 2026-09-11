@@ -1,6 +1,6 @@
 import { test, expect, BrowserContext, Locator, Page, Response } from '@playwright/test'
 import { login } from '../utils/auth'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations, cleanupOrphanedTestProductos } from '../utils/live-cleanup'
 import { esperarCanalColaborativo, faltantesDelEntornoLive, leerCotizacionDelServidor, leerProyectoYCuentasDelServidor, liveEnabled } from '../utils/live-helpers'
 import { cleanupLiveUser, ensureLiveUser } from '../utils/live-users'
 import { fmtCurrency } from '@/lib/quotations/format'
@@ -117,6 +117,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
 
     await cleanupLiveCotizacionesByPrefix(PREFIJO).catch((e) => console.error('[live colab] barrido inicial:', e))
     await cleanupOrphanedFolioReservations().catch((e) => console.error('[live colab] reservas huérfanas:', e))
+    await cleanupOrphanedTestProductos().catch((e) => console.error('[live colab] productos huérfanos:', e))
     await ensureLiveUser(USUARIO_B)
 
     const suffix = Date.now()

@@ -2,7 +2,7 @@ import { test, expect, BrowserContext, Page } from '@playwright/test'
 import { createClient, RealtimeChannel } from '@supabase/supabase-js'
 import { SignJWT } from 'jose'
 import { login } from '../utils/auth'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations, cleanupOrphanedTestProductos } from '../utils/live-cleanup'
 import { faltantesDelEntornoLive, liveEnabled } from '../utils/live-helpers'
 import { cleanupLiveUser, ensureLiveUser } from '../utils/live-users'
 
@@ -91,6 +91,7 @@ test.describe('live: autorización del canal privado de Realtime', () => {
 
     await cleanupLiveCotizacionesByPrefix(PREFIJO).catch((e) => console.error('[live realtime-auth] barrido inicial:', e))
     await cleanupOrphanedFolioReservations().catch((e) => console.error('[live realtime-auth] reservas huérfanas:', e))
+    await cleanupOrphanedTestProductos().catch((e) => console.error('[live realtime-auth] productos huérfanos:', e))
     await ensureLiveUser(USUARIO_SIN_COTIZACIONES)
 
     context = await browser.newContext()
