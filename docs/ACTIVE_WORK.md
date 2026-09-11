@@ -346,16 +346,23 @@ Regresión de un usuario: `tests/e2e/critical/cotizaciones-editar.spec.ts`,
 
 ## Siguiente paso
 
-1. Implementar causas E-I tal como están diseñadas arriba (o revisar el archivo de
-   plan completo si sigue disponible en `/root/.claude/plans/los-avisos-de-floofy-dragonfly.md`
-   de la sesión anterior — pero ese path es local a esa sesión/cuenta, no está en
-   git; este documento ya tiene todo el contenido técnico necesario para no
-   depender de él).
-2. Correr la suite completa de validación (arriba) y confirmar que
+**PR ya abierto en borrador:** [#28](https://github.com/EduardoTerwogt/serenata-erp/pull/28)
+(rama `claude/adoring-mayer-34emkm` → `main`), con el commit `09859b6` (Fixes 1-4).
+Al cortar esta sesión, CI (`test`, `smoke-and-critical`, `live`, `fresh-db`) estaba
+**en progreso, sin confirmar en verde todavía** — lo primero que debe hacer la
+sesión/cuenta que retome es revisar el resultado de ESE PR antes de seguir
+agregando commits.
+
+1. Confirmar el estado real de CI en el PR #28 (no asumir verde solo porque el
+   push tuvo éxito).
+2. Implementar causas E-I tal como están diseñadas arriba (todo el contenido
+   técnico necesario ya está en este documento, no depende de ningún archivo
+   fuera del repo).
+3. Correr la suite completa de validación (arriba) y confirmar que
    `flushPendingSaves`/Generar/Aprobar nunca corren con una celda sin confirmar.
-3. Abrir el PR en borrador hacia `main` con el primer commit útil de la rama (no
-   se abrió todavía en esta sesión).
-4. Una vez todo en verde (incluido `live` en CI, no solo el push): documentar el
+4. Pushear el segundo commit al MISMO PR #28 (misma rama) — no abrir un PR nuevo.
+5. Una vez todo en verde (incluido `live` en CI, no solo el push): documentar el
    cierre real como Fase 8.7.2 en `docs/ROADMAP.md` → Cerrado y en
    `ARCHITECTURE.md` → Edición colaborativa (mismo formato que la entrada de
-   8.7.1), y recién ahí actualizar este documento a "ninguna iniciativa activa".
+   8.7.1), pasar el PR de borrador a listo, y recién ahí actualizar este
+   documento a "ninguna iniciativa activa".
