@@ -135,11 +135,23 @@ secretos: `TESTING.md`.
 
 ---
 
-## Cierre de sesión
+## Skills del proyecto
 
-Antes de cerrar, correr `/serenata-cerrar-sesion`: actualiza `docs/ACTIVE_WORK.md`,
-verifica si `ARCHITECTURE.md` sigue siendo verdad, mueve a `docs/decisions/` lo que
-alguien podría volver a cuestionar en seis meses, y purga el debugging ya resuelto.
+Dos procedimientos fijos viven en `.claude/skills/`:
+
+- **`serenata-iniciar-fase`** — al abrir sesión: leer `docs/ACTIVE_WORK.md`, inspeccionar
+  `main`, localizar infraestructura reutilizable, clasificar riesgos P0/P1/P2 y proponer
+  **sin implementar**.
+- **`serenata-cerrar-sesion`** — antes de cerrar: actualizar `docs/ACTIVE_WORK.md`,
+  verificar si `ARCHITECTURE.md` sigue siendo verdad, mover a `docs/decisions/` lo que
+  alguien podría volver a cuestionar en seis meses, y purgar el debugging resuelto.
+
+El registro de slash commands se arma al arrancar la sesión, así que si el repo se
+actualiza después, `/serenata-iniciar-fase` puede no aparecer en el autocompletado
+aunque el archivo exista. **Eso no impide usarlas:** basta pedirlo en lenguaje natural
+("arranca la fase actual", "vamos a cerrar la sesión") o nombrarla ("usa la skill
+serenata-cerrar-sesion"). Si el comando no responde, leer el `SKILL.md` correspondiente
+y seguir el procedimiento.
 
 ---
 

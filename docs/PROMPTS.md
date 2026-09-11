@@ -10,16 +10,25 @@ de abajo solo apuntan a `docs/ACTIVE_WORK.md`: es lo único que cambia entre ses
 
 ---
 
+> **Nota sobre los slash commands.** El registro de comandos se arma al arrancar la
+> sesión. Si tu entorno actualiza el repo después de ese momento,
+> `/serenata-iniciar-fase` puede no salir en el autocompletado aunque el archivo
+> exista. No importa: pedirlo en lenguaje natural activa la misma skill, porque su
+> campo `description` coincide. Por eso abajo va primero la forma en lenguaje natural.
+
 ## Abrir una sesión de trabajo
 
 ```
-/serenata-iniciar-fase
+Arranca la fase actual de @docs/ACTIVE_WORK.md
 ```
 
-Lee `ACTIVE_WORK.md`, inspecciona `main`, busca infraestructura reutilizable,
-clasifica riesgos P0/P1/P2 y propone. **No implementa.**
+Activa `serenata-iniciar-fase`: lee `ACTIVE_WORK.md`, inspecciona `main`, busca
+infraestructura reutilizable, clasifica riesgos P0/P1/P2 y propone. **No implementa.**
 
-Equivalente sin skill:
+Equivalentes: `/serenata-iniciar-fase` (si el comando aparece) o
+`Usa la skill serenata-iniciar-fase`.
+
+Versión explícita, si prefieres no depender de la skill:
 
 ```
 Trabajemos la fase actual de @docs/ACTIVE_WORK.md. Revisa main y
@@ -71,10 +80,10 @@ resumen: cuántos usos, cuáles requieren corrección, cuáles son razonables.
 ## Cerrar sesión
 
 ```
-/serenata-cerrar-sesion
+Vamos a cerrar la sesión
 ```
 
-Reescribe `ACTIVE_WORK.md`, verifica si `ARCHITECTURE.md` sigue siendo verdad, mueve
+Activa `serenata-cerrar-sesion`. Reescribe `ACTIVE_WORK.md`, verifica si `ARCHITECTURE.md` sigue siendo verdad, mueve
 a `docs/decisions/` lo que alguien podría cuestionar en seis meses, purga el
 debugging resuelto y commitea.
 
