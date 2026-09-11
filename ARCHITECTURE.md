@@ -134,9 +134,11 @@ reservar folio, registrar pago, guardar cotización y los PATCH por sección.
 siendo específico de Cotizaciones. Se decide su forma genérica cuando Proyectos exista
 como segundo consumidor real, no antes.
 
-Por qué se construyó así: [`docs/decisions/002`](docs/decisions/002-modelo-de-conflictos-por-campo.md)
-y [`docs/decisions/003`](docs/decisions/003-realtime-solo-presence.md). El recorrido
-completo, con los defectos que se encontraron en el camino:
+Por qué se construyó así: [`docs/decisions/002`](docs/decisions/002-modelo-de-conflictos-por-campo.md),
+[`docs/decisions/003`](docs/decisions/003-realtime-solo-presence.md) y
+[`docs/decisions/007`](docs/decisions/007-guard-de-estado-for-share-vs-for-update.md)
+(por qué el guard de estado en escrituras de partidas usa `FOR SHARE`, no `FOR
+UPDATE`). El recorrido completo, con los defectos que se encontraron en el camino:
 [`docs/archive/fases-colaboracion-0-8.md`](docs/archive/fases-colaboracion-0-8.md).
 
 ## Reglas que se respetan

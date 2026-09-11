@@ -12,14 +12,10 @@ para no priorizar features con información vieja.
 
 ---
 
-## Ahora — Fase 8.7.1
+## Ahora — ninguna iniciativa activa
 
-Una auditoría sobre el cierre de Fase 8.7 encontró un P0 que ese cierre no cubrió:
-`flushPendingSaves` solo esperaba cuatro de las nueve vías de mutación de partidas, y
-ninguna escritura de partidas revisaba el `estado` de la cotización dueña. Implementada
-en rama, pendiente de PR/CI verde (incluido el job `live`)/merge. Detalle en
-`docs/ACTIVE_WORK.md`. Engineering Hardening sigue siendo la siguiente prioridad
-comprometida después de esta, sin arrancar todavía.
+Fase 8.7.1 cerró completa (ver Cerrado, abajo). Engineering Hardening es la
+siguiente prioridad comprometida, pero no ha arrancado.
 
 ## Siguiente — Engineering Hardening
 
@@ -85,6 +81,13 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Fase 8.7.1, Serializar mutaciones de partidas contra Generar/Aprobar
+  (2026-09-11).** Una auditoría sobre el cierre de Fase 8.7 encontró que
+  `flushPendingSaves` solo cubría cuatro de las nueve vías de mutación de partidas y
+  que ninguna escritura de partidas revisaba el `estado` de la cotización dueña.
+  Cerrado con un guard transaccional (`FOR SHARE`) en las tres RPCs de escritura de
+  partidas + flush completo de las cinco vías que faltaban. Historia:
+  `docs/archive/fase-8.7.1-estado-guard-partidas.md`.
 - **Fase 8.7, Cierre real de Collaboration (2026-09-11).** Cerró los cinco huecos
   de la auditoría de Fase 8 (flush real previo a Generar/Aprobar, cleanup de
   Presence en reconexión, prueba live de Aprobar bajo concurrencia, `409`
