@@ -61,7 +61,13 @@ Actualizar `docs/ROADMAP.md` y mover la bitácora larga —si la hubo— a
 
 ## 6. Commit y push a la rama
 
-Commitear la documentación junto con el trabajo y pushear **a la rama**, no a `main`.
+**Si todo el diff de la sesión es documentación (solo `.md`):** commitear y pushear
+directo a `main`. No hace falta rama, PR ni CI — un `.md` no lo ejecuta el build ni
+los tests.
+
+**Si el diff toca cualquier otra cosa** (código, migraciones, config, scripts):
+commitear la documentación junto con el trabajo y pushear **a la rama**, no a
+`main`.
 
 **Confirmar que existe un PR abierto para esta rama.** Si no se abrió al iniciar
 sesión, abrirlo ahora (en borrador) antes de seguir — sin PR, ningún push a la rama

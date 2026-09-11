@@ -85,6 +85,15 @@ hay que crearlo con el `GITHUB_TOKEN` que dé el usuario.
 solo cuando el trabajo está terminado y todas las suites pasaron. `main` siempre debe
 ser una versión desplegable.
 
+**Excepción — solo documentación:** si el diff completo toca **únicamente archivos
+`.md`** (`CLAUDE.md`, `README.md`, `ARCHITECTURE.md`, `TESTING.md`,
+`DESIGN_SYSTEM.md`, cualquier cosa bajo `docs/` o `.claude/skills/*/SKILL.md`) — cero
+código de la app, migraciones, config o scripts — se commitea y pushea **directo a
+`main`**, sin rama ni PR. Un `.md` no lo ejecuta el build ni los tests, así que no hay
+CI real que perderse. Si el diff toca aunque sea un archivo que no sea `.md`, deja de
+aplicar la excepción y todo el cambio (incluida la parte de documentación) sigue el
+flujo normal de rama + PR.
+
 ```bash
 git fetch origin main
 git switch main && git pull --ff-only origin main
@@ -119,7 +128,10 @@ Un cambio está **pre-aprobado** —se ejecuta sin pausar— si cumple las 4 con
 (3) no elimina features, (4) no bloquea features; y sus tests ya corrieron en verde.
 
 Pedir aprobación **solo** ante una decisión de negocio, arquitectura o UX/UI que no
-esté clara o tenga más de un camino razonable. Fixes pequeños y seguros van directo.
+esté clara o tenga más de un camino razonable. Fixes pequeños y seguros van directo
+— es decir, se ejecutan sin pausar a pedir permiso, pero **el destino del push sigue
+la sección "Rama + PR" de arriba**: rama + PR salvo que el cambio sea 100%
+documentación.
 
 Un plan ya aprobado se ejecuta completo sin volver a pedir permiso, siempre que cada
 etapa pase sus tests y se verifique que lo pusheado quedó **en verde de verdad**

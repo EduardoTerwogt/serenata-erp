@@ -6,7 +6,11 @@ portal para proveedores y extracción AI de eventos desde mensajes informales.
 
 - **App en producción:** https://serenata-erp.vercel.app
 - **Repo:** https://github.com/EduardoTerwogt/serenata-erp
-- **Rama única:** `main` (push a `main` = deploy automático en Vercel)
+- **Flujo:** rama dedicada → PR (en borrador, desde el primer commit) → CI real en
+  verde → merge a `main`. Push a `main` = deploy automático en Vercel, por eso `main`
+  siempre debe quedar desplegable. Única excepción: un cambio que sea 100%
+  documentación (`.md`) va directo a `main`, sin rama ni PR. Detalle completo en
+  [`CLAUDE.md`](CLAUDE.md).
 
 ## Stack
 

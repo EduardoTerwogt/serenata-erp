@@ -41,6 +41,10 @@ No leer el roadmap completo: la fase actual es la que importa.
 
 ## 2. Situarse en la rama de trabajo
 
+**Excepción:** si el trabajo de la sesión es 100% documentación (solo archivos
+`.md`), este paso no aplica — se commitea y pushea directo a `main` al cerrar (ver
+`serenata-cerrar-sesion`).
+
 **Nunca `git reset --hard`.** Verificar primero y no destruir nada:
 
 ```bash
