@@ -509,6 +509,26 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       expect(item.precio_unitario).toBe(Number(nuevoPrecioA))
       expect(item.descripcion).not.toBe(PRODUCTO_AUTOFILL.descripcion)
     }
+
+    // Fase 8.7 (Bloque 1): un conflicto sin resolver ahora bloquea cualquier
+    // transición posterior (Generar/Aprobar) -- flushPendingSaves fuerza y
+    // reintenta cualquier celda todavía marcada dirty, incluida una con un
+    // conflicto abandonado (nunca se limpia de itemDirtyCellsRef mientras no
+    // se resuelva). Como este describe.serial reutiliza las mismas dos
+    // páginas para todos los tests, el lado que perdió la carrera (A o B,
+    // cualquiera de los 4 campos del producto) puede quedar con un banner sin
+    // resolver que arrastraría el bloqueo hasta el siguiente test ("generar
+    // cotización..."). Se resuelve aquí, igual que ya hace el test anterior
+    // con su propio conflicto -- sin esto, un test que no tiene nada que ver
+    // fallaría por un timeout sin relación aparente.
+    for (const page of [pageA, pageB]) {
+      for (let intentos = 0; intentos < 6; intentos += 1) {
+        const usarBoton = page.getByRole('button', { name: /^Usar\s+"/ }).first()
+        if (!(await usarBoton.isVisible().catch(() => false))) break
+        await usarBoton.click()
+        await page.waitForTimeout(200)
+      }
+    }
   })
 
   test('generar cotización mientras otro colaborador edita una partida no revierte su cambio', async () => {
