@@ -1,6 +1,7 @@
 ---
 name: serenata-iniciar-fase
 description: Arranca una fase o bloque de trabajo en Serenata ERP auditando primero el estado real del código, sin implementar. Usar al abrir una sesión nueva de trabajo sobre el repo, cuando el usuario pide empezar una fase, retomar el trabajo activo, o auditar un área antes de cambiarla.
+user-invocable: true
 ---
 
 # Iniciar una fase de trabajo

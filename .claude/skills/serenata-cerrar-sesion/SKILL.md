@@ -1,6 +1,7 @@
 ---
 name: serenata-cerrar-sesion
 description: Cierra una sesión de trabajo en Serenata ERP persistiendo el estado en los documentos del repo antes de que la conversación termine. Usar cuando el usuario dice que va a cerrar, terminar, o dejar aquí el trabajo, cuando se completó un bloque, o antes de abrir una sesión nueva.
+user-invocable: true
 ---
 
 # Cerrar sesión
