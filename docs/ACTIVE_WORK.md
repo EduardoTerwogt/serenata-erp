@@ -6,32 +6,60 @@
 
 **Ninguna iniciativa activa.**
 
-**Último cierre — ajuste puntual fuera de roadmap:** se reforzó la documentación del
-flujo de sesión (no tocó código ni arquitectura, por eso no entró a
-`docs/ROADMAP.md` como iniciativa). Mergeado a `main` en `f688708` (PR #26).
+**Último cierre — ajuste puntual fuera de roadmap:** sesión completa de higiene del
+flujo de sesión y auditoría de contradicciones en la documentación. No tocó código
+ni arquitectura, por eso no entró a `docs/ROADMAP.md` como iniciativa. Todo mergeado
+o pusheado directo a `main` (commits `f688708` → `010f169`, el último vía la
+excepción de doc-only recién creada en esta misma sesión).
 
-- `CLAUDE.md` y `serenata-iniciar-fase` ahora dicen explícitamente que un push a una
-  rama sin PR abierto no dispara `test.yml`/`e2e.yml`/`migrations.yml`, y que el PR
-  debe abrirse en borrador con el primer commit útil, no al final.
-- `serenata-cerrar-sesion` exige confirmar que ese PR existe antes de dar por válido
-  un "CI en verde".
-- `serenata-iniciar-fase` ganó un paso 0 que pregunta qué se va a trabajar y lo
-  clasifica contra el roadmap (ya priorizado / nuevo → se agrega al roadmap antes de
-  arrancar / fuera de roadmap → se documenta aquí al cerrar).
-- `docs/ROADMAP.md` documenta la misma clasificación en su sección "Cómo se
-  mantiene".
+Resumen de lo que cambió (el detalle vive en `CLAUDE.md` y los commits mismos, no se
+repite aquí):
+
+- `CLAUDE.md` documenta ahora el flujo completo rama → PR (en borrador, desde el
+  primer commit) → CI verde → merge, más la excepción: un diff 100% `.md` va directo
+  a `main`, sin rama ni PR.
+- `serenata-iniciar-fase` gana un paso 0 (clasificar el pedido de la sesión contra
+  el roadmap) y el recordatorio de abrir el PR en borrador temprano.
+- `serenata-cerrar-sesion` exige confirmar que existe un PR antes de dar un "CI en
+  verde" por válido.
+- Auditoría de contradicciones en toda la documentación (3 sub-agentes, root docs +
+  `.claude/` + `docs/`): se corrigieron imprecisiones en `README.md`/`TESTING.md`, se
+  actualizó `DESIGN_SYSTEM.md`/`ui.md`/`ROADMAP.md` para reflejar que la migración de
+  Fase 5.7 ya está completa (estaban marcando como pendientes archivos que ya usan
+  los tokens nuevos), se agregó una excepción estrecha a `migraciones.md` (editar una
+  migración vieja solo para sincronizar el archivo con producción, nunca para
+  cambiar comportamiento), y se anotó un hallazgo nuevo para Engineering Hardening
+  (ver abajo).
+- `main` local estaba divergido de `origin/main` (50 commits propios de una época
+  pre-reforma). Sincronizado, y el setup de sesión en `CLAUDE.md`/
+  `serenata-iniciar-fase` ahora fuerza `main` local = `origin/main` en cada sesión.
 
 Historial de iniciativas cerradas (Fase 8.7, 8.7.1, colaboración en cotizaciones,
 etc.): ver `docs/ROADMAP.md` → **Cerrado**, con enlaces a `docs/archive/`.
 
+## Tests ejecutados
+
+CI real en cada uno de los pushes directos a `main` de esta sesión (`test.yml`,
+`e2e.yml`, `migrations.yml`) — todos verdes en el commit final `010f169`. Dos flakes
+puntuales del job `live` (contra Supabase/Drive de prueba reales) en commits
+intermedios, ambos confirmados como infraestructura y no del cambio: el commit
+inmediato siguiente, con el mismo código de app, pasó limpio.
+
 ## Problemas encontrados (abiertos)
 
-- **Flake en `tests/e2e/critical/planeacion.spec.ts`** ("extracción IA: pega texto,
-  valida y crea cotizaciones"): en el PR #26 falló por timeout de navegación
-  (`toHaveURL(/\/cotizaciones$/)`, 5000ms, recibió `/planeacion`), pero el run de
-  `main` inmediatamente anterior pasó el mismo spec en verde con código de app
-  idéntico — no se investigó a fondo por ser un PR de documentación pura. Si vuelve a
-  fallar de forma intermitente, revisar el timing de esa redirección.
+- **Flake recurrente en el job `live`.** Van tres ocasiones distintas en lo que va
+  del día (`planeacion.spec.ts` en el PR #26, y dos veces más en pushes directos de
+  esta sesión) donde `live` falla y el commit inmediato siguiente —con el mismo
+  código— pasa limpio. Nunca se investigó la causa raíz porque cada vez el diff no
+  tocaba código de la app. Si sigue repitiéndose, vale la pena investigar
+  `live` en sí (¿timeout corto, contención de red hacia el Supabase/Drive de
+  prueba?) — candidato natural para el frente E (Pruebas de carga) o uno nuevo de
+  Engineering Hardening.
+- **PUT genérico en `cuentas-pagar` contradice `.claude/rules/api.md`.**
+  `app/api/cuentas-pagar/route.ts` actualiza `estado`/`fecha_pago`/`monto_pagado` por
+  un `PUT` genérico pese a existir `registrar-pago` como endpoint dedicado. Anotado
+  en detalle en `docs/archive/auditoria-ingenieria-2026-09.md` (frente C), para
+  decidir cuando arranque Engineering Hardening. No se tocó código.
 
 ## Deuda técnica conocida (sin resolver, intencional)
 
@@ -42,5 +70,5 @@ etc.): ver `docs/ROADMAP.md` → **Cerrado**, con enlaces a `docs/archive/`.
 ## Siguiente paso
 
 Ver `docs/ROADMAP.md` — **Engineering Hardening** es la siguiente iniciativa
-comprometida, sin arrancar todavía. Auditar primero (`/serenata-iniciar-fase`)
-antes de definir bloques.
+comprometida, sin arrancar todavía. Auditar primero (`/serenata-iniciar-fase`) antes
+de definir bloques — ya tiene dos hallazgos nuevos que sumar a los del frente C.
