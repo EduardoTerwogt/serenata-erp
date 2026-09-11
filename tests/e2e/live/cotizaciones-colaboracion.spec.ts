@@ -1,6 +1,6 @@
 import { test, expect, BrowserContext, Locator, Page } from '@playwright/test'
 import { login } from '../utils/auth'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations, ensureLiveProducto } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
 import { esperarCanalColaborativo, faltantesDelEntornoLive, leerCotizacionDelServidor, liveEnabled } from '../utils/live-helpers'
 import { cleanupLiveUser, ensureLiveUser } from '../utils/live-users'
 import { fmtCurrency } from '@/lib/quotations/format'
@@ -118,9 +118,6 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     await cleanupLiveCotizacionesByPrefix(PREFIJO).catch((e) => console.error('[live colab] barrido inicial:', e))
     await cleanupOrphanedFolioReservations().catch((e) => console.error('[live colab] reservas huérfanas:', e))
     await ensureLiveUser(USUARIO_B)
-    // Fase 8: producto real para el conflicto autofill-vs-edición-manual (punto B
-    // de la auditoría) -- necesita un producto de verdad en la tabla, no mockeado.
-    await ensureLiveProducto(PRODUCTO_AUTOFILL)
 
     const suffix = Date.now()
 
@@ -128,6 +125,18 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     pageA = await contextA.newPage()
     vigilarErrores(pageA, 'A')
     await login(pageA, '/cotizaciones')
+
+    // Fase 8: producto real para el conflicto autofill-vs-edición-manual (punto
+    // B de la auditoría) -- necesita un producto de verdad en la tabla, no
+    // mockeado. Se crea vía el POST real (no un upsert directo a Supabase):
+    // GET /api/productos cachea 5 min en el servidor (CacheManager) y solo el
+    // propio POST la invalida (`cache.invalidate('productos:')`); un insert
+    // directo deja esa caché sirviendo la lista vieja el resto del job entero
+    // si algún test anterior (basic.spec.ts, etc.) ya la calentó -- exactamente
+    // lo que pasó en CI: el dropdown nunca aparecía, no por un problema de
+    // timing sino porque el producto nunca llegaba al cliente.
+    const productoResponse = await pageA.request.post('/api/productos', { data: PRODUCTO_AUTOFILL })
+    expect(productoResponse.ok(), `no se pudo crear el producto de prueba: ${await productoResponse.text()}`).toBeTruthy()
 
     origenId = await crearCotizacion(pageA, `${PREFIJO}ORIGEN-${suffix}`, `Origen colab ${suffix}`, [
       { descripcion: 'Grúa importada', precio: 4000 },
