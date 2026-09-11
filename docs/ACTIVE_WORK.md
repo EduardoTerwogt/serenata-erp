@@ -99,11 +99,105 @@ intencional hasta que Proyectos exista como segundo consumidor real.
 
 ## Estado
 
-Bloques 1-5: sin empezar.
+**Bloque 1: cerrado.** `flushPendingSaves` ahora fuerza (sin await intermedio, foto
+atómica) todo lo dirty de General/Totales/Partidas/Notas antes de leer
+`pendingMutationsRef`, y `trackMutation` envuelve la operación completa (no el
+`fetch()` crudo) en las cuatro vías -- un 409/500 pendiente ahora sí aborta
+Generar/Aprobar/el "Generar PDF" standalone. Se agregó `transitionInFlightRef`
+(doble click) y un guard por campo/celda contra el doble disparo entre el blur de
+sección y el propio flush del click. `approve_cotizacion` gana el mismo guard de
+estado bajo `FOR UPDATE` que ya tenía `emitir_cotizacion` (asimetría encontrada en la
+auditoría, aprobada para este bloque) -- migración
+`20260911_approve_cotizacion_estado_guard.sql`, aplicada y validada contra
+`serenata-erp-test` (estados inválidos e idempotencia de `APROBADA`, sin efectos
+secundarios). Cobertura nueva en
+`tests/e2e/critical/cotizaciones-flush-transicion.spec.ts` (9 casos: las 5 vías de
+guardado x 409/500/dirty-click-inmediato, más el doble click) y un caso unitario en
+`lib/server/quotations/__tests__/approval.test.ts`. `tsc`, lint, unit (417), build,
+smoke (21) y critical (59, incluidos los 9 nuevos) verdes localmente; `live` queda
+pendiente de confirmar en CI (esta sesión no tiene el `service_role`/JWT de
+`serenata-erp-test`, solo acceso de datos vía MCP).
+
+**Bloque 2: cerrado.** El cleanup de retries de `trackPresence` (`pendingTrackRetriesRef`)
+solo corría en `onSessionEnd` (unmount/cambio de topic); una reconexión interna pasaba
+por `onDisconnected`, que no lo tocaba -- un retry agendado justo antes de la caída
+sobrevivía a la reconexión y terminaba llamando `.track()` contra el canal viejo, ya
+retirado por `useRealtimeChannel`. `hooks/useQuotationPresence.ts` gana
+`clearPendingTrackRetries`, una sola función invocada desde `onDisconnected` y desde
+`onSessionEnd`, más un guard defensivo en `intentar` (compara contra
+`channelRef.current`) para el residual de una promesa de `.track()` que resuelve
+después del cleanup. No se tocó el protocolo de Presence ni la estrategia de reconnect
+de `lib/realtime/useRealtimeChannel.ts`. Cobertura: el test existente
+"el canal caído reconecta..." ahora exige cero `pageerror` en general (antes solo
+excluía un mensaje puntual), y un test nuevo, "Presence se recupera tras una caída de
+canal, sin pageerror", fuerza una caída real (cierre de WebSocket del lado servidor) y
+confirma que Presence vuelve a funcionar tras reconectar. `tsc`, lint, unit (417),
+build, smoke (21) y critical (60, incluido el nuevo) verdes localmente bajo Node 24.
+
+**Fix preexistente (fuera de los bloques, ya cerrado):** el test `live`
+"seleccionar producto (autofill) mientras otro edita precio a mano" fallaba de forma
+intermitente desde antes de Fase 8.7 (reproduce igual en `main`/`09f880b`, confirmado
+por fecha de CI y, ahora, por mecanismo real). Causa raíz: `handleSelectProduct`
+nunca limpiaba `itemDirtyCellsRef`/el timer de autosave de los 4 campos que parchea
+atómicamente -- si el usuario seguía con una celda (p. ej. `descripcion`) dirty por
+una edición manual sin blur, el blur disparado al elegir la sugerencia hacía que
+`handleItemFieldBlur` mandara un segundo PATCH suelto de un solo campo, corriendo en
+paralelo al combinado. La RPC nunca fue parcial: eran dos llamadas atómicas
+independientes, una de las cuales nunca debió dispararse. Arreglado limpiando dirty
++ timer de los 4 campos antes de aplicar la selección. Cobertura nueva en el test
+crítico mockeado ya existente ("seleccionar una sugerencia de producto..."), que
+ahora falla si se dispara más de un PATCH a `/items/:id` -- confirmado que reproduce
+sin el fix y pasa con él.
+
+**Bloque 3: cerrado.** Faltaba cobertura live de concurrencia para "Aprobar" (ya
+existía para "Generar"). Nuevo test en
+`tests/e2e/live/cotizaciones-colaboracion.spec.ts`, mismo `describe.serial` y mismo
+patrón que el de Generar: B edita una partida sin soltar el foco justo cuando A
+pulsa "Aprobar Cotización" (el PATCH de B puede seguir en vuelo cuando
+`approve_cotizacion` dispara). Verificado contra Supabase real: la cotización queda
+`APROBADA`, la edición de B no se revirtió, el proyecto se creó, la cuenta por
+cobrar se creó, y las cuentas por pagar creadas coinciden exactamente con las
+partidas que tienen `x_pagar > 0` en ese momento (invariante, no un conteo fijo).
+Nuevo helper `leerProyectoYCuentasDelServidor` en `tests/e2e/utils/live-helpers.ts`,
+mismo patrón que `leerCotizacionDelServidor`. No se tocó `approve_cotizacion` (ya
+tenía su guard de estado del Bloque 1) ni `cleanupLiveCotizacion` (ya limpiaba
+proyectos/cuentas de antes). `tsc` y lint verdes localmente; `live` confirmado
+verde en CI real sobre el commit `dccdd2e`.
+
+**Bloque 4: cerrado.** La integridad de DB ya estaba protegida
+(`upsert_items_cotizacion`, guard por `WHERE cotizacion_id` en el `ON CONFLICT`); el
+hueco era de semántica de API: `POST /api/cotizaciones/:id/items` descartaba el
+retorno de `upsertItems` y, si el guard rechazaba un id ya perteneciente a otra
+cotización, terminaba respondiendo `{ item: undefined }` con status 200 -- una
+respuesta exitosa con una partida inexistente. Ahora usa el retorno directo de
+`upsertItems`: si venía un id explícito del cliente y el array resultante viene
+vacío, responde `409` sin recalcular ni emitir el evento confirmado. El caso "mismo
+id en la misma cotización" ya era idempotente de antes, sin cambios. No se tocó la
+RPC ni `items/bulk/route.ts` (sus ids ya vienen siempre propios de la misma
+cotización o recién generados). Cobertura: unit nuevo para el caso 409
+(`cotizaciones-items-create-route.test.ts`) y un test live nuevo que pasa por la API
+real, no por la RPC directo (`items-cotizacion-uuid-guard.spec.ts`), confirmando el
+409 y que la fila de A y el conteo de B quedan intactos. `tsc`, lint, unit (418) y
+critical (60) verdes localmente; los 4 checks (`test`, `fresh-db`, `smoke-and-critical`,
+`live`) verdes en CI real sobre el commit `b651479`.
+
+**Bloque 5: cerrado.** Verificada la descripción de `ARCHITECTURE.md` contra el
+código real después de los bloques 1-4 y actualizada: se agregó la garantía de
+flush + revalidación de estado bajo `FOR UPDATE` en ambos RPCs (Bloque 1) y el `409`
+explícito por UUID cruzado en la creación de partidas (Bloque 4) a la sección de
+Edición colaborativa; se quitó el aviso "Todavía no es READY" y se declaró el
+módulo READY, con la lista de los cinco huecos que se cerraron. No se tocó
+`docs/decisions/002` (ya estaba alineado desde el trabajo adelantado del
+2026-09-11) ni se documentó la capa genérica `base`/`conflict` (deuda intencional,
+sigue así hasta que Proyectos exista como segundo consumidor real).
+
+**Los cinco bloques de la Fase 8.7 están cerrados.** Falta correr la validación
+completa de "antes del merge" (abajo) y, si todo sigue verde, mergear a `main`.
 
 ## Próximo paso
 
-Auditar el bloque 1 (`/serenata-iniciar-fase`) y proponer el plan antes de tocar código.
+Validación completa antes del merge (ver sección de abajo) y, si todo sale verde,
+merge a `main` — cierra la Fase 8.7 y declara Fase 8 CLOSED.
 
 ## Validación antes del merge
 

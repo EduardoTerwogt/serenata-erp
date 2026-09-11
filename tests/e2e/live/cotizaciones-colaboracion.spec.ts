@@ -1,7 +1,7 @@
 import { test, expect, BrowserContext, Locator, Page } from '@playwright/test'
 import { login } from '../utils/auth'
 import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
-import { esperarCanalColaborativo, faltantesDelEntornoLive, leerCotizacionDelServidor, liveEnabled } from '../utils/live-helpers'
+import { esperarCanalColaborativo, faltantesDelEntornoLive, leerCotizacionDelServidor, leerProyectoYCuentasDelServidor, liveEnabled } from '../utils/live-helpers'
 import { cleanupLiveUser, ensureLiveUser } from '../utils/live-users'
 import { fmtCurrency } from '@/lib/quotations/format'
 
@@ -509,6 +509,26 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       expect(item.precio_unitario).toBe(Number(nuevoPrecioA))
       expect(item.descripcion).not.toBe(PRODUCTO_AUTOFILL.descripcion)
     }
+
+    // Fase 8.7 (Bloque 1): un conflicto sin resolver ahora bloquea cualquier
+    // transición posterior (Generar/Aprobar) -- flushPendingSaves fuerza y
+    // reintenta cualquier celda todavía marcada dirty, incluida una con un
+    // conflicto abandonado (nunca se limpia de itemDirtyCellsRef mientras no
+    // se resuelva). Como este describe.serial reutiliza las mismas dos
+    // páginas para todos los tests, el lado que perdió la carrera (A o B,
+    // cualquiera de los 4 campos del producto) puede quedar con un banner sin
+    // resolver que arrastraría el bloqueo hasta el siguiente test ("generar
+    // cotización..."). Se resuelve aquí, igual que ya hace el test anterior
+    // con su propio conflicto -- sin esto, un test que no tiene nada que ver
+    // fallaría por un timeout sin relación aparente.
+    for (const page of [pageA, pageB]) {
+      for (let intentos = 0; intentos < 6; intentos += 1) {
+        const usarBoton = page.getByRole('button', { name: /^Usar\s+"/ }).first()
+        if (!(await usarBoton.isVisible().catch(() => false))) break
+        await usarBoton.click()
+        await page.waitForTimeout(200)
+      }
+    }
   })
 
   test('generar cotización mientras otro colaborador edita una partida no revierte su cambio', async () => {
@@ -537,5 +557,42 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     // fix, "Generar Cotización" mandaba un PUT completo con el snapshot que A
     // tenía en memoria, y podía pisar justo esta edición.
     expect(cotizacion.items[2].descripcion).toBe(nuevaDescripcion)
+  })
+
+  test('aprobar mientras otro colaborador edita una partida no revierte su cambio ni deja proyecto/cuentas a medias', async () => {
+    test.setTimeout(90_000)
+
+    // Mismo patrón que el test de Generar de arriba (Fase 8.7 Bloque 3): B sigue
+    // escribiendo (sin soltar el foco) justo cuando A pulsa "Aprobar Cotización" --
+    // el PATCH de B puede seguir en vuelo, o recién confirmado, cuando A dispara
+    // approve_cotizacion. Se usa la fila 1 ("Partida dos"), no la 2 que ya usó y
+    // verificó el test de Generar, para no pisar esa aserción.
+    const descripcionB = celda(pageB, 1, COL.descripcion)
+    const nuevaDescripcion = `Descripción B Aprobar Fase8 ${Date.now()}`
+    await descripcionB.click()
+    await descripcionB.fill(nuevaDescripcion)
+
+    await Promise.all([
+      descripcionB.blur(),
+      pageA.getByRole('button', { name: 'Aprobar Cotización' }).click(),
+    ])
+
+    // Misma señal de "corrió de punta a punta" que usa el test crítico mockeado de
+    // Aprobar (tests/e2e/critical/cotizaciones-aprobar.spec.ts).
+    await expect(pageA.getByText('¡Cotización aprobada! Proyecto y cuentas creados.')).toBeVisible({ timeout: 60_000 })
+
+    const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+    expect(cotizacion.estado).toBe('APROBADA')
+    expect(cotizacion.items[1].descripcion).toBe(nuevaDescripcion)
+
+    const { proyecto, cuentasPagar, cuentaCobrar } = await leerProyectoYCuentasDelServidor(cotizacionId)
+    expect(proyecto).toBeTruthy()
+    expect(cuentaCobrar).toBeTruthy()
+    // Invariante real, no un conteo fijo: el estado acumulado de x_pagar por item
+    // varía según los tests anteriores de este describe.serial -- lo que importa es
+    // que cada partida con x_pagar > 0 tenga su fila en cuentas_pagar, ni de más ni
+    // de menos.
+    const itemsConXPagar = cotizacion.items.filter((item) => item.x_pagar > 0).length
+    expect(cuentasPagar).toHaveLength(itemsConXPagar)
   })
 })

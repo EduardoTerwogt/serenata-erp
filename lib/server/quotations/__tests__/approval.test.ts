@@ -89,6 +89,28 @@ describe('approveQuotationAndFetchResult', () => {
     })
   })
 
+  it('retorna 400 cuando la RPC rechaza por estado inválido dentro de su propia transacción (defensa en profundidad, sin haber pasado por el chequeo previo en JS)', async () => {
+    // El chequeo previo en JS ya obligó estado === 'EMITIDA' para llegar aquí;
+    // este caso simula que la RPC igual encontró otro estado bajo su propio
+    // FOR UPDATE (20260911_approve_cotizacion_estado_guard.sql) -- nunca debe
+    // leerse como éxito solo porque `error` (de supabase-js) vino null.
+    mocks.getCotizacionByIdMock.mockResolvedValue({ id: 'SH001', estado: 'EMITIDA' })
+    mocks.rpcMock.mockResolvedValue({
+      data: { error: 'estado_invalido', estado_actual: 'CANCELADA' },
+      error: null,
+    })
+
+    const result = await approveQuotationAndFetchResult('SH001')
+
+    expect(result).toEqual({
+      ok: false,
+      status: 400,
+      body: {
+        error: 'Solo se pueden aprobar cotizaciones en estado EMITIDA. Estado actual: CANCELADA',
+      },
+    })
+  })
+
   it('retorna la cotización aprobada y los artefactos creados por el RPC', async () => {
     mocks.getCotizacionByIdMock
       .mockResolvedValueOnce({ id: 'SH001', estado: 'EMITIDA' })
