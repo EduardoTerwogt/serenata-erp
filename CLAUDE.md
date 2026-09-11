@@ -24,9 +24,23 @@ Este archivo es **manual de entrada + índice**. Lo específico vive en su lugar
 | ¿Cómo se valida? | `TESTING.md` |
 | ¿Qué reglas visuales? | `DESIGN_SYSTEM.md` |
 | ¿Cómo se llegó hasta aquí? | `docs/archive/` |
+| ¿Qué prompt uso para X? | `docs/PROMPTS.md` |
 
 Las reglas por tipo de archivo (API, migraciones, Realtime, UI, PDF) viven en
-`.claude/rules/` y se cargan solas al tocar esa ruta. No repetirlas aquí.
+`.claude/rules/` y se cargan solas al **leer** un archivo de esa ruta. No repetirlas
+aquí — con la excepción de abajo.
+
+### Patrones obligatorios al crear archivos nuevos
+
+Las rules por ruta se inyectan al leer un archivo, no siempre al crearlo. Estos tres
+son innegociables y se repiten aquí a propósito para que nunca falten:
+
+1. **Rutas API:** auth primero (`requireSection('<seccion>')` o `requireAnySection()`,
+   copiando el patrón de una ruta hermana) y payload validado con Zod antes de usarlo.
+2. **`params` es Promise en Next.js 16:** `const { id } = await params`.
+3. **UI:** tokens `--sn-*` de `app/globals.css`. Nunca `gray-*` ni `#f97316`.
+
+El detalle completo de cada uno está en `.claude/rules/`.
 
 ---
 
