@@ -98,9 +98,17 @@ reservar folio, registrar pago, guardar cotización y los PATCH por sección.
   devuelve 403 y el error se traga — medido, no supuesto.
 - Las escrituras van por sección (`general`, `totales`, `notas`, `items/[itemId]`)
   y los RPCs bloquean fila y aplican solo las claves recibidas. Cada fila tiene un
-  UUID estable.
+  UUID estable, generado en el cliente y nunca reasignado; si un id ya pertenece a
+  una fila de OTRA cotización, la creación responde `409` explícito en vez de
+  aplicarse a medias o pisar la fila ajena en silencio.
 - **Conflictos por campo con `409`.** No es last-write-wins ciego: se compara contra
   la base del campo y un conflicto real devuelve `409` al caller.
+- **Ninguna transición de estado (`Generar`, `Aprobar`, `Generar PDF`) corre con
+  cambios locales sin confirmar.** Antes de disparar la RPC, se fuerza el debounce
+  pendiente de las cuatro secciones y se espera toda mutación en vuelo; un `409`/`500`
+  aborta la transición. `emitir_cotizacion` y `approve_cotizacion` revalidan además
+  su propio estado (`BORRADOR`→`EMITIDA`, `EMITIDA`→`APROBADA`) dentro de la misma
+  transacción bajo `FOR UPDATE` — el mismo guard en los dos RPCs, no solo en uno.
 - No hay OT ni CRDT, y no hacen falta: son campos de un registro, no texto compartido.
 - Reconexión, auth y refresh de token están en la infraestructura genérica
   `lib/realtime/useRealtimeChannel.ts`; `useQuotationPresence` es un wrapper fino.
@@ -146,10 +154,16 @@ evidencia, no cuenta como terminado.
 | Admin de usuarios y sync a Google Sheets | `critical/admin-usuarios.spec.ts` |
 | Dashboard (incluye gastos fijos) | `lib/server/repositories/dashboard.ts` + sus tests |
 
-**Edición colaborativa de cotizaciones:** funciona y está cubierta por pruebas de
-concurrencia. **Todavía no es READY**: la auditoría de Fase 8 dejó cinco huecos
-abiertos que se cierran en la Fase 8.7 — ver `docs/ACTIVE_WORK.md`. No tomarla como
-template técnico para otro módulo hasta entonces.
+**Edición colaborativa de cotizaciones: READY.** La auditoría de Fase 8 dejó cinco
+huecos abiertos, cerrados en la Fase 8.7: flush real previo a toda transición de
+estado, cleanup de Presence en reconexión, prueba live de Aprobar bajo concurrencia,
+`409` explícito ante un UUID de partida cruzado entre cotizaciones, y esta misma
+descripción. Cubierta por pruebas de concurrencia reales contra Supabase de prueba
+(`tests/e2e/live/`) — ver `docs/ACTIVE_WORK.md` para el detalle de cada bloque. Es el
+módulo de referencia: lo que aquí funciona (Postgres como única autoridad, broadcast
+confirmado como mecanismo primario, conflictos por campo y por identidad con `409`,
+polling solo como fallback) es el patrón a replicar en Proyectos y Cuentas cuando
+necesiten edición colaborativa.
 
 Lo que está construido **a medias a propósito** vive en `docs/ROADMAP.md`.
 

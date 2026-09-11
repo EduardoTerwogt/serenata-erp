@@ -164,12 +164,40 @@ tenía su guard de estado del Bloque 1) ni `cleanupLiveCotizacion` (ya limpiaba
 proyectos/cuentas de antes). `tsc` y lint verdes localmente; `live` confirmado
 verde en CI real sobre el commit `dccdd2e`.
 
-Bloques 4-5: sin empezar.
+**Bloque 4: cerrado.** La integridad de DB ya estaba protegida
+(`upsert_items_cotizacion`, guard por `WHERE cotizacion_id` en el `ON CONFLICT`); el
+hueco era de semántica de API: `POST /api/cotizaciones/:id/items` descartaba el
+retorno de `upsertItems` y, si el guard rechazaba un id ya perteneciente a otra
+cotización, terminaba respondiendo `{ item: undefined }` con status 200 -- una
+respuesta exitosa con una partida inexistente. Ahora usa el retorno directo de
+`upsertItems`: si venía un id explícito del cliente y el array resultante viene
+vacío, responde `409` sin recalcular ni emitir el evento confirmado. El caso "mismo
+id en la misma cotización" ya era idempotente de antes, sin cambios. No se tocó la
+RPC ni `items/bulk/route.ts` (sus ids ya vienen siempre propios de la misma
+cotización o recién generados). Cobertura: unit nuevo para el caso 409
+(`cotizaciones-items-create-route.test.ts`) y un test live nuevo que pasa por la API
+real, no por la RPC directo (`items-cotizacion-uuid-guard.spec.ts`), confirmando el
+409 y que la fila de A y el conteo de B quedan intactos. `tsc`, lint, unit (418) y
+critical (60) verdes localmente; los 4 checks (`test`, `fresh-db`, `smoke-and-critical`,
+`live`) verdes en CI real sobre el commit `b651479`.
+
+**Bloque 5: cerrado.** Verificada la descripción de `ARCHITECTURE.md` contra el
+código real después de los bloques 1-4 y actualizada: se agregó la garantía de
+flush + revalidación de estado bajo `FOR UPDATE` en ambos RPCs (Bloque 1) y el `409`
+explícito por UUID cruzado en la creación de partidas (Bloque 4) a la sección de
+Edición colaborativa; se quitó el aviso "Todavía no es READY" y se declaró el
+módulo READY, con la lista de los cinco huecos que se cerraron. No se tocó
+`docs/decisions/002` (ya estaba alineado desde el trabajo adelantado del
+2026-09-11) ni se documentó la capa genérica `base`/`conflict` (deuda intencional,
+sigue así hasta que Proyectos exista como segundo consumidor real).
+
+**Los cinco bloques de la Fase 8.7 están cerrados.** Falta correr la validación
+completa de "antes del merge" (abajo) y, si todo sigue verde, mergear a `main`.
 
 ## Próximo paso
 
-Bloque 4: conflicto de UUID cruzado explícito en la API (`/serenata-iniciar-fase` ya
-hecho -- ver plan en curso).
+Validación completa antes del merge (ver sección de abajo) y, si todo sale verde,
+merge a `main` — cierra la Fase 8.7 y declara Fase 8 CLOSED.
 
 ## Validación antes del merge
 
