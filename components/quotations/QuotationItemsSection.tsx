@@ -36,8 +36,9 @@ interface Props {
    * su id, React no remontaba y el input seguía mostrando el valor viejo.
    */
   fields: Array<{ id: string }>
-  editingItemIndex: number | null
-  setEditingItemIndex: (value: number | null) => void
+  /** Id estable de la fila abierta en la tarjeta móvil (nunca el índice: un `replace()` de reconciliación lo desactualiza). */
+  editingItemRowId: string | null
+  setEditingItemRowId: (value: string | null) => void
   calcItem: (item: QuotationFormValues['items'][number]) => { importe: number; margen: number }
   /** Keyed por rowId (id estable de la partida), no por índice. */
   handleDescripcionChange: (rowId: string, value: string) => void
@@ -91,8 +92,8 @@ export function QuotationItemsSection({
   register,
   watchedItems,
   fields,
-  editingItemIndex,
-  setEditingItemIndex,
+  editingItemRowId,
+  setEditingItemRowId,
   calcItem,
   handleDescripcionChange,
   productoSugerencias,
@@ -151,6 +152,10 @@ export function QuotationItemsSection({
   const rowIdAt = (index: number) => watchedItems[index]?.id ?? ''
   const cellBusy = (index: number, field: QuotationItemCellField) => items.isCellBusy(rowIdAt(index), field)
   const rowStatus = (index: number) => items.rowStatusText(rowIdAt(index))
+  // Se recalcula en cada render a partir del id estable: así se autocorrige después
+  // de cualquier `replace()` (reconciliación por alta/baja de otro colaborador) en
+  // vez de arrastrar un índice que ya no apunta a la fila correcta.
+  const editingItemIndex = editingItemRowId === null ? null : watchedItems.findIndex((item) => item.id === editingItemRowId)
 
   const renderEditableDesktopRow = (fieldId: string, index: number) => {
     const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
@@ -240,7 +245,7 @@ export function QuotationItemsSection({
     const { importe, margen } = calcItem(item)
     const statusText = rowStatus(index)
     return (
-      <div key={fieldId} className="rounded-card border border-hairline bg-row p-4 cursor-pointer hover:border-row-alt transition-colors" onClick={() => setEditingItemIndex(index)}>
+      <div key={fieldId} className="rounded-card border border-hairline bg-row p-4 cursor-pointer hover:border-row-alt transition-colors" onClick={() => setEditingItemRowId(rowIdAt(index))}>
         <div className="flex justify-between items-start gap-3 mb-2">
           <div className="min-w-0">
             <p className="text-body font-medium text-[15px] truncate">{item.descripcion || 'Sin descripción'}</p>
@@ -354,11 +359,11 @@ export function QuotationItemsSection({
         </div>
       </div>
 
-      {editingItemIndex !== null && editable && (
+      {editingItemIndex !== null && editingItemIndex >= 0 && editable && (
         <div className="md:hidden fixed inset-0 bg-app z-50 overflow-y-auto">
           <div className="px-5 pt-12 pb-8">
             <div className="flex justify-between items-center mb-7 gap-3">
-              <button onClick={() => setEditingItemIndex(null)} className="min-h-[44px] px-4 py-2 rounded-control bg-accent hover:bg-accent-pressed text-accent-ink font-medium text-content transition-colors">Listo</button>
+              <button onClick={() => setEditingItemRowId(null)} className="min-h-[44px] px-4 py-2 rounded-control bg-accent hover:bg-accent-pressed text-accent-ink font-medium text-content transition-colors">Listo</button>
               <span className="text-body font-medium text-[15px] text-right flex-1 min-w-0">{watchedItems[editingItemIndex]?.descripcion ? 'Editar partida' : 'Nueva partida'}</span>
             </div>
             {rowStatus(editingItemIndex) && <div className="mb-4 rounded-control border border-accent-quiet/60 bg-accent-quiet/10 px-3 py-2 text-xs text-accent-quiet">{rowStatus(editingItemIndex)}</div>}
@@ -379,7 +384,7 @@ export function QuotationItemsSection({
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo + IVA</span><span className="text-subtext text-content font-medium">${fmtCurrency(calculateCostoConIva((watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).x_pagar))}</span></div>
               <div className="flex justify-between"><span className="text-faint text-content">Margen</span><span className={`text-content font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
-            {<button type="button" onClick={() => { items.removeRow(rowIdAt(editingItemIndex)); setEditingItemIndex(null) }} className="w-full text-cancelled-fg hover:opacity-80 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
+            {<button type="button" onClick={() => { items.removeRow(rowIdAt(editingItemIndex)); setEditingItemRowId(null) }} className="w-full text-cancelled-fg hover:opacity-80 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
           </div>
         </div>
       )}

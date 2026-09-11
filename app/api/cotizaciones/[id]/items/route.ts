@@ -25,6 +25,10 @@ export async function POST(
     // mismo estado en vez de crear una fila duplicada. Sin id en el body
     // (compatibilidad con un cliente viejo) se sigue generando en servidor.
     const clientId = typeof body?.id === 'string' && UUID_RE.test(body.id) ? body.id : null
+    // Igual que en el PATCH de partida: permite que el propio creador reconozca su
+    // confirmación (`item_confirmed`) y no dispare una reconciliación completa por su
+    // propia alta.
+    const mutationId = typeof body?.mutation_id === 'string' ? body.mutation_id : null
     const cotizacion = await getCotizacionById(id)
     const previousItems = cotizacion.items || []
 
@@ -88,7 +92,7 @@ export async function POST(
         cotizacion_id: id,
         item_id: itemId,
         revision: createdItem?.revision ?? null,
-        mutation_id: null,
+        mutation_id: mutationId,
         operation: 'create',
         at: new Date().toISOString(),
       },

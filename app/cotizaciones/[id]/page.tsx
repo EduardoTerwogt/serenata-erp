@@ -182,7 +182,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [success, setSuccess] = useState<string | null>(null)
   const [driveLink, setDriveLink] = useState<string | null>(null)
   const [notasInternas, setNotasInternas] = useState('')
-  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
+  // Id estable de la fila que edita la tarjeta móvil, no su índice: un `replace()`
+  // de reconciliación (alta/baja de un colaborador) cambia qué índice apunta a cuál
+  // fila, y un índice guardado quedaba apuntando a la fila equivocada -- ver
+  // `QuotationItemsSection`, que recalcula el índice en cada render a partir de este id.
+  const [editingItemRowId, setEditingItemRowId] = useState<string | null>(null)
   const [showCopyModal, setShowCopyModal] = useState(false)
   const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
   const [iva_activo, setIvaActivo] = useState(true)
@@ -225,6 +229,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const itemDirtyCellsRef = useRef<Set<string>>(new Set())
   const itemFocusedCellsRef = useRef<Set<string>>(new Set())
   const itemSavingCellsRef = useRef<Set<string>>(new Set())
+  // Máximo un PATCH en vuelo por celda: si `persistItemCellAutosave` se llama de
+  // nuevo mientras la clave ya está en `itemSavingCellsRef` (debounce y blur casi
+  // simultáneos, o dos blurs seguidos antes de que el primer PATCH resuelva), el
+  // segundo intento no dispara un segundo `fetch` con una `base` que el primero ya
+  // dejó vieja -- queda pendiente aquí y se reintenta solo cuando el que está en
+  // vuelo termina.
+  const itemCellRetryNeededRef = useRef<Set<string>>(new Set())
   const itemCellAutosaveTimersRef = useRef<Record<string, number | null>>({})
   const itemCellIdleReleaseTimersRef = useRef<Record<string, number | null>>({})
   // Último valor de cada partida confirmado por el servidor -- la fuente del "base"
@@ -510,8 +521,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // El id ya lo generó el cliente (Fase 6B, ver handleAddRow) -- el POST solo lo
   // valida y lo usa como llave del insert. `upsertItems` en el servidor hace que
   // reintentar con el mismo id converja al mismo estado, no cree una fila doble.
-  const createQuotationItemRow = useCallback(async (rowId: string) => {
-    const response = await fetch(`/api/cotizaciones/${id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: rowId }) })
+  const createQuotationItemRow = useCallback(async (rowId: string, mutationId: string) => {
+    const response = await fetch(`/api/cotizaciones/${id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: rowId, mutation_id: mutationId }) })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(data?.message || data?.error || 'Error creando partida')
     return data?.item as ItemCotizacion | undefined
@@ -820,10 +831,20 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // arreglo se vuelve a registrar, así que una fila recién agregada aportaba 0 al
   // subtotal. Combinar `fields` con lo observado es el patrón que recomienda
   // react-hook-form para useFieldArray y deja el total correcto en ambos casos.
-  const itemsParaTotales = useMemo(
-    () => fields.map((field, index) => ({ ...(field as unknown as QuotationFormValues['items'][number]), ...(watchedItems?.[index] ?? {}) })),
-    [fields, watchedItems]
-  )
+  // Acotar por el más largo de los dos (no por `fields.length`): `fields` y
+  // `watchedItems` son dos estados de RHF que pueden divergir en longitud
+  // transitoriamente (p. ej. tras un `append` propio o una reconciliación de un
+  // colaborador antes de que el array se vuelva a registrar) -- acotar por el más
+  // corto dejaba una fila recién agregada fuera de Totales/Utilidad hasta el
+  // próximo `reset()` completo (recarga de página).
+  const itemsParaTotales = useMemo(() => {
+    const len = Math.max(fields.length, watchedItems?.length ?? 0)
+    return Array.from({ length: len }, (_, index) => ({
+      ...EMPTY_QUOTATION_ITEM,
+      ...(fields[index] as unknown as QuotationFormValues['items'][number] | undefined),
+      ...(watchedItems?.[index] ?? {}),
+    }))
+  }, [fields, watchedItems])
   const totales = useMemo(() => calculateQuotationTotals({ items: itemsParaTotales, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }), [itemsParaTotales, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor])
   const displayTotales = useMemo(() => esEditable && cotizacion ? totales : (cotizacion ? buildReadOnlyTotals(cotizacion) : totales), [esEditable, cotizacion, totales])
   const estimatedTaxes = useMemo(() => calculateEstimatedTaxes(itemsParaTotales, displayTotales), [itemsParaTotales, displayTotales])
@@ -928,6 +949,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       },
       (saveError: unknown) => {
         if (saveError instanceof PatchConflictError) {
+          // Si lo que se intentó guardar es idéntico a lo que el servidor ya tiene,
+          // no hay nada que decidir -- se resuelve solo, sin mostrar el banner.
+          const detail = saveError.fields[field]
+          if (detail && detail.attempted === detail.current) {
+            generalServerRef.current = { ...generalServerRef.current, [field]: detail.current } as GeneralSnapshot
+            generalFieldBaseRef.current[field] = detail.current
+            generalFieldDirtyRef.current.delete(field)
+            generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
+            return
+          }
           // Nunca se descarta en silencio lo que el usuario tecleó: el campo queda
           // tal cual, se muestra el conflicto y el usuario decide con qué valor seguir.
           setGeneralFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
@@ -968,6 +999,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       },
       (saveError: unknown) => {
         if (saveError instanceof PatchConflictError) {
+          // Si lo que se intentó guardar es idéntico a lo que el servidor ya tiene,
+          // no hay nada que decidir -- se resuelve solo, sin mostrar el banner.
+          const detail = saveError.fields[field]
+          if (detail && detail.attempted === detail.current) {
+            totalsServerRef.current = { ...totalsServerRef.current, [field]: detail.current } as TotalsSnapshot
+            totalsFieldBaseRef.current[field] = detail.current
+            totalsFieldDirtyRef.current.delete(field)
+            totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
+            return
+          }
           setTotalsFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
           return
         }
@@ -1093,6 +1134,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // conflicto/error movido a `.then(onFulfilled, onRejected)`.
   const persistItemCellAutosave = useCallback((rowId: string, field: QuotationItemCellField): Promise<unknown> => {
     const key = getItemCellKey(rowId, field)
+    if (itemSavingCellsRef.current.has(key)) {
+      itemCellRetryNeededRef.current.add(key)
+      return Promise.resolve()
+    }
     const index = getItemIndexByRowId(rowId)
     if (index < 0) return Promise.resolve()
     const item = getValues(`items.${index}`)
@@ -1120,6 +1165,18 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       },
       (saveError: unknown) => {
         if (saveError instanceof PatchConflictError) {
+          // Si nadie cambió nada realmente (lo que el usuario intentó guardar es
+          // idéntico a lo que el servidor ya tiene), no hay nada que decidir -- se
+          // resuelve solo, igual que "Usar" pero sin mostrar el banner. Un conflicto
+          // real (valores distintos) sigue mostrándose sin tocar.
+          const detail = saveError.fields[field]
+          if (detail && detail.attempted === detail.current) {
+            itemsServerRef.current[rowId] = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)), [field]: detail.current }
+            itemCellBaseRef.current[key] = { [field]: detail.current }
+            itemDirtyCellsRef.current.delete(key)
+            scheduleItemCellIdleRelease(rowId, field)
+            return
+          }
           // Nunca se descarta en silencio lo que el usuario tecleó: la fila queda tal
           // cual, se muestra el conflicto y el usuario decide con qué valor seguir.
           setItemCellConflicts((prev) => ({ ...prev, [key]: saveError.fields }))
@@ -1129,6 +1186,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       }
     ).finally(() => {
       itemSavingCellsRef.current.delete(key)
+      if (itemCellRetryNeededRef.current.delete(key)) {
+        void persistItemCellAutosave(rowId, field)
+      }
     })
     return p
   }, [clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState, trackMutation])
@@ -1330,14 +1390,22 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     // Se pinta de inmediato con ese id; el POST (que lo valida y lo usa como
     // llave del insert) viaja detrás.
     const rowId = crypto.randomUUID()
-    append({ ...EMPTY_QUOTATION_ITEM, id: rowId, precio_unitario: 0, x_pagar: 0 })
+    // Nunca robar el foco por un cambio ajeno (mismo criterio que los otros `append()`
+    // de este archivo): sin `shouldFocus: false`, RHF autofoca la fila nueva y ese
+    // foco dispara `setActiveSection('partidas')`/`cellFocus` para una celda que nadie
+    // enfocó a propósito.
+    append({ ...EMPTY_QUOTATION_ITEM, id: rowId, precio_unitario: 0, x_pagar: 0 }, { shouldFocus: false })
 
     // Fase 8.7.1: `trackMutation` envuelve la misma promesa que ya guarda
     // `pendingRowCreationsRef` -- así `flushPendingSaves` también la espera
     // antes de Generar/Aprobar, igual que ya hace con General/Totales/
     // Partidas/Notas. Antes, un alta de fila en vuelo era invisible para el
     // flush.
-    const creation = trackMutation(createQuotationItemRow(rowId))
+    // `mutation_id` (igual que en el PATCH): así el propio creador reconoce su
+    // confirmación al recibir `item_confirmed` y no reconcilia contra sí mismo.
+    const mutationId = crypto.randomUUID()
+    rememberOwnItemMutationId(mutationId)
+    const creation = trackMutation(createQuotationItemRow(rowId, mutationId))
     pendingRowCreationsRef.current.set(rowId, creation.then(() => undefined, () => undefined))
 
     try {
@@ -1353,7 +1421,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       pendingRowCreationsRef.current.delete(rowId)
     }
-  }, [append, createQuotationItemRow, getItemIndexByRowId, recordServerItem, remove, resyncPartidas, trackMutation])
+  }, [append, createQuotationItemRow, getItemIndexByRowId, recordServerItem, rememberOwnItemMutationId, remove, resyncPartidas, trackMutation])
 
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
@@ -1726,7 +1794,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div ref={partidasSectionRef} className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')} onBlurCapture={handlePartidasBlur}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
-        <QuotationItemsSection editable={!!esEditable} register={register} watchedItems={watchedItems} fields={fields} editingItemIndex={editingItemIndex} setEditingItemIndex={setEditingItemIndex} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onCopyClick={() => setShowCopyModal(true)} items={itemsController} />      </div>
+        <QuotationItemsSection editable={!!esEditable} register={register} watchedItems={watchedItems} fields={fields} editingItemRowId={editingItemRowId} setEditingItemRowId={setEditingItemRowId} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onCopyClick={() => setShowCopyModal(true)} items={itemsController} />      </div>
 
       <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={handleImportItems} />
 

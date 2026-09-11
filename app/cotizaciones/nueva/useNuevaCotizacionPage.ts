@@ -24,7 +24,7 @@ export function useNuevaCotizacionPage() {
   const fechaEntregaParam = searchParams.get('fecha_entrega') || ''
   const esComplementaria = !!complementaria_de
 
-  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
+  const [editingItemRowId, setEditingItemRowId] = useState<string | null>(null)
   const [folio, setFolio] = useState('')
   const [responsables, setResponsables] = useState<Proveedor[]>([])
   const [guardando, setGuardando] = useState(false)
@@ -313,8 +313,8 @@ export function useNuevaCotizacionPage() {
     append,
     replace,
     getValues,
-    editingItemIndex,
-    setEditingItemIndex,
+    editingItemRowId,
+    setEditingItemRowId,
     folio,
     responsables,
     guardando,
