@@ -12,10 +12,14 @@ para no priorizar features con información vieja.
 
 ---
 
-## Ahora — ninguna iniciativa activa
+## Ahora — Fase 8.7.1
 
-Fase 8.7 cerró completa (ver Cerrado, abajo). Engineering Hardening es la
-siguiente prioridad comprometida, pero no ha arrancado.
+Una auditoría sobre el cierre de Fase 8.7 encontró un P0 que ese cierre no cubrió:
+`flushPendingSaves` solo esperaba cuatro de las nueve vías de mutación de partidas, y
+ninguna escritura de partidas revisaba el `estado` de la cotización dueña. Implementada
+en rama, pendiente de PR/CI verde (incluido el job `live`)/merge. Detalle en
+`docs/ACTIVE_WORK.md`. Engineering Hardening sigue siendo la siguiente prioridad
+comprometida después de esta, sin arrancar todavía.
 
 ## Siguiente — Engineering Hardening
 

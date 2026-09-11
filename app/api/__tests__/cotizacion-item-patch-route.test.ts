@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   findOrCreateProveedorByNombreMock: vi.fn(),
+  deleteItemCotizacionMock: vi.fn(async () => undefined),
   recalculateQuotationHeaderMock: vi.fn(),
   runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
   triggerSheetsSyncMock: vi.fn(),
@@ -10,12 +11,22 @@ const mocks = vi.hoisted(() => ({
   afterMock: vi.fn(),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
   withIdempotencyMock: vi.fn(async (_scope: string, _key: string | null | undefined, handler: () => Promise<{ status: number; body: unknown }>) => handler()),
-  deleteEqMock: vi.fn(async (): Promise<{ error: Error | null }> => ({ error: null })),
 }))
 
 vi.mock('next/server', () => ({ after: mocks.afterMock }))
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
-vi.mock('@/lib/db', () => ({ findOrCreateProveedorByNombre: mocks.findOrCreateProveedorByNombreMock }))
+// Fase 8.7.1: reexporta la clase real de error (no un mock) para poder
+// lanzarla desde deleteItemCotizacionMock -- exactamente lo que hace la
+// implementación real cuando delete_item_cotizacion rechaza por estado, y así
+// el `instanceof` de la ruta (que también importa desde `@/lib/db`) funciona.
+vi.mock('@/lib/db', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/server/repositories/quotations')>('@/lib/server/repositories/quotations')
+  return {
+    findOrCreateProveedorByNombre: mocks.findOrCreateProveedorByNombreMock,
+    deleteItemCotizacion: mocks.deleteItemCotizacionMock,
+    EstadoCotizacionInvalidoError: actual.EstadoCotizacionInvalidoError,
+  }
+})
 vi.mock('@/lib/server/quotations/persistence', () => ({
   recalculateQuotationHeader: mocks.recalculateQuotationHeaderMock,
   runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
@@ -23,14 +34,10 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
 vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('@/lib/server/idempotency', () => ({ withIdempotency: mocks.withIdempotencyMock }))
-vi.mock('@/lib/supabase', () => ({
-  supabaseAdmin: {
-    rpc: mocks.rpcMock,
-    from: () => ({ delete: () => ({ eq: () => ({ eq: mocks.deleteEqMock }) }) }),
-  },
-}))
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 
 import { PATCH, DELETE } from '../cotizaciones/[id]/items/[itemId]/route'
+import { EstadoCotizacionInvalidoError } from '@/lib/db'
 
 const ITEM_ID = '11111111-1111-4111-8111-111111111111'
 const params = Promise.resolve({ id: 'SH001', itemId: ITEM_ID })
@@ -245,6 +252,26 @@ describe('PATCH /api/cotizaciones/[id]/items/[itemId]', () => {
       expect((erroDentroDelHandler as Error)?.message).toBe('boom')
     })
   })
+
+  describe('Fase 8.7.1 -- guard de estado', () => {
+    it('responde 409 estructurado cuando la cotización ya no está en BORRADOR/EMITIDA, sin recalcular el encabezado', async () => {
+      mocks.rpcMock.mockResolvedValue({
+        data: { estado_invalido: true, estado_actual: 'APROBADA' },
+        error: null,
+      })
+
+      const res = await PATCH(req({ descripcion: 'Edición tardía' }), { params })
+
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({
+        error: 'estado_invalido',
+        estado_actual: 'APROBADA',
+        message: 'No se pueden modificar partidas de una cotización en estado APROBADA',
+      })
+      expect(mocks.recalculateQuotationHeaderMock).not.toHaveBeenCalled()
+      expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
+    })
+  })
 })
 
 describe('DELETE /api/cotizaciones/[id]/items/[itemId]', () => {
@@ -252,7 +279,7 @@ describe('DELETE /api/cotizaciones/[id]/items/[itemId]', () => {
     const res = await DELETE(new Request(`http://x/api/cotizaciones/SH001/items/${ITEM_ID}`, { method: 'DELETE' }), { params })
 
     expect(res.status).toBe(200)
-    expect(mocks.deleteEqMock).toHaveBeenCalledWith('id', ITEM_ID)
+    expect(mocks.deleteItemCotizacionMock).toHaveBeenCalledWith('SH001', ITEM_ID)
     expect(mocks.recalculateQuotationHeaderMock).toHaveBeenCalledTimes(1)
     expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([{
       topic: 'cotizacion:SH001',
@@ -269,12 +296,27 @@ describe('DELETE /api/cotizaciones/[id]/items/[itemId]', () => {
     }])
   })
 
-  it('si falla el borrado en Supabase, responde 500 y no emite el evento', async () => {
-    mocks.deleteEqMock.mockResolvedValueOnce({ error: new Error('boom') })
+  it('si falla el borrado, responde 500 y no emite el evento', async () => {
+    mocks.deleteItemCotizacionMock.mockRejectedValueOnce(new Error('boom'))
 
     const res = await DELETE(new Request(`http://x/api/cotizaciones/SH001/items/${ITEM_ID}`, { method: 'DELETE' }), { params })
 
     expect(res.status).toBe(500)
+    expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
+  })
+
+  it('Fase 8.7.1: responde 409 cuando la cotización ya no está en BORRADOR/EMITIDA', async () => {
+    mocks.deleteItemCotizacionMock.mockRejectedValueOnce(new EstadoCotizacionInvalidoError('CANCELADA'))
+
+    const res = await DELETE(new Request(`http://x/api/cotizaciones/SH001/items/${ITEM_ID}`, { method: 'DELETE' }), { params })
+
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({
+      error: 'estado_invalido',
+      estado_actual: 'CANCELADA',
+      message: 'No se pueden modificar partidas de una cotización en estado CANCELADA',
+    })
+    expect(mocks.recalculateQuotationHeaderMock).not.toHaveBeenCalled()
     expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
   })
 })

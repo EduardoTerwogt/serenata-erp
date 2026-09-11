@@ -112,6 +112,19 @@ export async function getItemsByCotizacion(cotizacionId: string) {
   return data as ItemCotizacion[]
 }
 
+// Fase 8.7.1: `upsert_items_cotizacion` ahora también rechaza la escritura si
+// la cotización ya no está en BORRADOR/EMITIDA (guard bajo FOR SHARE, ver
+// db/migrations/20260911_item_cotizacion_estado_guard.sql) -- antes se podía
+// seguir creando/importando partidas en una cotización ya APROBADA/CANCELADA.
+export class EstadoCotizacionInvalidoError extends Error {
+  estadoActual: string | null
+  constructor(estadoActual: string | null) {
+    super(`No se pueden modificar partidas de una cotización en estado ${estadoActual ?? 'desconocido'}`)
+    this.name = 'EstadoCotizacionInvalidoError'
+    this.estadoActual = estadoActual
+  }
+}
+
 // Fase 8 (hardening pre-Proyectos): el id viene del CLIENTE (Fase 6B), así que
 // un `.upsert()` genérico sin guardia dejaba que un id reusado deliberadamente
 // (o por un bug futuro) -- perteneciente a una partida de OTRA cotización --
@@ -130,7 +143,25 @@ export async function upsertItems(items: Partial<ItemCotizacion>[]) {
     p_items: items,
   })
   if (error) throw error
-  return data as ItemCotizacion[]
+  if (data && typeof data === 'object' && 'estado_invalido' in data) {
+    throw new EstadoCotizacionInvalidoError((data as { estado_actual?: string | null }).estado_actual ?? null)
+  }
+  return ((data as { items?: ItemCotizacion[] })?.items) ?? []
+}
+
+// Fase 8.7.1: reemplaza el `.delete()` directo que corría en la ruta -- sin
+// RPC no había dónde meter el guard de estado de forma atómica. Mismo
+// comportamiento que antes para el caso feliz (no es error si la fila ya no
+// existe); nuevo: rechaza si la cotización ya no está en BORRADOR/EMITIDA.
+export async function deleteItemCotizacion(cotizacionId: string, itemId: string) {
+  const { data, error } = await supabaseAdmin.rpc('delete_item_cotizacion', {
+    p_cotizacion_id: cotizacionId,
+    p_item_id: itemId,
+  })
+  if (error) throw error
+  if (data && typeof data === 'object' && 'estado_invalido' in data) {
+    throw new EstadoCotizacionInvalidoError((data as { estado_actual?: string | null }).estado_actual ?? null)
+  }
 }
 
 export async function deleteItemsByCotizacion(cotizacionId: string) {

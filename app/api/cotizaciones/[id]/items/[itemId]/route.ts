@@ -1,6 +1,6 @@
 import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
-import { findOrCreateProveedorByNombre } from '@/lib/db'
+import { findOrCreateProveedorByNombre, deleteItemCotizacion, EstadoCotizacionInvalidoError } from '@/lib/db'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
@@ -69,6 +69,13 @@ export async function PATCH(
     if (patchError) throw patchError
     if (!data) {
       return { status: 404, body: { error: 'Partida no encontrada' } }
+    }
+    if (typeof data === 'object' && data !== null && 'estado_invalido' in data) {
+      const estadoActual = (data as { estado_actual?: string }).estado_actual
+      return {
+        status: 409,
+        body: { error: 'estado_invalido', estado_actual: estadoActual, message: `No se pueden modificar partidas de una cotización en estado ${estadoActual}` },
+      }
     }
     if (typeof data === 'object' && data !== null && 'conflict' in data) {
       return {
@@ -141,20 +148,12 @@ export async function DELETE(
 
   try {
     const { id, itemId } = await params
-    // No necesita su propio RPC con FOR UPDATE: un DELETE ya toma el lock de
-    // fila que corresponde, así que si corre a la vez que un PATCH (que sí
-    // usa FOR UPDATE dentro de patch_item_cotizacion) Postgres serializa las
-    // dos transacciones -- cualquiera que llegue primero gana, la otra ve el
-    // resultado ya aplicado (el DELETE borra la fila con los últimos valores
-    // si el PATCH ganó primero; el PATCH recibe "no encontrada" -> 404 si el
-    // DELETE ganó primero). No hay ventana de carrera que pierda un cambio.
-    const { error } = await supabaseAdmin
-      .from('items_cotizacion')
-      .delete()
-      .eq('cotizacion_id', id)
-      .eq('id', itemId)
-
-    if (error) throw error
+    // Fase 8.7.1: el DELETE directo por fila serializaba bien contra un PATCH
+    // concurrente (mismo lock de fila), pero no revisaba el estado de la
+    // cotización -- se movió a `delete_item_cotizacion` (RPC), que agrega ese
+    // guard bajo FOR SHARE sobre `cotizaciones` sin perder la serialización
+    // que ya tenía contra `patch_item_cotizacion`.
+    await deleteItemCotizacion(id, itemId)
 
     await recalculateQuotationHeader(id)
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
@@ -175,6 +174,9 @@ export async function DELETE(
     }])
     return Response.json({ ok: true })
   } catch (error) {
+    if (error instanceof EstadoCotizacionInvalidoError) {
+      return Response.json({ error: 'estado_invalido', estado_actual: error.estadoActual, message: error.message }, { status: 409 })
+    }
     console.error('[DELETE /api/cotizaciones/:id/items/:itemId] Error eliminando item:', error)
     return Response.json({ error: 'Error eliminando partida' }, { status: 500 })
   }

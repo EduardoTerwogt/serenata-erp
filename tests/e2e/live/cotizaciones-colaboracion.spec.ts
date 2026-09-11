@@ -595,4 +595,103 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     const itemsConXPagar = cotizacion.items.filter((item) => item.x_pagar > 0).length
     expect(cuentasPagar).toHaveLength(itemsConXPagar)
   })
+
+  // Fase 8.7.1: la auditoría sobre 8.7 encontró que ninguna escritura de
+  // partidas revisaba el `estado` de la cotización dueña -- se podía seguir
+  // modificando, creando, borrando o importando partidas de una cotización ya
+  // APROBADA, sin ningún rechazo. El test anterior deja `cotizacionId` en
+  // APROBADA; este reusa ese mismo estado (nada que preparar) para probar el
+  // guard directo contra la API real, no contra un mock.
+  test('editar una partida de una cotización ya APROBADA se rechaza, sin tocar nada', async () => {
+    test.setTimeout(30_000)
+
+    const antes = await leerCotizacionDelServidor(cotizacionId)
+    expect(antes.estado).toBe('APROBADA')
+    const item = antes.items[0]
+
+    const response = await pageB.request.patch(`/api/cotizaciones/${cotizacionId}/items/${item.id}`, {
+      data: { descripcion: `Intento tardío post-aprobación ${Date.now()}` },
+    })
+
+    expect(response.status()).toBe(409)
+    const body = await response.json() as { error?: string; estado_actual?: string }
+    expect(body.error).toBe('estado_invalido')
+    expect(body.estado_actual).toBe('APROBADA')
+
+    // Nada cambió: ni la partida ni el estado.
+    const despues = await leerCotizacionDelServidor(cotizacionId)
+    expect(despues.estado).toBe('APROBADA')
+    expect(despues.items[0].descripcion).toBe(item.descripcion)
+  })
+
+  // El test de arriba ("aprobar mientras otro colaborador edita...") prueba UN
+  // orden -- el favorable, donde la edición de B gana. La auditoría señaló
+  // exactamente este punto: "una prueba live verde con un orden favorable no
+  // demuestra que todos los órdenes concurrentes sean seguros". Este test
+  // dispara Aprobar y un PATCH concurrente de verdad (sin forzar quién gana,
+  // vía `Promise.all` contra la API real) y verifica la invariante que debe
+  // sostenerse sea cual sea el ganador: la cotización queda APROBADA con
+  // exactamente un snapshot -- o el de B si su PATCH se confirmó antes de que
+  // `approve_cotizacion` leyera `items_cotizacion`, o el previo si Aprobar
+  // ganó y el PATCH tardío se rechazó -- nunca una mezcla, y `cuentas_pagar`
+  // siempre corresponde al snapshot final. Usa su propia cotización (no la
+  // compartida del describe.serial) porque ya se aprobó arriba y no se puede
+  // volver a correr la carrera sobre la misma.
+  test('aprobar y editar una partida al mismo tiempo: cualquier orden deja cotización, proyecto y cuentas consistentes entre sí', async () => {
+    test.setTimeout(60_000)
+
+    const suffix = Date.now()
+    const raceId = await crearCotizacion(pageA, `${PREFIJO}RACE-${suffix}`, `Race ${suffix}`, [
+      { descripcion: 'Partida race', precio: 8000 },
+    ])
+
+    try {
+      const inicial = await leerCotizacionDelServidor(raceId)
+      const itemId = inicial.items[0].id
+      // x_pagar > 0 para que approve_cotizacion también cree una cuenta por
+      // pagar -- si no, la invariante de abajo (cuentasPagar.length ===
+      // itemsConXPagar) sería trivialmente 0 = 0 y no probaría nada.
+      const setXPagar = await pageA.request.patch(`/api/cotizaciones/${raceId}/items/${itemId}`, { data: { x_pagar: 3000 } })
+      expect(setXPagar.ok(), await setXPagar.text()).toBeTruthy()
+
+      const emitirResponse = await pageA.request.post(`/api/cotizaciones/${raceId}/emitir`)
+      expect(emitirResponse.ok(), await emitirResponse.text()).toBeTruthy()
+
+      const nuevaDescripcion = `Descripción tardía race ${suffix}`
+      const [aprobarResponse, patchResponse] = await Promise.all([
+        pageA.request.post(`/api/cotizaciones/${raceId}/aprobar`),
+        pageB.request.patch(`/api/cotizaciones/${raceId}/items/${itemId}`, { data: { descripcion: nuevaDescripcion } }),
+      ])
+
+      expect(aprobarResponse.ok(), await aprobarResponse.text()).toBeTruthy()
+
+      const final = await leerCotizacionDelServidor(raceId)
+      expect(final.estado).toBe('APROBADA')
+
+      const { proyecto, cuentasPagar, cuentaCobrar } = await leerProyectoYCuentasDelServidor(raceId)
+      expect(proyecto).toBeTruthy()
+      expect(cuentaCobrar).toBeTruthy()
+
+      if (patchResponse.ok()) {
+        // B ganó: su PATCH se confirmó antes de que approve_cotizacion leyera
+        // items_cotizacion, así que el snapshot aprobado ya lo incluye.
+        expect(final.items[0].descripcion).toBe(nuevaDescripcion)
+      } else {
+        // Aprobar ganó: el PATCH tardío de B se rechazó explícito (409,
+        // estado_invalido) en vez de aplicarse a una cotización ya no editable.
+        expect(patchResponse.status()).toBe(409)
+        const body = await patchResponse.json() as { error?: string }
+        expect(body.error).toBe('estado_invalido')
+        expect(final.items[0].descripcion).not.toBe(nuevaDescripcion)
+      }
+
+      // Invariante real sea cual sea el ganador: cuentas_pagar corresponde
+      // exactamente al snapshot de items_cotizacion que quedó vigente --
+      // nunca calculado de una versión distinta a la que terminó aprobada.
+      const itemsConXPagar = final.items.filter((item) => item.x_pagar > 0).length
+      expect(cuentasPagar).toHaveLength(itemsConXPagar)
+    } finally {
+      await cleanupLiveCotizacion(raceId).catch((e) => console.error('[live colab] cleanup race:', e))
+    }
+  })
 })
