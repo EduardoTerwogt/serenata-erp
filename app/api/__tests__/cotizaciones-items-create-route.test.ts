@@ -16,18 +16,31 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/server', () => ({ after: mocks.afterMock }))
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
-vi.mock('@/lib/db', () => ({
-  getCotizacionById: mocks.getCotizacionByIdMock,
-  upsertItems: mocks.upsertItemsMock,
-}))
+// Fase 8.7.1: reexporta la clase real de EstadoCotizacionInvalidoError (no un
+// mock) para que el `instanceof` de la ruta funcione con el error que lanza
+// upsertItemsMock en el test del guard de estado, de abajo.
+vi.mock('@/lib/db', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/server/repositories/quotations')>('@/lib/server/repositories/quotations')
+  return {
+    getCotizacionById: mocks.getCotizacionByIdMock,
+    upsertItems: mocks.upsertItemsMock,
+    EstadoCotizacionInvalidoError: actual.EstadoCotizacionInvalidoError,
+  }
+})
 vi.mock('@/lib/server/quotations/persistence', () => ({
   recalculateQuotationHeader: mocks.recalculateQuotationHeaderMock,
   runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
 }))
 vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
+// La ruta en sí no llama a supabaseAdmin (todo pasa por @/lib/db, mockeado
+// arriba) -- este mock solo evita que `vi.importActual` de arriba, al cargar
+// el módulo real de repositorios, intente crear un cliente de Supabase real
+// sin las env vars.
+vi.mock('@/lib/supabase', () => ({ supabaseAdmin: {} }))
 
 import { POST } from '../cotizaciones/[id]/items/route'
+import { EstadoCotizacionInvalidoError } from '@/lib/db'
 
 const params = Promise.resolve({ id: 'SH001' })
 const req = (body?: unknown) => new Request('http://x/api/cotizaciones/SH001/items', {
@@ -133,6 +146,23 @@ describe('POST /api/cotizaciones/[id]/items', () => {
       const body = await res.json()
       expect(body.error).toMatch(/otra cotización/)
       // Ninguna fila cambió: no hay recálculo, no hay evento confirmado.
+      expect(mocks.recalculateQuotationHeaderMock).not.toHaveBeenCalled()
+      expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Fase 8.7.1 -- guard de estado', () => {
+    it('responde 409 cuando la cotización ya no está en BORRADOR/EMITIDA', async () => {
+      mocks.upsertItemsMock.mockRejectedValueOnce(new EstadoCotizacionInvalidoError('APROBADA'))
+
+      const res = await POST(req(), { params })
+
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({
+        error: 'estado_invalido',
+        estado_actual: 'APROBADA',
+        message: 'No se pueden modificar partidas de una cotización en estado APROBADA',
+      })
       expect(mocks.recalculateQuotationHeaderMock).not.toHaveBeenCalled()
       expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
     })

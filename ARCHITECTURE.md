@@ -103,12 +103,29 @@ reservar folio, registrar pago, guardar cotización y los PATCH por sección.
   aplicarse a medias o pisar la fila ajena en silencio.
 - **Conflictos por campo con `409`.** No es last-write-wins ciego: se compara contra
   la base del campo y un conflicto real devuelve `409` al caller.
+- **Toda escritura de partidas revalida el `estado` de la cotización (Fase 8.7.1).**
+  `patch_item_cotizacion`, `upsert_items_cotizacion` (alta individual y masiva) y
+  `delete_item_cotizacion` bloquean la fila de `cotizaciones` bajo `FOR SHARE` antes
+  de tocar la partida; si el estado ya no es `BORRADOR`/`EMITIDA`, rechazan con
+  `{estado_invalido, estado_actual}` (`409` en la ruta) en vez de aplicar la
+  escritura. `FOR SHARE` (no `FOR UPDATE`) porque dos escrituras de partidas
+  *distintas* no deben bloquearse entre sí — solo bloquean contra el `FOR UPDATE`
+  exclusivo de `emitir_cotizacion`/`approve_cotizacion` (ver abajo), que es lo único
+  que cambia el estado.
 - **Ninguna transición de estado (`Generar`, `Aprobar`, `Generar PDF`) corre con
   cambios locales sin confirmar.** Antes de disparar la RPC, se fuerza el debounce
-  pendiente de las cuatro secciones y se espera toda mutación en vuelo; un `409`/`500`
-  aborta la transición. `emitir_cotizacion` y `approve_cotizacion` revalidan además
-  su propio estado (`BORRADOR`→`EMITIDA`, `EMITIDA`→`APROBADA`) dentro de la misma
-  transacción bajo `FOR UPDATE` — el mismo guard en los dos RPCs, no solo en uno.
+  pendiente de las cuatro secciones y se espera toda mutación en vuelo — incluidas
+  seleccionar producto, cambiar responsable, alta/baja de fila e importar partidas
+  (Fase 8.7.1: antes de eso, `flushPendingSaves` solo veía los cuatro autoguardados
+  por debounce; esas cinco vías, sin debounce, eran invisibles para el flush); un
+  `409`/`500` aborta la transición. `emitir_cotizacion` y `approve_cotizacion`
+  revalidan además su propio estado (`BORRADOR`→`EMITIDA`, `EMITIDA`→`APROBADA`)
+  dentro de la misma transacción bajo `FOR UPDATE` — el mismo guard en los dos RPCs,
+  no solo en uno — y ese `FOR UPDATE` espera a que cualquier escritura de partida en
+  vuelo suelte su `FOR SHARE` antes de leer/cambiar el estado: ninguna escritura de
+  partida puede aterrizar en una cotización que ya quedó `APROBADA`, y
+  `cuentas_pagar`/`cuenta_cobrar` siempre se calculan del mismo snapshot que terminó
+  aprobado, sea cual sea el orden real de la carrera.
 - No hay OT ni CRDT, y no hacen falta: son campos de un registro, no texto compartido.
 - Reconexión, auth y refresh de token están en la infraestructura genérica
   `lib/realtime/useRealtimeChannel.ts`; `useQuotationPresence` es un wrapper fino.
@@ -158,7 +175,12 @@ evidencia, no cuenta como terminado.
 huecos abiertos, cerrados en la Fase 8.7: flush real previo a toda transición de
 estado, cleanup de Presence en reconexión, prueba live de Aprobar bajo concurrencia,
 `409` explícito ante un UUID de partida cruzado entre cotizaciones, y esta misma
-descripción. Cubierta por pruebas de concurrencia reales contra Supabase de prueba
+descripción. Una auditoría posterior sobre ese mismo cierre encontró que el flush
+solo cubría cuatro de las nueve vías de mutación de partidas y que ninguna escritura
+revalidaba el estado de la cotización — cerrado en Fase 8.7.1 (flush completo de las
+cinco vías restantes + guard de estado transaccional en `patch_item_cotizacion`/
+`upsert_items_cotizacion`/`delete_item_cotizacion`, ver más arriba). Cubierta por
+pruebas de concurrencia reales contra Supabase de prueba
 (`tests/e2e/live/`) — ver `docs/ACTIVE_WORK.md` para el detalle de cada bloque. Es el
 módulo de referencia: lo que aquí funciona (Postgres como única autoridad, broadcast
 confirmado como mecanismo primario, conflictos por campo y por identidad con `409`,

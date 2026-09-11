@@ -468,7 +468,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     if (response.status === 409 && data?.error === 'conflict') {
       throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
     }
-    if (!response.ok) throw new Error(data?.error || 'Error actualizando partida')
+    // Fase 8.7.1: `estado_invalido` (cotización ya no BORRADOR/EMITIDA) trae
+    // un `message` legible aparte del código en `error` -- se prefiere ese.
+    if (!response.ok) throw new Error(data?.message || data?.error || 'Error actualizando partida')
     return data?.item as ItemCotizacion | undefined
   }, [awaitRowCreation, id])
 
@@ -511,7 +513,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const createQuotationItemRow = useCallback(async (rowId: string) => {
     const response = await fetch(`/api/cotizaciones/${id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: rowId }) })
     const data = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(data?.error || 'Error creando partida')
+    if (!response.ok) throw new Error(data?.message || data?.error || 'Error creando partida')
     return data?.item as ItemCotizacion | undefined
   }, [id])
 
@@ -519,7 +521,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     await awaitRowCreation(rowId)
     const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'DELETE' })
     const data = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(data?.error || 'Error eliminando partida')
+    if (!response.ok) throw new Error(data?.message || data?.error || 'Error eliminando partida')
   }, [awaitRowCreation, id])
 
   // `preserveLocalEdits` evita que la respuesta del servidor sobreescriba una celda
@@ -1330,7 +1332,12 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const rowId = crypto.randomUUID()
     append({ ...EMPTY_QUOTATION_ITEM, id: rowId, precio_unitario: 0, x_pagar: 0 })
 
-    const creation = createQuotationItemRow(rowId)
+    // Fase 8.7.1: `trackMutation` envuelve la misma promesa que ya guarda
+    // `pendingRowCreationsRef` -- así `flushPendingSaves` también la espera
+    // antes de Generar/Aprobar, igual que ya hace con General/Totales/
+    // Partidas/Notas. Antes, un alta de fila en vuelo era invisible para el
+    // flush.
+    const creation = trackMutation(createQuotationItemRow(rowId))
     pendingRowCreationsRef.current.set(rowId, creation.then(() => undefined, () => undefined))
 
     try {
@@ -1346,7 +1353,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       pendingRowCreationsRef.current.delete(rowId)
     }
-  }, [append, createQuotationItemRow, getItemIndexByRowId, recordServerItem, remove, resyncPartidas])
+  }, [append, createQuotationItemRow, getItemIndexByRowId, recordServerItem, remove, resyncPartidas, trackMutation])
 
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
@@ -1359,24 +1366,31 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         .map((item) => item.id)
         .filter((rowId): rowId is string => !!rowId && !pendingRowCreationsRef.current.has(rowId))
 
-      const response = await fetch(`/api/cotizaciones/${id}/items/bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: items.map((sourceItem) => ({
-            categoria: sourceItem.categoria || '',
-            descripcion: sourceItem.descripcion || '',
-            cantidad: sourceItem.cantidad || 1,
-            precio_unitario: sourceItem.precio_unitario || 0,
-            x_pagar: sourceItem.x_pagar || 0,
-            responsable_id: sourceItem.responsable_id || '',
-            responsable_nombre: sourceItem.responsable_nombre || '',
-          })),
-          reemplazar_ids: reemplazarIds,
-        }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data?.error || 'Error copiando partidas')
+      // Fase 8.7.1: se trackea la operación completa (fetch + parseo + chequeo
+      // de status, no el `fetch()` crudo) -- mismo criterio que
+      // `patchQuotationItem` -- para que `flushPendingSaves` espere una
+      // importación en vuelo antes de Generar/Aprobar y aborte si falla.
+      const data = await trackMutation((async () => {
+        const response = await fetch(`/api/cotizaciones/${id}/items/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: items.map((sourceItem) => ({
+              categoria: sourceItem.categoria || '',
+              descripcion: sourceItem.descripcion || '',
+              cantidad: sourceItem.cantidad || 1,
+              precio_unitario: sourceItem.precio_unitario || 0,
+              x_pagar: sourceItem.x_pagar || 0,
+              responsable_id: sourceItem.responsable_id || '',
+              responsable_nombre: sourceItem.responsable_nombre || '',
+            })),
+            reemplazar_ids: reemplazarIds,
+          }),
+        })
+        const body = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(body?.message || body?.error || 'Error copiando partidas')
+        return body
+      })())
 
       const updated = data?.cotizacion as Cotizacion | undefined
       if (!updated) throw new Error('Respuesta inválida al copiar partidas')
@@ -1399,7 +1413,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       setImportingItems(false)
     }
-  }, [getValues, id, recordServerItem, replace, resyncPartidas])
+  }, [getValues, id, recordServerItem, replace, resyncPartidas, trackMutation])
 
   // Borrado optimista, identificado por rowId: la fila desaparece al instante y el
   // DELETE (que recalcula el encabezado y sincroniza Sheets) corre después, encolado
@@ -1411,14 +1425,18 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     replace((getValues('items') || []).filter((item) => !item.id || !pendingRowRemovalsRef.current.has(item.id)))
     setCotizacion((prev) => prev ? { ...prev, items: (prev.items || []).filter((item) => item.id !== rowId) } : prev)
     try {
-      await enqueueRowMutation(rowId, () => deleteQuotationItemRow(rowId))
+      // Fase 8.7.1: trackeada para que flushPendingSaves espere un borrado en
+      // vuelo antes de Generar/Aprobar y aborte si falla -- antes era
+      // invisible para el flush (enqueueRowMutation solo serializa contra
+      // otra mutación de la misma fila, no contra la transición de estado).
+      await trackMutation(enqueueRowMutation(rowId, () => deleteQuotationItemRow(rowId)))
       pendingRowRemovalsRef.current.delete(rowId)
     } catch (deleteError: unknown) {
       pendingRowRemovalsRef.current.delete(rowId)
       setError(deleteError instanceof Error ? deleteError.message : 'Error eliminando partida')
       void resyncPartidas()
     }
-  }, [deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, replace, resyncPartidas])
+  }, [deleteQuotationItemRow, enqueueRowMutation, getItemIndexByRowId, getValues, replace, resyncPartidas, trackMutation])
 
   // Operación atómica multi-campo: manda "base" para los 4 campos que el autofill
   // toca, así la RPC la rechaza completa (ningún campo se aplica a medias) si
@@ -1446,7 +1464,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       const mutationId = crypto.randomUUID()
       rememberOwnItemMutationId(mutationId)
-      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }, { base: base ?? undefined, mutationId }))
+      // Fase 8.7.1: trackeada -- antes este autofill era invisible para
+      // flushPendingSaves, así que Generar/Aprobar podían disparar la
+      // transición mientras este PATCH atómico seguía en vuelo.
+      const updatedItem = await trackMutation(enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }, { base: base ?? undefined, mutationId })))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         for (const field of fields) clearItemCellConflict(rowId, field)
@@ -1470,7 +1491,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       setError(saveError instanceof Error ? saveError.message : 'Error aplicando producto')
       void resyncPartidas()
     }
-  }, [clearItemCellAutosaveTimer, clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, upsertLocalItemState])
+  }, [clearItemCellAutosaveTimer, clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, seleccionarProducto, trackMutation, upsertLocalItemState])
 
   const handleResponsableChange = useCallback(async (rowId: string, responsableId: string) => {
     const index = getItemIndexByRowId(rowId)
@@ -1484,7 +1505,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       const mutationId = crypto.randomUUID()
       rememberOwnItemMutationId(mutationId)
-      const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' }, { base: base ?? undefined, mutationId }))
+      // Fase 8.7.1: trackeada, mismo motivo que handleSelectProduct arriba.
+      const updatedItem = await trackMutation(enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { responsable_id: responsableId, responsable_nombre: responsable?.nombre ?? '' }, { base: base ?? undefined, mutationId })))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         clearItemCellConflict(rowId, 'responsable_id')
@@ -1503,7 +1525,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       setError(saveError instanceof Error ? saveError.message : 'Error actualizando responsable')
       void resyncPartidas()
     }
-  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, responsables, setValue, upsertLocalItemState])
+  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, responsables, setValue, trackMutation, upsertLocalItemState])
 
   // Presencia estilo Sheets: saber que alguien más está en una celda sirve para
   // resaltarla y avisar, nunca para deshabilitar nada.

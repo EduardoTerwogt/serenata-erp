@@ -1,6 +1,6 @@
 import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
-import { getCotizacionById, upsertItems } from '@/lib/db'
+import { getCotizacionById, upsertItems, EstadoCotizacionInvalidoError } from '@/lib/db'
 import { normalizeQuotationItem } from '@/lib/quotations/calculations'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
@@ -97,6 +97,9 @@ export async function POST(
 
     return Response.json({ item: createdItem })
   } catch (error) {
+    if (error instanceof EstadoCotizacionInvalidoError) {
+      return Response.json({ error: 'estado_invalido', estado_actual: error.estadoActual, message: error.message }, { status: 409 })
+    }
     console.error('[POST /api/cotizaciones/:id/items] Error creando item:', error)
     return Response.json({ error: 'Error creando partida' }, { status: 500 })
   }

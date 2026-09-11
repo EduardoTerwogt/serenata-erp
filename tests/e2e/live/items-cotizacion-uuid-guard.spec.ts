@@ -14,6 +14,12 @@ import { login } from '../utils/auth'
  * bug futuro) que ya perteneciera a OTRA cotización podía "secuestrar" esa fila
  * ajena, sobreescribiéndola por completo. Esta prueba confirma que la RPC
  * rechaza esa operación (no la aplica) sin tocar la fila ajena.
+ *
+ * Fase 8.7.1: `upsert_items_cotizacion` cambió de `returns setof
+ * items_cotizacion` a `returns jsonb` (para poder devolver también el rechazo
+ * por estado -- ver db/migrations/20260911_item_cotizacion_estado_guard.sql),
+ * así que la respuesta ya no es el array de filas directo: es
+ * `{items: [...]}` en éxito, o `{estado_invalido: true, ...}` en rechazo.
  */
 
 const liveEnabled = Boolean(
@@ -46,23 +52,24 @@ test.describe('live: guardia de UUID cruzado en items_cotizacion', () => {
 
     try {
       // A crea su partida legítima.
-      const { data: itemsA, error: errorA } = await supabase.rpc('upsert_items_cotizacion', {
+      const { data: dataA, error: errorA } = await supabase.rpc('upsert_items_cotizacion', {
         p_cotizacion_id: cotizacionAId,
         p_items: [{ descripcion: 'Item legítimo de A', precio_unitario: 1000 }],
       })
       expect(errorA).toBeNull()
-      const itemId = itemsA![0].id as string
+      const itemsA = (dataA as { items: Array<{ id: string }> }).items
+      const itemId = itemsA[0].id
 
       // B intenta "crear" una partida reusando el mismo UUID -- si el guard
       // funciona, esto no debe tocar la fila de A en absoluto.
-      const { data: itemsB, error: errorB } = await supabase.rpc('upsert_items_cotizacion', {
+      const { data: dataB, error: errorB } = await supabase.rpc('upsert_items_cotizacion', {
         p_cotizacion_id: cotizacionBId,
         p_items: [{ id: itemId, descripcion: 'Secuestrado por B', precio_unitario: 9999 }],
       })
       expect(errorB).toBeNull()
       // La fila de A no le pertenece a B: la RPC no la devuelve (RETURNING la
       // omite cuando el WHERE del ON CONFLICT falla).
-      expect(itemsB).toEqual([])
+      expect((dataB as { items: unknown[] }).items).toEqual([])
 
       const { data: itemFinal, error: errorFinal } = await supabase
         .from('items_cotizacion')
