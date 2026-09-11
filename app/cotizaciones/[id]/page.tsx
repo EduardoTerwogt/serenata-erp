@@ -973,46 +973,61 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const patch: Record<string, unknown> = { [field]: value }
     const baseValue = generalFieldBaseRef.current[field]
     const base = baseValue !== undefined ? { [field]: baseValue } : undefined
-    const p = trackMutation(patchQuotationGeneral(patch, { base }))
-    p.then(
+    // La promesa CRUDA de `patchQuotationGeneral` rechaza en CUALQUIER 409,
+    // incluido el conflicto "idéntico" que se resuelve solo abajo.
+    // `trackMutation` debe registrar la promesa SEMÁNTICA (tras aplicar esa
+    // resolución), no la cruda -- si no, `flushPendingSaves` vería un
+    // conflicto ya auto-resuelto como una mutación fallida.
+    const rawPatch = patchQuotationGeneral(patch, { base })
+    const semantic = rawPatch.then(
       (updated) => {
-        generalFieldDirtyRef.current.delete(field)
-        clearGeneralFieldConflict(field)
-        if (updated) {
-          generalServerRef.current = buildGeneralSnapshot({ cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega || '', locacion: updated.locacion || '' })
-          setCotizacion((prev) => prev ? { ...prev, cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega, locacion: updated.locacion } : prev)
+        try {
+          generalFieldDirtyRef.current.delete(field)
+          clearGeneralFieldConflict(field)
+          if (updated) {
+            generalServerRef.current = buildGeneralSnapshot({ cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega || '', locacion: updated.locacion || '' })
+            setCotizacion((prev) => prev ? { ...prev, cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega, locacion: updated.locacion } : prev)
+          }
+          generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
+          if (!generalFocusedRef.current) {
+            clearGeneralIdleReleaseTimer()
+            if (generalFieldDirtyRef.current.size === 0) { generalLockHeldRef.current = false; releaseSection('general'); return }
+          }
+          if (generalFieldDirtyRef.current.size === 0) scheduleGeneralIdleRelease()
+        } finally {
+          generalFieldSavingRef.current.delete(field)
+          setIsSavingGeneral(generalFieldSavingRef.current.size > 0)
         }
-        generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
-        if (!generalFocusedRef.current) {
-          clearGeneralIdleReleaseTimer()
-          if (generalFieldDirtyRef.current.size === 0) { generalLockHeldRef.current = false; releaseSection('general'); return }
-        }
-        if (generalFieldDirtyRef.current.size === 0) scheduleGeneralIdleRelease()
       },
       (saveError: unknown) => {
-        if (saveError instanceof PatchConflictError) {
-          // Si lo que se intentó guardar es idéntico a lo que el servidor ya tiene,
-          // no hay nada que decidir -- se resuelve solo, sin mostrar el banner.
-          const detail = saveError.fields[field]
-          if (detail && normalizeGeneralFieldValue(detail.attempted) === normalizeGeneralFieldValue(detail.current)) {
-            generalServerRef.current = { ...generalServerRef.current, [field]: detail.current } as GeneralSnapshot
-            generalFieldBaseRef.current[field] = detail.current
-            generalFieldDirtyRef.current.delete(field)
-            generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
-            return
+        try {
+          if (saveError instanceof PatchConflictError) {
+            // Si lo que se intentó guardar es idéntico a lo que el servidor ya tiene,
+            // no hay nada que decidir -- se resuelve solo, sin mostrar el banner.
+            const detail = saveError.fields[field]
+            if (detail && normalizeGeneralFieldValue(detail.attempted) === normalizeGeneralFieldValue(detail.current)) {
+              generalServerRef.current = { ...generalServerRef.current, [field]: detail.current } as GeneralSnapshot
+              generalFieldBaseRef.current[field] = detail.current
+              generalFieldDirtyRef.current.delete(field)
+              generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
+              return
+            }
+            // Nunca se descarta en silencio lo que el usuario tecleó: el campo queda
+            // tal cual, se muestra el conflicto y el usuario decide con qué valor
+            // seguir. Se relanza para que la promesa trackeada rechace de verdad y
+            // `flushPendingSaves` vea la falla real (conflicto sin resolver).
+            setGeneralFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
+            throw saveError
           }
-          // Nunca se descarta en silencio lo que el usuario tecleó: el campo queda
-          // tal cual, se muestra el conflicto y el usuario decide con qué valor seguir.
-          setGeneralFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
-          return
+          setError(saveError instanceof Error ? saveError.message : 'Error guardando información general')
+          throw saveError
+        } finally {
+          generalFieldSavingRef.current.delete(field)
+          setIsSavingGeneral(generalFieldSavingRef.current.size > 0)
         }
-        setError(saveError instanceof Error ? saveError.message : 'Error guardando información general')
       }
-    ).finally(() => {
-      generalFieldSavingRef.current.delete(field)
-      setIsSavingGeneral(generalFieldSavingRef.current.size > 0)
-    })
-    return p
+    )
+    return trackMutation(semantic)
   }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease, trackMutation])
 
   const persistTotalsField = useCallback((field: QuotationTotalsField): Promise<unknown> => {
@@ -1023,44 +1038,54 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const patch: Record<string, unknown> = { [field]: value }
     const baseValue = totalsFieldBaseRef.current[field]
     const base = baseValue !== undefined ? { [field]: baseValue } : undefined
-    const p = trackMutation(patchQuotationTotales(patch, { base }))
-    p.then(
+    // Mismo motivo que `persistGeneralField`: `trackMutation` debe registrar la
+    // promesa SEMÁNTICA (tras resolver un conflicto idéntico), no la cruda.
+    const rawPatch = patchQuotationTotales(patch, { base })
+    const semantic = rawPatch.then(
       (updated) => {
-        totalsFieldDirtyRef.current.delete(field)
-        clearTotalsFieldConflict(field)
-        if (updated) {
-          totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
-          setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor } : prev)
+        try {
+          totalsFieldDirtyRef.current.delete(field)
+          clearTotalsFieldConflict(field)
+          if (updated) {
+            totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
+            setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor } : prev)
+          }
+          totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
+          if (!totalsFocusedRef.current) {
+            clearTotalsIdleReleaseTimer()
+            if (totalsFieldDirtyRef.current.size === 0) { totalsLockHeldRef.current = false; releaseSection('totales'); return }
+          }
+          if (totalsFieldDirtyRef.current.size === 0) scheduleTotalsIdleRelease()
+        } finally {
+          totalsFieldSavingRef.current.delete(field)
+          setIsSavingTotals(totalsFieldSavingRef.current.size > 0)
         }
-        totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
-        if (!totalsFocusedRef.current) {
-          clearTotalsIdleReleaseTimer()
-          if (totalsFieldDirtyRef.current.size === 0) { totalsLockHeldRef.current = false; releaseSection('totales'); return }
-        }
-        if (totalsFieldDirtyRef.current.size === 0) scheduleTotalsIdleRelease()
       },
       (saveError: unknown) => {
-        if (saveError instanceof PatchConflictError) {
-          // Si lo que se intentó guardar es idéntico a lo que el servidor ya tiene,
-          // no hay nada que decidir -- se resuelve solo, sin mostrar el banner.
-          const detail = saveError.fields[field]
-          if (detail && normalizeTotalsFieldValue(field, detail.attempted) === normalizeTotalsFieldValue(field, detail.current)) {
-            totalsServerRef.current = { ...totalsServerRef.current, [field]: detail.current } as TotalsSnapshot
-            totalsFieldBaseRef.current[field] = detail.current
-            totalsFieldDirtyRef.current.delete(field)
-            totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
-            return
+        try {
+          if (saveError instanceof PatchConflictError) {
+            // Si lo que se intentó guardar es idéntico a lo que el servidor ya tiene,
+            // no hay nada que decidir -- se resuelve solo, sin mostrar el banner.
+            const detail = saveError.fields[field]
+            if (detail && normalizeTotalsFieldValue(field, detail.attempted) === normalizeTotalsFieldValue(field, detail.current)) {
+              totalsServerRef.current = { ...totalsServerRef.current, [field]: detail.current } as TotalsSnapshot
+              totalsFieldBaseRef.current[field] = detail.current
+              totalsFieldDirtyRef.current.delete(field)
+              totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
+              return
+            }
+            setTotalsFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
+            throw saveError
           }
-          setTotalsFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
-          return
+          setError(saveError instanceof Error ? saveError.message : 'Error guardando configuración de totales')
+          throw saveError
+        } finally {
+          totalsFieldSavingRef.current.delete(field)
+          setIsSavingTotals(totalsFieldSavingRef.current.size > 0)
         }
-        setError(saveError instanceof Error ? saveError.message : 'Error guardando configuración de totales')
       }
-    ).finally(() => {
-      totalsFieldSavingRef.current.delete(field)
-      setIsSavingTotals(totalsFieldSavingRef.current.size > 0)
-    })
-    return p
+    )
+    return trackMutation(semantic)
   }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease, trackMutation])
 
   const persistGeneralFieldRef = useRef(persistGeneralField)
@@ -1191,7 +1216,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
    */
   const sendItemCellPatchRound = useCallback(async (rowId: string, field: QuotationItemCellField): Promise<unknown> => {
     const key = getItemCellKey(rowId, field)
-    await awaitRowCreation(rowId)
+    try {
+      await awaitRowCreation(rowId)
+    } catch (creationError: unknown) {
+      // El alta de la fila falló (ver handleAddRow) -- no hay fila a la que
+      // mandarle este PATCH. Se rechaza aquí mismo (no se llega a construir
+      // `patch` ni a llamar al servidor) para que el drenado de
+      // `persistItemCellAutosave` rechace limpio en vez de un 404 confuso.
+      setError(creationError instanceof Error ? creationError.message : 'Error creando partida')
+      throw creationError
+    }
     let base = itemCellBaseRef.current[key]
     if (base === undefined) {
       const freshBase = buildItemFieldBase(itemsServerRef.current[rowId], field)
@@ -1210,13 +1244,24 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       : { responsable_id: item.responsable_id || '', responsable_nombre: item.responsable_nombre || '' }
     const mutationId = crypto.randomUUID()
     rememberOwnItemMutationId(mutationId)
-    const p = trackMutation(patchQuotationItem(rowId, patch, { base, mutationId }))
-    return p.then(
+    // La promesa CRUDA de `patchQuotationItem` rechaza en CUALQUIER 409, incluido
+    // el conflicto "idéntico" que la rama de abajo resuelve sola. `trackMutation`
+    // debe registrar la promesa SEMÁNTICA (`semantic`, tras aplicar esa
+    // resolución), no la cruda -- si no, `flushPendingSaves` vería un
+    // conflicto ya auto-resuelto como una mutación fallida y abortaría
+    // Generar/Aprobar sin motivo real.
+    const rawPatch = patchQuotationItem(rowId, patch, { base, mutationId })
+    const semantic = rawPatch.then(
       (updatedItem) => {
         markLocalWrite(rowId, field)
         itemDirtyCellsRef.current.delete(key)
         clearItemCellConflict(rowId, field)
-        itemCellBaseRef.current[key] = patch
+        // El valor canónico es `updatedItem` (lo que el servidor confirmó),
+        // no el `patch` que se mandó -- evita que una diferencia de
+        // redondeo/formato entre lo mandado y lo almacenado deje `base`
+        // desincronizado del valor real en la base de datos.
+        const freshBase = updatedItem ? buildItemFieldBase(updatedItem, field) : null
+        itemCellBaseRef.current[key] = freshBase ?? patch
         if (updatedItem) {
           upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         }
@@ -1250,6 +1295,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         throw saveError
       }
     )
+    return trackMutation(semantic)
   }, [awaitRowCreation, clearItemCellAutosaveTimer, clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState, trackMutation])
 
   /**
@@ -1530,15 +1576,26 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     // `itemsServerRef`. Encadenar `recordServerItem` sobre `creation` (en
     // `rowReady`) y derivar `pendingRowCreationsRef` de `rowReady` (no de
     // `creation`) garantiza ese orden.
-    const rowReady = creation.then(
-      (createdItem) => { if (createdItem) recordServerItem(createdItem); return createdItem },
-      () => undefined
-    )
-    pendingRowCreationsRef.current.set(rowId, rowReady.then(() => undefined))
+    // A diferencia de una versión anterior de este fix, un POST fallido debe
+    // seguir rechazando aquí -- convertirlo en `undefined` dejaba
+    // `pendingRowCreationsRef` resuelto como "fila lista" aunque nunca se haya
+    // creado, y una edición que esperaba esa creación (`awaitRowCreation`)
+    // podía seguir de largo y mandar un PATCH contra una fila inexistente.
+    const rowReady = creation.then((createdItem) => {
+      if (!createdItem) throw new Error('No se pudo crear la fila')
+      recordServerItem(createdItem)
+      return createdItem
+    })
+    const readyPromise = rowReady.then(() => undefined)
+    // Nadie más que este mismo `try` tiene por qué esperar esta promesa --
+    // si nadie edita la fila mientras el alta sigue en vuelo, un rechazo aquí
+    // quedaría sin handler propio. Mismo patrón que `itemCellDrainRef`'s
+    // `drain.catch(() => {})` más abajo.
+    readyPromise.catch(() => {})
+    pendingRowCreationsRef.current.set(rowId, readyPromise)
 
     try {
       const createdItem = await rowReady
-      if (!createdItem) throw new Error('No se pudo crear la fila')
       setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
     } catch (createError: unknown) {
       const index = getItemIndexByRowId(rowId)
@@ -1665,7 +1722,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       const updatedItem = await trackMutation(enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }, { base: base ?? undefined, mutationId })))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
-        for (const field of fields) clearItemCellConflict(rowId, field)
+        for (const field of fields) {
+          clearItemCellConflict(rowId, field)
+          // Refresca `base` al valor canónico que el servidor acaba de confirmar
+          // -- sin esto, seguir editando cualquiera de estos 4 campos sin blur
+          // después del autofill mandaba el siguiente PATCH con el `base` viejo
+          // (mismo bug que causa E, pero para esta ruta atómica).
+          const freshBase = buildItemFieldBase(updatedItem, field)
+          if (freshBase) itemCellBaseRef.current[getItemCellKey(rowId, field)] = freshBase
+        }
       }
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
@@ -1705,14 +1770,32 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         clearItemCellConflict(rowId, 'responsable_id')
+        // Refresca `base` (ambos campos, `responsable_id` Y `responsable_nombre`
+        // -- viajan siempre juntos) al valor canónico confirmado, mismo motivo
+        // que en `handleSelectProduct`.
+        const freshBase = buildItemFieldBase(updatedItem, 'responsable_id')
+        if (freshBase) itemCellBaseRef.current[getItemCellKey(rowId, 'responsable_id')] = freshBase
       }
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
-        const detail = saveError.fields.responsable_id
-        if (detail) {
+        // El PATCH manda dos campos (`responsable_id` y `responsable_nombre`,
+        // ver `base` arriba) pero solo `responsable_id` tiene celda propia en
+        // la UI -- si SOLO `responsable_nombre` chocó (el id no cambió, pero
+        // el nombre denormalizado del proveedor sí), mirar nada más
+        // `fields.responsable_id` dejaba el conflicto sin banner ni forma de
+        // resolverlo. Se guardan los dos, cada uno bajo su propia clave, para
+        // que `resolveItemCellConflict` (abajo) actualice ambos sin mezclar un
+        // nombre donde va un id.
+        const detailId = saveError.fields.responsable_id
+        const detailNombre = saveError.fields.responsable_nombre
+        if (detailId || detailNombre) {
           setItemCellConflicts((prev) => ({
             ...prev,
-            [getItemCellKey(rowId, 'responsable_id')]: { ...prev[getItemCellKey(rowId, 'responsable_id')], responsable_id: detail },
+            [getItemCellKey(rowId, 'responsable_id')]: {
+              ...prev[getItemCellKey(rowId, 'responsable_id')],
+              ...(detailId ? { responsable_id: detailId } : {}),
+              ...(detailNombre ? { responsable_nombre: detailNombre } : {}),
+            },
           }))
         }
         return
@@ -1735,14 +1818,58 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // Conflicto por celda: alguien más guardó este campo entre que se capturó el
   // "base" y que se intentó guardar. `attempted` es lo que el usuario tecleó,
   // nunca se pierde -- el banner deja elegir entre eso y lo que hay ahora.
+  // `responsable_id` es la única celda de UI para el par responsable_id/
+  // responsable_nombre (ver handleResponsableChange) -- si el conflicto real
+  // cayó solo en `responsable_nombre` (id igual, cambió el nombre
+  // denormalizado del proveedor), se muestra igual desde aquí en vez de
+  // quedar invisible.
   const getItemCellConflict = useCallback((rowId: string, field: QuotationItemCellField) => {
-    const detail = itemCellConflicts[getItemCellKey(rowId, field)]?.[field]
+    const record = itemCellConflicts[getItemCellKey(rowId, field)]
+    if (!record) return null
+    const detail = field === 'responsable_id' ? (record.responsable_id ?? record.responsable_nombre) : record[field]
     return detail ? { current: detail.current, attempted: detail.attempted } : null
   }, [itemCellConflicts])
 
   const resolveItemCellConflict = useCallback((rowId: string, field: QuotationItemCellField, resolution: 'theirs' | 'mine') => {
     const key = getItemCellKey(rowId, field)
-    const detail = itemCellConflicts[key]?.[field]
+    const record = itemCellConflicts[key]
+    if (!record) return
+
+    if (field === 'responsable_id') {
+      // Grupo atómico: `responsable_id` y `responsable_nombre` se resuelven
+      // juntos, cada uno con SU PROPIO detalle -- nunca se guarda un nombre
+      // bajo la clave de un id (o viceversa) en `itemsServerRef`/`base`, que es
+      // justo lo que rompía el <select> si se reusaba ciegamente el camino
+      // genérico de abajo.
+      const detailId = record.responsable_id
+      const detailNombre = record.responsable_nombre
+      if (!detailId && !detailNombre) return
+      clearItemCellConflict(rowId, field)
+      const nextServer = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)) }
+      const nextBase: Record<string, unknown> = { ...itemCellBaseRef.current[key] }
+      if (detailId) { nextServer.responsable_id = detailId.current as string; nextBase.responsable_id = detailId.current }
+      if (detailNombre) { nextServer.responsable_nombre = detailNombre.current as string | null; nextBase.responsable_nombre = detailNombre.current }
+      itemsServerRef.current[rowId] = nextServer
+      itemCellBaseRef.current[key] = nextBase
+
+      if (resolution === 'theirs') {
+        const index = getItemIndexByRowId(rowId)
+        if (index >= 0) {
+          if (detailId) setValue(`items.${index}.responsable_id` as never, detailId.current as never)
+          if (detailNombre) setValue(`items.${index}.responsable_nombre` as never, detailNombre.current as never)
+        }
+        itemDirtyCellsRef.current.delete(key)
+        scheduleItemCellIdleRelease(rowId, field)
+        return
+      }
+      // "mine": lo elegido se conserva tal cual, se reintenta con el base ya
+      // corregido -- reusa el drenado genérico de partidas, cuyo patch para
+      // 'responsable_id' ya manda ambos campos juntos (ver sendItemCellPatchRound).
+      void persistItemCellAutosave(rowId, field)
+      return
+    }
+
+    const detail = record[field]
     if (!detail) return
     clearItemCellConflict(rowId, field)
     // El "current" que devolvió la RPC es la verdad del servidor a partir de ahora,

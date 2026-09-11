@@ -183,6 +183,54 @@ test('cambiar el responsable de una partida persiste el cambio', async ({ page }
   await expect(responsableSelect).toHaveValue('resp-2')
 })
 
+// Fase 8.7.2 (causa 3 de la auditoría externa): el PATCH de responsable manda
+// dos campos (`responsable_id` y `responsable_nombre`, viajan siempre juntos),
+// pero antes de este fix el manejo de conflicto solo miraba
+// `fields.responsable_id` -- si el 409 real solo traía `responsable_nombre`
+// (el id no cambió, pero el nombre denormalizado del proveedor sí), el
+// conflicto se descartaba en silencio: ni banner ni forma de resolverlo, y el
+// cambio del usuario se perdía sin aviso.
+test('conflicto solo en responsable_nombre (el id no chocó) muestra el banner y se resuelve sin corromper el id', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-RESPONSABLE-NOMBRE-CONFLICT',
+    estado: 'BORRADOR',
+    responsables: [
+      { id: 'resp-1', nombre: 'Sofía Ramírez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Camarógrafa'], notas: null, activo: true, created_at: '2026-01-01' },
+      { id: 'resp-2', nombre: 'Juan Pérez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Gaffer'], notas: null, activo: true, created_at: '2026-01-01' },
+    ],
+  })
+  await page.route('**/api/cotizaciones/SH-E2E-RESPONSABLE-NOMBRE-CONFLICT/items/*', async (route) => {
+    if (route.request().method() !== 'PATCH') { await route.fallback(); return }
+    await fulfillJson(route, {
+      error: 'conflict',
+      entity: 'item_cotizacion',
+      id: 'item-detail-1',
+      // Nota: `responsable_id` NO aparece en `fields` -- no chocó. Solo el
+      // nombre denormalizado, que es justo el caso que se perdía antes.
+      fields: { responsable_nombre: { base: 'Sofía Ramírez', current: 'Juan P. (renombrado)', attempted: 'Juan Pérez' } },
+    }, 409)
+  })
+  await login(page, '/cotizaciones/SH-E2E-RESPONSABLE-NOMBRE-CONFLICT')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-RESPONSABLE-NOMBRE-CONFLICT' })).toBeVisible()
+
+  const firstRow = page.locator('table tbody tr').first()
+  const responsableSelect = firstRow.locator('td').nth(5).locator('select')
+  await expect(responsableSelect).toHaveValue('resp-1')
+
+  await responsableSelect.selectOption('resp-2')
+
+  const banner = firstRow.getByText(/Alguien más lo cambió a/)
+  await expect(banner).toBeVisible()
+  await expect(banner).toContainText('Juan P. (renombrado)')
+
+  await firstRow.getByRole('button', { name: /Usar/ }).click()
+  await expect(banner).toBeHidden()
+  // `responsable_id` nunca estuvo en conflicto -- debe seguir en `resp-2`
+  // (lo que el usuario eligió), nunca pisado por el valor (un NOMBRE) del
+  // campo que sí chocó.
+  await expect(responsableSelect).toHaveValue('resp-2')
+})
+
 test('copiar partidas seleccionadas desde otra cotización las trae a la actual', async ({ page }) => {
   await mockCotizacionDetailApis(page, { id: 'SH-E2E-COPIAR', estado: 'BORRADOR' })
   await page.route('**/api/cotizaciones', async (route) => {
