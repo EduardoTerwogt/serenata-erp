@@ -1,6 +1,6 @@
 # Estado real del proyecto
 
-**Última actualización:** 2026-09-10 · `main` en `824590e` · Fase 7 (escalamiento multiusuario) cerrada -- sigue Fase 8
+**Última actualización:** 2026-09-11 · `main` en `6d47adf` · Fase 8 (hardening pre-Proyectos) cerrada -- arquitectura colaborativa READY para Proyectos
 
 Este documento es la foto honesta del repo: qué funciona de verdad, qué está a
 medias y qué está roto ahora mismo. Si vas a retomar el trabajo, léelo antes que
@@ -99,14 +99,20 @@ Los tres se detectaron con el nivel `live`; ningún mock los habría visto.
 
 ---
 
-## 3. Rediseño de colaboración en tiempo real — Fase 7 cerrada, sigue Fase 8
+## 3. Rediseño de colaboración en tiempo real — Fase 8 cerrada, READY para Proyectos
 
 Iniciativa de alto riesgo (Realtime, RPCs, seguridad, concurrencia) ejecutada
-en branch dedicada `claude/eloquent-lamport-h7effg` + PR draft + Vercel
+en branches dedicadas (una por fase: `claude/eloquent-lamport-h7effg` para
+Fases 0-7, `claude/fase8-hardening-precotizaciones` para Fase 8) + PR + Vercel
 Preview, como excepción explícita aprobada a la regla de "siempre `main`" —
 ver la política git de la sección "Git — setup y reglas" de `CLAUDE.md`. El
-Preview de esta branch apunta al proyecto Supabase de prueba
+Preview de cada branch apunta al proyecto Supabase de prueba
 (`serenata-erp-test`), no a producción.
+
+Con Fase 8 cerrada (ver más abajo), la auditoría final concluye que la
+arquitectura queda **READY para Proyectos sin deuda bloqueante** — el
+siguiente paso natural es Fase 9 (Proyectos como segundo piloto real de
+colaboración), no incluida todavía.
 
 ### Fase 0 — Baseline (cerrada)
 
@@ -858,6 +864,88 @@ en Presence a ninguna escala. Confirma en vivo que el cierre de Fase 6
 aguanta hasta 10 conexiones simultáneas al mismo canal `cotizacion:{id}`
 sin degradarse. `Test Suite`, `Migrations` y `E2E` (los dos jobs) en verde
 también sobre el push a `main`, no solo en el PR.
+
+### Fase 8 — Hardening pre-Proyectos (cerrada)
+
+Antes de replicar el patrón de colaboración en tiempo real de Cotizaciones
+en Proyectos, se hizo una auditoría crítica de 9 puntos (3 agentes de
+exploración en paralelo + verificación propia, cada hallazgo citado con
+archivo+línea). Confirmó que la arquitectura de fondo (Postgres como única
+fuente de verdad, mutaciones granulares con `base`/`FOR UPDATE`/409, IDs
+estables, Presence solo-awareness, canal privado autorizado) estaba bien,
+pero encontró 6 correcciones puntuales reales -- ninguna requería
+rediseñar nada, todas eran fixes locales dentro del modelo ya aprobado:
+
+1. **PUT completo (`save_cotizacion`) en Generar/Aprobar** -- la única
+   carrera de este lote capaz de perder datos con dos usuarios legítimos
+   sin nada raro de por medio. `aprobar()`/`generarCotizacion()` llamaban
+   primero al PUT completo (sin comparar `revision` ni `base` contra
+   nada), pudiendo revertir en silencio una partida que otro colaborador
+   acababa de guardar por PATCH. Fix: `flushPendingSaves()` (espera las
+   mutaciones PATCH que ya estaban en vuelo en el momento del click, sin
+   convertirse en una cola global) + relectura canónica + la RPC de
+   transición que corresponde -- `approve_cotizacion` (ya existía,
+   transaccional, no hacía falta ninguna RPC nueva) para Aprobar, y la
+   nueva `emitir_cotizacion` (mismo patrón `FOR UPDATE` que el resto)
+   para BORRADOR→EMITIDA, que no existía como transición dedicada.
+2. **Evento `item_confirmed` con `item_id: null` (operación `bulk`)
+   descartado antes del reducer** -- el import masivo de otro colaborador
+   nunca disparaba reconciliación inmediata por Realtime, solo por el
+   poll de 20s (la red de seguridad, no el camino primario). Fix de una
+   línea: aceptar `item_id: null` cuando `operation === 'bulk'`.
+3. **Tres fugas reales de lifecycle en la reconexión de Realtime**,
+   confirmadas con evidencia directa de log de CI, no supuestas:
+   - `cannot add presence callbacks after joining a channel` SÍ era real
+     (root cause en el código fuente de `@supabase/realtime-js`:
+     `RealtimeClient.channel()` reusa el objeto de canal existente para
+     el mismo topic si `removeChannel()` -- async -- no terminó todavía;
+     `scheduleReconnect()` llamaba `connect()` sin esperarlo).
+   - Cadenas de refresco de token huérfanas (cada reconexión dejaba viva
+     una adicional, nunca cancelada hasta el unmount final).
+   - Timeouts de reintento de `trackPresence` sin cancelar en cleanup.
+4. **Colisión de UUID cruzado en `items_cotizacion`** -- `upsertItems()`
+   hacía un `.upsert()` genérico sin `WHERE cotizacion_id`, así que un
+   UUID reusado (deliberado o por un bug futuro) entre cotizaciones
+   distintas podía secuestrar la fila completa de la otra vía
+   `ON CONFLICT DO UPDATE`. `save_cotizacion` ya resolvía esto
+   correctamente; se extrajo el mismo patrón a una RPC nueva
+   (`upsert_items_cotizacion`) para que ambas rutas de alta la usen.
+5. **RLS: el navegador solo puede Presence, nunca Broadcast** -- nada en
+   el código emite `channel.send({type:'broadcast'})` desde el navegador
+   desde Fase 6D, pero la política de INSERT sobre `realtime.messages`
+   seguía permitiendo ambas extensiones para cualquier staff autorizado.
+   Ahora el INSERT de `authenticated` solo cubre `presence`; el SELECT
+   (recibir broadcasts confirmados del servidor) no cambia.
+6. **Extracción de la infraestructura genérica de canal** a
+   `lib/realtime/useRealtimeChannel.ts` (conexión/reconexión/token/
+   cleanup ya arreglados en el punto 3) -- `useQuotationPresence` queda
+   como wrapper fino. El protocolo `base`/`mutation_id`/conflict se deja
+   como **deuda intencional** hasta que Proyectos exista como segundo
+   consumidor real: especular su forma con un solo consumidor habría sido
+   abstracción prematura.
+
+Cada punto trae su propio test de regresión. Los tres primeros PRs de
+prueba en `live` real destaparon 3 fallos que no eran bugs de producto
+sino supuestos incorrectos de los tests nuevos (documentado en los
+commits de fix, útil si se repiten patrones parecidos en Proyectos):
+`channel.send()` con RLS-denegado resuelve `'timed out'`, no `'error'`
+(el servidor no manda ningún ack explícito de rechazo); el banner de
+conflicto es por-celda y coexisten varios a la vez, así que un locator
+de Playwright sin acotar a una fila puede toparse con uno ajeno; y el
+dropdown de sugerencias de producto usa `position:fixed` con coordenadas
+calculadas solo en `onFocus` -- enfocar antes de scrollear (en vez de
+scrollear primero y dejar que `.fill()` sea quien enfoque) lo deja
+posicionado donde ya no está el input.
+
+**Resultado:** mergeado a `main` (squash) como
+[PR #22](https://github.com/EduardoTerwogt/serenata-erp/pull/22), commit
+`6d47adf`. `Test Suite`, `Migrations` y `E2E` (`live` y
+`smoke-and-critical`) los tres en verde sobre el propio push a `main`.
+**Conclusión de la auditoría: la arquitectura queda READY para Proyectos
+sin deuda bloqueante** -- dos huecos de cobertura (responsable concurrente
+y foco-en-celda-vs-borrar-fila) quedan como deuda documentada, no
+bloqueante, por bajo valor marginal de duplicar un protocolo que ya
+prueban otros casos.
 
 - **Google Calendar desde Proyectos:** la UI existe, el flujo end-to-end no está
   cerrado. En planeación sí funciona; no asumir que es lo mismo.
