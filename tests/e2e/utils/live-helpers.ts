@@ -124,3 +124,66 @@ export async function leerCotizacionDelServidor(cotizacionId: string): Promise<C
   const items = [...(row.items_cotizacion || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
   return { ...row, items }
 }
+
+interface ProyectoServidor {
+  id: string
+  cliente: string
+  proyecto: string
+  estado: string
+}
+
+interface CuentaPagarServidor {
+  id: string
+  cotizacion_id: string
+  item_id: string
+  x_pagar: number
+  estado: string
+}
+
+interface CuentaCobrarServidor {
+  id: string
+  cotizacion_id: string
+  monto_total: number
+  estado: string
+}
+
+/**
+ * Lee lo que `approve_cotizacion` debería haber dejado escrito: el proyecto
+ * (upsert con `id = cotizacion_id`), las cuentas por pagar (una por partida con
+ * `x_pagar > 0`) y la cuenta por cobrar (siempre se crea). Mismo motivo que
+ * `leerCotizacionDelServidor` -- verificar contra el servidor real, no contra lo
+ * que la pantalla dice que pasó.
+ */
+export async function leerProyectoYCuentasDelServidor(cotizacionId: string): Promise<{
+  proyecto: ProyectoServidor | null
+  cuentasPagar: CuentaPagarServidor[]
+  cuentaCobrar: CuentaCobrarServidor | null
+}> {
+  const supabase = getLiveSupabaseAdmin()
+
+  const { data: proyecto, error: proyectoError } = await supabase
+    .from('proyectos')
+    .select('id, cliente, proyecto, estado')
+    .eq('id', cotizacionId)
+    .maybeSingle()
+  if (proyectoError) throw proyectoError
+
+  const { data: cuentasPagar, error: cuentasPagarError } = await supabase
+    .from('cuentas_pagar')
+    .select('id, cotizacion_id, item_id, x_pagar, estado')
+    .eq('cotizacion_id', cotizacionId)
+  if (cuentasPagarError) throw cuentasPagarError
+
+  const { data: cuentaCobrar, error: cuentaCobrarError } = await supabase
+    .from('cuentas_cobrar')
+    .select('id, cotizacion_id, monto_total, estado')
+    .eq('cotizacion_id', cotizacionId)
+    .maybeSingle()
+  if (cuentaCobrarError) throw cuentaCobrarError
+
+  return {
+    proyecto: proyecto as ProyectoServidor | null,
+    cuentasPagar: (cuentasPagar || []) as CuentaPagarServidor[],
+    cuentaCobrar: cuentaCobrar as CuentaCobrarServidor | null,
+  }
+}
