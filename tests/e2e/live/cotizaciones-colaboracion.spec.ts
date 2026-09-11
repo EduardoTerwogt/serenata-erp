@@ -1,4 +1,4 @@
-import { test, expect, BrowserContext, Locator, Page } from '@playwright/test'
+import { test, expect, BrowserContext, Locator, Page, Response } from '@playwright/test'
 import { login } from '../utils/auth'
 import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
 import { esperarCanalColaborativo, faltantesDelEntornoLive, leerCotizacionDelServidor, leerProyectoYCuentasDelServidor, liveEnabled } from '../utils/live-helpers'
@@ -262,7 +262,27 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     test.setTimeout(120_000)
 
     const antes = await filas(pageA).count()
-    await filas(pageA).last().locator('td').last().locator('button').click()
+
+    // Regresión real reportada (Fase 8.7.2): la RPC delete_item_cotizacion
+    // faltaba en producción y el DELETE moría con 500 -- el borrado de la UI
+    // es optimista, así que `toHaveCount(antes - 1)` por sí solo puede
+    // aprobar de inmediato aunque el servidor haya rechazado el borrado.
+    // Orden correcto: (1) el DELETE real responde 200; (2) el servidor
+    // confirma la ausencia (puede tardar en converger, por eso el poll);
+    // (3) recién con eso confirmado, la fila sigue ausente en ambas
+    // pantallas y el subtotal quedó correcto -- nunca antes ni en paralelo.
+    const [deleteResponse] = await Promise.all([
+      pageA.waitForResponse(
+        (response) => response.url().includes('/items/') && response.request().method() === 'DELETE'
+      ),
+      filas(pageA).last().locator('td').last().locator('button').click(),
+    ])
+    expect(deleteResponse.status()).toBe(200)
+
+    await expect.poll(async () => {
+      const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+      return cotizacion.items.length
+    }, { timeout: 30_000 }).toBe(antes - 1)
 
     await expect(filas(pageA)).toHaveCount(antes - 1, { timeout: 30_000 })
     await expect(filas(pageB)).toHaveCount(antes - 1, { timeout: 30_000 })
@@ -474,6 +494,24 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     // en la posición final.
     await descripcionB.evaluate((el) => el.scrollIntoView({ block: 'center' }))
     await descripcionB.fill('Grúa E2E Fase8')
+
+    // Diagnóstico (Fase 8.7.2): este test ya falló en runs previos de CI con
+    // el mismo síntoma (la sugerencia nunca aparece) pese a que la creación
+    // del producto ya pasa por el POST real (para que su propia invalidación
+    // de caché corra) -- ver el comentario en el `beforeAll`. Antes de asumir
+    // que es un problema de timing/UI, consultar el mismo endpoint desde la
+    // sesión real de B distingue si el producto ya llegó al servidor/caché
+    // que ve B (problema de UI si SÍ aparece acá) o si nunca llegó (problema
+    // de caché/datos si NO aparece).
+    const diagProductos = await pageB.request.get('/api/productos?q=')
+    const diagBody = await diagProductos.json().catch(() => null)
+    const diagIncluyeProducto = Array.isArray(diagBody) && diagBody.some(
+      (p: { descripcion?: string }) => p.descripcion === PRODUCTO_AUTOFILL.descripcion
+    )
+    console.log(
+      `[live colab][diag] GET /api/productos?q= (sesión de B) status=${diagProductos.status()} ` +
+      `total=${Array.isArray(diagBody) ? diagBody.length : 'n/a'} incluyeProductoAutofill=${diagIncluyeProducto}`
+    )
 
     // El filtrado de sugerencias es 100% client-side contra un catálogo que
     // `useQuotationForm` carga en un `requestIdleCallback` (hasta 1.5s de
@@ -781,25 +819,58 @@ test.describe('live: colaboración real -- causas E-I (Fase 8.7.2)', () => {
   test('causa F: escribir de nuevo en la misma celda mientras el PATCH anterior sigue en vuelo manda un segundo PATCH con el valor final, sin 409', async () => {
     test.setTimeout(60_000)
     const precioA = celda(pageA, 0, COL.precio)
+    const patronRuta = '**/api/cotizaciones/*/items/*'
+
+    // Respuestas de PATCH observadas, identificadas por el precio que llevaba
+    // su propio body -- nunca por orden de llegada. Con la ruta retrasando el
+    // primer PATCH 1.5s, un `waitForResponse` genérico registrado antes de
+    // que salga el segundo PATCH puede resolverse contra la respuesta del
+    // PRIMERO -- ambos matchean el mismo patrón de URL/método.
+    const respuestas: { precio: number; status: number }[] = []
+    const onResponse = async (response: Response) => {
+      const request = response.request()
+      if (request.method() !== 'PATCH' || !response.url().includes('/items/')) return
+      const body = request.postDataJSON() as { precio_unitario?: number } | null
+      const precio = body?.precio_unitario
+      if (typeof precio === 'number') {
+        respuestas.push({ precio, status: response.status() })
+      }
+    }
+    pageA.on('response', onResponse)
 
     let firstPatchDelayed = false
-    await pageA.route('**/api/cotizaciones/*/items/*', async (route) => {
+    const delayedPatchHandler: Parameters<typeof pageA.route>[1] = async (route) => {
       if (!firstPatchDelayed && route.request().method() === 'PATCH') {
         firstPatchDelayed = true
         await new Promise((resolve) => setTimeout(resolve, 1_500))
       }
       await route.continue()
-    })
+    }
+    await pageA.route(patronRuta, delayedPatchHandler)
 
-    await precioA.click()
-    await precioA.fill('2100')
-    await precioA.blur() // dispara el primer PATCH -- el intercept de arriba lo mantiene en vuelo 1.5s
-    await pageA.waitForTimeout(300) // asegura que el primer PATCH ya salió antes de seguir
-    await precioA.click()
-    await precioA.fill('2200')
-    await precioA.blur() // segunda edición mientras el primer PATCH sigue en vuelo
+    try {
+      await precioA.click()
+      await precioA.fill('2100')
+      await precioA.blur() // dispara el primer PATCH -- el handler de arriba lo mantiene en vuelo 1.5s
+      await pageA.waitForTimeout(300) // asegura que el primer PATCH ya salió antes de seguir
+      await precioA.click()
+      await precioA.fill('2200')
+      await precioA.blur() // segunda edición mientras el primer PATCH sigue en vuelo
 
-    await pageA.unroute('**/api/cotizaciones/*/items/*')
+      // Esperar y validar AMBAS respuestas por su contenido, no solo su
+      // llegada -- las dos deben resolver en 200, nunca en 409.
+      await expect.poll(() => respuestas.find((r) => r.precio === 2100)?.status, { timeout: 20_000 }).toBe(200)
+      await expect.poll(() => respuestas.find((r) => r.precio === 2200)?.status, { timeout: 20_000 }).toBe(200)
+    } finally {
+      // El handler retrasado ya llamó route.continue() en ambas peticiones
+      // para este punto (las dos respuestas ya llegaron) -- retirar la ruta
+      // y el listener acá, nunca antes, evita el "Route is already handled!"
+      // de desregistrar mientras una petición seguía en vuelo. unroute con
+      // la función exacta, no el patrón a secas, para no arrastrar handlers
+      // de otros tests/beforeEach sobre el mismo patrón.
+      await pageA.unroute(patronRuta, delayedPatchHandler)
+      pageA.off('response', onResponse)
+    }
 
     await expect.poll(async () => {
       const cotizacion = await leerCotizacionDelServidor(cotizacionId)
