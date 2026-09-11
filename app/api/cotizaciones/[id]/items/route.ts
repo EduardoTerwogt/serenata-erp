@@ -49,7 +49,7 @@ export async function POST(
       x_pagar: 0,
     })
 
-    await upsertItems([{
+    const upserted = await upsertItems([{
       id: itemId,
       cotizacion_id: id,
       categoria: normalized.categoria,
@@ -64,6 +64,15 @@ export async function POST(
       orden: nextOrder,
       notas: null,
     }])
+
+    // Fase 8.7 (Bloque 4): `upsert_items_cotizacion` protege contra un id
+    // reusado de OTRA cotización con un WHERE en el ON CONFLICT -- si no
+    // matchea, la fila ajena queda intacta pero simplemente no aparece en el
+    // RETURNING (no lanza). Sin este chequeo, `createdItem` de abajo quedaría
+    // undefined y la respuesta sería un 200 con un item inexistente.
+    if (clientId && upserted.length === 0) {
+      return Response.json({ error: 'Ya existe una partida con este id en otra cotización' }, { status: 409 })
+    }
 
     const updatedQuotation = await recalculateQuotationHeader(id)
     const createdItem = (updatedQuotation.items || []).find((item) => item.id === itemId)

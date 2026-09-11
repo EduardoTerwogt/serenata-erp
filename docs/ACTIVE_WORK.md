@@ -149,11 +149,27 @@ crítico mockeado ya existente ("seleccionar una sugerencia de producto..."), qu
 ahora falla si se dispara más de un PATCH a `/items/:id` -- confirmado que reproduce
 sin el fix y pasa con él.
 
-Bloques 3-5: sin empezar.
+**Bloque 3: cerrado.** Faltaba cobertura live de concurrencia para "Aprobar" (ya
+existía para "Generar"). Nuevo test en
+`tests/e2e/live/cotizaciones-colaboracion.spec.ts`, mismo `describe.serial` y mismo
+patrón que el de Generar: B edita una partida sin soltar el foco justo cuando A
+pulsa "Aprobar Cotización" (el PATCH de B puede seguir en vuelo cuando
+`approve_cotizacion` dispara). Verificado contra Supabase real: la cotización queda
+`APROBADA`, la edición de B no se revirtió, el proyecto se creó, la cuenta por
+cobrar se creó, y las cuentas por pagar creadas coinciden exactamente con las
+partidas que tienen `x_pagar > 0` en ese momento (invariante, no un conteo fijo).
+Nuevo helper `leerProyectoYCuentasDelServidor` en `tests/e2e/utils/live-helpers.ts`,
+mismo patrón que `leerCotizacionDelServidor`. No se tocó `approve_cotizacion` (ya
+tenía su guard de estado del Bloque 1) ni `cleanupLiveCotizacion` (ya limpiaba
+proyectos/cuentas de antes). `tsc` y lint verdes localmente; `live` confirmado
+verde en CI real sobre el commit `dccdd2e`.
+
+Bloques 4-5: sin empezar.
 
 ## Próximo paso
 
-Auditar el bloque 3 (`/serenata-iniciar-fase`) y proponer el plan antes de tocar código.
+Bloque 4: conflicto de UUID cruzado explícito en la API (`/serenata-iniciar-fase` ya
+hecho -- ver plan en curso).
 
 ## Validación antes del merge
 

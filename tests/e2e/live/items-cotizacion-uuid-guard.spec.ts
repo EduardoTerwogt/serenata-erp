@@ -1,5 +1,6 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, Page } from '@playwright/test'
 import { getLiveSupabaseAdmin } from '../utils/live-cleanup'
+import { login } from '../utils/auth'
 
 /**
  * Prueba de integridad real contra serenata-erp-test para la RPC
@@ -77,6 +78,65 @@ test.describe('live: guardia de UUID cruzado en items_cotizacion', () => {
     } finally {
       await limpiarCotizacionDePrueba(supabase, cotizacionAId)
       await limpiarCotizacionDePrueba(supabase, cotizacionBId)
+    }
+  })
+})
+
+/**
+ * Fase 8.7 (Bloque 4): la RPC ya protege la integridad de la DB (test de arriba),
+ * pero la API (`POST /api/cotizaciones/:id/items`) no distinguía ese rechazo de un
+ * alta normal -- devolvía 200 con un `item` inexistente. Este test ejercita la ruta
+ * real (no la RPC directo) para confirmar la semántica que pide la doc: UUID
+ * existente en otra cotización -> 409, sin tocar la fila ajena.
+ */
+async function crearCotizacionViaApi(page: Page, cliente: string): Promise<{ id: string }> {
+  const response = await page.request.post('/api/cotizaciones', {
+    data: { cliente, proyecto: 'Test guardia de UUID (API)', estado: 'BORRADOR', items: [] },
+  })
+  expect(response.status(), `no se pudo crear la cotización de prueba: ${await response.text()}`).toBe(201)
+  return response.json() as Promise<{ id: string }>
+}
+
+test.describe('live: guardia de UUID cruzado en la API de items', () => {
+  test.skip(!liveEnabled, 'Live integration tests are disabled until PLAYWRIGHT_BASE_URL and live credentials are configured')
+
+  test('crear un item en B con el id de un item de A responde 409 y no toca la fila de A', async ({ page }) => {
+    const supabase = getLiveSupabaseAdmin()
+    await login(page, '/cotizaciones')
+
+    const suffix = Date.now()
+    const cotizacionA = await crearCotizacionViaApi(page, `E2E-UUID-GUARD-API-A-${suffix}`)
+    const cotizacionB = await crearCotizacionViaApi(page, `E2E-UUID-GUARD-API-B-${suffix}`)
+
+    try {
+      // A crea su partida legítima a través de la ruta real (sin "id" en el body:
+      // el servidor genera el suyo, igual que hace el botón "Agregar fila").
+      const responseA = await page.request.post(`/api/cotizaciones/${cotizacionA.id}/items`, { data: {} })
+      expect(responseA.status(), `no se pudo crear la partida de A: ${await responseA.text()}`).toBe(200)
+      const { item: itemA } = await responseA.json() as { item: { id: string } }
+
+      // B intenta "crear" una partida reusando el id de A -- la API debe rechazarlo
+      // explícitamente, no devolver éxito con un item inexistente.
+      const responseB = await page.request.post(`/api/cotizaciones/${cotizacionB.id}/items`, { data: { id: itemA.id } })
+      expect(responseB.status(), `debía responder 409, respondió: ${responseB.status()} ${await responseB.text()}`).toBe(409)
+
+      const { data: itemFinal, error } = await supabase
+        .from('items_cotizacion')
+        .select('cotizacion_id')
+        .eq('id', itemA.id)
+        .single()
+      expect(error).toBeNull()
+      expect(itemFinal?.cotizacion_id).toBe(cotizacionA.id)
+
+      // La fila de B no ganó una partida fantasma por el intento rechazado.
+      const { count } = await supabase
+        .from('items_cotizacion')
+        .select('id', { count: 'exact', head: true })
+        .eq('cotizacion_id', cotizacionB.id)
+      expect(count).toBe(0)
+    } finally {
+      await limpiarCotizacionDePrueba(supabase, cotizacionA.id)
+      await limpiarCotizacionDePrueba(supabase, cotizacionB.id)
     }
   })
 })

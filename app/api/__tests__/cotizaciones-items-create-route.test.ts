@@ -3,7 +3,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCotizacionByIdMock: vi.fn(),
-  upsertItemsMock: vi.fn(async (_rows: Record<string, unknown>[]) => []),
+  // Por default hace eco de las filas que recibe, como la RPC real cuando el
+  // upsert sí aplica. Los tests del guard de UUID cruzado (Fase 8.7 Bloque 4)
+  // sobreescriben esto a `[]` para simular el rechazo del WHERE del ON CONFLICT.
+  upsertItemsMock: vi.fn(async (rows: Record<string, unknown>[]) => rows),
   recalculateQuotationHeaderMock: vi.fn(),
   runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
   triggerSheetsSyncMock: vi.fn(),
@@ -114,6 +117,23 @@ describe('POST /api/cotizaciones/[id]/items', () => {
       const body = await res.json()
       expect(body.item).toEqual({ id: CLIENT_ID, categoria: '', descripcion: 'ya creada', cantidad: 1, precio_unitario: 0, x_pagar: 0, orden: 0 })
       expect(mocks.upsertItemsMock).not.toHaveBeenCalled()
+      expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Fase 8.7 Bloque 4 -- guard de UUID cruzado', () => {
+    it('responde 409 cuando el id ya pertenece a una partida de otra cotización', async () => {
+      // upsert_items_cotizacion rechaza el ON CONFLICT (el WHERE por cotizacion_id
+      // no matchea) y no devuelve la fila -- exactamente lo que hace la RPC real.
+      mocks.upsertItemsMock.mockResolvedValueOnce([])
+
+      const res = await POST(req({ id: CLIENT_ID }), { params })
+
+      expect(res.status).toBe(409)
+      const body = await res.json()
+      expect(body.error).toMatch(/otra cotización/)
+      // Ninguna fila cambió: no hay recálculo, no hay evento confirmado.
+      expect(mocks.recalculateQuotationHeaderMock).not.toHaveBeenCalled()
       expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
     })
   })
