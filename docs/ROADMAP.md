@@ -108,3 +108,10 @@ Si aparece otro feature a medias, documentarlo aquí.
 Una iniciativa entra a **Siguiente** cuando se prioriza, pasa a `ACTIVE_WORK.md`
 cuando arranca, y vuelve aquí como **Cerrado** cuando termina. Si generó una bitácora
 larga, esa bitácora se archiva — no se queda en los documentos vivos.
+
+No todo lo que se trabaja pasa por aquí. Al abrir sesión (`serenata-iniciar-fase`),
+lo que no está ya en este documento se clasifica por alcance: si toma más de una
+sesión, agrega un módulo/feature o cambia una capa/arquitectura, entra primero a
+**Siguiente** o **Después** antes de arrancar. Si es un ajuste puntual de una sola
+sesión, se trabaja directo sin tocar este documento y solo queda registrado en
+`docs/ACTIVE_WORK.md` al cerrar.

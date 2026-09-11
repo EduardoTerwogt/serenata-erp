@@ -91,12 +91,20 @@ git switch main && git pull --ff-only origin main
 git switch -c <rama-de-trabajo>      # o git switch <rama> si ya existe
 ```
 
+**Un push a la rama sin PR abierto no corre CI.** `test.yml`, `e2e.yml` y
+`migrations.yml` solo se disparan por evento de Pull Request o por push a `main` —
+nunca por un push simple a una rama. En cuanto exista el primer commit útil de la
+rama, abrir el PR hacia `main` **en borrador**, precisamente para que cada push
+subsecuente dispare los workflows reales. No esperar a terminar el trabajo para
+abrirlo.
+
 - **Nunca `git reset --hard` automático.** Destruye trabajo local sin aviso. Si el
   árbol está sucio, `git status` primero y preguntar.
 - Commit + push a la rama después de cada cambio funcional terminado. Pushear a una
   rama es seguro: no despliega ni mergea nada.
 - **Antes del merge:** todas las suites verdes en el PR y el Preview de Vercel
-  desplegando bien. Que el push haya tenido éxito no prueba nada.
+  desplegando bien. Que el push haya tenido éxito no prueba nada — y si nunca se
+  abrió el PR, esas suites nunca corrieron.
 - `origin/main` es la verdad para el punto de partida de una rama, no para
   sobrescribir la rama en la que estás trabajando.
 - **Ejecución entre sesiones:** una sesión nueva con tareas en cola de una sesión
