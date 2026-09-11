@@ -1,7 +1,7 @@
 'use client'
 
 import { FocusEvent, use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useFieldArray, useForm } from 'react-hook-form'
+import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadge'
@@ -154,6 +154,48 @@ function buildItemFieldsBase(server: ItemCotizacion | undefined, fields: Quotati
   return fields.reduce<Record<string, unknown>>((acc, field) => ({ ...acc, ...(buildItemFieldBase(server, field) ?? {}) }), {})
 }
 
+/**
+ * Misma coerción que ya arma el `patch` de cada campo de partida (ver
+ * `sendItemCellPatchRound`). `attempted`/`current` de la RPC pueden diferir de
+ * lo que hay en el formulario por representación (`null` vs `''`, `"10"` vs
+ * `10`), no solo por dato real -- comparar con esta normalización, no con
+ * `===` crudo, para decidir si un conflicto es "idéntico" (se resuelve solo).
+ */
+function normalizeItemFieldValue(field: QuotationItemCellField, value: unknown): unknown {
+  switch (field) {
+    case 'categoria':
+    case 'descripcion':
+    case 'responsable_id':
+      return value || ''
+    case 'cantidad':
+      return Number(value) || 0
+    case 'precio_unitario':
+    case 'x_pagar':
+      return value === '' || value === null || value === undefined ? 0 : Number(value) || 0
+  }
+}
+
+/** Mismo principio que `normalizeItemFieldValue`, para los campos de General. */
+function normalizeGeneralFieldValue(value: unknown): string {
+  return value ? String(value) : ''
+}
+
+/**
+ * Mismo principio que `normalizeItemFieldValue`, para los campos de Totales --
+ * misma coerción que ya aplican `getTotalsFieldValue`/`resolveTotalsFieldConflict`.
+ */
+function normalizeTotalsFieldValue(field: QuotationTotalsField, value: unknown): unknown {
+  switch (field) {
+    case 'porcentaje_fee':
+    case 'descuento_valor':
+      return value === '' || value === null || value === undefined ? 0 : Number(value) || 0
+    case 'iva_activo':
+      return Boolean(value)
+    case 'descuento_tipo':
+      return value === 'porcentaje' ? 'porcentaje' : 'monto'
+  }
+}
+
 function mapItemToFormItem(item: ItemCotizacion): QuotationFormValues['items'][number] {
   return {
     id: item.id,
@@ -229,12 +271,17 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const itemDirtyCellsRef = useRef<Set<string>>(new Set())
   const itemFocusedCellsRef = useRef<Set<string>>(new Set())
   const itemSavingCellsRef = useRef<Set<string>>(new Set())
-  // Máximo un PATCH en vuelo por celda: si `persistItemCellAutosave` se llama de
-  // nuevo mientras la clave ya está en `itemSavingCellsRef` (debounce y blur casi
-  // simultáneos, o dos blurs seguidos antes de que el primer PATCH resuelva), el
-  // segundo intento no dispara un segundo `fetch` con una `base` que el primero ya
-  // dejó vieja -- queda pendiente aquí y se reintenta solo cuando el que está en
-  // vuelo termina.
+  // Drenado real por celda: mientras una celda ya tiene una ronda de PATCH en
+  // vuelo (`itemCellDrainRef`), una edición nueva sobre la MISMA celda no dispara
+  // un segundo `fetch` en paralelo (rompería el orden y correría con una `base`
+  // que la ronda en vuelo va a dejar vieja) -- solo marca `itemCellRetryNeededRef`
+  // y el drenado, al terminar su ronda actual, ve la marca y manda una ronda más
+  // con el valor final, sin volver a golpear el servidor por cada tecla. El
+  // drenado completo (ronda inicial + reintentos encolados) se resuelve como una
+  // sola promesa, así que `flushPendingSaves` -- y el guard de "una celda con
+  // cambios locales sin confirmar" que usa `reconciliarConServidor` -- ven una
+  // sola espera coherente en vez de una ronda a medias.
+  const itemCellDrainRef = useRef<Map<string, Promise<unknown>>>(new Map())
   const itemCellRetryNeededRef = useRef<Set<string>>(new Set())
   const itemCellAutosaveTimersRef = useRef<Record<string, number | null>>({})
   const itemCellIdleReleaseTimersRef = useRef<Record<string, number | null>>({})
@@ -827,24 +874,19 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     Promise.all([fetchQuotationDetail(id), fetchProveedores()]).then(([cot, resp]) => { applyCotizacionToState(cot); setResponsables(resp); setLoading(false); const pending = sessionStorage.getItem('pdf_drive_result'); if (pending) { sessionStorage.removeItem('pdf_drive_result'); try { const { link } = JSON.parse(pending); setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(link ?? null) } catch {} } }).catch(() => setLoading(false))
   }, [id, applyCotizacionToState])
 
-  // `watch('items')` devuelve los valores con los que se hizo el `append` hasta que el
-  // arreglo se vuelve a registrar, así que una fila recién agregada aportaba 0 al
-  // subtotal. Combinar `fields` con lo observado es el patrón que recomienda
-  // react-hook-form para useFieldArray y deja el total correcto en ambos casos.
-  // Acotar por el más largo de los dos (no por `fields.length`): `fields` y
-  // `watchedItems` son dos estados de RHF que pueden divergir en longitud
-  // transitoriamente (p. ej. tras un `append` propio o una reconciliación de un
-  // colaborador antes de que el array se vuelva a registrar) -- acotar por el más
-  // corto dejaba una fila recién agregada fuera de Totales/Utilidad hasta el
-  // próximo `reset()` completo (recarga de página).
-  const itemsParaTotales = useMemo(() => {
-    const len = Math.max(fields.length, watchedItems?.length ?? 0)
-    return Array.from({ length: len }, (_, index) => ({
-      ...EMPTY_QUOTATION_ITEM,
-      ...(fields[index] as unknown as QuotationFormValues['items'][number] | undefined),
-      ...(watchedItems?.[index] ?? {}),
-    }))
-  }, [fields, watchedItems])
+  // `fields[i].id` es la key autogenerada de `useFieldArray` para React, no el
+  // `id` de negocio pasado a `append()` -- un join por esa key nunca encuentra
+  // nada real. `useWatch` sí devuelve el array vivo con los valores e ids de
+  // negocio actuales, incluida una fila recién agregada, sin depender de que el
+  // array se vuelva a registrar (a diferencia de `watch('items')`, que devuelve
+  // los valores del último `append`/`reset` hasta que RHF re-registra el campo).
+  // Solo para este cálculo -- `fields` sigue siendo exclusivamente la key de
+  // remonte de `useFieldArray`.
+  const liveItemsForTotals = useWatch({ control, name: 'items' })
+  const itemsParaTotales = useMemo(
+    () => (liveItemsForTotals ?? []) as QuotationFormValues['items'],
+    [liveItemsForTotals]
+  )
   const totales = useMemo(() => calculateQuotationTotals({ items: itemsParaTotales, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }), [itemsParaTotales, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor])
   const displayTotales = useMemo(() => esEditable && cotizacion ? totales : (cotizacion ? buildReadOnlyTotals(cotizacion) : totales), [esEditable, cotizacion, totales])
   const estimatedTaxes = useMemo(() => calculateEstimatedTaxes(itemsParaTotales, displayTotales), [itemsParaTotales, displayTotales])
@@ -952,7 +994,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           // Si lo que se intentó guardar es idéntico a lo que el servidor ya tiene,
           // no hay nada que decidir -- se resuelve solo, sin mostrar el banner.
           const detail = saveError.fields[field]
-          if (detail && detail.attempted === detail.current) {
+          if (detail && normalizeGeneralFieldValue(detail.attempted) === normalizeGeneralFieldValue(detail.current)) {
             generalServerRef.current = { ...generalServerRef.current, [field]: detail.current } as GeneralSnapshot
             generalFieldBaseRef.current[field] = detail.current
             generalFieldDirtyRef.current.delete(field)
@@ -1002,7 +1044,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           // Si lo que se intentó guardar es idéntico a lo que el servidor ya tiene,
           // no hay nada que decidir -- se resuelve solo, sin mostrar el banner.
           const detail = saveError.fields[field]
-          if (detail && detail.attempted === detail.current) {
+          if (detail && normalizeTotalsFieldValue(field, detail.attempted) === normalizeTotalsFieldValue(field, detail.current)) {
             totalsServerRef.current = { ...totalsServerRef.current, [field]: detail.current } as TotalsSnapshot
             totalsFieldBaseRef.current[field] = detail.current
             totalsFieldDirtyRef.current.delete(field)
@@ -1129,78 +1171,144 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     void persistTotalsField(field)
   }, [clearTotalsFieldConflict, persistTotalsField, totalsFieldConflicts])
 
-  // Fase 8.7 (Bloque 1): mismo cambio de forma que persistGeneralField/
-  // persistTotalsField -- devuelve `p` (rechaza en 409/500) con el manejo de
-  // conflicto/error movido a `.then(onFulfilled, onRejected)`.
-  const persistItemCellAutosave = useCallback((rowId: string, field: QuotationItemCellField): Promise<unknown> => {
+  /**
+   * Una ronda de PATCH para una celda: arma el patch, lo manda, y aplica éxito
+   * o conflicto. NUNCA se llama sola desde fuera -- `persistItemCellAutosave`
+   * la envuelve en un drenado real (ver abajo) para que, si llegan varias
+   * ediciones a la misma celda mientras una ronda sigue en vuelo, se manden en
+   * secuencia (nunca en paralelo) y con la `base` ya refrescada por la ronda
+   * anterior.
+   *
+   * Causa E: en éxito, refresca `itemCellBaseRef` al valor recién confirmado
+   * (antes solo `upsertLocalItemState` tocaba el form, nunca el `base` -- así
+   * que seguir editando la MISMA celda sin blur después de un autoguardado
+   * mandaba la próxima ronda con un `base` ya viejo y producía un 409 contra
+   * uno mismo).
+   *
+   * Causa I: si el `base` nunca se capturó (primera edición de una fila nueva,
+   * antes de que su POST confirme y `itemsServerRef` se pueble), se reconstruye
+   * aquí en vez de mandar el PATCH sin comparación.
+   */
+  const sendItemCellPatchRound = useCallback(async (rowId: string, field: QuotationItemCellField): Promise<unknown> => {
     const key = getItemCellKey(rowId, field)
-    if (itemSavingCellsRef.current.has(key)) {
-      itemCellRetryNeededRef.current.add(key)
-      return Promise.resolve()
+    await awaitRowCreation(rowId)
+    let base = itemCellBaseRef.current[key]
+    if (base === undefined) {
+      const freshBase = buildItemFieldBase(itemsServerRef.current[rowId], field)
+      if (freshBase) { base = freshBase; itemCellBaseRef.current[key] = freshBase }
     }
+    clearItemCellAutosaveTimer(key)
     const index = getItemIndexByRowId(rowId)
-    if (index < 0) return Promise.resolve()
+    if (index < 0) return undefined
     const item = getValues(`items.${index}`)
-    if (!item) return Promise.resolve()
-    itemSavingCellsRef.current.add(key)
+    if (!item) return undefined
     const patch: Record<string, unknown> = field === 'categoria' ? { categoria: item.categoria || '' }
       : field === 'descripcion' ? { descripcion: item.descripcion || '' }
       : field === 'cantidad' ? { cantidad: Number(item.cantidad) || 0 }
       : field === 'precio_unitario' ? { precio_unitario: item.precio_unitario === '' ? 0 : Number(item.precio_unitario) || 0 }
       : field === 'x_pagar' ? { x_pagar: item.x_pagar === '' ? 0 : Number(item.x_pagar) || 0 }
       : { responsable_id: item.responsable_id || '', responsable_nombre: item.responsable_nombre || '' }
-    const base = itemCellBaseRef.current[key]
     const mutationId = crypto.randomUUID()
     rememberOwnItemMutationId(mutationId)
     const p = trackMutation(patchQuotationItem(rowId, patch, { base, mutationId }))
-    p.then(
+    return p.then(
       (updatedItem) => {
         markLocalWrite(rowId, field)
         itemDirtyCellsRef.current.delete(key)
         clearItemCellConflict(rowId, field)
+        itemCellBaseRef.current[key] = patch
         if (updatedItem) {
           upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         }
         scheduleItemCellIdleRelease(rowId, field)
+        return updatedItem
       },
       (saveError: unknown) => {
         if (saveError instanceof PatchConflictError) {
           // Si nadie cambió nada realmente (lo que el usuario intentó guardar es
-          // idéntico a lo que el servidor ya tiene), no hay nada que decidir -- se
-          // resuelve solo, igual que "Usar" pero sin mostrar el banner. Un conflicto
-          // real (valores distintos) sigue mostrándose sin tocar.
+          // idéntico a lo que el servidor ya tiene, comparado sin importar
+          // representación -- causa G), no hay nada que decidir -- se resuelve
+          // solo, igual que "Usar" pero sin mostrar el banner.
           const detail = saveError.fields[field]
-          if (detail && detail.attempted === detail.current) {
+          if (detail && normalizeItemFieldValue(field, detail.attempted) === normalizeItemFieldValue(field, detail.current)) {
             itemsServerRef.current[rowId] = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)), [field]: detail.current }
             itemCellBaseRef.current[key] = { [field]: detail.current }
             itemDirtyCellsRef.current.delete(key)
             scheduleItemCellIdleRelease(rowId, field)
-            return
+            return undefined
           }
-          // Nunca se descarta en silencio lo que el usuario tecleó: la fila queda tal
-          // cual, se muestra el conflicto y el usuario decide con qué valor seguir.
+          // Conflicto real: nunca se descarta en silencio lo que el usuario
+          // tecleó -- la fila queda tal cual, se muestra el conflicto y el
+          // usuario decide. `itemDirtyCellsRef` NO se limpia a propósito (sigue
+          // bloqueando Generar/Aprobar) y el error se relanza para que el
+          // drenado de `persistItemCellAutosave` rechace y `flushPendingSaves`
+          // vea la falla real.
           setItemCellConflicts((prev) => ({ ...prev, [key]: saveError.fields }))
-          return
+          throw saveError
         }
         setError(saveError instanceof Error ? saveError.message : 'Error guardando partida')
+        throw saveError
       }
-    ).finally(() => {
+    )
+  }, [awaitRowCreation, clearItemCellAutosaveTimer, clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState, trackMutation])
+
+  /**
+   * Drenado real por celda (causa F): como máximo una ronda de PATCH en vuelo
+   * por celda. Si llega una edición nueva mientras una ronda ya está en curso,
+   * no dispara un segundo `fetch` en paralelo -- marca `itemCellRetryNeededRef`
+   * y el `do...while` manda una ronda más en cuanto la actual resuelve, con el
+   * valor final del form en ese momento. Todo el drenado (ronda inicial +
+   * reintentos encolados) es UNA sola promesa: quien llama antes de que
+   * termine (otra tecla, `flushItemCellDirtyFields`) recibe esa misma promesa
+   * en vez de disparar otra ronda por su cuenta.
+   */
+  const persistItemCellAutosave = useCallback((rowId: string, field: QuotationItemCellField): Promise<unknown> => {
+    const key = getItemCellKey(rowId, field)
+    const existing = itemCellDrainRef.current.get(key)
+    if (existing) {
+      itemCellRetryNeededRef.current.add(key)
+      return existing
+    }
+    itemSavingCellsRef.current.add(key)
+    const drain = (async () => {
+      let result: unknown
+      do {
+        itemCellRetryNeededRef.current.delete(key)
+        result = await sendItemCellPatchRound(rowId, field)
+      } while (itemCellRetryNeededRef.current.has(key))
+      return result
+    })().finally(() => {
       itemSavingCellsRef.current.delete(key)
-      if (itemCellRetryNeededRef.current.delete(key)) {
-        void persistItemCellAutosave(rowId, field)
-      }
+      itemCellDrainRef.current.delete(key)
     })
-    return p
-  }, [clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState, trackMutation])
+    // Nadie más que `flushPendingSaves` (vía `Promise.allSettled`) tiene por qué
+    // esperar este drenado -- los demás callers lo disparan "fire and forget"
+    // (`void persistItemCellAutosave(...)`) desde un debounce o un blur. Sin
+    // este `catch` mudo, un conflicto real (que a propósito rechaza el
+    // drenado) se reportaría como unhandled rejection en la consola aunque el
+    // banner de conflicto ya se haya mostrado -- mismo patrón que `trackMutation`
+    // usa arriba para su propia promesa derivada.
+    drain.catch(() => {})
+    itemCellDrainRef.current.set(key, drain)
+    return drain
+  }, [sendItemCellPatchRound])
 
   // Fase 8.7 (Bloque 1): equivalente a flushGeneralDirtyFields/
   // flushTotalsDirtyFields, para partidas -- fuerza cualquier celda con una
   // edición todavía esperando su debounce de 800ms y devuelve las promesas
   // reales para que flushPendingSaves las incluya en su foto.
+  // Fase 8.7.2 (causa F): itera la UNIÓN de `itemDirtyCellsRef` y
+  // `itemCellDrainRef.keys()`, no solo dirty -- así un drenado ya en curso se
+  // ve aunque su ronda actual haya limpiado `itemDirtyCellsRef` un instante
+  // antes de que esto corra. A propósito NO marca `itemCellRetryNeededRef` por
+  // su cuenta (generaría un PATCH redundante en cada Generar/Aprobar).
   const flushItemCellDirtyFields = useCallback((): Promise<unknown>[] => {
     const disparadas: Promise<unknown>[] = []
-    for (const key of Array.from(itemDirtyCellsRef.current)) {
-      if (itemSavingCellsRef.current.has(key)) continue
+    const keys = new Set([...Array.from(itemDirtyCellsRef.current), ...Array.from(itemCellDrainRef.current.keys())])
+    for (const key of Array.from(keys)) {
+      const existingDrain = itemCellDrainRef.current.get(key)
+      if (existingDrain) { disparadas.push(existingDrain); continue }
+      if (!itemDirtyCellsRef.current.has(key)) continue
       const [rowId, field] = key.split(':') as [string, QuotationItemCellField]
       clearItemCellAutosaveTimer(key)
       disparadas.push(persistItemCellAutosave(rowId, field))
@@ -1374,6 +1482,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     lockItemCell(rowId, field)
     clearItemCellIdleReleaseTimer(key)
     clearItemCellAutosaveTimer(key)
+    // Causa F (hueco de la ronda de revisión): si ya hay un drenado en vuelo para
+    // esta celda, esta tecla no dispara su propio timer -- pero el drenado en
+    // vuelo puede resolver ANTES de que este debounce venza, y en éxito limpia
+    // `itemDirtyCellsRef` sin que nadie haya marcado un reintento. Marcarlo aquí
+    // (no solo en el guard de `persistItemCellAutosave`) es lo que hace que el
+    // drenado en curso vea la marca y mande una ronda más con este valor.
+    if (itemCellDrainRef.current.has(key)) itemCellRetryNeededRef.current.add(key)
     itemCellAutosaveTimersRef.current[key] = window.setTimeout(() => { void persistItemCellAutosave(rowId, field) }, ITEM_CELL_AUTOSAVE_DELAY_MS)
   }, [clearItemCellAutosaveTimer, clearItemCellIdleReleaseTimer, lockItemCell, markLocalWrite, persistItemCellAutosave])
 
@@ -1406,12 +1521,24 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const mutationId = crypto.randomUUID()
     rememberOwnItemMutationId(mutationId)
     const creation = trackMutation(createQuotationItemRow(rowId, mutationId))
-    pendingRowCreationsRef.current.set(rowId, creation.then(() => undefined, () => undefined))
+    // Causa I: los `.then` de una promesa se disparan en el orden en que se
+    // registraron. `recordServerItem` tenía que correr ANTES de que
+    // `pendingRowCreationsRef` resolviera la fila como lista -- si no, una
+    // primera edición de la celda (que llama `awaitRowCreation` y después lee
+    // `itemsServerRef.current[rowId]` para reconstruir su `base`, causa I en
+    // `sendItemCellPatchRound`) podía encontrar la fila todavía sin poblar en
+    // `itemsServerRef`. Encadenar `recordServerItem` sobre `creation` (en
+    // `rowReady`) y derivar `pendingRowCreationsRef` de `rowReady` (no de
+    // `creation`) garantiza ese orden.
+    const rowReady = creation.then(
+      (createdItem) => { if (createdItem) recordServerItem(createdItem); return createdItem },
+      () => undefined
+    )
+    pendingRowCreationsRef.current.set(rowId, rowReady.then(() => undefined))
 
     try {
-      const createdItem = await creation
+      const createdItem = await rowReady
       if (!createdItem) throw new Error('No se pudo crear la fila')
-      recordServerItem(createdItem)
       setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
     } catch (createError: unknown) {
       const index = getItemIndexByRowId(rowId)
