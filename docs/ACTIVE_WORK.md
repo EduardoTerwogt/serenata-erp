@@ -99,11 +99,30 @@ intencional hasta que Proyectos exista como segundo consumidor real.
 
 ## Estado
 
-Bloques 1-5: sin empezar.
+**Bloque 1: cerrado.** `flushPendingSaves` ahora fuerza (sin await intermedio, foto
+atómica) todo lo dirty de General/Totales/Partidas/Notas antes de leer
+`pendingMutationsRef`, y `trackMutation` envuelve la operación completa (no el
+`fetch()` crudo) en las cuatro vías -- un 409/500 pendiente ahora sí aborta
+Generar/Aprobar/el "Generar PDF" standalone. Se agregó `transitionInFlightRef`
+(doble click) y un guard por campo/celda contra el doble disparo entre el blur de
+sección y el propio flush del click. `approve_cotizacion` gana el mismo guard de
+estado bajo `FOR UPDATE` que ya tenía `emitir_cotizacion` (asimetría encontrada en la
+auditoría, aprobada para este bloque) -- migración
+`20260911_approve_cotizacion_estado_guard.sql`, aplicada y validada contra
+`serenata-erp-test` (estados inválidos e idempotencia de `APROBADA`, sin efectos
+secundarios). Cobertura nueva en
+`tests/e2e/critical/cotizaciones-flush-transicion.spec.ts` (9 casos: las 5 vías de
+guardado x 409/500/dirty-click-inmediato, más el doble click) y un caso unitario en
+`lib/server/quotations/__tests__/approval.test.ts`. `tsc`, lint, unit (417), build,
+smoke (21) y critical (59, incluidos los 9 nuevos) verdes localmente; `live` queda
+pendiente de confirmar en CI (esta sesión no tiene el `service_role`/JWT de
+`serenata-erp-test`, solo acceso de datos vía MCP).
+
+Bloques 2-5: sin empezar.
 
 ## Próximo paso
 
-Auditar el bloque 1 (`/serenata-iniciar-fase`) y proponer el plan antes de tocar código.
+Auditar el bloque 2 (`/serenata-iniciar-fase`) y proponer el plan antes de tocar código.
 
 ## Validación antes del merge
 

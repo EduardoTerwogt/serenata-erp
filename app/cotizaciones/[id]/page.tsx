@@ -201,6 +201,12 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const generalIdleReleaseTimerRef = useRef<number | null>(null)
   const totalsIdleReleaseTimerRef = useRef<number | null>(null)
   const notasDirtyRef = useRef(false)
+  // Fase 8.7 (Bloque 1): guard contra doble disparo -- ver el comentario junto
+  // a flushGeneralDirtyFields. Notas no tiene un "flush de todos los campos
+  // dirty" separado (es un solo campo), así que el guard vive directo en
+  // persistNotasAutosave: si ya hay un guardado en vuelo, se devuelve esa
+  // misma promesa en vez de disparar un segundo PATCH concurrente.
+  const notasInFlightRef = useRef<Promise<unknown> | null>(null)
   const generalDirtyRef = useRef(false)
   const totalsDirtyRef = useRef(false)
   const notasLockHeldRef = useRef(false)
@@ -270,15 +276,18 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const pendingMutationsRef = useRef<Set<Promise<unknown>>>(new Set())
   const trackMutation = useCallback(<T,>(promise: Promise<T>): Promise<T> => {
     pendingMutationsRef.current.add(promise)
-    promise.finally(() => { pendingMutationsRef.current.delete(promise) })
+    // La cadena derivada de `.finally()` es una promesa nueva y distinta de
+    // `promise`: si `promise` rechaza, esta también, y sin un handler propio
+    // se reporta como rechazo no manejado aunque `promise` sí tenga el suyo
+    // (el de quien la trackeó). Se apaga aquí explícitamente.
+    promise.finally(() => { pendingMutationsRef.current.delete(promise) }).catch(() => {})
     return promise
   }, [])
-  const flushPendingSaves = useCallback(async (): Promise<boolean> => {
-    const enVuelo = Array.from(pendingMutationsRef.current)
-    if (enVuelo.length === 0) return true
-    const resultados = await Promise.allSettled(enVuelo)
-    return resultados.every((r) => r.status === 'fulfilled')
-  }, [])
+  // `flushPendingSaves` en sí se define más abajo (línea ~985), después de
+  // `flushGeneralDirtyFields`/`flushTotalsDirtyFields`/`flushItemCellDirtyFields`/
+  // `persistNotasAutosave` -- los necesita todos y en este punto del componente
+  // todavía no existen.
+  const flushInFlightRef = useRef<Promise<boolean> | null>(null)
 
   const markLocalWrite = useCallback((rowId: string, field: QuotationItemCellField) => {
     localWriteAtRef.current.set(getItemCellKey(rowId, field), Date.now())
@@ -437,6 +446,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     if (pending) await pending
   }, [])
 
+  // Fase 8.7 (Bloque 1): `trackMutation` YA NO envuelve el `fetch()` de aquí --
+  // lo envuelve quien llama a esta función (persistItemCellAutosave), sobre la
+  // promesa completa (fetch + parseo + chequeo de status). `fetch()` resuelve
+  // (fulfilled) en cuanto llegan las cabeceras, sin importar el status: si se
+  // trackeaba el `fetch()` crudo, un 409/500 nunca llegaba a verse como
+  // rechazo desde `flushPendingSaves`, que es justo el bug que este bloque
+  // cierra. Trackear la función completa (que sí hace `throw` más abajo) es lo
+  // que hace que el flush detecte el fallo de verdad.
   const patchQuotationItem = useCallback(async (
     rowId: string,
     patch: Record<string, unknown>,
@@ -446,32 +463,32 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const body: Record<string, unknown> = { ...patch }
     if (options?.base) body.base = options.base
     if (options?.mutationId) body.mutation_id = options.mutationId
-    const response = await trackMutation(fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))
+    const response = await fetch(`/api/cotizaciones/${id}/items/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await response.json().catch(() => ({}))
     if (response.status === 409 && data?.error === 'conflict') {
       throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
     }
     if (!response.ok) throw new Error(data?.error || 'Error actualizando partida')
     return data?.item as ItemCotizacion | undefined
-  }, [awaitRowCreation, id, trackMutation])
+  }, [awaitRowCreation, id])
 
   // Fetch crudo (no sendJson/getJson): esos helpers colapsan cualquier respuesta
   // no-2xx en un Error genérico y perderían el payload {fields} del 409, igual
-  // que patchQuotationItem arriba.
+  // que patchQuotationItem arriba. Ídem nota de trackMutation arriba.
   const patchQuotationGeneral = useCallback(async (
     patch: Record<string, unknown>,
     options?: { base?: Record<string, unknown> | null }
   ) => {
     const body: Record<string, unknown> = { ...patch }
     if (options?.base) body.base = options.base
-    const response = await trackMutation(fetch(`/api/cotizaciones/${id}/general`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))
+    const response = await fetch(`/api/cotizaciones/${id}/general`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await response.json().catch(() => ({}))
     if (response.status === 409 && data?.error === 'conflict') {
       throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
     }
     if (!response.ok) throw new Error(data?.error || 'Error actualizando información general')
     return data as Cotizacion | undefined
-  }, [id, trackMutation])
+  }, [id])
 
   const patchQuotationTotales = useCallback(async (
     patch: Record<string, unknown>,
@@ -479,14 +496,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   ) => {
     const body: Record<string, unknown> = { ...patch }
     if (options?.base) body.base = options.base
-    const response = await trackMutation(fetch(`/api/cotizaciones/${id}/totales`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))
+    const response = await fetch(`/api/cotizaciones/${id}/totales`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await response.json().catch(() => ({}))
     if (response.status === 409 && data?.error === 'conflict') {
       throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
     }
     if (!response.ok) throw new Error(data?.error || 'Error actualizando configuración de totales')
     return data as Cotizacion | undefined
-  }, [id, trackMutation])
+  }, [id])
 
   // El id ya lo generó el cliente (Fase 6B, ver handleAddRow) -- el POST solo lo
   // valida y lo usa como llave del insert. `upsertItems` en el servidor hace que
@@ -809,13 +826,45 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const displayTotales = useMemo(() => esEditable && cotizacion ? totales : (cotizacion ? buildReadOnlyTotals(cotizacion) : totales), [esEditable, cotizacion, totales])
   const estimatedTaxes = useMemo(() => calculateEstimatedTaxes(itemsParaTotales, displayTotales), [itemsParaTotales, displayTotales])
 
-  const persistNotasAutosave = useCallback(async () => {
-    if (!cotizacion) return
-    const notasToSave = getCurrentNotasSnapshot(); const previousNotas = lastSavedNotasRef.current
-    if (notasToSave === previousNotas) { notasDirtyRef.current = false; if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } scheduleNotasIdleRelease(); return }
+  // Fase 8.7 (Bloque 1): ya no es `async`/try-catch -- devuelve directamente
+  // `p`, la promesa trackeada (rechaza en 409/500 igual que antes), con el
+  // manejo de UI adjunto vía `.then(onFulfilled, onRejected)` en vez de
+  // `await` + `catch`. Así el caller (flushPendingSaves) puede capturar `p` y
+  // ver su rechazo real, y quien dispara esto sin esperarlo (el timer de
+  // debounce, el blur) sigue sin generar un rechazo no manejado, porque el
+  // handler queda adjunto en el mismo tick en que se crea la promesa.
+  const persistNotasAutosave = useCallback((): Promise<unknown> => {
+    if (notasInFlightRef.current) return notasInFlightRef.current
+    if (!cotizacion) return Promise.resolve()
+    const notasToSave = getCurrentNotasSnapshot()
+    const previousNotas = lastSavedNotasRef.current
+    if (notasToSave === previousNotas) {
+      notasDirtyRef.current = false
+      if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas') }
+      else scheduleNotasIdleRelease()
+      return Promise.resolve()
+    }
     setIsSavingNotas(true)
-    try { await trackMutation(saveQuotationNotes(id, notasToSave || null)); lastSavedNotasRef.current = notasToSave; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev)) } catch (saveError: unknown) { setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas'); notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } finally { setIsSavingNotas(false) }
-    const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current; notasDirtyRef.current = hasPendingChanges; if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return } if (!hasPendingChanges) scheduleNotasIdleRelease()
+    const p = trackMutation(saveQuotationNotes(id, notasToSave || null))
+    notasInFlightRef.current = p
+    p.then(
+      () => {
+        lastSavedNotasRef.current = notasToSave
+        setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev))
+        const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current
+        notasDirtyRef.current = hasPendingChanges
+        if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return }
+        if (!hasPendingChanges) scheduleNotasIdleRelease()
+      },
+      (saveError: unknown) => {
+        setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas')
+        notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current
+        clearNotasIdleReleaseTimer()
+        notasLockHeldRef.current = false
+        releaseSection('notas')
+      }
+    ).finally(() => { setIsSavingNotas(false); notasInFlightRef.current = null })
+    return p
   }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, releaseSection, scheduleNotasIdleRelease, trackMutation])
 
   const getGeneralFieldValue = useCallback((field: QuotationGeneralField): unknown => {
@@ -845,77 +894,89 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
    * corriendo -- podía quedar pisada por ese PATCH. Con un campo por PATCH esto ya
    * no es posible: cada uno solo toca su propia columna.
    */
-  const persistGeneralField = useCallback(async (field: QuotationGeneralField) => {
-    if (!cotizacion) return
+  // Fase 8.7 (Bloque 1): mismo cambio de forma que persistNotasAutosave --
+  // devuelve `p` (la promesa trackeada de `patchQuotationGeneral`, que sí
+  // rechaza en 409/500) y mueve el manejo de conflicto/error a
+  // `.then(onFulfilled, onRejected)`. El resto de la lógica (base, snapshot,
+  // liberación de sección) es idéntica a la de antes, solo movida de las
+  // ramas try/catch a las del `.then`.
+  const persistGeneralField = useCallback((field: QuotationGeneralField): Promise<unknown> => {
+    if (!cotizacion) return Promise.resolve()
     generalFieldSavingRef.current.add(field)
     setIsSavingGeneral(true)
-    try {
-      const value = getGeneralFieldValue(field)
-      const patch: Record<string, unknown> = { [field]: value }
-      const baseValue = generalFieldBaseRef.current[field]
-      const base = baseValue !== undefined ? { [field]: baseValue } : undefined
-      const updated = await patchQuotationGeneral(patch, { base })
-      generalFieldDirtyRef.current.delete(field)
-      clearGeneralFieldConflict(field)
-      if (updated) {
-        generalServerRef.current = buildGeneralSnapshot({ cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega || '', locacion: updated.locacion || '' })
-        setCotizacion((prev) => prev ? { ...prev, cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega, locacion: updated.locacion } : prev)
+    const value = getGeneralFieldValue(field)
+    const patch: Record<string, unknown> = { [field]: value }
+    const baseValue = generalFieldBaseRef.current[field]
+    const base = baseValue !== undefined ? { [field]: baseValue } : undefined
+    const p = trackMutation(patchQuotationGeneral(patch, { base }))
+    p.then(
+      (updated) => {
+        generalFieldDirtyRef.current.delete(field)
+        clearGeneralFieldConflict(field)
+        if (updated) {
+          generalServerRef.current = buildGeneralSnapshot({ cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega || '', locacion: updated.locacion || '' })
+          setCotizacion((prev) => prev ? { ...prev, cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega, locacion: updated.locacion } : prev)
+        }
+        generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
+        if (!generalFocusedRef.current) {
+          clearGeneralIdleReleaseTimer()
+          if (generalFieldDirtyRef.current.size === 0) { generalLockHeldRef.current = false; releaseSection('general'); return }
+        }
+        if (generalFieldDirtyRef.current.size === 0) scheduleGeneralIdleRelease()
+      },
+      (saveError: unknown) => {
+        if (saveError instanceof PatchConflictError) {
+          // Nunca se descarta en silencio lo que el usuario tecleó: el campo queda
+          // tal cual, se muestra el conflicto y el usuario decide con qué valor seguir.
+          setGeneralFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
+          return
+        }
+        setError(saveError instanceof Error ? saveError.message : 'Error guardando información general')
       }
-    } catch (saveError: unknown) {
-      if (saveError instanceof PatchConflictError) {
-        // Nunca se descarta en silencio lo que el usuario tecleó: el campo queda
-        // tal cual, se muestra el conflicto y el usuario decide con qué valor seguir.
-        setGeneralFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
-        return
-      }
-      setError(saveError instanceof Error ? saveError.message : 'Error guardando información general')
-      return
-    } finally {
+    ).finally(() => {
       generalFieldSavingRef.current.delete(field)
       setIsSavingGeneral(generalFieldSavingRef.current.size > 0)
-    }
-    generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
-    if (!generalFocusedRef.current) {
-      clearGeneralIdleReleaseTimer()
-      if (generalFieldDirtyRef.current.size === 0) { generalLockHeldRef.current = false; releaseSection('general'); return }
-    }
-    if (generalFieldDirtyRef.current.size === 0) scheduleGeneralIdleRelease()
-  }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease])
+    })
+    return p
+  }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease, trackMutation])
 
-  const persistTotalsField = useCallback(async (field: QuotationTotalsField) => {
-    if (!cotizacion) return
+  const persistTotalsField = useCallback((field: QuotationTotalsField): Promise<unknown> => {
+    if (!cotizacion) return Promise.resolve()
     totalsFieldSavingRef.current.add(field)
     setIsSavingTotals(true)
-    try {
-      const value = getTotalsFieldValue(field)
-      const patch: Record<string, unknown> = { [field]: value }
-      const baseValue = totalsFieldBaseRef.current[field]
-      const base = baseValue !== undefined ? { [field]: baseValue } : undefined
-      const updated = await patchQuotationTotales(patch, { base })
-      totalsFieldDirtyRef.current.delete(field)
-      clearTotalsFieldConflict(field)
-      if (updated) {
-        totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
-        setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor } : prev)
+    const value = getTotalsFieldValue(field)
+    const patch: Record<string, unknown> = { [field]: value }
+    const baseValue = totalsFieldBaseRef.current[field]
+    const base = baseValue !== undefined ? { [field]: baseValue } : undefined
+    const p = trackMutation(patchQuotationTotales(patch, { base }))
+    p.then(
+      (updated) => {
+        totalsFieldDirtyRef.current.delete(field)
+        clearTotalsFieldConflict(field)
+        if (updated) {
+          totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
+          setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor } : prev)
+        }
+        totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
+        if (!totalsFocusedRef.current) {
+          clearTotalsIdleReleaseTimer()
+          if (totalsFieldDirtyRef.current.size === 0) { totalsLockHeldRef.current = false; releaseSection('totales'); return }
+        }
+        if (totalsFieldDirtyRef.current.size === 0) scheduleTotalsIdleRelease()
+      },
+      (saveError: unknown) => {
+        if (saveError instanceof PatchConflictError) {
+          setTotalsFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
+          return
+        }
+        setError(saveError instanceof Error ? saveError.message : 'Error guardando configuración de totales')
       }
-    } catch (saveError: unknown) {
-      if (saveError instanceof PatchConflictError) {
-        setTotalsFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
-        return
-      }
-      setError(saveError instanceof Error ? saveError.message : 'Error guardando configuración de totales')
-      return
-    } finally {
+    ).finally(() => {
       totalsFieldSavingRef.current.delete(field)
       setIsSavingTotals(totalsFieldSavingRef.current.size > 0)
-    }
-    totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
-    if (!totalsFocusedRef.current) {
-      clearTotalsIdleReleaseTimer()
-      if (totalsFieldDirtyRef.current.size === 0) { totalsLockHeldRef.current = false; releaseSection('totales'); return }
-    }
-    if (totalsFieldDirtyRef.current.size === 0) scheduleTotalsIdleRelease()
-  }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease])
+    })
+    return p
+  }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease, trackMutation])
 
   const persistGeneralFieldRef = useRef(persistGeneralField)
   persistGeneralFieldRef.current = persistGeneralField
@@ -954,18 +1015,36 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // Al salir de la sección se guardan de inmediato todos los campos sucios en vez
   // de esperar su debounce individual -- mismo criterio que tenía el guardado de
   // sección completa al perder el foco.
-  const flushGeneralDirtyFields = useCallback(() => {
+  // Fase 8.7 (Bloque 1): un campo "sucio" sigue contando como tal hasta que su
+  // PATCH resuelve con éxito (`persistGeneralField` recién lo borra de
+  // `generalFieldDirtyRef` en el `.then` de éxito) -- así que si esto se
+  // dispara mientras ESE MISMO campo ya tiene un PATCH en vuelo (p. ej. el
+  // blur de la sección, disparado por el propio click en Aprobar/Generar, que
+  // corre en un `setTimeout(0)` diferido y puede caer después de que
+  // `flushPendingSaves` ya lo disparó), saltarlo evita un segundo PATCH
+  // concurrente del mismo campo -- que además de redundante, puede generar un
+  // 409 falso contra sí mismo (el `base` que manda el segundo ya quedó viejo
+  // frente al valor que el primero acaba de confirmar). El primero ya quedó
+  // trackeado en `pendingMutationsRef` vía `trackMutation`, así que
+  // `flushPendingSaves` lo sigue esperando aunque aquí no se repita.
+  const flushGeneralDirtyFields = useCallback((): Promise<unknown>[] => {
+    const disparadas: Promise<unknown>[] = []
     for (const field of Array.from(generalFieldDirtyRef.current)) {
+      if (generalFieldSavingRef.current.has(field)) continue
       clearGeneralFieldTimer(field)
-      void persistGeneralField(field)
+      disparadas.push(persistGeneralField(field))
     }
+    return disparadas
   }, [clearGeneralFieldTimer, persistGeneralField])
 
-  const flushTotalsDirtyFields = useCallback(() => {
+  const flushTotalsDirtyFields = useCallback((): Promise<unknown>[] => {
+    const disparadas: Promise<unknown>[] = []
     for (const field of Array.from(totalsFieldDirtyRef.current)) {
+      if (totalsFieldSavingRef.current.has(field)) continue
       clearTotalsFieldTimer(field)
-      void persistTotalsField(field)
+      disparadas.push(persistTotalsField(field))
     }
+    return disparadas
   }, [clearTotalsFieldTimer, persistTotalsField])
 
   const resolveGeneralFieldConflict = useCallback((field: QuotationGeneralField, resolution: 'theirs' | 'mine') => {
@@ -1007,43 +1086,92 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     void persistTotalsField(field)
   }, [clearTotalsFieldConflict, persistTotalsField, totalsFieldConflicts])
 
-  const persistItemCellAutosave = useCallback(async (rowId: string, field: QuotationItemCellField) => {
+  // Fase 8.7 (Bloque 1): mismo cambio de forma que persistGeneralField/
+  // persistTotalsField -- devuelve `p` (rechaza en 409/500) con el manejo de
+  // conflicto/error movido a `.then(onFulfilled, onRejected)`.
+  const persistItemCellAutosave = useCallback((rowId: string, field: QuotationItemCellField): Promise<unknown> => {
     const key = getItemCellKey(rowId, field)
     const index = getItemIndexByRowId(rowId)
-    if (index < 0) return
+    if (index < 0) return Promise.resolve()
     const item = getValues(`items.${index}`)
-    if (!item) return
+    if (!item) return Promise.resolve()
     itemSavingCellsRef.current.add(key)
-    try {
-      const patch: Record<string, unknown> = field === 'categoria' ? { categoria: item.categoria || '' }
-        : field === 'descripcion' ? { descripcion: item.descripcion || '' }
-        : field === 'cantidad' ? { cantidad: Number(item.cantidad) || 0 }
-        : field === 'precio_unitario' ? { precio_unitario: item.precio_unitario === '' ? 0 : Number(item.precio_unitario) || 0 }
-        : field === 'x_pagar' ? { x_pagar: item.x_pagar === '' ? 0 : Number(item.x_pagar) || 0 }
-        : { responsable_id: item.responsable_id || '', responsable_nombre: item.responsable_nombre || '' }
-      const base = itemCellBaseRef.current[key]
-      const mutationId = crypto.randomUUID()
-      rememberOwnItemMutationId(mutationId)
-      const updatedItem = await patchQuotationItem(rowId, patch, { base, mutationId })
-      markLocalWrite(rowId, field)
-      itemDirtyCellsRef.current.delete(key)
-      clearItemCellConflict(rowId, field)
-      if (updatedItem) {
-        upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
+    const patch: Record<string, unknown> = field === 'categoria' ? { categoria: item.categoria || '' }
+      : field === 'descripcion' ? { descripcion: item.descripcion || '' }
+      : field === 'cantidad' ? { cantidad: Number(item.cantidad) || 0 }
+      : field === 'precio_unitario' ? { precio_unitario: item.precio_unitario === '' ? 0 : Number(item.precio_unitario) || 0 }
+      : field === 'x_pagar' ? { x_pagar: item.x_pagar === '' ? 0 : Number(item.x_pagar) || 0 }
+      : { responsable_id: item.responsable_id || '', responsable_nombre: item.responsable_nombre || '' }
+    const base = itemCellBaseRef.current[key]
+    const mutationId = crypto.randomUUID()
+    rememberOwnItemMutationId(mutationId)
+    const p = trackMutation(patchQuotationItem(rowId, patch, { base, mutationId }))
+    p.then(
+      (updatedItem) => {
+        markLocalWrite(rowId, field)
+        itemDirtyCellsRef.current.delete(key)
+        clearItemCellConflict(rowId, field)
+        if (updatedItem) {
+          upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
+        }
+        scheduleItemCellIdleRelease(rowId, field)
+      },
+      (saveError: unknown) => {
+        if (saveError instanceof PatchConflictError) {
+          // Nunca se descarta en silencio lo que el usuario tecleó: la fila queda tal
+          // cual, se muestra el conflicto y el usuario decide con qué valor seguir.
+          setItemCellConflicts((prev) => ({ ...prev, [key]: saveError.fields }))
+          return
+        }
+        setError(saveError instanceof Error ? saveError.message : 'Error guardando partida')
       }
-      scheduleItemCellIdleRelease(rowId, field)
-    } catch (saveError: unknown) {
-      if (saveError instanceof PatchConflictError) {
-        // Nunca se descarta en silencio lo que el usuario tecleó: la fila queda tal
-        // cual, se muestra el conflicto y el usuario decide con qué valor seguir.
-        setItemCellConflicts((prev) => ({ ...prev, [key]: saveError.fields }))
-        return
-      }
-      setError(saveError instanceof Error ? saveError.message : 'Error guardando partida')
-    } finally {
+    ).finally(() => {
       itemSavingCellsRef.current.delete(key)
+    })
+    return p
+  }, [clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState, trackMutation])
+
+  // Fase 8.7 (Bloque 1): equivalente a flushGeneralDirtyFields/
+  // flushTotalsDirtyFields, para partidas -- fuerza cualquier celda con una
+  // edición todavía esperando su debounce de 800ms y devuelve las promesas
+  // reales para que flushPendingSaves las incluya en su foto.
+  const flushItemCellDirtyFields = useCallback((): Promise<unknown>[] => {
+    const disparadas: Promise<unknown>[] = []
+    for (const key of Array.from(itemDirtyCellsRef.current)) {
+      if (itemSavingCellsRef.current.has(key)) continue
+      const [rowId, field] = key.split(':') as [string, QuotationItemCellField]
+      clearItemCellAutosaveTimer(key)
+      disparadas.push(persistItemCellAutosave(rowId, field))
     }
-  }, [clearItemCellConflict, getItemIndexByRowId, getValues, markLocalWrite, patchQuotationItem, rememberOwnItemMutationId, scheduleItemCellIdleRelease, upsertLocalItemState])
+    return disparadas
+  }, [clearItemCellAutosaveTimer, persistItemCellAutosave])
+
+  // Fase 8.7 (Bloque 1): definida aquí porque necesita flushGeneralDirtyFields/
+  // flushTotalsDirtyFields/flushItemCellDirtyFields/persistNotasAutosave, todos
+  // declarados arriba en este mismo componente -- ver la nota junto a
+  // `pendingMutationsRef`/`trackMutation` más arriba.
+  const flushPendingSaves = useCallback((): Promise<boolean> => {
+    if (flushInFlightRef.current) return flushInFlightRef.current
+    const run = (async (): Promise<boolean> => {
+      const disparadas: Promise<unknown>[] = [
+        ...flushGeneralDirtyFields(),
+        ...flushTotalsDirtyFields(),
+        ...flushItemCellDirtyFields(),
+        ...(notasDirtyRef.current ? [persistNotasAutosave()] : []),
+      ]
+      // Combinar ANTES de que cualquiera de las recién disparadas alcance a
+      // resolverse (nunca ocurre en el mismo tick síncrono: toda resolución
+      // de promesa se agenda como microtask) -- si se esperara aquí a que
+      // terminen antes de leer `pendingMutationsRef`, `trackMutation` ya
+      // las habría sacado del Set con su propio `.finally()`.
+      const enVuelo = [...Array.from(pendingMutationsRef.current), ...disparadas]
+      if (enVuelo.length === 0) return true
+      const resultados = await Promise.allSettled(enVuelo)
+      return resultados.every((r) => r.status === 'fulfilled')
+    })()
+    flushInFlightRef.current = run
+    return run.finally(() => { flushInFlightRef.current = null })
+  }, [flushGeneralDirtyFields, flushTotalsDirtyFields, flushItemCellDirtyFields, persistNotasAutosave])
 
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
@@ -1433,7 +1561,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // (que opera contra Postgres, no contra lo que el cliente tenga en memoria)
   // -> releer canónico. `approve_cotizacion` ya existía con su propia
   // transacción; `emitir_cotizacion` es nueva, mismo patrón `FOR UPDATE`.
+  // Fase 8.7 (Bloque 1): guard síncrono contra doble click/reentrancia. Los
+  // `disabled={...}` del JSX dependen de `setState`, que es asíncrono y no
+  // alcanza a deshabilitar el botón antes de un segundo click en el mismo
+  // tick; este ref se revisa como primera línea, antes de cualquier setState.
+  const transitionInFlightRef = useRef(false)
   const aprobar = async () => {
+    if (transitionInFlightRef.current) return
+    transitionInFlightRef.current = true
     setAprobando(true); setError(null); setSuccess(null)
     try {
       const flushOk = await flushPendingSaves()
@@ -1443,11 +1578,27 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       await refreshCatalogos()
       setSuccess('¡Cotización aprobada! Proyecto y cuentas creados.')
       setTimeout(() => setSuccess(null), 4000)
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al aprobar') } finally { setAprobando(false) }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al aprobar') } finally { setAprobando(false); transitionInFlightRef.current = false }
   }
   const handlePdfResult = (result: { savedToDrive: boolean; driveWebViewLink?: string; driveError?: string }) => { if (result.savedToDrive) { setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(result.driveWebViewLink ?? null) } else if (result.driveError) { setError(`Error al guardar en Drive: ${result.driveError}`); setDriveLink(null) } else { setError('No se pudo guardar el PDF en Drive'); setDriveLink(null) } setTimeout(() => { setSuccess(null); setError(null); setDriveLink(null) }, 10000) }
-  const generarPDF = async () => { if (!cotizacion) return; setGenerandoPdf(true); setError(null); setSuccess(null); setDriveLink(null); try { const result = await generateQuotationPdf(cotizacion, undefined, { skipDownload: true }); handlePdfResult(result) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al generar PDF') } finally { setGenerandoPdf(false) } }
+  // Fase 8.7 (Bloque 1): "Generar PDF" (EMITIDA/APROBADA, no cambia estado) no
+  // llamaba a flushPendingSaves -- el peor caso no es financiero (no crea
+  // proyecto/cuentas) pero sí podía descargar un PDF con datos desactualizados
+  // si quedaba algo dirty sin confirmar. Mismo guard que Generar/Aprobar.
+  const generarPDF = async () => {
+    if (!cotizacion || transitionInFlightRef.current) return
+    transitionInFlightRef.current = true
+    setGenerandoPdf(true); setError(null); setSuccess(null); setDriveLink(null)
+    try {
+      const flushOk = await flushPendingSaves()
+      if (!flushOk) { setError('Hay cambios recientes que no se guardaron correctamente. Revisa antes de generar el PDF.'); return }
+      const result = await generateQuotationPdf(cotizacion, undefined, { skipDownload: true })
+      handlePdfResult(result)
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al generar PDF') } finally { setGenerandoPdf(false); transitionInFlightRef.current = false }
+  }
   const generarCotizacion = async () => {
+    if (transitionInFlightRef.current) return
+    transitionInFlightRef.current = true
     setGuardando(true); setError(null)
     try {
       const flushOk = await flushPendingSaves()
@@ -1461,7 +1612,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al generar PDF') } finally { setGenerandoPdf(false) }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al generar cotización')
-    } finally { setGuardando(false) }
+    } finally { setGuardando(false); transitionInFlightRef.current = false }
   }
   const crearComplementaria = () => { if (cotizacion) router.push(buildComplementariaUrl(id, cotizacion)) }
   const cancelarCotizacion = async () => { if (!confirm('¿Cancelar esta cotización? Se eliminará el proyecto y las cuentas por cobrar/pagar asociadas.')) return; setCancelando(true); setError(null); setSuccess(null); try { const res = await fetch(`/api/cotizaciones/${id}/cancelar`, { method: 'POST' }); if (!res.ok) { const body = await res.json(); throw new Error(body.error || 'Error al cancelar') } const updated = await res.json(); applyCotizacionToState(updated); setSuccess('Cotización cancelada. Proyecto y cuentas eliminados.'); setTimeout(() => setSuccess(null), 4000) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al cancelar') } finally { setCancelando(false) } }

@@ -32,6 +32,23 @@ export async function approveQuotationAndFetchResult(id: string) {
     return { ok: false as const, status, body: { error: msg } }
   }
 
+  // Fase 8.7 (Bloque 1): guard de estado dentro de la propia transacción
+  // (20260911_approve_cotizacion_estado_guard.sql), mismo patrón que ya usa
+  // emitir_cotizacion (app/api/cotizaciones/[id]/emitir/route.ts). Esto NO
+  // es RPC error (`error` de supabase-js arriba) -- es un valor de retorno
+  // normal con forma de error, así que hay que revisarlo antes de asumir
+  // éxito y leer `result.already_approved`/`proyecto_id`.
+  if (data && typeof data === 'object' && 'error' in data && (data as { error?: string }).error === 'estado_invalido') {
+    const estadoActual = (data as { estado_actual?: string }).estado_actual
+    return {
+      ok: false as const,
+      status: 400,
+      body: {
+        error: `Solo se pueden aprobar cotizaciones en estado EMITIDA. Estado actual: ${estadoActual}`,
+      },
+    }
+  }
+
   // Invalidate folio cache after successful approval (folio is consumed)
   invalidateFolioCache()
 
