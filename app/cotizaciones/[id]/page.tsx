@@ -155,6 +155,32 @@ function buildItemFieldsBase(server: ItemCotizacion | undefined, fields: Quotati
 }
 
 /**
+ * `patch_item_cotizacion` es atómica por diseño (ver la migración): si
+ * CUALQUIER campo del patch está en conflicto, la RPC rechaza la operación
+ * COMPLETA sin aplicar nada -- ni siquiera los campos que sí coincidían con
+ * su `base`. `saveError.fields` solo trae el detalle de los campos que la
+ * RPC detectó en conflicto; un campo del grupo ausente ahí no significa que
+ * sí se guardó -- significa que su valor en el servidor sigue siendo
+ * exactamente su `base` (por eso no se marcó), y lo que este PATCH intentó
+ * para ese campo nunca llegó a aplicarse. Sin esto, "Usar"/"Mantener" solo
+ * tocaban los campos que individualmente aparecían en `saveError.fields` y
+ * dejaban el resto del grupo mostrando un valor que jamás se guardó como si
+ * fuera el vigente.
+ */
+function buildAtomicConflictRecord(
+  fields: QuotationItemCellField[],
+  base: Record<string, unknown> | null,
+  attemptedPatch: Record<string, unknown>,
+  saveError: PatchConflictError
+): Record<string, FieldConflictDetail> {
+  const record: Record<string, FieldConflictDetail> = {}
+  for (const field of fields) {
+    record[field] = saveError.fields[field] ?? { base: base?.[field], current: base?.[field], attempted: attemptedPatch[field] }
+  }
+  return record
+}
+
+/**
  * Misma coerción que ya arma el `patch` de cada campo de partida (ver
  * `sendItemCellPatchRound`). `attempted`/`current` de la RPC pueden diferir de
  * lo que hay en el formulario por representación (`null` vs `''`, `"10"` vs
@@ -1381,13 +1407,21 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       // terminen antes de leer `pendingMutationsRef`, `trackMutation` ya
       // las habría sacado del Set con su propio `.finally()`.
       const enVuelo = [...Array.from(pendingMutationsRef.current), ...disparadas]
-      if (enVuelo.length === 0) return true
+      // Un conflicto real de un PATCH atómico multi-campo (autofill de
+      // producto, cambio de responsable) nunca se marca "dirty" -- eso
+      // dispararía un reintento por celda individual y rompería la
+      // atomicidad otra vez (ver handleSelectProduct). Por eso el bloqueo acá
+      // se revisa directo contra `itemCellConflicts`: mientras quede alguno
+      // sin resolver (Usar/Mantener lo limpia), la transición no procede,
+      // haya o no algo más en vuelo/dirty en este instante.
+      const sinConflictosSinResolver = Object.keys(itemCellConflicts).length === 0
+      if (enVuelo.length === 0) return sinConflictosSinResolver
       const resultados = await Promise.allSettled(enVuelo)
-      return resultados.every((r) => r.status === 'fulfilled')
+      return sinConflictosSinResolver && resultados.every((r) => r.status === 'fulfilled')
     })()
     flushInFlightRef.current = run
     return run.finally(() => { flushInFlightRef.current = null })
-  }, [flushGeneralDirtyFields, flushTotalsDirtyFields, flushItemCellDirtyFields, persistNotasAutosave])
+  }, [flushGeneralDirtyFields, flushTotalsDirtyFields, flushItemCellDirtyFields, itemCellConflicts, persistNotasAutosave])
 
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
@@ -1735,15 +1769,26 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } catch (saveError: unknown) {
       if (saveError instanceof PatchConflictError) {
         // El mismo banner de conflicto por celda que usan las ediciones normales --
-        // deja elegir, campo por campo, entre lo que sugirió el producto (attempted)
-        // y lo que hay ahora en el servidor (current). Nada se descarta en silencio:
-        // como la RPC es atómica, si hubo conflicto ningún campo se guardó.
+        // deja elegir, entre lo que sugirió el producto (attempted) y lo que hay
+        // ahora en el servidor (current). Nada se descarta en silencio: como la
+        // RPC es atómica, si hubo conflicto NINGÚN campo se guardó -- se
+        // sintetiza el registro completo de los 4 (buildAtomicConflictRecord),
+        // no solo los que la RPC marcó, y se guarda el MISMO registro bajo las
+        // 4 claves para que cualquiera de los 4 banners resuelva el grupo entero
+        // (ver resolveItemCellConflict).
+        const patchAttempted = { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }
+        const record = buildAtomicConflictRecord(fields, base, patchAttempted, saveError)
+        // El PATCH atómico se rechazó completo -- ninguno de los 4 campos se
+        // guardó, así que NO se marcan como "dirty" en itemDirtyCellsRef: ese
+        // mecanismo dispara `persistItemCellAutosave` por CELDA INDIVIDUAL
+        // (flushItemCellDirtyFields), lo que rompería otra vez la atomicidad
+        // -- 4 PATCH de un solo campo cada uno, en vez de uno atómico de 4.
+        // El bloqueo de Generar/Aprobar mientras este conflicto siga sin
+        // resolver corre por `flushPendingSaves`, que revisa directamente si
+        // queda algún `itemCellConflicts` sin resolver (ver más abajo).
         setItemCellConflicts((prev) => {
           const next = { ...prev }
-          for (const field of fields) {
-            const detail = saveError.fields[field]
-            if (detail) next[getItemCellKey(rowId, field)] = { ...next[getItemCellKey(rowId, field)], [field]: detail }
-          }
+          for (const field of fields) next[getItemCellKey(rowId, field)] = record
           return next
         })
         return
@@ -1805,6 +1850,55 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     }
   }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, responsables, setValue, trackMutation, upsertLocalItemState])
 
+  /**
+   * "Mantener lo mío" sobre un conflicto de un PATCH atómico multi-campo
+   * (autofill de producto): reintenta el PATCH COMPLETO con TODOS los campos
+   * del grupo -- nunca uno solo, o se pierde la atomicidad otra vez (el
+   * drenado genérico de `persistItemCellAutosave` solo sabe mandar un campo a
+   * la vez). Usa los valores ACTUALES del form (lo que el usuario sigue
+   * viendo, sin tocar) y el `base` ya refrescado por `resolveItemCellConflict`
+   * a los valores reales del servidor.
+   */
+  const retryItemGroupPatch = useCallback(async (rowId: string, groupFields: QuotationItemCellField[]) => {
+    const index = getItemIndexByRowId(rowId)
+    if (index < 0) return
+    const item = getValues(`items.${index}`)
+    if (!item) return
+    const patch: Record<string, unknown> = {}
+    for (const field of groupFields) {
+      patch[field] = field === 'cantidad' ? Number(item.cantidad) || 0
+        : field === 'precio_unitario' ? (item.precio_unitario === '' ? 0 : Number(item.precio_unitario) || 0)
+        : field === 'x_pagar' ? (item.x_pagar === '' ? 0 : Number(item.x_pagar) || 0)
+        : (item as unknown as Record<string, unknown>)[field] || ''
+    }
+    const base = buildItemFieldsBase(itemsServerRef.current[rowId], groupFields)
+    const mutationId = crypto.randomUUID()
+    rememberOwnItemMutationId(mutationId)
+    try {
+      const updatedItem = await trackMutation(enqueueRowMutation(rowId, () => patchQuotationItem(rowId, patch, { base: base ?? undefined, mutationId })))
+      if (updatedItem) {
+        upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
+        for (const field of groupFields) {
+          clearItemCellConflict(rowId, field)
+          const freshBase = buildItemFieldBase(updatedItem, field)
+          if (freshBase) itemCellBaseRef.current[getItemCellKey(rowId, field)] = freshBase
+        }
+      }
+    } catch (saveError: unknown) {
+      if (saveError instanceof PatchConflictError) {
+        const record = buildAtomicConflictRecord(groupFields, base, patch, saveError)
+        setItemCellConflicts((prev) => {
+          const next = { ...prev }
+          for (const field of groupFields) next[getItemCellKey(rowId, field)] = record
+          return next
+        })
+        return
+      }
+      setError(saveError instanceof Error ? saveError.message : 'Error aplicando cambios')
+      void resyncPartidas()
+    }
+  }, [clearItemCellConflict, enqueueRowMutation, getItemIndexByRowId, getValues, patchQuotationItem, rememberOwnItemMutationId, resyncPartidas, trackMutation, upsertLocalItemState])
+
   // Presencia estilo Sheets: saber que alguien más está en una celda sirve para
   // resaltarla y avisar, nunca para deshabilitar nada.
   const isItemCellLocked = useCallback((rowId: string, field: QuotationItemCellField) => !!itemCellEditors[getItemCellKey(rowId, field)], [itemCellEditors])
@@ -1837,57 +1931,105 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
     if (field === 'responsable_id') {
       // Grupo atómico: `responsable_id` y `responsable_nombre` se resuelven
-      // juntos, cada uno con SU PROPIO detalle -- nunca se guarda un nombre
-      // bajo la clave de un id (o viceversa) en `itemsServerRef`/`base`, que es
-      // justo lo que rompía el <select> si se reusaba ciegamente el camino
-      // genérico de abajo.
+      // juntos. La RPC es atómica -- si CUALQUIERA de los dos chocó, NINGUNO
+      // se guardó -- así que un campo ausente de `record` no significa "se
+      // guardó tal cual se intentó": significa que el servidor sigue
+      // teniendo el `base` original, capturado antes del intento. Sin este
+      // fallback, "Usar" dejaba el <select> mostrando el id que se INTENTÓ
+      // (nunca aceptado por el servidor) para el campo que no apareció como
+      // conflictivo.
       const detailId = record.responsable_id
       const detailNombre = record.responsable_nombre
       if (!detailId && !detailNombre) return
+      const originalBase = itemCellBaseRef.current[key] as { responsable_id?: string; responsable_nombre?: string | null } | undefined
+      const trueId = (detailId ? detailId.current : originalBase?.responsable_id) as string | null | undefined
+      const trueNombre = (detailNombre ? detailNombre.current : originalBase?.responsable_nombre) as string | null | undefined
+
       clearItemCellConflict(rowId, field)
-      const nextServer = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)) }
-      const nextBase: Record<string, unknown> = { ...itemCellBaseRef.current[key] }
-      if (detailId) { nextServer.responsable_id = detailId.current as string; nextBase.responsable_id = detailId.current }
-      if (detailNombre) { nextServer.responsable_nombre = detailNombre.current as string | null; nextBase.responsable_nombre = detailNombre.current }
-      itemsServerRef.current[rowId] = nextServer
-      itemCellBaseRef.current[key] = nextBase
+      itemsServerRef.current[rowId] = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)), responsable_id: (trueId ?? null) as never, responsable_nombre: (trueNombre ?? null) as never }
+      itemCellBaseRef.current[key] = { responsable_id: trueId ?? null, responsable_nombre: trueNombre ?? null }
 
       if (resolution === 'theirs') {
         const index = getItemIndexByRowId(rowId)
         if (index >= 0) {
-          if (detailId) setValue(`items.${index}.responsable_id` as never, detailId.current as never)
-          if (detailNombre) setValue(`items.${index}.responsable_nombre` as never, detailNombre.current as never)
+          setValue(`items.${index}.responsable_id` as never, (trueId ?? '') as never)
+          setValue(`items.${index}.responsable_nombre` as never, (trueNombre ?? '') as never)
         }
         itemDirtyCellsRef.current.delete(key)
         scheduleItemCellIdleRelease(rowId, field)
         return
       }
-      // "mine": lo elegido se conserva tal cual, se reintenta con el base ya
-      // corregido -- reusa el drenado genérico de partidas, cuyo patch para
-      // 'responsable_id' ya manda ambos campos juntos (ver sendItemCellPatchRound).
+      // "mine": lo elegido en el form se conserva tal cual, se reintenta con
+      // el base ya corregido -- reusa el drenado genérico de partidas, cuyo
+      // patch para 'responsable_id' ya manda ambos campos juntos (ver
+      // sendItemCellPatchRound).
       void persistItemCellAutosave(rowId, field)
       return
     }
 
-    const detail = record[field]
-    if (!detail) return
-    clearItemCellConflict(rowId, field)
-    // El "current" que devolvió la RPC es la verdad del servidor a partir de ahora,
-    // gane el valor ajeno o el propio -- ambos casos parten de ahí para el próximo PATCH.
-    itemsServerRef.current[rowId] = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)), [field]: detail.current }
-    itemCellBaseRef.current[key] = { [field]: detail.current }
+    const groupFields = Object.keys(record) as QuotationItemCellField[]
+    if (groupFields.length === 0) return
+
+    if (groupFields.length === 1) {
+      // Camino de siempre: un solo campo, sin atomicidad multi-campo de por medio.
+      const detail = record[field]
+      if (!detail) return
+      clearItemCellConflict(rowId, field)
+      // El "current" que devolvió la RPC es la verdad del servidor a partir de ahora,
+      // gane el valor ajeno o el propio -- ambos casos parten de ahí para el próximo PATCH.
+      itemsServerRef.current[rowId] = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)), [field]: detail.current }
+      itemCellBaseRef.current[key] = { [field]: detail.current }
+
+      if (resolution === 'theirs') {
+        const index = getItemIndexByRowId(rowId)
+        if (index >= 0) setValue(`items.${index}.${field}` as never, detail.current as never)
+        itemDirtyCellsRef.current.delete(key)
+        scheduleItemCellIdleRelease(rowId, field)
+        return
+      }
+
+      // "mine": lo tecleado se conserva tal cual, se reintenta con el base ya corregido.
+      void persistItemCellAutosave(rowId, field)
+      return
+    }
+
+    // Grupo atómico multi-campo (autofill de producto: descripcion/categoria/
+    // precio_unitario/x_pagar viajan juntos en un solo PATCH -- si CUALQUIERA
+    // chocó, la RPC rechazó TODO). `record` ya trae el registro completo de
+    // los 4 campos (buildAtomicConflictRecord sintetiza los que no aparecían
+    // en `saveError.fields`), así que se resuelven TODOS juntos aquí, sin
+    // importar en qué celda se haya clickeado el botón -- nunca solo el campo
+    // cuyo botón se pulsó, que es justo el bug reportado (los otros 3
+    // quedaban mostrando un valor que nunca se guardó).
+    const index = getItemIndexByRowId(rowId)
+    const nextServer = { ...(itemsServerRef.current[rowId] || ({} as ItemCotizacion)) }
+    for (const f of groupFields) {
+      const fKey = getItemCellKey(rowId, f)
+      const detail = record[f]
+      clearItemCellConflict(rowId, f)
+      if (resolution === 'theirs') {
+        nextServer[f] = detail.current as never
+        itemCellBaseRef.current[fKey] = { [f]: detail.current }
+        if (index >= 0) setValue(`items.${index}.${f}` as never, detail.current as never)
+        itemDirtyCellsRef.current.delete(fKey)
+      } else {
+        // "mine": lo que hay en el form (lo intentado) no se toca aquí --
+        // solo se refresca `base` al valor real recién confirmado, para que
+        // el reintento de abajo compare contra el servidor de verdad.
+        itemCellBaseRef.current[fKey] = { [f]: detail.current }
+      }
+    }
+    itemsServerRef.current[rowId] = nextServer
 
     if (resolution === 'theirs') {
-      const index = getItemIndexByRowId(rowId)
-      if (index >= 0) setValue(`items.${index}.${field}` as never, detail.current as never)
-      itemDirtyCellsRef.current.delete(key)
       scheduleItemCellIdleRelease(rowId, field)
       return
     }
 
-    // "mine": lo tecleado se conserva tal cual, se reintenta con el base ya corregido.
-    void persistItemCellAutosave(rowId, field)
-  }, [clearItemCellConflict, getItemIndexByRowId, itemCellConflicts, persistItemCellAutosave, scheduleItemCellIdleRelease, setValue])
+    // "mine": reintenta el PATCH completo con TODOS los campos del grupo --
+    // nunca uno solo (ver retryItemGroupPatch).
+    void retryItemGroupPatch(rowId, groupFields)
+  }, [clearItemCellConflict, getItemIndexByRowId, itemCellConflicts, persistItemCellAutosave, retryItemGroupPatch, scheduleItemCellIdleRelease, setValue])
 
   // Mismo contrato que usa la pantalla de nueva cotización; aquí cada operación se
   // persiste contra la API y se difunde a los demás colaboradores.
