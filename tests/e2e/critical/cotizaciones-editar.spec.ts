@@ -741,5 +741,59 @@ test('el canal caído reconecta en varios intentos sin lanzar errores de lifecyc
   // Suficiente para varias rondas de backoff (1s/2s/4s/8s) del reconnect real.
   await page.waitForTimeout(12_000)
 
-  expect(pageErrors.filter((m) => m.includes('cannot add presence callbacks'))).toEqual([])
+  // Fase 8.7 (Bloque 2): criterio de cierre es "cero pageerror" en general, no
+  // solo ausencia del mensaje puntual que motivó este test originalmente --
+  // un retry de trackPresence contra un canal ya retirado también terminaría
+  // como pageerror si algo lo dejara escapar sin manejar.
+  expect(pageErrors).toEqual([])
+})
+
+// Fase 8.7 (Bloque 2): "onDisconnected" (reconexión interna) no limpiaba los
+// retries pendientes de trackPresence -- solo "onSessionEnd" (unmount) lo
+// hacía. Este test fuerza una caída real de canal (cierre del WebSocket desde
+// el servidor simulado) y confirma que, tras reconectar, Presence vuelve a
+// funcionar (se ve al otro colaborador) sin ningún pageerror -- el criterio de
+// cierre completo del bloque, no solo la ausencia de un mensaje puntual.
+test('Presence se recupera tras una caída de canal, sin pageerror', async ({ page }) => {
+  await mockCotizacionDetailApis(page, { id: 'SH-E2E-PRESENCE-RECONNECT', estado: 'BORRADOR' })
+
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+
+  let intentosDeConexion = 0
+  await page.routeWebSocket(/realtime/, (route) => {
+    intentosDeConexion += 1
+    const esPrimeraConexion = intentosDeConexion === 1
+    route.onMessage((raw) => {
+      let msg: unknown
+      try { msg = JSON.parse(raw.toString()) } catch { return }
+      const [jr, ref, t, event] = msg as [string, string, string, string]
+      const reply = (payload: unknown) => route.send(JSON.stringify([jr, ref, t, 'phx_reply', payload]))
+      if (event === 'phx_join') {
+        reply({ status: 'ok', response: {} })
+        if (!esPrimeraConexion) {
+          // Solo la reconexión trae al otro colaborador -- así la aserción de
+          // más abajo prueba específicamente que Presence volvió a funcionar
+          // DESPUÉS de la caída, no que nunca dejó de andar.
+          const presencia = { 'otro-colaborador': { metas: [{ user_id: 'otro-colaborador', email: 'otro@serenata.test', name: 'Otro', active_section: null, entity_id: null, field: null, online_at: new Date().toISOString(), phx_ref: 'ref-otro' }] } }
+          route.send(JSON.stringify([jr, null, t, 'presence_state', presencia]))
+        }
+        return
+      }
+      if (event === 'heartbeat' || event === 'access_token' || event === 'presence') {
+        reply({ status: 'ok', response: {} })
+      }
+    })
+    if (esPrimeraConexion) {
+      // Cierre del lado servidor -- exactamente lo que dispara CHANNEL_ERROR/
+      // CLOSED y el reconnect con backoff, sin depender de un timeout largo.
+      setTimeout(() => { void route.close() }, 300)
+    }
+  })
+
+  await login(page, '/cotizaciones/SH-E2E-PRESENCE-RECONNECT')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-PRESENCE-RECONNECT' })).toBeVisible()
+
+  await expect(page.getByText('Otro', { exact: true })).toBeVisible({ timeout: 15_000 })
+  expect(pageErrors).toEqual([])
 })

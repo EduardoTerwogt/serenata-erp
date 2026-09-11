@@ -206,7 +206,9 @@ export function useQuotationPresence({
   // Fase 8 (hardening pre-Proyectos): ids de los `setTimeout` de reintento de
   // `trackPresence` todavía pendientes -- sin esto, un reintento programado
   // justo antes de un unmount/reconexión sobrevivía y podía disparar `.track()`
-  // sobre un canal ya reemplazado. Se limpian en `onSessionEnd`, más abajo.
+  // sobre un canal ya reemplazado. Se limpian en `clearPendingTrackRetries`,
+  // más abajo (Fase 8.7 Bloque 2: antes solo se limpiaban en `onSessionEnd`,
+  // no en una reconexión interna).
   const pendingTrackRetriesRef = useRef<Set<number>>(new Set())
 
   const identity = useMemo(() => {
@@ -278,17 +280,29 @@ export function useQuotationPresence({
     })
   }, [identity.email, identity.name, identity.userId])
 
-  const handleDisconnected = useCallback(() => {
-    dispatchAwareness({ type: 'set_connected', connected: false })
-  }, [])
-
-  const handleSessionEnd = useCallback(() => {
+  // Fase 8.7 (Bloque 2): única función de limpieza de los retries de
+  // trackPresence, usada tanto en reconexión interna (onDisconnected) como en
+  // unmount/session end (onSessionEnd). Antes solo corría en onSessionEnd --
+  // una reconexión interna (onDisconnected) nunca la ejecutaba, así que un
+  // retry agendado justo antes de que el canal cayera sobrevivía a la
+  // reconexión y terminaba llamando `.track()` sobre el canal viejo, ya
+  // retirado por `useRealtimeChannel`.
+  const clearPendingTrackRetries = useCallback(() => {
     const pendingTrackRetries = pendingTrackRetriesRef.current
     pendingTrackRetries.forEach((timeoutId) => window.clearTimeout(timeoutId))
     pendingTrackRetries.clear()
+  }, [])
+
+  const handleDisconnected = useCallback(() => {
+    clearPendingTrackRetries()
+    dispatchAwareness({ type: 'set_connected', connected: false })
+  }, [clearPendingTrackRetries])
+
+  const handleSessionEnd = useCallback(() => {
+    clearPendingTrackRetries()
     dispatchAwareness({ type: 'reset' })
     dispatchConfirmedEvent({ type: 'reset' })
-  }, [])
+  }, [clearPendingTrackRetries])
 
   const { channelRef } = useRealtimeChannel({
     topic: enabled ? `cotizacion:${cotizacionId}` : null,
@@ -322,12 +336,20 @@ export function useQuotationPresence({
 
     const intentar = (intentosRestantes: number): void => {
       void channel.track(payload).catch((error) => {
+        // El propio `.track()` puede seguir en vuelo cuando el canal ya cayó
+        // y `useRealtimeChannel` lo reemplazó -- `clearPendingTrackRetries`
+        // solo alcanza a cancelar los retries YA agendados en ese instante,
+        // no una promesa que rechaza después. Este chequeo cierra ese residual:
+        // si `channelRef.current` ya no es este `channel`, no tiene sentido
+        // reintentar contra uno retirado.
+        if (channelRef.current !== channel) return
         if (intentosRestantes <= 0) {
           console.error('[useQuotationPresence] track() agotó reintentos', error)
           return
         }
         const timeoutId = window.setTimeout(() => {
           pendingTrackRetriesRef.current.delete(timeoutId)
+          if (channelRef.current !== channel) return
           intentar(intentosRestantes - 1)
         }, 1_000)
         pendingTrackRetriesRef.current.add(timeoutId)

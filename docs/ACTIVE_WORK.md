@@ -118,11 +118,27 @@ smoke (21) y critical (59, incluidos los 9 nuevos) verdes localmente; `live` que
 pendiente de confirmar en CI (esta sesión no tiene el `service_role`/JWT de
 `serenata-erp-test`, solo acceso de datos vía MCP).
 
-Bloques 2-5: sin empezar.
+**Bloque 2: cerrado.** El cleanup de retries de `trackPresence` (`pendingTrackRetriesRef`)
+solo corría en `onSessionEnd` (unmount/cambio de topic); una reconexión interna pasaba
+por `onDisconnected`, que no lo tocaba -- un retry agendado justo antes de la caída
+sobrevivía a la reconexión y terminaba llamando `.track()` contra el canal viejo, ya
+retirado por `useRealtimeChannel`. `hooks/useQuotationPresence.ts` gana
+`clearPendingTrackRetries`, una sola función invocada desde `onDisconnected` y desde
+`onSessionEnd`, más un guard defensivo en `intentar` (compara contra
+`channelRef.current`) para el residual de una promesa de `.track()` que resuelve
+después del cleanup. No se tocó el protocolo de Presence ni la estrategia de reconnect
+de `lib/realtime/useRealtimeChannel.ts`. Cobertura: el test existente
+"el canal caído reconecta..." ahora exige cero `pageerror` en general (antes solo
+excluía un mensaje puntual), y un test nuevo, "Presence se recupera tras una caída de
+canal, sin pageerror", fuerza una caída real (cierre de WebSocket del lado servidor) y
+confirma que Presence vuelve a funcionar tras reconectar. `tsc`, lint, unit (417),
+build, smoke (21) y critical (60, incluido el nuevo) verdes localmente bajo Node 24.
+
+Bloques 3-5: sin empezar.
 
 ## Próximo paso
 
-Auditar el bloque 2 (`/serenata-iniciar-fase`) y proponer el plan antes de tocar código.
+Auditar el bloque 3 (`/serenata-iniciar-fase`) y proponer el plan antes de tocar código.
 
 ## Validación antes del merge
 
