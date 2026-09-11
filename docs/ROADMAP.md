@@ -6,16 +6,16 @@ Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el
 una sesión de trabajo. Para lo que se está construyendo ahora,
 `docs/ACTIVE_WORK.md`.
 
-Solo hay dos iniciativas comprometidas. **Lo que sigue después es producto y se
-define en Chat una vez cerradas ambas** — deliberadamente, para no priorizar features
-con información vieja.
+Queda una iniciativa comprometida: Engineering Hardening, sin arrancar. **Lo que
+sigue después es producto y se define en Chat una vez cerrada** — deliberadamente,
+para no priorizar features con información vieja.
 
 ---
 
-## Ahora — Fase 8.7, Cierre real de Collaboration
+## Ahora — ninguna iniciativa activa
 
-Cerrar los huecos de la auditoría de Fase 8 y dejar Cotizaciones oficialmente READY.
-Detalle y bloques en `docs/ACTIVE_WORK.md`.
+Fase 8.7 cerró completa (ver Cerrado, abajo). Engineering Hardening es la
+siguiente prioridad comprometida, pero no ha arrancado.
 
 ## Siguiente — Engineering Hardening
 
@@ -81,6 +81,11 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Fase 8.7, Cierre real de Collaboration (2026-09-11).** Cerró los cinco huecos
+  de la auditoría de Fase 8 (flush real previo a Generar/Aprobar, cleanup de
+  Presence en reconexión, prueba live de Aprobar bajo concurrencia, `409`
+  explícito por UUID cruzado, `ARCHITECTURE.md` actualizado) y declaró
+  Cotizaciones READY. Historia: `docs/archive/fase-8.7-cierre-collaboration.md`.
 - **Colaboración en cotizaciones (Fases 0-8).** Edición simultánea con modelo
   server-authoritative, conflictos por campo, Realtime solo Presence.
   Historia: `docs/archive/fases-colaboracion-0-8.md`.
