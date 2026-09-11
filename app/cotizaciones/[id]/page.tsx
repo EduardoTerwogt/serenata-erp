@@ -1105,6 +1105,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const base = itemCellBaseRef.current[key]
     const mutationId = crypto.randomUUID()
     rememberOwnItemMutationId(mutationId)
+    console.error('[DIAG-B1-CELL]', JSON.stringify({ rowId, field, patch, base, hasBase: base !== undefined }))
     const p = trackMutation(patchQuotationItem(rowId, patch, { base, mutationId }))
     p.then(
       (updatedItem) => {
@@ -1435,6 +1436,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     try {
       const mutationId = crypto.randomUUID()
       rememberOwnItemMutationId(mutationId)
+      console.error('[DIAG-B1-PRODUCT]', JSON.stringify({ rowId, base, hasBase: base !== null }))
       const updatedItem = await enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }, { base: base ?? undefined, mutationId }))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })

@@ -23,6 +23,7 @@ export async function PATCH(
   // como siempre. El grid nuevo (fase posterior) es quien empezará a mandarlos.
   const base: Record<string, unknown> | undefined = body?.base && typeof body.base === 'object' ? body.base : undefined
   const mutationId: string | undefined = typeof body?.mutation_id === 'string' ? body.mutation_id : undefined
+  console.error('[DIAG-B1-SERVER]', JSON.stringify({ id, itemId, body, base, mutationId }))
 
   // La RPC (el único paso que puede generar un conflicto real o duplicar un
   // efecto) es lo único que corre bajo withIdempotency: si algo de aquí en
