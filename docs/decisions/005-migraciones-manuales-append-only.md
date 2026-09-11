@@ -40,3 +40,24 @@ cada push, y esa reconstrucción es el único gate que detecta la divergencia.
   `ENABLE ROW LEVEL SECURITY` a una migración vieja para que el archivo
   reflejara lo que la tabla ya tenía en producción. Detalle completo de la regla
   en `.claude/rules/migraciones.md`.
+- **Riesgo real encontrado al promover migraciones "atrasadas" (Fase 8.7.2,
+  2026-09-11):** dos migraciones (`20260911_approve_cotizacion_estado_guard.sql`,
+  `20260911_item_cotizacion_estado_guard.sql`) se habían probado en
+  `serenata-erp-test` semanas antes de promoverse a producción. Al promoverlas
+  se descubrió que ambas hacían `CREATE OR REPLACE FUNCTION` sobre una copia de
+  `approve_cotizacion`/`patch_item_cotizacion` **anterior** a dos fixes ya
+  aplicados por separado en producción sobre esas mismas funciones
+  (`20260906_before_rename_fase53_cuentas_schema.sql`,
+  `20260910_fix_null_vs_empty_conflict_false_positive.sql`) — promoverlas tal
+  cual habría revertido ambos fixes en silencio (y ya los había revertido en
+  `serenata-erp-test`, sin que nadie lo notara hasta ahora). Causa raíz: cuando
+  dos migraciones distintas reemplazan la MISMA función completa en momentos
+  distintos, la reproducibilidad de "aplicar en orden desde cero" no garantiza
+  que una migración escrita hoy conozca los cambios que otra migración, escrita
+  después de la que ella usó como base, ya aplicó sobre la misma función. Se
+  corrigió con 2 migraciones aditivas nuevas que reincorporan ambos fixes sobre
+  la base del guard de estado (ver commit `736b780`). **Mitigación para la
+  próxima vez que una función se reemplace completa:** antes de promover una
+  migración con `CREATE OR REPLACE FUNCTION` que lleva tiempo esperando, diffear
+  su cuerpo contra `pg_get_functiondef` de la definición VIVA en producción, no
+  solo confiar en el historial de archivos del repo.

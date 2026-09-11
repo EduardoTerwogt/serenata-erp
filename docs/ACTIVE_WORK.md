@@ -4,365 +4,203 @@
 
 ## Estado
 
-**Fase 8.7.2 — Cierre correctivo sobre colaboración en Cotizaciones, EN PROGRESO.**
-Continuación directa de Fase 8.7.1 sobre el mismo módulo (mismo patrón que 8.7→8.7.1:
-se auditó, aparecieron huecos reales, se numera una fase nueva — no se reabre la
-anterior). Sesión cortada por límite de uso de cuenta **antes de terminar**; retoma
-en cuenta/sesión nueva. Rama `claude/adoring-mayer-34emkm`, sin PR abierto todavía
-(pendiente: abrir uno en borrador con el primer push útil, per `CLAUDE.md`).
+**Fase 8.7.2 — Cierre correctivo sobre colaboración en Cotizaciones, EN PROGRESO,
+muy cerca de cerrar.** Las causas E-I (diseñadas en una sesión anterior) ya estaban
+codeadas y commiteadas al arrancar esta sesión. Esta sesión: (1) encontró y arregló
+el bug real de producción reportado por el usuario (borrado de partidas roto), (2)
+encontró y arregló 2 bugs reales más durante la propia verificación (uno en el
+código de la app, otro de datos de test acumulados), y (3) dejó UN SOLO bloqueador
+para cerrar, que no es de código: un token de Google Drive vencido en el entorno de
+CI/Vercel.
 
-**No mover esto a `docs/ROADMAP.md` → Cerrado todavía.** Solo la mitad está hecha.
+**No mover esto a `docs/ROADMAP.md` → Cerrado todavía.** Falta confirmar `live` en
+verde completo (ver "Siguiente paso") y una decisión pendiente del usuario sobre el
+script de paridad de esquema.
 
-### Los dos bugs reportados
+Rama `claude/adoring-mayer-34emkm`, PR **[#28](https://github.com/EduardoTerwogt/serenata-erp/pull/28)**
+abierto en borrador, último commit `36ab909`. `test`, `fresh-db` y
+`smoke-and-critical` están en verde real (confirmado en CI, no solo push exitoso).
 
-1. **Avisos de "está editando" que no se actualizan** + banner de conflicto
-   espurio: al agregar una partida mientras hay otra persona en el módulo (aunque
-   esa persona no esté en Partidas), aparece "Alguien más lo cambió a "" mientras
-   editabas", y "Mantener"/"Usar" no lo cierran.
-2. **Totales/Utilidad no se recalculan** tras agregar una fila en modo
-   colaborativo — solo quedan correctos al recargar la página completa.
+## Completado en esta sesión
 
-Son bugs de estado en el cliente (Presence + React Hook Form + reconciliación), no
-del modelo de datos: no tocar el protocolo de conflictos por campo
-(`docs/decisions/002`), Presence-only Realtime (`docs/decisions/003`) ni los guards
-`FOR SHARE`/`FOR UPDATE` (`docs/decisions/007`).
+### 1. Bug de producción: borrado de partidas roto (reportado por el usuario)
 
-Este diagnóstico pasó por tres rondas de auditoría cruzada (dos externas, sobre dos
-versiones sucesivas del plan) antes de aprobarse — cada hallazgo de las auditorías
-se verificó contra el código real antes de aceptarlo, y una propuesta (reabrir Fase
-8.7.1 en vez de numerar 8.7.2) se rechazó con evidencia (`grep "8.7.2"` no da
-resultados en el repo; los bloqueadores citados como pendientes — evento `bulk`
-descartado en silencio, recálculo fuera de la transacción — están en
-`docs/ROADMAP.md` bajo **Engineering Hardening**, iniciativa distinta y sin
-arrancar, no bajo 8.7.1, que el repo ya marca Cerrado).
+El usuario probó el preview de Vercel y encontró que borrar una partida en una
+cotización **existente** (no colaborativa) tiraba "Error eliminando partida" — algo
+que antes funcionaba. Causa raíz confirmada con SQL directo contra los 2 proyectos
+Supabase reales: producción (`fwmyoqokcjtldiofuxdg`) tenía la última migración
+aplicada en `20260910_realtime_presence_only_insert` — 2 migraciones más nuevas
+(`20260911_approve_cotizacion_estado_guard.sql`,
+`20260911_item_cotizacion_estado_guard.sql`, esta última crea
+`delete_item_cotizacion` desde cero) estaban commiteadas y probadas en
+`serenata-erp-test`, pero nunca promovidas a producción.
 
-## Completado en esta sesión (aplicado en el working tree, sin commitear)
+Al promoverlas se encontró un problema más serio: ambas migraciones hacían
+`CREATE OR REPLACE FUNCTION` sobre una copia de `approve_cotizacion`/
+`patch_item_cotizacion` **anterior** a 2 fixes ya aplicados por separado
+(población de `cuentas_cobrar.proyecto_id`, wrapper `jsonb_null_as_empty_string`
+contra falsos positivos de conflicto) — promoverlas tal cual habría revertido
+ambos fixes en producción (y ya los había revertido en `serenata-erp-test`, sin que
+nadie lo notara). Detalle completo de la causa y la mitigación para el futuro:
+`docs/decisions/005-migraciones-manuales-append-only.md`.
 
-Causas A-D del diagnóstico, cada una verificada leyendo el código real:
+**Resuelto:** se autoraron 2 migraciones aditivas nuevas
+(`20260911_approve_cotizacion_restore_proyecto_id.sql`,
+`20260911_item_cotizacion_restore_null_vs_empty_fix.sql`) que reincorporan ambos
+fixes sobre la base del guard de estado. Se aplicaron con `apply_migration`
+(individualmente, nunca `execute_sql` — así quedan registradas en el historial de
+Supabase) primero en `serenata-erp-test` y luego, en la misma sesión, en
+producción. Verificado con SQL directo en ambos entornos: `delete_item_cotizacion`
+existe con permisos correctos, `approve_cotizacion` y `patch_item_cotizacion`
+tienen ambos fixes, y un borrado controlado en una cotización desechable de
+producción confirmó `{deleted: true}` sin dejar datos residuales. Commit `736b780`.
 
-1. **Presence: limpiar la celda activa al soltar sección + filtrar por sección.**
-   `hooks/useQuotationPresence.ts`, `releaseSection`: ahora limpia también
-   `activeCellRef.current = null` y difunde `trackPresence(null, null)` — antes
-   solo limpiaba `active_section`, nunca `entity_id`/`field`, así que el heartbeat
-   de 15s repetía indefinidamente "editando esta celda" aunque el usuario ya
-   hubiera salido de Partidas. `itemCellEditors` ahora además filtra
-   `user.active_section !== 'partidas'` como defensa adicional.
-2. **`mutation_id` real en el alta de fila.** `createQuotationItemRow` (page.tsx)
-   ahora manda `mutation_id`; `app/api/cotizaciones/[id]/items/route.ts` lo lee del
-   body y lo threadea al broadcast `item_confirmed` (antes iba `null` siempre) —
-   así el propio creador de una fila reconoce su confirmación y no dispara una
-   reconciliación completa contra sí mismo.
-3. **Modal/tarjeta móvil de edición atado por id estable, no por índice.**
-   `editingItemIndex` (`useState<number|null>`) → `editingItemRowId`
-   (`useState<string|null>`) en `page.tsx`, `QuotationItemsSection.tsx`,
-   `app/cotizaciones/nueva/page.tsx` y `useNuevaCotizacionPage.ts` (comparten el
-   componente). El índice se deriva en cada render vía
-   `watchedItems.findIndex(i => i.id === editingItemRowId)`, así que se autocorrige
-   tras cualquier `replace()` de reconciliación — antes, un índice guardado
-   quedaba apuntando a la fila equivocada y "Mantener"/"Usar" no hacían nada.
-4. **`handleAddRow` ya no roba el foco.** `append(..., { shouldFocus: false })`,
-   igual que los otros `append()` del archivo — evita un aviso de "editando
-   Partidas" no intencional al agregar una fila.
+**Pendiente de confirmación humana:** el usuario todavía no repitió su prueba
+manual original en el preview de Vercel — hacerlo antes de dar esto por cerrado del
+todo (aunque la causa raíz y el fix ya están verificados por SQL directo).
 
-**Verificado desktop vs. móvil:** el bug del índice stale (causa C) es específico
-de móvil (`rowIdAt(index)` en desktop se recalcula dentro del propio loop de
-render, sin estado persistido que pueda desincronizarse). La causa E de abajo, en
-cambio, afecta ambas plataformas por igual.
+### 2. Causa F (real, en código de la app) — encontrada durante la propia verificación
 
-**Tests corridos sobre 1-4:** `npx tsc --noEmit` limpio, `npm run lint` limpio (solo
-warnings preexistentes sin relación), `npm test` → 428/428 (se agregó un caso nuevo
-en `app/api/__tests__/cotizaciones-items-create-route.test.ts` para el
-`mutation_id`). `npm run test:e2e:smoke`/`critical` **no se pudieron correr limpios
-en este sandbox** — la versión de Chromium preinstalada (`chromium-1194`) no
-coincide con la que `@playwright/test@1.54.2` espera (`headless_shell-1217`); es un
-problema de entorno, no de este código (ver nota de infraestructura, abajo).
-`live` no corre en este sandbox en absoluto (red bloqueada a `*.supabase.co`, ver
-`TESTING.md`).
+El test live de causa F fallaba con `route.continue: Route is already handled!`
+(commit `8b28707` lo arregló: la intercepción se retiraba mientras el PATCH
+retrasado seguía en vuelo — ahora se distinguen las 2 respuestas por contenido y se
+espera a que ambas resuelvan antes de desregistrar la ruta, en un `finally`).
 
-## Pendiente: causas E-I, diseñadas pero NO codeadas todavía
+Arreglada esa carrera, el test reveló un bug real distinto: la segunda edición de
+una celda (mientras la primera ronda de PATCH seguía en vuelo) sí disparaba un
+segundo PATCH, pero con el valor VIEJO en vez del recién tecleado. Causa raíz en
+`sendItemCellPatchRound` (`app/cotizaciones/[id]/page.tsx`): al resolver una ronda
+con éxito, `itemDirtyCellsRef` se limpiaba incondicionalmente ANTES de llamar
+`upsertLocalItemState(updatedItem, { preserveLocalEdits: true })`. Si ya había un
+reintento encolado (`itemCellRetryNeededRef`, por una edición más nueva llegada
+mientras esa ronda seguía en vuelo), `preserveLocalEdits` ya no veía la celda como
+"ocupada" y pisaba el valor recién tecleado con el `updatedItem` de la ronda que
+acababa de resolver (viejo) — el drenado mandaba entonces la ronda siguiente
+leyendo ese valor ya pisado. Mismo hueco en la rama de conflicto "idéntico"
+auto-resuelto.
 
-Diagnóstico completo, con líneas exactas y los snippets de la solución, verificado
-contra el código real (no solo inferido) — implementar tal cual antes de dar el
-bloque por cerrado.
+**Fix:** no limpiar `itemDirtyCellsRef` si ya hay un reintento encolado para esa
+celda. Commit `36ab909`. **Verificado con el diagnóstico real de CI** (no solo
+lectura de código): el log de un run real muestra ahora la secuencia correcta —
+PATCH 1 `{precio_unitario:2100, base:1750}` → 200, PATCH 2
+`{precio_unitario:2200, base:2100}` → 200 (antes del fix, el PATCH 2 llevaba
+`precio_unitario:2100`, el valor viejo). Test en verde en CI.
 
-### E. `itemCellBaseRef` nunca se refresca tras un PATCH exitoso (causa raíz real, no depende de un segundo colaborador)
+### 3. Autofill (dato de test acumulado, no timing/caché) — encontrada durante la propia verificación
 
-`persistItemCellAutosave`, en éxito, llama `upsertLocalItemState(...)`, que solo
-hace `recordServerItem` + `setValue` por celda — **nunca toca `itemCellBaseRef`**.
-Si un usuario edita una celda, el autoguardado de 800ms confirma (servidor pasa de
-V0 a V1), y sigue editando la MISMA celda sin blur (patrón normal: pausa, autoguarda,
-sigue afinando), el siguiente autoguardado manda la `base` capturada en el FOCUS
-original (V0), no V1 → el servidor compara V0 contra V1 → `409` **contra uno
-mismo**, con `current` pudiendo ser cualquier valor (incluido vacío). Esto puede
-explicar el síntoma "alguien más lo cambió a ''" incluso sin un segundo colaborador
-real tocando nada.
+El test `seleccionar producto (autofill) mientras otro edita precio a mano` fallaba
+hacía varias sesiones con el mismo síntoma (el dropdown de sugerencias nunca
+aparece). Se había intentado arreglar antes asumiendo timing/caché del lado
+cliente-servidor — no era eso. Causa raíz real, confirmada con SQL directo: `GET
+/api/productos?q=` (sin `.limit()` cuando `q` está vacío) devolvía exactamente
+`total=1000` — el default de `db-max-rows` de PostgREST. `serenata-erp-test` tenía
+**1241** productos acumulados (confirmado 100% basura de test por su
+`created_at`): el auto-aprendizaje de productos desde `descripcion` de partida
+(`onConflict: 'descripcion'`, deliberado en producción) nunca colisiona cuando
+decenas de specs live usan descripciones únicas por corrida (sufijo `Date.now()`,
+contadores de escala) — cada corrida agregaba filas nuevas y permanentes, para
+siempre, sin que ningún cleanup las tocara.
 
-### F. Sin serialización real por celda, y `flushPendingSaves` puede no ver un reintento pendiente
+**Fix:** se limpiaron los 1241 productos huérfanos y se agregó
+`cleanupOrphanedTestProductos()` (`tests/e2e/utils/live-cleanup.ts`, purga
+productos de más de 1 día) al mismo `beforeAll` que ya limpia reservas de folio
+huérfanas, en los 4 specs live que lo necesitan (`basic.spec.ts`,
+`cotizaciones-colaboracion.spec.ts`, `cotizaciones-colaboracion-escala.spec.ts`,
+`realtime-channel-authorization.spec.ts`). Commit `36ab909`. **Verificado en CI:**
+el test ya no aparece en la lista de fallos.
 
-`persistItemCellAutosave` no comprobaba si la celda ya tenía un PATCH en vuelo.
-`flushPendingSaves` toma **una foto única** de lo que está en vuelo
-(`pendingMutationsRef` + `disparadas`) y hace un solo `await Promise.allSettled(...)`
-— sin loop, sin re-chequeo. Una solución ingenua ("si ya hay uno en vuelo, no mandar
-otro y confiar en que algo dispare un reintento después") rompe la garantía que Fase
-8.7.1 cerró ("ninguna transición corre con cambios locales sin confirmar"), porque
-`flushItemCellDirtyFields` salta por completo una celda ya en `itemSavingCellsRef`,
-y un reintento que arranca después de que `flushPendingSaves` ya tomó su foto nunca
-entra a lo que el flush espera.
+### 4. Test de borrado por UI mejorado
 
-**Diseño aprobado (drenado por celda):**
+`tests/e2e/live/cotizaciones-colaboracion.spec.ts`, test "borrar una fila...": el
+borrado es optimista en la UI, así que `toHaveCount(antes - 1)` solo podía aprobar
+de inmediato aunque el servidor hubiera rechazado el DELETE (la regresión real que
+motivó todo este bloque). Ahora captura la respuesta real del DELETE en paralelo al
+clic, exige `200`, y solo después de que el servidor confirma la ausencia verifica
+UI y subtotal — nunca antes ni en paralelo. Commit `8b28707`. En verde en el último
+run de CI.
 
-```ts
-// Nuevos refs, junto a itemSavingCellsRef/itemDirtyCellsRef:
-const itemCellDrainRef = useRef<Map<string, Promise<unknown>>>(new Map())
-const itemCellRetryNeededRef = useRef<Set<string>>(new Set())
+### 5. Script de paridad de esquema (nuevo, decisión de uso pendiente)
 
-// Extraer el cuerpo actual de persistItemCellAutosave (armar patch, mandar PATCH,
-// aplicar éxito/conflicto) a una función interna:
-const sendItemCellPatchRound = useCallback(async (rowId, field) => {
-  const key = getItemCellKey(rowId, field)
-  await awaitRowCreation(rowId)          // Fix I: garantiza itemsServerRef poblado
-  let base = itemCellBaseRef.current[key]
-  if (base === undefined) {              // Fix I: reconstruir si nunca se capturó
-    const freshBase = buildItemFieldBase(itemsServerRef.current[rowId], field)
-    if (freshBase) { base = freshBase; itemCellBaseRef.current[key] = freshBase }
-  }
-  clearItemCellAutosaveTimer(key)        // Fix I: cancela debounce redundante
-  // ...arma `patch` con normalizeItemFieldValue (ver causa G) por campo,
-  // llama patchQuotationItem(rowId, patch, { base, mutationId })
-  // en éxito: aplica lo de siempre Y ADEMÁS refresca itemCellBaseRef.current[key]
-  //   al valor recién confirmado (arregla causa E) y limpia itemDirtyCellsRef.
-  // en conflicto real (no idéntico, causa G): dispara el banner, NO limpia
-  //   itemDirtyCellsRef (deliberado, bloquea Generar/Aprobar), relanza el error.
-  // en conflicto idéntico (causa G): se resuelve solo, limpia itemDirtyCellsRef.
-}, [...])
+`scripts/check-schema-parity.mjs`: compara `db/migrations/_manifest.json` contra
+`list_migrations` de un proyecto Supabase real (Management API), por nombre
+normalizado (sin el prefijo de timestamp, que difiere entre entornos aunque la
+migración sea la misma). Pensado para el gap operativo real que causó el punto 1:
+nada detectaba que producción estaba 2 (en realidad 4, ver arriba) migraciones
+atrasada. **Deliberadamente NO corre en CI** (necesitaría el token de producción en
+GitHub Actions, prohibido por `TESTING.md`/`docs/ENV.md`) — queda como script
+manual. Commit `1f20566`.
 
-const persistItemCellAutosave = useCallback((rowId, field) => {
-  const key = getItemCellKey(rowId, field)
-  const existing = itemCellDrainRef.current.get(key)
-  if (existing) { itemCellRetryNeededRef.current.add(key); return existing }
-  itemSavingCellsRef.current.add(key)
-  const drain = (async () => {
-    let result
-    do {
-      itemCellRetryNeededRef.current.delete(key)
-      result = await sendItemCellPatchRound(rowId, field)   // throw = conflicto real, rechaza el drenado
-    } while (itemCellRetryNeededRef.current.has(key))
-    return result
-  })().finally(() => {
-    itemSavingCellsRef.current.delete(key)
-    itemCellDrainRef.current.delete(key)
-  })
-  itemCellDrainRef.current.set(key, drain)
-  return drain
-}, [...])
-```
+**Decisión pendiente del usuario:** ¿correrlo como paso manual obligatorio antes de
+mergear a `main`, o como un workflow de GitHub Actions separado y protegido (con el
+secreto de producción restringido a ese entorno)? No se implementó ninguna de las
+dos automatizaciones — falta que el usuario elija.
 
-**Hueco encontrado en la ronda de revisión siguiente (ya incorporado arriba en el
-diseño, detallar bien al codear):** una tecla nueva sola NO llama a
-`persistItemCellAutosave` (solo reprograma el debounce) — si la ronda en vuelo
-resuelve antes de que venza ese debounce, limpia dirty sin que nadie haya marcado
-`retryNeeded`, y si `flushPendingSaves` corre justo ahí no ve nada pendiente. Dos
-cambios lo cierran:
+## Tests ejecutados (resultado real, no esperado)
 
-```ts
-// dentro de handleItemFieldChange, junto a lo que ya marca dirty:
-if (itemCellDrainRef.current.has(key)) itemCellRetryNeededRef.current.add(key)
-```
-```ts
-// flushItemCellDirtyFields: iterar la UNIÓN de itemDirtyCellsRef y
-// itemCellDrainRef.keys(), no solo dirty -- así un drenado activo se ve aunque su
-// ronda actual haya limpiado dirty un instante antes. A propósito NO marca
-// retryNeeded por su cuenta (generaría PATCH redundantes en cada Generar):
-const keys = new Set([...itemDirtyCellsRef.current, ...itemCellDrainRef.current.keys()])
-for (const key of keys) {
-  const existingDrain = itemCellDrainRef.current.get(key)
-  if (existingDrain) { disparadas.push(existingDrain); continue }
-  if (!itemDirtyCellsRef.current.has(key)) continue
-  const [rowId, field] = key.split(':')
-  clearItemCellAutosaveTimer(key)
-  disparadas.push(persistItemCellAutosave(rowId, field))
-}
-```
-`itemSavingCellsRef` sigue marcado durante TODO el drenado (una vez antes del
-`do...while`, se quita una vez en el `.finally()` externo) — `celdaOcupada` en
-`reconciliarConServidor` ya lo consulta, así que la celda queda protegida de un
-pisado por reconciliación en toda la ventana, sin cambios ahí.
-
-### G. "Conflicto idéntico" necesita comparación normalizada, no `===` crudo
-
-`attempted`/`current` de la RPC pueden diferir de lo que hay en el formulario por
-representación (`null` vs `''`, `"10"` vs `10`), no solo por dato real. Normalizar
-con la MISMA coerción que ya arma el `patch` de cada campo:
-
-```ts
-function normalizeItemFieldValue(field: QuotationItemCellField, value: unknown): unknown {
-  switch (field) {
-    case 'categoria': case 'descripcion': case 'responsable_id': return value || ''
-    case 'cantidad': return Number(value) || 0
-    case 'precio_unitario': case 'x_pagar':
-      return value === '' || value === null || value === undefined ? 0 : Number(value) || 0
-  }
-}
-```
-`sendItemCellPatchRound` arma `patch[field]` llamando a esta función (reemplaza el
-switch inline actual) y, ante conflicto, compara
-`normalizeItemFieldValue(field, attempted) === normalizeItemFieldValue(field, current)`.
-Mismo principio para General/Totales, reusando la coerción que ya hacen
-`getGeneralFieldValue`/`getTotalsFieldValue` (`page.tsx:893-909`).
-
-### H. Totales: `fields[i].id` NO es el UUID de negocio — usar `useWatch`, no join por id
-
-`useFieldArray({ control, name: 'items' })` sin `keyName` custom: `fields[i].id` es
-la key autogenerada de RHF para React, no el `id` de negocio que se le pasó a
-`append()` (confirmado: el propio comentario del componente ya lo decía). Un diseño
-anterior que unía por `field.id` nunca iba a encontrar nada. Fix real:
-
-```ts
-import { useFieldArray, useForm, useWatch } from 'react-hook-form'
-// ...
-const liveItemsForTotals = useWatch({ control, name: 'items' }) ?? []
-const itemsParaTotales = useMemo(
-  () => liveItemsForTotals as QuotationFormValues['items'],
-  [liveItemsForTotals]
-)
-```
-Solo para este cálculo — no migrar el resto del componente de `watch('items')` a
-`useWatch` (fuera de alcance, más call-sites afectados). `fields` sigue siendo
-exclusivamente la key de remonte de `useFieldArray`.
-
-### I. Primera edición de una fila nueva: reconstruir base + evitar PATCH redundante
-
-Ya integrado en el snippet de `sendItemCellPatchRound` arriba
-(`awaitRowCreation` + reconstruir `base` si `undefined` + `clearItemCellAutosaveTimer`).
-Además, en `handleAddRow` (líneas ~1388-1418 de `page.tsx`), `pendingRowCreationsRef`
-guarda hoy un `.then` registrado directamente sobre `creation`, ANTES de
-`await creation` — como los `.then` de una promesa se disparan en el orden en que
-se registraron, esa promesa puede resolver antes de que `recordServerItem(createdItem)`
-se ejecute. Fix:
-
-```ts
-const creation = trackMutation(createQuotationItemRow(rowId, mutationId))
-const rowReady = creation.then(
-  (createdItem) => { if (createdItem) recordServerItem(createdItem); return createdItem },
-  () => undefined
-)
-pendingRowCreationsRef.current.set(rowId, rowReady.then(() => undefined))
-try {
-  const createdItem = await rowReady
-  if (!createdItem) throw new Error('No se pudo crear la fila')
-  setCotizacion((prev) => prev ? { ...prev, items: [...(prev.items || []), createdItem] } : prev)
-  // (el resto de handleAddRow sigue igual)
-```
-
-### Orden de implementación recomendado
-
-1. Verificar que los Fixes 1-4 (ya aplicados) siguen intactos.
-2. Fix H (totales, `useWatch`) — autocontenido, reemplaza el código de
-   `itemsParaTotales` que YA está en el working tree (versión con `Math.max`/join
-   por id, ambas descartadas, ver "Deuda técnica" abajo).
-3. Fix E/F/I juntos (son un solo cambio coherente: `sendItemCellPatchRound` +
-   ambos refs nuevos + `handleItemFieldChange` + `flushItemCellDirtyFields` +
-   `handleAddRow`) — no separarlos, dejarían el drenado a medias.
-4. Fix G (comparación normalizada) — se apoya en la función de normalización que
-   E/F ya necesita.
-5. Aplicar el mismo principio de G a General/Totales
-   (`resolveGeneralFieldConflict`/`resolveTotalsFieldConflict` y sus handlers de
-   rechazo).
-
-### Validación pendiente
-
-`npx tsc --noEmit && npm run lint && npm test` en cada paso. Pruebas live nuevas en
-`tests/e2e/live/cotizaciones-colaboracion*.spec.ts` (no corren en este sandbox, solo
-en CI vía el PR), capturando el payload real del `409` (`rowId`, `field`, `base`,
-`current`, `attempted`) y cuántos PATCH viajaron:
-
-1. B fuera de Partidas, A agrega y llena una fila → ningún conflicto ni aviso
-   espurio.
-2. A agrega una fila y escribe inmediatamente (antes de que la creación confirme)
-   → un solo PATCH efectivo, sin 409, con y sin robo de foco.
-3. Un solo usuario edita la misma celda dos veces seguidas sin blur, con pausa
-   larga entre ambas → ningún conflicto contra uno mismo (prueba directa de E,
-   reproducible sin segundo colaborador).
-4. Conflicto real → "Mantener" persiste lo escrito, en desktop y móvil.
-5. Conflicto real → "Usar" aplica el valor del servidor, en desktop y móvil.
-6. Escribir, y mientras el PATCH viaja escribir de nuevo en la misma celda → el
-   drenado manda un segundo PATCH con el valor final, sin 409.
-7. Después de 4-6, Subtotal/Total/Utilidad cambian sin recargar.
-8. Salir de Partidas elimina de inmediato el aviso de celda/sección para el otro
-   colaborador.
-9. Alta concurrente de fila (A y B casi al mismo tiempo) → ambas filas y Totales
-   correctos sin recargar, sin fusionar campos de filas distintas.
-10. Modal móvil abierto + `replace()` de otro colaborador → sigue
-    mostrando/resolviendo la fila correcta.
-11. PATCH resuelve justo antes de que venza el debounce de la tecla siguiente,
-    dispara Generar/Aprobar en ese instante → el flush espera el segundo PATCH,
-    la transición nunca corre con la celda sin confirmar.
-12. Agregar fila y escribir ANTES de que el POST confirme → primer PATCH sin
-    conflicto; segunda edición inmediata (sin blur) tampoco choca consigo misma.
-
-Regresión de un usuario: `tests/e2e/critical/cotizaciones-editar.spec.ts`,
-`cotizaciones-nueva-partidas.spec.ts`, `cotizaciones-flush-transicion.spec.ts`.
-
-`npm run build` antes de push (toca rutas/TS).
-
-## Decisiones nuevas de esta sesión
-
-- **Reclasificación:** esto NO es "ajuste puntual fuera de roadmap" — cierra un
-  hueco real en la garantía transaccional que Fase 8.7.1 había establecido
-  ("ninguna transición corre con cambios locales sin confirmar"). Se documenta como
-  Fase 8.7.2 en `docs/ROADMAP.md` → Cerrado **una vez terminado**, no antes. No se
-  reabre 8.7.1 (ver evidencia arriba).
-- **Totales: `useWatch` solo para ese cálculo, no migración completa.** Se
-  consideró y descartó migrar todo `watch('items')` a `useWatch` en el componente —
-  alcance mayor al de este fix, se deja como decisión aparte si se quiere más
-  adelante.
-- **No unificar `fields`/`watch('items')` en general.** `fields` sigue siendo
-  exclusivamente la key de remonte de `useFieldArray` (confirmado que ese es su
-  único rol real hoy); no se propone eliminar esa dualidad.
+- `npx tsc --noEmit`: limpio, en cada commit de esta sesión.
+- `npm run lint`: limpio (solo los mismos warnings preexistentes sin relación),
+  en cada commit.
+- `npm test`: 429/429, en cada commit.
+- `tests/e2e/critical/cotizaciones-editar.spec.ts` +
+  `cotizaciones-flush-transicion.spec.ts` (47 tests): corridos localmente contra
+  el fix de causa F con el workaround de `executablePath` del sandbox (revertido
+  antes de cada commit, sin diff en `playwright.config.ts`) — 47/47 en verde, sin
+  regresión.
+- CI del PR #28, último run (commit `36ab909`): `test` ✅, `fresh-db` ✅,
+  `smoke-and-critical` ✅. `live`: 41/42 tests en verde (incluidas causa F y
+  autofill, antes rojas) — 1 solo test rojo, ver "Problemas encontrados".
 
 ## Problemas encontrados (abiertos)
 
-- **El working tree tiene código de Totales y de "un PATCH en vuelo" que ya se
-  sabe INCORRECTO** (versiones descartadas del diseño, antes de las causas H y
-  E/F de arriba): el cálculo de `itemsParaTotales` actual usa `Math.max`/join por
-  `field.id` (no funciona, ver causa H) y `persistItemCellAutosave` tiene un guard
-  de un solo reintento sin refrescar `itemCellBaseRef` (ver causas E/F). **No dar
-  por bueno ese código** — reemplazar según el diseño de arriba antes de correr la
-  suite de validación completa o hacer merge.
-- **`test:e2e:smoke`/`test:e2e:critical` no corrieron limpios en este sandbox**
-  por un mismatch de versión de Chromium preinstalada vs. la que
-  `@playwright/test@1.54.2` espera — investigar si es un problema del sandbox en sí
-  (reportar si persiste) o basta con un override de `executablePath` temporal (NUNCA
-  commitear ese override) para validar localmente. No bloquea: `smoke`/`critical`
-  sí corren en CI con el binario correcto.
-- Heredados de antes (sin tocar esta sesión): flake recurrente del job `live` en CI
-  (ver commits previos), PUT genérico en `cuentas-pagar` (`docs/archive/auditoria-ingenieria-2026-09.md`).
+- **Bloqueador único para cerrar Fase 8.7.2:** `tests/e2e/live/basic.spec.ts`,
+  test "crear → emitir → aprobar → ... → subir factura real a Drive → registrar
+  pago" falla con:
+  ```
+  [Drive/upload] Exception: Google Drive desautorizado (uploadPdf): invalid_grant.
+  El refresh token expiró, fue revocado o ya no coincide con GOOGLE_CLIENT_ID /
+  GOOGLE_CLIENT_SECRET. Reautoriza Drive y actualiza GOOGLE_DRIVE_REFRESH_TOKEN en
+  Vercel.
+  ```
+  **No es un bug de código ni de esta fase** — es un token OAuth vencido/revocado
+  en el entorno de CI (y probablemente también en Vercel). Requiere una acción
+  humana fuera del repo: reautorizar Google Drive y actualizar
+  `GOOGLE_DRIVE_REFRESH_TOKEN` (en Vercel, y el secret equivalente que usa
+  `e2e.yml` en GitHub Actions). Es muy probable que la falla original de este
+  mismo test en un run anterior de esta sesión (un `FK violation` distinto, en
+  `documentos_cuentas_cobrar_cuentas_cobrar_id_fkey`) haya sido otra manifestación
+  del mismo problema de fondo — se investigó a fondo esa causa (se descartaron
+  cascadas, se probó `approve_cotizacion` aislado por SQL directo en ambos
+  entornos, funciona bien) sin poder reproducirla de nuevo, y no volvió a aparecer
+  en los 2 runs siguientes.
+- Heredado de antes (sin tocar esta sesión): flake recurrente del job `live` en
+  CI (ver commits previos), PUT genérico en `cuentas-pagar`
+  (`docs/archive/auditoria-ingenieria-2026-09.md`).
 
 ## Deuda técnica conocida (sin resolver, intencional)
 
 - **Capa genérica `base`/`conflict`:** el protocolo de conflictos por campo sigue
   siendo específico de Cotizaciones. Se decide su forma genérica cuando Proyectos
   exista como segundo consumidor real, no antes.
+- **Script de paridad de esquema sin automatizar** (ver punto 5 arriba) — decisión
+  pendiente del usuario sobre el modo de ejecución.
 
 ## Siguiente paso
 
-**PR ya abierto en borrador:** [#28](https://github.com/EduardoTerwogt/serenata-erp/pull/28)
-(rama `claude/adoring-mayer-34emkm` → `main`), con el commit `09859b6` (Fixes 1-4).
-Al cortar esta sesión, CI (`test`, `smoke-and-critical`, `live`, `fresh-db`) estaba
-**en progreso, sin confirmar en verde todavía** — lo primero que debe hacer la
-sesión/cuenta que retome es revisar el resultado de ESE PR antes de seguir
-agregando commits.
-
-1. Confirmar el estado real de CI en el PR #28 (no asumir verde solo porque el
-   push tuvo éxito).
-2. Implementar causas E-I tal como están diseñadas arriba (todo el contenido
-   técnico necesario ya está en este documento, no depende de ningún archivo
-   fuera del repo).
-3. Correr la suite completa de validación (arriba) y confirmar que
-   `flushPendingSaves`/Generar/Aprobar nunca corren con una celda sin confirmar.
-4. Pushear el segundo commit al MISMO PR #28 (misma rama) — no abrir un PR nuevo.
-5. Una vez todo en verde (incluido `live` en CI, no solo el push): documentar el
-   cierre real como Fase 8.7.2 en `docs/ROADMAP.md` → Cerrado y en
+1. **Conseguir que alguien con acceso a Google Cloud Console / Vercel reautorice
+   Drive** y actualice `GOOGLE_DRIVE_REFRESH_TOKEN` (Vercel + el secret de GitHub
+   Actions que usa `e2e.yml`).
+2. Re-disparar el job `live` del PR #28 (push nuevo o re-run) y confirmar los 42
+   tests en verde, incluido el de `basic.spec.ts`.
+3. Preguntarle al usuario cómo quiere operar `scripts/check-schema-parity.mjs`
+   (paso manual pre-merge vs. workflow protegido separado) — no bloquea el cierre
+   de esta fase, pero quedó pendiente.
+4. Con `live` (los 42 tests) + `test` + `fresh-db` + `smoke-and-critical` en
+   verde real: documentar el cierre en `docs/ROADMAP.md` → Cerrado y en
    `ARCHITECTURE.md` → Edición colaborativa (mismo formato que la entrada de
-   8.7.1), pasar el PR de borrador a listo, y recién ahí actualizar este
+   8.7.1), pasar el PR #28 de borrador a listo, y recién ahí actualizar este
    documento a "ninguna iniciativa activa".
+5. Pedirle al usuario que repita su prueba manual original en el preview de
+   Vercel (borrar una partida en una cotización existente) — la causa raíz y el
+   fix ya están verificados por SQL directo, pero falta esa confirmación humana.
+6. **El merge a `main` lo autoriza el usuario directamente** — no es parte de
+   cerrar esta fase ni de cerrar sesión.
