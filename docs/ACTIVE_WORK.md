@@ -6,43 +6,32 @@
 
 **Ninguna iniciativa activa.**
 
-**Ajuste puntual (fuera de roadmap):** se reforzó la documentación del flujo de
-sesión — no tocó código ni arquitectura, así que no entra a `docs/ROADMAP.md`.
-Cambios: `CLAUDE.md` y `serenata-iniciar-fase` ahora dicen explícitamente que un
-push a una rama sin PR abierto no dispara `test.yml`/`e2e.yml`/`migrations.yml`, y
-que el PR debe abrirse en borrador con el primer commit útil (no al final);
-`serenata-cerrar-sesion` ahora exige confirmar que ese PR existe antes de dar por
-válido un "CI en verde"; `serenata-iniciar-fase` ganó un paso 0 que clasifica el
-pedido de la sesión contra el roadmap (ya priorizado / nuevo → se agrega al roadmap
-antes de arrancar / fuera de roadmap → se documenta aquí al cerrar), y
-`docs/ROADMAP.md` documenta esa misma regla en su sección "Cómo se mantiene".
+**Último cierre — ajuste puntual fuera de roadmap:** se reforzó la documentación del
+flujo de sesión (no tocó código ni arquitectura, por eso no entró a
+`docs/ROADMAP.md` como iniciativa). Mergeado a `main` en `f688708` (PR #26).
 
-Fase 8.7.1 (Serializar mutaciones de partidas contra
-Generar/Aprobar) cerró completa y se mergeó a `main` en el commit `2a04241` (PR #24)
-— las 4 suites de CI real en verde (`test`, `fresh-db`/Migrations,
-`smoke-and-critical`, `live`) y el Preview de Vercel desplegando bien. Detalle
-completo: [`docs/archive/fase-8.7.1-estado-guard-partidas.md`](archive/fase-8.7.1-estado-guard-partidas.md).
+- `CLAUDE.md` y `serenata-iniciar-fase` ahora dicen explícitamente que un push a una
+  rama sin PR abierto no dispara `test.yml`/`e2e.yml`/`migrations.yml`, y que el PR
+  debe abrirse en borrador con el primer commit útil, no al final.
+- `serenata-cerrar-sesion` exige confirmar que ese PR existe antes de dar por válido
+  un "CI en verde".
+- `serenata-iniciar-fase` ganó un paso 0 que pregunta qué se va a trabajar y lo
+  clasifica contra el roadmap (ya priorizado / nuevo → se agrega al roadmap antes de
+  arrancar / fuera de roadmap → se documenta aquí al cerrar).
+- `docs/ROADMAP.md` documenta la misma clasificación en su sección "Cómo se
+  mantiene".
 
-Una auditoría sobre el cierre de Fase 8.7 encontró que `flushPendingSaves` solo
-cubría cuatro de las nueve vías de mutación de partidas (seleccionar producto,
-cambiar responsable, alta/baja de fila e importar partidas quedaban fuera) y que
-ninguna escritura de partidas revisaba el `estado` de la cotización dueña — se podía
-seguir editando, creando, borrando o importando partidas de una cotización ya
-`APROBADA`/`CANCELADA`. Corregido con un guard transaccional (`FOR SHARE` sobre
-`cotizaciones`) en `patch_item_cotizacion`/`upsert_items_cotizacion`/
-`delete_item_cotizacion` (nueva) + las cinco vías que faltaban ahora pasan por
-`trackMutation`.
+Historial de iniciativas cerradas (Fase 8.7, 8.7.1, colaboración en cotizaciones,
+etc.): ver `docs/ROADMAP.md` → **Cerrado**, con enlaces a `docs/archive/`.
 
-El job `live` del PR encontró una regresión real (no del bug que se estaba
-arreglando, sino del propio cambio): `upsert_items_cotizacion` cambió su forma de
-retorno (`setof items_cotizacion` → `jsonb`, necesario para poder devolver el
-rechazo por estado), y `tests/e2e/live/items-cotizacion-uuid-guard.spec.ts` llamaba
-la RPC directo vía `supabase-js` esperando el array crudo de antes. Corregido en el
-mismo PR antes de mergear.
+## Problemas encontrados (abiertos)
 
-Fase 8.7 (Cierre real de Collaboration) sigue cerrada, mergeada a `main` en el
-commit `887af1d` (PR #23). Detalle:
-[`docs/archive/fase-8.7-cierre-collaboration.md`](archive/fase-8.7-cierre-collaboration.md).
+- **Flake en `tests/e2e/critical/planeacion.spec.ts`** ("extracción IA: pega texto,
+  valida y crea cotizaciones"): en el PR #26 falló por timeout de navegación
+  (`toHaveURL(/\/cotizaciones$/)`, 5000ms, recibió `/planeacion`), pero el run de
+  `main` inmediatamente anterior pasó el mismo spec en verde con código de app
+  idéntico — no se investigó a fondo por ser un PR de documentación pura. Si vuelve a
+  fallar de forma intermitente, revisar el timing de esa redirección.
 
 ## Deuda técnica conocida (sin resolver, intencional)
 
