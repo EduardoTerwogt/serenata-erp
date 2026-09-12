@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-12T16:42:28.258Z",
-  "count": 58,
+  "generated_at": "2026-09-12T17:02:34.159Z",
+  "count": 59,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -59,6 +59,7 @@
     "20260911_approve_cotizacion_restore_proyecto_id.sql",
     "20260911_item_cotizacion_estado_guard.sql",
     "20260911_item_cotizacion_restore_null_vs_empty_fix.sql",
+    "20260912_bulk_replace_items_cotizacion.sql",
     "20260912_idempotency_keys_payload_hash.sql"
   ]
 }
