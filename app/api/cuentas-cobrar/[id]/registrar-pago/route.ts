@@ -4,7 +4,9 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
-import { withIdempotency } from '@/lib/server/idempotency'
+import { withIdempotency, computePayloadHash } from '@/lib/server/idempotency'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -19,7 +21,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const fechaPago = formData.get('fecha_pago') as string
     const comprobante = formData.get('comprobante') as File | null
     const notas = formData.get('notas') as string | null
-    const idempotencyKey = formData.get('idempotency_key') as string | null
+    const operationId = formData.get('operation_id') as string | null
 
     if (!Number.isFinite(monto) || monto <= 0) {
       return Response.json({ error: 'Monto debe ser mayor a 0' }, { status: 400 })
@@ -33,78 +35,97 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: 'Fecha de pago requerida' }, { status: 400 })
     }
 
-    const cuenta = await getCuentaCobrarById(id)
-    if (!cuenta) {
-      return Response.json({ error: 'Cuenta por cobrar no encontrada' }, { status: 404 })
+    // Engineering Hardening EF-1, 1E-3c: validación sintáctica del
+    // operation_id ANTES de tocar la base.
+    if (!operationId || !UUID_RE.test(operationId)) {
+      return Response.json({ error: 'operation_id requerido (uuid)' }, { status: 400 })
     }
 
-    const pagosActuales = await getPagosComprobantesByCuenta(id)
-    const totalPagado = pagosActuales.reduce((sum, p) => sum + p.monto, 0)
-    const nuevoTotal = totalPagado + monto
+    const payloadHash = computePayloadHash({ dominio: 'cuentas_cobrar', cuentaId: id, monto, tipoPago, fechaPago, notas: notas ?? null })
 
-    if (nuevoTotal > cuenta.monto_total) {
-      return Response.json(
-        { error: `Monto excede el total de la cuenta. Total: $${cuenta.monto_total}, ya pagado: $${totalPagado}, nuevo: $${nuevoTotal}` },
-        { status: 400 }
-      )
-    }
-
-    // Fase 3.3: protege contra doble click/retry -- con la misma
-    // idempotency_key, una segunda request recibe la misma respuesta en vez
-    // de subir el comprobante otra vez y duplicar el pago.
-    const { status, body } = await withIdempotency(`cuentas-cobrar:${id}:registrar-pago`, idempotencyKey, async () => {
-      let comprobanteUrl = null
-      if (comprobante) {
-        const googleEnv = getGoogleEnv()
-        if (!googleEnv) {
-          return { status: 500, body: { error: 'Google Drive no configurado' } }
+    // Orden de request (v13.1 §9): sintáctico -> operation_id/uuid (arriba)
+    // -> payloadHash -> consulta idempotency_keys (dentro de withIdempotency)
+    // ANTES de leer saldo/Drive/RPC -- la lectura de la cuenta y el cálculo
+    // del total pagado se movieron DENTRO del handler.
+    const { status, body } = await withIdempotency(
+      `cuentas-cobrar:${id}:registrar-pago`,
+      operationId,
+      async () => {
+        const cuenta = await getCuentaCobrarById(id)
+        if (!cuenta) {
+          return { status: 404, body: { error: 'Cuenta por cobrar no encontrada' } }
         }
 
-        const proyecto = await getProyectoById(cuenta.cotizacion_id)
-        if (!proyecto) {
-          return { status: 404, body: { error: 'Proyecto asociado no encontrado' } }
-        }
-        const folderPath = `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
-        const fileName = comprobante.name
-        comprobanteUrl = await uploadFileToDrive(comprobante, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
+        const pagosActuales = await getPagosComprobantesByCuenta(id)
+        const totalPagado = pagosActuales.reduce((sum, p) => sum + p.monto, 0)
+        const nuevoTotal = totalPagado + monto
 
-        await createDocumentoCuentaCobrar({
-          cuentas_cobrar_id: id,
-          tipo: 'OTRO',
-          archivo_url: comprobanteUrl,
-          archivo_nombre: comprobante.name,
-          archivo_size: comprobante.size,
+        if (nuevoTotal > cuenta.monto_total) {
+          return {
+            status: 400,
+            body: { error: `Monto excede el total de la cuenta. Total: $${cuenta.monto_total}, ya pagado: $${totalPagado}, nuevo: $${nuevoTotal}` },
+          }
+        }
+
+        let comprobanteUrl = null
+        if (comprobante) {
+          const googleEnv = getGoogleEnv()
+          if (!googleEnv) {
+            return { status: 500, body: { error: 'Google Drive no configurado' } }
+          }
+
+          const proyecto = await getProyectoById(cuenta.cotizacion_id)
+          if (!proyecto) {
+            return { status: 404, body: { error: 'Proyecto asociado no encontrado' } }
+          }
+          const folderPath = `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
+          const fileName = comprobante.name
+          comprobanteUrl = await uploadFileToDrive(comprobante, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
+
+          await createDocumentoCuentaCobrar({
+            cuentas_cobrar_id: id,
+            tipo: 'OTRO',
+            archivo_url: comprobanteUrl,
+            archivo_nombre: comprobante.name,
+            archivo_size: comprobante.size,
+            operation_id: operationId,
+          })
+        }
+
+        const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('registrar_pago_cuenta_cobrar', {
+          p_cuenta_id: id,
+          p_monto: monto,
+          p_tipo_pago: tipoPago,
+          p_fecha_pago: fechaPago,
+          p_comprobante_url: comprobanteUrl || '',
+          p_archivo_nombre: comprobante?.name || `pago_${fechaPago}`,
+          p_notas: notas,
+          p_operation_id: operationId,
         })
-      }
 
-      const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('registrar_pago_cuenta_cobrar', {
-        p_cuenta_id: id,
-        p_monto: monto,
-        p_tipo_pago: tipoPago,
-        p_fecha_pago: fechaPago,
-        p_comprobante_url: comprobanteUrl || '',
-        p_archivo_nombre: comprobante?.name || `pago_${fechaPago}`,
-        p_notas: notas,
-      })
+        if (rpcError) {
+          if (rpcError.code === 'P1411') {
+            return { status: 409, body: { error: 'operation_id_cruzado', message: rpcError.message } }
+          }
+          return { status: 400, body: { error: rpcError.message } }
+        }
 
-      if (rpcError) {
-        return { status: 400, body: { error: rpcError.message } }
-      }
+        triggerSheetsSync('cuentas_cobrar')
 
-      triggerSheetsSync('cuentas_cobrar')
-
-      return {
-        status: 200,
-        body: {
-          success: true,
-          resumen: {
-            monto_pagado_total: rpcResult.monto_pagado_total,
-            monto_pendiente: rpcResult.monto_pendiente,
-            estado_nuevo: rpcResult.estado_nuevo,
+        return {
+          status: 200,
+          body: {
+            success: true,
+            resumen: {
+              monto_pagado_total: rpcResult.monto_pagado_total,
+              monto_pendiente: rpcResult.monto_pendiente,
+              estado_nuevo: rpcResult.estado_nuevo,
+            },
           },
-        },
-      }
-    })
+        }
+      },
+      { payloadHash }
+    )
 
     return Response.json(body, { status })
   } catch (error) {

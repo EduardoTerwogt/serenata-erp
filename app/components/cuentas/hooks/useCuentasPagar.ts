@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CuentaPagar, DocumentoCuentaPagar, OrdenPago, RegimenFiscal, HistorialCambioResponsableItem } from '@/lib/types'
 import { getJson, sendFormData, sendJson } from '@/lib/client/api'
+import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
+import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
 
 interface CuentaPagarDetalle {
   cuenta: CuentaPagar
@@ -108,14 +110,25 @@ export function useCuentasPagar() {
     id: string,
     data: { monto: number; comprobante?: File }
   ) => {
-    const formData = new FormData()
-    formData.append('monto', String(data.monto))
-    if (data.comprobante) formData.append('comprobante', data.comprobante)
-    // Fase 3.3: una key nueva por intento -- protege contra doble
-    // click/retry sin bloquear un reintento real con datos distintos.
-    formData.append('idempotency_key', crypto.randomUUID())
-
-    const result = await sendFormData(`/api/cuentas-pagar/${id}/registrar-pago`, formData, 'Error al registrar pago')
+    // 1E-3b: fingerprint sobre el comprobante ORIGINAL (data.comprobante,
+    // antes de normalizar) + persistencia en localStorage antes del fetch --
+    // ver lib/client/pagoIdempotency.ts para el orden exacto y las reglas
+    // de limpieza (createdNow/reusedExisting, nunca tras un error post-fetch).
+    const result = await runIdempotentPagoSubmit({
+      scope: `registrar-pago:cuentas-pagar:${id}`,
+      dominio: 'cuentas-pagar',
+      cuentaId: id,
+      fields: { monto: data.monto },
+      comprobante: data.comprobante,
+      normalize: normalizeComprobante,
+      submit: async ({ operationId, comprobante }) => {
+        const formData = new FormData()
+        formData.append('monto', String(data.monto))
+        if (comprobante) formData.append('comprobante', comprobante)
+        formData.append('operation_id', operationId)
+        return sendFormData(`/api/cuentas-pagar/${id}/registrar-pago`, formData, 'Error al registrar pago')
+      },
+    })
     await cargar()
     return result
   }, [cargar])

@@ -49,3 +49,17 @@ export async function computeClientPayloadHash(payload: unknown): Promise<string
   const digest = await crypto.subtle.digest('SHA-256', encoded)
   return toHex(digest)
 }
+
+/**
+ * Hash de los BYTES de un archivo (1E-3b/c): el fingerprint de un intento
+ * de pago debe reflejar el comprobante ORIGINAL, antes de normalizar --
+ * un cambio de contenido del mismo nombre de archivo debe cambiar el
+ * fingerprint. Se combina con el resto de los campos del intento vía
+ * `computeClientPayloadHash` (nunca se compara directamente contra un hash
+ * calculado en el servidor).
+ */
+export async function computeClientFileHash(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  const digest = await crypto.subtle.digest('SHA-256', buffer)
+  return toHex(digest)
+}
