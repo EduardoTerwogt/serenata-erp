@@ -100,14 +100,11 @@ describe('POST /api/cotizaciones/[id]/items/bulk', () => {
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
-  it('llama a la RPC transaccional con operation_id, cotizacion_id, items y reemplazar_ids filtrados', async () => {
+  it('llama a la RPC transaccional con operation_id, cotizacion_id, items y reemplazar_ids', async () => {
     await POST(
       req({
         items: [item(), item({ id: ITEM_ID_2, descripcion: 'Luz' })],
-        reemplazar_ids: [
-          { id: ITEM_ID_1, revision: 0 },
-          { id: 'sin-revision' }, // filtrado -- no trae revision numérica
-        ],
+        reemplazar_ids: [{ id: ITEM_ID_1, revision: 0 }],
         operation_id: OP_ID,
       }),
       { params }
@@ -119,6 +116,47 @@ describe('POST /api/cotizaciones/[id]/items/bulk', () => {
       p_items: [item(), item({ id: ITEM_ID_2, descripcion: 'Luz' })],
       p_reemplazar_ids: [{ id: ITEM_ID_1, revision: 0 }],
     })
+  })
+
+  // Hallazgo de auditoría PR #29: antes se descartaba en silencio con
+  // `.filter()` -- el cliente creía haber marcado esa fila para
+  // reutilizar/borrar y el servidor la ignoraba sin avisar.
+  it('rechaza con 400 si alguna entrada de reemplazar_ids no trae revision numérica, sin llamar la RPC', async () => {
+    const res = await POST(
+      req({
+        items: [item()],
+        reemplazar_ids: [
+          { id: ITEM_ID_1, revision: 0 },
+          { id: 'sin-revision' },
+        ],
+        operation_id: OP_ID,
+      }),
+      { params }
+    )
+    expect(res.status).toBe(400)
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('rechaza con 400 si alguna entrada de reemplazar_ids trae un id no-uuid, sin llamar la RPC', async () => {
+    const res = await POST(
+      req({
+        items: [item()],
+        reemplazar_ids: [{ id: 'no-es-uuid', revision: 0 }],
+        operation_id: OP_ID,
+      }),
+      { params }
+    )
+    expect(res.status).toBe(400)
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('rechaza con 400 si reemplazar_ids no es un arreglo, sin llamar la RPC', async () => {
+    const res = await POST(
+      req({ items: [item()], reemplazar_ids: 'no-es-arreglo', operation_id: OP_ID }),
+      { params }
+    )
+    expect(res.status).toBe(400)
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
   it('usa scope ligado a la cotización y pasa payloadHash a withIdempotency', async () => {

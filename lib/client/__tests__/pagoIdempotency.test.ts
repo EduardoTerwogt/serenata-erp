@@ -99,7 +99,7 @@ describe('runIdempotentPagoSubmit', () => {
     expect(submit).not.toHaveBeenCalled()
   })
 
-  it('mismo fingerprint (reusedExisting): reutiliza el operationId existente, NO llama createPendingOperation', async () => {
+  it('mismo fingerprint FRESH (reusedExisting): reutiliza el operationId existente, NO reconcilia, NO llama createPendingOperation', async () => {
     mocks.readPendingOperationMock.mockReturnValue({
       kind: 'fresh',
       op: { operationId: 'op-existente', fingerprint: 'fingerprint-1', status: 'pending', createdAt: Date.now() },
@@ -116,6 +116,7 @@ describe('runIdempotentPagoSubmit', () => {
     })
 
     expect(mocks.createPendingOperationMock).not.toHaveBeenCalled()
+    expect(mocks.reconcilePagoEstadoMock).not.toHaveBeenCalled()
     expect(submit).toHaveBeenCalledWith({ operationId: 'op-existente', comprobante: undefined })
   })
 
@@ -124,7 +125,7 @@ describe('runIdempotentPagoSubmit', () => {
       kind: 'fresh',
       op: { operationId: 'op-viejo', fingerprint: 'fingerprint-viejo', status: 'pending', createdAt: Date.now() },
     })
-    mocks.reconcilePagoEstadoMock.mockResolvedValue('not_found')
+    mocks.reconcilePagoEstadoMock.mockResolvedValue({ status: 'not_found' })
     const submit = vi.fn()
 
     await expect(
@@ -147,7 +148,7 @@ describe('runIdempotentPagoSubmit', () => {
       kind: 'stale',
       op: { operationId: 'op-viejo', fingerprint: 'fingerprint-viejo', status: 'pending', createdAt: Date.now() },
     })
-    mocks.reconcilePagoEstadoMock.mockResolvedValue('ambiguous')
+    mocks.reconcilePagoEstadoMock.mockResolvedValue({ status: 'ambiguous' })
     const submit = vi.fn()
 
     await expect(
@@ -171,7 +172,55 @@ describe('runIdempotentPagoSubmit', () => {
         op: { operationId: 'op-viejo', fingerprint: 'fingerprint-viejo', status: 'pending', createdAt: Date.now() },
       })
       .mockReturnValueOnce({ kind: 'none' })
-    mocks.reconcilePagoEstadoMock.mockResolvedValue('completed')
+    mocks.reconcilePagoEstadoMock.mockResolvedValue({ status: 'completed', result: { ok: true, viejo: true } })
+    const submit = vi.fn(async () => ({ ok: true }))
+
+    const result = await runIdempotentPagoSubmit({
+      scope: 'scope-1',
+      dominio: 'cuentas-pagar',
+      cuentaId: 'c1',
+      fields: { monto: 100 },
+      normalize: async (f) => f,
+      submit,
+    })
+
+    // El fingerprint es DISTINTO -- la operación vieja que completó no es
+    // esta; se reintenta con una identidad nueva, nunca con el resultado
+    // reconciliado de la vieja.
+    expect(result).toEqual({ ok: true })
+    expect(mocks.clearPendingOperationMock).toHaveBeenCalledWith('scope-1') // una vez por el completed, otra por el éxito
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('mismo fingerprint STALE + reconciliación completed: usa el resultado ya confirmado, NUNCA reenvía', async () => {
+    mocks.readPendingOperationMock.mockReturnValue({
+      kind: 'stale',
+      op: { operationId: 'op-existente', fingerprint: 'fingerprint-1', status: 'pending', createdAt: Date.now() - 120_000 },
+    })
+    mocks.reconcilePagoEstadoMock.mockResolvedValue({ status: 'completed', result: { ok: true, resumen: 'confirmado-antes' } })
+    const submit = vi.fn(async () => ({ ok: true, resumen: 'NUNCA-DEBERIA-VERSE' }))
+
+    const result = await runIdempotentPagoSubmit({
+      scope: 'scope-1',
+      dominio: 'cuentas-pagar',
+      cuentaId: 'c1',
+      fields: { monto: 100 },
+      normalize: async (f) => f,
+      submit,
+    })
+
+    expect(mocks.reconcilePagoEstadoMock).toHaveBeenCalledWith('cuentas-pagar', 'c1', 'op-existente')
+    expect(result).toEqual({ ok: true, resumen: 'confirmado-antes' })
+    expect(submit).not.toHaveBeenCalled()
+    expect(mocks.clearPendingOperationMock).toHaveBeenCalledWith('scope-1')
+  })
+
+  it('mismo fingerprint STALE + reconciliación not_found: permite el retry EXACTO (mismo operationId, mismo payload)', async () => {
+    mocks.readPendingOperationMock.mockReturnValue({
+      kind: 'stale',
+      op: { operationId: 'op-existente', fingerprint: 'fingerprint-1', status: 'pending', createdAt: Date.now() - 120_000 },
+    })
+    mocks.reconcilePagoEstadoMock.mockResolvedValue({ status: 'not_found' })
     const submit = vi.fn(async () => ({ ok: true }))
 
     const result = await runIdempotentPagoSubmit({
@@ -184,8 +233,31 @@ describe('runIdempotentPagoSubmit', () => {
     })
 
     expect(result).toEqual({ ok: true })
-    expect(mocks.clearPendingOperationMock).toHaveBeenCalledWith('scope-1') // una vez por el completed, otra por el éxito
-    expect(submit).toHaveBeenCalledTimes(1)
+    // Nunca una identidad nueva: el retry usa el MISMO operationId de la
+    // operación pendiente, nunca uno generado de cero.
+    expect(submit).toHaveBeenCalledWith({ operationId: 'op-existente', comprobante: undefined })
+    expect(mocks.createPendingOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('mismo fingerprint STALE + reconciliación ambiguous: permite el mismo retry EXACTO que not_found', async () => {
+    mocks.readPendingOperationMock.mockReturnValue({
+      kind: 'stale',
+      op: { operationId: 'op-existente', fingerprint: 'fingerprint-1', status: 'pending', createdAt: Date.now() - 120_000 },
+    })
+    mocks.reconcilePagoEstadoMock.mockResolvedValue({ status: 'ambiguous' })
+    const submit = vi.fn(async () => ({ ok: true }))
+
+    const result = await runIdempotentPagoSubmit({
+      scope: 'scope-1',
+      dominio: 'cuentas-pagar',
+      cuentaId: 'c1',
+      fields: { monto: 100 },
+      normalize: async (f) => f,
+      submit,
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(submit).toHaveBeenCalledWith({ operationId: 'op-existente', comprobante: undefined })
   })
 
   it('createdNow + fallo de normalize (pre-fetch): limpia, nunca llama submit', async () => {

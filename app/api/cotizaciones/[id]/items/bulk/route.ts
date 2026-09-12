@@ -59,7 +59,6 @@ export async function POST(
   const { id } = await params
   const body = await request.json().catch(() => ({}))
   const inputItems: BulkItemInput[] = Array.isArray(body?.items) ? body.items : []
-  const reemplazarIdsInput: ReemplazarIdInput[] = Array.isArray(body?.reemplazar_ids) ? body.reemplazar_ids : []
   const operationId: unknown = body?.operation_id
 
   if (inputItems.length === 0) {
@@ -76,10 +75,22 @@ export async function POST(
     }
   }
 
-  const reemplazarIds = reemplazarIdsInput.filter(
-    (r): r is { id: string; revision: number } =>
-      typeof r?.id === 'string' && UUID_RE.test(r.id) && typeof r.revision === 'number'
-  )
+  // Hallazgo de auditoría PR #29: una entrada de `reemplazar_ids` mal
+  // formada (id no-uuid, revision ausente/no-numérica) se descartaba en
+  // silencio con `.filter()` -- el cliente creía haber marcado esa fila
+  // para reutilizar/borrar y el servidor simplemente la ignoraba, sin
+  // avisar. Ahora se rechaza la petición completa, igual que ya se hace
+  // con un id inválido en `items`.
+  if (body?.reemplazar_ids !== undefined && !Array.isArray(body.reemplazar_ids)) {
+    return Response.json({ error: 'reemplazar_ids debe ser un arreglo' }, { status: 400 })
+  }
+  const reemplazarIdsInput: ReemplazarIdInput[] = Array.isArray(body?.reemplazar_ids) ? body.reemplazar_ids : []
+  for (const r of reemplazarIdsInput) {
+    if (typeof r?.id !== 'string' || !UUID_RE.test(r.id) || typeof r.revision !== 'number') {
+      return Response.json({ error: 'Cada entrada de reemplazar_ids debe traer {id (uuid), revision (number)}' }, { status: 400 })
+    }
+  }
+  const reemplazarIds = reemplazarIdsInput as Array<{ id: string; revision: number }>
 
   const payloadHash = computePayloadHash({ items: inputItems, reemplazar_ids: reemplazarIds, cotizacionId: id })
 

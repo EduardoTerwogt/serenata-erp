@@ -7,6 +7,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { computePayloadHash, withIdempotency } from '../idempotency'
+import { computeClientPayloadHash } from '@/lib/shared/canonicalPayload'
 
 function tableMock({
   insertError = null,
@@ -166,5 +167,136 @@ describe('computePayloadHash', () => {
     const a = computePayloadHash({ monto: 100 })
     const b = computePayloadHash({ monto: 200 })
     expect(a).not.toBe(b)
+  })
+})
+
+// Hallazgo de auditoría PR #29: probar la paridad DIRECTA entre el hash del
+// servidor (`computePayloadHash`, Node `crypto`) y el del cliente
+// (`computeClientPayloadHash`, Web Crypto) -- ambos comparten
+// `canonicalizeJson`, pero solo comparar sus resultados byte a byte sobre
+// varios payloads reales (anidados, arrays, Unicode) prueba que la
+// paridad se sostiene en la práctica, no solo que la canonicalización en
+// sí misma esté bien (ya cubierto por separado en
+// `lib/shared/__tests__/canonicalPayload.test.ts`).
+describe('paridad SHA-256 cliente/servidor (computePayloadHash vs computeClientPayloadHash)', () => {
+  const payloads: Array<[string, unknown]> = [
+    ['objeto plano', { a: 1, b: 'dos', c: true, d: null }],
+    ['objeto anidado con claves en distinto orden', { z: { nested: { y: 2, x: 1 } }, a: 1 }],
+    ['arrays (el orden importa, no se reordenan)', { items: [{ id: 'c' }, { id: 'a' }, { id: 'b' }] }],
+    ['Unicode -- acentos, eñes y emoji', { cliente: 'Peña Ñoño', proyecto: 'Boda en México 🎉', nota: '日本語テスト' }],
+    ['payload real de bulk-import (anidado + array + Unicode)', {
+      items: [
+        { id: 'item-1', descripcion: 'Renta de grúa Technocrane®', precio_unitario: 25000, responsable_nombre: 'José Ángel' },
+        { id: 'item-2', descripcion: 'Catering — menú vegetariano', precio_unitario: 8000, responsable_nombre: null },
+      ],
+      reemplazar_ids: [{ id: 'item-1', revision: 2 }],
+      cotizacionId: 'SH-2026-Ñ001',
+    }],
+    ['valores extremos -- vacío, cero, negativo, decimales', { vacio: '', cero: 0, negativo: -15.5, arr: [] }],
+  ]
+
+  it.each(payloads)('%s', async (_label, payload) => {
+    const serverHash = computePayloadHash(payload)
+    const clientHash = await computeClientPayloadHash(payload)
+    expect(clientHash).toBe(serverHash)
+    expect(serverHash).toMatch(/^[0-9a-f]{64}$/)
+  })
+})
+
+// Hallazgo de auditoría PR #29 (pruebas compuestas v13.1): dos requests con
+// la MISMA (scope, key, payload_hash) -- el "original lento" y su
+// "retry exacto" tras un `not_found`/`ambiguous` -- deben resultar en UNA
+// SOLA ejecución del handler sin importar cuál de los dos gana la carrera
+// del INSERT. Mock con estado REAL (un Map compartido, no un valor fijo)
+// para que el segundo INSERT que llega vea de verdad el `23505` que dejó
+// el primero, y su poll subsiguiente vea el resultado que el primero
+// terminó de guardar -- a diferencia de `tableMock` (arriba), que fija la
+// respuesta de antemano y no sirve para probar una carrera real.
+describe('withIdempotency -- carrera real, ambos órdenes de llegada (una sola aplicación)', () => {
+  function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  function createRaceTable() {
+    const store = new Map<string, { status_code: number | null; response: unknown; payload_hash: string | null }>()
+    return {
+      insert: vi.fn(async ({ scope, key, payload_hash }: { scope: string; key: string; payload_hash: string | null }) => {
+        const k = `${scope}:${key}`
+        if (store.has(k)) return { error: { code: '23505', message: 'duplicate key' } }
+        store.set(k, { status_code: null, response: null, payload_hash })
+        return { error: null }
+      }),
+      select: vi.fn(() => ({
+        eq: (_c1: string, scopeVal: string) => ({
+          eq: (_c2: string, keyVal: string) => ({
+            maybeSingle: async () => ({ data: store.get(`${scopeVal}:${keyVal}`) ?? null }),
+          }),
+        }),
+      })),
+      update: vi.fn((patch: { status_code: number; response: unknown }) => ({
+        eq: (_c1: string, scopeVal: string) => ({
+          eq: (_c2: string, keyVal: string) => {
+            const row = store.get(`${scopeVal}:${keyVal}`)
+            if (row) Object.assign(row, patch)
+            return Promise.resolve({ error: null })
+          },
+        }),
+      })),
+      delete: vi.fn(() => ({
+        eq: (_c1: string, scopeVal: string) => ({
+          eq: (_c2: string, keyVal: string) => {
+            store.delete(`${scopeVal}:${keyVal}`)
+            return Promise.resolve({ error: null })
+          },
+        }),
+      })),
+    }
+  }
+
+  async function callConcurrente(table: ReturnType<typeof createRaceTable>, delayMs: number, handler: () => Promise<{ status: number; body: unknown }>) {
+    if (delayMs > 0) await sleep(delayMs)
+    return withIdempotency('scope-carrera', 'op-misma-identidad', handler, { payloadHash: 'hash-compartido' })
+  }
+
+  it('orden A-primero: A gana el INSERT, B lo ve duplicado y espera -- una sola aplicación', async () => {
+    const table = createRaceTable()
+    mocks.fromMock.mockReturnValue(table)
+    let ejecuciones = 0
+    const handler = vi.fn(async () => {
+      ejecuciones += 1
+      return { status: 200, body: { ok: true, ejecucion: ejecuciones } }
+    })
+
+    const [resultA, resultB] = await Promise.all([
+      callConcurrente(table, 0, handler),
+      callConcurrente(table, 5, handler),
+    ])
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(resultA).toEqual({ status: 200, body: { ok: true, ejecucion: 1 } })
+    expect(resultB).toEqual(resultA)
+  })
+
+  it('orden B-primero (mismo escenario, orden de llegada invertido): sigue siendo una sola aplicación', async () => {
+    const table = createRaceTable()
+    mocks.fromMock.mockReturnValue(table)
+    let ejecuciones = 0
+    const handler = vi.fn(async () => {
+      ejecuciones += 1
+      return { status: 200, body: { ok: true, ejecucion: ejecuciones } }
+    })
+
+    // Mismo escenario que el test anterior, con los delays invertidos --
+    // ahora es la llamada "B" la que gana el INSERT. El resultado debe ser
+    // simétrico: sigue habiendo una sola ejecución y ambas llamadas ven el
+    // mismo resultado, sin importar cuál physically llegó primero.
+    const [resultA, resultB] = await Promise.all([
+      callConcurrente(table, 5, handler),
+      callConcurrente(table, 0, handler),
+    ])
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(resultA).toEqual(resultB)
+    expect(resultA).toEqual({ status: 200, body: { ok: true, ejecucion: 1 } })
   })
 })

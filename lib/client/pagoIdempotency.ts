@@ -1,6 +1,6 @@
 import { computeClientFileHash, computeClientPayloadHash } from '@/lib/shared/canonicalPayload'
 import { clearPendingOperation, createPendingOperation, readPendingOperation } from '@/lib/client/pendingOperation'
-import { reconcilePagoEstado, type PagoReconciliationStatus } from '@/lib/client/reconcilePago'
+import { reconcilePagoEstado, type PagoReconciliationResult } from '@/lib/client/reconcilePago'
 
 /**
  * Orquestación de idempotencia compartida entre useCuentasPagar y
@@ -15,9 +15,21 @@ import { reconcilePagoEstado, type PagoReconciliationStatus } from '@/lib/client
  * 2. `readPendingOperation`.
  * 3. Fingerprint distinto a uno pendiente -> bloquear y reconciliar.
  *    `not_found`/`ambiguous` nunca liberan nada; solo `completed` permite
- *    seguir (se limpia y se reintenta esta misma pasada desde cero).
+ *    seguir (se limpia y se reintenta esta misma pasada desde cero, con un
+ *    `operationId` NUEVO -- el fingerprint distinto prueba que es una
+ *    operación distinta de la que sí completó).
  * 4. Mismo fingerprint -> reutilizar el `operationId` existente
- *    (`reusedExisting`).
+ *    (`reusedExisting`). Fix post-auditoría PR #29: el TTL de
+ *    `pendingOperation` (`stale`) es un GATILLO real de reconciliación, no
+ *    solo una marca ignorada -- si el registro venció, se reconcilia ANTES
+ *    de reenviar aunque el fingerprint sea el mismo:
+ *    - `completed` -> el intento anterior YA se aplicó. Se limpia y se
+ *      devuelve ESE resultado sin reenviar -- reenviar con un
+ *      `operationId` nuevo generaría un pago duplicado real; reenviar con
+ *      el mismo ya no tiene nada que confirmar.
+ *    - `not_found`/`ambiguous` -> la identidad sigue viva. Se permite
+ *      exactamente un retry EXACTO (mismo `operationId`, mismo payload),
+ *      nunca una identidad nueva.
  * 5. Persistir inmediatamente antes del primer `fetch`, nunca antes --
  *    solo cuando la identidad es nueva (`createdNow`).
  * 6. `normalize()` (comprime el comprobante si aplica). Un fallo aquí:
@@ -36,7 +48,7 @@ export interface RunIdempotentPagoSubmitParams<TFields> {
   normalize: (file: File) => Promise<File>
   submit: (args: { operationId: string; comprobante?: File }) => Promise<unknown>
   /** Inyectable solo para pruebas -- por default consulta el endpoint real. */
-  reconcile?: (dominio: 'cuentas-pagar' | 'cuentas-cobrar', cuentaId: string, operationId: string) => Promise<PagoReconciliationStatus>
+  reconcile?: (dominio: 'cuentas-pagar' | 'cuentas-cobrar', cuentaId: string, operationId: string) => Promise<PagoReconciliationResult>
 }
 
 const MAX_RECONCILE_RETRIES = 2
@@ -73,9 +85,27 @@ export async function runIdempotentPagoSubmit<TFields extends Record<string, unk
     } else if (pending.op.fingerprint === fingerprint) {
       operationId = pending.op.operationId
       origin = 'reusedExisting'
+
+      // TTL como gatillo REAL de reconciliación (fix post-auditoría PR #29):
+      // un registro `stale` nunca se reenvía a ciegas, aunque el payload sea
+      // idéntico -- puede que el intento original ya haya terminado en el
+      // servidor mientras esta pestaña esperaba.
+      if (pending.kind === 'stale') {
+        const reconciliation = await reconcile(dominio, cuentaId, operationId)
+        if (reconciliation.status === 'completed') {
+          // Ya se aplicó de verdad -- usar ESE resultado, nunca reenviar:
+          // reenviar generaría un `operationId` nuevo en la siguiente
+          // vuelta del loop y, con él, un pago duplicado real.
+          clearPendingOperation(scope)
+          return reconciliation.result
+        }
+        // not_found/ambiguous: la identidad sigue viva -- se cae al retry
+        // EXACTO de abajo (mismo operationId, mismo payload), nunca una
+        // identidad nueva.
+      }
     } else {
-      const estado = await reconcile(dominio, cuentaId, pending.op.operationId)
-      if (estado === 'completed') {
+      const reconciliation = await reconcile(dominio, cuentaId, pending.op.operationId)
+      if (reconciliation.status === 'completed') {
         clearPendingOperation(scope)
         continue // reintentar esta pasada, ya sin registro pendiente
       }
