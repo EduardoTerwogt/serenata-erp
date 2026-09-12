@@ -4,7 +4,7 @@
 
 ## Estado
 
-**Engineering Hardening — EF-1 implementado + 6 hallazgos de auditoría corregidos, pendiente de confirmación de CI y merge.**
+**Engineering Hardening — EF-1 implementado + 7 hallazgos de auditoría corregidos, pendiente de confirmación de CI y merge.**
 
 Los 9 bloques de EF-1 están commiteados y pusheados a `claude/trusting-cerf-kl5qph`
 (PR [#29](https://github.com/EduardoTerwogt/serenata-erp/pull/29), borrador):
@@ -17,8 +17,8 @@ con pruebas SQL aisladas contra `serenata-erp-test` antes de commitear, con
 limpieza de datos de prueba después.
 
 **Auditoría posterior de PR #29 contra v13.1 + addendum (2026-09-12):**
-encontró 6 hallazgos, todos corregidos, con `tsc`/`lint`/`test` en verde
-local (543/543) tras el fix:
+encontró 7 hallazgos, todos corregidos, con `tsc`/`lint`/`test` en verde
+local (544/544) tras el fix:
 
 1. **P1410 no cubría fila reutilizada inexistente** — `bulk_replace_items_cotizacion`
    solo comparaba `revision` cuando la fila de `reemplazar_ids` seguía
@@ -57,6 +57,17 @@ local (543/543) tras el fix:
    contrato de éxito** — un 2xx sin `cotizacion` limpiaba el registro antes
    del `throw`. Ahora la validación vive dentro de
    `runIdempotentBulkImportSubmit`, antes de limpiar.
+7. **Orden invertido de `normalize()` y `createPendingOperation()` en pagos**
+   (hallazgo reportado por el usuario tras revisar el diff) — el código
+   persistía la identidad ANTES de `normalize()` (async, puede tardar
+   segundos: imagen, canvas, encode JPEG). Un cierre de pestaña o caída del
+   navegador durante esa ventana dejaba una identidad persistida sin que
+   ningún request hubiera salido nunca — como `not_found` nunca es
+   terminal, un intento posterior con un payload distinto quedaba
+   bloqueado por esa identidad fantasma. No era riesgo de doble cobro, era
+   un problema de liveness. Orden corregido en `runIdempotentPagoSubmit`:
+   `normalize() → createPendingOperation() → submit()`. `bulk` no tenía
+   este problema (`buildCandidatePayload` es síncrono).
 
 **Bloqueadores reales para mergear EF-1, ninguno del código:**
 1. **CI real** — GitHub Actions sigue bloqueado por agotamiento de cuota
@@ -130,7 +141,7 @@ Camino crítico de EF-1 (v13.1 §16, sin cambios): baseline → 1C-1 → 1E-1 �
 
 ## Siguiente paso
 
-EF-1 completo, con los 6 hallazgos de la auditoría de PR #29 ya corregidos
+EF-1 completo, con los 7 hallazgos de la auditoría de PR #29 ya corregidos
 y en verde local, esperando resolución de la cuota de GitHub Actions para
 que `test`/`migrations`/`e2e` corran de verdad. Cuando corran:
 1. Confirmar los 3 workflows en verde en el commit HEAD de
