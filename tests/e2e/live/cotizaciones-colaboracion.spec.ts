@@ -919,6 +919,15 @@ test.describe('live: colaboración real -- causas E-I (Fase 8.7.2)', () => {
     }, { timeout: 20_000 }).toBe(true)
 
     await expect(pageA.getByText(/Alguien más lo cambió a/)).toBeHidden()
+
+    // Diagnóstico de CI (2026-09-12): esta prueba solo confirmaba la fila en
+    // el servidor y en A -- nunca esperaba a que B (la otra pestaña) también
+    // convergiera vía Realtime antes de terminar. El siguiente test (causa H)
+    // captura su "antes" contando filas en B; si B todavía no había recibido
+    // esta fila nueva, ese "antes" quedaba desactualizado por una fila y el
+    // conteo final del siguiente test aparecía uno de más (flake
+    // intermitente, no una regresión de producto).
+    await expect(filas(pageB)).toHaveCount(await filas(pageA).count(), { timeout: 20_000 })
   })
 
   test('causa H: agregar una fila y llenar su precio actualiza Subtotal en ambas pantallas sin recargar', async () => {
