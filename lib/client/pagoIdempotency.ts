@@ -30,12 +30,22 @@ import { reconcilePagoEstado, type PagoReconciliationResult } from '@/lib/client
  *    - `not_found`/`ambiguous` -> la identidad sigue viva. Se permite
  *      exactamente un retry EXACTO (mismo `operationId`, mismo payload),
  *      nunca una identidad nueva.
- * 5. Persistir inmediatamente antes del primer `fetch`, nunca antes --
- *    solo cuando la identidad es nueva (`createdNow`).
- * 6. `normalize()` (comprime el comprobante si aplica). Un fallo aquí:
- *    - `createdNow` (nunca se envió nada para esta identidad) -> limpiar.
+ * 5. `normalize()` (comprime el comprobante si aplica) -- ANTES de
+ *    persistir, no después. Fix post-auditoría PR #29: `normalize()` es
+ *    async y puede tardar segundos (carga de imagen, canvas, encode JPEG);
+ *    si `createPendingOperation` corriera antes, un cierre de pestaña o
+ *    caída del navegador durante esa ventana dejaría una identidad
+ *    persistida sin que ningún request hubiera salido nunca -- y como
+ *    `not_found` nunca es terminal (paso 3), un intento posterior con un
+ *    payload DISTINTO quedaría bloqueado por esa identidad fantasma hasta
+ *    reconciliar. Con `normalize()` primero, `createdNow` no persiste nada
+ *    todavía -- un fallo aquí no deja rastro que limpiar: el siguiente
+ *    intento simplemente vuelve a ver `none`.
  *    - `reusedExisting` (un intento anterior pudo haber hecho commit) ->
- *      NO limpiar.
+ *      un fallo aquí NO toca el registro (ya existía antes de este
+ *      intento, no lo creó este retry).
+ * 6. Persistir inmediatamente antes del `fetch`, nunca antes -- solo
+ *    cuando la identidad es nueva (`createdNow`).
  * 7. `submit()` (el fetch real). Éxito -> limpiar. Cualquier error
  *    posterior al fetch -> nunca limpiar, sea cual sea la procedencia.
  */
@@ -112,24 +122,31 @@ export async function runIdempotentPagoSubmit<TFields extends Record<string, unk
       throw new Error('Hay un pago pendiente de confirmar. Espera unos segundos e intenta de nuevo.')
     }
 
+    // Fix post-auditoría PR #29: `normalize()` corre ANTES de persistir.
+    // Es async y puede tardar (carga de imagen, canvas, encode JPEG) -- si
+    // `createPendingOperation` corriera antes, una pestaña cerrada o el
+    // navegador cayéndose durante esa ventana dejaría una identidad
+    // persistida sin que ningún request hubiera salido nunca. Como
+    // `not_found` nunca es terminal, esa identidad fantasma bloquearía un
+    // intento posterior con un payload distinto hasta reconciliar -- un
+    // problema de liveness real, no de doble cobro (nunca hubo request).
+    let normalizedComprobante: File | undefined
+    try {
+      normalizedComprobante = comprobante ? await normalize(comprobante) : undefined
+    } catch (normalizeError) {
+      // createdNow: todavía no se persistió nada -- no hay nada que
+      // limpiar, el siguiente intento simplemente vuelve a ver `none`.
+      // reusedExisting: el registro ya existía antes de este intento (no
+      // lo creó este retry) -- un intento anterior (u otro request en
+      // vuelo) pudo haber hecho commit, así que tampoco se toca aquí.
+      throw normalizeError
+    }
+
     if (origin === 'createdNow') {
       const created = createPendingOperation(scope, fingerprint, operationId)
       if (!created) {
         throw new Error('No se pudo registrar el intento de forma segura. Intenta de nuevo.')
       }
-    }
-
-    let normalizedComprobante: File | undefined
-    try {
-      normalizedComprobante = comprobante ? await normalize(comprobante) : undefined
-    } catch (normalizeError) {
-      if (origin === 'createdNow') {
-        // Ningún request salió nunca para esta identidad -- seguro limpiar.
-        clearPendingOperation(scope)
-      }
-      // reusedExisting: un intento anterior (u otro request en vuelo) pudo
-      // haber hecho commit -- este fallo local del retry no lo descarta.
-      throw normalizeError
     }
 
     try {

@@ -260,12 +260,20 @@ describe('runIdempotentPagoSubmit', () => {
     expect(submit).toHaveBeenCalledWith({ operationId: 'op-existente', comprobante: undefined })
   })
 
-  it('createdNow + fallo de normalize (pre-fetch): limpia, nunca llama submit', async () => {
+  // Fix post-auditoría PR #29: `normalize()` corre ANTES de persistir, no
+  // después -- un fallo de `createdNow` acá nunca llegó a crear el
+  // registro (no hay nada que limpiar), a diferencia del orden anterior
+  // (create -> normalize) que dejaba una identidad fantasma persistida si
+  // el navegador caía durante la compresión.
+  it('createdNow + fallo de normalize (pre-fetch): NUNCA persiste nada, nunca llama submit', async () => {
     mocks.readPendingOperationMock.mockReturnValue({ kind: 'none' })
     const submit = vi.fn()
+    const callOrder: string[] = []
     const normalize = vi.fn(async () => {
+      callOrder.push('normalize')
       throw new Error('comprobante inválido')
     })
+    mocks.createPendingOperationMock.mockImplementation(() => { callOrder.push('create'); return true })
 
     await expect(
       runIdempotentPagoSubmit({
@@ -279,8 +287,31 @@ describe('runIdempotentPagoSubmit', () => {
       })
     ).rejects.toThrow('comprobante inválido')
 
+    expect(callOrder).toEqual(['normalize']) // create() nunca se alcanza
+    expect(mocks.createPendingOperationMock).not.toHaveBeenCalled()
     expect(submit).not.toHaveBeenCalled()
-    expect(mocks.clearPendingOperationMock).toHaveBeenCalledWith('scope-1')
+    expect(mocks.clearPendingOperationMock).not.toHaveBeenCalled()
+  })
+
+  // Orden explícito pedido en la corrección: normalize -> create -> submit.
+  it('createdNow con éxito: respeta el orden normalize -> create -> submit', async () => {
+    mocks.readPendingOperationMock.mockReturnValue({ kind: 'none' })
+    const callOrder: string[] = []
+    const normalize = vi.fn(async (f: File) => { callOrder.push('normalize'); return f })
+    mocks.createPendingOperationMock.mockImplementation(() => { callOrder.push('create'); return true })
+    const submit = vi.fn(async () => { callOrder.push('submit'); return { ok: true } })
+
+    await runIdempotentPagoSubmit({
+      scope: 'scope-1',
+      dominio: 'cuentas-pagar',
+      cuentaId: 'c1',
+      fields: { monto: 100 },
+      comprobante: new File(['x'], 'foto.jpg', { type: 'image/jpeg' }),
+      normalize,
+      submit,
+    })
+
+    expect(callOrder).toEqual(['normalize', 'create', 'submit'])
   })
 
   it('reusedExisting + fallo de normalize (pre-fetch): NO limpia -- un intento anterior pudo haber hecho commit', async () => {
