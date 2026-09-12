@@ -29,3 +29,23 @@ export function canonicalizeJson(value: unknown): JsonValue {
   }
   return value as JsonValue
 }
+
+function toHex(bytes: ArrayBuffer): string {
+  return Array.from(new Uint8Array(bytes))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/**
+ * Hash del lado del cliente (1C-2b), Web Crypto en vez del `crypto` de Node
+ * de `lib/server/idempotency.ts` -- misma canonicalización (`canonicalizeJson`),
+ * misma forma de hash (SHA-256, hex). Requiere un contexto seguro
+ * (`crypto.subtle`, disponible en HTTPS/localhost); nunca importa
+ * `lib/server/idempotency.ts`, `supabaseAdmin` ni `server-only`.
+ */
+export async function computeClientPayloadHash(payload: unknown): Promise<string> {
+  const canonical = canonicalizeJson(payload)
+  const encoded = new TextEncoder().encode(JSON.stringify(canonical))
+  const digest = await crypto.subtle.digest('SHA-256', encoded)
+  return toHex(digest)
+}

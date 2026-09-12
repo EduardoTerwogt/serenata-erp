@@ -10,8 +10,10 @@ import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
 import { ImportableItem, QuotationItemsController } from '@/hooks/useQuotationItems'
-import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
+import { calculateEstimatedTaxes, calculateQuotationTotals, normalizeQuotationItem } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem, reconcileServerItems } from '@/lib/quotations/mappers'
+import { computeClientPayloadHash } from '@/lib/shared/canonicalPayload'
+import { clearPendingOperation, createPendingOperation, readPendingOperation } from '@/lib/client/pendingOperation'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { approveQuotation, buildComplementariaUrl, emitirCotizacion, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationNotes } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
@@ -219,6 +221,51 @@ function normalizeTotalsFieldValue(field: QuotationTotalsField, value: unknown):
       return Boolean(value)
     case 'descuento_tipo':
       return value === 'porcentaje' ? 'porcentaje' : 'monto'
+  }
+}
+
+// 1C-2b: payload canónico completo persistido por pendingOperation.ts --
+// necesario para repetir una importación bulk verbatim en un retry, nunca
+// reconstruido de memoria (los ids ya definitivos importan, no solo los
+// valores de los campos).
+interface BulkImportPayload {
+  items: Array<{
+    id: string
+    categoria: string
+    descripcion: string
+    cantidad: number
+    precio_unitario: number
+    importe: number
+    responsable_id: string | null
+    responsable_nombre: string | null
+    x_pagar: number
+    margen: number
+    orden: number
+    notas: string | null
+  }>
+  reemplazar_ids: Array<{ id: string; revision: number }>
+  cotizacionId: string
+}
+
+type BulkReconciliationStatus = 'completed' | 'not_found' | 'ambiguous'
+
+/**
+ * Consulta el endpoint de reconciliación del bulk. `not_found`/`ambiguous`
+ * NUNCA se interpretan como "la operación original no se ejecutará" --
+ * solo `completed` es terminal (v13.1, corrección de reconciliación).
+ * Un fallo de red se trata igual que `not_found`: no libera nada.
+ */
+async function reconcileBulkImportEstado(cotizacionId: string, operationId: string): Promise<BulkReconciliationStatus> {
+  try {
+    const response = await fetch(
+      `/api/cotizaciones/${cotizacionId}/items/bulk/estado?operation_id=${encodeURIComponent(operationId)}`
+    )
+    const body = await response.json().catch(() => ({}))
+    if (response.ok && body?.status === 'completed') return 'completed'
+    if (response.ok && body?.status === 'ambiguous') return 'ambiguous'
+    return 'not_found'
+  } catch {
+    return 'not_found'
   }
 }
 
@@ -1660,54 +1707,155 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
     setImportingItems(true)
+    const scope = `bulk_import:${id}`
     try {
-      // Las filas en blanco que ya existen se reutilizan (conservan su posición) y las
-      // que sobren se borran en la misma petición.
-      const reemplazarIds = (getValues('items') || [])
-        .filter((item) => isBlankQuotationItem(item))
-        .map((item) => item.id)
-        .filter((rowId): rowId is string => !!rowId && !pendingRowCreationsRef.current.has(rowId))
+      // Hasta 2 pasadas: la segunda solo corre si la primera bloqueó por un
+      // fingerprint distinto y la reconciliación confirmó `completed` (la
+      // operación vieja terminó, ya es seguro iniciar una nueva).
+      let intentosRestantes = 2
+      while (intentosRestantes > 0) {
+        intentosRestantes -= 1
 
-      // Fase 8.7.1: se trackea la operación completa (fetch + parseo + chequeo
-      // de status, no el `fetch()` crudo) -- mismo criterio que
-      // `patchQuotationItem` -- para que `flushPendingSaves` espere una
-      // importación en vuelo antes de Generar/Aprobar y aborte si falla.
-      const data = await trackMutation((async () => {
-        const response = await fetch(`/api/cotizaciones/${id}/items/bulk`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            items: items.map((sourceItem) => ({
-              categoria: sourceItem.categoria || '',
-              descripcion: sourceItem.descripcion || '',
-              cantidad: sourceItem.cantidad || 1,
-              precio_unitario: sourceItem.precio_unitario || 0,
-              x_pagar: sourceItem.x_pagar || 0,
-              responsable_id: sourceItem.responsable_id || '',
-              responsable_nombre: sourceItem.responsable_nombre || '',
-            })),
-            reemplazar_ids: reemplazarIds,
-          }),
+        // 1. Materializar el payload candidato -- ids ya definitivos (nuevos
+        // o reutilizados), igual que ya hace el resto de la app (Fase 6B):
+        // esta ruta deja de ser la única que generaba ids del lado del servidor.
+        const reusableIds = (getValues('items') || [])
+          .filter((item) => isBlankQuotationItem(item))
+          .map((item) => item.id)
+          .filter((rowId): rowId is string => !!rowId && !pendingRowCreationsRef.current.has(rowId))
+
+        let nextOrder = Object.values(itemsServerRef.current).reduce((max, item) => Math.max(max, item.orden ?? 0), -1) + 1
+
+        const rows = items.map((sourceItem, index) => {
+          const reusedId = reusableIds[index]
+          const existing = reusedId ? itemsServerRef.current[reusedId] : undefined
+          const normalized = normalizeQuotationItem({
+            id: reusedId || crypto.randomUUID(),
+            categoria: String(sourceItem.categoria || ''),
+            descripcion: String(sourceItem.descripcion || ''),
+            cantidad: Number(sourceItem.cantidad) || 1,
+            precio_unitario: Number(sourceItem.precio_unitario) || 0,
+            responsable_id: sourceItem.responsable_id || '',
+            responsable_nombre: sourceItem.responsable_nombre || '',
+            x_pagar: Number(sourceItem.x_pagar) || 0,
+          })
+
+          return {
+            id: normalized.id as string,
+            categoria: normalized.categoria,
+            descripcion: normalized.descripcion,
+            cantidad: normalized.cantidad,
+            precio_unitario: normalized.precio_unitario,
+            importe: normalized.importe,
+            responsable_id: normalized.responsable_id || null,
+            responsable_nombre: normalized.responsable_nombre || null,
+            x_pagar: normalized.x_pagar,
+            margen: normalized.margen,
+            orden: existing ? (existing.orden ?? nextOrder++) : nextOrder++,
+            notas: existing?.notas ?? null,
+          }
         })
-        const body = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(body?.message || body?.error || 'Error copiando partidas')
-        return body
-      })())
 
-      const updated = data?.cotizacion as Cotizacion | undefined
-      if (!updated) throw new Error('Respuesta inválida al copiar partidas')
+        const candidatePayload: BulkImportPayload = {
+          items: rows,
+          reemplazar_ids: reusableIds.map((rowId) => ({
+            id: rowId,
+            revision: itemsServerRef.current[rowId]?.revision ?? 0,
+          })),
+          cotizacionId: id,
+        }
 
-      // Se aplica la lista completa de una vez (nada de append + setValue, que era lo
-      // que dejaba una fila fuera del subtotal). Solo se tocan partidas y totales del
-      // encabezado: cliente, proyecto, notas y config de totales pueden estar en
-      // edición en otra sección y no deben pisarse.
-      // Las filas cuya alta sigue en vuelo siguen siendo del usuario: el servidor
-      // aún no las conoce, y descartarlas las dejaba invisibles hasta recargar.
-      const provisionales = (getValues('items') || []).filter((item) => item.id && pendingRowCreationsRef.current.has(item.id))
-      replace([...(updated.items || []).map(mapItemToFormItem), ...provisionales])
-      setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : updated)
-      for (const item of updated.items || []) {
-        recordServerItem(item)
+        // 2. Fingerprint sobre el payload candidato.
+        const fingerprint = await computeClientPayloadHash(candidatePayload)
+
+        // 3. readPendingOperation.
+        const pending = readPendingOperation<BulkImportPayload>(scope)
+
+        if (pending.kind === 'unavailable') {
+          setError('No se pudo verificar el estado de una importación anterior. Intenta de nuevo.')
+          return
+        }
+
+        let operationId: string
+        let payloadToSend: BulkImportPayload
+        let isNewOperation = false
+
+        if (pending.kind === 'none') {
+          operationId = crypto.randomUUID()
+          payloadToSend = candidatePayload
+          isNewOperation = true
+        } else if (pending.op.fingerprint === fingerprint) {
+          // Mismo fingerprint: reutilizar operationId + el payload
+          // PERSISTIDO verbatim -- nunca el recién recomputado, aunque
+          // coincida en fingerprint (evita divergencias de ids/revision
+          // entre lo guardado y lo recién calculado).
+          operationId = pending.op.operationId
+          payloadToSend = pending.op.payload ?? candidatePayload
+        } else {
+          // Fingerprint distinto con una operación pendiente: bloquear y
+          // reconciliar. `not_found`/`ambiguous` NUNCA liberan el registro.
+          const estado = await reconcileBulkImportEstado(id, pending.op.operationId)
+          if (estado === 'completed') {
+            clearPendingOperation(scope)
+            continue // reintentar esta pasada, ya sin registro pendiente
+          }
+          setError('Hay una importación de partidas pendiente de confirmar. Espera unos segundos e intenta de nuevo.')
+          return
+        }
+
+        // 4. Persistir inmediatamente antes del fetch, nunca antes.
+        if (isNewOperation) {
+          const created = createPendingOperation(scope, fingerprint, operationId, payloadToSend)
+          if (!created) {
+            setError('No se pudo registrar la importación de forma segura. Intenta de nuevo.')
+            return
+          }
+        }
+
+        // 5. fetch -- Fase 8.7.1: se trackea la operación completa (fetch +
+        // parseo + chequeo de status), no el `fetch()` crudo, para que
+        // `flushPendingSaves` espere una importación en vuelo antes de
+        // Generar/Aprobar y aborte si falla.
+        let data: { cotizacion?: Cotizacion } | undefined
+        try {
+          data = await trackMutation((async () => {
+            const response = await fetch(`/api/cotizaciones/${id}/items/bulk`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                items: payloadToSend.items,
+                reemplazar_ids: payloadToSend.reemplazar_ids,
+                operation_id: operationId,
+              }),
+            })
+            const responseBody = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(responseBody?.message || responseBody?.error || 'Error copiando partidas')
+            return responseBody
+          })())
+        } catch (fetchError) {
+          // El fetch fue intentado -- nunca limpiar. El registro permanece
+          // pendiente hasta éxito confirmado o reconciliación `completed`.
+          throw fetchError
+        }
+
+        clearPendingOperation(scope)
+
+        const updated = data?.cotizacion as Cotizacion | undefined
+        if (!updated) throw new Error('Respuesta inválida al copiar partidas')
+
+        // Se aplica la lista completa de una vez (nada de append + setValue, que era lo
+        // que dejaba una fila fuera del subtotal). Solo se tocan partidas y totales del
+        // encabezado: cliente, proyecto, notas y config de totales pueden estar en
+        // edición en otra sección y no deben pisarse.
+        // Las filas cuya alta sigue en vuelo siguen siendo del usuario: el servidor
+        // aún no las conoce, y descartarlas las dejaba invisibles hasta recargar.
+        const provisionales = (getValues('items') || []).filter((item) => item.id && pendingRowCreationsRef.current.has(item.id))
+        replace([...(updated.items || []).map(mapItemToFormItem), ...provisionales])
+        setCotizacion((prev) => prev ? { ...prev, items: updated.items || [], subtotal: updated.subtotal, fee_agencia: updated.fee_agencia, general: updated.general, iva: updated.iva, total: updated.total, margen_total: updated.margen_total, utilidad_total: updated.utilidad_total } : updated)
+        for (const item of updated.items || []) {
+          recordServerItem(item)
+        }
+        return
       }
     } catch (importError: unknown) {
       setError(importError instanceof Error ? importError.message : 'Error copiando partidas')
