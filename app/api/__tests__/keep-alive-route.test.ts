@@ -3,15 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   checkDriveAuthMock: vi.fn(),
   limitMock: vi.fn(),
+  deleteMock: vi.fn(),
+  notMock: vi.fn(),
+  ltMock: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: {
-    from: () => ({
-      select: () => ({
-        limit: mocks.limitMock,
-      }),
-    }),
+    from: (table: string) => {
+      if (table === 'idempotency_keys') {
+        return { delete: mocks.deleteMock }
+      }
+      return {
+        select: () => ({
+          limit: mocks.limitMock,
+        }),
+      }
+    },
   },
 }))
 
@@ -33,6 +41,9 @@ describe('GET /api/keep-alive', () => {
   beforeEach(() => {
     mocks.limitMock.mockReset().mockResolvedValue({ error: null })
     mocks.checkDriveAuthMock.mockReset().mockResolvedValue({ status: 'ok' })
+    mocks.ltMock.mockReset().mockResolvedValue({ error: null, count: 0 })
+    mocks.notMock.mockReset().mockReturnValue({ lt: mocks.ltMock })
+    mocks.deleteMock.mockReset().mockReturnValue({ not: mocks.notMock })
   })
 
   afterEach(() => {
@@ -55,6 +66,28 @@ describe('GET /api/keep-alive', () => {
   it('retorna 200 con el header correcto y CRON_SECRET configurado', async () => {
     process.env.CRON_SECRET = 'secreto-real'
     const response = await GET(buildRequest('Bearer secreto-real'))
+    expect(response.status).toBe(200)
+  })
+
+  it('1E-1 -- borra idempotency_keys solo completadas (status_code no NULL) con más de 7 días', async () => {
+    process.env.CRON_SECRET = 'secreto-real'
+    mocks.ltMock.mockResolvedValue({ error: null, count: 3 })
+
+    const response = await GET(buildRequest('Bearer secreto-real'))
+    const body = await response.json()
+
+    expect(mocks.deleteMock).toHaveBeenCalledWith({ count: 'exact' })
+    expect(mocks.notMock).toHaveBeenCalledWith('status_code', 'is', null)
+    expect(mocks.ltMock).toHaveBeenCalledTimes(1)
+    expect(body.idempotency_keys_deleted).toBe(3)
+  })
+
+  it('1E-1 -- un fallo en la limpieza de idempotency_keys no tumba el keep-alive', async () => {
+    process.env.CRON_SECRET = 'secreto-real'
+    mocks.ltMock.mockResolvedValue({ error: { message: 'boom' }, count: null })
+
+    const response = await GET(buildRequest('Bearer secreto-real'))
+
     expect(response.status).toBe(200)
   })
 })

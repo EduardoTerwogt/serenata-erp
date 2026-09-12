@@ -36,6 +36,25 @@ export async function GET(request: Request) {
     console.error('Keep-alive: Drive credentials invalid —', drive.message)
   }
 
+  // 1E-1: retención de idempotency_keys -- borra únicamente filas COMPLETADAS
+  // (status_code IS NOT NULL) con más de 7 días. Nunca una fila pendiente
+  // (status_code NULL): su expiración/reconciliación es responsabilidad del
+  // dominio (pago_operations/bulk_import_operations), no de esta limpieza.
+  // Best-effort: un fallo aquí no afecta el resultado del keep-alive.
+  let idempotencyKeysDeleted: number | null = null
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const { error: cleanupError, count } = await supabaseAdmin
+      .from('idempotency_keys')
+      .delete({ count: 'exact' })
+      .not('status_code', 'is', null)
+      .lt('created_at', sevenDaysAgo)
+    if (cleanupError) throw cleanupError
+    idempotencyKeysDeleted = count ?? 0
+  } catch (error) {
+    console.error('Keep-alive: idempotency_keys cleanup failed:', error)
+  }
+
   const ok = supabaseOk && drive.status !== 'invalid_grant' && drive.status !== 'error'
 
   return Response.json(
@@ -46,6 +65,7 @@ export async function GET(request: Request) {
       ...(supabaseError ? { supabase_error: supabaseError } : {}),
       drive: drive.status,
       ...(drive.message ? { drive_message: drive.message } : {}),
+      idempotency_keys_deleted: idempotencyKeysDeleted,
     },
     { status: ok ? 200 : 500 }
   )

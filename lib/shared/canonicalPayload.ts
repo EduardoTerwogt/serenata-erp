@@ -1,0 +1,31 @@
+/**
+ * Canonicalización de payloads para hash de idempotencia (1E-1). Módulo
+ * puro, sin dependencias server-only: lo usa `lib/server/idempotency.ts`
+ * (Node `crypto`) y, desde 1C-2b, código de cliente (`'use client'`) que
+ * necesita el mismo algoritmo con Web Crypto -- nunca importando
+ * `lib/server/idempotency.ts`, `supabaseAdmin` ni `server-only`.
+ *
+ * Ordena las claves de objeto recursivamente en todos los niveles; los
+ * arrays NO se reordenan (el orden de un array es parte del significado
+ * del payload, p. ej. `items` en un bulk-import).
+ */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue }
+
+export function canonicalizeJson(value: unknown): JsonValue {
+  if (Array.isArray(value)) {
+    return value.map((item) => canonicalizeJson(item))
+  }
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, val]) => [key, canonicalizeJson(val)] as const)
+    return Object.fromEntries(entries)
+  }
+  return value as JsonValue
+}
