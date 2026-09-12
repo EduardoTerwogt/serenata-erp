@@ -2,6 +2,14 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { checkDriveAuth } from '@/lib/integrations/google/drive'
 
 export async function GET(request: Request) {
+  // 1B-3: sin CRON_SECRET configurado, la comparación de abajo se hace
+  // contra el literal "Bearer undefined" -- un secreto predecible. Falla
+  // cerrado explícito antes de comparar, nunca abierto por configuración
+  // ausente.
+  if (!process.env.CRON_SECRET) {
+    return Response.json({ error: 'CRON_SECRET no configurado' }, { status: 500 })
+  }
+
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
