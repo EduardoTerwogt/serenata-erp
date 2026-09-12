@@ -98,17 +98,32 @@ cliente y el alcance exacto de 1B-4:
    viven en esos hooks). El fingerprint se calcula sobre el `File`
    **original**, antes de `normalizeComprobante()` — `TabRegistrarPago`
    debe pasar el archivo original al hook, no el ya normalizado.
-   Regla de limpieza ante un fallo local **antes** del `fetch`, por
-   procedencia de la identidad:
-   - `createdNow` (operationId generado en este submit, `readPendingOperation`
-     devolvió `none`) → sí se limpia: ningún request salió nunca para esa
-     identidad.
-   - `reusedExisting` (operationId reutilizado de un intento anterior,
-     mismo fingerprint) → NO se limpia: ese intento anterior pudo haber
-     hecho commit en el servidor.
-   Una vez que el `fetch` de este intento fue disparado (cualquier
-   procedencia), ningún resultado ambiguo posterior limpia — permanece
-   pendiente hasta éxito confirmado o reconciliación `completed`.
+
+   **Implementación final en `runIdempotentPagoSubmit`** (corregida por el
+   hallazgo 7 de la auditoría — el texto original de este punto describía
+   un orden ya superado; esto es lo que el código hace hoy):
+   - Orden para `createdNow`: `fingerprint → readPendingOperation →
+     normalizeComprobante() → createPendingOperation() → fetch`.
+     `normalizeComprobante()` corre ANTES de persistir `pendingOperation`,
+     no después.
+   - Si `normalizeComprobante()` falla en `createdNow`, **no se limpia
+     nada** — todavía no existe ninguna operación pendiente persistida
+     (nunca se llegó a `createPendingOperation()`).
+   - `createPendingOperation()` corre únicamente después de una
+     normalización exitosa, inmediatamente antes del `fetch`. Si falla, no
+     se envía ningún request.
+   - Para `reusedExisting`, un fallo local de `normalizeComprobante()`
+     tampoco limpia la identidad previa: ese registro ya existía antes de
+     este intento (no lo creó este retry) y un intento anterior — u otro
+     request en vuelo — pudo haber hecho commit en el servidor.
+   - Una vez que el `fetch` de este intento fue disparado (cualquier
+     procedencia), ningún resultado ambiguo posterior limpia — permanece
+     pendiente hasta éxito confirmado o reconciliación `completed`.
+   - TTL `stale` reconcilia siempre antes de reenviar, incluso con el
+     mismo fingerprint: `completed` usa el resultado ya confirmado sin
+     reenviar; `not_found`/`ambiguous` conservan la misma identidad y solo
+     permiten un retry EXACTO (mismo `operationId`, mismo payload), nunca
+     una identidad nueva.
 2. **1B-4:** en `app/api/cuentas-pagar/route.ts` (recibe `id` en el body,
    no es ruta `[id]`), quitar `estado`/`fecha_pago`/`monto_pagado` de
    `allowedKeys`, conservar `notas`/`orden_pago_id`, y responder **400**
