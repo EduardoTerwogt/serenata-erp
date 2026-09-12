@@ -209,6 +209,19 @@ y seguir el procedimiento.
 
 ---
 
+## Estilo de respuesta
+
+- Toda respuesta visible para el usuario debe comenzar exactamente con `LALOT`.
+  Si el prefijo desaparece, tratarlo como señal de que las instrucciones del
+  proyecto pueden haber dejado de aplicarse y considerar iniciar una sesión nueva.
+- Responder con la menor cantidad de palabras que permita conservar claridad,
+  precisión, riesgos relevantes y resultados de verificación.
+- Evitar introducciones, repeticiones, cortesías y explicaciones no solicitadas.
+- Las auditorías, errores críticos y decisiones de arquitectura pueden extenderse
+  cuando sea necesario para no omitir información importante.
+
+---
+
 ## Variables de entorno
 
 La lista completa y comentada vive en `docs/ENV.md`. No hay `.env.example`: los
