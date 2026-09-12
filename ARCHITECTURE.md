@@ -102,7 +102,13 @@ reservar folio, registrar pago, guardar cotización y los PATCH por sección.
   una fila de OTRA cotización, la creación responde `409` explícito en vez de
   aplicarse a medias o pisar la fila ajena en silencio.
 - **Conflictos por campo con `409`.** No es last-write-wins ciego: se compara contra
-  la base del campo y un conflicto real devuelve `409` al caller.
+  la base del campo y un conflicto real devuelve `409` al caller. Un PATCH
+  multi-campo (autofill de producto: `descripcion`/`categoria`/`precio_unitario`/
+  `x_pagar`; responsable: `responsable_id`/`responsable_nombre`) es atómico en la
+  RPC — si CUALQUIER campo choca, se rechaza completo, nada se aplica a medias
+  (Fase 8.7.2). La resolución respeta esa atomicidad: "Usar" revierte TODOS los
+  campos del grupo al valor real del servidor, "Mantener" reintenta el PATCH
+  completo con la `base` de todo el grupo ya refrescada — nunca un campo aislado.
 - **Toda escritura de partidas revalida el `estado` de la cotización (Fase 8.7.1).**
   `patch_item_cotizacion`, `upsert_items_cotizacion` (alta individual y masiva) y
   `delete_item_cotizacion` bloquean la fila de `cotizaciones` bajo `FOR SHARE` antes
@@ -126,6 +132,13 @@ reservar folio, registrar pago, guardar cotización y los PATCH por sección.
   partida puede aterrizar en una cotización que ya quedó `APROBADA`, y
   `cuentas_pagar`/`cuenta_cobrar` siempre se calculan del mismo snapshot que terminó
   aprobado, sea cual sea el orden real de la carrera.
+- **Drenado real por celda, no un solo intento (Fase 8.7.2).** Editar la misma
+  celda otra vez mientras su PATCH anterior sigue en vuelo no dispara un segundo
+  `fetch` en paralelo ni se pierde: `itemCellDrainRef`/`itemCellRetryNeededRef`
+  encolan la edición más nueva y el drenado manda una ronda más con el valor final
+  en cuanto la ronda en curso resuelve — con la `base` de cada celda refrescada al
+  valor que el servidor acaba de confirmar, para no generar un `409` contra uno
+  mismo por seguir editando sin blur.
 - No hay OT ni CRDT, y no hacen falta: son campos de un registro, no texto compartido.
 - Reconexión, auth y refresh de token están en la infraestructura genérica
   `lib/realtime/useRealtimeChannel.ts`; `useQuotationPresence` es un wrapper fino.
@@ -181,9 +194,15 @@ descripción. Una auditoría posterior sobre ese mismo cierre encontró que el f
 solo cubría cuatro de las nueve vías de mutación de partidas y que ninguna escritura
 revalidaba el estado de la cotización — cerrado en Fase 8.7.1 (flush completo de las
 cinco vías restantes + guard de estado transaccional en `patch_item_cotizacion`/
-`upsert_items_cotizacion`/`delete_item_cotizacion`, ver más arriba). Cubierta por
-pruebas de concurrencia reales contra Supabase de prueba
-(`tests/e2e/live/`) — ver `docs/ACTIVE_WORK.md` para el detalle de cada bloque. Es el
+`upsert_items_cotizacion`/`delete_item_cotizacion`, ver más arriba). Una tercera
+ronda (Fase 8.7.2) cerró dos bugs más de estado en el cliente (avisos de "editando"
+que no se actualizaban, Totales sin recalcular tras agregar fila) con drenado real
+por celda, `base` refrescada tras cada PATCH y resolución de conflicto atómica para
+grupos multi-campo (ver más arriba) — y, verificando ese cierre, encontró y corrigió
+2 migraciones de producción atrasadas que habrían revertido en silencio 2 fixes ya
+aplicados por separado (`docs/decisions/005-migraciones-manuales-append-only.md`).
+Cubierta por pruebas de concurrencia reales contra Supabase de prueba
+(`tests/e2e/live/`) — historia completa de cada fase en `docs/archive/`. Es el
 módulo de referencia: lo que aquí funciona (Postgres como única autoridad, broadcast
 confirmado como mecanismo primario, conflictos por campo y por identidad con `409`,
 polling solo como fallback) es el patrón a replicar en Proyectos y Cuentas cuando
