@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   requirePortalSessionMock: vi.fn(),
-  getCuentasPagarMock: vi.fn(),
+  getCuentaPagarByIdMock: vi.fn(),
   createDocumentoCuentaPagarMock: vi.fn(),
   getProyectoByIdMock: vi.fn(),
   getProveedorByIdMock: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('@/lib/portal-auth', () => ({
 }))
 
 vi.mock('@/lib/db', () => ({
-  getCuentasPagar: mocks.getCuentasPagarMock,
+  getCuentaPagarById: mocks.getCuentaPagarByIdMock,
   createDocumentoCuentaPagar: mocks.createDocumentoCuentaPagarMock,
   getProyectoById: mocks.getProyectoByIdMock,
   getProveedorById: mocks.getProveedorByIdMock,
@@ -60,9 +60,9 @@ describe('POST /api/portal/cuentas/[id]/factura', () => {
   beforeEach(() => {
     Object.values(mocks).forEach(m => m.mockReset())
     mocks.requirePortalSessionMock.mockResolvedValue({ proveedorId: 'prov-1', response: null })
-    mocks.getCuentasPagarMock.mockResolvedValue([
+    mocks.getCuentaPagarByIdMock.mockResolvedValue(
       { id: 'cuenta-1', responsable_id: 'prov-1', x_pagar: 1000, cotizacion_id: 'SH001', proyecto_id: 'SH001' },
-    ])
+    )
     mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', regimen_fiscal: 'moral' })
     mocks.getProyectoByIdMock.mockResolvedValue({ id: 'SH001', proyecto: 'Spot Verano' })
     mocks.getGoogleEnvMock.mockReturnValue({ driveFolderIdCuentas: 'folder-cuentas' })
@@ -83,13 +83,13 @@ describe('POST /api/portal/cuentas/[id]/factura', () => {
   })
 
   it('retorna 404 si la cuenta no existe', async () => {
-    mocks.getCuentasPagarMock.mockResolvedValue([])
+    mocks.getCuentaPagarByIdMock.mockResolvedValue(null)
     const response = await POST(buildRequest(), params())
     expect(response.status).toBe(404)
   })
 
   it('retorna 403 si la cuenta no pertenece al proveedor autenticado', async () => {
-    mocks.getCuentasPagarMock.mockResolvedValue([{ id: 'cuenta-1', responsable_id: 'otro-proveedor', x_pagar: 1000 }])
+    mocks.getCuentaPagarByIdMock.mockResolvedValue({ id: 'cuenta-1', responsable_id: 'otro-proveedor', x_pagar: 1000 })
     const response = await POST(buildRequest(), params())
     expect(response.status).toBe(403)
   })

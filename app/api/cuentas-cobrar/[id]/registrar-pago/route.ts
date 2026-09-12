@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasCobrar, getPagosComprobantesByCuenta, createDocumentoCuentaCobrar, getProyectoById } from '@/lib/db'
+import { getCuentaCobrarById, getPagosComprobantesByCuenta, createDocumentoCuentaCobrar, getProyectoById } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/supabase'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
@@ -33,8 +33,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: 'Fecha de pago requerida' }, { status: 400 })
     }
 
-    const cuentas = await getCuentasCobrar()
-    const cuenta = cuentas.find(c => c.id === id)
+    const cuenta = await getCuentaCobrarById(id)
     if (!cuenta) {
       return Response.json({ error: 'Cuenta por cobrar no encontrada' }, { status: 404 })
     }

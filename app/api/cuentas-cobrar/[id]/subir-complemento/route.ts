@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasCobrar, createDocumentoCuentaCobrar } from '@/lib/db'
+import { getCuentaCobrarById, createDocumentoCuentaCobrar } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
@@ -24,8 +24,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: 'Se requiere archivo PDF de complemento' }, { status: 400 })
     }
 
-    const cuentas = await getCuentasCobrar()
-    const cuenta = cuentas.find(c => c.id === id)
+    const cuenta = await getCuentaCobrarById(id)
     if (!cuenta) {
       return Response.json({ error: 'Cuenta por cobrar no encontrada' }, { status: 404 })
     }

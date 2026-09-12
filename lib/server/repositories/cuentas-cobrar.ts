@@ -17,6 +17,21 @@ export async function getCuentasCobrar() {
 }
 
 /**
+ * Detalle por ID -- nunca a través de getCuentasCobrar().find() (1C-1).
+ * .maybeSingle() nunca .single(): "no encontrada" debe seguir siendo un
+ * 404 explícito del caller, no un error de Postgres por 0 filas.
+ */
+export async function getCuentaCobrarById(id: string): Promise<CuentaCobrar | null> {
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_cobrar')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data as CuentaCobrar | null
+}
+
+/**
  * Cuentas por cobrar de un proyecto puntual -- usado por el Reporte de
  * Cierre automático (Fase 5.2 Bloque 4) para el "cobrado real", mismo
  * patrón que getCuentasPagarByProyecto.

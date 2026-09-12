@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasCobrar, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
+import { getCuentaCobrarById, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
 import { parseFacturaXML, validarMontoFactura, validarFacturaClienteXML, calcularDeadline } from '@/lib/server/xml/factura-parser'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
@@ -39,8 +39,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     // Obtener cuenta
-    const cuentas = await getCuentasCobrar()
-    const cuenta = cuentas.find(c => c.id === id)
+    const cuenta = await getCuentaCobrarById(id)
     if (!cuenta) {
       return Response.json(
         { error: 'Cuenta por cobrar no encontrada' },
