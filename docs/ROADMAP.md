@@ -82,6 +82,16 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Fase 8.7.2, Drenado real por celda + sincronización de migraciones
+  (2026-09-12).** Cerró 2 bugs reportados (avisos de "editando" que no se
+  actualizaban, Totales sin recalcular tras agregar fila) con las causas E-I sobre
+  el drenado por celda, base refrescada tras cada PATCH y comparación de conflicto
+  normalizada — y, verificando ese cierre, encontró y corrigió 2 migraciones de
+  producción atrasadas (`delete_item_cotizacion` no existía ahí) que además habrían
+  revertido en silencio 2 fixes ya aplicados por separado, un bug real en el
+  drenado (`itemDirtyCellsRef` se limpiaba antes de tiempo) y datos de test
+  acumulados rompiendo el límite de PostgREST en `GET /api/productos`. Historia:
+  `docs/archive/fase-8.7.2-drenado-partidas-y-sincronizacion.md`.
 - **Fase 8.7.1, Serializar mutaciones de partidas contra Generar/Aprobar
   (2026-09-11).** Una auditoría sobre el cierre de Fase 8.7 encontró que
   `flushPendingSaves` solo cubría cuatro de las nueve vías de mutación de partidas y

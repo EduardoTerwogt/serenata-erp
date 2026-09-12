@@ -21,6 +21,20 @@ function conflictBody(entity: string, id: string, field: string) {
   }
 }
 
+// Fase 8.7.2 (causas E-I): un 409 donde `attempted === current` (comparado
+// normalizado) no es un conflicto real -- nadie cambió nada de verdad, se
+// resuelve solo sin banner. `value` no necesita coincidir con el patch que el
+// cliente realmente mandó: `normalize*FieldValue` solo compara `attempted`
+// contra `current`, así que basta con que ambos sean iguales entre sí.
+function identicalConflictBody(entity: string, id: string, field: string, value: string) {
+  return {
+    error: 'conflict',
+    entity,
+    id,
+    fields: { [field]: { base: 'valor-viejo', current: value, attempted: value } },
+  }
+}
+
 async function mockEmitir(
   page: import('@playwright/test').Page,
   id: string,
@@ -462,5 +476,81 @@ test.describe('flush previo a Generar/Aprobar -- las 5 vías que faltaban', () =
 
     await expect(page.getByText('¡Cotización aprobada! Proyecto y cuentas creados.')).toBeVisible()
     expect(aprobarCallCount).toBe(1)
+  })
+})
+
+// Fase 8.7.2 (causas E-I): antes de este bloque, `trackMutation` registraba en
+// `pendingMutationsRef` la promesa CRUDA de cada PATCH -- la que rechaza en
+// CUALQUIER 409, incluido el conflicto "idéntico" que la propia lógica de
+// arriba resuelve sola (mismo valor, sin banner). `flushPendingSaves` veía esa
+// promesa cruda rechazada y abortaba Generar/Aprobar aunque no hubiera nada
+// real que revisar. El fix registra la promesa SEMÁNTICA (ya procesada) en su
+// lugar -- estas pruebas verifican que la transición YA NO se aborta en este
+// caso, para General, Totales y Partidas.
+test.describe('flush previo a Generar/Aprobar -- conflicto idéntico no debe abortar', () => {
+  test('General: un 409 "idéntico" se resuelve solo y NO aborta Aprobar', async ({ page }) => {
+    const id = 'SH-E2E-FLUSH-GEN-IDENTICAL'
+    await mockCotizacionDetailApis(page, { id, estado: 'EMITIDA' })
+    let aprobarCalled = false
+    await page.route(`**/api/cotizaciones/${id}/aprobar`, async (route) => {
+      aprobarCalled = true
+      await fulfillJson(route, { already_approved: false, cotizacion_id: id })
+    })
+    await page.route(`**/api/cotizaciones/${id}/general`, async (route) => {
+      await fulfillJson(route, identicalConflictBody('cotizacion_general', id, 'locacion', 'Misma locación'), 409)
+    })
+    await login(page, `/cotizaciones/${id}`)
+    await expect(page.getByRole('heading', { name: id })).toBeVisible()
+
+    await page.locator('input[placeholder="Lugar del evento"]').fill('Misma locación')
+    await page.getByRole('button', { name: 'Aprobar Cotización' }).click()
+
+    await expect(page.getByText('Hay cambios recientes que no se guardaron correctamente. Revisa antes de aprobar.')).toBeHidden()
+    await expect(page.getByText('¡Cotización aprobada! Proyecto y cuentas creados.')).toBeVisible()
+    expect(aprobarCalled).toBe(true)
+  })
+
+  test('Totales: un 409 "idéntico" se resuelve solo y NO aborta Aprobar', async ({ page }) => {
+    const id = 'SH-E2E-FLUSH-TOT-IDENTICAL'
+    await mockCotizacionDetailApis(page, { id, estado: 'EMITIDA' })
+    let aprobarCalled = false
+    await page.route(`**/api/cotizaciones/${id}/aprobar`, async (route) => {
+      aprobarCalled = true
+      await fulfillJson(route, { already_approved: false, cotizacion_id: id })
+    })
+    await page.route(`**/api/cotizaciones/${id}/totales`, async (route) => {
+      await fulfillJson(route, identicalConflictBody('cotizacion_totales', id, 'porcentaje_fee', '0.3'), 409)
+    })
+    await login(page, `/cotizaciones/${id}`)
+    await expect(page.getByRole('heading', { name: id })).toBeVisible()
+
+    const feeInput = page.locator('input[type="number"][max="100"]')
+    await feeInput.fill('30')
+    await page.getByRole('button', { name: 'Aprobar Cotización' }).click()
+
+    await expect(page.getByText('Hay cambios recientes que no se guardaron correctamente. Revisa antes de aprobar.')).toBeHidden()
+    await expect(page.getByText('¡Cotización aprobada! Proyecto y cuentas creados.')).toBeVisible()
+    expect(aprobarCalled).toBe(true)
+  })
+
+  test('Partidas: un 409 "idéntico" en una celda se resuelve solo y NO aborta Generar Cotización', async ({ page }) => {
+    const id = 'SH-E2E-FLUSH-ITEM-IDENTICAL'
+    const cotizacion = await mockCotizacionDetailApis(page, { id, estado: 'BORRADOR' })
+    let emitirCalled = false
+    await mockEmitir(page, id, cotizacion, () => { emitirCalled = true })
+    await page.route(`**/api/cotizaciones/${id}/items/*`, async (route) => {
+      if (route.request().method() !== 'PATCH') { await route.fallback(); return }
+      await fulfillJson(route, identicalConflictBody('item_cotizacion', 'item-detail-1', 'descripcion', 'Edición que coincide'), 409)
+    })
+    await login(page, `/cotizaciones/${id}`)
+    await expect(page.getByRole('heading', { name: id })).toBeVisible()
+
+    const descripcion = page.locator('table tbody tr').first().locator('td').nth(1).locator('input')
+    await descripcion.fill('Edición que coincide')
+    await page.getByRole('button', { name: 'Generar Cotización' }).click()
+
+    await expect(page.getByText('Hay cambios recientes que no se guardaron correctamente. Revisa antes de generar.')).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Aprobar Cotización' })).toBeVisible()
+    expect(emitirCalled).toBe(true)
   })
 })

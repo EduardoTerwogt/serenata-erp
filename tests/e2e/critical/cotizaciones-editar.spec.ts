@@ -183,6 +183,207 @@ test('cambiar el responsable de una partida persiste el cambio', async ({ page }
   await expect(responsableSelect).toHaveValue('resp-2')
 })
 
+// Fase 8.7.2 (causa 3 de la auditoría externa): el PATCH de responsable manda
+// dos campos (`responsable_id` y `responsable_nombre`, viajan siempre juntos),
+// pero antes de este fix el manejo de conflicto solo miraba
+// `fields.responsable_id` -- si el 409 real solo traía `responsable_nombre`
+// (el id no cambió, pero el nombre denormalizado del proveedor sí), el
+// conflicto se descartaba en silencio: ni banner ni forma de resolverlo, y el
+// cambio del usuario se perdía sin aviso.
+test('conflicto solo en responsable_nombre (el id no chocó) muestra el banner y se resuelve sin corromper el id', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-RESPONSABLE-NOMBRE-CONFLICT',
+    estado: 'BORRADOR',
+    responsables: [
+      { id: 'resp-1', nombre: 'Sofía Ramírez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Camarógrafa'], notas: null, activo: true, created_at: '2026-01-01' },
+      { id: 'resp-2', nombre: 'Juan Pérez', telefono: null, correo: null, banco: null, clabe: null, roles: ['Gaffer'], notas: null, activo: true, created_at: '2026-01-01' },
+    ],
+  })
+  await page.route('**/api/cotizaciones/SH-E2E-RESPONSABLE-NOMBRE-CONFLICT/items/*', async (route) => {
+    if (route.request().method() !== 'PATCH') { await route.fallback(); return }
+    await fulfillJson(route, {
+      error: 'conflict',
+      entity: 'item_cotizacion',
+      id: 'item-detail-1',
+      // Nota: `responsable_id` NO aparece en `fields` -- no chocó. Solo el
+      // nombre denormalizado, que es justo el caso que se perdía antes.
+      fields: { responsable_nombre: { base: 'Sofía Ramírez', current: 'Juan P. (renombrado)', attempted: 'Juan Pérez' } },
+    }, 409)
+  })
+  await login(page, '/cotizaciones/SH-E2E-RESPONSABLE-NOMBRE-CONFLICT')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-RESPONSABLE-NOMBRE-CONFLICT' })).toBeVisible()
+
+  const firstRow = page.locator('table tbody tr').first()
+  const responsableSelect = firstRow.locator('td').nth(5).locator('select')
+  await expect(responsableSelect).toHaveValue('resp-1')
+
+  await responsableSelect.selectOption('resp-2')
+
+  const banner = firstRow.getByText(/Alguien más lo cambió a/)
+  await expect(banner).toBeVisible()
+  await expect(banner).toContainText('Juan P. (renombrado)')
+
+  await firstRow.getByRole('button', { name: /Usar/ }).click()
+  await expect(banner).toBeHidden()
+  // `patch_item_cotizacion` es atómica: como `responsable_nombre` chocó, la
+  // RPC rechazó el PATCH COMPLETO -- `responsable_id` NUNCA se guardó,
+  // aunque no aparezca en `fields`. El servidor sigue en `resp-1` (el valor
+  // real, nunca cambió); "Usar" debe reflejar EXACTAMENTE eso, no el intento
+  // rechazado (`resp-2`).
+  await expect(responsableSelect).toHaveValue('resp-1')
+})
+
+// Fase 8.7.2 (bloqueador de la 2da ronda de auditoría externa): la misma
+// atomicidad aplica al autofill de producto -- descripcion/categoria/
+// precio_unitario/x_pagar viajan en un solo PATCH, y si CUALQUIERA choca la
+// RPC rechaza los 4. Antes de este fix, "Usar" solo revertía el campo que la
+// RPC marcó en conflicto (precio_unitario aquí) y dejaba los otros 3
+// mostrando el autofill nunca guardado -- formulario y servidor divergían.
+test('conflicto de autofill (solo un campo choca) revierte los 4 campos del grupo al valor real del servidor, no solo el que chocó', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-AUTOFILL-CONFLICT',
+    estado: 'BORRADOR',
+    productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
+  })
+  // El item por defecto de mockCotizacionDetailApis (item-detail-1) es
+  // { categoria: 'Producción', descripcion: 'Renta de cámara',
+  //   precio_unitario: 15000, x_pagar: 6000 } -- ese es el `base` real que
+  // buildItemFieldsBase captura antes del autofill, y lo que "el servidor"
+  // (el mock, aquí) realmente tiene.
+  let patchRecibido: Record<string, unknown> | null = null
+  await page.route('**/api/cotizaciones/SH-E2E-AUTOFILL-CONFLICT/items/*', async (route) => {
+    if (route.request().method() !== 'PATCH') { await route.fallback(); return }
+    patchRecibido = route.request().postDataJSON()
+    await fulfillJson(route, {
+      error: 'conflict',
+      entity: 'item_cotizacion',
+      id: 'item-detail-1',
+      // Solo `precio_unitario` choca -- otro colaborador ya lo cambió a
+      // 18000 antes de este PATCH (base real: 15000, el precio original del
+      // item). descripcion/categoria/x_pagar NO aparecen en `fields`: su
+      // base coincide con el current real, así que la RPC no los marcó --
+      // pero como la operación es atómica, NINGUNO de los 4 se guardó, ni
+      // siquiera esos 3.
+      fields: { precio_unitario: { base: 15000, current: 18000, attempted: 25000 } },
+    }, 409)
+  })
+  await login(page, '/cotizaciones/SH-E2E-AUTOFILL-CONFLICT')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-AUTOFILL-CONFLICT' })).toBeVisible()
+
+  const firstRow = page.locator('table tbody tr').first()
+  const descripcion = firstRow.locator('td').nth(1).locator('input')
+  const categoria = firstRow.locator('td').nth(0).locator('input')
+  const precio = firstRow.locator('td').nth(3).locator('input')
+  const xPagar = firstRow.locator('td').nth(6).locator('input')
+
+  await descripcion.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+  await descripcion.fill('grúa Techno')
+  await Promise.all([
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH'),
+    page.getByText('Renta de grúa Technocrane').click(),
+  ])
+
+  // El PATCH que de verdad viajó al "servidor" (el mock) confirma que el
+  // intento fue el autofill completo, con `base` correcto -- lo que la RPC
+  // rechazó atómicamente.
+  await expect.poll(() => patchRecibido).not.toBeNull()
+  expect(patchRecibido).toMatchObject({ descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar: 12000, base: { descripcion: 'Renta de cámara', categoria: 'Producción', precio_unitario: 15000, x_pagar: 6000 } })
+
+  const banner = firstRow.getByText(/Alguien más lo cambió a/).first()
+  await expect(banner).toBeVisible()
+
+  await firstRow.getByRole('button', { name: /^Usar/ }).first().click()
+  await expect(banner).toBeHidden()
+
+  // El PATCH atómico se rechazó completo -- los 4 campos deben quedar en el
+  // valor real que "el servidor" (el mock) tiene, nunca en el autofill que
+  // nunca se guardó. precio_unitario usa el `current` del conflicto (18000,
+  // lo que el otro colaborador puso); descripcion/categoria/x_pagar vuelven
+  // a su propio valor real (su base coincidía con el current, la RPC no los
+  // marcó), que es exactamente lo que el mock sirvió al cargar la página.
+  await expect(descripcion).toHaveValue('Renta de cámara')
+  await expect(categoria).toHaveValue('Producción')
+  await expect(precio).toHaveValue('18000')
+  await expect(xPagar).toHaveValue('6000')
+})
+
+// Fase 8.7.2 (2da ronda de auditoría externa): "Mantener" reintenta el PATCH
+// atómico completo -- pero antes de este fix, `itemsServerRef` (de donde
+// `retryItemGroupPatch` arma la `base` del reintento vía
+// `buildItemFieldsBase`) solo se refrescaba al valor real en la rama
+// "theirs". En "mine" quedaba con el valor VIEJO, así que el reintento
+// mandaba la misma `base` desactualizada y volvía a chocar contra el mismo
+// conflicto que se acababa de "resolver".
+test('conflicto de autofill: "Mantener" reintenta el PATCH completo con los 4 campos y la base ya corregida', async ({ page }) => {
+  await mockCotizacionDetailApis(page, {
+    id: 'SH-E2E-AUTOFILL-MANTENER',
+    estado: 'BORRADOR',
+    productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
+  })
+  const patchesRecibidos: Record<string, unknown>[] = []
+  await page.route('**/api/cotizaciones/SH-E2E-AUTOFILL-MANTENER/items/*', async (route) => {
+    if (route.request().method() !== 'PATCH') { await route.fallback(); return }
+    const body = route.request().postDataJSON()
+    patchesRecibidos.push(body)
+    if (patchesRecibidos.length === 1) {
+      // Primer intento: precio_unitario choca (otro colaborador ya lo puso
+      // en 18000) -- la RPC rechaza los 4 campos completos.
+      await fulfillJson(route, {
+        error: 'conflict',
+        entity: 'item_cotizacion',
+        id: 'item-detail-1',
+        fields: { precio_unitario: { base: 15000, current: 18000, attempted: 25000 } },
+      }, 409)
+      return
+    }
+    // Segundo intento (tras "Mantener"): éxito, confirma los 4 campos con el
+    // precio que el usuario eligió mantener (25000, el del producto).
+    await fulfillJson(route, {
+      item: {
+        id: 'item-detail-1', cotizacion_id: 'SH-E2E-AUTOFILL-MANTENER',
+        categoria: body.categoria, descripcion: body.descripcion, cantidad: 1,
+        precio_unitario: body.precio_unitario, importe: body.precio_unitario,
+        responsable_nombre: 'Sofía Ramírez', responsable_id: 'resp-1',
+        x_pagar: body.x_pagar, margen: body.precio_unitario - body.x_pagar,
+        orden: 1, notas: null,
+      },
+    })
+  })
+  await login(page, '/cotizaciones/SH-E2E-AUTOFILL-MANTENER')
+  await expect(page.getByRole('heading', { name: 'SH-E2E-AUTOFILL-MANTENER' })).toBeVisible()
+
+  const firstRow = page.locator('table tbody tr').first()
+  const descripcion = firstRow.locator('td').nth(1).locator('input')
+  await descripcion.evaluate((el) => el.scrollIntoView({ block: 'center' }))
+  await descripcion.fill('grúa Techno')
+  await Promise.all([
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH'),
+    page.getByText('Renta de grúa Technocrane').click(),
+  ])
+  await expect.poll(() => patchesRecibidos.length).toBe(1)
+
+  const banner = firstRow.getByText(/Alguien más lo cambió a/).first()
+  await expect(banner).toBeVisible()
+
+  await Promise.all([
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH'),
+    firstRow.getByRole('button', { name: /^Mantener/ }).first().click(),
+  ])
+
+  // El reintento debe mandar los 4 campos otra vez (nunca uno solo, o se
+  // pierde la atomicidad) y, sobre todo, el `base.precio_unitario` corregido
+  // al `current` real que el 409 anterior reveló (18000) -- no el `base`
+  // original (15000), que volvería a chocar contra el mismo conflicto.
+  await expect.poll(() => patchesRecibidos.length).toBe(2)
+  const segundoPatch = patchesRecibidos[1]
+  expect(segundoPatch).toMatchObject({ descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar: 12000 })
+  expect((segundoPatch.base as Record<string, unknown>).precio_unitario).toBe(18000)
+
+  // Tras el éxito del reintento, ningún conflicto debe quedar visible.
+  await expect(banner).toBeHidden()
+  await expect(page.getByText(/Alguien más lo cambió a/)).toHaveCount(0)
+})
+
 test('copiar partidas seleccionadas desde otra cotización las trae a la actual', async ({ page }) => {
   await mockCotizacionDetailApis(page, { id: 'SH-E2E-COPIAR', estado: 'BORRADOR' })
   await page.route('**/api/cotizaciones', async (route) => {

@@ -88,6 +88,18 @@ describe('POST /api/cotizaciones/[id]/items', () => {
     }])
   })
 
+  it('threadea el mutation_id del body al evento item_confirmed (Fase: colaboración)', async () => {
+    const res = await POST(req({ mutation_id: 'mut-123' }), { params })
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    const createdId = body.item.id
+
+    expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([expect.objectContaining({
+      payload: expect.objectContaining({ cotizacion_id: 'SH001', item_id: createdId, mutation_id: 'mut-123' }),
+    })])
+  })
+
   it('numera el orden a partir del máximo existente', async () => {
     mocks.getCotizacionByIdMock.mockResolvedValue({
       id: 'SH001', cliente: 'ACME', proyecto: 'Spot',

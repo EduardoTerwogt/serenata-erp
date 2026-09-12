@@ -369,8 +369,15 @@ export function useQuotationPresence({
     if (section && previous !== section) return
 
     activeSectionRef.current = null
+    // `activeCellRef` solo lo toca `lockItemCell`, llamado nada más desde el foco de
+    // celdas de Partidas -- soltar cualquier sección ya lo encuentra en `null` salvo
+    // que se esté saliendo de Partidas. Sin este reset, un usuario que abandona la
+    // sección sigue publicando la última celda que enfocó ahí: el otro colaborador
+    // ve "X está editando esta celda" indefinidamente (el heartbeat solo repite el
+    // mismo payload), aunque X ya ni siquiera esté en Partidas.
+    activeCellRef.current = null
     if (!enabled) return
-    trackPresence(null, activeCellRef.current)
+    trackPresence(null, null)
   }, [enabled, trackPresence])
 
   const lockItemCell = useCallback((rowId: string, field: QuotationItemCellField) => {
@@ -424,6 +431,10 @@ export function useQuotationPresence({
 
     onlineUsers.forEach((user) => {
       if (!user.entity_id || !user.field) return
+      // Defensa adicional a `releaseSection` limpiando `entity_id`/`field`: cubre
+      // cualquier otra ventana donde Presence quede desincronizada (pestaña cerrada
+      // abruptamente antes del release, blip de red antes del próximo heartbeat).
+      if (user.active_section !== 'partidas') return
       if (user.user_id === identity.userId) return
       const key = getCellKey(user.entity_id, user.field)
       if (!editors[key]) editors[key] = user

@@ -1,6 +1,6 @@
-import { test, expect, BrowserContext, Locator, Page } from '@playwright/test'
+import { test, expect, BrowserContext, Locator, Page, Response } from '@playwright/test'
 import { login } from '../utils/auth'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupLiveProducto, cleanupOrphanedFolioReservations, cleanupOrphanedTestProductos } from '../utils/live-cleanup'
 import { esperarCanalColaborativo, faltantesDelEntornoLive, leerCotizacionDelServidor, leerProyectoYCuentasDelServidor, liveEnabled } from '../utils/live-helpers'
 import { cleanupLiveUser, ensureLiveUser } from '../utils/live-users'
 import { fmtCurrency } from '@/lib/quotations/format'
@@ -117,6 +117,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
 
     await cleanupLiveCotizacionesByPrefix(PREFIJO).catch((e) => console.error('[live colab] barrido inicial:', e))
     await cleanupOrphanedFolioReservations().catch((e) => console.error('[live colab] reservas huérfanas:', e))
+    await cleanupOrphanedTestProductos().catch((e) => console.error('[live colab] productos huérfanos:', e))
     await ensureLiveUser(USUARIO_B)
 
     const suffix = Date.now()
@@ -262,7 +263,27 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     test.setTimeout(120_000)
 
     const antes = await filas(pageA).count()
-    await filas(pageA).last().locator('td').last().locator('button').click()
+
+    // Regresión real reportada (Fase 8.7.2): la RPC delete_item_cotizacion
+    // faltaba en producción y el DELETE moría con 500 -- el borrado de la UI
+    // es optimista, así que `toHaveCount(antes - 1)` por sí solo puede
+    // aprobar de inmediato aunque el servidor haya rechazado el borrado.
+    // Orden correcto: (1) el DELETE real responde 200; (2) el servidor
+    // confirma la ausencia (puede tardar en converger, por eso el poll);
+    // (3) recién con eso confirmado, la fila sigue ausente en ambas
+    // pantallas y el subtotal quedó correcto -- nunca antes ni en paralelo.
+    const [deleteResponse] = await Promise.all([
+      pageA.waitForResponse(
+        (response) => response.url().includes('/items/') && response.request().method() === 'DELETE'
+      ),
+      filas(pageA).last().locator('td').last().locator('button').click(),
+    ])
+    expect(deleteResponse.status()).toBe(200)
+
+    await expect.poll(async () => {
+      const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+      return cotizacion.items.length
+    }, { timeout: 30_000 }).toBe(antes - 1)
 
     await expect(filas(pageA)).toHaveCount(antes - 1, { timeout: 30_000 })
     await expect(filas(pageB)).toHaveCount(antes - 1, { timeout: 30_000 })
@@ -474,6 +495,24 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     // en la posición final.
     await descripcionB.evaluate((el) => el.scrollIntoView({ block: 'center' }))
     await descripcionB.fill('Grúa E2E Fase8')
+
+    // Diagnóstico (Fase 8.7.2): este test ya falló en runs previos de CI con
+    // el mismo síntoma (la sugerencia nunca aparece) pese a que la creación
+    // del producto ya pasa por el POST real (para que su propia invalidación
+    // de caché corra) -- ver el comentario en el `beforeAll`. Antes de asumir
+    // que es un problema de timing/UI, consultar el mismo endpoint desde la
+    // sesión real de B distingue si el producto ya llegó al servidor/caché
+    // que ve B (problema de UI si SÍ aparece acá) o si nunca llegó (problema
+    // de caché/datos si NO aparece).
+    const diagProductos = await pageB.request.get('/api/productos?q=')
+    const diagBody = await diagProductos.json().catch(() => null)
+    const diagIncluyeProducto = Array.isArray(diagBody) && diagBody.some(
+      (p: { descripcion?: string }) => p.descripcion === PRODUCTO_AUTOFILL.descripcion
+    )
+    console.log(
+      `[live colab][diag] GET /api/productos?q= (sesión de B) status=${diagProductos.status()} ` +
+      `total=${Array.isArray(diagBody) ? diagBody.length : 'n/a'} incluyeProductoAutofill=${diagIncluyeProducto}`
+    )
 
     // El filtrado de sugerencias es 100% client-side contra un catálogo que
     // `useQuotationForm` carga en un `requestIdleCallback` (hasta 1.5s de
@@ -692,6 +731,327 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       expect(cuentasPagar).toHaveLength(itemsConXPagar)
     } finally {
       await cleanupLiveCotizacion(raceId).catch((e) => console.error('[live colab] cleanup race:', e))
+    }
+  })
+})
+
+/**
+ * Fase 8.7.2: valida el drenado real por celda, el refresco de `base` tras
+ * cada PATCH exitoso, y que Totales se recalcule sin recargar -- contra el
+ * servidor real, no mockeado. Cotización propia, para no interferir con el
+ * describe de arriba.
+ */
+test.describe('live: colaboración real -- causas E-I (Fase 8.7.2)', () => {
+  test.skip(!liveEnabled, 'Requiere PLAYWRIGHT_BASE_URL, credenciales reales y el bypass apagado')
+  test.describe.configure({ mode: 'serial' })
+
+  let contextA: BrowserContext
+  let contextB: BrowserContext
+  let pageA: Page
+  let pageB: Page
+  let cotizacionId = ''
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(120_000)
+
+    await cleanupLiveCotizacionesByPrefix(`${PREFIJO}872-`).catch((e) => console.error('[live 8.7.2] barrido inicial:', e))
+    await ensureLiveUser(USUARIO_B)
+
+    const suffix = Date.now()
+
+    contextA = await browser.newContext()
+    pageA = await contextA.newPage()
+    vigilarErrores(pageA, 'A')
+    await login(pageA, '/cotizaciones')
+
+    cotizacionId = await crearCotizacion(pageA, `${PREFIJO}872-${suffix}`, `Fase872 ${suffix}`, [
+      { descripcion: 'Partida E-I uno', precio: 1000 },
+      { descripcion: 'Partida E-I dos', precio: 2000 },
+      { descripcion: 'Partida E-I tres', precio: 3000 },
+    ])
+
+    contextB = await browser.newContext()
+    pageB = await contextB.newPage()
+    vigilarErrores(pageB, 'B')
+    await login(pageB, '/cotizaciones', { email: USUARIO_B.email, password: USUARIO_B.password })
+
+    await pageA.goto(`/cotizaciones/${cotizacionId}`)
+    await pageB.goto(`/cotizaciones/${cotizacionId}`)
+    await expect(filas(pageA)).toHaveCount(3, { timeout: 30_000 })
+    await expect(filas(pageB)).toHaveCount(3, { timeout: 30_000 })
+
+    await esperarCanalColaborativo([
+      { page: pageA, veA: NOMBRE_CORTO_B },
+      { page: pageB },
+    ])
+  })
+
+  test.afterAll(async () => {
+    await contextA?.close()
+    await contextB?.close()
+    if (cotizacionId) await cleanupLiveCotizacion(cotizacionId).catch((e) => console.error('[live 8.7.2] cleanup:', e))
+    await cleanupLiveCotizacionesByPrefix(`${PREFIJO}872-`).catch((e) => console.error('[live 8.7.2] barrido final:', e))
+    await cleanupLiveUser(USUARIO_B.email).catch((e) => console.error('[live 8.7.2] cleanup usuario B:', e))
+  })
+
+  test('causa E: editar la misma celda dos veces seguidas sin blur, con pausa larga entre ambas, no produce un conflicto contra uno mismo', async () => {
+    test.setTimeout(60_000)
+    const precioA = celda(pageA, 0, COL.precio)
+
+    await precioA.click()
+    await precioA.fill('1500')
+    // Deja pasar el debounce (800ms) + tiempo de sobra para que el primer
+    // autoguardado confirme en el servidor ANTES de seguir editando -- el
+    // escenario exacto de causa E: `itemCellBaseRef` debía refrescarse al
+    // valor recién confirmado; si no, la SEGUNDA edición manda un `base` ya
+    // viejo y el servidor la rechaza con un 409 contra el propio usuario.
+    await pageA.waitForTimeout(2_000)
+    await precioA.fill('1750')
+    await precioA.blur()
+
+    await expect.poll(async () => {
+      const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+      return cotizacion.items[0].precio_unitario
+    }, { timeout: 20_000 }).toBe(1750)
+
+    await expect(pageA.getByText(/Alguien más lo cambió a/)).toBeHidden()
+  })
+
+  test('causa F: escribir de nuevo en la misma celda mientras el PATCH anterior sigue en vuelo manda un segundo PATCH con el valor final, sin 409', async () => {
+    test.setTimeout(60_000)
+    const precioA = celda(pageA, 0, COL.precio)
+    const patronRuta = '**/api/cotizaciones/*/items/*'
+
+    // Respuestas de PATCH observadas, identificadas por el precio que llevaba
+    // su propio body -- nunca por orden de llegada. Con la ruta retrasando el
+    // primer PATCH 1.5s, un `waitForResponse` genérico registrado antes de
+    // que salga el segundo PATCH puede resolverse contra la respuesta del
+    // PRIMERO -- ambos matchean el mismo patrón de URL/método.
+    const respuestas: { precio: number; status: number }[] = []
+    const onResponse = async (response: Response) => {
+      const request = response.request()
+      if (request.method() !== 'PATCH' || !response.url().includes('/items/')) return
+      let body: { precio_unitario?: number } | null = null
+      try {
+        body = request.postDataJSON() as { precio_unitario?: number } | null
+      } catch (e) {
+        console.log(`[live colab][diag causa F] postDataJSON() falló: ${e instanceof Error ? e.message : e} -- raw: ${request.postData()}`)
+      }
+      // Diagnóstico: loguear CADA PATCH visto a esta celda, tenga o no
+      // precio_unitario reconocible -- si el segundo PATCH nunca aparece acá
+      // tampoco, no llegó a salir del navegador; si aparece con otra forma,
+      // el bug es de forma/parseo, no de que nunca se mandó.
+      console.log(`[live colab][diag causa F] PATCH ${response.url()} status=${response.status()} body=${request.postData()}`)
+      const precio = body?.precio_unitario
+      if (typeof precio === 'number') {
+        respuestas.push({ precio, status: response.status() })
+      }
+    }
+    pageA.on('response', onResponse)
+
+    // Diagnóstico adicional: loguear cuando el navegador DISPARA el PATCH,
+    // no solo cuando llega su respuesta -- si el segundo PATCH nunca sale
+    // del cliente (el bug estaría en el drenado de React, no en la red),
+    // esto lo muestra aunque nunca llegue a `onResponse`.
+    const onRequest = (request: import('@playwright/test').Request) => {
+      if (request.method() !== 'PATCH' || !request.url().includes('/items/')) return
+      console.log(`[live colab][diag causa F] PATCH disparado -> ${request.url()} body=${request.postData()}`)
+    }
+    pageA.on('request', onRequest)
+
+    let firstPatchDelayed = false
+    const delayedPatchHandler: Parameters<typeof pageA.route>[1] = async (route) => {
+      if (!firstPatchDelayed && route.request().method() === 'PATCH') {
+        firstPatchDelayed = true
+        await new Promise((resolve) => setTimeout(resolve, 1_500))
+      }
+      await route.continue()
+    }
+    await pageA.route(patronRuta, delayedPatchHandler)
+
+    try {
+      await precioA.click()
+      await precioA.fill('2100')
+      await precioA.blur() // dispara el primer PATCH -- el handler de arriba lo mantiene en vuelo 1.5s
+      await pageA.waitForTimeout(300) // asegura que el primer PATCH ya salió antes de seguir
+      await precioA.click()
+      await precioA.fill('2200')
+      await precioA.blur() // segunda edición mientras el primer PATCH sigue en vuelo
+
+      // Esperar y validar AMBAS respuestas por su contenido, no solo su
+      // llegada -- las dos deben resolver en 200, nunca en 409.
+      await expect.poll(() => respuestas.find((r) => r.precio === 2100)?.status, { timeout: 20_000 }).toBe(200)
+      await expect.poll(() => respuestas.find((r) => r.precio === 2200)?.status, { timeout: 20_000 }).toBe(200)
+    } finally {
+      // El handler retrasado ya llamó route.continue() en ambas peticiones
+      // para este punto (las dos respuestas ya llegaron) -- retirar la ruta
+      // y el listener acá, nunca antes, evita el "Route is already handled!"
+      // de desregistrar mientras una petición seguía en vuelo. unroute con
+      // la función exacta, no el patrón a secas, para no arrastrar handlers
+      // de otros tests/beforeEach sobre el mismo patrón.
+      await pageA.unroute(patronRuta, delayedPatchHandler)
+      pageA.off('response', onResponse)
+      pageA.off('request', onRequest)
+    }
+
+    await expect.poll(async () => {
+      const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+      return cotizacion.items[0].precio_unitario
+    }, { timeout: 20_000 }).toBe(2200)
+
+    await expect(pageA.getByText(/Alguien más lo cambió a/)).toBeHidden()
+  })
+
+  test('causa I: agregar una fila y escribir en ella antes de que el alta confirme no dispara un 409 contra uno mismo', async () => {
+    test.setTimeout(60_000)
+    const descripcionNueva = `Partida creada y editada de inmediato ${Date.now()}`
+
+    await pageA.getByRole('button', { name: 'Agregar fila' }).click()
+    const filaNueva = filas(pageA).last()
+    const descripcionInput = filaNueva.locator('td').nth(COL.descripcion).locator('input')
+    await descripcionInput.click()
+    await descripcionInput.fill(descripcionNueva)
+    await descripcionInput.blur()
+
+    await expect.poll(async () => {
+      const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+      return cotizacion.items.some((item) => item.descripcion === descripcionNueva)
+    }, { timeout: 20_000 }).toBe(true)
+
+    await expect(pageA.getByText(/Alguien más lo cambió a/)).toBeHidden()
+  })
+
+  test('causa H: agregar una fila y llenar su precio actualiza Subtotal en ambas pantallas sin recargar', async () => {
+    test.setTimeout(60_000)
+    const antes = await filas(pageB).count()
+    const cotizacionAntes = await leerCotizacionDelServidor(cotizacionId)
+
+    await pageB.getByRole('button', { name: 'Agregar fila' }).click()
+    await expect(filas(pageB)).toHaveCount(antes + 1, { timeout: 30_000 })
+    const precioNuevo = celda(pageB, antes, COL.precio)
+    await precioNuevo.click()
+    await precioNuevo.fill('999')
+    await precioNuevo.blur()
+
+    await expect.poll(async () => {
+      const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+      return cotizacion.subtotal
+    }, { timeout: 20_000 }).toBe(cotizacionAntes.subtotal + 999)
+
+    const cotizacionFinal = await leerCotizacionDelServidor(cotizacionId)
+    const esperado = `$${fmtCurrency(cotizacionFinal.subtotal)}`
+    // Causa H: antes de este fix, `itemsParaTotales` unía por `fields[i].id`
+    // -- la key interna de react-hook-form, no el id de negocio -- así que
+    // una fila agregada vía `append()` (el botón de arriba) nunca entraba al
+    // cálculo hasta recargar la página completa. Se verifica SIN reload en
+    // ninguna de las dos pantallas.
+    await expect(subtotal(pageA)).toHaveText(esperado, { timeout: 30_000 })
+    await expect(subtotal(pageB)).toHaveText(esperado, { timeout: 30_000 })
+  })
+
+  test('alta concurrente de fila por A y B no mezcla campos entre filas ni deja Totales mal', async () => {
+    test.setTimeout(60_000)
+    const antes = await filas(pageA).count()
+
+    await Promise.all([
+      pageA.getByRole('button', { name: 'Agregar fila' }).click(),
+      pageB.getByRole('button', { name: 'Agregar fila' }).click(),
+    ])
+
+    await expect(filas(pageA)).toHaveCount(antes + 2, { timeout: 30_000 })
+    await expect(filas(pageB)).toHaveCount(antes + 2, { timeout: 30_000 })
+
+    const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+    expect(cotizacion.items).toHaveLength(antes + 2)
+    const ids = new Set(cotizacion.items.map((item) => item.id))
+    expect(ids.size).toBe(cotizacion.items.length)
+
+    const esperado = `$${fmtCurrency(cotizacion.subtotal)}`
+    await expect(subtotal(pageA)).toHaveText(esperado, { timeout: 30_000 })
+    await expect(subtotal(pageB)).toHaveText(esperado, { timeout: 30_000 })
+  })
+})
+
+/**
+ * Fase 8.7.2: el fix más importante de la auditoría externa -- un conflicto
+ * "idéntico" (mismo valor final) se resolvía solo en el cliente, pero
+ * `flushPendingSaves` seguía viendo la promesa CRUDA del PATCH (que rechaza
+ * en cualquier 409) en vez de la semántica ya resuelta, y abortaba
+ * Generar/Aprobar sin motivo real. Cotización dedicada porque este test SÍ
+ * transiciona el estado.
+ */
+test.describe('live: conflicto idéntico no bloquea Generar Cotización', () => {
+  test.skip(!liveEnabled, 'Requiere PLAYWRIGHT_BASE_URL, credenciales reales y el bypass apagado')
+
+  test('conflicto idéntico (mismo valor final) se resuelve solo y no bloquea Generar Cotización', async ({ browser }) => {
+    test.setTimeout(120_000)
+
+    await ensureLiveUser(USUARIO_B)
+    const suffix = Date.now()
+
+    const contextA = await browser.newContext()
+    const pageA = await contextA.newPage()
+    vigilarErrores(pageA, 'A')
+    await login(pageA, '/cotizaciones')
+
+    const contextB = await browser.newContext()
+    const pageB = await contextB.newPage()
+    vigilarErrores(pageB, 'B')
+    await login(pageB, '/cotizaciones', { email: USUARIO_B.email, password: USUARIO_B.password })
+
+    const cotizacionId = await crearCotizacion(pageA, `${PREFIJO}872IDEM-${suffix}`, `Fase872Idem ${suffix}`, [
+      { descripcion: 'Partida idéntica', precio: 4000 },
+    ])
+
+    try {
+      await pageA.goto(`/cotizaciones/${cotizacionId}`)
+      await pageB.goto(`/cotizaciones/${cotizacionId}`)
+      await expect(filas(pageA)).toHaveCount(1, { timeout: 30_000 })
+      await expect(filas(pageB)).toHaveCount(1, { timeout: 30_000 })
+      await esperarCanalColaborativo([
+        { page: pageA, veA: NOMBRE_CORTO_B },
+        { page: pageB },
+      ])
+
+      const precioA = celda(pageA, 0, COL.precio)
+      const precioB = celda(pageB, 0, COL.precio)
+      const valorFinal = '9500'
+
+      // Ambos enfocan el MISMO campo antes de que nadie lo haya tocado --
+      // capturan el mismo "base" (4000, el precio original de esta fila).
+      await precioA.click()
+      await precioB.click()
+
+      // B guarda primero y confirma en el servidor.
+      await precioB.fill(valorFinal)
+      await precioB.blur()
+      await expect.poll(async () => {
+        const cotizacion = await leerCotizacionDelServidor(cotizacionId)
+        return cotizacion.items[0].precio_unitario
+      }, { timeout: 20_000 }).toBe(Number(valorFinal))
+
+      // A, con la base ya vieja (4000), intenta guardar EXACTAMENTE el mismo
+      // valor final que B ya confirmó -- causa G: se resuelve solo, sin
+      // banner.
+      await precioA.fill(valorFinal)
+      await precioA.blur()
+      await pageA.waitForTimeout(1_500)
+      await expect(pageA.getByText(/Alguien más lo cambió a/)).toBeHidden()
+
+      // El punto central del fix: un conflicto ya auto-resuelto NO debe
+      // bloquear Generar/Aprobar -- antes, `trackMutation` registraba la
+      // promesa cruda del PATCH (rechazada) en vez de la semántica.
+      await pageA.getByRole('button', { name: 'Generar Cotización' }).click()
+      await expect(pageA.getByRole('button', { name: 'Aprobar Cotización' })).toBeVisible({ timeout: 60_000 })
+
+      const cotizacionFinal = await leerCotizacionDelServidor(cotizacionId)
+      expect(cotizacionFinal.estado).toBe('EMITIDA')
+      expect(cotizacionFinal.items[0].precio_unitario).toBe(Number(valorFinal))
+    } finally {
+      await contextA.close()
+      await contextB.close()
+      await cleanupLiveCotizacion(cotizacionId).catch((e) => console.error('[live 8.7.2 idem] cleanup:', e))
+      await cleanupLiveUser(USUARIO_B.email).catch((e) => console.error('[live 8.7.2 idem] cleanup usuario B:', e))
     }
   })
 })

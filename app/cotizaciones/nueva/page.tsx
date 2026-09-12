@@ -34,8 +34,8 @@ function NuevaCotizacionContent() {
     fields,
     getValues,
     replace,
-    editingItemIndex,
-    setEditingItemIndex,
+    editingItemRowId,
+    setEditingItemRowId,
     folio,
     responsables,
     guardando,
@@ -159,8 +159,8 @@ function NuevaCotizacionContent() {
         register={register}
         watchedItems={watchedItems}
         fields={fields}
-        editingItemIndex={editingItemIndex}
-        setEditingItemIndex={setEditingItemIndex}
+        editingItemRowId={editingItemRowId}
+        setEditingItemRowId={setEditingItemRowId}
         calcItem={calcItem}
         handleDescripcionChange={handleDescripcionChange}
         productoSugerencias={productoSugerencias}

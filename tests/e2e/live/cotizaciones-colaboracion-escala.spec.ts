@@ -1,6 +1,6 @@
 import { test, expect, BrowserContext, Page } from '@playwright/test'
 import { getPlaywrightCredentials, login } from '../utils/auth'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations, cleanupOrphanedTestProductos } from '../utils/live-cleanup'
 import { faltantesDelEntornoLive, leerCotizacionDelServidor, liveEnabled } from '../utils/live-helpers'
 import { cleanupLiveUser, ensureLiveUser, LiveUserSeed } from '../utils/live-users'
 
@@ -74,6 +74,7 @@ test.describe('live: escalamiento multiusuario', () => {
     }
     await cleanupLiveCotizacionesByPrefix(PREFIJO).catch((e) => console.error('[live escala] barrido inicial:', e))
     await cleanupOrphanedFolioReservations().catch((e) => console.error('[live escala] reservas huérfanas:', e))
+    await cleanupOrphanedTestProductos().catch((e) => console.error('[live escala] productos huérfanos:', e))
     // Los N-1 participantes extra se siembran UNA sola vez y se reusan en las 4
     // corridas (2/3/5/10) -- crear/borrar usuarios reales en cada corrida solo
     // agregaría tiempo de CI sin cubrir nada nuevo.
