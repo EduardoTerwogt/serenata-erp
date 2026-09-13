@@ -17,7 +17,7 @@ vi.mock('@/lib/server/repositories/cuentas-cobrar', () => ({
   getPagosComprobantesEnRango: mocks.getPagosComprobantesEnRango,
 }))
 vi.mock('@/lib/server/repositories/cuentas-pagar', () => ({ getCuentasPagar: mocks.getCuentasPagar }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { from: mocks.fromMock } }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { from: mocks.fromMock } }))
 
 import { rangoDePeriodo, bucketsDePeriodo, getResumenDashboard } from '../dashboard'
 

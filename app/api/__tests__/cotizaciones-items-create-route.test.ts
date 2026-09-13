@@ -37,7 +37,7 @@ vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks
 // arriba) -- este mock solo evita que `vi.importActual` de arriba, al cargar
 // el módulo real de repositorios, intente crear un cliente de Supabase real
 // sin las env vars.
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: {} }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: {} }))
 
 import { POST } from '../cotizaciones/[id]/items/route'
 import { EstadoCotizacionInvalidoError } from '@/lib/db'

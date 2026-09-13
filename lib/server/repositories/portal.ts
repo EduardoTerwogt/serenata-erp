@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { CandidatoMatchProveedor, CuentaPagar, Proveedor, ProveedorDocumento } from '@/lib/types'
 
 // Fase 5.5 -- Portal de proveedores. La identidad de portal ES la misma

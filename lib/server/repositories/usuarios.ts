@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import type { AuthUser } from '@/lib/auth-utils'
 
 export interface UsuarioRow {

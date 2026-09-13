@@ -3,7 +3,7 @@ import { getCotizacionById } from '@/lib/db'
 import { runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { Cotizacion } from '@/lib/types'
 
 /**

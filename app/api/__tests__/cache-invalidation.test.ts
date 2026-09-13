@@ -22,7 +22,7 @@ vi.mock('@/lib/integrations/sheets/trigger', () => ({
 
 // Import de solo tipo -- se borra en compilación, no dispara la resolución
 // real del módulo mockeado (a diferencia del import runtime de más abajo).
-import type { supabaseAdmin as SupabaseAdminType } from '@/lib/supabase'
+import type { supabaseAdmin as SupabaseAdminType } from '@/lib/server/supabase-admin'
 
 type SupabaseFrom = typeof SupabaseAdminType.from
 
@@ -41,7 +41,7 @@ const createChainableMock = (data: unknown, error: unknown = null) => {
   return chain as unknown as ReturnType<SupabaseFrom>
 }
 
-vi.mock('@/lib/supabase', () => {
+vi.mock('@/lib/server/supabase-admin', () => {
   const mockSupabase = {
     from: vi.fn(() => createChainableMock(null)),
   }
@@ -56,7 +56,7 @@ vi.mock('@/lib/supabase', () => {
 import { GET as getClientes, POST as postClientes } from '../clientes/route'
 import { GET as getProductos, POST as postProductos } from '../productos/route'
 import { GET as getProveedores, POST as postProveedores } from '../proveedores/route'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 describe('Cache Invalidation', () => {
   beforeEach(() => {

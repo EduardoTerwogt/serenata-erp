@@ -1,7 +1,7 @@
 import { requireAnySection } from '@/lib/api-auth'
 import { driveService } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function POST(req: Request) {

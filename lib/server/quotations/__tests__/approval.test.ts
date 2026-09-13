@@ -9,7 +9,7 @@ vi.mock('@/lib/db', () => ({
   getCotizacionById: mocks.getCotizacionByIdMock,
 }))
 
-vi.mock('@/lib/supabase', () => ({
+vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: {
     rpc: mocks.rpcMock,
   },

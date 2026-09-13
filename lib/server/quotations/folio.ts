@@ -1,5 +1,5 @@
 import { getNextFolio, getNextFolioComplementaria } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 export interface ReservedQuotationFolio {
   folio: string

@@ -12,7 +12,7 @@ vi.mock('@/lib/db', () => ({
   getNextFolioComplementaria: mocks.getNextFolioComplementariaMock,
 }))
 
-vi.mock('@/lib/supabase', () => ({
+vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: {
     from: mocks.fromMock,
     rpc: mocks.rpcMock,

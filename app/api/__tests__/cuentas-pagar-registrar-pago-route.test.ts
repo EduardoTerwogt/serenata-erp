@@ -32,7 +32,7 @@ vi.mock('@/lib/server/idempotency', () => ({
   withIdempotency: mocks.withIdempotencyMock,
   computePayloadHash: mocks.computePayloadHashMock,
 }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 
 import { POST } from '../cuentas-pagar/[id]/registrar-pago/route'
 

@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   ltMock: vi.fn(),
 }))
 
-vi.mock('@/lib/supabase', () => ({
+vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: {
     from: (table: string) => {
       if (table === 'idempotency_keys') {

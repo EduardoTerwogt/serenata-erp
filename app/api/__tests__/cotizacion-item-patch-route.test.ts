@@ -34,7 +34,7 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
 vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('@/lib/server/idempotency', () => ({ withIdempotency: mocks.withIdempotencyMock }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 
 import { PATCH, DELETE } from '../cotizaciones/[id]/items/[itemId]/route'
 import { EstadoCotizacionInvalidoError } from '@/lib/db'

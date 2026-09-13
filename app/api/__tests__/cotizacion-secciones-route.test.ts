@@ -14,7 +14,7 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
   runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
 }))
 vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 
 import { PATCH as PATCH_GENERAL } from '../cotizaciones/[id]/general/route'
 import { PATCH as PATCH_TOTALES } from '../cotizaciones/[id]/totales/route'

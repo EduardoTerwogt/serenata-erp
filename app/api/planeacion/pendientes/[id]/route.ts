@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 export async function DELETE(
   request: Request,

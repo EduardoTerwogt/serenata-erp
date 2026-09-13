@@ -1,5 +1,5 @@
 import { getCotizacionById } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { invalidateFolioCache } from '@/app/api/folio/route'
 
 export async function approveQuotationAndFetchResult(id: string) {

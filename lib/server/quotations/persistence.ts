@@ -1,6 +1,6 @@
 import { getCotizacionById } from '@/lib/db'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { ItemCotizacion } from '@/lib/types'
 
 async function saveCotizacionAtomic(payload: Record<string, unknown>) {

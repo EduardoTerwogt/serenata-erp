@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import type { ProyectoTarea, ProyectoTareaChecklistItem } from '@/lib/types'
 import { calcularFechaLimite } from '@/lib/server/projects/pm-helpers'
 import { getTareasDefaultByTipo } from '@/lib/server/repositories/tipos-proyecto'

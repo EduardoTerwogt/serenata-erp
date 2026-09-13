@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 // Anthropic Sonnet pricing (current as of 2026)
 // Input: $3.00 per 1M tokens

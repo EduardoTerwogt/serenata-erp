@@ -5,7 +5,7 @@ import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { withIdempotency, type IdempotentResult } from '@/lib/server/idempotency'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { ItemCotizacion } from '@/lib/types'
 
 export async function PATCH(

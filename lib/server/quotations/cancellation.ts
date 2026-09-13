@@ -1,5 +1,5 @@
 import { getCotizacionById } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 export async function cancelQuotation(id: string) {
   const cotizacion = await getCotizacionById(id)

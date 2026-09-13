@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { canonicalizeJson } from '@/lib/shared/canonicalPayload'
 
 /**
