@@ -1,0 +1,93 @@
+name: Preview Latency Gate
+
+# Mide el p95 de latencia de rutas de app/api contra un deployment Preview
+# de Vercel real. Disparo manual (workflow_dispatch) -- pensado para que
+# Claude lo dispare vía la API de GitHub cuando un bloque del plan (ej.
+# EF-2 1D-3) exige medir latencia real contra un Preview, ya que el
+# entorno de ejecución de Claude no tiene salida de red hacia *.vercel.app.
+# Reutilizable para cualquier PR/Preview futuro: solo cambian los inputs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      preview_url:
+        description: 'URL del deployment Preview a medir (sin / al final)'
+        required: true
+        type: string
+      routes:
+        description: 'Rutas de app/api a medir, separadas por coma'
+        required: false
+        type: string
+        default: 'folio,clientes,productos,proveedores'
+      warmup:
+        description: 'Solicitudes de warm-up a descartar por ruta'
+        required: false
+        type: string
+        default: '5'
+      samples:
+        description: 'Solicitudes medidas por ruta (después del warm-up)'
+        required: false
+        type: string
+        default: '30'
+      gate_ms:
+        description: 'Gate de p95 en milisegundos'
+        required: false
+        type: string
+        default: '1000'
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login staff + medir p95 por ruta
+        env:
+          PREVIEW_URL: ${{ inputs.preview_url }}
+          ROUTES: ${{ inputs.routes }}
+          WARMUP: ${{ inputs.warmup }}
+          SAMPLES: ${{ inputs.samples }}
+          GATE_MS: ${{ inputs.gate_ms }}
+          STAFF_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+          STAFF_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+        run: |
+          set -euo pipefail
+          JAR=$(mktemp)
+
+          CSRF=$(curl -s -c "$JAR" "$PREVIEW_URL/api/auth/csrf" | grep -o '"csrfToken":"[^"]*"' | cut -d'"' -f4)
+          curl -s -b "$JAR" -c "$JAR" -X POST "$PREVIEW_URL/api/auth/callback/credentials" \
+            --data-urlencode "csrfToken=$CSRF" \
+            --data-urlencode "email=$STAFF_EMAIL" \
+            --data-urlencode "password=$STAFF_PASSWORD" \
+            --data-urlencode "callbackUrl=$PREVIEW_URL/cotizaciones" \
+            --data-urlencode "json=true" -o /dev/null
+
+          CHECK=$(curl -s -o /dev/null -w "%{http_code}" -b "$JAR" "$PREVIEW_URL/api/folio")
+          if [ "$CHECK" != "200" ]; then
+            echo "::error::Login falló contra $PREVIEW_URL (HTTP $CHECK en /api/folio). Verifica que los secrets PLAYWRIGHT_TEST_EMAIL/PLAYWRIGHT_TEST_PASSWORD correspondan a una cuenta staff válida en el entorno (Supabase) al que apunta ese Preview -- si el Preview apunta a producción y esos secrets son de serenata-erp-test, hace falta otra cuenta."
+            exit 1
+          fi
+          echo "Login OK contra $PREVIEW_URL"
+          echo
+
+          FAILED=0
+          IFS=',' read -ra ROUTE_ARR <<< "$ROUTES"
+          for ROUTE in "${ROUTE_ARR[@]}"; do
+            TOTAL=$((WARMUP + SAMPLES))
+            TIMES=()
+            for i in $(seq 1 "$TOTAL"); do
+              T=$(curl -s -o /dev/null -w "%{time_total}" -b "$JAR" "$PREVIEW_URL/api/$ROUTE")
+              TIMES+=("$T")
+            done
+            MEASURED=("${TIMES[@]:$WARMUP}")
+            RANK=$(awk -v n="$SAMPLES" 'BEGIN{r=n*0.95; ri=int(r); if (r>ri) ri++; if (ri<1) ri=1; print ri}')
+            P95=$(printf '%s\n' "${MEASURED[@]}" | sort -n | sed -n "${RANK}p")
+            P95_MS=$(awk -v t="$P95" 'BEGIN{printf "%.0f", t*1000}')
+            if [ "$P95_MS" -le "$GATE_MS" ]; then
+              echo "RESULT /api/$ROUTE p95=${P95_MS}ms PASS"
+            else
+              echo "RESULT /api/$ROUTE p95=${P95_MS}ms FAIL gate=${GATE_MS}ms"
+              FAILED=1
+            fi
+          done
+
+          rm -f "$JAR"
+          exit "$FAILED"
