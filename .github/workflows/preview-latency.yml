@@ -46,8 +46,12 @@ jobs:
           WARMUP: ${{ inputs.warmup }}
           SAMPLES: ${{ inputs.samples }}
           GATE_MS: ${{ inputs.gate_ms }}
-          STAFF_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
-          STAFF_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+          # PREVIEW_STAFF_* tiene prioridad -- una cuenta staff válida en el
+          # entorno real al que apunta el Preview (a menudo producción, no
+          # serenata-erp-test). Si no está seteado, cae a las credenciales
+          # de test que ya usa el job `live`.
+          STAFF_EMAIL: ${{ secrets.PREVIEW_STAFF_EMAIL || secrets.PLAYWRIGHT_TEST_EMAIL }}
+          STAFF_PASSWORD: ${{ secrets.PREVIEW_STAFF_PASSWORD || secrets.PLAYWRIGHT_TEST_PASSWORD }}
         run: |
           set -euo pipefail
           JAR=$(mktemp)
