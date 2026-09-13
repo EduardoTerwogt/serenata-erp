@@ -109,19 +109,22 @@ export async function PATCH(
     }
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
     // Evento confirmado por servidor tras el commit -- payload chico (ids +
-    // revision + timestamp, nunca la partida completa).
-    void sendRealtimeBroadcast([{
-      topic: `cotizacion:${id}`,
-      event: 'item_confirmed',
-      payload: {
-        cotizacion_id: id,
-        item_id: itemId,
-        revision: updatedItem.revision ?? null,
-        mutation_id: mutationId ?? null,
-        at: new Date().toISOString(),
-      },
-      private: true,
-    }])
+    // revision + timestamp, nunca la partida completa). EF-2 1D-1: en
+    // after(), mismo motivo que el autosave de arriba.
+    after(async () => {
+      await sendRealtimeBroadcast([{
+        topic: `cotizacion:${id}`,
+        event: 'item_confirmed',
+        payload: {
+          cotizacion_id: id,
+          item_id: itemId,
+          revision: updatedItem.revision ?? null,
+          mutation_id: mutationId ?? null,
+          at: new Date().toISOString(),
+        },
+        private: true,
+      }])
+    })
 
     return { status: 200, body: { item: updatedItem } }
   }
@@ -158,20 +161,22 @@ export async function DELETE(
     await recalculateQuotationHeader(id)
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
     // Evento confirmado por servidor tras el commit -- la fila ya no existe,
-    // así que no hay revision que mandar.
-    void sendRealtimeBroadcast([{
-      topic: `cotizacion:${id}`,
-      event: 'item_confirmed',
-      payload: {
-        cotizacion_id: id,
-        item_id: itemId,
-        revision: null,
-        mutation_id: null,
-        operation: 'delete',
-        at: new Date().toISOString(),
-      },
-      private: true,
-    }])
+    // así que no hay revision que mandar. EF-2 1D-1: en after().
+    after(async () => {
+      await sendRealtimeBroadcast([{
+        topic: `cotizacion:${id}`,
+        event: 'item_confirmed',
+        payload: {
+          cotizacion_id: id,
+          item_id: itemId,
+          revision: null,
+          mutation_id: null,
+          operation: 'delete',
+          at: new Date().toISOString(),
+        },
+        private: true,
+      }])
+    })
     return Response.json({ ok: true })
   } catch (error) {
     if (error instanceof EstadoCotizacionInvalidoError) {

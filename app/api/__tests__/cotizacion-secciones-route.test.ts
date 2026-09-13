@@ -6,6 +6,11 @@ const mocks = vi.hoisted(() => ({
   runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
   triggerSheetsSyncMock: vi.fn(),
   rpcMock: vi.fn(),
+  // EF-2 1D-1: general/route.ts y totales/route.ts ahora importan `after`
+  // de next/server para agendar el broadcast -- sin este mock, el `after()`
+  // real revienta fuera de un scope de request real de Next.js.
+  afterMock: vi.fn(),
+  sendRealtimeBroadcastMock: vi.fn(async () => undefined),
 }))
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
@@ -15,6 +20,8 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
 }))
 vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
+vi.mock('next/server', () => ({ after: mocks.afterMock }))
+vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 
 import { PATCH as PATCH_GENERAL } from '../cotizaciones/[id]/general/route'
 import { PATCH as PATCH_TOTALES } from '../cotizaciones/[id]/totales/route'
@@ -26,6 +33,16 @@ const req = (ruta: string, body: unknown) => new Request(`http://x/api/cotizacio
 })
 
 const cotizacion = { id: 'SH001', cliente: 'ACME', proyecto: 'Spot', items: [{ id: 'item-1' }] }
+
+/**
+ * EF-2 1D-1: el broadcast se agenda vía `after()` -- `afterMock` solo
+ * registra el callback, nunca lo ejecuta solo. Invoca el callback
+ * agendado, igual que Next.js haría tras enviar la respuesta.
+ */
+async function flushAfter() {
+  const calls = mocks.afterMock.mock.calls.map((call: unknown[]) => call[0] as () => Promise<void>)
+  for (const cb of calls) await cb()
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -48,6 +65,20 @@ describe('PATCH /api/cotizaciones/[id]/general', () => {
     expect(fn).toBe('patch_cotizacion_general')
     expect(args).toEqual({ p_cotizacion_id: 'SH001', p_patch: { proyecto: 'Nuevo nombre' }, p_base: null })
     expect(JSON.stringify(args)).not.toContain('items')
+  })
+
+  it('agenda (after()) y emite general_confirmed tras el commit', async () => {
+    await PATCH_GENERAL(req('general', { proyecto: 'Nuevo nombre' }), { params })
+
+    expect(mocks.afterMock).toHaveBeenCalledTimes(1)
+    expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
+    await flushAfter()
+    expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([{
+      topic: 'cotizacion:SH001',
+      event: 'general_confirmed',
+      payload: { cotizacion_id: 'SH001', at: expect.any(String) },
+      private: true,
+    }])
   })
 
   it('permite vaciar locación y fecha de entrega', async () => {
@@ -100,6 +131,20 @@ describe('PATCH /api/cotizaciones/[id]/totales', () => {
     expect(fn).toBe('patch_cotizacion_totales')
     expect(args).toEqual({ p_cotizacion_id: 'SH001', p_patch: { porcentaje_fee: 0.2 }, p_base: null })
     expect(JSON.stringify(args)).not.toContain('items')
+  })
+
+  it('agenda (after()) y emite totales_confirmed tras el commit', async () => {
+    await PATCH_TOTALES(req('totales', { porcentaje_fee: 0.2 }), { params })
+
+    expect(mocks.afterMock).toHaveBeenCalledTimes(1)
+    expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
+    await flushAfter()
+    expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([{
+      topic: 'cotizacion:SH001',
+      event: 'totales_confirmed',
+      payload: { cotizacion_id: 'SH001', at: expect.any(String) },
+      private: true,
+    }])
   })
 
   it('respeta apagar el IVA y el descuento en cero', async () => {

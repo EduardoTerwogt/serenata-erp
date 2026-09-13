@@ -55,6 +55,18 @@ const itemVacioDelServidor = {
   categoria: '', descripcion: '', cantidad: 1, precio_unitario: 0, x_pagar: 0, revision: 0,
 }
 
+/**
+ * EF-2 1D-1: el broadcast ahora se agenda vía `after()` (antes era
+ * fire-and-forget directo) -- `afterMock` es un `vi.fn()` que solo
+ * REGISTRA el callback, nunca lo ejecuta solo. Este helper invoca todos
+ * los callbacks agendados en la request (autosaves no críticos + el
+ * broadcast), igual que Next.js haría tras enviar la respuesta.
+ */
+async function flushAfter() {
+  const calls = mocks.afterMock.mock.calls.map((call: unknown[]) => call[0] as () => Promise<void>)
+  for (const cb of calls) await cb()
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireSectionMock.mockResolvedValue({ response: null })
@@ -72,6 +84,7 @@ describe('POST /api/cotizaciones/[id]/items', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     const createdId = body.item.id
+    await flushAfter()
 
     expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([{
       topic: 'cotizacion:SH001',
@@ -94,6 +107,7 @@ describe('POST /api/cotizaciones/[id]/items', () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     const createdId = body.item.id
+    await flushAfter()
 
     expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([expect.objectContaining({
       payload: expect.objectContaining({ cotizacion_id: 'SH001', item_id: createdId, mutation_id: 'mut-123' }),

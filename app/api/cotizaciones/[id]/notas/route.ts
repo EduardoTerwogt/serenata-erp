@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
 import { saveNotasInternas } from '@/lib/server/quotations/persistence'
@@ -22,13 +23,15 @@ export async function PATCH(
     await saveNotasInternas(id, notas)
     // Evento confirmado por servidor tras el commit -- antes Notas solo se
     // refrescaba vía `section_saved` (aviso del navegador que guardó, sin
-    // acuse del servidor).
-    void sendRealtimeBroadcast([{
-      topic: `cotizacion:${id}`,
-      event: 'notas_confirmed',
-      payload: { cotizacion_id: id, at: new Date().toISOString() },
-      private: true,
-    }])
+    // acuse del servidor). EF-2 1D-1: en after().
+    after(async () => {
+      await sendRealtimeBroadcast([{
+        topic: `cotizacion:${id}`,
+        event: 'notas_confirmed',
+        payload: { cotizacion_id: id, at: new Date().toISOString() },
+        private: true,
+      }])
+    })
     return Response.json(await getCotizacionById(id))
   } catch (error) {
     console.error('[PATCH /api/cotizaciones/:id/notas] Error guardando notas:', error)
