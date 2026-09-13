@@ -6,6 +6,9 @@ import {
 } from '@/lib/server/projects/tipo-assignment'
 import { ProyectoCambiarEtapaSchema, validate } from '@/lib/validation/schemas'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { DomainError, buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE = 'PUT /api/proyectos/[id]/etapa'
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('proyectos')
@@ -23,13 +26,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     triggerSheetsSync('proyectos', 'historial_responsable')
     return Response.json(proyecto)
   } catch (error) {
+    // lib/server/projects/tipo-assignment.ts no se toca -- el mapeo a
+    // DomainError es responsabilidad exclusiva de la frontera HTTP, mismo
+    // mensaje/status 400 que antes.
     if (error instanceof ProyectoSinTipoError || error instanceof EtapaNoPerteneceATipoError) {
-      return Response.json({ error: error.message }, { status: 400 })
+      return buildErrorResponse(
+        new DomainError({ code: error.name, status: 400, safeMessage: error.message, cause: error }),
+        ROUTE
+      )
     }
-    console.error(error)
-    return Response.json(
-      { error: `Error cambiando etapa: ${error instanceof Error ? error.message : JSON.stringify(error)}` },
-      { status: 500 }
-    )
+    return buildErrorResponse(error, ROUTE)
   }
 }
