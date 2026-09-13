@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-12T22:39:50.261Z",
-  "count": 61,
+  "generated_at": "2026-09-13T03:30:49.388Z",
+  "count": 62,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -62,6 +62,7 @@
     "20260912_bulk_replace_items_cotizacion.sql",
     "20260912_idempotency_keys_payload_hash.sql",
     "20260912_pago_operations.sql",
-    "20260913_bulk_replace_items_cotizacion_fix_deleted_row.sql"
+    "20260913_bulk_replace_items_cotizacion_fix_deleted_row.sql",
+    "20260913_usuarios_session_version.sql"
   ]
 }
