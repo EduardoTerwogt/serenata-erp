@@ -98,11 +98,19 @@ describe('useRealtimeChannel', () => {
     createdChannels = []
     channelsByTopic = new Map()
     currentTopic = `cotizacion:TEST-${Math.random().toString(36).slice(2, 10)}`
+    // Modela RealtimeClient.removeChannel() real: solo hace `teardown()`
+    // (baja del registro) cuando `unsubscribe()` resuelve 'ok' -- 'timed
+    // out'/'error' dejan el canal registrado (@supabase/realtime-js
+    // RealtimeClient.js). El default de cada test es el camino feliz;
+    // los tests de 'error'/rechazo sobrescriben esto explícitamente.
     mocks.removeChannelMock.mockReset().mockImplementation((channel: FakeChannel) =>
-      Promise.resolve().then(() => {
-        channelsByTopic.forEach((registered, topic) => {
-          if (registered === channel) channelsByTopic.delete(topic)
-        })
+      Promise.resolve('ok').then((status) => {
+        if (status === 'ok') {
+          channelsByTopic.forEach((registered, topic) => {
+            if (registered === channel) channelsByTopic.delete(topic)
+          })
+        }
+        return status
       })
     )
     mocks.authorizeRealtimeMock.mockReset().mockResolvedValue(600)
@@ -177,12 +185,12 @@ describe('useRealtimeChannel', () => {
   it('connect() espera removeChannel() del canal anterior antes de reintentar', async () => {
     let resolveRemove: (() => void) | null = null
     mocks.removeChannelMock.mockImplementation(
-      (channel: FakeChannel) => new Promise<void>((resolve) => {
+      (channel: FakeChannel) => new Promise<string>((resolve) => {
         resolveRemove = () => {
           channelsByTopic.forEach((registered, topic) => {
             if (registered === channel) channelsByTopic.delete(topic)
           })
-          resolve()
+          resolve('ok')
         }
       })
     )
@@ -301,5 +309,84 @@ describe('useRealtimeChannel', () => {
     expect(mocks.createPrivateChannelMock).toHaveBeenCalledTimes(2)
 
     second.unmount()
+  })
+
+  it('removeChannel() resuelve "error": no libera el topic hasta reintentar y confirmar "ok"', async () => {
+    const options = baseOptions()
+    const { unmount } = renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+      initialProps: options,
+    })
+    await flush()
+    const first = createdChannels[0]
+
+    // Primer intento: el cliente real dejaría el canal registrado (no hace
+    // `teardown()` salvo con 'ok') -- el mock por defecto de este archivo
+    // solo limpia channelsByTopic cuando resuelve 'ok', así que un 'error'
+    // explícito reproduce eso sin tocar el registro.
+    mocks.removeChannelMock.mockImplementationOnce(() => Promise.resolve('error'))
+
+    unmount()
+    await flush()
+
+    // Todavía registrado -- un 'error' nunca debe tratarse como "ya se fue".
+    expect(channelsByTopic.get(options.topic!)).toBe(first)
+
+    // Backoff del primer reintento (500ms) -- la segunda llamada usa el
+    // mock por defecto, que sí resuelve 'ok'.
+    await flush(500)
+
+    expect(channelsByTopic.get(options.topic!)).toBeUndefined()
+
+    // Recién ahora un remount debe obtener un canal nuevo, nunca `first`.
+    const second = renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+      initialProps: options,
+    })
+    await flush()
+
+    const activeForTopic = channelsByTopic.get(options.topic!)
+    expect(activeForTopic).toBeDefined()
+    expect(activeForTopic).not.toBe(first)
+
+    second.unmount()
+  })
+
+  it('removeChannel() rechaza la promesa: no produce un rejection sin manejar ni bloquea el siguiente mount', async () => {
+    const unhandledRejections: unknown[] = []
+    const onUnhandledRejection = (reason: unknown) => unhandledRejections.push(reason)
+    process.on('unhandledRejection', onUnhandledRejection)
+
+    try {
+      const options = baseOptions()
+      const { unmount } = renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+        initialProps: options,
+      })
+      await flush()
+      const first = createdChannels[0]
+
+      mocks.removeChannelMock.mockImplementationOnce(() => Promise.reject(new Error('network lost')))
+
+      unmount()
+      await flush()
+
+      // El rechazo se atrapa y se trata como 'error' -- ni desbloquea el
+      // topic de inmediato ni escapa como una promesa sin manejar.
+      expect(channelsByTopic.get(options.topic!)).toBe(first)
+
+      await flush(500)
+      expect(channelsByTopic.get(options.topic!)).toBeUndefined()
+
+      const second = renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+        initialProps: options,
+      })
+      await flush()
+      expect(channelsByTopic.get(options.topic!)).not.toBe(first)
+
+      second.unmount()
+      await flush(2000) // agota cualquier reintento pendiente del segundo unmount también
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection)
+    }
+
+    expect(unhandledRejections).toHaveLength(0)
   })
 })
