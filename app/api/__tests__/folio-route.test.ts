@@ -34,15 +34,30 @@ describe('GET /api/folio', () => {
     await expect(response.json()).resolves.toEqual({ folio: 'SH010-B' })
   })
 
-  // EF-2 1D-3: se retiró el CacheManager en memoria de este endpoint --
-  // esta prueba confirma que dos GETs sucesivos consultan el repositorio
-  // las dos veces, no una sola vez servida desde caché.
-  it('dos GETs sucesivos llaman a previewNextQuotationFolio las dos veces (sin caché)', async () => {
+  // EF-2 1D-3: esta ruta fue la única de las 4 medidas cuyo p95 en Preview
+  // (2314ms) superó el gate de 1s -- se revirtió puntualmente a
+  // CacheManager (clientes/productos/proveedores sí pasaron y quedaron sin
+  // caché). Esta prueba confirma que dos GETs con el mismo query solo
+  // consultan el repositorio una vez (cache hit).
+  // El cache es un CacheManager de módulo, compartido entre los `it()` de
+  // este archivo -- cada caso usa su propio complementaria_de para no
+  // pisar la entrada de otro caso.
+  it('dos GETs sucesivos con el mismo query solo llaman a previewNextQuotationFolio una vez (cache hit)', async () => {
     mocks.requireSectionMock.mockResolvedValue({ response: null })
     mocks.previewNextQuotationFolioMock.mockResolvedValue('SH010-B')
 
-    await GET(new Request('http://localhost/api/folio'))
-    await GET(new Request('http://localhost/api/folio'))
+    await GET(new Request('http://localhost/api/folio?complementaria_de=CACHE-HIT-TEST'))
+    await GET(new Request('http://localhost/api/folio?complementaria_de=CACHE-HIT-TEST'))
+
+    expect(mocks.previewNextQuotationFolioMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('un query distinto (complementaria_de distinto) no reutiliza la entrada de caché de otro', async () => {
+    mocks.requireSectionMock.mockResolvedValue({ response: null })
+    mocks.previewNextQuotationFolioMock.mockResolvedValue('SH010-B')
+
+    await GET(new Request('http://localhost/api/folio?complementaria_de=DISTINCT-KEY-A'))
+    await GET(new Request('http://localhost/api/folio?complementaria_de=DISTINCT-KEY-B'))
 
     expect(mocks.previewNextQuotationFolioMock).toHaveBeenCalledTimes(2)
   })
