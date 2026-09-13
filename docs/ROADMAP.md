@@ -1,28 +1,29 @@
 # Roadmap
 
-**Última actualización:** 2026-09-11
+**Última actualización:** 2026-09-13
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
 `docs/ACTIVE_WORK.md`.
 
-Queda una iniciativa comprometida: Engineering Hardening, sin arrancar. **Lo que
-sigue después es producto y se define en Chat una vez cerrada** — deliberadamente,
-para no priorizar features con información vieja.
+Queda una iniciativa comprometida en curso: Engineering Hardening (EF-1 cerrado,
+EF-2/EF-3 sin autorizar todavía). **Lo que sigue después es producto y se define en
+Chat una vez cerrada por completo** — deliberadamente, para no priorizar features con
+información vieja.
 
 ---
 
-## Ahora — ninguna iniciativa activa
+## Ahora — Engineering Hardening (EF-1 cerrado, EF-2/EF-3 pendientes)
 
-Fase 8.7.1 cerró completa (ver Cerrado, abajo). Engineering Hardening es la
-siguiente prioridad comprometida, pero no ha arrancado.
+**EF-1 mergeado a `main`** (PR [#29](https://github.com/EduardoTerwogt/serenata-erp/pull/29),
+2026-09-13): baseline, 1C-1, 1E-1, 1C-2a/b (bulk de partidas), 1B-3, 1B-4,
+1E-3a/b/c (idempotencia financiera) + 7 hallazgos de una auditoría posterior
+del propio PR. Detalle completo, decisiones y hallazgos: `docs/ACTIVE_WORK.md`
+(hasta que se archive) y [`docs/decisions/008`](decisions/008-idempotencia-cliente-orden-fingerprint-normalize-persist.md).
 
-## Siguiente — Engineering Hardening
-
-Hallazgos de la auditoría de ingeniería (2026-09). Ninguno obliga a reescribir el
-sistema; todos son corregibles incrementalmente. Van **antes** que cualquier feature
-nueva, porque son patrones transversales: cada módulo que se agregue encima los
-replica.
+**EF-2 y EF-3 no autorizados** — mantienen los gates de entrada definidos en
+el plan canónico v13.1 §15. Hallazgos y frentes A-E completos, con el detalle
+de cada caso: [`docs/archive/auditoria-ingenieria-2026-09.md`](archive/auditoria-ingenieria-2026-09.md).
 
 ### Frentes
 
@@ -38,14 +39,15 @@ replica.
 quedar establecida al cerrar cada frente:**
 [`docs/archive/auditoria-ingenieria-2026-09.md`](archive/auditoria-ingenieria-2026-09.md).
 
-Los bloques concretos se definen al auditar la iniciativa, no ahora.
+Los bloques concretos de EF-2/EF-3 se definen al auditar cada frente antes de
+arrancarlo, no ahora.
 
 ---
 
 ## Después
 
-**Sin definir a propósito.** Al cerrar 8.7 y Engineering Hardening se prioriza en
-Chat, con el estado real del sistema a la vista.
+**Sin definir a propósito.** Al cerrar Engineering Hardening por completo (EF-2 y
+EF-3) se prioriza en Chat, con el estado real del sistema a la vista.
 
 El material candidato está en el roadmap de producto de 2026-09-04 (Fase 5, del que
 ya se entregaron el Portal, el Dashboard con gastos fijos, y las bases de Proyectos y

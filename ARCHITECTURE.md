@@ -154,6 +154,36 @@ Por qué se construyó así: [`docs/decisions/002`](docs/decisions/002-modelo-de
 UPDATE`). El recorrido completo, con los defectos que se encontraron en el camino:
 [`docs/archive/fases-colaboracion-0-8.md`](docs/archive/fases-colaboracion-0-8.md).
 
+## Idempotencia de cliente (pagos y bulk-import de partidas)
+
+`lib/client/pagoIdempotency.ts` (`runIdempotentPagoSubmit`, compartido por
+`useCuentasPagar`/`useCuentasCobrar`) y `lib/client/bulkImportIdempotency.ts`
+(`runIdempotentBulkImportSubmit`, usado por `handleImportItems` en
+`app/cotizaciones/[id]/page.tsx`) orquestan reintentos seguros de doble clic,
+retry de red o pestaña caída a medio submit, contra `withIdempotency`
+(`lib/server/idempotency.ts`, tabla `idempotency_keys`) del lado servidor.
+
+- Orden fijo: `fingerprint (sobre el archivo/payload ORIGINAL) →
+  readPendingOperation → reconciliar si aplica → normalize()/construir
+  payload → createPendingOperation() (solo si la identidad es nueva) →
+  fetch → clear (solo en éxito)`. Detalle completo y por qué el orden
+  importa: [`docs/decisions/008`](docs/decisions/008-idempotencia-cliente-orden-fingerprint-normalize-persist.md).
+- El TTL de `pendingOperation` es un gatillo real de reconciliación, no una
+  marca ignorada: un registro vencido (`stale`) siempre reconcilia contra
+  `/estado` antes de reenviar, aunque el fingerprint sea idéntico.
+  `not_found`/`ambiguous` nunca son terminales — solo permiten un retry
+  EXACTO (mismo `operationId`, mismo payload), nunca una identidad nueva.
+- La limpieza de la identidad pendiente distingue `origin: 'createdNow' |
+  'reusedExisting'`: un fallo local antes del `fetch` solo limpia cuando la
+  identidad se generó en este mismo submit (nunca salió ningún request);
+  una identidad reutilizada de un intento anterior nunca se limpia por un
+  fallo local, porque ese intento anterior pudo haber hecho commit.
+- `bulk_replace_items_cotizacion` (RPC) rechaza con `P1410` tanto una fila
+  de `reemplazar_ids` con `revision` desfasada como una que ya no existe
+  (borrada por una operación concurrente) — antes solo cubría el primer
+  caso, y el segundo dejaba que `INSERT ... ON CONFLICT` la recreara de
+  cero. Prueba de regresión: `tests/e2e/live/bulk-replace-items-rpc.spec.ts`.
+
 ## Reglas que se respetan
 
 1. No meter lógica de datos en páginas si cabe en un hook, servicio o repositorio.
@@ -178,6 +208,7 @@ evidencia, no cuenta como terminado.
 | Cuentas por cobrar (factura, complemento, pagos parciales) | crítico + live de concurrencia |
 | Cuentas por pagar (factura, pagos, órdenes de pago con PDF real) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia |
 | Registrar pago sin carreras (cobrar y pagar) | `tests/e2e/live/cuentas-*-concurrency.spec.ts` |
+| Idempotencia de cliente (pagos y bulk-import de partidas) | `lib/client/__tests__/pagoIdempotency.test.ts`, `bulkImportIdempotency.test.ts`, `lib/server/__tests__/idempotency.test.ts`, `tests/e2e/live/bulk-replace-items-rpc.spec.ts` |
 | Proyectos (detalle, tareas, cronograma, tipos, reporte de cierre) | smoke de proyectos |
 | Proveedores (lista + modal, historial, régimen fiscal) | `tests/e2e/critical/proveedores.spec.ts` |
 | Portal de proveedores (signup, login, confirmar identidad, subir factura) | `smoke/portal-signup.spec.ts`, `critical/portal-factura.spec.ts` |
@@ -247,3 +278,9 @@ Trampas reales, no teóricas. Cada una costó un bug:
 - **Las migraciones se aplican a mano** en el SQL Editor de Supabase; no hay CLI ni
   aplicación automática. `npm run check-migrations` solo lista y valida nombres.
 - **No mezclar refactors de UI con cambios de schema/RPC/SQL** en el mismo bloque.
+- **`PUT /api/cuentas-pagar` (recibe `id` en el body, no es ruta `[id]`) no
+  acepta `estado`/`fecha_pago`/`monto_pagado`** — esos campos son
+  transicionales y solo se tocan vía los endpoints explícitos de
+  registrar-pago. Si el body trae cualquiera de los tres, responde `400` y
+  rechaza el update completo, incluso si viene mezclado con `notas`/
+  `orden_pago_id` (sí permitidos) — nunca aplica parcialmente.
