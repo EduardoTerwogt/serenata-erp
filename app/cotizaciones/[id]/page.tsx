@@ -10,8 +10,9 @@ import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
 import { ImportableItem, QuotationItemsController } from '@/hooks/useQuotationItems'
-import { calculateEstimatedTaxes, calculateQuotationTotals } from '@/lib/quotations/calculations'
+import { calculateEstimatedTaxes, calculateQuotationTotals, normalizeQuotationItem } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem, reconcileServerItems } from '@/lib/quotations/mappers'
+import { BulkImportPayload, runIdempotentBulkImportSubmit } from '@/lib/client/bulkImportIdempotency'
 import { QuotationFormValues } from '@/lib/quotations/types'
 import { approveQuotation, buildComplementariaUrl, emitirCotizacion, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationNotes } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
@@ -297,6 +298,20 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const itemDirtyCellsRef = useRef<Set<string>>(new Set())
   const itemFocusedCellsRef = useRef<Set<string>>(new Set())
   const itemSavingCellsRef = useRef<Set<string>>(new Set())
+  // Drenado real para General/Totales (mismo "causa F" que itemCellDrainRef/
+  // itemCellRetryNeededRef abajo, portado desde partidas -- Fase 8.7.2 lo dejó
+  // resuelto solo para partidas; General y Totales seguían limpiando su dirty
+  // sin importar si ya había un reintento encolado con un valor más nuevo,
+  // produciendo un conflicto contra sí mismos con ediciones rápidas seguidas
+  // (p. ej. alternar el switch de IVA dos veces antes de que el primer PATCH
+  // resuelva). Mientras un campo ya tiene una ronda de PATCH en vuelo, una
+  // edición nueva sobre el MISMO campo no dispara un segundo `fetch` en
+  // paralelo -- solo marca el `RetryNeeded` y el drenado, al terminar su ronda
+  // actual, manda una ronda más con el valor final.
+  const generalFieldDrainRef = useRef<Map<QuotationGeneralField, Promise<unknown>>>(new Map())
+  const generalFieldRetryNeededRef = useRef<Set<QuotationGeneralField>>(new Set())
+  const totalsFieldDrainRef = useRef<Map<QuotationTotalsField, Promise<unknown>>>(new Map())
+  const totalsFieldRetryNeededRef = useRef<Set<QuotationTotalsField>>(new Set())
   // Drenado real por celda: mientras una celda ya tiene una ronda de PATCH en
   // vuelo (`itemCellDrainRef`), una edición nueva sobre la MISMA celda no dispara
   // un segundo `fetch` en paralelo (rompería el orden y correría con una `base`
@@ -991,7 +1006,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // `.then(onFulfilled, onRejected)`. El resto de la lógica (base, snapshot,
   // liberación de sección) es idéntica a la de antes, solo movida de las
   // ramas try/catch a las del `.then`.
-  const persistGeneralField = useCallback((field: QuotationGeneralField): Promise<unknown> => {
+  const sendGeneralFieldPatchRound = useCallback((field: QuotationGeneralField): Promise<unknown> => {
     if (!cotizacion) return Promise.resolve()
     generalFieldSavingRef.current.add(field)
     setIsSavingGeneral(true)
@@ -1008,10 +1023,28 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const semantic = rawPatch.then(
       (updated) => {
         try {
-          generalFieldDirtyRef.current.delete(field)
+          // Igual que `sendItemCellPatchRound`: si ya hay un reintento
+          // encolado (`generalFieldRetryNeededRef`), esta ronda que acaba de
+          // resolver ya está desactualizada frente a una edición más nueva --
+          // limpiar el dirty acá dejaría creer que el campo ya no tiene
+          // cambios locales sin confirmar. El drenado de
+          // `persistGeneralFieldAutosave` manda la ronda siguiente con el
+          // valor correcto -- recién esa, al no encontrar más reintentos
+          // pendientes, limpia el dirty de verdad.
+          if (!generalFieldRetryNeededRef.current.has(field)) {
+            generalFieldDirtyRef.current.delete(field)
+          }
           clearGeneralFieldConflict(field)
           if (updated) {
             generalServerRef.current = buildGeneralSnapshot({ cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega || '', locacion: updated.locacion || '' })
+            // Causa E (portada de partidas): refrescar el "base" al valor
+            // recién confirmado, SIEMPRE -- no solo cuando el dirty se limpia.
+            // Sin esto, una ronda encolada por `generalFieldRetryNeededRef`
+            // mandaría su PATCH con el `base` de ANTES de esta ronda exitosa,
+            // que ya quedó viejo frente al valor real en el servidor, y
+            // produciría un 409 contra uno mismo -- el mismo conflicto falso
+            // que este fix busca eliminar.
+            generalFieldBaseRef.current[field] = generalServerRef.current[field]
             setCotizacion((prev) => prev ? { ...prev, cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega, locacion: updated.locacion } : prev)
           }
           generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
@@ -1034,7 +1067,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
             if (detail && normalizeGeneralFieldValue(detail.attempted) === normalizeGeneralFieldValue(detail.current)) {
               generalServerRef.current = { ...generalServerRef.current, [field]: detail.current } as GeneralSnapshot
               generalFieldBaseRef.current[field] = detail.current
-              generalFieldDirtyRef.current.delete(field)
+              // Mismo motivo que la rama de éxito: no limpiar dirty si ya hay
+              // un reintento encolado con un valor más nuevo.
+              if (!generalFieldRetryNeededRef.current.has(field)) {
+                generalFieldDirtyRef.current.delete(field)
+              }
               generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
               return
             }
@@ -1056,7 +1093,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return trackMutation(semantic)
   }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease, trackMutation])
 
-  const persistTotalsField = useCallback((field: QuotationTotalsField): Promise<unknown> => {
+  const sendTotalsFieldPatchRound = useCallback((field: QuotationTotalsField): Promise<unknown> => {
     if (!cotizacion) return Promise.resolve()
     totalsFieldSavingRef.current.add(field)
     setIsSavingTotals(true)
@@ -1064,16 +1101,27 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     const patch: Record<string, unknown> = { [field]: value }
     const baseValue = totalsFieldBaseRef.current[field]
     const base = baseValue !== undefined ? { [field]: baseValue } : undefined
-    // Mismo motivo que `persistGeneralField`: `trackMutation` debe registrar la
-    // promesa SEMÁNTICA (tras resolver un conflicto idéntico), no la cruda.
+    // Mismo motivo que `sendGeneralFieldPatchRound`: `trackMutation` debe
+    // registrar la promesa SEMÁNTICA (tras resolver un conflicto idéntico), no
+    // la cruda.
     const rawPatch = patchQuotationTotales(patch, { base })
     const semantic = rawPatch.then(
       (updated) => {
         try {
-          totalsFieldDirtyRef.current.delete(field)
+          // Mismo motivo que `sendGeneralFieldPatchRound`: no limpiar dirty si
+          // ya hay un reintento encolado (`totalsFieldRetryNeededRef`) con un
+          // valor más nuevo -- el drenado de `persistTotalsFieldAutosave`
+          // manda la ronda siguiente y recién esa limpia el dirty de verdad.
+          if (!totalsFieldRetryNeededRef.current.has(field)) {
+            totalsFieldDirtyRef.current.delete(field)
+          }
           clearTotalsFieldConflict(field)
           if (updated) {
             totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
+            // Causa E (portada de partidas): refrescar el "base" al valor
+            // recién confirmado, SIEMPRE -- ver el comentario equivalente en
+            // `sendGeneralFieldPatchRound`.
+            totalsFieldBaseRef.current[field] = totalsServerRef.current[field]
             setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor } : prev)
           }
           totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
@@ -1096,7 +1144,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
             if (detail && normalizeTotalsFieldValue(field, detail.attempted) === normalizeTotalsFieldValue(field, detail.current)) {
               totalsServerRef.current = { ...totalsServerRef.current, [field]: detail.current } as TotalsSnapshot
               totalsFieldBaseRef.current[field] = detail.current
-              totalsFieldDirtyRef.current.delete(field)
+              // Mismo motivo que la rama de éxito: no limpiar dirty si ya hay
+              // un reintento encolado con un valor más nuevo.
+              if (!totalsFieldRetryNeededRef.current.has(field)) {
+                totalsFieldDirtyRef.current.delete(field)
+              }
               totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
               return
             }
@@ -1114,10 +1166,65 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return trackMutation(semantic)
   }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease, trackMutation])
 
-  const persistGeneralFieldRef = useRef(persistGeneralField)
-  persistGeneralFieldRef.current = persistGeneralField
-  const persistTotalsFieldRef = useRef(persistTotalsField)
-  persistTotalsFieldRef.current = persistTotalsField
+  /**
+   * Drenado real para General (mismo patrón que `persistItemCellAutosave`
+   * para partidas): como máximo una ronda de PATCH en vuelo por campo. Si
+   * llega una edición nueva mientras una ronda ya está en curso, no dispara
+   * un segundo `fetch` en paralelo -- marca `generalFieldRetryNeededRef` y el
+   * `do...while` manda una ronda más en cuanto la actual resuelve, con el
+   * valor final del form en ese momento.
+   */
+  const persistGeneralFieldAutosave = useCallback((field: QuotationGeneralField): Promise<unknown> => {
+    const existing = generalFieldDrainRef.current.get(field)
+    if (existing) {
+      generalFieldRetryNeededRef.current.add(field)
+      return existing
+    }
+    const drain = (async () => {
+      let result: unknown
+      do {
+        generalFieldRetryNeededRef.current.delete(field)
+        result = await sendGeneralFieldPatchRound(field)
+      } while (generalFieldRetryNeededRef.current.has(field))
+      return result
+    })().finally(() => {
+      generalFieldDrainRef.current.delete(field)
+    })
+    // Mismo motivo que `persistItemCellAutosave`: este drenado se dispara
+    // "fire and forget" desde un debounce -- sin este `catch` mudo, un
+    // conflicto real (que a propósito rechaza el drenado) se reportaría como
+    // unhandled rejection aunque el banner de conflicto ya se haya mostrado.
+    drain.catch(() => {})
+    generalFieldDrainRef.current.set(field, drain)
+    return drain
+  }, [sendGeneralFieldPatchRound])
+
+  /** Equivalente a `persistGeneralFieldAutosave`, para Totales. */
+  const persistTotalsFieldAutosave = useCallback((field: QuotationTotalsField): Promise<unknown> => {
+    const existing = totalsFieldDrainRef.current.get(field)
+    if (existing) {
+      totalsFieldRetryNeededRef.current.add(field)
+      return existing
+    }
+    const drain = (async () => {
+      let result: unknown
+      do {
+        totalsFieldRetryNeededRef.current.delete(field)
+        result = await sendTotalsFieldPatchRound(field)
+      } while (totalsFieldRetryNeededRef.current.has(field))
+      return result
+    })().finally(() => {
+      totalsFieldDrainRef.current.delete(field)
+    })
+    drain.catch(() => {})
+    totalsFieldDrainRef.current.set(field, drain)
+    return drain
+  }, [sendTotalsFieldPatchRound])
+
+  const persistGeneralFieldRef = useRef(persistGeneralFieldAutosave)
+  persistGeneralFieldRef.current = persistGeneralFieldAutosave
+  const persistTotalsFieldRef = useRef(persistTotalsFieldAutosave)
+  persistTotalsFieldRef.current = persistTotalsFieldAutosave
 
   /**
    * Marca un campo de General como sucio y programa su propio autoguardado
@@ -1152,7 +1259,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // de esperar su debounce individual -- mismo criterio que tenía el guardado de
   // sección completa al perder el foco.
   // Fase 8.7 (Bloque 1): un campo "sucio" sigue contando como tal hasta que su
-  // PATCH resuelve con éxito (`persistGeneralField` recién lo borra de
+  // PATCH resuelve con éxito (`sendGeneralFieldPatchRound` recién lo borra de
   // `generalFieldDirtyRef` en el `.then` de éxito) -- así que si esto se
   // dispara mientras ESE MISMO campo ya tiene un PATCH en vuelo (p. ej. el
   // blur de la sección, disparado por el propio click en Aprobar/Generar, que
@@ -1163,25 +1270,38 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // frente al valor que el primero acaba de confirmar). El primero ya quedó
   // trackeado en `pendingMutationsRef` vía `trackMutation`, así que
   // `flushPendingSaves` lo sigue esperando aunque aquí no se repita.
+  // Fase 8.7.2 (causa F, portado a General): itera la UNIÓN de
+  // `generalFieldDirtyRef` y `generalFieldDrainRef.keys()`, no solo dirty --
+  // así un drenado ya en curso se ve aunque su ronda actual haya limpiado
+  // `generalFieldDirtyRef` un instante antes de que esto corra. Si ya hay un
+  // drenado en vuelo para el campo, se reusa esa misma promesa en vez de
+  // disparar una ronda nueva por su cuenta.
   const flushGeneralDirtyFields = useCallback((): Promise<unknown>[] => {
     const disparadas: Promise<unknown>[] = []
-    for (const field of Array.from(generalFieldDirtyRef.current)) {
-      if (generalFieldSavingRef.current.has(field)) continue
+    const fields = new Set([...Array.from(generalFieldDirtyRef.current), ...Array.from(generalFieldDrainRef.current.keys())])
+    for (const field of Array.from(fields)) {
+      const existingDrain = generalFieldDrainRef.current.get(field)
+      if (existingDrain) { disparadas.push(existingDrain); continue }
+      if (!generalFieldDirtyRef.current.has(field)) continue
       clearGeneralFieldTimer(field)
-      disparadas.push(persistGeneralField(field))
+      disparadas.push(persistGeneralFieldAutosave(field))
     }
     return disparadas
-  }, [clearGeneralFieldTimer, persistGeneralField])
+  }, [clearGeneralFieldTimer, persistGeneralFieldAutosave])
 
+  /** Equivalente a `flushGeneralDirtyFields`, para Totales. */
   const flushTotalsDirtyFields = useCallback((): Promise<unknown>[] => {
     const disparadas: Promise<unknown>[] = []
-    for (const field of Array.from(totalsFieldDirtyRef.current)) {
-      if (totalsFieldSavingRef.current.has(field)) continue
+    const fields = new Set([...Array.from(totalsFieldDirtyRef.current), ...Array.from(totalsFieldDrainRef.current.keys())])
+    for (const field of Array.from(fields)) {
+      const existingDrain = totalsFieldDrainRef.current.get(field)
+      if (existingDrain) { disparadas.push(existingDrain); continue }
+      if (!totalsFieldDirtyRef.current.has(field)) continue
       clearTotalsFieldTimer(field)
-      disparadas.push(persistTotalsField(field))
+      disparadas.push(persistTotalsFieldAutosave(field))
     }
     return disparadas
-  }, [clearTotalsFieldTimer, persistTotalsField])
+  }, [clearTotalsFieldTimer, persistTotalsFieldAutosave])
 
   const resolveGeneralFieldConflict = useCallback((field: QuotationGeneralField, resolution: 'theirs' | 'mine') => {
     const detail = generalFieldConflicts[field]
@@ -1200,9 +1320,13 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       generalDirtyRef.current = generalFieldDirtyRef.current.size > 0
       return
     }
-    // "mine": lo tecleado se conserva tal cual, se reintenta con el base ya corregido.
-    void persistGeneralField(field)
-  }, [clearGeneralFieldConflict, generalFieldConflicts, persistGeneralField, setClienteInput, setProyectoInput, setValue])
+    // "mine": lo tecleado se conserva tal cual, se reintenta con el base ya
+    // corregido -- reusa el drenado genérico (mismo criterio que
+    // `resolveItemCellConflict` con `persistItemCellAutosave`) en vez de
+    // llamar la ronda cruda directo, para que un reintento concurrente sobre
+    // este mismo campo se encole en vez de correr en paralelo.
+    void persistGeneralFieldAutosave(field)
+  }, [clearGeneralFieldConflict, generalFieldConflicts, persistGeneralFieldAutosave, setClienteInput, setProyectoInput, setValue])
 
   const resolveTotalsFieldConflict = useCallback((field: QuotationTotalsField, resolution: 'theirs' | 'mine') => {
     const detail = totalsFieldConflicts[field]
@@ -1219,8 +1343,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
       return
     }
-    void persistTotalsField(field)
-  }, [clearTotalsFieldConflict, persistTotalsField, totalsFieldConflicts])
+    // Mismo motivo que `resolveGeneralFieldConflict`: reusa el drenado
+    // genérico en vez de la ronda cruda.
+    void persistTotalsFieldAutosave(field)
+  }, [clearTotalsFieldConflict, persistTotalsFieldAutosave, totalsFieldConflicts])
 
   /**
    * Una ronda de PATCH para una celda: arma el patch, lo manda, y aplica éxito
@@ -1660,42 +1786,81 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const handleImportItems = useCallback(async (items: ImportableItem[]) => {
     if (items.length === 0) return
     setImportingItems(true)
+    const scope = `bulk_import:${id}`
     try {
-      // Las filas en blanco que ya existen se reutilizan (conservan su posición) y las
-      // que sobren se borran en la misma petición.
-      const reemplazarIds = (getValues('items') || [])
-        .filter((item) => isBlankQuotationItem(item))
-        .map((item) => item.id)
-        .filter((rowId): rowId is string => !!rowId && !pendingRowCreationsRef.current.has(rowId))
+      const { cotizacion: updated } = await runIdempotentBulkImportSubmit({
+        scope,
+        cotizacionId: id,
+        // Recalculado en cada intento (retry tras un `completed`, o el
+        // envío inicial): ids ya definitivos (nuevos o reutilizados), igual
+        // que ya hace el resto de la app (Fase 6B) -- esta ruta deja de ser
+        // la única que generaba ids del lado del servidor.
+        buildCandidatePayload: (): BulkImportPayload => {
+          const reusableIds = (getValues('items') || [])
+            .filter((item) => isBlankQuotationItem(item))
+            .map((item) => item.id)
+            .filter((rowId): rowId is string => !!rowId && !pendingRowCreationsRef.current.has(rowId))
 
-      // Fase 8.7.1: se trackea la operación completa (fetch + parseo + chequeo
-      // de status, no el `fetch()` crudo) -- mismo criterio que
-      // `patchQuotationItem` -- para que `flushPendingSaves` espere una
-      // importación en vuelo antes de Generar/Aprobar y aborte si falla.
-      const data = await trackMutation((async () => {
-        const response = await fetch(`/api/cotizaciones/${id}/items/bulk`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            items: items.map((sourceItem) => ({
-              categoria: sourceItem.categoria || '',
-              descripcion: sourceItem.descripcion || '',
-              cantidad: sourceItem.cantidad || 1,
-              precio_unitario: sourceItem.precio_unitario || 0,
-              x_pagar: sourceItem.x_pagar || 0,
+          let nextOrder = Object.values(itemsServerRef.current).reduce((max, item) => Math.max(max, item.orden ?? 0), -1) + 1
+
+          const rows = items.map((sourceItem, index) => {
+            const reusedId = reusableIds[index]
+            const existing = reusedId ? itemsServerRef.current[reusedId] : undefined
+            const normalized = normalizeQuotationItem({
+              id: reusedId || crypto.randomUUID(),
+              categoria: String(sourceItem.categoria || ''),
+              descripcion: String(sourceItem.descripcion || ''),
+              cantidad: Number(sourceItem.cantidad) || 1,
+              precio_unitario: Number(sourceItem.precio_unitario) || 0,
               responsable_id: sourceItem.responsable_id || '',
               responsable_nombre: sourceItem.responsable_nombre || '',
-            })),
-            reemplazar_ids: reemplazarIds,
-          }),
-        })
-        const body = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(body?.message || body?.error || 'Error copiando partidas')
-        return body
-      })())
+              x_pagar: Number(sourceItem.x_pagar) || 0,
+            })
 
-      const updated = data?.cotizacion as Cotizacion | undefined
-      if (!updated) throw new Error('Respuesta inválida al copiar partidas')
+            return {
+              id: normalized.id as string,
+              categoria: normalized.categoria,
+              descripcion: normalized.descripcion,
+              cantidad: normalized.cantidad,
+              precio_unitario: normalized.precio_unitario,
+              importe: normalized.importe,
+              responsable_id: normalized.responsable_id || null,
+              responsable_nombre: normalized.responsable_nombre || null,
+              x_pagar: normalized.x_pagar,
+              margen: normalized.margen,
+              orden: existing ? (existing.orden ?? nextOrder++) : nextOrder++,
+              notas: existing?.notas ?? null,
+            }
+          })
+
+          return {
+            items: rows,
+            reemplazar_ids: reusableIds.map((rowId) => ({
+              id: rowId,
+              revision: itemsServerRef.current[rowId]?.revision ?? 0,
+            })),
+            cotizacionId: id,
+          }
+        },
+        // Fase 8.7.1: se trackea la operación completa (fetch + parseo +
+        // chequeo de status), no el `fetch()` crudo, para que
+        // `flushPendingSaves` espere una importación en vuelo antes de
+        // Generar/Aprobar y aborte si falla.
+        submit: ({ operationId, payload }) => trackMutation((async () => {
+          const response = await fetch(`/api/cotizaciones/${id}/items/bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: payload.items,
+              reemplazar_ids: payload.reemplazar_ids,
+              operation_id: operationId,
+            }),
+          })
+          const responseBody = await response.json().catch(() => ({}))
+          if (!response.ok) throw new Error(responseBody?.message || responseBody?.error || 'Error copiando partidas')
+          return responseBody as { cotizacion?: Cotizacion }
+        })()) as Promise<{ cotizacion?: Cotizacion }>,
+      })
 
       // Se aplica la lista completa de una vez (nada de append + setValue, que era lo
       // que dejaba una fila fuera del subtotal). Solo se tocan partidas y totales del

@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasPagar, getDocumentosCuentaPagar, getOrdenPagoById, getProveedorById } from '@/lib/db'
+import { getCuentaPagarById, getDocumentosCuentaPagar, getOrdenPagoById, getProveedorById } from '@/lib/db'
 import { calcularSaldoPendiente } from '@/lib/server/cuentas/status'
 
 export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
@@ -8,8 +8,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 
   try {
     const { id } = await props.params
-    const cuentas = await getCuentasPagar()
-    const cuenta = cuentas.find(c => c.id === id)
+    const cuenta = await getCuentaPagarById(id)
     if (!cuenta) {
       return Response.json({ error: 'Cuenta por pagar no encontrada' }, { status: 404 })
     }

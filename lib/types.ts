@@ -361,6 +361,9 @@ export interface DocumentoCuentaCobrar {
   created_at: string
   estado_validacion: EstadoValidacionDocumento
   detalle_validacion?: string | null
+  // 1E-3a: permite reconstruir, en la reconciliación, qué documento
+  // corresponde a qué operación de idempotencia financiera.
+  operation_id?: string | null
 }
 
 export interface DocumentoCuentaPagar {
@@ -373,6 +376,7 @@ export interface DocumentoCuentaPagar {
   created_at: string
   estado_validacion: EstadoValidacionDocumento
   detalle_validacion?: string | null
+  operation_id?: string | null
 }
 
 export interface OrdenPago {

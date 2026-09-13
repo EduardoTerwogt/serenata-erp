@@ -504,7 +504,7 @@ test('aplicar una plantilla persiste las partidas y reusa la fila en blanco', as
   // y la fila en blanco se mandó para reutilizarla, no para crear una de más.
   await expect.poll(() => bulkRequests.length).toBe(1)
   expect((bulkRequests[0].items as Record<string, unknown>[]).map((i) => i.descripcion)).toEqual(['Cámara', 'Iluminación'])
-  expect(bulkRequests[0].reemplazar_ids).toEqual(['item-blank-1'])
+  expect(bulkRequests[0].reemplazar_ids).toEqual([{ id: 'item-blank-1', revision: 0 }])
 })
 
 test('autoguarda la configuración de totales (fee y descuento)', async ({ page }) => {

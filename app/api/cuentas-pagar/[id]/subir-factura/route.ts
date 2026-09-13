@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasPagar, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById } from '@/lib/db'
+import { getCuentaPagarById, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
@@ -47,8 +47,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: 'El archivo excede el límite de 10 MB' }, { status: 400 })
     }
 
-    const cuentas = await getCuentasPagar()
-    const cuenta = cuentas.find(c => c.id === id)
+    const cuenta = await getCuentaPagarById(id)
     if (!cuenta) {
       return Response.json({ error: 'Cuenta por pagar no encontrada' }, { status: 404 })
     }

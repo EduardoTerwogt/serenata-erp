@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CuentaCobrar, DocumentoCuentaCobrar, PagoComprobante } from '@/lib/types'
 import { getJson, sendFormData } from '@/lib/client/api'
+import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
+import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
 
 interface CuentaDetalle {
   cuenta: CuentaCobrar
@@ -83,17 +85,26 @@ export function useCuentasCobrar() {
     id: string,
     data: { monto: number; tipo_pago: string; fecha_pago: string; notas?: string; comprobante?: File }
   ) => {
-    const formData = new FormData()
-    formData.append('monto', String(data.monto))
-    formData.append('tipo_pago', data.tipo_pago)
-    formData.append('fecha_pago', data.fecha_pago)
-    if (data.notas) formData.append('notas', data.notas)
-    if (data.comprobante) formData.append('comprobante', data.comprobante)
-    // Fase 3.3: una key nueva por intento -- protege contra doble
-    // click/retry sin bloquear un reintento real con datos distintos.
-    formData.append('idempotency_key', crypto.randomUUID())
-
-    const result = await sendFormData(`/api/cuentas-cobrar/${id}/registrar-pago`, formData, 'Error al registrar pago')
+    // 1E-3c: mismo orquestador que useCuentasPagar -- fingerprint sobre el
+    // comprobante ORIGINAL (antes de normalizar) + campos del formulario.
+    const result = await runIdempotentPagoSubmit({
+      scope: `registrar-pago:cuentas-cobrar:${id}`,
+      dominio: 'cuentas-cobrar',
+      cuentaId: id,
+      fields: { monto: data.monto, tipo_pago: data.tipo_pago, fecha_pago: data.fecha_pago, notas: data.notas ?? null },
+      comprobante: data.comprobante,
+      normalize: normalizeComprobante,
+      submit: async ({ operationId, comprobante }) => {
+        const formData = new FormData()
+        formData.append('monto', String(data.monto))
+        formData.append('tipo_pago', data.tipo_pago)
+        formData.append('fecha_pago', data.fecha_pago)
+        if (data.notas) formData.append('notas', data.notas)
+        if (comprobante) formData.append('comprobante', comprobante)
+        formData.append('operation_id', operationId)
+        return sendFormData(`/api/cuentas-cobrar/${id}/registrar-pago`, formData, 'Error al registrar pago')
+      },
+    })
     await cargar()
     return result
   }, [cargar])

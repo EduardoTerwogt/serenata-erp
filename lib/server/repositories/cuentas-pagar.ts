@@ -33,6 +33,33 @@ export async function getCuentasPagar() {
 }
 
 /**
+ * Detalle por ID -- nunca a través de getCuentasPagar().find(), que con
+ * más de 500 cuentas puede no traer la fila buscada aunque exista (1C-1).
+ * .maybeSingle() nunca .single(): "no encontrada" debe seguir siendo un
+ * 404 explícito del caller, no un error de Postgres por 0 filas.
+ */
+export async function getCuentaPagarById(id: string): Promise<CuentaPagar | null> {
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_pagar')
+    .select('*, cotizaciones(proyecto), proyectos(proyecto)')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const row = data as CuentaPagarConJoins
+  return {
+    ...row,
+    proyecto_nombre:
+      row.proyecto_nombre ||
+      row.cotizaciones?.proyecto ||
+      row.proyectos?.proyecto ||
+      undefined,
+    cotizaciones: undefined,
+    proyectos: undefined,
+  } as CuentaPagar
+}
+
+/**
  * Cuentas por pagar de un proyecto puntual -- usado por el auto-llenado del
  * Status Report / Reporte de Cierre (Fase 5.2) para financiero real vs.
  * cotizado, sin traer las 500 más recientes de todo el sistema.

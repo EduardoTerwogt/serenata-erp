@@ -919,6 +919,15 @@ test.describe('live: colaboración real -- causas E-I (Fase 8.7.2)', () => {
     }, { timeout: 20_000 }).toBe(true)
 
     await expect(pageA.getByText(/Alguien más lo cambió a/)).toBeHidden()
+
+    // Diagnóstico de CI (2026-09-12): esta prueba solo confirmaba la fila en
+    // el servidor y en A -- nunca esperaba a que B (la otra pestaña) también
+    // convergiera vía Realtime antes de terminar. El siguiente test (causa H)
+    // captura su "antes" contando filas en B; si B todavía no había recibido
+    // esta fila nueva, ese "antes" quedaba desactualizado por una fila y el
+    // conteo final del siguiente test aparecía uno de más (flake
+    // intermitente, no una regresión de producto).
+    await expect(filas(pageB)).toHaveCount(await filas(pageA).count(), { timeout: 20_000 })
   })
 
   test('causa H: agregar una fila y llenar su precio actualiza Subtotal en ambas pantallas sin recargar', async () => {
@@ -969,6 +978,152 @@ test.describe('live: colaboración real -- causas E-I (Fase 8.7.2)', () => {
     const esperado = `$${fmtCurrency(cotizacion.subtotal)}`
     await expect(subtotal(pageA)).toHaveText(esperado, { timeout: 30_000 })
     await expect(subtotal(pageB)).toHaveText(esperado, { timeout: 30_000 })
+  })
+})
+
+/**
+ * Reporte manual en TEST-EF1-VERIFY (2026-09-12): alternar el switch de IVA
+ * en Totales disparaba un falso "Alguien más lo cambió a..." sin que nadie
+ * más editara la cotización -- la misma causa F que Fase 8.7.2 ya había
+ * resuelto para partidas (`itemCellDrainRef`/`itemCellRetryNeededRef`), pero
+ * nunca portada a Totales/General: `sendTotalsFieldPatchRound`/
+ * `sendGeneralFieldPatchRound` limpiaban su dirty en cuanto SU ronda
+ * resolvía, sin ver que ya había un reintento encolado con un valor más
+ * nuevo -- ese reintento entonces mandaba un PATCH con un "base" ya viejo y
+ * chocaba contra sí mismo. El fix agrega el mismo drenado real
+ * (`generalFieldDrainRef`/`totalsFieldDrainRef` + sus `RetryNeeded`) y
+ * refresca el "base" en cada ronda exitosa (causa E, también portada).
+ */
+test.describe('live: colaboración real -- drenado real en Totales y General (fix conflicto falso de IVA)', () => {
+  test.skip(!liveEnabled, 'Requiere PLAYWRIGHT_BASE_URL, credenciales reales y el bypass apagado')
+
+  let context: BrowserContext
+  let page: Page
+  let cotizacionId = ''
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(60_000)
+    await cleanupLiveCotizacionesByPrefix(`${PREFIJO}DRAIN-`).catch((e) => console.error('[live drain] barrido inicial:', e))
+
+    context = await browser.newContext()
+    page = await context.newPage()
+    vigilarErrores(page, 'drain')
+    await login(page, '/cotizaciones')
+
+    const suffix = Date.now()
+    cotizacionId = await crearCotizacion(page, `${PREFIJO}DRAIN-${suffix}`, `Drain ${suffix}`, [
+      { descripcion: 'Partida drenado uno', precio: 1000 },
+    ])
+
+    await page.goto(`/cotizaciones/${cotizacionId}`)
+    await expect(filas(page)).toHaveCount(1, { timeout: 30_000 })
+  })
+
+  test.afterAll(async () => {
+    await context?.close()
+    if (cotizacionId) await cleanupLiveCotizacion(cotizacionId).catch((e) => console.error('[live drain] cleanup:', e))
+    await cleanupLiveCotizacionesByPrefix(`${PREFIJO}DRAIN-`).catch((e) => console.error('[live drain] barrido final:', e))
+  })
+
+  test('Totales: alternar el switch de IVA mientras el PATCH anterior sigue en vuelo no produce un conflicto contra uno mismo', async () => {
+    test.setTimeout(30_000)
+    const rutaTotales = `**/api/cotizaciones/${cotizacionId}/totales`
+    const ivaToggle = page.locator('span', { hasText: 'IVA (16%)' }).locator('button')
+
+    // Identificadas por el valor que lleva el propio body del PATCH, no por
+    // orden de llegada -- mismo motivo que "causa F" de partidas: con el
+    // primer PATCH retrasado, un `waitForResponse` genérico podría resolver
+    // contra la respuesta equivocada.
+    const respuestas: { ivaActivo: boolean; status: number }[] = []
+    const onResponse = async (response: Response) => {
+      const request = response.request()
+      if (request.method() !== 'PATCH' || !response.url().includes('/totales')) return
+      let body: { iva_activo?: boolean } | null = null
+      try {
+        body = request.postDataJSON() as { iva_activo?: boolean } | null
+      } catch {
+        // Diagnóstico solo -- si el body no es JSON parseable no hay nada que
+        // registrar para este PATCH en particular.
+      }
+      if (typeof body?.iva_activo === 'boolean') respuestas.push({ ivaActivo: body.iva_activo, status: response.status() })
+    }
+    page.on('response', onResponse)
+
+    let firstPatchDelayed = false
+    const delayedHandler: Parameters<typeof page.route>[1] = async (route) => {
+      if (!firstPatchDelayed && route.request().method() === 'PATCH') {
+        firstPatchDelayed = true
+        await new Promise((resolve) => setTimeout(resolve, 1_500))
+      }
+      await route.continue()
+    }
+    await page.route(rutaTotales, delayedHandler)
+
+    const ivaAntes = (await leerCotizacionDelServidor(cotizacionId)).iva_activo
+
+    try {
+      await ivaToggle.click() // marca dirty -> debounce de 800ms -> PATCH #1 (retrasado 1.5s)
+      // Deja que el debounce dispare el primer PATCH y salga del navegador
+      // antes de seguir -- el segundo click debe caer mientras ESE PATCH
+      // sigue en vuelo, el escenario exacto que producía el conflicto falso.
+      await page.waitForTimeout(900)
+      await ivaToggle.click() // segundo toggle mientras el primer PATCH sigue en vuelo
+
+      await expect.poll(() => respuestas.find((r) => r.ivaActivo === !ivaAntes)?.status, { timeout: 15_000 }).toBe(200)
+      await expect.poll(() => respuestas.find((r) => r.ivaActivo === ivaAntes)?.status, { timeout: 15_000 }).toBe(200)
+    } finally {
+      await page.unroute(rutaTotales, delayedHandler)
+      page.off('response', onResponse)
+    }
+
+    await expect.poll(async () => (await leerCotizacionDelServidor(cotizacionId)).iva_activo, { timeout: 15_000 }).toBe(ivaAntes)
+    await expect(page.getByText(/Alguien más lo cambió a/)).toBeHidden()
+  })
+
+  test('General: editar Locación mientras el PATCH anterior sigue en vuelo no produce un conflicto contra uno mismo', async () => {
+    test.setTimeout(30_000)
+    const rutaGeneral = `**/api/cotizaciones/${cotizacionId}/general`
+    const locacionInput = page.getByPlaceholder('Lugar del evento')
+
+    const respuestas: { locacion: string; status: number }[] = []
+    const onResponse = async (response: Response) => {
+      const request = response.request()
+      if (request.method() !== 'PATCH' || !response.url().includes('/general')) return
+      let body: { locacion?: string } | null = null
+      try {
+        body = request.postDataJSON() as { locacion?: string } | null
+      } catch {
+        // Diagnóstico solo.
+      }
+      if (typeof body?.locacion === 'string') respuestas.push({ locacion: body.locacion, status: response.status() })
+    }
+    page.on('response', onResponse)
+
+    let firstPatchDelayed = false
+    const delayedHandler: Parameters<typeof page.route>[1] = async (route) => {
+      if (!firstPatchDelayed && route.request().method() === 'PATCH') {
+        firstPatchDelayed = true
+        await new Promise((resolve) => setTimeout(resolve, 1_500))
+      }
+      await route.continue()
+    }
+    await page.route(rutaGeneral, delayedHandler)
+
+    try {
+      await locacionInput.click()
+      await locacionInput.fill('Foro A')
+      await page.waitForTimeout(900) // deja salir el primer PATCH (retrasado 1.5s)
+      await locacionInput.fill('Foro A y B')
+
+      await expect.poll(() => respuestas.find((r) => r.locacion === 'Foro A')?.status, { timeout: 15_000 }).toBe(200)
+      await expect.poll(() => respuestas.find((r) => r.locacion === 'Foro A y B')?.status, { timeout: 15_000 }).toBe(200)
+    } finally {
+      await page.unroute(rutaGeneral, delayedHandler)
+      page.off('response', onResponse)
+    }
+
+    await expect.poll(async () => (await leerCotizacionDelServidor(cotizacionId)).locacion, { timeout: 15_000 }).toBe('Foro A y B')
+    await expect(page.getByText(/Alguien más lo cambió a/)).toBeHidden()
   })
 })
 
