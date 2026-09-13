@@ -2,6 +2,10 @@ import { auth, type AppSection } from '@/auth'
 import { getUserSections, hasAnySection } from '@/lib/authz'
 import { cookies } from 'next/headers'
 import type { Session } from 'next-auth'
+import { getUsuarioSessionState } from '@/lib/server/repositories/usuarios'
+import { logStructured, newRequestId } from '@/lib/server/observability/log'
+
+const ROUTE = 'requireAuthenticated'
 
 const E2E_BYPASS_COOKIE = 'e2e-bypass'
 const ALL_SECTIONS: AppSection[] = ['admin', 'dashboard', 'cotizaciones', 'proyectos', 'cuentas', 'responsables', 'planeacion']
@@ -48,6 +52,38 @@ export async function requireAuthenticated() {
     return {
       session: null,
       response: Response.json({ error: 'No autenticado' }, { status: 401 }),
+    }
+  }
+
+  // EF-2 1B-2b: comprueba que la sesión (JWT) no fue invalidada desde que
+  // se emitió -- usuario desactivado, o `sections`/`password_hash`/`email`
+  // cambiados vía `admin_update_usuario` (1B-2a) desde otra sesión admin.
+  // `proxy.ts` solo hace un chequeo optimista de que el claim exista, sin
+  // consultar Postgres -- esta es la validación real.
+  const userClaims = session.user as { id?: string; sessionVersion?: number }
+  if (userClaims.id) {
+    let estado: { active: boolean; session_version: number } | null
+    try {
+      estado = await getUsuarioSessionState(userClaims.id)
+    } catch (e) {
+      // Error transitorio de Postgres -- NUNCA se trata como sesión
+      // invalidada. Un blip de Supabase no debe desloguear a todo el
+      // staff a la vez: la sesión queda intacta, solo esta request falla.
+      const requestId = newRequestId()
+      logStructured({ requestId, route: ROUTE, level: 'error', message: 'session_state_check_failed', detail: e instanceof Error ? e.message : String(e) })
+      return {
+        session: null,
+        response: Response.json({ error: 'Servicio no disponible, intenta de nuevo', requestId }, { status: 503 }),
+      }
+    }
+
+    if (!estado || !estado.active || estado.session_version !== (userClaims.sessionVersion ?? 0)) {
+      const requestId = newRequestId()
+      logStructured({ requestId, route: ROUTE, level: 'warn', message: 'session_invalidated', detail: userClaims.id })
+      return {
+        session: null,
+        response: Response.json({ error: 'Sesión invalidada', requestId }, { status: 401 }),
+      }
     }
   }
 

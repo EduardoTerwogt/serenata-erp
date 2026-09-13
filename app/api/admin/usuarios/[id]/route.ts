@@ -1,6 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { hashPassword } from '@/lib/auth-utils'
-import { getUsuarioById, updateUsuario } from '@/lib/server/repositories/usuarios'
+import { getUsuarioById, adminUpdateUsuario } from '@/lib/server/repositories/usuarios'
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('admin')
@@ -39,7 +39,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     return Response.json({ error: 'No puedes desactivarte a ti mismo' }, { status: 400 })
   }
 
-  const updates: Parameters<typeof updateUsuario>[1] = {}
+  const updates: Parameters<typeof adminUpdateUsuario>[1] = {}
   if (body.name !== undefined) updates.name = body.name.trim()
   if (body.email !== undefined) updates.email = body.email.toLowerCase().trim()
   if (body.sections !== undefined) updates.sections = body.sections
@@ -52,7 +52,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   }
 
   try {
-    const usuario = await updateUsuario(id, updates)
+    // EF-2 1B-2a/1B-2b: admin_update_usuario bumpea session_version cuando
+    // corresponde (active/sections/password_hash/email), en la misma
+    // transacción -- una sesión con la versión vieja recibe 401 en su
+    // siguiente request (lib/api-auth.ts).
+    const usuario = await adminUpdateUsuario(id, updates)
     return Response.json(usuario)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

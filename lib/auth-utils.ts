@@ -129,6 +129,8 @@ export interface AuthUser {
   passwordHash: string
   name: string
   sections: string[]
+  /** EF-2 1B-2b: claim de revocación de sesión, ver lib/api-auth.ts. */
+  sessionVersion: number
 }
 
 /**
