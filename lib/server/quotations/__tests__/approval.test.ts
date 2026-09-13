@@ -3,20 +3,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   getCotizacionByIdMock: vi.fn(),
   rpcMock: vi.fn(),
+  invalidateFolioCacheMock: vi.fn(),
 }))
 
 vi.mock('@/lib/db', () => ({
   getCotizacionById: mocks.getCotizacionByIdMock,
 }))
 
-vi.mock('@/lib/supabase', () => ({
+vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: {
     rpc: mocks.rpcMock,
   },
 }))
 
-vi.mock('@/app/api/folio/route', () => ({
-  invalidateFolioCache: vi.fn(),
+vi.mock('@/lib/server/quotations/folio', () => ({
+  invalidateFolioCache: mocks.invalidateFolioCacheMock,
 }))
 
 import { approveQuotationAndFetchResult } from '../approval'
@@ -25,6 +26,7 @@ describe('approveQuotationAndFetchResult', () => {
   beforeEach(() => {
     mocks.getCotizacionByIdMock.mockReset()
     mocks.rpcMock.mockReset()
+    mocks.invalidateFolioCacheMock.mockReset()
   })
 
   it('retorna 404 cuando la cotización no existe', async () => {
@@ -130,6 +132,7 @@ describe('approveQuotationAndFetchResult', () => {
     const result = await approveQuotationAndFetchResult('SH001')
 
     expect(mocks.rpcMock).toHaveBeenCalledWith('approve_cotizacion', { p_id: 'SH001' })
+    expect(mocks.invalidateFolioCacheMock).toHaveBeenCalledTimes(1)
     expect(result).toEqual({
       ok: true,
       status: 200,

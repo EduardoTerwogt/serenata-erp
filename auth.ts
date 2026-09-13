@@ -2,8 +2,9 @@ import NextAuth from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import { getAuthUser, hashPassword, needsRehash, verifyPassword } from '@/lib/auth-utils'
 import { normalizeUserSections } from '@/lib/authz'
+import { jwtCallback, sessionCallback, type AppSection } from '@/lib/auth-callbacks'
 
-export type AppSection = 'admin' | 'dashboard' | 'cotizaciones' | 'proyectos' | 'cuentas' | 'responsables' | 'planeacion'
+export type { AppSection }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -44,6 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.name,
           sections: normalizeUserSections(user.sections),
+          sessionVersion: user.sessionVersion,
         }
       },
     }),
@@ -51,25 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   pages: { signIn: '/login' },
   session: { strategy: 'jwt' },
   callbacks: {
-    jwt({ token, user }) {
-      if (user) {
-        token.sections = normalizeUserSections((user as { sections?: string[] }).sections)
-      } else {
-        token.sections = normalizeUserSections(token.sections as string[] | undefined)
-      }
-      return token
-    },
-    session({ session, token }) {
-      if (session.user) {
-        const user = session.user as { sections?: AppSection[]; id?: string }
-        user.sections = normalizeUserSections(token.sections as string[] | undefined)
-        // `token.sub` ya trae el id (NextAuth lo fija en el jwt callback por
-        // default a partir del `id` que devuelve `authorize()`). Sin esto,
-        // session.user.id queda undefined y el resto del código que ya lo
-        // esperaba (app/cotizaciones/[id]/page.tsx) caía al fallback de email.
-        user.id = token.sub
-      }
-      return session
-    },
+    jwt: jwtCallback,
+    session: sessionCallback,
   },
 })

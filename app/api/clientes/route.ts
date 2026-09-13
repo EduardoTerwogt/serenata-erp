@@ -1,10 +1,7 @@
 import { requireSection } from '@/lib/api-auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
-import { CacheManager } from '@/lib/api/cache'
 import { z } from 'zod'
-
-const cache = new CacheManager(5 * 60 * 1000)
 
 const ClientePostSchema = z.object({
   nombre: z.string().min(1, 'nombre requerido').max(255, 'nombre demasiado largo').trim(),
@@ -16,12 +13,6 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const q = (searchParams.get('q') ?? '').trim().slice(0, 100)
-
-  const cacheKey = `clientes:${q}`
-  const cached = cache.get(cacheKey)
-  if (cached) {
-    return Response.json(cached)
-  }
 
   let query = supabaseAdmin
     .from('clientes')
@@ -39,7 +30,6 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Error obteniendo clientes' }, { status: 500 })
   }
 
-  cache.set(cacheKey, data || [])
   return Response.json(data || [])
 }
 
@@ -67,7 +57,6 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Error creando cliente' }, { status: 500 })
     }
 
-    cache.invalidate('clientes:')
     triggerSheetsSync('clientes')
     return Response.json(data, { status: 201 })
   } catch (e) {

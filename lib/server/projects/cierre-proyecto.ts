@@ -1,5 +1,5 @@
 import { generarHistorialProyecto, getCuentasCobrarByProyecto, getCuentasPagarByProyecto, getProyectoById, updateProyecto } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { getCotizacionById } from '@/lib/server/repositories/quotations'
 import { getTareasByProyecto } from '@/lib/server/repositories/proyecto-tareas'
 import { getDocumentoSingleton, upsertDocumentoAutoGenerado } from '@/lib/server/repositories/proyecto-documentos'

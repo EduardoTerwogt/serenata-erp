@@ -1,10 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
-import { CacheManager } from '@/lib/api/cache'
-
-// Fase 8c: Caché en servidor para búsquedas (5 minutos TTL)
-const cache = new CacheManager(5 * 60 * 1000)
 
 export async function GET(request: Request) {
   const authResult = await requireSection('cotizaciones')
@@ -12,13 +8,6 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const q = searchParams.get('q') ?? ''
-
-  // Fase 8c: Verificar caché antes de consultar BD
-  const cacheKey = `productos:${q}`
-  const cached = cache.get(cacheKey)
-  if (cached) {
-    return Response.json(cached)
-  }
 
   let query = supabaseAdmin
     .from('productos')
@@ -36,8 +25,6 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Error en productos' }, { status: 500 })
   }
 
-  // Guardar en caché para futuras búsquedas
-  cache.set(cacheKey, data || [])
   return Response.json(data || [])
 }
 
@@ -69,9 +56,6 @@ export async function POST(request: Request) {
       console.error('[POST /api/productos] Error:', error)
       return Response.json({ error: 'Error en productos' }, { status: 500 })
     }
-
-    // Invalidate cache after successful creation
-    cache.invalidate('productos:')
 
     triggerSheetsSync('productos')
     return Response.json(data, { status: 201 })

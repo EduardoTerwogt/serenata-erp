@@ -54,6 +54,7 @@ DRIVE_TEST_FOLDER_ID=            # 1cofExiUSPDRq9CeH6oU-WSBev1I56m-a
 GOOGLE_DRIVE_REFRESH_TOKEN_TEST=
 PLAYWRIGHT_TEST_EMAIL=
 PLAYWRIGHT_TEST_PASSWORD=
+NEXT_PUBLIC_E2E_TEST_HOOKS=      # 'true' SOLO en el job `live` -- expone lib/supabase-browser.ts como window.__e2eSupabaseBrowser para que Playwright pueda inspeccionar canales de Realtime reales (tests/e2e/live/realtime-channel-reconnection.spec.ts). Nunca en Vercel.
 ```
 
 El folder de Drive de prueba es exclusivo de CI y reemplaza a los dos folders reales dentro del job `live`, así que ningún test puede escribir en las carpetas de producción.

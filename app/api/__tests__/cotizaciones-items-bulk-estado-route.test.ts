@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({ getCotizacionById: mocks.getCotizacionByIdMock }))
-vi.mock('@/lib/supabase', () => ({
+vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: {
     from: (table: string) => {
       if (table === 'idempotency_keys') {

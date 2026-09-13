@@ -1,9 +1,10 @@
+import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
 import { runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { Cotizacion } from '@/lib/types'
 
 /**
@@ -53,12 +54,16 @@ export async function PATCH(
     const actualizada = data as Cotizacion
     await runQuotationNonCriticalAutosaves(actualizada.cliente, actualizada.proyecto, [], 'PATCH /api/cotizaciones/:id/general')
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
-    void sendRealtimeBroadcast([{
-      topic: `cotizacion:${id}`,
-      event: 'general_confirmed',
-      payload: { cotizacion_id: id, at: new Date().toISOString() },
-      private: true,
-    }])
+    // EF-2 1D-1: en after() -- fire-and-forget puede perderse si la
+    // función serverless termina antes de que la promesa resuelva.
+    after(async () => {
+      await sendRealtimeBroadcast([{
+        topic: `cotizacion:${id}`,
+        event: 'general_confirmed',
+        payload: { cotizacion_id: id, at: new Date().toISOString() },
+        private: true,
+      }])
+    })
 
     return Response.json(await getCotizacionById(id))
   } catch (error) {

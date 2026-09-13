@@ -1,6 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { getCuentasCobrar, updateCuentaCobrar } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { calcularEstadoCuentaCobrarDetallado } from '@/lib/server/cuentas/status'
 import type { EstadoCuentaCobrar } from '@/lib/types'

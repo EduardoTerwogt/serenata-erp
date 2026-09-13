@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { checkDriveAuth } from '@/lib/integrations/google/drive'
 
 export async function GET(request: Request) {

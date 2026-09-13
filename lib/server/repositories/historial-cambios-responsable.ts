@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { HistorialCambioResponsableItem } from '@/lib/types'
 
 // Log append-only: nunca se borra ni reconstruye (a diferencia de

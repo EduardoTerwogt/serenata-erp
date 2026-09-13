@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { getCotizaciones } from '@/lib/server/repositories/quotations'
 import { getProyectos } from '@/lib/server/repositories/proyectos'
 import { getCuentasCobrar, getPagosComprobantesEnRango } from '@/lib/server/repositories/cuentas-cobrar'

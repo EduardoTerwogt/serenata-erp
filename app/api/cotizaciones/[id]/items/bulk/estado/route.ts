@@ -1,6 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 /**
  * Endpoint de reconciliación (Engineering Hardening EF-1, 1C-2b). Misma

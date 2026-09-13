@@ -1,5 +1,5 @@
 import { getItemsByCotizacion, getProyectoById, updateProyecto } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { cerrarProyectoSiEsFinal } from '@/lib/server/projects/cierre-proyecto'
 import { ItemCotizacion, Proyecto } from '@/lib/types'
 

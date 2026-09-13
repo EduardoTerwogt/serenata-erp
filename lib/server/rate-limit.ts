@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 /**
  * Auditoría externa 2026-09-09 (Fase 2.4). Sin Upstash/Vercel KV disponible

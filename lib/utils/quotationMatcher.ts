@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import type { Cotizacion } from '@/lib/types'
 
 export interface MatchResult {

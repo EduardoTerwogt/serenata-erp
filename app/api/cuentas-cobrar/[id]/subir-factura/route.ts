@@ -4,6 +4,9 @@ import { parseFacturaXML, validarMontoFactura, validarFacturaClienteXML, calcula
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE = 'POST /api/cuentas-cobrar/[id]/subir-factura'
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -166,10 +169,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       archivos_subidos: uploadedFiles.length,
     })
   } catch (error) {
-    console.error('[cuentas-cobrar/subir-factura]', error)
-    return Response.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    )
+    return buildErrorResponse(error, ROUTE)
   }
 }

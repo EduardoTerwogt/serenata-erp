@@ -34,6 +34,25 @@ describe('GET /api/folio', () => {
     await expect(response.json()).resolves.toEqual({ folio: 'SH010-B' })
   })
 
+  // EF-2 1D-3: el gate de p95 en Preview mostró 2314ms sin caché (>1s) para
+  // esta ruta -- única de las 4 medidas que no pasó. El caché se restauró,
+  // pero vive en lib/server/quotations/folio.ts (dentro de
+  // previewNextQuotationFolio), no en esta ruta -- approval.ts, capa
+  // server, también necesita invalidarlo, y una dependencia lib/server ->
+  // app/api invertiría el layering. El comportamiento de caché en sí se
+  // prueba en lib/server/quotations/__tests__/folio.test.ts; aquí solo se
+  // confirma que la ruta delega cada request, sin lógica propia de por
+  // medio.
+  it('dos GETs sucesivos delegan a previewNextQuotationFolio en cada llamada', async () => {
+    mocks.requireSectionMock.mockResolvedValue({ response: null })
+    mocks.previewNextQuotationFolioMock.mockResolvedValue('SH010-B')
+
+    await GET(new Request('http://localhost/api/folio'))
+    await GET(new Request('http://localhost/api/folio'))
+
+    expect(mocks.previewNextQuotationFolioMock).toHaveBeenCalledTimes(2)
+  })
+
   it('corta la ejecución cuando el endpoint no está autorizado', async () => {
     mocks.requireSectionMock.mockResolvedValue({
       response: Response.json({ error: 'No autorizado' }, { status: 403 }),

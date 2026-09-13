@@ -30,9 +30,20 @@ vi.mock('@/lib/server/idempotency', () => ({
   withIdempotency: mocks.withIdempotencyMock,
   computePayloadHash: mocks.computePayloadHashMock,
 }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 
 import { POST } from '../cotizaciones/[id]/items/bulk/route'
+
+/**
+ * EF-2 1D-1: el broadcast ahora se agenda vía `after()` -- `afterMock`
+ * solo registra el callback, nunca lo ejecuta solo. Invoca todos los
+ * callbacks agendados (broadcast + autosaves de catálogo), igual que
+ * Next.js haría tras enviar la respuesta.
+ */
+async function flushAfter() {
+  const calls = mocks.afterMock.mock.calls.map((call: unknown[]) => call[0] as () => Promise<void>)
+  for (const cb of calls) await cb()
+}
 
 const params = Promise.resolve({ id: 'SH001' })
 const req = (body: unknown) =>
@@ -176,6 +187,7 @@ describe('POST /api/cotizaciones/[id]/items/bulk', () => {
     expect(res.status).toBe(200)
     expect(mocks.recalculateQuotationHeaderMock).toHaveBeenCalledWith('SH001')
     expect(mocks.triggerSheetsSyncMock).toHaveBeenCalledWith('cotizaciones', 'items_cotizacion')
+    await flushAfter()
     expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([{
       topic: 'cotizacion:SH001',
       event: 'item_confirmed',
@@ -193,11 +205,14 @@ describe('POST /api/cotizaciones/[id]/items/bulk', () => {
     expect(body.cotizacion).toEqual({ id: 'SH001', cliente: 'ACME', proyecto: 'Spot', items: [] })
   })
 
-  it('difiere los autoguardados de catálogo fuera de la respuesta', async () => {
+  it('difiere el broadcast y los autoguardados de catálogo fuera de la respuesta (2 after())', async () => {
     await POST(req({ items: [item()], operation_id: OP_ID }), { params })
 
-    expect(mocks.afterMock).toHaveBeenCalledTimes(1)
+    // EF-2 1D-1: el broadcast se sumó como un segundo after() -- antes
+    // solo estaban los autosaves de catálogo.
+    expect(mocks.afterMock).toHaveBeenCalledTimes(2)
     expect(mocks.runQuotationNonCriticalAutosavesMock).not.toHaveBeenCalled()
+    expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
   })
 
   it('estado_invalido de la RPC -- responde 409, sin recalcular ni emitir evento', async () => {

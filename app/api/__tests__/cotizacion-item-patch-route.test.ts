@@ -34,7 +34,7 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
 vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('@/lib/server/idempotency', () => ({ withIdempotency: mocks.withIdempotencyMock }))
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 
 import { PATCH, DELETE } from '../cotizaciones/[id]/items/[itemId]/route'
 import { EstadoCotizacionInvalidoError } from '@/lib/db'
@@ -45,6 +45,17 @@ const req = (body: unknown) => new Request(`http://x/api/cotizaciones/SH001/item
   method: 'PATCH',
   body: JSON.stringify(body),
 })
+
+/**
+ * EF-2 1D-1: el broadcast ahora se agenda vía `after()` -- `afterMock`
+ * solo registra el callback, nunca lo ejecuta solo. Invoca todos los
+ * callbacks agendados en la request, igual que Next.js haría tras enviar
+ * la respuesta.
+ */
+async function flushAfter() {
+  const calls = mocks.afterMock.mock.calls.map((call: unknown[]) => call[0] as () => Promise<void>)
+  for (const cb of calls) await cb()
+}
 
 const itemDelServidor = {
   id: ITEM_ID,
@@ -151,7 +162,9 @@ describe('PATCH /api/cotizaciones/[id]/items/[itemId]', () => {
 
     expect(mocks.recalculateQuotationHeaderMock).toHaveBeenCalledWith('SH001')
     expect(mocks.triggerSheetsSyncMock).toHaveBeenCalledWith('cotizaciones', 'items_cotizacion')
-    expect(mocks.afterMock).toHaveBeenCalledTimes(1)
+    // EF-2 1D-1: el broadcast se sumó como un segundo after() -- antes
+    // solo estaba el de autosaves no críticos.
+    expect(mocks.afterMock).toHaveBeenCalledTimes(2)
     expect(await res.json()).toEqual({ item: itemDelServidor })
   })
 
@@ -214,6 +227,7 @@ describe('PATCH /api/cotizaciones/[id]/items/[itemId]', () => {
       })
 
       await PATCH(req({ descripcion: 'x', mutation_id: 'mut-abc' }), { params })
+      await flushAfter()
 
       expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([
         expect.objectContaining({
@@ -281,6 +295,7 @@ describe('DELETE /api/cotizaciones/[id]/items/[itemId]', () => {
     expect(res.status).toBe(200)
     expect(mocks.deleteItemCotizacionMock).toHaveBeenCalledWith('SH001', ITEM_ID)
     expect(mocks.recalculateQuotationHeaderMock).toHaveBeenCalledTimes(1)
+    await flushAfter()
     expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([{
       topic: 'cotizacion:SH001',
       event: 'item_confirmed',

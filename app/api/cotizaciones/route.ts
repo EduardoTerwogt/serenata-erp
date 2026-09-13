@@ -10,7 +10,7 @@ import {
 } from '@/lib/server/quotations/persistence'
 import { CotizacionCreateSchema, validate } from '@/lib/validation/schemas'
 import { ItemCotizacion } from '@/lib/types'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { consumeReservedQuotationFolio, reserveNextQuotationFolio } from '@/lib/server/quotations/folio'
 
 interface CotizacionRawRow {

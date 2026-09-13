@@ -5,7 +5,7 @@
 //
 // No modifica Supabase. Es operación segura de solo-lectura en la BD.
 
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { overwriteSheet, formatHeaderRow, getSheetIds, CellValue } from '@/lib/integrations/google/sheets'
 import { TABLE_SCHEMAS, TableSchema, toSheetValue } from './schema'
 

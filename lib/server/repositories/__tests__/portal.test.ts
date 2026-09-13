@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // el proveedorId correcto y propaga resultado/error.
 const mocks = vi.hoisted(() => ({ rpcMock: vi.fn() }))
 
-vi.mock('@/lib/supabase', () => ({
+vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: { rpc: mocks.rpcMock },
 }))
 

@@ -6,6 +6,9 @@ import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
 import { RegimenFiscal } from '@/lib/types'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE = 'POST /api/cuentas-pagar/[id]/subir-factura'
 
 function extractFacturaFechaFromXml(xmlContent: string): string | null {
   const match = xmlContent.match(/\bFecha=["']([^"']+)["']/i)
@@ -129,7 +132,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       },
     })
   } catch (error) {
-    console.error('[cuentas-pagar/subir-factura]', error)
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE)
   }
 }

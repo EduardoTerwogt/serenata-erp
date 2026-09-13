@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import type { ProyectoDocumento, TipoProyectoDocumento } from '@/lib/types'
 
 export async function getDocumentosByProyecto(proyectoId: string): Promise<ProyectoDocumento[]> {

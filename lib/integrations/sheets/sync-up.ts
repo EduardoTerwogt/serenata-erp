@@ -10,7 +10,7 @@
 //   - Si el Sheet está vacío o solo tiene header → no se borra nada (seguro)
 //   - Supabase es la fuente de verdad en estructura; Sheets es editor de datos
 
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { readAllRows } from '@/lib/integrations/google/sheets'
 import { TABLE_SCHEMAS, TableSchema, fromSheetValue } from './schema'
 

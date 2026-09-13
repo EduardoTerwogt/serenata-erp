@@ -35,7 +35,7 @@ vi.mock('@/lib/server/quotations/folio', () => ({
   consumeReservedQuotationFolio: mocks.consumeReservedQuotationFolioMock,
 }))
 
-vi.mock('@/lib/supabase', () => ({
+vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: {},
 }))
 

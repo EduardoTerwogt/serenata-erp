@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   rpcMock: vi.fn(),
 }))
 
-vi.mock('@/lib/supabase', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 
 import { upsertItems, deleteItemCotizacion, EstadoCotizacionInvalidoError } from '../quotations'
 

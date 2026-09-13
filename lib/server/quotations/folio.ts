@@ -1,5 +1,6 @@
 import { getNextFolio, getNextFolioComplementaria } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { CacheManager } from '@/lib/api/cache'
 
 export interface ReservedQuotationFolio {
   folio: string
@@ -29,9 +30,35 @@ function extractComplementariaCode(folio: string | null | undefined, baseFolio: 
   return match ? match[1].charCodeAt(0) : null
 }
 
+// EF-2 1D-3: el gate de p95 en Preview mostró 2314ms sin caché (>1s) para
+// esta ruta -- única de las 4 medidas que no pasó (clientes/productos/
+// proveedores quedan sin caché, sí pasaron el gate). El caché vive aquí, en
+// la capa server, no en app/api/folio/route.ts -- approval.ts (también capa
+// server) necesita invalidarlo, y una dependencia lib/server -> app/api
+// invierte el layering (regresión detectada en auditoría del PR #31: el
+// commit original de 1D-3 había eliminado esa dependencia a propósito).
+const cache = new CacheManager(5 * 60 * 1000)
+
 export async function previewNextQuotationFolio(baseFolio?: string): Promise<string> {
   const trimmedBase = baseFolio?.trim() || ''
+  const cacheKey = `folio:${trimmedBase || 'normal'}`
+  const cached = cache.get<string>(cacheKey)
+  if (cached) return cached
 
+  const folio = await computeNextQuotationFolio(trimmedBase)
+  cache.set(cacheKey, folio)
+  return folio
+}
+
+/**
+ * Invalidate folio cache - called when quotations are approved and folios are consumed
+ * Ensures the next folio prediction is accurate after a folio has been reserved
+ */
+export function invalidateFolioCache() {
+  cache.invalidateAll()
+}
+
+async function computeNextQuotationFolio(trimmedBase: string): Promise<string> {
   try {
     if (!trimmedBase) {
       // Obtener todos los folios principales existentes

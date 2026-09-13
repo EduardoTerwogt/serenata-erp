@@ -4,7 +4,7 @@ import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { withIdempotency, computePayloadHash, type IdempotentResult } from '@/lib/server/idempotency'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { ItemCotizacion } from '@/lib/types'
 
 interface BulkItemInput {
@@ -135,20 +135,23 @@ export async function POST(
         triggerSheetsSync('cotizaciones', 'items_cotizacion')
         // Evento confirmado por servidor tras el commit -- una sola señal
         // para toda la alta masiva, no una por fila: el cliente reconcilia
-        // leyendo la cotización completa.
-        void sendRealtimeBroadcast([{
-          topic: `cotizacion:${id}`,
-          event: 'item_confirmed',
-          payload: {
-            cotizacion_id: id,
-            item_id: null,
-            revision: null,
-            mutation_id: null,
-            operation: 'bulk',
-            at: new Date().toISOString(),
-          },
-          private: true,
-        }])
+        // leyendo la cotización completa. EF-2 1D-1: en after(), mismo
+        // motivo que el resto de los broadcasts de este archivo.
+        after(async () => {
+          await sendRealtimeBroadcast([{
+            topic: `cotizacion:${id}`,
+            event: 'item_confirmed',
+            payload: {
+              cotizacion_id: id,
+              item_id: null,
+              revision: null,
+              mutation_id: null,
+              operation: 'bulk',
+              at: new Date().toISOString(),
+            },
+            private: true,
+          }])
+        })
 
         const insertedIds = new Set(inputItems.map((item) => item.id))
         const createdItems = (updatedQuotation.items || []).filter((item) => insertedIds.has(item.id))

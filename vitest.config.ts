@@ -15,6 +15,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      // EF-2 1B-1: `server-only` lanza fuera de la condición `react-server`,
+      // que Vitest no activa -- sin este alias, cualquier test que toque
+      // lib/server/supabase-admin.ts (directo o vía un repositorio) revienta.
+      'server-only': path.resolve(__dirname, 'test/shims/server-only.ts'),
     },
   },
 })

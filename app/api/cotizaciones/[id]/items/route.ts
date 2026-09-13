@@ -84,20 +84,24 @@ export async function POST(
     after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items') })
     triggerSheetsSync('cotizaciones', 'items_cotizacion')
     // Evento confirmado por servidor tras el commit -- payload chico (ids +
-    // revision + timestamp, nunca la partida completa).
-    void sendRealtimeBroadcast([{
-      topic: `cotizacion:${id}`,
-      event: 'item_confirmed',
-      payload: {
-        cotizacion_id: id,
-        item_id: itemId,
-        revision: createdItem?.revision ?? null,
-        mutation_id: mutationId,
-        operation: 'create',
-        at: new Date().toISOString(),
-      },
-      private: true,
-    }])
+    // revision + timestamp, nunca la partida completa). EF-2 1D-1: en
+    // after(), igual que el autosave de arriba -- serverless puede cortar
+    // la función antes de que un `void` fire-and-forget termine.
+    after(async () => {
+      await sendRealtimeBroadcast([{
+        topic: `cotizacion:${id}`,
+        event: 'item_confirmed',
+        payload: {
+          cotizacion_id: id,
+          item_id: itemId,
+          revision: createdItem?.revision ?? null,
+          mutation_id: mutationId,
+          operation: 'create',
+          at: new Date().toISOString(),
+        },
+        private: true,
+      }])
+    })
 
     return Response.json({ item: createdItem })
   } catch (error) {

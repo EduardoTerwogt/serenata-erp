@@ -1,5 +1,5 @@
 import { requireAnySection } from '@/lib/api-auth'
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { ItemPatchSchema, validate } from '@/lib/validation/schemas'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { createHistorialCambioResponsableItem } from '@/lib/server/repositories/historial-cambios-responsable'

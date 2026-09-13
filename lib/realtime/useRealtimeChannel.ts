@@ -45,6 +45,46 @@ export interface UseRealtimeChannelOptions {
   onSessionEnd: () => void
 }
 
+// Coordina un remount con el cleanup fire-and-forget de la instancia anterior
+// del hook: son closures de efectos DISTINTAS (sin estado de React
+// compartido entre ellas), así que solo un registro a nivel de módulo,
+// compartido por todos los usuarios de este hook, puede saber que ya hay una
+// remoción en vuelo para un topic antes de pedirle al cliente un canal nuevo
+// para ese mismo topic.
+const pendingRemovals = new Map<string, Promise<void>>()
+
+// `RealtimeClient.removeChannel()` solo hace `channel.teardown()` (la baja
+// real de su registro interno) cuando `unsubscribe()` resuelve 'ok' -- con
+// 'timed out' o 'error' el canal queda registrado igual, y `.channel(topic)`
+// lo devolvería de nuevo en el próximo connect() si asumiéramos que ya
+// desapareció (@supabase/realtime-js RealtimeClient.js: removeChannel/channel).
+// Se reintenta con backoff acotado antes de liberar el topic.
+const REMOVE_CHANNEL_RETRY_DELAYS_MS = [500, 1000, 2000]
+
+async function removeChannelWithRetry(channel: RealtimeChannel, topic: string): Promise<void> {
+  for (let attempt = 0; attempt <= REMOVE_CHANNEL_RETRY_DELAYS_MS.length; attempt++) {
+    let status: string
+    try {
+      status = await supabaseBrowser.removeChannel(channel)
+    } catch (e) {
+      status = 'error'
+      console.error('[useRealtimeChannel] removeChannel() rechazó la promesa', topic, e)
+    }
+    if (status === 'ok') return
+    const delay = REMOVE_CHANNEL_RETRY_DELAYS_MS[attempt]
+    if (delay === undefined) break
+    console.error('[useRealtimeChannel] removeChannel() no confirmó "ok", reintentando', { topic, status, attempt })
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+  // Reintentos agotados: el canal puede seguir registrado en el cliente real
+  // -- no hay forma segura de "forzar" su baja desde aquí. Se libera el
+  // topic de todas formas (Realtime es best-effort, `.claude/rules/realtime.md`;
+  // la reconciliación contra Postgres sigue garantizando los datos) en vez
+  // de bloquear toda reconexión futura a ese topic indefinidamente, mientras
+  // el error queda visible en logs para investigar la fuga.
+  console.error('[useRealtimeChannel] no se pudo confirmar la remoción del canal tras reintentos -- puede seguir registrado en el cliente de Realtime', topic)
+}
+
 export interface UseRealtimeChannelResult {
   /** Canal activo, o `null` si no hay uno (deshabilitado o reconectando). Ref
    *  estable: leer `.current` fuera de un efecto (ej. para `channel.track()`)
@@ -94,8 +134,20 @@ export function useRealtimeChannel({
     // Root cause confirmado en vivo (CI, 2026-09-10): sin reconexión, el canal
     // de un colaborador se cae a CLOSED apenas arranca la sesión y se queda
     // muerto para siempre -- nada volvía a llamar `channel.subscribe()`.
-    const connect = () => {
+    const connect = async () => {
       if (cancelled) return
+
+      // Un remount (mismo topic) puede ocurrir en el mismo tick que el
+      // cleanup fire-and-forget de la instancia anterior (ver return() más
+      // abajo) -- sin esperar esa remoción en vuelo, `.channel(topic)`
+      // reutilizaría el objeto todavía unido en vez de crear uno nuevo
+      // (EF-2 1A-1: expuesto por el test de remount, antes solo verificaba
+      // conteos de creación, nunca convergencia real).
+      const pendingRemoval = pendingRemovals.get(topic)
+      if (pendingRemoval) {
+        await pendingRemoval
+        if (cancelled) return
+      }
 
       // Cancelar la cadena de refresco de token anterior ANTES de pedir una
       // nueva -- sin esto, cada reconexión dejaba viva una cadena adicional
@@ -165,7 +217,7 @@ export function useRealtimeChannel({
       void join()
     }
 
-    connect()
+    void connect()
 
     return () => {
       cancelled = true
@@ -175,7 +227,19 @@ export function useRealtimeChannel({
       const channel = channelRef.current
       if (channel) {
         void channel.untrack().catch(() => null)
-        void supabaseBrowser.removeChannel(channel)
+        // Fire-and-forget deliberado (el cleanup de un efecto no puede ser
+        // async) -- pero se registra la promesa para que un remount
+        // inmediato del mismo topic (ver connect() arriba) la espere antes
+        // de reutilizar/crear un canal, en vez de perder la referencia a una
+        // remoción todavía en curso. removeChannelWithRetry nunca rechaza
+        // (atrapa sus propios errores) y solo libera el topic cuando
+        // confirma 'ok' o agota los reintentos -- nunca en cuanto la
+        // promesa "resuelve" sin más, que es lo que dejaba reutilizar un
+        // canal que el cliente real nunca terminó de dar de baja.
+        const removal = removeChannelWithRetry(channel, topic).finally(() => {
+          if (pendingRemovals.get(topic) === removal) pendingRemovals.delete(topic)
+        })
+        pendingRemovals.set(topic, removal)
       }
       channelRef.current = null
     }
