@@ -133,6 +133,19 @@ cliente y el alcance exacto de 1B-4. Quedaron implementados así:
 
 ## Deuda técnica
 
+- **`previewNextQuotationFolio()` sin `complementaria_de` hace
+  `SELECT id FROM cotizaciones` sin filtro ni límite** (trae toda la tabla
+  para calcular el siguiente folio en JS) — `lib/server/quotations/folio.ts`.
+  Causa raíz real de la latencia intermitente de `GET /api/folio` medida en
+  EF-2 1D-3 contra un Preview real (p95 osciló entre 486ms y 3664ms en 3
+  corridas idénticas, según si la petición caía en una instancia tibia de
+  Vercel o no) — el `CacheManager` en memoria que 1D-3 restauró para esa
+  ruta puntual **no resuelve esto de fondo**, solo lo esconde quirúrgicamente
+  cuando la petición cae en la misma instancia serverless que la anterior.
+  Preexistente a EF-2 (no introducido esta sesión). Fuera de alcance de
+  EF-2 por decisión del plan (1D-3 no introduce índices ni migraciones). Fix
+  real: limitar/paginar la consulta o resolver el siguiente folio por RPC en
+  Postgres en vez de traer toda la tabla a Node.
 - **Modo de uso de `scripts/check-schema-parity.mjs`:** ¿paso manual
   obligatorio antes de mergear a `main`, o workflow de GitHub Actions
   separado y protegido (con el secreto de producción restringido a ese
