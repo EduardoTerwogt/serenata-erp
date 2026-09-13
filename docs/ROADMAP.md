@@ -6,41 +6,51 @@ Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el
 una sesión de trabajo. Para lo que se está construyendo ahora,
 `docs/ACTIVE_WORK.md`.
 
-Queda una iniciativa comprometida en curso: Engineering Hardening (EF-1 cerrado,
-EF-2/EF-3 sin autorizar todavía). **Lo que sigue después es producto y se define en
-Chat una vez cerrada por completo** — deliberadamente, para no priorizar features con
-información vieja.
+Queda una iniciativa comprometida en curso: Engineering Hardening (EF-1 y EF-2
+cerrados, EF-3 sin autorizar todavía). **Lo que sigue después es producto y se
+define en Chat una vez cerrada por completo** — deliberadamente, para no
+priorizar features con información vieja.
 
 ---
 
-## Ahora — Engineering Hardening (EF-1 cerrado, EF-2/EF-3 pendientes)
+## Ahora — Engineering Hardening (EF-1/EF-2 cerrados, EF-3 pendiente)
 
 **EF-1 mergeado a `main`** (PR [#29](https://github.com/EduardoTerwogt/serenata-erp/pull/29),
 2026-09-13): baseline, 1C-1, 1E-1, 1C-2a/b (bulk de partidas), 1B-3, 1B-4,
 1E-3a/b/c (idempotencia financiera) + 7 hallazgos de una auditoría posterior
-del propio PR. Detalle completo, decisiones y hallazgos: `docs/ACTIVE_WORK.md`
-(hasta que se archive) y [`docs/decisions/008`](decisions/008-idempotencia-cliente-orden-fingerprint-normalize-persist.md).
+del propio PR. Detalle completo, decisiones y hallazgos: `docs/archive/` y
+[`docs/decisions/008`](decisions/008-idempotencia-cliente-orden-fingerprint-normalize-persist.md).
 
-**EF-2 y EF-3 no autorizados** — mantienen los gates de entrada definidos en
-el plan canónico v13.1 §15. Hallazgos y frentes A-E completos, con el detalle
-de cada caso: [`docs/archive/auditoria-ingenieria-2026-09.md`](archive/auditoria-ingenieria-2026-09.md).
+**EF-2 mergeado a `main`** (PR [#31](https://github.com/EduardoTerwogt/serenata-erp/pull/31),
+2026-09-13, commit `980464c`): 1A-1/1A-2 (resiliencia y reconexión de
+Realtime), 1B-1 (aislar `supabaseAdmin`), 1B-2a/1B-2b (revocación de sesión
+de staff vía `session_version`, [`docs/decisions/009`](decisions/009-revocacion-sesion-staff-session-version.md)),
+1D-1 (`after()` para broadcasts fire-and-forget), 1D-3 (retiro de 3 de 4
+cachés locales, medido con p95 real contra Preview), 1E-2 (`DomainError` +
+logger estructurado en 3 rutas). Dos rondas de auditoría del propio PR
+encontraron y corrigieron hallazgos reales antes de mergear — detalle en
+`docs/archive/` una vez se archive la bitácora de la sesión.
+
+**EF-3 no autorizado** — mantiene el gate de entrada definido en el plan
+canónico v13.1 §15. Los frentes A-E de abajo reflejan lo que EF-2 cerró y lo
+que sigue abierto.
 
 ### Frentes
 
-| Frente | Qué resuelve | P |
-|---|---|---|
-| **A. Escalabilidad del acceso a datos** | El patrón "traer toda la tabla y filtrar en JS". Incluye un bug latente: `getCuentasPagar()` tiene `.limit(500)` y varias rutas buscan por ID dentro de esa lista, así que con 501+ cuentas una cuenta válida responde "no encontrada" sin error ni log. | P0 |
-| **B. Correctness serverless** | Trabajo que asume un proceso único de larga vida corriendo en funciones efímeras: broadcasts con `void Promise`, caches en `Map`, debounce de Sheets con `setTimeout`. Incluye un evento `bulk` de Realtime que se descarta en silencio y que la reconciliación oculta. | P0/P1 |
-| **C. Superficie de riesgo** | `supabaseAdmin` accesible desde cualquier ruta, sin revocación de sesión para staff, `CRON_SECRET` que falla abierto si no existe, e idempotencia que trata cualquier error de INSERT como duplicado. | P1 |
-| **D. Mantenibilidad** | `app/cotizaciones/[id]/page.tsx` con ~1,500 líneas y demasiadas responsabilidades, manejo de errores inconsistente, y lógica de upload duplicada en tres módulos. | P1/P2 |
-| **E. Pruebas de carga** | Los tests actuales prueban correctness con 2-10 sesiones, no capacidad. Falta una suite (k6/Artillery) que responda objetivamente "¿aguanta si mañana entran 100 personas?". | P1 |
+| Frente | Qué resuelve | P | Estado tras EF-2 |
+|---|---|---|---|
+| **A. Escalabilidad del acceso a datos** | El patrón "traer toda la tabla y filtrar en JS". Incluye un bug latente: `getCuentasPagar()` tiene `.limit(500)` y varias rutas buscan por ID dentro de esa lista, así que con 501+ cuentas una cuenta válida responde "no encontrada" sin error ni log. | P0 | **Sin tocar.** EF-2 1D-3 encontró un caso más del mismo patrón (`previewNextQuotationFolio()` sin límite/filtro, `docs/ACTIVE_WORK.md` → Deuda técnica) pero no lo corrigió — fuera de alcance por decisión del plan. |
+| **B. Correctness serverless** | Trabajo que asume un proceso único de larga vida corriendo en funciones efímeras: broadcasts con `void Promise`, caches en `Map`, debounce de Sheets con `setTimeout`. Incluye un evento `bulk` de Realtime que se descarta en silencio y que la reconciliación oculta. | P0/P1 | **Parcial.** Broadcasts de cotizaciones ahora van por `after()` (1D-1). 3 de 4 cachés locales retirados (1D-3) — `folio` se quedó, ver gotcha de serverless en `ARCHITECTURE.md`. Debounce de Sheets y el evento `bulk` descartado siguen sin tocar. |
+| **C. Superficie de riesgo** | `supabaseAdmin` accesible desde cualquier ruta, sin revocación de sesión para staff, `CRON_SECRET` que falla abierto si no existe, e idempotencia que trata cualquier error de INSERT como duplicado. | P1 | **Parcial.** `supabaseAdmin` aislado con `server-only` (1B-1). Revocación de sesión de staff implementada (1B-2a/1B-2b). `CRON_SECRET` e idempotencia de INSERT siguen sin tocar. |
+| **D. Mantenibilidad** | `app/cotizaciones/[id]/page.tsx` con ~1,500 líneas y demasiadas responsabilidades, manejo de errores inconsistente, y lógica de upload duplicada en tres módulos. | P1/P2 | **Apenas empezado.** `DomainError`+logger adoptado en 3 rutas (1E-2) de muchas. El refactor de `page.tsx` y la deduplicación de upload no se tocaron. |
+| **E. Pruebas de carga** | Los tests actuales prueban correctness con 2-10 sesiones, no capacidad. Falta una suite (k6/Artillery) que responda objetivamente "¿aguanta si mañana entran 100 personas?". | P1 | **Sin tocar.** |
 
 **Hallazgos completos, con el detalle de cada caso y la norma arquitectónica que debe
 quedar establecida al cerrar cada frente:**
 [`docs/archive/auditoria-ingenieria-2026-09.md`](archive/auditoria-ingenieria-2026-09.md).
 
-Los bloques concretos de EF-2/EF-3 se definen al auditar cada frente antes de
-arrancarlo, no ahora.
+Los bloques concretos de EF-3 se definen al auditar cada frente contra el
+código real (ya con EF-2 aplicado) antes de arrancar, no ahora.
 
 ---
 

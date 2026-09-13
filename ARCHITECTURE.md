@@ -34,19 +34,25 @@ app/                          # Next.js App Router
 components/                   # Reutilizables: quotations/, ui/, layout/, navigation/
 hooks/                        # useQuotationForm, useQuotationPresence, useServiceTemplateForm, usePrefetch
 lib/
-├── api-auth.ts               # requireSection() / requireAnySection()
+├── api-auth.ts               # requireSection() / requireAnySection() / requireAuthenticated()
+├── proxy-handler.ts          # lógica de proxy.ts (testable sin importar next-auth)
+├── auth-callbacks.ts         # callbacks jwt/session de NextAuth (testables por separado)
 ├── authz.ts  types.ts  supabase.ts  supabase-browser.ts
 ├── db.ts                     # SOLO fachada: reexporta repositories
 ├── validation/schemas.ts     # Zod
-├── client/api.ts             # getJson/postJson/putJson/FormData/binary
+├── client/api.ts             # getJson/postJson/putJson/FormData/binary + 401 compartido
 ├── quotations/               # cálculos, formato, mappers
 ├── parsers/                  # eventInfoParser (fallback regex)
 ├── integrations/google/      # drive, sheets, calendar (parcial)
+├── api/cache.ts               # CacheManager en memoria (ver gotcha de serverless)
 └── server/                   # server-only
+    ├── supabase-admin.ts     # cliente service_role -- `import 'server-only'`, nunca al navegador
     ├── repositories/         # acceso a datos por dominio
-    ├── quotations/           # approval, cancel, folio, persistence
+    ├── quotations/           # approval, cancel, folio (con su propio caché), persistence
     ├── cuentas/              # estados y transiciones
     ├── projects/             # tareas, autofill de documentos
+    ├── errors/               # DomainError + safeMessage
+    ├── observability/        # logger estructurado con requestId
     └── pdf/                  # cotización, orden de pago, hoja de llamado, reporte de cierre
 
 db/migrations/                # SQL numerado; se aplica A MANO en Supabase
@@ -57,11 +63,27 @@ docs/                         # ACTIVE_WORK · ROADMAP · decisions/ · archive/
 ## Capas
 
 **1. Auth y autorización.** `proxy.ts` (convención de Next.js 16, sustituye a
-`middleware.ts`) valida sesión y secciones permitidas antes de llegar a página o
-API. Dentro de cada route, `requireSection('cotizaciones')` repite la comprobación.
-Secciones: `admin`, `dashboard`, `cotizaciones`, `proyectos`, `cuentas`,
-`responsables`, `planeacion`. El portal de proveedores tiene sesión propia,
-independiente de NextAuth.
+`middleware.ts`) es un wrapper fino (`export default auth(proxyHandler)`); toda
+la lógica real vive en `lib/proxy-handler.ts` para poder testearla sin arrastrar
+`NextAuth({...})` (que Vitest no resuelve bajo Next 16). Valida sesión y
+secciones permitidas antes de llegar a página o API. Dentro de cada route,
+`requireSection('cotizaciones')` repite la comprobación. Secciones: `admin`,
+`dashboard`, `cotizaciones`, `proyectos`, `cuentas`, `responsables`,
+`planeacion`. El portal de proveedores tiene sesión propia, independiente de
+NextAuth.
+
+**Revocación de sesión de staff (`session_version`, EF-2 1B-2b).** Igual que el
+Portal (`db/migrations/20260909_portal_session_version.sql`), `usuarios` tiene
+una columna `session_version` que `admin_update_usuario()` (RPC) incrementa
+cuando cambia `active`/`sections`/`password_hash`/`email` (nunca con solo
+`name`). El JWT lleva ese valor como claim. `proxy.ts`/`lib/proxy-handler.ts`
+solo verifica de forma **optimista** que el claim exista y sea un entero ≥ 0
+(sin tocar Postgres, corre en Edge en cada navegación); `requireAuthenticated()`
+(`lib/api-auth.ts`) sí consulta la fila real una vez por request de API y
+diferencia sesión revocada (`401`, fuerza `signOut()`+relogin) de un error
+transitorio de Postgres (`503`, sesión intacta — nunca logout masivo por una
+caída de DB). Detalle completo y alternativas descartadas:
+[`docs/decisions/009`](docs/decisions/009-revocacion-sesion-staff-session-version.md).
 
 **2. Páginas.** Delegan en hooks y componentes por dominio. La excepción deliberada
 es `app/cotizaciones/[id]/page.tsx`, que concentra la lógica de edición
@@ -81,6 +103,19 @@ uno nuevo.
 **6. Datos.** Supabase directo para lecturas y escrituras simples; **RPCs de
 PostgreSQL** para todo lo que deba ser atómico: aprobar y cancelar cotización,
 reservar folio, registrar pago, guardar cotización y los PATCH por sección.
+`lib/supabase.ts` expone **solo** el cliente anónimo; el cliente
+`service_role` vive aislado en `lib/server/supabase-admin.ts` con
+`import 'server-only'` como primera línea — importarlo desde un componente
+cliente rompe el build en vez de filtrar la llave al navegador (EF-2 1B-1).
+
+**7. Errores seguros al cliente.** `lib/server/errors/domain-error.ts`
+(`DomainError` con `code`/`status`/`safeMessage`) + `lib/server/observability/log.ts`
+(logger JSON con `requestId`) — adoptado en las rutas de subir factura
+(CxC/CxP) y `proyectos/[id]/etapa`. Un error no-`DomainError` siempre se
+traduce a un mensaje genérico seguro; el detalle técnico real solo va al log,
+nunca al cliente. El contrato `{error: string}` se extiende con `requestId`,
+nunca se reemplaza. No está adoptado todavía en el resto de las rutas —
+ver `docs/ROADMAP.md`.
 
 ## Edición colaborativa
 
@@ -142,6 +177,9 @@ reservar folio, registrar pago, guardar cotización y los PATCH por sección.
 - No hay OT ni CRDT, y no hacen falta: son campos de un registro, no texto compartido.
 - Reconexión, auth y refresh de token están en la infraestructura genérica
   `lib/realtime/useRealtimeChannel.ts`; `useQuotationPresence` es un wrapper fino.
+  Un remount inmediato del mismo topic (StrictMode, cambio de `key`) espera la
+  remoción del canal anterior antes de reconectar -- ver gotcha de
+  `removeChannel()` más abajo, EF-2 1A-1.
 
 **Aún no generalizado a propósito:** el protocolo `base`/`mutation_id`/conflict sigue
 siendo específico de Cotizaciones. Se decide su forma genérica cuando Proyectos exista
@@ -216,6 +254,8 @@ evidencia, no cuenta como terminado.
 | Plantillas de servicios (cotizaciones nuevas) | `critical/plantillas-servicios.spec.ts` |
 | Admin de usuarios y sync a Google Sheets | `critical/admin-usuarios.spec.ts` |
 | Dashboard (incluye gastos fijos) | `lib/server/repositories/dashboard.ts` + sus tests |
+| Revocación de sesión de staff (`session_version`) | `__tests__/proxy.test.ts`, `__tests__/auth-callbacks.test.ts`, `lib/__tests__/api-auth.test.ts`, `tests/e2e/live/staff-session-revocation.spec.ts` |
+| Resiliencia de Realtime (backoff, convergencia en remount, refresco de token) | `lib/realtime/__tests__/useRealtimeChannel.test.ts`, `tests/e2e/live/realtime-channel-reconnection.spec.ts` |
 
 **Edición colaborativa de cotizaciones: READY.** La auditoría de Fase 8 dejó cinco
 huecos abiertos, cerrados en la Fase 8.7: flush real previo a toda transición de
@@ -284,3 +324,21 @@ Trampas reales, no teóricas. Cada una costó un bug:
   registrar-pago. Si el body trae cualquiera de los tres, responde `400` y
   rechaza el update completo, incluso si viene mezclado con `notas`/
   `orden_pago_id` (sí permitidos) — nunca aplica parcialmente.
+- **`CacheManager` en memoria (`lib/api/cache.ts`) no persiste entre
+  instancias serverless de Vercel.** Medido en EF-2 1D-3: la misma ruta
+  (`/api/folio`) osciló entre 486ms y 3664ms de p95 en 3 corridas idénticas
+  contra un Preview real, según si la petición caía en la misma instancia
+  tibia que la anterior o no. Nunca es una garantía de caché-hit, solo una
+  mitigación best-effort — si una ruta necesita latencia consistente, la
+  solución real es una consulta más barata (filtro/límite/RPC), no un `Map`
+  de proceso. Causa raíz de la deuda documentada en `docs/ACTIVE_WORK.md`
+  para `previewNextQuotationFolio()`.
+- **`RealtimeClient.removeChannel()` (`@supabase/realtime-js`) solo da de
+  baja el canal si `unsubscribe()` resuelve `'ok'`.** Con `'timed out'` o
+  `'error'` el canal queda registrado en el cliente igual, y
+  `.channel(topic)` lo reutiliza en el siguiente `connect()`/remount para
+  ese mismo topic. `useRealtimeChannel.ts` (`removeChannelWithRetry`)
+  reintenta con backoff acotado antes de liberar el topic — cualquier código
+  nuevo que llame `removeChannel()` directamente debe revisar el status
+  devuelto, nunca asumir que "la promesa resolvió" significa "el canal ya no
+  existe" (EF-2 1A-1, expuesto por auditoría del PR #31).
