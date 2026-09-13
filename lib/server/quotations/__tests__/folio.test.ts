@@ -21,6 +21,7 @@ vi.mock('@/lib/server/supabase-admin', () => ({
 
 import {
   consumeReservedQuotationFolio,
+  invalidateFolioCache,
   previewNextQuotationFolio,
   reserveNextQuotationFolio,
 } from '../folio'
@@ -57,6 +58,10 @@ describe('quotation folio helpers', () => {
     mocks.getNextFolioComplementariaMock.mockReset()
     mocks.fromMock.mockReset()
     mocks.rpcMock.mockReset()
+    // EF-2 1D-3: previewNextQuotationFolio cachea por 5 min (CacheManager
+    // módulo-scoped) -- sin limpiarlo, un test reutilizaría el resultado
+    // cacheado por otro que llamó con el mismo baseFolio (ej. sin argumento).
+    invalidateFolioCache()
   })
 
   it('preview principal encuentra el primer gap disponible', async () => {
@@ -185,6 +190,52 @@ describe('quotation folio helpers', () => {
     await expect(reserveNextQuotationFolio()).rejects.toThrow(
       'La función de reserva atómica de folio no está instalada en la base de datos.'
     )
+  })
+
+  it('cachea el resultado por baseFolio: dos llamadas con el mismo argumento solo consultan una vez', async () => {
+    const cotQuery = createPrincipalCotQuery({ data: [{ id: 'SH001' }], error: null })
+    const resQuery = createReservationQuery({ data: [], error: null })
+    mocks.fromMock.mockReturnValueOnce(cotQuery).mockReturnValueOnce(resQuery)
+
+    const first = await previewNextQuotationFolio()
+    const second = await previewNextQuotationFolio()
+
+    expect(first).toBe('SH002')
+    expect(second).toBe('SH002')
+    expect(mocks.fromMock).toHaveBeenCalledTimes(2) // solo la primera llamada consultó
+  })
+
+  it('un baseFolio distinto no reutiliza la entrada de caché de otro', async () => {
+    mocks.fromMock
+      .mockReturnValueOnce(createPrincipalCotQuery({ data: [], error: null }))
+      .mockReturnValueOnce(createReservationQuery({ data: [], error: null }))
+      .mockReturnValueOnce(createCompCotQuery({ data: [], error: null }))
+      .mockReturnValueOnce(createReservationQuery({ data: [], error: null }))
+
+    await previewNextQuotationFolio()
+    await previewNextQuotationFolio('SH020')
+
+    expect(mocks.fromMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('invalidateFolioCache() limpia el caché -- la siguiente llamada vuelve a consultar', async () => {
+    mocks.fromMock
+      .mockReturnValueOnce(createPrincipalCotQuery({ data: [{ id: 'SH001' }], error: null }))
+      .mockReturnValueOnce(createReservationQuery({ data: [], error: null }))
+
+    await previewNextQuotationFolio()
+    expect(mocks.fromMock).toHaveBeenCalledTimes(2)
+
+    invalidateFolioCache()
+
+    mocks.fromMock
+      .mockReturnValueOnce(createPrincipalCotQuery({ data: [{ id: 'SH001' }, { id: 'SH002' }], error: null }))
+      .mockReturnValueOnce(createReservationQuery({ data: [], error: null }))
+
+    const afterInvalidate = await previewNextQuotationFolio()
+
+    expect(afterInvalidate).toBe('SH003')
+    expect(mocks.fromMock).toHaveBeenCalledTimes(4)
   })
 
   it('consumeReservedQuotationFolio no llama al RPC sin token y falla si la reserva ya expiró', async () => {

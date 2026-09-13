@@ -12,9 +12,11 @@ propio PR, y el fix de drenado real de Totales/General consolidado desde el PR
 #30 (cerrado sin mergear — sus commits llegaron a `main` vía PR #29).
 
 Plan canónico v13.1 (13 rondas de revisión) aprobado. Estado real de la
-iniciativa: **v13.1 aprobado**; **EF-1 cerrado**; **EF-2 y EF-3 no
-autorizados**, mantienen los gates de entrada de v13.1 §15. Frentes A-E de la
-auditoría de ingeniería: `docs/ROADMAP.md` → Ahora, detalle completo en
+iniciativa: **v13.1 aprobado**; **EF-1 cerrado**; **EF-2 implementado en PR
+[#31](https://github.com/EduardoTerwogt/serenata-erp/pull/31)**, en borrador,
+pendiente de auditoría final y merge; **EF-3 no autorizado**, mantiene el gate
+de entrada de v13.1 §15. Frentes A-E de la auditoría de ingeniería:
+`docs/ROADMAP.md` → Ahora, detalle completo en
 `docs/archive/auditoria-ingenieria-2026-09.md`.
 
 ### Precisiones de ejecución que corrigieron la redacción original de v13.1
@@ -160,10 +162,21 @@ cliente y el alcance exacto de 1B-4. Quedaron implementados así:
 
 ## Siguiente paso
 
-EF-1 cerrado. Antes de arrancar **EF-2**: auditar ese frente contra el código
-real (mismo patrón que se hizo para EF-1) y proponer bloques concretos sin
-implementar — sigue el gate de entrada de v13.1 §15, no autorizado todavía.
-Frentes candidatos (A-E) en `docs/ROADMAP.md` → Ahora.
+**EF-2 (PR #31): los 8 bloques del plan aprobado están implementados**
+(1A-1, 1A-2, 1B-1, 1B-2a, 1B-2b, 1D-1, 1D-3, 1E-2), con una auditoría del
+propio PR que encontró y corrigió 3 hallazgos (test de remount de 1A-1 que no
+probaba convergencia real -- expuso y forzó a corregir una condición de
+carrera genuina en `useRealtimeChannel.ts`; layering invertido reintroducido
+en el fallback de caché de folio de 1D-3; validación de `sessionVersion` en
+`proxy-handler.ts` que aceptaba `NaN`/`Infinity`/fraccionarios). Migración de
+1B-2a verificada en producción (`fwmyoqokcjtldiofuxdg`): columna, RPC,
+`search_path` y grants (`service_role` únicamente) confirmados por consulta
+directa. CI en verde. Falta: renombrar el PR (título/descripción solo
+mencionan 1A-1) y decidir con el usuario cuándo pasarlo a "listo para
+revisión" y mergear.
+
+Después de EF-2: **EF-3** sigue sin autorizar, mismo gate de entrada de
+v13.1 §15. Frentes candidatos (A-E) en `docs/ROADMAP.md` → Ahora.
 
 Sin dueño ni urgencia: borrar manualmente la rama remota
 `fix/totales-general-conflict-drain` (ver arriba) y decidir el modo de uso de

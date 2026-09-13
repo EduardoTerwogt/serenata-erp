@@ -81,10 +81,25 @@ describe('proxyHandler', () => {
 
   it('sessionVersion=0 (falsy pero válido) no se confunde con "claim ausente"', () => {
     // Guard contra un bug sutil: `!userClaims.sessionVersion` trataría 0
-    // como ausente: el código usa `typeof ... !== 'number'`, no un check
-    // de truthiness.
+    // como ausente: el código usa `Number.isInteger(...) && ... >= 0`, no un
+    // check de truthiness.
     const req = buildReq({ pathname: '/dashboard', user: { sections: ['dashboard'], sessionVersion: 0 } })
     const res = proxyHandler(req)
     expect(res.status).toBe(200)
   })
+
+  it.each([NaN, Infinity, -Infinity, 1.5, -1])(
+    'sessionVersion=%p (no es un entero >= 0 válido) se trata como no autenticado',
+    (sessionVersion) => {
+      // `typeof sessionVersion !== 'number'` (la versión anterior de este
+      // chequeo) dejaba pasar NaN/Infinity/fraccionarios/negativos --
+      // ninguno es un valor real que la RPC de session_version pueda emitir,
+      // pero el chequeo debe rechazarlos explícitamente igual (fail
+      // explícito, nunca en silencio).
+      const req = buildReq({ pathname: '/cotizaciones', user: { sections: ['cotizaciones'], sessionVersion } })
+      const res = proxyHandler(req)
+      expect(res.status).toBe(307)
+      expect(res.headers.get('location')).toContain('/login')
+    },
+  )
 })

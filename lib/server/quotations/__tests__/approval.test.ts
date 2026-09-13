@@ -16,7 +16,7 @@ vi.mock('@/lib/server/supabase-admin', () => ({
   },
 }))
 
-vi.mock('@/app/api/folio/route', () => ({
+vi.mock('@/lib/server/quotations/folio', () => ({
   invalidateFolioCache: mocks.invalidateFolioCacheMock,
 }))
 

@@ -45,6 +45,14 @@ export interface UseRealtimeChannelOptions {
   onSessionEnd: () => void
 }
 
+// Coordina un remount con el cleanup fire-and-forget de la instancia anterior
+// del hook: son closures de efectos DISTINTAS (sin estado de React
+// compartido entre ellas), así que solo un registro a nivel de módulo,
+// compartido por todos los usuarios de este hook, puede saber que ya hay una
+// remoción en vuelo para un topic antes de pedirle al cliente un canal nuevo
+// para ese mismo topic.
+const pendingRemovals = new Map<string, Promise<void>>()
+
 export interface UseRealtimeChannelResult {
   /** Canal activo, o `null` si no hay uno (deshabilitado o reconectando). Ref
    *  estable: leer `.current` fuera de un efecto (ej. para `channel.track()`)
@@ -94,8 +102,20 @@ export function useRealtimeChannel({
     // Root cause confirmado en vivo (CI, 2026-09-10): sin reconexión, el canal
     // de un colaborador se cae a CLOSED apenas arranca la sesión y se queda
     // muerto para siempre -- nada volvía a llamar `channel.subscribe()`.
-    const connect = () => {
+    const connect = async () => {
       if (cancelled) return
+
+      // Un remount (mismo topic) puede ocurrir en el mismo tick que el
+      // cleanup fire-and-forget de la instancia anterior (ver return() más
+      // abajo) -- sin esperar esa remoción en vuelo, `.channel(topic)`
+      // reutilizaría el objeto todavía unido en vez de crear uno nuevo
+      // (EF-2 1A-1: expuesto por el test de remount, antes solo verificaba
+      // conteos de creación, nunca convergencia real).
+      const pendingRemoval = pendingRemovals.get(topic)
+      if (pendingRemoval) {
+        await pendingRemoval
+        if (cancelled) return
+      }
 
       // Cancelar la cadena de refresco de token anterior ANTES de pedir una
       // nueva -- sin esto, cada reconexión dejaba viva una cadena adicional
@@ -165,7 +185,7 @@ export function useRealtimeChannel({
       void join()
     }
 
-    connect()
+    void connect()
 
     return () => {
       cancelled = true
@@ -175,7 +195,15 @@ export function useRealtimeChannel({
       const channel = channelRef.current
       if (channel) {
         void channel.untrack().catch(() => null)
-        void supabaseBrowser.removeChannel(channel)
+        // Fire-and-forget deliberado (el cleanup de un efecto no puede ser
+        // async) -- pero se registra la promesa para que un remount
+        // inmediato del mismo topic (ver connect() arriba) la espere antes
+        // de reutilizar/crear un canal, en vez de perder la referencia a una
+        // remoción todavía en curso.
+        const removal = supabaseBrowser.removeChannel(channel).then(() => {
+          if (pendingRemovals.get(topic) === removal) pendingRemovals.delete(topic)
+        })
+        pendingRemovals.set(topic, removal)
       }
       channelRef.current = null
     }

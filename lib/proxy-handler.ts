@@ -108,7 +108,7 @@ export function proxyHandler(req: NextAuthRequest) {
   // desactivado/cambiado a mitad de sesión) se detecta recién en la
   // siguiente llamada a una API route protegida.
   const userClaims = req.auth.user as { sessionVersion?: number }
-  if (typeof userClaims.sessionVersion !== 'number') {
+  if (!Number.isInteger(userClaims.sessionVersion) || userClaims.sessionVersion! < 0) {
     return unauthenticatedResponse(req, pathname, isApiRoute)
   }
 

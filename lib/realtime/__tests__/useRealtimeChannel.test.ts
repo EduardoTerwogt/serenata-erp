@@ -61,10 +61,28 @@ async function flush(ms = 0) {
 describe('useRealtimeChannel', () => {
   let createdChannels: FakeChannel[]
   let cancelRefreshMock: ReturnType<typeof vi.fn>
+  /**
+   * Modela el registro interno del `RealtimeClient` real de Supabase:
+   * `.channel(topic)` reutiliza el objeto existente para ese topic hasta que
+   * `removeChannel()` termina de resolver -- si el mock siempre devolviera un
+   * objeto nuevo en cada llamada, ningún test podría distinguir "convergió a
+   * un solo canal" de "quedaron dos canales unidos en paralelo", que es
+   * justo el bug que el remount debe descartar.
+   */
+  let channelsByTopic: Map<string, FakeChannel>
+  /**
+   * `useRealtimeChannel.ts` coordina remounts vía un `pendingRemovals`
+   * módulo-scoped (no hay estado de React compartido entre instancias
+   * separadas del hook) -- ese mapa persiste entre tests dentro del mismo
+   * archivo. Un topic único por test evita que una entrada que quede
+   * pendiente en un test (ej. un mock de `removeChannel` nunca resuelto a
+   * propósito) contamine el `connect()` de otro.
+   */
+  let currentTopic: string
 
   function baseOptions(overrides: Partial<UseRealtimeChannelOptions> = {}): UseRealtimeChannelOptions {
     return {
-      topic: 'cotizacion:SH001',
+      topic: currentTopic,
       enabled: true,
       presenceKeyPrefix: 'user-1',
       onChannelCreated: vi.fn(),
@@ -78,13 +96,24 @@ describe('useRealtimeChannel', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     createdChannels = []
-    mocks.removeChannelMock.mockReset().mockResolvedValue(undefined)
+    channelsByTopic = new Map()
+    currentTopic = `cotizacion:TEST-${Math.random().toString(36).slice(2, 10)}`
+    mocks.removeChannelMock.mockReset().mockImplementation((channel: FakeChannel) =>
+      Promise.resolve().then(() => {
+        channelsByTopic.forEach((registered, topic) => {
+          if (registered === channel) channelsByTopic.delete(topic)
+        })
+      })
+    )
     mocks.authorizeRealtimeMock.mockReset().mockResolvedValue(600)
     cancelRefreshMock = vi.fn()
     mocks.scheduleTokenRefreshMock.mockReset().mockReturnValue(cancelRefreshMock)
-    mocks.createPrivateChannelMock.mockReset().mockImplementation(() => {
+    mocks.createPrivateChannelMock.mockReset().mockImplementation((topic: string) => {
+      const existing = channelsByTopic.get(topic)
+      if (existing) return existing
       const channel = makeFakeChannel(createdChannels.length)
       createdChannels.push(channel)
+      channelsByTopic.set(topic, channel)
       return channel
     })
   })
@@ -148,7 +177,14 @@ describe('useRealtimeChannel', () => {
   it('connect() espera removeChannel() del canal anterior antes de reintentar', async () => {
     let resolveRemove: (() => void) | null = null
     mocks.removeChannelMock.mockImplementation(
-      () => new Promise<void>((resolve) => { resolveRemove = resolve })
+      (channel: FakeChannel) => new Promise<void>((resolve) => {
+        resolveRemove = () => {
+          channelsByTopic.forEach((registered, topic) => {
+            if (registered === channel) channelsByTopic.delete(topic)
+          })
+          resolve()
+        }
+      })
     )
 
     renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
@@ -238,7 +274,13 @@ describe('useRealtimeChannel', () => {
     await flush()
     const first = createdChannels[0]
     expect(mocks.removeChannelMock).not.toHaveBeenCalled()
+    expect(channelsByTopic.get(options.topic!)).toBe(first)
 
+    // El cleanup de desmontaje es fire-and-forget (`void removeChannel(...)`,
+    // no `await`) -- el remount ocurre en el mismo tick, antes de que esa
+    // promesa resuelva. Si `connect()` no espera una remoción pendiente del
+    // mismo topic, el registro del cliente real reutilizaría el objeto de
+    // canal todavía unido en vez de crear uno nuevo.
     unmount()
     expect(mocks.removeChannelMock).toHaveBeenCalledWith(first)
 
@@ -248,8 +290,13 @@ describe('useRealtimeChannel', () => {
     await flush()
 
     // Aserción dura: al final, para este topic queda exactamente un canal
-    // activo -- el del remount. Si esto falla, 1A-1 queda bloqueado (ver
-    // plan): no se relaja esta aserción ni se mergea con el test en rojo.
+    // activo, y es uno creado DESPUÉS de que el anterior terminó de
+    // removerse -- no el mismo objeto reutilizado a medio remover. Si esto
+    // falla, 1A-1 queda bloqueado (ver plan): no se relaja esta aserción ni
+    // se mergea con el test en rojo.
+    const activeForTopic = channelsByTopic.get(options.topic!)
+    expect(activeForTopic).toBeDefined()
+    expect(activeForTopic).not.toBe(first)
     expect(createdChannels).toHaveLength(2)
     expect(mocks.createPrivateChannelMock).toHaveBeenCalledTimes(2)
 

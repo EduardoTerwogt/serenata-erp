@@ -34,30 +34,21 @@ describe('GET /api/folio', () => {
     await expect(response.json()).resolves.toEqual({ folio: 'SH010-B' })
   })
 
-  // EF-2 1D-3: esta ruta fue la única de las 4 medidas cuyo p95 en Preview
-  // (2314ms) superó el gate de 1s -- se revirtió puntualmente a
-  // CacheManager (clientes/productos/proveedores sí pasaron y quedaron sin
-  // caché). Esta prueba confirma que dos GETs con el mismo query solo
-  // consultan el repositorio una vez (cache hit).
-  // El cache es un CacheManager de módulo, compartido entre los `it()` de
-  // este archivo -- cada caso usa su propio complementaria_de para no
-  // pisar la entrada de otro caso.
-  it('dos GETs sucesivos con el mismo query solo llaman a previewNextQuotationFolio una vez (cache hit)', async () => {
+  // EF-2 1D-3: el gate de p95 en Preview mostró 2314ms sin caché (>1s) para
+  // esta ruta -- única de las 4 medidas que no pasó. El caché se restauró,
+  // pero vive en lib/server/quotations/folio.ts (dentro de
+  // previewNextQuotationFolio), no en esta ruta -- approval.ts, capa
+  // server, también necesita invalidarlo, y una dependencia lib/server ->
+  // app/api invertiría el layering. El comportamiento de caché en sí se
+  // prueba en lib/server/quotations/__tests__/folio.test.ts; aquí solo se
+  // confirma que la ruta delega cada request, sin lógica propia de por
+  // medio.
+  it('dos GETs sucesivos delegan a previewNextQuotationFolio en cada llamada', async () => {
     mocks.requireSectionMock.mockResolvedValue({ response: null })
     mocks.previewNextQuotationFolioMock.mockResolvedValue('SH010-B')
 
-    await GET(new Request('http://localhost/api/folio?complementaria_de=CACHE-HIT-TEST'))
-    await GET(new Request('http://localhost/api/folio?complementaria_de=CACHE-HIT-TEST'))
-
-    expect(mocks.previewNextQuotationFolioMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('un query distinto (complementaria_de distinto) no reutiliza la entrada de caché de otro', async () => {
-    mocks.requireSectionMock.mockResolvedValue({ response: null })
-    mocks.previewNextQuotationFolioMock.mockResolvedValue('SH010-B')
-
-    await GET(new Request('http://localhost/api/folio?complementaria_de=DISTINCT-KEY-A'))
-    await GET(new Request('http://localhost/api/folio?complementaria_de=DISTINCT-KEY-B'))
+    await GET(new Request('http://localhost/api/folio'))
+    await GET(new Request('http://localhost/api/folio'))
 
     expect(mocks.previewNextQuotationFolioMock).toHaveBeenCalledTimes(2)
   })
