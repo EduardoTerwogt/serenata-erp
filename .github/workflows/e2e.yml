@@ -90,6 +90,12 @@ jobs:
       NEXTAUTH_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      # EF-2 1A-2: expone lib/supabase-browser.ts como window.__e2eSupabaseBrowser
+      # SOLO en este build -- necesario para que
+      # realtime-channel-reconnection.spec.ts pueda contar canales activos y
+      # detectar huérfanos tras una reconexión. Nunca se fija fuera de este job
+      # (ni en smoke-and-critical, ni en Vercel).
+      NEXT_PUBLIC_E2E_TEST_HOOKS: 'true'
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
       # JWT Secret legacy de serenata-erp-test (Supabase Dashboard -> Settings
       # -> API) -- firma los tokens cortos de app/api/realtime/token, que las
