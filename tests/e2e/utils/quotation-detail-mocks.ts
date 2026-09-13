@@ -223,9 +223,17 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
   // cotización). Se registra DESPUÉS de /items/* porque en Playwright gana la última
   // ruta registrada y el comodín también casaría con "bulk".
   const bulkRoute = async (route: Parameters<Parameters<Page['route']>[1]>[0]) => {
-    const body = (route.request().postDataJSON() || {}) as { items?: Record<string, unknown>[]; reemplazar_ids?: string[] }
+    // Engineering Hardening EF-1 (1C-2b): `reemplazar_ids` es `{id, revision}[]`
+    // desde que la ruta real pasó a llamar a `bulk_replace_items_cotizacion`
+    // -- antes era `string[]` (el `upsertItems()` viejo). El mock quedó
+    // comparando un objeto contra un string y `reusables` siempre daba vacío,
+    // así que nunca "reusaba" la fila en blanco: la dejaba viva y encima
+    // insertaba las partidas nuevas, dejando una fila de más.
+    const body = (route.request().postDataJSON() || {}) as { items?: Record<string, unknown>[]; reemplazar_ids?: Array<{ id: string; revision?: number }> }
     await itemLatency()
-    const reusables = (body.reemplazar_ids || []).filter((rowId) => cotizacion.items.some((item) => item.id === rowId))
+    const reusables = (body.reemplazar_ids || [])
+      .map((r) => r.id)
+      .filter((rowId) => cotizacion.items.some((item) => item.id === rowId))
 
     ;(body.items || []).forEach((source, index) => {
       const cantidad = Number(source.cantidad) || 1
