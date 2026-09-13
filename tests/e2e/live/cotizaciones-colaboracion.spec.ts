@@ -129,13 +129,13 @@ test.describe('live: colaboración real entre dos usuarios', () => {
 
     // Fase 8: producto real para el conflicto autofill-vs-edición-manual (punto
     // B de la auditoría) -- necesita un producto de verdad en la tabla, no
-    // mockeado. Se crea vía el POST real (no un upsert directo a Supabase):
-    // GET /api/productos cachea 5 min en el servidor (CacheManager) y solo el
-    // propio POST la invalida (`cache.invalidate('productos:')`); un insert
-    // directo deja esa caché sirviendo la lista vieja el resto del job entero
-    // si algún test anterior (basic.spec.ts, etc.) ya la calentó -- exactamente
-    // lo que pasó en CI: el dropdown nunca aparecía, no por un problema de
-    // timing sino porque el producto nunca llegaba al cliente.
+    // mockeado. Se crea vía el POST real (no un upsert directo a Supabase) por
+    // el mismo motivo que cualquier alta real: pasa por la validación y el
+    // triggerSheetsSync de la ruta. (Histórico: hasta EF-2 1D-3,
+    // GET /api/productos cacheaba 5 min en el servidor -- un insert directo
+    // podía servir una lista vieja el resto del job si un test anterior ya
+    // había calentado esa caché. El caché se retiró; ya no aplica, pero el
+    // POST real sigue siendo el camino correcto.)
     const productoResponse = await pageA.request.post('/api/productos', { data: PRODUCTO_AUTOFILL })
     expect(productoResponse.ok(), `no se pudo crear el producto de prueba: ${await productoResponse.text()}`).toBeTruthy()
 

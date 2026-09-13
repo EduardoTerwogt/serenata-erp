@@ -34,6 +34,19 @@ describe('GET /api/folio', () => {
     await expect(response.json()).resolves.toEqual({ folio: 'SH010-B' })
   })
 
+  // EF-2 1D-3: se retiró el CacheManager en memoria de este endpoint --
+  // esta prueba confirma que dos GETs sucesivos consultan el repositorio
+  // las dos veces, no una sola vez servida desde caché.
+  it('dos GETs sucesivos llaman a previewNextQuotationFolio las dos veces (sin caché)', async () => {
+    mocks.requireSectionMock.mockResolvedValue({ response: null })
+    mocks.previewNextQuotationFolioMock.mockResolvedValue('SH010-B')
+
+    await GET(new Request('http://localhost/api/folio'))
+    await GET(new Request('http://localhost/api/folio'))
+
+    expect(mocks.previewNextQuotationFolioMock).toHaveBeenCalledTimes(2)
+  })
+
   it('corta la ejecución cuando el endpoint no está autorizado', async () => {
     mocks.requireSectionMock.mockResolvedValue({
       response: Response.json({ error: 'No autorizado' }, { status: 403 }),

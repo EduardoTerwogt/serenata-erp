@@ -1,6 +1,5 @@
 import { getCotizacionById } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { invalidateFolioCache } from '@/app/api/folio/route'
 
 export async function approveQuotationAndFetchResult(id: string) {
   let cotizacion
@@ -48,9 +47,6 @@ export async function approveQuotationAndFetchResult(id: string) {
       },
     }
   }
-
-  // Invalidate folio cache after successful approval (folio is consumed)
-  invalidateFolioCache()
 
   const result = data as {
     already_approved: boolean
