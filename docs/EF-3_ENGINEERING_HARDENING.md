@@ -3414,9 +3414,11 @@ vacíos, nunca una mezcla inconsistente de los dos patrones.
 3. **Comportamiento a preservar:** las escrituras a Postgres de las 28
    rutas siguen exactamente igual — solo se quita el disparo de sync.
 4. **Archivos exactos:** los 28 de arriba + `lib/integrations/sheets/trigger.ts`
-   (eliminar) + los 17 tests que hoy hacen `vi.mock('@/lib/integrations/sheets/trigger', ...)`
+   (eliminar) + los 18 tests que hoy hacen `vi.mock('@/lib/integrations/sheets/trigger', ...)`
    para poder testear sus rutas sin disparar el sync real (confirmado por
-   grep exhaustivo de `__tests__/`), que pasan a **quitar ese mock por
+   grep exhaustivo de `__tests__/` -- ronda de verificación previa a 3C-1
+   encontró un 18º archivo, `cuentas-cobrar-route.test.ts`, ausente de esta
+   lista original), que pasan a **quitar ese mock por
    completo** (ya no hay nada que mockear) en vez de dejar un mock de un
    módulo que no existe:
    `app/api/__tests__/productos-route.test.ts`,
@@ -3429,6 +3431,7 @@ vacíos, nunca una mezcla inconsistente de los dos patrones.
    `app/api/__tests__/cotizaciones-items-bulk-route.test.ts`,
    `app/api/__tests__/cotizaciones-items-create-route.test.ts`,
    `app/api/__tests__/cuentas-cobrar-registrar-pago-route.test.ts`,
+   `app/api/__tests__/cuentas-cobrar-route.test.ts`,
    `app/api/__tests__/cuentas-cobrar-subir-factura-route.test.ts`,
    `app/api/__tests__/cuentas-pagar-registrar-pago-route.test.ts`,
    `app/api/__tests__/cuentas-pagar-route.test.ts`,
@@ -3437,24 +3440,24 @@ vacíos, nunca una mezcla inconsistente de los dos patrones.
    `app/api/__tests__/cotizacion-aprobar-route.test.ts`,
    `app/api/__tests__/cotizacion-detail-route.test.ts`.
 5. **Eliminados:** `trigger.ts`. **Modificados:** los 28 archivos de ruta +
-   los 17 tests de arriba (quitar su mock de `trigger`).
+   los 18 tests de arriba (quitar su mock de `trigger`).
 6. **Migraciones/RPC:** ninguna.
 7. **Dependencias entrantes:** ninguna. **Salientes:** 3C-2.
 8. **Orden:** primero de EF-3C.
 9. **Riesgo:** P1 — remoción mecánica, riesgo bajo por archivo, alto en
    volumen de archivos tocados.
 10. **Pruebas:** `npx tsc --noEmit`, `npm run lint`, `npm test` (incluidos
-    los 17 tests del punto 4 con su mock quitado, deben seguir pasando sin
+    los 18 tests del punto 4 con su mock quitado, deben seguir pasando sin
     él porque ya no hay nada que mockear), `smoke`+`critical` completos —
     ninguno debería referenciar `triggerSheetsSync`.
 11. **Criterio de aceptación:** grep de `triggerSheetsSync` en todo el repo
-    devuelve 0; los 17 tests pasan sin su mock de `trigger`; CI completo en
+    devuelve 0; los 18 tests pasan sin su mock de `trigger`; CI completo en
     verde.
 12. **Rollback:** revertir el PR completo.
-13. **Horas:** 8-10h (sube por los 17 tests a ajustar además de las 28
+13. **Horas:** 8-10h (sube por los 18 tests a ajustar además de las 28
     rutas).
 14. **Tamaño:** grande en archivos, chico en complejidad, 1 PR.
-15. **Evidencia:** el grep del punto 11 + confirmación de que los 17 tests
+15. **Evidencia:** el grep del punto 11 + confirmación de que los 18 tests
     pasan sin el mock.
 
 #### 3C-2 — Paginar lectura completa de `sync-down.ts` (con desempate estable)
@@ -5153,7 +5156,7 @@ exige aquí la nota de aprobación explícita no vacía (regla de 3 estados de
 | 3B-10 | Pendiente | 3B-1 | — | — | — | — | | — |
 | 3B-11 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#43](https://github.com/EduardoTerwogt/serenata-erp/pull/43) | `7f7497a` | `bd69268` | | Arrancar el siguiente bloque independiente (3B-12, 3C-1, 3D-0) |
 | 3B-12 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#44](https://github.com/EduardoTerwogt/serenata-erp/pull/44) | `814ba3e` | `101b243` | | Arrancar el siguiente bloque independiente (3C-1, 3D-0) |
-| 3C-1 | Pendiente | ninguna | — | — | — | — | | — |
+| 3C-1 | En curso | ninguna | `claude/hopeful-allen-jql9xp` | — | — | — | | — |
 | 3C-2 | Pendiente | 3C-1 | — | — | — | — | | — |
 | 3C-3 | Pendiente | 3C-2 | — | — | — | — | | — |
 | 3C-4 | Pendiente | 3C-3 | — | — | — | — | | — |
