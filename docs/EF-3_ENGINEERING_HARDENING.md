@@ -98,7 +98,7 @@ destino.
 | F15 | `rate_limits` sin retención | 3C-4 |
 | F15b | *(condicional)* `syncAllDown()` no cabe en `maxDuration` del cron de keep-alive al volumen objetivo | 3C-4 (si aplica) |
 | F16 | `page.tsx` 2,388 líneas, ~80 refs inline | 3D-0..3D-8 |
-| F26 | *(condicional)* Characterization test de 3D-0 revela una carrera/pérdida real en la interacción flush/reconciliación | 3D-0b (si aplica) |
+| F26 | **Activado** — T12 de 3D-0 confirmó una carrera real: si el PATCH de un campo de General/Totales resuelve antes que una reconciliación ya en vuelo, ésta pisa el valor recién confirmado con una lectura vieja (T11, orden inverso, sí está protegido por el guard existente) | 3D-0b |
 | F17 | Reconciliación/collaboration-adapter sin extraer | 3D-6 |
 | F18 | `DomainError`/`buildErrorResponse` en 3/93 rutas | 3D-9, 3D-10, 3D-11 |
 | F19 | Validación de upload duplicada | 3D-12 |
@@ -113,8 +113,8 @@ destino.
 aplica"). **F14b, F15b y F26 son condicionales** — cada una solo existe
 como fila real si su gate/medición/test respectivo falla (3B-7 para F14b,
 3C-4 para F15b, 3D-0 para F26); si pasan/no revelan el problema, esa fila
-condicional no se crea. Total real de hallazgos: **25 (si ninguna
-condicional se activa) a 28 (si las 3 se activan)** — nunca "26 fijos".
+condicional no se crea. **F26 ya se activó** (T12 de 3D-0, ver arriba) —
+26 hallazgos reales hoy, 26-28 según si F14b/F15b también se activan.
 
 ---
 
@@ -147,10 +147,9 @@ condicional se activa) a 28 (si las 3 se activan)** — nunca "26 fijos".
 
 3D-0 ──▶ 3D-1 ──▶ 3D-2 ──▶ 3D-3 ──▶ 3D-4 ──▶ 3D-5 ──▶ 3D-6 ──▶ 3D-7 ──▶ 3D-8
   (secuencial estricto)
-3D-0 ──▶ [3D-0b, solo si el characterization test revela una carrera real] ──▶ 3D-6
-  (3D-0b es condicional -- no existe como fila del tracker de 40 bloques
-  salvo que el test de 3D-0 la active; si se activa, bloquea 3D-6 hasta
-  cerrar, sin afectar a 3D-1..3D-5)
+3D-0 ──▶ 3D-0b ──▶ 3D-6
+  (activado -- T12 de 3D-0 confirmó la carrera real (F26); 3D-0b bloquea
+  3D-6 hasta cerrar, sin afectar a 3D-1..3D-5)
 3D-9, 3D-10, 3D-11, 3D-12 — independientes entre sí y de 3D-0..3D-8
 
 EF-3A completo ──▶ EF-3B/3C/3D (necesitan sus entornos)
@@ -4193,6 +4192,94 @@ vacíos, nunca una mezcla inconsistente de los dos patrones.
     comportamiento real documenta; si T11/T12 revelaron un
     bug real, la nota lo dice explícitamente y referencia `F26`/`3D-0b`.
 
+#### 3D-0b — Fix de la carrera flush/reconciliación en General/Totales (F26)
+
+1. **Problema:** confirmado empíricamente por T12 de 3D-0 (test real, no
+   hipótesis): si el PATCH de un campo de General/Totales resuelve
+   **antes** que una reconciliación ya en vuelo (`reconciliarConServidor`,
+   disparada por un evento `*_confirmed` de Presence que llegó mientras el
+   PATCH todavía viajaba), la reconciliación aplica su lectura — capturada
+   ANTES de que el PATCH commiteara — y pisa el valor recién confirmado
+   con uno más viejo. El guard existente en `applyGeneralOnly`/
+   `applyTotalsOnly` (`isFieldBusy = dirty || saving`, page.tsx:712,729)
+   solo mira si el campo está *actualmente* ocupado, nunca si la
+   reconciliación en vuelo partió de un instante anterior al último PATCH
+   confirmado — exactamente el mismo problema que `localWriteAtRef`/
+   `escrituraLocalPosterior` ya resuelve para **partidas** (page.tsx:362-364,
+   804-807), pero que General/Totales nunca heredaron. T11 (orden inverso:
+   la reconciliación resuelve primero) sí queda protegido por el guard de
+   dirty/lock existente — no hay pérdida en ese orden, no se toca.
+2. **Decisión:** portar el mismo patrón de `localWriteAtRef` a
+   General/Totales, por campo:
+   - Dos refs nuevas: `generalFieldConfirmedAtRef =
+     useRef<Partial<Record<QuotationGeneralField, number>>>({})` y
+     `totalsFieldConfirmedAtRef` (mismo tipo, para
+     `QuotationTotalsField`).
+   - En el `.then` de éxito de `sendGeneralFieldPatchRound`/
+     `sendTotalsFieldPatchRound` (donde ya se refresca
+     `generalServerRef.current`/`totalsServerRef.current`, page.tsx:1039,
+     1120), agregar `generalFieldConfirmedAtRef.current[field] =
+     Date.now()` / `totalsFieldConfirmedAtRef.current[field] = Date.now()`
+     — el mismo instante en que el campo se considera "confirmado por el
+     servidor".
+   - `applyGeneralOnly`/`applyTotalsOnly` reciben un parámetro nuevo
+     `pedidoEn: number` (el mismo `Date.now()` que `reconciliarConServidor`
+     ya captura al arrancar, página.tsx:791, hoy sin usar para estos dos).
+     Su `isFieldBusy` interno se extiende: además de
+     `dirty || saving`, un campo también cuenta como "ocupado" (se salta
+     esta reconciliación) si `generalFieldConfirmedAtRef.current[field] !==
+     undefined && generalFieldConfirmedAtRef.current[field]! >= pedidoEn`
+     — el campo tiene una confirmación más nueva (o de exactamente el mismo
+     instante) que el momento en que esta lectura de reconciliación arrancó,
+     así que aplicarla la pisaría con algo más viejo.
+   - `reconciliarConServidor` pasa `pedidoEn` en sus dos llamadas
+     (page.tsx:890-891): `applyGeneralOnly(updated, pedidoEn)`,
+     `applyTotalsOnly(updated, pedidoEn)`.
+3. **Comportamiento a preservar:** T1-T10 de 3D-0 (todo lo que no toca esta
+   carrera específica) sigue exactamente igual. T11 de 3D-0 (orden A) sigue
+   pasando sin cambios — el guard nuevo es un `||` adicional, nunca quita
+   protección existente.
+4. **Archivos exactos:** `app/cotizaciones/[id]/page.tsx`.
+5. **Modificados:** ese archivo únicamente — ningún archivo nuevo (extiende
+   funciones/refs ya existentes, no crea un hook nuevo; la extracción a
+   hooks es 3D-1..3D-7, fuera de alcance aquí).
+6. **Migraciones/RPC:** ninguna — el fix es enteramente de estado de
+   cliente.
+7. **Dependencias entrantes:** 3D-0. **Salientes:** 3D-6 (la extracción de
+   `useQuotationReconciliation` hereda este fix ya aplicado — sin esto,
+   3D-6 estaría extrayendo y congelando un bug conocido en un hook nuevo).
+8. **Orden:** después de 3D-0, antes de 3D-6; no bloquea 3D-1..3D-5 (no
+   tocan la reconciliación).
+9. **Riesgo:** P1 — corrige una pérdida de dato real ya confirmada por
+   test, en el módulo READY de colaboración; mitigado por ser una extensión
+   aditiva de un guard existente (nunca reduce protección) y por el punto
+   11 (T11 y T12 deben seguir/pasar a pasar en verde).
+10. **Pruebas:** el propio `page-autosave-characterization.test.tsx` de
+    3D-0 se reutiliza tal cual — **T12 (que hoy documenta el bug) se
+    reescribe para afirmar el valor CORRECTO** (`'Valor local del
+    usuario'`, no la lectura vieja), como characterization test corregido
+    que debe fallar contra el código de ANTES de este fix y pasar después
+    (rojo→verde real). T11 se re-corre sin cambios (verde en ambos
+    lados). Se agrega un T13 nuevo: dos campos DISTINTOS de General (p. ej.
+    `locacion` confirmado, `cliente` todavía dirty) con una reconciliación
+    en vuelo de por medio — confirma que el fix es **por campo**, no por
+    sección completa (el campo confirmado se protege, el campo todavía
+    dirty se salta igual que siempre por el guard original).
+11. **Criterio de aceptación:** T1-T11 y el T12 reescrito (ahora afirmando
+    el valor correcto) más el T13 nuevo, todos en verde contra el código
+    con el fix aplicado; el T12 reescrito confirmado en rojo contra el
+    código de 3D-0 sin este fix (evidencia de que el test realmente
+    ejercita el bug, no un falso positivo).
+12. **Rollback:** revertir el PR — 3D-0's test suite vuelve a documentar el
+    bug tal cual (T12 original).
+13. **Horas:** 6-8h (fix acotado a 2 refs + 1 parámetro nuevo en 2
+    funciones + su verificación con el test ya existente).
+14. **Tamaño:** chico, 1 PR.
+15. **Evidencia:** diff completo de `page.tsx` (mínimo, aditivo) + el
+    archivo de test de 3D-0 con T12 reescrito y T13 agregado, ambos en
+    verde contra el fix, más el T12 reescrito confirmado en rojo contra el
+    código pre-fix (adjuntar el output de esa corrida).
+
 #### 3D-1 — `useQuotationMutationTracker`
 
 1. **Problema:** `trackMutation`/`pendingMutationsRef` (líneas 375-389,
@@ -5160,13 +5247,14 @@ exige aquí la nota de aprobación explícita no vacía (regla de 3 estados de
 | 3C-2 | Cerrado | 3C-1 | `claude/hopeful-allen-jql9xp` | [#46](https://github.com/EduardoTerwogt/serenata-erp/pull/46) | `25def7c` | `6723280` | | Arrancar el siguiente bloque independiente (3C-3, 3D-0) |
 | 3C-3 | Cerrado | 3C-2 | `claude/hopeful-allen-jql9xp` | [#47](https://github.com/EduardoTerwogt/serenata-erp/pull/47) | `7e3a873` | `71881de` | | Arrancar el siguiente bloque independiente (3C-4, 3D-0) |
 | 3C-4 | Pendiente | 3C-3 | — | — | — | — | | Bloqueado: la medición empírica obligatoria del punto 2 exige volumen objetivo (items_cotizacion≥5500) en el entorno serverless real de 3A-1 — hoy `serenata-erp-test` tiene 11 filas. Pausado por decisión del usuario hasta que 3A-1/3A-3 se resuelvan (setup manual de Vercel pendiente) |
-| 3D-0 | En curso | ninguna | `claude/hopeful-allen-jql9xp` | — | — | — | | — |
+| 3D-0 | En curso | ninguna | `claude/hopeful-allen-jql9xp` | [#48](https://github.com/EduardoTerwogt/serenata-erp/pull/48) | — | — | | — |
+| 3D-0b | Pendiente | 3D-0 | — | — | — | — | | Bloque activado por F26 (T12 de 3D-0 confirmó la carrera real) -- ver especificación en la sección 6 |
 | 3D-1 | Pendiente | 3D-0 | — | — | — | — | | — |
 | 3D-2 | Pendiente | 3D-1 | — | — | — | — | | — |
 | 3D-3 | Pendiente | 3D-2 | — | — | — | — | | — |
 | 3D-4 | Pendiente | 3D-3 | — | — | — | — | | — |
 | 3D-5 | Pendiente | 3D-0, 3D-1, 3D-2, 3D-3, 3D-4 | — | — | — | — | | — |
-| 3D-6 | Pendiente | 3D-0, 3D-2, 3D-3, 3D-4, 3D-5 | — | — | — | — | | — |
+| 3D-6 | Pendiente | 3D-0, 3D-0b, 3D-2, 3D-3, 3D-4, 3D-5 | — | — | — | — | | — |
 | 3D-7 | Pendiente | 3D-0, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6 | — | — | — | — | | — |
 | 3D-8 | Pendiente | 3D-0, 3D-1, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6, 3D-7 | N/A | N/A | — | N/A | | — |
 | 3D-9 | Pendiente | ninguna | — | — | — | — | | — |
