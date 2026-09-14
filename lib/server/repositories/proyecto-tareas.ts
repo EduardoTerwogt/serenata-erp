@@ -171,16 +171,65 @@ export interface TareaAgregada extends ProyectoTarea {
  * automáticamente al cerrar todavía -- se resuelve cuando Bloque 3/4
  * termine de migrar el filtro a etapa.es_etapa_final.
  */
-export async function getTareasAgregadas(): Promise<TareaAgregada[]> {
-  const { data, error } = await supabaseAdmin
-    .from('proyecto_tareas')
-    .select('*, proveedores(nombre), proyectos!inner(proyecto, cliente, estado)')
-    .neq('estado', 'COMPLETADA')
-    .neq('proyectos.estado', 'FINALIZADO')
-    .order('fecha_limite', { ascending: true, nullsFirst: false })
-  if (error) throw error
+// EF-3 3B-5: mismo PAGE_SIZE/HARD_CAP conservadores que getProyectos()
+// (ver docs/EF-3_ENGINEERING_HARDENING.md #3B-5) -- alimenta las tabs
+// Tareas/Estatus del mismo tablero Kanban, necesita membresía completa.
+const TAREAS_AGREGADAS_PAGE_SIZE = 500
+const TAREAS_AGREGADAS_HARD_CAP = 20000
 
-  return (data || []).map((row: Record<string, unknown>) => {
+export async function getTareasAgregadas(): Promise<TareaAgregada[]> {
+  let all: Record<string, unknown>[] = []
+  let cursorFechaLimite: string | null = null
+  let cursorId: string | null = null
+
+  while (true) {
+    let query = supabaseAdmin
+      .from('proyecto_tareas')
+      .select('*, proveedores(nombre), proyectos!inner(proyecto, cliente, estado)')
+      .neq('estado', 'COMPLETADA')
+      .neq('proyectos.estado', 'FINALIZADO')
+      .order('fecha_limite', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true })
+      .limit(TAREAS_AGREGADAS_PAGE_SIZE)
+
+    // 2 ramas explícitas -- NULLS LAST pone TODAS las filas con
+    // fecha_limite IS NULL después de TODAS las no-nulas, así que "después
+    // del cursor" depende de si el cursor mismo ya cruzó al bloque NULL.
+    if (cursorFechaLimite !== null) {
+      // cursor con fecha_limite no nula: la página siguiente incluye tanto
+      // las filas con fecha_limite mayor (o igual + id mayor, desempate)
+      // como TODAS las filas NULL -- van después de cualquier no-nula bajo
+      // NULLS LAST, sin importar el valor del cursor.
+      query = query.or(
+        `fecha_limite.gt.${cursorFechaLimite},and(fecha_limite.eq.${cursorFechaLimite},id.gt.${cursorId}),fecha_limite.is.null`
+      )
+    } else if (cursorId !== null) {
+      // cursor ya dentro del bloque NULL: no hay nada "después" salvo más
+      // filas NULL con id mayor -- ya estamos al final del orden.
+      query = query.is('fecha_limite', null).gt('id', cursorId)
+    }
+    // cursorFechaLimite/cursorId ambos null: primera página, sin filtro de cursor.
+
+    const { data, error } = await query
+    if (error) throw error
+    if (!data || data.length === 0) break
+
+    all = all.concat(data as Record<string, unknown>[])
+    if (all.length > TAREAS_AGREGADAS_HARD_CAP) {
+      throw new Error(
+        `getTareasAgregadas() superó el circuit breaker de ${TAREAS_AGREGADAS_HARD_CAP} filas sin agotar la tabla -- ` +
+        `posible bug de paginación o crecimiento muy por encima de lo esperado. Fallando explícito ` +
+        `en vez de devolver un array parcial al tablero de Proyectos.`
+      )
+    }
+
+    const last = data[data.length - 1] as Record<string, unknown>
+    cursorFechaLimite = (last.fecha_limite as string | null) ?? null
+    cursorId = last.id as string
+    if (data.length < TAREAS_AGREGADAS_PAGE_SIZE) break
+  }
+
+  return all.map((row) => {
     const proyecto = row.proyectos as { proyecto: string; cliente: string }
     const { proyectos: _proyectos, ...rest } = row
     void _proyectos
