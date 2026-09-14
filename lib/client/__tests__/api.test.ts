@@ -78,6 +78,46 @@ describe('lib/client/api.ts -- manejo compartido de 401', () => {
     expect(mocks.signOutMock).not.toHaveBeenCalled()
   })
 
+  it('dos GET concurrentes al mismo URL sin AbortSignal comparten un único fetch (dedupe normal)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    })
+    global.fetch = fetchMock as unknown as typeof fetch
+    const { getJson } = await import('../api')
+
+    await Promise.all([
+      getJson('/api/x', 'fallback'),
+      getJson('/api/x', 'fallback'),
+    ])
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  // EF-3 3B-2: useCuentasCobrar pasa su propio AbortSignal a cada GET para
+  // poder cancelar una búsqueda en vuelo -- si ese GET compartiera in-flight
+  // (por URL) con otro caller sin relación, abortar el primero abortaría
+  // también al segundo aunque su propio signal jamás se haya abortado. Un
+  // GET con `signal` queda fuera de la dedupe precisamente para evitar eso.
+  it('un GET con su propio AbortSignal NO comparte in-flight con otro GET al mismo URL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    })
+    global.fetch = fetchMock as unknown as typeof fetch
+    const { getJson } = await import('../api')
+
+    const controller = new AbortController()
+    await Promise.all([
+      getJson('/api/x', 'fallback', { signal: controller.signal }),
+      getJson('/api/x', 'fallback'),
+    ])
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('getArrayBuffer también dispara el manejo compartido de 401', async () => {
     mockFetchOnce(401, { error: 'Sesión invalidada' })
     const { getArrayBuffer } = await import('../api')

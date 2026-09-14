@@ -56,7 +56,15 @@ export async function getApiErrorMessage(response: Response, fallbackMessage: st
 export async function getJson<T>(url: string, fallbackMessage: string, init?: RequestInit): Promise<T> {
   const isGet = !init?.method || init.method.toUpperCase() === 'GET'
 
-  if (isGet) {
+  // La dedupe por URL asume que todos los callers de un mismo GET en vuelo
+  // comparten el mismo ciclo de vida -- eso deja de ser cierto en cuanto
+  // uno de ellos trae su propio AbortSignal (EF-3 3B-2: debounce +
+  // cancelación de useCuentasCobrar): si dos llamadas al mismo URL
+  // compartieran el fetch en vuelo, abortar la primera abortaría también
+  // la segunda aunque su propio signal siga sin abortar. Un GET con
+  // `signal` propio se excluye de la dedupe -- nunca comparte in-flight
+  // con otro caller.
+  if (isGet && !init?.signal) {
     // Reutilizar promise en vuelo si ya hay un GET idéntico en curso
     const existing = _inFlight.get(url)
     if (existing) return existing as Promise<T>
@@ -81,7 +89,8 @@ export async function getJson<T>(url: string, fallbackMessage: string, init?: Re
     return promise
   }
 
-  // POST/PUT/DELETE: sin deduplicación (son mutaciones únicas)
+  // POST/PUT/DELETE (mutaciones únicas) o GET con su propio AbortSignal:
+  // sin deduplicación.
   const response = await fetch(url, init)
   if (!response.ok) {
     if (response.status === 401) await handleUnauthorizedResponse(url)

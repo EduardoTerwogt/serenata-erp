@@ -16,6 +16,30 @@ export async function getCuentasCobrar() {
   return data as CuentaCobrar[]
 }
 
+export interface BuscarCuentasCobrarResult {
+  rows: CuentaCobrar[]
+  total_rows: number
+  total_monto_pendiente: number
+  total_monto_pagado: number
+  pendientes_count: number
+}
+
+/**
+ * EF-3 3B-2: busqueda/paginacion/totales server-side via RPC unica
+ * (db/migrations/20260914_buscar_cuentas_cobrar.sql) -- reemplaza el
+ * filtrado en JS sobre getCuentasCobrar() completo. La RPC ya llama
+ * sync_estados_cuentas_cobrar_vencidas() (3B-1) internamente.
+ */
+export async function buscarCuentasCobrar(search: string | null, page: number, pageSize: number) {
+  const { data, error } = await supabaseAdmin.rpc('buscar_cuentas_cobrar', {
+    p_search: search,
+    p_page: page,
+    p_page_size: pageSize,
+  })
+  if (error) throw error
+  return data as BuscarCuentasCobrarResult
+}
+
 /**
  * Detalle por ID -- nunca a través de getCuentasCobrar().find() (1C-1).
  * .maybeSingle() nunca .single(): "no encontrada" debe seguir siendo un

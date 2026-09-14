@@ -12,26 +12,8 @@ function includesSearchValue(value: string | null | undefined, term: string) {
   return (value || '').toLowerCase().includes(term)
 }
 
-export function buildCobrarRows(cuentas: CuentaCobrar[]): SelectedCuenta[] {
-  return cuentas.map((cuenta) => ({ ...cuenta, tipo: 'cobrar' as const }))
-}
-
 export function buildPagarRows(cuentas: CuentaPagar[]): SelectedCuenta[] {
   return cuentas.map((cuenta) => ({ ...cuenta, tipo: 'pagar' as const }))
-}
-
-export function filterCobrarRows(cuentas: SelectedCuenta[], term: string) {
-  if (!term) return cuentas
-
-  return cuentas.filter((cuenta) =>
-    cuenta.tipo === 'cobrar' &&
-    (
-      includesSearchValue(cuenta.cotizacion_id, term) ||
-      includesSearchValue(cuenta.folio, term) ||
-      includesSearchValue(cuenta.cliente, term) ||
-      includesSearchValue(cuenta.proyecto, term)
-    )
-  )
 }
 
 export function filterPagarRows(cuentas: SelectedCuenta[], term: string) {

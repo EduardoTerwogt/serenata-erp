@@ -85,7 +85,12 @@ export function CuentasPage() {
 
   const termPorProyecto = busqueda.toLowerCase().trim()
 
-  const abrirDetalleDesdeAlerta = (alertaId: string) => {
+  // EF-3 3B-2: cobrarFiltradas ya no es el arreglo completo -- es solo la
+  // página actual del server. Una alerta puede apuntar a una cuenta que no
+  // está en esa página, así que el fallback ahora carga el detalle real
+  // por ID (mismo endpoint que ya usa CuentaDetailModal) en vez de buscar
+  // en un arreglo local que ya no existe.
+  const abrirDetalleDesdeAlerta = async (alertaId: string) => {
     setShowAlertasModal(false)
 
     const cuentaDesdeLista = cobrarFiltradas.find((cuenta) => cuenta.id === alertaId)
@@ -94,9 +99,9 @@ export function CuentasPage() {
       return
     }
 
-    const cuentaCompleta = cobrarApi.cuentas.find((cuenta) => cuenta.id === alertaId)
-    if (cuentaCompleta) {
-      setSelectedCuenta({ ...cuentaCompleta, tipo: 'cobrar' })
+    const detalle = await cobrarApi.cargarDetalle(alertaId)
+    if (detalle) {
+      setSelectedCuenta({ ...detalle.cuenta, tipo: 'cobrar' })
       return
     }
 
@@ -142,14 +147,26 @@ export function CuentasPage() {
           onChange={setVista}
         />
         <div className="ml-auto flex-none">
-          <SearchInput
-            expandable
-            placeholder={tab === 'cobrar'
-              ? 'Buscar por folio, cliente o proyecto…'
-              : 'Buscar por folio, responsable, proyecto o descripción…'}
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-          />
+          {/* EF-3 3B-2: en Lista/Cobrar la búsqueda es server-side (con
+              debounce propio) via cobrarApi.busqueda -- en el resto de
+              vistas sigue siendo el filtro en JS de busqueda de página. */}
+          {vista === 'lista' && tab === 'cobrar' ? (
+            <SearchInput
+              expandable
+              placeholder="Buscar por folio, cliente o proyecto…"
+              value={cobrarApi.busqueda}
+              onChange={(e) => cobrarApi.setBusqueda(e.target.value)}
+            />
+          ) : (
+            <SearchInput
+              expandable
+              placeholder={tab === 'cobrar'
+                ? 'Buscar por folio, cliente o proyecto…'
+                : 'Buscar por folio, responsable, proyecto o descripción…'}
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
+          )}
         </div>
       </div>
 
@@ -185,8 +202,11 @@ export function CuentasPage() {
         <CuentasTable
           tab={tab}
           cuentas={tab === 'cobrar' ? cobrarFiltradas : pagarFiltradas}
-          total={tab === 'cobrar' ? cobrarApi.cuentas.length : pagarApi.cuentas.length}
+          total={tab === 'cobrar' ? cobrarApi.totalRows : pagarApi.cuentas.length}
           onSelect={(cuenta) => setSelectedCuenta(cuenta)}
+          page={tab === 'cobrar' ? cobrarApi.page : undefined}
+          pageCount={tab === 'cobrar' ? cobrarApi.pageCount : undefined}
+          onPageChange={tab === 'cobrar' ? cobrarApi.setPage : undefined}
         />
       )}
 

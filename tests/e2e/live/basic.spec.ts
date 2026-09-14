@@ -103,8 +103,12 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await expect(page.getByText('APROBADA', { exact: true })).toBeVisible()
 
     // 3. Confirmar por API real que se generaron cuenta por cobrar y por pagar
-    const cobrarRes = await page.request.get('/api/cuentas-cobrar')
-    const cuentasCobrar = await cobrarRes.json() as Array<{ id: string; cotizacion_id: string; monto_total: number }>
+    // EF-3 3B-2: GET /api/cuentas-cobrar responde {rows, total_rows, ...} de
+    // la RPC buscar_cuentas_cobrar -- ya no un arreglo plano. Se busca por
+    // el folio real (cotizacionId) para no depender de que la cuenta caiga
+    // en la página 1 por default (orden created_at desc, page_size 50).
+    const cobrarRes = await page.request.get(`/api/cuentas-cobrar?search=${cotizacionId}`)
+    const { rows: cuentasCobrar } = await cobrarRes.json() as { rows: Array<{ id: string; cotizacion_id: string; monto_total: number }> }
     const cuentaCobrar = cuentasCobrar.find((c) => c.cotizacion_id === cotizacionId)
     expect(cuentaCobrar, 'debe existir una cuenta por cobrar real para esta cotización').toBeTruthy()
 
@@ -197,8 +201,10 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await expect(page.getByText('CANCELADA', { exact: true })).toBeVisible()
 
     // Confirmar por API real que no quedó ninguna cuenta generada
-    const cobrarRes = await page.request.get('/api/cuentas-cobrar')
-    const cuentasCobrar = await cobrarRes.json() as Array<{ cotizacion_id: string }>
+    // EF-3 3B-2: {rows, total_rows, ...} en vez de un arreglo plano -- se
+    // busca por el folio real para no depender de la página 1 por default.
+    const cobrarRes = await page.request.get(`/api/cuentas-cobrar?search=${cotizacionId}`)
+    const { rows: cuentasCobrar } = await cobrarRes.json() as { rows: Array<{ cotizacion_id: string }> }
     expect(cuentasCobrar.some((c) => c.cotizacion_id === cotizacionId)).toBe(false)
 
     const pagarRes = await page.request.get('/api/cuentas-pagar')

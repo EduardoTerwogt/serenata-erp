@@ -420,8 +420,22 @@ export async function mockCuentasApis(page: Page) {
     })
   })
 
-  await page.route('**/api/cuentas-cobrar', async (route) => {
-    await fulfillJson(route, cuentasCobrar)
+  // EF-3 3B-2: GET /api/cuentas-cobrar ahora siempre lleva querystring
+  // (?page=&pageSize=, y opcionalmente &search=) y responde el shape de la
+  // RPC buscar_cuentas_cobrar. Un glob termina en el path exacto y NO
+  // matchea si se le agrega un querystring -- se usa un RegExp explícito
+  // (fin de ruta o `?...`) para seguir matcheando esta ruta con o sin
+  // query string, sin capturar las rutas más específicas (`/alertas`,
+  // `/{id}/...`).
+  await page.route(/\/api\/cuentas-cobrar(\?.*)?$/, async (route) => {
+    const saldoPendiente = cobrarCuenta.monto_total - cobrarCuenta.monto_pagado
+    await fulfillJson(route, {
+      rows: cuentasCobrar,
+      total_rows: cuentasCobrar.length,
+      total_monto_pendiente: Math.max(0, saldoPendiente),
+      total_monto_pagado: cobrarCuenta.monto_pagado,
+      pendientes_count: cuentasCobrar.filter((c) => c.estado !== 'PAGADO').length,
+    })
   })
 
   await page.route('**/api/cuentas-pagar', async (route) => {
