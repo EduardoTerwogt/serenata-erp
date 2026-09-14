@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { CuentaPagar, DocumentoCuentaPagar, OrdenPago, RegimenFiscal, HistorialCambioResponsableItem } from '@/lib/types'
 import { getJson, sendFormData, sendJson } from '@/lib/client/api'
 import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
 import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
+
+const PAGE_SIZE = 50
+const SEARCH_DEBOUNCE_MS = 300
 
 interface CuentaPagarDetalle {
   cuenta: CuentaPagar
@@ -64,25 +67,86 @@ interface OrdenPagoResult {
   }
 }
 
+interface BuscarCuentasPagarResponse {
+  rows: CuentaPagar[]
+  total_rows: number
+  total_monto_pendiente: number
+  total_monto_pagado: number
+  pendientes_count: number
+}
+
+// EF-3 3B-3: busqueda/paginacion/totales server-side via
+// /api/cuentas-pagar?search=&page=&pageSize= (RPC buscar_cuentas_pagar).
+// Mismo mecanismo de debounce/AbortController/secuencia que
+// useCuentasCobrar (3B-2): setBusqueda hace debounce de 300ms antes de
+// disparar el fetch; cada fetch cancela el anterior via AbortController y
+// lleva un numero de secuencia incremental -- una respuesta solo se aplica
+// al estado si su secuencia coincide con la ultima emitida.
 export function useCuentasPagar() {
   const [cuentas, setCuentas] = useState<CuentaPagar[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [busqueda, setBusquedaState] = useState('')
+  const [busquedaDebounced, setBusquedaDebounced] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalRows, setTotalRows] = useState(0)
+  const [totalMontoPendiente, setTotalMontoPendiente] = useState(0)
+  const [totalMontoPagado, setTotalMontoPagado] = useState(0)
+  const [pendientesCount, setPendientesCount] = useState(0)
 
-  const cargar = useCallback(async () => {
+  const abortRef = useRef<AbortController | null>(null)
+  const seqRef = useRef(0)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    abortRef.current?.abort()
+  }, [])
+
+  const setBusqueda = useCallback((value: string) => {
+    setBusquedaState(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setBusquedaDebounced(value)
+      setPage(1)
+    }, SEARCH_DEBOUNCE_MS)
+  }, [])
+
+  const cargar = useCallback(async (search: string, pageArg: number) => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const seq = ++seqRef.current
+
     setLoading(true)
     setError(null)
     try {
-      const data = await getJson<CuentaPagar[]>('/api/cuentas-pagar', 'Error al cargar cuentas por pagar')
-      setCuentas(data)
+      const params = new URLSearchParams()
+      if (search) params.set('search', search)
+      params.set('page', String(pageArg))
+      params.set('pageSize', String(PAGE_SIZE))
+      const data = await getJson<BuscarCuentasPagarResponse>(
+        `/api/cuentas-pagar?${params.toString()}`,
+        'Error al cargar cuentas por pagar',
+        { signal: controller.signal }
+      )
+      if (seq !== seqRef.current) return
+      setCuentas(data.rows)
+      setTotalRows(data.total_rows)
+      setTotalMontoPendiente(data.total_monto_pendiente)
+      setTotalMontoPagado(data.total_monto_pagado)
+      setPendientesCount(data.pendientes_count)
     } catch (err) {
+      if (controller.signal.aborted || seq !== seqRef.current) return
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
-      setLoading(false)
+      if (seq === seqRef.current) setLoading(false)
     }
   }, [])
 
-  useEffect(() => { void cargar() }, [cargar])
+  useEffect(() => { void cargar(busquedaDebounced, page) }, [cargar, busquedaDebounced, page])
+
+  const recargar = useCallback(() => cargar(busquedaDebounced, page), [cargar, busquedaDebounced, page])
 
   const cargarDetalle = useCallback(async (id: string): Promise<CuentaPagarDetalle | null> => {
     try {
@@ -102,9 +166,9 @@ export function useCuentasPagar() {
     formData.append('factura_proveedor_pdf', pdf)
 
     const result = await sendFormData(`/api/cuentas-pagar/${id}/subir-factura`, formData, 'Error al subir factura')
-    await cargar()
+    await recargar()
     return result
-  }, [cargar])
+  }, [recargar])
 
   const registrarPago = useCallback(async (
     id: string,
@@ -129,17 +193,17 @@ export function useCuentasPagar() {
         return sendFormData(`/api/cuentas-pagar/${id}/registrar-pago`, formData, 'Error al registrar pago')
       },
     })
-    await cargar()
+    await recargar()
     return result
-  }, [cargar])
+  }, [recargar])
 
   const generarOrdenPago = useCallback(async (): Promise<OrdenPagoResult> => {
     const data = await getJson<OrdenPagoResult>('/api/cuentas-pagar/generar-orden-pago', 'Error al generar orden de pago', {
       method: 'POST',
     })
-    await cargar()
+    await recargar()
     return data
-  }, [cargar])
+  }, [recargar])
 
   const cargarHistorialOrdenes = useCallback(async (): Promise<{ total: number; ordenes: OrdenPago[] }> => {
     return getJson('/api/cuentas-pagar/ordenes-historial', 'Error al cargar historial')
@@ -152,19 +216,30 @@ export function useCuentasPagar() {
   // nunca escribe directo a cuentas_pagar para esto, para no desincronizar.
   const reasignarResponsable = useCallback(async (itemId: string, responsableId: string, responsableNombre: string) => {
     const result = await sendJson(`/api/items/${itemId}`, { responsable_id: responsableId, responsable_nombre: responsableNombre }, 'Error al reasignar responsable', { method: 'PATCH' })
-    await cargar()
+    await recargar()
     return result
-  }, [cargar])
+  }, [recargar])
 
   const cargarHistorialResponsable = useCallback(async (cuentaId: string): Promise<{ historial: HistorialCambioResponsableItem[] }> => {
     return getJson(`/api/cuentas-pagar/${cuentaId}/historial-responsable`, 'Error al cargar historial de responsable')
   }, [])
 
+  const pageCount = Math.max(1, Math.ceil(totalRows / PAGE_SIZE))
+
   return useMemo(() => ({
     cuentas,
     loading,
     error,
-    recargar: cargar,
+    busqueda,
+    setBusqueda,
+    page,
+    setPage,
+    pageCount,
+    totalRows,
+    totalMontoPendiente,
+    totalMontoPagado,
+    pendientesCount,
+    recargar,
     cargarDetalle,
     cargarPreviewOrdenPago,
     subirFactura,
@@ -173,5 +248,10 @@ export function useCuentasPagar() {
     cargarHistorialOrdenes,
     reasignarResponsable,
     cargarHistorialResponsable,
-  }), [cuentas, loading, error, cargar, cargarDetalle, cargarPreviewOrdenPago, subirFactura, registrarPago, generarOrdenPago, cargarHistorialOrdenes, reasignarResponsable, cargarHistorialResponsable])
+  }), [
+    cuentas, loading, error, busqueda, setBusqueda, page, pageCount, totalRows,
+    totalMontoPendiente, totalMontoPagado, pendientesCount, recargar,
+    cargarDetalle, cargarPreviewOrdenPago, subirFactura, registrarPago,
+    generarOrdenPago, cargarHistorialOrdenes, reasignarResponsable, cargarHistorialResponsable,
+  ])
 }

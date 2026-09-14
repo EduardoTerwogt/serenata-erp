@@ -428,18 +428,43 @@ export async function mockCuentasApis(page: Page) {
   // query string, sin capturar las rutas más específicas (`/alertas`,
   // `/{id}/...`).
   await page.route(/\/api\/cuentas-cobrar(\?.*)?$/, async (route) => {
+    const search = (new URL(route.request().url()).searchParams.get('search') || '').toLowerCase()
+    const filtered = search
+      ? cuentasCobrar.filter((c) =>
+          [c.cotizacion_id, c.folio, c.cliente, c.proyecto].some((v) => (v || '').toLowerCase().includes(search))
+        )
+      : cuentasCobrar
     const saldoPendiente = cobrarCuenta.monto_total - cobrarCuenta.monto_pagado
     await fulfillJson(route, {
-      rows: cuentasCobrar,
-      total_rows: cuentasCobrar.length,
+      rows: filtered,
+      total_rows: filtered.length,
       total_monto_pendiente: Math.max(0, saldoPendiente),
       total_monto_pagado: cobrarCuenta.monto_pagado,
       pendientes_count: cuentasCobrar.filter((c) => c.estado !== 'PAGADO').length,
     })
   })
 
-  await page.route('**/api/cuentas-pagar', async (route) => {
-    await fulfillJson(route, cuentasPagar)
+  // EF-3 3B-3: GET /api/cuentas-pagar ahora siempre lleva querystring
+  // (?page=&pageSize=, opcionalmente &search=) y responde el shape de la
+  // RPC buscar_cuentas_pagar -- mismo RegExp que cuentas-cobrar (3B-2)
+  // para matchear con o sin query string sin capturar
+  // `/generar-orden-pago`, `/ordenes-historial`, `/{id}/...`.
+  await page.route(/\/api\/cuentas-pagar(\?.*)?$/, async (route) => {
+    const search = (new URL(route.request().url()).searchParams.get('search') || '').toLowerCase()
+    const filtered = search
+      ? cuentasPagar.filter((c) =>
+          [c.cotizacion_id, c.folio, c.responsable_nombre, c.proyecto_nombre, c.item_descripcion]
+            .some((v) => (v || '').toLowerCase().includes(search))
+        )
+      : cuentasPagar
+    const saldoPendiente = pagarCuenta.x_pagar - pagarCuenta.monto_pagado
+    await fulfillJson(route, {
+      rows: filtered,
+      total_rows: filtered.length,
+      total_monto_pendiente: Math.max(0, saldoPendiente),
+      total_monto_pagado: pagarCuenta.monto_pagado,
+      pendientes_count: cuentasPagar.filter((c) => c.estado !== 'PAGADO').length,
+    })
   })
 
   // Fase 5.3 Bloque 3: vista "Por proyecto" es la vista por default de

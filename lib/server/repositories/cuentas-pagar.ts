@@ -32,6 +32,30 @@ export async function getCuentasPagar() {
   })) as CuentaPagar[]
 }
 
+export interface BuscarCuentasPagarResult {
+  rows: CuentaPagar[]
+  total_rows: number
+  total_monto_pendiente: number
+  total_monto_pagado: number
+  pendientes_count: number
+}
+
+/**
+ * EF-3 3B-3: busqueda/paginacion/totales server-side via RPC unica
+ * (db/migrations/20260914_buscar_cuentas_pagar.sql) -- reemplaza el
+ * filtrado en JS sobre getCuentasPagar() (que además trae solo las
+ * últimas 500 filas).
+ */
+export async function buscarCuentasPagar(search: string | null, page: number, pageSize: number) {
+  const { data, error } = await supabaseAdmin.rpc('buscar_cuentas_pagar', {
+    p_search: search,
+    p_page: page,
+    p_page_size: pageSize,
+  })
+  if (error) throw error
+  return data as BuscarCuentasPagarResult
+}
+
 /**
  * Detalle por ID -- nunca a través de getCuentasPagar().find(), que con
  * más de 500 cuentas puede no traer la fila buscada aunque exista (1C-1).

@@ -1,14 +1,20 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasPagar, updateCuentaPagar } from '@/lib/db'
+import { buscarCuentasPagar, updateCuentaPagar } from '@/lib/db'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
-export async function GET() {
+// EF-3 3B-3: busqueda/paginacion/totales server-side via RPC unica
+// buscar_cuentas_pagar (db/migrations/20260914_buscar_cuentas_pagar.sql).
+export async function GET(request: Request) {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
 
   try {
-    const cuentas = await getCuentasPagar()
-    return Response.json(cuentas)
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search')
+    const page = Number(searchParams.get('page')) || 1
+    const pageSize = Number(searchParams.get('pageSize')) || 50
+    const result = await buscarCuentasPagar(search, page, pageSize)
+    return Response.json(result)
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error obteniendo cuentas por pagar' }, { status: 500 })
