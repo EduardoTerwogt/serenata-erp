@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-13
+**Última actualización:** 2026-09-14
 
 ## Estado
 
@@ -11,17 +11,23 @@ commit `980464c`. Historia completa de cada uno:
 [`docs/archive/ef-1-engineering-hardening.md`](archive/ef-1-engineering-hardening.md),
 [`docs/archive/ef-2-engineering-hardening.md`](archive/ef-2-engineering-hardening.md).
 
-Plan canónico v13.1 (13 rondas de revisión) aprobado. Estado real de la
-iniciativa: **v13.1 aprobado**; **EF-1 y EF-2 cerrados**; **EF-3 no
-autorizado**, mantiene el gate de entrada de v13.1 §15. Los frentes A-E de
-la auditoría de ingeniería, con lo que EF-2 cerró de cada uno y lo que sigue
-abierto: `docs/ROADMAP.md` → Ahora (tabla de frentes), detalle completo en
-`docs/archive/auditoria-ingenieria-2026-09.md`.
-
-No hay ninguna iniciativa a medio arrancar ahora mismo — el trabajo activo
-es decidir/auditar EF-3 cuando se priorice.
+**EF-3 autorizado y en ejecución (2026-09-14).** Plan v12 (12 rondas de
+auditoría, la última externa e independiente contra el repo real), 40
+bloques. Documento canónico + matriz de hallazgos + tracker en vivo:
+[`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md).
+**Bloque en curso: 3A-0** (este mismo commit — persistencia documental del
+plan). Siguiente: 3A-0b (validador de tracker en CI).
 
 ## Completado en esta sesión
+
+**3A-0 (EF-3):** creación de `docs/EF-3_ENGINEERING_HARDENING.md` (plan
+completo v12 + historial de 12 rondas + tracker de 40 bloques),
+actualización de `docs/ROADMAP.md` (EF-3 pasa de "no autorizado" a "en
+ejecución") y de este documento, y de las 2 skills
+(`serenata-iniciar-fase`/`serenata-cerrar-sesion`) para que reconozcan el
+tracker de EF-3 al abrir/cerrar sesión.
+
+## Completado en sesiones anteriores
 
 **EF-2 (8 bloques del plan aprobado), de punta a punta:** planeación en modo
 plan con 4 rondas de auditoría del usuario contra el código real antes de
@@ -38,23 +44,14 @@ Infraestructura nueva y reutilizable que quedó del camino:
 de cualquier ruta contra cualquier Preview — útil para el próximo bloque
 que necesite el mismo tipo de gate.
 
-Documentación: nueva decisión
-[`009`](decisions/009-revocacion-sesion-staff-session-version.md) (revocación
-de sesión de staff), `ARCHITECTURE.md` actualizado (aislamiento de
-`supabaseAdmin`, revocación de sesión, `DomainError`/logger, 2 gotchas
-nuevos de serverless/Realtime, 2 filas nuevas en "Módulos y cobertura"),
-`docs/ROADMAP.md` (EF-2 pasa a cerrado, tabla de frentes con estado real
-tras EF-2), y esta sesión de EF-1 archivada junto con la de EF-2 (ver
-Estado, arriba) — `docs/ACTIVE_WORK.md` traía todavía la bitácora larga de
-cierre de EF-1, ya cerrada hace una sesión.
-
 ## Tests ejecutados
 
 `npx tsc --noEmit`, `npm run lint` y `npm test` en verde antes de cada push
-de la sesión; suite completa en 616/616 en el estado final. CI real
+de la sesión; suite completa en 616/616 en el estado final de EF-2. CI real
 confirmado en verde (no solo el webhook de finalización) en los 4 checks
 del commit final del PR #31 (`ee82da0`): `test`, `fresh-db`, `live`,
-`smoke-and-critical`, más el Preview de Vercel.
+`smoke-and-critical`, más el Preview de Vercel. 3A-0 es doc-only, sin
+suites que correr.
 
 ## Problemas encontrados que siguen abiertos
 
@@ -73,25 +70,15 @@ del commit final del PR #31 (`ee82da0`): `test`, `fresh-db`, `live`,
 ## Deuda técnica
 
 - **`previewNextQuotationFolio()` sin `complementaria_de` hace
-  `SELECT id FROM cotizaciones` sin filtro ni límite** (trae toda la tabla
-  para calcular el siguiente folio en JS) — `lib/server/quotations/folio.ts`.
-  Causa raíz real de la latencia intermitente de `GET /api/folio` medida en
-  EF-2 1D-3 contra un Preview real (p95 osciló entre 486ms y 3664ms en 3
-  corridas idénticas, según si la petición caía en una instancia tibia de
-  Vercel o no) — el `CacheManager` en memoria que 1D-3 restauró para esa
-  ruta puntual **no resuelve esto de fondo**, solo lo esconde
-  quirúrgicamente cuando la petición cae en la misma instancia serverless
-  que la anterior (ver gotcha en `ARCHITECTURE.md`). Preexistente a EF-2, no
-  introducido esta sesión. Fuera de alcance de EF-2 por decisión del plan
-  (1D-3 no introduce índices ni migraciones). Fix real: limitar/paginar la
-  consulta o resolver el siguiente folio por RPC en Postgres en vez de traer
-  toda la tabla a Node. Mismo patrón que el frente A de la auditoría de
-  ingeniería (`getCuentasPagar()` con problema análogo) — candidato natural
-  para EF-3.
+  `SELECT id FROM cotizaciones` sin filtro ni límite** — F14 de la matriz de
+  EF-3, se cierra en el bloque **3B-7** (RPC `preview_next_cotizacion_folio_principal`).
+  Detalle histórico: p95 osciló entre 486ms y 3664ms contra un Preview real
+  en EF-2 1D-3; el `CacheManager` que 1D-3 restauró para esa ruta puntual
+  no resuelve esto de fondo (ver gotcha en `ARCHITECTURE.md`).
 - **Frentes A (escalabilidad de datos) y E (pruebas de carga) de la
-  auditoría de ingeniería: sin tocar por EF-2.** Frentes B, C y D quedaron
-  parcialmente cerrados — detalle exacto de qué se cerró de cada uno en
-  `docs/ROADMAP.md` → Ahora (tabla de frentes). Candidatos para EF-3.
+  auditoría de ingeniería: cubiertos por el plan EF-3 v12** (40 bloques,
+  `docs/EF-3_ENGINEERING_HARDENING.md`) — ya no son deuda sin plan, están
+  en ejecución.
 - **Modo de uso de `scripts/check-schema-parity.mjs`:** ¿paso manual
   obligatorio antes de mergear a `main`, o workflow de GitHub Actions
   separado y protegido (con el secreto de producción restringido a ese
@@ -107,13 +94,11 @@ del commit final del PR #31 (`ee82da0`): `test`, `fresh-db`, `live`,
 
 ## Siguiente paso
 
-**EF-3, cuando se priorice:** auditar los frentes A-E contra el código real
-ya con EF-2 aplicado (mismo patrón que se hizo para EF-1 y EF-2) y proponer
-bloques concretos sin implementar — sigue el gate de entrada de v13.1 §15,
-no autorizado todavía. Punto de partida: la tabla de frentes en
-`docs/ROADMAP.md` → Ahora ya dice qué le falta a cada uno tras EF-2; el
-frente A (escalabilidad) y E (carga) están intactos y son los más grandes
-pendientes.
+**3A-0b** (validador de tracker en CI, rama+PR) — primer bloque con rama de
+EF-3, requisito de todo lo demás según el grafo de dependencias
+(`docs/EF-3_ENGINEERING_HARDENING.md` → Sección 5). Después: 3A-1
+(entornos de carga), que además necesita un paso manual del usuario
+(crear el proyecto Vercel aislado, sección 3A-1 punto 2).
 
 Sin dueño ni urgencia: borrar manualmente la rama remota
 `fix/totales-general-conflict-drain` y decidir el modo de uso de

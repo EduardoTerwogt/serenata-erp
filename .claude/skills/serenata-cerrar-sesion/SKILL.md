@@ -78,3 +78,12 @@ Confirmar que CI quedó en verde de verdad — no solo que el push tuvo éxito.
 **El merge a `main` no es parte de cerrar sesión.** Ocurre una sola vez, cuando la
 iniciativa completa está terminada, todas las suites pasaron en el PR y el Preview de
 Vercel desplegó bien. Si el trabajo sigue abierto, la rama se queda como está.
+
+## 6bis. Si esta sesión mergeó un bloque de EF-3 a `main`
+
+Sincronización documental inmediata (commit doc-only) que marca ese bloque
+`Cerrado` con PR+SHA (o Commit SHA si es de los 6 bloques doc-only) en el
+tracker de `docs/EF-3_ENGINEERING_HARDENING.md`, y marca `En curso` el
+siguiente bloque del grafo — esto sí es parte de cerrar sesión, a diferencia
+del merge de código (que sigue rama+PR normal). Si el bloque quedó a medias,
+el checkpoint va también en el tracker, no solo en `ACTIVE_WORK.md`.

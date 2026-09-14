@@ -1,19 +1,21 @@
 # Roadmap
 
-**Última actualización:** 2026-09-13
+**Última actualización:** 2026-09-14
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
 `docs/ACTIVE_WORK.md`.
 
 Queda una iniciativa comprometida en curso: Engineering Hardening (EF-1 y EF-2
-cerrados, EF-3 sin autorizar todavía). **Lo que sigue después es producto y se
-define en Chat una vez cerrada por completo** — deliberadamente, para no
-priorizar features con información vieja.
+cerrados, **EF-3 autorizado y en ejecución** — plan v12,
+[`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md), 40
+bloques, tracker en la Sección 11 de ese documento). **Lo que sigue después
+es producto y se define en Chat una vez cerrada por completo** —
+deliberadamente, para no priorizar features con información vieja.
 
 ---
 
-## Ahora — Engineering Hardening (EF-1/EF-2 cerrados, EF-3 pendiente)
+## Ahora — Engineering Hardening (EF-1/EF-2 cerrados, EF-3 en ejecución)
 
 **EF-1 mergeado a `main`** (PR [#29](https://github.com/EduardoTerwogt/serenata-erp/pull/29),
 2026-09-13): baseline, 1C-1, 1E-1, 1C-2a/b (bulk de partidas), 1B-3, 1B-4,
@@ -31,9 +33,13 @@ logger estructurado en 3 rutas). Dos rondas de auditoría del propio PR
 encontraron y corrigieron hallazgos reales antes de mergear — detalle en
 `docs/archive/` una vez se archive la bitácora de la sesión.
 
-**EF-3 no autorizado** — mantiene el gate de entrada definido en el plan
-canónico v13.1 §15. Los frentes A-E de abajo reflejan lo que EF-2 cerró y lo
-que sigue abierto.
+**EF-3 autorizado (2026-09-14)** — plan v12, 12 rondas de auditoría (la
+última, externa e independiente contra el repo real). 40 bloques repartidos
+en 5 subfases (3A tooling/carga, 3B escalabilidad de datos, 3C correctness
+serverless, 3D mantenibilidad, 3E cierre). Detalle completo, tracker en
+vivo y matriz de 25-28 hallazgos:
+[`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md). Los
+frentes A-E de abajo reflejan lo que EF-2 cerró y lo que EF-3 cierra.
 
 ### Frentes
 
@@ -49,8 +55,9 @@ que sigue abierto.
 quedar establecida al cerrar cada frente:**
 [`docs/archive/auditoria-ingenieria-2026-09.md`](archive/auditoria-ingenieria-2026-09.md).
 
-Los bloques concretos de EF-3 se definen al auditar cada frente contra el
-código real (ya con EF-2 aplicado) antes de arrancar, no ahora.
+Los 40 bloques concretos de EF-3 ya están definidos y auditados contra el
+código real (12 rondas) en `docs/EF-3_ENGINEERING_HARDENING.md` — arrancan
+con este mismo commit (3A-0).
 
 ---
 
