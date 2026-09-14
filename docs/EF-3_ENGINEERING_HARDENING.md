@@ -5152,7 +5152,7 @@ exige aquí la nota de aprobación explícita no vacía (regla de 3 estados de
 | 3B-9 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#42](https://github.com/EduardoTerwogt/serenata-erp/pull/42) | `85b28f6` | `3d48178` | | Arrancar el siguiente bloque independiente (3B-11, 3B-12, 3C-1, 3D-0) |
 | 3B-10 | Pendiente | 3B-1 | — | — | — | — | | — |
 | 3B-11 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#43](https://github.com/EduardoTerwogt/serenata-erp/pull/43) | `7f7497a` | `bd69268` | | Arrancar el siguiente bloque independiente (3B-12, 3C-1, 3D-0) |
-| 3B-12 | En curso | ninguna | `claude/hopeful-allen-jql9xp` | [#44](https://github.com/EduardoTerwogt/serenata-erp/pull/44) | — | — | | — |
+| 3B-12 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#44](https://github.com/EduardoTerwogt/serenata-erp/pull/44) | `814ba3e` | `101b243` | | Arrancar el siguiente bloque independiente (3C-1, 3D-0) |
 | 3C-1 | Pendiente | ninguna | — | — | — | — | | — |
 | 3C-2 | Pendiente | 3C-1 | — | — | — | — | | — |
 | 3C-3 | Pendiente | 3C-2 | — | — | — | — | | — |
