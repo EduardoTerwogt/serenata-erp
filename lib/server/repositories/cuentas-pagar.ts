@@ -357,6 +357,25 @@ export async function getOrdenesPago() {
   return data as OrdenPago[]
 }
 
+export interface BuscarOrdenesPagoResult {
+  rows: OrdenPago[]
+  totalRows: number
+}
+
+// EF-3 3B-11: getOrdenesPago() sin limite explicito -- unico consumidor
+// (ordenes-historial/route.ts) pasa a pedir paginado vía la RPC
+// buscar_ordenes_pago (db/migrations/20260914_buscar_ordenes_pago.sql).
+// getOrdenesPago() se conserva sin cambios -- ningun otro caller la usa
+// hoy, pero no hay razón para eliminarla si no estorba.
+export async function buscarOrdenesPago(page: number, pageSize: number): Promise<BuscarOrdenesPagoResult> {
+  const { data, error } = await supabaseAdmin.rpc('buscar_ordenes_pago', {
+    p_page: page,
+    p_page_size: pageSize,
+  })
+  if (error) throw error
+  return { rows: data.rows as OrdenPago[], totalRows: data.total_rows as number }
+}
+
 // EF-3 3B-8: el filtro fecha_entrega<=hoy se movió a SQL (RPC
 // cuentas_pagar_pendientes_eventos_realizados,
 // db/migrations/20260914_cuentas_pagar_pendientes_eventos_realizados.sql)

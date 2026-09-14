@@ -14,6 +14,8 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { SectionLoading } from '@/components/ui/SectionLoading'
+import { TableFooter } from '@/components/ui/TableFooter'
+import { HISTORIAL_PAGE_SIZE } from '@/app/components/cuentas/hooks/useCuentasPagar'
 
 // Puerto de patterns/Metric.jsx del kit: sn-label + valor en sn-display
 // text-h2, no un h3 semibold suelto.
@@ -63,6 +65,9 @@ export function CuentasPage() {
     alertas,
     loadingAlertas,
     historialOrdenes,
+    historialTotal,
+    historialPage,
+    irAPaginaHistorial,
     cobrarApi,
     pagarApi,
     porProyectoApi,
@@ -118,8 +123,8 @@ export function CuentasPage() {
               {tab === 'cobrar' && !loadingAlertas && alertas.length > 0 && (
                 <HeaderPopupButton label="Alertas" count={alertas.length} onClick={() => setShowAlertasModal(true)} />
               )}
-              {tab === 'pagar' && historialOrdenes.length > 0 && (
-                <HeaderPopupButton label="Historial" count={historialOrdenes.length} onClick={() => setShowHistorialModal(true)} />
+              {tab === 'pagar' && historialTotal > 0 && (
+                <HeaderPopupButton label="Historial" count={historialTotal} onClick={() => setShowHistorialModal(true)} />
               )}
               <Button onClick={() => setShowOrdenModal(true)} iconLeft="file-text">
                 Ficha de órdenes de pago
@@ -262,7 +267,7 @@ export function CuentasPage() {
       )}
 
       {showHistorialModal && (
-        <Modal title="Historial de Órdenes" subtitle={`${historialOrdenes.length} orden(es)`} onClose={() => setShowHistorialModal(false)}>
+        <Modal title="Historial de Órdenes" subtitle={`${historialTotal} orden(es)`} onClose={() => setShowHistorialModal(false)}>
           {historialOrdenes.map((orden) => (
             <div key={orden.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-row border border-hairline rounded-control p-4">
               <div>
@@ -285,6 +290,16 @@ export function CuentasPage() {
               </div>
             </div>
           ))}
+          {/* EF-3 3B-11: paginación server-side del historial -- reutiliza
+              TableFooter (3B-2/3B-3/3B-4) en vez de un Pager.tsx nuevo. */}
+          <TableFooter
+            shown={historialOrdenes.length}
+            total={historialTotal}
+            unit="orden(es)"
+            page={historialPage}
+            pageCount={Math.max(1, Math.ceil(historialTotal / HISTORIAL_PAGE_SIZE))}
+            onPageChange={irAPaginaHistorial}
+          />
         </Modal>
       )}
     </div>

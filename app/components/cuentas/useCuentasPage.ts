@@ -21,6 +21,8 @@ export function useCuentasPage() {
   const [alertas, setAlertas] = useState<AlertaCuentaCobrar[]>([])
   const [loadingAlertas, setLoadingAlertas] = useState(false)
   const [historialOrdenes, setHistorialOrdenes] = useState<OrdenPago[]>([])
+  const [historialTotal, setHistorialTotal] = useState(0)
+  const [historialPage, setHistorialPage] = useState(1)
   const alertasLoadedRef = useRef(false)
   const historialLoadedRef = useRef(false)
 
@@ -47,16 +49,29 @@ export function useCuentasPage() {
     }
   }, [fetchAlertas])
 
-  const cargarHistorialOrdenes = useCallback(async () => {
+  // EF-3 3B-11: el historial de órdenes ahora pagina server-side -- recibe
+  // la página a cargar en vez de traer todas las órdenes.
+  const cargarHistorialOrdenes = useCallback(async (page: number) => {
     try {
-      const data = await fetchHistorialOrdenes()
+      const data = await fetchHistorialOrdenes(page)
       setHistorialOrdenes(data.ordenes || [])
+      setHistorialTotal(data.total || 0)
       historialLoadedRef.current = true
     } catch {
       setHistorialOrdenes([])
+      setHistorialTotal(0)
       historialLoadedRef.current = false
     }
   }, [fetchHistorialOrdenes])
+
+  // Navegación imperativa del historial: fija la página y dispara el fetch
+  // de inmediato -- separado del efecto de carga inicial (que solo corre
+  // una vez por apertura del tab "pagar", gateado por historialLoadedRef)
+  // para no refetchear en cada cambio de tab una vez ya cargado.
+  const irAPaginaHistorial = useCallback((page: number) => {
+    setHistorialPage(page)
+    void cargarHistorialOrdenes(page)
+  }, [cargarHistorialOrdenes])
 
   // Fase 2: Refresh selectivo — solo recarga la lista afectada, no ambas.
   // La vista "Por proyecto" (Bloque 3) sí se recarga siempre porque agrupa
@@ -84,9 +99,9 @@ export function useCuentasPage() {
 
     if (tab === 'pagar') {
       historialLoadedRef.current = false
-      await cargarHistorialOrdenes()
+      await cargarHistorialOrdenes(historialPage)
     }
-  }, [cargarAlertas, cargarHistorialOrdenes, recargarCobrar, recargarPagar, recargarPorProyecto, tab])
+  }, [cargarAlertas, cargarHistorialOrdenes, historialPage, recargarCobrar, recargarPagar, recargarPorProyecto, tab])
 
   useEffect(() => {
     if (tab !== 'cobrar' || alertasLoadedRef.current) return
@@ -95,7 +110,7 @@ export function useCuentasPage() {
 
   useEffect(() => {
     if (tab !== 'pagar' || historialLoadedRef.current) return
-    void cargarHistorialOrdenes()
+    void cargarHistorialOrdenes(1)
   }, [cargarHistorialOrdenes, tab])
 
   // EF-3 3B-2/3B-3: cuentasCobrar/cuentasPagar ya llegan filtradas/paginadas
@@ -130,6 +145,9 @@ export function useCuentasPage() {
     alertas,
     loadingAlertas,
     historialOrdenes,
+    historialTotal,
+    historialPage,
+    irAPaginaHistorial,
     cobrarApi,
     pagarApi,
     porProyectoApi,
