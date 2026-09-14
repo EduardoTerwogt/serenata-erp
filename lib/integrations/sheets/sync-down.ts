@@ -24,6 +24,22 @@ export interface SyncDownSummary {
   errors: number
 }
 
+// ─── heartbeat de lease (3C-3) ──────────────────────────────────────────────
+
+// true = lease del lock de sync todavía vigente, false = perdido (otro
+// proceso ya reclamó el lock -- seguir escribiendo correría el riesgo de
+// pisar filas a medio sobrescribir del nuevo dueño).
+export type SyncHeartbeat = () => Promise<boolean>
+
+export class SheetsSyncLeaseLostError extends Error {}
+
+async function assertHeartbeatOk(onHeartbeat: SyncHeartbeat): Promise<void> {
+  const stillOwns = await onHeartbeat() // puede lanzar si la RPC de renovación falló -- eso se propaga tal cual, no se envuelve
+  if (!stillOwns) {
+    throw new SheetsSyncLeaseLostError('Lease de sync de Sheets perdido a medio camino -- abortando para no escribir sobre el nuevo dueño del lock')
+  }
+}
+
 // ─── syncTableDown ────────────────────────────────────────────────────────────
 
 const SYNC_DOWN_PAGE_SIZE = 1000
@@ -31,6 +47,7 @@ const SYNC_DOWN_PAGE_SIZE = 1000
 async function syncTableDown(
   spreadsheetId: string,
   schema: TableSchema,
+  onHeartbeat?: SyncHeartbeat,
 ): Promise<SyncDownResult> {
   const { tab, table, columns, orderBy, pk } = schema
 
@@ -71,6 +88,7 @@ async function syncTableDown(
       if (!data || data.length === 0) break
 
       rows.push(...(data as unknown as Record<string, unknown>[]))
+      if (onHeartbeat) await assertHeartbeatOk(onHeartbeat) // renueva y verifica tras CADA página
       if (data.length < SYNC_DOWN_PAGE_SIZE) break
 
       const last = data[data.length - 1] as unknown as Record<string, unknown>
@@ -93,6 +111,12 @@ async function syncTableDown(
     return { tab, table, rows: rows.length, ok: true }
 
   } catch (err: unknown) {
+    // Un lease perdido nunca se absorbe en este catch genérico junto con
+    // cualquier otro error -- si se convirtiera en {ok:false} normal, la
+    // llamadora (syncAllDown/la ruta) seguiría sincronizando la tabla
+    // siguiente como si nada, escribiendo sobre el spreadsheet del nuevo
+    // dueño del lock. Se relanza tal cual, antes de la conversión genérica.
+    if (err instanceof SheetsSyncLeaseLostError) throw err
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[Sheets/sync-down] ERROR en ${tab}:`, message)
     return { tab, table, rows: 0, ok: false, error: message }
@@ -105,14 +129,16 @@ async function syncTableDown(
  * Sincroniza TODAS las tablas de Supabase al Google Sheet.
  * Devuelve un resumen con el resultado por tabla.
  */
-export async function syncAllDown(spreadsheetId: string): Promise<SyncDownSummary> {
+export async function syncAllDown(spreadsheetId: string, onHeartbeat?: SyncHeartbeat): Promise<SyncDownSummary> {
   // Formatear headers después (necesitamos los sheetIds)
   const sheetIds = await getSheetIds(spreadsheetId)
 
   // Sincronizar todas las tablas en secuencia para no saturar la API de Sheets
   const results: SyncDownResult[] = []
   for (const schema of TABLE_SCHEMAS) {
-    const result = await syncTableDown(spreadsheetId, schema)
+    // Propaga SheetsSyncLeaseLostError sin capturarla -- syncAllDown no
+    // tiene try/catch propio, así que sube tal cual hasta quien la llame.
+    const result = await syncTableDown(spreadsheetId, schema, onHeartbeat)
     results.push(result)
 
     // Formatear header row si tenemos el sheetId
@@ -123,6 +149,10 @@ export async function syncAllDown(spreadsheetId: string): Promise<SyncDownSummar
         // No crítico si el formateo falla
       }
     }
+
+    // Renovación/verificación también entre tablas, no solo dentro del
+    // loop de páginas de cada una.
+    if (onHeartbeat) await assertHeartbeatOk(onHeartbeat)
   }
 
   const totalRows = results.reduce((sum, r) => sum + r.rows, 0)
@@ -137,13 +167,14 @@ export async function syncAllDown(spreadsheetId: string): Promise<SyncDownSummar
 export async function syncTableDownByName(
   spreadsheetId: string,
   tableName: string,
+  onHeartbeat?: SyncHeartbeat,
 ): Promise<SyncDownResult> {
   const schema = TABLE_SCHEMAS.find(s => s.table === tableName || s.tab === tableName)
   if (!schema) {
     return { tab: tableName, table: tableName, rows: 0, ok: false, error: `Tabla '${tableName}' no encontrada en schema` }
   }
 
-  const result = await syncTableDown(spreadsheetId, schema)
+  const result = await syncTableDown(spreadsheetId, schema, onHeartbeat)
 
   if (result.ok) {
     const sheetIds = await getSheetIds(spreadsheetId)

@@ -28,6 +28,10 @@ interface SyncSummary {
   errors?: number
   results?: SyncResult[]
   syncSummary?: { results?: SyncResult[]; totalRows?: number; errors?: number }
+  // EF-3 3C-3: presente solo en la respuesta de sync-down, protegida por el
+  // lock -- 'error' cuando alguna tabla falló (sincronización parcial),
+  // distinto del verde de éxito aunque la request en sí haya respondido 200.
+  state?: 'idle' | 'running' | 'error'
 }
 
 type Step = 'idle' | 'loading' | 'done' | 'error'
@@ -164,7 +168,7 @@ export function AdminSheets() {
 
         {step === 'done' && result && (
           <SectionCard
-            title="Resultado"
+            title={result.state === 'error' ? 'Resultado — parcial, revisar' : 'Resultado'}
             borderedHeader
             contentClassName="p-0"
             actions={
@@ -175,6 +179,15 @@ export function AdminSheets() {
               )
             }
           >
+            {result.state === 'error' && (
+              <div className="flex items-start gap-[var(--space-md)] border-b border-hairline bg-cancelled-bg p-[19px] text-cancelled-fg">
+                <Icon name="warning" size={17} className="mt-0.5 flex-none" />
+                <span className="flex-1 text-[length:var(--text-base)] leading-[var(--lh-body)]">
+                  Alguna(s) tabla(s) fallaron al sincronizar -- revisa el detalle abajo.
+                </span>
+              </div>
+            )}
+
             {hayTotales && (
               <div className="grid grid-cols-2 gap-[19px] border-b border-hairline p-[19px] sm:grid-cols-4">
                 {[
