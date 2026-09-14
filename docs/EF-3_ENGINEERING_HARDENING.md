@@ -5299,7 +5299,7 @@ exige aquí la nota de aprobación explícita no vacía (regla de 3 estados de
 | 3A-6 | Pendiente | 3A-1, 3A-2, 3A-3, 3A-4, 3A-5 | N/A | N/A | — | N/A | | — |
 | 3B-1 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#35](https://github.com/EduardoTerwogt/serenata-erp/pull/35) | `bdc87b9` | `a317144` | | Arrancar 3B-2 |
 | 3B-2 | Cerrado | 3B-1 | `claude/hopeful-allen-jql9xp` | [#36](https://github.com/EduardoTerwogt/serenata-erp/pull/36) | `e85662c` | `f251a3c` | | Arrancar 3B-3 |
-| 3B-3 | En curso | ninguna | `claude/hopeful-allen-jql9xp` | — | — | — | | Abrir PR en borrador |
+| 3B-3 | En curso | ninguna | `claude/hopeful-allen-jql9xp` | [#37](https://github.com/EduardoTerwogt/serenata-erp/pull/37) | — | — | | Esperar CI en verde, luego mergear |
 | 3B-4 | Pendiente | ninguna | — | — | — | — | | — |
 | 3B-5 | Pendiente | ninguna | — | — | — | — | | — |
 | 3B-6 | Pendiente | ninguna | — | — | — | — | | — |
