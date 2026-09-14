@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-14T15:10:18.832Z",
-  "count": 65,
+  "generated_at": "2026-09-14T15:28:42.539Z",
+  "count": 66,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -66,6 +66,7 @@
     "20260913_usuarios_session_version.sql",
     "20260914_buscar_cuentas_cobrar.sql",
     "20260914_buscar_cuentas_pagar.sql",
+    "20260914_fix_buscar_cuentas_pagar_proyecto_nombre.sql",
     "20260914_sync_estados_cuentas_cobrar_vencidas.sql"
   ]
 }
