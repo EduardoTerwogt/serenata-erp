@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-14
+**Última actualización:** 2026-09-14 (post-merge PR #48)
 
 ## Estado
 
@@ -15,11 +15,12 @@ commit `980464c`. Historia completa de cada uno:
 Documento canónico + matriz de hallazgos + tracker en vivo:
 [`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md) (§11).
 Cerrados hasta hoy: 3A-0, 3A-0b, 3B-1, 3B-2, 3B-3, 3B-4, 3B-5, 3B-6, 3B-8,
-3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3.
+3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3D-0.
 
-**Bloque en curso: 3D-0** (characterization tests de `page.tsx`) — PR
-[#48](https://github.com/EduardoTerwogt/serenata-erp/pull/48), en borrador,
-rama `claude/hopeful-allen-jql9xp`. Ver detalle abajo.
+**3D-0 cerrado y mergeado** (characterization tests de `page.tsx`) — PR
+[#48](https://github.com/EduardoTerwogt/serenata-erp/pull/48), squash
+`30486a8`. Ver detalle abajo. Siguiente bloque libre: 3D-1 (o 3D-0b si se
+prioriza el fix de F26).
 
 **3C-4 pausado** por decisión del usuario (setup manual de Vercel
 pendiente) — ver "Problemas encontrados que siguen abiertos".
@@ -67,12 +68,30 @@ pendiente) — ver "Problemas encontrados que siguen abiertos".
     `/api/admin/usuarios/[id]` por env vars ausentes en local, no
     relacionada, ya documentada en PRs previos).
   - **CI del PR #48:** `test`, `fresh-db`, `smoke-and-critical`,
-    `tracker-lint` en verde. `live` en rojo 3 veces seguidas — 2 corridas
-    distintas en la categoría ya documentada de desync Presence/colaboración,
-    y la 3ª (repetida en 2 reruns consecutivos) siempre en el mismo spec:
-    `cotizaciones-colaboracion.spec.ts:479` ("seleccionar producto (autofill)
-    mientras otro edita precio a mano"). **Investigación de causa raíz en
-    curso, sin cerrar** — ver problemas abiertos abajo.
+    `tracker-lint` en verde desde el inicio. `live` falló 4 veces seguidas en
+    el mismo spec (`cotizaciones-colaboracion.spec.ts:479`, "seleccionar
+    producto (autofill) mientras otro edita precio a mano") — **causa raíz
+    confirmada y arreglada** (ver bullet siguiente); tras el fix, 6/6 checks
+    verdes y merge (squash `30486a8`).
+- **Cierre de PR #48: causa raíz real de `live`, no timing/flake.**
+  `app/api/productos/route.ts` no tenía `.limit()` cuando `q` viene vacío —
+  dependía en silencio del tope por defecto de PostgREST. Confirmado por SQL
+  directo: `serenata-erp-test.productos` tenía **1205 filas activas, 100%
+  basura de fixtures de tests** (`Escala n=...` de
+  `cotizaciones-colaboracion-escala.spec.ts`, `Partida creada y editada de
+  inmediato...`, ninguna catálogo real — producción tiene solo 40). El
+  producto recién creado por el test de autofill caía fuera de las primeras
+  1000 filas alfabéticas. `cleanupOrphanedTestProductos()`
+  (`tests/e2e/utils/live-cleanup.ts`) ya se invocaba en el `beforeAll` de
+  las 5 specs live relevantes pero solo borraba filas >24h — con varios
+  reruns el mismo día (como este PR) la basura fresca sobrevivía y se
+  acumulaba (mismo síntoma de Fase 8.7.2, repetido). Fix (commit `62aac60`,
+  mismo PR): `.limit(2000)` explícito en la ruta +
+  `cleanupOrphanedTestProductos()` sin ventana de 24h (borra todo — seguro
+  porque `workers:1`/`fullyParallel:false` garantiza que ningún spec corre
+  en paralelo) + limpieza manual de las 1205 filas para desbloquear ya.
+  Frente A del roadmap (paginación real del catálogo) queda pendiente, sin
+  tocar — este fix es puntual.
 - **Documentación EF-3:** tracker sincronizado en cada paso (3C-3 Cerrado,
   3C-4 pausado con nota, 3D-0 En curso→PR linkeado, F26/3D-0b), todo vía
   commits doc-only directos a `main` (excepción de `CLAUDE.md`).
@@ -92,33 +111,11 @@ previas de esta misma iniciativa — historia en el tracker
 `npx tsc --noEmit`, `npm run lint`, `npm test` (727/727) y `npm run build`
 en verde antes del push de 3D-0 (build con la falla esperada de env vars ya
 documentada). CI del PR #47 (3C-3) confirmado verde en los 4 checks reales
-antes de mergear. CI del PR #48 (3D-0): 4/5 checks verdes,
-`live` pendiente de resolver (ver abajo).
+antes de mergear. CI del PR #48 (3D-0): 6/6 checks verdes (incluido `live`)
+tras el fix de `GET /api/productos`, confirmado antes de mergear.
 
 ## Problemas encontrados que siguen abiertos
 
-- **`live` del PR #48 falla de forma repetida en
-  `cotizaciones-colaboracion.spec.ts:479`** (autofill de producto mientras
-  otro edita precio a mano — timeout esperando que la sugerencia de
-  autocomplete de B quede visible). El propio test ya trae un diagnóstico
-  incorporado (Fase 8.7.2) para distinguir "el producto nunca llegó al
-  servidor" de "problema de timing de UI". En la corrida más reciente el
-  diagnóstico devolvió `GET /api/productos?q=` con `total=1000,
-  incluyeProductoAutofill=false` — **pista real sin confirmar todavía:**
-  `app/api/productos/route.ts` no aplica `.limit()` cuando `q` viene vacío,
-  pero Supabase/PostgREST tiene un tope de fila por defecto (típicamente
-  1000) para queries sin límite explícito — si el catálogo de
-  `serenata-erp-test` ya supera esa cifra, un producto nuevo puede quedar
-  fuera de las primeras 1000 filas devueltas según el orden alfabético
-  (`order('descripcion')`), y el dropdown de sugerencias (100% client-side
-  contra ese payload) nunca lo ve. **Sin confirmar aún:** contar filas
-  reales de `productos` en `serenata-erp-test` y decidir si el fix es (a)
-  agregar `.limit()`/paginación real a esa ruta, o (b) que el fixture de
-  setup del test filtre/limpie productos viejos. Investigación interrumpida
-  por cierre de sesión — **siguiente sesión debe retomarla antes de mergear
-  el PR #48**, o decidir explícitamente que es un problema de datos de test
-  preexistente y mergear igual (el resto de checks está verde y el diff no
-  toca nada relacionado).
 - **Rama remota `fix/totales-general-conflict-drain` (ex-PR #30) no se pudo
   borrar** — `403` del token de esa sesión. Su código ya está en `main` vía
   PR #29; sin trabajo sin mergear. (Arrastrado, sin cambios esta sesión.)
@@ -133,21 +130,26 @@ antes de mergear. CI del PR #48 (3D-0): 4/5 checks verdes,
   separado? Decisión del usuario, sin urgencia. (Arrastrado.)
 - **`previewNextQuotationFolio()` sin `complementaria_de`:** F14, se cierra
   en 3B-7 — bloqueado por el mismo setup manual de Vercel que 3A-1.
+- **`GET /api/productos` (hallazgo nuevo, sin F-code en la matriz EF-3):**
+  el `.limit(2000)` agregado al cerrar PR #48 evita el truncado silencioso
+  de hoy, pero sigue siendo el patrón "traer todo el catálogo" de Frente A
+  del roadmap — un catálogo real que superara 2000 productos activos volvería
+  a perder items del autofill sin error visible. Producción hoy: 40
+  productos (margen amplio). Paginación real, fuera de alcance de este fix
+  puntual — evaluar si entra a un bloque EF-3 nuevo o queda para "Después".
 
 ## Siguiente paso
 
-1. **Cerrar PR #48 (3D-0):** resolver la investigación de `live` (ver
-   arriba) — o confirmar que es un problema de datos/infraestructura de
-   test preexistente sin relación con el diff y mergear con esa evidencia
-   documentada en el PR. Tracker: 3D-0 → `Cerrado` con PR+SHA tras el merge.
-2. **3D-0b** (fix de la carrera F26, especificación completa ya escrita en
+1. **3D-0b** (fix de la carrera F26, especificación completa ya escrita en
    el plan, sección 6) — bloque chico, 6-8h estimadas. No bloquea 3D-1.
-3. **3D-1** (`useQuotationMutationTracker`, extracción del primer hook) es
+2. **3D-1** (`useQuotationMutationTracker`, extracción del primer hook) es
    el siguiente bloque independiente del grafo de EF-3D — no depende de
    3D-0b.
-4. Sin dueño ni urgencia: borrar la rama remota huérfana
-   `fix/totales-general-conflict-drain` y decidir el modo de uso de
-   `check-schema-parity.mjs`.
+3. Sin dueño ni urgencia: borrar la rama remota huérfana
+   `fix/totales-general-conflict-drain`, decidir el modo de uso de
+   `check-schema-parity.mjs`, y decidir si el hallazgo nuevo de
+   `GET /api/productos` (paginación real, ver Deuda técnica) entra a EF-3 o
+   queda para "Después".
 
 **Sigue bloqueado, sin cambios:** 3A-1 a 3A-6, 3B-7, y ahora también 3C-4 —
 todos esperando el paso manual del usuario (crear proyecto Vercel aislado +
