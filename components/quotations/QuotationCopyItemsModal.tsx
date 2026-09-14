@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Cotizacion, ItemCotizacion } from '@/lib/types'
 import { fmtCurrency } from '@/lib/quotations/format'
-import { fetchQuotationsList } from '@/lib/services/quotation-service'
+import { fetchQuotationDetail, fetchQuotationsPage } from '@/lib/services/quotation-service'
+
+const MODAL_PAGE_SIZE = 20
+const SEARCH_DEBOUNCE_MS = 300
 
 interface Props {
   open: boolean
@@ -12,40 +15,93 @@ interface Props {
   onImport: (items: ItemCotizacion[]) => void | Promise<void>
 }
 
+// EF-3 3B-4: rediseño en 2 pasos -- ya no carga TODAS las cotizaciones
+// completas (con items) de una sola vez vía fetchQuotationsList()
+// (eliminada). Paso 1: lista ligera server-side (búsqueda con debounce +
+// AbortController + número de secuencia, mismo mecanismo que
+// useCuentasCobrar/useCuentasPagar de 3B-2/3B-3). Paso 2: detalle bajo
+// demanda vía fetchQuotationDetail(id) al seleccionar una cotización.
 export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, onImport }: Props) {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+
   const [selectedCotizacionId, setSelectedCotizacionId] = useState<string | null>(null)
+  const [selectedCotizacion, setSelectedCotizacion] = useState<Cotizacion | null>(null)
+  const [loadingDetalle, setLoadingDetalle] = useState(false)
+  const [errorDetalle, setErrorDetalle] = useState<string | null>(null)
+
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set())
   const [importing, setImporting] = useState(false)
+
+  const abortRef = useRef<AbortController | null>(null)
+  const seqRef = useRef(0)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const cargarLista = useCallback(async (term: string) => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const seq = ++seqRef.current
+
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await fetchQuotationsPage({ search: term, page: 1, pageSize: MODAL_PAGE_SIZE, signal: controller.signal })
+      if (seq !== seqRef.current) return
+      setCotizaciones(data.rows.filter((c) => c.id !== excludeCotizacionId))
+    } catch (e: unknown) {
+      if (controller.signal.aborted || seq !== seqRef.current) return
+      setError(e instanceof Error ? e.message : 'Error cargando cotizaciones')
+    } finally {
+      if (seq === seqRef.current) setLoading(false)
+    }
+  }, [excludeCotizacionId])
 
   useEffect(() => {
     if (!open) return
     setSearch('')
     setSelectedCotizacionId(null)
+    setSelectedCotizacion(null)
+    setErrorDetalle(null)
     setSelectedItemIds(new Set())
-    setError(null)
-    setLoading(true)
-    fetchQuotationsList()
-      .then((data) => setCotizaciones(data.filter((c) => c.id !== excludeCotizacionId)))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Error cargando cotizaciones'))
-      .finally(() => setLoading(false))
-  }, [open, excludeCotizacionId])
+    void cargarLista('')
+  }, [open, cargarLista])
 
-  const filteredCotizaciones = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return cotizaciones
-    return cotizaciones.filter((c) =>
-      c.id.toLowerCase().includes(q) || c.cliente.toLowerCase().includes(q) || c.proyecto.toLowerCase().includes(q)
-    )
-  }, [cotizaciones, search])
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    abortRef.current?.abort()
+  }, [])
 
-  const selectedCotizacion = useMemo(
-    () => cotizaciones.find((c) => c.id === selectedCotizacionId) || null,
-    [cotizaciones, selectedCotizacionId]
-  )
+  const cambiarBusqueda = (valor: string) => {
+    setSearch(valor)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => { void cargarLista(valor) }, SEARCH_DEBOUNCE_MS)
+  }
+
+  const seleccionarCotizacion = useCallback(async (id: string) => {
+    setSelectedCotizacionId(id)
+    setSelectedItemIds(new Set())
+    setErrorDetalle(null)
+    setLoadingDetalle(true)
+    try {
+      const detalle = await fetchQuotationDetail(id)
+      setSelectedCotizacion(detalle)
+    } catch (e: unknown) {
+      setErrorDetalle(e instanceof Error ? e.message : 'Error cargando la cotización')
+    } finally {
+      setLoadingDetalle(false)
+    }
+  }, [])
+
+  const volverALista = () => {
+    setSelectedCotizacionId(null)
+    setSelectedCotizacion(null)
+    setErrorDetalle(null)
+    setSelectedItemIds(new Set())
+  }
+
   const sourceItems = selectedCotizacion?.items || []
 
   const toggleItem = (itemId: string) => {
@@ -89,33 +145,32 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
         </div>
 
         <div className="p-4 md:p-6 overflow-y-auto flex-1">
-          {error && <div className="rounded-control border border-cancelled-fg/30 bg-cancelled-bg text-cancelled-fg px-4 py-3 mb-4 text-content">{error}</div>}
-
-          {!selectedCotizacion ? (
+          {!selectedCotizacionId ? (
             <>
+              {error && <div className="rounded-control border border-cancelled-fg/30 bg-cancelled-bg text-cancelled-fg px-4 py-3 mb-4 text-content">{error}</div>}
               <input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => cambiarBusqueda(e.target.value)}
                 placeholder="Buscar por folio, cliente o proyecto..."
                 autoFocus
                 className="w-full bg-input border border-hairline rounded-control px-3 py-2 text-body text-content focus:outline-none focus:border-accent mb-3"
               />
               {loading ? (
                 <p className="text-faint text-content py-6 text-center">Cargando cotizaciones...</p>
-              ) : filteredCotizaciones.length === 0 ? (
+              ) : cotizaciones.length === 0 ? (
                 <p className="text-faint text-content py-6 text-center">No se encontraron cotizaciones</p>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {filteredCotizaciones.map((c) => (
+                  {cotizaciones.map((c) => (
                     <button
                       key={c.id}
                       type="button"
-                      onClick={() => setSelectedCotizacionId(c.id)}
+                      onClick={() => void seleccionarCotizacion(c.id)}
                       className="w-full text-left bg-row hover:bg-row-alt border border-hairline rounded-control px-4 py-3 transition-colors"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className="sn-display text-body text-content" style={{ letterSpacing: '0.06em' }}>{c.id}</span>
-                        <span className="text-xs text-faint">{(c.items || []).length} partida(s)</span>
+                        <span className="text-xs text-faint">{c.itemsCount ?? 0} partida(s)</span>
                       </div>
                       <p className="text-body text-content mt-0.5">{c.proyecto}</p>
                       <p className="text-faint text-xs">{c.cliente}</p>
@@ -128,51 +183,60 @@ export function QuotationCopyItemsModal({ open, onClose, excludeCotizacionId, on
             <>
               <button
                 type="button"
-                onClick={() => { setSelectedCotizacionId(null); setSelectedItemIds(new Set()) }}
+                onClick={volverALista}
                 className="text-faint hover:text-subtext text-content mb-3"
               >
                 ← Elegir otra cotización
               </button>
-              <div className="mb-3">
-                <span className="sn-display text-body" style={{ letterSpacing: '0.06em' }}>{selectedCotizacion.id}</span>
-                <span className="text-subtext text-content"> — {selectedCotizacion.proyecto} · {selectedCotizacion.cliente}</span>
-              </div>
 
-              {sourceItems.length === 0 ? (
-                <p className="text-faint text-content py-6 text-center">Esta cotización no tiene partidas</p>
-              ) : (
+              {loadingDetalle ? (
+                <p className="text-faint text-content py-6 text-center">Cargando cotización...</p>
+              ) : errorDetalle ? (
+                <div className="rounded-control border border-cancelled-fg/30 bg-cancelled-bg text-cancelled-fg px-4 py-3 text-content">{errorDetalle}</div>
+              ) : selectedCotizacion ? (
                 <>
-                  <label className="flex items-center gap-2 text-content text-body mb-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedItemIds.size === sourceItems.length && sourceItems.length > 0}
-                      onChange={toggleAll}
-                      className="w-4 h-4 accent-[--sn-orange]"
-                    />
-                    Seleccionar todo ({sourceItems.length})
-                  </label>
-                  <div className="space-y-1.5 max-h-80 overflow-y-auto">
-                    {sourceItems.map((item) => (
-                      <label
-                        key={item.id}
-                        className="flex items-center gap-3 bg-row border border-hairline rounded-control px-3 py-2 cursor-pointer hover:border-row-alt"
-                      >
+                  <div className="mb-3">
+                    <span className="sn-display text-body" style={{ letterSpacing: '0.06em' }}>{selectedCotizacion.id}</span>
+                    <span className="text-subtext text-content"> — {selectedCotizacion.proyecto} · {selectedCotizacion.cliente}</span>
+                  </div>
+
+                  {sourceItems.length === 0 ? (
+                    <p className="text-faint text-content py-6 text-center">Esta cotización no tiene partidas</p>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-2 text-content text-body mb-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={selectedItemIds.has(item.id)}
-                          onChange={() => toggleItem(item.id)}
-                          className="w-4 h-4 accent-[--sn-orange] flex-shrink-0"
+                          checked={selectedItemIds.size === sourceItems.length && sourceItems.length > 0}
+                          onChange={toggleAll}
+                          className="w-4 h-4 accent-[--sn-orange]"
                         />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-body text-content truncate">{item.descripcion || 'Sin descripción'}</p>
-                          <p className="text-faint text-xs">{item.categoria || 'Sin categoría'} · {item.responsable_nombre || 'Sin responsable'}</p>
-                        </div>
-                        <span className="text-subtext text-content whitespace-nowrap">${fmtCurrency(item.importe)}</span>
+                        Seleccionar todo ({sourceItems.length})
                       </label>
-                    ))}
-                  </div>
+                      <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                        {sourceItems.map((item) => (
+                          <label
+                            key={item.id}
+                            className="flex items-center gap-3 bg-row border border-hairline rounded-control px-3 py-2 cursor-pointer hover:border-row-alt"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedItemIds.has(item.id)}
+                              onChange={() => toggleItem(item.id)}
+                              className="w-4 h-4 accent-[--sn-orange] flex-shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-body text-content truncate">{item.descripcion || 'Sin descripción'}</p>
+                              <p className="text-faint text-xs">{item.categoria || 'Sin categoría'} · {item.responsable_nombre || 'Sin responsable'}</p>
+                            </div>
+                            <span className="text-subtext text-content whitespace-nowrap">${fmtCurrency(item.importe)}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </>
-              )}
+              ) : null}
             </>
           )}
         </div>

@@ -386,19 +386,37 @@ test('conflicto de autofill: "Mantener" reintenta el PATCH completo con los 4 ca
 
 test('copiar partidas seleccionadas desde otra cotización las trae a la actual', async ({ page }) => {
   await mockCotizacionDetailApis(page, { id: 'SH-E2E-COPIAR', estado: 'BORRADOR' })
-  await page.route('**/api/cotizaciones', async (route) => {
+
+  // EF-3 3B-4: QuotationCopyItemsModal ya no carga TODAS las cotizaciones
+  // completas de una sola vez -- paso 1 es la lista ligera server-side
+  // (RPC buscar_cotizaciones, {rows, total_rows, counts_by_estado}, sin
+  // `items`) y paso 2 es fetchQuotationDetail(id) bajo demanda al
+  // seleccionar. Un glob termina en el path exacto y no matchea si se le
+  // agrega el querystring (?search=&page=&pageSize=) que ahora siempre
+  // lleva la lista -- se usa un RegExp explícito, igual que en
+  // tests/e2e/utils/cuentas-mocks.ts (3B-2/3B-3).
+  await page.route(/\/api\/cotizaciones(\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') { await route.fallback(); return }
-    await fulfillJson(route, [
-      {
-        id: 'SH-OTRA',
-        cliente: 'Otro Cliente',
-        proyecto: 'Otro Proyecto',
-        estado: 'EMITIDA',
-        items: [
-          { id: 'otra-item-1', cotizacion_id: 'SH-OTRA', categoria: 'Audio', descripcion: 'Boom más micrófono', cantidad: 1, precio_unitario: 5000, importe: 5000, responsable_nombre: null, responsable_id: null, x_pagar: 2000, margen: 3000, orden: 1, notas: null },
-        ],
-      },
-    ])
+    await fulfillJson(route, {
+      rows: [
+        { id: 'SH-OTRA', cliente: 'Otro Cliente', proyecto: 'Otro Proyecto', estado: 'EMITIDA', total: 5000, created_at: '2026-01-01T00:00:00Z', items_count: 1 },
+      ],
+      total_rows: 1,
+      counts_by_estado: { TODAS: 1, BORRADOR: 0, EMITIDA: 1, APROBADA: 0, CANCELADA: 0 },
+    })
+  })
+  await page.route('**/api/cotizaciones/SH-OTRA', async (route) => {
+    if (route.request().method() !== 'GET') { await route.fallback(); return }
+    await fulfillJson(route, {
+      id: 'SH-OTRA',
+      cliente: 'Otro Cliente',
+      proyecto: 'Otro Proyecto',
+      estado: 'EMITIDA',
+      total: 5000,
+      items: [
+        { id: 'otra-item-1', cotizacion_id: 'SH-OTRA', categoria: 'Audio', descripcion: 'Boom más micrófono', cantidad: 1, precio_unitario: 5000, importe: 5000, responsable_nombre: null, responsable_id: null, x_pagar: 2000, margen: 3000, orden: 1, notas: null },
+      ],
+    })
   })
   await login(page, '/cotizaciones/SH-E2E-COPIAR')
   await expect(page.getByRole('heading', { name: 'SH-E2E-COPIAR' })).toBeVisible()

@@ -20,8 +20,54 @@ export async function fetchQuotationDetail(id: string): Promise<Cotizacion> {
   return getJson(`/api/cotizaciones/${id}`, 'Cotización no encontrada')
 }
 
-export async function fetchQuotationsList(): Promise<Cotizacion[]> {
-  return getJson('/api/cotizaciones', 'Error cargando cotizaciones')
+export interface QuotationsPageParams {
+  search?: string
+  estado?: string
+  page?: number
+  pageSize?: number
+  signal?: AbortSignal
+}
+
+export interface QuotationsPageResult {
+  rows: Cotizacion[]
+  totalRows: number
+  countsByEstado: Record<string, number>
+}
+
+interface BuscarCotizacionesRawRow extends Omit<Cotizacion, 'itemsCount'> {
+  items_count: number
+}
+
+interface BuscarCotizacionesRawResponse {
+  rows: BuscarCotizacionesRawRow[]
+  total_rows: number
+  counts_by_estado: Record<string, number>
+}
+
+// EF-3 3B-4: busqueda/paginacion/conteos server-side via RPC unica
+// buscar_cotizaciones -- reemplaza fetchQuotationsList() (traía TODAS las
+// cotizaciones completas, incluidos items, sin límite). Mapea
+// items_count (snake_case, respuesta cruda de la API) a itemsCount
+// (camelCase, convenio del lado cliente) -- esta es la única función que
+// lee la respuesta cruda de GET /api/cotizaciones.
+export async function fetchQuotationsPage(params: QuotationsPageParams = {}): Promise<QuotationsPageResult> {
+  const searchParams = new URLSearchParams()
+  if (params.search) searchParams.set('search', params.search)
+  if (params.estado) searchParams.set('estado', params.estado)
+  searchParams.set('page', String(params.page ?? 1))
+  searchParams.set('pageSize', String(params.pageSize ?? 10))
+
+  const data = await getJson<BuscarCotizacionesRawResponse>(
+    `/api/cotizaciones?${searchParams.toString()}`,
+    'Error cargando cotizaciones',
+    params.signal ? { signal: params.signal } : undefined
+  )
+
+  return {
+    rows: data.rows.map((row) => ({ ...row, itemsCount: row.items_count })),
+    totalRows: data.total_rows,
+    countsByEstado: data.counts_by_estado,
+  }
 }
 
 export async function saveQuotationNotes(id: string, notasInternas: string | null): Promise<Cotizacion> {

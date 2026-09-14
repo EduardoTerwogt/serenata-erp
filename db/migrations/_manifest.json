@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-14T15:28:42.539Z",
-  "count": 66,
+  "generated_at": "2026-09-14T15:37:57.309Z",
+  "count": 67,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -64,6 +64,7 @@
     "20260912_pago_operations.sql",
     "20260913_bulk_replace_items_cotizacion_fix_deleted_row.sql",
     "20260913_usuarios_session_version.sql",
+    "20260914_buscar_cotizaciones.sql",
     "20260914_buscar_cuentas_cobrar.sql",
     "20260914_buscar_cuentas_pagar.sql",
     "20260914_fix_buscar_cuentas_pagar_proyecto_nombre.sql",
