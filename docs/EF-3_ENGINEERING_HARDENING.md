@@ -5160,7 +5160,7 @@ exige aquí la nota de aprobación explícita no vacía (regla de 3 estados de
 | 3C-2 | Cerrado | 3C-1 | `claude/hopeful-allen-jql9xp` | [#46](https://github.com/EduardoTerwogt/serenata-erp/pull/46) | `25def7c` | `6723280` | | Arrancar el siguiente bloque independiente (3C-3, 3D-0) |
 | 3C-3 | Cerrado | 3C-2 | `claude/hopeful-allen-jql9xp` | [#47](https://github.com/EduardoTerwogt/serenata-erp/pull/47) | `7e3a873` | `71881de` | | Arrancar el siguiente bloque independiente (3C-4, 3D-0) |
 | 3C-4 | Pendiente | 3C-3 | — | — | — | — | | Bloqueado: la medición empírica obligatoria del punto 2 exige volumen objetivo (items_cotizacion≥5500) en el entorno serverless real de 3A-1 — hoy `serenata-erp-test` tiene 11 filas. Pausado por decisión del usuario hasta que 3A-1/3A-3 se resuelvan (setup manual de Vercel pendiente) |
-| 3D-0 | Pendiente | ninguna | — | — | — | — | | — |
+| 3D-0 | En curso | ninguna | `claude/hopeful-allen-jql9xp` | — | — | — | | — |
 | 3D-1 | Pendiente | 3D-0 | — | — | — | — | | — |
 | 3D-2 | Pendiente | 3D-1 | — | — | — | — | | — |
 | 3D-3 | Pendiente | 3D-2 | — | — | — | — | | — |
