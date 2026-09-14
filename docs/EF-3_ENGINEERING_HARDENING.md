@@ -5297,7 +5297,7 @@ exige aquí la nota de aprobación explícita no vacía (regla de 3 estados de
 | 3A-4 | Pendiente | 3A-1 | — | — | — | — | | — |
 | 3A-5 | Pendiente | 3A-1, 3A-2, 3A-3, 3A-4 | — | — | — | — | | — |
 | 3A-6 | Pendiente | 3A-1, 3A-2, 3A-3, 3A-4, 3A-5 | N/A | N/A | — | N/A | | — |
-| 3B-1 | Pendiente | ninguna | — | — | — | — | | — |
+| 3B-1 | En curso | ninguna | `claude/hopeful-allen-jql9xp` | (PR pendiente de abrir) | — | — | | Abrir PR en borrador |
 | 3B-2 | Pendiente | 3B-1 | — | — | — | — | | — |
 | 3B-3 | Pendiente | ninguna | — | — | — | — | | — |
 | 3B-4 | Pendiente | ninguna | — | — | — | — | | — |
