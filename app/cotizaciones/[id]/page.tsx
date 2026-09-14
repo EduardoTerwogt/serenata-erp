@@ -8,6 +8,7 @@ import { StatusBadge, toneForCotizacionEstado } from '@/components/ui/StatusBadg
 import { Button } from '@/components/ui/Button'
 import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
+import { useQuotationMutationTracker } from '@/hooks/useQuotationMutationTracker'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
 import { ImportableItem, QuotationItemsController } from '@/hooks/useQuotationItems'
 import { calculateEstimatedTaxes, calculateQuotationTotals, normalizeQuotationItem } from '@/lib/quotations/calculations'
@@ -371,25 +372,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const generalFieldConfirmedAtRef = useRef<Partial<Record<QuotationGeneralField, number>>>({})
   const totalsFieldConfirmedAtRef = useRef<Partial<Record<QuotationTotalsField, number>>>({})
 
-  // Fase 8 (hardening pre-Proyectos): todo PATCH saliente (partidas, general,
-  // totales, notas) se registra aquí mientras está en vuelo. `flushPendingSaves`
-  // lo usa antes de Emitir/Aprobar -- sin esto, un PATCH disparado por un blur
-  // justo antes de pulsar el botón podía seguir en vuelo cuando se leía el
-  // estado "canónico" del servidor, y esa lectura llegaba más vieja que el
-  // propio cambio del usuario que está aprobando. Deliberadamente simple: no es
-  // una cola ni un tracker global, solo una foto de "lo que ya estaba en
-  // camino" en el instante exacto del click -- lo que se dispare después no se
-  // espera aquí.
-  const pendingMutationsRef = useRef<Set<Promise<unknown>>>(new Set())
-  const trackMutation = useCallback(<T,>(promise: Promise<T>): Promise<T> => {
-    pendingMutationsRef.current.add(promise)
-    // La cadena derivada de `.finally()` es una promesa nueva y distinta de
-    // `promise`: si `promise` rechaza, esta también, y sin un handler propio
-    // se reporta como rechazo no manejado aunque `promise` sí tenga el suyo
-    // (el de quien la trackeó). Se apaga aquí explícitamente.
-    promise.finally(() => { pendingMutationsRef.current.delete(promise) }).catch(() => {})
-    return promise
-  }, [])
+  // EF-3 3D-1: extraído a hooks/useQuotationMutationTracker.ts -- ver ese
+  // archivo para la explicación completa de por qué existe.
+  const { pendingMutationsRef, trackMutation } = useQuotationMutationTracker()
   // `flushPendingSaves` en sí se define más abajo (línea ~985), después de
   // `flushGeneralDirtyFields`/`flushTotalsDirtyFields`/`flushItemCellDirtyFields`/
   // `persistNotasAutosave` -- los necesita todos y en este punto del componente
@@ -1588,7 +1573,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     })()
     flushInFlightRef.current = run
     return run.finally(() => { flushInFlightRef.current = null })
-  }, [flushGeneralDirtyFields, flushTotalsDirtyFields, flushItemCellDirtyFields, itemCellConflicts, persistNotasAutosave])
+  }, [flushGeneralDirtyFields, flushTotalsDirtyFields, flushItemCellDirtyFields, itemCellConflicts, pendingMutationsRef, persistNotasAutosave])
 
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
