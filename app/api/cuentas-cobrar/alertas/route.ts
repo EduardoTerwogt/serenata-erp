@@ -1,33 +1,23 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasCobrar, updateCuentaCobrar } from '@/lib/db'
-import { calcularEstadoCuentaCobrarDetallado, calcularSaldoPendiente } from '@/lib/server/cuentas/status'
+import { getCuentasCobrar } from '@/lib/db'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { calcularSaldoPendiente } from '@/lib/server/cuentas/status'
 
+// EF-3 3B-1: mismo recalculo que app/api/cuentas-cobrar/route.ts, ahora
+// vía la RPC unica sync_estados_cuentas_cobrar_vencidas() -- esta ruta ya
+// no duplica la logica de calcularEstadoCuentaCobrarDetallado ni escribe
+// cuenta por cuenta.
 export async function GET() {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
 
   try {
-    const cuentas = await getCuentasCobrar()
+    const { error: syncError } = await supabaseAdmin.rpc('sync_estados_cuentas_cobrar_vencidas')
+    if (syncError) throw syncError
+
+    const cuentasActualizadas = await getCuentasCobrar()
     const hoy = new Date()
     const hoyIso = hoy.toISOString().split('T')[0]
-
-    const cuentasActualizadas = await Promise.all(
-      cuentas.map(async (cuenta) => {
-        const estadoCalculado = calcularEstadoCuentaCobrarDetallado({
-          montoPagado: cuenta.monto_pagado || 0,
-          montoTotal: cuenta.monto_total,
-          fechaVencimiento: cuenta.fecha_vencimiento,
-          isFacturada: cuenta.estado !== 'FACTURA_PENDIENTE' && !!cuenta.fecha_factura,
-          today: hoy,
-        })
-
-        if (estadoCalculado !== cuenta.estado) {
-          return updateCuentaCobrar(cuenta.id, { estado: estadoCalculado })
-        }
-
-        return cuenta
-      })
-    )
 
     const alertas = cuentasActualizadas
       .filter((c): c is typeof c & { fecha_vencimiento: string } =>

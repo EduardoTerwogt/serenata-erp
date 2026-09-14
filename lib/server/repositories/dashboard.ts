@@ -4,6 +4,7 @@ import { getProyectos } from '@/lib/server/repositories/proyectos'
 import { getCuentasCobrar, getPagosComprobantesEnRango } from '@/lib/server/repositories/cuentas-cobrar'
 import { getCuentasPagar } from '@/lib/server/repositories/cuentas-pagar'
 import { calcularSaldoPendiente } from '@/lib/server/cuentas/status'
+import { round2 } from '@/lib/server/shared/decimal'
 import { Cotizacion, CuentaPagar, GastoFijo } from '@/lib/types'
 
 // Fase 5.6 -- Dashboard ejecutivo. Base contable: flujo de caja real (lo
@@ -95,10 +96,6 @@ export function bucketsDePeriodo(periodo: PeriodoDashboard, anchor: Date, n = 6)
 
 function enRango(fecha: string | null | undefined, inicio: string, fin: string): boolean {
   return !!fecha && fecha >= inicio && fecha < fin
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
 }
 
 export async function getGastosFijos(soloActivos = false): Promise<GastoFijo[]> {

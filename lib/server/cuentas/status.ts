@@ -1,4 +1,5 @@
 import { EstadoCuentaCobrar } from '@/lib/types'
+import { round2 } from '@/lib/server/shared/decimal'
 
 export interface CuentaCobrarStatusInput {
   montoPagado: number
@@ -10,7 +11,7 @@ export interface CuentaCobrarStatusInput {
 
 export function calcularSaldoPendiente(total: number, pagado: number | null | undefined): number {
   const saldo = Number(total || 0) - Number(pagado || 0)
-  return saldo > 0 ? Number(saldo.toFixed(2)) : 0
+  return saldo > 0 ? round2(saldo) : 0
 }
 
 export function calcularEstadoCuentaCobrarDetallado({
