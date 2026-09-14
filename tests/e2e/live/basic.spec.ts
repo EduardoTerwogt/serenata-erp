@@ -112,8 +112,10 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     const cuentaCobrar = cuentasCobrar.find((c) => c.cotizacion_id === cotizacionId)
     expect(cuentaCobrar, 'debe existir una cuenta por cobrar real para esta cotización').toBeTruthy()
 
-    const pagarRes = await page.request.get('/api/cuentas-pagar')
-    const cuentasPagar = await pagarRes.json() as Array<{ id: string; cotizacion_id: string; x_pagar: number }>
+    // EF-3 3B-3: GET /api/cuentas-pagar responde {rows, total_rows, ...} de
+    // la RPC buscar_cuentas_pagar -- ya no un arreglo plano.
+    const pagarRes = await page.request.get(`/api/cuentas-pagar?search=${cotizacionId}`)
+    const { rows: cuentasPagar } = await pagarRes.json() as { rows: Array<{ id: string; cotizacion_id: string; x_pagar: number }> }
     const cuentaPagar = cuentasPagar.find((c) => c.cotizacion_id === cotizacionId)
     expect(cuentaPagar, 'debe existir una cuenta por pagar real para esta cotización').toBeTruthy()
 
@@ -207,8 +209,9 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     const { rows: cuentasCobrar } = await cobrarRes.json() as { rows: Array<{ cotizacion_id: string }> }
     expect(cuentasCobrar.some((c) => c.cotizacion_id === cotizacionId)).toBe(false)
 
-    const pagarRes = await page.request.get('/api/cuentas-pagar')
-    const cuentasPagar = await pagarRes.json() as Array<{ cotizacion_id: string }>
+    // EF-3 3B-3: {rows, total_rows, ...} en vez de un arreglo plano.
+    const pagarRes = await page.request.get(`/api/cuentas-pagar?search=${cotizacionId}`)
+    const { rows: cuentasPagar } = await pagarRes.json() as { rows: Array<{ cotizacion_id: string }> }
     expect(cuentasPagar.some((c) => c.cotizacion_id === cotizacionId)).toBe(false)
   })
 })

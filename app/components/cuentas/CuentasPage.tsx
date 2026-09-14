@@ -147,15 +147,18 @@ export function CuentasPage() {
           onChange={setVista}
         />
         <div className="ml-auto flex-none">
-          {/* EF-3 3B-2: en Lista/Cobrar la búsqueda es server-side (con
-              debounce propio) via cobrarApi.busqueda -- en el resto de
-              vistas sigue siendo el filtro en JS de busqueda de página. */}
-          {vista === 'lista' && tab === 'cobrar' ? (
+          {/* EF-3 3B-2/3B-3: en vista Lista la búsqueda es server-side (con
+              debounce propio) via cobrarApi/pagarApi.busqueda -- en la
+              vista "Por proyecto" sigue siendo el filtro en JS de
+              busqueda de página. */}
+          {vista === 'lista' ? (
             <SearchInput
               expandable
-              placeholder="Buscar por folio, cliente o proyecto…"
-              value={cobrarApi.busqueda}
-              onChange={(e) => cobrarApi.setBusqueda(e.target.value)}
+              placeholder={tab === 'cobrar'
+                ? 'Buscar por folio, cliente o proyecto…'
+                : 'Buscar por folio, responsable, proyecto o descripción…'}
+              value={tab === 'cobrar' ? cobrarApi.busqueda : pagarApi.busqueda}
+              onChange={(e) => (tab === 'cobrar' ? cobrarApi.setBusqueda : pagarApi.setBusqueda)(e.target.value)}
             />
           ) : (
             <SearchInput
@@ -202,11 +205,11 @@ export function CuentasPage() {
         <CuentasTable
           tab={tab}
           cuentas={tab === 'cobrar' ? cobrarFiltradas : pagarFiltradas}
-          total={tab === 'cobrar' ? cobrarApi.totalRows : pagarApi.cuentas.length}
+          total={tab === 'cobrar' ? cobrarApi.totalRows : pagarApi.totalRows}
           onSelect={(cuenta) => setSelectedCuenta(cuenta)}
-          page={tab === 'cobrar' ? cobrarApi.page : undefined}
-          pageCount={tab === 'cobrar' ? cobrarApi.pageCount : undefined}
-          onPageChange={tab === 'cobrar' ? cobrarApi.setPage : undefined}
+          page={tab === 'cobrar' ? cobrarApi.page : pagarApi.page}
+          pageCount={tab === 'cobrar' ? cobrarApi.pageCount : pagarApi.pageCount}
+          onPageChange={tab === 'cobrar' ? cobrarApi.setPage : pagarApi.setPage}
         />
       )}
 

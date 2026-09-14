@@ -11,14 +11,6 @@ import {
   Tab,
   Vista,
 } from '@/app/components/cuentas/types'
-import {
-  buildPagarRows,
-  countPendingCuentas,
-  filterPagarRows,
-  getCuentaSearchTerm,
-  sumMontoPagado,
-  sumMontoPendiente,
-} from '@/app/components/cuentas/selectors'
 
 export function useCuentasPage() {
   const [tab, setTab] = useState<Tab>('cobrar')
@@ -37,7 +29,7 @@ export function useCuentasPage() {
   const porProyectoApi = useCuentasPorProyecto()
 
   const { cuentas: cuentasCobrar, loading: loadingCobrar, recargar: recargarCobrar, cargarAlertas: fetchAlertas, pendientesCount: cuentasCobrarPendientes } = cobrarApi
-  const { cuentas: cuentasPagar, loading: loadingPagar, recargar: recargarPagar, cargarHistorialOrdenes: fetchHistorialOrdenes } = pagarApi
+  const { cuentas: cuentasPagar, loading: loadingPagar, recargar: recargarPagar, cargarHistorialOrdenes: fetchHistorialOrdenes, pendientesCount: cuentasPagarPendientes } = pagarApi
   const { recargar: recargarPorProyecto } = porProyectoApi
 
   const cargarAlertas = useCallback(async () => {
@@ -106,23 +98,22 @@ export function useCuentasPage() {
     void cargarHistorialOrdenes()
   }, [cargarHistorialOrdenes, tab])
 
-  // EF-3 3B-2: cuentasCobrar ya llega filtrada/paginada por el servidor
-  // (busqueda propia de cobrarApi) -- solo se le agrega el tag `tipo` para
-  // que calce con SelectedCuenta. CxP sigue filtrando en JS sobre el
-  // arreglo completo (busqueda de página) hasta 3B-3.
-  const term = useMemo(() => getCuentaSearchTerm(busqueda), [busqueda])
+  // EF-3 3B-2/3B-3: cuentasCobrar/cuentasPagar ya llegan filtradas/paginadas
+  // por el servidor (busqueda propia de cobrarApi/pagarApi) -- solo se les
+  // agrega el tag `tipo` para que calcen con SelectedCuenta.
   const cobrarFiltradas = useMemo<SelectedCuenta[]>(
     () => cuentasCobrar.map((cuenta) => ({ ...cuenta, tipo: 'cobrar' as const })),
     [cuentasCobrar]
   )
-  const pagarRows = useMemo(() => buildPagarRows(cuentasPagar), [cuentasPagar])
-  const pagarFiltradas = useMemo(() => filterPagarRows(pagarRows, term), [pagarRows, term])
+  const pagarFiltradas = useMemo<SelectedCuenta[]>(
+    () => cuentasPagar.map((cuenta) => ({ ...cuenta, tipo: 'pagar' as const })),
+    [cuentasPagar]
+  )
 
   const totalPorCobrar = cobrarApi.totalMontoPendiente
   const totalCobrado = cobrarApi.totalMontoPagado
-  const totalPorPagar = useMemo(() => sumMontoPendiente(pagarFiltradas), [pagarFiltradas])
-  const totalPagado = useMemo(() => sumMontoPagado(pagarFiltradas), [pagarFiltradas])
-  const cuentasPagarPendientes = useMemo(() => countPendingCuentas(cuentasPagar), [cuentasPagar])
+  const totalPorPagar = pagarApi.totalMontoPendiente
+  const totalPagado = pagarApi.totalMontoPagado
   const loading = tab === 'cobrar' ? loadingCobrar : loadingPagar
 
   return {
