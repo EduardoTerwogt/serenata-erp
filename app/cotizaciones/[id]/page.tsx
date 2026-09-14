@@ -362,6 +362,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // Instante de la última escritura local por celda. Cualquier dato del servidor
   // pedido ANTES de esa marca llega viejo y no debe aplicarse a esa celda.
   const localWriteAtRef = useRef<Map<string, number>>(new Map())
+  // F26/3D-0b: mismo patrón que localWriteAtRef pero para General/Totales, por
+  // campo. Sin esto, una reconciliación en vuelo que arrancó ANTES de que un
+  // PATCH de campo confirmara podía pisar el valor recién confirmado con su
+  // propia lectura, más vieja -- el guard de dirty/saving no alcanza a cubrir
+  // esa ventana porque el campo ya no está "ocupado" cuando la reconciliación
+  // aplica.
+  const generalFieldConfirmedAtRef = useRef<Partial<Record<QuotationGeneralField, number>>>({})
+  const totalsFieldConfirmedAtRef = useRef<Partial<Record<QuotationTotalsField, number>>>({})
 
   // Fase 8 (hardening pre-Proyectos): todo PATCH saliente (partidas, general,
   // totales, notas) se registra aquí mientras está en vuelo. `flushPendingSaves`
@@ -706,10 +714,17 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // propio en vuelo (mismo criterio que `isCellBusy` en partidas). Antes esto se
   // saltaba la sección COMPLETA si cualquier campo estaba sucio -- con eso, editar
   // Fecha dejaba a Locación viendo una foto vieja aunque nadie la estuviera tocando.
-  const applyGeneralOnly = useCallback((cot: Cotizacion) => {
+  const applyGeneralOnly = useCallback((cot: Cotizacion, pedidoEn: number) => {
     const general = buildGeneralSnapshot({ cliente: cot.cliente, proyecto: cot.proyecto, fecha_entrega: cot.fecha_entrega || '', locacion: cot.locacion || '' })
     generalServerRef.current = general
-    const isFieldBusy = (field: QuotationGeneralField) => generalFieldDirtyRef.current.has(field) || generalFieldSavingRef.current.has(field)
+    // F26/3D-0b: además de dirty/saving, un campo con una confirmación más
+    // nueva (o del mismo instante) que el arranque de ESTA lectura también
+    // cuenta como ocupado -- aplicarla lo pisaría con algo más viejo que lo
+    // que el servidor ya confirmó después.
+    const isFieldBusy = (field: QuotationGeneralField) =>
+      generalFieldDirtyRef.current.has(field) ||
+      generalFieldSavingRef.current.has(field) ||
+      (generalFieldConfirmedAtRef.current[field] !== undefined && generalFieldConfirmedAtRef.current[field]! >= pedidoEn)
     if (!isFieldBusy('cliente')) { setClienteInput(general.cliente); clienteInputValueRef.current = general.cliente; setValue('cliente', general.cliente) }
     if (!isFieldBusy('proyecto')) { setProyectoInput(general.proyecto); proyectoInputValueRef.current = general.proyecto; setValue('proyecto', general.proyecto) }
     if (!isFieldBusy('fecha_entrega')) setValue('fecha_entrega', general.fecha_entrega)
@@ -723,10 +738,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       locacion: isFieldBusy('locacion') ? prev.locacion : (general.locacion || null),
     } : prev)
   }, [setClienteInput, setProyectoInput, setValue])
-  const applyTotalsOnly = useCallback((cot: Cotizacion) => {
+  const applyTotalsOnly = useCallback((cot: Cotizacion, pedidoEn: number) => {
     const totalsConfig = buildTotalsSnapshot({ porcentaje_fee: cot.porcentaje_fee, iva_activo: cot.iva_activo, descuento_tipo: cot.descuento_tipo, descuento_valor: cot.descuento_valor })
     totalsServerRef.current = totalsConfig
-    const isFieldBusy = (field: QuotationTotalsField) => totalsFieldDirtyRef.current.has(field) || totalsFieldSavingRef.current.has(field)
+    // F26/3D-0b: mismo criterio que applyGeneralOnly -- ver ese comentario.
+    const isFieldBusy = (field: QuotationTotalsField) =>
+      totalsFieldDirtyRef.current.has(field) ||
+      totalsFieldSavingRef.current.has(field) ||
+      (totalsFieldConfirmedAtRef.current[field] !== undefined && totalsFieldConfirmedAtRef.current[field]! >= pedidoEn)
     if (!isFieldBusy('porcentaje_fee')) { setPorcentajeFee(totalsConfig.porcentaje_fee); porcentajeFeeValueRef.current = totalsConfig.porcentaje_fee }
     if (!isFieldBusy('iva_activo')) { setIvaActivo(totalsConfig.iva_activo); ivaActivoValueRef.current = totalsConfig.iva_activo }
     if (!isFieldBusy('descuento_tipo')) { setDescuentoTipo(totalsConfig.descuento_tipo); descuentoTipoValueRef.current = totalsConfig.descuento_tipo }
@@ -887,8 +906,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         // marca de "sin guardar", así que aplicarlas a ciegas borraba la edición en
         // curso -- el mismo defecto que se arregló en las partidas, otra sección.
         if (!notasLockHeldRef.current && !notasDirtyRef.current) applyNotasOnly(updated.notas_internas ?? null)
-        if (!generalLockHeldRef.current && !generalDirtyRef.current) applyGeneralOnly(updated)
-        if (!totalsLockHeldRef.current && !totalsDirtyRef.current) applyTotalsOnly(updated)
+        if (!generalLockHeldRef.current && !generalDirtyRef.current) applyGeneralOnly(updated, pedidoEn)
+        if (!totalsLockHeldRef.current && !totalsDirtyRef.current) applyTotalsOnly(updated, pedidoEn)
       } catch (loadError) {
         console.error('[cotizaciones/[id]] Error reconciliando con el servidor:', loadError)
       }
@@ -1037,6 +1056,10 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           clearGeneralFieldConflict(field)
           if (updated) {
             generalServerRef.current = buildGeneralSnapshot({ cliente: updated.cliente, proyecto: updated.proyecto, fecha_entrega: updated.fecha_entrega || '', locacion: updated.locacion || '' })
+            // F26/3D-0b: instante en que el campo pasa a estar confirmado por
+            // el servidor -- una reconciliación que arrancó antes de esto no
+            // debe pisarlo con una lectura más vieja.
+            generalFieldConfirmedAtRef.current[field] = Date.now()
             // Causa E (portada de partidas): refrescar el "base" al valor
             // recién confirmado, SIEMPRE -- no solo cuando el dirty se limpia.
             // Sin esto, una ronda encolada por `generalFieldRetryNeededRef`
@@ -1118,6 +1141,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
           clearTotalsFieldConflict(field)
           if (updated) {
             totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
+            // F26/3D-0b: ver el comentario equivalente en sendGeneralFieldPatchRound.
+            totalsFieldConfirmedAtRef.current[field] = Date.now()
             // Causa E (portada de partidas): refrescar el "base" al valor
             // recién confirmado, SIEMPRE -- ver el comentario equivalente en
             // `sendGeneralFieldPatchRound`.

@@ -547,28 +547,77 @@ describe('page.tsx -- characterization de autosave/flush/reconciliación (3D-0)'
     void container
   })
 
-  it('T12: interleaving orden B -- el flush resuelve antes que la reconciliación', async () => {
+  it('T12: interleaving orden B -- el flush resuelve antes que la reconciliación (F26/3D-0b: ya NO pisa el valor confirmado)', async () => {
     const { flushPatch, reconciliation, cot, locacionInput } = await setupInterleavingScenario()
 
-    // Orden B: el flush confirma primero (limpia el dirty del campo).
+    // Orden B: el flush confirma primero (limpia el dirty del campo y marca
+    // generalFieldConfirmedAtRef.current['locacion'] con el instante de la
+    // confirmación).
     flushPatch.resolve(jsonResponse({ ...cot, locacion: 'Valor local del usuario' }))
     await FLUSH(0)
     expect(locacionInput.value).toBe('Valor local del usuario')
 
-    // La reconciliación en vuelo resuelve DESPUÉS, con una lectura que ya
-    // quedó vieja frente al valor recién confirmado por el flush.
+    // La reconciliación en vuelo resuelve DESPUÉS, con una lectura capturada
+    // ANTES de que el flush confirmara (por eso trae un valor viejo).
     reconciliation.resolve({ ...cot, locacion: 'Locación vieja (snapshot pre-flush)' })
     await FLUSH(0)
 
-    // Predicción cerrada del plan (3D-0, T12): para cuando la reconciliación
-    // resuelve, el flush ya limpió generalDirtyRef Y ya liberó
-    // generalLockHeldRef (el campo se desenfocó explícitamente antes del
-    // flush, vía blur) -- el guard de applyGeneralOnly (page.tsx:890) ya NO
-    // bloquea nada, así que la reconciliación SÍ aplica su lectura vieja y
-    // pisa el valor recién confirmado. Si esta aserción resulta correcta al
-    // correr el test, es el hallazgo real que activa F26/3D-0b (carrera
-    // flush/reconciliación con pérdida real) -- documentado aquí como tal,
-    // no corregido en este bloque (3D-0 es test-only).
-    expect(locacionInput.value).toBe('Locación vieja (snapshot pre-flush)')
+    // Characterization test corregido (era el que documentaba el bug F26
+    // antes del fix de 3D-0b): con el guard por-instante
+    // (generalFieldConfirmedAtRef >= pedidoEn de la reconciliación), el campo
+    // ya no está "libre" solo porque dejó de estar dirty/saving -- su
+    // confirmación es más nueva que el arranque de esta reconciliación, así
+    // que se salta igual que en T11. Este test debe fallar (rojo) contra el
+    // código anterior a 3D-0b y pasar (verde) contra el código con el fix.
+    expect(locacionInput.value).toBe('Valor local del usuario')
+  })
+
+  it('T13: dos campos DISTINTOS de General -- el fix de F26/3D-0b es por campo, no por sección completa', async () => {
+    const cot = buildCotizacion({ estado: 'EMITIDA' })
+    const { container, fetchMock, emitPresenceUpdate } = await renderPage(cot)
+    const generalRoute = `/api/cotizaciones/${cot.id}/general`
+    const flushPatch = deferred<unknown>()
+    setRoute(`PATCH ${generalRoute}`, () => flushPatch.promise)
+
+    const reconciliation = deferred<Cotizacion>()
+    mocks.fetchQuotationDetailMock.mockReturnValue(reconciliation.promise)
+
+    const locacionInput = container.querySelector('input[name="locacion"]') as HTMLInputElement
+    // `cliente` no tiene `name` (input controlado a mano, sin register()) --
+    // se ubica por placeholder, igual que el resto del módulo lo hace por rol.
+    const clienteInput = container.querySelector('input[placeholder="Nombre del cliente"]') as HTMLInputElement
+
+    // `locacion`: editar y blur -- flush inmediato, sin esperar el debounce.
+    await act(async () => { fireEvent.change(locacionInput, { target: { value: 'Locación confirmada' } }) })
+    await act(async () => { fireEvent.blur(locacionInput) })
+    await FLUSH(0) // el setTimeout(0) de handleGeneralBlur corre aquí
+    expect(fetchMock.mock.calls.filter(([u]) => u === generalRoute)).toHaveLength(1)
+
+    // `cliente`: editar SIN blur -- queda dirty, su propio debounce de 800ms
+    // nunca corre en este test, así que nunca manda su PATCH.
+    await act(async () => { fireEvent.change(clienteInput, { target: { value: 'Cliente todavía sucio' } }) })
+
+    // Reconciliación disparada por Presence mientras el flush de `locacion`
+    // sigue en vuelo.
+    await emitPresenceUpdate({ latestGeneralConfirmed: { cotizacion_id: cot.id, at: new Date().toISOString() } })
+    expect(mocks.fetchQuotationDetailMock).toHaveBeenCalledTimes(2)
+
+    // El flush de `locacion` confirma primero -- queda protegido por el
+    // guard por-instante.
+    flushPatch.resolve(jsonResponse({ ...cot, locacion: 'Locación confirmada' }))
+    await FLUSH(0)
+    expect(locacionInput.value).toBe('Locación confirmada')
+
+    // La reconciliación resuelve después, con una lectura vieja para AMBOS
+    // campos.
+    reconciliation.resolve({ ...cot, locacion: 'Locación vieja (snapshot pre-flush)', cliente: 'Cliente vieja (snapshot pre-flush)' })
+    await FLUSH(0)
+
+    // `locacion` (confirmado): protegido por generalFieldConfirmedAtRef -- no
+    // se pisa con la lectura vieja.
+    expect(locacionInput.value).toBe('Locación confirmada')
+    // `cliente` (todavía dirty): se salta igual que siempre, por el guard
+    // original de dirty -- nunca llegó a mandar su propio PATCH.
+    expect(clienteInput.value).toBe('Cliente todavía sucio')
   })
 })
