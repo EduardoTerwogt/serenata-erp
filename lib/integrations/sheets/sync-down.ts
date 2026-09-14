@@ -26,23 +26,57 @@ export interface SyncDownSummary {
 
 // ─── syncTableDown ────────────────────────────────────────────────────────────
 
+const SYNC_DOWN_PAGE_SIZE = 1000
+
 async function syncTableDown(
   spreadsheetId: string,
   schema: TableSchema,
 ): Promise<SyncDownResult> {
-  const { tab, table, columns, orderBy } = schema
+  const { tab, table, columns, orderBy, pk } = schema
 
   try {
-    // 1. Leer todos los datos de Supabase
-    const { data, error } = await supabaseAdmin
-      .from(table)
-      .select(columns.join(', '))
-      .order(orderBy ?? 'created_at', { ascending: true })
-      .limit(5000) // límite de seguridad
+    // 1. Leer todos los datos de Supabase por keyset -- un `.limit(5000)` con
+    // paginación por OFFSET (lo que hace `.range()` internamente) no es
+    // segura: si se inserta o borra una fila entre 2 páginas leídas, las
+    // filas siguientes se desplazan y una fila puede quedar duplicada u
+    // omitida sin importar cuán estable sea el ORDER BY. El keyset continúa
+    // estrictamente desde el último valor leído, inmune a ese corrimiento.
+    const cursorCol = orderBy ?? 'created_at'
+    // El select siempre incluye la columna de cursor y el pk, aunque no
+    // estén en `columns` (cuentas_cobrar/cuentas_pagar no exportan
+    // created_at a Sheets pero sí la tienen en Postgres) -- dedupe con un
+    // Set por si cursorCol/pk ya están en columns. El mapeo a filas de
+    // Sheets más abajo sigue iterando solo `columns`, nunca `selectCols`,
+    // así que esta columna extra nunca llega a la hoja.
+    const selectCols = Array.from(new Set([...columns, cursorCol, pk]))
 
-    if (error) throw error
+    const rows: Record<string, unknown>[] = []
+    let cursorOrderVal: unknown = null
+    let cursorPk: unknown = null
 
-    const rows = data ?? []
+    while (true) {
+      let query = supabaseAdmin
+        .from(table)
+        .select(selectCols.join(', '))
+        .order(cursorCol, { ascending: true })
+        .order(pk, { ascending: true })
+        .limit(SYNC_DOWN_PAGE_SIZE)
+
+      if (cursorOrderVal !== null && cursorPk !== null) {
+        query = query.or(`${cursorCol}.gt.${cursorOrderVal},and(${cursorCol}.eq.${cursorOrderVal},${pk}.gt.${cursorPk})`)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+      if (!data || data.length === 0) break
+
+      rows.push(...(data as unknown as Record<string, unknown>[]))
+      if (data.length < SYNC_DOWN_PAGE_SIZE) break
+
+      const last = data[data.length - 1] as unknown as Record<string, unknown>
+      cursorOrderVal = last[cursorCol]
+      cursorPk = last[pk]
+    }
 
     // 2. Construir filas para Sheets: [header, ...datos]
     const headerRow: CellValue[] = columns
