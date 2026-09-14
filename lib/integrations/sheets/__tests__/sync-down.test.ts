@@ -24,7 +24,8 @@ vi.mock('@/lib/integrations/google/sheets', () => ({
   getSheetIds: mocks.getSheetIdsMock,
 }))
 
-import { syncTableDownByName } from '../sync-down'
+import { syncTableDownByName, syncAllDown, SheetsSyncLeaseLostError } from '../sync-down'
+import { TABLE_SCHEMAS } from '../schema'
 
 interface ChainCall {
   select: string
@@ -198,5 +199,137 @@ describe('syncTableDownByName -- paginación por keyset', () => {
     expect(result.ok).toBe(false)
     expect(result.error).toBe('conexión perdida')
     expect(mocks.overwriteSheetMock).not.toHaveBeenCalled()
+  })
+})
+
+function proyectoRow(id: string, createdAt: string) {
+  return {
+    id, cliente: 'X', proyecto: 'Y', fecha_entrega: null, locacion: null,
+    horarios: null, punto_encuentro: null, estado: 'RODAJE', notas: null,
+    created_at: createdAt,
+  }
+}
+
+// EF-3 3C-3: el heartbeat (onHeartbeat) renueva y verifica el lease del lock
+// de sync tras CADA página de CADA tabla -- una sync de 9 tablas puede
+// tardar más de 600s, así que renovar solo una vez al final dejaría el
+// lease expirar a medio camino. Si el lease se pierde (otro proceso ya
+// reclamó el lock), syncTableDown debe abortar de inmediato con
+// SheetsSyncLeaseLostError -- nunca seguir leyendo ni escribir a Sheets
+// encima del nuevo dueño. Un fallo real de la RPC de renovación (no un
+// lease perdido) nunca se confunde con eso: syncTableDown lo absorbe como
+// el fallo normal de esa tabla si ocurrió dentro de su loop de páginas, o
+// se propaga sin capturar si ocurrió en el heartbeat "entre tablas" de
+// syncAllDown (que no tiene try/catch propio).
+describe('heartbeat de lease (onHeartbeat) -- 3C-3', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.overwriteSheetMock.mockResolvedValue(true)
+    mocks.formatHeaderRowMock.mockResolvedValue(undefined)
+    mocks.getSheetIdsMock.mockResolvedValue({})
+  })
+
+  it('syncTableDownByName invoca el heartbeat 1 vez por página (3 páginas -> 3 llamadas)', async () => {
+    const page1 = Array.from({ length: 1000 }, (_, i) => proyectoRow(`a-${i}`, '2026-01-01'))
+    const page2 = Array.from({ length: 1000 }, (_, i) => proyectoRow(`b-${i}`, '2026-01-02'))
+    const page3 = Array.from({ length: 200 }, (_, i) => proyectoRow(`c-${i}`, '2026-01-03'))
+    const calls: ChainCall[] = []
+    mockPages(mocks.fromMock, 'proyectos', [
+      { data: page1, error: null }, { data: page2, error: null }, { data: page3, error: null },
+    ], calls)
+
+    const heartbeat = vi.fn(async () => true)
+    const result = await syncTableDownByName(SPREADSHEET_ID, 'proyectos', heartbeat)
+
+    expect(result.ok).toBe(true)
+    expect(result.rows).toBe(2200)
+    expect(heartbeat).toHaveBeenCalledTimes(3)
+  })
+
+  it('syncAllDown invoca el heartbeat 1 vez adicional al terminar CADA tabla -- nunca una sola vez al final de las 9', async () => {
+    const page1 = Array.from({ length: 1000 }, (_, i) => proyectoRow(`a-${i}`, '2026-01-01'))
+    const page2 = Array.from({ length: 1000 }, (_, i) => proyectoRow(`b-${i}`, '2026-01-02'))
+    const page3 = Array.from({ length: 200 }, (_, i) => proyectoRow(`c-${i}`, '2026-01-03'))
+    const calls: ChainCall[] = []
+    let proyectosCall = 0
+    mocks.fromMock.mockImplementation((table: string) => {
+      if (table === 'proyectos') {
+        const pages = [{ data: page1, error: null }, { data: page2, error: null }, { data: page3, error: null }]
+        const page = pages[Math.min(proyectosCall, pages.length - 1)]
+        proyectosCall += 1
+        return makeChainableBuilder(page, calls)
+      }
+      return makeChainableBuilder({ data: [], error: null }, calls)
+    })
+
+    const heartbeat = vi.fn(async () => true)
+    const summary = await syncAllDown(SPREADSHEET_ID, heartbeat)
+
+    expect(summary.errors).toBe(0)
+    // 3 llamadas por las 3 páginas de "proyectos" (las otras 8 tablas
+    // traen 0 filas -> 0 llamadas en su propio loop) + 1 llamada de
+    // syncAllDown al terminar CADA una de las TABLE_SCHEMAS.length tablas.
+    expect(heartbeat).toHaveBeenCalledTimes(3 + TABLE_SCHEMAS.length)
+  })
+
+  it('aborta por lease perdido: relanza SheetsSyncLeaseLostError de inmediato, no lee la 3a página ni escribe a Sheets', async () => {
+    const page1 = Array.from({ length: 1000 }, (_, i) => proyectoRow(`a-${i}`, '2026-01-01'))
+    const page2 = Array.from({ length: 1000 }, (_, i) => proyectoRow(`b-${i}`, '2026-01-02'))
+    const page3 = Array.from({ length: 200 }, (_, i) => proyectoRow(`c-${i}`, '2026-01-03'))
+    const calls: ChainCall[] = []
+    mockPages(mocks.fromMock, 'proyectos', [
+      { data: page1, error: null }, { data: page2, error: null }, { data: page3, error: null },
+    ], calls)
+
+    let call = 0
+    const heartbeat = vi.fn(async () => { call += 1; return call < 2 }) // true en la 1a, false en la 2a
+
+    await expect(syncTableDownByName(SPREADSHEET_ID, 'proyectos', heartbeat))
+      .rejects.toBeInstanceOf(SheetsSyncLeaseLostError)
+
+    expect(mocks.fromMock).toHaveBeenCalledTimes(2) // nunca pidió la 3a página
+    expect(mocks.overwriteSheetMock).not.toHaveBeenCalled()
+  })
+
+  it('distingue un fallo real de la RPC de renovación (dentro del loop de páginas) de un lease perdido: la tabla queda ok:false, nunca SheetsSyncLeaseLostError', async () => {
+    const page1 = Array.from({ length: 1000 }, (_, i) => proyectoRow(`a-${i}`, '2026-01-01'))
+    const page2 = Array.from({ length: 200 }, (_, i) => proyectoRow(`b-${i}`, '2026-01-02'))
+    const calls: ChainCall[] = []
+    mockPages(mocks.fromMock, 'proyectos', [{ data: page1, error: null }, { data: page2, error: null }], calls)
+
+    let call = 0
+    const heartbeat = vi.fn(async () => {
+      call += 1
+      if (call === 2) throw new Error('timeout de renovación')
+      return true
+    })
+
+    const result = await syncTableDownByName(SPREADSHEET_ID, 'proyectos', heartbeat)
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toBe('timeout de renovación')
+    expect(mocks.overwriteSheetMock).not.toHaveBeenCalled()
+  })
+
+  it('un fallo real de la RPC en el heartbeat ENTRE tablas de syncAllDown se propaga sin capturar -- nunca se confunde con lease perdido', async () => {
+    const primeraTabla = TABLE_SCHEMAS[0].table
+    const calls: ChainCall[] = []
+    mocks.fromMock.mockImplementation((table: string) => {
+      if (table !== primeraTabla) throw new Error(`no debería llegar a: ${table}`)
+      return makeChainableBuilder({ data: [{}], error: null }, calls)
+    })
+
+    let call = 0
+    const heartbeat = vi.fn(async () => {
+      call += 1
+      // 1a llamada: dentro del loop de páginas de la primera tabla (única
+      // página, <PAGE_SIZE) -> ok. 2a llamada: entre tablas, justo después
+      // de terminarla -> falla real de la RPC.
+      if (call === 2) throw new Error('timeout de renovación')
+      return true
+    })
+
+    await expect(syncAllDown(SPREADSHEET_ID, heartbeat)).rejects.toThrow('timeout de renovación')
+    expect(mocks.fromMock).toHaveBeenCalledTimes(1) // nunca avanzó a la 2a tabla
   })
 })
