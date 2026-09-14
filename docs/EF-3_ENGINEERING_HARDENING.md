@@ -5227,11 +5227,14 @@ esta ronda corre en un entorno de ejecución con una única rama designada
 incompatible con "una rama + un PR por bloque". Los 13 bloques de EF-3D
 comparten esa misma rama y un solo PR contra `main`, en commits separados
 por bloque (mismo criterio de commits atómicos, distinto de PRs). "Rama"/"PR"
-de cada fila 3D-0b..3D-12 apunta a esa rama/PR compartida; "Estado" pasa a
-`En curso` cuando el código+tests del bloque están listos localmente y a
-`Cerrado` recién cuando ese PR compartido mergea a `main` (con el "Commit de
-merge" real de ese momento) -- nunca antes, para no romper el invariante de
-"Cerrado = ya en `main`" que el resto del tracker respeta.
+de cada fila 3D-0b..3D-12 apunta a esa rama/PR compartida; "Estado" se queda
+en `Pendiente` (el progreso real -- código+tests listos localmente para
+cuáles bloques -- vive en "Nota") hasta que ese PR compartido mergea a
+`main`, momento en el que TODAS las filas bundleadas pasan a `Cerrado` de
+una vez, con el mismo "Commit de merge". Nunca `En curso` mientras dependa de
+otro bloque de este mismo lote sin mergear -- `scripts/validate-ef3-tracker.mjs`
+(regla d) rechaza correctamente esa combinación, ya que "En curso" exige que
+toda dependencia esté `Cerrado`, y aquí ninguna lo está todavía.
 
 | ID | Estado | Dependencias | Rama | PR | Commit SHA | Commit de merge | Nota | Próxima acción |
 |---|---|---|---|---|---|---|---|---|
@@ -5260,10 +5263,10 @@ merge" real de ese momento) -- nunca antes, para no romper el invariante de
 | 3C-3 | Cerrado | 3C-2 | `claude/hopeful-allen-jql9xp` | [#47](https://github.com/EduardoTerwogt/serenata-erp/pull/47) | `7e3a873` | `71881de` | | Arrancar el siguiente bloque independiente (3C-4, 3D-0) |
 | 3C-4 | Pendiente | 3C-3 | — | — | — | — | | Bloqueado: la medición empírica obligatoria del punto 2 exige volumen objetivo (items_cotizacion≥5500) en el entorno serverless real de 3A-1 — hoy `serenata-erp-test` tiene 11 filas. Pausado por decisión del usuario hasta que 3A-1/3A-3 se resuelvan (setup manual de Vercel pendiente) |
 | 3D-0 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#48](https://github.com/EduardoTerwogt/serenata-erp/pull/48) | `62aac60` | `30486a8` | F26 activado (T12 confirmó carrera real en flush/reconciliación General/Totales) -- 3D-0b abierto como bloque correctivo, no bloquea el cierre de 3D-0. `live` falló 4 veces por causa no relacionada al diff (`GET /api/productos` sin `.limit()` + fixtures de test acumulados en `serenata-erp-test`, superando el tope de PostgREST) -- root-caused y arreglado en el mismo PR (commit `62aac60`) | Arrancar el siguiente bloque independiente (3D-1, o 3D-0b si se prioriza el fix de F26) |
-| 3D-0b | En curso | 3D-0 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | — | — | | Código+tests listos localmente (13/13 verde, incluye T12 reescrito rojo→verde). Ver nota de excepción de proceso arriba |
-| 3D-1 | En curso | 3D-0 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | — | — | | Código+tests listos localmente (`hooks/useQuotationMutationTracker.ts`, T1-T13 verdes). Ver nota de excepción de proceso arriba |
-| 3D-2 | En curso | 3D-1 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | — | — | Movió también los tipos/helpers compartidos de General/Totales/Items (antes locales a `page.tsx`) a `lib/quotations/collaboration.ts` nuevo, no listado en el punto 4 de la especificación -- evita un ciclo de imports `page.tsx` <-> `hooks/useQuotationXAutosave.ts` que los 4 hooks de esta sub-secuencia (3D-2..3D-5) habrían necesitado si cada uno reimportara esos tipos desde `page.tsx`. Puramente mecánico (funciones/tipos/clase movidos verbatim), sin cambio de comportamiento -- confirmado por los 13 casos de 3D-0/3D-0b en verde | Código+tests listos localmente (`hooks/useQuotationGeneralAutosave.ts`, `lib/quotations/collaboration.ts`, T1-T13 verdes, `tsc`/build limpios). Ver nota de excepción de proceso arriba |
-| 3D-3 | Pendiente | 3D-2 | — | — | — | — | | — |
+| 3D-0b | Pendiente | 3D-0 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | — | — | | Código+tests listos localmente (13/13 verde, incluye T12 reescrito rojo→verde). Ver nota de excepción de proceso arriba |
+| 3D-1 | Pendiente | 3D-0 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | — | — | | Código+tests listos localmente (`hooks/useQuotationMutationTracker.ts`, T1-T13 verdes). Ver nota de excepción de proceso arriba |
+| 3D-2 | Pendiente | 3D-1 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | — | — | Movió también los tipos/helpers compartidos de General/Totales/Items (antes locales a `page.tsx`) a `lib/quotations/collaboration.ts` nuevo, no listado en el punto 4 de la especificación -- evita un ciclo de imports `page.tsx` <-> `hooks/useQuotationXAutosave.ts` que los 4 hooks de esta sub-secuencia (3D-2..3D-5) habrían necesitado si cada uno reimportara esos tipos desde `page.tsx`. Puramente mecánico (funciones/tipos/clase movidos verbatim), sin cambio de comportamiento -- confirmado por los 13 casos de 3D-0/3D-0b en verde | Código+tests listos localmente (`hooks/useQuotationGeneralAutosave.ts`, `lib/quotations/collaboration.ts`, T1-T13 verdes, `tsc`/build limpios). Ver nota de excepción de proceso arriba |
+| 3D-3 | Pendiente | 3D-2 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | — | — | | Código+tests listos localmente (`hooks/useQuotationTotalesAutosave.ts`, T1-T13 verdes incluidos T2/T8 de Totales, `tsc`/lint/build limpios). Ver nota de excepción de proceso arriba |
 | 3D-4 | Pendiente | 3D-3 | — | — | — | — | | — |
 | 3D-5 | Pendiente | 3D-0, 3D-1, 3D-2, 3D-3, 3D-4 | — | — | — | — | | — |
 | 3D-6 | Pendiente | 3D-0, 3D-0b, 3D-2, 3D-3, 3D-4, 3D-5 | — | — | — | — | | — |
