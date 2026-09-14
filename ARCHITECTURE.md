@@ -253,6 +253,7 @@ evidencia, no cuenta como terminado.
 | Planeación (extracción AI, pendientes, soft delete) | `critical/planeacion.spec.ts` |
 | Plantillas de servicios (cotizaciones nuevas) | `critical/plantillas-servicios.spec.ts` |
 | Admin de usuarios y sync a Google Sheets | `critical/admin-usuarios.spec.ts` |
+| Sync manual Supabase→Sheets con lock/lease (huérfanos, sin error crudo expuesto) | `lib/integrations/sheets/__tests__/sync-down.test.ts`, `app/api/__tests__/sheets-sync-down-route.test.ts`, `app/api/__tests__/sheets-status-route.test.ts` |
 | Dashboard (incluye gastos fijos) | `lib/server/repositories/dashboard.ts` + sus tests |
 | Revocación de sesión de staff (`session_version`) | `__tests__/proxy.test.ts`, `__tests__/auth-callbacks.test.ts`, `lib/__tests__/api-auth.test.ts`, `tests/e2e/live/staff-session-revocation.spec.ts` |
 | Resiliencia de Realtime (backoff, convergencia en remount, refresco de token) | `lib/realtime/__tests__/useRealtimeChannel.test.ts`, `tests/e2e/live/realtime-channel-reconnection.spec.ts` |
@@ -295,7 +296,7 @@ autoritativa, no una tabla en un documento. Agrupadas por dominio:
 | Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable`, `historial_cambios_responsable_item` |
 | Planeación | `planeacion_pendientes`, `planeacion_event_notas` (soft delete en `eliminada`), `extraction_logs` |
 | Dashboard | `gastos_fijos` |
-| Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys` |
+| Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys`, `sheets_sync_status` |
 
 **RLS** está habilitado en las tablas pero **sin políticas de lectura**, así que la
 llave anónima no lee nada. Es la razón de que la colaboración no use
@@ -307,8 +308,16 @@ Trampas reales, no teóricas. Cada una costó un bug:
 
 - **Cotizaciones COMPLEMENTARIA afectan al Proyecto de la PRINCIPAL.** Al aprobarse
   suman al proyecto y las cuentas del padre. No tratarlas como independientes.
-- **Escribir en cotizaciones / proyectos / cuentas dispara sync a Google Sheets.** Si
-  el sync rompe, revisar `lib/integrations/` antes de culpar al write.
+- **Escribir en cotizaciones / proyectos / cuentas YA NO dispara sync a Google
+  Sheets automáticamente** (EF-3 3C-1, `triggerSheetsSync()` eliminado — 31
+  call-sites). El sync Supabase→Sheets es **manual** hoy, vía
+  `POST /api/integrations/sheets/sync-down` (botón en `/admin`,
+  `AdminSheets.tsx`), protegido por un lock con lease en `sheets_sync_status`
+  (3C-3: `acquire_sheets_sync_lock`/`renew_sheets_sync_lease`/
+  `release_sheets_sync_lock`, keyset pagination en `sync-down.ts`). Un
+  safety-net diario vía el cron de `keep-alive` está planeado (3C-4) pero
+  **pausado** hasta que el volumen de prueba objetivo esté disponible (ver
+  tracker de EF-3).
 - **Reservar folio es atómico vía RPC.** Generar folios en JS garantiza carreras.
 - **Rate limiting corre sobre Postgres**, no sobre un store dedicado (no hay cuenta
   de pago de Vercel). Funciona al volumen actual; la interfaz
