@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCotizacionById } from '@/lib/db'
+import { buscarCotizaciones, getCotizacionById } from '@/lib/db'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { formatSupabaseError } from '@/lib/quotations/rpc-utils'
 import {
@@ -10,29 +10,24 @@ import {
 } from '@/lib/server/quotations/persistence'
 import { CotizacionCreateSchema, validate } from '@/lib/validation/schemas'
 import { ItemCotizacion } from '@/lib/types'
-import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { consumeReservedQuotationFolio, reserveNextQuotationFolio } from '@/lib/server/quotations/folio'
 
-interface CotizacionRawRow {
-  [key: string]: unknown
-  items_cotizacion: ItemCotizacion[]
-}
-
-export async function GET() {
+// EF-3 3B-4: busqueda/paginacion/conteos server-side via RPC unica
+// buscar_cotizaciones (db/migrations/20260914_buscar_cotizaciones.sql) --
+// filas resumen (sin `items`), no la tabla completa con JOIN a
+// items_cotizacion(*) que traía antes sin límite.
+export async function GET(request: Request) {
   const authResult = await requireSection('cotizaciones')
   if (authResult.response) return authResult.response
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from('cotizaciones')
-      .select('*, items_cotizacion(*)')
-      // Las partidas SIEMPRE ordenadas por `orden`: sin esto Postgres las devuelve en
-      // orden arbitrario, que además cambia cuando una fila se actualiza.
-      .order('orden', { referencedTable: 'items_cotizacion', ascending: true })
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    const mapped = ((data || []) as CotizacionRawRow[]).map((d) => ({ ...d, items: d.items_cotizacion }))
-    return Response.json(mapped)
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search')
+    const estado = searchParams.get('estado')
+    const page = Number(searchParams.get('page')) || 1
+    const pageSize = Number(searchParams.get('pageSize')) || 10
+    const result = await buscarCotizaciones(search, estado, page, pageSize)
+    return Response.json(result)
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error obteniendo cotizaciones' }, { status: 500 })

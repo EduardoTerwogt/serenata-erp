@@ -2,9 +2,10 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Cotizacion, EstadoCotizacion } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
+import { fetchQuotationsPage } from '@/lib/services/quotation-service'
 import { SectionHero } from '@/components/ui/SectionHero'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { FilterTabs, type FilterTab } from '@/components/ui/FilterTabs'
@@ -16,6 +17,7 @@ import { SectionLoading } from '@/components/ui/SectionLoading'
 
 const ESTADOS: (EstadoCotizacion | 'TODAS')[] = ['TODAS', 'BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']
 const PAGE_SIZE = 10
+const SEARCH_DEBOUNCE_MS = 300
 
 const ESTADO_LABEL: Record<EstadoCotizacion | 'TODAS', string> = {
   TODAS: 'Todas',
@@ -25,27 +27,74 @@ const ESTADO_LABEL: Record<EstadoCotizacion | 'TODAS', string> = {
   CANCELADA: 'Cancelada',
 }
 
+const EMPTY_COUNTS: Record<EstadoCotizacion | 'TODAS', number> = {
+  TODAS: 0,
+  BORRADOR: 0,
+  EMITIDA: 0,
+  APROBADA: 0,
+  CANCELADA: 0,
+}
+
 function fmtMoney(n: number) {
   return n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+// EF-3 3B-4: busqueda/paginacion/conteos por estado server-side via
+// fetchQuotationsPage (RPC buscar_cotizaciones) -- reemplaza el fetch
+// directo propio que traía TODAS las cotizaciones y filtraba/paginaba en
+// JS. Mismo mecanismo de debounce (300ms) + AbortController + numero de
+// secuencia que useCuentasCobrar/useCuentasPagar (3B-2/3B-3): una
+// respuesta solo se aplica al estado si su secuencia coincide con la
+// última emitida.
 export default function CotizacionesPage() {
   const router = useRouter()
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
+  const [totalRows, setTotalRows] = useState(0)
+  const [countsByEstado, setCountsByEstado] = useState(EMPTY_COUNTS)
   const [filtro, setFiltro] = useState<EstadoCotizacion | 'TODAS'>('TODAS')
-  const [busqueda, setBusqueda] = useState('')
+  const [busqueda, setBusquedaState] = useState('')
+  const [busquedaDebounced, setBusquedaDebounced] = useState('')
   const [loading, setLoading] = useState(true)
   const [pagina, setPagina] = useState(1)
 
-  useEffect(() => {
-    fetch('/api/cotizaciones')
-      .then(r => r.json())
-      .then(data => {
-        setCotizaciones(data)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
+  const abortRef = useRef<AbortController | null>(null)
+  const seqRef = useRef(0)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    abortRef.current?.abort()
+  }, [])
+
+  const cargar = useCallback(async (search: string, estado: EstadoCotizacion | 'TODAS', pageArg: number) => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const seq = ++seqRef.current
+
+    setLoading(true)
+    try {
+      const data = await fetchQuotationsPage({
+        search,
+        estado: estado === 'TODAS' ? undefined : estado,
+        page: pageArg,
+        pageSize: PAGE_SIZE,
+        signal: controller.signal,
+      })
+      if (seq !== seqRef.current) return
+      setCotizaciones(data.rows)
+      setTotalRows(data.totalRows)
+      setCountsByEstado({ ...EMPTY_COUNTS, ...data.countsByEstado })
+    } catch {
+      if (controller.signal.aborted || seq !== seqRef.current) return
+    } finally {
+      if (seq === seqRef.current) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void cargar(busquedaDebounced, filtro, pagina) }, [cargar, busquedaDebounced, filtro, pagina])
+
+  useEffect(() => {
     // Fase 5c: Prefetch de catálogos en background para Nueva Cotización
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
       requestIdleCallback(() => {
@@ -59,28 +108,7 @@ export default function CotizacionesPage() {
     }
   }, [])
 
-  const porEstado = filtro === 'TODAS'
-    ? cotizaciones
-    : cotizaciones.filter(c => c.estado === filtro)
-
-  const filtradas = busqueda.trim()
-    ? porEstado.filter(cot => {
-        const term = busqueda.toLowerCase()
-        return (
-          cot.id.toLowerCase().includes(term) ||
-          cot.cliente.toLowerCase().includes(term) ||
-          cot.proyecto.toLowerCase().includes(term) ||
-          (cot.items || []).some(item =>
-            item.descripcion.toLowerCase().includes(term) ||
-            (item.responsable_nombre && item.responsable_nombre.toLowerCase().includes(term))
-          )
-        )
-      })
-    : porEstado
-
-  const pageCount = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE))
-  const paginaActual = Math.min(pagina, pageCount)
-  const paginadas = filtradas.slice((paginaActual - 1) * PAGE_SIZE, paginaActual * PAGE_SIZE)
+  const pageCount = Math.max(1, Math.ceil(totalRows / PAGE_SIZE))
 
   const cambiarFiltro = (estado: EstadoCotizacion | 'TODAS') => {
     setFiltro(estado)
@@ -88,15 +116,19 @@ export default function CotizacionesPage() {
   }
 
   const cambiarBusqueda = (valor: string) => {
-    setBusqueda(valor)
-    setPagina(1)
+    setBusquedaState(valor)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setBusquedaDebounced(valor)
+      setPagina(1)
+    }, SEARCH_DEBOUNCE_MS)
   }
 
   const tabs: FilterTab<EstadoCotizacion | 'TODAS'>[] = useMemo(() => ESTADOS.map(estado => ({
     value: estado,
     label: ESTADO_LABEL[estado],
-    count: estado === 'TODAS' ? cotizaciones.length : cotizaciones.filter(c => c.estado === estado).length,
-  })), [cotizaciones])
+    count: countsByEstado[estado] ?? 0,
+  })), [countsByEstado])
 
   return (
     <div className="flex flex-col gap-[19px]">
@@ -123,7 +155,7 @@ export default function CotizacionesPage() {
 
       {loading ? (
         <SectionLoading />
-      ) : filtradas.length > 0 ? (
+      ) : cotizaciones.length > 0 ? (
         <div className="overflow-hidden rounded-panel border border-hairline bg-card">
           {/* Desktop: tabla -- table-fixed + colgroup para que los anchos de
               columna no cambien al paginar o filtrar (proporciones de
@@ -147,7 +179,7 @@ export default function CotizacionesPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginadas.map(cot => (
+                {cotizaciones.map(cot => (
                   <tr
                     key={cot.id}
                     onClick={() => router.push(`/cotizaciones/${cot.id}`)}
@@ -166,7 +198,7 @@ export default function CotizacionesPage() {
                     </td>
                     <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{cot.cliente}</td>
                     <td className="truncate px-[var(--row-pad-x)] align-middle font-semibold text-ink">
-                      {(!cot.items || cot.items.length === 0) ? (
+                      {!cot.itemsCount ? (
                         <span className="inline-flex items-center gap-1 text-[length:var(--text-xs)] font-normal text-cancelled-fg">
                           <Icon name="warning" size={13} /> Sin items
                         </span>
@@ -184,7 +216,7 @@ export default function CotizacionesPage() {
 
           {/* Mobile: cards -- el kit no cubre mobile, se mantiene el patrón ya usado en el resto de la app */}
           <div className="divide-y divide-hairline md:hidden">
-            {paginadas.map(cot => (
+            {cotizaciones.map(cot => (
               <Link key={cot.id} href={`/cotizaciones/${cot.id}`} className="block p-4 transition-colors hover:bg-row">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <span className="sn-display truncate text-content text-body" style={{ letterSpacing: '0.06em' }}>{cot.id}</span>
@@ -197,7 +229,7 @@ export default function CotizacionesPage() {
                     Complementaria de <span className="font-mono font-bold">{cot.es_complementaria_de}</span>
                   </p>
                 )}
-                {(!cot.items || cot.items.length === 0) && (
+                {!cot.itemsCount && (
                   <p className="mb-2 flex items-center gap-1 break-words text-xs text-cancelled-fg">
                     <Icon name="warning" size={13} /> Sin items (llenar manualmente)
                   </p>
@@ -211,10 +243,10 @@ export default function CotizacionesPage() {
           </div>
 
           <TableFooter
-            shown={paginadas.length}
-            total={filtradas.length}
+            shown={cotizaciones.length}
+            total={totalRows}
             unit="cotizaciones"
-            page={paginaActual}
+            page={pagina}
             pageCount={pageCount}
             onPageChange={setPagina}
           />

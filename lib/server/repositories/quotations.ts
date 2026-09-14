@@ -13,6 +13,30 @@ export async function getCotizaciones() {
   return data as Cotizacion[]
 }
 
+export interface BuscarCotizacionesResult {
+  rows: (Cotizacion & { items_count: number })[]
+  total_rows: number
+  counts_by_estado: Record<string, number>
+}
+
+/**
+ * EF-3 3B-4: busqueda/paginacion/conteos server-side via RPC unica
+ * (db/migrations/20260914_buscar_cotizaciones.sql) -- reemplaza el
+ * filtrado/paginado en JS sobre getCotizaciones()/fetchQuotationsList()
+ * sin limite. Las filas devueltas son resumen (sin `items`); el detalle
+ * completo sigue viniendo de getCotizacionById().
+ */
+export async function buscarCotizaciones(search: string | null, estado: string | null, page: number, pageSize: number) {
+  const { data, error } = await supabaseAdmin.rpc('buscar_cotizaciones', {
+    p_search: search,
+    p_estado: estado,
+    p_page: page,
+    p_page_size: pageSize,
+  })
+  if (error) throw error
+  return data as BuscarCotizacionesResult
+}
+
 export async function getCotizacionById(id: string) {
   const { data, error } = await supabaseAdmin
     .from('cotizaciones')
