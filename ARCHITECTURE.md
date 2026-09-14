@@ -351,3 +351,18 @@ Trampas reales, no teóricas. Cada una costó un bug:
   nuevo que llame `removeChannel()` directamente debe revisar el status
   devuelto, nunca asumir que "la promesa resolvió" significa "el canal ya no
   existe" (EF-2 1A-1, expuesto por auditoría del PR #31).
+- **`GET /api/productos` (carga completa sin `q`, usada por
+  `useQuotationForm` para el autofill client-side) tiene `.limit(2000)`
+  explícito — antes no tenía ninguno y dependía en silencio del tope por
+  defecto de PostgREST (1000 filas).** Costó el mismo bug dos veces
+  (Fase 8.7.2 y PR #48, EF-3 3D-0): fixtures de `tests/e2e/live/` sin
+  cleanup completo acumularon >1000 filas en `serenata-erp-test`, y el
+  producto recién creado por un test quedaba fuera de la respuesta según
+  orden alfabético, sin error ni log. `cleanupOrphanedTestProductos()`
+  (`tests/e2e/utils/live-cleanup.ts`) borra la tabla completa en cada
+  `beforeAll` relevante (seguro por `workers:1`/`fullyParallel:false` en
+  `playwright.config.ts` — ningún spec corre en paralelo) en vez de filtrar
+  por antigüedad. El `.limit(2000)` es un tope explícito, no paginación
+  real: un catálogo de producción que algún día lo supere (hoy 40 filas)
+  volvería a perder productos del autofill en silencio — sigue siendo el
+  patrón "traer todo el catálogo" del Frente A del roadmap, sin resolver.
