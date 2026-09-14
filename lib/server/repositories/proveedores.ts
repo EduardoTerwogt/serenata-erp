@@ -1,15 +1,5 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import {
-  Proveedor,
-  TipoDocumentoProveedor,
-  EstadoValidacionDocumento,
-} from '@/lib/types'
-
-export interface ProveedorDocumentoResumenRow {
-  proveedor_id: string
-  tipo: TipoDocumentoProveedor
-  estado_validacion: EstadoValidacionDocumento
-}
+import { Proveedor } from '@/lib/types'
 
 // EF-3 3B-6: volumen real 10, objetivo de capacidad 1,000 (CLAUDE.md), justo
 // en el borde del cap real de PostgREST (max_rows=1000, verificado en
@@ -110,14 +100,6 @@ export async function updateProveedor(id: string, updates: Partial<Proveedor>) {
 // documentos (sin filtrar por proveedor) para que la agregación (completa/
 // incompleta/con errores) se calcule en JS, mismo criterio que el resto del
 // repo para resúmenes ("no vistas SQL nuevas").
-export async function getAllProveedorDocumentos(): Promise<ProveedorDocumentoResumenRow[]> {
-  const { data, error } = await supabaseAdmin
-    .from('proveedor_documentos')
-    .select('proveedor_id, tipo, estado_validacion')
-  if (error) throw error
-  return data as ProveedorDocumentoResumenRow[]
-}
-
 export async function findOrCreateProveedorByNombre(nombre: string): Promise<Proveedor> {
   const nombreLimpio = nombre.trim()
   const { data: existente, error: buscarError } = await supabaseAdmin
