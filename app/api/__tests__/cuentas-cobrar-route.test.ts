@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   buscarCuentasCobrarMock: vi.fn(),
   updateCuentaCobrarMock: vi.fn(),
-  triggerSheetsSyncMock: vi.fn(),
 }))
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
@@ -12,7 +11,6 @@ vi.mock('@/lib/db', () => ({
   buscarCuentasCobrar: mocks.buscarCuentasCobrarMock,
   updateCuentaCobrar: mocks.updateCuentaCobrarMock,
 }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 
 import { GET } from '../cuentas-cobrar/route'
 

@@ -21,8 +21,6 @@ vi.mock('@/lib/db', () => ({
   getProveedores: mocks.getProveedoresMock,
   createProveedor: mocks.createProveedorMock,
 }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: vi.fn() }))
-
 import { GET, POST } from '../proveedores/route'
 
 describe('GET /api/proveedores', () => {

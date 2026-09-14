@@ -2,7 +2,6 @@ import { requireSection } from '@/lib/api-auth'
 import { getCuentaCobrarById, createDocumentoCuentaCobrar } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -69,7 +68,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       archivo_size: complementoPdfFile.size,
     })
 
-    triggerSheetsSync('cuentas_cobrar')
 
     return Response.json({
       success: true,

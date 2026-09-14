@@ -1,7 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { asignarTipoProyecto, TipoYaAsignadoError } from '@/lib/server/projects/tipo-assignment'
 import { ProyectoAsignarTipoSchema, validate } from '@/lib/validation/schemas'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('proyectos')
@@ -16,7 +15,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     const proyecto = await asignarTipoProyecto(id, validation.data.tipo_proyecto_id)
-    triggerSheetsSync('proyectos')
     return Response.json(proyecto)
   } catch (error) {
     if (error instanceof TipoYaAsignadoError) {

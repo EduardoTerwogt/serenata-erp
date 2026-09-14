@@ -1,7 +1,6 @@
 import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { Cotizacion } from '@/lib/types'
@@ -37,7 +36,6 @@ export async function POST(
   }
 
   const emitida = data as Cotizacion
-  triggerSheetsSync('cotizaciones')
   // EF-2 1D-1: en after() -- fire-and-forget puede perderse si la función
   // serverless termina antes de que la promesa resuelva.
   after(async () => {

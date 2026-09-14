@@ -2,7 +2,6 @@ import { requireSection } from '@/lib/api-auth'
 import { createDocumentoCuentaPagar, getCuentaPagarById, getProyectoById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { withIdempotency, computePayloadHash } from '@/lib/server/idempotency'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
@@ -89,7 +88,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
           return { status: 400, body: { error: rpcError.message } }
         }
 
-        triggerSheetsSync('cuentas_pagar')
 
         return {
           status: 200,

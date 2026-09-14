@@ -1,6 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
 import { getProveedorById, updateProveedor } from '@/lib/db'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { validate, ProveedorUpdateSchema } from '@/lib/validation/schemas'
 
 export async function GET(
@@ -33,7 +32,6 @@ export async function PUT(
     const validation = validate(ProveedorUpdateSchema, body)
     if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 })
     const proveedor = await updateProveedor(id, validation.data)
-    triggerSheetsSync('proveedores')
     return Response.json(proveedor)
   } catch (error) {
     console.error(error)

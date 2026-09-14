@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   deleteItemCotizacionMock: vi.fn(async () => undefined),
   recalculateQuotationHeaderMock: vi.fn(),
   runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
-  triggerSheetsSyncMock: vi.fn(),
   rpcMock: vi.fn(),
   afterMock: vi.fn(),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
@@ -31,7 +30,6 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
   recalculateQuotationHeader: mocks.recalculateQuotationHeaderMock,
   runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
 }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('@/lib/server/idempotency', () => ({ withIdempotency: mocks.withIdempotencyMock }))
 vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
@@ -157,11 +155,10 @@ describe('PATCH /api/cotizaciones/[id]/items/[itemId]', () => {
     expect(mocks.recalculateQuotationHeaderMock).not.toHaveBeenCalled()
   })
 
-  it('recalcula el encabezado, sincroniza a Sheets y devuelve la partida', async () => {
+  it('recalcula el encabezado y devuelve la partida', async () => {
     const res = await PATCH(req({ descripcion: 'Cámara escrita por A' }), { params })
 
     expect(mocks.recalculateQuotationHeaderMock).toHaveBeenCalledWith('SH001')
-    expect(mocks.triggerSheetsSyncMock).toHaveBeenCalledWith('cotizaciones', 'items_cotizacion')
     // EF-2 1D-1: el broadcast se sumó como un segundo after() -- antes
     // solo estaba el de autosaves no críticos.
     expect(mocks.afterMock).toHaveBeenCalledTimes(2)

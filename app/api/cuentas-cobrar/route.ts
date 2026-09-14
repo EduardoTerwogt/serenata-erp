@@ -1,6 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
 import { buscarCuentasCobrar, updateCuentaCobrar } from '@/lib/db'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 // EF-3 3B-2: busqueda/paginacion/totales server-side via RPC unica
 // buscar_cuentas_cobrar (db/migrations/20260914_buscar_cuentas_cobrar.sql),
@@ -39,7 +38,6 @@ export async function PUT(request: Request) {
     )
 
     const cuenta = await updateCuentaCobrar(id, sanitizedUpdates)
-    triggerSheetsSync('cuentas_cobrar')
     return Response.json(cuenta)
   } catch (error) {
     console.error(error)

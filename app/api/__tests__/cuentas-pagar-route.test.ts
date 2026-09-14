@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(),
   buscarCuentasPagarMock: vi.fn(),
   updateCuentaPagarMock: vi.fn(),
-  triggerSheetsSyncMock: vi.fn(),
 }))
 
 vi.mock('@/lib/api-auth', () => ({
@@ -14,10 +13,6 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/db', () => ({
   buscarCuentasPagar: mocks.buscarCuentasPagarMock,
   updateCuentaPagar: mocks.updateCuentaPagarMock,
-}))
-
-vi.mock('@/lib/integrations/sheets/trigger', () => ({
-  triggerSheetsSync: mocks.triggerSheetsSyncMock,
 }))
 
 import { GET, PUT } from '../cuentas-pagar/route'
@@ -39,7 +34,6 @@ beforeEach(() => {
     pendientes_count: 1,
   })
   mocks.updateCuentaPagarMock.mockReset().mockResolvedValue({ id: 'cuenta-1', notas: 'ok' })
-  mocks.triggerSheetsSyncMock.mockReset()
 })
 
 // EF-3 3B-3: GET delega busqueda/paginacion/totales a la RPC unica
