@@ -14,6 +14,9 @@ interface Props {
   cuentas: CuentaListItem[]
   total: number
   onSelect: (cuenta: CuentaListItem) => void
+  page?: number
+  pageCount?: number
+  onPageChange?: (page: number) => void
 }
 
 function fmt(n: number) {
@@ -25,7 +28,7 @@ function fmt(n: number) {
 const COL_WIDTHS_COBRAR = ['9%', '17%', '23%', '20%', '17%', '14%']
 const COL_WIDTHS_PAGAR = ['9%', '21%', '16%', '21%', '20%', '13%']
 
-export function CuentasTable({ tab, cuentas, total, onSelect }: Props) {
+export function CuentasTable({ tab, cuentas, total, onSelect, page, pageCount, onPageChange }: Props) {
   const columns = tab === 'cobrar'
     ? ['Folio', 'Cliente', 'Proyecto', 'Pagado / Total', 'Vencimiento', 'Estado']
     : ['Folio', 'Proyecto', 'Responsable', 'Descripción', 'Pagado / Total', 'Estado']
@@ -135,7 +138,7 @@ export function CuentasTable({ tab, cuentas, total, onSelect }: Props) {
         })}
       </div>
 
-      <TableFooter shown={cuentas.length} total={total} unit="cuentas" />
+      <TableFooter shown={cuentas.length} total={total} unit="cuentas" page={page} pageCount={pageCount} onPageChange={onPageChange} />
     </div>
   )
 }

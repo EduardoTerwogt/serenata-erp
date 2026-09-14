@@ -1,21 +1,23 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentasCobrar, updateCuentaCobrar } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { buscarCuentasCobrar, updateCuentaCobrar } from '@/lib/db'
 import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
-// EF-3 3B-1: el recalculo de estados vencidos vive en la RPC
-// sync_estados_cuentas_cobrar_vencidas() (db/migrations/20260914_sync_estados_cuentas_cobrar_vencidas.sql)
-// -- una sola implementacion en SQL, ya no duplicada entre esta ruta y
-// app/api/cuentas-cobrar/alertas/route.ts.
-export async function GET() {
+// EF-3 3B-2: busqueda/paginacion/totales server-side via RPC unica
+// buscar_cuentas_cobrar (db/migrations/20260914_buscar_cuentas_cobrar.sql),
+// que ya llama sync_estados_cuentas_cobrar_vencidas() (3B-1) internamente
+// -- esta ruta ya no la invoca por su cuenta (evitaba un UPDATE completo
+// de la tabla ejecutado de mas en cada GET).
+export async function GET(request: Request) {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
 
   try {
-    const { error: syncError } = await supabaseAdmin.rpc('sync_estados_cuentas_cobrar_vencidas')
-    if (syncError) throw syncError
-    const cuentas = await getCuentasCobrar()
-    return Response.json(cuentas)
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search')
+    const page = Number(searchParams.get('page')) || 1
+    const pageSize = Number(searchParams.get('pageSize')) || 50
+    const result = await buscarCuentasCobrar(search, page, pageSize)
+    return Response.json(result)
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error obteniendo cuentas por cobrar' }, { status: 500 })
