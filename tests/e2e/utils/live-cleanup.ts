@@ -121,23 +121,22 @@ export async function cleanupLiveProducto(descripcion: string) {
  * escala, etc.) precisamente para no chocar entre sí -- cada una nunca
  * colisiona con `onConflict`, así que nunca se actualiza una fila existente:
  * siempre crea una nueva, permanente, que ningún cleanup por descripción
- * exacta cubre. Confirmado en vivo: 1241 filas acumuladas en
- * `serenata-erp-test` (creciendo ~180/día), todas de corridas de test según
- * su `created_at` -- ninguna dato de catálogo real, porque este proyecto es
- * exclusivamente de CI. Al pasar de 1000 activos, `GET /api/productos?q=`
- * (sin límite explícito cuando `q` está vacío) empezó a truncarse en el
- * `db-max-rows` default de PostgREST, dejando fuera alfabéticamente al
- * producto que el test de autofill necesitaba -- la fila causa real del
- * "el dropdown nunca aparece" (Fase 8.7.2), no timing ni caché.
+ * exacta cubre.
  *
- * Cualquier producto de más de un día es, en este proyecto, basura de una
- * corrida de CI ya terminada -- nada legítimo necesita sobrevivir tanto.
- * Se corre en el mismo `beforeAll` que ya limpia reservas de folio huérfanas,
- * para que la tabla nunca vuelva a acercarse al límite de PostgREST.
+ * Este cleanup filtraba originalmente por `created_at` < 24h, pero
+ * `workers: 1`/`fullyParallel: false` (`playwright.config.ts`) garantiza que
+ * ningún spec corre en paralelo con otro -- así que nada creado por una
+ * corrida de CI anterior sigue "vivo" cuando el siguiente `beforeAll`
+ * arranca, y el filtro de 24h solo servía para dejar sobrevivir la basura de
+ * corridas *del mismo día*. Con varios reruns de `live` en un solo día (o
+ * varios PRs el mismo día) eso bastó para volver a superar el tope por
+ * defecto de PostgREST (1000 filas) en `GET /api/productos?q=` -- el mismo
+ * síntoma de Fase 8.7.2, repetido en PR #48. Este proyecto (`serenata-erp-test`)
+ * es exclusivamente de CI: nada en `productos` necesita sobrevivir a un
+ * `beforeAll` posterior, así que se borra todo, sin filtro de antigüedad.
  */
 export async function cleanupOrphanedTestProductos() {
   const supabase = getLiveSupabaseAdmin()
-  const unDiaAtras = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const { error } = await supabase.from('productos').delete().lt('created_at', unDiaAtras)
+  const { error } = await supabase.from('productos').delete().not('id', 'is', null)
   if (error) throw error
 }
