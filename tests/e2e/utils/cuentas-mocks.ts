@@ -413,7 +413,11 @@ export async function mockCuentasApis(page: Page) {
     })
   })
 
-  await page.route('**/api/cuentas-pagar/ordenes-historial', async (route) => {
+  // EF-3 3B-11: GET /api/cuentas-pagar/ordenes-historial ahora siempre
+  // lleva querystring (?page=&pageSize=) -- mismo RegExp que
+  // cuentas-cobrar/cuentas-pagar (3B-2/3B-3) para matchear con o sin
+  // query string.
+  await page.route(/\/api\/cuentas-pagar\/ordenes-historial(\?.*)?$/, async (route) => {
     await fulfillJson(route, {
       total: ordenesHistorial.length,
       ordenes: ordenesHistorial,

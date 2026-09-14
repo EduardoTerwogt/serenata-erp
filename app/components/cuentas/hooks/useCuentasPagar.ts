@@ -7,6 +7,7 @@ import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
 import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
 
 const PAGE_SIZE = 50
+export const HISTORIAL_PAGE_SIZE = 20
 const SEARCH_DEBOUNCE_MS = 300
 
 interface CuentaPagarDetalle {
@@ -205,8 +206,11 @@ export function useCuentasPagar() {
     return data
   }, [recargar])
 
-  const cargarHistorialOrdenes = useCallback(async (): Promise<{ total: number; ordenes: OrdenPago[] }> => {
-    return getJson('/api/cuentas-pagar/ordenes-historial', 'Error al cargar historial')
+  // EF-3 3B-11: la RPC buscar_ordenes_pago pagina el historial -- el
+  // caller (useCuentasPage.ts) pasa la página actual, mismo pageSize fijo
+  // que el resto de listas paginadas del módulo.
+  const cargarHistorialOrdenes = useCallback(async (page: number): Promise<{ total: number; ordenes: OrdenPago[] }> => {
+    return getJson(`/api/cuentas-pagar/ordenes-historial?page=${page}&pageSize=${HISTORIAL_PAGE_SIZE}`, 'Error al cargar historial')
   }, [])
 
   // Fase 5.3 Bloque 0 punto 2 / Bloque 3: reasignar responsable desde Cuentas
