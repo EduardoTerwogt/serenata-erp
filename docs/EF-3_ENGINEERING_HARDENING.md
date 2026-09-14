@@ -5286,7 +5286,7 @@ contenido multi-párrafo repetido).
 
 | ID | Estado | Dependencias | Rama | PR | Commit SHA | Commit de merge | Próxima acción |
 |---|---|---|---|---|---|---|---|
-| 3A-0 | En curso | ninguna | N/A | N/A | (pendiente de commit de sincronización) | N/A | Commit de sincronización (llenar Commit SHA), luego arrancar 3A-0b |
+| 3A-0 | Cerrado | ninguna | N/A | N/A | `09ad7fc` | N/A | Arrancar 3A-0b |
 | 3A-0b | Pendiente | 3A-0 | — | — | — | — | Arrancar tras cerrar 3A-0 |
 | 3A-1 | Pendiente | 3A-0b | — | — | — | — | Arrancar tras cerrar 3A-0b |
 | 3A-2 | Pendiente | 3A-1 | — | — | — | — | — |
