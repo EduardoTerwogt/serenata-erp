@@ -9,7 +9,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ fromMock: vi.fn() }))
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: vi.fn(async () => ({ response: null })) }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: vi.fn() }))
 vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { from: mocks.fromMock } }))
 
 import { GET, POST } from '../productos/route'

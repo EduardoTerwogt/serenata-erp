@@ -1,6 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
 import { buscarCotizaciones, getCotizacionById } from '@/lib/db'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { formatSupabaseError } from '@/lib/quotations/rpc-utils'
 import {
   buildCreateCotizacionPayload,
@@ -82,7 +81,6 @@ export async function POST(request: Request) {
     }
     await consumeReservedQuotationFolio(folio, reservationToken || null)
     await runQuotationNonCriticalAutosaves(cotizacionData.cliente, cotizacionData.proyecto, inputItems, 'POST /api/cotizaciones')
-    triggerSheetsSync('cotizaciones', 'items_cotizacion', 'clientes', 'productos')
 
     return Response.json(await getCotizacionById(folio), { status: 201 })
   } catch (error) {

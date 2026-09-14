@@ -1,6 +1,5 @@
 import { requireAnySection, requireSection } from '@/lib/api-auth'
 import { getProveedores, createProveedor } from '@/lib/db'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { validate, ProveedorCreateSchema } from '@/lib/validation/schemas'
 
 export async function GET() {
@@ -26,7 +25,6 @@ export async function POST(request: Request) {
     if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 })
     const proveedor = await createProveedor({ ...validation.data, activo: true })
 
-    triggerSheetsSync('proveedores')
     return Response.json(proveedor, { status: 201 })
   } catch (error) {
     console.error(error)

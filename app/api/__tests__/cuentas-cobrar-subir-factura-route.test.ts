@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
   calcularDeadlineMock: vi.fn(),
   uploadFileToDriveMock: vi.fn(),
   getGoogleEnvMock: vi.fn(),
-  triggerSheetsSyncMock: vi.fn(),
 }))
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
@@ -38,7 +37,6 @@ vi.mock('@/lib/server/xml/factura-parser', () => ({
 }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 
 import { POST } from '../cuentas-cobrar/[id]/subir-factura/route'
 

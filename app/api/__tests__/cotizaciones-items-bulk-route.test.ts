@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   recalculateQuotationHeaderMock: vi.fn(),
   runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
-  triggerSheetsSyncMock: vi.fn(),
   afterMock: vi.fn(),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
   rpcMock: vi.fn(),
@@ -24,7 +23,6 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
   recalculateQuotationHeader: mocks.recalculateQuotationHeaderMock,
   runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
 }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('@/lib/server/idempotency', () => ({
   withIdempotency: mocks.withIdempotencyMock,
@@ -181,12 +179,11 @@ describe('POST /api/cotizaciones/[id]/items/bulk', () => {
     )
   })
 
-  it('éxito: recalcula encabezado, sincroniza Sheets, emite item_confirmed y responde 200 con la cotización', async () => {
+  it('éxito: recalcula encabezado, emite item_confirmed y responde 200 con la cotización', async () => {
     const res = await POST(req({ items: [item(), item({ id: ITEM_ID_2, descripcion: 'Luz' })], operation_id: OP_ID }), { params })
 
     expect(res.status).toBe(200)
     expect(mocks.recalculateQuotationHeaderMock).toHaveBeenCalledWith('SH001')
-    expect(mocks.triggerSheetsSyncMock).toHaveBeenCalledWith('cotizaciones', 'items_cotizacion')
     await flushAfter()
     expect(mocks.sendRealtimeBroadcastMock).toHaveBeenCalledWith([{
       topic: 'cotizacion:SH001',

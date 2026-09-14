@@ -10,7 +10,6 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCotizacionByIdMock: vi.fn(),
-  triggerSheetsSyncMock: vi.fn(),
   rpcMock: vi.fn(),
   afterMock: vi.fn(),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
@@ -18,7 +17,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({ getCotizacionById: mocks.getCotizacionByIdMock }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 vi.mock('next/server', () => ({ after: mocks.afterMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
@@ -44,11 +42,10 @@ beforeEach(() => {
 })
 
 describe('POST /api/cotizaciones/[id]/emitir', () => {
-  it('emite la cotización, sincroniza Sheets y agenda+ejecuta general_confirmed', async () => {
+  it('emite la cotización y agenda+ejecuta general_confirmed', async () => {
     const res = await POST(req(), { params })
 
     expect(res.status).toBe(200)
-    expect(mocks.triggerSheetsSyncMock).toHaveBeenCalledWith('cotizaciones')
     expect(mocks.afterMock).toHaveBeenCalledTimes(1)
     expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
 

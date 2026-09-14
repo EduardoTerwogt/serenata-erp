@@ -3,7 +3,6 @@ import { getCuentaCobrarById, updateCuentaCobrar, createDocumentoCuentaCobrar, g
 import { parseFacturaXML, validarMontoFactura, validarFacturaClienteXML, calcularDeadline } from '@/lib/server/xml/factura-parser'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 
 const ROUTE = 'POST /api/cuentas-cobrar/[id]/subir-factura'
@@ -158,7 +157,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     })
 
     // Trigger sincronización con Sheets
-    triggerSheetsSync('cuentas_cobrar')
 
     return Response.json({
       success: true,

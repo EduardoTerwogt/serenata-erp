@@ -4,7 +4,6 @@ import { requireSection } from '@/lib/api-auth'
 import { createOrdenPago, getCuentasPagarPendientesEventosRealizados, updateCuentasPagarEnOrden } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { buildOrdenPagoPreview } from '@/lib/server/ordenes-pago/build'
 import { generateOrdenPagoPdf } from '@/lib/server/pdf/orden-pago-pdf'
 
@@ -95,7 +94,6 @@ export async function POST() {
 
     await updateCuentasPagarEnOrden(preview.cuentas_ids, ordenPago.id)
 
-    triggerSheetsSync('cuentas_pagar')
 
     return Response.json({
       success: true,

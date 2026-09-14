@@ -2,7 +2,6 @@ import { requireAnySection } from '@/lib/api-auth'
 import { driveService } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function POST(req: Request) {
   // ── 1. Auth ──────────────────────────────────────────────────────────────
@@ -86,7 +85,6 @@ export async function POST(req: Request) {
       )
     }
 
-    triggerSheetsSync('cotizaciones')
     return Response.json(result)
 
   } catch (err: unknown) {

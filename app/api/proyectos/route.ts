@@ -1,6 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
 import { getProyectos, createProyecto } from '@/lib/db'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 
 export async function GET() {
   const authResult = await requireSection('proyectos')
@@ -22,7 +21,6 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const proyecto = await createProyecto(body)
-    triggerSheetsSync('proyectos')
     return Response.json(proyecto, { status: 201 })
   } catch (error) {
     console.error(error)

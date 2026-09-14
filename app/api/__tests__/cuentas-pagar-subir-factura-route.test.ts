@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   getProveedorByIdMock: vi.fn(),
   uploadFileToDriveMock: vi.fn(),
   getGoogleEnvMock: vi.fn(),
-  triggerSheetsSyncMock: vi.fn(),
   parseFacturaXMLMock: vi.fn(),
   validarFacturaFiscalProveedorMock: vi.fn(),
 }))
@@ -31,7 +30,6 @@ vi.mock('@/lib/db', () => ({
 }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/xml/factura-parser', () => ({ parseFacturaXML: mocks.parseFacturaXMLMock }))
 vi.mock('@/lib/server/validation/factura-fiscal', () => ({ validarFacturaFiscalProveedor: mocks.validarFacturaFiscalProveedorMock }))
 

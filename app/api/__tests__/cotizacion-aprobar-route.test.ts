@@ -13,10 +13,6 @@ vi.mock('@/lib/server/quotations/approval', () => ({
   approveQuotationAndFetchResult: mocks.approveQuotationAndFetchResultMock,
 }))
 
-vi.mock('@/lib/integrations/sheets/trigger', () => ({
-  triggerSheetsSync: vi.fn(),
-}))
-
 import { POST } from '../cotizaciones/[id]/aprobar/route'
 
 describe('POST /api/cotizaciones/[id]/aprobar', () => {

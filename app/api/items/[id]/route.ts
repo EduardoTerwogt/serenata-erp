@@ -1,7 +1,6 @@
 import { requireAnySection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { ItemPatchSchema, validate } from '@/lib/validation/schemas'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { createHistorialCambioResponsableItem } from '@/lib/server/repositories/historial-cambios-responsable'
 import { findOrCreateProveedorByNombre } from '@/lib/server/repositories/proveedores'
 
@@ -57,7 +56,6 @@ export async function PATCH(
     if (updateError) throw updateError
 
     if (!('responsable_id' in parsed) && !('responsable_nombre' in parsed)) {
-      triggerSheetsSync('items_cotizacion')
       return Response.json({ ok: true })
     }
 
@@ -115,7 +113,6 @@ export async function PATCH(
       }
     }
 
-    triggerSheetsSync('items_cotizacion', 'cuentas_pagar')
     return Response.json({ ok: true })
   } catch (e) {
     console.error('[PATCH /api/items/:id] Error:', e)

@@ -3,7 +3,6 @@ import { getCuentaCobrarById, getPagosComprobantesByCuenta, createDocumentoCuent
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { withIdempotency, computePayloadHash } from '@/lib/server/idempotency'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -110,7 +109,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
           return { status: 400, body: { error: rpcError.message } }
         }
 
-        triggerSheetsSync('cuentas_cobrar')
 
         return {
           status: 200,

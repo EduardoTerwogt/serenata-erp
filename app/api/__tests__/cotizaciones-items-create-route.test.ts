@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   upsertItemsMock: vi.fn(async (rows: Record<string, unknown>[]) => rows),
   recalculateQuotationHeaderMock: vi.fn(),
   runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
-  triggerSheetsSyncMock: vi.fn(),
   afterMock: vi.fn(),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
 }))
@@ -31,7 +30,6 @@ vi.mock('@/lib/server/quotations/persistence', () => ({
   recalculateQuotationHeader: mocks.recalculateQuotationHeaderMock,
   runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
 }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 // La ruta en sí no llama a supabaseAdmin (todo pasa por @/lib/db, mockeado
 // arriba) -- este mock solo evita que `vi.importActual` de arriba, al cargar

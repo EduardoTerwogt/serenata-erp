@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCotizacionByIdMock: vi.fn(),
   runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
-  triggerSheetsSyncMock: vi.fn(),
   rpcMock: vi.fn(),
   // EF-2 1D-1: general/route.ts y totales/route.ts ahora importan `after`
   // de next/server para agendar el broadcast -- sin este mock, el `after()`
@@ -18,7 +17,6 @@ vi.mock('@/lib/db', () => ({ getCotizacionById: mocks.getCotizacionByIdMock }))
 vi.mock('@/lib/server/quotations/persistence', () => ({
   runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
 }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 vi.mock('next/server', () => ({ after: mocks.afterMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))

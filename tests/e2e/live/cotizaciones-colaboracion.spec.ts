@@ -130,8 +130,8 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     // Fase 8: producto real para el conflicto autofill-vs-edición-manual (punto
     // B de la auditoría) -- necesita un producto de verdad en la tabla, no
     // mockeado. Se crea vía el POST real (no un upsert directo a Supabase) por
-    // el mismo motivo que cualquier alta real: pasa por la validación y el
-    // triggerSheetsSync de la ruta. (Histórico: hasta EF-2 1D-3,
+    // el mismo motivo que cualquier alta real: pasa por la validación de la
+    // ruta. (Histórico: hasta EF-2 1D-3,
     // GET /api/productos cacheaba 5 min en el servidor -- un insert directo
     // podía servir una lista vieja el resto del job si un test anterior ya
     // había calentado esa caché. El caché se retiró; ya no aplica, pero el

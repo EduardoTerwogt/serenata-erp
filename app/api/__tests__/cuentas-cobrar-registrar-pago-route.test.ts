@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   createDocumentoCuentaCobrarMock: vi.fn(),
   uploadFileToDriveMock: vi.fn(),
   getGoogleEnvMock: vi.fn(),
-  triggerSheetsSyncMock: vi.fn(),
   rpcMock: vi.fn(),
   withIdempotencyMock: vi.fn(
     async (
@@ -29,7 +28,6 @@ vi.mock('@/lib/db', () => ({
 }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/idempotency', () => ({
   withIdempotency: mocks.withIdempotencyMock,
   computePayloadHash: mocks.computePayloadHashMock,

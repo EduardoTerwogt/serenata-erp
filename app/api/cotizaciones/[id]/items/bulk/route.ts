@@ -1,7 +1,6 @@
 import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { withIdempotency, computePayloadHash, type IdempotentResult } from '@/lib/server/idempotency'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
@@ -132,7 +131,6 @@ export async function POST(
         }
 
         const updatedQuotation = await recalculateQuotationHeader(id)
-        triggerSheetsSync('cotizaciones', 'items_cotizacion')
         // Evento confirmado por servidor tras el commit -- una sola señal
         // para toda la alta masiva, no una por fila: el cliente reconcilia
         // leyendo la cotización completa. EF-2 1D-1: en after(), mismo

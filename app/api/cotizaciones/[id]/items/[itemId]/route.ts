@@ -2,7 +2,6 @@ import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { findOrCreateProveedorByNombre, deleteItemCotizacion, EstadoCotizacionInvalidoError } from '@/lib/db'
 import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { withIdempotency, type IdempotentResult } from '@/lib/server/idempotency'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
@@ -107,7 +106,6 @@ export async function PATCH(
     } catch (recalcError) {
       console.error('[PATCH /api/cotizaciones/:id/items/:itemId] El patch se guardó pero falló el recálculo del encabezado:', recalcError)
     }
-    triggerSheetsSync('cotizaciones', 'items_cotizacion')
     // Evento confirmado por servidor tras el commit -- payload chico (ids +
     // revision + timestamp, nunca la partida completa). EF-2 1D-1: en
     // after(), mismo motivo que el autosave de arriba.
@@ -159,7 +157,6 @@ export async function DELETE(
     await deleteItemCotizacion(id, itemId)
 
     await recalculateQuotationHeader(id)
-    triggerSheetsSync('cotizaciones', 'items_cotizacion')
     // Evento confirmado por servidor tras el commit -- la fila ya no existe,
     // así que no hay revision que mandar. EF-2 1D-1: en after().
     after(async () => {

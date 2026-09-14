@@ -33,14 +33,12 @@ const mocks = vi.hoisted(() => {
   return {
     requireSectionMock: vi.fn(async () => ({ response: null })),
     cambiarEtapaProyectoMock: vi.fn(),
-    triggerSheetsSyncMock: vi.fn(),
     ProyectoSinTipoErrorFake,
     EtapaNoPerteneceATipoErrorFake,
   }
 })
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
-vi.mock('@/lib/integrations/sheets/trigger', () => ({ triggerSheetsSync: mocks.triggerSheetsSyncMock }))
 vi.mock('@/lib/server/projects/tipo-assignment', () => ({
   cambiarEtapaProyecto: mocks.cambiarEtapaProyectoMock,
   ProyectoSinTipoError: mocks.ProyectoSinTipoErrorFake,

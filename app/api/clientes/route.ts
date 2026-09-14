@@ -1,6 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { z } from 'zod'
 
 const ClientePostSchema = z.object({
@@ -57,7 +56,6 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Error creando cliente' }, { status: 500 })
     }
 
-    triggerSheetsSync('clientes')
     return Response.json(data, { status: 201 })
   } catch (e) {
     console.error('[POST /api/clientes] Error inesperado:', e)

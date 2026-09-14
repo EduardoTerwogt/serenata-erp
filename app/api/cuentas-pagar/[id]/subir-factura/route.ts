@@ -2,7 +2,6 @@ import { requireSection } from '@/lib/api-auth'
 import { getCuentaPagarById, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
 import { RegimenFiscal } from '@/lib/types'
@@ -115,7 +114,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       cuentaActualizada = await updateCuentaPagar(id, { fecha_factura: fechaFactura } as Partial<typeof cuenta>)
     }
 
-    triggerSheetsSync('cuentas_pagar')
 
     return Response.json({
       success: true,

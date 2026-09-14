@@ -4,7 +4,6 @@ import {
   deleteItemsByCotizacion,
   getCotizacionById,
 } from '@/lib/db'
-import { triggerSheetsSync } from '@/lib/integrations/sheets/trigger'
 import { ItemCotizacion } from '@/lib/types'
 import { formatSupabaseError } from '@/lib/quotations/rpc-utils'
 import {
@@ -67,7 +66,6 @@ export async function PUT(
       await saveNotasInternas(id, parsed.notas_internas ?? null)
     }
     await runQuotationNonCriticalAutosaves(payload.cliente, payload.proyecto, inputItems ?? [], 'PUT /api/cotizaciones/:id')
-    triggerSheetsSync('cotizaciones', 'items_cotizacion')
 
     return Response.json(await getCotizacionById(id))
   } catch (error) {
@@ -94,7 +92,6 @@ export async function DELETE(
     }
     await deleteItemsByCotizacion(id)
     await deleteCotizacion(id)
-    triggerSheetsSync('cotizaciones', 'items_cotizacion')
     return Response.json({ ok: true })
   } catch (error) {
     console.error(error)
