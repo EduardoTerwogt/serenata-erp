@@ -5282,54 +5282,56 @@ de merge" siempre en `N/A` y usa "Commit SHA" en su lugar. "Criterio de
 aceptación" y "Evidencia" de cada fila son el punto 11 y 15 de la
 especificación de ese bloque en la Sección 6 de este mismo documento —
 referenciados ahí, no duplicados aquí (evita una tabla de 40 filas con
-contenido multi-párrafo repetido).
+contenido multi-párrafo repetido). "Nota" es el campo "Decisión o bloqueo
+pendiente" del punto 3A-0 — vacío salvo un `Diferido con aprobación`, que
+exige aquí la nota de aprobación explícita no vacía (regla de 3 estados de
+`--require-final`, ver 3A-0b).
 
-| ID | Estado | Dependencias | Rama | PR | Commit SHA | Commit de merge | Próxima acción |
-|---|---|---|---|---|---|---|---|
-| 3A-0 | Cerrado | ninguna | N/A | N/A | `09ad7fc` | N/A | Arrancar 3A-0b |
-| 3A-0b | Pendiente | 3A-0 | — | — | — | — | Arrancar tras cerrar 3A-0 |
-| 3A-1 | Pendiente | 3A-0b | — | — | — | — | Arrancar tras cerrar 3A-0b |
-| 3A-2 | Pendiente | 3A-1 | — | — | — | — | — |
-| 3A-3 | Pendiente | 3A-1 | — | — | — | — | — |
-| 3A-4 | Pendiente | 3A-1 | — | — | — | — | — |
-| 3A-5 | Pendiente | 3A-1, 3A-2, 3A-3, 3A-4 | — | — | — | — | — |
-| 3A-6 | Pendiente | 3A-1..3A-5 | N/A | N/A | — | N/A | — |
-| 3B-1 | Pendiente | ninguna | — | — | — | — | — |
-| 3B-2 | Pendiente | 3B-1 | — | — | — | — | — |
-| 3B-3 | Pendiente | ninguna | — | — | — | — | — |
-| 3B-4 | Pendiente | ninguna | — | — | — | — | — |
-| 3B-5 | Pendiente | ninguna | — | — | — | — | — |
-| 3B-6 | Pendiente | ninguna | — | — | — | — | — |
-| 3B-7 | Pendiente | 3A-1 | — | — | — | — | — |
-| 3B-8 | Pendiente | ninguna | — | — | — | — | — |
-| 3B-9 | Pendiente | ninguna | — | — | — | — | — |
-| 3B-10 | Pendiente | 3B-1 | — | — | — | — | — |
-| 3B-11 | Pendiente | ninguna | — | — | — | — | — |
-| 3B-12 | Pendiente | ninguna | — | — | — | — | — |
-| 3C-1 | Pendiente | ninguna | — | — | — | — | — |
-| 3C-2 | Pendiente | 3C-1 | — | — | — | — | — |
-| 3C-3 | Pendiente | 3C-2 | — | — | — | — | — |
-| 3C-4 | Pendiente | 3C-3 | — | — | — | — | — |
-| 3D-0 | Pendiente | ninguna | — | — | — | — | — |
-| 3D-1 | Pendiente | 3D-0 | — | — | — | — | — |
-| 3D-2 | Pendiente | 3D-1 | — | — | — | — | — |
-| 3D-3 | Pendiente | 3D-2 | — | — | — | — | — |
-| 3D-4 | Pendiente | 3D-3 | — | — | — | — | — |
-| 3D-5 | Pendiente | 3D-0, 3D-1, 3D-2, 3D-3, 3D-4 | — | — | — | — | — |
-| 3D-6 | Pendiente | 3D-0, 3D-2, 3D-3, 3D-4, 3D-5 | — | — | — | — | — |
-| 3D-7 | Pendiente | 3D-0, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6 | — | — | — | — | — |
-| 3D-8 | Pendiente | 3D-0..3D-7 mergeados | N/A | N/A | — | N/A | — |
-| 3D-9 | Pendiente | ninguna | — | — | — | — | — |
-| 3D-10 | Pendiente | ninguna | — | — | — | — | — |
-| 3D-11 | Pendiente | ninguna | — | — | — | — | — |
-| 3D-12 | Pendiente | ninguna | — | — | — | — | — |
-| 3E-1 | Pendiente | EF-3B+3C+3D completos | N/A | N/A | — | N/A | — |
-| 3E-2 | Pendiente | 3E-1 | N/A | N/A | — | N/A | — |
-| 3E-3 | Pendiente | 3E-2 | N/A | N/A | — | N/A | — |
+| ID | Estado | Dependencias | Rama | PR | Commit SHA | Commit de merge | Nota | Próxima acción |
+|---|---|---|---|---|---|---|---|---|
+| 3A-0 | Cerrado | ninguna | N/A | N/A | `09ad7fc` | N/A | | Arrancar 3A-0b |
+| 3A-0b | En curso | 3A-0 | `claude/hopeful-allen-jql9xp` | (PR pendiente de abrir) | — | — | | Abrir PR en borrador |
+| 3A-1 | Pendiente | 3A-0b | — | — | — | — | | Arrancar tras cerrar 3A-0b |
+| 3A-2 | Pendiente | 3A-1 | — | — | — | — | | — |
+| 3A-3 | Pendiente | 3A-1 | — | — | — | — | | — |
+| 3A-4 | Pendiente | 3A-1 | — | — | — | — | | — |
+| 3A-5 | Pendiente | 3A-1, 3A-2, 3A-3, 3A-4 | — | — | — | — | | — |
+| 3A-6 | Pendiente | 3A-1, 3A-2, 3A-3, 3A-4, 3A-5 | N/A | N/A | — | N/A | | — |
+| 3B-1 | Pendiente | ninguna | — | — | — | — | | — |
+| 3B-2 | Pendiente | 3B-1 | — | — | — | — | | — |
+| 3B-3 | Pendiente | ninguna | — | — | — | — | | — |
+| 3B-4 | Pendiente | ninguna | — | — | — | — | | — |
+| 3B-5 | Pendiente | ninguna | — | — | — | — | | — |
+| 3B-6 | Pendiente | ninguna | — | — | — | — | | — |
+| 3B-7 | Pendiente | 3A-1 | — | — | — | — | | — |
+| 3B-8 | Pendiente | ninguna | — | — | — | — | | — |
+| 3B-9 | Pendiente | ninguna | — | — | — | — | | — |
+| 3B-10 | Pendiente | 3B-1 | — | — | — | — | | — |
+| 3B-11 | Pendiente | ninguna | — | — | — | — | | — |
+| 3B-12 | Pendiente | ninguna | — | — | — | — | | — |
+| 3C-1 | Pendiente | ninguna | — | — | — | — | | — |
+| 3C-2 | Pendiente | 3C-1 | — | — | — | — | | — |
+| 3C-3 | Pendiente | 3C-2 | — | — | — | — | | — |
+| 3C-4 | Pendiente | 3C-3 | — | — | — | — | | — |
+| 3D-0 | Pendiente | ninguna | — | — | — | — | | — |
+| 3D-1 | Pendiente | 3D-0 | — | — | — | — | | — |
+| 3D-2 | Pendiente | 3D-1 | — | — | — | — | | — |
+| 3D-3 | Pendiente | 3D-2 | — | — | — | — | | — |
+| 3D-4 | Pendiente | 3D-3 | — | — | — | — | | — |
+| 3D-5 | Pendiente | 3D-0, 3D-1, 3D-2, 3D-3, 3D-4 | — | — | — | — | | — |
+| 3D-6 | Pendiente | 3D-0, 3D-2, 3D-3, 3D-4, 3D-5 | — | — | — | — | | — |
+| 3D-7 | Pendiente | 3D-0, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6 | — | — | — | — | | — |
+| 3D-8 | Pendiente | 3D-0, 3D-1, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6, 3D-7 | N/A | N/A | — | N/A | | — |
+| 3D-9 | Pendiente | ninguna | — | — | — | — | | — |
+| 3D-10 | Pendiente | ninguna | — | — | — | — | | — |
+| 3D-11 | Pendiente | ninguna | — | — | — | — | | — |
+| 3D-12 | Pendiente | ninguna | — | — | — | — | | — |
+| 3E-1 | Pendiente | 3B-1, 3B-2, 3B-3, 3B-4, 3B-5, 3B-6, 3B-7, 3B-8, 3B-9, 3B-10, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3C-4, 3D-0, 3D-1, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12 | N/A | N/A | — | N/A | | — |
+| 3E-2 | Pendiente | 3E-1 | N/A | N/A | — | N/A | | — |
+| 3E-3 | Pendiente | 3E-2 | N/A | N/A | — | N/A | | — |
 
 **Filas condicionales** (`3B-7b`/`3C-4b`/`3D-0b`) — no existen todavía;
 se agregan solo si su gate/medición/test respectivo (3B-7/3C-4/3D-0) las
 activa, siguiendo la regla de proceso de 3A-0b (primero PR que actualiza
 matriz+grafo+validador, después la fila).
-
 
