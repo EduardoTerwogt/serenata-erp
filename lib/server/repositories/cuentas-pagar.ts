@@ -357,21 +357,16 @@ export async function getOrdenesPago() {
   return data as OrdenPago[]
 }
 
+// EF-3 3B-8: el filtro fecha_entrega<=hoy se movió a SQL (RPC
+// cuentas_pagar_pendientes_eventos_realizados,
+// db/migrations/20260914_cuentas_pagar_pendientes_eventos_realizados.sql)
+// -- antes traía TODAS las PENDIENTE con joins y filtraba en JS. La RPC
+// devuelve el mismo shape aplanado que CuentaPagarConJoins (cp.* +
+// cotizaciones/proyectos anidados vía jsonb_build_object), verificado en
+// vivo contra serenata-erp-test con paridad exacta contra el filtro
+// anterior.
 export async function getCuentasPagarPendientesEventosRealizados() {
-  const hoy = new Date().toISOString().split('T')[0]
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .select(`
-      *,
-      cotizaciones(fecha_entrega, proyecto),
-      proyectos(proyecto)
-    `)
-    .eq('estado', 'PENDIENTE')
-    .order('responsable_nombre', { ascending: true })
-    .order('cotizacion_id', { ascending: true })
+  const { data, error } = await supabaseAdmin.rpc('cuentas_pagar_pendientes_eventos_realizados')
   if (error) throw error
-  return (data as CuentaPagarConJoins[]).filter((cuenta) => {
-    const fechaEntrega = cuenta.cotizaciones?.fecha_entrega
-    return fechaEntrega && fechaEntrega <= hoy
-  })
+  return data as CuentaPagarConJoins[]
 }
