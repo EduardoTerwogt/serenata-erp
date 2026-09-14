@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-14T17:43:13.041Z",
-  "count": 71,
+  "generated_at": "2026-09-14T18:08:14.785Z",
+  "count": 72,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -71,6 +71,7 @@
     "20260914_cuentas_pagar_pendientes_eventos_realizados.sql",
     "20260914_cuentas_por_proyecto.sql",
     "20260914_fix_buscar_cuentas_pagar_proyecto_nombre.sql",
+    "20260914_proveedor_documentos_resumen.sql",
     "20260914_proveedores_pagina_por_nombre.sql",
     "20260914_sync_estados_cuentas_cobrar_vencidas.sql"
   ]
