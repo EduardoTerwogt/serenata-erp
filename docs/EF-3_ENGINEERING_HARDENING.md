@@ -5290,7 +5290,7 @@ exige aquí la nota de aprobación explícita no vacía (regla de 3 estados de
 | ID | Estado | Dependencias | Rama | PR | Commit SHA | Commit de merge | Nota | Próxima acción |
 |---|---|---|---|---|---|---|---|---|
 | 3A-0 | Cerrado | ninguna | N/A | N/A | `09ad7fc` | N/A | | Arrancar 3A-0b |
-| 3A-0b | En curso | 3A-0 | `claude/hopeful-allen-jql9xp` | (PR pendiente de abrir) | — | — | | Abrir PR en borrador |
+| 3A-0b | En curso | 3A-0 | `claude/hopeful-allen-jql9xp` | [#34](https://github.com/EduardoTerwogt/serenata-erp/pull/34) | — | — | | Esperar CI en verde, luego mergear |
 | 3A-1 | Pendiente | 3A-0b | — | — | — | — | | Arrancar tras cerrar 3A-0b |
 | 3A-2 | Pendiente | 3A-1 | — | — | — | — | | — |
 | 3A-3 | Pendiente | 3A-1 | — | — | — | — | | — |
