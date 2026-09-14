@@ -16,6 +16,16 @@ export async function GET(request: Request) {
 
   if (q) {
     query = query.ilike('descripcion', `%${q}%`).limit(10)
+  } else {
+    // Sin `q` (carga completa para autofill client-side, useQuotationForm.ts)
+    // esta query no tenía límite explícito: dependía en silencio del tope por
+    // defecto de PostgREST (típicamente 1000 filas), así que un catálogo que
+    // lo superara truncaba productos nuevos según orden alfabético, sin error
+    // ni log (causa real de un fallo repetido en tests/e2e/live, ver
+    // ACTIVE_WORK.md). Explícito aquí para no depender de ese default; sigue
+    // siendo el patrón "traer todo el catálogo" de Frente A del roadmap
+    // (paginación real pendiente, fuera de alcance de este fix puntual).
+    query = query.limit(2000)
   }
 
   const { data, error } = await query
