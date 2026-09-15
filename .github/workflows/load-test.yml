@@ -97,6 +97,7 @@ jobs:
       # Variables que solo usan los scripts, nunca las lee `next start`:
       PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
       PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
       TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
       DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
@@ -124,6 +125,81 @@ jobs:
 
       - name: env-check -- confirmar que apunta a serenata-erp-test antes de cualquier tráfico
         run: node scripts/loadtest/env-check.mjs --target-url http://127.0.0.1:3000
+
+      # ---- TMP 3A-4: validación real, se revierte antes de mergear el PR ----
+      # loadtest_runs aún no existe en serenata-erp-test real (migración
+      # pendiente de aplicación manual, MCP de Supabase caído esta sesión) --
+      # se valida todo lo que NO depende de esa tabla: folder real de Drive
+      # (crear/borrar/guard) y la cascada de bulkCleanupLoadTestRun contra
+      # datos sembrados reales, importando la función directo (bypass del
+      # CLI, que sí toca loadtest_runs).
+      - name: TMP 3A-4 -- generar runId real
+        run: echo "RUN_ID=$(node -e "process.stdout.write(crypto.randomUUID())")" >> "$GITHUB_ENV"
+
+      - name: TMP 3A-4 -- Drive folder real -- crear (secreto correcto)
+        run: |
+          set -euo pipefail
+          SECRET=$(node -e "process.stdout.write(process.env.LOADTEST_ENV_SECRET.trim())")
+          echo "::add-mask::$SECRET"
+          RES=$(curl -sS -w '\n%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-drive-folder \
+            -H 'Content-Type: application/json' -H "x-loadtest-secret: $SECRET" \
+            -d "{\"runId\":\"$RUN_ID\"}")
+          CODE=$(echo "$RES" | tail -n1)
+          BODY=$(echo "$RES" | sed '$d')
+          echo "status=$CODE body=$BODY"
+          if [ "$CODE" != "200" ]; then echo "::error::esperaba 200 creando carpeta, llegó $CODE"; exit 1; fi
+          FOLDER_ID=$(node -e "console.log(JSON.parse(process.argv[1]).folderId)" "$BODY")
+          if [ -z "$FOLDER_ID" ] || [ "$FOLDER_ID" = "undefined" ]; then echo "::error::respuesta sin folderId real"; exit 1; fi
+          echo "FOLDER_ID=$FOLDER_ID" >> "$GITHUB_ENV"
+          echo "SECRET=$SECRET" >> "$GITHUB_ENV"
+
+      - name: TMP 3A-4 -- Drive folder real -- guard rechaza secreto incorrecto (404, nunca 403)
+        run: |
+          set -euo pipefail
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-drive-folder \
+            -H 'Content-Type: application/json' -H 'x-loadtest-secret: secreto-incorrecto' \
+            -d "{\"runId\":\"$RUN_ID\"}")
+          if [ "$CODE" != "404" ]; then echo "::error::esperaba 404 con secreto incorrecto, llegó $CODE"; exit 1; fi
+
+      - name: TMP 3A-4 -- Drive folder real -- borrar la carpeta creada
+        run: |
+          set -euo pipefail
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "http://127.0.0.1:3000/api/internal/loadtest-drive-folder?folderId=$FOLDER_ID" -H "x-loadtest-secret: $SECRET")
+          if [ "$CODE" != "200" ]; then echo "::error::esperaba 200 borrando carpeta, llegó $CODE"; exit 1; fi
+
+      - name: TMP 3A-4 -- sembrar volumen moderado real (60 cotizaciones = 300 items)
+        env:
+          LOADTEST_PROVEEDORES_TARGET: '60'
+          LOADTEST_COTIZACIONES_TARGET: '60'
+        run: node scripts/loadtest/seed-volume-fixtures.mjs --target-url http://127.0.0.1:3000 --run-id "$RUN_ID"
+
+      - name: TMP 3A-4 -- bulkCleanupLoadTestRun real (import directo, bypass loadtest_runs)
+        run: |
+          cat > /tmp/tmp-3a4-cleanup-check.mjs <<'EOF'
+          import { createClient } from '@supabase/supabase-js'
+          import { bulkCleanupLoadTestRun } from '/home/runner/work/serenata-erp/serenata-erp/scripts/loadtest/bulk-cleanup.mjs'
+
+          const supabaseAdmin = createClient(process.env.TEST_SUPABASE_URL, process.env.TEST_SUPABASE_SERVICE_ROLE_KEY)
+          const runId = process.env.RUN_ID
+          const counts = await bulkCleanupLoadTestRun(supabaseAdmin, runId)
+          console.log('bulkCleanupLoadTestRun counts:', counts)
+          if (!counts.items_cotizacion || counts.items_cotizacion < 300) {
+            throw new Error(`esperaba >=300 items_cotizacion borrados, llegó ${counts.items_cotizacion}`)
+          }
+          if (!counts.cotizaciones || counts.cotizaciones < 60) {
+            throw new Error(`esperaba >=60 cotizaciones borradas, llegó ${counts.cotizaciones}`)
+          }
+
+          const residual = await supabaseAdmin
+            .from('cotizaciones').select('id', { count: 'exact', head: true })
+            .ilike('cliente', `LOADTEST-${runId}-%`)
+          if ((residual.count ?? 0) !== 0) {
+            throw new Error(`quedaron ${residual.count} cotizaciones residuales tras el cleanup`)
+          }
+          console.log('TMP 3A-4: cascada real verificada -- 0 filas residuales')
+          EOF
+          node /tmp/tmp-3a4-cleanup-check.mjs
+      # ---- fin TMP 3A-4 ----
 
       # Los 8 escenarios de k6 contra este entorno local los agrega 3A-5.
 
