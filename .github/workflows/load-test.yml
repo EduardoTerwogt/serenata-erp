@@ -1,0 +1,169 @@
+name: Load Test
+
+# EF-3A 3A-1: infraestructura de carga (k6) -- entorno local (next start en
+# el runner) + entorno serverless real (proyecto Vercel aislado, rama de
+# despliegue fija loadtest-target, nunca main). Los escenarios de k6 en sí
+# los agregan 3A-5 (entorno local)/3A-6 (entorno serverless) a los jobs
+# `local`/`serverless` de abajo -- este workflow, tal cual queda en 3A-1,
+# solo deja el entorno listo y verificado (env-check) antes de que exista
+# tráfico real que mandarle.
+#
+# Disparo manual porque fija loadtest-target a un SHA arbitrario de main
+# (inputs.sha) -- nunca se infiere de un push automático, para que un push
+# cualquiera a main no dispare sin querer un deploy al entorno de carga.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'SHA de main a fijar en loadtest-target (debe ser ancestro real de origin/main)'
+        required: true
+        type: string
+
+# Mismo group que e2e.yml -- ambos mutan serenata-erp-test y la misma
+# carpeta de Drive de test, así que GitHub Actions encola cualquier corrida
+# que se solape en vez de dejarlas correr a la vez contra el mismo proyecto
+# compartido.
+concurrency:
+  group: serenata-erp-test-shared
+  cancel-in-progress: false
+
+jobs:
+  pin-loadtest-target:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # acotado a ESTE job -- el resto de load-test.yml no lo hereda
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # historial completo -- el push siguiente referencia un SHA arbitrario de main, no solo el HEAD superficial que un checkout shallow trae por defecto
+
+      - name: Guard -- solo se permite fijar loadtest-target desde un SHA que sea ancestro real de origin/main
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if ! git merge-base --is-ancestor "${{ inputs.sha }}" origin/main; then
+            echo "::error::${{ inputs.sha }} no es un ancestro de origin/main -- abortando, nunca se fuerza un push a loadtest-target con un SHA arbitrario o de una rama distinta." >&2
+            exit 1
+          fi
+
+      - name: Fijar loadtest-target al SHA exacto
+        run: git push --force-with-lease origin "${{ inputs.sha }}:refs/heads/loadtest-target"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Esperar a que el deployment del proyecto Vercel aislado quede READY
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          TEAM_ID: ${{ secrets.LOADTEST_VERCEL_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          ARGS=(--project-id "${{ secrets.LOADTEST_VERCEL_PROJECT_ID }}" --sha "${{ inputs.sha }}" --timeout-seconds 300)
+          if [ -n "$TEAM_ID" ]; then
+            ARGS+=(--team-id "$TEAM_ID")
+          fi
+          node scripts/loadtest/wait-for-deployment.mjs "${ARGS[@]}"
+
+  local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Tabla exacta de 3A-1 -- verificada contra el job `live` real de
+      # e2e.yml, no un remapeo genérico.
+      AUTH_SECRET: loadtest-e2e-secret
+      AUTH_TRUST_HOST: 'true'
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      CRON_SECRET: loadtest-cron-secret
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_JWT_SECRET: ${{ secrets.TEST_SUPABASE_JWT_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN_TEST }}
+      GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_DRIVE_FOLDER_ID_CUENTAS: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+      LOADTEST_MODE: 'true'
+      LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
+      # Variables que solo usan los scripts, nunca las lee `next start`:
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app against the test environment
+        run: npm run build
+
+      - name: Start app in background
+        run: nohup npx next start > next-start.log 2>&1 &
+
+      - name: Wait for app to be ready
+        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
+
+      - name: env-check -- confirmar que apunta a serenata-erp-test antes de cualquier tráfico
+        run: node scripts/loadtest/env-check.mjs --target-url http://127.0.0.1:3000
+
+      # Los 8 escenarios de k6 contra este entorno local los agrega 3A-5.
+
+      - name: Dump Next.js server log on failure
+        if: failure()
+        run: |
+          echo "── next-start.log ──"
+          cat next-start.log || echo "(next-start.log no existe)"
+
+  serverless:
+    # No arranca hasta que `local` completó su propio ciclo -- ambos jobs
+    # mutan la MISMA base serenata-erp-test y la misma carpeta de Drive de
+    # test, así que correr en paralelo dentro de la misma corrida de
+    # workflow_dispatch corrompería el ciclo de datos compartidos.
+    # `pin-loadtest-target` sí corre en paralelo con `local` porque solo
+    # prepara el deploy remoto, no toca datos compartidos.
+    needs: [pin-loadtest-target, local]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: env-check -- confirmar que el deployment serverless apunta a serenata-erp-test
+        run: node scripts/loadtest/env-check.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
+
+      # Los 8 escenarios de k6 contra el entorno serverless real los agrega 3A-6.

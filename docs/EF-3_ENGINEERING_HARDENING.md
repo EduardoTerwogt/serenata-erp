@@ -5249,7 +5249,7 @@ bloqueó el cierre del resto porque ninguna fila cerrada pasó nunca por
 |---|---|---|---|---|---|---|---|---|
 | 3A-0 | Cerrado | ninguna | N/A | N/A | `09ad7fc` | N/A | | Arrancar 3A-0b |
 | 3A-0b | Cerrado | 3A-0 | `claude/hopeful-allen-jql9xp` | [#34](https://github.com/EduardoTerwogt/serenata-erp/pull/34) | — | `94e5944` | | — |
-| 3A-1 | Pendiente | 3A-0b | — | — | — | — | | Bloqueado por paso manual del usuario (crear proyecto Vercel aislado + secretos, ver spec 3A-1 punto 2) |
+| 3A-1 | En curso | 3A-0b | `claude/ecstatic-hopper-pyo0vy` | — | — | — | Paso manual del usuario (proyecto Vercel aislado `serenata-erp-loadtest` + 16 env vars + 7 secretos nuevos de GitHub) ya completado. Código en PR: `load-test.yml`, `wait-for-deployment.mjs`, `env-check.mjs`, ruta `env-check`, `docs/ENV.md` | Abrir PR y mergear |
 | 3A-2 | Pendiente | 3A-1 | — | — | — | — | | — |
 | 3A-3 | Pendiente | 3A-1 | — | — | — | — | | — |
 | 3A-4 | Pendiente | 3A-1 | — | — | — | — | | — |
