@@ -121,6 +121,43 @@ ver `docs/ROADMAP.md`.
 
 `app/cotizaciones/[id]/page.tsx` + `hooks/useQuotationPresence.ts`.
 
+**Refactor de `page.tsx` (EF-3D, 3D-0b..3D-8):** el archivo bajó de 2,388 a
+1,484 líneas (-38%) extrayendo 6 clústeres de estado+lógica a hooks
+dedicados bajo `hooks/`, más un módulo compartido de tipos/helpers puros en
+`lib/quotations/collaboration.ts` (creado para evitar un ciclo de imports
+`page.tsx` ↔ `hooks/*`):
+
+| Hook | Sección que gobierna |
+|---|---|
+| `useQuotationMutationTracker` | `trackMutation()` genérico — registra toda promesa de mutación en vuelo, usado por el resto de los hooks de abajo para que `flushPendingSaves` pueda esperarlos |
+| `useQuotationGeneralAutosave` | Cliente/proyecto/fecha de entrega/locación: dirty, lock, foco, drenado, conflicto por campo |
+| `useQuotationTotalesAutosave` | % fee/IVA/descuento: mismo patrón, dueño de su propio estado (no vivía en `page.tsx` antes) |
+| `useQuotationNotasAutosave` | Notas internas: mismo patrón, campo único sin conflicto multi-campo |
+| `useQuotationReconciliation` | `reconciliarConServidor`/`resyncPartidas` — reconciliación por polling/broadcast de las 4 secciones |
+| `useQuotationBusinessActions` | `aprobar`/`generarPDF`/`generarCotizacion`/`crearComplementaria`/`cancelarCotizacion`, con la asimetría original de flush+guard preservada exactamente |
+
+**`useQuotationItemCellsAutosave` (3D-5) NO se extrajo.** Ese bloque quedó
+**pausado por decisión explícita del usuario**: además de ser el de mayor
+riesgo de implementación, su propio criterio de aceptación exige una
+prueba manual contra el entorno serverless real de 3A-1, bloqueada por el
+mismo setup de Vercel pendiente que bloquea 3A-1/3B-7/3C-4. Como
+consecuencia, todo el autoguardado por celda de partidas (`itemDirtyCellsRef`,
+`itemFocusedCellsRef`, `itemSavingCellsRef`, `itemCellDrainRef`,
+`itemCellRetryNeededRef`, `itemCellBaseRef`, `itemCellConflicts`,
+`rowMutationQueueRef`, `pendingRowRemovalsRef`, `pendingRowCreationsRef`,
+`patchQuotationItem`/`createQuotationItemRow`/`deleteQuotationItemRow`,
+`sendItemCellPatchRound`, `persistItemCellAutosave`,
+`flushItemCellDirtyFields`, `handleItemFieldFocus/Blur/Change`,
+`handleAddRow`/`handleImportItems`/`handleRemoveRow`,
+`handleSelectProduct`/`handleResponsableChange`, `retryItemGroupPatch`,
+`resolveItemCellConflict`/`getItemCellConflict`) sigue viviendo inline en
+`page.tsx`. `useQuotationReconciliation` y `useQuotationBusinessActions`
+(3D-6/3D-7) reciben esos refs y `flushItemCellDirtyFields` directo de
+`page.tsx` como parámetros, en vez de desde un hook propio — misma firma
+interna que tendrían si 3D-5 ya existiera, distinto origen de esos
+parámetros. Cuando 3D-5 se retome, esas dos firmas se actualizan para
+recibirlos del nuevo hook.
+
 - **PostgreSQL es la única autoridad.** El navegador solo hace mutaciones vía
   API/RPC y emite Presence; nunca broadcasts de negocio. La política RLS de
   `realtime.messages` solo permite `presence` a `authenticated`.
