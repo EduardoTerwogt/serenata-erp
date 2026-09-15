@@ -46,6 +46,15 @@ describe('GET /api/internal/env-check', () => {
     expect(response.status).toBe(404)
   })
 
+  it('EF-3A 3A-1 -- tolera un LINE SEPARATOR (U+2028) colgando al final del secreto guardado (artefacto real de copiar/pegar)', async () => {
+    process.env.LOADTEST_MODE = 'true'
+    process.env.LOADTEST_ENV_SECRET = 'correct-secret '
+
+    const response = await GET(makeRequest('correct-secret'))
+
+    expect(response.status).toBe(200)
+  })
+
   it('EF-3A 3A-1 -- con LOADTEST_MODE=true y el secreto correcto, responde 200 sin exponer llaves reales', async () => {
     process.env.LOADTEST_MODE = 'true'
     process.env.LOADTEST_ENV_SECRET = 'correct-secret'
