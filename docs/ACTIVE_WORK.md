@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-14
+**Última actualización:** 2026-09-15
 
 ## Estado
 
@@ -15,100 +15,116 @@ commit `980464c`. Historia completa de cada uno:
 Documento canónico + matriz de hallazgos + tracker en vivo:
 [`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md) (§11).
 Cerrados hasta hoy: 3A-0, 3A-0b, 3B-1, 3B-2, 3B-3, 3B-4, 3B-5, 3B-6, 3B-8,
-3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, **3D-0**.
+3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, **3D-0, 3D-0b, 3D-1, 3D-2, 3D-3, 3D-4,
+3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12** (mergeados vía PR
+[#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49), commit de
+merge `2d7bd47`).
 
-**Ningún bloque en curso.** Libres para arrancar: 3D-0b (fix de la carrera
-F26) o 3D-1 (`useQuotationMutationTracker`) — no dependen entre sí.
+**Ningún bloque en curso.** El único bloque de EF-3D que sigue abierto es
+**3D-5** (`useQuotationItemCellsAutosave`), pausado por decisión explícita
+del usuario — ver "Problemas encontrados que siguen abiertos". El resto del
+grafo de EF-3D (3D-0..3D-4, 3D-6..3D-12) ya está cerrado.
 
-**3C-4 pausado** por decisión del usuario (setup manual de Vercel
-pendiente) — ver "Problemas encontrados que siguen abiertos".
+**3C-4 y 3D-5 pausados** por decisión del usuario (ambos requieren el setup
+manual de Vercel de 3A-1 pendiente, o en el caso de 3D-5 una prueba manual
+serverless) — ver "Problemas encontrados que siguen abiertos".
 
 ## Completado en esta sesión
 
-Sesión enfocada en cerrar el PR [#48](https://github.com/EduardoTerwogt/serenata-erp/pull/48)
-(3D-0, characterization tests de `page.tsx`), que venía de una sesión
-anterior con `live` en rojo repetido y sin mergear.
+Sesión que implementó y cerró **11 de los 13 bloques de EF-3D** (refactor de
+`app/cotizaciones/[id]/page.tsx` + `DomainError`/`buildErrorResponse` +
+Document Ingestion Core), a pedido explícito del usuario
+("implementa toda la fase completa de 3D desde ID 3D-0b hasta 3D-12").
 
-- **Causa raíz real de `live` diagnosticada con datos, no supuesta.**
-  El diagnóstico embebido del test (`cotizaciones-colaboracion.spec.ts:479`)
-  apuntaba a que `GET /api/productos?q=` no devolvía el producto recién
-  creado. Confirmado por SQL directo contra `serenata-erp-test`:
-  `app/api/productos/route.ts` no tenía `.limit()` cuando `q` viene vacío —
-  dependía en silencio del tope por defecto de PostgREST — y la tabla
-  `productos` tenía **1205 filas activas, 100% basura de fixtures de tests**
-  (`Escala n=...` de `cotizaciones-colaboracion-escala.spec.ts`, `Partida
-  creada y editada de inmediato...`; producción real tiene solo 40). El
-  producto del test caía fuera de las primeras 1000 filas alfabéticas.
-  `cleanupOrphanedTestProductos()` ya se invocaba en el `beforeAll` de las 5
-  specs live relevantes, pero solo borraba filas >24h — con varios reruns
-  de `live` el mismo día (como pasó en este PR) la basura fresca
-  sobrevivía y se acumulaba. Mismo síntoma que ya había pasado una vez
-  (Fase 8.7.2), repetido por la misma causa de fondo sin cerrar del todo.
-- **Fix aplicado y mergeado (commit `62aac60`, mismo PR):**
-  - `app/api/productos/route.ts`: `.limit(2000)` explícito en la carga sin
-    `q` — dependía de un default implícito de PostgREST no documentado en
-    el código, violaba "fallar explícito, nunca en silencio".
-  - `tests/e2e/utils/live-cleanup.ts`: `cleanupOrphanedTestProductos()`
-    borra todo en vez de filtrar por `created_at` >24h — seguro porque
-    `workers:1`/`fullyParallel:false` (`playwright.config.ts`) garantiza
-    que ningún spec live corre en paralelo con otro.
-  - `serenata-erp-test.productos` limpiada manualmente (1205→0 filas) para
-    desbloquear el PR de inmediato.
-  - Decisión explícita: no tocar la paginación real del catálogo completo
-    (eso es el Frente A del roadmap, alcance de iniciativa propia) — el fix
-    es puntual, deja registrado el patrón como deuda técnica nueva.
-- **CI y merge:** local en verde (`tsc`, `lint`, 727/727 tests) antes de
-  pushear. CI del PR #48 pasó de 4/5 (con `live` rojo 4 veces seguidas) a
-  **6/6 verde** tras el fix, sin conflicto de merge, sin review threads
-  pendientes. Mergeado (squash `30486a8`).
-- **Tracker EF-3 sincronizado** (commit doc-only `b37be1d`, directo a
-  `main`): fila `3D-0` → `Cerrado` con PR+Commit SHA+Commit de merge, nota
-  con la causa raíz y el fix aplicado.
+- **Excepción de proceso, aprobada por el usuario:** este entorno de
+  ejecución está limitado a una única rama designada
+  (`claude/nifty-hypatia-n1tptj`), sin permiso para crear ramas nuevas —
+  incompatible con la convención normal de "1 rama + 1 PR por bloque". Los
+  13 bloques de EF-3D compartieron esa rama y un solo PR (#49) contra
+  `main`, en commits separados por bloque. Documentado en el tracker antes
+  de empezar.
+- **3D-0b** (`8e2d1a2`): fix de la carrera real que T12 de 3D-0 había
+  confirmado (F26) entre el flush de un campo de General/Totales y una
+  reconciliación en vuelo — portado el patrón `localWriteAtRef` que
+  partidas ya tenía.
+- **3D-1..3D-4** (`b2e8255`, `1684d74`, `52a9600`): extracción de
+  `useQuotationMutationTracker`, `useQuotationGeneralAutosave`,
+  `useQuotationTotalesAutosave`, `useQuotationNotasAutosave` — mismo
+  comportamiento exacto, verificado por los 13 casos de la suite de
+  caracterización de 3D-0/3D-0b en verde tras cada extracción. Se creó
+  `lib/quotations/collaboration.ts` (no listado en la especificación) para
+  evitar un ciclo de imports `page.tsx` ↔ `hooks/*`.
+- **3D-5 pausado por decisión explícita del usuario** tras preguntarle
+  cómo proceder: es el bloque de mayor riesgo (P0, "ya causó bugs reales
+  dos veces") y su propio criterio de aceptación exige una prueba manual
+  contra el entorno serverless real de 3A-1, bloqueada por el mismo setup
+  de Vercel pendiente que bloquea 3A-1/3B-7/3C-4.
+- **3D-6/3D-7** (`1315a37`, `911cc6e`): extracción de
+  `useQuotationReconciliation` y `useQuotationBusinessActions`, adaptados
+  para recibir los refs del clúster de partidas (`itemDirtyCellsRef` y
+  demás) directo de `page.tsx` en vez de desde el hook de 3D-5 — misma
+  firma interna, distinto origen. Cuando 3D-5 se retome, ambas firmas se
+  actualizan.
+- **3D-8** (`453694e`+`0b7c1d2`, doc-only, 2 commits directo a `main` tras
+  el merge de #49): `page.tsx` bajó de 2,388 a **1,484 líneas (-38%)**.
+  `ARCHITECTURE.md` documenta los 6 hooks reales y deja explícito que
+  `useQuotationItemCellsAutosave` (3D-5) no se extrajo. `live` completo
+  verde contra `main` (workflow run `34917496098`).
+- **3D-9** (`6f282d0`): `DomainError`/`buildErrorResponse` en cancelación de
+  cotización + registrar-pago (CxP/CxC) + generar-orden-pago. 2 hits
+  residuales de `rpcError.message` documentados (asignación a variable
+  local para logging server-side, nunca llega al cliente).
+- **3D-10** (`f5787be`): `buildErrorResponse` en las 8 rutas de Portal
+  (login, signup, signup/confirmar, documentos, cuentas, factura, me,
+  perfil). `toErrorMessage`/`error-message.ts` intactos.
+- **3D-11** (`60b9aee`): `DomainError` en `proyectos/[id]` PUT y
+  `proyectos/[id]/tipo` PUT, preservando intacto el mapeo
+  `TipoYaAsignadoError`→409.
+- **3D-12** (`31e0948`): nuevo `lib/server/uploads/factura-validation.ts`
+  consolida required/tipo/tamaño de subida de factura para CxP/CxC/Portal
+  — cada ruta conserva su propia tabla de mensajes exacta.
+- **CI incidencia mid-sesión ("FALLO UN TEST"):** `tracker-lint` falló
+  porque 3D-2 estaba `En curso` dependiendo de 3D-1 también `En curso` (el
+  validador exige que toda dependencia de una fila `En curso` esté
+  `Cerrado`). Fix: los bloques bundleados se quedaron en `Pendiente`
+  (progreso real en "Nota") hasta el merge real — commit `e6635e0`.
+- **Merge de PR #49 a `main`, autorizado explícitamente por el usuario**
+  tras confirmar CI verde (`test`/`fresh-db`/`smoke-and-critical`/
+  `tracker-lint`/`live`) y `mergeable_state: clean`. Commit de merge
+  `2d7bd47`. Post-merge, `E2E`/`Test Suite`/`Migrations` en `main`
+  confirmados verdes antes de cerrar 3D-8.
+- **Tracker sincronizado:** 11 filas bundleadas (3D-0b, 3D-1..3D-4,
+  3D-6, 3D-7, 3D-9..3D-12) pasaron a `Cerrado` de una vez con PR+SHA+commit
+  de merge; 3D-8 cerrado aparte como doc-only con su propio Commit SHA;
+  3D-5 se quedó `Pendiente`.
 
 ## Completado en sesiones anteriores
 
-- **3C-3 (EF-3):** lock de Sheets con lease/renovación/recuperación de
-  huérfanos (`sheets_sync_status` + 3 RPC `SECURITY DEFINER`), heartbeat por
-  página en `sync-down.ts`, `POST /sync-down` y `GET /status` nuevos,
-  `AdminSheets.tsx` con estado "parcial, revisar". PR
-  [#47](https://github.com/EduardoTerwogt/serenata-erp/pull/47) mergeado
-  (squash `71881de`). 18 tests nuevos, todo verde en CI.
-- **3C-4 evaluado y pausado:** requiere medición empírica de duración de
-  `syncAllDown()` contra volumen objetivo (`items_cotizacion`≥5500) en el
-  entorno serverless real de 3A-1 — hoy `serenata-erp-test` tiene 11 filas
-  (500x por debajo). Decisión explícita del usuario: pausar esa fase entera
-  y seguir con el resto del grafo que no depende de 3A-1/3A-3. Documentado
-  en el tracker (nota de la fila 3C-4).
-- **3D-0 (characterization tests de `page.tsx`):** archivo nuevo
-  `app/cotizaciones/[id]/__tests__/page-autosave-characterization.test.tsx`,
-  12 casos (T1-T12) del punto 10 de la especificación — debounce de
-  General/Totales/Notas/celda de item, drenado real, retry acotado,
-  conflicto por 409, unmount sin timer colgado, flush-before-transition e
-  interleaving flush↔reconciliación en ambos órdenes. **No toca `page.tsx`
-  ni componentes hijos.** Primer `render()` de React Testing Library del
-  repo. **Hallazgo real (F26 activado):** T12 confirmó una carrera real
-  entre el flush de un campo de General/Totales y una reconciliación en
-  vuelo — si el PATCH resuelve antes que la reconciliación, ésta pisa el
-  valor recién confirmado con una lectura vieja (T11, orden inverso, sí
-  está protegido). Se abrió el bloque correctivo **3D-0b** con su
-  especificación completa de 15 puntos ya escrita en el plan (fix: portar
-  el patrón `localWriteAtRef`/`escrituraLocalPosterior` que partidas ya
-  tiene, a General/Totales por campo).
 - Ver `docs/archive/` para EF-1/EF-2 completos. EF-3 bloques 3A-0, 3A-0b,
-  3B-1 a 3B-12 (salvo 3B-7, bloqueado), 3C-1, 3C-2: cerrados en sesiones
-  previas de esta misma iniciativa — historia en el tracker
+  3B-1 a 3B-12 (salvo 3B-7, bloqueado), 3C-1 a 3C-3, 3D-0: cerrados en
+  sesiones previas de esta misma iniciativa — historia en el tracker
   (`docs/EF-3_ENGINEERING_HARDENING.md` §11) con PR y SHA de cada uno.
 
 ## Tests ejecutados
 
-`npx tsc --noEmit`, `npm run lint` (0 errores, solo warnings preexistentes)
-y `npm test` (727/727) en verde localmente antes de pushear el fix de
-`GET /api/productos`. CI del PR #48: 6/6 checks verdes (`test`, `fresh-db`,
-`smoke-and-critical`, `tracker-lint`, `live`, Vercel Preview) confirmado
-antes de mergear.
+En cada bloque de esta sesión, antes de cada commit: `npx tsc --noEmit`
+(limpio), `npm run lint` (0 errores, 7 warnings preexistentes), `npm test`
+(creció de 728 a **792/792** verde), `npm run build` (compilación +
+TypeScript limpios; falla después al recolectar datos de página por falta
+de credenciales Supabase en este sandbox — esperado, `docs/ENV.md`, no
+relacionado al diff), `node scripts/validate-ef3-tracker.mjs` (OK). CI del
+PR #49: 6/6 checks verdes en el commit final (`31e0948`) antes de mergear.
+Post-merge en `main`: `test`/`Migrations`/`live`/`smoke-and-critical` verdes
+tanto en el commit de merge (`2d7bd47`) como en el push doc-only de 3D-8
+(`0b7c1d2`).
 
 ## Problemas encontrados que siguen abiertos
 
+- **3D-5 (`useQuotationItemCellsAutosave`) pausado** — máximo riesgo de
+  implementación de todo EF-3D, requiere prueba manual contra el entorno
+  serverless real de 3A-1. Todo el autoguardado de celdas de partidas sigue
+  inline en `page.tsx`. Retomar cuando 3A-1 esté disponible, o si el
+  usuario decide aceptar el riesgo sin la prueba manual.
 - **Rama remota `fix/totales-general-conflict-drain` (ex-PR #30) no se pudo
   borrar** — `403` del token de esa sesión. Su código ya está en `main` vía
   PR #29; sin trabajo sin mergear. (Arrastrado, sin cambios esta sesión.)
@@ -123,28 +139,22 @@ antes de mergear.
   separado? Decisión del usuario, sin urgencia. (Arrastrado.)
 - **`previewNextQuotationFolio()` sin `complementaria_de`:** F14, se cierra
   en 3B-7 — bloqueado por el mismo setup manual de Vercel que 3A-1.
-- **`GET /api/productos` (hallazgo nuevo, sin F-code en la matriz EF-3):**
-  el `.limit(2000)` agregado al cerrar PR #48 evita el truncado silencioso
-  de hoy, pero sigue siendo el patrón "traer todo el catálogo" de Frente A
-  del roadmap — un catálogo real que superara 2000 productos activos
-  volvería a perder items del autofill sin error visible. Producción hoy:
-  40 productos (margen amplio). Paginación real, fuera de alcance de este
-  fix puntual — evaluar si entra a un bloque EF-3 nuevo o queda para
-  "Después".
+- **`GET /api/productos` con `.limit(2000)` explícito** (no paginación
+  real): sigue siendo deuda de Frente A del roadmap — un catálogo real que
+  superara 2000 productos activos volvería a perder items del autofill sin
+  error visible. Producción hoy: 40 productos (margen amplio). (Arrastrado.)
 
 ## Siguiente paso
 
-1. **3D-0b** (fix de la carrera F26, especificación completa ya escrita en
-   el plan, sección 6) — bloque chico, 6-8h estimadas. No bloquea 3D-1.
-2. **3D-1** (`useQuotationMutationTracker`, extracción del primer hook) es
-   el siguiente bloque independiente del grafo de EF-3D — no depende de
-   3D-0b.
+1. **3D-5** sigue pausado — no hay siguiente acción salvo que el usuario
+   decida retomarlo o que 3A-1 se resuelva.
+2. **EF-3E** (3E-1 baseline final, 3E-2 reconciliación documental, 3E-3
+   cierre formal) depende de EF-3B+3C+3D completos — todavía no aplica
+   mientras 3D-5 siga abierto.
 3. Sin dueño ni urgencia: borrar la rama remota huérfana
    `fix/totales-general-conflict-drain`, decidir el modo de uso de
-   `check-schema-parity.mjs`, y decidir si el hallazgo nuevo de
-   `GET /api/productos` (paginación real, ver Deuda técnica) entra a EF-3 o
-   queda para "Después".
+   `check-schema-parity.mjs`.
 
-**Sigue bloqueado, sin cambios:** 3A-1 a 3A-6, 3B-7, y 3C-4 — todos
+**Sigue bloqueado, sin cambios:** 3A-1 a 3A-6, 3B-7, 3C-4 y 3D-5 — todos
 esperando el paso manual del usuario (crear proyecto Vercel aislado +
 secretos, spec 3A-1 punto 2).

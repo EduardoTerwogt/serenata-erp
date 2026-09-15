@@ -110,12 +110,15 @@ cliente rompe el build en vez de filtrar la llave al navegador (EF-2 1B-1).
 
 **7. Errores seguros al cliente.** `lib/server/errors/domain-error.ts`
 (`DomainError` con `code`/`status`/`safeMessage`) + `lib/server/observability/log.ts`
-(logger JSON con `requestId`) — adoptado en las rutas de subir factura
-(CxC/CxP) y `proyectos/[id]/etapa`. Un error no-`DomainError` siempre se
+(logger JSON con `requestId`). Un error no-`DomainError` siempre se
 traduce a un mensaje genérico seguro; el detalle técnico real solo va al log,
 nunca al cliente. El contrato `{error: string}` se extiende con `requestId`,
-nunca se reemplaza. No está adoptado todavía en el resto de las rutas —
-ver `docs/ROADMAP.md`.
+nunca se reemplaza. Adoptado (EF-2 1E-2 + EF-3 3D-9/3D-10/3D-11) en: subir
+factura (CxC/CxP), `proyectos/[id]/etapa`, `proyectos/[id]` PUT,
+`proyectos/[id]/tipo` PUT, cancelación de cotización, registrar-pago
+(CxC/CxP), generar-orden-pago, y las 8 rutas de Portal (login, signup,
+signup/confirmar, documentos, cuentas, `cuentas/[id]/factura`, me, perfil).
+No está adoptado todavía en el resto de las rutas — ver `docs/ROADMAP.md`.
 
 ## Edición colaborativa
 
