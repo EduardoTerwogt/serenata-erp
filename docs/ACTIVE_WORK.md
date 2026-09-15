@@ -14,23 +14,34 @@ commit `980464c`. Historia completa de cada uno:
 **EF-3 en ejecución.** Plan v12, 40 bloques + hasta 3 condicionales.
 Documento canónico + matriz de hallazgos + tracker en vivo:
 [`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md) (§11).
-Cerrados hasta hoy: 3A-0, 3A-0b, 3A-1, **3A-2**, 3B-1, 3B-2, 3B-3, 3B-4,
-3B-5, 3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3D-0, 3D-0b, 3D-1,
-3D-2, 3D-3, 3D-4, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12.
+Cerrados hasta hoy: 3A-0, 3A-0b, 3A-1, **3A-2, 3A-3**, 3B-1, 3B-2, 3B-3,
+3B-4, 3B-5, 3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3D-0, 3D-0b,
+3D-1, 3D-2, 3D-3, 3D-4, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12.
 
-**En curso: 3A-3** (fixtures de volumen, rama `claude/ef3a-fixtures-volumen`),
-siguiente paso de la ejecución completa de EF-3A (3A-2→3A-6) en curso esta
-sesión. El único bloque de EF-3D que sigue abierto es **3D-5**
-(`useQuotationItemCellsAutosave`), pausado por decisión explícita del
-usuario, pero su bloqueador real (entorno serverless de 3A-1) ya no existe
-— ver más abajo.
+**En curso: 3A-4** (cleanup de Postgres/Drive por `runId`, rama
+`claude/ef3a-cleanup-drive-postgres`), siguiente paso de la ejecución
+completa de EF-3A (3A-2→3A-6) en curso esta sesión. El único bloque de
+EF-3D que sigue abierto es **3D-5** (`useQuotationItemCellsAutosave`),
+pausado por decisión explícita del usuario, pero su bloqueador real
+(entorno serverless de 3A-1) ya no existe — ver más abajo.
 
 **3D-5 puede retomarse cuando el usuario decida** — la prueba manual
 contra el entorno serverless real que su criterio de aceptación exige ya
 es posible (`serenata-erp-loadtest`, ver 3A-1). **3C-4 sigue pausado**,
-ahora solo por 3A-3 (sembrado de volumen, en curso), no por 3A-1.
+ahora solo por 3A-3 sembrando volumen real en la próxima corrida (3A-3 en
+sí ya cerró), no por 3A-1.
 
 ## Completado en esta sesión
+
+**Cierre de 3A-3 (fixtures de volumen)**, PR
+[#56](https://github.com/EduardoTerwogt/serenata-erp/pull/56), commit
+`41b9ccc`. `scripts/loadtest/seed-volume-fixtures.mjs` siembra volumen
+real (1,200 cotizaciones × 5 items) vía la API real (`POST
+/api/cotizaciones`+`.../emitir`+`.../aprobar`), no RPCs crudas, para no
+reimplementar la orquestación real de folio+persistencia+`approve_cotizacion`.
+Validación real (escala reducida, `LOADTEST_PROVEEDORES_TARGET=3`/
+`LOADTEST_COTIZACIONES_TARGET=3`): 3/3 proveedores + 3/3 cotizaciones
+creadas+emitidas+aprobadas, conteos post-seed exactos contra el objetivo.
 
 **Cierre de 3A-2 (fixtures de identidad, staff/Portal)**, PR
 [#55](https://github.com/EduardoTerwogt/serenata-erp/pull/55), commit
@@ -52,7 +63,7 @@ junto con `/api/internal/loadtest-drive-folder` (3A-4) de una vez; (2)
 
 - **Plan de sesión:** ejecutar EF-3A completo (3A-2→3A-6) en secuencia,
   cada bloque su propia rama+PR, mergeando antes de arrancar el siguiente
-  — 3A-3/3A-4 siguen en curso.
+  — 3A-4 en curso.
 
 ## Completado en sesiones anteriores
 
@@ -213,11 +224,15 @@ los 3 jobs (`pin-loadtest-target`/`local`/`serverless`) en verde.
 
 ## Siguiente paso
 
-1. **3A-3 en curso** (rama `claude/ef3a-fixtures-volumen`) — seguido de
-   3A-4, 3A-5 (3 PRs) y 3A-6, en ese orden, para cerrar EF-3A por
-   completo esta sesión.
-2. **3B-7, 3C-4** dependen de 3A-1 (cerrado) + su propia dependencia
-   directa (3A-3 para 3C-4, en curso) — no arrancan solos todavía.
+1. **3A-4 en curso** (rama `claude/ef3a-cleanup-drive-postgres`) — seguido
+   de 3A-5 (3 PRs) y 3A-6, en ese orden, para cerrar EF-3A por completo
+   esta sesión.
+2. **3B-7** depende de 3A-1 (cerrado) — no arranca sola todavía (fuera del
+   plan de esta sesión). **3C-4** depende de 3A-1 (cerrado) + volumen real
+   sembrado en `serenata-erp-test` (`items_cotizacion>=5,500`) — el script
+   de 3A-3 ya existe y está validado, pero la corrida completa contra
+   `serenata-erp-test` todavía no se ejecutó (solo a escala reducida para
+   validar el bloque); sigue bloqueado hasta esa corrida real.
 3. **3D-5** puede retomarse si el usuario decide correr la prueba manual
    contra `serenata-erp-loadtest`.
 4. Sin dueño ni urgencia: borrar la rama remota huérfana
