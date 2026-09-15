@@ -46,10 +46,20 @@ function fingerprint(value) {
 }
 
 // fetch nativo de Node no combina múltiples Set-Cookie en headers.get() --
-// getSetCookie() sí devuelve cada uno por separado, necesario para
-// mantener tanto la cookie de csrf como la de sesión en el mismo jar.
-function extractCookies(response) {
-  return response.headers.getSetCookie().map((c) => c.split(';')[0])
+// getSetCookie() sí devuelve cada uno por separado. Deduplicado por
+// NOMBRE, quedándose con el último (mismo criterio que un browser real o
+// curl -c): /api/auth/csrf devuelve 2 Set-Cookie distintos para
+// authjs.csrf-token (uno del middleware auth() al procesar la request,
+// otro de la ruta en sí) -- mandar ambos sin deduplicar hace que el
+// servidor lea el primero, que no matchea el csrfToken del JSON body, y
+// el login falla con MissingCSRF (visto en un run real de load-test.yml).
+function mergeCookies(jar, response) {
+  for (const raw of response.headers.getSetCookie()) {
+    const pair = raw.split(';')[0]
+    const name = pair.split('=')[0]
+    jar.set(name, pair)
+  }
+  return jar
 }
 
 async function main() {
@@ -108,7 +118,7 @@ async function main() {
     console.error(`env-check: no se pudo obtener csrf token de ${targetUrl} (status ${csrfRes.status})`)
     process.exit(1)
   }
-  const jar = extractCookies(csrfRes)
+  const jar = mergeCookies(new Map(), csrfRes)
   const { csrfToken } = await csrfRes.json()
 
   const loginRes = await fetch(`${targetUrl}/api/auth/callback/credentials`, {
@@ -116,7 +126,7 @@ async function main() {
     redirect: 'manual',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      Cookie: jar.join('; '),
+      Cookie: [...jar.values()].join('; '),
     },
     body: new URLSearchParams({
       csrfToken,
@@ -126,10 +136,10 @@ async function main() {
       json: 'true',
     }),
   })
-  jar.push(...extractCookies(loginRes))
+  mergeCookies(jar, loginRes)
 
   const adminRes = await fetch(`${targetUrl}/api/admin/usuarios`, {
-    headers: { Cookie: jar.join('; ') },
+    headers: { Cookie: [...jar.values()].join('; ') },
   })
   if (adminRes.status === 403) {
     console.error(
