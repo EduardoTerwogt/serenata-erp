@@ -14,16 +14,17 @@ commit `980464c`. Historia completa de cada uno:
 **EF-3 en ejecución.** Plan v12, 40 bloques + hasta 3 condicionales.
 Documento canónico + matriz de hallazgos + tracker en vivo:
 [`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md) (§11).
-Cerrados hasta hoy: 3A-0, 3A-0b, 3A-1, **3A-2, 3A-3**, 3B-1, 3B-2, 3B-3,
+Cerrados hasta hoy: 3A-0, 3A-0b, 3A-1, **3A-2, 3A-3, 3A-4**, 3B-1, 3B-2, 3B-3,
 3B-4, 3B-5, 3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3D-0, 3D-0b,
 3D-1, 3D-2, 3D-3, 3D-4, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12.
 
-**En curso: 3A-4** (cleanup de Postgres/Drive por `runId`, rama
-`claude/ef3a-cleanup-drive-postgres`), siguiente paso de la ejecución
-completa de EF-3A (3A-2→3A-6) en curso esta sesión. El único bloque de
-EF-3D que sigue abierto es **3D-5** (`useQuotationItemCellsAutosave`),
-pausado por decisión explícita del usuario, pero su bloqueador real
-(entorno serverless de 3A-1) ya no existe — ver más abajo.
+**En curso: 3A-5** (scripts de carga k6 + telemetría, 3 PRs, rama
+`claude/ef3a-k6-escenarios-basicos` para el primero), siguiente paso de la
+ejecución completa de EF-3A (3A-2→3A-6) en curso esta sesión. El único
+bloque de EF-3D que sigue abierto es **3D-5**
+(`useQuotationItemCellsAutosave`), pausado por decisión explícita del
+usuario, pero su bloqueador real (entorno serverless de 3A-1) ya no
+existe — ver más abajo.
 
 **3D-5 puede retomarse cuando el usuario decida** — la prueba manual
 contra el entorno serverless real que su criterio de aceptación exige ya
@@ -32,6 +33,26 @@ ahora solo por 3A-3 sembrando volumen real en la próxima corrida (3A-3 en
 sí ya cerró), no por 3A-1.
 
 ## Completado en esta sesión
+
+**Cierre de 3A-4 (cleanup de Postgres/Drive por `runId`)**, PR
+[#57](https://github.com/EduardoTerwogt/serenata-erp/pull/57), commit
+`fdaabc0`. Override de carpeta de Drive falla-cerrado
+(`resolveUploadFolderId`, `LoadtestOverrideRejectedError extends
+DomainError`) en las 3 rutas de subir factura; `createDriveFolder`/
+`deleteDriveFile` nuevas en `drive.ts`; endpoint interno
+`POST/DELETE /api/internal/loadtest-drive-folder`; `bulk-cleanup.mjs`
+(cascada por `runId` en 11 tablas, keyset pagination, `CHUNK_SIZE=150`,
+barrido de corridas huérfanas). Validación real vía `workflow_dispatch` de
+`load-test.yml` encontró y arregló 2 hallazgos reales, uno por intento:
+(1) faltaba `TEST_SUPABASE_URL` en el env del job `local` — ningún script
+plano de 3A-2/3A-3/3A-4 podía correr ahí; (2) el script inline de
+verificación se escribía en `/tmp`, fuera del árbol de `node_modules`.
+Con ambos arreglados: folder real de Drive crear/borrar + guard 404 con
+secreto incorrecto, y cascada de `bulkCleanupLoadTestRun` contra datos
+sembrados reales (60 cotizaciones×5 items) — 0 filas residuales. La
+migración `20260915_loadtest_runs.sql` se aplicó a `serenata-erp-test`
+directo por MCP tras reconectar (estuvo caído gran parte de la sesión) —
+confirmada con `list_tables` (RLS habilitado, 0 filas).
 
 **Cierre de 3A-3 (fixtures de volumen)**, PR
 [#56](https://github.com/EduardoTerwogt/serenata-erp/pull/56), commit
@@ -63,7 +84,7 @@ junto con `/api/internal/loadtest-drive-folder` (3A-4) de una vez; (2)
 
 - **Plan de sesión:** ejecutar EF-3A completo (3A-2→3A-6) en secuencia,
   cada bloque su propia rama+PR, mergeando antes de arrancar el siguiente
-  — 3A-4 en curso.
+  — 3A-5 en curso.
 
 ## Completado en sesiones anteriores
 
@@ -224,9 +245,10 @@ los 3 jobs (`pin-loadtest-target`/`local`/`serverless`) en verde.
 
 ## Siguiente paso
 
-1. **3A-4 en curso** (rama `claude/ef3a-cleanup-drive-postgres`) — seguido
-   de 3A-5 (3 PRs) y 3A-6, en ese orden, para cerrar EF-3A por completo
-   esta sesión.
+1. **3A-5 en curso** (rama `claude/ef3a-k6-escenarios-basicos`, PR (a) de
+   3: `_shared.js` + `navegacion-proyectos.js`/`dashboard.js`/`cuentas.js`)
+   — seguido de las 2 PRs restantes de 3A-5 y luego 3A-6, en ese orden,
+   para cerrar EF-3A por completo esta sesión.
 2. **3B-7** depende de 3A-1 (cerrado) — no arranca sola todavía (fuera del
    plan de esta sesión). **3C-4** depende de 3A-1 (cerrado) + volumen real
    sembrado en `serenata-erp-test` (`items_cotizacion>=5,500`) — el script
