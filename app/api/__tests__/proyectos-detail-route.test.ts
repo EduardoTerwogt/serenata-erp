@@ -97,4 +97,22 @@ describe('PUT /api/proyectos/[id]', () => {
       details: { estado: ['Valor no permitido'] },
     })
   })
+
+  it('EF-3 3D-11: un error inesperado (crudo de Supabase) nunca expone su mensaje real al cliente', async () => {
+    mocks.validateMock.mockReturnValue({ ok: true, data: { estado: 'FINALIZADO' } })
+    mocks.updateProyectoWithRollbackMock.mockRejectedValue(new Error('null value in column "estado" violates not-null constraint'))
+
+    const response = await PUT(
+      new Request('http://localhost/api/proyectos/PROY-001', {
+        method: 'PUT',
+        body: JSON.stringify({ estado: 'FINALIZADO' }),
+      }),
+      { params: Promise.resolve({ id: 'PROY-001' }) },
+    )
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(JSON.stringify(body)).not.toContain('estado')
+    expect(body.requestId).toEqual(expect.any(String))
+  })
 })

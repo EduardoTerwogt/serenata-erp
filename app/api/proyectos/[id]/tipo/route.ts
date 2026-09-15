@@ -1,6 +1,9 @@
 import { requireSection } from '@/lib/api-auth'
 import { asignarTipoProyecto, TipoYaAsignadoError } from '@/lib/server/projects/tipo-assignment'
 import { ProyectoAsignarTipoSchema, validate } from '@/lib/validation/schemas'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE = 'PUT /api/proyectos/[id]/tipo'
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('proyectos')
@@ -20,10 +23,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (error instanceof TipoYaAsignadoError) {
       return Response.json({ error: error.message }, { status: 409 })
     }
-    console.error(error)
-    return Response.json(
-      { error: `Error asignando tipo de proyecto: ${error instanceof Error ? error.message : JSON.stringify(error)}` },
-      { status: 500 }
-    )
+    return buildErrorResponse(error, ROUTE)
   }
 }

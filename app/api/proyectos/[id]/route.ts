@@ -1,6 +1,9 @@
 import { requireSection } from '@/lib/api-auth'
 import { getProyectoDetalle, updateProyectoWithRollback } from '@/lib/server/projects/service'
 import { ProyectoUpdateSchema, validate } from '@/lib/validation/schemas'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE_PUT = 'PUT /api/proyectos/[id]'
 
 export async function GET(
   _request: Request,
@@ -41,10 +44,6 @@ export async function PUT(
     const proyecto = await updateProyectoWithRollback(id, proyectoUpdates, notas_por_item as Record<string, string>)
     return Response.json(proyecto)
   } catch (error) {
-    console.error(error)
-    return Response.json(
-      { error: `Error actualizando proyecto: ${error instanceof Error ? error.message : JSON.stringify(error)}` },
-      { status: 500 },
-    )
+    return buildErrorResponse(error, ROUTE_PUT)
   }
 }
