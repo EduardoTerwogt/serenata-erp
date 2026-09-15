@@ -58,6 +58,15 @@ describe('portal-auth -- firma y verificación de token (funciones puras)', () =
     expect(await verifyPortalSession('')).toBeNull()
     expect(await verifyPortalSession('a.b.c')).toBeNull()
   })
+
+  it('EF-3A 3A-2: signPortalSession/verifyPortalSession son su propio inverso exacto -- base de confianza antes de confiar en POST /api/internal/loadtest-portal-session, que solo las envuelve', async () => {
+    const { signPortalSession, verifyPortalSession } = await import('../portal-auth')
+    const proveedorId = '11111111-1111-1111-1111-111111111111'
+    const sessionVersion = 1
+    const token = await signPortalSession(proveedorId, sessionVersion)
+    const result = await verifyPortalSession(token)
+    expect(result).toEqual({ proveedorId, sessionVersion })
+  })
 })
 
 describe('portal-auth -- requirePortalSession revoca contra el estado real del proveedor (Fase 2.5)', () => {

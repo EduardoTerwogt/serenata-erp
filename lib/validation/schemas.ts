@@ -250,6 +250,17 @@ export const GastoFijoUpdateSchema = z.object({
   activo: z.boolean().optional(),
 })
 
+// ==================== EF-3A -- INFRAESTRUCTURA DE CARGA (LOADTEST) ====================
+// Payloads de los endpoints internos `/api/internal/loadtest-*`, protegidos
+// por el guard fail-closed LOADTEST_MODE+LOADTEST_ENV_SECRET -- validados
+// igual que cualquier otro payload de la app, nunca confiados solo porque
+// el guard ya pasó.
+
+export const LoadtestPortalSessionSchema = z.object({
+  proveedorId: z.string().uuid(),
+  sessionVersion: z.number().int().positive(),
+})
+
 // ==================== HELPER ====================
 
 /**
