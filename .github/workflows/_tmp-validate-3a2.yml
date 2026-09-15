@@ -1,0 +1,124 @@
+name: TMP Validate 3A-2
+
+# Workflow temporal, solo en esta rama, para validar en real (no solo CI)
+# el endpoint /api/internal/loadtest-portal-session y los 2 scripts nuevos
+# de 3A-2 contra serenata-erp-test -- se borra antes de mergear el PR.
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: serenata-erp-test-shared
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTH_SECRET: loadtest-e2e-secret
+      AUTH_TRUST_HOST: 'true'
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      CRON_SECRET: loadtest-cron-secret
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_JWT_SECRET: ${{ secrets.TEST_SUPABASE_JWT_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN_TEST }}
+      GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_DRIVE_FOLDER_ID_CUENTAS: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+      LOADTEST_MODE: 'true'
+      LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: nohup npx next start > next-start.log 2>&1 &
+
+      - run: npx wait-on http://127.0.0.1:3000 --timeout 60000
+
+      - name: env-check
+        run: node scripts/loadtest/env-check.mjs --target-url http://127.0.0.1:3000
+
+      - name: Generar runId de prueba
+        id: runid
+        run: echo "run_id=$(node -e 'console.log(crypto.randomUUID())')" >> "$GITHUB_OUTPUT"
+
+      - name: prepare-staff-fixtures.mjs (2 identidades)
+        run: |
+          node scripts/loadtest/prepare-staff-fixtures.mjs \
+            --target-url http://127.0.0.1:3000 \
+            --run-id ${{ steps.runid.outputs.run_id }} \
+            --count 2 \
+            --out /tmp/staff-fixtures.json
+          cat /tmp/staff-fixtures.json
+
+      - name: prepare-portal-fixtures.mjs (3 proveedores)
+        run: |
+          node scripts/loadtest/prepare-portal-fixtures.mjs \
+            --target-url http://127.0.0.1:3000 \
+            --run-id ${{ steps.runid.outputs.run_id }} \
+            --count 3 \
+            --out /tmp/portal-fixtures.json
+          cat /tmp/portal-fixtures.json
+
+      - name: Confirmar que la cookie del Portal autentica de verdad (GET /api/portal/me)
+        run: |
+          set -euo pipefail
+          COOKIE=$(node -e "console.log(require('/tmp/portal-fixtures.json')[0].cookieValue)")
+          STATUS=$(curl -s -o /tmp/me.json -w '%{http_code}' http://127.0.0.1:3000/api/portal/me -H "Cookie: portal_session=$COOKIE")
+          echo "status=$STATUS"; cat /tmp/me.json
+          test "$STATUS" = "200"
+
+      - name: 3 casos de validación Zod + guard -- loadtest-portal-session
+        run: |
+          set -euo pipefail
+          PROVEEDOR_ID=$(node -e "console.log(require('/tmp/portal-fixtures.json')[0].proveedorId)")
+
+          # secreto incorrecto -> 404
+          S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
+            -H 'Content-Type: application/json' -H 'x-loadtest-secret: incorrecto' \
+            -d "{\"proveedorId\":\"$PROVEEDOR_ID\",\"sessionVersion\":1}")
+          echo "secreto incorrecto -> $S"; test "$S" = "404"
+
+          # proveedorId no UUID -> 400
+          S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
+            -H 'Content-Type: application/json' -H "x-loadtest-secret: $LOADTEST_ENV_SECRET" \
+            -d '{"proveedorId":"no-es-uuid","sessionVersion":1}')
+          echo "proveedorId invalido -> $S"; test "$S" = "400"
+
+          # sessionVersion <= 0 -> 400
+          S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
+            -H 'Content-Type: application/json' -H "x-loadtest-secret: $LOADTEST_ENV_SECRET" \
+            -d "{\"proveedorId\":\"$PROVEEDOR_ID\",\"sessionVersion\":0}")
+          echo "sessionVersion 0 -> $S"; test "$S" = "400"
+
+          # body no JSON -> 400
+          S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
+            -H 'Content-Type: application/json' -H "x-loadtest-secret: $LOADTEST_ENV_SECRET" \
+            -d 'no-es-json')
+          echo "body no JSON -> $S"; test "$S" = "400"
+
+          echo "OK -- 4/4 casos de guard/validación pasaron"
+
+      - name: Dump Next.js server log on failure
+        if: failure()
+        run: cat next-start.log || echo "(no existe)"
