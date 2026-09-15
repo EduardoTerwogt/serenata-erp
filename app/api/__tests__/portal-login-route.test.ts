@@ -109,4 +109,13 @@ describe('POST /api/portal/login', () => {
     expect(response.status).toBe(200)
     expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('prov-1', 0)
   })
+
+  it('EF-3 3D-10: un error inesperado (crudo de Supabase) nunca expone su mensaje real al cliente', async () => {
+    mocks.getProveedorByCorreoMock.mockRejectedValue(new Error('relation "proveedores" does not exist'))
+    const response = await POST(req({ correo: 'jose@correo.com', password: 'password123' }))
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(JSON.stringify(body)).not.toContain('proveedores')
+    expect(body.requestId).toEqual(expect.any(String))
+  })
 })

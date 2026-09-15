@@ -91,4 +91,13 @@ describe('POST /api/portal/signup', () => {
     const body = await response.json()
     expect(body).toEqual({ success: true })
   })
+
+  it('EF-3 3D-10: un error inesperado (crudo de Supabase) nunca expone su mensaje real al cliente', async () => {
+    mocks.crearProveedorDesdeSignupMock.mockRejectedValue(new Error('duplicate key value violates unique constraint'))
+    const response = await POST(req({ nombre: 'Chok', correo: 'jose@correo.com', password: 'password123' }))
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(JSON.stringify(body)).not.toContain('duplicate key')
+    expect(body.requestId).toEqual(expect.any(String))
+  })
 })

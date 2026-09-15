@@ -3,7 +3,9 @@ import { validate, PortalLoginSchema } from '@/lib/validation/schemas'
 import { getProveedorByCorreo, updateProveedor } from '@/lib/db'
 import { setPortalSessionCookie } from '@/lib/portal-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
-import { toErrorMessage } from '@/lib/server/portal/error-message'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE = 'POST /api/portal/login'
 
 export async function POST(request: Request) {
   try {
@@ -50,7 +52,6 @@ export async function POST(request: Request) {
       requiere_confirmacion: proveedor.portal_estado === 'pendiente_confirmacion',
     })
   } catch (error) {
-    console.error('[portal/login]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE)
   }
 }

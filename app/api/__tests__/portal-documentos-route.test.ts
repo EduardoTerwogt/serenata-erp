@@ -120,4 +120,13 @@ describe('POST /api/portal/documentos', () => {
     const response = await POST(buildRequest('INE', null))
     expect(response.status).toBe(400)
   })
+
+  it('EF-3 3D-10: un error inesperado (crudo de Supabase) nunca expone su mensaje real al cliente', async () => {
+    mocks.createProveedorDocumentoMock.mockRejectedValue(new Error('relation "proveedor_documentos" does not exist'))
+    const response = await POST(buildRequest('COMPROBANTE_DOMICILIO'))
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(JSON.stringify(body)).not.toContain('proveedor_documentos')
+    expect(body.requestId).toEqual(expect.any(String))
+  })
 })

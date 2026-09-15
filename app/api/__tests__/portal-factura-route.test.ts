@@ -137,4 +137,13 @@ describe('POST /api/portal/cuentas/[id]/factura', () => {
       expect.objectContaining({ tipo: 'FACTURA_PROVEEDOR_XML', estado_validacion: 'validado' })
     )
   })
+
+  it('EF-3 3D-10: un error inesperado (crudo de Supabase) nunca expone su mensaje real al cliente', async () => {
+    mocks.getCuentaPagarByIdMock.mockRejectedValue(new Error('constraint violation on cuentas_pagar'))
+    const response = await POST(buildRequest(), params())
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(JSON.stringify(body)).not.toContain('cuentas_pagar')
+    expect(body.requestId).toEqual(expect.any(String))
+  })
 })

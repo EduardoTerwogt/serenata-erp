@@ -4,9 +4,10 @@ import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor, calcularEjemploFactura } from '@/lib/server/validation/factura-fiscal'
-import { toErrorMessage } from '@/lib/server/portal/error-message'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { RegimenFiscal } from '@/lib/types'
 
+const ROUTE = 'POST /api/portal/cuentas/[id]/factura'
 const ALLOWED_XML_TYPES = ['text/xml', 'application/xml']
 const ALLOWED_PDF_TYPES = ['application/pdf']
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -106,7 +107,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     return Response.json({ success: true })
   } catch (error) {
-    console.error('[portal/cuentas/factura]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE)
   }
 }
