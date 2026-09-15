@@ -37,8 +37,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { loginRest } from './rest-login.mjs'
 
-const PROVEEDORES_TARGET = 1200
-const COTIZACIONES_TARGET = 1200
+// Overrides opcionales -- solo para correr una prueba de humo real y
+// barata contra serenata-erp-test (unas decenas de filas en vez de miles)
+// sin tocar el objetivo real de la corrida completa, que sigue siendo
+// 1,200 por default.
+const PROVEEDORES_TARGET = Number(process.env.LOADTEST_PROVEEDORES_TARGET) || 1200
+const COTIZACIONES_TARGET = Number(process.env.LOADTEST_COTIZACIONES_TARGET) || 1200
 const ITEMS_PER_COTIZACION = 5
 const PROVEEDOR_INSERT_BATCH = 300
 
