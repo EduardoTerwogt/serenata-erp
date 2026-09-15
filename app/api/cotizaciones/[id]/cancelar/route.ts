@@ -1,5 +1,8 @@
 import { requireSection } from '@/lib/api-auth'
 import { cancelQuotation } from '@/lib/server/quotations/cancellation'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE = 'POST /api/cotizaciones/[id]/cancelar'
 
 export async function POST(
   _request: Request,
@@ -13,9 +16,6 @@ export async function POST(
     const result = await cancelQuotation(id)
     return Response.json(result)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Error cancelando cotización'
-    const status = message.includes('Solo se pueden cancelar') ? 403 : 500
-    console.error('[POST /api/cotizaciones/:id/cancelar]', message)
-    return Response.json({ error: message }, { status })
+    return buildErrorResponse(error, ROUTE)
   }
 }

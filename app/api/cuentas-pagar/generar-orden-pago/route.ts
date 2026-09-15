@@ -6,6 +6,10 @@ import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { buildOrdenPagoPreview } from '@/lib/server/ordenes-pago/build'
 import { generateOrdenPagoPdf } from '@/lib/server/pdf/orden-pago-pdf'
+import { buildErrorResponse, DomainError } from '@/lib/server/errors/domain-error'
+
+const ROUTE_GET = 'GET /api/cuentas-pagar/generar-orden-pago'
+const ROUTE_POST = 'POST /api/cuentas-pagar/generar-orden-pago'
 
 function buildOrdenPagoFileName(preview: ReturnType<typeof buildOrdenPagoPreview>) {
   const now = new Date()
@@ -29,6 +33,15 @@ function isDriveAuthError(message: string) {
   return normalized.includes('invalid_grant') || normalized.includes('google drive desautorizado')
 }
 
+// Solo para decidir el status/safeMessage correcto (isDriveAuthError) --
+// nunca se manda al cliente. buildErrorResponse ya se encarga del logging
+// estructurado y del safeMessage genérico para todo lo demás.
+function extractRawMessage(cause: unknown): string {
+  if (cause instanceof Error) return cause.message
+  if (typeof cause === 'object' && cause !== null) return JSON.stringify(cause)
+  return String(cause)
+}
+
 export async function GET() {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
@@ -38,22 +51,7 @@ export async function GET() {
     const preview = buildOrdenPagoPreview(cuentasPendientes)
     return Response.json(preview)
   } catch (error) {
-    let errorMsg = 'Error desconocido'
-    if (error instanceof Error) {
-      errorMsg = error.message
-    } else if (typeof error === 'object' && error !== null) {
-      errorMsg = JSON.stringify(error)
-    } else {
-      errorMsg = String(error)
-    }
-    console.error('[cuentas-pagar/generar-orden-pago][GET]', errorMsg, error)
-    return Response.json(
-      {
-        error: 'Error obteniendo preview de orden de pago',
-        details: errorMsg,
-      },
-      { status: 500 }
-    )
+    return buildErrorResponse(error, ROUTE_GET)
   }
 }
 
@@ -109,32 +107,20 @@ export async function POST() {
       preview: preview.responsables,
     })
   } catch (error) {
-    let errorMsg = 'Error desconocido'
-    if (error instanceof Error) {
-      errorMsg = error.message
-    } else if (typeof error === 'object' && error !== null) {
-      errorMsg = JSON.stringify(error)
-    } else {
-      errorMsg = String(error)
-    }
-    console.error('[cuentas-pagar/generar-orden-pago][POST]', errorMsg, error)
+    const rawMessage = extractRawMessage(error)
 
-    if (isDriveAuthError(errorMsg)) {
-      return Response.json(
-        {
-          error: 'Google Drive desautorizado. Reautoriza Drive y actualiza GOOGLE_DRIVE_REFRESH_TOKEN en Vercel.',
-          details: errorMsg,
-        },
-        { status: 503 }
+    if (isDriveAuthError(rawMessage)) {
+      return buildErrorResponse(
+        new DomainError({
+          code: 'drive_desautorizado',
+          status: 503,
+          safeMessage: 'Google Drive desautorizado. Reautoriza Drive y actualiza GOOGLE_DRIVE_REFRESH_TOKEN en Vercel.',
+          cause: error,
+        }),
+        ROUTE_POST
       )
     }
 
-    return Response.json(
-      {
-        error: 'Error generando orden de pago',
-        details: errorMsg,
-      },
-      { status: 500 }
-    )
+    return buildErrorResponse(error, ROUTE_POST)
   }
 }
