@@ -6,8 +6,17 @@ import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
 import { RegimenFiscal } from '@/lib/types'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 
 const ROUTE = 'POST /api/cuentas-pagar/[id]/subir-factura'
+
+const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
+  XML_REQUIRED: 'Se requiere archivo XML de factura proveedor',
+  PDF_REQUIRED: 'Se requiere archivo PDF de factura proveedor',
+  XML_INVALID_TYPE: 'El archivo XML debe ser de tipo text/xml o application/xml',
+  PDF_INVALID_TYPE: 'El archivo PDF debe ser de tipo application/pdf',
+  FILE_TOO_LARGE: 'El archivo excede el límite de 10 MB',
+}
 
 function extractFacturaFechaFromXml(xmlContent: string): string | null {
   const match = xmlContent.match(/\bFecha=["']([^"']+)["']/i)
@@ -25,29 +34,15 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const { id } = await props.params
     const formData = await request.formData()
 
-    const facturaXmlFile = formData.get('factura_proveedor_xml') as File | null
-    const facturaPdfFile = formData.get('factura_proveedor_pdf') as File | null
+    const facturaXmlFileInput = formData.get('factura_proveedor_xml') as File | null
+    const facturaPdfFileInput = formData.get('factura_proveedor_pdf') as File | null
 
-    if (!facturaXmlFile) {
-      return Response.json({ error: 'Se requiere archivo XML de factura proveedor' }, { status: 400 })
+    const validation = validateFacturaFiles({ xml: facturaXmlFileInput, pdf: facturaPdfFileInput, pdfRequired: true })
+    if (!validation.ok) {
+      return Response.json({ error: VALIDATION_MESSAGES[validation.code] }, { status: 400 })
     }
-    if (!facturaPdfFile) {
-      return Response.json({ error: 'Se requiere archivo PDF de factura proveedor' }, { status: 400 })
-    }
-
-    // Validar tipos MIME permitidos
-    const ALLOWED_XML_TYPES = ['text/xml', 'application/xml']
-    const ALLOWED_PDF_TYPES = ['application/pdf']
-    if (!ALLOWED_XML_TYPES.includes(facturaXmlFile.type) && !facturaXmlFile.name.endsWith('.xml')) {
-      return Response.json({ error: 'El archivo XML debe ser de tipo text/xml o application/xml' }, { status: 400 })
-    }
-    if (!ALLOWED_PDF_TYPES.includes(facturaPdfFile.type) && !facturaPdfFile.name.endsWith('.pdf')) {
-      return Response.json({ error: 'El archivo PDF debe ser de tipo application/pdf' }, { status: 400 })
-    }
-    const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
-    if (facturaXmlFile.size > MAX_FILE_SIZE || facturaPdfFile.size > MAX_FILE_SIZE) {
-      return Response.json({ error: 'El archivo excede el límite de 10 MB' }, { status: 400 })
-    }
+    const facturaXmlFile = facturaXmlFileInput as File
+    const facturaPdfFile = facturaPdfFileInput as File
 
     const cuenta = await getCuentaPagarById(id)
     if (!cuenta) {
