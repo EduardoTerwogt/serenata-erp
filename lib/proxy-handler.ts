@@ -56,6 +56,14 @@ function isPublicPath(pathname: string) {
     // de que su propio guard corriera, devolviendo 401 en vez de 404 (visto
     // en un run real de load-test.yml).
     pathname.startsWith('/api/internal/env-check') ||
+    // EF-3A 3A-2/3A-4: mismo patrón, mismo motivo -- otras 2 rutas internas
+    // con el mismo guard fail-closed, llamadas por scripts de carga sin
+    // cookie de sesión. Repetido el mismo bug real de arriba (401 antes del
+    // guard propio) en loadtest-portal-session durante la validación real
+    // de 3A-2 -- agregada aquí de una vez la que 3A-4 también necesitará,
+    // para no repetir el mismo hallazgo dos veces.
+    pathname.startsWith('/api/internal/loadtest-portal-session') ||
+    pathname.startsWith('/api/internal/loadtest-drive-folder') ||
     // Portal de proveedores (Fase 5.5): auth propia (lib/portal-auth.ts,
     // cookie portal_session), separada de NextAuth -- no pasa por el check
     // de sesión interna de abajo. Cada página/route del portal se protege
