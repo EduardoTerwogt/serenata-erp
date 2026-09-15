@@ -99,7 +99,6 @@ jobs:
       PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
       TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
-      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
       DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
       TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
     steps:
@@ -125,76 +124,6 @@ jobs:
 
       - name: env-check -- confirmar que apunta a serenata-erp-test antes de cualquier tráfico
         run: node scripts/loadtest/env-check.mjs --target-url http://127.0.0.1:3000
-
-      # ── TMP 3A-2 validation -- se borra antes de mergear el PR ──
-      - name: TMP -- generar runId de prueba
-        id: tmp_runid
-        run: echo "run_id=$(node -e 'console.log(crypto.randomUUID())')" >> "$GITHUB_OUTPUT"
-
-      - name: TMP -- prepare-staff-fixtures.mjs (2 identidades)
-        run: |
-          node scripts/loadtest/prepare-staff-fixtures.mjs \
-            --target-url http://127.0.0.1:3000 \
-            --run-id ${{ steps.tmp_runid.outputs.run_id }} \
-            --count 2 \
-            --out /tmp/staff-fixtures.json
-          cat /tmp/staff-fixtures.json
-
-      - name: TMP -- prepare-portal-fixtures.mjs (3 proveedores)
-        run: |
-          node scripts/loadtest/prepare-portal-fixtures.mjs \
-            --target-url http://127.0.0.1:3000 \
-            --run-id ${{ steps.tmp_runid.outputs.run_id }} \
-            --count 3 \
-            --out /tmp/portal-fixtures.json
-          cat /tmp/portal-fixtures.json
-
-      - name: TMP -- confirmar que la cookie del Portal autentica de verdad (GET /api/portal/me)
-        run: |
-          set -euo pipefail
-          COOKIE=$(node -e "console.log(require('/tmp/portal-fixtures.json')[0].cookieValue)")
-          STATUS=$(curl -s -o /tmp/me.json -w '%{http_code}' http://127.0.0.1:3000/api/portal/me -H "Cookie: portal_session=$COOKIE")
-          echo "status=$STATUS"; cat /tmp/me.json
-          test "$STATUS" = "200"
-
-      - name: TMP -- 4 casos de guard/validación -- loadtest-portal-session
-        run: |
-          set -euo pipefail
-          PROVEEDOR_ID=$(node -e "console.log(require('/tmp/portal-fixtures.json')[0].proveedorId)")
-          # $LOADTEST_ENV_SECRET trae el LINE SEPARATOR (U+2028) colgando
-          # (mismo artefacto de 3A-1) -- bash no lo recorta, y curl lo manda
-          # como bytes UTF-8 crudos que el parser de headers del lado
-          # servidor decodifica distinto a como Node decodifica la env var
-          # directa, así que el .trim() del servidor no reconoce esos bytes
-          # como whitespace y el guard rechaza el secreto real. Los scripts
-          # .mjs reales (prepare-*-fixtures.mjs) ya hacen este mismo trim en
-          # JS antes de mandarlo -- por eso ellos sí funcionaron en este
-          # mismo job. Este trim es solo del paso TMP de validación, nunca
-          # del código real.
-          SECRET=$(node -e "process.stdout.write(process.env.LOADTEST_ENV_SECRET.trim())")
-
-          S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
-            -H 'Content-Type: application/json' -H 'x-loadtest-secret: incorrecto' \
-            -d "{\"proveedorId\":\"$PROVEEDOR_ID\",\"sessionVersion\":1}")
-          echo "secreto incorrecto -> $S"; test "$S" = "404"
-
-          S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
-            -H 'Content-Type: application/json' -H "x-loadtest-secret: $SECRET" \
-            -d '{"proveedorId":"no-es-uuid","sessionVersion":1}')
-          echo "proveedorId invalido -> $S"; test "$S" = "400"
-
-          S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
-            -H 'Content-Type: application/json' -H "x-loadtest-secret: $SECRET" \
-            -d "{\"proveedorId\":\"$PROVEEDOR_ID\",\"sessionVersion\":0}")
-          echo "sessionVersion 0 -> $S"; test "$S" = "400"
-
-          S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
-            -H 'Content-Type: application/json' -H "x-loadtest-secret: $SECRET" \
-            -d 'no-es-json')
-          echo "body no JSON -> $S"; test "$S" = "400"
-
-          echo "OK -- 4/4 casos de guard/validación pasaron"
-      # ── fin TMP 3A-2 validation ──
 
       # Los 8 escenarios de k6 contra este entorno local los agrega 3A-5.
 
