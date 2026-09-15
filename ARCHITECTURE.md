@@ -85,6 +85,20 @@ transitorio de Postgres (`503`, sesión intacta — nunca logout masivo por una
 caída de DB). Detalle completo y alternativas descartadas:
 [`docs/decisions/009`](docs/decisions/009-revocacion-sesion-staff-session-version.md).
 
+**Rutas máquina-a-máquina (sin sesión de NextAuth).** `proxy.ts` intercepta
+*toda* ruta no listada en `isPublicPath()` (`lib/proxy-handler.ts`) y exige
+sesión — incluidas rutas API que nunca reciben cookies porque las llama un
+script o un cron, no un browser. Estas rutas se agregan a `isPublicPath()`
+y se protegen con su propio guard fail-closed (secreto/token propio, 404 en
+vez de 403 para no delatar que existen): `/api/integrations/drive/authorize`
+y `/api/integrations/drive/callback` (sección `admin` vía `requireSection`
+dentro de la ruta), `/api/keep-alive` (`CRON_SECRET`),
+`/api/internal/env-check` (`LOADTEST_MODE`+`LOADTEST_ENV_SECRET`, EF-3A
+3A-1 — usado por `scripts/loadtest/env-check.mjs`, nunca por un usuario).
+Olvidar esta lista para una ruta nueva de este tipo produce un 401 confuso
+del middleware, no del guard propio de la ruta — visto en un run real de
+`load-test.yml` durante 3A-1.
+
 **2. Páginas.** Delegan en hooks y componentes por dominio. La excepción deliberada
 es `app/cotizaciones/[id]/page.tsx`, que concentra la lógica de edición
 colaborativa (ver abajo).
