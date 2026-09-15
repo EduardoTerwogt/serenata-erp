@@ -10,13 +10,15 @@ import { Cotizacion, ItemCotizacion, Proveedor } from '@/lib/types'
 import { useQuotationForm } from '@/hooks/useQuotationForm'
 import { useQuotationMutationTracker } from '@/hooks/useQuotationMutationTracker'
 import { useQuotationGeneralAutosave } from '@/hooks/useQuotationGeneralAutosave'
+import { useQuotationTotalesAutosave } from '@/hooks/useQuotationTotalesAutosave'
+import { useQuotationNotasAutosave } from '@/hooks/useQuotationNotasAutosave'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
 import { ImportableItem, QuotationItemsController } from '@/hooks/useQuotationItems'
 import { calculateEstimatedTaxes, calculateQuotationTotals, normalizeQuotationItem } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem, reconcileServerItems } from '@/lib/quotations/mappers'
 import { BulkImportPayload, runIdempotentBulkImportSubmit } from '@/lib/client/bulkImportIdempotency'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { approveQuotation, buildComplementariaUrl, emitirCotizacion, fetchQuotationDetail, fetchProveedores, generateQuotationPdf, saveQuotationNotes } from '@/lib/services/quotation-service'
+import { approveQuotation, buildComplementariaUrl, emitirCotizacion, fetchQuotationDetail, fetchProveedores, generateQuotationPdf } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
 import { Icon } from '@/components/ui/Icon'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
@@ -28,20 +30,13 @@ import {
   buildAtomicConflictRecord,
   buildItemFieldBase,
   buildItemFieldsBase,
-  buildTotalsSnapshot,
   FieldConflictDetail,
   getItemCellKey,
   ITEM_CELL_AUTOSAVE_DELAY_MS,
   ITEM_CELL_IDLE_RELEASE_MS,
   mapItemToFormItem,
   normalizeItemFieldValue,
-  normalizeTotalsFieldValue,
-  NOTAS_AUTOSAVE_DELAY_MS,
   PatchConflictError,
-  QuotationTotalsField,
-  SECTION_IDLE_RELEASE_MS,
-  TOTALS_AUTOSAVE_DELAY_MS,
-  TotalsSnapshot,
 } from '@/lib/quotations/collaboration'
 
 const sectionLabels: Record<QuotationPresenceSection, string> = {
@@ -91,59 +86,20 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [driveLink, setDriveLink] = useState<string | null>(null)
-  const [notasInternas, setNotasInternas] = useState('')
   // Id estable de la fila que edita la tarjeta móvil, no su índice: un `replace()`
   // de reconciliación (alta/baja de un colaborador) cambia qué índice apunta a cuál
   // fila, y un índice guardado quedaba apuntando a la fila equivocada -- ver
   // `QuotationItemsSection`, que recalcula el índice en cada render a partir de este id.
   const [editingItemRowId, setEditingItemRowId] = useState<string | null>(null)
   const [showCopyModal, setShowCopyModal] = useState(false)
-  const [porcentaje_fee, setPorcentajeFee] = useState(0.15)
-  const [iva_activo, setIvaActivo] = useState(true)
-  const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
-  const [descuento_valor, setDescuentoValor] = useState(0)
-  const [isSavingNotas, setIsSavingNotas] = useState(false)
-  const [isSavingTotals, setIsSavingTotals] = useState(false)
   const [importingItems, setImportingItems] = useState(false)
   const notasSectionRef = useRef<HTMLDivElement | null>(null)
   const generalSectionRef = useRef<HTMLDivElement | null>(null)
   const totalsSectionRef = useRef<HTMLDivElement | null>(null)
   const partidasSectionRef = useRef<HTMLDivElement | null>(null)
-  const notasAutosaveTimerRef = useRef<number | null>(null)
-  const notasIdleReleaseTimerRef = useRef<number | null>(null)
-  const totalsIdleReleaseTimerRef = useRef<number | null>(null)
-  const notasDirtyRef = useRef(false)
-  // Fase 8.7 (Bloque 1): guard contra doble disparo -- ver el comentario junto
-  // a flushGeneralDirtyFields. Notas no tiene un "flush de todos los campos
-  // dirty" separado (es un solo campo), así que el guard vive directo en
-  // persistNotasAutosave: si ya hay un guardado en vuelo, se devuelve esa
-  // misma promesa en vez de disparar un segundo PATCH concurrente.
-  const notasInFlightRef = useRef<Promise<unknown> | null>(null)
-  const totalsDirtyRef = useRef(false)
-  const notasLockHeldRef = useRef(false)
-  const totalsLockHeldRef = useRef(false)
-  const notasFocusedRef = useRef(false)
-  const totalsFocusedRef = useRef(false)
-  const notasValueRef = useRef('')
-  const porcentajeFeeValueRef = useRef(0.15)
-  const ivaActivoValueRef = useRef(true)
-  const descuentoTipoValueRef = useRef<'monto' | 'porcentaje'>('monto')
-  const descuentoValorValueRef = useRef(0)
   const itemDirtyCellsRef = useRef<Set<string>>(new Set())
   const itemFocusedCellsRef = useRef<Set<string>>(new Set())
   const itemSavingCellsRef = useRef<Set<string>>(new Set())
-  // Drenado real para General/Totales (mismo "causa F" que itemCellDrainRef/
-  // itemCellRetryNeededRef abajo, portado desde partidas -- Fase 8.7.2 lo dejó
-  // resuelto solo para partidas; General y Totales seguían limpiando su dirty
-  // sin importar si ya había un reintento encolado con un valor más nuevo,
-  // produciendo un conflicto contra sí mismos con ediciones rápidas seguidas
-  // (p. ej. alternar el switch de IVA dos veces antes de que el primer PATCH
-  // resuelva). Mientras un campo ya tiene una ronda de PATCH en vuelo, una
-  // edición nueva sobre el MISMO campo no dispara un segundo `fetch` en
-  // paralelo -- solo marca el `RetryNeeded` y el drenado, al terminar su ronda
-  // actual, manda una ronda más con el valor final.
-  const totalsFieldDrainRef = useRef<Map<QuotationTotalsField, Promise<unknown>>>(new Map())
-  const totalsFieldRetryNeededRef = useRef<Set<QuotationTotalsField>>(new Set())
   // Drenado real por celda: mientras una celda ya tiene una ronda de PATCH en
   // vuelo (`itemCellDrainRef`), una edición nueva sobre la MISMA celda no dispara
   // un segundo `fetch` en paralelo (rompería el orden y correría con una `base`
@@ -194,13 +150,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // Instante de la última escritura local por celda. Cualquier dato del servidor
   // pedido ANTES de esa marca llega viejo y no debe aplicarse a esa celda.
   const localWriteAtRef = useRef<Map<string, number>>(new Map())
-  // F26/3D-0b: mismo patrón que localWriteAtRef pero para General/Totales, por
-  // campo. Sin esto, una reconciliación en vuelo que arrancó ANTES de que un
-  // PATCH de campo confirmara podía pisar el valor recién confirmado con su
-  // propia lectura, más vieja -- el guard de dirty/saving no alcanza a cubrir
-  // esa ventana porque el campo ya no está "ocupado" cuando la reconciliación
-  // aplica.
-  const totalsFieldConfirmedAtRef = useRef<Partial<Record<QuotationTotalsField, number>>>({})
 
   // EF-3 3D-1: extraído a hooks/useQuotationMutationTracker.ts -- ver ese
   // archivo para la explicación completa de por qué existe.
@@ -226,36 +175,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
       return next
     })
   }, [])
-  const clearTotalsFieldConflict = useCallback((field: QuotationTotalsField) => {
-    setTotalsFieldConflicts((prev) => {
-      if (!(field in prev)) return prev
-      const next = { ...prev }
-      delete next[field]
-      return next
-    })
-  }, [])
-  const clearTotalsFieldTimer = useCallback((field: QuotationTotalsField) => {
-    const timer = totalsFieldTimersRef.current[field]
-    if (timer) window.clearTimeout(timer)
-    totalsFieldTimersRef.current[field] = null
-  }, [])
-  const lastSavedNotasRef = useRef('')
-  // Último valor de Totales confirmado por el servidor -- la fuente del
-  // "base" que se manda en cada PATCH de campo para detectar conflictos.
-  // Mismo patrón que itemsServerRef para partidas (y que
-  // hooks/useQuotationGeneralAutosave.ts para General): nunca se pisa con lo
-  // que el usuario está tecleando (eso vive solo en el form / en los
-  // *ValueRef de abajo).
-  const totalsServerRef = useRef<TotalsSnapshot>(buildTotalsSnapshot({}))
-  // Campos de Totales con una edición local sin confirmar. Reemplaza el
-  // booleano de sección única: dos campos de la misma sección ahora se guardan
-  // (y detectan conflicto) de forma independiente.
-  const totalsFieldDirtyRef = useRef<Set<QuotationTotalsField>>(new Set())
-  const totalsFieldSavingRef = useRef<Set<QuotationTotalsField>>(new Set())
-  // "base" capturado por campo (al empezar a editarlo), listo para el próximo PATCH.
-  const totalsFieldBaseRef = useRef<Partial<Record<QuotationTotalsField, unknown>>>({})
-  const totalsFieldTimersRef = useRef<Partial<Record<QuotationTotalsField, number | null>>>({})
-  const [totalsFieldConflicts, setTotalsFieldConflicts] = useState<Partial<Record<QuotationTotalsField, FieldConflictDetail>>>({})
 
   const { register, control, watch, reset, setValue, getValues } = useForm<QuotationFormValues>({
     defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
@@ -354,19 +273,73 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     seleccionarProyecto,
   })
 
-  const getCurrentNotasSnapshot = useCallback(() => notasValueRef.current.trim() ? notasValueRef.current : '', [])
+  // EF-3 3D-3: extraído a hooks/useQuotationTotalesAutosave.ts -- ver ese
+  // archivo para la explicación completa de por qué existe.
+  const {
+    porcentaje_fee,
+    iva_activo,
+    descuento_tipo,
+    descuento_valor,
+    totalsFieldConflicts,
+    totalsDirtyRef,
+    totalsLockHeldRef,
+    applyTotalsOnly,
+    flushTotalsDirtyFields,
+    resolveTotalsFieldConflict,
+    handleTotalsFocus,
+    handleTotalsBlur,
+    trackedSetPorcentajeFee,
+    trackedSetIvaActivo,
+    trackedSetDescuentoTipo,
+    trackedSetDescuentoValor,
+    clearTotalsIdleReleaseTimer,
+    resetTotalsFromServer,
+    clearAllTotalsFieldTimers,
+  } = useQuotationTotalesAutosave({
+    id,
+    cotizacion,
+    esEditable,
+    trackMutation,
+    setCotizacion,
+    setError,
+    setActiveSection,
+    releaseSection,
+    totalsSectionRef,
+  })
+
+  // EF-3 3D-4: extraído a hooks/useQuotationNotasAutosave.ts -- ver ese
+  // archivo para la explicación completa de por qué existe.
+  const {
+    notasInternas,
+    notasDirtyRef,
+    notasLockHeldRef,
+    persistNotasAutosave,
+    applyNotasOnly,
+    handleNotasFocus,
+    handleNotasBlur,
+    trackedHandleNotasChange,
+    clearNotasIdleReleaseTimer,
+    resetNotasFromServer,
+  } = useQuotationNotasAutosave({
+    id,
+    cotizacion,
+    esEditable,
+    trackMutation,
+    setCotizacion,
+    setError,
+    setActiveSection,
+    releaseSection,
+    notasSectionRef,
+  })
+
   const getItemIndexByRowId = useCallback((rowId: string) => { const items = getValues('items') || []; return items.findIndex((item) => item?.id === rowId) }, [getValues])
   const hasLocalItemRowActivity = useCallback((rowId: string) => (
     Array.from(itemDirtyCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemFocusedCellsRef.current).some((key) => key.startsWith(`${rowId}:`)) || Array.from(itemSavingCellsRef.current).some((key) => key.startsWith(`${rowId}:`))
   ), [])
 
-  const clearNotasIdleReleaseTimer = useCallback(() => { if (notasIdleReleaseTimerRef.current !== null) { window.clearTimeout(notasIdleReleaseTimerRef.current); notasIdleReleaseTimerRef.current = null } }, [])
-  const clearTotalsIdleReleaseTimer = useCallback(() => { if (totalsIdleReleaseTimerRef.current !== null) { window.clearTimeout(totalsIdleReleaseTimerRef.current); totalsIdleReleaseTimerRef.current = null } }, [])
   const clearItemCellAutosaveTimer = useCallback((key: string) => { const timer = itemCellAutosaveTimersRef.current[key]; if (timer !== null && timer !== undefined) { window.clearTimeout(timer); delete itemCellAutosaveTimersRef.current[key] } }, [])
   const clearItemCellIdleReleaseTimer = useCallback((key: string) => { const timer = itemCellIdleReleaseTimersRef.current[key]; if (timer !== null && timer !== undefined) { window.clearTimeout(timer); delete itemCellIdleReleaseTimersRef.current[key] } }, [])
 
-  const scheduleNotasIdleRelease = useCallback(() => { clearNotasIdleReleaseTimer(); if (!notasLockHeldRef.current) return; notasIdleReleaseTimerRef.current = window.setTimeout(() => { notasIdleReleaseTimerRef.current = null; if (!notasLockHeldRef.current || notasDirtyRef.current || isSavingNotas) return; notasLockHeldRef.current = false; releaseSection('notas') }, SECTION_IDLE_RELEASE_MS) }, [clearNotasIdleReleaseTimer, isSavingNotas, releaseSection])
-  const scheduleTotalsIdleRelease = useCallback(() => { clearTotalsIdleReleaseTimer(); if (!totalsLockHeldRef.current) return; totalsIdleReleaseTimerRef.current = window.setTimeout(() => { totalsIdleReleaseTimerRef.current = null; if (!totalsLockHeldRef.current || totalsDirtyRef.current || isSavingTotals) return; totalsLockHeldRef.current = false; releaseSection('totales') }, SECTION_IDLE_RELEASE_MS) }, [clearTotalsIdleReleaseTimer, isSavingTotals, releaseSection])
   const scheduleItemCellIdleRelease = useCallback((rowId: string, field: QuotationItemCellField) => { const key = getItemCellKey(rowId, field); clearItemCellIdleReleaseTimer(key); itemCellIdleReleaseTimersRef.current[key] = window.setTimeout(() => { delete itemCellIdleReleaseTimersRef.current[key]; if (itemDirtyCellsRef.current.has(key) || itemSavingCellsRef.current.has(key)) return; itemFocusedCellsRef.current.delete(key); releaseItemCell(rowId, field) }, ITEM_CELL_IDLE_RELEASE_MS) }, [clearItemCellIdleReleaseTimer, releaseItemCell])
 
   // Toda mutación de una fila entra en su propia cola: dos borrados seguidos, o un
@@ -417,21 +390,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     if (!response.ok) throw new Error(data?.message || data?.error || 'Error actualizando partida')
     return data?.item as ItemCotizacion | undefined
   }, [awaitRowCreation, id])
-
-  const patchQuotationTotales = useCallback(async (
-    patch: Record<string, unknown>,
-    options?: { base?: Record<string, unknown> | null }
-  ) => {
-    const body: Record<string, unknown> = { ...patch }
-    if (options?.base) body.base = options.base
-    const response = await fetch(`/api/cotizaciones/${id}/totales`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const data = await response.json().catch(() => ({}))
-    if (response.status === 409 && data?.error === 'conflict') {
-      throw new PatchConflictError((data?.fields || {}) as Record<string, FieldConflictDetail>)
-    }
-    if (!response.ok) throw new Error(data?.error || 'Error actualizando configuración de totales')
-    return data as Cotizacion | undefined
-  }, [id])
 
   // El id ya lo generó el cliente (Fase 6B, ver handleAddRow) -- el POST solo lo
   // valida y lo usa como llave del insert. `upsertItems` en el servidor hace que
@@ -495,57 +453,16 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   const applyCotizacionToState = useCallback((cot: Cotizacion) => {
     setCotizacion(cot)
-    const notas = cot.notas_internas ?? ''
-    const totalsConfig = buildTotalsSnapshot({ porcentaje_fee: cot.porcentaje_fee, iva_activo: cot.iva_activo, descuento_tipo: cot.descuento_tipo, descuento_valor: cot.descuento_valor })
-    setNotasInternas(notas)
-    notasValueRef.current = notas
-    lastSavedNotasRef.current = notas
-    notasDirtyRef.current = false
+    resetNotasFromServer(cot)
     resetGeneralFromServer(cot)
-    totalsServerRef.current = totalsConfig
-    totalsDirtyRef.current = false
-    totalsFieldDirtyRef.current.clear()
-    totalsFieldBaseRef.current = {}
-    setTotalsFieldConflicts({})
-    setPorcentajeFee(totalsConfig.porcentaje_fee)
-    porcentajeFeeValueRef.current = totalsConfig.porcentaje_fee
-    setIvaActivo(totalsConfig.iva_activo)
-    ivaActivoValueRef.current = totalsConfig.iva_activo
-    setDescuentoTipo(totalsConfig.descuento_tipo)
-    descuentoTipoValueRef.current = totalsConfig.descuento_tipo
-    setDescuentoValor(totalsConfig.descuento_valor)
-    descuentoValorValueRef.current = totalsConfig.descuento_valor
+    resetTotalsFromServer(cot)
     for (const item of cot.items || []) recordServerItem(item)
     reset({ cliente: cot.cliente, proyecto: cot.proyecto, fecha_entrega: cot.fecha_entrega || '', locacion: cot.locacion || '', items: (cot.items || []).map(mapItemToFormItem) })
-  }, [recordServerItem, reset, resetGeneralFromServer])
+  }, [recordServerItem, reset, resetGeneralFromServer, resetNotasFromServer, resetTotalsFromServer])
 
-  const applyNotasOnly = useCallback((notas: string | null) => { const normalized = notas ?? ''; setNotasInternas(normalized); notasValueRef.current = normalized; lastSavedNotasRef.current = normalized; notasDirtyRef.current = false; setCotizacion((prev) => (prev ? { ...prev, notas_internas: notas } : prev)) }, [])
+  // applyNotasOnly: EF-3 3D-4, ver hooks/useQuotationNotasAutosave.ts.
   // applyGeneralOnly: EF-3 3D-2, ver hooks/useQuotationGeneralAutosave.ts.
-  // Refresco tras un save remoto: NUNCA pisa un campo con una edición o un guardado
-  // propio en vuelo (mismo criterio que `isCellBusy` en partidas). Antes esto se
-  // saltaba la sección COMPLETA si cualquier campo estaba sucio -- con eso, editar
-  // Fecha dejaba a Locación viendo una foto vieja aunque nadie la estuviera tocando.
-  const applyTotalsOnly = useCallback((cot: Cotizacion, pedidoEn: number) => {
-    const totalsConfig = buildTotalsSnapshot({ porcentaje_fee: cot.porcentaje_fee, iva_activo: cot.iva_activo, descuento_tipo: cot.descuento_tipo, descuento_valor: cot.descuento_valor })
-    totalsServerRef.current = totalsConfig
-    // F26/3D-0b: mismo criterio que applyGeneralOnly -- ver ese comentario.
-    const isFieldBusy = (field: QuotationTotalsField) =>
-      totalsFieldDirtyRef.current.has(field) ||
-      totalsFieldSavingRef.current.has(field) ||
-      (totalsFieldConfirmedAtRef.current[field] !== undefined && totalsFieldConfirmedAtRef.current[field]! >= pedidoEn)
-    if (!isFieldBusy('porcentaje_fee')) { setPorcentajeFee(totalsConfig.porcentaje_fee); porcentajeFeeValueRef.current = totalsConfig.porcentaje_fee }
-    if (!isFieldBusy('iva_activo')) { setIvaActivo(totalsConfig.iva_activo); ivaActivoValueRef.current = totalsConfig.iva_activo }
-    if (!isFieldBusy('descuento_tipo')) { setDescuentoTipo(totalsConfig.descuento_tipo); descuentoTipoValueRef.current = totalsConfig.descuento_tipo }
-    if (!isFieldBusy('descuento_valor')) { setDescuentoValor(totalsConfig.descuento_valor); descuentoValorValueRef.current = totalsConfig.descuento_valor }
-    totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
-    setCotizacion((prev) => prev ? {
-      ...prev,
-      porcentaje_fee: isFieldBusy('porcentaje_fee') ? prev.porcentaje_fee : totalsConfig.porcentaje_fee,
-      iva_activo: isFieldBusy('iva_activo') ? prev.iva_activo : totalsConfig.iva_activo,
-      descuento_tipo: isFieldBusy('descuento_tipo') ? prev.descuento_tipo : totalsConfig.descuento_tipo,
-      descuento_valor: isFieldBusy('descuento_valor') ? prev.descuento_valor : totalsConfig.descuento_valor,
-    } : prev)
-  }, [])
+  // applyTotalsOnly: EF-3 3D-3, ver hooks/useQuotationTotalesAutosave.ts.
 
   // Red de seguridad única: ante cualquier fallo del servidor se vuelve a leer la
   // cotización y se reconstruye la tabla, en vez de parchear el estado local a mano
@@ -706,14 +623,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     } finally {
       reconciliacionEnCursoRef.current = null
     }
-  }, [append, applyGeneralOnly, applyNotasOnly, applyTotalsOnly, generalDirtyRef, generalLockHeldRef, getValues, hasLocalItemRowActivity, id, recordServerItem, replace, setValue])
+  }, [append, applyGeneralOnly, applyNotasOnly, applyTotalsOnly, generalDirtyRef, generalLockHeldRef, getValues, hasLocalItemRowActivity, id, notasDirtyRef, notasLockHeldRef, recordServerItem, replace, setValue, totalsDirtyRef, totalsLockHeldRef])
 
   useEffect(() => { refreshCatalogos() }, [refreshCatalogos])
-  useEffect(() => { notasValueRef.current = notasInternas }, [notasInternas])
-  useEffect(() => { porcentajeFeeValueRef.current = porcentaje_fee }, [porcentaje_fee])
-  useEffect(() => { ivaActivoValueRef.current = iva_activo }, [iva_activo])
-  useEffect(() => { descuentoTipoValueRef.current = descuento_tipo }, [descuento_tipo])
-  useEffect(() => { descuentoValorValueRef.current = descuento_valor }, [descuento_valor])
 
   useEffect(() => {
     Promise.all([fetchQuotationDetail(id), fetchProveedores()]).then(([cot, resp]) => { applyCotizacionToState(cot); setResponsables(resp); setLoading(false); const pending = sessionStorage.getItem('pdf_drive_result'); if (pending) { sessionStorage.removeItem('pdf_drive_result'); try { const { link } = JSON.parse(pending); setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(link ?? null) } catch {} } }).catch(() => setLoading(false))
@@ -743,198 +655,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // ver su rechazo real, y quien dispara esto sin esperarlo (el timer de
   // debounce, el blur) sigue sin generar un rechazo no manejado, porque el
   // handler queda adjunto en el mismo tick en que se crea la promesa.
-  const persistNotasAutosave = useCallback((): Promise<unknown> => {
-    if (notasInFlightRef.current) return notasInFlightRef.current
-    if (!cotizacion) return Promise.resolve()
-    const notasToSave = getCurrentNotasSnapshot()
-    const previousNotas = lastSavedNotasRef.current
-    if (notasToSave === previousNotas) {
-      notasDirtyRef.current = false
-      if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas') }
-      else scheduleNotasIdleRelease()
-      return Promise.resolve()
-    }
-    setIsSavingNotas(true)
-    const p = trackMutation(saveQuotationNotes(id, notasToSave || null))
-    notasInFlightRef.current = p
-    p.then(
-      () => {
-        lastSavedNotasRef.current = notasToSave
-        setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev))
-        const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current
-        notasDirtyRef.current = hasPendingChanges
-        if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return }
-        if (!hasPendingChanges) scheduleNotasIdleRelease()
-      },
-      (saveError: unknown) => {
-        setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas')
-        notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current
-        clearNotasIdleReleaseTimer()
-        notasLockHeldRef.current = false
-        releaseSection('notas')
-      }
-    ).finally(() => { setIsSavingNotas(false); notasInFlightRef.current = null })
-    return p
-  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, releaseSection, scheduleNotasIdleRelease, trackMutation])
+  // persistNotasAutosave: EF-3 3D-4, ver hooks/useQuotationNotasAutosave.ts.
 
-  const getTotalsFieldValue = useCallback((field: QuotationTotalsField): unknown => {
-    switch (field) {
-      case 'porcentaje_fee': return porcentajeFeeValueRef.current
-      case 'iva_activo': return ivaActivoValueRef.current
-      case 'descuento_tipo': return descuentoTipoValueRef.current
-      case 'descuento_valor': return descuentoValorValueRef.current
-    }
-  }, [])
-
-  // sendGeneralFieldPatchRound: EF-3 3D-2, ver hooks/useQuotationGeneralAutosave.ts.
-  const sendTotalsFieldPatchRound = useCallback((field: QuotationTotalsField): Promise<unknown> => {
-    if (!cotizacion) return Promise.resolve()
-    totalsFieldSavingRef.current.add(field)
-    setIsSavingTotals(true)
-    const value = getTotalsFieldValue(field)
-    const patch: Record<string, unknown> = { [field]: value }
-    const baseValue = totalsFieldBaseRef.current[field]
-    const base = baseValue !== undefined ? { [field]: baseValue } : undefined
-    // Mismo motivo que `sendGeneralFieldPatchRound`: `trackMutation` debe
-    // registrar la promesa SEMÁNTICA (tras resolver un conflicto idéntico), no
-    // la cruda.
-    const rawPatch = patchQuotationTotales(patch, { base })
-    const semantic = rawPatch.then(
-      (updated) => {
-        try {
-          // Mismo motivo que `sendGeneralFieldPatchRound`: no limpiar dirty si
-          // ya hay un reintento encolado (`totalsFieldRetryNeededRef`) con un
-          // valor más nuevo -- el drenado de `persistTotalsFieldAutosave`
-          // manda la ronda siguiente y recién esa limpia el dirty de verdad.
-          if (!totalsFieldRetryNeededRef.current.has(field)) {
-            totalsFieldDirtyRef.current.delete(field)
-          }
-          clearTotalsFieldConflict(field)
-          if (updated) {
-            totalsServerRef.current = buildTotalsSnapshot({ porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor })
-            // F26/3D-0b: ver el comentario equivalente en sendGeneralFieldPatchRound.
-            totalsFieldConfirmedAtRef.current[field] = Date.now()
-            // Causa E (portada de partidas): refrescar el "base" al valor
-            // recién confirmado, SIEMPRE -- ver el comentario equivalente en
-            // `sendGeneralFieldPatchRound`.
-            totalsFieldBaseRef.current[field] = totalsServerRef.current[field]
-            setCotizacion((prev) => prev ? { ...prev, porcentaje_fee: updated.porcentaje_fee, iva_activo: updated.iva_activo, descuento_tipo: updated.descuento_tipo, descuento_valor: updated.descuento_valor } : prev)
-          }
-          totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
-          if (!totalsFocusedRef.current) {
-            clearTotalsIdleReleaseTimer()
-            if (totalsFieldDirtyRef.current.size === 0) { totalsLockHeldRef.current = false; releaseSection('totales'); return }
-          }
-          if (totalsFieldDirtyRef.current.size === 0) scheduleTotalsIdleRelease()
-        } finally {
-          totalsFieldSavingRef.current.delete(field)
-          setIsSavingTotals(totalsFieldSavingRef.current.size > 0)
-        }
-      },
-      (saveError: unknown) => {
-        try {
-          if (saveError instanceof PatchConflictError) {
-            // Si lo que se intentó guardar es idéntico a lo que el servidor ya tiene,
-            // no hay nada que decidir -- se resuelve solo, sin mostrar el banner.
-            const detail = saveError.fields[field]
-            if (detail && normalizeTotalsFieldValue(field, detail.attempted) === normalizeTotalsFieldValue(field, detail.current)) {
-              totalsServerRef.current = { ...totalsServerRef.current, [field]: detail.current } as TotalsSnapshot
-              totalsFieldBaseRef.current[field] = detail.current
-              // Mismo motivo que la rama de éxito: no limpiar dirty si ya hay
-              // un reintento encolado con un valor más nuevo.
-              if (!totalsFieldRetryNeededRef.current.has(field)) {
-                totalsFieldDirtyRef.current.delete(field)
-              }
-              totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
-              return
-            }
-            setTotalsFieldConflicts((prev) => ({ ...prev, [field]: saveError.fields[field] }))
-            throw saveError
-          }
-          setError(saveError instanceof Error ? saveError.message : 'Error guardando configuración de totales')
-          throw saveError
-        } finally {
-          totalsFieldSavingRef.current.delete(field)
-          setIsSavingTotals(totalsFieldSavingRef.current.size > 0)
-        }
-      }
-    )
-    return trackMutation(semantic)
-  }, [clearTotalsFieldConflict, clearTotalsIdleReleaseTimer, cotizacion, getTotalsFieldValue, patchQuotationTotales, releaseSection, scheduleTotalsIdleRelease, trackMutation])
-
-  // persistGeneralFieldAutosave: EF-3 3D-2, ver hooks/useQuotationGeneralAutosave.ts.
-  const persistTotalsFieldAutosave = useCallback((field: QuotationTotalsField): Promise<unknown> => {
-    const existing = totalsFieldDrainRef.current.get(field)
-    if (existing) {
-      totalsFieldRetryNeededRef.current.add(field)
-      return existing
-    }
-    const drain = (async () => {
-      let result: unknown
-      do {
-        totalsFieldRetryNeededRef.current.delete(field)
-        result = await sendTotalsFieldPatchRound(field)
-      } while (totalsFieldRetryNeededRef.current.has(field))
-      return result
-    })().finally(() => {
-      totalsFieldDrainRef.current.delete(field)
-    })
-    drain.catch(() => {})
-    totalsFieldDrainRef.current.set(field, drain)
-    return drain
-  }, [sendTotalsFieldPatchRound])
-
-  const persistTotalsFieldRef = useRef(persistTotalsFieldAutosave)
-  persistTotalsFieldRef.current = persistTotalsFieldAutosave
-
-  // markGeneralFieldDirty: EF-3 3D-2, ver hooks/useQuotationGeneralAutosave.ts.
-  const markTotalsFieldDirty = useCallback((field: QuotationTotalsField) => {
-    if (!totalsFieldDirtyRef.current.has(field)) {
-      totalsFieldBaseRef.current[field] = totalsServerRef.current[field]
-      totalsFieldDirtyRef.current.add(field)
-    }
-    totalsDirtyRef.current = true
-    clearTotalsFieldTimer(field)
-    totalsFieldTimersRef.current[field] = window.setTimeout(() => { void persistTotalsFieldRef.current(field) }, TOTALS_AUTOSAVE_DELAY_MS)
-  }, [clearTotalsFieldTimer])
-
-  // flushGeneralDirtyFields: EF-3 3D-2, ver hooks/useQuotationGeneralAutosave.ts.
-  // Al salir de la sección se guardan de inmediato todos los campos sucios en vez
-  // de esperar su debounce individual -- mismo criterio que tenía el guardado de
-  // sección completa al perder el foco.
-  const flushTotalsDirtyFields = useCallback((): Promise<unknown>[] => {
-    const disparadas: Promise<unknown>[] = []
-    const fields = new Set([...Array.from(totalsFieldDirtyRef.current), ...Array.from(totalsFieldDrainRef.current.keys())])
-    for (const field of Array.from(fields)) {
-      const existingDrain = totalsFieldDrainRef.current.get(field)
-      if (existingDrain) { disparadas.push(existingDrain); continue }
-      if (!totalsFieldDirtyRef.current.has(field)) continue
-      clearTotalsFieldTimer(field)
-      disparadas.push(persistTotalsFieldAutosave(field))
-    }
-    return disparadas
-  }, [clearTotalsFieldTimer, persistTotalsFieldAutosave])
-
-  // resolveGeneralFieldConflict: EF-3 3D-2, ver hooks/useQuotationGeneralAutosave.ts.
-  const resolveTotalsFieldConflict = useCallback((field: QuotationTotalsField, resolution: 'theirs' | 'mine') => {
-    const detail = totalsFieldConflicts[field]
-    if (!detail) return
-    clearTotalsFieldConflict(field)
-    totalsServerRef.current = { ...totalsServerRef.current, [field]: detail.current } as TotalsSnapshot
-    totalsFieldBaseRef.current[field] = detail.current
-    if (resolution === 'theirs') {
-      if (field === 'porcentaje_fee') { const v = Number(detail.current) || 0; porcentajeFeeValueRef.current = v; setPorcentajeFee(v) }
-      else if (field === 'iva_activo') { const v = Boolean(detail.current); ivaActivoValueRef.current = v; setIvaActivo(v) }
-      else if (field === 'descuento_tipo') { const v = detail.current === 'porcentaje' ? 'porcentaje' : 'monto'; descuentoTipoValueRef.current = v; setDescuentoTipo(v) }
-      else { const v = Number(detail.current) || 0; descuentoValorValueRef.current = v; setDescuentoValor(v) }
-      totalsFieldDirtyRef.current.delete(field)
-      totalsDirtyRef.current = totalsFieldDirtyRef.current.size > 0
-      return
-    }
-    // Mismo motivo que `resolveGeneralFieldConflict`: reusa el drenado
-    // genérico en vez de la ronda cruda.
-    void persistTotalsFieldAutosave(field)
-  }, [clearTotalsFieldConflict, persistTotalsFieldAutosave, totalsFieldConflicts])
+  // getTotalsFieldValue/sendTotalsFieldPatchRound/persistTotalsFieldAutosave/
+  // markTotalsFieldDirty/flushTotalsDirtyFields/resolveTotalsFieldConflict:
+  // EF-3 3D-3, ver hooks/useQuotationTotalesAutosave.ts.
 
   /**
    * Una ronda de PATCH para una celda: arma el patch, lo manda, y aplica éxito
@@ -1151,15 +876,9 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     })()
     flushInFlightRef.current = run
     return run.finally(() => { flushInFlightRef.current = null })
-  }, [flushGeneralDirtyFields, flushTotalsDirtyFields, flushItemCellDirtyFields, itemCellConflicts, pendingMutationsRef, persistNotasAutosave])
+  }, [flushGeneralDirtyFields, flushTotalsDirtyFields, flushItemCellDirtyFields, itemCellConflicts, notasDirtyRef, pendingMutationsRef, persistNotasAutosave])
 
-  useEffect(() => {
-    if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
-    if (notasAutosaveTimerRef.current !== null) window.clearTimeout(notasAutosaveTimerRef.current)
-    notasAutosaveTimerRef.current = window.setTimeout(() => { void persistNotasAutosave() }, NOTAS_AUTOSAVE_DELAY_MS)
-    return () => { if (notasAutosaveTimerRef.current !== null) { window.clearTimeout(notasAutosaveTimerRef.current); notasAutosaveTimerRef.current = null } }
-  }, [esEditable, isSavingNotas, notasInternas, persistNotasAutosave])
-
+  // Debounce de Notas: EF-3 3D-4, ver hooks/useQuotationNotasAutosave.ts.
   // General y Totales ya no tienen un debounce por sección: `markGeneralFieldDirty`/
   // `markTotalsFieldDirty` programan su propio timeout por campo en cuanto se
   // detecta la edición (ver los `tracked*` handlers más abajo).
@@ -1235,19 +954,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   }, [esEditable, reconciliarConServidor])
 
   useEffect(() => () => {
-    if (notasAutosaveTimerRef.current !== null) window.clearTimeout(notasAutosaveTimerRef.current)
     clearNotasIdleReleaseTimer(); clearGeneralIdleReleaseTimer(); clearTotalsIdleReleaseTimer()
     Object.values(itemCellAutosaveTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
     Object.values(itemCellIdleReleaseTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
     clearAllGeneralFieldTimers()
-    Object.values(totalsFieldTimersRef.current).forEach((timer) => timer && window.clearTimeout(timer))
-  }, [clearAllGeneralFieldTimers, clearGeneralIdleReleaseTimer, clearNotasIdleReleaseTimer, clearTotalsIdleReleaseTimer])
+    clearAllTotalsFieldTimers()
+  }, [clearAllGeneralFieldTimers, clearAllTotalsFieldTimers, clearGeneralIdleReleaseTimer, clearNotasIdleReleaseTimer, clearTotalsIdleReleaseTimer])
 
-  const handleNotasFocus = useCallback(() => { if (!esEditable) return; clearNotasIdleReleaseTimer(); notasFocusedRef.current = true; if (!notasLockHeldRef.current) { notasLockHeldRef.current = true; setActiveSection('notas') } }, [clearNotasIdleReleaseTimer, esEditable, setActiveSection])
-  const handleTotalsFocus = useCallback(() => { if (!esEditable) return; clearTotalsIdleReleaseTimer(); totalsFocusedRef.current = true; if (!totalsLockHeldRef.current) { totalsLockHeldRef.current = true; setActiveSection('totales') } }, [clearTotalsIdleReleaseTimer, esEditable, setActiveSection])
-
-  const handleNotasBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && notasSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && notasSectionRef.current?.contains(activeElement)) return; notasFocusedRef.current = false; clearNotasIdleReleaseTimer(); if (notasDirtyRef.current) { void persistNotasAutosave(); return } notasLockHeldRef.current = false; releaseSection('notas') }, 0) }, [clearNotasIdleReleaseTimer, esEditable, persistNotasAutosave, releaseSection])
-  const handleTotalsBlur = useCallback((event: FocusEvent<HTMLDivElement>) => { if (!esEditable) return; const nextTarget = event.relatedTarget as Node | null; if (nextTarget && totalsSectionRef.current?.contains(nextTarget)) return; window.setTimeout(() => { const activeElement = document.activeElement; if (activeElement && totalsSectionRef.current?.contains(activeElement)) return; totalsFocusedRef.current = false; clearTotalsIdleReleaseTimer(); if (totalsFieldDirtyRef.current.size > 0) { flushTotalsDirtyFields(); return } totalsLockHeldRef.current = false; releaseSection('totales') }, 0) }, [clearTotalsIdleReleaseTimer, esEditable, flushTotalsDirtyFields, releaseSection])
+  // handleNotasFocus/handleNotasBlur: EF-3 3D-4, ver hooks/useQuotationNotasAutosave.ts.
+  // handleTotalsFocus/handleTotalsBlur: EF-3 3D-3, ver hooks/useQuotationTotalesAutosave.ts.
 
   // Sin esto, tocar la tabla una vez te dejaba marcado como editor de Partidas para
   // los demás indefinidamente: era la única sección sin liberación al salir.
@@ -1264,10 +979,8 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
   // handleGeneralFocus/handleGeneralBlur/tracked*: EF-3 3D-2, ver
   // hooks/useQuotationGeneralAutosave.ts.
-  const trackedSetPorcentajeFee = useCallback((value: number) => { handleTotalsFocus(); markTotalsFieldDirty('porcentaje_fee'); porcentajeFeeValueRef.current = value; setPorcentajeFee(value) }, [handleTotalsFocus, markTotalsFieldDirty])
-  const trackedSetIvaActivo = useCallback((value: boolean | ((prev: boolean) => boolean)) => { handleTotalsFocus(); markTotalsFieldDirty('iva_activo'); const nextValue = typeof value === 'function' ? value(ivaActivoValueRef.current) : value; ivaActivoValueRef.current = nextValue; setIvaActivo(nextValue) }, [handleTotalsFocus, markTotalsFieldDirty])
-  const trackedSetDescuentoTipo = useCallback((value: 'monto' | 'porcentaje') => { handleTotalsFocus(); markTotalsFieldDirty('descuento_tipo'); descuentoTipoValueRef.current = value; setDescuentoTipo(value) }, [handleTotalsFocus, markTotalsFieldDirty])
-  const trackedSetDescuentoValor = useCallback((value: number) => { handleTotalsFocus(); markTotalsFieldDirty('descuento_valor'); descuentoValorValueRef.current = value; setDescuentoValor(value) }, [handleTotalsFocus, markTotalsFieldDirty])
+  // trackedSetPorcentajeFee/trackedSetIvaActivo/trackedSetDescuentoTipo/
+  // trackedSetDescuentoValor: EF-3 3D-3, ver hooks/useQuotationTotalesAutosave.ts.
 
   const handleItemFieldFocus = useCallback((rowId: string, field: QuotationItemCellField) => {
     const key = getItemCellKey(rowId, field)
@@ -1948,7 +1661,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      {(notasInternas || esEditable) && <div ref={notasSectionRef} className={`bg-row/60 border rounded-panel p-4 ${sectionEditors.notas ? 'border-accent-quiet/70' : 'border-hairline'}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}><SectionEditBadge section="notas" /><p className="sn-label mb-2">Notas del evento (uso interno)</p>{esEditable ? <textarea value={notasInternas} onChange={e => { handleNotasFocus(); notasDirtyRef.current = true; setNotasInternas(e.target.value) }} rows={3} placeholder="Sin notas..." className="w-full bg-transparent text-body text-content resize-none outline-none placeholder-faint disabled:opacity-50 disabled:cursor-not-allowed" /> : <p className="text-subtext text-content whitespace-pre-wrap">{notasInternas || '—'}</p>}</div>}
+      {(notasInternas || esEditable) && <div ref={notasSectionRef} className={`bg-row/60 border rounded-panel p-4 ${sectionEditors.notas ? 'border-accent-quiet/70' : 'border-hairline'}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}><SectionEditBadge section="notas" /><p className="sn-label mb-2">Notas del evento (uso interno)</p>{esEditable ? <textarea value={notasInternas} onChange={e => trackedHandleNotasChange(e.target.value)} rows={3} placeholder="Sin notas..." className="w-full bg-transparent text-body text-content resize-none outline-none placeholder-faint disabled:opacity-50 disabled:cursor-not-allowed" /> : <p className="text-subtext text-content whitespace-pre-wrap">{notasInternas || '—'}</p>}</div>}
 
       <div ref={generalSectionRef} className={`rounded-panel ${sectionEditors.general ? 'ring-1 ring-accent-quiet/70' : ''}`} onFocusCapture={handleGeneralFocus} onBlurCapture={handleGeneralBlur}>
         <div className="px-1"><SectionEditBadge section="general" /></div>
