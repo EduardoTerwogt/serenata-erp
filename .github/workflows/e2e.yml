@@ -6,6 +6,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+# EF-3A 3A-1: mismo group que load-test.yml -- ambos mutan serenata-erp-test,
+# así que GitHub Actions los encola en vez de dejarlos correr a la vez contra
+# el mismo proyecto compartido (fuente real de contaminación cruzada, ya
+# documentada en EF-2).
+concurrency:
+  group: serenata-erp-test-shared
+  cancel-in-progress: false
+
 jobs:
   smoke-and-critical:
     runs-on: ubuntu-latest
