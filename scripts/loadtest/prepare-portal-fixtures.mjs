@@ -74,6 +74,15 @@ async function main() {
       correo: `LOADTEST-${runId}-${n}@proveedor.test`,
       activo: true,
       session_version: FIXTURE_SESSION_VERSION,
+      // 'activo' (no NULL/'pendiente_confirmacion'): representa un proveedor
+      // que ya completó el signup del Portal -- GET /api/portal/me exige
+      // portal_estado !== null además de requirePortalSession() (encontrado
+      // en la validación real de este bloque: sin esto, /me devuelve 401
+      // "No autenticado" aunque la cookie firmada sea válida). Las otras
+      // rutas que k6 (3A-5) ejercita (perfil, cuentas, documentos) no
+      // exigen este campo, pero un proveedor de fixture sin cuenta de
+      // portal completa no representa el tráfico real que la suite simula.
+      portal_estado: 'activo',
     }
   })
 
