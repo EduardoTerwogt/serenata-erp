@@ -99,7 +99,6 @@ jobs:
       PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
       TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
-      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
       DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
       TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
     steps:
@@ -125,55 +124,6 @@ jobs:
 
       - name: env-check -- confirmar que apunta a serenata-erp-test antes de cualquier tráfico
         run: node scripts/loadtest/env-check.mjs --target-url http://127.0.0.1:3000
-
-      # ── TMP 3A-3 validation -- se borra antes de mergear el PR ──
-      - name: TMP -- generar runId de prueba
-        id: tmp_runid
-        run: echo "run_id=$(node -e 'console.log(crypto.randomUUID())')" >> "$GITHUB_OUTPUT"
-
-      - name: TMP -- seed-volume-fixtures.mjs (escala reducida -- 3 cotizaciones/proveedores)
-        env:
-          LOADTEST_PROVEEDORES_TARGET: '3'
-          LOADTEST_COTIZACIONES_TARGET: '3'
-        run: |
-          node scripts/loadtest/seed-volume-fixtures.mjs \
-            --target-url http://127.0.0.1:3000 \
-            --run-id ${{ steps.tmp_runid.outputs.run_id }}
-
-      - name: TMP -- limpiar filas de esta corrida (bulk-cleanup.mjs real llega en 3A-4)
-        if: always()
-        run: |
-          node -e "
-            const { createClient } = require('@supabase/supabase-js');
-            const supabaseAdmin = createClient(process.env.TEST_SUPABASE_URL, process.env.TEST_SUPABASE_SERVICE_ROLE_KEY);
-            const runId = '${{ steps.tmp_runid.outputs.run_id }}';
-            const pattern = \`LOADTEST-\${runId}-%\`;
-            (async () => {
-              const cot = await supabaseAdmin.from('cotizaciones').select('id').ilike('cliente', pattern);
-              const ids = (cot.data || []).map(r => r.id);
-              console.log('TMP cleanup: cotizaciones a borrar:', ids.length);
-              if (ids.length > 0) {
-                await supabaseAdmin.from('items_cotizacion').delete().in('cotizacion_id', ids);
-                await supabaseAdmin.from('cuentas_pagar').delete().in('cotizacion_id', ids);
-                await supabaseAdmin.from('cuentas_cobrar').delete().in('cotizacion_id', ids);
-                await supabaseAdmin.from('proyectos').delete().in('id', ids);
-                await supabaseAdmin.from('cotizacion_folio_reservations').delete().in('folio', ids);
-                await supabaseAdmin.from('cotizaciones').delete().in('id', ids);
-              }
-              const prov = await supabaseAdmin.from('proveedores').select('id').ilike('nombre', pattern);
-              const provIds = (prov.data || []).map(r => r.id);
-              console.log('TMP cleanup: proveedores a borrar:', provIds.length);
-              if (provIds.length > 0) await supabaseAdmin.from('proveedores').delete().in('id', provIds);
-              const cli = await supabaseAdmin.from('clientes').select('id').ilike('nombre', pattern);
-              const cliIds = (cli.data || []).map(r => r.id);
-              if (cliIds.length > 0) await supabaseAdmin.from('clientes').delete().in('id', cliIds);
-              const prod = await supabaseAdmin.from('productos').select('id').ilike('descripcion', pattern);
-              const prodIds = (prod.data || []).map(r => r.id);
-              if (prodIds.length > 0) await supabaseAdmin.from('productos').delete().in('id', prodIds);
-              console.log('TMP cleanup: listo');
-            })().catch(e => { console.error(e); process.exit(1); });
-          "
-      # ── fin TMP 3A-3 validation ──
 
       # Los 8 escenarios de k6 contra este entorno local los agrega 3A-5.
 
