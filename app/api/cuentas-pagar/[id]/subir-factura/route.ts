@@ -2,6 +2,7 @@ import { requireSection } from '@/lib/api-auth'
 import { getCuentaPagarById, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
+import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
 import { RegimenFiscal } from '@/lib/types'
@@ -65,8 +66,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
-    const facturaXmlUrl = await uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, googleEnv.driveFolderIdCuentas || undefined)
-    const facturaPdfUrl = await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, googleEnv.driveFolderIdCuentas || undefined)
+    const uploadFolderId = resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined)
+    const facturaXmlUrl = await uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, uploadFolderId)
+    const facturaPdfUrl = await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, uploadFolderId)
 
     // Validación fiscal profunda (Fase 5.3 Bloque 0, punto 3): el desglose
     // de impuestos del XML (traslados/retenciones) debe coincidir con lo

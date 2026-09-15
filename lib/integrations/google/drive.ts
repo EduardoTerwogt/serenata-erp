@@ -340,3 +340,60 @@ export async function uploadFileToDrive(
     throw toOperationalDriveError(err, 'uploadFileToDrive')
   }
 }
+
+/**
+ * EF-3A 3A-4: crea una carpeta de Drive dedicada por corrida de carga
+ * (`loadtest-${runId}`), para aislar los uploads de la suite del folder
+ * normal de cuentas -- y poder borrarla completa al limpiar. Un solo nivel
+ * (a diferencia de ensureFolderPath, que resuelve rutas multi-segmento) --
+ * scripts/loadtest/create-drive-run-folder.mjs solo necesita 1 carpeta por
+ * corrida.
+ */
+export async function createDriveFolder(name: string, parentId: string): Promise<string> {
+  const auth = getGoogleOAuth2Client()
+  if (!auth) {
+    throw new Error('Google Drive not configured')
+  }
+  const drive = google.drive({ version: 'v3', auth })
+  try {
+    const res = await withDriveRetry('createDriveFolder', () => drive.files.create({
+      supportsAllDrives: true,
+      requestBody: {
+        name,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentId],
+      },
+      fields: 'id',
+    }))
+    if (!res.data.id) {
+      throw new Error(`No se pudo crear la carpeta "${name}"`)
+    }
+    return res.data.id
+  } catch (err: unknown) {
+    throw toOperationalDriveError(err, 'createDriveFolder')
+  }
+}
+
+/**
+ * EF-3A 3A-4: borrado permanente (no a la papelera) -- el cleanup de carga
+ * existe precisamente para no dejar carpetas/archivos huérfanos en Drive de
+ * test acumulándose corrida tras corrida. Idempotente: un 404 de Google
+ * (ya borrado) no es un error para el caller.
+ */
+export async function deleteDriveFile(fileId: string): Promise<void> {
+  const auth = getGoogleOAuth2Client()
+  if (!auth) {
+    throw new Error('Google Drive not configured')
+  }
+  const drive = google.drive({ version: 'v3', auth })
+  try {
+    await withDriveRetry('deleteDriveFile', () => drive.files.delete({
+      fileId,
+      supportsAllDrives: true,
+    }))
+  } catch (err: unknown) {
+    const status = (err as { status?: number; code?: number })?.status ?? (err as { status?: number; code?: number })?.code
+    if (status === 404) return
+    throw toOperationalDriveError(err, 'deleteDriveFile')
+  }
+}
