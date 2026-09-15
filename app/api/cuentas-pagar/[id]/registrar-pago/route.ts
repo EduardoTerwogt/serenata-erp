@@ -4,7 +4,10 @@ import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { withIdempotency, computePayloadHash } from '@/lib/server/idempotency'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+import { logStructured, newRequestId } from '@/lib/server/observability/log'
 
+const ROUTE = 'POST /api/cuentas-pagar/[id]/registrar-pago'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
@@ -82,10 +85,14 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         })
 
         if (rpcError) {
+          const requestId = newRequestId()
+          const rpcDetail = rpcError.message
           if (rpcError.code === 'P1411') {
-            return { status: 409, body: { error: 'operation_id_cruzado', message: rpcError.message } }
+            logStructured({ requestId, route: ROUTE, level: 'warn', message: 'operation_id_cruzado', detail: rpcDetail })
+            return { status: 409, body: { error: 'operation_id_cruzado', requestId } }
           }
-          return { status: 400, body: { error: rpcError.message } }
+          logStructured({ requestId, route: ROUTE, level: 'error', message: 'rpc_registrar_pago_cuenta_pagar_error', detail: rpcDetail })
+          return { status: 400, body: { error: 'No se pudo registrar el pago', requestId } }
         }
 
 
@@ -107,8 +114,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     return Response.json(body, { status })
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error)
-    console.error('[cuentas-pagar/registrar-pago]', msg)
-    return Response.json({ error: `Error registrando pago: ${msg}` }, { status: 500 })
+    return buildErrorResponse(error, ROUTE)
   }
 }

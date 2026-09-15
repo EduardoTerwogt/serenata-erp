@@ -9,8 +9,11 @@ import {
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { extraerDatosIdentidad } from '@/lib/server/portal/document-parser'
-import { toErrorMessage } from '@/lib/server/portal/error-message'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { TipoDocumentoProveedor } from '@/lib/types'
+
+const ROUTE_GET = 'GET /api/portal/documentos'
+const ROUTE_POST = 'POST /api/portal/documentos'
 
 const TIPOS_VALIDOS: TipoDocumentoProveedor[] = [
   'CONSTANCIA_SITUACION_FISCAL',
@@ -33,8 +36,7 @@ export async function GET() {
     const documentos = await getProveedorDocumentos(portalAuth.proveedorId)
     return Response.json({ documentos })
   } catch (error) {
-    console.error('[portal/documentos]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE_GET)
   }
 }
 
@@ -95,7 +97,6 @@ export async function POST(request: Request) {
 
     return Response.json({ success: true, documento, requiere_confirmacion: requiereConfirmacion })
   } catch (error) {
-    console.error('[portal/documentos]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE_POST)
   }
 }

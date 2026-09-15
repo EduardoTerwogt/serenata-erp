@@ -4,8 +4,17 @@ import { parseFacturaXML, validarMontoFactura, validarFacturaClienteXML, calcula
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 
 const ROUTE = 'POST /api/cuentas-cobrar/[id]/subir-factura'
+
+const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
+  XML_REQUIRED: 'Se requiere archivo XML de factura',
+  PDF_REQUIRED: 'Se requiere archivo PDF de factura',
+  XML_INVALID_TYPE: 'El archivo XML debe ser de tipo text/xml o application/xml',
+  PDF_INVALID_TYPE: 'El archivo PDF debe ser de tipo application/pdf',
+  FILE_TOO_LARGE: 'El archivo excede el límite de 10 MB',
+}
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -16,29 +25,15 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const formData = await request.formData()
 
     // Obtener archivos
-    const pdfFile = formData.get('factura_pdf') as File | null
-    const xmlFile = formData.get('factura_xml') as File | null
+    const pdfFileInput = formData.get('factura_pdf') as File | null
+    const xmlFileInput = formData.get('factura_xml') as File | null
 
-    if (!xmlFile) {
-      return Response.json(
-        { error: 'Se requiere archivo XML de factura' },
-        { status: 400 }
-      )
+    const validation = validateFacturaFiles({ xml: xmlFileInput, pdf: pdfFileInput, pdfRequired: false })
+    if (!validation.ok) {
+      return Response.json({ error: VALIDATION_MESSAGES[validation.code] }, { status: 400 })
     }
-
-    // Validar tipos MIME permitidos
-    const ALLOWED_XML_TYPES = ['text/xml', 'application/xml']
-    const ALLOWED_PDF_TYPES = ['application/pdf']
-    if (!ALLOWED_XML_TYPES.includes(xmlFile.type) && !xmlFile.name.endsWith('.xml')) {
-      return Response.json({ error: 'El archivo XML debe ser de tipo text/xml o application/xml' }, { status: 400 })
-    }
-    if (pdfFile && !ALLOWED_PDF_TYPES.includes(pdfFile.type) && !pdfFile.name.endsWith('.pdf')) {
-      return Response.json({ error: 'El archivo PDF debe ser de tipo application/pdf' }, { status: 400 })
-    }
-    const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
-    if (xmlFile.size > MAX_FILE_SIZE || (pdfFile && pdfFile.size > MAX_FILE_SIZE)) {
-      return Response.json({ error: 'El archivo excede el límite de 10 MB' }, { status: 400 })
-    }
+    const xmlFile = xmlFileInput as File
+    const pdfFile = pdfFileInput
 
     // Obtener cuenta
     const cuenta = await getCuentaCobrarById(id)

@@ -142,10 +142,23 @@ describe('POST /api/cuentas-cobrar/[id]/registrar-pago', () => {
     })
   })
 
-  it('P1411 (operation_id cruzado) -- 409', async () => {
+  it('P1411 (operation_id cruzado) -- 409, sin exponer el mensaje crudo de la RPC', async () => {
     mocks.rpcMock.mockResolvedValue({ data: null, error: { code: 'P1411', message: 'operation_id ya pertenece a otra cuenta' } })
     const res = await POST(buildRequest(), { params })
     expect(res.status).toBe(409)
-    expect((await res.json()).error).toBe('operation_id_cruzado')
+    const body = await res.json()
+    expect(body.error).toBe('operation_id_cruzado')
+    expect(body.requestId).toEqual(expect.any(String))
+    expect(JSON.stringify(body)).not.toContain('operation_id ya pertenece a otra cuenta')
+  })
+
+  it('error de RPC sin código reconocido -- EF-3 3D-9: 400 sin exponer el mensaje crudo de la RPC', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'boom' } })
+    const res = await POST(buildRequest(), { params })
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).not.toBe('boom')
+    expect(body.requestId).toEqual(expect.any(String))
+    expect(JSON.stringify(body)).not.toContain('boom')
   })
 })

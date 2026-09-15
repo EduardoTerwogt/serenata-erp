@@ -4,12 +4,19 @@ import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor, calcularEjemploFactura } from '@/lib/server/validation/factura-fiscal'
-import { toErrorMessage } from '@/lib/server/portal/error-message'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 import { RegimenFiscal } from '@/lib/types'
 
-const ALLOWED_XML_TYPES = ['text/xml', 'application/xml']
-const ALLOWED_PDF_TYPES = ['application/pdf']
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+const ROUTE = 'POST /api/portal/cuentas/[id]/factura'
+
+const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
+  XML_REQUIRED: 'Se requiere el archivo XML de tu factura',
+  PDF_REQUIRED: 'Se requiere el archivo PDF de tu factura',
+  XML_INVALID_TYPE: 'El archivo XML debe ser de tipo text/xml o application/xml',
+  PDF_INVALID_TYPE: 'El archivo PDF debe ser de tipo application/pdf',
+  FILE_TOO_LARGE: 'El archivo excede el límite de 10 MB',
+}
 
 /**
  * Fase 5.5: mismo flujo de validación fiscal que
@@ -28,19 +35,15 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const { id } = await props.params
     const formData = await request.formData()
 
-    const facturaXmlFile = formData.get('factura_xml') as File | null
-    const facturaPdfFile = formData.get('factura_pdf') as File | null
-    if (!facturaXmlFile) return Response.json({ error: 'Se requiere el archivo XML de tu factura' }, { status: 400 })
-    if (!facturaPdfFile) return Response.json({ error: 'Se requiere el archivo PDF de tu factura' }, { status: 400 })
-    if (!ALLOWED_XML_TYPES.includes(facturaXmlFile.type) && !facturaXmlFile.name.endsWith('.xml')) {
-      return Response.json({ error: 'El archivo XML debe ser de tipo text/xml o application/xml' }, { status: 400 })
+    const facturaXmlFileInput = formData.get('factura_xml') as File | null
+    const facturaPdfFileInput = formData.get('factura_pdf') as File | null
+
+    const validation = validateFacturaFiles({ xml: facturaXmlFileInput, pdf: facturaPdfFileInput, pdfRequired: true })
+    if (!validation.ok) {
+      return Response.json({ error: VALIDATION_MESSAGES[validation.code] }, { status: 400 })
     }
-    if (!ALLOWED_PDF_TYPES.includes(facturaPdfFile.type) && !facturaPdfFile.name.endsWith('.pdf')) {
-      return Response.json({ error: 'El archivo PDF debe ser de tipo application/pdf' }, { status: 400 })
-    }
-    if (facturaXmlFile.size > MAX_FILE_SIZE || facturaPdfFile.size > MAX_FILE_SIZE) {
-      return Response.json({ error: 'El archivo excede el límite de 10 MB' }, { status: 400 })
-    }
+    const facturaXmlFile = facturaXmlFileInput as File
+    const facturaPdfFile = facturaPdfFileInput as File
 
     const cuenta = await getCuentaPagarById(id)
     if (!cuenta) return Response.json({ error: 'Cuenta no encontrada' }, { status: 404 })
@@ -106,7 +109,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     return Response.json({ success: true })
   } catch (error) {
-    console.error('[portal/cuentas/factura]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE)
   }
 }

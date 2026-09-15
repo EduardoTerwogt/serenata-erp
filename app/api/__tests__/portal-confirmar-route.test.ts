@@ -60,4 +60,13 @@ describe('POST /api/portal/signup/confirmar', () => {
     expect(mocks.setPortalSessionCookieMock).not.toHaveBeenCalled()
     expect(response.status).toBe(200)
   })
+
+  it('EF-3 3D-10: un error inesperado (crudo de Supabase) nunca expone su mensaje real al cliente', async () => {
+    mocks.updateProveedorMock.mockRejectedValue(new Error('constraint violation on proveedores'))
+    const response = await POST(req({ confirmar: false }))
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(JSON.stringify(body)).not.toContain('proveedores')
+    expect(body.requestId).toEqual(expect.any(String))
+  })
 })

@@ -1,7 +1,10 @@
 import { requirePortalSession } from '@/lib/portal-auth'
 import { getProveedorById, updateProveedor } from '@/lib/db'
 import { validate, PortalPerfilSchema } from '@/lib/validation/schemas'
-import { toErrorMessage } from '@/lib/server/portal/error-message'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE_GET = 'GET /api/portal/perfil'
+const ROUTE_PATCH = 'PATCH /api/portal/perfil'
 
 export async function GET() {
   const portalAuth = await requirePortalSession()
@@ -17,8 +20,7 @@ export async function GET() {
       regimen_fiscal: proveedor.regimen_fiscal,
     })
   } catch (error) {
-    console.error('[portal/perfil]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE_GET)
   }
 }
 
@@ -40,7 +42,6 @@ export async function PATCH(request: Request) {
       regimen_fiscal: proveedor.regimen_fiscal,
     })
   } catch (error) {
-    console.error('[portal/perfil]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE_PATCH)
   }
 }

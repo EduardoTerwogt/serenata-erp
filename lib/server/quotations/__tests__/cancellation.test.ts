@@ -127,7 +127,7 @@ describe('cancelQuotation', () => {
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
-  it('throws error when RPC call fails', async () => {
+  it('throws error when RPC call fails -- EF-3 3D-9: DomainError con safeMessage genérico, sin el detalle crudo de Postgres', async () => {
     const quotationId = 'SH006'
     const cotizacion = { id: quotationId, estado: 'EMITIDA', cliente: 'Will Fail' }
 
@@ -138,9 +138,32 @@ describe('cancelQuotation', () => {
       error: { message: 'Database constraint violation' },
     })
 
-    await expect(cancelQuotation(quotationId)).rejects.toThrow(
-      'Error cancelando cotizacion: Database constraint violation',
-    )
+    await expect(cancelQuotation(quotationId)).rejects.toMatchObject({
+      name: 'DomainError',
+      status: 500,
+      safeMessage: expect.not.stringContaining('Database constraint violation'),
+      cause: { message: 'Database constraint violation' },
+    })
+  })
+
+  it('throws DomainError when verifying existing payments fails at the DB level -- EF-3 3D-9: sin el detalle crudo de Postgres', async () => {
+    const quotationId = 'SH008'
+    const cotizacion = { id: quotationId, estado: 'EMITIDA', cliente: 'DB Down' }
+
+    mocks.getCotizacionByIdMock.mockResolvedValue(cotizacion)
+    mocks.fromMock.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: { message: 'conexión perdida' } }),
+      }),
+    })
+
+    await expect(cancelQuotation(quotationId)).rejects.toMatchObject({
+      name: 'DomainError',
+      status: 500,
+      safeMessage: expect.not.stringContaining('conexión perdida'),
+      cause: { message: 'conexión perdida' },
+    })
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
   it('throws error when quotation is not found', async () => {

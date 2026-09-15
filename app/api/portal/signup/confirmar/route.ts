@@ -1,7 +1,9 @@
 import { requirePortalSession, setPortalSessionCookie } from '@/lib/portal-auth'
 import { validate, PortalConfirmarMatchSchema } from '@/lib/validation/schemas'
 import { confirmarMatch, updateProveedor } from '@/lib/db'
-import { toErrorMessage } from '@/lib/server/portal/error-message'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE = 'POST /api/portal/signup/confirmar'
 
 export async function POST(request: Request) {
   const portalAuth = await requirePortalSession()
@@ -27,7 +29,6 @@ export async function POST(request: Request) {
     })
     return Response.json({ success: true, proveedor: proveedorActualizado })
   } catch (error) {
-    console.error('[portal/signup/confirmar]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE)
   }
 }

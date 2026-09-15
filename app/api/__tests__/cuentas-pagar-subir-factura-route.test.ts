@@ -37,10 +37,12 @@ import { POST } from '../cuentas-pagar/[id]/subir-factura/route'
 
 const params = Promise.resolve({ id: 'cuenta-1' })
 
-function buildRequest() {
+function buildRequest(overrides: Partial<{ xml: File | null; pdf: File | null }> = {}) {
   const formData = new FormData()
-  formData.append('factura_proveedor_xml', new File(['<factura/>'], 'f.xml', { type: 'text/xml' }))
-  formData.append('factura_proveedor_pdf', new File([new Uint8Array([1, 2, 3])], 'f.pdf', { type: 'application/pdf' }))
+  const xml = overrides.xml === undefined ? new File(['<factura/>'], 'f.xml', { type: 'text/xml' }) : overrides.xml
+  const pdf = overrides.pdf === undefined ? new File([new Uint8Array([1, 2, 3])], 'f.pdf', { type: 'application/pdf' }) : overrides.pdf
+  if (xml) formData.append('factura_proveedor_xml', xml)
+  if (pdf) formData.append('factura_proveedor_pdf', pdf)
   return new Request('http://localhost/api/cuentas-pagar/cuenta-1/subir-factura', { method: 'POST', body: formData })
 }
 
@@ -68,5 +70,35 @@ describe('POST /api/cuentas-pagar/[id]/subir-factura', () => {
     const second = await POST(buildRequest(), { params }).then((r) => r.json()) as { requestId: string }
 
     expect(first.requestId).not.toBe(second.requestId)
+  })
+
+  it('EF-3 3D-12: XML_REQUIRED -- "Se requiere archivo XML de factura proveedor"', async () => {
+    const response = await POST(buildRequest({ xml: null }), { params })
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'Se requiere archivo XML de factura proveedor' })
+  })
+
+  it('EF-3 3D-12: PDF_REQUIRED -- "Se requiere archivo PDF de factura proveedor"', async () => {
+    const response = await POST(buildRequest({ pdf: null }), { params })
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'Se requiere archivo PDF de factura proveedor' })
+  })
+
+  it('EF-3 3D-12: XML_INVALID_TYPE -- "El archivo XML debe ser de tipo text/xml o application/xml"', async () => {
+    const response = await POST(buildRequest({ xml: new File(['x'], 'f.bin', { type: 'application/octet-stream' }) }), { params })
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'El archivo XML debe ser de tipo text/xml o application/xml' })
+  })
+
+  it('EF-3 3D-12: PDF_INVALID_TYPE -- "El archivo PDF debe ser de tipo application/pdf"', async () => {
+    const response = await POST(buildRequest({ pdf: new File(['x'], 'f.bin', { type: 'application/octet-stream' }) }), { params })
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'El archivo PDF debe ser de tipo application/pdf' })
+  })
+
+  it('EF-3 3D-12: FILE_TOO_LARGE -- "El archivo excede el límite de 10 MB"', async () => {
+    const response = await POST(buildRequest({ xml: new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'f.xml', { type: 'text/xml' }) }), { params })
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'El archivo excede el límite de 10 MB' })
   })
 })

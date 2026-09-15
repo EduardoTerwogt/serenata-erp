@@ -1,7 +1,9 @@
 import { requirePortalSession } from '@/lib/portal-auth'
 import { getProveedorById } from '@/lib/db'
 import { Proveedor } from '@/lib/types'
-import { toErrorMessage } from '@/lib/server/portal/error-message'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE = 'GET /api/portal/me'
 
 export async function GET() {
   const portalAuth = await requirePortalSession()
@@ -27,7 +29,6 @@ export async function GET() {
       candidato,
     })
   } catch (error) {
-    console.error('[portal/me]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE)
   }
 }

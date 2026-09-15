@@ -137,4 +137,43 @@ describe('POST /api/portal/cuentas/[id]/factura', () => {
       expect.objectContaining({ tipo: 'FACTURA_PROVEEDOR_XML', estado_validacion: 'validado' })
     )
   })
+
+  it('EF-3 3D-10: un error inesperado (crudo de Supabase) nunca expone su mensaje real al cliente', async () => {
+    mocks.getCuentaPagarByIdMock.mockRejectedValue(new Error('constraint violation on cuentas_pagar'))
+    const response = await POST(buildRequest(), params())
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(JSON.stringify(body)).not.toContain('cuentas_pagar')
+    expect(body.requestId).toEqual(expect.any(String))
+  })
+
+  it('EF-3 3D-12: XML_REQUIRED -- "Se requiere el archivo XML de tu factura"', async () => {
+    const response = await POST(buildRequest({ xml: null }), params())
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'Se requiere el archivo XML de tu factura' })
+  })
+
+  it('EF-3 3D-12: PDF_REQUIRED -- "Se requiere el archivo PDF de tu factura"', async () => {
+    const response = await POST(buildRequest({ pdf: null }), params())
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'Se requiere el archivo PDF de tu factura' })
+  })
+
+  it('EF-3 3D-12: XML_INVALID_TYPE -- "El archivo XML debe ser de tipo text/xml o application/xml"', async () => {
+    const response = await POST(buildRequest({ xml: new File(['x'], 'f.bin', { type: 'application/octet-stream' }) }), params())
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'El archivo XML debe ser de tipo text/xml o application/xml' })
+  })
+
+  it('EF-3 3D-12: PDF_INVALID_TYPE -- "El archivo PDF debe ser de tipo application/pdf"', async () => {
+    const response = await POST(buildRequest({ pdf: new File(['x'], 'f.bin', { type: 'application/octet-stream' }) }), params())
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'El archivo PDF debe ser de tipo application/pdf' })
+  })
+
+  it('EF-3 3D-12: FILE_TOO_LARGE -- "El archivo excede el límite de 10 MB"', async () => {
+    const response = await POST(buildRequest({ xml: new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'factura.xml', { type: 'text/xml' }) }), params())
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'El archivo excede el límite de 10 MB' })
+  })
 })

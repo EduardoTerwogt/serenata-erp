@@ -3,7 +3,9 @@ import { validate, PortalSignupSchema } from '@/lib/validation/schemas'
 import { crearProveedorDesdeSignup, getProveedorByCorreo } from '@/lib/db'
 import { setPortalSessionCookie } from '@/lib/portal-auth'
 import { checkRateLimit, getClientIp } from '@/lib/server/rate-limit'
-import { toErrorMessage } from '@/lib/server/portal/error-message'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+
+const ROUTE = 'POST /api/portal/signup'
 
 /**
  * Registro ligero: correo, password y nombre/alias opcional (ej. "Chok" en
@@ -44,7 +46,6 @@ export async function POST(request: Request) {
 
     return Response.json({ success: true })
   } catch (error) {
-    console.error('[portal/signup]', error)
-    return Response.json({ error: toErrorMessage(error) }, { status: 500 })
+    return buildErrorResponse(error, ROUTE)
   }
 }
