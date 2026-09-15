@@ -50,6 +50,12 @@ function isPublicPath(pathname: string) {
     pathname.startsWith('/api/keep-alive') ||
     pathname.startsWith('/api/integrations/drive/authorize') ||
     pathname.startsWith('/api/integrations/drive/callback') ||
+    // EF-3A 3A-1: gate propio (LOADTEST_MODE + x-loadtest-secret, 404
+    // fail-closed), nunca sesión de NextAuth -- scripts/loadtest/env-check.mjs
+    // la llama sin cookies. Sin esto, este mismo proxy la interceptaba antes
+    // de que su propio guard corriera, devolviendo 401 en vez de 404 (visto
+    // en un run real de load-test.yml).
+    pathname.startsWith('/api/internal/env-check') ||
     // Portal de proveedores (Fase 5.5): auth propia (lib/portal-auth.ts,
     // cookie portal_session), separada de NextAuth -- no pasa por el check
     // de sesión interna de abajo. Cada página/route del portal se protege

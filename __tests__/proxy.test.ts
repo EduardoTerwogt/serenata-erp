@@ -34,6 +34,12 @@ describe('proxyHandler', () => {
     expect(res.status).toBe(200) // NextResponse.next() -> 200 pass-through
   })
 
+  it('EF-3A 3A-1 -- /api/internal/env-check pasa sin sesión (tiene su propio guard fail-closed)', () => {
+    const req = buildReq({ pathname: '/api/internal/env-check' })
+    const res = proxyHandler(req)
+    expect(res.status).toBe(200) // NextResponse.next() -> 200 pass-through
+  })
+
   it('sin sesión en una página protegida -> redirect a /login', () => {
     const req = buildReq({ pathname: '/cotizaciones', user: null })
     const res = proxyHandler(req)
