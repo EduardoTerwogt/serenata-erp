@@ -14,22 +14,47 @@ commit `980464c`. Historia completa de cada uno:
 **EF-3 en ejecución.** Plan v12, 40 bloques + hasta 3 condicionales.
 Documento canónico + matriz de hallazgos + tracker en vivo:
 [`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md) (§11).
-Cerrados hasta hoy: 3A-0, 3A-0b, **3A-1**, 3B-1, 3B-2, 3B-3, 3B-4, 3B-5,
-3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3D-0, 3D-0b, 3D-1, 3D-2,
-3D-3, 3D-4, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12.
+Cerrados hasta hoy: 3A-0, 3A-0b, 3A-1, **3A-2**, 3B-1, 3B-2, 3B-3, 3B-4,
+3B-5, 3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3D-0, 3D-0b, 3D-1,
+3D-2, 3D-3, 3D-4, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12.
 
-**Ningún bloque en curso.** 3A-1 (infraestructura de carga) cerró esta
-sesión — ver "Completado en esta sesión". El único bloque de EF-3D que
-sigue abierto es **3D-5** (`useQuotationItemCellsAutosave`), pausado por
-decisión explícita del usuario, pero su bloqueador real (entorno
-serverless de 3A-1) ya no existe — ver más abajo.
+**En curso: 3A-3** (fixtures de volumen, rama `claude/ef3a-fixtures-volumen`),
+siguiente paso de la ejecución completa de EF-3A (3A-2→3A-6) en curso esta
+sesión. El único bloque de EF-3D que sigue abierto es **3D-5**
+(`useQuotationItemCellsAutosave`), pausado por decisión explícita del
+usuario, pero su bloqueador real (entorno serverless de 3A-1) ya no existe
+— ver más abajo.
 
 **3D-5 puede retomarse cuando el usuario decida** — la prueba manual
 contra el entorno serverless real que su criterio de aceptación exige ya
 es posible (`serenata-erp-loadtest`, ver 3A-1). **3C-4 sigue pausado**,
-ahora solo por 3A-3 (sembrado de volumen), no por 3A-1.
+ahora solo por 3A-3 (sembrado de volumen, en curso), no por 3A-1.
 
 ## Completado en esta sesión
+
+**Cierre de 3A-2 (fixtures de identidad, staff/Portal)**, PR
+[#55](https://github.com/EduardoTerwogt/serenata-erp/pull/55), commit
+`f8c0ec2`. Endpoint interno `POST /api/internal/loadtest-portal-session`
+(mismo guard fail-closed que `env-check`) firma cookies reales del Portal
+sin pasar por `/api/portal/login` (rate limit real); `prepare-staff-fixtures.mjs`
+crea identidades de staff distintas (login REST, extraído a
+`rest-login.mjs`); `prepare-portal-fixtures.mjs` crea proveedores efímeros
+directo en Postgres. Validación real vía `workflow_dispatch` de
+`load-test.yml` encontró y arregló 2 bugs reales, uno por intento:
+(1) `proxy-handler.ts` bloqueaba la ruta nueva con 401 antes de su propio
+guard — mismo patrón ya visto 2 veces en 3A-1, agregada a `isPublicPath()`
+junto con `/api/internal/loadtest-drive-folder` (3A-4) de una vez; (2)
+`prepare-portal-fixtures.mjs` dejaba `portal_estado` en NULL — `GET
+/api/portal/me` exige `portal_estado !== null` además de
+`requirePortalSession()`, fix: proveedores de fixture con `portal_estado:
+'activo'`. Los 7 casos de la spec pasaron en verde contra
+`serenata-erp-loadtest` real.
+
+- **Plan de sesión:** ejecutar EF-3A completo (3A-2→3A-6) en secuencia,
+  cada bloque su propia rama+PR, mergeando antes de arrancar el siguiente
+  — 3A-3/3A-4 siguen en curso.
+
+## Completado en sesiones anteriores
 
 **Cierre de 3A-1 (infraestructura de carga EF-3A)**, bloqueado desde
 sesiones anteriores por un paso manual del usuario. Esta sesión: guió el
@@ -112,9 +137,6 @@ bueno solo con CI verde.
 - **Tracker actualizado:** 3A-1 pasa a `Cerrado` con los 4 PR/commits;
   notas de 3C-4 y 3D-5 corregidas (su bloqueador de "3A-1 sin resolver"
   ya no aplica).
-
-## Completado en sesiones anteriores
-
 - Ver `docs/archive/` para EF-1/EF-2 completos. EF-3 bloques 3A-0, 3A-0b,
   3B-1 a 3B-12 (salvo 3B-7, bloqueado), 3C-1 a 3C-3: cerrados en sesiones
   previas.
@@ -129,9 +151,19 @@ bueno solo con CI verde.
 
 ## Tests ejecutados
 
-En cada uno de los 4 PRs de esta sesión, antes de cada commit: `npx tsc
+**3A-2 (PR #55):** `npx tsc --noEmit` (limpio), `npm run lint` (0 errores,
+7 warnings preexistentes), `npm test` (creció de 799 a **800/800** verde),
+`node scripts/validate-ef3-tracker.mjs` (OK). CI: 5/5 checks verdes
+(`fresh-db`, `smoke-and-critical`, `test`, `live`, `tracker-lint`) —
+`fresh-db` necesitó 1 re-run por un flake real de infra (`supabase/setup-cli@v1`:
+"rate limit exceeded" resolviendo la versión, murió antes de correr ningún
+test). Validación real, no solo CI: 3 corridas de `workflow_dispatch` de
+`load-test.yml` (`local`) contra `serenata-erp-loadtest`, la última con
+los 7 casos de la spec en verde.
+
+En los 4 PRs de 3A-1 (sesión anterior), antes de cada commit: `npx tsc
 --noEmit` (limpio), `npm run lint` (0 errores, 7 warnings preexistentes),
-`npm test` (creció de 792 a **799/799** verde), `node
+`npm test` (creció de 792 a 799/799 verde), `node
 scripts/validate-ef3-tracker.mjs` (OK). PR #54 además reprodujo el bug real
 localmente (`next build`+`next start` en el sandbox) antes de pushear, en
 vez de confiar en la teoría. CI de los 4 PRs: 6/6 checks verdes antes de
@@ -181,10 +213,11 @@ los 3 jobs (`pin-loadtest-target`/`local`/`serverless`) en verde.
 
 ## Siguiente paso
 
-1. **3A-2, 3A-3, 3A-4** ya desbloqueados (dependían solo de 3A-1) — se
-   pueden arrancar en paralelo.
+1. **3A-3 en curso** (rama `claude/ef3a-fixtures-volumen`) — seguido de
+   3A-4, 3A-5 (3 PRs) y 3A-6, en ese orden, para cerrar EF-3A por
+   completo esta sesión.
 2. **3B-7, 3C-4** dependen de 3A-1 (cerrado) + su propia dependencia
-   directa (3A-3 para 3C-4) — no arrancan solos todavía.
+   directa (3A-3 para 3C-4, en curso) — no arrancan solos todavía.
 3. **3D-5** puede retomarse si el usuario decide correr la prueba manual
    contra `serenata-erp-loadtest`.
 4. Sin dueño ni urgencia: borrar la rama remota huérfana
