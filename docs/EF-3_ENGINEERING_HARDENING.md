@@ -5249,7 +5249,7 @@ bloqueó el cierre del resto porque ninguna fila cerrada pasó nunca por
 |---|---|---|---|---|---|---|---|---|
 | 3A-0 | Cerrado | ninguna | N/A | N/A | `09ad7fc` | N/A | | Arrancar 3A-0b |
 | 3A-0b | Cerrado | 3A-0 | `claude/hopeful-allen-jql9xp` | [#34](https://github.com/EduardoTerwogt/serenata-erp/pull/34) | — | `94e5944` | | — |
-| 3A-1 | En curso | 3A-0b | `claude/ecstatic-hopper-pyo0vy` | — | — | — | Paso manual del usuario (proyecto Vercel aislado `serenata-erp-loadtest` + 16 env vars + 7 secretos nuevos de GitHub) ya completado. Código en PR: `load-test.yml`, `wait-for-deployment.mjs`, `env-check.mjs`, ruta `env-check`, `docs/ENV.md` | Abrir PR y mergear |
+| 3A-1 | En curso | 3A-0b | `claude/ecstatic-hopper-pyo0vy` | [#51](https://github.com/EduardoTerwogt/serenata-erp/pull/51) | `04f091d` | `be0c8b4` | Setup manual completo (proyecto Vercel aislado `serenata-erp-loadtest` + 16 env vars + 7 secretos nuevos de GitHub). PR #51 mergeado y CI verde. Primer `workflow_dispatch` real contra Vercel: `pin-loadtest-target` OK (`wait-for-deployment.mjs` confirmado contra la API real), pero `local` falló -- `LOADTEST_ENV_SECRET` traía un LINE SEPARATOR (U+2028) colgando (artefacto de copiar/pegar), Node no puede meterlo en un header HTTP. Fix en PR [#52](https://github.com/EduardoTerwogt/serenata-erp/pull/52) (`.trim()` en ambos lados del guard) | Mergear #52 y re-disparar `load-test.yml` para confirmar `local`/`serverless` en verde |
 | 3A-2 | Pendiente | 3A-1 | — | — | — | — | | — |
 | 3A-3 | Pendiente | 3A-1 | — | — | — | — | | — |
 | 3A-4 | Pendiente | 3A-1 | — | — | — | — | | — |
