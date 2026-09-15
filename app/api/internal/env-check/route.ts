@@ -35,9 +35,17 @@ function supabaseRefFromUrl(url: string | undefined): string | null {
 }
 
 export async function GET(request: Request) {
+  // .trim() de ambos lados: un secreto pegado con un LINE SEPARATOR
+  // (U+2028) colgando al final -- visto en un run real contra este
+  // endpoint -- nunca debe volver un guard de seguridad en un falso
+  // negativo permanente si el mismo artefacto quedó en Vercel y en GitHub.
+  const receivedSecret = request.headers.get('x-loadtest-secret')?.trim()
+  const expectedSecret = process.env.LOADTEST_ENV_SECRET?.trim()
+
   if (
     process.env.LOADTEST_MODE !== 'true' ||
-    request.headers.get('x-loadtest-secret') !== process.env.LOADTEST_ENV_SECRET
+    !expectedSecret ||
+    receivedSecret !== expectedSecret
   ) {
     return new Response(null, { status: 404 })
   }

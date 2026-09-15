@@ -28,7 +28,12 @@ function parseArgs() {
 }
 
 function requireEnv(name) {
-  const value = process.env[name]
+  // .trim() también quita LINE SEPARATOR (U+2028)/PARAGRAPH SEPARATOR
+  // (U+2029) -- un artefacto real de copiar/pegar un secreto desde ciertas
+  // apps/terminales que Node no puede meter en un header HTTP
+  // ("Cannot convert argument to a ByteString"), visto en un run real de
+  // load-test.yml.
+  const value = process.env[name]?.trim()
   if (!value) {
     console.error(`env-check: falta la variable de entorno ${name}`)
     process.exit(1)
