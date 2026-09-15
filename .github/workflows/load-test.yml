@@ -133,6 +133,19 @@ jobs:
       # (crear/borrar/guard) y la cascada de bulkCleanupLoadTestRun contra
       # datos sembrados reales, importando la función directo (bypass del
       # CLI, que sí toca loadtest_runs).
+      - name: TMP 3A-4 -- limpiar corrida huérfana de un intento previo (bug ya corregido, script en /tmp sin node_modules)
+        run: |
+          cat > tmp-3a4-cleanup-check.mjs <<'EOF'
+          import { createClient } from '@supabase/supabase-js'
+          import { bulkCleanupLoadTestRun } from './scripts/loadtest/bulk-cleanup.mjs'
+
+          const supabaseAdmin = createClient(process.env.TEST_SUPABASE_URL, process.env.TEST_SUPABASE_SERVICE_ROLE_KEY)
+          const counts = await bulkCleanupLoadTestRun(supabaseAdmin, '36ce795d-fc66-4982-b20e-1ccb7a305f9c')
+          console.log('limpieza de corrida huérfana previa:', counts)
+          EOF
+          node tmp-3a4-cleanup-check.mjs
+          rm tmp-3a4-cleanup-check.mjs
+
       - name: TMP 3A-4 -- generar runId real
         run: echo "RUN_ID=$(node -e "process.stdout.write(crypto.randomUUID())")" >> "$GITHUB_ENV"
 
@@ -175,9 +188,9 @@ jobs:
 
       - name: TMP 3A-4 -- bulkCleanupLoadTestRun real (import directo, bypass loadtest_runs)
         run: |
-          cat > /tmp/tmp-3a4-cleanup-check.mjs <<'EOF'
+          cat > tmp-3a4-cleanup-check.mjs <<'EOF'
           import { createClient } from '@supabase/supabase-js'
-          import { bulkCleanupLoadTestRun } from '/home/runner/work/serenata-erp/serenata-erp/scripts/loadtest/bulk-cleanup.mjs'
+          import { bulkCleanupLoadTestRun } from './scripts/loadtest/bulk-cleanup.mjs'
 
           const supabaseAdmin = createClient(process.env.TEST_SUPABASE_URL, process.env.TEST_SUPABASE_SERVICE_ROLE_KEY)
           const runId = process.env.RUN_ID
@@ -198,7 +211,8 @@ jobs:
           }
           console.log('TMP 3A-4: cascada real verificada -- 0 filas residuales')
           EOF
-          node /tmp/tmp-3a4-cleanup-check.mjs
+          node tmp-3a4-cleanup-check.mjs
+          rm tmp-3a4-cleanup-check.mjs
       # ---- fin TMP 3A-4 ----
 
       # Los 8 escenarios de k6 contra este entorno local los agrega 3A-5.
