@@ -126,7 +126,22 @@ jobs:
       - name: env-check -- confirmar que apunta a serenata-erp-test antes de cualquier tráfico
         run: node scripts/loadtest/env-check.mjs --target-url http://127.0.0.1:3000
 
-      # Los 8 escenarios de k6 contra este entorno local los agrega 3A-5.
+      - name: Instalar k6
+        uses: grafana/setup-k6-action@v1
+
+      # SMOKE=1 corre cada escenario 1 sola vez (options.scenarios no se
+      # puede pisar con flags de CLI, ver _shared.js) -- confirma que el
+      # script real funciona contra este entorno antes de que 3A-6 los
+      # corra a escala completa. Los escenarios que faltan (3A-5 PR b/c) se
+      # agregan aquí según se mergeen.
+      - name: SMOKE navegacion-proyectos.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/navegacion-proyectos.js
+
+      - name: SMOKE dashboard.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/dashboard.js
+
+      - name: SMOKE cuentas.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/cuentas.js
 
       - name: Dump Next.js server log on failure
         if: failure()
