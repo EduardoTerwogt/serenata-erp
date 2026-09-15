@@ -161,6 +161,17 @@ jobs:
         run: |
           set -euo pipefail
           PROVEEDOR_ID=$(node -e "console.log(require('/tmp/portal-fixtures.json')[0].proveedorId)")
+          # $LOADTEST_ENV_SECRET trae el LINE SEPARATOR (U+2028) colgando
+          # (mismo artefacto de 3A-1) -- bash no lo recorta, y curl lo manda
+          # como bytes UTF-8 crudos que el parser de headers del lado
+          # servidor decodifica distinto a como Node decodifica la env var
+          # directa, así que el .trim() del servidor no reconoce esos bytes
+          # como whitespace y el guard rechaza el secreto real. Los scripts
+          # .mjs reales (prepare-*-fixtures.mjs) ya hacen este mismo trim en
+          # JS antes de mandarlo -- por eso ellos sí funcionaron en este
+          # mismo job. Este trim es solo del paso TMP de validación, nunca
+          # del código real.
+          SECRET=$(node -e "process.stdout.write(process.env.LOADTEST_ENV_SECRET.trim())")
 
           S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
             -H 'Content-Type: application/json' -H 'x-loadtest-secret: incorrecto' \
@@ -168,17 +179,17 @@ jobs:
           echo "secreto incorrecto -> $S"; test "$S" = "404"
 
           S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
-            -H 'Content-Type: application/json' -H "x-loadtest-secret: $LOADTEST_ENV_SECRET" \
+            -H 'Content-Type: application/json' -H "x-loadtest-secret: $SECRET" \
             -d '{"proveedorId":"no-es-uuid","sessionVersion":1}')
           echo "proveedorId invalido -> $S"; test "$S" = "400"
 
           S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
-            -H 'Content-Type: application/json' -H "x-loadtest-secret: $LOADTEST_ENV_SECRET" \
+            -H 'Content-Type: application/json' -H "x-loadtest-secret: $SECRET" \
             -d "{\"proveedorId\":\"$PROVEEDOR_ID\",\"sessionVersion\":0}")
           echo "sessionVersion 0 -> $S"; test "$S" = "400"
 
           S=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/internal/loadtest-portal-session \
-            -H 'Content-Type: application/json' -H "x-loadtest-secret: $LOADTEST_ENV_SECRET" \
+            -H 'Content-Type: application/json' -H "x-loadtest-secret: $SECRET" \
             -d 'no-es-json')
           echo "body no JSON -> $S"; test "$S" = "400"
 
