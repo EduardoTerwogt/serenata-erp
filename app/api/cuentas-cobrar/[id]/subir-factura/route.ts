@@ -3,6 +3,7 @@ import { getCuentaCobrarById, updateCuentaCobrar, createDocumentoCuentaCobrar, g
 import { parseFacturaXML, validarMontoFactura, validarFacturaClienteXML, calcularDeadline } from '@/lib/server/xml/factura-parser'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
+import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 
@@ -106,11 +107,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
     const folderPath = `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
     const uploadedFiles: { type: 'FACTURA_PDF' | 'FACTURA_XML'; url: string; nombre: string }[] = []
-    const cuentasFolderId = googleEnv.driveFolderIdCuentas
+    const cuentasFolderId = resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined)
 
     // Subir PDF
     if (pdfFile) {
-      const pdfUrl = await uploadFileToDrive(pdfFile, folderPath, pdfFile.name, cuentasFolderId || undefined)
+      const pdfUrl = await uploadFileToDrive(pdfFile, folderPath, pdfFile.name, cuentasFolderId)
       uploadedFiles.push({
         type: 'FACTURA_PDF',
         url: pdfUrl,
@@ -119,7 +120,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     // Subir XML
-    const xmlUrl = await uploadFileToDrive(xmlFile, folderPath, xmlFile.name, cuentasFolderId || undefined)
+    const xmlUrl = await uploadFileToDrive(xmlFile, folderPath, xmlFile.name, cuentasFolderId)
     uploadedFiles.push({
       type: 'FACTURA_XML',
       url: xmlUrl,

@@ -261,6 +261,10 @@ export const LoadtestPortalSessionSchema = z.object({
   sessionVersion: z.number().int().positive(),
 })
 
+export const LoadtestDriveFolderSchema = z.object({
+  runId: z.string().uuid(),
+})
+
 // ==================== HELPER ====================
 
 /**

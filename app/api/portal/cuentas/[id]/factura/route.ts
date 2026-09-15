@@ -2,6 +2,7 @@ import { requirePortalSession } from '@/lib/portal-auth'
 import { getCuentaPagarById, createDocumentoCuentaPagar, getProyectoById, getProveedorById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
+import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor, calcularEjemploFactura } from '@/lib/server/validation/factura-fiscal'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
@@ -86,9 +87,10 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     if (!googleEnv) return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
 
     const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto?.proyecto ?? cuenta.proyecto_id}`
+    const uploadFolderId = resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined)
     const [facturaXmlUrl, facturaPdfUrl] = await Promise.all([
-      uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, googleEnv.driveFolderIdCuentas || undefined),
-      uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, googleEnv.driveFolderIdCuentas || undefined),
+      uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, uploadFolderId),
+      uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, uploadFolderId),
     ])
 
     await Promise.all([
