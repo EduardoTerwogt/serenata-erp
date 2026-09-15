@@ -13,13 +13,14 @@ import { useQuotationGeneralAutosave } from '@/hooks/useQuotationGeneralAutosave
 import { useQuotationTotalesAutosave } from '@/hooks/useQuotationTotalesAutosave'
 import { useQuotationNotasAutosave } from '@/hooks/useQuotationNotasAutosave'
 import { useQuotationReconciliation } from '@/hooks/useQuotationReconciliation'
+import { useQuotationBusinessActions } from '@/hooks/useQuotationBusinessActions'
 import { QuotationItemCellField, QuotationPresenceSection, useQuotationPresence } from '@/hooks/useQuotationPresence'
 import { ImportableItem, QuotationItemsController } from '@/hooks/useQuotationItems'
 import { calculateEstimatedTaxes, calculateQuotationTotals, normalizeQuotationItem } from '@/lib/quotations/calculations'
 import { buildReadOnlyTotals, EMPTY_QUOTATION_ITEM, isBlankQuotationItem } from '@/lib/quotations/mappers'
 import { BulkImportPayload, runIdempotentBulkImportSubmit } from '@/lib/client/bulkImportIdempotency'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { approveQuotation, buildComplementariaUrl, emitirCotizacion, fetchQuotationDetail, fetchProveedores, generateQuotationPdf } from '@/lib/services/quotation-service'
+import { fetchQuotationDetail, fetchProveedores } from '@/lib/services/quotation-service'
 import { formatDateDisplay } from '@/lib/format-date'
 import { Icon } from '@/components/ui/Icon'
 import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGeneralInfoSection'
@@ -155,11 +156,6 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // EF-3 3D-1: extraído a hooks/useQuotationMutationTracker.ts -- ver ese
   // archivo para la explicación completa de por qué existe.
   const { pendingMutationsRef, trackMutation } = useQuotationMutationTracker()
-  // `flushPendingSaves` en sí se define más abajo (línea ~985), después de
-  // `flushGeneralDirtyFields`/`flushTotalsDirtyFields`/`flushItemCellDirtyFields`/
-  // `persistNotasAutosave` -- los necesita todos y en este punto del componente
-  // todavía no existen.
-  const flushInFlightRef = useRef<Promise<boolean> | null>(null)
 
   const markLocalWrite = useCallback((rowId: string, field: QuotationItemCellField) => {
     localWriteAtRef.current.set(getItemCellKey(rowId, field), Date.now())
@@ -714,40 +710,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     return disparadas
   }, [clearItemCellAutosaveTimer, persistItemCellAutosave])
 
-  // Fase 8.7 (Bloque 1): definida aquí porque necesita flushGeneralDirtyFields/
-  // flushTotalsDirtyFields/flushItemCellDirtyFields/persistNotasAutosave, todos
-  // declarados arriba en este mismo componente -- ver la nota junto a
-  // `pendingMutationsRef`/`trackMutation` más arriba.
-  const flushPendingSaves = useCallback((): Promise<boolean> => {
-    if (flushInFlightRef.current) return flushInFlightRef.current
-    const run = (async (): Promise<boolean> => {
-      const disparadas: Promise<unknown>[] = [
-        ...flushGeneralDirtyFields(),
-        ...flushTotalsDirtyFields(),
-        ...flushItemCellDirtyFields(),
-        ...(notasDirtyRef.current ? [persistNotasAutosave()] : []),
-      ]
-      // Combinar ANTES de que cualquiera de las recién disparadas alcance a
-      // resolverse (nunca ocurre en el mismo tick síncrono: toda resolución
-      // de promesa se agenda como microtask) -- si se esperara aquí a que
-      // terminen antes de leer `pendingMutationsRef`, `trackMutation` ya
-      // las habría sacado del Set con su propio `.finally()`.
-      const enVuelo = [...Array.from(pendingMutationsRef.current), ...disparadas]
-      // Un conflicto real de un PATCH atómico multi-campo (autofill de
-      // producto, cambio de responsable) nunca se marca "dirty" -- eso
-      // dispararía un reintento por celda individual y rompería la
-      // atomicidad otra vez (ver handleSelectProduct). Por eso el bloqueo acá
-      // se revisa directo contra `itemCellConflicts`: mientras quede alguno
-      // sin resolver (Usar/Mantener lo limpia), la transición no procede,
-      // haya o no algo más en vuelo/dirty en este instante.
-      const sinConflictosSinResolver = Object.keys(itemCellConflicts).length === 0
-      if (enVuelo.length === 0) return sinConflictosSinResolver
-      const resultados = await Promise.allSettled(enVuelo)
-      return sinConflictosSinResolver && resultados.every((r) => r.status === 'fulfilled')
-    })()
-    flushInFlightRef.current = run
-    return run.finally(() => { flushInFlightRef.current = null })
-  }, [flushGeneralDirtyFields, flushTotalsDirtyFields, flushItemCellDirtyFields, itemCellConflicts, notasDirtyRef, pendingMutationsRef, persistNotasAutosave])
+  // flushPendingSaves: EF-3 3D-7, ver hooks/useQuotationBusinessActions.ts.
 
   // Debounce de Notas: EF-3 3D-4, ver hooks/useQuotationNotasAutosave.ts.
   // General y Totales ya no tienen un debounce por sección: `markGeneralFieldDirty`/
@@ -1400,70 +1363,37 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     importing: importingItems,
   }), [getItemCellConflict, getItemRowStatusText, handleAddRow, handleImportItems, handleItemFieldBlur, handleItemFieldChange, handleItemFieldFocus, handleRemoveRow, handleResponsableChange, handleSelectProduct, importingItems, isItemCellLocked, resolveItemCellConflict])
 
-  // Fase 8 (hardening pre-Proyectos): Aprobar/Generar YA NO mandan un PUT
-  // completo de la cotización (`updateQuotation`/`save_cotizacion`) -- ese
-  // camino no comparaba `revision` ni `base` contra nada, así que podía
-  // revertir en silencio una partida que otro colaborador acababa de guardar
-  // por PATCH un instante antes. Ambas transiciones son ahora: esperar las
-  // mutaciones locales en vuelo -> ejecutar la transición de estado dedicada
-  // (que opera contra Postgres, no contra lo que el cliente tenga en memoria)
-  // -> releer canónico. `approve_cotizacion` ya existía con su propia
-  // transacción; `emitir_cotizacion` es nueva, mismo patrón `FOR UPDATE`.
-  // Fase 8.7 (Bloque 1): guard síncrono contra doble click/reentrancia. Los
-  // `disabled={...}` del JSX dependen de `setState`, que es asíncrono y no
-  // alcanza a deshabilitar el botón antes de un segundo click en el mismo
-  // tick; este ref se revisa como primera línea, antes de cualquier setState.
-  const transitionInFlightRef = useRef(false)
-  const aprobar = async () => {
-    if (transitionInFlightRef.current) return
-    transitionInFlightRef.current = true
-    setAprobando(true); setError(null); setSuccess(null)
-    try {
-      const flushOk = await flushPendingSaves()
-      if (!flushOk) { setError('Hay cambios recientes que no se guardaron correctamente. Revisa antes de aprobar.'); return }
-      const fullCot = await approveQuotation(id)
-      applyCotizacionToState(fullCot)
-      await refreshCatalogos()
-      setSuccess('¡Cotización aprobada! Proyecto y cuentas creados.')
-      setTimeout(() => setSuccess(null), 4000)
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al aprobar') } finally { setAprobando(false); transitionInFlightRef.current = false }
-  }
-  const handlePdfResult = (result: { savedToDrive: boolean; driveWebViewLink?: string; driveError?: string }) => { if (result.savedToDrive) { setSuccess('PDF guardado exitosamente en Drive'); setDriveLink(result.driveWebViewLink ?? null) } else if (result.driveError) { setError(`Error al guardar en Drive: ${result.driveError}`); setDriveLink(null) } else { setError('No se pudo guardar el PDF en Drive'); setDriveLink(null) } setTimeout(() => { setSuccess(null); setError(null); setDriveLink(null) }, 10000) }
-  // Fase 8.7 (Bloque 1): "Generar PDF" (EMITIDA/APROBADA, no cambia estado) no
-  // llamaba a flushPendingSaves -- el peor caso no es financiero (no crea
-  // proyecto/cuentas) pero sí podía descargar un PDF con datos desactualizados
-  // si quedaba algo dirty sin confirmar. Mismo guard que Generar/Aprobar.
-  const generarPDF = async () => {
-    if (!cotizacion || transitionInFlightRef.current) return
-    transitionInFlightRef.current = true
-    setGenerandoPdf(true); setError(null); setSuccess(null); setDriveLink(null)
-    try {
-      const flushOk = await flushPendingSaves()
-      if (!flushOk) { setError('Hay cambios recientes que no se guardaron correctamente. Revisa antes de generar el PDF.'); return }
-      const result = await generateQuotationPdf(cotizacion, undefined, { skipDownload: true })
-      handlePdfResult(result)
-    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al generar PDF') } finally { setGenerandoPdf(false); transitionInFlightRef.current = false }
-  }
-  const generarCotizacion = async () => {
-    if (transitionInFlightRef.current) return
-    transitionInFlightRef.current = true
-    setGuardando(true); setError(null)
-    try {
-      const flushOk = await flushPendingSaves()
-      if (!flushOk) { setError('Hay cambios recientes que no se guardaron correctamente. Revisa antes de generar.'); return }
-      const refreshedCotizacion = await emitirCotizacion(id)
-      applyCotizacionToState(refreshedCotizacion)
-      setGenerandoPdf(true); setSuccess(null); setDriveLink(null)
-      try {
-        const result = await generateQuotationPdf(refreshedCotizacion, watchedItems, { skipDownload: true })
-        handlePdfResult(result)
-      } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al generar PDF') } finally { setGenerandoPdf(false) }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error al generar cotización')
-    } finally { setGuardando(false); transitionInFlightRef.current = false }
-  }
-  const crearComplementaria = () => { if (cotizacion) router.push(buildComplementariaUrl(id, cotizacion)) }
-  const cancelarCotizacion = async () => { if (!confirm('¿Cancelar esta cotización? Se eliminará el proyecto y las cuentas por cobrar/pagar asociadas.')) return; setCancelando(true); setError(null); setSuccess(null); try { const res = await fetch(`/api/cotizaciones/${id}/cancelar`, { method: 'POST' }); if (!res.ok) { const body = await res.json(); throw new Error(body.error || 'Error al cancelar') } const updated = await res.json(); applyCotizacionToState(updated); setSuccess('Cotización cancelada. Proyecto y cuentas eliminados.'); setTimeout(() => setSuccess(null), 4000) } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error al cancelar') } finally { setCancelando(false) } }
+  // EF-3 3D-7: extraído a hooks/useQuotationBusinessActions.ts -- ver ese
+  // archivo para la explicación completa de por qué existe (incluida la
+  // asimetría deliberada entre las 5 acciones, preservada tal cual).
+  const {
+    aprobar,
+    generarPDF,
+    generarCotizacion,
+    crearComplementaria,
+    cancelarCotizacion,
+  } = useQuotationBusinessActions({
+    id,
+    cotizacion,
+    router,
+    watchedItems,
+    refreshCatalogos,
+    applyCotizacionToState,
+    setError,
+    setSuccess,
+    setDriveLink,
+    setAprobando,
+    setGenerandoPdf,
+    setGuardando,
+    setCancelando,
+    flushItemCellDirtyFields,
+    flushGeneralDirtyFields,
+    flushTotalsDirtyFields,
+    notasDirtyRef,
+    persistNotasAutosave,
+    pendingMutationsRef,
+    itemCellConflicts,
+  })
 
   if (loading) return <SkeletonQuotationDetail />
   if (!cotizacion) return <div className="p-8 text-center text-faint">Cotización no encontrada</div>
