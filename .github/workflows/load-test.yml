@@ -281,11 +281,15 @@ jobs:
       GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
       LOADTEST_MODE: 'true'
       LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
-      # Variables que solo usa seed-volume-fixtures.mjs, nunca `next start`:
+      # Variables que solo usan los scripts (env-check.mjs,
+      # seed-volume-fixtures.mjs), nunca `next start`:
       PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
       PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
       TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
     steps:
       - uses: actions/checkout@v4
 
