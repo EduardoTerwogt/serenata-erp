@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  EF-3A 3A-5: fixture fija de factura para uploads.js -- deliberadamente
+  NO es un CFDI fiscalmente válido (RFC/UUID/sellos ficticios). El staff
+  real (POST /api/cuentas-pagar/[id]/subir-factura) sube el archivo y
+  marca "revisión" si la validación fiscal no cuadra, nunca bloquea --
+  confirmado en app/api/cuentas-pagar/[id]/subir-factura/route.ts. Basta
+  con que sea XML bien formado para que parseFacturaXML() no truene.
+-->
+<cfdi:Comprobante
+  xmlns:cfdi="http://www.sat.gob.mx/cfd/4"
+  xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital"
+  Version="4.0"
+  Fecha="2026-01-01T12:00:00"
+  Total="812.00"
+  SubTotal="700.00">
+  <cfdi:Emisor Rfc="LOAD860101AAA" Nombre="Proveedor de carga LOADTEST" RegimenFiscal="601" />
+  <cfdi:Receptor Rfc="SER860101BBB" Nombre="Serenata House" UsoCFDI="G03" />
+  <cfdi:Conceptos>
+    <cfdi:Concepto Cantidad="1" Descripcion="Servicio de carga LOADTEST" ValorUnitario="700.00" Importe="700.00">
+      <cfdi:Impuestos>
+        <cfdi:Traslados>
+          <cfdi:Traslado Impuesto="002" Importe="112.00" />
+        </cfdi:Traslados>
+      </cfdi:Impuestos>
+    </cfdi:Concepto>
+  </cfdi:Conceptos>
+  <cfdi:Complemento>
+    <tfd:TimbreFiscalDigital UUID="00000000-0000-0000-0000-000000000000" />
+  </cfdi:Complemento>
+</cfdi:Comprobante>

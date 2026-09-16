@@ -143,6 +143,43 @@ jobs:
       - name: SMOKE cuentas.js
         run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/cuentas.js
 
+      # Los escenarios que escriben datos (3A-5 PR b) necesitan un runId
+      # real (para taggear filas y limpiarlas después), una carpeta real de
+      # Drive (3A-4) y, para portal.js, sesiones de Portal ya firmadas
+      # (3A-2) -- se preparan una sola vez aquí y se limpian todas juntas al
+      # final vía bulk-cleanup.mjs (ya registra/borra también la carpeta de
+      # Drive por runId, ahora que loadtest_runs existe en serenata-erp-test).
+      - name: k6 (3A-5) -- generar runId para las corridas SMOKE que escriben datos
+        run: echo "SMOKE_RUN_ID=$(node -e "process.stdout.write(crypto.randomUUID())")" >> "$GITHUB_ENV"
+
+      - name: k6 (3A-5) -- crear carpeta real de Drive para la corrida SMOKE
+        run: |
+          set -euo pipefail
+          node scripts/loadtest/create-drive-run-folder.mjs --target-url http://127.0.0.1:3000 --run-id "$SMOKE_RUN_ID" | tee /tmp/create-drive-folder.log
+          grep '^LOADTEST_DRIVE_FOLDER_ID=' /tmp/create-drive-folder.log >> "$GITHUB_ENV"
+
+      - name: k6 (3A-5) -- fixture de Portal para SMOKE (1 sesión)
+        run: node scripts/loadtest/prepare-portal-fixtures.mjs --target-url http://127.0.0.1:3000 --run-id "$SMOKE_RUN_ID" --count 1 --out portal-fixtures-smoke.json
+
+      - name: SMOKE crear-cotizaciones.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env RUN_ID="$SMOKE_RUN_ID" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/crear-cotizaciones.js
+
+      - name: SMOKE editar-concurrente.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env RUN_ID="$SMOKE_RUN_ID" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" --env TEST_SUPABASE_URL="$TEST_SUPABASE_URL" --env TEST_SUPABASE_ANON_KEY="$TEST_SUPABASE_ANON_KEY" scripts/loadtest/k6/editar-concurrente.js
+
+      - name: SMOKE session-version-cost.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env RUN_ID="$SMOKE_RUN_ID" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/session-version-cost.js
+
+      - name: SMOKE uploads.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env RUN_ID="$SMOKE_RUN_ID" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" --env LOADTEST_DRIVE_FOLDER_ID="$LOADTEST_DRIVE_FOLDER_ID" --env LOADTEST_ENV_SECRET="$LOADTEST_ENV_SECRET" scripts/loadtest/k6/uploads.js
+
+      - name: SMOKE portal.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env PORTAL_FIXTURES_FILE="$GITHUB_WORKSPACE/portal-fixtures-smoke.json" scripts/loadtest/k6/portal.js
+
+      - name: k6 (3A-5) -- limpiar datos y carpeta de Drive de la corrida SMOKE
+        if: always()
+        run: node scripts/loadtest/bulk-cleanup.mjs --target-url http://127.0.0.1:3000 --run-id "$SMOKE_RUN_ID"
+
       - name: Dump Next.js server log on failure
         if: failure()
         run: |
