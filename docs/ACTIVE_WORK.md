@@ -14,15 +14,15 @@ commit `980464c`. Historia completa de cada uno:
 **EF-3 en ejecución.** Plan v12, 40 bloques + hasta 3 condicionales.
 Documento canónico + matriz de hallazgos + tracker en vivo:
 [`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md) (§11).
-Cerrados hasta hoy: 3A-0, 3A-0b, 3A-1, **3A-2, 3A-3, 3A-4**, 3B-1, 3B-2, 3B-3,
-3B-4, 3B-5, 3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3D-0, 3D-0b,
-3D-1, 3D-2, 3D-3, 3D-4, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12.
+Cerrados hasta hoy: 3A-0, 3A-0b, 3A-1, **3A-2, 3A-3, 3A-4, 3A-5**, 3B-1,
+3B-2, 3B-3, 3B-4, 3B-5, 3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3,
+3D-0, 3D-0b, 3D-1, 3D-2, 3D-3, 3D-4, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11,
+3D-12.
 
-**En curso: 3A-5** (scripts de carga k6 + telemetría, 3 PRs — PR (a) y (b)
-mergeadas, los 8 escenarios de k6 completos; PR (c) en curso en rama
-`claude/ef3a-k6-telemetria`), siguiente paso de la ejecución completa de
-EF-3A (3A-2→3A-6) en curso esta sesión. El único bloque de EF-3D que sigue
-abierto es **3D-5**
+**En curso: 3A-6** (baseline diagnóstico inicial, 100% doc-only —
+`docs/archive/ef-3-baseline-previo.md`), último bloque de la ejecución
+completa de EF-3A (3A-2→3A-6) en curso esta sesión. El único bloque de
+EF-3D que sigue abierto es **3D-5**
 (`useQuotationItemCellsAutosave`), pausado por decisión explícita del
 usuario, pero su bloqueador real (entorno serverless de 3A-1) ya no
 existe — ver más abajo.
@@ -34,6 +34,25 @@ ahora solo por 3A-3 sembrando volumen real en la próxima corrida (3A-3 en
 sí ya cerró), no por 3A-1.
 
 ## Completado en esta sesión
+
+**Cierre de 3A-5 (scripts de carga k6 + telemetría, 3 PRs)** — PR (c)
+[#60](https://github.com/EduardoTerwogt/serenata-erp/pull/60), commit
+`0ea0c02`. Migración `20260916_pg_stat_statements_snapshot.sql`:
+esquema/columnas verificados contra `serenata-erp-test` real **antes** de
+escribirla (`extensions.pg_stat_statements`, `total_exec_time`/
+`mean_exec_time`, exactamente lo que el doc asumía); RPC
+`pg_stat_statements_snapshot()` trae el universo completo (nunca un
+top-N), confirmado con conteo idéntico al de la vista real (`1534=1534`)
+y `queryid` sin pérdida de precisión. `telemetry-snapshot.mjs`/
+`telemetry-deltas.mjs`: `window_mean_ms = total_exec_time_delta_ms/
+calls_delta` (nunca `mean_exec_time` del snapshot "después" directo),
+`flag:'new_or_reset'` para `queryid` nuevo (nunca "nuevo" sin calificar).
+Validación real vía `workflow_dispatch`: pipeline completo (snapshot
+antes → 8 escenarios SMOKE → snapshot después → deltas reales) en verde,
+deltas calculados correctamente contra datos reales. **Con esto, EF-3A
+3A-5 queda completo** (3 PRs: #58, #59, #60) — los 8 escenarios de k6 del
+audit original existen y están validados real, con telemetría real de
+Postgres. Solo falta 3A-6 (doc-only) para cerrar EF-3A por completo.
 
 **3A-5 PR (b) mergeada** (resto de escenarios k6: crear/editar
 cotizaciones, portal, uploads, session-version-cost), PR
@@ -275,11 +294,12 @@ los 3 jobs (`pin-loadtest-target`/`local`/`serverless`) en verde.
 
 ## Siguiente paso
 
-1. **3A-5 en curso** — PR (a) y (b) mergeadas (#58, #59), los 8 escenarios
-   de k6 completos; arrancando PR (c) en rama `claude/ef3a-k6-telemetria`
-   (migración `pg_stat_statements` + RPC + `telemetry-snapshot.mjs`/
-   `telemetry-deltas.mjs`) — seguido de 3A-6 para cerrar EF-3A por
-   completo esta sesión.
+1. **3A-5 cerrado** (#58, #59, #60) — **3A-6 en curso**, último bloque
+   para cerrar EF-3A por completo esta sesión: baseline diagnóstico
+   inicial, 100% doc-only (`docs/archive/ef-3-baseline-previo.md`), corre
+   los 8 escenarios de k6 a escala completa (no `SMOKE=1`) contra local y
+   serverless con volumen/identidades reales sembrados y snapshots de
+   `pg_stat_statements` antes/después de cada target.
 2. **3B-7** depende de 3A-1 (cerrado) — no arranca sola todavía (fuera del
    plan de esta sesión). **3C-4** depende de 3A-1 (cerrado) + volumen real
    sembrado en `serenata-erp-test` (`items_cotizacion>=5,500`) — el script
