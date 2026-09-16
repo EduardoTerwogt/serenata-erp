@@ -24,6 +24,11 @@ on:
         required: false
         type: boolean
         default: false
+      measure_sync_down:
+        description: 'Si es true, el job serverless además mide la duración real de syncAllDown() (POST /api/integrations/sheets/sync-down) contra el entorno serverless -- gate de 3C-4. Sobreescribe TODAS las pestañas de Sheets de serenata-erp-test, así que default false para no hacerlo en cada dispatch normal'
+        required: false
+        type: boolean
+        default: false
 
 # Mismo group que e2e.yml -- ambos mutan serenata-erp-test y la misma
 # carpeta de Drive de test, así que GitHub Actions encola cualquier corrida
@@ -240,6 +245,15 @@ jobs:
 
       - name: env-check -- confirmar que el deployment serverless apunta a serenata-erp-test
         run: node scripts/loadtest/env-check.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
+
+      # EF-3 3C-4: gate obligatorio -- duración real de syncAllDown() contra
+      # el volumen objetivo ya sembrado (Bloque 4), en el entorno
+      # serverless real. Opt-in (measure_sync_down) porque sobreescribe TODAS
+      # las pestañas de la hoja de test -- no se quiere ese efecto lateral en
+      # cada dispatch normal de load-test.yml.
+      - name: EF-3 3C-4 -- medir duración real de syncAllDown() contra el entorno serverless
+        if: ${{ inputs.measure_sync_down }}
+        run: node scripts/loadtest/measure-sync-down-duration.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
 
       # Los 8 escenarios de k6 contra el entorno serverless real los agrega 3A-6.
 
