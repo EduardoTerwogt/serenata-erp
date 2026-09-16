@@ -24,11 +24,18 @@ const STAGES = [
   { target: 38, duration: '11m30s' },
 ]
 
-export const options = buildOptions(STAGES, {
-  ...DEFAULT_THRESHOLDS,
-  http_req_duration: ['p(95)<5000', 'p(99)<8000'],
-  upload_error_rate: ['rate<0.02'],
-})
+// setupTimeout explícito: el default de k6 (60s) no alcanza para las 50
+// creaciones secuenciales (crear+emitir+aprobar+buscar cuenta_pagar) de
+// setup() -- bug real encontrado en la corrida de 3A-6, ver
+// docs/archive/ef-3-baseline-previo.md.
+export const options = {
+  ...buildOptions(STAGES, {
+    ...DEFAULT_THRESHOLDS,
+    http_req_duration: ['p(95)<5000', 'p(99)<8000'],
+    upload_error_rate: ['rate<0.02'],
+  }),
+  setupTimeout: '5m',
+}
 
 // Archivos fijos del repo -- nunca generados on-the-fly, para que el
 // tamaño/contenido sea determinístico entre corridas. open() se resuelve
