@@ -1,0 +1,28 @@
+-- EF-3 3E-1: cuentas_por_proyecto() medida a volumen real (11K+ cuentas_pagar,
+-- ~2200 proyectos, seed de EF-3A/3E-1) durante el ciclo de k6 a duración real
+-- del gate de baseline final -- mean_exec_time=1012ms, max_exec_time=7912ms
+-- (pg_stat_statements), causando "canceling statement due to statement
+-- timeout" (57014) real en el endpoint /api/cuentas/por-proyecto bajo carga
+-- concurrente, y probable "noisy neighbor" (el resto de los escenarios de k6
+-- que corren concurrentemente contra la misma serenata-erp-test compartida
+-- también rompieron su umbral de http_req_failed en la misma ventana).
+--
+-- Root cause confirmado con EXPLAIN (ANALYZE, BUFFERS): cuentas_cobrar SÍ
+-- tiene índice por proyecto_id (idx_cuentas_cobrar_proyecto_id, migración
+-- previa), pero cuentas_pagar NUNCA lo tuvo -- cada invocación de
+-- cuentas_por_proyecto() hace, POR CADA proyecto con al menos una cuenta (los
+-- ~2200 reales), 3 subconsultas correlacionadas contra cuentas_pagar (EXISTS +
+-- jsonb_agg + SUM) filtradas por proyecto_id sin índice -- secuencial cada
+-- vez sobre las ~11K filas de cuentas_pagar. Confirmado en
+-- serenata-erp-test: 5605.9ms / 1,630,527 shared buffer hits ANTES del
+-- índice -> 578-623ms / ~28,000 buffer hits DESPUÉS (medido con la misma
+-- EXPLAIN ANALYZE, mismo dato, mismo proyecto).
+--
+-- CREATE INDEX IF NOT EXISTS: puramente aditivo, ya aplicado y verificado
+-- manualmente en serenata-erp-test (ozrtsludmcguvgqdjicn) y en producción
+-- (fwmyoqokcjtldiofuxdg, volumen bajo hoy -- 55 cuentas_pagar/18 proyectos --
+-- pero el mismo patrón sin índice habría escalado igual de mal). Esta
+-- migración deja el archivo numerado consistente con lo ya aplicado a mano
+-- (regla de docs/decisions/005-migraciones-manuales-append-only.md).
+CREATE INDEX IF NOT EXISTS idx_cuentas_pagar_proyecto_id
+  ON public.cuentas_pagar (proyecto_id);
