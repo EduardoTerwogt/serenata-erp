@@ -57,3 +57,55 @@ export function loginStaff(targetUrl, email, password) {
   )
   check(loginRes, { 'login: status 200 o redirect': (r) => r.status === 200 || r.status === 302 })
 }
+
+// GET /api/proveedores devuelve el catálogo completo (sin paginar) -- pool
+// real de responsable_id para los escenarios que crean cotizaciones
+// (3A-2/3A-3 ya sembraron fixtures reales). Asume que el caller ya inició
+// sesión de staff en su mismo scope (setup() o la VU actual) -- setup()
+// tiene su propio cookie jar, separado del de cada VU, así que este
+// helper nunca hace login por su cuenta.
+export function fetchProveedorIds(targetUrl) {
+  const res = http.get(`${targetUrl}/api/proveedores`)
+  check(res, { 'proveedores: status 200': (r) => r.status === 200 })
+  const proveedores = JSON.parse(res.body)
+  if (!Array.isArray(proveedores) || proveedores.length === 0) {
+    throw new Error('fetchProveedorIds: sin proveedores de fixture -- correr 3A-2/3A-3 primero')
+  }
+  return proveedores.map((p) => p.id)
+}
+
+export function fechaEntregaEn15Dias() {
+  const d = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+  return d.toISOString().slice(0, 10)
+}
+
+// Payload real de creación de cotización, compartido por
+// crear-cotizaciones.js/editar-concurrente.js/uploads.js/
+// session-version-cost.js -- x_pagar>0 siempre: sin eso approve_cotizacion
+// no genera ninguna fila en cuentas_pagar (confirmado en
+// db/migrations/20260408_approve_cotizacion_rpc.sql:112), y varios de esos
+// escenarios dependen de que sí existan cuentas por pagar reales.
+export function buildCotizacionPayload(runId, clienteSuffix, itemDescripcion, proyecto, responsableId) {
+  return {
+    cliente: `LOADTEST-${runId}-Cliente-${clienteSuffix}`,
+    proyecto,
+    fecha_entrega: fechaEntregaEn15Dias(),
+    items: [{
+      descripcion: itemDescripcion,
+      categoria: 'Producción',
+      cantidad: 1,
+      precio_unitario: 1000,
+      x_pagar: 700,
+      responsable_id: responsableId,
+    }],
+  }
+}
+
+// wss://<ref>.supabase.co/realtime/v1/websocket?apikey=...&vsn=1.0.0 --
+// misma derivación que supabase-js hace internamente a partir de la URL
+// http(s) del proyecto (createClient() nunca fija una URL de Realtime
+// distinta en este repo, confirmado en lib/supabase-browser.ts).
+export function buildRealtimeWsUrl(supabaseUrl, anonKey) {
+  const wsBase = supabaseUrl.replace(/^http/, 'ws')
+  return `${wsBase}/realtime/v1/websocket?apikey=${anonKey}&vsn=1.0.0`
+}
