@@ -443,6 +443,16 @@ jobs:
           echo $? > results/session-version-cost.exit
           exit 0
 
+      # Imprime las métricas reales de cada escenario DIRECTO al log del job
+      # (texto, recuperable por get_job_logs) en vez de depender solo del
+      # artifact subido (zip en blob storage, no descargable desde este
+      # sandbox por policy de egress) -- así el número real de cada
+      # escenario queda en un lugar que sí se puede leer después.
+      - name: 3E-1 -- imprimir métricas reales de k6 (compacto, al log del job)
+        if: always()
+        run: |
+          node -e "const fs=require('fs');const dir='results';for(const f of fs.readdirSync(dir).filter(f=>f.endsWith('.json')).sort()){let j;try{j=JSON.parse(fs.readFileSync(dir+'/'+f,'utf8'))}catch(e){console.log('=== '+f+' NO PARSEABLE ('+e.message+') ===');continue}const m=j.metrics||{};const pick=(n)=>{const mm=m[n];return mm?{values:mm.values,thresholds:mm.thresholds}:null};console.log('=== '+f+' ===');console.log(JSON.stringify({iterations:(m.iterations||{}).values,vus_max:(m.vus_max||{}).values,http_reqs:(m.http_reqs||{}).values,http_req_duration:pick('http_req_duration'),http_req_failed:pick('http_req_failed'),checks:(m.checks||{}).values}))}"
+
       - name: 3E-1 -- snapshot de pg_stat_statements DESPUÉS + deltas reales
         if: always()
         run: |
@@ -469,8 +479,12 @@ jobs:
           node scripts/loadtest/bulk-cleanup.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID" \
             || echo "::warning::bulk-cleanup.mjs salió con error (folder de Drive con muchos hijos, ver 3E-1) -- las filas de Postgres se limpiaron antes de ese punto, carpeta huérfana documentada para --sweep-orphans"
 
-      - name: Dump Next.js server log on failure
-        if: failure()
+      # Siempre (no solo on failure): 3E-1 punto 2 exige revisar la firma de
+      # "Bloque 7" (fallas rápidas + next-start.log limpio = contención de
+      # CPU del runner compartido, no límite real de la app) contra ESTA
+      # corrida, no asumirla del intento anterior.
+      - name: 3E-1 -- volcar next-start.log completo (siempre, para la firma de Bloque 7)
+        if: always()
         run: |
           echo "── next-start.log ──"
           cat next-start.log || echo "(next-start.log no existe)"
@@ -608,6 +622,12 @@ jobs:
             scripts/loadtest/k6/session-version-cost.js > results/session-version-cost.log 2>&1
           echo $? > results/session-version-cost.exit
           exit 0
+
+      # Ver el comentario equivalente en local-full.
+      - name: 3E-1 -- imprimir métricas reales de k6 (compacto, al log del job, serverless)
+        if: always()
+        run: |
+          node -e "const fs=require('fs');const dir='results';for(const f of fs.readdirSync(dir).filter(f=>f.endsWith('.json')).sort()){let j;try{j=JSON.parse(fs.readFileSync(dir+'/'+f,'utf8'))}catch(e){console.log('=== '+f+' NO PARSEABLE ('+e.message+') ===');continue}const m=j.metrics||{};const pick=(n)=>{const mm=m[n];return mm?{values:mm.values,thresholds:mm.thresholds}:null};console.log('=== '+f+' ===');console.log(JSON.stringify({iterations:(m.iterations||{}).values,vus_max:(m.vus_max||{}).values,http_reqs:(m.http_reqs||{}).values,http_req_duration:pick('http_req_duration'),http_req_failed:pick('http_req_failed'),checks:(m.checks||{}).values}))}"
 
       - name: 3E-1 -- snapshot de pg_stat_statements DESPUÉS + deltas reales (serverless)
         if: always()
