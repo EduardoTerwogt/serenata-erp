@@ -39,6 +39,11 @@ on:
         required: false
         type: boolean
         default: false
+      full_baseline:
+        description: 'THROWAWAY (EF-3 3E-1, orquestación descartable, nunca mergeada a main): en vez de las corridas SMOKE de los jobs local/serverless, corre los 8 escenarios de k6 a duración REAL (sin SMOKE=1, ~12min c/u los 7 concurrentes + ~5min session-version-cost.js aislado) contra local (job local-full) y después contra serverless (job serverless-full, mismo seed compartido), con snapshot de pg_stat_statements antes/después y cleanup del runId -- el gate real de 3E-1. Desactiva los jobs local/serverless (SMOKE) para ese mismo dispatch, evitando tráfico redundante contra el mismo serenata-erp-test compartido'
+        required: false
+        type: boolean
+        default: false
 
 # Mismo group que e2e.yml -- ambos mutan serenata-erp-test y la misma
 # carpeta de Drive de test, así que GitHub Actions encola cualquier corrida
@@ -94,7 +99,7 @@ jobs:
           node scripts/loadtest/wait-for-deployment.mjs "${ARGS[@]}"
 
   local:
-    if: ${{ !inputs.seed_volume }}
+    if: ${{ !inputs.seed_volume && !inputs.full_baseline }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -229,7 +234,7 @@ jobs:
     # workflow_dispatch corrompería el ciclo de datos compartidos.
     # `pin-loadtest-target` sí corre en paralelo con `local` porque solo
     # prepara el deploy remoto, no toca datos compartidos.
-    if: ${{ !inputs.seed_volume }}
+    if: ${{ !inputs.seed_volume && !inputs.full_baseline }}
     needs: [pin-loadtest-target, local]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -275,6 +280,343 @@ jobs:
         run: node scripts/loadtest/reset-sheets-integration.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
 
       # Los 8 escenarios de k6 contra el entorno serverless real los agrega 3A-6.
+
+  # ---------------------------------------------------------------------
+  # EF-3 3E-1 -- THROWAWAY, orquestación descartable (nunca mergeada a
+  # main, ver docs/EF-3_ENGINEERING_HARDENING.md 3E-1 punto 1 y
+  # docs/archive/ef-3-baseline-previo.md): ciclo real (no SMOKE) de los 8
+  # escenarios de k6, gate real de umbrales, contra local (este job) y
+  # después contra serverless (job serverless-full de abajo, mismo seed
+  # compartido de serenata-erp-test).
+  #
+  # Fix del bug real que abortó el intento de 3A-6 (cascada de fallo:
+  # `wait $PID` de un escenario que rompió su propio umbral, bajo
+  # `bash -e` -- ver docs/archive/ef-3-baseline-previo.md "Cascada de
+  # fallo"): el paso que lanza los 7 escenarios concurrentes corre con
+  # `set +e` y exporta un `--summary-export=results/<nombre>.json` +
+  # `results/<nombre>.exit` por escenario, terminando siempre en `exit 0`
+  # -- un umbral roto en cualquiera de los 7 nunca aborta el resto del
+  # job. session-version-cost.js corre aislado DESPUÉS (mismo criterio que
+  # 3A-5/3A-6), y el snapshot "después"+deltas y el cleanup del runId
+  # corren siempre (`if: always()`), pase lo que pase con los umbrales.
+  local-full:
+    if: ${{ inputs.full_baseline }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Misma tabla exacta que el job `local` (3A-1, verificada contra el
+      # job `live` real de e2e.yml).
+      AUTH_SECRET: loadtest-e2e-secret
+      AUTH_TRUST_HOST: 'true'
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      CRON_SECRET: loadtest-cron-secret
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_JWT_SECRET: ${{ secrets.TEST_SUPABASE_JWT_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN_TEST }}
+      GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_DRIVE_FOLDER_ID_CUENTAS: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+      LOADTEST_MODE: 'true'
+      LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+      TARGET_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app against the test environment
+        run: npm run build
+
+      - name: Start app in background
+        run: nohup npx next start > next-start.log 2>&1 &
+
+      - name: Wait for app to be ready
+        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
+
+      - name: env-check -- confirmar que apunta a serenata-erp-test antes de cualquier tráfico
+        run: node scripts/loadtest/env-check.mjs --target-url "$TARGET_URL"
+
+      - name: Instalar k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: 3E-1 -- snapshot de pg_stat_statements ANTES (ciclo completo)
+        run: node scripts/loadtest/telemetry-snapshot.mjs --out telemetry-before-full.json
+
+      - name: 3E-1 -- generar runId del ciclo completo
+        run: echo "FULL_RUN_ID=$(node -e "process.stdout.write(crypto.randomUUID())")" >> "$GITHUB_ENV"
+
+      - name: 3E-1 -- crear carpeta real de Drive para el ciclo completo
+        run: |
+          set -euo pipefail
+          node scripts/loadtest/create-drive-run-folder.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID" | tee /tmp/create-drive-folder-full.log
+          grep '^LOADTEST_DRIVE_FOLDER_ID=' /tmp/create-drive-folder-full.log >> "$GITHUB_ENV"
+
+      - name: 3E-1 -- fixtures reales de Portal (150 sesiones firmadas)
+        run: node scripts/loadtest/prepare-portal-fixtures.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID" --count 150 --out portal-fixtures-full.json
+
+      - name: 3E-1 -- lanzar los 7 escenarios concurrentes a duración real (sin SMOKE), nunca abortar por un umbral roto
+        run: |
+          set +e
+          mkdir -p results
+
+          k6 run --summary-export=results/crear-cotizaciones.json \
+            --env TARGET_URL="$TARGET_URL" --env RUN_ID="$FULL_RUN_ID" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/crear-cotizaciones.js > results/crear-cotizaciones.log 2>&1 &
+          PID_CREAR=$!
+
+          k6 run --summary-export=results/editar-concurrente.json \
+            --env TARGET_URL="$TARGET_URL" --env RUN_ID="$FULL_RUN_ID" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            --env TEST_SUPABASE_URL="$TEST_SUPABASE_URL" --env TEST_SUPABASE_ANON_KEY="$TEST_SUPABASE_ANON_KEY" \
+            scripts/loadtest/k6/editar-concurrente.js > results/editar-concurrente.log 2>&1 &
+          PID_EDITAR=$!
+
+          k6 run --summary-export=results/navegacion-proyectos.json \
+            --env TARGET_URL="$TARGET_URL" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/navegacion-proyectos.js > results/navegacion-proyectos.log 2>&1 &
+          PID_NAV=$!
+
+          k6 run --summary-export=results/dashboard.json \
+            --env TARGET_URL="$TARGET_URL" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/dashboard.js > results/dashboard.log 2>&1 &
+          PID_DASH=$!
+
+          k6 run --summary-export=results/cuentas.json \
+            --env TARGET_URL="$TARGET_URL" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/cuentas.js > results/cuentas.log 2>&1 &
+          PID_CUENTAS=$!
+
+          k6 run --summary-export=results/portal.json \
+            --env TARGET_URL="$TARGET_URL" --env PORTAL_FIXTURES_FILE="$GITHUB_WORKSPACE/portal-fixtures-full.json" \
+            scripts/loadtest/k6/portal.js > results/portal.log 2>&1 &
+          PID_PORTAL=$!
+
+          k6 run --summary-export=results/uploads.json \
+            --env TARGET_URL="$TARGET_URL" --env RUN_ID="$FULL_RUN_ID" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            --env LOADTEST_DRIVE_FOLDER_ID="$LOADTEST_DRIVE_FOLDER_ID" --env LOADTEST_ENV_SECRET="$LOADTEST_ENV_SECRET" \
+            scripts/loadtest/k6/uploads.js > results/uploads.log 2>&1 &
+          PID_UPLOADS=$!
+
+          wait $PID_CREAR;   echo $? > results/crear-cotizaciones.exit
+          wait $PID_EDITAR;  echo $? > results/editar-concurrente.exit
+          wait $PID_NAV;     echo $? > results/navegacion-proyectos.exit
+          wait $PID_DASH;    echo $? > results/dashboard.exit
+          wait $PID_CUENTAS; echo $? > results/cuentas.exit
+          wait $PID_PORTAL;  echo $? > results/portal.exit
+          wait $PID_UPLOADS; echo $? > results/uploads.exit
+
+          echo "── Exit codes (0 = k6 corrió y sus umbrales pasaron) ──"
+          for f in results/*.exit; do echo "$f: $(cat "$f")"; done
+          exit 0
+
+      - name: 3E-1 -- session-version-cost.js aislado (después de los 7 concurrentes)
+        if: always()
+        run: |
+          set +e
+          k6 run --summary-export=results/session-version-cost.json \
+            --env TARGET_URL="$TARGET_URL" --env RUN_ID="$FULL_RUN_ID" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/session-version-cost.js > results/session-version-cost.log 2>&1
+          echo $? > results/session-version-cost.exit
+          exit 0
+
+      - name: 3E-1 -- snapshot de pg_stat_statements DESPUÉS + deltas reales
+        if: always()
+        run: |
+          node scripts/loadtest/telemetry-snapshot.mjs --out telemetry-after-full.json
+          node scripts/loadtest/telemetry-deltas.mjs --before telemetry-before-full.json --after telemetry-after-full.json --run-id "$FULL_RUN_ID"
+          cat "docs/archive/telemetry/${FULL_RUN_ID}-pg-stat-deltas.json" | head -c 4000
+
+      - name: 3E-1 -- limpiar datos y carpeta de Drive del ciclo completo
+        if: always()
+        run: node scripts/loadtest/bulk-cleanup.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID"
+
+      - name: Dump Next.js server log on failure
+        if: failure()
+        run: |
+          echo "── next-start.log ──"
+          cat next-start.log || echo "(next-start.log no existe)"
+
+      - name: 3E-1 -- subir resultados reales (JSON de k6 + logs + telemetría)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ef3e1-local-full-results
+          path: |
+            results/**
+            telemetry-before-full.json
+            telemetry-after-full.json
+            docs/archive/telemetry/*-pg-stat-deltas.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  serverless-full:
+    # Corre DESPUÉS de local-full -- mismo motivo que serverless/local:
+    # ambos mutan la misma serenata-erp-test compartida, sin solaparse.
+    if: ${{ inputs.full_baseline }}
+    needs: [pin-loadtest-target, local-full]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+      TARGET_URL: ${{ secrets.LOADTEST_SERVERLESS_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: env-check -- confirmar que el deployment serverless apunta a serenata-erp-test
+        run: node scripts/loadtest/env-check.mjs --target-url "$TARGET_URL"
+
+      - name: Instalar k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: 3E-1 -- snapshot de pg_stat_statements ANTES (ciclo completo, serverless)
+        run: node scripts/loadtest/telemetry-snapshot.mjs --out telemetry-before-full.json
+
+      - name: 3E-1 -- generar runId del ciclo completo (serverless)
+        run: echo "FULL_RUN_ID=$(node -e "process.stdout.write(crypto.randomUUID())")" >> "$GITHUB_ENV"
+
+      - name: 3E-1 -- crear carpeta real de Drive para el ciclo completo (serverless)
+        run: |
+          set -euo pipefail
+          node scripts/loadtest/create-drive-run-folder.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID" | tee /tmp/create-drive-folder-full.log
+          grep '^LOADTEST_DRIVE_FOLDER_ID=' /tmp/create-drive-folder-full.log >> "$GITHUB_ENV"
+
+      - name: 3E-1 -- fixtures reales de Portal (150 sesiones firmadas, serverless)
+        run: node scripts/loadtest/prepare-portal-fixtures.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID" --count 150 --out portal-fixtures-full.json
+
+      - name: 3E-1 -- lanzar los 7 escenarios concurrentes a duración real (sin SMOKE), nunca abortar por un umbral roto (serverless)
+        run: |
+          set +e
+          mkdir -p results
+
+          k6 run --summary-export=results/crear-cotizaciones.json \
+            --env TARGET_URL="$TARGET_URL" --env RUN_ID="$FULL_RUN_ID" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/crear-cotizaciones.js > results/crear-cotizaciones.log 2>&1 &
+          PID_CREAR=$!
+
+          k6 run --summary-export=results/editar-concurrente.json \
+            --env TARGET_URL="$TARGET_URL" --env RUN_ID="$FULL_RUN_ID" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            --env TEST_SUPABASE_URL="$TEST_SUPABASE_URL" --env TEST_SUPABASE_ANON_KEY="$TEST_SUPABASE_ANON_KEY" \
+            scripts/loadtest/k6/editar-concurrente.js > results/editar-concurrente.log 2>&1 &
+          PID_EDITAR=$!
+
+          k6 run --summary-export=results/navegacion-proyectos.json \
+            --env TARGET_URL="$TARGET_URL" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/navegacion-proyectos.js > results/navegacion-proyectos.log 2>&1 &
+          PID_NAV=$!
+
+          k6 run --summary-export=results/dashboard.json \
+            --env TARGET_URL="$TARGET_URL" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/dashboard.js > results/dashboard.log 2>&1 &
+          PID_DASH=$!
+
+          k6 run --summary-export=results/cuentas.json \
+            --env TARGET_URL="$TARGET_URL" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/cuentas.js > results/cuentas.log 2>&1 &
+          PID_CUENTAS=$!
+
+          k6 run --summary-export=results/portal.json \
+            --env TARGET_URL="$TARGET_URL" --env PORTAL_FIXTURES_FILE="$GITHUB_WORKSPACE/portal-fixtures-full.json" \
+            scripts/loadtest/k6/portal.js > results/portal.log 2>&1 &
+          PID_PORTAL=$!
+
+          k6 run --summary-export=results/uploads.json \
+            --env TARGET_URL="$TARGET_URL" --env RUN_ID="$FULL_RUN_ID" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            --env LOADTEST_DRIVE_FOLDER_ID="$LOADTEST_DRIVE_FOLDER_ID" --env LOADTEST_ENV_SECRET="$LOADTEST_ENV_SECRET" \
+            scripts/loadtest/k6/uploads.js > results/uploads.log 2>&1 &
+          PID_UPLOADS=$!
+
+          wait $PID_CREAR;   echo $? > results/crear-cotizaciones.exit
+          wait $PID_EDITAR;  echo $? > results/editar-concurrente.exit
+          wait $PID_NAV;     echo $? > results/navegacion-proyectos.exit
+          wait $PID_DASH;    echo $? > results/dashboard.exit
+          wait $PID_CUENTAS; echo $? > results/cuentas.exit
+          wait $PID_PORTAL;  echo $? > results/portal.exit
+          wait $PID_UPLOADS; echo $? > results/uploads.exit
+
+          echo "── Exit codes (0 = k6 corrió y sus umbrales pasaron) ──"
+          for f in results/*.exit; do echo "$f: $(cat "$f")"; done
+          exit 0
+
+      - name: 3E-1 -- session-version-cost.js aislado (después de los 7 concurrentes, serverless)
+        if: always()
+        run: |
+          set +e
+          k6 run --summary-export=results/session-version-cost.json \
+            --env TARGET_URL="$TARGET_URL" --env RUN_ID="$FULL_RUN_ID" \
+            --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" \
+            scripts/loadtest/k6/session-version-cost.js > results/session-version-cost.log 2>&1
+          echo $? > results/session-version-cost.exit
+          exit 0
+
+      - name: 3E-1 -- snapshot de pg_stat_statements DESPUÉS + deltas reales (serverless)
+        if: always()
+        run: |
+          node scripts/loadtest/telemetry-snapshot.mjs --out telemetry-after-full.json
+          node scripts/loadtest/telemetry-deltas.mjs --before telemetry-before-full.json --after telemetry-after-full.json --run-id "$FULL_RUN_ID"
+          cat "docs/archive/telemetry/${FULL_RUN_ID}-pg-stat-deltas.json" | head -c 4000
+
+      - name: 3E-1 -- limpiar datos y carpeta de Drive del ciclo completo (serverless)
+        if: always()
+        run: node scripts/loadtest/bulk-cleanup.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID"
+
+      - name: 3E-1 -- subir resultados reales (JSON de k6 + logs + telemetría, serverless)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ef3e1-serverless-full-results
+          path: |
+            results/**
+            telemetry-before-full.json
+            telemetry-after-full.json
+            docs/archive/telemetry/*-pg-stat-deltas.json
+          if-no-files-found: warn
+          retention-days: 14
 
   # EF-3A 3A-3, corrida a escala completa (operacional, no un bloque de la
   # spec): siembra 1,200 proveedores + 1,200 cotizaciones x5 items en
