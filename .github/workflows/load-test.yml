@@ -129,6 +129,14 @@ jobs:
       - name: Instalar k6
         uses: grafana/setup-k6-action@v1
 
+      # Snapshot "antes" -- 3A-5 (c): pg_stat_statements_snapshot() trae el
+      # universo completo (nunca un top-N que sesga los deltas). El
+      # snapshot "después" se toma tras las corridas SMOKE que escriben
+      # datos, antes del cleanup -- pg_stat_statements mide estadísticas de
+      # queries, no filas, así que el cleanup no afecta el delta.
+      - name: k6 (3A-5) -- snapshot de pg_stat_statements ANTES
+        run: node scripts/loadtest/telemetry-snapshot.mjs --out telemetry-before.json
+
       # SMOKE=1 corre cada escenario 1 sola vez (options.scenarios no se
       # puede pisar con flags de CLI, ver _shared.js) -- confirma que el
       # script real funciona contra este entorno antes de que 3A-6 los
@@ -175,6 +183,12 @@ jobs:
 
       - name: SMOKE portal.js
         run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env PORTAL_FIXTURES_FILE="$GITHUB_WORKSPACE/portal-fixtures-smoke.json" scripts/loadtest/k6/portal.js
+
+      - name: k6 (3A-5) -- snapshot de pg_stat_statements DESPUÉS + deltas reales
+        run: |
+          node scripts/loadtest/telemetry-snapshot.mjs --out telemetry-after.json
+          node scripts/loadtest/telemetry-deltas.mjs --before telemetry-before.json --after telemetry-after.json --run-id "$SMOKE_RUN_ID"
+          cat "docs/archive/telemetry/${SMOKE_RUN_ID}-pg-stat-deltas.json" | head -c 2000
 
       - name: k6 (3A-5) -- limpiar datos y carpeta de Drive de la corrida SMOKE
         if: always()
