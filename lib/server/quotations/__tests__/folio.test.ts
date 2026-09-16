@@ -35,13 +35,12 @@ function createCompCotQuery(result: { data: unknown; error: unknown }) {
   }
 }
 
-/** Reservation query: .select().eq().is().gt() or .select().eq().eq().is().gt() — gt is terminal */
+/** Reservation query: .select().eq().eq().or() — or is terminal (F14d: cuenta reservas consumidas o activas, no solo activas) */
 function createReservationQuery(result: { data: unknown; error: unknown }) {
   return {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    is: vi.fn().mockReturnThis(),
-    gt: vi.fn().mockResolvedValue(result),
+    or: vi.fn().mockResolvedValue(result),
   }
 }
 

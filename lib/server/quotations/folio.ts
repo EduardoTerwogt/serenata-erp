@@ -91,13 +91,16 @@ async function computeNextQuotationFolio(trimmedBase: string): Promise<string> {
       (existing || []).map(c => extractComplementariaCode(c.id, trimmedBase)).filter((n): n is number => n !== null)
     )
 
+    // Igual que reserve_next_cotizacion_folio() (F14d): una reserva ya
+    // consumida sigue ocupando su folio para siempre, aunque la
+    // cotización correspondiente ya no exista -- no filtrar solo por
+    // reservas activas o el preview sugeriría una letra ya emitida.
     const { data: reserved, error } = await supabaseAdmin
       .from('cotizacion_folio_reservations')
       .select('folio')
       .eq('kind', 'COMPLEMENTARIA')
       .eq('base_folio', trimmedBase)
-      .is('consumed_at', null)
-      .gt('expires_at', new Date().toISOString())
+      .or(`consumed_at.not.is.null,expires_at.gt.${new Date().toISOString()}`)
     if (error) throw error
 
     const reservedCodes = new Set(

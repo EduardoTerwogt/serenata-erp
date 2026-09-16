@@ -38,14 +38,14 @@ function parseArgs() {
 }
 
 async function waitForDeployment(projectId, sha, timeoutSeconds, vercelToken, teamId) {
+  const teamParam = teamId ? `&teamId=${teamId}` : ''
   const deadline = Date.now() + timeoutSeconds * 1000
   while (Date.now() < deadline) {
-    const teamParam = teamId ? `&teamId=${teamId}` : ''
     const res = await fetch(
       `https://api.vercel.com/v6/deployments?projectId=${projectId}&meta-githubCommitSha=${sha}&limit=1${teamParam}`,
       { headers: { Authorization: `Bearer ${vercelToken}` } }
     )
-    if (!res.ok) throw new Error(`Vercel API respondió ${res.status} consultando deployments`)
+    if (!res.ok) throw new Error(`Vercel API respondió ${res.status} consultando deployments: ${await res.text()}`)
     const { deployments } = await res.json()
     const deployment = deployments[0]
     if (!deployment) {
@@ -59,7 +59,31 @@ async function waitForDeployment(projectId, sha, timeoutSeconds, vercelToken, te
     // BUILDING / QUEUED / INITIALIZING: sigue esperando
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
   }
-  throw new Error(`Timeout de ${timeoutSeconds}s esperando el deployment del sha ${sha} -- ver el dashboard de Vercel manualmente antes de reintentar`)
+
+  // Diagnóstico antes de fallar: distinguir "el proyecto/team-id de la
+  // consulta no tiene NINGÚN deployment visible" (probable project-id/
+  // team-id mal configurado) de "el SHA nunca apareció" (el deploy
+  // pertenece a otro branch/proyecto, o Vercel no lo disparó) -- un
+  // simple "Timeout" no distingue estos dos casos reales muy distintos.
+  let diagnostic = ''
+  try {
+    const debugRes = await fetch(
+      `https://api.vercel.com/v6/deployments?projectId=${projectId}&limit=5${teamParam}`,
+      { headers: { Authorization: `Bearer ${vercelToken}` } }
+    )
+    if (debugRes.ok) {
+      const { deployments } = await debugRes.json()
+      diagnostic = deployments.length === 0
+        ? ' -- 0 deployments visibles para este projectId/teamId (revisar LOADTEST_VERCEL_PROJECT_ID/LOADTEST_VERCEL_TEAM_ID)'
+        : ` -- ${deployments.length} deployment(s) recientes visibles, ninguno con sha ${sha} (shas: ${deployments.map((d) => d.meta?.githubCommitSha ?? '?').join(', ')})`
+    } else {
+      diagnostic = ` -- diagnóstico también falló: Vercel API respondió ${debugRes.status}`
+    }
+  } catch (diagErr) {
+    diagnostic = ` -- diagnóstico también falló: ${diagErr.message}`
+  }
+
+  throw new Error(`Timeout de ${timeoutSeconds}s esperando el deployment del sha ${sha}${diagnostic} -- ver el dashboard de Vercel manualmente antes de reintentar`)
 }
 
 async function main() {
