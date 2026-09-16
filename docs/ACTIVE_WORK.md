@@ -14,15 +14,20 @@ commit `980464c`. Historia completa de cada uno:
 **EF-3 en ejecución.** Plan v12, 40 bloques + hasta 3 condicionales.
 Documento canónico + matriz de hallazgos + tracker en vivo:
 [`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md) (§11).
-Cerrados hasta hoy: 3A-0, 3A-0b, 3A-1, **3A-2, 3A-3, 3A-4, 3A-5**, 3B-1,
-3B-2, 3B-3, 3B-4, 3B-5, 3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3,
-3D-0, 3D-0b, 3D-1, 3D-2, 3D-3, 3D-4, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11,
-3D-12.
+Cerrados hasta hoy: 3A-0, 3A-0b, 3A-1, **3A-2, 3A-3, 3A-4, 3A-5, 3A-6**,
+3B-1, 3B-2, 3B-3, 3B-4, 3B-5, 3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3C-2,
+3C-3, 3D-0, 3D-0b, 3D-1, 3D-2, 3D-3, 3D-4, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10,
+3D-11, 3D-12. **EF-3A queda 100% cerrado esta sesión (3A-0 → 3A-6).**
 
-**En curso: 3A-6** (baseline diagnóstico inicial, 100% doc-only —
-`docs/archive/ef-3-baseline-previo.md`), último bloque de la ejecución
-completa de EF-3A (3A-2→3A-6) en curso esta sesión. El único bloque de
-EF-3D que sigue abierto es **3D-5**
+**EF-3A completo, con un gap disclosed:** el baseline diagnóstico de 3A-6
+(`docs/archive/ef-3-baseline-previo.md`) quedó parcial por dos bloqueadores
+reales — Vercel rate-limited (retry 24h, bloquea `serverless` por
+completo) y el target `local` reveló fallas masivas (92-99%) bajo
+concurrencia combinada real en 5 de 7 escenarios (`portal.js` sí tuvo
+100% de éxito real a 150 VUs) — el usuario decidió cerrar 3A-6 ya con lo
+real obtenido en vez de reintentar esta sesión (ver "Problemas
+encontrados" abajo para el detalle y los próximos pasos explícitos). El
+único bloque de EF-3D que sigue abierto es **3D-5**
 (`useQuotationItemCellsAutosave`), pausado por decisión explícita del
 usuario, pero su bloqueador real (entorno serverless de 3A-1) ya no
 existe — ver más abajo.
@@ -34,6 +39,28 @@ ahora solo por 3A-3 sembrando volumen real en la próxima corrida (3A-3 en
 sí ya cerró), no por 3A-1.
 
 ## Completado en esta sesión
+
+**Cierre de 3A-6 (baseline diagnóstico inicial) — y con él, EF-3A completo
+(3A-0 → 3A-6).** 100% doc-only, `docs/archive/ef-3-baseline-previo.md`.
+Intento real vía `workflow_dispatch` en una rama throwaway (nunca
+mergeada), volumen sembrado escalado a 150/150 (disclosed, no los
+1,200/1,200 originales, por tiempo de sesión — duraciones de k6 sin
+recortar, 12 min reales por escenario). Dos bloqueadores reales:
+`serverless` bloqueado por completo por un rate-limit real de Vercel
+(confirmado por el usuario, retry 24h); `local` con 92-99% de
+`http_req_failed` en 5 de 7 escenarios concurrentes, con `portal.js` como
+único 100% limpio a 150 VUs — hipótesis de causa raíz: el job `local`
+corre la app Y los 7 procesos generadores de carga de k6 en el mismo
+runner compartido (diseño heredado de 3A-1), sin poder aislar contención
+de runner de límite real de la app. El script de orquestación abortó
+antes del cleanup (`set -e` + `wait` sobre 7 procesos, uno con threshold
+roto) — dejó datos reales huérfanos en `serenata-erp-test`, limpiados a
+mano vía Supabase MCP (SQL directo, misma cascada FK-safe que
+`bulk-cleanup.mjs`), confirmado 0 residuales. Bug real encontrado:
+`uploads.js` necesita `setupTimeout` explícito (k6 default 60s insuficiente
+para sus 50 creaciones secuenciales de cotización) — pendiente como PR
+normal, no doc-only. El usuario decidió, vía pregunta directa, cerrar
+3A-6 ya con estos hallazgos reales en vez de reintentar esta sesión.
 
 **Cierre de 3A-5 (scripts de carga k6 + telemetría, 3 PRs)** — PR (c)
 [#60](https://github.com/EduardoTerwogt/serenata-erp/pull/60), commit
@@ -254,6 +281,17 @@ los 3 jobs (`pin-loadtest-target`/`local`/`serverless`) en verde.
 
 ## Problemas encontrados que siguen abiertos
 
+- **3A-6 quedó parcial, con reintento explícito pendiente** — ver
+  `docs/archive/ef-3-baseline-previo.md` para el detalle completo. En
+  resumen: (1) `serverless` bloqueado por un rate-limit real de Vercel
+  (retry ~24h desde 2026-09-16 ~01:00 UTC) — reintentar el ciclo completo
+  una vez se libere; (2) `local`, tal como está diseñado desde 3A-1 (corre
+  la app y el generador de carga k6 en el mismo runner compartido), no
+  midió throughput/latencia confiables bajo concurrencia combinada real —
+  decidir si se re-arquitectura (runner separado) o se documenta como
+  "solo humo funcional" de aquí en adelante; (3) `uploads.js` necesita
+  `setupTimeout` explícito en sus `options` (bug real, encontrado en la
+  corrida, PR normal pendiente — no es doc-only).
 - **3D-5 (`useQuotationItemCellsAutosave`) sigue pausado** por decisión del
   usuario, pero su bloqueador real (entorno serverless de 3A-1) ya no
   existe — la prueba manual que su criterio de aceptación exige ya se
@@ -294,12 +332,10 @@ los 3 jobs (`pin-loadtest-target`/`local`/`serverless`) en verde.
 
 ## Siguiente paso
 
-1. **3A-5 cerrado** (#58, #59, #60) — **3A-6 en curso**, último bloque
-   para cerrar EF-3A por completo esta sesión: baseline diagnóstico
-   inicial, 100% doc-only (`docs/archive/ef-3-baseline-previo.md`), corre
-   los 8 escenarios de k6 a escala completa (no `SMOKE=1`) contra local y
-   serverless con volumen/identidades reales sembrados y snapshots de
-   `pg_stat_statements` antes/después de cada target.
+1. **EF-3A cerrado por completo esta sesión (3A-0 → 3A-6).** Sin más
+   trabajo de EF-3A pendiente salvo el reintento explícito de 3A-6
+   documentado arriba (Vercel + `local` + bug de `uploads.js`) cuando el
+   usuario decida retomarlo — no bloquea nada más de EF-3.
 2. **3B-7** depende de 3A-1 (cerrado) — no arranca sola todavía (fuera del
    plan de esta sesión). **3C-4** depende de 3A-1 (cerrado) + volumen real
    sembrado en `serenata-erp-test` (`items_cotizacion>=5,500`) — el script
