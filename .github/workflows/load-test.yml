@@ -19,6 +19,11 @@ on:
         description: 'SHA de main a fijar en loadtest-target (debe ser ancestro real de origin/main)'
         required: true
         type: string
+      seed_volume:
+        description: 'Si es true, en vez de correr el load test, solo siembra el volumen objetivo (EF-3A 3A-3, escala completa: 1,200 proveedores + 1,200 cotizaciones x5 items) en serenata-erp-test -- operacional para el gate de 3C-4, no repite pin/local/serverless'
+        required: false
+        type: boolean
+        default: false
 
 # Mismo group que e2e.yml -- ambos mutan serenata-erp-test y la misma
 # carpeta de Drive de test, así que GitHub Actions encola cualquier corrida
@@ -30,6 +35,7 @@ concurrency:
 
 jobs:
   pin-loadtest-target:
+    if: ${{ !inputs.seed_volume }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -73,6 +79,7 @@ jobs:
           node scripts/loadtest/wait-for-deployment.mjs "${ARGS[@]}"
 
   local:
+    if: ${{ !inputs.seed_volume }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -207,6 +214,7 @@ jobs:
     # workflow_dispatch corrompería el ciclo de datos compartidos.
     # `pin-loadtest-target` sí corre en paralelo con `local` porque solo
     # prepara el deploy remoto, no toca datos compartidos.
+    if: ${{ !inputs.seed_volume }}
     needs: [pin-loadtest-target, local]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -234,3 +242,82 @@ jobs:
         run: node scripts/loadtest/env-check.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
 
       # Los 8 escenarios de k6 contra el entorno serverless real los agrega 3A-6.
+
+  # EF-3A 3A-3, corrida a escala completa (operacional, no un bloque de la
+  # spec): siembra 1,200 proveedores + 1,200 cotizaciones x5 items en
+  # serenata-erp-test vía los mismos 3 endpoints REST reales que usa un
+  # usuario (create/emitir/aprobar -- ver seed-volume-fixtures.mjs, no
+  # reimplementa la orquestación de approve_cotizacion en JS plano). A
+  # diferencia de las corridas SMOKE de `local`/`serverless`, esta siembra
+  # es deliberadamente PERMANENTE (sin bulk-cleanup.mjs al final): su
+  # propósito es dejar volumen realista instalado en serenata-erp-test para
+  # que 3C-4 (y cualquier medición futura) tenga datos reales contra los
+  # que correr, no datos de una sola corrida descartable. Corre contra un
+  # `next start` local (no el proyecto Vercel serverless aislado) porque
+  # aquí no se mide rendimiento de la app -- solo se necesita un servidor
+  # real para autenticar y llamar los 3 endpoints; usar `local` evita
+  # depender del deploy de loadtest-target y de su rate limit de Vercel
+  # (documentado en 3A-6) para una tarea que no lo requiere.
+  seed-volumen:
+    if: ${{ inputs.seed_volume }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Misma tabla que el job `local` -- se necesita el mismo `next start`
+      # real para autenticar contra /api/auth y llamar los endpoints reales.
+      AUTH_SECRET: loadtest-e2e-secret
+      AUTH_TRUST_HOST: 'true'
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      CRON_SECRET: loadtest-cron-secret
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_JWT_SECRET: ${{ secrets.TEST_SUPABASE_JWT_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN_TEST }}
+      GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_DRIVE_FOLDER_ID_CUENTAS: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+      LOADTEST_MODE: 'true'
+      LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
+      # Variables que solo usa seed-volume-fixtures.mjs, nunca `next start`:
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app against the test environment
+        run: npm run build
+
+      - name: Start app in background
+        run: nohup npx next start > next-start.log 2>&1 &
+
+      - name: Wait for app to be ready
+        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
+
+      - name: env-check -- confirmar que apunta a serenata-erp-test antes de sembrar nada
+        run: node scripts/loadtest/env-check.mjs --target-url http://127.0.0.1:3000
+
+      - name: Generar runId de la siembra de volumen
+        run: echo "SEED_RUN_ID=$(node -e "process.stdout.write(crypto.randomUUID())")" >> "$GITHUB_ENV"
+
+      - name: Sembrar volumen objetivo completo (1,200 proveedores + 1,200 cotizaciones x5 items)
+        run: node scripts/loadtest/seed-volume-fixtures.mjs --target-url http://127.0.0.1:3000 --run-id "$SEED_RUN_ID"
+
+      - name: Dump Next.js server log on failure
+        if: failure()
+        run: |
+          echo "── next-start.log ──"
+          cat next-start.log || echo "(next-start.log no existe)"
