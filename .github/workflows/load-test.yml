@@ -29,6 +29,11 @@ on:
         required: false
         type: boolean
         default: false
+      test_item_cell_conflict:
+        description: 'Si es true, corre la prueba manual obligatoria de 3D-5 (causa F: PATCH en vuelo sobre la misma celda, sin 409 contra uno mismo) contra el entorno serverless real -- reutiliza tests/e2e/live/cotizaciones-colaboracion.spec.ts, ya cubierto en el job `live` de e2e.yml pero ahí contra un next start local, no el deploy real'
+        required: false
+        type: boolean
+        default: false
 
 # Mismo group que e2e.yml -- ambos mutan serenata-erp-test y la misma
 # carpeta de Drive de test, así que GitHub Actions encola cualquier corrida
@@ -339,3 +344,58 @@ jobs:
         run: |
           echo "── next-start.log ──"
           cat next-start.log || echo "(next-start.log no existe)"
+
+  # EF-3 3D-5, criterio de aceptación ("prueba manual adicional
+  # obligatoria... editar la misma celda repetidamente con el PATCH
+  # anterior en vuelo, confirmar que no se pierde ninguna edición y no
+  # aparece un 409 contra uno mismo"): reutiliza VERBATIM el test "causa F"
+  # de tests/e2e/live/cotizaciones-colaboracion.spec.ts (ya prueba
+  # exactamente ese escenario, y ya corre en cada push al job `live` de
+  # e2e.yml) -- la única diferencia real es apuntar `PLAYWRIGHT_BASE_URL`
+  # al deploy real de `serenata-erp-loadtest` en vez de un `next start`
+  # local, algo que `playwright.config.ts` ya soporta sin cambios (usa la
+  # URL externa directo, sin levantar servidor). No se reescribe el
+  # escenario: sería exactamente el mismo código con más riesgo de
+  # divergir del real con el tiempo.
+  test-item-cell-conflict:
+    if: ${{ inputs.test_item_cell_conflict }}
+    needs: [pin-loadtest-target]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ secrets.LOADTEST_SERVERLESS_URL }}
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      # Sin esto, si faltara una credencial Playwright marcaría el test
+      # como "skipped" y el job quedaría VERDE sin haber probado nada --
+      # mismo guard que usa el job `live` de e2e.yml.
+      PLAYWRIGHT_LIVE_REQUIRED: 'true'
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Quitar el repo apt de Google Chrome preinstalado en el runner
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: EF-3 3D-5 -- prueba manual (causa F) contra el entorno serverless real
+        run: npx playwright test tests/e2e/live/cotizaciones-colaboracion.spec.ts -g "causa F" --reporter=list
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-item-cell-conflict-artifacts
+          path: playwright-report
