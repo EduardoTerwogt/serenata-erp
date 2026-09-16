@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-15T22:51:52.804Z",
-  "count": 74,
+  "generated_at": "2026-09-16T00:18:17.964Z",
+  "count": 75,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -75,6 +75,7 @@
     "20260914_proveedores_pagina_por_nombre.sql",
     "20260914_sheets_sync_lock.sql",
     "20260914_sync_estados_cuentas_cobrar_vencidas.sql",
-    "20260915_loadtest_runs.sql"
+    "20260915_loadtest_runs.sql",
+    "20260916_pg_stat_statements_snapshot.sql"
   ]
 }
