@@ -5236,20 +5236,25 @@ otro bloque de este mismo lote sin mergear -- `scripts/validate-ef3-tracker.mjs`
 (regla d) rechaza correctamente esa combinación, ya que "En curso" exige que
 toda dependencia esté `Cerrado`, y aquí ninguna lo está todavía.
 
-**Excepción de proceso para el cierre de EF-3 (3B-7/3B-10/3C-4), misma
+**Excepción de proceso para el cierre de EF-3 (3B-7/3B-10/3C-4/3D-5), misma
 regla que EF-3D:** esta ronda también corre en un entorno con una única
 rama designada (`claude/brave-maxwell-a2j60v`, distinta de la de EF-3D),
-sin permiso para crear ramas nuevas. Los 3 bloques restantes de EF-3B/3C
+sin permiso para crear ramas nuevas. Los 4 bloques restantes de EF-3B/3C/3D
 comparten esa rama y un solo PR ([#61](https://github.com/EduardoTerwogt/serenata-erp/pull/61))
-contra `main`, en commits separados por bloque. "Rama"/"PR" de cada fila
-apunta a esa rama/PR compartida; "Estado" se queda en `Pendiente` (progreso
-real en "Nota") hasta que el PR mergea. A diferencia de EF-3D, no todas las
-filas cierran en el mismo instante del merge: 3B-10 sí (su criterio de
-aceptación es solo tests), pero 3B-7 exige además medir p95 sin caché
-contra el entorno serverless real -- `load-test.yml` no permite pinear
-`serenata-erp-loadtest` a un SHA sin mergear (`pin-loadtest-target` exige
-que sea ancestro de `origin/main`), así que esa medición solo puede
-correr DESPUÉS del merge, en la misma sesión o en la siguiente.
+contra `main`, en commits separados por bloque -- incluido 3D-5, cuya spec
+original pedía "en su propio PR, sin combinar con ningún otro cambio"
+(punto 8), pero la restricción de rama única de esta sesión lo hace
+imposible; se preserva la intención con su propio commit atómico, aislado
+del resto. "Rama"/"PR" de cada fila apunta a esa rama/PR compartida;
+"Estado" se queda en `Pendiente` (progreso real en "Nota") hasta que el PR
+mergea. A diferencia de EF-3D, no todas las filas cierran en el mismo
+instante del merge: 3B-10 sí (su criterio de aceptación es solo tests),
+pero 3B-7 exige además medir p95 sin caché contra el entorno serverless
+real, y 3D-5 exige una prueba manual documentada contra ese mismo entorno
+-- `load-test.yml` no permite pinear `serenata-erp-loadtest` a un SHA sin
+mergear (`pin-loadtest-target` exige que sea ancestro de `origin/main`),
+así que ambas verificaciones solo pueden correr DESPUÉS del merge, en la
+misma sesión o en la siguiente.
 
 **Cierre real:** PR #49 mergeó a `main` en el commit `2d7bd47`, con `live`
 completo en verde contra `main` (workflow run `34917496098`). Las 10 filas
@@ -5292,7 +5297,7 @@ bloqueó el cierre del resto porque ninguna fila cerrada pasó nunca por
 | 3D-2 | Cerrado | 3D-1 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | `1684d74` | `2d7bd47` | Movió también los tipos/helpers compartidos de General/Totales/Items (antes locales a `page.tsx`) a `lib/quotations/collaboration.ts` nuevo, no listado en el punto 4 de la especificación -- evita un ciclo de imports `page.tsx` <-> `hooks/useQuotationXAutosave.ts` que los 4 hooks de esta sub-secuencia (3D-2..3D-5) habrían necesitado si cada uno reimportara esos tipos desde `page.tsx`. Puramente mecánico (funciones/tipos/clase movidos verbatim), sin cambio de comportamiento -- confirmado por los 13 casos de 3D-0/3D-0b en verde | Arrancar el siguiente bloque independiente |
 | 3D-3 | Cerrado | 3D-2 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | `52a9600` | `2d7bd47` | `hooks/useQuotationTotalesAutosave.ts`, T1-T13 verdes incluidos T2/T8 de Totales. Commiteado junto con 3D-4 (mismo commit) tras un gap de proceso en la sesión original -- documentado, no oculto | Arrancar el siguiente bloque independiente |
 | 3D-4 | Cerrado | 3D-3 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | `52a9600` | `2d7bd47` | `hooks/useQuotationNotasAutosave.ts`, T1-T13 verdes. Mismo commit que 3D-3, ver su nota | Arrancar el siguiente bloque independiente |
-| 3D-5 | Pendiente | 3D-0, 3D-1, 3D-2, 3D-3, 3D-4 | — | — | — | — | Pausado por decisión explícita del usuario: además de ser el bloque de mayor riesgo (P0 de implementación, "ya causó bugs reales dos veces"), su propio criterio de aceptación (punto 11) exige una prueba manual contra el entorno serverless real. 3A-1 ya cerró -- el entorno (`serenata-erp-loadtest`) existe y está validado end-to-end -- así que la prueba manual que este bloque necesita ya se puede correr. No cierra solo con CI verde | Retomar si el usuario decide correr la prueba manual contra `serenata-erp-loadtest` ahora que existe, o seguir aceptando el riesgo sin ella |
+| 3D-5 | Pendiente | 3D-0, 3D-1, 3D-2, 3D-3, 3D-4 | `claude/brave-maxwell-a2j60v` | [#61](https://github.com/EduardoTerwogt/serenata-erp/pull/61) | — | — | Implementación completa: `hooks/useQuotationItemCellsAutosave.ts` (clúster completo -- autosave de celdas, alta/baja/import de filas, conflicto atómico de 4 campos del autofill de producto, `itemsController`), verbatim desde `page.tsx` (1484→~660 líneas). Alcance ampliado respecto al punto 4 original de la spec (que solo nombraba el autosave puro) para incluir todo el clúster de partidas, misma consistencia que General/Totales/Notas. `resyncPartidas` (de `useQuotationReconciliation`, que depende de los refs de este hook) se pasa vía wrapper estable en un ref para evitar ciclo de imports -- ver comentario junto a `resyncPartidasRef` en `page.tsx`. T4/T5/T6/T9 de `page-autosave-characterization.test.tsx` (3D-0) en verde sin tocar; nuevo `page-item-cells-atomic-conflict.test.tsx` (aislado por el caché de catálogos de `useQuotationForm.ts`) cubre el conflicto atómico multi-campo, nunca antes probado automatizado. **Sigue sin cerrar**: su criterio de aceptación exige una prueba manual documentada contra el entorno serverless real (`serenata-erp-loadtest`), no cierra solo con CI verde | Mergear PR #61, luego correr y documentar la prueba manual contra `serenata-erp-loadtest` |
 | 3D-6 | Cerrado | 3D-0, 3D-0b, 3D-2, 3D-3, 3D-4, 3D-5 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | `1315a37` | `2d7bd47` | Cerrado con 3D-5 aún pausado (decisión del usuario, ver nota de 3D-5): `useQuotationReconciliation` recibe los refs del clúster de partidas (`itemDirtyCellsRef`/`itemFocusedCellsRef`/`itemSavingCellsRef`/`localWriteAtRef`/`pendingRowCreationsRef`) directo de `page.tsx` en vez de desde un hook `useQuotationItemCellsAutosave` -- mismo comportamiento, misma firma interna, distinto origen de esos parámetros. Cuando 3D-5 se retome, esta firma se actualiza para recibirlos de ahí | Arrancar el siguiente bloque independiente |
 | 3D-7 | Cerrado | 3D-0, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6 | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | `911cc6e` | `2d7bd47` | Cerrado con 3D-5 aún pausado (ver nota de 3D-5/3D-6): `useQuotationBusinessActions` recibe `flushItemCellDirtyFields` directo de `page.tsx` en vez de un hook `useQuotationItemCellsAutosave`. Asimetría de las 5 acciones (aprobar/generarPDF/generarCotizacion con flush+guard; crearComplementaria sin ninguno; cancelarCotizacion con guard propio sin flush) preservada exactamente, confirmada por lectura del código movido | Arrancar 3D-8 (ya desbloqueado -- PR #49 mergeado) |
 | 3D-8 | Cerrado | 3D-0, 3D-1, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6, 3D-7 | N/A | N/A | `453694e` | N/A | `page.tsx` bajó de 2,388 a 1,484 líneas (-38%). `ARCHITECTURE.md` (sección "Edición colaborativa") documenta los 6 hooks realmente extraídos (`useQuotationMutationTracker`/`useQuotationGeneralAutosave`/`useQuotationTotalesAutosave`/`useQuotationNotasAutosave`/`useQuotationReconciliation`/`useQuotationBusinessActions`) y deja explícito que `useQuotationItemCellsAutosave` (3D-5) NO se extrajo -- sigue pausado por decisión del usuario, el autoguardado de partidas sigue inline en `page.tsx`, y 3D-6/3D-7 reciben esos refs directo de `page.tsx` en vez de ese hook. `live` completo en verde contra `main` tras el merge de #49 (workflow run `34917496098`, jobs `live`+`smoke-and-critical`+`test`+`Migrations`, todos `success` sobre el commit de merge `2d7bd47`) | Cierre de F16/F17 para los 11 bloques ejecutados; 3D-5 queda como único bloque de `page.tsx` sin cerrar |
