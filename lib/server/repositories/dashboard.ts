@@ -1,11 +1,7 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { getCotizaciones } from '@/lib/server/repositories/quotations'
-import { getProyectos } from '@/lib/server/repositories/proyectos'
-import { getCuentasCobrar, getPagosComprobantesEnRango } from '@/lib/server/repositories/cuentas-cobrar'
-import { getCuentasPagar } from '@/lib/server/repositories/cuentas-pagar'
-import { calcularSaldoPendiente } from '@/lib/server/cuentas/status'
+import { getPagosComprobantesEnRango } from '@/lib/server/repositories/cuentas-cobrar'
 import { round2 } from '@/lib/server/shared/decimal'
-import { Cotizacion, CuentaPagar, GastoFijo } from '@/lib/types'
+import { Cotizacion, GastoFijo } from '@/lib/types'
 
 // Fase 5.6 -- Dashboard ejecutivo. Base contable: flujo de caja real (lo
 // efectivamente cobrado/pagado en el periodo), no lo cotizado/aprobado --
@@ -170,20 +166,50 @@ function resuelto<T>(fuentesConError: string[], nombreFuente: string, resultado:
   return fallback
 }
 
+type CotizacionReciente = Pick<Cotizacion, 'id' | 'proyecto' | 'cliente' | 'total' | 'estado' | 'created_at'>
+
 /**
- * Egresos por mes = suma de x_pagar de cuentas_pagar totalmente liquidadas
- * (estado PAGADO) cuya fecha_pago cae en el rango. Limitación conocida y
- * documentada (ver 20260905_atomic_registrar_pago_cuenta_pagar.sql):
- * cuentas_pagar no tiene ledger de abonos -- fecha_pago solo se graba al
- * llegar a PAGADO completo, así que un abono parcial suelto no cuenta aquí
- * hasta que la cuenta se liquide del todo. No se resuelve en esta fase.
+ * EF-3 3B-10 (F13): agregados que antes traían la tabla completa a Node
+ * (cuentas_cobrar/cuentas_pagar/cotizaciones/proyectos) ahora se calculan
+ * en SQL (db/migrations/20260916_dashboard_agregados_sql.sql). Egresos por
+ * bucket = suma de x_pagar de cuentas_pagar totalmente liquidadas (estado
+ * PAGADO) cuya fecha_pago cae en el rango -- misma limitación conocida y
+ * documentada (ver 20260905_atomic_registrar_pago_cuenta_pagar.sql): sin
+ * ledger de abonos, un abono parcial suelto no cuenta aquí hasta que la
+ * cuenta se liquide del todo. Ingresos por bucket se queda en JS: viene de
+ * getPagosComprobantesEnRango(), que ya filtra server-side por rango --
+ * fuera de alcance de 3B-10.
  */
-function sumarEgresosEnRango(cuentasPagar: CuentaPagar[], inicio: string, fin: string): number {
-  return round2(
-    cuentasPagar
-      .filter((c) => c.estado === 'PAGADO' && enRango(c.fecha_pago, inicio, fin))
-      .reduce((sum, c) => sum + Number(c.x_pagar || 0), 0)
-  )
+async function getDashboardKpisCuentas(): Promise<{ por_cobrar: number; por_pagar: number }> {
+  const { data, error } = await supabaseAdmin.rpc('dashboard_kpis_cuentas')
+  if (error) throw error
+  return data as { por_cobrar: number; por_pagar: number }
+}
+
+async function getDashboardEgresosPorBucket(buckets: RangoPeriodo[]): Promise<number[]> {
+  const { data, error } = await supabaseAdmin.rpc('dashboard_egresos_por_bucket', {
+    p_buckets: buckets.map((b) => ({ inicio: b.inicio, fin: b.fin })),
+  })
+  if (error) throw error
+  return data as number[]
+}
+
+async function getDashboardActividadCotizaciones(inicio: string, fin: string): Promise<{ aprobadas: number; borrador: number }> {
+  const { data, error } = await supabaseAdmin.rpc('dashboard_actividad_cotizaciones', { p_inicio: inicio, p_fin: fin })
+  if (error) throw error
+  return data as { aprobadas: number; borrador: number }
+}
+
+async function getDashboardActividadProyectos(inicio: string, fin: string): Promise<{ creados: number; en_curso: number }> {
+  const { data, error } = await supabaseAdmin.rpc('dashboard_actividad_proyectos', { p_inicio: inicio, p_fin: fin })
+  if (error) throw error
+  return data as { creados: number; en_curso: number }
+}
+
+async function getDashboardCotizacionesRecientes(): Promise<CotizacionReciente[]> {
+  const { data, error } = await supabaseAdmin.rpc('dashboard_cotizaciones_recientes')
+  if (error) throw error
+  return data as CotizacionReciente[]
 }
 
 export async function getResumenDashboard({
@@ -198,29 +224,39 @@ export async function getResumenDashboard({
   const buckets = bucketsDePeriodo(periodo, anchor, 6)
   const rangoInicioTotal = buckets[0].inicio
 
-  const [cuentasCobrarR, cuentasPagarR, cotizacionesR, proyectosR, gastosFijosR, pagosR] = await Promise.allSettled([
-    getCuentasCobrar(),
-    getCuentasPagar(),
-    getCotizaciones(),
-    getProyectos(),
-    getGastosFijos(true),
+  const [
+    kpisCuentasR,
+    egresosPorBucketR,
+    pagosR,
+    actividadCotizacionesR,
+    actividadProyectosR,
+    gastosFijosR,
+    cotizacionesRecientesR,
+  ] = await Promise.allSettled([
+    getDashboardKpisCuentas(),
+    getDashboardEgresosPorBucket(buckets),
     getPagosComprobantesEnRango(rangoInicioTotal, periodoActual.fin),
+    getDashboardActividadCotizaciones(periodoActual.inicio, periodoActual.fin),
+    getDashboardActividadProyectos(periodoActual.inicio, periodoActual.fin),
+    getGastosFijos(true),
+    getDashboardCotizacionesRecientes(),
   ])
 
   const fuentesConError: string[] = []
-  const cuentasCobrar = resuelto(fuentesConError, 'Cuentas por cobrar', cuentasCobrarR, [])
-  const cuentasPagar = resuelto(fuentesConError, 'Cuentas por pagar', cuentasPagarR, [])
-  const cotizaciones = resuelto(fuentesConError, 'Cotizaciones', cotizacionesR, [])
-  const proyectos = resuelto(fuentesConError, 'Proyectos', proyectosR, [])
-  const gastosFijosActivos = resuelto(fuentesConError, 'Gastos fijos', gastosFijosR, [])
+  const kpisCuentas = resuelto(fuentesConError, 'Cuentas por cobrar/pagar', kpisCuentasR, { por_cobrar: 0, por_pagar: 0 })
+  const egresosPorBucket = resuelto(fuentesConError, 'Egresos por periodo', egresosPorBucketR, buckets.map(() => 0))
   const pagos = resuelto(fuentesConError, 'Pagos', pagosR, [])
+  const actividadCotizaciones = resuelto(fuentesConError, 'Cotizaciones', actividadCotizacionesR, { aprobadas: 0, borrador: 0 })
+  const actividadProyectos = resuelto(fuentesConError, 'Proyectos', actividadProyectosR, { creados: 0, en_curso: 0 })
+  const gastosFijosActivos = resuelto(fuentesConError, 'Gastos fijos', gastosFijosR, [])
+  const cotizacionesRecientes = resuelto(fuentesConError, 'Cotizaciones recientes', cotizacionesRecientesR, [])
 
-  const balance = buckets.map((b) => ({
+  const balance = buckets.map((b, i) => ({
     label: b.label,
     ingresos: round2(
       pagos.filter((p) => enRango(p.fecha_pago, b.inicio, b.fin)).reduce((sum, p) => sum + Number(p.monto || 0), 0)
     ),
-    egresos: sumarEgresosEnRango(cuentasPagar, b.inicio, b.fin),
+    egresos: egresosPorBucket[i] ?? 0,
   }))
 
   const actualBalance = balance[balance.length - 1]
@@ -229,32 +265,16 @@ export async function getResumenDashboard({
   const utilidadAntesIsr = round2(ingresos - egresos)
   const impuestos = round2(Math.max(0, utilidadAntesIsr) * TASA_ISR_PERSONA_MORAL)
 
-  const porCobrar = round2(
-    cuentasCobrar
-      .filter((c) => c.estado !== 'PAGADO')
-      .reduce((sum, c) => sum + calcularSaldoPendiente(c.monto_total, c.monto_pagado), 0)
-  )
-  const deudas = round2(
-    cuentasPagar
-      .filter((c) => c.estado !== 'PAGADO')
-      .reduce((sum, c) => sum + calcularSaldoPendiente(c.x_pagar, c.monto_pagado), 0)
-  )
+  const porCobrar = kpisCuentas.por_cobrar
+  const deudas = kpisCuentas.por_pagar
 
-  const cotizacionesEnPeriodo = cotizaciones.filter((c) => enRango(c.created_at, periodoActual.inicio, periodoActual.fin))
-  const cotizacionesAprobadas = cotizacionesEnPeriodo.filter((c) => c.estado === 'APROBADA').length
-  const cotizacionesBorrador = cotizacionesEnPeriodo.filter((c) => c.estado === 'BORRADOR').length
+  const cotizacionesAprobadas = actividadCotizaciones.aprobadas
+  const cotizacionesBorrador = actividadCotizaciones.borrador
 
-  const proyectosCreados = proyectos.filter((p) => enRango(p.created_at, periodoActual.inicio, periodoActual.fin)).length
-  const proyectosEnCurso = proyectos.filter(
-    (p) => !!p.fecha_inicio_real && p.fecha_inicio_real < periodoActual.inicio && !p.fecha_cierre_real
-  ).length
+  const proyectosCreados = actividadProyectos.creados
+  const proyectosEnCurso = actividadProyectos.en_curso
 
   const totalGastosFijos = round2(gastosFijosActivos.reduce((sum, g) => sum + Number(g.monto_mensual || 0), 0))
-
-  const cotizacionesRecientes = [...cotizaciones]
-    .sort((a, b) => (b.created_at > a.created_at ? 1 : -1))
-    .slice(0, 6)
-    .map((c) => ({ id: c.id, proyecto: c.proyecto, cliente: c.cliente, total: c.total, estado: c.estado, created_at: c.created_at }))
 
   return {
     periodo,

@@ -1,23 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Cotizacion, CuentaPagar, CuentaCobrar, PagoComprobante, Proyecto, GastoFijo } from '@/lib/types'
+import { PagoComprobante, GastoFijo } from '@/lib/types'
 
 const mocks = vi.hoisted(() => ({
-  getCotizaciones: vi.fn(),
-  getProyectos: vi.fn(),
-  getCuentasCobrar: vi.fn(),
   getPagosComprobantesEnRango: vi.fn(),
-  getCuentasPagar: vi.fn(),
   fromMock: vi.fn(),
+  rpcMock: vi.fn(),
 }))
 
-vi.mock('@/lib/server/repositories/quotations', () => ({ getCotizaciones: mocks.getCotizaciones }))
-vi.mock('@/lib/server/repositories/proyectos', () => ({ getProyectos: mocks.getProyectos }))
 vi.mock('@/lib/server/repositories/cuentas-cobrar', () => ({
-  getCuentasCobrar: mocks.getCuentasCobrar,
   getPagosComprobantesEnRango: mocks.getPagosComprobantesEnRango,
 }))
-vi.mock('@/lib/server/repositories/cuentas-pagar', () => ({ getCuentasPagar: mocks.getCuentasPagar }))
-vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { from: mocks.fromMock } }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { from: mocks.fromMock, rpc: mocks.rpcMock } }))
 
 import { rangoDePeriodo, bucketsDePeriodo, getResumenDashboard } from '../dashboard'
 
@@ -34,6 +27,42 @@ function mockGastosFijosActivos(gastos: GastoFijo[]) {
           eq: () => Promise.resolve({ data: gastos, error: null }),
         }),
       }),
+    }
+  })
+}
+
+/**
+ * EF-3 3B-10: los 4 agregados que antes venían de tablas completas ahora
+ * son 5 RPCs (dashboard_kpis_cuentas/dashboard_egresos_por_bucket/
+ * dashboard_actividad_cotizaciones/dashboard_actividad_proyectos/
+ * dashboard_cotizaciones_recientes) -- supabaseAdmin.rpc(fnName, params)
+ * se despacha por nombre, un override por RPC. Cualquier RPC no
+ * especificada en `overrides` responde con su fallback en cero.
+ */
+function mockDashboardRpcs(overrides: {
+  kpisCuentas?: { por_cobrar: number; por_pagar: number } | Error
+  egresosPorBucket?: number[] | Error
+  actividadCotizaciones?: { aprobadas: number; borrador: number } | Error
+  actividadProyectos?: { creados: number; en_curso: number } | Error
+  cotizacionesRecientes?: unknown[] | Error
+}) {
+  mocks.rpcMock.mockImplementation((fnName: string) => {
+    const respond = (value: unknown) =>
+      value instanceof Error ? Promise.reject(value) : Promise.resolve({ data: value, error: null })
+
+    switch (fnName) {
+      case 'dashboard_kpis_cuentas':
+        return respond(overrides.kpisCuentas ?? { por_cobrar: 0, por_pagar: 0 })
+      case 'dashboard_egresos_por_bucket':
+        return respond(overrides.egresosPorBucket ?? [0, 0, 0, 0, 0, 0])
+      case 'dashboard_actividad_cotizaciones':
+        return respond(overrides.actividadCotizaciones ?? { aprobadas: 0, borrador: 0 })
+      case 'dashboard_actividad_proyectos':
+        return respond(overrides.actividadProyectos ?? { creados: 0, en_curso: 0 })
+      case 'dashboard_cotizaciones_recientes':
+        return respond(overrides.cotizacionesRecientes ?? [])
+      default:
+        throw new Error(`RPC no mockeada: ${fnName}`)
     }
   })
 }
@@ -78,10 +107,7 @@ describe('getResumenDashboard', () => {
   })
 
   it('mes sin pagos ni egresos -- todo en cero, sin dividir entre cero', async () => {
-    mocks.getCotizaciones.mockResolvedValue([] as Cotizacion[])
-    mocks.getProyectos.mockResolvedValue([] as Proyecto[])
-    mocks.getCuentasCobrar.mockResolvedValue([] as CuentaCobrar[])
-    mocks.getCuentasPagar.mockResolvedValue([] as CuentaPagar[])
+    mockDashboardRpcs({})
     mocks.getPagosComprobantesEnRango.mockResolvedValue([] as PagoComprobante[])
     mockGastosFijosActivos([])
 
@@ -95,72 +121,78 @@ describe('getResumenDashboard', () => {
   })
 
   it('si una fuente falla, el resto del dashboard sigue calculándose', async () => {
-    mocks.getCotizaciones.mockRejectedValue(new Error('supabase caído'))
-    mocks.getProyectos.mockResolvedValue([] as Proyecto[])
-    mocks.getCuentasCobrar.mockResolvedValue([{ id: 'c1', monto_total: 1000, monto_pagado: 0, estado: 'FACTURADO' } as CuentaCobrar])
-    mocks.getCuentasPagar.mockResolvedValue([] as CuentaPagar[])
+    mockDashboardRpcs({
+      kpisCuentas: { por_cobrar: 1000, por_pagar: 0 },
+      actividadCotizaciones: new Error('supabase caído'),
+    })
     mocks.getPagosComprobantesEnRango.mockResolvedValue([] as PagoComprobante[])
     mockGastosFijosActivos([])
 
     const resumen = await getResumenDashboard({ periodo: 'mes', fecha: '2026-03-15' })
 
     expect(resumen.fuentesConError).toEqual(['Cotizaciones'])
-    expect(resumen.cotizacionesRecientes).toEqual([])
     expect(resumen.kpis.cotizacionesAprobadas).toBe(0)
-    // Cuentas por cobrar sí respondió -- el KPI se calcula con normalidad
+    // dashboard_kpis_cuentas sí respondió -- el KPI se calcula con normalidad
     expect(resumen.kpis.porCobrar).toBe(1000)
   })
 
   it('agrega ingresos, egresos, ISR y cobertura del periodo con datos sintéticos', async () => {
-    const cotizaciones: Cotizacion[] = [
-      { id: 'SH001', cliente: 'Cliente A', proyecto: 'Boda A', estado: 'APROBADA', created_at: '2026-03-05T00:00:00Z' } as Cotizacion,
-      { id: 'SH002', cliente: 'Cliente B', proyecto: 'Evento B', estado: 'BORRADOR', created_at: '2026-03-10T00:00:00Z' } as Cotizacion,
-      { id: 'SH000', cliente: 'Cliente C', proyecto: 'Evento C', estado: 'APROBADA', created_at: '2026-01-01T00:00:00Z' } as Cotizacion,
-    ]
-    const proyectos: Proyecto[] = [
-      { id: 'SH001', created_at: '2026-03-05T00:00:00Z', fecha_inicio_real: null, fecha_cierre_real: null } as Proyecto,
-      { id: 'SH000', created_at: '2026-01-01T00:00:00Z', fecha_inicio_real: '2026-02-15', fecha_cierre_real: null } as Proyecto,
-    ]
-    const cuentasCobrar: CuentaCobrar[] = [
-      { id: 'c1', monto_total: 10000, monto_pagado: 4000, estado: 'PARCIALMENTE_PAGADO' } as CuentaCobrar,
-      { id: 'c2', monto_total: 5000, monto_pagado: 5000, estado: 'PAGADO' } as CuentaCobrar,
-    ]
-    const cuentasPagar: CuentaPagar[] = [
-      { id: 'p1', x_pagar: 3000, monto_pagado: 3000, estado: 'PAGADO', fecha_pago: '2026-03-20' } as CuentaPagar,
-      { id: 'p2', x_pagar: 2000, monto_pagado: 500, estado: 'PENDIENTE', fecha_pago: null } as CuentaPagar,
+    const cotizacionesRecientes = [
+      { id: 'SH002', cliente: 'Cliente B', proyecto: 'Evento B', total: 0, estado: 'BORRADOR', created_at: '2026-03-10T00:00:00Z' },
+      { id: 'SH001', cliente: 'Cliente A', proyecto: 'Boda A', total: 0, estado: 'APROBADA', created_at: '2026-03-05T00:00:00Z' },
+      { id: 'SH000', cliente: 'Cliente C', proyecto: 'Evento C', total: 0, estado: 'APROBADA', created_at: '2026-01-01T00:00:00Z' },
     ]
     const pagos: PagoComprobante[] = [
       { id: 'pc1', monto: 6000, fecha_pago: '2026-03-10' } as PagoComprobante,
       { id: 'pc2', monto: 1500, fecha_pago: '2026-03-25' } as PagoComprobante,
     ]
 
-    mocks.getCotizaciones.mockResolvedValue(cotizaciones)
-    mocks.getProyectos.mockResolvedValue(proyectos)
-    mocks.getCuentasCobrar.mockResolvedValue(cuentasCobrar)
-    mocks.getCuentasPagar.mockResolvedValue(cuentasPagar)
+    mockDashboardRpcs({
+      kpisCuentas: { por_cobrar: 6000, por_pagar: 1500 },
+      // buckets: Oct2025..Mar2026 -- solo p1 (PAGADO, fecha_pago 2026-03-20) cae en el último (marzo)
+      egresosPorBucket: [0, 0, 0, 0, 0, 3000],
+      actividadCotizaciones: { aprobadas: 1, borrador: 1 },
+      actividadProyectos: { creados: 1, en_curso: 1 },
+      cotizacionesRecientes,
+    })
     mocks.getPagosComprobantesEnRango.mockResolvedValue(pagos)
     mockGastosFijosActivos([gastoFijo({ monto_mensual: 4000 })])
 
     const resumen = await getResumenDashboard({ periodo: 'mes', fecha: '2026-03-15' })
 
-    // Ingresos = 6000 + 1500 = 7500; Egresos = 3000 (única PAGADO con fecha_pago en marzo)
+    // Ingresos = 6000 + 1500 = 7500; Egresos = 3000 (bucket vigente, marzo)
     expect(resumen.fiscal.ingresos).toBe(7500)
     expect(resumen.fiscal.egresos).toBe(3000)
     expect(resumen.fiscal.utilidadAntesIsr).toBe(4500)
     expect(resumen.fiscal.impuestos).toBe(1350) // 30% de 4500
-    expect(resumen.fiscal.deudas).toBe(1500) // saldo pendiente de p2 (2000-500), p1 ya PAGADO
+    expect(resumen.fiscal.deudas).toBe(1500)
 
-    expect(resumen.kpis.porCobrar).toBe(6000) // saldo pendiente de c1 (10000-4000); c2 ya PAGADO
+    expect(resumen.kpis.porCobrar).toBe(6000)
     expect(resumen.kpis.porPagar).toBe(1500)
-    expect(resumen.kpis.cotizacionesAprobadas).toBe(1) // solo SH001 cae en marzo 2026
+    expect(resumen.kpis.cotizacionesAprobadas).toBe(1)
     expect(resumen.kpis.cotizacionesBorrador).toBe(1)
 
     expect(resumen.cobertura.totalGastosFijos).toBe(4000)
     expect(resumen.cobertura.facturado).toBe(7500)
 
-    expect(resumen.actividad.proyectosCreados).toBe(1) // SH001 creado en marzo
-    expect(resumen.actividad.proyectosEnCurso).toBe(1) // SH000 inició antes de marzo y sigue sin cerrar
+    expect(resumen.actividad.proyectosCreados).toBe(1)
+    expect(resumen.actividad.proyectosEnCurso).toBe(1)
 
+    // El orden lo da la RPC (dashboard_cotizaciones_recientes) -- el cliente no reordena.
     expect(resumen.cotizacionesRecientes.map((c) => c.id)).toEqual(['SH002', 'SH001', 'SH000'])
+  })
+
+  it('dashboard_egresos_por_bucket falla -- balance sigue con egresos en 0, ingresos intactos', async () => {
+    mockDashboardRpcs({
+      egresosPorBucket: new Error('rpc caída'),
+    })
+    mocks.getPagosComprobantesEnRango.mockResolvedValue([{ id: 'pc1', monto: 500, fecha_pago: '2026-03-10' } as PagoComprobante])
+    mockGastosFijosActivos([])
+
+    const resumen = await getResumenDashboard({ periodo: 'mes', fecha: '2026-03-15' })
+
+    expect(resumen.fuentesConError).toEqual(['Egresos por periodo'])
+    expect(resumen.fiscal.egresos).toBe(0)
+    expect(resumen.fiscal.ingresos).toBe(500)
   })
 })

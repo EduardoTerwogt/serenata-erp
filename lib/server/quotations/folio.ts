@@ -11,17 +11,16 @@ export interface ReservedQuotationFolio {
 
 function isMissingFunctionError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '')
-  return message.includes('reserve_next_cotizacion_folio') || message.includes('consume_cotizacion_folio_reservation')
+  return (
+    message.includes('reserve_next_cotizacion_folio') ||
+    message.includes('consume_cotizacion_folio_reservation') ||
+    message.includes('preview_next_cotizacion_folio_principal')
+  )
 }
 
 function isMissingReservationTableError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '')
   return message.includes('cotizacion_folio_reservations') || message.includes('relation')
-}
-
-function extractPrincipalNumber(folio: string | null | undefined) {
-  const match = String(folio || '').match(/^SH(\d+)$/)
-  return match ? Number(match[1]) : null
 }
 
 function extractComplementariaCode(folio: string | null | undefined, baseFolio: string) {
@@ -59,41 +58,31 @@ export function invalidateFolioCache() {
 }
 
 async function computeNextQuotationFolio(trimmedBase: string): Promise<string> {
-  try {
-    if (!trimmedBase) {
-      // Obtener todos los folios principales existentes
-      const { data: existing } = await supabaseAdmin
-        .from('cotizaciones')
-        .select('id')
-      const existingNumbers = new Set(
-        (existing || []).map(c => extractPrincipalNumber(c.id)).filter((n): n is number => n !== null)
-      )
-
-      // Obtener reservas activas
-      const { data: reserved, error } = await supabaseAdmin
-        .from('cotizacion_folio_reservations')
-        .select('folio')
-        .eq('kind', 'PRINCIPAL')
-        .is('consumed_at', null)
-        .gt('expires_at', new Date().toISOString())
+  if (!trimmedBase) {
+    // EF-3 3B-7 (F14): el hueco libre desde 1 se calcula en SQL
+    // (preview_next_cotizacion_folio_principal, principio del palomar)
+    // en vez de traer toda la tabla `cotizaciones` a Node.
+    try {
+      const { data, error } = await supabaseAdmin.rpc('preview_next_cotizacion_folio_principal')
       if (error) throw error
-
-      const reservedNumbers = new Set(
-        (reserved || []).map(r => extractPrincipalNumber(r.folio)).filter((n): n is number => n !== null)
-      )
-
-      // Buscar primer gap disponible empezando desde 1
-      const maxNumber = Math.max(0, ...Array.from(existingNumbers), ...Array.from(reservedNumbers))
-      for (let i = 1; i <= maxNumber; i++) {
-        if (!existingNumbers.has(i) && !reservedNumbers.has(i)) {
-          return `SH${String(i).padStart(3, '0')}`
-        }
+      if (typeof data !== 'string' || !data) {
+        // Mensaje sin el nombre de la función: isMissingFunctionError() hace
+        // match por substring -- si el mensaje la nombrara, este error de
+        // validación se confundiría con "la función no existe" y caería al
+        // fallback en silencio en vez de propagarse.
+        throw new Error('La RPC de folio principal no devolvió un folio válido')
       }
-      // Sin gaps, usar siguiente número
-      return `SH${String(maxNumber + 1).padStart(3, '0')}`
+      return data
+    } catch (error) {
+      if (!isMissingFunctionError(error)) throw error
+      return getNextFolio()
     }
+  }
 
-    // Complementarias — misma lógica de gaps
+  try {
+    // Complementarias — misma lógica de gaps en JS. Fuera de alcance de
+    // 3B-7: ya acotada por `.eq('es_complementaria_de', ...)`, nunca trae
+    // la tabla completa.
     const { data: existing } = await supabaseAdmin
       .from('cotizaciones')
       .select('id')
@@ -124,7 +113,7 @@ async function computeNextQuotationFolio(trimmedBase: string): Promise<string> {
     return `${trimmedBase}-${String.fromCharCode(maxCode + 1)}`
   } catch (error) {
     if (!isMissingReservationTableError(error)) throw error
-    return trimmedBase ? getNextFolioComplementaria(trimmedBase) : getNextFolio()
+    return getNextFolioComplementaria(trimmedBase)
   }
 }
 

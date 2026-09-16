@@ -26,13 +26,6 @@ import {
   reserveNextQuotationFolio,
 } from '../folio'
 
-/** Principal cotizaciones: .from('cotizaciones').select('id') — select is terminal */
-function createPrincipalCotQuery(result: { data: unknown; error: unknown }) {
-  return {
-    select: vi.fn().mockResolvedValue(result),
-  }
-}
-
 /** Complementaria cotizaciones: .from('cotizaciones').select('id').eq(...) — eq is terminal */
 function createCompCotQuery(result: { data: unknown; error: unknown }) {
   return {
@@ -64,60 +57,46 @@ describe('quotation folio helpers', () => {
     invalidateFolioCache()
   })
 
-  it('preview principal encuentra el primer gap disponible', async () => {
-    // Existen SH001, SH002, SH004 (SH003 fue borrada)
-    const cotQuery = createPrincipalCotQuery({
-      data: [{ id: 'SH001' }, { id: 'SH002' }, { id: 'SH004' }],
-      error: null,
-    })
-    const resQuery = createReservationQuery({
-      data: [],
-      error: null,
-    })
-    mocks.fromMock
-      .mockReturnValueOnce(cotQuery)   // cotizaciones
-      .mockReturnValueOnce(resQuery)   // reservations
+  it('preview principal llama a la RPC de folio (EF-3 3B-7) y regresa lo que responde', async () => {
+    // EF-3 3B-7: el hueco libre desde 1 ahora se calcula en SQL
+    // (preview_next_cotizacion_folio_principal) -- la lógica de huecos en
+    // sí se valida por paridad JS-vs-RPC contra serenata-erp-test, no aquí.
+    mocks.rpcMock.mockResolvedValue({ data: 'SH003', error: null })
 
     const folio = await previewNextQuotationFolio()
 
+    expect(mocks.rpcMock).toHaveBeenCalledWith('preview_next_cotizacion_folio_principal')
+    expect(mocks.fromMock).not.toHaveBeenCalled()
     expect(folio).toBe('SH003')
   })
 
-  it('preview principal devuelve siguiente si no hay gaps', async () => {
-    const cotQuery = createPrincipalCotQuery({
-      data: [{ id: 'SH001' }, { id: 'SH002' }, { id: 'SH003' }],
-      error: null,
+  it('preview principal hace fallback a getNextFolio() cuando la RPC no existe', async () => {
+    mocks.getNextFolioMock.mockResolvedValue('SH010')
+    mocks.rpcMock.mockResolvedValue({
+      data: null,
+      error: new Error('Could not find the function public.preview_next_cotizacion_folio_principal in the schema cache'),
     })
-    const resQuery = createReservationQuery({
-      data: [],
-      error: null,
-    })
-    mocks.fromMock
-      .mockReturnValueOnce(cotQuery)
-      .mockReturnValueOnce(resQuery)
 
     const folio = await previewNextQuotationFolio()
 
-    expect(folio).toBe('SH004')
+    expect(folio).toBe('SH010')
+    expect(mocks.getNextFolioMock).toHaveBeenCalled()
   })
 
-  it('preview principal respeta reservas activas al buscar gaps', async () => {
-    // SH001 existe, SH002 reservada, SH003 libre
-    const cotQuery = createPrincipalCotQuery({
-      data: [{ id: 'SH001' }],
-      error: null,
-    })
-    const resQuery = createReservationQuery({
-      data: [{ folio: 'SH002' }],
-      error: null,
-    })
-    mocks.fromMock
-      .mockReturnValueOnce(cotQuery)
-      .mockReturnValueOnce(resQuery)
+  it('preview principal propaga un error real de la RPC (no lo confunde con función faltante)', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: new Error('conexión perdida') })
 
-    const folio = await previewNextQuotationFolio()
+    await expect(previewNextQuotationFolio()).rejects.toThrow('conexión perdida')
+    expect(mocks.getNextFolioMock).not.toHaveBeenCalled()
+  })
 
-    expect(folio).toBe('SH003')
+  it('preview principal lanza error si la RPC no devuelve un folio válido (y no cae al fallback)', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: null })
+
+    await expect(previewNextQuotationFolio()).rejects.toThrow(
+      'La RPC de folio principal no devolvió un folio válido'
+    )
+    expect(mocks.getNextFolioMock).not.toHaveBeenCalled()
   })
 
   it('preview complementaria encuentra gaps', async () => {
@@ -139,11 +118,9 @@ describe('quotation folio helpers', () => {
     expect(folio).toBe('SH010-B')
   })
 
-  it('preview hace fallback al siguiente folio real cuando no existe la tabla de reservas', async () => {
-    mocks.getNextFolioMock.mockResolvedValue('SH010')
-    // The first from() call (cotizaciones) succeeds, but the select resolves to null data
-    // The second from() call (reservations) throws the missing-table error
-    const cotQuery = createPrincipalCotQuery({ data: [], error: null })
+  it('preview complementaria hace fallback a getNextFolioComplementaria cuando no existe la tabla de reservas', async () => {
+    mocks.getNextFolioComplementariaMock.mockResolvedValue('SH010-D')
+    const cotQuery = createCompCotQuery({ data: [], error: null })
     const resQuery = createReservationQuery({
       data: null,
       error: new Error('relation "cotizacion_folio_reservations" does not exist'),
@@ -152,9 +129,10 @@ describe('quotation folio helpers', () => {
       .mockReturnValueOnce(cotQuery)
       .mockReturnValueOnce(resQuery)
 
-    const folio = await previewNextQuotationFolio()
+    const folio = await previewNextQuotationFolio('SH010')
 
-    expect(folio).toBe('SH010')
+    expect(folio).toBe('SH010-D')
+    expect(mocks.getNextFolioComplementariaMock).toHaveBeenCalledWith('SH010')
   })
 
   it('reserveNextQuotationFolio usa el RPC atómico cuando está disponible', async () => {
@@ -193,49 +171,42 @@ describe('quotation folio helpers', () => {
   })
 
   it('cachea el resultado por baseFolio: dos llamadas con el mismo argumento solo consultan una vez', async () => {
-    const cotQuery = createPrincipalCotQuery({ data: [{ id: 'SH001' }], error: null })
-    const resQuery = createReservationQuery({ data: [], error: null })
-    mocks.fromMock.mockReturnValueOnce(cotQuery).mockReturnValueOnce(resQuery)
+    mocks.rpcMock.mockResolvedValueOnce({ data: 'SH002', error: null })
 
     const first = await previewNextQuotationFolio()
     const second = await previewNextQuotationFolio()
 
     expect(first).toBe('SH002')
     expect(second).toBe('SH002')
-    expect(mocks.fromMock).toHaveBeenCalledTimes(2) // solo la primera llamada consultó
+    expect(mocks.rpcMock).toHaveBeenCalledTimes(1) // solo la primera llamada consultó
   })
 
   it('un baseFolio distinto no reutiliza la entrada de caché de otro', async () => {
+    mocks.rpcMock.mockResolvedValueOnce({ data: 'SH001', error: null })
     mocks.fromMock
-      .mockReturnValueOnce(createPrincipalCotQuery({ data: [], error: null }))
-      .mockReturnValueOnce(createReservationQuery({ data: [], error: null }))
       .mockReturnValueOnce(createCompCotQuery({ data: [], error: null }))
       .mockReturnValueOnce(createReservationQuery({ data: [], error: null }))
 
     await previewNextQuotationFolio()
     await previewNextQuotationFolio('SH020')
 
-    expect(mocks.fromMock).toHaveBeenCalledTimes(4)
+    expect(mocks.rpcMock).toHaveBeenCalledTimes(1)
+    expect(mocks.fromMock).toHaveBeenCalledTimes(2)
   })
 
   it('invalidateFolioCache() limpia el caché -- la siguiente llamada vuelve a consultar', async () => {
-    mocks.fromMock
-      .mockReturnValueOnce(createPrincipalCotQuery({ data: [{ id: 'SH001' }], error: null }))
-      .mockReturnValueOnce(createReservationQuery({ data: [], error: null }))
+    mocks.rpcMock.mockResolvedValueOnce({ data: 'SH002', error: null })
 
     await previewNextQuotationFolio()
-    expect(mocks.fromMock).toHaveBeenCalledTimes(2)
+    expect(mocks.rpcMock).toHaveBeenCalledTimes(1)
 
     invalidateFolioCache()
 
-    mocks.fromMock
-      .mockReturnValueOnce(createPrincipalCotQuery({ data: [{ id: 'SH001' }, { id: 'SH002' }], error: null }))
-      .mockReturnValueOnce(createReservationQuery({ data: [], error: null }))
-
+    mocks.rpcMock.mockResolvedValueOnce({ data: 'SH003', error: null })
     const afterInvalidate = await previewNextQuotationFolio()
 
     expect(afterInvalidate).toBe('SH003')
-    expect(mocks.fromMock).toHaveBeenCalledTimes(4)
+    expect(mocks.rpcMock).toHaveBeenCalledTimes(2)
   })
 
   it('consumeReservedQuotationFolio no llama al RPC sin token y falla si la reserva ya expiró', async () => {
