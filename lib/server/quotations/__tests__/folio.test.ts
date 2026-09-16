@@ -21,7 +21,6 @@ vi.mock('@/lib/server/supabase-admin', () => ({
 
 import {
   consumeReservedQuotationFolio,
-  invalidateFolioCache,
   previewNextQuotationFolio,
   reserveNextQuotationFolio,
 } from '../folio'
@@ -50,10 +49,6 @@ describe('quotation folio helpers', () => {
     mocks.getNextFolioComplementariaMock.mockReset()
     mocks.fromMock.mockReset()
     mocks.rpcMock.mockReset()
-    // EF-2 1D-3: previewNextQuotationFolio cachea por 5 min (CacheManager
-    // módulo-scoped) -- sin limpiarlo, un test reutilizaría el resultado
-    // cacheado por otro que llamó con el mismo baseFolio (ej. sin argumento).
-    invalidateFolioCache()
   })
 
   it('preview principal llama a la RPC de folio (EF-3 3B-7) y regresa lo que responde', async () => {
@@ -169,18 +164,20 @@ describe('quotation folio helpers', () => {
     )
   })
 
-  it('cachea el resultado por baseFolio: dos llamadas con el mismo argumento solo consultan una vez', async () => {
-    mocks.rpcMock.mockResolvedValueOnce({ data: 'SH002', error: null })
+  it('sin caché (EF-3 3B-7, gate de p95 superado): dos llamadas con el mismo argumento consultan dos veces', async () => {
+    mocks.rpcMock
+      .mockResolvedValueOnce({ data: 'SH002', error: null })
+      .mockResolvedValueOnce({ data: 'SH003', error: null })
 
     const first = await previewNextQuotationFolio()
     const second = await previewNextQuotationFolio()
 
     expect(first).toBe('SH002')
-    expect(second).toBe('SH002')
-    expect(mocks.rpcMock).toHaveBeenCalledTimes(1) // solo la primera llamada consultó
+    expect(second).toBe('SH003')
+    expect(mocks.rpcMock).toHaveBeenCalledTimes(2)
   })
 
-  it('un baseFolio distinto no reutiliza la entrada de caché de otro', async () => {
+  it('un baseFolio distinto llama a su propia rama, cada una sin caché', async () => {
     mocks.rpcMock.mockResolvedValueOnce({ data: 'SH001', error: null })
     mocks.fromMock
       .mockReturnValueOnce(createCompCotQuery({ data: [], error: null }))
@@ -191,21 +188,6 @@ describe('quotation folio helpers', () => {
 
     expect(mocks.rpcMock).toHaveBeenCalledTimes(1)
     expect(mocks.fromMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('invalidateFolioCache() limpia el caché -- la siguiente llamada vuelve a consultar', async () => {
-    mocks.rpcMock.mockResolvedValueOnce({ data: 'SH002', error: null })
-
-    await previewNextQuotationFolio()
-    expect(mocks.rpcMock).toHaveBeenCalledTimes(1)
-
-    invalidateFolioCache()
-
-    mocks.rpcMock.mockResolvedValueOnce({ data: 'SH003', error: null })
-    const afterInvalidate = await previewNextQuotationFolio()
-
-    expect(afterInvalidate).toBe('SH003')
-    expect(mocks.rpcMock).toHaveBeenCalledTimes(2)
   })
 
   it('consumeReservedQuotationFolio no llama al RPC sin token y falla si la reserva ya expiró', async () => {
