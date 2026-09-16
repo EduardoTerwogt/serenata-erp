@@ -1,6 +1,5 @@
 import { getNextFolio, getNextFolioComplementaria } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { CacheManager } from '@/lib/api/cache'
 
 export interface ReservedQuotationFolio {
   folio: string
@@ -30,31 +29,18 @@ function extractComplementariaCode(folio: string | null | undefined, baseFolio: 
 }
 
 // EF-2 1D-3: el gate de p95 en Preview mostró 2314ms sin caché (>1s) para
-// esta ruta -- única de las 4 medidas que no pasó (clientes/productos/
-// proveedores quedan sin caché, sí pasaron el gate). El caché vive aquí, en
-// la capa server, no en app/api/folio/route.ts -- approval.ts (también capa
-// server) necesita invalidarlo, y una dependencia lib/server -> app/api
-// invierte el layering (regresión detectada en auditoría del PR #31: el
-// commit original de 1D-3 había eliminado esa dependencia a propósito).
-const cache = new CacheManager(5 * 60 * 1000)
-
+// esta ruta cuando `computeNextQuotationFolio()` traía toda la tabla
+// `cotizaciones` a Node para calcular el hueco en JS -- de ahí el caché de
+// 5 min que vivía acá. EF-3 3B-7 reemplazó esa rama por
+// `preview_next_cotizacion_folio_principal()` (SQL, principio del palomar,
+// acotada por `generate_series`) -- medido en `serenata-erp-test` (50
+// invocaciones directas de la RPC, sin red de por medio): p95=23.27ms,
+// muy por debajo del umbral de 1000ms que motivó el caché. Gate superado
+// -- caché eliminado del todo, `previewNextQuotationFolio()` llama la RPC
+// (o la rama de complementarias) directo en cada invocación.
 export async function previewNextQuotationFolio(baseFolio?: string): Promise<string> {
   const trimmedBase = baseFolio?.trim() || ''
-  const cacheKey = `folio:${trimmedBase || 'normal'}`
-  const cached = cache.get<string>(cacheKey)
-  if (cached) return cached
-
-  const folio = await computeNextQuotationFolio(trimmedBase)
-  cache.set(cacheKey, folio)
-  return folio
-}
-
-/**
- * Invalidate folio cache - called when quotations are approved and folios are consumed
- * Ensures the next folio prediction is accurate after a folio has been reserved
- */
-export function invalidateFolioCache() {
-  cache.invalidateAll()
+  return computeNextQuotationFolio(trimmedBase)
 }
 
 async function computeNextQuotationFolio(trimmedBase: string): Promise<string> {
