@@ -5236,6 +5236,21 @@ otro bloque de este mismo lote sin mergear -- `scripts/validate-ef3-tracker.mjs`
 (regla d) rechaza correctamente esa combinación, ya que "En curso" exige que
 toda dependencia esté `Cerrado`, y aquí ninguna lo está todavía.
 
+**Excepción de proceso para el cierre de EF-3 (3B-7/3B-10/3C-4), misma
+regla que EF-3D:** esta ronda también corre en un entorno con una única
+rama designada (`claude/brave-maxwell-a2j60v`, distinta de la de EF-3D),
+sin permiso para crear ramas nuevas. Los 3 bloques restantes de EF-3B/3C
+comparten esa rama y un solo PR ([#61](https://github.com/EduardoTerwogt/serenata-erp/pull/61))
+contra `main`, en commits separados por bloque. "Rama"/"PR" de cada fila
+apunta a esa rama/PR compartida; "Estado" se queda en `Pendiente` (progreso
+real en "Nota") hasta que el PR mergea. A diferencia de EF-3D, no todas las
+filas cierran en el mismo instante del merge: 3B-10 sí (su criterio de
+aceptación es solo tests), pero 3B-7 exige además medir p95 sin caché
+contra el entorno serverless real -- `load-test.yml` no permite pinear
+`serenata-erp-loadtest` a un SHA sin mergear (`pin-loadtest-target` exige
+que sea ancestro de `origin/main`), así que esa medición solo puede
+correr DESPUÉS del merge, en la misma sesión o en la siguiente.
+
 **Cierre real:** PR #49 mergeó a `main` en el commit `2d7bd47`, con `live`
 completo en verde contra `main` (workflow run `34917496098`). Las 10 filas
 bundleadas que llegaron a implementarse pasaron a `Cerrado` de una vez
@@ -5261,10 +5276,10 @@ bloqueó el cierre del resto porque ninguna fila cerrada pasó nunca por
 | 3B-4 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#38](https://github.com/EduardoTerwogt/serenata-erp/pull/38) | `01633a1` | `3ce5678` | | Arrancar el siguiente bloque independiente (3B-5, 3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3D-0) |
 | 3B-5 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#39](https://github.com/EduardoTerwogt/serenata-erp/pull/39) | `cc76bf1` | `1eeee6f` | | Arrancar el siguiente bloque independiente (3B-6, 3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3D-0) |
 | 3B-6 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#40](https://github.com/EduardoTerwogt/serenata-erp/pull/40) | `c67cd4f` | `baec49b` | | Arrancar el siguiente bloque independiente (3B-8, 3B-9, 3B-11, 3B-12, 3C-1, 3D-0) |
-| 3B-7 | Pendiente | 3A-1 | — | — | — | — | | — |
+| 3B-7 | Pendiente | 3A-1 | `claude/brave-maxwell-a2j60v` | [#61](https://github.com/EduardoTerwogt/serenata-erp/pull/61) | `882e299` | — | RPC `preview_next_cotizacion_folio_principal()` (migración `20260916_preview_next_cotizacion_folio_principal.sql`) reemplaza el `SELECT id FROM cotizaciones` sin filtro de la rama principal; la rama de complementarias no se toca. Paridad JS-vs-RPC confirmada con 4 casos sintéticos contra `serenata-erp-test`. Falta medir p95 sin caché contra `serenata-erp-loadtest` (solo posible tras mergear, ver excepción de proceso arriba) | Mergear PR #61, luego medir p95 real y decidir sobre el caché |
 | 3B-8 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#41](https://github.com/EduardoTerwogt/serenata-erp/pull/41) | `13e2646` | `7e233c5` | | Arrancar el siguiente bloque independiente (3B-9, 3B-11, 3B-12, 3C-1, 3D-0) |
 | 3B-9 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#42](https://github.com/EduardoTerwogt/serenata-erp/pull/42) | `85b28f6` | `3d48178` | | Arrancar el siguiente bloque independiente (3B-11, 3B-12, 3C-1, 3D-0) |
-| 3B-10 | Pendiente | 3B-1 | — | — | — | — | | — |
+| 3B-10 | Pendiente | 3B-1 | `claude/brave-maxwell-a2j60v` | [#61](https://github.com/EduardoTerwogt/serenata-erp/pull/61) | `1375290` | — | 5 RPCs (`dashboard_kpis_cuentas`/`dashboard_egresos_por_bucket`/`dashboard_actividad_cotizaciones`/`dashboard_actividad_proyectos`/`dashboard_cotizaciones_recientes`, migración `20260916_dashboard_agregados_sql.sql`) reemplazan las 4 lecturas de tabla completa de `getResumenDashboard()`. `getPagosComprobantesEnRango()` no se toca (ya filtra server-side, fuera de alcance de F13). De paso elimina el `.limit(500)` real de `getCuentasPagar()` que topaba el KPI "por pagar". `dashboard_egresos_por_bucket` usa `WITH ORDINALITY` (orden validado por separado contra `serenata-erp-test`). 9/9 tests de paridad/resiliencia en verde | Mergear PR #61 (cierra junto con 3B-7 si su gate ya pasó, o antes si no) |
 | 3B-11 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#43](https://github.com/EduardoTerwogt/serenata-erp/pull/43) | `7f7497a` | `bd69268` | | Arrancar el siguiente bloque independiente (3B-12, 3C-1, 3D-0) |
 | 3B-12 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#44](https://github.com/EduardoTerwogt/serenata-erp/pull/44) | `814ba3e` | `101b243` | | Arrancar el siguiente bloque independiente (3C-1, 3D-0) |
 | 3C-1 | Cerrado | ninguna | `claude/hopeful-allen-jql9xp` | [#45](https://github.com/EduardoTerwogt/serenata-erp/pull/45) | `a6c734a` | `753c982` | | Arrancar el siguiente bloque independiente (3C-2, 3D-0) |
