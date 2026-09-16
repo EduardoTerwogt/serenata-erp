@@ -450,9 +450,24 @@ jobs:
           node scripts/loadtest/telemetry-deltas.mjs --before telemetry-before-full.json --after telemetry-after-full.json --run-id "$FULL_RUN_ID"
           cat "docs/archive/telemetry/${FULL_RUN_ID}-pg-stat-deltas.json" | head -c 4000
 
+      # No-fatal a propósito: bulk-cleanup.mjs SIEMPRE borra las filas de
+      # Postgres primero (crítico) y recién después intenta borrar la
+      # carpeta de Drive -- a escala real (uploads.js real, no SMOKE) la
+      # carpeta acumula muchos más archivos que en SMOKE (1-3), y el borrado
+      # de carpeta de Drive con muchos hijos puede devolver 403/500
+      # ("may not have granted the app write access to all children") --
+      # mismo tipo de huérfano ya documentado y tolerado en 3A-6
+      # (docs/archive/ef-3-baseline-previo.md), que se autolimpia en un
+      # --sweep-orphans futuro. Este job (throwaway, nunca mergea a main) no
+      # debe fallar completo por eso -- fallar completo bloquearía
+      # `serverless-full` vía `needs: local-full`, perdiendo el gate real
+      # que sí importa. El log de bulk-cleanup.mjs ya deja explícito cuántas
+      # filas borró antes de intentar la carpeta.
       - name: 3E-1 -- limpiar datos y carpeta de Drive del ciclo completo
         if: always()
-        run: node scripts/loadtest/bulk-cleanup.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID"
+        run: |
+          node scripts/loadtest/bulk-cleanup.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID" \
+            || echo "::warning::bulk-cleanup.mjs salió con error (folder de Drive con muchos hijos, ver 3E-1) -- las filas de Postgres se limpiaron antes de ese punto, carpeta huérfana documentada para --sweep-orphans"
 
       - name: Dump Next.js server log on failure
         if: failure()
@@ -601,9 +616,12 @@ jobs:
           node scripts/loadtest/telemetry-deltas.mjs --before telemetry-before-full.json --after telemetry-after-full.json --run-id "$FULL_RUN_ID"
           cat "docs/archive/telemetry/${FULL_RUN_ID}-pg-stat-deltas.json" | head -c 4000
 
+      # No-fatal a propósito -- ver el comentario equivalente en local-full.
       - name: 3E-1 -- limpiar datos y carpeta de Drive del ciclo completo (serverless)
         if: always()
-        run: node scripts/loadtest/bulk-cleanup.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID"
+        run: |
+          node scripts/loadtest/bulk-cleanup.mjs --target-url "$TARGET_URL" --run-id "$FULL_RUN_ID" \
+            || echo "::warning::bulk-cleanup.mjs salió con error (folder de Drive con muchos hijos, ver 3E-1) -- las filas de Postgres se limpiaron antes de ese punto, carpeta huérfana documentada para --sweep-orphans"
 
       - name: 3E-1 -- subir resultados reales (JSON de k6 + logs + telemetría, serverless)
         if: always()
