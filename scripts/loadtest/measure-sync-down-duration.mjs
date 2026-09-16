@@ -4,7 +4,9 @@
  * sembrado (Bloque 4: proveedores=1200, cotizaciones=1200,
  * items_cotizacion=6000, cuentas_pagar=6000) en el entorno serverless real
  * (serenata-erp-loadtest). Umbral: 50s (el mismo que motiva la cadena de
- * remediación de la spec: subir maxDuration -> chunking -> cursor).
+ * remediación de la spec: subir maxDuration -> chunking -> cursor). El gate
+ * exige AMBOS: duración < umbral Y errors=0 -- una corrida rápida porque
+ * cada tabla falló de inmediato no demuestra nada sobre el volumen real.
  *
  * Uso:
  *   node scripts/loadtest/measure-sync-down-duration.mjs --target-url <url>
@@ -68,6 +70,18 @@ async function main() {
   console.log(`measure-sync-down-duration: umbral = ${THRESHOLD_MS}ms (${THRESHOLD_MS / 1000}s)`)
   if (body) {
     console.log(`measure-sync-down-duration: totalRows=${body.totalRows ?? '?'} errors=${body.errors ?? '?'} state=${body.state ?? '?'}`)
+    // Un gate de duración que pasa mientras cada tabla falla no probó nada
+    // real (11s de latencia contra 0 filas escritas no es la métrica que
+    // pide 3C-4) -- por tabla, para poder root-causear en vez de asumir.
+    if (Array.isArray(body.results)) {
+      for (const r of body.results) {
+        console.log(`measure-sync-down-duration:   tabla ${r.tab}: ok=${r.ok} rows=${r.rows}${r.error ? ` error=${r.error}` : ''}`)
+      }
+    }
+    if ((body.errors ?? 0) > 0) {
+      console.error('measure-sync-down-duration: GATE NO SUPERADO -- syncAllDown() falló en una o más tablas (ver detalle por tabla arriba)')
+      process.exit(1)
+    }
   }
 
   if (durationMs >= THRESHOLD_MS) {

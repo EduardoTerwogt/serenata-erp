@@ -34,6 +34,11 @@ on:
         required: false
         type: boolean
         default: false
+      reset_sheets_integration:
+        description: 'Si es true, en vez de medir la duración de syncAllDown(), llama POST /api/integrations/sheets/setup contra el entorno serverless para crear un spreadsheet NUEVO con las credenciales reales de ese entorno -- diagnóstico/corrección de F15c (measure_sync_down reportó "Requested entity was not found" en las 9 tablas: el TEST_SHEETS_SPREADSHEET_ID actual no es accesible). El log imprime el ID nuevo; guardarlo a mano en el secreto de GitHub y en Vercel (el job no puede escribirlos)'
+        required: false
+        type: boolean
+        default: false
 
 # Mismo group que e2e.yml -- ambos mutan serenata-erp-test y la misma
 # carpeta de Drive de test, así que GitHub Actions encola cualquier corrida
@@ -259,6 +264,15 @@ jobs:
       - name: EF-3 3C-4 -- medir duración real de syncAllDown() contra el entorno serverless
         if: ${{ inputs.measure_sync_down }}
         run: node scripts/loadtest/measure-sync-down-duration.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
+
+      # F15c: measure_sync_down reveló que las 9 tablas fallan con "Requested
+      # entity was not found" contra el TEST_SHEETS_SPREADSHEET_ID actual --
+      # opt-in aparte porque crea un spreadsheet nuevo (efecto lateral que
+      # no se quiere en cada dispatch normal) y porque requiere una acción
+      # manual posterior (guardar el ID nuevo en el secreto/Vercel).
+      - name: EF-3 3C-4 (F15c) -- crear spreadsheet nuevo con las credenciales reales del entorno serverless
+        if: ${{ inputs.reset_sheets_integration }}
+        run: node scripts/loadtest/reset-sheets-integration.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
 
       # Los 8 escenarios de k6 contra el entorno serverless real los agrega 3A-6.
 
