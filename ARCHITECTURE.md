@@ -311,6 +311,7 @@ evidencia, no cuenta como terminado.
 | Dashboard (incluye gastos fijos) | `lib/server/repositories/dashboard.ts` + sus tests |
 | Revocación de sesión de staff (`session_version`) | `__tests__/proxy.test.ts`, `__tests__/auth-callbacks.test.ts`, `lib/__tests__/api-auth.test.ts`, `tests/e2e/live/staff-session-revocation.spec.ts` |
 | Resiliencia de Realtime (backoff, convergencia en remount, refresco de token) | `lib/realtime/__tests__/useRealtimeChannel.test.ts`, `tests/e2e/live/realtime-channel-reconnection.spec.ts` |
+| Infraestructura de carga real (k6, targets local/serverless, identidades de staff/Portal, volumen sembrado, cleanup por `runId` en Postgres+Drive, telemetría de `pg_stat_statements`) | `docs/EF-3_ENGINEERING_HARDENING.md` §11 (3A-1..3A-6), `docs/archive/ef-3-baseline-previo.md` |
 
 **Edición colaborativa de cotizaciones: READY.** La auditoría de Fase 8 dejó cinco
 huecos abiertos, cerrados en la Fase 8.7: flush real previo a toda transición de
@@ -350,7 +351,7 @@ autoritativa, no una tabla en un documento. Agrupadas por dominio:
 | Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable`, `historial_cambios_responsable_item` |
 | Planeación | `planeacion_pendientes`, `planeacion_event_notas` (soft delete en `eliminada`), `extraction_logs` |
 | Dashboard | `gastos_fijos` |
-| Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys`, `sheets_sync_status` |
+| Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys`, `sheets_sync_status`, `loadtest_runs` |
 
 **RLS** está habilitado en las tablas pero **sin políticas de lectura**, así que la
 llave anónima no lee nada. Es la razón de que la colaboración no use
@@ -405,6 +406,16 @@ Trampas reales, no teóricas. Cada una costó un bug:
   nuevo que llame `removeChannel()` directamente debe revisar el status
   devuelto, nunca asumir que "la promesa resolvió" significa "el canal ya no
   existe" (EF-2 1A-1, expuesto por auditoría del PR #31).
+- **El target `local` de `load-test.yml` (EF-3A) corre la app (`next start`) Y
+  los procesos generadores de carga de k6 en el mismo runner de GitHub Actions
+  (2 cores compartidos).** Bajo concurrencia combinada real (7 escenarios a la
+  vez, ~95+ VUs) esto produjo 92-99% de `http_req_failed` con latencias
+  ultra-rápidas (avg 3-16ms) y cero errores de aplicación en los logs —
+  contención de conexión/socket del runner compartido, no un límite real de la
+  app (3A-6, `docs/archive/ef-3-baseline-previo.md`). **Sus percentiles bajo
+  concurrencia combinada no son confiables** como medición de capacidad; sirve
+  solo para humo funcional (`SMOKE=1`). El target `serverless` (Vercel real,
+  infraestructura propia) es la fuente válida de percentiles.
 - **`GET /api/productos` (carga completa sin `q`, usada por
   `useQuotationForm` para el autofill client-side) tiene `.limit(2000)`
   explícito — antes no tenía ninguno y dependía en silencio del tope por
