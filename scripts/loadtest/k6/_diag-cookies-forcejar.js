@@ -47,7 +47,14 @@ function forceLastSetCookieIntoJar(jar, url, res) {
     const name = nameValue.trim().slice(0, eq)
     const value = nameValue.slice(eq + 1).trim()
     try {
-      jar.set(url, name, value, { path: '/' })
+      // secure:true explícito -- RFC 6265bis exige el atributo Secure para
+      // cookies con prefijo __Secure-/__Host- (los 2 que emite esta app);
+      // omitirlo puede hacer que el jar (basado en net/http/cookiejar de
+      // Go) rechace o no adjunte el cookie en requests siguientes,
+      // independientemente de que el valor extraído sea el correcto --
+      // primer intento de este diagnóstico lo omitió, resultado no
+      // concluyente.
+      jar.set(url, name, value, { path: '/', secure: true })
       count++
     } catch (e) {
       console.log(`FORCEJAR vu=${__VU} jar.set ERROR name=${name} msg=${e.message}`)
