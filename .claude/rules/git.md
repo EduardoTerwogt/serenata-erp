@@ -40,6 +40,13 @@ perderse. Si el diff toca aunque sea un archivo que no sea `.md`, deja de aplica
 excepción y todo el cambio (incluida la parte de documentación) sigue el flujo
 normal de rama + PR.
 
+**Esta excepción aplica igual en sesiones de Claude Code remotas/en la nube**
+(las que corren en un branch asignado por el entorno, no en la máquina local del
+usuario). El usuario autorizó explícitamente el push directo a `main` para diffs
+100% `.md` también en ese tipo de sesión — no hace falta confirmar de nuevo ni
+quedarse en la rama asignada solo por precaución cuando el diff es 100%
+documentación.
+
 ```bash
 git fetch origin main
 git branch -f main origin/main       # por si el setup de sesión no corrió antes
