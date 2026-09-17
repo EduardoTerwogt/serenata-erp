@@ -76,7 +76,7 @@ destino.
 
 ---
 
-## 4. Matriz de hallazgos (25 base, 25-28 según condicionales)
+## 4. Matriz de hallazgos (25 base + F27/F28 agregados en 3E-1, 26-30 según condicionales)
 
 | # | Hallazgo | Bloque(s) |
 |---|---|---|
@@ -111,13 +111,23 @@ destino.
 | F23 | Rate limit de Portal incompatible con 100-200 VUs | 3A-2 |
 | F24 | Deriva documental de `ROADMAP.md` | 3A-0 |
 | F25 | `getOrdenesPago()`/`getAllProveedorDocumentos()` sin acotar (encontrados en ronda 4) | 3B-11, 3B-12 |
+| F27 | **Activado y corregido** — `cuentas_por_proyecto()` sin índice en `cuentas_pagar.proyecto_id`, medido `mean_exec_time=1012ms`/`max=7912ms` (`pg_stat_statements`) a volumen real (~11K `cuentas_pagar`/~2200 `proyectos`) durante el ciclo real de k6 de 3E-1 — cada invocación hace 3 subconsultas correlacionadas por proyecto sin índice, secuenciales sobre toda la tabla. Root cause confirmado con `EXPLAIN (ANALYZE, BUFFERS)`. `CREATE INDEX IF NOT EXISTS idx_cuentas_pagar_proyecto_id` (aditivo): `5605.9ms`/`1,630,527` buffer hits → `578-623ms`/`~28,000` buffer hits. Aplicado a `serenata-erp-test` y producción, migración `20260916_fix_cuentas_por_proyecto_missing_index.sql`, PR [#69](https://github.com/EduardoTerwogt/serenata-erp/pull/69) mergeado (`106245f`). Re-medido después del fix (2 corridas más del ciclo completo): el gate roto de `http_req_failed` persistió idéntico — F27 no era la causa (ver F28) | 3E-1 |
+| F28 | **Activado, diferido con aprobación** — race de concurrencia real en la rotación del cookie de sesión de `next-auth` (`session: {strategy:'jwt'}`, `proxy.ts = auth(proxyHandler)`, reemite/rota el cookie en casi cada request autenticada — comportamiento default de next-auth v5, sin config custom de `cookies`/`session.updateAge` en `auth.ts`). Bajo requests verdaderamente concurrentes contra la MISMA sesión, cada uno intenta rotar el cookie a la vez — ver [`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897) ("Race condition with cookie altering requests"). Explica los 6 de 7 escenarios concurrentes que rompieron `http_req_failed<1%` en el gate real de 3E-1, idéntico en `local` y `serverless`, antes y después de F27. Descartado exhaustivamente: cliente k6 (override manual del jar ×2, con y sin `secure:true`, resultado idéntico), infraestructura edge/multi-región de Vercel (reproduce igual en `local` single-process), cold-start/derivación perezosa de clave (reproduce igual con el proceso ya caliente vía `setup()` de k6 antes de la concurrencia). Solo `portal.js` (bypass de sesión HMAC, sin round-trip de next-auth) pasa limpio siempre. Detalle completo de la investigación y la evidencia en `docs/archive/ef-3-baseline-final.md`. **Diferido con aprobación explícita del usuario (2026-09-17)** — gatillo angosto (requests verdaderamente simultáneos a la misma sesión, no "2 pestañas en algún momento del día"), no bloquea el cierre de EF-3. Fix (upgrade de `next-auth` o ajuste de `session.updateAge`/config de rotación) queda pendiente como trabajo aparte, fuera de Engineering Hardening | 3E-1, 3E-1b |
 
 **F1 a F25 = 25 hallazgos base** (24 con bloque asignado + F21 "no
 aplica"). **F14b, F15b y F26 son condicionales** — cada una solo existe
 como fila real si su gate/medición/test respectivo falla (3B-7 para F14b,
 3C-4 para F15b, 3D-0 para F26); si pasan/no revelan el problema, esa fila
-condicional no se crea. **F26 ya se activó** (T12 de 3D-0, ver arriba) —
-26 hallazgos reales hoy, 26-28 según si F14b/F15b también se activan.
+condicional no se crea. **F26 ya se activó** (T12 de 3D-0, ver arriba).
+**F27 y F28 se agregaron durante 3E-1** (fuera de la enumeración
+original de 25, mismo criterio que F14c/F14d bajo 3B-7 — hallazgos reales
+encontrados en la ejecución, no en el audit inicial): F27 activado y
+corregido dentro del mismo bloque (no necesita fila condicional propia,
+igual que F14c/F14d); F28 activado con fila condicional propia `3E-1b`
+(mismo patrón que `3B-7b`/`3C-4b`/`3D-0b`) porque queda diferido en vez de
+resuelto. **28 hallazgos reales hoy, 28-30 según si F14b/F15b también se
+activan** (no lo hicieron — F14b no se evaluó porque el gate de 3B-7 pasó,
+F15b quedó fuera de alcance por decisión de producto, ver 3C-4).
 
 ---
 
@@ -5308,12 +5318,18 @@ bloqueó el cierre del resto porque ninguna fila cerrada pasó nunca por
 | 3D-10 | Cerrado | ninguna | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | `f5787be` | `2d7bd47` | Migradas las 8 rutas de Portal (login, signup, signup/confirmar, documentos GET+POST, cuentas GET, cuentas/[id]/factura POST, me GET, perfil GET+PATCH) de `toErrorMessage`+`Response.json` manual a `buildErrorResponse`. `toErrorMessage`/`error-message.ts` quedan intactos (no se tocan, siguen usados en otros lugares) tal como exige el punto 5 de la especificación. `perfil` usa GET+PATCH en el código real (la especificación decía "GET+PUT") -- se siguió el código, no el texto de la spec | Arrancar el siguiente bloque independiente |
 | 3D-11 | Cerrado | ninguna | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | `60b9aee` | `2d7bd47` | Migradas `app/api/proyectos/[id]/route.ts` (PUT, único catch, sin mapeo de dominio previo) y `app/api/proyectos/[id]/tipo/route.ts` (PUT, preserva intacto el mapeo `TipoYaAsignadoError` -> 409 antes del catch genérico) a `buildErrorResponse`. `GET /api/proyectos/[id]` no se toca (fuera de alcance, su 404 propio no es el catch genérico) | Arrancar el siguiente bloque independiente |
 | 3D-12 | Cerrado | ninguna | `claude/nifty-hypatia-n1tptj` | [#49](https://github.com/EduardoTerwogt/serenata-erp/pull/49) | `31e0948` | `2d7bd47` | Nuevo `lib/server/uploads/factura-validation.ts` (`validateFacturaFiles`) consolida required/tipo-MIME-o-extensión/tamaño para CxP (`pdfRequired: true`), CxC (`pdfRequired: false`, nunca emite `PDF_REQUIRED`) y Portal (`pdfRequired: true`). Cada ruta conserva su propia tabla de mensajes exacta (difieren entre las 3, confirmado leyendo los 3 archivos) mapeando el código devuelto. El fallback por extensión y el chequeo de contenido XML (`.trim().startsWith('<')`, fuera de alcance de este módulo) se preservan intactos en cada ruta. Magic-byte validation deliberadamente fuera de alcance (nunca fue un hallazgo confirmado) | Arrancar el siguiente bloque independiente |
-| 3E-1 | Pendiente | 3B-1, 3B-2, 3B-3, 3B-4, 3B-5, 3B-6, 3B-7, 3B-8, 3B-9, 3B-10, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3C-4, 3D-0, 3D-1, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12 | N/A | N/A | — | N/A | | — |
-| 3E-2 | Pendiente | 3E-1 | N/A | N/A | — | N/A | | — |
+| 3E-1 | Cerrado | 3B-1, 3B-2, 3B-3, 3B-4, 3B-5, 3B-6, 3B-7, 3B-8, 3B-9, 3B-10, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3C-4, 3D-0, 3D-1, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12 | N/A | N/A | pendiente de commit de sincronización | N/A | `docs/archive/ef-3-baseline-final.md`. Ciclo real de 8 escenarios (4 corridas completas, local+serverless) sobre `a6e4528`: `http_req_duration` p95<800/p99<1500 pasó en los 7 escenarios concurrentes en ambos entornos siempre; `http_req_failed` rate<1% pasó solo en `portal.js` (150 VUs, limpio) -- los otros 6 rompieron, idéntico en local y serverless, antes y después de un fix real (F27: índice faltante en `cuentas_pagar.proyecto_id`, PR #69 mergeado `106245f`, no cambió el resultado tras re-medir). Root-caused a fondo: F28, race de concurrencia real en la rotación del cookie de sesión de next-auth bajo requests verdaderamente concurrentes a la misma sesión (`nextauthjs/next-auth#8897`) -- descartado exhaustivamente cliente k6 (override manual del jar ×2), infraestructura edge/multi-región de Vercel (reproduce igual en local single-process) y cold-start (reproduce igual con el proceso ya caliente). **Diferido con aprobación explícita del usuario (2026-09-17)**, fila condicional `3E-1b`. Bloque 7 (hipótesis de contención de CPU del runner compartido de 3A-6) revisado y descartado para este hallazgo -- reproduce idéntico en serverless (infraestructura propia de Vercel, sin contención de runner posible); relectura de 3A-6 sugiere que su propio hallazgo (5/7 escenarios rotos, portal limpio) también era F28, nunca confirmable entonces porque serverless nunca llegó a correr por el rate-limit de Vercel de esa sesión. Rama throwaway `claude/ef3e1-baseline-tmp` (nunca mergeada) borrada al cerrar este bloque | Arrancar 3E-2 |
+| 3E-1b | Diferido con aprobación | 3E-1 | N/A | N/A | N/A | N/A | F28 -- race de concurrencia real en la rotación del cookie de sesión de next-auth (`session: {strategy:'jwt'}`, `proxy.ts = auth(proxyHandler)`) bajo requests verdaderamente concurrentes contra la misma sesión -- ver `nextauthjs/next-auth#8897`. Detalle completo de la investigación (6 pasos, cliente k6/infra edge/cold-start descartados uno por uno) y evidencia real en la matriz de hallazgos (sección 4, fila F28) y en `docs/archive/ef-3-baseline-final.md`. **Diferido con aprobación explícita del usuario (2026-09-17)** -- gatillo angosto (requests genuinamente simultáneos a la misma sesión, no "2 pestañas abiertas en algún momento del día"), no bloquea el cierre de EF-3. Fix (upgrade de `next-auth` o ajuste de `session.updateAge`/config de rotación de cookie) queda pendiente como trabajo aparte, fuera de Engineering Hardening, sin bloque ni fecha asignados | — |
+| 3E-2 | Pendiente | 3E-1, 3E-1b | N/A | N/A | — | N/A | | — |
 | 3E-3 | Pendiente | 3E-2 | N/A | N/A | — | N/A | | — |
 
-**Filas condicionales** (`3B-7b`/`3C-4b`/`3D-0b`) — no existen todavía;
-se agregan solo si su gate/medición/test respectivo (3B-7/3C-4/3D-0) las
-activa, siguiendo la regla de proceso de 3A-0b (primero PR que actualiza
-matriz+grafo+validador, después la fila).
+**Filas condicionales** (`3B-7b`/`3C-4b`/`3D-0b`/`3E-1b`) — cada una se
+agrega solo si su gate/medición/test/ciclo respectivo (3B-7/3C-4/3D-0/3E-1)
+la activa, siguiendo la regla de proceso de 3A-0b (primero PR que actualiza
+matriz+grafo+validador, después la fila). Estado real a fecha de cierre de
+EF-3: `3B-7b` (F14b) nunca se activó (el gate de 3B-7 pasó); `3C-4b`
+(F15b) nunca se evaluó (fuera de alcance por decisión de producto, ver
+3C-4); `3D-0b` (F26) se activó y cerró (T12 de 3D-0 confirmó la carrera
+real, ver su propia fila arriba); `3E-1b` (F28) se activó y quedó
+`Diferido con aprobación` (ver su propia fila arriba).
 
