@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { CandidatoMatchProveedor, CuentaPagar, Proveedor, ProveedorDocumento } from '@/lib/types'
+import { CandidatoMatchProveedor, CuentaPagar, CuentaPagarGrupo, Proveedor, ProveedorDocumento } from '@/lib/types'
 
 // Fase 5.5 -- Portal de proveedores. La identidad de portal ES la misma
 // fila de `proveedores` (ver migración 20260907_fase55...): estas funciones
@@ -72,6 +72,25 @@ export async function getCuentasPagarPorProveedor(proveedorId: string): Promise<
     .order('created_at', { ascending: false })
   if (error) throw error
   return data as CuentaPagar[]
+}
+
+// Bloque 4 de la agrupación de Cuentas por Pagar (docs/PLAN.md): el Portal
+// factura por grupo, no por item. Devuelve solo los grupos reales
+// (cuentas_pagar_grupos) del proveedor -- el caller (GET /api/portal/cuentas)
+// combina esto con getCuentasPagarPorProveedor para completar el desglose de
+// items de cada grupo y para detectar cuentas legacy sin grupo_id todavía.
+export async function getCuentasPagarGruposPorProveedor(proveedorId: string): Promise<CuentaPagarGrupo[]> {
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_pagar_grupos')
+    .select('*, proyectos(proyecto)')
+    .eq('responsable_id', proveedorId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data as Array<CuentaPagarGrupo & { proyectos: { proyecto: string } | null }>).map((row) => ({
+    ...row,
+    proyecto_nombre: row.proyecto_nombre || row.proyectos?.proyecto || undefined,
+    proyectos: undefined,
+  })) as CuentaPagarGrupo[]
 }
 
 export async function createProveedorDocumento(documento: Partial<ProveedorDocumento>): Promise<ProveedorDocumento> {

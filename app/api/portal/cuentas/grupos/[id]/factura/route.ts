@@ -1,5 +1,5 @@
 import { requirePortalSession } from '@/lib/portal-auth'
-import { getCuentaPagarById, createDocumentoCuentaPagar, getProyectoById, getProveedorById } from '@/lib/db'
+import { getCuentaPagarGrupoById, createDocumentoCuentaPagar, getProyectoById, getProveedorById, marcarGrupoFacturado } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
@@ -9,7 +9,7 @@ import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 import { RegimenFiscal } from '@/lib/types'
 
-const ROUTE = 'POST /api/portal/cuentas/[id]/factura'
+const ROUTE = 'POST /api/portal/cuentas/grupos/[id]/factura'
 
 const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
   XML_REQUIRED: 'Se requiere el archivo XML de tu factura',
@@ -20,13 +20,16 @@ const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
 }
 
 /**
- * Fase 5.5: mismo flujo de validación fiscal que
- * app/api/cuentas-pagar/[id]/subir-factura/route.ts (staff interno), pero
- * con una diferencia deliberada -- ahí, si la factura no cuadra, igual se
- * sube y se marca "revisión" para que alguien la revise después. Aquí se
- * BLOQUEA: no se sube nada, se le regresa al proveedor el error exacto
- * más un ejemplo del desglose correcto (calcularEjemploFactura) y una
- * explicación de por qué, para que corrija y resuba él mismo.
+ * Bloque 4 de la agrupación de Cuentas por Pagar (docs/PLAN.md): contraparte
+ * agrupada de la ruta legacy app/api/portal/cuentas/[id]/factura/route.ts
+ * (retirada -- contrato nuevo, no transicional, único consumidor real).
+ * Mismo flujo de validación fiscal que el interno
+ * (app/api/cuentas-pagar/grupos/[id]/subir-factura/route.ts), pero contra
+ * grupo.monto_total y con el comportamiento de bloqueo que ya tenía el
+ * Portal: si la factura no cuadra, NUNCA se guarda -- se regresa el error
+ * exacto más un ejemplo del desglose correcto para que el proveedor corrija
+ * y resuba él mismo (a diferencia de la ruta interna, que sí guarda en
+ * 'revision' para que Serenata la revise).
  */
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const portalAuth = await requirePortalSession()
@@ -46,10 +49,13 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const facturaXmlFile = facturaXmlFileInput as File
     const facturaPdfFile = facturaPdfFileInput as File
 
-    const cuenta = await getCuentaPagarById(id)
-    if (!cuenta) return Response.json({ error: 'Cuenta no encontrada' }, { status: 404 })
-    if (cuenta.responsable_id !== portalAuth.proveedorId) {
-      return Response.json({ error: 'Esta cuenta no te pertenece' }, { status: 403 })
+    const grupo = await getCuentaPagarGrupoById(id)
+    if (!grupo) return Response.json({ error: 'Grupo no encontrado' }, { status: 404 })
+    if (grupo.responsable_id !== portalAuth.proveedorId) {
+      return Response.json({ error: 'Este grupo no te pertenece' }, { status: 403 })
+    }
+    if (grupo.estado !== 'ABIERTO') {
+      return Response.json({ error: 'Este grupo ya tiene una factura registrada.' }, { status: 409 })
     }
 
     const facturaXmlContent = await facturaXmlFile.text()
@@ -65,28 +71,28 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json(
         {
           error: `No se pudo leer tu factura: ${facturaData.error}`,
-          ejemplo: calcularEjemploFactura(Number(cuenta.x_pagar || 0), regimenFiscal),
+          ejemplo: calcularEjemploFactura(Number(grupo.monto_total || 0), regimenFiscal),
         },
         { status: 422 }
       )
     }
 
-    const validacion = validarFacturaFiscalProveedor(facturaData, Number(cuenta.x_pagar || 0), regimenFiscal)
+    const validacion = validarFacturaFiscalProveedor(facturaData, Number(grupo.monto_total || 0), regimenFiscal)
     if (validacion.estado_validacion === 'revision') {
       return Response.json(
         {
           error: validacion.detalle_validacion,
-          ejemplo: calcularEjemploFactura(Number(cuenta.x_pagar || 0), regimenFiscal),
+          ejemplo: calcularEjemploFactura(Number(grupo.monto_total || 0), regimenFiscal),
         },
         { status: 422 }
       )
     }
 
-    const proyecto = await getProyectoById(cuenta.proyecto_id)
+    const proyecto = await getProyectoById(grupo.proyecto_id)
     const googleEnv = getGoogleEnv()
     if (!googleEnv) return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
 
-    const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto?.proyecto ?? cuenta.proyecto_id}`
+    const folderPath = `/Por Pagar/${grupo.proyecto_id}-${proyecto?.proyecto ?? grupo.proyecto_id}`
     const uploadFolderId = resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined)
     const [facturaXmlUrl, facturaPdfUrl] = await Promise.all([
       uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, uploadFolderId),
@@ -95,19 +101,21 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     await Promise.all([
       createDocumentoCuentaPagar({
-        cuentas_pagar_id: id,
+        grupo_id: id,
         tipo: 'FACTURA_PROVEEDOR_XML',
         archivo_url: facturaXmlUrl,
         archivo_nombre: facturaXmlFile.name,
         estado_validacion: 'validado',
       }),
       createDocumentoCuentaPagar({
-        cuentas_pagar_id: id,
+        grupo_id: id,
         tipo: 'FACTURA_PROVEEDOR',
         archivo_url: facturaPdfUrl,
         archivo_nombre: facturaPdfFile.name,
       }),
     ])
+
+    await marcarGrupoFacturado(id)
 
     return Response.json({ success: true })
   } catch (error) {

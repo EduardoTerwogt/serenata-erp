@@ -44,13 +44,25 @@ interface PerfilResponse {
   regimen_fiscal: 'moral' | 'fisica' | null
 }
 
-interface CuentaPortal {
+interface GrupoPortalItem {
   id: string
-  proyecto_nombre: string | null
   item_descripcion: string | null
+  cantidad: number
   x_pagar: number
+  cotizacion_id: string
+}
+
+interface GrupoPortal {
+  id: string
+  es_grupo: boolean
+  facturable: boolean
+  proyecto_id: string
+  proyecto_nombre: string | null
   estado: string
+  monto_total: number
+  monto_pagado: number
   saldo_pendiente: number
+  items: GrupoPortalItem[]
 }
 
 interface EjemploFactura {
@@ -78,17 +90,17 @@ export default function PortalPage() {
   const [me, setMe] = useState<MeResponse | null>(null)
   const [perfil, setPerfil] = useState<PerfilResponse | null>(null)
   const [documentos, setDocumentos] = useState<ProveedorDocumento[]>([])
-  const [cuentas, setCuentas] = useState<CuentaPortal[]>([])
+  const [grupos, setGrupos] = useState<GrupoPortal[]>([])
 
   const cargarTodo = () => {
     Promise.all([
       getJson<PerfilResponse>('/api/portal/perfil', 'Error al cargar tu perfil'),
       getJson<{ documentos: ProveedorDocumento[] }>('/api/portal/documentos', 'Error al cargar tus documentos'),
-      getJson<{ cuentas: CuentaPortal[] }>('/api/portal/cuentas', 'Error al cargar tus cuentas'),
+      getJson<{ grupos: GrupoPortal[] }>('/api/portal/cuentas', 'Error al cargar tus cuentas'),
     ]).then(([perfilRes, documentosRes, cuentasRes]) => {
       setPerfil(perfilRes)
       setDocumentos(documentosRes.documentos)
-      setCuentas(cuentasRes.cuentas)
+      setGrupos(cuentasRes.grupos)
     })
   }
 
@@ -160,7 +172,7 @@ export default function PortalPage() {
         />
       )}
 
-      {tab === 'cuentas' && <TabCuentas cuentas={cuentas} />}
+      {tab === 'cuentas' && <TabCuentas grupos={grupos} />}
     </div>
   )
 }
@@ -338,8 +350,8 @@ function TabDocumentos({
   )
 }
 
-function TabCuentas({ cuentas }: { cuentas: CuentaPortal[] }) {
-  const [cuentaId, setCuentaId] = useState('')
+function TabCuentas({ grupos }: { grupos: GrupoPortal[] }) {
+  const [grupoId, setGrupoId] = useState('')
   const [xml, setXml] = useState<File | null>(null)
   const [pdf, setPdf] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
@@ -347,12 +359,12 @@ function TabCuentas({ cuentas }: { cuentas: CuentaPortal[] }) {
   const [ejemplo, setEjemplo] = useState<EjemploFactura | null>(null)
   const [success, setSuccess] = useState(false)
 
-  const cuentasFacturables = cuentas.filter(c => c.estado !== 'PAGADO')
+  const gruposFacturables = grupos.filter(g => g.facturable)
 
   const subirFactura = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!cuentaId) {
-      setError('Selecciona a qué cuenta corresponde tu factura')
+    if (!grupoId) {
+      setError('Selecciona a qué proyecto corresponde tu factura')
       return
     }
     if (!xml || !pdf) {
@@ -367,7 +379,7 @@ function TabCuentas({ cuentas }: { cuentas: CuentaPortal[] }) {
       const formData = new FormData()
       formData.set('factura_xml', xml)
       formData.set('factura_pdf', pdf)
-      const response = await fetch(`/api/portal/cuentas/${cuentaId}/factura`, { method: 'POST', body: formData })
+      const response = await fetch(`/api/portal/cuentas/grupos/${grupoId}/factura`, { method: 'POST', body: formData })
       const data = await response.json()
       if (!response.ok) {
         setError(data.error || 'Error al subir tu factura')
@@ -387,16 +399,16 @@ function TabCuentas({ cuentas }: { cuentas: CuentaPortal[] }) {
       <SectionCard title="Subir factura" contentClassName="p-4 md:p-6 space-y-4">
         <form onSubmit={subirFactura} className="space-y-4">
           <div>
-            <label className="block text-content font-medium text-body mb-1">Cuenta a la que corresponde</label>
+            <label className="block text-content font-medium text-body mb-1">Proyecto al que corresponde</label>
             <select
-              value={cuentaId}
-              onChange={e => setCuentaId(e.target.value)}
+              value={grupoId}
+              onChange={e => setGrupoId(e.target.value)}
               className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
             >
-              <option value="">Selecciona una cuenta...</option>
-              {cuentasFacturables.map(c => (
-                <option key={c.id} value={c.id}>
-                  {(c.proyecto_nombre || c.item_descripcion || 'Proyecto')} · {formatMoney(c.x_pagar)}
+              <option value="">Selecciona un proyecto...</option>
+              {gruposFacturables.map(g => (
+                <option key={g.id} value={g.id}>
+                  {(g.proyecto_nombre || 'Proyecto')} · {formatMoney(g.monto_total)}
                 </option>
               ))}
             </select>
@@ -452,24 +464,40 @@ function TabCuentas({ cuentas }: { cuentas: CuentaPortal[] }) {
       </SectionCard>
 
       <SectionCard title="Tus cuentas con Serenata" contentClassName="p-0">
-        {!cuentas.length ? (
+        {!grupos.length ? (
           <p className="p-4 md:p-6 text-content text-faint">
             Todavía no tienes cuentas registradas. Cuando Serenata te asigne a un proyecto, aparecerán aquí.
           </p>
         ) : (
-          cuentas.map((cuenta, i) => (
+          grupos.map((grupo, i) => (
             <div
-              key={cuenta.id}
-              className={`flex items-center justify-between gap-3 p-4 md:px-6 ${i === cuentas.length - 1 ? '' : 'border-b border-hairline'}`}
+              key={grupo.id}
+              className={`p-4 md:px-6 ${i === grupos.length - 1 ? '' : 'border-b border-hairline'}`}
             >
-              <div className="min-w-0">
-                <p className="text-body font-medium truncate">{cuenta.proyecto_nombre || cuenta.item_descripcion || 'Proyecto'}</p>
-                <p className="text-content text-subtext truncate">{cuenta.item_descripcion}</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-body font-medium truncate">{grupo.proyecto_nombre || grupo.items[0]?.item_descripcion || 'Proyecto'}</p>
+                  {grupo.items.length > 1 ? (
+                    <p className="text-content text-subtext">{grupo.items.length} conceptos</p>
+                  ) : (
+                    <p className="text-content text-subtext truncate">{grupo.items[0]?.item_descripcion}</p>
+                  )}
+                </div>
+                <div className="flex-none text-right">
+                  <StatusBadge tone={toneForCuentaEstado(grupo.estado)}>{grupo.estado}</StatusBadge>
+                  <p className="mt-1 text-content text-body">{formatMoney(grupo.saldo_pendiente)} pendiente</p>
+                </div>
               </div>
-              <div className="flex-none text-right">
-                <StatusBadge tone={toneForCuentaEstado(cuenta.estado)}>{cuenta.estado}</StatusBadge>
-                <p className="mt-1 text-content text-body">{formatMoney(cuenta.saldo_pendiente)} pendiente</p>
-              </div>
+              {grupo.items.length > 1 && (
+                <div className="mt-3 space-y-1 border-t border-hairline pt-3">
+                  {grupo.items.map(item => (
+                    <div key={item.id} className="flex items-center justify-between gap-3 text-content text-subtext">
+                      <span className="truncate">{item.item_descripcion}</span>
+                      <span className="flex-none text-body">{formatMoney(item.x_pagar)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))
         )}

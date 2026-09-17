@@ -14,7 +14,7 @@ export async function mockPortalSignup(page: Page) {
 
 const PERFIL_DEFAULT = { nombre: 'Antonio Gutierrez', telefono: null, banco: null, clabe: null, regimen_fiscal: null }
 
-export async function mockPortalDashboard(page: Page, overrides: { cuentas?: unknown[]; documentos?: unknown[] } = {}) {
+export async function mockPortalDashboard(page: Page, overrides: { grupos?: unknown[]; documentos?: unknown[] } = {}) {
   await page.route('**/api/portal/me', async (route) => {
     await fulfillJson(route, {
       id: 'prov-1',
@@ -35,16 +35,18 @@ export async function mockPortalDashboard(page: Page, overrides: { cuentas?: unk
 
   await page.route('**/api/portal/cuentas', async (route) => {
     await fulfillJson(route, {
-      cuentas: overrides.cuentas ?? [
+      grupos: overrides.grupos ?? [
         {
-          id: 'cuenta-1',
+          id: 'grupo-1',
+          es_grupo: true,
+          facturable: true,
+          proyecto_id: 'SH001',
           proyecto_nombre: 'Spot Verano',
-          item_descripcion: 'Audio en vivo',
-          x_pagar: 1000,
-          estado: 'PENDIENTE',
+          estado: 'ABIERTO',
+          monto_total: 1000,
           monto_pagado: 0,
           saldo_pendiente: 1000,
-          fecha_factura: null,
+          items: [{ id: 'cuenta-1', item_descripcion: 'Audio en vivo', cantidad: 1, x_pagar: 1000, cotizacion_id: 'SH001' }],
         },
       ],
     })
@@ -94,7 +96,7 @@ export async function mockPortalDashboardConMatch(page: Page) {
   })
 
   await page.route('**/api/portal/cuentas', async (route) => {
-    await fulfillJson(route, { cuentas: [] })
+    await fulfillJson(route, { grupos: [] })
   })
 
   await page.route('**/api/portal/signup/confirmar', async (route) => {
@@ -104,7 +106,7 @@ export async function mockPortalDashboardConMatch(page: Page) {
 }
 
 export async function mockPortalFacturaBloqueada(page: Page) {
-  await page.route('**/api/portal/cuentas/*/factura', async (route) => {
+  await page.route('**/api/portal/cuentas/grupos/*/factura', async (route) => {
     await fulfillJson(
       route,
       {
@@ -124,7 +126,7 @@ export async function mockPortalFacturaBloqueada(page: Page) {
 }
 
 export async function mockPortalFacturaValida(page: Page) {
-  await page.route('**/api/portal/cuentas/*/factura', async (route) => {
+  await page.route('**/api/portal/cuentas/grupos/*/factura', async (route) => {
     await fulfillJson(route, { success: true })
   })
 }

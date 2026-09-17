@@ -6,7 +6,7 @@ async function irATabCuentasYSeleccionar(page: import('@playwright/test').Page) 
   await page.goto('/portal')
   await page.getByRole('button', { name: 'Cuentas y facturas' }).click()
 
-  await page.locator('select').selectOption('cuenta-1')
+  await page.locator('select').selectOption('grupo-1')
 
   const fileInputs = page.locator('input[type="file"]')
   await fileInputs.nth(0).setInputFiles({ name: 'factura.xml', mimeType: 'application/xml', buffer: Buffer.from('<cfdi:Comprobante></cfdi:Comprobante>', 'utf-8') })

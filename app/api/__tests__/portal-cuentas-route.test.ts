@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requirePortalSessionMock: vi.fn(),
   getCuentasPagarPorProveedorMock: vi.fn(),
+  getCuentasPagarGruposPorProveedorMock: vi.fn(),
 }))
 
 vi.mock('@/lib/portal-auth', () => ({
@@ -11,6 +12,7 @@ vi.mock('@/lib/portal-auth', () => ({
 
 vi.mock('@/lib/db', () => ({
   getCuentasPagarPorProveedor: mocks.getCuentasPagarPorProveedorMock,
+  getCuentasPagarGruposPorProveedor: mocks.getCuentasPagarGruposPorProveedorMock,
 }))
 
 import { GET } from '../portal/cuentas/route'
@@ -19,6 +21,8 @@ describe('GET /api/portal/cuentas', () => {
   beforeEach(() => {
     Object.values(mocks).forEach(m => m.mockReset())
     mocks.requirePortalSessionMock.mockResolvedValue({ proveedorId: 'prov-1', response: null })
+    mocks.getCuentasPagarPorProveedorMock.mockResolvedValue([])
+    mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([])
   })
 
   it('retorna 401 sin sesión de portal', async () => {
@@ -28,19 +32,73 @@ describe('GET /api/portal/cuentas', () => {
     expect(mocks.getCuentasPagarPorProveedorMock).not.toHaveBeenCalled()
   })
 
-  it('mapea las cuentas del proveedor con saldo pendiente calculado', async () => {
+  it('agrupa las cuentas del proveedor que ya tienen grupo_id bajo su grupo real, con desglose de items', async () => {
+    mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([
+      { id: 'grupo-1', proyecto_id: 'SH001', proyecto_nombre: 'Spot Verano', estado: 'ABIERTO', monto_total: 1500, monto_pagado: 0 },
+    ])
     mocks.getCuentasPagarPorProveedorMock.mockResolvedValue([
-      { id: 'c1', proyecto_nombre: 'Spot Verano', item_descripcion: 'Renta cámara', x_pagar: 1000, estado: 'pendiente', monto_pagado: 400, fecha_factura: '2026-01-01' },
-      { id: 'c2', proyecto_nombre: null, item_descripcion: 'Edición', x_pagar: 500, estado: 'pendiente', monto_pagado: null, fecha_factura: null },
+      { id: 'c1', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Renta cámara', cantidad: 1, x_pagar: 1000, cotizacion_id: 'SH001' },
+      { id: 'c2', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Grip', cantidad: 1, x_pagar: 500, cotizacion_id: 'SH001' },
     ])
 
     const response = await GET()
+    const body = await response.json()
 
     expect(response.status).toBe(200)
+    expect(body.grupos).toEqual([
+      {
+        id: 'grupo-1',
+        es_grupo: true,
+        facturable: true,
+        proyecto_id: 'SH001',
+        proyecto_nombre: 'Spot Verano',
+        estado: 'ABIERTO',
+        monto_total: 1500,
+        monto_pagado: 0,
+        saldo_pendiente: 1500,
+        items: [
+          { id: 'c1', item_descripcion: 'Renta cámara', cantidad: 1, x_pagar: 1000, cotizacion_id: 'SH001' },
+          { id: 'c2', item_descripcion: 'Grip', cantidad: 1, x_pagar: 500, cotizacion_id: 'SH001' },
+        ],
+      },
+    ])
+  })
+
+  it('un grupo FACTURADO/EN_PROCESO_PAGO/PAGADO no es facturable', async () => {
+    mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([
+      { id: 'grupo-1', proyecto_id: 'SH001', proyecto_nombre: 'Spot Verano', estado: 'FACTURADO', monto_total: 1000, monto_pagado: 0 },
+    ])
+    mocks.getCuentasPagarPorProveedorMock.mockResolvedValue([
+      { id: 'c1', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Renta cámara', cantidad: 1, x_pagar: 1000, cotizacion_id: 'SH001' },
+    ])
+
+    const response = await GET()
     const body = await response.json()
-    expect(body.cuentas).toEqual([
-      { id: 'c1', proyecto_nombre: 'Spot Verano', item_descripcion: 'Renta cámara', x_pagar: 1000, estado: 'pendiente', monto_pagado: 400, saldo_pendiente: 600, fecha_factura: '2026-01-01' },
-      { id: 'c2', proyecto_nombre: null, item_descripcion: 'Edición', x_pagar: 500, estado: 'pendiente', monto_pagado: 0, saldo_pendiente: 500, fecha_factura: null },
+    expect(body.grupos[0].facturable).toBe(false)
+  })
+
+  it('una cuenta legacy sin grupo_id se muestra como un grupo de un solo item, nunca facturable', async () => {
+    mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([])
+    mocks.getCuentasPagarPorProveedorMock.mockResolvedValue([
+      { id: 'c3', grupo_id: null, proyecto_id: 'SH002', proyecto_nombre: 'Documental', item_descripcion: 'Edición', cantidad: 1, x_pagar: 500, monto_pagado: 200, estado: 'EN_PROCESO_PAGO', cotizacion_id: 'SH002' },
+    ])
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(body.grupos).toEqual([
+      {
+        id: 'c3',
+        es_grupo: false,
+        facturable: false,
+        proyecto_id: 'SH002',
+        proyecto_nombre: 'Documental',
+        estado: 'EN_PROCESO_PAGO',
+        monto_total: 500,
+        monto_pagado: 200,
+        saldo_pendiente: 300,
+        items: [{ id: 'c3', item_descripcion: 'Edición', cantidad: 1, x_pagar: 500, cotizacion_id: 'SH002' }],
+      },
     ])
   })
 
