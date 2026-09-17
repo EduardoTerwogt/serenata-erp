@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import {
   CuentaPagar,
+  CuentaPagarGrupo,
   DocumentoCuentaPagar,
   ItemCotizacion,
   OrdenPago,
@@ -11,6 +12,11 @@ import { getItemsByCotizacion } from '@/lib/server/repositories/quotations'
 export type CuentaPagarConJoins = CuentaPagar & {
   cotizaciones?: { proyecto?: string; fecha_entrega?: string } | null
   proyectos?: { proyecto?: string } | null
+}
+
+type CuentaPagarGrupoConJoins = CuentaPagarGrupo & {
+  proyectos?: { proyecto?: string } | null
+  proveedores?: { nombre?: string } | null
 }
 
 export async function getCuentasPagar() {
@@ -106,14 +112,6 @@ export async function updateCuentaPagar(id: string, updates: Partial<CuentaPagar
     .single()
   if (error) throw error
   return data as CuentaPagar
-}
-
-export async function updateCuentasPagarEnOrden(ids: string[], ordenId: string) {
-  const { error } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .update({ estado: 'EN_PROCESO_PAGO', orden_pago_id: ordenId })
-    .in('id', ids)
-  if (error) throw error
 }
 
 export async function deleteCuentasPagarByCotizacion(cotizacionId: string) {
@@ -376,16 +374,90 @@ export async function buscarOrdenesPago(page: number, pageSize: number): Promise
   return { rows: data.rows as OrdenPago[], totalRows: data.total_rows as number }
 }
 
-// EF-3 3B-8: el filtro fecha_entrega<=hoy se movió a SQL (RPC
-// cuentas_pagar_pendientes_eventos_realizados,
-// db/migrations/20260914_cuentas_pagar_pendientes_eventos_realizados.sql)
-// -- antes traía TODAS las PENDIENTE con joins y filtraba en JS. La RPC
-// devuelve el mismo shape aplanado que CuentaPagarConJoins (cp.* +
-// cotizaciones/proyectos anidados vía jsonb_build_object), verificado en
-// vivo contra serenata-erp-test con paridad exacta contra el filtro
-// anterior.
-export async function getCuentasPagarPendientesEventosRealizados() {
-  const { data, error } = await supabaseAdmin.rpc('cuentas_pagar_pendientes_eventos_realizados')
+// ==================== Agrupación de Cuentas por Pagar (docs/PLAN.md) ====================
+
+export async function getCuentaPagarGrupoById(id: string): Promise<CuentaPagarGrupo | null> {
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_pagar_grupos')
+    .select('*, proyectos(proyecto), proveedores(nombre)')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const row = data as CuentaPagarGrupoConJoins
+  return {
+    ...row,
+    proyecto_nombre: row.proyecto_nombre || row.proyectos?.proyecto || undefined,
+    responsable_nombre: row.proveedores?.nombre || undefined,
+    proyectos: undefined,
+    proveedores: undefined,
+  } as CuentaPagarGrupo
+}
+
+export async function getCuentasPagarPorGrupo(grupoId: string): Promise<CuentaPagar[]> {
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_pagar')
+    .select('*')
+    .eq('grupo_id', grupoId)
+  if (error) throw error
+  return data as CuentaPagar[]
+}
+
+/**
+ * Transición ABIERTO -> FACTURADO. El guard `.eq('estado', 'ABIERTO')` vive
+ * en el propio UPDATE -- atómico por construcción (una sola sentencia SQL),
+ * sin necesitar una RPC dedicada. Si el grupo ya no estaba ABIERTO (carrera
+ * con otra subida, o ya facturado), no actualiza nada y devuelve null --
+ * el caller decide qué hacer con eso.
+ */
+export async function marcarGrupoFacturado(id: string): Promise<CuentaPagarGrupo | null> {
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_pagar_grupos')
+    .update({ estado: 'FACTURADO', updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('estado', 'ABIERTO')
+    .select()
+  if (error) throw error
+  return data && data.length > 0 ? (data[0] as CuentaPagarGrupo) : null
+}
+
+export async function getDocumentosCuentaPagarGrupo(grupoId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('documentos_cuentas_pagar')
+    .select('*')
+    .eq('grupo_id', grupoId)
+    .order('fecha_carga', { ascending: false })
+  if (error) throw error
+  return data as DocumentoCuentaPagar[]
+}
+
+/**
+ * Fuente de generar-orden-pago desde el Bloque 3: grupos FACTURADO cuyas
+ * cotizaciones (principal + cualquier complementaria) ya tienen evento
+ * realizado -- ver db/migrations/20260917_orden_pago_grupos_facturados_eventos_realizados.sql.
+ * Mismo shape que getCuentasPagarPendientesEventosRealizados(), así que
+ * buildOrdenPagoPreview() sigue funcionando sin cambios.
+ */
+export async function getCuentasPagarGruposFacturadosEventosRealizados() {
+  const { data, error } = await supabaseAdmin.rpc('cuentas_pagar_grupos_facturados_eventos_realizados')
   if (error) throw error
   return data as CuentaPagarConJoins[]
+}
+
+export async function updateCuentasPagarGruposEnOrden(grupoIds: string[], ordenId: string) {
+  const { error: grupoError } = await supabaseAdmin
+    .from('cuentas_pagar_grupos')
+    .update({ estado: 'EN_PROCESO_PAGO', orden_pago_id: ordenId })
+    .in('id', grupoIds)
+  if (grupoError) throw grupoError
+
+  // Se refleja en las hijas para no romper reportes existentes que ya leen
+  // cuentas_pagar.orden_pago_id/estado a nivel item (y para que la
+  // agregación de ordenes_pago.estado dentro de registrar_pago_grupo_factura,
+  // que sigue leyendo por cuentas_pagar.orden_pago_id, no cambie).
+  const { error: cuentasError } = await supabaseAdmin
+    .from('cuentas_pagar')
+    .update({ estado: 'EN_PROCESO_PAGO', orden_pago_id: ordenId })
+    .in('grupo_id', grupoIds)
+  if (cuentasError) throw cuentasError
 }

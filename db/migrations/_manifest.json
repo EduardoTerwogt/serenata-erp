@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-17T19:39:41.762Z",
-  "count": 83,
+  "generated_at": "2026-09-17T21:36:54.457Z",
+  "count": 85,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -83,7 +83,9 @@
     "20260916_pg_stat_statements_snapshot.sql",
     "20260916_preview_next_cotizacion_folio_principal.sql",
     "20260917_cuentas_pagar_grupos.sql",
+    "20260917_orden_pago_grupos_facturados_eventos_realizados.sql",
     "20260917_reasignar_responsable_cuenta_pagar.sql",
-    "20260917_reconciliar_grupos_en_approve_cotizacion.sql"
+    "20260917_reconciliar_grupos_en_approve_cotizacion.sql",
+    "20260917_registrar_pago_grupo_factura.sql"
   ]
 }

@@ -4,6 +4,7 @@ export type EstadoPago = 'PENDIENTE' | 'PAGADO' | 'PARCIAL'
 
 export type EstadoCuentaCobrar = 'FACTURA_PENDIENTE' | 'FACTURADO' | 'PARCIALMENTE_PAGADO' | 'PAGADO' | 'VENCIDO'
 export type EstadoCuentaPagar = 'PENDIENTE' | 'EN_PROCESO_PAGO' | 'PAGADO'
+export type EstadoCuentaPagarGrupo = 'ABIERTO' | 'FACTURADO' | 'EN_PROCESO_PAGO' | 'PAGADO'
 export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO'
 
 export type RegimenFiscal = 'moral' | 'fisica'
@@ -317,6 +318,24 @@ export interface CuentaPagar {
   notas: string | null
   updated_at?: string
   created_at?: string
+  grupo_id?: string | null
+}
+
+// Agrupa cuentas_pagar del mismo proveedor dentro del mismo proyecto para
+// pedir/validar una sola factura y un solo pago sobre el total acumulado
+// (docs/PLAN.md, iniciativa de agrupación de Cuentas por Pagar).
+export interface CuentaPagarGrupo {
+  id: string
+  proyecto_id: string
+  proyecto_nombre?: string
+  responsable_id: string
+  responsable_nombre?: string
+  estado: EstadoCuentaPagarGrupo
+  monto_total: number
+  monto_pagado: number
+  orden_pago_id: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface CuentaCobrar {
@@ -369,7 +388,10 @@ export interface DocumentoCuentaCobrar {
 
 export interface DocumentoCuentaPagar {
   id: string
-  cuentas_pagar_id: string
+  // Exactamente uno de los dos (CHECK en la base): cuentas_pagar_id para
+  // documentos legacy por item, grupo_id para facturación agrupada.
+  cuentas_pagar_id?: string | null
+  grupo_id?: string | null
   tipo: 'FACTURA_PROVEEDOR' | 'FACTURA_PROVEEDOR_XML' | 'COMPROBANTE_PAGO' | 'OTRO'
   archivo_url: string
   archivo_nombre: string

@@ -1,7 +1,7 @@
 export const maxDuration = 60
 
 import { requireSection } from '@/lib/api-auth'
-import { createOrdenPago, getCuentasPagarPendientesEventosRealizados, updateCuentasPagarEnOrden } from '@/lib/db'
+import { createOrdenPago, getCuentasPagarGruposFacturadosEventosRealizados, updateCuentasPagarGruposEnOrden } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { buildOrdenPagoPreview } from '@/lib/server/ordenes-pago/build'
@@ -47,7 +47,7 @@ export async function GET() {
   if (authResult.response) return authResult.response
 
   try {
-    const cuentasPendientes = await getCuentasPagarPendientesEventosRealizados()
+    const cuentasPendientes = await getCuentasPagarGruposFacturadosEventosRealizados()
     const preview = buildOrdenPagoPreview(cuentasPendientes)
     return Response.json(preview)
   } catch (error) {
@@ -60,10 +60,10 @@ export async function POST() {
   if (authResult.response) return authResult.response
 
   try {
-    const cuentasPendientes = await getCuentasPagarPendientesEventosRealizados()
+    const cuentasPendientes = await getCuentasPagarGruposFacturadosEventosRealizados()
     if (cuentasPendientes.length === 0) {
       return Response.json(
-        { error: 'No hay cuentas por pagar pendientes con eventos ya realizados' },
+        { error: 'No hay grupos de cuentas por pagar facturados con eventos ya realizados' },
         { status: 400 }
       )
     }
@@ -90,7 +90,12 @@ export async function POST() {
       created_by: authResult.session?.user?.email || 'sistema',
     })
 
-    await updateCuentasPagarEnOrden(preview.cuentas_ids, ordenPago.id)
+    // preview.cuentas_ids son ids de cuentas_pagar (nivel item, para el PDF
+    // detallado) -- la transición de estado ahora ocurre a nivel grupo, así
+    // que se derivan los grupo_id distintos de las cuentas que entraron al
+    // preview.
+    const grupoIds = Array.from(new Set(cuentasPendientes.map((cuenta) => cuenta.grupo_id).filter((v): v is string => Boolean(v))))
+    await updateCuentasPagarGruposEnOrden(grupoIds, ordenPago.id)
 
 
     return Response.json({
