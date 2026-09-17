@@ -1,8 +1,10 @@
 import { requireSection } from '@/lib/api-auth'
-import { buscarCuentasPagar, updateCuentaPagar } from '@/lib/db'
+import { buscarCuentasPagarGrupos, updateCuentaPagar } from '@/lib/db'
 
-// EF-3 3B-3: busqueda/paginacion/totales server-side via RPC unica
-// buscar_cuentas_pagar (db/migrations/20260914_buscar_cuentas_pagar.sql).
+// Bloque 6 (docs/PLAN.md): busqueda/paginacion/totales server-side via RPC
+// unica buscar_cuentas_pagar_grupos
+// (db/migrations/20260918_buscar_cuentas_pagar_grupos.sql) -- una fila por
+// grupo/responsable, no por item.
 export async function GET(request: Request) {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
@@ -12,7 +14,7 @@ export async function GET(request: Request) {
     const search = searchParams.get('search')
     const page = Number(searchParams.get('page')) || 1
     const pageSize = Number(searchParams.get('pageSize')) || 50
-    const result = await buscarCuentasPagar(search, page, pageSize)
+    const result = await buscarCuentasPagarGrupos(search, page, pageSize)
     return Response.json(result)
   } catch (error) {
     console.error(error)

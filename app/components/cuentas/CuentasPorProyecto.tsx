@@ -5,7 +5,7 @@ import { CuentaCobrar, CuentaPagar } from '@/lib/types'
 import { Icon } from '@/components/ui/Icon'
 import { StatusBadge, toneForCuentaEstado } from '@/components/ui/StatusBadge'
 import { ProyectoConCuentas } from '@/app/components/cuentas/hooks/useCuentasPorProyecto'
-import { sumMontoPendiente } from '@/app/components/cuentas/selectors'
+import { agruparCuentasPagarPorGrupo, sumMontoPendiente } from '@/app/components/cuentas/selectors'
 import { formatCuentasCurrency } from '@/app/components/cuentas/utils'
 
 interface Props {
@@ -29,6 +29,7 @@ export function CuentasPorProyecto({ proyectos, term, onSelectCobrar, onSelectPa
 
   const filtrados = useMemo(() => {
     return proyectos
+      .map((grupo) => ({ ...grupo, cuentas_pagar: agruparCuentasPagarPorGrupo(grupo.cuentas_pagar) }))
       .map((grupo) => {
         if (!term) return grupo
         const proyectoMatch = matches(term, grupo.proyecto.nombre, grupo.proyecto.cliente, grupo.proyecto.folio)
@@ -144,7 +145,12 @@ export function CuentasPorProyecto({ proyectos, term, onSelectCobrar, onSelectPa
                               onClick={() => onSelectPagar(cuenta)}
                               className="h-[46px] cursor-pointer border-t border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt"
                             >
-                              <td className="truncate px-4 align-middle font-medium text-ink">{cuenta.responsable_nombre}</td>
+                              <td className="truncate px-4 align-middle font-medium text-ink">
+                                <div className="truncate">{cuenta.responsable_nombre}</div>
+                                {cuenta.items_count && cuenta.items_count > 1 && (
+                                  <div className="truncate text-[length:var(--text-xs)] text-faint">{cuenta.items_count} conceptos</div>
+                                )}
+                              </td>
                               <td className="truncate px-4 text-right align-middle text-subtext">${fmt(cuenta.x_pagar)}</td>
                               <td className="px-4 text-right align-middle">
                                 <StatusBadge tone={toneForCuentaEstado(cuenta.estado)}>{cuenta.estado}</StatusBadge>

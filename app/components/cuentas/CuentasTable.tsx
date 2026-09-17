@@ -78,8 +78,14 @@ export function CuentasTable({ tab, cuentas, total, onSelect, page, pageCount, o
                         {cuenta.correo && <div className="truncate text-[length:var(--text-xs)] text-faint">{cuenta.correo}</div>}
                       </td>
                       <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">
-                        <div className="truncate">{cuenta.item_descripcion || '—'}</div>
-                        {cuenta.cantidad > 1 && <div className="truncate text-[length:var(--text-xs)] text-faint">Cantidad: {cuenta.cantidad}</div>}
+                        {cuenta.items_count && cuenta.items_count > 1 ? (
+                          <div className="truncate">{cuenta.items_count} conceptos</div>
+                        ) : (
+                          <>
+                            <div className="truncate">{cuenta.item_descripcion || '—'}</div>
+                            {cuenta.cantidad > 1 && <div className="truncate text-[length:var(--text-xs)] text-faint">Cantidad: {cuenta.cantidad}</div>}
+                          </>
+                        )}
                       </td>
                       <td className="truncate px-[var(--row-pad-x)] align-middle text-ink font-semibold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</td>
                     </>
@@ -126,7 +132,9 @@ export function CuentasTable({ tab, cuentas, total, onSelect, page, pageCount, o
                 <>
                   <div className="text-body font-medium">{cuenta.proyecto_nombre || '—'}</div>
                   <div className="text-subtext text-content">{cuenta.responsable_nombre}</div>
-                  <div className="text-body text-content mt-2">{cuenta.item_descripcion || '—'}</div>
+                  <div className="text-body text-content mt-2">
+                    {cuenta.items_count && cuenta.items_count > 1 ? `${cuenta.items_count} conceptos` : cuenta.item_descripcion || '—'}
+                  </div>
                   <div className="flex justify-between text-content mt-3 pt-3 border-t border-hairline">
                     <span className="text-subtext">Pagado / Total</span>
                     <span className="text-ink font-bold">${fmt(saldoPagado)} / ${fmt(montoTotal)}</span>

@@ -47,13 +47,18 @@ export interface BuscarCuentasPagarResult {
 }
 
 /**
- * EF-3 3B-3: busqueda/paginacion/totales server-side via RPC unica
- * (db/migrations/20260914_buscar_cuentas_pagar.sql) -- reemplaza el
- * filtrado en JS sobre getCuentasPagar() (que además trae solo las
- * últimas 500 filas).
+ * Bloque 6 (docs/PLAN.md, agrupación de Cuentas por Pagar): fuente de la
+ * vista "Lista" via RPC unica buscar_cuentas_pagar_grupos
+ * (db/migrations/20260918_buscar_cuentas_pagar_grupos.sql) -- reemplaza a
+ * buscar_cuentas_pagar (db/migrations/20260914_buscar_cuentas_pagar.sql,
+ * se deja desplegada sin caller, mismo patrón de limpieza que
+ * getCuentasPagarPendientesEventosRealizados del Bloque 3). Cada fila es un
+ * grupo real (cuentas_pagar_grupos, con estado/x_pagar/monto_pagado del
+ * grupo) o una cuenta_pagar legacy sin grupo_id -- nunca items sueltos de un
+ * grupo ya existente.
  */
-export async function buscarCuentasPagar(search: string | null, page: number, pageSize: number) {
-  const { data, error } = await supabaseAdmin.rpc('buscar_cuentas_pagar', {
+export async function buscarCuentasPagarGrupos(search: string | null, page: number, pageSize: number) {
+  const { data, error } = await supabaseAdmin.rpc('buscar_cuentas_pagar_grupos', {
     p_search: search,
     p_page: page,
     p_page_size: pageSize,

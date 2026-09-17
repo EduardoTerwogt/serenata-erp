@@ -307,7 +307,7 @@ export interface CuentaPagar {
   correo: string | null
   clabe: string | null
   banco: string | null
-  estado: EstadoCuentaPagar
+  estado: EstadoCuentaPagar | EstadoCuentaPagarGrupo
   folio?: string
   fecha_factura?: string | null
   fecha_vencimiento?: string | null
@@ -319,6 +319,15 @@ export interface CuentaPagar {
   updated_at?: string
   created_at?: string
   grupo_id?: string | null
+  // Bloque 6 (docs/PLAN.md): poblados por buscar_cuentas_pagar_grupos()
+  // cuando la fila representa un grupo real en vez de un item suelto.
+  es_grupo?: boolean
+  items_count?: number
+  // Bloque 6: poblados por cuentas_por_proyecto() (LEFT JOIN a
+  // cuentas_pagar_grupos), null cuando el item no tiene grupo_id todavía.
+  grupo_estado?: EstadoCuentaPagarGrupo | null
+  grupo_monto_total?: number | null
+  grupo_monto_pagado?: number | null
 }
 
 // Agrupa cuentas_pagar del mismo proveedor dentro del mismo proyecto para

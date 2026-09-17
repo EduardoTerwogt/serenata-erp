@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(),
-  buscarCuentasPagarMock: vi.fn(),
+  buscarCuentasPagarGruposMock: vi.fn(),
   updateCuentaPagarMock: vi.fn(),
 }))
 
@@ -11,7 +11,7 @@ vi.mock('@/lib/api-auth', () => ({
 }))
 
 vi.mock('@/lib/db', () => ({
-  buscarCuentasPagar: mocks.buscarCuentasPagarMock,
+  buscarCuentasPagarGrupos: mocks.buscarCuentasPagarGruposMock,
   updateCuentaPagar: mocks.updateCuentaPagarMock,
 }))
 
@@ -26,7 +26,7 @@ function buildPutRequest(body: unknown) {
 
 beforeEach(() => {
   mocks.requireSectionMock.mockReset().mockResolvedValue({ response: null })
-  mocks.buscarCuentasPagarMock.mockReset().mockResolvedValue({
+  mocks.buscarCuentasPagarGruposMock.mockReset().mockResolvedValue({
     rows: [{ id: 'c1', estado: 'PENDIENTE' }],
     total_rows: 1,
     total_monto_pendiente: 0,
@@ -36,13 +36,13 @@ beforeEach(() => {
   mocks.updateCuentaPagarMock.mockReset().mockResolvedValue({ id: 'cuenta-1', notas: 'ok' })
 })
 
-// EF-3 3B-3: GET delega busqueda/paginacion/totales a la RPC unica
-// buscar_cuentas_pagar (via buscarCuentasPagar()) -- ya no llama
-// getCuentasPagar() (arreglo completo con .limit(500)).
+// Bloque 6: GET delega busqueda/paginacion/totales a la RPC unica
+// buscar_cuentas_pagar_grupos (via buscarCuentasPagarGrupos()) -- una fila
+// por grupo/responsable, no por item.
 describe('GET /api/cuentas-pagar', () => {
-  it('llama buscarCuentasPagar con los defaults cuando no hay querystring', async () => {
+  it('llama buscarCuentasPagarGrupos con los defaults cuando no hay querystring', async () => {
     const res = await GET(new Request('http://localhost/api/cuentas-pagar'))
-    expect(mocks.buscarCuentasPagarMock).toHaveBeenCalledWith(null, 1, 50)
+    expect(mocks.buscarCuentasPagarGruposMock).toHaveBeenCalledWith(null, 1, 50)
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toEqual({
@@ -56,11 +56,11 @@ describe('GET /api/cuentas-pagar', () => {
 
   it('parsea search/page/pageSize del querystring', async () => {
     await GET(new Request('http://localhost/api/cuentas-pagar?search=ITEM_01&page=2&pageSize=20'))
-    expect(mocks.buscarCuentasPagarMock).toHaveBeenCalledWith('ITEM_01', 2, 20)
+    expect(mocks.buscarCuentasPagarGruposMock).toHaveBeenCalledWith('ITEM_01', 2, 20)
   })
 
   it('responde 500 sin exponer el error interno si la RPC falla', async () => {
-    mocks.buscarCuentasPagarMock.mockRejectedValueOnce(new Error('db down'))
+    mocks.buscarCuentasPagarGruposMock.mockRejectedValueOnce(new Error('db down'))
     const res = await GET(new Request('http://localhost/api/cuentas-pagar'))
     expect(res.status).toBe(500)
     const body = await res.json()
