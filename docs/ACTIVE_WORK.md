@@ -26,43 +26,48 @@ Historia completa de cada una:
 `docs/ROADMAP.md` no tiene todavía una próxima iniciativa comprometida —
 se prioriza en Chat con el estado real del sistema a la vista.
 
+**F28 — RESUELTO** (race de concurrencia en la rotación del cookie de sesión de
+`next-auth`), PR [#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71)
+mergeado. Detalle completo:
+[`docs/decisions/010-f28-diferir-race-cookie-nextauth.md`](decisions/010-f28-diferir-race-cookie-nextauth.md).
+
 ## Completado en esta sesión (2026-09-17)
 
-**F28 — RESUELTO**, en la misma sesión en que se documentó el
-diferimiento (el hallazgo era de EF-3 3E-1, pero EF-3 ya estaba cerrado
-antes de esta sesión — este trabajo fue aparte, no reabrió esa
-iniciativa). Race de concurrencia real en la rotación del cookie de
-sesión de `next-auth` bajo requests verdaderamente simultáneos a la
-misma sesión ([`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897),
-sigue abierto upstream sin fix).
+**Workflow de `docs/PLAN.md` para coordinar entre cuentas de Claude distintas**,
+PR [#72](https://github.com/EduardoTerwogt/serenata-erp/pull/72) (mergeado).
 
-- **Causa raíz** (verificada línea por línea contra el código fuente
-  instalado de `@auth/core`, no solo inferida): `auth()` usado como
-  middleware en `proxy.ts` invoca la acción `session()` de `@auth/core`,
-  que para `strategy: 'jwt'` siempre re-firma y reemite `Set-Cookie` en
-  cada invocación exitosa, sin throttle de `updateAge`. El vector real y
-  único confirmado era ese middleware, no `lib/api-auth.ts` (su `auth()`
-  sin argumentos ya descartaba el `Set-Cookie` en silencio).
-- **Fix:** PR [#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71)
-  (mergeado, commit `136fee9`) — `proxy.ts`/`lib/proxy-handler.ts` y
-  `lib/api-auth.ts` dejan de envolver con `auth()` y usan `getToken()`
-  (nuevo `lib/session-token.ts`), que decodifica sin efectos
-  secundarios y nunca emite `Set-Cookie`. La revocación real contra
-  Postgres (`getUsuarioSessionState`) no se tocó.
-- **Tests ejecutados y resultado real:** `tsc --noEmit` limpio, `lint`
-  sin errores nuevos, `npm test` 833/833 en verde, suite `e2e.yml`
-  completa (`smoke-and-critical` + `live`) en verde en el PR y de nuevo
-  en `main` tras el merge. Test de regresión nuevo,
-  `tests/e2e/live/staff-session-concurrent-rotation.spec.ts` (15
-  requests genuinamente concurrentes contra la misma sesión real): en
-  verde contra `main`. `load-test.yml` completo (`local` + `serverless`)
-  por `workflow_dispatch` contra `main`: verde (el primer intento se
-  topó con un rate-limit de build de la cuenta de Vercel, ajeno al
-  diff, resuelto solo unas horas después).
-- Detalle completo, causa raíz exacta y verificación:
-  [`docs/decisions/010-f28-diferir-race-cookie-nextauth.md`](decisions/010-f28-diferir-race-cookie-nextauth.md).
-  `ARCHITECTURE.md` (capa de auth y gotcha de F28) actualizado para
-  reflejar el mecanismo nuevo.
+- **Motivación:** con varias cuentas de Claude trabajando el mismo repo, la
+  memoria automática es local a cada cuenta/máquina — el repo es el único canal
+  real de contexto compartido. Antes, el tracker de una iniciativa grande usaba
+  un nombre distinto cada vez (ej. `docs/EF-3_ENGINEERING_HARDENING.md`), lo que
+  dejó referencias muertas en los skills y en `ARCHITECTURE.md` tras archivarse.
+- **`docs/PLAN.md`** (nuevo): nombre fijo para el tracker de la iniciativa
+  multi-sesión activa. Nace como borrador desde la primera idea confirmada (no
+  cuando el plan ya está terminado), se refina en vivo, se ejecuta bloque por
+  bloque, y se archiva con `git mv` a `docs/archive/<slug>.md` al cerrar. Ciclo
+  de vida completo documentado dentro del propio archivo.
+- Referencias a `docs/PLAN.md` agregadas en `CLAUDE.md`, `README.md`, `AGENTS.md`,
+  `docs/ROADMAP.md`, `docs/PROMPTS.md` y ambos skills de sesión
+  (`serenata-iniciar-fase`, `serenata-cerrar-sesion`).
+- **`CLAUDE.md` optimizado:** 229 → 166 líneas (bajo el límite de 200
+  recomendado por la doc de Claude Code). Detalle de git movido a
+  `.claude/rules/git.md` (carga siempre, sin pérdida de contexto). Principios
+  críticos, patrones obligatorios y reglas de negocio invariables intactos.
+- **Limpieza de referencias muertas a la ruta vieja de EF-3**
+  (`docs/EF-3_ENGINEERING_HARDENING.md` → `docs/archive/ef-3-engineering-hardening.md`):
+  3 en documentación (`ARCHITECTURE.md` y ambos skills) + ~11 en comentarios de
+  código/tests (k6, repos de proyectos/proveedores, `env-check`,
+  `useQuotationBusinessActions`, `test.yml`). Sin tocar
+  `scripts/validate-ef3-tracker.mjs` ni su test a propósito — `TRACKER_PATHS`
+  prueba ambas rutas como fallback intencional.
+- **Autorizado explícitamente por el usuario:** la excepción doc-only (push
+  directo a `main`) aplica igual en sesiones de Claude Code remotas/en la nube,
+  documentado en `.claude/rules/git.md`.
+- **Tests ejecutados y resultado real:** `tsc --noEmit` limpio, `lint` sin
+  errores nuevos (8 warnings preexistentes, ninguno en archivos tocados),
+  `vitest` 46/46 en los 5 archivos de test tocados. CI del PR en verde:
+  `test`, `tracker-lint`, `smoke-and-critical`, `fresh-db`, `live`, Vercel
+  (preview + comments).
 
 ## Deuda técnica
 
@@ -100,11 +105,6 @@ sigue abierto upstream sin fix).
 - **`SUPABASE_JWT_SECRET` con valores distintos entre "Production" y
   "Preview" en Vercel producción** — sin investigar el porqué. No se
   tocó, solo anotado. (Arrastrado.)
-- **RESUELTO (2026-09-17):** los comentarios de código que citaban la ruta vieja
-  `docs/EF-3_ENGINEERING_HARDENING.md` ya apuntan a
-  `docs/archive/ef-3-engineering-hardening.md`. Quedan intencionalmente sin tocar
-  `scripts/validate-ef3-tracker.mjs` y su test — `TRACKER_PATHS` prueba a propósito
-  ambas rutas (activa y archivada) y el test verifica ese fallback, no está roto.
 - **Pendiente, requiere decisión de arquitectura (no de esta sesión):** el job
   `tracker-lint` de `.github/workflows/test.yml` sigue corriendo en cada PR
   validando específicamente los 40 bloques de EF-3, una iniciativa ya cerrada para
@@ -128,14 +128,10 @@ sigue abierto upstream sin fix).
 
 ## Siguiente paso
 
-Ninguna iniciativa de Engineering Hardening en curso, ni ningún trabajo
-abierto de esta sesión. La próxima sesión que arranque
+Ninguna iniciativa en curso, ni ningún trabajo abierto de esta sesión.
+`docs/PLAN.md` está vacío. La próxima sesión que arranque
 (`serenata-iniciar-fase`) debe priorizar contra `docs/ROADMAP.md`
 (sección "Después") con el estado real del sistema a la vista, no
-asumir que hay trabajo pendiente por default.
-
-`docs/PLAN.md` está vacío — no hay ninguna iniciativa multi-sesión en
-definición ni en curso. Si la próxima sesión confirma una idea con alcance
-de iniciativa, debe llenar `docs/PLAN.md` desde el primer borrador (ver su
-propio "Ciclo de vida") y anotar aquí una línea apuntando a él, para que
-cualquier otra cuenta de Claude que abra sesión mientras tanto lo vea.
+asumir que hay trabajo pendiente por default. Si confirma una idea con
+alcance de iniciativa, debe llenar `docs/PLAN.md` desde el primer borrador
+(ver su "Ciclo de vida") y anotar aquí una línea apuntando a él.
