@@ -1,7 +1,14 @@
-import { auth } from '@/auth'
+import type { NextRequest } from 'next/server'
+import { getEdgeSessionToken } from '@/lib/session-token'
 import { proxyHandler } from '@/lib/proxy-handler'
 
-export default auth(proxyHandler)
+// F28: ya no se envuelve con `auth()` -- ver `lib/session-token.ts` para el
+// porqué (auth() como middleware reemite el cookie de sesión en cada
+// invocación, causa raíz de la race de rotación bajo concurrencia real).
+export default async function middleware(req: NextRequest) {
+  const token = await getEdgeSessionToken(req)
+  return proxyHandler(req, token)
+}
 
 export const config = {
   // Excluye también archivos estáticos de public/ (svg/png/jpg/etc) -- el

@@ -1,14 +1,20 @@
 import type { AppSection } from '@/lib/auth-callbacks'
 import { getUserSections, hasAnySection } from '@/lib/authz'
 import { NextResponse } from 'next/server'
-import type { NextAuthRequest } from 'next-auth'
+import type { NextRequest } from 'next/server'
+import type { SessionTokenClaims } from '@/lib/session-token'
 
 /**
  * EF-2 1B-2b: la lógica de `proxy.ts` vive aquí, no en `proxy.ts` mismo,
  * para poder testearla (`__tests__/proxy.test.ts`) sin importar `@/auth`
  * -- `NextAuth({...})` transitivamente carga `next/server` de una forma
  * que Vitest no resuelve bajo Next 16. `proxy.ts` queda como un wrapper
- * fino: `export default auth(proxyHandler)`.
+ * fino que decodifica el token (`lib/session-token.ts`) y llama aquí.
+ *
+ * F28: `req` es un `NextRequest` plano, no el `NextAuthRequest` que
+ * envolvía `auth()` -- el token de sesión llega ya decodificado como
+ * segundo argumento (ver `proxy.ts`), sin que este proxy dependa de
+ * `auth()` ni pueda reemitir el cookie de sesión.
  */
 
 type SectionRule = {
@@ -84,11 +90,11 @@ function getFirstAllowedPath(sections: string[]) {
   return rule?.prefix ?? '/login'
 }
 
-function shouldBypassForE2E(req: NextAuthRequest) {
+function shouldBypassForE2E(req: NextRequest) {
   return process.env.PLAYWRIGHT_E2E_BYPASS === 'true' && req.cookies.get(E2E_BYPASS_COOKIE)?.value === '1'
 }
 
-function unauthenticatedResponse(req: NextAuthRequest, pathname: string, isApiRoute: boolean) {
+function unauthenticatedResponse(req: NextRequest, pathname: string, isApiRoute: boolean) {
   if (isApiRoute) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   }
@@ -97,7 +103,7 @@ function unauthenticatedResponse(req: NextAuthRequest, pathname: string, isApiRo
   return NextResponse.redirect(loginUrl)
 }
 
-export function proxyHandler(req: NextAuthRequest) {
+export function proxyHandler(req: NextRequest, token: SessionTokenClaims | null) {
   const { pathname } = req.nextUrl
   const isApiRoute = pathname.startsWith('/api/')
 
@@ -109,7 +115,7 @@ export function proxyHandler(req: NextAuthRequest) {
     return NextResponse.next()
   }
 
-  if (!req.auth?.user) {
+  if (!token) {
     return unauthenticatedResponse(req, pathname, isApiRoute)
   }
 
@@ -117,16 +123,15 @@ export function proxyHandler(req: NextAuthRequest) {
   // runtime donde corre este proxy no debe pagar un round-trip a la base
   // en cada navegación de página (eso ya lo hace `requireAuthenticated()`,
   // una vez por request de API). Un JWT firmado antes de este despliegue
-  // no trae el claim `sessionVersion` -- tratarlo como no autenticado
+  // no trae el claim `session_version` -- tratarlo como no autenticado
   // fuerza un login limpio que sí lo emite. La revocación real (usuario
   // desactivado/cambiado a mitad de sesión) se detecta recién en la
   // siguiente llamada a una API route protegida.
-  const userClaims = req.auth.user as { sessionVersion?: number }
-  if (!Number.isInteger(userClaims.sessionVersion) || userClaims.sessionVersion! < 0) {
+  if (!Number.isInteger(token.session_version) || token.session_version! < 0) {
     return unauthenticatedResponse(req, pathname, isApiRoute)
   }
 
-  const sections = getUserSections(req.auth.user as { sections?: string[] })
+  const sections = getUserSections(token)
 
   if (!isApiRoute && pathname === '/') {
     return NextResponse.redirect(new URL(getFirstAllowedPath(sections), req.url))
