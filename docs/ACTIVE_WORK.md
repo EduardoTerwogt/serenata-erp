@@ -26,21 +26,29 @@ Historia completa de cada una:
 `docs/ROADMAP.md` no tiene todavía una próxima iniciativa comprometida —
 se prioriza en Chat con el estado real del sistema a la vista.
 
-**Un hallazgo real de EF-3 queda diferido, no resuelto — F28.** Race de
-concurrencia real en la rotación del cookie de sesión de `next-auth` bajo
-requests verdaderamente simultáneos a la misma sesión
-([`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897)).
-Causa `http_req_failed` >1% en 6 de 8 escenarios del gate de carga de
-3E-1 (duración/latencia sí pasa siempre). Root-caused a fondo
-(cliente k6, infra edge/multi-región de Vercel y cold-start descartados
-uno por uno) y **diferido con aprobación explícita del usuario
-(2026-09-17)** — gatillo angosto, no bloquea nada de lo ya entregado.
-Fix (upgrade de `next-auth` o ajuste de `session.updateAge`/config de
-rotación) sin bloque ni fecha asignados — candidato real para la próxima
-iniciativa que se priorice. Detalle completo en
-`docs/archive/ef-3-baseline-final.md`, en la matriz de hallazgos del
-tracker archivado (fila F28, fila condicional `3E-1b`), y en
+**F28 — RESUELTO (2026-09-17), en la misma sesión en que se documentó el
+diferimiento.** Race de concurrencia real en la rotación del cookie de
+sesión de `next-auth` bajo requests verdaderamente simultáneos a la misma
+sesión ([`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897),
+sigue abierto upstream sin fix). Causa raíz real (verificada contra el
+código fuente instalado de `@auth/core`): `auth()` usado como middleware
+en `proxy.ts` reemitía el cookie de sesión en cada invocación exitosa,
+sin throttle para `strategy: 'jwt'`. Fix: PR
+[#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71) (mergeado,
+commit `136fee9`) — `proxy.ts`/`lib/api-auth.ts` migran a `getToken()`
+(decodifica sin reemitir `Set-Cookie`, nuevo `lib/session-token.ts`).
+Verificado con un test e2e nuevo (`staff-session-concurrent-rotation.spec.ts`,
+15 requests concurrentes reales) en verde contra el entorno de test real.
+Detalle completo, causa raíz exacta y verificación en
 [`docs/decisions/010-f28-diferir-race-cookie-nextauth.md`](decisions/010-f28-diferir-race-cookie-nextauth.md).
+
+**Pendiente menor, no bloqueante:** re-correr `load-test.yml` por
+`workflow_dispatch` contra `136fee9` una vez se levante el límite de
+build de la cuenta de Vercel (`pin-loadtest-target` se topó con
+`Deployment rate limited — retry in 24 hours` el 2026-09-17 ~04:22 UTC,
+infra de cuenta, no del diff) — confirmación a escala de carga real del
+job `serverless`, que no llegó a correr. El job `local` (build real +
+smoke de los 9 escenarios k6) sí corrió limpio contra el fix.
 
 ## Pendiente de limpieza manual (no bloquea nada)
 
@@ -63,8 +71,6 @@ tracker archivado (fila F28, fila condicional `3E-1b`), y en
   duplicado. Siguen pendientes, sin plan asignado.
 - **Evento `bulk` de Realtime descartado en silencio** (Frente B de la
   auditoría) — tampoco fue parte del alcance de EF-3. Sigue sin tocar.
-- **F28 (ver arriba)** — diferido con aprobación explícita, sin bloque ni
-  fecha.
 - **Modo de uso de `scripts/check-schema-parity.mjs`:** ¿paso manual
   obligatorio antes de mergear a `main`, o workflow de GitHub Actions
   separado? Decisión del usuario, sin urgencia. (Arrastrado.)
