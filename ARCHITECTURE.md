@@ -315,7 +315,7 @@ evidencia, no cuenta como terminado.
 | Dashboard (incluye gastos fijos) | `lib/server/repositories/dashboard.ts` + sus tests |
 | Revocación de sesión de staff (`session_version`) | `__tests__/proxy.test.ts`, `__tests__/auth-callbacks.test.ts`, `lib/__tests__/api-auth.test.ts`, `tests/e2e/live/staff-session-revocation.spec.ts` |
 | Resiliencia de Realtime (backoff, convergencia en remount, refresco de token) | `lib/realtime/__tests__/useRealtimeChannel.test.ts`, `tests/e2e/live/realtime-channel-reconnection.spec.ts` |
-| Infraestructura de carga real (k6, targets local/serverless, identidades de staff/Portal, volumen sembrado, cleanup por `runId` en Postgres+Drive, telemetría de `pg_stat_statements`) | `docs/EF-3_ENGINEERING_HARDENING.md` §11 (3A-1..3A-6), `docs/archive/ef-3-baseline-previo.md` |
+| Infraestructura de carga real (k6, targets local/serverless, identidades de staff/Portal, volumen sembrado, cleanup por `runId` en Postgres+Drive, telemetría de `pg_stat_statements`) | `docs/archive/ef-3-engineering-hardening.md` §11 (3A-1..3A-6), `docs/archive/ef-3-baseline-previo.md` |
 
 **Edición colaborativa de cotizaciones: READY.** La auditoría de Fase 8 dejó cinco
 huecos abiertos, cerrados en la Fase 8.7: flush real previo a toda transición de

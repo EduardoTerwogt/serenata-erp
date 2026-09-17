@@ -160,3 +160,12 @@ sesión, agrega un módulo/feature o cambia una capa/arquitectura, entra primero
 **Siguiente** o **Después** antes de arrancar. Si es un ajuste puntual de una sola
 sesión, se trabaja directo sin tocar este documento y solo queda registrado en
 `docs/ACTIVE_WORK.md` al cerrar.
+
+**Iniciativas grandes (varias sesiones/bloques) usan `docs/PLAN.md`** como tracker
+de nombre fijo — no un archivo nuevo por iniciativa. Nace como borrador desde la
+primera idea confirmada (antes de que el plan esté terminado, para que sea visible
+entre cuentas de Claude distintas), se refina en vivo editando el archivo, se
+ejecuta bloque por bloque, y al cerrar la iniciativa se archiva con `git mv` a
+`docs/archive/<slug-descriptivo>.md` — mismo patrón que usó Engineering Hardening,
+con nombre fijo en vez de uno por iniciativa. Detalle completo del ciclo en el
+propio `docs/PLAN.md`.

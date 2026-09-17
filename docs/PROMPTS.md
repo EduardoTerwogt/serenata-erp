@@ -5,8 +5,12 @@ Los prompts para trabajar en este repo desde Claude Code. Copiar tal cual.
 **No hace falta pegar contexto.** `CLAUDE.md` se carga automáticamente en cada
 sesión de Claude Code — principios críticos, reglas de git, autonomía, regla de
 producción de Supabase y patrones obligatorios ya están ahí sin pedirlos. Las reglas
-de `.claude/rules/` entran solas al leer un archivo de esa ruta. Por eso los prompts
-de abajo solo apuntan a `docs/ACTIVE_WORK.md`: es lo único que cambia entre sesiones.
+de `.claude/rules/` entran solas al leer un archivo de esa ruta (`git.md` carga
+siempre). Por eso los prompts de abajo apuntan a `docs/ACTIVE_WORK.md` (lo que
+cambia entre sesiones) y a `docs/PLAN.md` cuando hay una iniciativa multi-sesión en
+borrador, refinamiento o ejecución — es el único canal real entre cuentas de Claude
+distintas, porque la memoria automática es local a cada cuenta/máquina y no se
+comparte entre ellas.
 
 ---
 
@@ -52,6 +56,31 @@ introduce y cómo vamos a demostrar que funciona.
 
 ```
 Estoy de acuerdo con [X], pero quiero que [Y]. Ajusta el plan para soportar eso.
+```
+
+## Arrancar una idea nueva (todavía sin plan)
+
+```
+Tengo una idea nueva: [descripción]. Audítala contra el código real y
+clasifícala contra @docs/ROADMAP.md. Si tiene alcance de iniciativa (más de
+una sesión), abre @docs/PLAN.md con un primer borrador — contexto, opciones,
+bloques propuestos — y pushéalo de inmediato aunque no esté terminado. No
+implementes todavía.
+```
+
+## Continuar el loop de refinamiento de un plan en borrador
+
+```
+Sigue refinando @docs/PLAN.md. Estado actual: [ajuste/pregunta]. Actualiza el
+archivo directamente, no solo me respondas en el chat, y pushea cada vuelta.
+```
+
+## Ejecutar un plan ya aprobado (posiblemente desde otra cuenta)
+
+```
+@docs/PLAN.md está aprobado. Ejecuta el siguiente bloque pendiente según su
+tracker y grafo de dependencias. Actualiza el tracker del propio
+@docs/PLAN.md al cerrar cada bloque, no solo @docs/ACTIVE_WORK.md.
 ```
 
 ## Ejecutar un bloque aprobado
@@ -112,6 +141,7 @@ debugging resuelto y commitea.
 | `docs/ROADMAP.md` | Chat — es dirección de producto |
 | `docs/ACTIVE_WORK.md` (initiative, objetivo, necesidad de negocio, no decidido) | Chat — es producto |
 | `docs/ACTIVE_WORK.md` (estado, bloques cerrados, tests, siguiente paso) | Code, al cerrar sesión |
+| `docs/PLAN.md` (borrador, refinamiento, tracker de ejecución) | Chat inicia el borrador; Code lo refina y mantiene el tracker durante la ejecución |
 | `ARCHITECTURE.md`, `docs/decisions/`, `.claude/rules/` | Code, al cerrar sesión |
 | `DESIGN_SYSTEM.md` y el design kit | Design decide, Code persiste |
 

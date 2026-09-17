@@ -6,8 +6,7 @@ portal de proveedores y extracción AI de eventos.
 
 - **App:** https://serenata-erp.vercel.app · **Repo:** https://github.com/EduardoTerwogt/serenata-erp
 - **Rama:** `main` (única) · push a `main` = deploy automático en Vercel
-- **Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 ·
-  Supabase (PostgreSQL: cliente directo + RPCs) · NextAuth v5 · Vercel
+- **Stack:** ver `package.json` (Next.js App Router, Supabase, NextAuth, Tailwind).
 
 ---
 
@@ -18,6 +17,7 @@ Este archivo es **manual de entrada + índice**. Lo específico vive en su lugar
 | Pregunta | Documento |
 |---|---|
 | ¿Qué estamos haciendo ahora? | `docs/ACTIVE_WORK.md` ← **empezar aquí cada sesión** |
+| ¿Hay una iniciativa multi-sesión en definición o en curso? | `docs/PLAN.md` |
 | ¿Hacia dónde vamos? | `docs/ROADMAP.md` |
 | ¿Cómo está construido y qué funciona hoy? | `ARCHITECTURE.md` |
 | ¿Por qué se decidió así? | `docs/decisions/` |
@@ -27,7 +27,8 @@ Este archivo es **manual de entrada + índice**. Lo específico vive en su lugar
 | ¿Qué prompt uso para X? | `docs/PROMPTS.md` |
 
 Las reglas por tipo de archivo (API, migraciones, Realtime, UI, PDF) viven en
-`.claude/rules/` y se cargan solas al **leer** un archivo de esa ruta. No repetirlas
+`.claude/rules/` y se cargan solas al **leer** un archivo de esa ruta;
+`.claude/rules/git.md` no tiene `paths:`, así que carga siempre. No repetirlas
 aquí — con la excepción de abajo.
 
 ### Patrones obligatorios al crear archivos nuevos
@@ -63,70 +64,14 @@ El detalle completo de cada uno está en `.claude/rules/`.
 
 ---
 
-## Git — setup y reglas
+## Git — rama, PR y setup
 
-```bash
-git config --global user.name "EduardoTerwogt"
-git config --global user.email "eduardoterwogth@gmail.com"
-source /home/user/serenata-erp/.env.local.tokens 2>/dev/null
-git remote set-url origin https://${GITHUB_TOKEN}@github.com/EduardoTerwogt/serenata-erp.git
+Detalle completo (setup de sesión, ciclo rama+PR, excepción doc-only) en
+`.claude/rules/git.md` — carga siempre, igual que este archivo.
 
-# main local siempre = main real de GitHub, nunca al revés. Seguro porque bajo este
-# flujo main local no debe cargar commits propios (todo pasa por rama+PR o por el
-# push directo de la excepción de doc-only, que nunca toca la rama local `main`).
-git fetch origin main
-git branch -f main origin/main
-```
-
-**El correo lleva "h" al final.** `eduardoterwogt@gmail.com` (sin "h") no corresponde
-a ninguna cuenta de GitHub y Vercel rechaza el deploy con "could not be matched to a
-GitHub account". Ya pasó una vez; no volver a quitarla.
-
-`.env.local.tokens` está en `.gitignore` y no viaja en el repo: en un entorno nuevo
-hay que crearlo con el `GITHUB_TOKEN` que dé el usuario.
-
-### Rama + PR, merge al final
-
-**Se trabaja en rama dedicada, nunca directo sobre `main`.** El merge a `main` ocurre
-solo cuando el trabajo está terminado y todas las suites pasaron. `main` siempre debe
-ser una versión desplegable.
-
-**Excepción — solo documentación:** si el diff completo toca **únicamente archivos
-`.md`** — cualquiera del repo, sin excepción: `CLAUDE.md`, `README.md`,
-`ARCHITECTURE.md`, `TESTING.md`, `DESIGN_SYSTEM.md`, lo que sea bajo `docs/`,
-`.claude/skills/*/SKILL.md`, `.claude/rules/*.md`, etc. — cero código de la app,
-migraciones, config o scripts — se commitea y pushea **directo a `main`**, sin rama
-ni PR. Un `.md` no lo ejecuta el build ni los tests, así que no hay CI real que
-perderse. Si el diff toca aunque sea un archivo que no sea `.md`, deja de aplicar la
-excepción y todo el cambio (incluida la parte de documentación) sigue el flujo
-normal de rama + PR.
-
-```bash
-git fetch origin main
-git branch -f main origin/main       # por si el setup de sesión no corrió antes
-git switch -c <rama-de-trabajo> origin/main   # o git switch <rama> si ya existe
-```
-
-**Un push a la rama sin PR abierto no corre CI.** `test.yml`, `e2e.yml` y
-`migrations.yml` solo se disparan por evento de Pull Request o por push a `main` —
-nunca por un push simple a una rama. En cuanto exista el primer commit útil de la
-rama, abrir el PR hacia `main` **en borrador**, precisamente para que cada push
-subsecuente dispare los workflows reales. No esperar a terminar el trabajo para
-abrirlo.
-
-- **Nunca `git reset --hard` automático.** Destruye trabajo local sin aviso. Si el
-  árbol está sucio, `git status` primero y preguntar.
-- Commit + push a la rama después de cada cambio funcional terminado. Pushear a una
-  rama es seguro: no despliega ni mergea nada.
-- **Antes del merge:** todas las suites verdes en el PR y el Preview de Vercel
-  desplegando bien. Que el push haya tenido éxito no prueba nada — y si nunca se
-  abrió el PR, esas suites nunca corrieron.
-- `origin/main` es la verdad para el punto de partida de una rama, no para
-  sobrescribir la rama en la que estás trabajando.
-- **Ejecución entre sesiones:** una sesión nueva con tareas en cola de una sesión
-  anterior NUNCA las ejecuta ni pushea al abrir — confirmar primero.
-  `.claude/hooks/pre-push-gate.mjs` bloquea el primer push **a `main`** de cada sesión
-  para forzar esa pausa; los pushes a ramas pasan sin fricción.
+**Resumen:** rama dedicada + PR en borrador desde el primer commit útil; merge a
+`main` solo cuando todo está en verde. Si el diff completo es solo `.md`, commit +
+push **directo a `main`**, sin rama ni PR. Nunca `git reset --hard` automático.
 
 ## Autonomía de ejecución
 
@@ -134,16 +79,13 @@ Un cambio está **pre-aprobado** —se ejecuta sin pausar— si cumple las 4 con
 (1) ya se revisó, (2) no altera funcionalidad existente como efecto secundario,
 (3) no elimina features, (4) no bloquea features; y sus tests ya corrieron en verde.
 
-Pedir aprobación **solo** ante una decisión de negocio, arquitectura o UX/UI que no
-esté clara o tenga más de un camino razonable. Fixes pequeños y seguros van directo
-— es decir, se ejecutan sin pausar a pedir permiso, pero **el destino del push sigue
-la sección "Rama + PR" de arriba**: rama + PR salvo que el cambio sea 100%
-documentación.
+Pedir aprobación **solo** ante una decisión de negocio, arquitectura o UX/UI sin
+camino claro. Fixes pequeños y seguros van directo, pero el destino del push sigue
+la sección "Git" de arriba: rama + PR salvo que el cambio sea 100% documentación.
 
-Un plan ya aprobado se ejecuta completo sin volver a pedir permiso, siempre que cada
-etapa pase sus tests y se verifique que lo pusheado quedó **en verde de verdad**
-(build, deploy y comportamiento real, incluido el job `live` de CI). Que el push
-tenga éxito no prueba nada.
+Un plan ya aprobado se ejecuta completo sin repreguntar, verificando en cada etapa
+que quedó **en verde de verdad** (build, deploy, comportamiento real, incluido el
+job `live`) — que el push tenga éxito no prueba nada.
 
 ---
 
@@ -187,12 +129,8 @@ Dos procedimientos fijos viven en `.claude/skills/`:
   verificar si `ARCHITECTURE.md` sigue siendo verdad, mover a `docs/decisions/` lo que
   alguien podría volver a cuestionar en seis meses, y purgar el debugging resuelto.
 
-El registro de slash commands se arma al arrancar la sesión, así que si el repo se
-actualiza después, `/serenata-iniciar-fase` puede no aparecer en el autocompletado
-aunque el archivo exista. **Eso no impide usarlas:** basta pedirlo en lenguaje natural
-("arranca la fase actual", "vamos a cerrar la sesión") o nombrarla ("usa la skill
-serenata-cerrar-sesion"). Si el comando no responde, leer el `SKILL.md` correspondiente
-y seguir el procedimiento.
+Si el autocompletado de `/serenata-iniciar-fase` no aparece, basta pedirlo en lenguaje
+natural — ver "Nota sobre los slash commands" en `docs/PROMPTS.md`.
 
 ---
 
