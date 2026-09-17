@@ -43,7 +43,7 @@ export const BASE_BLOCK_IDS = [
   '3E-1', '3E-2', '3E-3',
 ]
 
-export const CONDITIONAL_BLOCK_IDS = ['3B-7b', '3C-4b', '3D-0b']
+export const CONDITIONAL_BLOCK_IDS = ['3B-7b', '3C-4b', '3D-0b', '3E-1b']
 
 export const DOC_ONLY_BLOCK_IDS = ['3A-0', '3A-6', '3D-8', '3E-1', '3E-2', '3E-3']
 
