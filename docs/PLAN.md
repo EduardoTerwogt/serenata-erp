@@ -210,7 +210,7 @@ independientes; ADR nuevo `011-agrupacion-cuentas-pagar-por-proveedor-proyecto.m
 
 | Bloque | Estado | Rama/PR o Commit SHA | Nota |
 |---|---|---|---|
-| 1. Esquema + reconciliación | Pendiente | — | — |
+| 1. Esquema + reconciliación | En curso (PR abierto) | `claude/epic-davinci-1fj7ki`, migración `20260917_cuentas_pagar_grupos.sql` | Tabla + columnas + `reconcile_cuenta_pagar_grupo` aplicados y probados en `serenata-erp-test` (4 escenarios vía SQL directo: sin responsable, crea grupo, mismo grupo, rechazo `P1412` con rollback atómico verificado). Advisors de seguridad limpios (RLS habilitado). `tsc`/`lint`/`test` (833/833) en verde local. |
 | 2. Aprobación + reasignación | Pendiente | — | — |
 | 3. Facturación + pago + órdenes | Pendiente | — | — |
 | 4. Portal de Proveedores | Pendiente | — | — |
