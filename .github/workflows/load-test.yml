@@ -59,6 +59,11 @@ on:
         required: false
         type: boolean
         default: false
+      diag_cookies_forcejar:
+        description: 'THROWAWAY (EF-3 3E-1, diagnóstico F27b -- nunca mergeada a main): diag_cookies_concurrent reprodujo el 401 sostenido a solo 5 VUs/5s -- el cookie de sesión queda AUSENTE del jar de esa VU después de exactamente un uso exitoso (no un valor de otra VU: GitHub Actions enmascara el valor real, así que la comparación literal no fue posible). k6 no expone un constructor de jar nuevo (http.cookieJar() ya es per-VU por diseño, sin config "más explícita" que probar -- docs.k6.io bloqueado por policy de egress de este sandbox). Este diagnóstico en cambio parsea el Set-Cookie crudo a mano tras cada respuesta y lo fuerza al jar vía jar.set() (mismo principio que mergeCookies() de rest-login.mjs/env-check.mjs, último gana por nombre) bajo la MISMA concurrencia (5 VUs) que rompió con el jar 100% automático -- si esto arregla el 401 sostenido, confirma que el manejo automático del jar de k6 es la causa real y valida el patrón exacto del fix. ~1-2 min reales, no es carga'
+        required: false
+        type: boolean
+        default: false
 
 # Mismo group que e2e.yml -- ambos mutan serenata-erp-test y la misma
 # carpeta de Drive de test, así que GitHub Actions encola cualquier corrida
@@ -114,7 +119,7 @@ jobs:
           node scripts/loadtest/wait-for-deployment.mjs "${ARGS[@]}"
 
   local:
-    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies && !inputs.diag_cookies_concurrent }}
+    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies && !inputs.diag_cookies_concurrent && !inputs.diag_cookies_forcejar }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -249,7 +254,7 @@ jobs:
     # workflow_dispatch corrompería el ciclo de datos compartidos.
     # `pin-loadtest-target` sí corre en paralelo con `local` porque solo
     # prepara el deploy remoto, no toca datos compartidos.
-    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies && !inputs.diag_cookies_concurrent }}
+    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies && !inputs.diag_cookies_concurrent && !inputs.diag_cookies_forcejar }}
     needs: [pin-loadtest-target, local]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -446,6 +451,51 @@ jobs:
         run: k6 run --env TARGET_URL="$TARGET_URL" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/_diag-cookies-concurrent.js
 
   # ---------------------------------------------------------------------
+  # EF-3 3E-1 -- THROWAWAY, diagnóstico puntual de F27b (nunca mergeada a
+  # main): serverless-diag-cookies-concurrent reprodujo el 401 sostenido a
+  # solo 5 VUs/5s -- el cookie de sesión queda AUSENTE del jar de esa VU
+  # tras exactamente un uso exitoso. k6 no expone un jar nuevo/separado
+  # que crear (http.cookieJar() ya es per-VU por diseño). Esta corrida
+  # fuerza el Set-Cookie correcto al jar a mano tras cada respuesta
+  # (jar.set(), mismo principio que mergeCookies() de rest-login.mjs) bajo
+  # la MISMA concurrencia -- si arregla el 401 sostenido, confirma que el
+  # manejo automático del jar de k6 es la causa real.
+  serverless-diag-cookies-forcejar:
+    if: ${{ inputs.diag_cookies_forcejar }}
+    needs: [pin-loadtest-target]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+      TARGET_URL: ${{ secrets.LOADTEST_SERVERLESS_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: env-check -- confirmar que el deployment serverless apunta a serenata-erp-test
+        run: node scripts/loadtest/env-check.mjs --target-url "$TARGET_URL"
+
+      - name: Instalar k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: 3E-1 diag -- forzar Set-Cookie correcto al jar a mano, 5 VUs concurrentes (foreground)
+        run: k6 run --env TARGET_URL="$TARGET_URL" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/_diag-cookies-forcejar.js
+
+  # ---------------------------------------------------------------------
   # EF-3 3E-1 -- THROWAWAY, orquestación descartable (nunca mergeada a
   # main, ver docs/EF-3_ENGINEERING_HARDENING.md 3E-1 punto 1 y
   # docs/archive/ef-3-baseline-previo.md): ciclo real (no SMOKE) de los 8
@@ -464,7 +514,7 @@ jobs:
   # 3A-5/3A-6), y el snapshot "después"+deltas y el cleanup del runId
   # corren siempre (`if: always()`), pase lo que pase con los umbrales.
   local-full:
-    if: ${{ inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies && !inputs.diag_cookies_concurrent }}
+    if: ${{ inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies && !inputs.diag_cookies_concurrent && !inputs.diag_cookies_forcejar }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -669,7 +719,7 @@ jobs:
   serverless-full:
     # Corre DESPUÉS de local-full -- mismo motivo que serverless/local:
     # ambos mutan la misma serenata-erp-test compartida, sin solaparse.
-    if: ${{ inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies && !inputs.diag_cookies_concurrent }}
+    if: ${{ inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies && !inputs.diag_cookies_concurrent && !inputs.diag_cookies_forcejar }}
     needs: [pin-loadtest-target, local-full]
     runs-on: ubuntu-latest
     timeout-minutes: 45
