@@ -11,12 +11,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getJsonMock: vi.fn(),
+  sendFormDataMock: vi.fn(async () => ({ success: true })),
+  runIdempotentPagoSubmitMock: vi.fn(async (_params: Record<string, unknown>) => ({ success: true })),
 }))
 
 vi.mock('@/lib/client/api', () => ({
   getJson: mocks.getJsonMock,
-  sendFormData: vi.fn(),
+  sendFormData: mocks.sendFormDataMock,
   sendJson: vi.fn(),
+}))
+
+vi.mock('@/lib/client/pagoIdempotency', () => ({
+  runIdempotentPagoSubmit: mocks.runIdempotentPagoSubmitMock,
 }))
 
 import { useCuentasPagar } from '../useCuentasPagar'
@@ -36,6 +42,8 @@ beforeEach(() => {
   vi.useFakeTimers()
   mocks.getJsonMock.mockReset()
   mocks.getJsonMock.mockResolvedValue(respuestaVacia())
+  mocks.sendFormDataMock.mockClear()
+  mocks.runIdempotentPagoSubmitMock.mockClear()
 })
 
 afterEach(() => {
@@ -118,5 +126,85 @@ describe('useCuentasPagar - busqueda server-side', () => {
     act(() => { result.current.setBusqueda('item') })
     await flush(300)
     expect(result.current.page).toBe(1)
+  })
+})
+
+// docs/PLAN.md -- agrupación de Cuentas por Pagar: cuando la cuenta
+// pertenece a un grupo de facturación, factura y pago se piden/registran
+// sobre el grupo (endpoints hermanos bajo /grupos/[grupoId]/...), nunca
+// sobre el item individual.
+describe('useCuentasPagar - subirFactura/registrarPago con grupoId', () => {
+  it('subirFactura sin grupoId apunta al endpoint del item', async () => {
+    const { result } = renderHook(() => useCuentasPagar())
+    await flush()
+
+    await act(async () => {
+      await result.current.subirFactura('cuenta-1', new File([], 'x.xml'), new File([], 'x.pdf'))
+    })
+
+    expect(mocks.sendFormDataMock).toHaveBeenCalledWith(
+      '/api/cuentas-pagar/cuenta-1/subir-factura',
+      expect.any(FormData),
+      expect.any(String)
+    )
+  })
+
+  it('subirFactura con grupoId apunta al endpoint del grupo', async () => {
+    const { result } = renderHook(() => useCuentasPagar())
+    await flush()
+
+    await act(async () => {
+      await result.current.subirFactura('cuenta-1', new File([], 'x.xml'), new File([], 'x.pdf'), 'grupo-1')
+    })
+
+    expect(mocks.sendFormDataMock).toHaveBeenCalledWith(
+      '/api/cuentas-pagar/grupos/grupo-1/subir-factura',
+      expect.any(FormData),
+      expect.any(String)
+    )
+  })
+
+  it('registrarPago sin grupoId usa el dominio/scope del item', async () => {
+    const { result } = renderHook(() => useCuentasPagar())
+    await flush()
+
+    await act(async () => {
+      await result.current.registrarPago('cuenta-1', { monto: 100 })
+    })
+
+    expect(mocks.runIdempotentPagoSubmitMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'registrar-pago:cuentas-pagar:cuenta-1',
+        dominio: 'cuentas-pagar',
+        cuentaId: 'cuenta-1',
+      })
+    )
+  })
+
+  it('registrarPago con grupoId usa el dominio/scope del grupo y llama al endpoint del grupo', async () => {
+    const { result } = renderHook(() => useCuentasPagar())
+    await flush()
+
+    await act(async () => {
+      await result.current.registrarPago('cuenta-1', { monto: 100 }, 'grupo-1')
+    })
+
+    expect(mocks.runIdempotentPagoSubmitMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'registrar-pago:cuentas-pagar-grupos:grupo-1',
+        dominio: 'cuentas-pagar-grupos',
+        cuentaId: 'grupo-1',
+      })
+    )
+
+    // El `submit` inyectado es el que de verdad decide la URL -- se invoca
+    // manualmente para verificar que apunta al endpoint del grupo, no del item.
+    const call = mocks.runIdempotentPagoSubmitMock.mock.calls[0][0] as unknown as { submit: (args: { operationId: string }) => Promise<unknown> }
+    await call.submit({ operationId: 'op-1' })
+    expect(mocks.sendFormDataMock).toHaveBeenCalledWith(
+      '/api/cuentas-pagar/grupos/grupo-1/registrar-pago',
+      expect.any(FormData),
+      expect.any(String)
+    )
   })
 })

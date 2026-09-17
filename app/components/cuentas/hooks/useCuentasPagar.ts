@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { CuentaPagar, DocumentoCuentaPagar, OrdenPago, RegimenFiscal, HistorialCambioResponsableItem } from '@/lib/types'
+import { CuentaPagar, CuentaPagarGrupo, DocumentoCuentaPagar, OrdenPago, RegimenFiscal, HistorialCambioResponsableItem } from '@/lib/types'
 import { getJson, sendFormData, sendJson } from '@/lib/client/api'
 import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
 import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
@@ -15,6 +15,9 @@ interface CuentaPagarDetalle {
   documentos: DocumentoCuentaPagar[]
   orden_pago?: OrdenPago | null
   proveedor?: { regimen_fiscal: RegimenFiscal | null } | null
+  // Presente solo cuando la cuenta pertenece a un grupo de facturación
+  // (docs/PLAN.md) -- factura y pago pasan a operar sobre el total del grupo.
+  grupo?: CuentaPagarGrupo | null
   resumen: { monto_pagado: number; saldo_pendiente: number }
 }
 
@@ -161,28 +164,41 @@ export function useCuentasPagar() {
     return getJson('/api/cuentas-pagar/generar-orden-pago', 'Error al cargar preview de orden')
   }, [])
 
-  const subirFactura = useCallback(async (id: string, xml: File, pdf: File) => {
+  // grupoId presente -> la cuenta pertenece a un grupo de facturación
+  // (docs/PLAN.md): factura y pago se piden/registran sobre el grupo
+  // completo, nunca sobre este item individual.
+  const subirFactura = useCallback(async (id: string, xml: File, pdf: File, grupoId?: string | null) => {
     const formData = new FormData()
     formData.append('factura_proveedor_xml', xml)
     formData.append('factura_proveedor_pdf', pdf)
 
-    const result = await sendFormData(`/api/cuentas-pagar/${id}/subir-factura`, formData, 'Error al subir factura')
+    const url = grupoId
+      ? `/api/cuentas-pagar/grupos/${grupoId}/subir-factura`
+      : `/api/cuentas-pagar/${id}/subir-factura`
+    const result = await sendFormData(url, formData, 'Error al subir factura')
     await recargar()
     return result
   }, [recargar])
 
   const registrarPago = useCallback(async (
     id: string,
-    data: { monto: number; comprobante?: File }
+    data: { monto: number; comprobante?: File },
+    grupoId?: string | null
   ) => {
+    const dominio = grupoId ? 'cuentas-pagar-grupos' : 'cuentas-pagar'
+    const targetId = grupoId || id
+    const submitUrl = grupoId
+      ? `/api/cuentas-pagar/grupos/${grupoId}/registrar-pago`
+      : `/api/cuentas-pagar/${id}/registrar-pago`
+
     // 1E-3b: fingerprint sobre el comprobante ORIGINAL (data.comprobante,
     // antes de normalizar) + persistencia en localStorage antes del fetch --
     // ver lib/client/pagoIdempotency.ts para el orden exacto y las reglas
     // de limpieza (createdNow/reusedExisting, nunca tras un error post-fetch).
     const result = await runIdempotentPagoSubmit({
-      scope: `registrar-pago:cuentas-pagar:${id}`,
-      dominio: 'cuentas-pagar',
-      cuentaId: id,
+      scope: `registrar-pago:${dominio}:${targetId}`,
+      dominio,
+      cuentaId: targetId,
       fields: { monto: data.monto },
       comprobante: data.comprobante,
       normalize: normalizeComprobante,
@@ -191,7 +207,7 @@ export function useCuentasPagar() {
         formData.append('monto', String(data.monto))
         if (comprobante) formData.append('comprobante', comprobante)
         formData.append('operation_id', operationId)
-        return sendFormData(`/api/cuentas-pagar/${id}/registrar-pago`, formData, 'Error al registrar pago')
+        return sendFormData(submitUrl, formData, 'Error al registrar pago')
       },
     })
     await recargar()

@@ -336,6 +336,9 @@ export interface CuentaPagarGrupo {
   orden_pago_id: string | null
   created_at: string
   updated_at: string
+  // Desglose de cuentas_pagar hijas -- lo agrega GET /api/cuentas-pagar/[id]/documentos
+  // para que la UI muestre qué compone el total del grupo.
+  items?: CuentaPagar[]
 }
 
 export interface CuentaCobrar {
