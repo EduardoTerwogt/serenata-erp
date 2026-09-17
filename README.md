@@ -49,6 +49,7 @@ en GitHub Actions, porque necesita secretos que no viven en el repo. Detalles en
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Manual de entrada e índice: principios críticos, git, autonomía. **Empezar aquí.** |
 | [`docs/ACTIVE_WORK.md`](docs/ACTIVE_WORK.md) | Qué se está construyendo ahora mismo. Punto de partida de cada sesión. |
+| [`docs/PLAN.md`](docs/PLAN.md) | Tracker de la iniciativa multi-sesión activa (nombre fijo, vacío si no hay ninguna en curso). |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Hacia dónde va el producto y qué está a medias a propósito. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Cómo está organizado el código, qué módulos funcionan, las tablas y los gotchas. |
 | [`docs/decisions/`](docs/decisions/) | Decisiones duraderas y por qué se tomaron. |
