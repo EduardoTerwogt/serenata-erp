@@ -173,6 +173,14 @@ jobs:
       - name: SMOKE cuentas.js
         run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/cuentas.js
 
+      # F28: reproducción mínima de la race de rotación del cookie de sesión
+      # (docs/decisions/010-f28-diferir-race-cookie-nextauth.md). SMOKE=1
+      # aquí solo confirma que el script corre -- el gate real (5 VUs reales,
+      # http_req_failed<1%) se corre a mano vía workflow_dispatch mientras
+      # F28 sigue sin cerrarse formalmente.
+      - name: SMOKE _diag-cookies-concurrent.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/_diag-cookies-concurrent.js
+
       # Los escenarios que escriben datos (3A-5 PR b) necesitan un runId
       # real (para taggear filas y limpiarlas después), una carpeta real de
       # Drive (3A-4) y, para portal.js, sesiones de Portal ya firmadas

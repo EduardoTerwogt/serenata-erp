@@ -1,7 +1,8 @@
-import { auth, type AppSection } from '@/auth'
+import type { AppSection } from '@/auth'
 import { getUserSections, hasAnySection } from '@/lib/authz'
 import { cookies } from 'next/headers'
 import type { Session } from 'next-auth'
+import { getNodeSessionToken } from '@/lib/session-token'
 import { getUsuarioSessionState } from '@/lib/server/repositories/usuarios'
 import { logStructured, newRequestId } from '@/lib/server/observability/log'
 
@@ -46,14 +47,31 @@ export async function requireAuthenticated() {
     }
   }
 
-  const session = await auth()
+  // F28: `getNodeSessionToken()` decodifica el JWT sin pasar por `auth()`
+  // -- ver `lib/session-token.ts`. `auth()` llamado sin argumentos (como
+  // acá) igual recalcula y reemite el cookie de sesión internamente, solo
+  // que las cabeceras se descartan en silencio (no hay `response` al que
+  // adjuntarlas en este contexto) -- trabajo redundante en cada request de
+  // API, evitado de una vez.
+  const token = await getNodeSessionToken()
 
-  if (!session?.user) {
+  if (!token?.sub) {
     return {
       session: null,
       response: Response.json({ error: 'No autenticado' }, { status: 401 }),
     }
   }
+
+  const session: Session = {
+    user: {
+      id: token.sub,
+      email: token.email,
+      name: token.name,
+      sections: token.sections,
+      sessionVersion: token.session_version,
+    },
+    expires: new Date((token.exp ?? 0) * 1000).toISOString(),
+  } as Session
 
   // EF-2 1B-2b: comprueba que la sesión (JWT) no fue invalidada desde que
   // se emitió -- usuario desactivado, o `sections`/`password_hash`/`email`
