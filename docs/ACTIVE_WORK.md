@@ -128,10 +128,7 @@ PR [#72](https://github.com/EduardoTerwogt/serenata-erp/pull/72) (mergeado).
 
 ## Siguiente paso
 
-Ninguna iniciativa en curso, ni ningún trabajo abierto de esta sesión.
-`docs/PLAN.md` está vacío. La próxima sesión que arranque
-(`serenata-iniciar-fase`) debe priorizar contra `docs/ROADMAP.md`
-(sección "Después") con el estado real del sistema a la vista, no
-asumir que hay trabajo pendiente por default. Si confirma una idea con
-alcance de iniciativa, debe llenar `docs/PLAN.md` desde el primer borrador
-(ver su "Ciclo de vida") y anotar aquí una línea apuntando a él.
+**Iniciativa activa: Agrupar Cuentas por Pagar por proveedor+proyecto para
+facturación** — aprobada, lista para ejecutar bloque por bloque. Tracker
+completo, diseño y estado de cada bloque: [`docs/PLAN.md`](PLAN.md). Próximo
+paso: Bloque 1 (esquema `cuentas_pagar_grupos` + función de reconciliación).

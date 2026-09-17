@@ -76,6 +76,17 @@ ejecutados de punta a punta, quedan en
 
 ---
 
+## Siguiente
+
+**Agrupar Cuentas por Pagar por proveedor+proyecto para facturación** —
+iniciativa aprobada, en ejecución. Hoy se pide factura por cada item de
+cotización por separado; cuando un proveedor tiene varios items dentro del
+mismo proyecto, deben agruparse para facturar (y pagar) el total acumulado
+en una sola operación, incluyendo el caso de facturas complementarias.
+Tracker completo, diseño y bloques: [`docs/PLAN.md`](PLAN.md).
+
+---
+
 ## Después
 
 **Sin definir a propósito.** Al cerrar Engineering Hardening por completo (EF-2 y
