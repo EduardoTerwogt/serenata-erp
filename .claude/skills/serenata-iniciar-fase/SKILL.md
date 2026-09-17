@@ -18,8 +18,13 @@ lo dijo ya) y cruzarlo contra `docs/ROADMAP.md`. Clasificar:
 - **Nuevo** — no está en el roadmap y tiene alcance de iniciativa (toma más de una
   sesión, agrega un módulo/feature, o cambia una capa/arquitectura) → agregarlo
   primero a `docs/ROADMAP.md` (sección "Siguiente" o "Después", según indique el
-  usuario) **antes** de crear `docs/ACTIVE_WORK.md`. Así queda registrado y no se
-  pierde si la sesión no termina.
+  usuario). En cuanto se confirma que vale la pena planearlo (no solo una pregunta
+  exploratoria), llenar `docs/PLAN.md` con un primer borrador (Contexto, opciones,
+  bloques propuestos — aunque el plan no esté terminado) y apuntar a él con una
+  línea en `docs/ACTIVE_WORK.md`. Commitear y pushear esto de inmediato (doc-only
+  → directo a `main`), **antes** de seguir refinando el plan — así ninguna cuenta
+  de Claude distinta que abra sesión mientras tanto se queda a ciegas. Ver el
+  "Ciclo de vida" dentro de `docs/PLAN.md`.
 - **Fuera de roadmap** — ajuste puntual, fix chico o tarea administrativa de una
   sola sesión → se trabaja directo, sin tocar `ROADMAP.md`. Se documenta el
   resultado al cerrar sesión en `ACTIVE_WORK.md` ("Completado"), no antes.
@@ -36,10 +41,11 @@ En este orden, y solo esto:
 3. `docs/decisions/` — solo las decisiones que toquen el área en cuestión.
 4. `docs/ROADMAP.md` — solo si hace falta saber qué está a medias en esa área.
 
-**1b.** Si `docs/ACTIVE_WORK.md` indica una iniciativa EF-3 activa, leer
-también el tracker de `docs/EF-3_ENGINEERING_HARDENING.md` (Sección 11),
-localizar el bloque `En curso` o el siguiente `Pendiente` según el grafo de
-dependencias (Sección 5), y partir de ahí en vez de re-proponer desde cero.
+**1b.** Si `docs/ACTIVE_WORK.md` apunta a una iniciativa en `docs/PLAN.md`
+(borrador o aprobada), leerlo también: contexto, matriz de hallazgos, bloques y
+tracker de estado. Si ya hay un bloque `En curso` o un `Pendiente` siguiente
+según el grafo de dependencias, partir de ahí en vez de re-proponer desde cero
+o reabrir el loop de refinamiento si ya estaba aprobado.
 
 No leer `docs/archive/` salvo que haga falta entender el origen de una decisión.
 No leer el roadmap completo: la fase actual es la que importa.
@@ -100,5 +106,10 @@ Validación      → cómo vamos a demostrar que funciona
 
 ## 6. Esperar aprobación
 
-**No implementar.** El usuario aprueba, ajusta o descarta. Una vez aprobado el plan,
-ejecutar bloque por bloque, validando cada uno antes de avanzar al siguiente.
+**No implementar.** El usuario aprueba, ajusta o descarta. Si la iniciativa es de
+alcance de una sola sesión, ejecutar directo. Si ya se abrió `docs/PLAN.md` como
+borrador (paso 0), marcar su Estado como "Aprobado, listo para ejecutar" antes de
+empezar — así queda explícito para cualquier cuenta que retome el trabajo. Una vez
+aprobado el plan, ejecutar bloque por bloque, validando cada uno antes de avanzar
+al siguiente, y actualizando el tracker de `docs/PLAN.md` conforme se cierra cada
+bloque.

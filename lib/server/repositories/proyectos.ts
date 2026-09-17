@@ -4,8 +4,9 @@ import {
 } from '@/lib/types'
 
 // EF-3 3B-5: PAGE_SIZE conservador (la mitad del max_rows=1000 verificado
-// empíricamente contra serenata-erp-test, ver docs/EF-3_ENGINEERING_HARDENING.md
-// #3B-5) -- un .limit() del lado cliente NO vence el cap de PostgREST, así
+// empíricamente contra serenata-erp-test, ver
+// docs/archive/ef-3-engineering-hardening.md #3B-5) -- un .limit() del lado
+// cliente NO vence el cap de PostgREST, así
 // que getProyectos() lee TODAS las páginas por keyset (created_at, id) en
 // vez de confiar en un límite alto que igual se trunca en 1000 filas.
 const PROYECTOS_PAGE_SIZE = 500

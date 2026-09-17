@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // fecha_limite (ORDER BY fecha_limite ASC NULLS LAST, id ASC) -- 2 ramas
 // explícitas porque NULLS LAST pone TODAS las filas fecha_limite IS NULL
 // después de TODAS las no-nulas, sin importar el valor del cursor (ver
-// docs/EF-3_ENGINEERING_HARDENING.md #3B-5).
+// docs/archive/ef-3-engineering-hardening.md #3B-5).
 //
 // El mock actúa de oráculo: dado el dataset completo ya ordenado como lo
 // haría Postgres, reproduce lo que el WHERE real devolvería para los

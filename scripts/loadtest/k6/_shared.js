@@ -3,7 +3,7 @@
 // `ramping-vus` (concurrencia real, cada VU es un usuario simulado
 // haciendo acción→sleep(think_time)→repite), nunca `ramping-arrival-rate`
 // (esa mide iteraciones/segundo, no usuarios concurrentes -- confirmado
-// contra docs/EF-3_ENGINEERING_HARDENING.md 3A-5 punto 1). El modo SMOKE
+// contra docs/archive/ef-3-engineering-hardening.md 3A-5 punto 1). El modo SMOKE
 // no puede lograrse con flags de CLI (`--vus 1 --iterations 1` no pisa un
 // `options.scenarios` ya declarado en el script) -- cada script construye
 // sus opciones vía `buildOptions()`.
@@ -31,7 +31,7 @@ export const DEFAULT_THRESHOLDS = {
 export function requiredEnv(name) {
   const value = __ENV[name]
   if (!value) {
-    throw new Error(`falta la variable de entorno --env ${name}=... (ver docs/EF-3_ENGINEERING_HARDENING.md 3A-5)`)
+    throw new Error(`falta la variable de entorno --env ${name}=... (ver docs/archive/ef-3-engineering-hardening.md 3A-5)`)
   }
   return value
 }

@@ -18,6 +18,8 @@ Reescribirlo —no acumular— con:
 - **Tests ejecutados** y su resultado real (no "debería pasar").
 - **Problemas encontrados** que siguen abiertos.
 - **Deuda técnica** relevante que se generó o se descubrió.
+- **Estado de `docs/PLAN.md`**: si hay una iniciativa en borrador, en
+  refinamiento o aprobada, una línea apuntando a él (no duplicar su contenido).
 - **Siguiente paso** concreto.
 
 Purgar el debugging ya resuelto, las hipótesis descartadas y los logs viejos. No son
@@ -79,11 +81,16 @@ Confirmar que CI quedó en verde de verdad — no solo que el push tuvo éxito.
 iniciativa completa está terminada, todas las suites pasaron en el PR y el Preview de
 Vercel desplegó bien. Si el trabajo sigue abierto, la rama se queda como está.
 
-## 6bis. Si esta sesión mergeó un bloque de EF-3 a `main`
+## 6bis. Si esta sesión avanzó una iniciativa con `docs/PLAN.md` activo
 
-Sincronización documental inmediata (commit doc-only) que marca ese bloque
-`Cerrado` con PR+SHA (o Commit SHA si es de los 6 bloques doc-only) en el
-tracker de `docs/EF-3_ENGINEERING_HARDENING.md`, y marca `En curso` el
-siguiente bloque del grafo — esto sí es parte de cerrar sesión, a diferencia
-del merge de código (que sigue rama+PR normal). Si el bloque quedó a medias,
-el checkpoint va también en el tracker, no solo en `ACTIVE_WORK.md`.
+Sincronización documental inmediata (commit doc-only) que marca el bloque
+recién mergeado como `Cerrado` con PR+SHA (o Commit SHA si es doc-only) en el
+tracker de `docs/PLAN.md`, y marca `En curso` el siguiente bloque del grafo —
+esto sí es parte de cerrar sesión, a diferencia del merge de código (que sigue
+rama+PR normal). Si el bloque quedó a medias, el checkpoint va también en el
+tracker, no solo en `ACTIVE_WORK.md`.
+
+**Si la iniciativa completa terminó:** `git mv docs/PLAN.md
+docs/archive/<slug-descriptivo>.md` (preserva el historial de git), resumir en
+`docs/ROADMAP.md` → "Cerrado" (paso 5 de arriba), y recrear `docs/PLAN.md`
+vacío (plantilla del "Ciclo de vida") listo para la próxima iniciativa.

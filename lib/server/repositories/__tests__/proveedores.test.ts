@@ -4,7 +4,7 @@ import { Proveedor } from '@/lib/types'
 // EF-3 3B-6: getProveedores() lee TODAS las filas activas vía la RPC
 // proveedores_pagina_por_nombre (paginación por keyset con comparación de
 // tupla (nombre, id) hecha en Postgres, nunca reordenada en Node) -- ver
-// docs/EF-3_ENGINEERING_HARDENING.md #3B-6. Estos tests mockean la
+// docs/archive/ef-3-engineering-hardening.md #3B-6. Estos tests mockean la
 // respuesta por página de la RPC; la verificación empírica del max_rows
 // real (1000 sin el fix, 1,200 con el fix) y la paridad de orden contra
 // nombres con `,`/`(`/`)`/acentos/ñ se hicieron a mano contra

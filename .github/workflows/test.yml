@@ -16,8 +16,8 @@ permissions:
 jobs:
   tracker-lint:
     # EF-3 3A-0b: valida la estructura del tracker de EF-3 (Sección 11 de
-    # docs/EF-3_ENGINEERING_HARDENING.md, o su ruta archivada tras 3E-2) en
-    # TODO push/PR, sin condicionar por path -- GitHub Actions no ofrece un
+    # docs/archive/ef-3-engineering-hardening.md, ruta activa mientras EF-3
+    # corría). TODO push/PR, sin condicionar por path -- GitHub Actions no ofrece un
     # filtro de `paths` confiable a nivel de job (solo a nivel del
     # disparador del workflow completo), así que correrlo siempre es más
     # simple y más seguro que una lógica de detección de cambios propensa a

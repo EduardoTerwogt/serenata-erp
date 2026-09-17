@@ -1,7 +1,7 @@
 // EF-3A 3A-5: 10 VUs editando la MISMA celda de la MISMA cotización
 // concurrentemente + 1 VU observadora midiendo la propagación real de
 // Realtime. Protocolo de autorización (2 pasos) y evento verificados
-// contra el código real -- ver docs/EF-3_ENGINEERING_HARDENING.md 3A-5.
+// contra el código real -- ver docs/archive/ef-3-engineering-hardening.md 3A-5.
 import http from 'k6/http'
 import ws from 'k6/ws'
 import { check, sleep } from 'k6'
