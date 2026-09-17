@@ -280,6 +280,52 @@ retry de red o pestaña caída a medio submit, contra `withIdempotency`
   caso, y el segundo dejaba que `INSERT ... ON CONFLICT` la recreara de
   cero. Prueba de regresión: `tests/e2e/live/bulk-replace-items-rpc.spec.ts`.
 
+## Cuentas por Pagar agrupadas por proveedor+proyecto
+
+`cuentas_pagar` sigue siendo el ledger detallado por renglón (1:1 con
+`items_cotizacion`, `x_pagar > 0`) — `cuentas_pagar_grupos` es una capa de
+agrupación encima, no un reemplazo. Un proveedor con varios renglones
+dentro del mismo proyecto factura y cobra el **total acumulado del grupo**,
+no renglón por renglón. Por qué se diseñó así, alternativas descartadas y
+la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](docs/decisions/011-agrupacion-cuentas-pagar-por-proveedor-proyecto.md).
+
+- **`reconcile_cuenta_pagar_grupo(cuenta_id)`** es la única función que
+  mantiene la agrupación consistente — la llaman `approve_cotizacion`
+  (cuentas nuevas, principal y complementaria), `reasignar_responsable_cuenta_pagar`
+  (reasignación de proveedor) y la migración retroactiva de datos. Nunca se
+  reimplementa la lógica de agrupación en un cuarto lugar.
+- Un índice único parcial (`cuentas_pagar_grupos_abierto_unique` sobre
+  `(proyecto_id, responsable_id) WHERE estado = 'ABIERTO'`) es lo que hace
+  segura la creación de grupos bajo concurrencia — dos aprobaciones casi
+  simultáneas del mismo proveedor+proyecto no pueden crear dos grupos
+  `ABIERTO`.
+- Reasignar el proveedor de una cuenta cuyo grupo ya no está `ABIERTO` se
+  rechaza con `RAISE EXCEPTION` (código `P1412`), nunca con un jsonb de
+  error — `reasignar_responsable_cuenta_pagar` escribe
+  `items_cotizacion`/`cuentas_pagar` ANTES de llamar a la reconciliación,
+  dentro de la misma transacción; solo una excepción real hace que Postgres
+  revierta también esas escrituras previas, no solo la reconciliación.
+- `registrar_pago_grupo_factura` prorratea el pago hacia las cuentas hija
+  sobre su **saldo pendiente** (no su `x_pagar` original), con la última
+  hija (orden estable por `id`) recibiendo el residuo exacto — garantiza
+  `SUM(hijas.monto_pagado) = grupo.monto_pagado` siempre, incluso en pagos
+  parciales sucesivos. Mismo mecanismo de idempotencia (`pago_operations`,
+  `operation_id`) que `registrar_pago_cuenta_pagar`.
+- `generar-orden-pago` toma grupos `FACTURADO` como fuente, elegibles solo
+  si **todas** las cotizaciones que le aportan renglones (principal +
+  cualquier complementaria) tienen su evento ya realizado — un `UNION ALL`
+  preserva el criterio anterior (cuenta individual `PENDIENTE` con evento
+  realizado) para cualquier fila que todavía no tenga `grupo_id`.
+- El Portal de Proveedores (`GET /api/portal/cuentas`) factura por grupo:
+  `{ grupos: [...] }`, con las cuentas legacy sin `grupo_id` todavía
+  representadas como grupos sintéticos de un solo renglón (visibles, nunca
+  facturables por esa vía) — nunca desaparecen de la vista del proveedor
+  mientras la migración retroactiva no las alcance.
+- La UI interna (`CuentaDetailModal`) muestra la tarjeta "Grupo de
+  facturación" con el desglose de renglones hermanos solo cuando
+  `cuenta.grupo_id` no es null; el cruce fiscal se calcula sobre
+  `grupo.monto_total`, nunca sobre el `x_pagar` del renglón individual.
+
 ## Reglas que se respetan
 
 1. No meter lógica de datos en páginas si cabe en un hook, servicio o repositorio.
@@ -351,7 +397,7 @@ autoritativa, no una tabla en un documento. Agrupadas por dominio:
 | Cotizaciones | `cotizaciones` (id = folio texto SH001), `items_cotizacion`, `cotizacion_folio_reservations`, `cotizacion_collaboration_events` |
 | Catálogos | `clientes`, `productos`, `service_templates` |
 | Proyectos | `proyectos`, `tipos_proyecto`, `tipo_proyecto_etapas`, `tipo_proyecto_tarea_default`, `proyecto_tareas`, `proyecto_tarea_checklist`, `proyecto_documentos` |
-| Cuentas | `cuentas_cobrar`, `cuentas_pagar`, `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`, `pagos_comprobantes`, `ordenes_pago` |
+| Cuentas | `cuentas_cobrar`, `cuentas_pagar`, `cuentas_pagar_grupos`, `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`, `pagos_comprobantes`, `ordenes_pago` |
 | Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable`, `historial_cambios_responsable_item` |
 | Planeación | `planeacion_pendientes`, `planeacion_event_notas` (soft delete en `eliminada`), `extraction_logs` |
 | Dashboard | `gastos_fijos` |

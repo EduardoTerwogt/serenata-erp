@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-17T21:36:54.457Z",
-  "count": 85,
+  "generated_at": "2026-09-17T22:53:28.162Z",
+  "count": 86,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -86,6 +86,7 @@
     "20260917_orden_pago_grupos_facturados_eventos_realizados.sql",
     "20260917_reasignar_responsable_cuenta_pagar.sql",
     "20260917_reconciliar_grupos_en_approve_cotizacion.sql",
-    "20260917_registrar_pago_grupo_factura.sql"
+    "20260917_registrar_pago_grupo_factura.sql",
+    "20260918_migracion_retroactiva_cuentas_pagar_grupos.sql"
   ]
 }

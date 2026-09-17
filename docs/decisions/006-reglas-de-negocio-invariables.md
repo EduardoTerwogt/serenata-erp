@@ -33,6 +33,18 @@ Utilidad Total   = Margen Total + Fee Agencia
 Margen %         = Utilidad Total ÷ Subtotal
 ```
 
+**Cuentas por Pagar agrupadas por proveedor+proyecto** (`docs/decisions/011`):
+un proveedor con varios renglones dentro del mismo proyecto factura y cobra
+el total acumulado, no renglón por renglón.
+
+```
+monto_total_grupo = Σ X Pagar de los renglones del proveedor dentro del proyecto
+```
+
+El cruce fiscal (persona moral / persona física con honorarios, fórmulas de
+abajo) se calcula sobre `monto_total_grupo`, nunca sobre el `X Pagar` de un
+renglón individual, cuando el renglón pertenece a un grupo.
+
 **Modelo fiscal de proveedores** (`lib/server/validation/factura-fiscal.ts`, según
 `regimen_fiscal`; `null`/`undefined` se trata como **moral**):
 - **Persona moral:** IVA 16% trasladado, acreditable, sin retenciones.
@@ -72,3 +84,7 @@ bug en este sistema.
   freelancers. Toda asignación resuelve a un id real, nunca texto suelto. La clave de
   permisos `AppSection` se mantiene como `'responsables'` a propósito, para no migrar
   `usuarios.sections`.
+- **Grupo de facturación** (`cuentas_pagar_grupos`, `docs/decisions/011`): agrupa las
+  cuentas por pagar del mismo proveedor dentro del mismo proyecto para que la
+  factura y el pago se pidan/validen una sola vez, por el total acumulado. Estados:
+  `ABIERTO` → `FACTURADO` → `EN_PROCESO_PAGO` → `PAGADO`.
