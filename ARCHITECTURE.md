@@ -436,7 +436,8 @@ Trampas reales, no teóricas. Cada una costó un bug:
   o ajuste de `session.updateAge`/config de rotación) sin bloque ni fecha
   asignados. Detalle completo:
   `docs/archive/ef-3-baseline-final.md`, tracker archivado (fila F28, fila
-  condicional `3E-1b`).
+  condicional `3E-1b`),
+  [`docs/decisions/010-f28-diferir-race-cookie-nextauth.md`](docs/decisions/010-f28-diferir-race-cookie-nextauth.md).
   **Corrección sobre 3A-6:** el baseline diagnóstico previo (3A-6,
   `docs/archive/ef-3-baseline-previo.md`) había atribuido un patrón de
   fallas casi idéntico (5/7 escenarios rotos, `portal.js` limpio) a

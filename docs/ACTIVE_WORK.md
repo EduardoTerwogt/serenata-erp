@@ -9,9 +9,11 @@ Las 3 iniciativas terminaron y están mergeadas a `main`:
 
 - **EF-1** — PR [#29](https://github.com/EduardoTerwogt/serenata-erp/pull/29), commit `cc60f6d`.
 - **EF-2** — PR [#31](https://github.com/EduardoTerwogt/serenata-erp/pull/31), commit `980464c`.
-- **EF-3** — 41 bloques (40 base + F27/F28), cierre en commits `7827ba8`
-  (3E-1), y los de 3E-2/3E-3 (ver Sección 11 del tracker archivado una vez
-  registrados).
+- **EF-3** — 41 filas base + 4 condicionales (28 hallazgos, F1-F28).
+  Cierre: 3E-1 `7827ba8`, 3E-2 `0114d9a`, 3E-3 `321575b` (contenido) +
+  `a4ff717` (sincronización final — `validate-ef3-tracker.mjs
+  --require-final` sin excepciones). Ver Sección 11/12 del tracker
+  archivado para el detalle completo.
 
 Historia completa de cada una:
 [`docs/archive/ef-1-engineering-hardening.md`](archive/ef-1-engineering-hardening.md),
@@ -36,8 +38,9 @@ uno por uno) y **diferido con aprobación explícita del usuario
 Fix (upgrade de `next-auth` o ajuste de `session.updateAge`/config de
 rotación) sin bloque ni fecha asignados — candidato real para la próxima
 iniciativa que se priorice. Detalle completo en
-`docs/archive/ef-3-baseline-final.md` y en la matriz de hallazgos del
-tracker archivado (fila F28, fila condicional `3E-1b`).
+`docs/archive/ef-3-baseline-final.md`, en la matriz de hallazgos del
+tracker archivado (fila F28, fila condicional `3E-1b`), y en
+[`docs/decisions/010-f28-diferir-race-cookie-nextauth.md`](decisions/010-f28-diferir-race-cookie-nextauth.md).
 
 ## Pendiente de limpieza manual (no bloquea nada)
 
