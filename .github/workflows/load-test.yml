@@ -49,6 +49,11 @@ on:
         required: false
         type: boolean
         default: false
+      diag_cookies:
+        description: 'THROWAWAY (EF-3 3E-1, diagnóstico F27b -- nunca mergeada a main): hipótesis puntual de que /api/auth/callback/credentials emite 2 Set-Cookie para el mismo nombre (mismo patrón que rest-login.mjs/env-check.mjs ya tuvieron que resolver a mano con mergeCookies() para /api/auth/csrf) y que el cookie jar automático de k6 no se queda con el último por nombre igual que un browser real -- eso explicaría el 401 "No autenticado" sostenido (no en ráfaga) que encontró serverless-diag-cuentas. 1 VU, 1 iteración -- inspecciona res.cookies/headers crudos de login y de 3 requests autenticados subsiguientes, y el estado del jar entre medio. Segundos de duración real (no es carga)'
+        required: false
+        type: boolean
+        default: false
 
 # Mismo group que e2e.yml -- ambos mutan serenata-erp-test y la misma
 # carpeta de Drive de test, así que GitHub Actions encola cualquier corrida
@@ -104,7 +109,7 @@ jobs:
           node scripts/loadtest/wait-for-deployment.mjs "${ARGS[@]}"
 
   local:
-    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas }}
+    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -239,7 +244,7 @@ jobs:
     # workflow_dispatch corrompería el ciclo de datos compartidos.
     # `pin-loadtest-target` sí corre en paralelo con `local` porque solo
     # prepara el deploy remoto, no toca datos compartidos.
-    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas }}
+    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies }}
     needs: [pin-loadtest-target, local]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -344,6 +349,53 @@ jobs:
         run: k6 run --env TARGET_URL="$TARGET_URL" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/cuentas.js
 
   # ---------------------------------------------------------------------
+  # EF-3 3E-1 -- THROWAWAY, diagnóstico puntual de F27b (nunca mergeada a
+  # main): hipótesis del coordinador -- el mismo bug de Set-Cookie
+  # duplicado por nombre que rest-login.mjs/env-check.mjs ya tuvieron que
+  # resolver a mano (mergeCookies(), última wins) para GET /api/auth/csrf
+  # podría estar TAMBIÉN presente en el cookie de sesión real que emite
+  # POST /api/auth/callback/credentials -- y el cookie jar automático de k6
+  # (a diferencia del merge manual de los scripts Node) podría no aplicar
+  # "el último Set-Cookie del mismo nombre gana" igual que un browser real,
+  # lo que explicaría el 401 "No autenticado" SOSTENIDO (no en ráfaga) que
+  # encontró serverless-diag-cuentas. 1 VU, 1 iteración -- segundos de
+  # duración real, no es carga.
+  serverless-diag-cookies:
+    if: ${{ inputs.diag_cookies }}
+    needs: [pin-loadtest-target]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+      TARGET_URL: ${{ secrets.LOADTEST_SERVERLESS_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: env-check -- confirmar que el deployment serverless apunta a serenata-erp-test
+        run: node scripts/loadtest/env-check.mjs --target-url "$TARGET_URL"
+
+      - name: Instalar k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: 3E-1 diag -- inspección cruda de Set-Cookie/jar contra serverless (foreground)
+        run: k6 run --env TARGET_URL="$TARGET_URL" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/_diag-cookies.js
+
+  # ---------------------------------------------------------------------
   # EF-3 3E-1 -- THROWAWAY, orquestación descartable (nunca mergeada a
   # main, ver docs/EF-3_ENGINEERING_HARDENING.md 3E-1 punto 1 y
   # docs/archive/ef-3-baseline-previo.md): ciclo real (no SMOKE) de los 8
@@ -362,7 +414,7 @@ jobs:
   # 3A-5/3A-6), y el snapshot "después"+deltas y el cleanup del runId
   # corren siempre (`if: always()`), pase lo que pase con los umbrales.
   local-full:
-    if: ${{ inputs.full_baseline && !inputs.diag_cuentas }}
+    if: ${{ inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -567,7 +619,7 @@ jobs:
   serverless-full:
     # Corre DESPUÉS de local-full -- mismo motivo que serverless/local:
     # ambos mutan la misma serenata-erp-test compartida, sin solaparse.
-    if: ${{ inputs.full_baseline && !inputs.diag_cuentas }}
+    if: ${{ inputs.full_baseline && !inputs.diag_cuentas && !inputs.diag_cookies }}
     needs: [pin-loadtest-target, local-full]
     runs-on: ubuntu-latest
     timeout-minutes: 45
