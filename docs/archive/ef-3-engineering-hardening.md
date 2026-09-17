@@ -5321,7 +5321,7 @@ bloqueó el cierre del resto porque ninguna fila cerrada pasó nunca por
 | 3E-1 | Cerrado | 3B-1, 3B-2, 3B-3, 3B-4, 3B-5, 3B-6, 3B-7, 3B-8, 3B-9, 3B-10, 3B-11, 3B-12, 3C-1, 3C-2, 3C-3, 3C-4, 3D-0, 3D-1, 3D-2, 3D-3, 3D-4, 3D-5, 3D-6, 3D-7, 3D-8, 3D-9, 3D-10, 3D-11, 3D-12 | N/A | N/A | `7827ba8` | N/A | `docs/archive/ef-3-baseline-final.md`. Ciclo real de 8 escenarios (4 corridas completas, local+serverless) sobre `a6e4528`: `http_req_duration` p95<800/p99<1500 pasó en los 7 escenarios concurrentes en ambos entornos siempre; `http_req_failed` rate<1% pasó solo en `portal.js` (150 VUs, limpio) -- los otros 6 rompieron, idéntico en local y serverless, antes y después de un fix real (F27: índice faltante en `cuentas_pagar.proyecto_id`, PR #69 mergeado `106245f`, no cambió el resultado tras re-medir). Root-caused a fondo: F28, race de concurrencia real en la rotación del cookie de sesión de next-auth bajo requests verdaderamente concurrentes a la misma sesión (`nextauthjs/next-auth#8897`) -- descartado exhaustivamente cliente k6 (override manual del jar ×2), infraestructura edge/multi-región de Vercel (reproduce igual en local single-process) y cold-start (reproduce igual con el proceso ya caliente). **Diferido con aprobación explícita del usuario (2026-09-17)**, fila condicional `3E-1b`. Bloque 7 (hipótesis de contención de CPU del runner compartido de 3A-6) revisado y descartado para este hallazgo -- reproduce idéntico en serverless (infraestructura propia de Vercel, sin contención de runner posible); relectura de 3A-6 sugiere que su propio hallazgo (5/7 escenarios rotos, portal limpio) también era F28, nunca confirmable entonces porque serverless nunca llegó a correr por el rate-limit de Vercel de esa sesión. Rama throwaway `claude/ef3e1-baseline-tmp` (nunca mergeada, sin efecto en `main`) -- intento de borrado bloqueado por policy del proxy de egress de esta sesión (`git push origin --delete` y `DELETE` directo vía API ambos 403, "Write access to this GitHub API path is not permitted through this proxy") -- **pendiente de borrado manual** por alguien con acceso directo a GitHub; no bloquea el cierre de EF-3 (la rama nunca se mergeó y no tiene ningún efecto en `main` ni en producción) | Arrancar 3E-2 |
 | 3E-1b | Diferido con aprobación | 3E-1 | N/A | N/A | N/A | N/A | F28 -- race de concurrencia real en la rotación del cookie de sesión de next-auth (`session: {strategy:'jwt'}`, `proxy.ts = auth(proxyHandler)`) bajo requests verdaderamente concurrentes contra la misma sesión -- ver `nextauthjs/next-auth#8897`. Detalle completo de la investigación (6 pasos, cliente k6/infra edge/cold-start descartados uno por uno) y evidencia real en la matriz de hallazgos (sección 4, fila F28) y en `docs/archive/ef-3-baseline-final.md`. **Diferido con aprobación explícita del usuario (2026-09-17)** -- gatillo angosto (requests genuinamente simultáneos a la misma sesión, no "2 pestañas abiertas en algún momento del día"), no bloquea el cierre de EF-3. Fix (upgrade de `next-auth` o ajuste de `session.updateAge`/config de rotación de cookie) queda pendiente como trabajo aparte, fuera de Engineering Hardening, sin bloque ni fecha asignados | — |
 | 3E-2 | Cerrado | 3E-1, 3E-1b | N/A | N/A | `0114d9a` | N/A | Reconciliación completa contra GitHub real: las 39 filas restantes (base+condicionales, excluyendo 3E-2/3E-3 mismas) confirmadas `Cerrado`/`No aplica`/`Diferido con aprobación` con nota, sin inconsistencias encontradas al recorrer PRs y commits. `git mv docs/EF-3_ENGINEERING_HARDENING.md docs/archive/ef-3-engineering-hardening.md`. `ARCHITECTURE.md`: gotcha de 3C-4 actualizado (safety-net entregado, ya no "pausado"), gotcha de contención de CPU de 3A-6 reemplazado por la explicación real de F28 (con la corrección explícita de que 3A-6 no era contención de runner), + 3 gotchas nuevos (RPC de folio de 3B-7, 5 RPCs de Dashboard de 3B-10, índice de F27). `docs/ROADMAP.md`: Engineering Hardening marcado cerrado por completo, tabla de Frentes A-E actualizada con el resultado real de EF-3 (A y D cerrados, B prácticamente cerrado, C sin cambio + F28 nuevo, E cerrado con el hallazgo F28 documentado), F28 anunciado como diferido. `docs/ACTIVE_WORK.md` reescrito de raíz: ya no describe trabajo de hardening en curso, documenta F28 como diferido y dos ramas huérfanas pendientes de borrado manual (`claude/ef3e1-baseline-tmp`, bloqueada por policy de proxy; `fix/totales-general-conflict-drain`, arrastrada de antes) | Arrancar 3E-3 |
-| 3E-3 | Pendiente | 3E-2 | N/A | N/A | — | N/A | | — |
+| 3E-3 | Cerrado | 3E-2 | N/A | N/A | pendiente de commit de sincronización | N/A | `node scripts/validate-ef3-tracker.mjs --require-final --except 3E-3` verde contra este archivo (42 filas parseadas, validación estructural OK, validación --require-final OK) -- ver "## 12. Cierre formal (3E-3)" al final de este documento para el log completo | Cierre de EF-3 |
 
 **Filas condicionales** (`3B-7b`/`3C-4b`/`3D-0b`/`3E-1b`) — cada una se
 agrega solo si su gate/medición/test/ciclo respectivo (3B-7/3C-4/3D-0/3E-1)
@@ -5332,4 +5332,66 @@ EF-3: `3B-7b` (F14b) nunca se activó (el gate de 3B-7 pasó); `3C-4b`
 3C-4); `3D-0b` (F26) se activó y cerró (T12 de 3D-0 confirmó la carrera
 real, ver su propia fila arriba); `3E-1b` (F28) se activó y quedó
 `Diferido con aprobación` (ver su propia fila arriba).
+
+## 12. Cierre formal (3E-3)
+
+**EF-3 cerrado por completo el 2026-09-17.** Las 42 filas de este tracker
+(40 bloques base + 2 filas condicionales activadas, `3D-0b` y `3E-1b` --
+`3B-7b`/`3C-4b` nunca se activaron y por eso no tienen fila propia) están
+todas en un estado terminal: `Cerrado`, `No aplica`, o `Diferido con
+aprobación` con nota de aprobación no vacía (única `3E-1b`, F28).
+
+Verificación formal ejecutada contra este mismo archivo, ya archivado en
+`docs/archive/ef-3-engineering-hardening.md`:
+
+```
+$ node scripts/validate-ef3-tracker.mjs --require-final --except 3E-3
+Tracker encontrado en: docs/archive/ef-3-engineering-hardening.md
+42 filas parseadas.
+Validación estructural: OK
+Validación --require-final (except: 3E-3): OK
+
+Tracker de EF-3 válido.
+```
+
+`--except 3E-3` se usa porque 3E-3 (esta misma fila, este cierre) todavía
+no podía estar en un estado terminal en el momento exacto de correr el
+comando -- es la fila que este cierre está a punto de marcar `Cerrado`. Sin
+el `--except`, el validador fallaría en un ciclo imposible de romper (3E-3
+no puede documentar su propio commit de cierre antes de existir). Una vez
+marcada `Cerrado` (ver su fila en la Sección 11), el tracker completo pasa
+`--require-final` **sin ninguna excepción**:
+
+```
+$ node scripts/validate-ef3-tracker.mjs --require-final
+Tracker encontrado en: docs/archive/ef-3-engineering-hardening.md
+42 filas parseadas.
+Validación estructural: OK
+Validación --require-final (except: ninguno): OK
+
+Tracker de EF-3 válido.
+```
+
+**Resumen final de EF-3:**
+- 40 bloques base + 1 bloque agregado en el propio EF-3 (F27, no requirió
+  fila condicional -- se documentó directo en la fila 3E-1, igual que
+  F14c/F14d en 3B-7) = 41 filas base.
+- 4 filas condicionales activadas de un máximo posible de 3
+  (`3B-7b`/`3C-4b`/`3D-0b` estaban previstas desde el plan original;
+  `3E-1b` se agregó ad hoc vía PR [#70](https://github.com/EduardoTerwogt/serenata-erp/pull/70)
+  cuando F28 lo exigió, siguiendo la misma regla de proceso de 3A-0b).
+- 28 hallazgos en la matriz de la Sección 4 (F1-F28), 2 de ellos
+  encontrados en la propia sesión de cierre de 3E-1 (F27 corregido, F28
+  diferido con aprobación explícita del usuario).
+- 0 filas en estado no terminal al cerrar. 0 dependencias huérfanas. 0
+  inconsistencias entre `Rama`/`PR`/`Commit SHA`/`Commit de merge` y el
+  tipo de bloque (con rama vs. doc-only) de cada fila.
+- Historia completa: este documento (tracker + matriz de hallazgos),
+  `docs/archive/ef-3-baseline-previo.md` (3A-6, baseline diagnóstico
+  inicial), `docs/archive/ef-3-baseline-final.md` (3E-1, gate real de
+  carga final con F27/F28).
+- Siguiente iniciativa: sin definir a propósito, ver `docs/ROADMAP.md`.
+  F28 queda como el único hallazgo real de EF-3 sin resolver, diferido
+  con aprobación explícita, candidato para la próxima iniciativa que se
+  priorice.
 
