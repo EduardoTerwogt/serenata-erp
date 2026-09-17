@@ -172,7 +172,7 @@ export interface TareaAgregada extends ProyectoTarea {
  * termine de migrar el filtro a etapa.es_etapa_final.
  */
 // EF-3 3B-5: mismo PAGE_SIZE/HARD_CAP conservadores que getProyectos()
-// (ver docs/EF-3_ENGINEERING_HARDENING.md #3B-5) -- alimenta las tabs
+// (ver docs/archive/ef-3-engineering-hardening.md #3B-5) -- alimenta las tabs
 // Tareas/Estatus del mismo tablero Kanban, necesita membresía completa.
 const TAREAS_AGREGADAS_PAGE_SIZE = 500
 const TAREAS_AGREGADAS_HARD_CAP = 20000

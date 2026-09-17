@@ -40,7 +40,7 @@ interface UseQuotationBusinessActionsOptions {
  * sin flush; `cancelarCotizacion` tiene su propio guard (`cancelando`) sin
  * flush ni `transitionInFlightRef`. Esta asimetría no se corrige aquí -- ver
  * el punto 2 de la especificación del bloque en
- * docs/EF-3_ENGINEERING_HARDENING.md.
+ * docs/archive/ef-3-engineering-hardening.md.
  */
 export function useQuotationBusinessActions({
   id,

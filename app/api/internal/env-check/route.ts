@@ -18,7 +18,7 @@
 import { createHash } from 'crypto'
 
 // Ref real de producción (serenata-erp) -- confirmado en
-// docs/EF-3_ENGINEERING_HARDENING.md sección 3 del plan. Hardcoded a
+// docs/archive/ef-3-engineering-hardening.md sección 3 del plan. Hardcoded a
 // propósito: esta comparación es la última línea de defensa contra medir
 // carga sobre datos reales, no debe depender de que otra env var esté bien
 // configurada.

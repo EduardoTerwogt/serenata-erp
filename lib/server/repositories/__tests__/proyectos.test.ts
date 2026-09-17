@@ -4,7 +4,7 @@ import { Proyecto } from '@/lib/types'
 // EF-3 3B-5: getProyectos() lee TODAS las filas de la tabla vía paginación
 // por keyset (created_at, id) en vez de una sola página -- un .limit() del
 // lado cliente no vence el cap real de PostgREST (max_rows=1000, ver
-// docs/EF-3_ENGINEERING_HARDENING.md #3B-5). Estos tests mockean la
+// docs/archive/ef-3-engineering-hardening.md #3B-5). Estos tests mockean la
 // respuesta por página, sin depender del contenido real de los filtros
 // .or() -- solo verifican que el loop de concatenación/parada/circuit
 // breaker se comporta correctamente. La verificación empírica del max_rows

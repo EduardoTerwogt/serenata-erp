@@ -10,7 +10,7 @@ import type { Cotizacion, ItemCotizacion } from '@/lib/types'
  * interacción flush/reconciliación, nunca antes probada explícitamente), no
  * lo que "debería" pasar. Este archivo NO modifica page.tsx ni ningún
  * componente hijo -- ver metodología completa en
- * docs/EF-3_ENGINEERING_HARDENING.md, bloque 3D-0.
+ * docs/archive/ef-3-engineering-hardening.md, bloque 3D-0.
  *
  * Dos hallazgos de esta ronda que corrigen la descripción del bloque en el
  * plan (no invalidan el bloque, solo su texto):

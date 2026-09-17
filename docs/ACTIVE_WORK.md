@@ -100,24 +100,18 @@ sigue abierto upstream sin fix).
 - **`SUPABASE_JWT_SECRET` con valores distintos entre "Production" y
   "Preview" en Vercel producción** — sin investigar el porqué. No se
   tocó, solo anotado. (Arrastrado.)
-- **Comentarios de código que citan la ruta vieja `docs/EF-3_ENGINEERING_HARDENING.md`**
-  (ya no existe ahí; el tracker vive en `docs/archive/ef-3-engineering-hardening.md`
-  desde el 2026-09-17). No rompen nada — son citas históricas en comentarios, no
-  imports ni lógica ejecutable — pero quedaron desactualizadas tras el archivado.
-  Ubicaciones: `scripts/validate-ef3-tracker.mjs` (ya prueba ambas rutas, no está
-  roto), `scripts/__tests__/validate-ef3-tracker.test.mjs`,
-  `.github/workflows/test.yml` (job `tracker-lint`),
-  `scripts/loadtest/k6/_shared.js`, `scripts/loadtest/k6/editar-concurrente.js`,
-  `app/cotizaciones/[id]/__tests__/page-autosave-characterization.test.tsx`,
-  `app/api/internal/env-check/route.ts`, `hooks/useQuotationBusinessActions.ts`,
-  `lib/server/repositories/proyecto-tareas.ts`, `lib/server/repositories/proyectos.ts`
-  y sus tests, `lib/server/repositories/__tests__/proveedores.test.ts`. Corregirlas
-  toca código, así que sale de la excepción doc-only — queda como cleanup de una
-  sesión de código, no de esta. Además, el job `tracker-lint` de `test.yml` sigue
-  corriendo en cada PR validando específicamente los 40 bloques de EF-3, ya cerrado
-  — generalizarlo para validar el tracker de `docs/PLAN.md` (cualquiera que sea la
-  iniciativa activa) es una mejora real, pero es cambio de código/CI con su propio
-  alcance. (Arrastrado.)
+- **RESUELTO (2026-09-17):** los comentarios de código que citaban la ruta vieja
+  `docs/EF-3_ENGINEERING_HARDENING.md` ya apuntan a
+  `docs/archive/ef-3-engineering-hardening.md`. Quedan intencionalmente sin tocar
+  `scripts/validate-ef3-tracker.mjs` y su test — `TRACKER_PATHS` prueba a propósito
+  ambas rutas (activa y archivada) y el test verifica ese fallback, no está roto.
+- **Pendiente, requiere decisión de arquitectura (no de esta sesión):** el job
+  `tracker-lint` de `.github/workflows/test.yml` sigue corriendo en cada PR
+  validando específicamente los 40 bloques de EF-3, una iniciativa ya cerrada para
+  siempre. Generalizarlo para validar el tracker de `docs/PLAN.md` (cualquiera que
+  sea la iniciativa activa, con IDs de bloque variables) es una mejora real, pero
+  implica diseñar un esquema de validación genérico — más de un camino razonable,
+  no es un cleanup mecánico. (Arrastrado.)
 
 ## Pendiente de limpieza manual (no bloquea nada)
 
