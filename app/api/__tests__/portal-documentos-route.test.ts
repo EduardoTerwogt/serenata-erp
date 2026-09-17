@@ -93,6 +93,44 @@ describe('POST /api/portal/documentos', () => {
     })
   })
 
+  it('sube la constancia y persiste regimen_fiscal cuando el proveedor todavía no tiene uno asignado', async () => {
+    mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', regimen_fiscal: null })
+    mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: null, regimen_fiscal: 'moral' })
+
+    await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+    expect(mocks.updateProveedorMock).toHaveBeenCalledWith('prov-1', { regimen_fiscal: 'moral' })
+  })
+
+  it('nunca pisa un regimen_fiscal que staff ya asignó a mano', async () => {
+    mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', regimen_fiscal: 'moral' })
+    mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: null, regimen_fiscal: 'fisica' })
+
+    await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+    expect(mocks.updateProveedorMock).not.toHaveBeenCalledWith('prov-1', expect.objectContaining({ regimen_fiscal: expect.anything() }))
+  })
+
+  it('constancia sin régimen fiscal legible -- no llama a updateProveedor por eso', async () => {
+    mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', regimen_fiscal: null })
+    mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: null, regimen_fiscal: null })
+
+    await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+    expect(mocks.updateProveedorMock).not.toHaveBeenCalled()
+  })
+
+  it('la extracción de la constancia corre aunque el proveedor no esté activo, para capturar regimen_fiscal (sin disparar matching)', async () => {
+    mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'pendiente_confirmacion', regimen_fiscal: null })
+    mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: 'Jose Gutierrez', regimen_fiscal: 'fisica' })
+
+    await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+    expect(mocks.extraerDatosIdentidadMock).toHaveBeenCalled()
+    expect(mocks.buscarCandidatosMatchMock).not.toHaveBeenCalled()
+    expect(mocks.updateProveedorMock).toHaveBeenCalledWith('prov-1', { regimen_fiscal: 'fisica' })
+  })
+
   it('no dispara matching si Claude no pudo leer el nombre', async () => {
     mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: null, regimen_fiscal: null })
 
