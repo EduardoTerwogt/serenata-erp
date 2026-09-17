@@ -1,21 +1,36 @@
 # Roadmap
 
-**Última actualización:** 2026-09-15
+**Última actualización:** 2026-09-17
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
 `docs/ACTIVE_WORK.md`.
 
-Queda una iniciativa comprometida en curso: Engineering Hardening (EF-1 y EF-2
-cerrados, **EF-3 autorizado y en ejecución** — plan v12,
-[`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md), 40
-bloques, tracker en la Sección 11 de ese documento). **Lo que sigue después
-es producto y se define en Chat una vez cerrada por completo** —
-deliberadamente, para no priorizar features con información vieja.
+**Engineering Hardening (EF-1+EF-2+EF-3) está cerrado por completo.** Las 3
+iniciativas — 12 sub-bloques (EF-1), 6 sub-bloques (EF-2) y 41 bloques
+(EF-3) — terminaron. Historia completa de EF-3 (40 bloques base + 4
+condicionales, matriz de 28 hallazgos, gate real de carga):
+[`docs/archive/ef-3-engineering-hardening.md`](archive/ef-3-engineering-hardening.md).
+**No hay ninguna iniciativa de Engineering Hardening en curso** — lo que
+sigue es producto, y se define en Chat con el estado real del sistema a la
+vista (deliberadamente no precomprometido aquí para no priorizar con
+información vieja).
+
+**Un hallazgo real de EF-3 queda diferido, no resuelto:** F28 (race de
+concurrencia en la rotación del cookie de sesión de `next-auth` bajo
+requests verdaderamente simultáneos a la misma sesión —
+[`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897)).
+Diferido con aprobación explícita del usuario (2026-09-17), gatillo
+angosto, documentado en detalle en
+[`docs/archive/ef-3-baseline-final.md`](archive/ef-3-baseline-final.md) y
+en la matriz de hallazgos del tracker archivado. El fix (upgrade de
+`next-auth` o ajuste de `session.updateAge`/config de rotación) no tiene
+bloque ni fecha asignados — es candidato real para la próxima iniciativa
+que se priorice.
 
 ---
 
-## Ahora — Engineering Hardening (EF-1/EF-2 cerrados, EF-3 en ejecución)
+## Cerrado — Engineering Hardening (EF-1 + EF-2 + EF-3)
 
 **EF-1 mergeado a `main`** (PR [#29](https://github.com/EduardoTerwogt/serenata-erp/pull/29),
 2026-09-13): baseline, 1C-1, 1E-1, 1C-2a/b (bulk de partidas), 1B-3, 1B-4,
@@ -33,31 +48,31 @@ logger estructurado en 3 rutas). Dos rondas de auditoría del propio PR
 encontraron y corrigieron hallazgos reales antes de mergear — detalle en
 `docs/archive/` una vez se archive la bitácora de la sesión.
 
-**EF-3 autorizado (2026-09-14)** — plan v12, 12 rondas de auditoría (la
-última, externa e independiente contra el repo real). 40 bloques repartidos
-en 5 subfases (3A tooling/carga, 3B escalabilidad de datos, 3C correctness
-serverless, 3D mantenibilidad, 3E cierre). Detalle completo, tracker en
-vivo y matriz de 25-28 hallazgos:
-[`docs/EF-3_ENGINEERING_HARDENING.md`](EF-3_ENGINEERING_HARDENING.md). Los
-frentes A-E de abajo reflejan lo que EF-2 cerró y lo que EF-3 cierra.
+**EF-3 cerrado (2026-09-14 a 2026-09-17)** — plan v12, 12 rondas de
+auditoría (la última, externa e independiente contra el repo real). 41
+bloques repartidos en 5 subfases (3A tooling/carga, 3B escalabilidad de
+datos, 3C correctness serverless, 3D mantenibilidad, 3E cierre). Detalle
+completo, tracker final y matriz de 28 hallazgos:
+[`docs/archive/ef-3-engineering-hardening.md`](archive/ef-3-engineering-hardening.md).
+Los frentes A-E de abajo reflejan el estado real tras EF-3.
 
 ### Frentes
 
-| Frente | Qué resuelve | P | Estado tras EF-2 |
+| Frente | Qué resuelve | P | Estado tras EF-3 |
 |---|---|---|---|
-| **A. Escalabilidad del acceso a datos** | El patrón "traer toda la tabla y filtrar en JS". Incluye un bug latente: `getCuentasPagar()` tiene `.limit(500)` y varias rutas buscan por ID dentro de esa lista, así que con 501+ cuentas una cuenta válida responde "no encontrada" sin error ni log. | P0 | **Sin tocar.** EF-2 1D-3 encontró un caso más del mismo patrón (`previewNextQuotationFolio()` sin límite/filtro, `docs/ACTIVE_WORK.md` → Deuda técnica) pero no lo corrigió — fuera de alcance por decisión del plan. |
-| **B. Correctness serverless** | Trabajo que asume un proceso único de larga vida corriendo en funciones efímeras: broadcasts con `void Promise`, caches en `Map`, debounce de Sheets con `setTimeout`. Incluye un evento `bulk` de Realtime que se descarta en silencio y que la reconciliación oculta. | P0/P1 | **Parcial.** Broadcasts de cotizaciones ahora van por `after()` (1D-1). 3 de 4 cachés locales retirados (1D-3) — `folio` se quedó, ver gotcha de serverless en `ARCHITECTURE.md`. Debounce de Sheets y el evento `bulk` descartado siguen sin tocar. |
-| **C. Superficie de riesgo** | `supabaseAdmin` accesible desde cualquier ruta, sin revocación de sesión para staff, `CRON_SECRET` que falla abierto si no existe, e idempotencia que trata cualquier error de INSERT como duplicado. | P1 | **Parcial.** `supabaseAdmin` aislado con `server-only` (1B-1). Revocación de sesión de staff implementada (1B-2a/1B-2b). `CRON_SECRET` e idempotencia de INSERT siguen sin tocar. |
-| **D. Mantenibilidad** | `app/cotizaciones/[id]/page.tsx` con ~2,400 líneas y demasiadas responsabilidades, manejo de errores inconsistente, y lógica de upload duplicada en tres módulos. | P1/P2 | **Muy avanzado (EF-3D, PR #49).** `page.tsx` bajó de 2,388 a 1,484 líneas (-38%) extrayendo 6 hooks (3D-0b..3D-4, 3D-6, 3D-7); solo falta `useQuotationItemCellsAutosave` (3D-5, pausado por decisión del usuario — la prueba manual serverless que exige ya es posible, 3A-1 cerró). `DomainError`+logger adoptado en ~15 rutas más (3D-9/10/11: financieras, Portal completo, Proyectos). Deduplicación de upload de factura hecha (3D-12, `lib/server/uploads/factura-validation.ts`, CxP/CxC/Portal). |
-| **E. Pruebas de carga** | Los tests actuales prueban correctness con 2-10 sesiones, no capacidad. Falta una suite (k6/Artillery) que responda objetivamente "¿aguanta si mañana entran 100 personas?". | P1 | **Infraestructura lista (3A-1, PR #51-#54).** Proyecto Vercel aislado (`serenata-erp-loadtest`) + `load-test.yml` + gate `env-check` validados end-to-end contra Vercel real. Los 8 escenarios de k6 en sí (3A-5 local, 3A-6 serverless) todavía no están escritos — sin eso, la pregunta de capacidad sigue sin respuesta real. |
+| **A. Escalabilidad del acceso a datos** | El patrón "traer toda la tabla y filtrar en JS". Incluía un bug latente: `getCuentasPagar()` tenía `.limit(500)` y varias rutas buscaban por ID dentro de esa lista, así que con 501+ cuentas una cuenta válida respondía "no encontrada" sin error ni log. | P0 | **Cerrado por EF-3 (3B-1..3B-12).** RPCs server-side para CxC/CxP/Órdenes de pago/Dashboard/resumen de documentos de proveedores (paginación, búsqueda, totales y agregados en SQL). El `.limit(500)` de `getCuentasPagar()` fue eliminado de paso en 3B-10 al reemplazar `getResumenDashboard()` por agregados SQL. |
+| **B. Correctness serverless** | Trabajo que asumía un proceso único de larga vida corriendo en funciones efímeras: broadcasts con `void Promise`, caches en `Map`, debounce de Sheets con `setTimeout`. Incluía un evento `bulk` de Realtime que se descartaba en silencio. | P0/P1 | **Prácticamente cerrado.** Broadcasts vía `after()` (EF-2 1D-1). Las 4 cachés locales retiradas — las 3 de EF-2 (1D-3) más `folio.ts` en 3B-7 (`CacheManager`/`invalidateFolioCache()` removidos, la RPC de preview se llama directo). `triggerSheetsSync()` y sus 31 call sites eliminados (3C-1); `sync-down.ts` paginado (3C-2); lock de Sheets con lease/renovación/recuperación de huérfanos (3C-3); retención de `rate_limits` + safety-net diario vía el mismo lock (3C-4). El evento `bulk` de Realtime descartado en silencio no fue parte del alcance de EF-3 — sigue sin tocar. |
+| **C. Superficie de riesgo** | `supabaseAdmin` accesible desde cualquier ruta, sin revocación de sesión para staff, `CRON_SECRET` que falla abierto si no existe, e idempotencia que trata cualquier error de INSERT como duplicado. | P1 | **Parcial, sin cambio en EF-3.** `supabaseAdmin` aislado (EF-2 1B-1) y revocación de sesión de staff (EF-2 1B-2a/1B-2b) siguen siendo lo único resuelto. `CRON_SECRET` fail-open e idempotencia de INSERT no fueron parte del alcance de EF-3 — siguen pendientes. Además, EF-3 encontró y documentó (diferido, no bloqueante) un hallazgo nuevo de esta misma familia: **F28**, race de concurrencia real en la rotación del cookie de sesión de `next-auth` bajo requests verdaderamente simultáneos a la misma sesión ([`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897)) — ver más abajo y `docs/archive/ef-3-baseline-final.md`. |
+| **D. Mantenibilidad** | `app/cotizaciones/[id]/page.tsx` con ~2,400 líneas y demasiadas responsabilidades, manejo de errores inconsistente, y lógica de upload duplicada en tres módulos. | P1/P2 | **Cerrado por EF-3 (3D-0..3D-12).** `page.tsx` bajó de 2,388 a ~660 líneas extrayendo los 7 hooks planeados, incluido `useQuotationItemCellsAutosave` (3D-5 — inicialmente pausado por decisión del usuario, retomado y cerrado dentro de EF-3 con prueba manual real contra `serenata-erp-loadtest`). `DomainError`+logger adoptado en ~15 rutas más (financieras, Portal completo, Proyectos). Deduplicación de upload de factura hecha (`lib/server/uploads/factura-validation.ts`, CxP/CxC/Portal). |
+| **E. Pruebas de carga** | Los tests actuales prueban correctness con 2-10 sesiones, no capacidad. Faltaba una suite (k6) que respondiera objetivamente "¿aguanta si mañana entran 100 personas?". | P1 | **Cerrado, con respuesta real y un hallazgo diferido.** Los 8 escenarios k6 (3A-5/3A-6) y el gate real de 8 escenarios × local/serverless (3E-1) corrieron sobre el código final de EF-3. `http_req_duration` (p95<800ms/p99<1500ms) pasó siempre en los 7 escenarios concurrentes, en ambos entornos. `http_req_failed` (rate<1%) solo pasó en `portal.js` (150 VUs limpio) — los otros 6 escenarios rompen por **F28** (ver Frente C), no por capacidad real del sistema. Root-caused a fondo y diferido con aprobación explícita del usuario; no es deuda oculta. |
 
 **Hallazgos completos, con el detalle de cada caso y la norma arquitectónica que debe
 quedar establecida al cerrar cada frente:**
 [`docs/archive/auditoria-ingenieria-2026-09.md`](archive/auditoria-ingenieria-2026-09.md).
 
-Los 40 bloques concretos de EF-3 ya están definidos y auditados contra el
-código real (12 rondas) en `docs/EF-3_ENGINEERING_HARDENING.md` — arrancan
-con este mismo commit (3A-0).
+Los 41 bloques de EF-3, auditados contra el código real (12 rondas) y
+ejecutados de punta a punta, quedan en
+[`docs/archive/ef-3-engineering-hardening.md`](archive/ef-3-engineering-hardening.md).
 
 ---
 

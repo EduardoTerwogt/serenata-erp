@@ -370,10 +370,22 @@ Trampas reales, no teóricas. Cada una costó un bug:
   `AdminSheets.tsx`), protegido por un lock con lease en `sheets_sync_status`
   (3C-3: `acquire_sheets_sync_lock`/`renew_sheets_sync_lease`/
   `release_sheets_sync_lock`, keyset pagination en `sync-down.ts`). Un
-  safety-net diario vía el cron de `keep-alive` está planeado (3C-4) pero
-  **pausado** hasta que el volumen de prueba objetivo esté disponible (ver
-  tracker de EF-3).
-- **Reservar folio es atómico vía RPC.** Generar folios en JS garantiza carreras.
+  safety-net diario vía el cron de `keep-alive` (`app/api/keep-alive/route.ts`,
+  EF-3 3C-4) llama `syncAllDown()` bajo el mismo lock, best-effort
+  (try/catch, nunca hace fallar `keep-alive`), más retención de
+  `rate_limits` (`window_start<24h`). La validación empírica de cuánto
+  tarda `syncAllDown()` contra Sheets real quedó fuera de alcance de
+  Engineering Hardening por decisión explícita del usuario (2026-09-16) —
+  el spreadsheet aislado de loadtest resultó inaccesible y reconfigurarlo,
+  o decidir el futuro de la integración de Sheets, es una decisión de
+  producto aparte. Detalle: `docs/archive/ef-3-engineering-hardening.md`.
+- **Reservar folio es atómico vía RPC** (`reserve_next_cotizacion_folio()`
+  al confirmar; `preview_next_cotizacion_folio_principal()` para el
+  preview de la rama principal, EF-3 3B-7 — la rama de complementarias
+  sigue en JS, `folio.ts`). Generar folios en JS sin RPC garantiza
+  carreras. El caché en memoria de `previewNextQuotationFolio()` fue
+  retirado en 3B-7 (ver el gotcha de `CacheManager` más abajo) — la RPC se
+  llama directo en cada invocación, con p95 medido de 23ms.
 - **Rate limiting corre sobre Postgres**, no sobre un store dedicado (no hay cuenta
   de pago de Vercel). Funciona al volumen actual; la interfaz
   `checkRateLimit(key, max, windowSeconds)` está aislada para poder migrar a Redis
@@ -395,8 +407,9 @@ Trampas reales, no teóricas. Cada una costó un bug:
   tibia que la anterior o no. Nunca es una garantía de caché-hit, solo una
   mitigación best-effort — si una ruta necesita latencia consistente, la
   solución real es una consulta más barata (filtro/límite/RPC), no un `Map`
-  de proceso. Causa raíz de la deuda documentada en `docs/ACTIVE_WORK.md`
-  para `previewNextQuotationFolio()`.
+  de proceso. Las 4 cachés locales que existían quedaron retiradas por
+  completo tras EF-3 3B-7 (`folio.ts`, el último): ya no queda ningún
+  `CacheManager` activo en el repo.
 - **`RealtimeClient.removeChannel()` (`@supabase/realtime-js`) solo da de
   baja el canal si `unsubscribe()` resuelve `'ok'`.** Con `'timed out'` o
   `'error'` el canal queda registrado en el cliente igual, y
@@ -406,16 +419,50 @@ Trampas reales, no teóricas. Cada una costó un bug:
   nuevo que llame `removeChannel()` directamente debe revisar el status
   devuelto, nunca asumir que "la promesa resolvió" significa "el canal ya no
   existe" (EF-2 1A-1, expuesto por auditoría del PR #31).
-- **El target `local` de `load-test.yml` (EF-3A) corre la app (`next start`) Y
-  los procesos generadores de carga de k6 en el mismo runner de GitHub Actions
-  (2 cores compartidos).** Bajo concurrencia combinada real (7 escenarios a la
-  vez, ~95+ VUs) esto produjo 92-99% de `http_req_failed` con latencias
-  ultra-rápidas (avg 3-16ms) y cero errores de aplicación en los logs —
-  contención de conexión/socket del runner compartido, no un límite real de la
-  app (3A-6, `docs/archive/ef-3-baseline-previo.md`). **Sus percentiles bajo
-  concurrencia combinada no son confiables** como medición de capacidad; sirve
-  solo para humo funcional (`SMOKE=1`). El target `serverless` (Vercel real,
-  infraestructura propia) es la fuente válida de percentiles.
+- **`next-auth` v5 rota el cookie de sesión en casi cada request autenticado
+  (`session: {strategy:'jwt'}`, `proxy.ts = auth(proxyHandler)`) y tiene una
+  race de concurrencia real bajo requests verdaderamente simultáneos contra
+  la misma sesión** — coincide con el issue upstream
+  [`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897).
+  Confirmado como **F28** en el gate de carga real de EF-3 3E-1: 6 de 8
+  escenarios rompieron `http_req_failed<1%` (duración/latencia sí pasan
+  siempre) de forma idéntica en `local` y `serverless`. Descartado
+  exhaustivamente: cliente k6 (override manual del cookie jar, dos veces),
+  infraestructura edge/multi-región de Vercel (reproduce igual en `local`
+  de un solo proceso) y cold-start (reproduce igual con el proceso ya
+  caliente). **Diferido con aprobación explícita del usuario
+  (2026-09-17)** — gatillo angosto (requests genuinamente simultáneos a la
+  misma sesión), no bloquea nada ya entregado. Fix (upgrade de `next-auth`
+  o ajuste de `session.updateAge`/config de rotación) sin bloque ni fecha
+  asignados. Detalle completo:
+  `docs/archive/ef-3-baseline-final.md`, tracker archivado (fila F28, fila
+  condicional `3E-1b`).
+  **Corrección sobre 3A-6:** el baseline diagnóstico previo (3A-6,
+  `docs/archive/ef-3-baseline-previo.md`) había atribuido un patrón de
+  fallas casi idéntico (5/7 escenarios rotos, `portal.js` limpio) a
+  contención de CPU/socket del runner compartido de GitHub Actions donde
+  corrían juntos la app y los generadores de carga k6. Esa hipótesis **no
+  se sostiene**: el mismo patrón reprodujo igual contra `serverless`
+  (infraestructura propia de Vercel, sin ningún runner compartido
+  posible). Es casi seguro que 3A-6 ya estaba viendo F28, nunca
+  confirmable entonces porque `serverless` no llegó a correr (bloqueado
+  por un rate-limit real de Vercel esa sesión). El target `local` de
+  `load-test.yml` sigue sirviendo para humo funcional (`SMOKE=1`); el
+  target `serverless` es la fuente válida de percentiles de capacidad.
+- **Dashboard usa 5 RPCs SQL agregadas** (`dashboard_kpis_cuentas`/
+  `dashboard_egresos_por_bucket`/`dashboard_actividad_cotizaciones`/
+  `dashboard_actividad_proyectos`/`dashboard_cotizaciones_recientes`, EF-3
+  3B-10) en vez de traer las tablas completas a JS y agregar ahí. De paso
+  eliminó el `.limit(500)` real que tenía `getCuentasPagar()` y que topaba
+  el KPI "por pagar". `getPagosComprobantesEnRango()` no se tocó (ya
+  filtraba server-side).
+- **`cuentas_por_proyecto()` necesita índice en `cuentas_pagar.proyecto_id`
+  (F27, EF-3 3E-1).** Sin él, la RPC hacía un seq scan completo de
+  `cuentas_pagar` por cada proyecto consultado — medido y corregido con
+  `CREATE INDEX IF NOT EXISTS idx_cuentas_pagar_proyecto_id` (migración
+  `20260916_fix_cuentas_por_proyecto_missing_index.sql`, aplicada a test y
+  producción). No explicó por sí solo el hallazgo más grande del gate de
+  carga de 3E-1 — ver F28 arriba.
 - **`GET /api/productos` (carga completa sin `q`, usada por
   `useQuotationForm` para el autofill client-side) tiene `.limit(2000)`
   explícito — antes no tenía ninguno y dependía en silencio del tope por
