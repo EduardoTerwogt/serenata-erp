@@ -47,7 +47,13 @@ export function requiredEnv(name) {
 // así que no hace falta fusionar nada a mano aquí.
 export function loginStaff(targetUrl, email, password) {
   const csrfRes = http.get(`${targetUrl}/api/auth/csrf`)
-  check(csrfRes, { 'csrf: status 200': (r) => r.status === 200 })
+  const csrfOk = check(csrfRes, { 'csrf: status 200': (r) => r.status === 200 })
+  // DIAG (EF-3 3E-1, diagnóstico de F27b -- throwaway, nunca merge): línea
+  // compacta al log del job (foreground, sin redirigir stdout) cuando falla,
+  // con el timestamp real que GitHub Actions ya le pone a cada línea.
+  if (!csrfOk) {
+    console.log(`DIAG-FAIL csrf vu=${__VU} iter=${__ITER} status=${csrfRes.status} body=${(csrfRes.body || '').slice(0, 150)}`)
+  }
   const { csrfToken } = JSON.parse(csrfRes.body)
 
   const loginRes = http.post(
@@ -55,7 +61,10 @@ export function loginStaff(targetUrl, email, password) {
     { csrfToken, email, password, callbackUrl: `${targetUrl}/`, json: 'true' },
     { redirects: 0 }
   )
-  check(loginRes, { 'login: status 200 o redirect': (r) => r.status === 200 || r.status === 302 })
+  const loginOk = check(loginRes, { 'login: status 200 o redirect': (r) => r.status === 200 || r.status === 302 })
+  if (!loginOk) {
+    console.log(`DIAG-FAIL login vu=${__VU} iter=${__ITER} status=${loginRes.status} body=${(loginRes.body || '').slice(0, 150)}`)
+  }
 }
 
 // GET /api/proveedores devuelve el catálogo completo (sin paginar) -- pool

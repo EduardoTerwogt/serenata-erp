@@ -27,14 +27,19 @@ export default function cuentas() {
     loggedIn = true
   }
 
+  // DIAG (EF-3 3E-1, diagnóstico de F27b -- throwaway, nunca merge): status
+  // real + snippet de body en cada falla, al log del job (foreground).
   const cobrarRes = http.get(`${TARGET_URL}/api/cuentas-cobrar?search=&page=1&pageSize=50`)
-  check(cobrarRes, { 'GET /api/cuentas-cobrar: 200': (r) => r.status === 200 })
+  const cobrarOk = check(cobrarRes, { 'GET /api/cuentas-cobrar: 200': (r) => r.status === 200 })
+  if (!cobrarOk) console.log(`DIAG-FAIL cuentas-cobrar vu=${__VU} iter=${__ITER} status=${cobrarRes.status} body=${(cobrarRes.body || '').slice(0, 150)}`)
 
   const pagarRes = http.get(`${TARGET_URL}/api/cuentas-pagar?search=&page=1&pageSize=50`)
-  check(pagarRes, { 'GET /api/cuentas-pagar: 200': (r) => r.status === 200 })
+  const pagarOk = check(pagarRes, { 'GET /api/cuentas-pagar: 200': (r) => r.status === 200 })
+  if (!pagarOk) console.log(`DIAG-FAIL cuentas-pagar vu=${__VU} iter=${__ITER} status=${pagarRes.status} body=${(pagarRes.body || '').slice(0, 150)}`)
 
   const porProyectoRes = http.get(`${TARGET_URL}/api/cuentas/por-proyecto`)
-  check(porProyectoRes, { 'GET /api/cuentas/por-proyecto: 200': (r) => r.status === 200 })
+  const porProyectoOk = check(porProyectoRes, { 'GET /api/cuentas/por-proyecto: 200': (r) => r.status === 200 })
+  if (!porProyectoOk) console.log(`DIAG-FAIL por-proyecto vu=${__VU} iter=${__ITER} status=${porProyectoRes.status} body=${(porProyectoRes.body || '').slice(0, 150)}`)
 
   sleep(2 + Math.random() * 2)
 }

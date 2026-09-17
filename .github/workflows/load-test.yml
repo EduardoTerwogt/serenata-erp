@@ -44,6 +44,11 @@ on:
         required: false
         type: boolean
         default: false
+      diag_cuentas:
+        description: 'THROWAWAY (EF-3 3E-1, diagnóstico de F27b -- nunca mergeada a main): corre SOLO cuentas.js a duración real contra serverless (job serverless-diag-cuentas), en foreground (sin --summary-export ni backgrounding) para que el log del job traiga status/body real de cada falla con timestamp real de GitHub Actions -- distingue si las fallas de http_req_failed se concentran en el ramp inicial (~30-60s, login synchronized) o se sostienen durante los 11m30s de meseta (capacidad real). No siembra ni limpia nada (cuentas.js es solo lectura). Desactiva local/serverless/local-full/serverless-full para ese mismo dispatch'
+        required: false
+        type: boolean
+        default: false
 
 # Mismo group que e2e.yml -- ambos mutan serenata-erp-test y la misma
 # carpeta de Drive de test, así que GitHub Actions encola cualquier corrida
@@ -99,7 +104,7 @@ jobs:
           node scripts/loadtest/wait-for-deployment.mjs "${ARGS[@]}"
 
   local:
-    if: ${{ !inputs.seed_volume && !inputs.full_baseline }}
+    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -234,7 +239,7 @@ jobs:
     # workflow_dispatch corrompería el ciclo de datos compartidos.
     # `pin-loadtest-target` sí corre en paralelo con `local` porque solo
     # prepara el deploy remoto, no toca datos compartidos.
-    if: ${{ !inputs.seed_volume && !inputs.full_baseline }}
+    if: ${{ !inputs.seed_volume && !inputs.full_baseline && !inputs.diag_cuentas }}
     needs: [pin-loadtest-target, local]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -282,6 +287,63 @@ jobs:
       # Los 8 escenarios de k6 contra el entorno serverless real los agrega 3A-6.
 
   # ---------------------------------------------------------------------
+  # EF-3 3E-1 -- THROWAWAY, diagnóstico de F27b (nunca mergeada a main):
+  # el ciclo real de 3E-1 (jobs de abajo) encontró que 6 de 7 escenarios
+  # concurrentes rompen http_req_failed<1% -- IGUAL en local y serverless,
+  # incluso después de arreglar F27 (cuentas_por_proyecto()) -- solo
+  # portal.js (bypass de sesión HMAC, sin login real) pasa limpio. Este job
+  # corre SOLO cuentas.js a duración real, EN FOREGROUND (sin
+  # --summary-export ni backgrounding, sin redirigir stdout a un archivo)
+  # para que el log del job traiga status/body real de cada falla, con el
+  # timestamp real que GitHub Actions ya le pone a cada línea -- eso separa
+  # 2 hipótesis sin ambigüedad: fallas concentradas en el ramp inicial
+  # (~30-60s, ~130 logins reales de NextAuth sincronizados por el ramp de
+  # ramping-vus, ya que cada VU hace loginStaff() UNA sola vez en su
+  # primera iteración) vs. fallas sostenidas durante los 11m30s de meseta
+  # (problema real de capacidad, no un artefacto del perfil de carga
+  # sintético de este load test). cuentas.js es de solo lectura -- no
+  # siembra ni necesita cleanup propio.
+  serverless-diag-cuentas:
+    if: ${{ inputs.diag_cuentas }}
+    needs: [pin-loadtest-target]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
+      TARGET_URL: ${{ secrets.LOADTEST_SERVERLESS_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: env-check -- confirmar que el deployment serverless apunta a serenata-erp-test
+        run: node scripts/loadtest/env-check.mjs --target-url "$TARGET_URL"
+
+      - name: Instalar k6
+        uses: grafana/setup-k6-action@v1
+
+      # EN FOREGROUND a propósito (sin --summary-export, sin backgrounding,
+      # sin redirigir a un archivo) -- todo el stdout de k6 (su resumen
+      # default + las líneas DIAG-FAIL) va directo al log del job, que sí
+      # se puede leer completo con get_job_logs (el artifact zip en blob
+      # storage no es descargable desde este sandbox).
+      - name: 3E-1 diag -- cuentas.js a duración real contra serverless (foreground)
+        run: k6 run --env TARGET_URL="$TARGET_URL" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/cuentas.js
+
+  # ---------------------------------------------------------------------
   # EF-3 3E-1 -- THROWAWAY, orquestación descartable (nunca mergeada a
   # main, ver docs/EF-3_ENGINEERING_HARDENING.md 3E-1 punto 1 y
   # docs/archive/ef-3-baseline-previo.md): ciclo real (no SMOKE) de los 8
@@ -300,7 +362,7 @@ jobs:
   # 3A-5/3A-6), y el snapshot "después"+deltas y el cleanup del runId
   # corren siempre (`if: always()`), pase lo que pase con los umbrales.
   local-full:
-    if: ${{ inputs.full_baseline }}
+    if: ${{ inputs.full_baseline && !inputs.diag_cuentas }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -505,7 +567,7 @@ jobs:
   serverless-full:
     # Corre DESPUÉS de local-full -- mismo motivo que serverless/local:
     # ambos mutan la misma serenata-erp-test compartida, sin solaparse.
-    if: ${{ inputs.full_baseline }}
+    if: ${{ inputs.full_baseline && !inputs.diag_cuentas }}
     needs: [pin-loadtest-target, local-full]
     runs-on: ubuntu-latest
     timeout-minutes: 45
