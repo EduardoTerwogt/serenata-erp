@@ -36,11 +36,12 @@ hooks/                        # useQuotationForm, useQuotationPresence, useServi
 lib/
 ├── api-auth.ts               # requireSection() / requireAnySection() / requireAuthenticated()
 ├── proxy-handler.ts          # lógica de proxy.ts (testable sin importar next-auth)
+├── session-token.ts          # getEdgeSessionToken()/getNodeSessionToken() -- decodifica el JWT (getToken(), next-auth/jwt) sin pasar por auth(), nunca reemite Set-Cookie (F28)
 ├── auth-callbacks.ts         # callbacks jwt/session de NextAuth (testables por separado)
 ├── authz.ts  types.ts  supabase.ts  supabase-browser.ts
 ├── db.ts                     # SOLO fachada: reexporta repositories
 ├── validation/schemas.ts     # Zod
-├── client/api.ts             # getJson/postJson/putJson/FormData/binary + 401 compartido
+├── client/api.ts             # getJson/postJson/putJson/FormData/binario + 401 compartido
 ├── quotations/               # cálculos, formato, mappers
 ├── parsers/                  # eventInfoParser (fallback regex)
 ├── integrations/google/      # drive, sheets, calendar (parcial)
@@ -63,14 +64,17 @@ docs/                         # ACTIVE_WORK · ROADMAP · decisions/ · archive/
 ## Capas
 
 **1. Auth y autorización.** `proxy.ts` (convención de Next.js 16, sustituye a
-`middleware.ts`) es un wrapper fino (`export default auth(proxyHandler)`); toda
-la lógica real vive en `lib/proxy-handler.ts` para poder testearla sin arrastrar
-`NextAuth({...})` (que Vitest no resuelve bajo Next 16). Valida sesión y
-secciones permitidas antes de llegar a página o API. Dentro de cada route,
-`requireSection('cotizaciones')` repite la comprobación. Secciones: `admin`,
-`dashboard`, `cotizaciones`, `proyectos`, `cuentas`, `responsables`,
-`planeacion`. El portal de proveedores tiene sesión propia, independiente de
-NextAuth.
+`middleware.ts`) decodifica el JWT de sesión con `getEdgeSessionToken()`
+(`lib/session-token.ts`, wrapper de `getToken()` de `next-auth/jwt`) y llama a
+`proxyHandler(req, token)` -- **ya no envuelve con `auth()`** (F28, ver gotchas:
+`auth()` usado como middleware reemitía el cookie de sesión en cada invocación).
+Toda la lógica real vive en `lib/proxy-handler.ts` para poder testearla sin
+arrastrar `NextAuth({...})` (que Vitest no resuelve bajo Next 16). Valida sesión
+y secciones permitidas antes de llegar a página o API. Dentro de cada route,
+`requireSection('cotizaciones')` repite la comprobación -- también vía
+`getNodeSessionToken()`, no `auth()`. Secciones: `admin`, `dashboard`,
+`cotizaciones`, `proyectos`, `cuentas`, `responsables`, `planeacion`. El portal
+de proveedores tiene sesión propia, independiente de NextAuth.
 
 **Revocación de sesión de staff (`session_version`, EF-2 1B-2b).** Igual que el
 Portal (`db/migrations/20260909_portal_session_version.sql`), `usuarios` tiene
@@ -419,25 +423,35 @@ Trampas reales, no teóricas. Cada una costó un bug:
   nuevo que llame `removeChannel()` directamente debe revisar el status
   devuelto, nunca asumir que "la promesa resolvió" significa "el canal ya no
   existe" (EF-2 1A-1, expuesto por auditoría del PR #31).
-- **`next-auth` v5 rota el cookie de sesión en casi cada request autenticado
-  (`session: {strategy:'jwt'}`, `proxy.ts = auth(proxyHandler)`) y tiene una
-  race de concurrencia real bajo requests verdaderamente simultáneos contra
-  la misma sesión** — coincide con el issue upstream
-  [`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897).
-  Confirmado como **F28** en el gate de carga real de EF-3 3E-1: 6 de 8
-  escenarios rompieron `http_req_failed<1%` (duración/latencia sí pasan
-  siempre) de forma idéntica en `local` y `serverless`. Descartado
-  exhaustivamente: cliente k6 (override manual del cookie jar, dos veces),
-  infraestructura edge/multi-región de Vercel (reproduce igual en `local`
-  de un solo proceso) y cold-start (reproduce igual con el proceso ya
-  caliente). **Diferido con aprobación explícita del usuario
-  (2026-09-17)** — gatillo angosto (requests genuinamente simultáneos a la
-  misma sesión), no bloquea nada ya entregado. Fix (upgrade de `next-auth`
-  o ajuste de `session.updateAge`/config de rotación) sin bloque ni fecha
-  asignados. Detalle completo:
-  `docs/archive/ef-3-baseline-final.md`, tracker archivado (fila F28, fila
-  condicional `3E-1b`),
+- **F28 — RESUELTO (2026-09-17, PR [#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71), commit `136fee9`).**
+  `next-auth` v5 rotaba el cookie de sesión en casi cada request autenticado
+  porque `auth()` usado como middleware (`proxy.ts = auth(proxyHandler)`)
+  invoca internamente la acción `session()` de `@auth/core`, que para
+  `strategy:'jwt'` siempre re-firma y reemite `Set-Cookie` — sin throttle de
+  `updateAge` (ese throttle solo existe en la rama de sesiones de base de
+  datos). Bajo requests verdaderamente simultáneos contra la misma sesión,
+  eso causaba una race de concurrencia real (coincide con el issue upstream,
+  aún abierto sin fix,
+  [`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897)).
+  Confirmado en el gate de carga real de EF-3 3E-1: 6 de 8 escenarios
+  rompieron `http_req_failed<1%` de forma idéntica en `local` y `serverless`
+  (duración/latencia sí pasaban siempre). **Fix:** `proxy.ts`/
+  `lib/proxy-handler.ts` y `lib/api-auth.ts` dejan de envolver con `auth()` y
+  usan `getToken()` (`lib/session-token.ts`) — decodifica sin efectos
+  secundarios, nunca emite `Set-Cookie`. Verificado con
+  `tests/e2e/live/staff-session-concurrent-rotation.spec.ts` (15 requests
+  concurrentes reales contra la misma sesión, en verde contra `main`).
+  Detalle completo, causa raíz exacta y verificación:
   [`docs/decisions/010-f28-diferir-race-cookie-nextauth.md`](docs/decisions/010-f28-diferir-race-cookie-nextauth.md).
+  **Pendiente de atender en algún momento, no bloqueante:** ni el paso
+  `SMOKE` de `scripts/loadtest/k6/_diag-cookies-concurrent.js` ni el job
+  `serverless` de `load-test.yml` ejercen las 5 VUs sostenidas contra el
+  umbral real `http_req_failed<1%` — ese gate nunca quedó cableado como job
+  permanente (solo se usó antes vía ramas throwaway durante el diagnóstico
+  original). El test e2e ya prueba el mecanismo real bajo concurrencia
+  genuina, así que no bloquea nada, pero si se quiere la confirmación a
+  escala hay que correr el script a mano fuera de `SMOKE=1`. Ver
+  `docs/ACTIVE_WORK.md`.
   **Corrección sobre 3A-6:** el baseline diagnóstico previo (3A-6,
   `docs/archive/ef-3-baseline-previo.md`) había atribuido un patrón de
   fallas casi idéntico (5/7 escenarios rotos, `portal.js` limpio) a

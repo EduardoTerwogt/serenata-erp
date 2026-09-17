@@ -26,45 +26,58 @@ Historia completa de cada una:
 `docs/ROADMAP.md` no tiene todavía una próxima iniciativa comprometida —
 se prioriza en Chat con el estado real del sistema a la vista.
 
-**F28 — RESUELTO (2026-09-17), en la misma sesión en que se documentó el
-diferimiento.** Race de concurrencia real en la rotación del cookie de
-sesión de `next-auth` bajo requests verdaderamente simultáneos a la misma
-sesión ([`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897),
-sigue abierto upstream sin fix). Causa raíz real (verificada contra el
-código fuente instalado de `@auth/core`): `auth()` usado como middleware
-en `proxy.ts` reemitía el cookie de sesión en cada invocación exitosa,
-sin throttle para `strategy: 'jwt'`. Fix: PR
-[#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71) (mergeado,
-commit `136fee9`) — `proxy.ts`/`lib/api-auth.ts` migran a `getToken()`
-(decodifica sin reemitir `Set-Cookie`, nuevo `lib/session-token.ts`).
-Verificado con un test e2e nuevo (`staff-session-concurrent-rotation.spec.ts`,
-15 requests concurrentes reales) en verde contra el entorno de test real.
-Detalle completo, causa raíz exacta y verificación en
-[`docs/decisions/010-f28-diferir-race-cookie-nextauth.md`](decisions/010-f28-diferir-race-cookie-nextauth.md).
+## Completado en esta sesión (2026-09-17)
 
-**Pendiente menor, no bloqueante:** re-correr `load-test.yml` por
-`workflow_dispatch` contra `136fee9` una vez se levante el límite de
-build de la cuenta de Vercel (`pin-loadtest-target` se topó con
-`Deployment rate limited — retry in 24 hours` el 2026-09-17 ~04:22 UTC,
-infra de cuenta, no del diff) — confirmación a escala de carga real del
-job `serverless`, que no llegó a correr. El job `local` (build real +
-smoke de los 9 escenarios k6) sí corrió limpio contra el fix.
+**F28 — RESUELTO**, en la misma sesión en que se documentó el
+diferimiento (el hallazgo era de EF-3 3E-1, pero EF-3 ya estaba cerrado
+antes de esta sesión — este trabajo fue aparte, no reabrió esa
+iniciativa). Race de concurrencia real en la rotación del cookie de
+sesión de `next-auth` bajo requests verdaderamente simultáneos a la
+misma sesión ([`nextauthjs/next-auth#8897`](https://github.com/nextauthjs/next-auth/issues/8897),
+sigue abierto upstream sin fix).
 
-## Pendiente de limpieza manual (no bloquea nada)
-
-- **Rama `claude/ef3e1-baseline-tmp`** (throwaway del ciclo de carga de
-  3E-1, nunca mergeada, sin efecto en `main`) — el borrado remoto está
-  bloqueado por policy del proxy de egress de las sesiones de Claude Code
-  contra la API de GitHub (`git push --delete` y `DELETE` directo vía API
-  ambos devolvieron 403: "Write access to this GitHub API path is not
-  permitted through this proxy"). Alguien con acceso directo a GitHub
-  puede borrarla desde la UI cuando quiera; no hay urgencia.
-- **Rama remota `fix/totales-general-conflict-drain` (ex-PR #30)** — mismo
-  tipo de bloqueo en una sesión anterior. Su código ya está en `main` vía
-  PR #29; no tiene trabajo sin mergear. (Arrastrado.)
+- **Causa raíz** (verificada línea por línea contra el código fuente
+  instalado de `@auth/core`, no solo inferida): `auth()` usado como
+  middleware en `proxy.ts` invoca la acción `session()` de `@auth/core`,
+  que para `strategy: 'jwt'` siempre re-firma y reemite `Set-Cookie` en
+  cada invocación exitosa, sin throttle de `updateAge`. El vector real y
+  único confirmado era ese middleware, no `lib/api-auth.ts` (su `auth()`
+  sin argumentos ya descartaba el `Set-Cookie` en silencio).
+- **Fix:** PR [#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71)
+  (mergeado, commit `136fee9`) — `proxy.ts`/`lib/proxy-handler.ts` y
+  `lib/api-auth.ts` dejan de envolver con `auth()` y usan `getToken()`
+  (nuevo `lib/session-token.ts`), que decodifica sin efectos
+  secundarios y nunca emite `Set-Cookie`. La revocación real contra
+  Postgres (`getUsuarioSessionState`) no se tocó.
+- **Tests ejecutados y resultado real:** `tsc --noEmit` limpio, `lint`
+  sin errores nuevos, `npm test` 833/833 en verde, suite `e2e.yml`
+  completa (`smoke-and-critical` + `live`) en verde en el PR y de nuevo
+  en `main` tras el merge. Test de regresión nuevo,
+  `tests/e2e/live/staff-session-concurrent-rotation.spec.ts` (15
+  requests genuinamente concurrentes contra la misma sesión real): en
+  verde contra `main`. `load-test.yml` completo (`local` + `serverless`)
+  por `workflow_dispatch` contra `main`: verde (el primer intento se
+  topó con un rate-limit de build de la cuenta de Vercel, ajeno al
+  diff, resuelto solo unas horas después).
+- Detalle completo, causa raíz exacta y verificación:
+  [`docs/decisions/010-f28-diferir-race-cookie-nextauth.md`](decisions/010-f28-diferir-race-cookie-nextauth.md).
+  `ARCHITECTURE.md` (capa de auth y gotcha de F28) actualizado para
+  reflejar el mecanismo nuevo.
 
 ## Deuda técnica
 
+- **Pendiente de atender en algún momento, no bloqueante — gate real de
+  concurrencia de F28 nunca quedó cableado en CI.** Ni el paso `SMOKE`
+  de `scripts/loadtest/k6/_diag-cookies-concurrent.js` ni el job
+  `serverless` de `load-test.yml` ejercen las 5 VUs sostenidas contra el
+  umbral real `http_req_failed<1%` — ese gate solo se usó antes vía
+  ramas throwaway durante el diagnóstico original de F28, nunca se
+  agregó como job permanente. El test e2e ya prueba el mecanismo real
+  bajo concurrencia genuina (ver arriba), así que esto no bloquea nada,
+  pero si en algún momento se quiere la confirmación a escala real hay
+  que correr `_diag-cookies-concurrent.js` a mano fuera de `SMOKE=1`
+  (o agregar un job dedicado a `load-test.yml`, mismo patrón que los
+  demás escenarios).
 - **Frente C (superficie de riesgo) de la auditoría de ingeniería no fue
   parte del alcance de EF-3:** `CRON_SECRET` que falla abierto si no
   existe, e idempotencia que trata cualquier error de INSERT como
@@ -88,9 +101,23 @@ smoke de los 9 escenarios k6) sí corrió limpio contra el fix.
   "Preview" en Vercel producción** — sin investigar el porqué. No se
   tocó, solo anotado. (Arrastrado.)
 
+## Pendiente de limpieza manual (no bloquea nada)
+
+- **Rama `claude/ef3e1-baseline-tmp`** (throwaway del ciclo de carga de
+  3E-1, nunca mergeada, sin efecto en `main`) — el borrado remoto está
+  bloqueado por policy del proxy de egress de las sesiones de Claude Code
+  contra la API de GitHub (`git push --delete` y `DELETE` directo vía API
+  ambos devolvieron 403: "Write access to this GitHub API path is not
+  permitted through this proxy"). Alguien con acceso directo a GitHub
+  puede borrarla desde la UI cuando quiera; no hay urgencia.
+- **Rama remota `fix/totales-general-conflict-drain` (ex-PR #30)** — mismo
+  tipo de bloqueo en una sesión anterior. Su código ya está en `main` vía
+  PR #29; no tiene trabajo sin mergear. (Arrastrado.)
+
 ## Siguiente paso
 
-Ninguna iniciativa de Engineering Hardening en curso. La próxima sesión
-que arranque (`serenata-iniciar-fase`) debe priorizar contra
-`docs/ROADMAP.md` (sección "Después") con el estado real del sistema a
-la vista, no asumir que hay trabajo de hardening pendiente por default.
+Ninguna iniciativa de Engineering Hardening en curso, ni ningún trabajo
+abierto de esta sesión. La próxima sesión que arranque
+(`serenata-iniciar-fase`) debe priorizar contra `docs/ROADMAP.md`
+(sección "Después") con el estado real del sistema a la vista, no
+asumir que hay trabajo pendiente por default.
