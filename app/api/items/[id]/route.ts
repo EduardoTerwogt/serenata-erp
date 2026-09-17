@@ -43,19 +43,13 @@ export async function PATCH(
       return Response.json({ error: 'Item no encontrado' }, { status: 404 })
     }
 
-    const updateFields: Record<string, unknown> = {}
-    if ('responsable_id' in parsed) updateFields.responsable_id = responsable_id || null
-    if ('responsable_nombre' in parsed) updateFields.responsable_nombre = responsable_nombre || null
-    if ('notas' in parsed) updateFields.notas = notas ?? null
-
-    const { error: updateError } = await supabaseAdmin
-      .from('items_cotizacion')
-      .update(updateFields)
-      .eq('id', id)
-
-    if (updateError) throw updateError
-
     if (!('responsable_id' in parsed) && !('responsable_nombre' in parsed)) {
+      // Solo notas: no toca cuentas_pagar ni grupos, update directo alcanza.
+      const { error: notasError } = await supabaseAdmin
+        .from('items_cotizacion')
+        .update({ notas: notas ?? null })
+        .eq('id', id)
+      if (notasError) throw notasError
       return Response.json({ ok: true })
     }
 
@@ -69,31 +63,84 @@ export async function PATCH(
       responsableData = data
     }
 
-    const cuentasPayload = {
-      responsable_nombre: responsable_nombre || 'Sin asignar',
-      responsable_id: responsable_id || null,
-      telefono: responsableData?.telefono ?? null,
-      correo: responsableData?.correo ?? null,
-      clabe: responsableData?.clabe ?? null,
-      banco: responsableData?.banco ?? null,
-    }
-
-    const { error: syncByItemIdError } = await supabaseAdmin
+    // Cuentas por pagar ya generadas para este item (cotización ya
+    // aprobada). item_id es la relación moderna (1:1, índice único); la
+    // fila "legacy" sin item_id (matcheada por descripción) es un residuo
+    // de datos previos a esa relación -- se mantiene por compatibilidad.
+    const { data: cuentaPrimaria } = await supabaseAdmin
       .from('cuentas_pagar')
-      .update(cuentasPayload)
+      .select('id')
       .eq('cotizacion_id', item.cotizacion_id)
       .eq('item_id', id)
+      .maybeSingle()
 
-    if (syncByItemIdError) throw syncByItemIdError
-
-    const { error: syncLegacyError } = await supabaseAdmin
+    const { data: cuentaLegacy } = await supabaseAdmin
       .from('cuentas_pagar')
-      .update(cuentasPayload)
+      .select('id')
       .eq('cotizacion_id', item.cotizacion_id)
       .is('item_id', null)
       .eq('item_descripcion', item.descripcion)
+      .maybeSingle()
 
-    if (syncLegacyError) throw syncLegacyError
+    // reasignar_responsable_cuenta_pagar hace, en una sola transacción,
+    // items_cotizacion (cuando la cuenta tiene item_id) + cuentas_pagar + la
+    // reconciliación de cuentas_pagar_grupos -- si el grupo viejo de la
+    // cuenta ya no está ABIERTO (P1412), revierte todo y esta ruta responde
+    // 409 en vez de aplicar parcialmente.
+    const rpcPayload = {
+      p_responsable_id: responsable_id || null,
+      p_responsable_nombre: responsable_nombre ?? null,
+      p_telefono: responsableData?.telefono ?? null,
+      p_correo: responsableData?.correo ?? null,
+      p_clabe: responsableData?.clabe ?? null,
+      p_banco: responsableData?.banco ?? null,
+    }
+    const grupoNoAbiertoResponse = Response.json(
+      { error: 'grupo_no_abierto', message: 'Esta cuenta ya forma parte de un grupo facturado o pagado; no se puede reasignar el proveedor sin una corrección contable.' },
+      { status: 409 }
+    )
+
+    if (cuentaPrimaria) {
+      const { error: rpcError } = await supabaseAdmin.rpc('reasignar_responsable_cuenta_pagar', {
+        p_cuenta_pagar_id: cuentaPrimaria.id,
+        ...rpcPayload,
+      })
+      if (rpcError) {
+        if (rpcError.code === 'P1412') return grupoNoAbiertoResponse
+        throw rpcError
+      }
+    } else {
+      // Sin fila primaria (cotización aún no aprobada, o solo existe la
+      // fila legacy sin item_id) -- nada que reconcilia items_cotizacion
+      // por RPC, se actualiza directo.
+      const updateFields: Record<string, unknown> = {}
+      if ('responsable_id' in parsed) updateFields.responsable_id = responsable_id || null
+      if ('responsable_nombre' in parsed) updateFields.responsable_nombre = responsable_nombre || null
+      const { error: updateError } = await supabaseAdmin
+        .from('items_cotizacion')
+        .update(updateFields)
+        .eq('id', id)
+      if (updateError) throw updateError
+    }
+
+    if (cuentaLegacy) {
+      const { error: rpcLegacyError } = await supabaseAdmin.rpc('reasignar_responsable_cuenta_pagar', {
+        p_cuenta_pagar_id: cuentaLegacy.id,
+        ...rpcPayload,
+      })
+      if (rpcLegacyError) {
+        if (rpcLegacyError.code === 'P1412') return grupoNoAbiertoResponse
+        throw rpcLegacyError
+      }
+    }
+
+    if ('notas' in parsed) {
+      const { error: notasError } = await supabaseAdmin
+        .from('items_cotizacion')
+        .update({ notas: notas ?? null })
+        .eq('id', id)
+      if (notasError) throw notasError
+    }
 
     if ('responsable_id' in parsed) {
       const nuevoResponsableId = responsable_id || null

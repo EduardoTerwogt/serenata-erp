@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-17T19:30:08.220Z",
-  "count": 81,
+  "generated_at": "2026-09-17T19:39:41.762Z",
+  "count": 83,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -82,6 +82,8 @@
     "20260916_fix_folio_reservation_survives_deletion.sql",
     "20260916_pg_stat_statements_snapshot.sql",
     "20260916_preview_next_cotizacion_folio_principal.sql",
-    "20260917_cuentas_pagar_grupos.sql"
+    "20260917_cuentas_pagar_grupos.sql",
+    "20260917_reasignar_responsable_cuenta_pagar.sql",
+    "20260917_reconciliar_grupos_en_approve_cotizacion.sql"
   ]
 }
