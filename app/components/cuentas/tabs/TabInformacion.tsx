@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { CuentaCobrar, CuentaPagar, CuentaPagarGrupo, HistorialCambioResponsableItem, Proveedor, RegimenFiscal } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { getJson } from '@/lib/client/api'
-import { calcularCrucePagoProveedor, formatCuentasCurrency } from '@/app/components/cuentas/utils'
+import { calcularCrucePagoProveedor } from '@/app/components/cuentas/utils'
 import { Icon } from '@/components/ui/Icon'
 import { StatusBadge, toneForCuentaEstado } from '@/components/ui/StatusBadge'
 
@@ -30,7 +30,6 @@ interface TabInformacionCobrarProps {
 interface TabInformacionPagarProps {
   tipo: 'pagar'
   cuenta: CuentaPagar
-  resumen?: { monto_pagado: number; saldo_pendiente: number }
   regimenFiscal?: RegimenFiscal | null
   // Presente solo cuando la cuenta pertenece a un grupo de facturación
   // (docs/PLAN.md) -- el total a facturar/pagar es el del grupo, no el de
@@ -172,8 +171,19 @@ function CrucePagoFiscal({ neto, regimenFiscal, esGrupo }: { neto: number; regim
   )
 }
 
-function GrupoFacturacionCard({ grupo, cuentaId }: { grupo: CuentaPagarGrupo; cuentaId: string }) {
-  const items = grupo.items || []
+// Bloque 7 (docs/PLAN.md): forma mínima que sirve tanto para un grupo real
+// (CuentaPagarGrupo) como para el "grupo" de 1 item sintetizado a partir de
+// una cuenta legacy sin grupo_id -- evita fricción entre EstadoCuentaPagarGrupo
+// y EstadoCuentaPagar (toneForCuentaEstado acepta string genérico).
+interface GrupoFacturacionData {
+  estado: string
+  monto_total: number
+  responsable_nombre?: string
+  items: CuentaPagar[]
+}
+
+function GrupoFacturacionCard({ grupo }: { grupo: GrupoFacturacionData }) {
+  const items = grupo.items
 
   return (
     <div className="rounded-panel border border-accent/35 bg-accent/5 p-4 space-y-3">
@@ -194,24 +204,16 @@ function GrupoFacturacionCard({ grupo, cuentaId }: { grupo: CuentaPagarGrupo; cu
       </p>
       {items.length > 0 && (
         <div className="border-t border-hairline pt-2 space-y-0">
-          {items.map((item) => {
-            const esActual = item.id === cuentaId
-            return (
-              <div key={item.id} className="flex items-center gap-3 py-2 border-b border-hairline last:border-b-0 text-content text-body">
-                <span className={`w-1.5 h-1.5 rounded-full flex-none ${esActual ? 'bg-accent' : 'bg-faint'}`} />
-                <div className="min-w-0 flex-1">
-                  <p className={`truncate ${esActual ? 'text-accent font-semibold' : 'text-ink font-medium'}`}>
-                    {item.item_descripcion || item.responsable_nombre}
-                  </p>
-                  <p className="text-faint text-eyebrow">{item.cotizacion_id}{esActual ? ' · este item' : ''}</p>
-                </div>
-                <span className="font-semibold text-body whitespace-nowrap">${fmt(item.x_pagar)}</span>
-                {esActual && (
-                  <span className="text-eyebrow font-bold text-accent bg-accent/15 rounded-pill px-2 py-0.5">actual</span>
-                )}
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center gap-3 py-2 border-b border-hairline last:border-b-0 text-content text-body">
+              <span className="w-1.5 h-1.5 rounded-full flex-none bg-faint" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-ink font-medium">{item.item_descripcion || item.responsable_nombre}</p>
+                <p className="text-faint text-eyebrow">{item.cotizacion_id}</p>
               </div>
-            )
-          })}
+              <span className="font-semibold text-body whitespace-nowrap">${fmt(item.x_pagar)}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -250,11 +252,19 @@ export function TabInformacion(props: TabInformacionProps) {
     )
   }
 
-  const { cuenta, resumen, regimenFiscal, grupo, onReasignarResponsable, cargarHistorialResponsable } = props
-  const montoPagado = resumen?.monto_pagado ?? cuenta.monto_pagado ?? 0
-  const saldoPendiente = resumen?.saldo_pendiente ?? (cuenta.x_pagar - montoPagado)
+  const { cuenta, regimenFiscal, grupo, onReasignarResponsable, cargarHistorialResponsable } = props
   const visibleFolio = cuenta.cotizacion_id
   const puedeReasignar = Boolean(cuenta.item_id && onReasignarResponsable)
+
+  // Bloque 7 (docs/PLAN.md): si la cuenta todavía no tiene grupo real
+  // (legacy sin grupo_id), se sintetiza uno de 1 item a partir de ella
+  // misma -- la tarjeta "Grupo de facturación" siempre aparece igual,
+  // nunca desaparece. El estado mostrado es el propio estado real del
+  // item (nunca se inventa "ABIERTO"), porque nunca pasó por el flujo de
+  // agrupación real.
+  const grupoEfectivo: GrupoFacturacionData = grupo
+    ? { estado: grupo.estado, monto_total: grupo.monto_total, responsable_nombre: grupo.responsable_nombre, items: grupo.items || [] }
+    : { estado: cuenta.estado, monto_total: cuenta.x_pagar, responsable_nombre: cuenta.responsable_nombre, items: [cuenta] }
 
   return (
     <div className="space-y-4">
@@ -271,47 +281,31 @@ export function TabInformacion(props: TabInformacionProps) {
         </div>
         <Field label="Proyecto"><p className="text-ink font-medium">{cuenta.proyecto_nombre || '—'}</p></Field>
         <Field label="Fecha Factura"><p className="text-ink font-medium">{formatDateDisplay(cuenta.fecha_factura)}</p></Field>
-        <div className="col-span-2">
-          <p className="text-subtext text-content">Descripción Item</p>
-          <p className="text-ink font-medium">{cuenta.item_descripcion || '—'}</p>
-          {cuenta.cantidad > 1 && <p className="text-faint text-eyebrow mt-1">Cantidad: {cuenta.cantidad}</p>}
-        </div>
-        <Field label="Monto x Pagar"><p className="text-ink font-bold">${fmt(cuenta.x_pagar)}</p></Field>
-        <Field label="Monto Pagado"><p className="text-ink font-bold">${fmt(montoPagado)}</p></Field>
-        <div className="col-span-2">
-          <p className="text-subtext text-content">Saldo Pendiente</p>
-          <p className={`font-bold ${saldoPendiente > 0 ? 'text-accent' : 'text-ink'}`}>
-            ${formatCuentasCurrency(saldoPendiente)}
-          </p>
-        </div>
+      </div>
 
-        {grupo && (
-          <div className="col-span-2">
-            <GrupoFacturacionCard grupo={grupo} cuentaId={cuenta.id} />
-          </div>
-        )}
+      <GrupoFacturacionCard grupo={grupoEfectivo} />
 
-        <div className="col-span-2 pt-4 border-t border-hairline">
-          <p className="text-subtext text-content mb-2">Información de Contacto</p>
-          <div className="text-content text-body space-y-1">
-            {cuenta.correo && <p>Correo: {cuenta.correo}</p>}
-            {cuenta.telefono && <p>Tel: {cuenta.telefono}</p>}
-            {cuenta.banco && <p>Banco: {cuenta.banco}</p>}
-            {cuenta.clabe && <p>CLABE: {cuenta.clabe}</p>}
-            {!cuenta.correo && !cuenta.telefono && !cuenta.banco && (
-              <p className="text-faint italic">Sin información de contacto</p>
-            )}
-          </div>
+      <CrucePagoFiscal neto={grupoEfectivo.monto_total} regimenFiscal={regimenFiscal} esGrupo={Boolean(grupo)} />
+
+      <div className="pt-4 border-t border-hairline">
+        <p className="text-subtext text-content mb-2">Información de Contacto</p>
+        <div className="text-content text-body space-y-1">
+          {cuenta.correo && <p>Correo: {cuenta.correo}</p>}
+          {cuenta.telefono && <p>Tel: {cuenta.telefono}</p>}
+          {cuenta.banco && <p>Banco: {cuenta.banco}</p>}
+          {cuenta.clabe && <p>CLABE: {cuenta.clabe}</p>}
+          {!cuenta.correo && !cuenta.telefono && !cuenta.banco && (
+            <p className="text-faint italic">Sin información de contacto</p>
+          )}
         </div>
       </div>
+
       {cuenta.notas && (
         <div className="pt-4 border-t border-hairline">
           <p className="text-subtext text-content mb-1">Notas</p>
           <p className="text-body text-content">{cuenta.notas}</p>
         </div>
       )}
-
-      <CrucePagoFiscal neto={grupo?.monto_total ?? cuenta.x_pagar} regimenFiscal={regimenFiscal} esGrupo={Boolean(grupo)} />
 
       {cargarHistorialResponsable && <HistorialResponsable cargar={cargarHistorialResponsable} />}
     </div>

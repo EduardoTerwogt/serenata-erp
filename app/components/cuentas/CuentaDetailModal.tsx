@@ -182,7 +182,6 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                   <TabInformacion
                     tipo="pagar"
                     cuenta={cuentaPagar}
-                    resumen={detallePagar?.resumen}
                     regimenFiscal={detallePagar?.proveedor?.regimen_fiscal ?? null}
                     grupo={detallePagar?.grupo ?? null}
                     onReasignarResponsable={async (responsableId, responsableNombre) => {
