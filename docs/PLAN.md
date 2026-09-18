@@ -36,7 +36,7 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 
 | Bloque | Iniciativa | Estado | Rama/PR |
 |---|---|---|---|
-| 1 | C — Plantillas: header de tarjeta | Pendiente | — |
+| 1 | C — Plantillas: header de tarjeta | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
 | 2 | A — Cotizaciones: UI de edición (sin fórmula) | Pendiente | — |
 | 3 | A — Cotizaciones: fórmula Costo Unitario/Costo Total (alto riesgo, bloque propio) | Pendiente | — |
 | 4 | D — Portal (4a alias/nombre, 4b ver documentos, 4c tab Historial) | Pendiente | — |
