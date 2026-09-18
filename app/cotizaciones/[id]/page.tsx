@@ -599,7 +599,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
             )}
             <p className="sn-label mb-2 mt-4">Notas del PDF · se imprimen debajo de Totales</p>
             {esEditable ? (
-              <textarea value={notasPdf} onChange={e => trackedHandleNotasPdfChange(e.target.value)} rows={4} placeholder="Sin notas..." className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-body text-content resize-none outline-none placeholder-faint focus:border-accent-quiet disabled:opacity-50 disabled:cursor-not-allowed" />
+              <textarea value={notasPdf} onChange={e => trackedHandleNotasPdfChange(e.target.value)} rows={4} placeholder="Sin notas para el PDF..." className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-body text-content resize-none outline-none placeholder-faint focus:border-accent-quiet disabled:opacity-50 disabled:cursor-not-allowed" />
             ) : (
               <p className="text-subtext text-content whitespace-pre-wrap">{notasPdf || '—'}</p>
             )}
