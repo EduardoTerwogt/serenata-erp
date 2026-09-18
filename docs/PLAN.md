@@ -37,7 +37,7 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 | Bloque | Iniciativa | Estado | Rama/PR |
 |---|---|---|---|
 | 1 | C — Plantillas: header de tarjeta | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
-| 2 | A — Cotizaciones: UI de edición (sin fórmula) | Pendiente | — |
+| 2 | A — Cotizaciones: UI de edición (sin fórmula) | En curso (PR abierto, incluye sub-tarea 6 con migración `notas_pdf` no anticipada por el plan) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
 | 3 | A — Cotizaciones: fórmula Costo Unitario/Costo Total (alto riesgo, bloque propio) | Pendiente | — |
 | 4 | D — Portal (4a alias/nombre, 4b ver documentos, 4c tab Historial) | Pendiente | — |
 | 5 | E — Clientes: catálogo editable | Pendiente | — |
@@ -230,6 +230,13 @@ Cada bloque es una rama dedicada + PR en borrador desde el primer commit útil
 (regla de `.claude/rules/git.md`). No comparten archivos entre sí salvo lo anotado
 en "Coordinación" más abajo, así que pueden avanzar en sesiones/agentes distintos
 sin bloquearse.
+
+**Desviación autorizada por el usuario (2026-09-18):** esta sesión ejecuta los
+Bloques 1-6 en una sola rama/PR (`claude/ecstatic-clarke-l73d8g` /
+[#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76)) en vez de una
+rama por bloque, cada uno en su propio commit para mantener trazabilidad. No
+cambia el resto de reglas del bloque (Bloque 3 sigue sin mezclarse con el 2,
+etc.) — solo el empaquetado de ramas/PR.
 
 ### Bloque 1 — Plantillas: header de tarjeta (el más simple, candidato a ir primero)
 
