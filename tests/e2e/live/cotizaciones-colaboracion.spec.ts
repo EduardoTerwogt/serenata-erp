@@ -428,6 +428,12 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       const cotizacion = await leerCotizacionDelServidor(cotizacionId)
       return cotizacion.notas_internas
     }, { timeout: 30_000 }).toBe(notaA)
+
+    // pageA/pageB persisten entre tests de este describe -- el overlay del
+    // modal (fixed inset-0, z-50) bloquearía los clicks de los tests
+    // siguientes si se deja abierto.
+    await pageA.getByRole('button', { name: 'Cerrar' }).click()
+    await pageB.getByRole('button', { name: 'Cerrar' }).click()
   })
 
   // Fase 8 (hardening pre-Proyectos): las 3 pruebas que siguen son las que la
