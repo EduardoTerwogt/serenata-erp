@@ -109,6 +109,24 @@ trazabilidad, márgenes y reportes históricos intactos).**
   correctamente desplegado — el hueco fue específico a esta iniciativa. A
   partir de aquí, cada migración se aplica a producción en el mismo bloque
   en que se valida en test, no se difiere.
+- **Segunda lección de proceso, encontrada al cerrar la iniciativa:**
+  `db/migrations/20260917_reconciliar_grupos_en_approve_cotizacion.sql`
+  (Bloque 2) se escribió `CREATE OR REPLACE FUNCTION approve_cotizacion`
+  sobre una copia vieja de la función — de antes de
+  `20260911_approve_cotizacion_restore_proyecto_id.sql`, que ya había
+  corregido una vez la falta de `proyecto_id` en el upsert de
+  `cuentas_cobrar`. El comentario de la migración de Bloque 2 afirmaba que
+  "todo lo demás ... queda exactamente igual"; era falso, y la regresión
+  volvió a colar el mismo bug (una cotización complementaria aprobada dejaba
+  de aparecer en Cuentas por Cobrar). Corregido en
+  `20260918_fix_approve_cotizacion_cuenta_cobrar_proyecto_id.sql`, con
+  backfill de la única fila real afectada en producción (`SH071-A`). **Norma
+  a partir de aquí:** al reemplazar una función existente vía
+  `CREATE OR REPLACE`, partir siempre de la migración más reciente que la
+  define (confirmarlo contra `pg_proc.prosrc` en producción o el manifiesto,
+  no de memoria ni de una copia local desactualizada), y diffear
+  explícitamente contra esa versión antes de asumir que "el resto queda
+  igual".
 
 ## Glosario
 
