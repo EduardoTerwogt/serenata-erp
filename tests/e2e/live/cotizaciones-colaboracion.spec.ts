@@ -413,11 +413,15 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     test.setTimeout(120_000)
 
     const notaA = `Nota escrita por A ${Date.now()}`
+    // Bloque 2 sub-tarea 8: "Nota de evento" ahora vive en un pop-up -- abrirlo
+    // antes de tocar el textarea, en ambas páginas.
+    await pageA.getByRole('button', { name: 'Nota de evento' }).click()
     const notasA = pageA.locator('textarea[placeholder="Sin notas..."]')
     await notasA.click()
     await notasA.fill(notaA)
     await notasA.blur()
 
+    await pageB.getByRole('button', { name: 'Nota de evento' }).click()
     await expect(pageB.locator('textarea[placeholder="Sin notas..."]')).toHaveValue(notaA, { timeout: 30_000 })
 
     await expect.poll(async () => {

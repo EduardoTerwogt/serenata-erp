@@ -15,7 +15,9 @@ test('edita información general de una cotización en BORRADOR (autosave)', asy
 
   const [request] = await Promise.all([
     page.waitForRequest((req) => req.url().includes('/general') && req.method() === 'PATCH'),
-    page.locator('textarea[placeholder="Sin notas..."]').click(),
+    // Bloque 2 sub-tarea 8: "Nota de evento" ya no está inline -- el heading
+    // sirve igual de bien como blanco neutral para sacar el foco del campo.
+    page.getByRole('heading', { name: 'SH-E2E-EDITAR' }).click(),
   ])
 
   expect(request.postDataJSON().proyecto).toBe('Spot Verano Editado E2E')
@@ -32,7 +34,9 @@ test('autoguarda fecha de entrega y locación (sección general)', async ({ page
 
   const [request] = await Promise.all([
     page.waitForRequest((req) => req.url().includes('/general') && req.method() === 'PATCH'),
-    page.locator('textarea[placeholder="Sin notas..."]').click(),
+    // Bloque 2 sub-tarea 8: "Nota de evento" ya no está inline -- el heading
+    // sirve igual de bien como blanco neutral para sacar el foco del campo.
+    page.getByRole('heading', { name: 'SH-E2E-GENERAL' }).click(),
   ])
 
   expect(request.postDataJSON().locacion).toBe('Guadalajara')
@@ -43,12 +47,17 @@ test('autoguarda las notas internas', async ({ page }) => {
   await login(page, '/cotizaciones/SH-E2E-NOTAS')
   await expect(page.getByRole('heading', { name: 'SH-E2E-NOTAS' })).toBeVisible()
 
+  // Bloque 2 sub-tarea 8: "Nota de evento" ahora vive en un pop-up -- abrirlo
+  // antes de tocar el textarea.
+  await page.getByRole('button', { name: 'Nota de evento' }).click()
   const notas = page.locator('textarea[placeholder="Sin notas..."]')
   await notas.fill('Llamado 6am, dos unidades')
 
   const [request] = await Promise.all([
     page.waitForRequest((req) => req.url().includes('/notas') && req.method() === 'PATCH'),
-    page.locator('input[placeholder="Nombre del proyecto"]').click(),
+    // Cerrar el modal saca el foco del textarea (blur) antes de desmontarlo,
+    // que es justo el disparador del autoguardado -- ver handleNotasBlur.
+    page.getByRole('button', { name: 'Cerrar' }).click(),
   ])
 
   expect(request.postDataJSON().notas_internas).toBe('Llamado 6am, dos unidades')
@@ -824,7 +833,9 @@ test('escribir en Datos generales mientras otro está en la sección sí guarda'
 
   const [request] = await Promise.all([
     page.waitForRequest((req) => req.url().includes('/general') && req.method() === 'PATCH'),
-    page.locator('textarea[placeholder="Sin notas..."]').click(),
+    // Bloque 2 sub-tarea 8: "Nota de evento" ya no está inline -- el heading
+    // sirve igual de bien como blanco neutral para sacar el foco del campo.
+    page.getByRole('heading', { name: 'SH-E2E-SECCION' }).click(),
   ])
   expect(request.postDataJSON().proyecto).toBe('Editado pese a la presencia ajena')
 })

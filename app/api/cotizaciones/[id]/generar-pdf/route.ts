@@ -10,6 +10,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
 
   try {
     const { id } = await props.params
+    const inline = new URL(request.url).searchParams.get('mode') === 'inline'
 
     // Fetch cotización data
     const cotizacion = await getCotizacionById(id)
@@ -50,7 +51,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
     return new Response(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Cotizacion_${cotizacion.id}.pdf"`,
+        'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="Cotizacion_${cotizacion.id}.pdf"`,
         'Content-Length': pdfBuffer.byteLength.toString(),
       },
     })

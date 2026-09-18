@@ -6,12 +6,15 @@ import { UseFormRegister } from 'react-hook-form'
 import { Producto, Proveedor, ServiceTemplate } from '@/lib/types'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { calculateCostoConIva } from '@/lib/quotations/calculations'
+import { calculateCostoConIva, toNumberOrZero } from '@/lib/quotations/calculations'
 import { fmtCurrency } from '@/lib/quotations/format'
 import { QuotationItemCellField } from '@/hooks/useQuotationPresence'
 import { QuotationItemsController } from '@/hooks/useQuotationItems'
-import { getJson } from '@/lib/client/api'
+import { getJson, sendJson } from '@/lib/client/api'
 import { Icon } from '@/components/ui/Icon'
+import { Select } from '@/components/ui/Select'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
 
 interface ReadOnlyItem {
   id: string
@@ -48,6 +51,8 @@ interface Props {
   responsables: Proveedor[]
   readOnlyItems?: ReadOnlyItem[]
   onCopyClick?: () => void
+  /** Bloque 2 sub-tarea 7: solo quien ya tiene sección `planeacion` ve el botón — sin tocar el guard del backend (`POST /api/service-templates` sigue exigiendo `requireSection('planeacion')`). */
+  canCreateTemplate?: boolean
   /**
    * Único punto de contacto con la lógica de partidas. La tabla se comporta igual en
    * una cotización nueva y en una existente: la diferencia (memoria vs. servidor) vive
@@ -59,6 +64,9 @@ interface Props {
 // Estilo "InlineInput" del design system: transparente hasta que se enfoca.
 const CELL_INPUT_CLASS = 'bg-transparent border border-transparent rounded-[8px] px-2 py-1.5 text-body focus:outline-none focus:bg-input focus:border-accent-quiet data-[busy]:border-accent-quiet/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
 const FULLSCREEN_INPUT_CLASS = 'w-full bg-input border border-hairline rounded-control px-4 py-3.5 text-base text-body focus:outline-none focus:border-accent data-[busy]:border-accent-quiet/70 disabled:opacity-50 disabled:cursor-not-allowed'
+// Bloque 2 sub-tarea 4: mismas clases, con el padding izquierdo reservado para el "$" fijo.
+const MONEY_CELL_INPUT_CLASS = CELL_INPUT_CLASS.replace('px-2', 'pl-5 pr-2')
+const FULLSCREEN_MONEY_INPUT_CLASS = FULLSCREEN_INPUT_CLASS.replace('px-4', 'pl-8 pr-4')
 
 function formatConflictValue(value: unknown): string {
   return value === null || value === undefined || value === '' ? '(vacío)' : String(value)
@@ -102,11 +110,16 @@ export function QuotationItemsSection({
   responsables,
   readOnlyItems = [],
   onCopyClick,
+  canCreateTemplate = false,
   items,
 }: Props) {
   const descInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const [dropdownPos, setDropdownPos] = useStateReact<Record<number, { top: number; left: number } | null>>({})
   const [templates, setTemplates] = useStateReact<ServiceTemplate[]>([])
+  const [showCreateTemplateModal, setShowCreateTemplateModal] = useStateReact(false)
+  const [newTemplateName, setNewTemplateName] = useStateReact('')
+  const [creatingTemplate, setCreatingTemplate] = useStateReact(false)
+  const [createTemplateError, setCreateTemplateError] = useStateReact<string | null>(null)
 
   useEffect(() => {
     if (!editable) return
@@ -125,6 +138,31 @@ export function QuotationItemsSection({
       await items.importItems(template.items)
     } finally {
       setApplyingTemplate(false)
+    }
+  }
+
+  const handleCreateTemplate = async () => {
+    const nombre = newTemplateName.trim()
+    if (!nombre || creatingTemplate) return
+    setCreatingTemplate(true)
+    setCreateTemplateError(null)
+    try {
+      const templateItems = watchedItems.map(item => ({
+        categoria: item.categoria,
+        descripcion: item.descripcion,
+        cantidad: item.cantidad,
+        precio_unitario: toNumberOrZero(item.precio_unitario),
+        x_pagar: toNumberOrZero(item.x_pagar),
+        responsable_id: item.responsable_id || null,
+        responsable_nombre: item.responsable_nombre || null,
+      }))
+      await sendJson('/api/service-templates', { nombre, items: templateItems }, 'Error creando plantilla')
+      setShowCreateTemplateModal(false)
+      setNewTemplateName('')
+    } catch (err) {
+      setCreateTemplateError(err instanceof Error ? err.message : 'Error creando plantilla')
+    } finally {
+      setCreatingTemplate(false)
     }
   }
 
@@ -174,7 +212,7 @@ export function QuotationItemsSection({
               onFocus={() => { items.cellFocus(rowIdAt(index), 'descripcion'); updateDropdownPos(index); if ((productoSugerencias[rowIdAt(index)]?.length ?? 0) > 0) setMostrarProductoDropdown(prev => ({ ...prev, [rowIdAt(index)]: true })) }}
               onBlur={() => { items.cellBlur(rowIdAt(index), 'descripcion'); setTimeout(() => setMostrarProductoDropdown(prev => ({ ...prev, [rowIdAt(index)]: false })), 200) }}
               data-busy={cellBusy(index, 'descripcion') || undefined}
-              className={`w-44 ${CELL_INPUT_CLASS}`}
+              className={`w-64 ${CELL_INPUT_CLASS}`}
               autoComplete="off"
             />
             {mostrarProductoDropdown[rowIdAt(index)] && (productoSugerencias[rowIdAt(index)]?.length ?? 0) > 0 && dropdownPos[index] && typeof document !== 'undefined' && createPortal(
@@ -200,10 +238,16 @@ export function QuotationItemsSection({
           <ItemFieldConflictBanner rowId={rowIdAt(index)} field="descripcion" items={items} />
         </td>
         <td className="px-4 py-2"><input type="number" min="1" {...register(`items.${index}.cantidad`, { valueAsNumber: true })} onFocus={() => items.cellFocus(rowIdAt(index), 'cantidad')} onBlur={() => items.cellBlur(rowIdAt(index), 'cantidad')} onChange={(e) => { items.cellChange(rowIdAt(index), 'cantidad'); register(`items.${index}.cantidad`).onChange(e) }} data-busy={cellBusy(index, 'cantidad') || undefined} className={`w-16 ${CELL_INPUT_CLASS}`} /><ItemFieldConflictBanner rowId={rowIdAt(index)} field="cantidad" items={items} /></td>
-        <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(index), 'precio_unitario')} onBlur={() => items.cellBlur(rowIdAt(index), 'precio_unitario')} onChange={(e) => { items.cellChange(rowIdAt(index), 'precio_unitario'); register(`items.${index}.precio_unitario`).onChange(e) }} data-busy={cellBusy(index, 'precio_unitario') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /><ItemFieldConflictBanner rowId={rowIdAt(index)} field="precio_unitario" items={items} /></td>
+        <td className="px-4 py-2">
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-subtext">$</span>
+            <input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(index), 'precio_unitario')} onBlur={() => items.cellBlur(rowIdAt(index), 'precio_unitario')} onChange={(e) => { items.cellChange(rowIdAt(index), 'precio_unitario'); register(`items.${index}.precio_unitario`).onChange(e) }} data-busy={cellBusy(index, 'precio_unitario') || undefined} className={`w-28 ${MONEY_CELL_INPUT_CLASS}`} />
+          </div>
+          <ItemFieldConflictBanner rowId={rowIdAt(index)} field="precio_unitario" items={items} />
+        </td>
         <td className="px-4 py-2 text-body font-medium whitespace-nowrap">${fmtCurrency(importe)}</td>
         <td className="px-4 py-2">
-          <select
+          <Select
             {...register(`items.${index}.responsable_id`)}
             onFocus={() => items.cellFocus(rowIdAt(index), 'responsable_id')}
             onBlur={() => items.cellBlur(rowIdAt(index), 'responsable_id')}
@@ -211,15 +255,21 @@ export function QuotationItemsSection({
               items.changeResponsable(rowIdAt(index), e.target.value)
             }}
             data-busy={cellBusy(index, 'responsable_id') || undefined}
-            className={`w-36 ${CELL_INPUT_CLASS}`}
+            className="w-36"
           >
             <option value="">Sin asignar</option>
             {responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
-          </select>
+          </Select>
           <input type="hidden" {...register(`items.${index}.responsable_nombre`)} />
           <ItemFieldConflictBanner rowId={rowIdAt(index)} field="responsable_id" items={items} />
         </td>
-        <td className="px-4 py-2"><input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(index), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(index), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(index), 'x_pagar'); register(`items.${index}.x_pagar`).onChange(e) }} data-busy={cellBusy(index, 'x_pagar') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /><ItemFieldConflictBanner rowId={rowIdAt(index)} field="x_pagar" items={items} /></td>
+        <td className="px-4 py-2">
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-subtext">$</span>
+            <input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(index), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(index), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(index), 'x_pagar'); register(`items.${index}.x_pagar`).onChange(e) }} data-busy={cellBusy(index, 'x_pagar') || undefined} className={`w-28 ${MONEY_CELL_INPUT_CLASS}`} />
+          </div>
+          <ItemFieldConflictBanner rowId={rowIdAt(index)} field="x_pagar" items={items} />
+        </td>
         <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
         <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(margen)}</td>
         <td className="px-4 py-2"><button type="button" onClick={() => items.removeRow(rowIdAt(index))} className="text-faint hover:text-cancelled-fg disabled:opacity-30 transition-colors">✕</button></td>
@@ -304,17 +354,18 @@ export function QuotationItemsSection({
           {editable && (
             <div className="flex flex-wrap gap-2">
               {templates.length > 0 && (
-                <select
+                <Select
                   value=""
                   onChange={e => { if (e.target.value) void handleApplyTemplate(e.target.value) }}
                   disabled={applyingTemplate}
-                  className="border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0"
+                  className="min-h-[44px] md:min-h-0"
                 >
                   <option value="">{applyingTemplate ? 'Aplicando plantilla…' : 'Plantilla de servicios…'}</option>
                   {templates.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                </select>
+                </Select>
               )}
               {onCopyClick && <button type="button" onClick={onCopyClick} className="flex items-center gap-2 border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0"><Icon name="copy" size={15} />Copiar desde otra cotización</button>}
+              {canCreateTemplate && watchedItems.length > 0 && <button type="button" onClick={() => setShowCreateTemplateModal(true)} className="flex items-center gap-2 border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0"><Icon name="plus" size={15} />Crear plantilla</button>}
             </div>
           )}
         </div>
@@ -376,9 +427,9 @@ export function QuotationItemsSection({
                 <ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="descripcion" items={items} />
               </div>
               <div><label className="sn-label block mb-2">Categoría</label><input {...register(`items.${editingItemIndex}.categoria`)} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'categoria')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'categoria')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'categoria'); register(`items.${editingItemIndex}.categoria`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'categoria') || undefined} className={FULLSCREEN_INPUT_CLASS} placeholder="Categoría" /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="categoria" items={items} /></div>
-              <div className="flex gap-3"><div className="flex-1"><label className="sn-label block mb-2">Cantidad</label><input type="number" min="1" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'cantidad')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'cantidad')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'cantidad'); register(`items.${editingItemIndex}.cantidad`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'cantidad') || undefined} className={`${FULLSCREEN_INPUT_CLASS} text-center`} /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="cantidad" items={items} /></div><div className="flex-[2]"><label className="sn-label block mb-2">Precio unitario</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'precio_unitario')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'precio_unitario')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'precio_unitario'); register(`items.${editingItemIndex}.precio_unitario`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'precio_unitario') || undefined} className={FULLSCREEN_INPUT_CLASS} /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="precio_unitario" items={items} /></div></div>
-              <div><label className="sn-label block mb-2">Responsable</label><select {...register(`items.${editingItemIndex}.responsable_id`)} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'responsable_id')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'responsable_id')} onChange={(e) => items.changeResponsable(rowIdAt(editingItemIndex), e.target.value)} data-busy={cellBusy(editingItemIndex, 'responsable_id') || undefined} className={`${FULLSCREEN_INPUT_CLASS} appearance-none`}><option value="">Sin asignar</option>{responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</select><input type="hidden" {...register(`items.${editingItemIndex}.responsable_nombre`)} /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="responsable_id" items={items} /></div>
-              <div><label className="sn-label block mb-2">Por pagar al responsable</label><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'x_pagar'); register(`items.${editingItemIndex}.x_pagar`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'x_pagar') || undefined} className={FULLSCREEN_INPUT_CLASS} /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="x_pagar" items={items} /></div>
+              <div className="flex gap-3"><div className="flex-1"><label className="sn-label block mb-2">Cantidad</label><input type="number" min="1" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'cantidad')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'cantidad')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'cantidad'); register(`items.${editingItemIndex}.cantidad`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'cantidad') || undefined} className={`${FULLSCREEN_INPUT_CLASS} text-center`} /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="cantidad" items={items} /></div><div className="flex-[2]"><label className="sn-label block mb-2">Precio unitario</label><div className="relative"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-subtext">$</span><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'precio_unitario')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'precio_unitario')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'precio_unitario'); register(`items.${editingItemIndex}.precio_unitario`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'precio_unitario') || undefined} className={FULLSCREEN_MONEY_INPUT_CLASS} /></div><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="precio_unitario" items={items} /></div></div>
+              <div><label className="sn-label block mb-2">Responsable</label><Select {...register(`items.${editingItemIndex}.responsable_id`)} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'responsable_id')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'responsable_id')} onChange={(e) => items.changeResponsable(rowIdAt(editingItemIndex), e.target.value)} data-busy={cellBusy(editingItemIndex, 'responsable_id') || undefined} size="lg" className="w-full"><option value="">Sin asignar</option>{responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</Select><input type="hidden" {...register(`items.${editingItemIndex}.responsable_nombre`)} /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="responsable_id" items={items} /></div>
+              <div><label className="sn-label block mb-2">Por pagar al responsable</label><div className="relative"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-subtext">$</span><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'x_pagar'); register(`items.${editingItemIndex}.x_pagar`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'x_pagar') || undefined} className={FULLSCREEN_MONEY_INPUT_CLASS} /></div><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="x_pagar" items={items} /></div>
             </div>
             <div className="rounded-panel border border-hairline bg-card p-4 mt-6">
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Importe</span><span className="text-subtext text-content font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).importe)}</span></div>
@@ -388,6 +439,34 @@ export function QuotationItemsSection({
             {<button type="button" onClick={() => { items.removeRow(rowIdAt(editingItemIndex)); setEditingItemRowId(null) }} className="w-full text-cancelled-fg hover:opacity-80 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}
           </div>
         </div>
+      )}
+
+      {showCreateTemplateModal && (
+        <Modal
+          title="Crear plantilla"
+          subtitle="Guarda las partidas actuales como una plantilla de servicios reutilizable"
+          onClose={() => { if (!creatingTemplate) { setShowCreateTemplateModal(false); setCreateTemplateError(null) } }}
+        >
+          <div>
+            <label className="sn-label block mb-2">Nombre de la plantilla</label>
+            <input
+              autoFocus
+              value={newTemplateName}
+              onChange={e => setNewTemplateName(e.target.value)}
+              placeholder="Nombre de la plantilla"
+              className={FULLSCREEN_INPUT_CLASS}
+            />
+          </div>
+          {createTemplateError && <p className="text-cancelled-fg text-content">{createTemplateError}</p>}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={() => setShowCreateTemplateModal(false)} disabled={creatingTemplate}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateTemplate} disabled={creatingTemplate || !newTemplateName.trim()}>
+              {creatingTemplate ? 'Creando...' : 'Crear plantilla'}
+            </Button>
+          </div>
+        </Modal>
       )}
     </>
   )

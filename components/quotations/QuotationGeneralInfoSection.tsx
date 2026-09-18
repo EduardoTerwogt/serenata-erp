@@ -221,7 +221,7 @@ export function QuotationGeneralInfoSection({
 
         <div>
           <label className="sn-label mb-1.5 block whitespace-nowrap">Fecha de Cotización</label>
-          <p className="py-1.5 text-content text-body whitespace-nowrap">{dateLabel}</p>
+          <p className="py-2 text-content text-body whitespace-nowrap">{dateLabel}</p>
         </div>
       </div>
 

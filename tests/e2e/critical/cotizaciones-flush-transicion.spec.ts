@@ -173,8 +173,14 @@ test.describe('flush previo a Generar/Aprobar', () => {
     await login(page, `/cotizaciones/${id}`)
     await expect(page.getByRole('heading', { name: id })).toBeVisible()
 
+    // Bloque 2 sub-tarea 8: "Nota de evento" ahora vive en un pop-up -- abrirlo
+    // para llegar al textarea. Se deja abierto a propósito: lo que este test
+    // verifica es que `notasDirtyRef` (no un blur) bloquea "Generar
+    // Cotización" mientras el PATCH de notas sigue sin resolver, así que el
+    // click usa `force` para no depender de cerrar el modal primero.
+    await page.getByRole('button', { name: 'Nota de evento' }).click()
     await page.locator('textarea[placeholder="Sin notas..."]').fill('Llamado 6am, cambia todo')
-    await page.getByRole('button', { name: 'Generar Cotización' }).click()
+    await page.getByRole('button', { name: 'Generar Cotización' }).click({ force: true })
 
     await expect(page.getByText('Hay cambios recientes que no se guardaron correctamente. Revisa antes de generar.')).toBeVisible()
     expect(emitirCalled).toBe(false)
