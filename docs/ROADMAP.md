@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-18
+**Última actualización:** 2026-09-18 (agrupación de observaciones)
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -96,88 +96,109 @@ módulos, p.ej. Cuentas por Cobrar con la lógica de agrupación por
 proveedor+proyecto que ya existe en Cuentas por Pagar) y decidir orden y
 alcance en Chat.
 
-### Observaciones sin agrupar (2026-09-18)
+### Observaciones agrupadas en iniciativas (2026-09-18, agrupado 2026-09-18)
 
-**Cotizaciones — edición**
-- Datos generales: alinear títulos con las entradas (cliente, proyecto, etc.
-  a la izquierda; fecha de cotización a la derecha).
-- Sacar "Nota de evento" de Datos generales; que sea un pop-up encima,
-  similar al de alertas en Cuentas.
-- Partidas: renombrar "X Pagar" a "Costo Unitario". "Costo + IVA" pasa a ser
-  Costo Unitario × Cantidad, renombrado "Costo Total". El IVA se saca de
-  Partidas pero debe seguir apareciendo en la sección de Impuestos —
-  evaluar una columna oculta en Partidas con Costo Total + IVA. Margen =
-  Importe − Costo Total.
-- Debajo de Totales/Utilidad, agregar una sección de notas visible en el PDF.
-- Botón "crear plantilla" en Partidas, para crear plantillas de servicios
-  nuevas desde ahí mismo.
-- Forzar el signo $ en "P. Unitario" y "Costo Unitario".
-- Unificar el formato de todos los dropdowns/menús desplegables de la
-  cotización al que ya se usa en Descripción y Datos generales.
-- Botón "Vista previa" del PDF antes de generarlo — solo visualización, no
-  editable.
-- Ajustar ancho de columnas para que todo sea legible, sin partidas
-  cortadas.
-- En Descuento, el 0 debe ser solo placeholder/sugerencia (como en
-  cliente/proyecto), no un valor puesto literalmente.
+Las observaciones sueltas del roadmap de producto se evaluaron contra el
+código real (exploración de Cotizaciones/edición, Cuentas, Portal,
+Plantillas, Dashboard y General) y se agruparon en iniciativas coherentes.
+Ninguna está comprometida todavía — se elige orden y se arranca en Chat,
+creando `docs/PLAN.md` recién ahí. Se marca qué va directo a implementación
+(patrón ya reusable en el repo) y qué necesita pasar antes por la sección de
+diseño (UI genuinamente nueva).
 
-**Cuentas**
-- Por Cobrar: replicar la lógica de agrupación de Por Pagar — si una cuenta
-  por cobrar todavía no tiene factura y se crea una cotización
-  complementaria, sumar ambas en una sola factura por el monto total; si ya
-  hay factura emitida, la complementaria sí se crea como partida aparte.
-- Tabla de Por Cobrar: agregar columna Proyecto (junto a cliente,
-  pagado/total y estado).
-- En el dropdown de cuenta, mostrar impuestos a pagar del proyecto y
-  utilidad bruta/neta del proyecto — revisar UI para la mejor forma,
-  siguiendo el lenguaje de diseño tipo Apple.
-- Definir cómo hacer el historial de cuentas sin que sea una lista
-  interminable con muchos proyectos — evaluar agrupar por mes/año.
-- Rediseñar el PDF de ficha de órdenes de pago.
+**Iniciativa A — Cotizaciones: edición (UI + una fórmula).** Todo vive en
+`app/cotizaciones/[id]/page.tsx` + hooks `useQuotation*`/
+`components/quotations/*`. Ningún punto requiere migración de esquema.
+Directo a implementación, sin diseño nuevo (reusan `Select`/`Modal` ya
+existentes en la pantalla o en Cuentas): alinear labels/inputs de Datos
+Generales; ajustar anchos de columna de Partidas (sospechosa: Descripción,
+`w-44`); unificar dropdowns (`responsable_id`, `descuento_tipo`, plantilla)
+al primitivo `Select`; forzar `$` en "P. Unitario"/"Costo Unitario"; botón
+"Vista previa" de PDF (modo `inline` nuevo en `generar-pdf/route.ts`);
+sección de notas visibles en el PDF debajo de Totales/Utilidad (siguiendo el
+patrón ya usado en `hoja-llamado-pdf.ts`, campo nuevo, no reusar "Notas del
+evento" interna); botón "crear plantilla" en Partidas (define antes si
+`POST /api/service-templates` se amplía a `requireAnySection(['planeacion','cotizaciones'])`
+o el botón solo se muestra a quien ya tiene `planeacion`); mover "Nota de
+evento" a un pop-up (reusa `Modal` + patrón de "Alertas de Cobro" de
+Cuentas — cuidado al desenganchar el autosave de notas de un contenedor que
+hoy depende de estar visible en el DOM).
+Directo a implementación pero toca dinero/autosave (mayor cuidado, al
+final): en Partidas, agregar columna visible "Costo Total" = Costo Unitario
+× Cantidad; "Costo + IVA" pasa a calcularse sobre ese Costo Total y queda
+oculta (sigue alimentando Impuestos); renombrar "X Pagar"→"Costo Unitario";
+Margen = Importe − Costo Total (cambia `lib/quotations/calculations.ts` y
+`docs/decisions/006`, sin migración — todo derivado del `x_pagar`
+existente); Descuento con 0 solo como placeholder (cambia el tipo de
+`descuento_valor` a `number | '' `/`null`, mismo patrón que
+`precio_unitario`/`x_pagar`).
 
-**Planeación**
-- Evaluar quitar esta sección completa (ver relación con el RAG/chatbot en
-  "General").
+**Iniciativa B — Cuentas: mejoras menores.** La agrupación de Cuentas por
+Cobrar por cliente+proyecto (análoga a la de Por Pagar) **se descartó por
+decisión del usuario** — "como está ahora ya funciona bien"; no vuelve a
+evaluarse. La columna "Proyecto" en la tabla de Por Cobrar **ya existe**
+(`CuentasTable.tsx`, dato ya viene de `buscar_cuentas_cobrar`) — verificar
+si el pedido original se refería a otra vista antes de dar por cerrado.
+Requieren diseño antes de implementar: dropdown de cuenta con impuestos a
+pagar y utilidad bruta/neta del proyecto (agregado a nivel proyecto que no
+existe hoy — solo hay cruce fiscal por cuenta/grupo vía
+`calcularCrucePagoProveedor`; UI "tipo Apple" pedida explícitamente);
+historial de cuentas agrupado por mes/año (decisión de UX, no solo estilo);
+rediseño del PDF de ficha de órdenes de pago.
 
-**Plantillas**
-- En el header de la tarjeta, mostrar el precio total de la plantilla a la
-  derecha, con la utilidad como subtítulo debajo — el subtítulo de utilidad
-  solo aparece si se conoce el costo; si no se sabe cuánto pagamos por el
-  servicio, no se agrega.
+**Iniciativa C — Plantillas: header de tarjeta (quick win aislado).**
+Precio total a la derecha + utilidad como subtítulo (solo si se conoce el
+costo). Sin migración — se deriva de `items` ya existentes
+(`precio_unitario`/`x_pagar`). Directo a implementación, sin diseño nuevo.
+Módulo aislado, sin dependencias con las demás iniciativas — candidato a ir
+primero.
 
-**Portal**
-- Datos personales: separar "nombre completo" y "alias" en dos campos.
-- Documentación: evaluar si todos los documentos necesitan extracción AI —
-  la mayoría sigue siempre el mismo formato; considerar un lector de texto
-  que no consuma tokens para esos casos.
-- Habilitar opción de "ver" para visualizar los documentos ya subidos.
-- Cuentas y facturas: la sección de subir factura se mantiene; unificar el
-  diseño del dropdown con el resto de la app. Migrar "Tus cuentas con
-  Serenata" a un tab nuevo llamado "Historial", como plantea el mockup del
-  design system.
-  - Donde hoy está "Tus cuentas con Serenata", poner una calculadora que
-    muestre el régimen fiscal del proveedor y el desglose de la factura
-    seleccionada (subtotal, IVA, retenciones según régimen, total a pagar).
-  - Si aplican retenciones, agregar una explicación breve y simple de por
-    qué se retiene y por qué ese es el total; si solo es IVA, no mostrar
-    ningún comentario/explicación.
+**Iniciativa D — Portal.** Separar "nombre completo" y "alias" en dos
+campos: requiere migración (columna nueva en `proveedores`) + tocar
+`Proveedor`/`PortalPerfilSchema`/`TabDatos` + revisar si `alias` entra al
+matching de `match_proveedor_por_nombre` — directo a implementación (dos
+inputs, sin UI nueva), pero es el único punto con cambio de esquema, va en
+bloque propio. Habilitar "ver" documentos ya subidos: trivial, el dato
+(`archivo_url`) ya viaja en `GET /api/portal/documentos`, solo falta el
+link. Migrar "Tus cuentas con Serenata" a un tab "Historial": ya existe
+mockup del design system — directo, sin diseño nuevo. Calculadora de
+régimen fiscal + desglose en el lugar que deja libre ese tab (confirmado:
+reemplaza el espacio actual): la lógica ya existe y se reusa completa
+(`calcularEjemploFactura`, `lib/server/validation/factura-fiscal.ts`, misma
+que ya valida facturas — no duplicar) pero la presentación visual es nueva
+→ pasa por diseño. Pendiente de definir alcance, no entra a esta ronda:
+si todos los documentos necesitan extracción AI — ya está parcialmente
+resuelto (`TIPOS_CON_IDENTIDAD` limita la IA a INE/Constancia fiscal); lo
+que falta definir es si se agrega una vía alterna de lectura sin tokens.
 
-**Dashboard**
-- Estado de resultados y balance general, con opción de exportar a Sheets.
+**Iniciativa E — General: catálogo de clientes editable.** Tabla `clientes`
+ya existe, hoy solo `GET`/`POST` (upsert implícito), sin vista de admin ni
+`PATCH`/`DELETE`. Sigue el mismo patrón ya construido para Proveedores
+(`app/proveedores/`, lista + modal) — directo a implementación, sin diseño
+nuevo real. Falta decidir manejo de dependencias al borrar un cliente con
+cotizaciones asociadas (soft delete vs. bloqueo) al planear el bloque.
 
-**General**
-- Traer catálogo de clientes a una vista donde se pueda visualizar, editar
-  y borrar.
-- Editor de PDFs: poder editar el formato de todos los PDFs tipo
-  Canva/herramienta de diseño.
-- Construir un RAG — posiblemente como chatbot desplegable en la esquina
-  inferior derecha (motivo detrás de evaluar quitar Planeación).
-- Limpiar todos los datos de prueba actuales, tanto en la app como en BD,
-  para arrancar con todo limpio.
-- Migrar la administración que hoy vive en un Sheets externo hacia la app,
-  para tener toda la info de la empresa cargada ahí.
-- Refinar el módulo de Proyectos — requiere trabajo, alcance todavía sin
-  definir.
+**Iniciativa F — Dashboard: estado de resultados y balance + export a
+Sheets.** El Dashboard ya tiene RPCs agregadas y la tubería Sheets
+(`sync-down.ts`/`schema.ts`/`AdminSheets.tsx`) ya soporta exportar tablas
+nuevas — la infraestructura de export se reusa directo. Pero "estado de
+resultados" y "balance general" como estados financieros formales son más
+que los agregados actuales (ingresos−egresos, ISR 30%) — **pendiente de
+definir alcance contable** (qué renglones exactos los componen) antes de
+poder planear el detalle; no es un bloqueo técnico.
+
+**Fuera de alcance de esta ronda** (candidatas de largo plazo, sin
+iniciativa ni orden asignado): Planeación — evaluar quitar la sección
+(ligado a RAG/chatbot); RAG/chatbot — no hay infraestructura de
+embeddings/vector store hoy, requiere decisión de producto primero; Editor
+de PDFs tipo Canva — reescritura completa (los 4 generadores actuales usan
+`jsPDF` imperativo, sin edición interactiva; único reuso posible es
+`pdf-base-config.ts`, branding); Migrar administración de Sheets externo a
+la app — no se identificó en el código a qué Sheet se refiere, requiere
+descubrimiento con el usuario; Refinar módulo de Proyectos — alcance sin
+definir; Limpiar datos de prueba (app + BD) — tarea puntual de operación
+(script ad-hoc), se ejecuta cuando se pida, confirmando antes qué entorno
+(test vs. producción).
 
 Material previo (roadmap de producto de 2026-09-04, Fase 5) ya entregado o
 superpuesto con lo de arriba: agregados del Cotizador (copiar entre
