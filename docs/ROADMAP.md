@@ -88,16 +88,102 @@ precomprometido aquí. Material candidato en "Después".
 ## Después
 
 **Sin definir a propósito.** Se prioriza en Chat, con el estado real del
-sistema a la vista.
+sistema a la vista. Ninguno de los puntos de abajo está comprometido todavía
+ni tiene alcance de iniciativa definido — son observaciones puntuales del
+usuario, por módulo, **sin agrupar ni planear**. Antes de arrancar cualquiera,
+agruparlos en iniciativas coherentes (algunos ya se ven relacionados entre
+módulos, p.ej. Cuentas por Cobrar con la lógica de agrupación por
+proveedor+proyecto que ya existe en Cuentas por Pagar) y decidir orden y
+alcance en Chat.
 
-El material candidato está en el roadmap de producto de 2026-09-04 (Fase 5, del que
-ya se entregaron el Portal, el Dashboard con gastos fijos, y las bases de Proyectos y
-Cuentas), menos lo ya entregado (Cuentas agrupadas por proyecto y cruce fiscal —
-cerrado, ver "Cerrado" abajo): los agregados del Cotizador (copiar entre
-cotizaciones, columna Costo + IVA, calculadora de impuestos), Proyectos como
-herramienta de PM con asistente sobre el historial, y cerrar la migración visual.
+### Observaciones sin agrupar (2026-09-18)
 
-Ninguno de esos está comprometido todavía.
+**Cotizaciones — edición**
+- Datos generales: alinear títulos con las entradas (cliente, proyecto, etc.
+  a la izquierda; fecha de cotización a la derecha).
+- Sacar "Nota de evento" de Datos generales; que sea un pop-up encima,
+  similar al de alertas en Cuentas.
+- Partidas: renombrar "X Pagar" a "Costo Unitario". "Costo + IVA" pasa a ser
+  Costo Unitario × Cantidad, renombrado "Costo Total". El IVA se saca de
+  Partidas pero debe seguir apareciendo en la sección de Impuestos —
+  evaluar una columna oculta en Partidas con Costo Total + IVA. Margen =
+  Importe − Costo Total.
+- Debajo de Totales/Utilidad, agregar una sección de notas visible en el PDF.
+- Botón "crear plantilla" en Partidas, para crear plantillas de servicios
+  nuevas desde ahí mismo.
+- Forzar el signo $ en "P. Unitario" y "Costo Unitario".
+- Unificar el formato de todos los dropdowns/menús desplegables de la
+  cotización al que ya se usa en Descripción y Datos generales.
+- Botón "Vista previa" del PDF antes de generarlo — solo visualización, no
+  editable.
+- Ajustar ancho de columnas para que todo sea legible, sin partidas
+  cortadas.
+- En Descuento, el 0 debe ser solo placeholder/sugerencia (como en
+  cliente/proyecto), no un valor puesto literalmente.
+
+**Cuentas**
+- Por Cobrar: replicar la lógica de agrupación de Por Pagar — si una cuenta
+  por cobrar todavía no tiene factura y se crea una cotización
+  complementaria, sumar ambas en una sola factura por el monto total; si ya
+  hay factura emitida, la complementaria sí se crea como partida aparte.
+- Tabla de Por Cobrar: agregar columna Proyecto (junto a cliente,
+  pagado/total y estado).
+- En el dropdown de cuenta, mostrar impuestos a pagar del proyecto y
+  utilidad bruta/neta del proyecto — revisar UI para la mejor forma,
+  siguiendo el lenguaje de diseño tipo Apple.
+- Definir cómo hacer el historial de cuentas sin que sea una lista
+  interminable con muchos proyectos — evaluar agrupar por mes/año.
+- Rediseñar el PDF de ficha de órdenes de pago.
+
+**Planeación**
+- Evaluar quitar esta sección completa (ver relación con el RAG/chatbot en
+  "General").
+
+**Plantillas**
+- En el header de la tarjeta, mostrar el precio total de la plantilla a la
+  derecha, con la utilidad como subtítulo debajo — el subtítulo de utilidad
+  solo aparece si se conoce el costo; si no se sabe cuánto pagamos por el
+  servicio, no se agrega.
+
+**Portal**
+- Datos personales: separar "nombre completo" y "alias" en dos campos.
+- Documentación: evaluar si todos los documentos necesitan extracción AI —
+  la mayoría sigue siempre el mismo formato; considerar un lector de texto
+  que no consuma tokens para esos casos.
+- Habilitar opción de "ver" para visualizar los documentos ya subidos.
+- Cuentas y facturas: la sección de subir factura se mantiene; unificar el
+  diseño del dropdown con el resto de la app. Migrar "Tus cuentas con
+  Serenata" a un tab nuevo llamado "Historial", como plantea el mockup del
+  design system.
+  - Donde hoy está "Tus cuentas con Serenata", poner una calculadora que
+    muestre el régimen fiscal del proveedor y el desglose de la factura
+    seleccionada (subtotal, IVA, retenciones según régimen, total a pagar).
+  - Si aplican retenciones, agregar una explicación breve y simple de por
+    qué se retiene y por qué ese es el total; si solo es IVA, no mostrar
+    ningún comentario/explicación.
+
+**Dashboard**
+- Estado de resultados y balance general, con opción de exportar a Sheets.
+
+**General**
+- Traer catálogo de clientes a una vista donde se pueda visualizar, editar
+  y borrar.
+- Editor de PDFs: poder editar el formato de todos los PDFs tipo
+  Canva/herramienta de diseño.
+- Construir un RAG — posiblemente como chatbot desplegable en la esquina
+  inferior derecha (motivo detrás de evaluar quitar Planeación).
+- Limpiar todos los datos de prueba actuales, tanto en la app como en BD,
+  para arrancar con todo limpio.
+- Migrar la administración que hoy vive en un Sheets externo hacia la app,
+  para tener toda la info de la empresa cargada ahí.
+- Refinar el módulo de Proyectos — requiere trabajo, alcance todavía sin
+  definir.
+
+Material previo (roadmap de producto de 2026-09-04, Fase 5) ya entregado o
+superpuesto con lo de arriba: agregados del Cotizador (copiar entre
+cotizaciones, columna Costo + IVA, calculadora de impuestos — ver Cotizaciones
+arriba), Proyectos como herramienta de PM con asistente sobre el historial
+(ver General arriba), y cerrar la migración visual.
 
 ---
 
