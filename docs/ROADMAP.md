@@ -123,15 +123,33 @@ o el botón solo se muestra a quien ya tiene `planeacion`); mover "Nota de
 evento" a un pop-up (reusa `Modal` + patrón de "Alertas de Cobro" de
 Cuentas — cuidado al desenganchar el autosave de notas de un contenedor que
 hoy depende de estar visible en el DOM).
-Directo a implementación pero toca dinero/autosave (mayor cuidado, al
-final): en Partidas, agregar columna visible "Costo Total" = Costo Unitario
-× Cantidad; "Costo + IVA" pasa a calcularse sobre ese Costo Total y queda
-oculta (sigue alimentando Impuestos); renombrar "X Pagar"→"Costo Unitario";
-Margen = Importe − Costo Total (cambia `lib/quotations/calculations.ts` y
-`docs/decisions/006`, sin migración — todo derivado del `x_pagar`
-existente); Descuento con 0 solo como placeholder (cambia el tipo de
-`descuento_valor` a `number | '' `/`null`, mismo patrón que
-`precio_unitario`/`x_pagar`).
+Directo a implementación: Descuento con 0 solo como placeholder (cambia el
+tipo de `descuento_valor` a `number | ''`/`null`, mismo patrón que
+`precio_unitario`/`x_pagar`) — sin dependencias, va con el resto de UI de
+arriba.
+
+**Bloque aparte, de mayor riesgo (RPC/schema, no UI): fórmula Costo
+Unitario/Costo Total.** En Partidas, agregar columna visible "Costo Total" =
+Costo Unitario × Cantidad; "Costo + IVA" pasa a calcularse sobre ese Costo
+Total y queda oculta (sigue alimentando Impuestos); renombrar "X
+Pagar"→"Costo Unitario"; Margen = Importe − Costo Total. **Auditado:** hoy
+`x_pagar` se guarda y se usa tal cual como monto total de la partida
+(`approve_cotizacion` copia `i.x_pagar` sin multiplicar por `i.cantidad`
+hacia `cuentas_pagar`) — el usuario confirmó que la fórmula nueva debe
+propagarse a **todo** lo que dependa de ese monto (Cuentas por Pagar, grupos
+de facturación, márgenes), no solo a la vista de la cotización. Por eso este
+punto ya no es "solo UI": toca `approve_cotizacion` (RPC crítica,
+`SECURITY DEFINER`), hay que revisar `reconcile_cuenta_pagar_grupo()` /
+`cuentas_por_proyecto()` / cualquier función que sume `x_pagar` para
+totales, y actualizar `docs/decisions/006` (`monto_total_grupo = Σ X Pagar`
+→ `Σ (Costo Unitario × Cantidad)`). Por la regla de no mezclar refactor de
+UI con cambio de schema/RPC, **va en su propio bloque**, separado del resto
+de la Iniciativa A. Auditoría real en producción (2026-09-18): de 178
+partidas con pago, 13 tienen Cantidad≠1; 7 ya generaron Cuentas por Pagar
+(6 `PENDIENTE`, 1 `EN_PROCESO_PAGO` con orden de pago ya generada), nada
+`PAGADO` — el usuario decidió que **no hace falta backfill** de esas filas
+(son datos de prueba que se limpiarán antes de uso real); si el ajuste es
+rápido se puede aplicar de paso, si no, se deja tal cual.
 
 **Iniciativa B — Cuentas: mejoras menores.** La agrupación de Cuentas por
 Cobrar por cliente+proyecto (análoga a la de Por Pagar) **se descartó por
@@ -199,6 +217,37 @@ descubrimiento con el usuario; Refinar módulo de Proyectos — alcance sin
 definir; Limpiar datos de prueba (app + BD) — tarea puntual de operación
 (script ad-hoc), se ejecuta cuando se pida, confirmando antes qué entorno
 (test vs. producción).
+
+#### Paralelización y secuenciación entre iniciativas (evaluado 2026-09-18)
+
+**En paralelo, sin chocar** (archivos/tablas distintos, sin dependencia de
+datos): Iniciativa A salvo el bloque de fórmula (UI pura de Cotizaciones,
+incluye Descuento placeholder); Iniciativa C (aislada); Iniciativa D salvo
+la calculadora fiscal (que espera diseño, no depende de A); Iniciativa E
+(aislada); Iniciativa B en sus partes no financieras (columna Proyecto,
+historial por mes/año, rediseño de PDF de orden de pago — el PDF solo lee
+el monto ya calculado, no duplica la fórmula). El bloque de fórmula
+Costo Unitario/Costo Total de A también puede desarrollarse en paralelo a
+todo esto (no comparte archivos), pero debe **mergear primero** que lo de
+abajo.
+
+**Deben esperar a que el bloque de fórmula de A esté en `main`:** la pieza
+de Iniciativa B "dropdown de cuenta con impuestos a pagar y utilidad
+bruta/neta del proyecto" (el agregado debe calcularse sobre el monto ya
+corregido, no sobre `x_pagar` crudo) y la Iniciativa F completa (mismo
+motivo, además de seguir pendiente de definir alcance contable — ya iba de
+última de todos modos).
+
+**Coordinación de proceso, no dependencia real:** migraciones numeradas por
+fecha (el bloque de fórmula de A y la migración de alias de D podrían
+chocar de nombre si corren el mismo día en ramas paralelas — se resuelve al
+mergear); `lib/types.ts` lo tocan D (`Proveedor.alias`) y E (`Cliente`) en
+secciones distintas, sin conflicto lógico.
+
+**Orden recomendado:** (1) en paralelo, A sin fórmula + C + D sin
+calculadora + E + B no-financieras — cinco frentes simultáneos; (2) bloque
+de fórmula de A (puede arrancar junto con 1, pero cierra antes de empezar
+3); (3) B (dropdown impuestos/utilidad de proyecto) + F completa, al final.
 
 Material previo (roadmap de producto de 2026-09-04, Fase 5) ya entregado o
 superpuesto con lo de arriba: agregados del Cotizador (copiar entre
