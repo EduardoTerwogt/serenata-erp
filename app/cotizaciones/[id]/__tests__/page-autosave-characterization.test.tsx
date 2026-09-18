@@ -310,7 +310,7 @@ describe('page.tsx -- characterization de autosave/flush/reconciliación (3D-0)'
     expect(mocks.saveQuotationNotesMock).not.toHaveBeenCalled()
 
     await FLUSH(1)
-    expect(mocks.saveQuotationNotesMock).toHaveBeenCalledWith(cot.id, 'Nota del evento')
+    expect(mocks.saveQuotationNotesMock).toHaveBeenCalledWith(cot.id, 'Nota del evento', null)
 
     notesDeferred.resolve({ ...cot, notas_internas: 'Nota del evento' })
     await FLUSH(0)

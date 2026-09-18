@@ -94,6 +94,7 @@ export interface QuotationPdfPayload {
   porcentaje_fee: number
   descuento_tipo: DescuentoTipo
   descuento_valor: number
+  notas: string | null
 }
 
 export type QuotationLikeForPdf = Pick<
@@ -113,6 +114,7 @@ export type QuotationLikeForPdf = Pick<
   | 'iva_activo'
   | 'descuento_tipo'
   | 'descuento_valor'
+  | 'notas_pdf'
 >
 
 export interface SaveQuotationOptions {

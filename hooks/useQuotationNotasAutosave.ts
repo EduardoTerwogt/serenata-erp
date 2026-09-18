@@ -36,6 +36,13 @@ export function useQuotationNotasAutosave({
   notasSectionRef,
 }: UseQuotationNotasAutosaveOptions) {
   const [notasInternas, setNotasInternas] = useState('')
+  // Bloque 2 (docs/PLAN.md) sub-tarea 6: `notas_pdf` es un campo nuevo,
+  // distinto de `notas_internas` -- comparte pop-up y sección de
+  // colaboración con él, así que comparte también dirty/debounce/lock en
+  // vez de duplicar por completo el mecanismo para un segundo campo de
+  // texto sin conflicto multi-usuario real (T7: Notas no tiene banner de
+  // conflicto). Cada guardado manda los dos valores vigentes juntos.
+  const [notasPdf, setNotasPdf] = useState('')
   const [isSavingNotas, setIsSavingNotas] = useState(false)
 
   const notasAutosaveTimerRef = useRef<number | null>(null)
@@ -51,11 +58,15 @@ export function useQuotationNotasAutosave({
   const notasLockHeldRef = useRef(false)
   const notasFocusedRef = useRef(false)
   const notasValueRef = useRef('')
+  const notasPdfValueRef = useRef('')
   const lastSavedNotasRef = useRef('')
+  const lastSavedNotasPdfRef = useRef('')
 
   useEffect(() => { notasValueRef.current = notasInternas }, [notasInternas])
+  useEffect(() => { notasPdfValueRef.current = notasPdf }, [notasPdf])
 
   const getCurrentNotasSnapshot = useCallback(() => notasValueRef.current.trim() ? notasValueRef.current : '', [])
+  const getCurrentNotasPdfSnapshot = useCallback(() => notasPdfValueRef.current.trim() ? notasPdfValueRef.current : '', [])
 
   const clearNotasIdleReleaseTimer = useCallback(() => {
     if (notasIdleReleaseTimerRef.current !== null) { window.clearTimeout(notasIdleReleaseTimerRef.current); notasIdleReleaseTimerRef.current = null }
@@ -83,42 +94,45 @@ export function useQuotationNotasAutosave({
     if (notasInFlightRef.current) return notasInFlightRef.current
     if (!cotizacion) return Promise.resolve()
     const notasToSave = getCurrentNotasSnapshot()
+    const notasPdfToSave = getCurrentNotasPdfSnapshot()
     const previousNotas = lastSavedNotasRef.current
-    if (notasToSave === previousNotas) {
+    const previousNotasPdf = lastSavedNotasPdfRef.current
+    if (notasToSave === previousNotas && notasPdfToSave === previousNotasPdf) {
       notasDirtyRef.current = false
       if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas') }
       else scheduleNotasIdleRelease()
       return Promise.resolve()
     }
     setIsSavingNotas(true)
-    const p = trackMutation(saveQuotationNotes(id, notasToSave || null))
+    const p = trackMutation(saveQuotationNotes(id, notasToSave || null, notasPdfToSave || null))
     notasInFlightRef.current = p
     p.then(
       () => {
         lastSavedNotasRef.current = notasToSave
-        setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null } : prev))
-        const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current
+        lastSavedNotasPdfRef.current = notasPdfToSave
+        setCotizacion((prev) => (prev ? { ...prev, notas_internas: notasToSave || null, notas_pdf: notasPdfToSave || null } : prev))
+        const hasPendingChanges = getCurrentNotasSnapshot() !== lastSavedNotasRef.current || getCurrentNotasPdfSnapshot() !== lastSavedNotasPdfRef.current
         notasDirtyRef.current = hasPendingChanges
         if (!notasFocusedRef.current) { clearNotasIdleReleaseTimer(); notasLockHeldRef.current = false; releaseSection('notas'); return }
         if (!hasPendingChanges) scheduleNotasIdleRelease()
       },
       (saveError: unknown) => {
         setError(saveError instanceof Error ? saveError.message : 'Error guardando notas internas')
-        notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current
+        notasDirtyRef.current = getCurrentNotasSnapshot() !== lastSavedNotasRef.current || getCurrentNotasPdfSnapshot() !== lastSavedNotasPdfRef.current
         clearNotasIdleReleaseTimer()
         notasLockHeldRef.current = false
         releaseSection('notas')
       }
     ).finally(() => { setIsSavingNotas(false); notasInFlightRef.current = null })
     return p
-  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasSnapshot, id, releaseSection, scheduleNotasIdleRelease, setCotizacion, setError, trackMutation])
+  }, [clearNotasIdleReleaseTimer, cotizacion, getCurrentNotasPdfSnapshot, getCurrentNotasSnapshot, id, releaseSection, scheduleNotasIdleRelease, setCotizacion, setError, trackMutation])
 
   useEffect(() => {
     if (!esEditable || !notasLockHeldRef.current || !notasDirtyRef.current || isSavingNotas) return
     if (notasAutosaveTimerRef.current !== null) window.clearTimeout(notasAutosaveTimerRef.current)
     notasAutosaveTimerRef.current = window.setTimeout(() => { void persistNotasAutosave() }, NOTAS_AUTOSAVE_DELAY_MS)
     return () => { if (notasAutosaveTimerRef.current !== null) { window.clearTimeout(notasAutosaveTimerRef.current); notasAutosaveTimerRef.current = null } }
-  }, [esEditable, isSavingNotas, notasInternas, persistNotasAutosave])
+  }, [esEditable, isSavingNotas, notasInternas, notasPdf, persistNotasAutosave])
 
   const handleNotasFocus = useCallback(() => {
     if (!esEditable) return
@@ -148,29 +162,44 @@ export function useQuotationNotasAutosave({
     setNotasInternas(value)
   }, [handleNotasFocus])
 
+  const trackedHandleNotasPdfChange = useCallback((value: string) => {
+    handleNotasFocus()
+    notasDirtyRef.current = true
+    setNotasPdf(value)
+  }, [handleNotasFocus])
+
   // Refresco tras un save remoto: mismo criterio que General/Totales -- nunca
   // pisa una edición o un guardado propio en vuelo.
-  const applyNotasOnly = useCallback((notas: string | null) => {
+  const applyNotasOnly = useCallback((notas: string | null, notasPdfValue: string | null) => {
     const normalized = notas ?? ''
+    const normalizedPdf = notasPdfValue ?? ''
     setNotasInternas(normalized)
+    setNotasPdf(normalizedPdf)
     notasValueRef.current = normalized
+    notasPdfValueRef.current = normalizedPdf
     lastSavedNotasRef.current = normalized
+    lastSavedNotasPdfRef.current = normalizedPdf
     notasDirtyRef.current = false
-    setCotizacion((prev) => (prev ? { ...prev, notas_internas: notas } : prev))
+    setCotizacion((prev) => (prev ? { ...prev, notas_internas: notas, notas_pdf: notasPdfValue } : prev))
   }, [setCotizacion])
 
   // Usado por `applyCotizacionToState` (page.tsx) al cargar/resincronizar la
   // cotización completa.
   const resetNotasFromServer = useCallback((cot: Cotizacion) => {
     const notas = cot.notas_internas ?? ''
+    const notasPdfValue = cot.notas_pdf ?? ''
     setNotasInternas(notas)
+    setNotasPdf(notasPdfValue)
     notasValueRef.current = notas
+    notasPdfValueRef.current = notasPdfValue
     lastSavedNotasRef.current = notas
+    lastSavedNotasPdfRef.current = notasPdfValue
     notasDirtyRef.current = false
   }, [])
 
   return {
     notasInternas,
+    notasPdf,
     notasDirtyRef,
     notasLockHeldRef,
     persistNotasAutosave,
@@ -178,6 +207,7 @@ export function useQuotationNotasAutosave({
     handleNotasFocus,
     handleNotasBlur,
     trackedHandleNotasChange,
+    trackedHandleNotasPdfChange,
     clearNotasIdleReleaseTimer,
     resetNotasFromServer,
   }

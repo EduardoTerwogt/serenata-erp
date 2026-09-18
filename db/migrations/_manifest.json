@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-18T02:40:19.801Z",
-  "count": 89,
+  "generated_at": "2026-09-18T19:33:06.677Z",
+  "count": 90,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -88,6 +88,7 @@
     "20260917_reconciliar_grupos_en_approve_cotizacion.sql",
     "20260917_registrar_pago_grupo_factura.sql",
     "20260918_buscar_cuentas_pagar_grupos.sql",
+    "20260918_cotizaciones_add_notas_pdf.sql",
     "20260918_cuentas_por_proyecto_incluir_grupo.sql",
     "20260918_fix_approve_cotizacion_cuenta_cobrar_proyecto_id.sql",
     "20260918_migracion_retroactiva_cuentas_pagar_grupos.sql"

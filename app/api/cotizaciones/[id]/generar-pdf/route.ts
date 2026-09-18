@@ -42,6 +42,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       porcentaje_fee: cotizacion.porcentaje_fee || 0,
       descuento_tipo: (cotizacion.descuento_tipo as 'monto' | 'porcentaje') || 'monto',
       descuento_valor: cotizacion.descuento_valor || 0,
+      notas: cotizacion.notas_pdf || null,
     }
 
     // Generate PDF

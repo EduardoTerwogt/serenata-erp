@@ -30,7 +30,7 @@ interface UseQuotationReconciliationOptions {
   applyCotizacionToState: (cot: Cotizacion) => void
   notasLockHeldRef: MutableRefObject<boolean>
   notasDirtyRef: MutableRefObject<boolean>
-  applyNotasOnly: (notas: string | null) => void
+  applyNotasOnly: (notas: string | null, notasPdf: string | null) => void
   generalLockHeldRef: MutableRefObject<boolean>
   generalDirtyRef: MutableRefObject<boolean>
   applyGeneralOnly: (cot: Cotizacion, pedidoEn: number) => void
@@ -217,7 +217,7 @@ export function useQuotationReconciliation({
         // ocupadas: applyGeneralOnly y compañía pisan el valor y además limpian la
         // marca de "sin guardar", así que aplicarlas a ciegas borraba la edición en
         // curso -- el mismo defecto que se arregló en las partidas, otra sección.
-        if (!notasLockHeldRef.current && !notasDirtyRef.current) applyNotasOnly(updated.notas_internas ?? null)
+        if (!notasLockHeldRef.current && !notasDirtyRef.current) applyNotasOnly(updated.notas_internas ?? null, updated.notas_pdf ?? null)
         if (!generalLockHeldRef.current && !generalDirtyRef.current) applyGeneralOnly(updated, pedidoEn)
         if (!totalsLockHeldRef.current && !totalsDirtyRef.current) applyTotalsOnly(updated, pedidoEn)
       } catch (loadError) {

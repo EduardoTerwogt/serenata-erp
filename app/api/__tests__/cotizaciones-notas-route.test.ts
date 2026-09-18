@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCotizacionByIdMock: vi.fn(),
-  saveNotasInternasMock: vi.fn(async () => undefined),
+  saveNotasMock: vi.fn(async () => undefined),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
   // EF-2 1D-1: notas/route.ts ahora importa `after` de next/server para
   // agendar el broadcast -- sin este mock, el `after()` real revienta
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({ getCotizacionById: mocks.getCotizacionByIdMock }))
-vi.mock('@/lib/server/quotations/persistence', () => ({ saveNotasInternas: mocks.saveNotasInternasMock }))
+vi.mock('@/lib/server/quotations/persistence', () => ({ saveNotas: mocks.saveNotasMock }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('next/server', () => ({ after: mocks.afterMock }))
 
@@ -42,10 +42,10 @@ beforeEach(() => {
 
 describe('PATCH /api/cotizaciones/[id]/notas', () => {
   it('guarda las notas y emite notas_confirmed tras el commit', async () => {
-    const res = await PATCH(req({ notas_internas: 'nota nueva' }), { params })
+    const res = await PATCH(req({ notas_internas: 'nota nueva', notas_pdf: 'nota del pdf' }), { params })
 
     expect(res.status).toBe(200)
-    expect(mocks.saveNotasInternasMock).toHaveBeenCalledWith('SH001', 'nota nueva')
+    expect(mocks.saveNotasMock).toHaveBeenCalledWith('SH001', { notas_internas: 'nota nueva', notas_pdf: 'nota del pdf' })
     expect(mocks.afterMock).toHaveBeenCalledTimes(1)
     expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
     await flushAfter()
@@ -57,8 +57,15 @@ describe('PATCH /api/cotizaciones/[id]/notas', () => {
     }])
   })
 
+  it('sin notas_pdf en el body, guarda null (Bloque 2 sub-tarea 6: campo nuevo, no reusa notas_internas)', async () => {
+    const res = await PATCH(req({ notas_internas: 'nota nueva' }), { params })
+
+    expect(res.status).toBe(200)
+    expect(mocks.saveNotasMock).toHaveBeenCalledWith('SH001', { notas_internas: 'nota nueva', notas_pdf: null })
+  })
+
   it('si guardar falla, responde 500 y no emite el evento', async () => {
-    mocks.saveNotasInternasMock.mockRejectedValueOnce(new Error('boom'))
+    mocks.saveNotasMock.mockRejectedValueOnce(new Error('boom'))
 
     const res = await PATCH(req({ notas_internas: 'x' }), { params })
 

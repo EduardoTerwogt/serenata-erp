@@ -70,9 +70,10 @@ export async function fetchQuotationsPage(params: QuotationsPageParams = {}): Pr
   }
 }
 
-export async function saveQuotationNotes(id: string, notasInternas: string | null): Promise<Cotizacion> {
+export async function saveQuotationNotes(id: string, notasInternas: string | null, notasPdf: string | null): Promise<Cotizacion> {
   return sendJson(`/api/cotizaciones/${id}/notas`, {
     notas_internas: notasInternas,
+    notas_pdf: notasPdf,
   }, 'Error guardando notas internas', { method: 'PATCH' })
 }
 

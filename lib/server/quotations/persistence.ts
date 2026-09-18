@@ -108,6 +108,22 @@ export async function saveNotasInternas(id: string, notas: string | null) {
 }
 
 /**
+ * Bloque 2 (docs/PLAN.md) sub-tarea 6: `notas_pdf` es un campo nuevo,
+ * distinto de `notas_internas` -- comparte el mismo pop-up ("Nota de
+ * evento") y el mismo autosave de sección, así que ambos valores se
+ * guardan juntos en un solo UPDATE en vez de duplicar por completo el
+ * mecanismo de dirty/debounce de `useQuotationNotasAutosave` para un
+ * segundo campo de texto sin conflicto multi-usuario real (T7).
+ */
+export async function saveNotas(id: string, notas: { notas_internas: string | null; notas_pdf: string | null }) {
+  const { error } = await supabaseAdmin
+    .from('cotizaciones')
+    .update(notas)
+    .eq('id', id)
+  if (error) throw error
+}
+
+/**
  * Recalcula el encabezado DENTRO de la base, en una sentencia.
  *
  * Antes se leía la cotización, se calculaban los totales en JS y se escribían de

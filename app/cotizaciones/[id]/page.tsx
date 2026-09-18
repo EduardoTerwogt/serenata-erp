@@ -236,6 +236,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // archivo para la explicación completa de por qué existe.
   const {
     notasInternas,
+    notasPdf,
     notasDirtyRef,
     notasLockHeldRef,
     persistNotasAutosave,
@@ -243,6 +244,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     handleNotasFocus,
     handleNotasBlur,
     trackedHandleNotasChange,
+    trackedHandleNotasPdfChange,
     clearNotasIdleReleaseTimer,
     resetNotasFromServer,
   } = useQuotationNotasAutosave({
@@ -589,10 +591,17 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         <Modal title="Nota de evento" subtitle="Uso interno, no sale en el PDF" onClose={() => setShowNotasModal(false)}>
           <div ref={notasSectionRef} className={`rounded-panel ${sectionEditors.notas ? 'ring-1 ring-accent-quiet/70' : ''}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}>
             <SectionEditBadge section="notas" />
+            <p className="sn-label mb-2">Nota de evento · uso interno, no sale en el PDF</p>
             {esEditable ? (
-              <textarea value={notasInternas} onChange={e => trackedHandleNotasChange(e.target.value)} rows={6} placeholder="Sin notas..." className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-body text-content resize-none outline-none placeholder-faint focus:border-accent-quiet disabled:opacity-50 disabled:cursor-not-allowed" />
+              <textarea value={notasInternas} onChange={e => trackedHandleNotasChange(e.target.value)} rows={4} placeholder="Sin notas..." className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-body text-content resize-none outline-none placeholder-faint focus:border-accent-quiet disabled:opacity-50 disabled:cursor-not-allowed" />
             ) : (
               <p className="text-subtext text-content whitespace-pre-wrap">{notasInternas || '—'}</p>
+            )}
+            <p className="sn-label mb-2 mt-4">Notas del PDF · se imprimen debajo de Totales</p>
+            {esEditable ? (
+              <textarea value={notasPdf} onChange={e => trackedHandleNotasPdfChange(e.target.value)} rows={4} placeholder="Sin notas..." className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-body text-content resize-none outline-none placeholder-faint focus:border-accent-quiet disabled:opacity-50 disabled:cursor-not-allowed" />
+            ) : (
+              <p className="text-subtext text-content whitespace-pre-wrap">{notasPdf || '—'}</p>
             )}
           </div>
         </Modal>

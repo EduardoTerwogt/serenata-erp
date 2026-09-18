@@ -175,6 +175,7 @@ export function buildQuotationPdfPayload(
     porcentaje_fee: quotation.porcentaje_fee ?? 0.15,
     descuento_tipo: quotation.descuento_tipo ?? 'monto',
     descuento_valor: quotation.descuento_valor ?? 0,
+    notas: quotation.notas_pdf ?? null,
   }
 }
 
