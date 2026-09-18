@@ -39,9 +39,9 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 | 1 | C — Plantillas: header de tarjeta | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
 | 2 | A — Cotizaciones: UI de edición (sin fórmula) | En curso (PR abierto, incluye sub-tarea 6 con migración `notas_pdf` no anticipada por el plan) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
 | 3 | A — Cotizaciones: fórmula Costo Unitario/Costo Total (alto riesgo, bloque propio) | Pendiente | — |
-| 4 | D — Portal (4a alias/nombre, 4b ver documentos, 4c tab Historial) | Pendiente | — |
-| 5 | E — Clientes: catálogo editable | Pendiente | — |
-| 6 | B — Cuentas: rediseño PDF de orden de pago | Pendiente | — |
+| 4 | D — Portal (4a alias/nombre con migración `alias`, 4b ver documentos, 4c tab Historial) | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
+| 5 | E — Clientes: catálogo editable | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
+| 6 | B — Cuentas: rediseño PDF de orden de pago | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
 
 Los 6 bloques pueden avanzar **en paralelo** (ramas/sesiones distintas, sin
 compartir archivos salvo lo anotado en "Coordinación entre bloques
