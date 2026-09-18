@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useReducer } from 'react'
-import { CuentaCobrar, CuentaPagar, DocumentoCuentaCobrar, DocumentoCuentaPagar, OrdenPago, PagoComprobante, RegimenFiscal, HistorialCambioResponsableItem } from '@/lib/types'
+import { CuentaCobrar, CuentaPagar, CuentaPagarGrupo, DocumentoCuentaCobrar, DocumentoCuentaPagar, OrdenPago, PagoComprobante, RegimenFiscal, HistorialCambioResponsableItem } from '@/lib/types'
 import { TabDocumentos } from '@/app/components/cuentas/tabs/TabDocumentos'
 import { formatDateDisplay } from '@/lib/format-date'
 import { TabInformacion } from '@/app/components/cuentas/tabs/TabInformacion'
@@ -28,6 +28,7 @@ interface CuentaPagarDetalle {
   documentos: DocumentoCuentaPagar[]
   orden_pago?: OrdenPago | null
   proveedor?: { regimen_fiscal: RegimenFiscal | null } | null
+  grupo?: CuentaPagarGrupo | null
   resumen: { monto_pagado: number; saldo_pendiente: number }
 }
 
@@ -83,8 +84,8 @@ interface Props {
   }
   pagarActions: {
     cargarDetalle: (id: string) => Promise<CuentaPagarDetalle | null>
-    subirFactura: (id: string, xml: File, pdf: File) => Promise<unknown>
-    registrarPago: (id: string, data: { monto: number; comprobante?: File }) => Promise<unknown>
+    subirFactura: (id: string, xml: File, pdf: File, grupoId?: string | null) => Promise<unknown>
+    registrarPago: (id: string, data: { monto: number; comprobante?: File }, grupoId?: string | null) => Promise<unknown>
     reasignarResponsable: (itemId: string, responsableId: string, responsableNombre: string) => Promise<unknown>
     cargarHistorialResponsable: (cuentaId: string) => Promise<{ historial: HistorialCambioResponsableItem[] }>
   }
@@ -181,8 +182,8 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                   <TabInformacion
                     tipo="pagar"
                     cuenta={cuentaPagar}
-                    resumen={detallePagar?.resumen}
                     regimenFiscal={detallePagar?.proveedor?.regimen_fiscal ?? null}
+                    grupo={detallePagar?.grupo ?? null}
                     onReasignarResponsable={async (responsableId, responsableNombre) => {
                       if (!cuentaPagar.item_id) return
                       await pagarActions.reasignarResponsable(cuentaPagar.item_id, responsableId, responsableNombre)
@@ -234,7 +235,8 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                   tipo="pagar"
                   cuentaId={cuentaPagar.id}
                   documentos={detallePagar?.documentos || []}
-                  onSubirFactura={pagarActions.subirFactura}
+                  grupo={detallePagar?.grupo ?? null}
+                  onSubirFactura={(id, xml, pdf) => pagarActions.subirFactura(id, xml, pdf, detallePagar?.grupo?.id)}
                   onRefresh={async () => {
                     await onRefresh()
                     dispatch({ type: 'loaded_pagar', data: await pagarActions.cargarDetalle(cuentaPagar.id) })
@@ -261,7 +263,8 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
                   tipo="pagar"
                   cuentaId={cuentaPagar.id}
                   estado={cuentaPagar.estado}
-                  onRegistrarPago={pagarActions.registrarPago}
+                  grupo={detallePagar?.grupo ?? null}
+                  onRegistrarPago={(id, data) => pagarActions.registrarPago(id, data, detallePagar?.grupo?.id)}
                   onRefresh={async () => {
                     await onRefresh()
                     dispatch({ type: 'loaded_pagar', data: await pagarActions.cargarDetalle(cuentaPagar.id) })

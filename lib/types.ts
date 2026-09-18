@@ -4,6 +4,7 @@ export type EstadoPago = 'PENDIENTE' | 'PAGADO' | 'PARCIAL'
 
 export type EstadoCuentaCobrar = 'FACTURA_PENDIENTE' | 'FACTURADO' | 'PARCIALMENTE_PAGADO' | 'PAGADO' | 'VENCIDO'
 export type EstadoCuentaPagar = 'PENDIENTE' | 'EN_PROCESO_PAGO' | 'PAGADO'
+export type EstadoCuentaPagarGrupo = 'ABIERTO' | 'FACTURADO' | 'EN_PROCESO_PAGO' | 'PAGADO'
 export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO'
 
 export type RegimenFiscal = 'moral' | 'fisica'
@@ -306,7 +307,7 @@ export interface CuentaPagar {
   correo: string | null
   clabe: string | null
   banco: string | null
-  estado: EstadoCuentaPagar
+  estado: EstadoCuentaPagar | EstadoCuentaPagarGrupo
   folio?: string
   fecha_factura?: string | null
   fecha_vencimiento?: string | null
@@ -317,6 +318,36 @@ export interface CuentaPagar {
   notas: string | null
   updated_at?: string
   created_at?: string
+  grupo_id?: string | null
+  // Bloque 6 (docs/PLAN.md): poblados por buscar_cuentas_pagar_grupos()
+  // cuando la fila representa un grupo real en vez de un item suelto.
+  es_grupo?: boolean
+  items_count?: number
+  // Bloque 6: poblados por cuentas_por_proyecto() (LEFT JOIN a
+  // cuentas_pagar_grupos), null cuando el item no tiene grupo_id todavía.
+  grupo_estado?: EstadoCuentaPagarGrupo | null
+  grupo_monto_total?: number | null
+  grupo_monto_pagado?: number | null
+}
+
+// Agrupa cuentas_pagar del mismo proveedor dentro del mismo proyecto para
+// pedir/validar una sola factura y un solo pago sobre el total acumulado
+// (docs/PLAN.md, iniciativa de agrupación de Cuentas por Pagar).
+export interface CuentaPagarGrupo {
+  id: string
+  proyecto_id: string
+  proyecto_nombre?: string
+  responsable_id: string
+  responsable_nombre?: string
+  estado: EstadoCuentaPagarGrupo
+  monto_total: number
+  monto_pagado: number
+  orden_pago_id: string | null
+  created_at: string
+  updated_at: string
+  // Desglose de cuentas_pagar hijas -- lo agrega GET /api/cuentas-pagar/[id]/documentos
+  // para que la UI muestre qué compone el total del grupo.
+  items?: CuentaPagar[]
 }
 
 export interface CuentaCobrar {
@@ -369,7 +400,10 @@ export interface DocumentoCuentaCobrar {
 
 export interface DocumentoCuentaPagar {
   id: string
-  cuentas_pagar_id: string
+  // Exactamente uno de los dos (CHECK en la base): cuentas_pagar_id para
+  // documentos legacy por item, grupo_id para facturación agrupada.
+  cuentas_pagar_id?: string | null
+  grupo_id?: string | null
   tipo: 'FACTURA_PROVEEDOR' | 'FACTURA_PROVEEDOR_XML' | 'COMPROBANTE_PAGO' | 'OTRO'
   archivo_url: string
   archivo_nombre: string

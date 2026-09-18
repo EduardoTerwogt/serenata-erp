@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { PagoComprobante } from '@/lib/types'
+import { CuentaPagarGrupo, PagoComprobante } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { DateField } from '@/components/ui/DateField'
+import { Icon } from '@/components/ui/Icon'
 
 function fmt(n: number) {
   return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
@@ -22,6 +23,11 @@ interface TabRegistrarPagoPagarProps {
   tipo: 'pagar'
   cuentaId: string
   estado: string
+  // Presente solo cuando la cuenta pertenece a un grupo de facturación
+  // (docs/PLAN.md) -- un solo pago cierra TODAS las cuentas del grupo a la
+  // vez, y no se puede registrar mientras el grupo no tenga factura
+  // validada (estado ABIERTO).
+  grupo?: CuentaPagarGrupo | null
   onRegistrarPago: (id: string, data: { monto: number; comprobante?: File }) => Promise<unknown>
   onRefresh: () => void
 }
@@ -38,6 +44,9 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
+  const grupo = props.tipo === 'pagar' ? props.grupo : null
+  const grupoNoFacturado = Boolean(grupo && grupo.estado === 'ABIERTO')
+  const grupoSaldoPendiente = grupo ? grupo.monto_total - grupo.monto_pagado : null
   const showOrdenInfo = props.tipo === 'pagar' && props.estado === 'EN_PROCESO_PAGO'
   const isPagado = props.estado === 'PAGADO'
 
@@ -85,6 +94,23 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
     <div className="space-y-4">
       <h3 className="text-h3 font-semibold text-ink mb-4">Registrar Pago</h3>
 
+      {grupo && !grupoNoFacturado && !isPagado && (
+        <div className="flex items-start gap-2 rounded-control border border-accent/30 bg-accent/10 p-3 text-content text-subtext">
+          <Icon name="file-text" size={15} className="flex-none mt-0.5 text-accent" />
+          <span>
+            Un solo pago cierra <strong className="text-ink">los {(grupo.items?.length ?? 0) || 'varios'} items del grupo a la vez</strong>.
+            Saldo pendiente del grupo: <strong className="text-ink">${fmt(grupoSaldoPendiente ?? 0)}</strong>.
+          </span>
+        </div>
+      )}
+
+      {grupoNoFacturado && (
+        <div className="flex items-start gap-2 rounded-control border border-cancelled-fg/30 bg-cancelled-bg p-3 text-cancelled-fg text-content">
+          <Icon name="warning" size={15} className="flex-none mt-0.5" />
+          <span>Este grupo todavía no tiene una factura validada — no se puede registrar pago hasta que pase a FACTURADO.</span>
+        </div>
+      )}
+
       {showOrdenInfo && (
         <div className="p-3 rounded-control border border-issued-fg/30 bg-issued-bg">
           <p className="text-issued-fg text-content">
@@ -113,7 +139,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
         </div>
       )}
 
-      {!isPagado && (
+      {!isPagado && !grupoNoFacturado && (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

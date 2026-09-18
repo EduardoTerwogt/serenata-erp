@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-16T23:24:01.948Z",
-  "count": 80,
+  "generated_at": "2026-09-17T23:42:42.101Z",
+  "count": 88,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -81,6 +81,14 @@
     "20260916_fix_folio_lpad_truncation.sql",
     "20260916_fix_folio_reservation_survives_deletion.sql",
     "20260916_pg_stat_statements_snapshot.sql",
-    "20260916_preview_next_cotizacion_folio_principal.sql"
+    "20260916_preview_next_cotizacion_folio_principal.sql",
+    "20260917_cuentas_pagar_grupos.sql",
+    "20260917_orden_pago_grupos_facturados_eventos_realizados.sql",
+    "20260917_reasignar_responsable_cuenta_pagar.sql",
+    "20260917_reconciliar_grupos_en_approve_cotizacion.sql",
+    "20260917_registrar_pago_grupo_factura.sql",
+    "20260918_buscar_cuentas_pagar_grupos.sql",
+    "20260918_cuentas_por_proyecto_incluir_grupo.sql",
+    "20260918_migracion_retroactiva_cuentas_pagar_grupos.sql"
   ]
 }

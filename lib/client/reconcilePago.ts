@@ -22,14 +22,18 @@ export interface PagoReconciliationResult {
  * nada.
  */
 export async function reconcilePagoEstado(
-  dominio: 'cuentas-pagar' | 'cuentas-cobrar',
+  dominio: 'cuentas-pagar' | 'cuentas-cobrar' | 'cuentas-pagar-grupos',
   cuentaId: string,
   operationId: string
 ): Promise<PagoReconciliationResult> {
   try {
-    const response = await fetch(
-      `/api/${dominio}/${cuentaId}/registrar-pago/estado?operation_id=${encodeURIComponent(operationId)}`
-    )
+    // Los grupos de facturación (docs/PLAN.md) viven bajo un sub-recurso de
+    // cuentas-pagar, no bajo su propio dominio en la URL.
+    const path =
+      dominio === 'cuentas-pagar-grupos'
+        ? `/api/cuentas-pagar/grupos/${cuentaId}/registrar-pago/estado`
+        : `/api/${dominio}/${cuentaId}/registrar-pago/estado`
+    const response = await fetch(`${path}?operation_id=${encodeURIComponent(operationId)}`)
     const body = await response.json().catch(() => ({}))
     if (response.ok && body?.status === 'completed') return { status: 'completed', result: body.result }
     if (response.ok && body?.status === 'ambiguous') return { status: 'ambiguous' }

@@ -51,14 +51,18 @@ import { reconcilePagoEstado, type PagoReconciliationResult } from '@/lib/client
  */
 export interface RunIdempotentPagoSubmitParams<TFields> {
   scope: string
-  dominio: 'cuentas-pagar' | 'cuentas-cobrar'
+  dominio: 'cuentas-pagar' | 'cuentas-cobrar' | 'cuentas-pagar-grupos'
   cuentaId: string
   fields: TFields
   comprobante?: File
   normalize: (file: File) => Promise<File>
   submit: (args: { operationId: string; comprobante?: File }) => Promise<unknown>
   /** Inyectable solo para pruebas -- por default consulta el endpoint real. */
-  reconcile?: (dominio: 'cuentas-pagar' | 'cuentas-cobrar', cuentaId: string, operationId: string) => Promise<PagoReconciliationResult>
+  reconcile?: (
+    dominio: 'cuentas-pagar' | 'cuentas-cobrar' | 'cuentas-pagar-grupos',
+    cuentaId: string,
+    operationId: string
+  ) => Promise<PagoReconciliationResult>
 }
 
 const MAX_RECONCILE_RETRIES = 2

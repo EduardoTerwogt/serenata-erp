@@ -1,9 +1,14 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { DocumentoCuentaCobrar, DocumentoCuentaPagar } from '@/lib/types'
+import { CuentaPagarGrupo, DocumentoCuentaCobrar, DocumentoCuentaPagar } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { StatusBadge, toneForValidacionEstado } from '@/components/ui/StatusBadge'
+import { Icon } from '@/components/ui/Icon'
+
+function fmt(n: number) {
+  return (n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })
+}
 
 interface TabDocumentosCobrarProps {
   tipo: 'cobrar'
@@ -18,6 +23,10 @@ interface TabDocumentosPagarProps {
   tipo: 'pagar'
   cuentaId: string
   documentos: DocumentoCuentaPagar[]
+  // Presente solo cuando la cuenta pertenece a un grupo de facturación
+  // (docs/PLAN.md) -- la factura que se sube aquí es sobre el total del
+  // grupo, no sobre este item solo.
+  grupo?: CuentaPagarGrupo | null
   onSubirFactura: (id: string, xml: File, pdf: File) => Promise<unknown>
   onRefresh: () => void
 }
@@ -117,10 +126,22 @@ export function TabDocumentos(props: TabDocumentosProps) {
   }
 
   const documentos = props.documentos
+  const grupo = props.tipo === 'pagar' ? props.grupo : null
+  const ocultarSubidaPorGrupoPagado = grupo?.estado === 'PAGADO'
 
   return (
     <div className="space-y-4">
       <h3 className="text-h3 font-semibold text-ink mb-4">Documentos</h3>
+
+      {grupo && (
+        <div className="flex items-start gap-2 rounded-control border border-accent/30 bg-accent/10 p-3 text-content text-subtext">
+          <Icon name="warning" size={15} className="flex-none mt-0.5 text-accent" />
+          <span>
+            {grupo.responsable_nombre || 'Este proveedor'} factura <strong className="text-ink">agrupado</strong> en este proyecto.
+            Sube <strong className="text-ink">una sola factura</strong> por el total del grupo — <strong className="text-ink">${fmt(grupo.monto_total)}</strong> —, no por este item.
+          </span>
+        </div>
+      )}
 
       {uploadError && (
         <div className="rounded-control border border-cancelled-fg/30 bg-cancelled-bg p-3">
@@ -206,7 +227,7 @@ export function TabDocumentos(props: TabDocumentosProps) {
               </button>
             </div>
           </>
-        ) : (
+        ) : !ocultarSubidaPorGrupoPagado && (
           <div className="space-y-2">
             <p className="text-content font-medium text-body">Subir Factura Proveedor</p>
             <div className="space-y-2">

@@ -80,9 +80,13 @@ export async function POST(request: Request) {
     let requiereConfirmacion = false
     if (TIPOS_CON_IDENTIDAD.includes(tipo as TipoDocumentoProveedor)) {
       const proveedorActual = await getProveedorById(portalAuth.proveedorId)
-      if (proveedorActual?.portal_estado === 'activo') {
+      const esConstancia = tipo === 'CONSTANCIA_SITUACION_FISCAL'
+      const activo = proveedorActual?.portal_estado === 'activo'
+
+      if (activo || esConstancia) {
         const datos = await extraerDatosIdentidad(file)
-        if (datos.nombre_completo) {
+
+        if (activo && datos.nombre_completo) {
           const candidatos = await buscarCandidatosMatch(datos.nombre_completo, portalAuth.proveedorId)
           if (candidatos.length > 0) {
             await updateProveedor(portalAuth.proveedorId, {
@@ -91,6 +95,14 @@ export async function POST(request: Request) {
             })
             requiereConfirmacion = true
           }
+        }
+
+        // La Constancia de Situación Fiscal es la única fuente confiable
+        // del régimen fiscal real -- se persiste automáticamente cuando el
+        // proveedor todavía no tiene uno asignado, nunca pisando un valor
+        // que staff ya haya corregido/confirmado a mano.
+        if (esConstancia && datos.regimen_fiscal && !proveedorActual?.regimen_fiscal) {
+          await updateProveedor(portalAuth.proveedorId, { regimen_fiscal: datos.regimen_fiscal })
         }
       }
     }
