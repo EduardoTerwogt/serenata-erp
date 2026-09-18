@@ -87,6 +87,14 @@ Un plan ya aprobado se ejecuta completo sin repreguntar, verificando en cada eta
 que quedó **en verde de verdad** (build, deploy, comportamiento real, incluido el
 job `live`) — que el push tenga éxito no prueba nada.
 
+Esto incluye Supabase: dentro de un plan ya aprobado, toda migración o cambio que
+haga falta para implementarlo (incluido un borrado sin reemplazo) se ejecuta sin
+pausar — ver sección "Supabase" abajo para el detalle y el único gatillo de pausa.
+`.claude/settings.json` habilita el permiso técnico de forma permanente; que no se
+use fuera de la ejecución de un plan es criterio de Claude, no un mecanismo técnico
+que distinga ambos casos — igual que el resto de esta sección. Detalle y motivo:
+`docs/decisions/012-autonomia-supabase-en-plan-aprobado.md`.
+
 ---
 
 ## Supabase — conexiones y regla de producción
@@ -96,11 +104,18 @@ Dos Custom Connectors al MCP oficial de Supabase, configurados en claude.ai
 - `supabase-test`: lectura y escritura completas sobre `serenata-erp-test`.
 - `supabase-prod`: escritura habilitada, bajo la regla siguiente.
 
-**Producción:** los cambios **aditivos o de mejora** están pre-aprobados. Borrar algo
-existente solo se permite cuando es para **sustituirlo** (recrear una función,
-renombrar una columna). Un borrado que elimina una capacidad **sin reemplazo**
-requiere mostrar el SQL exacto y esperar confirmación explícita. Todo cambio aplicado
-se guarda como migración numerada y se commitea.
+**Producción, dentro de un plan ya aprobado:** todo cambio necesario para
+implementar el plan está autorizado sin pausar — incluido un borrado sin reemplazo.
+El único gatillo de pausa es que el cambio toque una regla de negocio no clara,
+genere una contradicción, o no esté claro cuál es el resultado final esperado; en
+ese caso se consulta antes de aplicar. Fuera de un plan (pedido suelto de Supabase
+en la sesión, no derivado de un plan ya revisado): los cambios **aditivos o de
+mejora** están pre-aprobados; borrar algo existente solo se permite cuando es para
+**sustituirlo** (recrear una función, renombrar una columna); un borrado que
+elimina una capacidad **sin reemplazo** requiere mostrar el SQL exacto y esperar
+confirmación explícita. En ambos casos, todo cambio aplicado se guarda como
+migración numerada y se commitea. Detalle y motivo de esta distinción:
+`docs/decisions/012-autonomia-supabase-en-plan-aprobado.md`.
 
 ---
 

@@ -61,3 +61,8 @@ cada push, y esa reconstrucción es el único gate que detecta la divergencia.
   migración con `CREATE OR REPLACE FUNCTION` que lleva tiempo esperando, diffear
   su cuerpo contra `pg_get_functiondef` de la definición VIVA en producción, no
   solo confiar en el historial de archivos del repo.
+- **Actualización (2026-09-18):** la regla "borrado sin reemplazo requiere
+  confirmación explícita" de este documento aplica a pedidos sueltos de Supabase
+  fuera de un plan aprobado. Dentro de la ejecución de un plan ya aprobado, esa
+  confirmación deja de pedirse (incluido un borrado sin reemplazo) — ver
+  `docs/decisions/012-autonomia-supabase-en-plan-aprobado.md`.

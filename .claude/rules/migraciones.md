@@ -20,3 +20,7 @@ paths:
   push: si una migración no es reproducible desde cero, ahí falla.
 - Probar primero en `serenata-erp-test` (ref `ozrtsludmcguvgqdjicn`), luego producción.
 - Contexto completo: `docs/decisions/005-migraciones-manuales-append-only.md`.
+- **Autorización:** dentro de un plan ya aprobado, aplicar y confirmar sin pausar
+  (incluido un borrado sin reemplazo) salvo regla de negocio no clara. Fuera de un
+  plan, sigue la regla de 005. Ver `CLAUDE.md` → "Autonomía de ejecución" /
+  "Supabase" y `docs/decisions/012-autonomia-supabase-en-plan-aprobado.md`.
