@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-17
+**Última actualización:** 2026-09-18
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -78,26 +78,24 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-**Agrupar Cuentas por Pagar por proveedor+proyecto para facturación** —
-iniciativa aprobada, en ejecución. Hoy se pide factura por cada item de
-cotización por separado; cuando un proveedor tiene varios items dentro del
-mismo proyecto, deben agruparse para facturar (y pagar) el total acumulado
-en una sola operación, incluyendo el caso de facturas complementarias.
-Tracker completo, diseño y bloques: [`docs/PLAN.md`](PLAN.md).
+**Sin definir a propósito.** Con Engineering Hardening y la agrupación de
+Cuentas por Pagar cerradas (ver "Cerrado" abajo), lo que sigue se prioriza
+en Chat con el estado real del sistema a la vista — deliberadamente no
+precomprometido aquí. Material candidato en "Después".
 
 ---
 
 ## Después
 
-**Sin definir a propósito.** Al cerrar Engineering Hardening por completo (EF-2 y
-EF-3) se prioriza en Chat, con el estado real del sistema a la vista.
+**Sin definir a propósito.** Se prioriza en Chat, con el estado real del
+sistema a la vista.
 
 El material candidato está en el roadmap de producto de 2026-09-04 (Fase 5, del que
 ya se entregaron el Portal, el Dashboard con gastos fijos, y las bases de Proyectos y
-Cuentas) más lo que surja de las dos iniciativas de arriba. Sigue pendiente de ese
-documento: Cuentas agrupadas por proyecto y cruce fiscal, los agregados del Cotizador
-(copiar entre cotizaciones, columna Costo + IVA, calculadora de impuestos), Proyectos
-como herramienta de PM con asistente sobre el historial, y cerrar la migración visual.
+Cuentas), menos lo ya entregado (Cuentas agrupadas por proyecto y cruce fiscal —
+cerrado, ver "Cerrado" abajo): los agregados del Cotizador (copiar entre
+cotizaciones, columna Costo + IVA, calculadora de impuestos), Proyectos como
+herramienta de PM con asistente sobre el historial, y cerrar la migración visual.
 
 Ninguno de esos está comprometido todavía.
 
@@ -127,6 +125,23 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Agrupar Cuentas por Pagar por proveedor+proyecto para facturación
+  (2026-09-18).** `cuentas_pagar` era 1:1 por renglón de cotización — un
+  proveedor con varios renglones en el mismo proyecto recibía una solicitud
+  de factura por cada uno por separado. 8 bloques: esquema
+  (`cuentas_pagar_grupos`) + reconciliación automática, integración en
+  aprobación/reasignación, facturación + pago agrupados + órdenes de pago +
+  UI interna, Portal de Proveedores (contrato agrupado), migración
+  retroactiva de datos, agrupar los listados internos ("Lista"/"Por
+  proyecto", no solo el modal de detalle), reordenar el modal de detalle, y
+  un hotfix de una regresión encontrada al cerrar (`proyecto_id` faltante en
+  `cuentas_cobrar` para cotizaciones complementarias, causada por un
+  `CREATE OR REPLACE` escrito sobre una copia vieja de `approve_cotizacion`).
+  PR [#73](https://github.com/EduardoTerwogt/serenata-erp/pull/73) y
+  [#74](https://github.com/EduardoTerwogt/serenata-erp/pull/74) mergeados a
+  `main`. Historia completa, diseño y tracker de los 8 bloques:
+  [`docs/archive/agrupacion-cuentas-pagar-por-proveedor-proyecto.md`](archive/agrupacion-cuentas-pagar-por-proveedor-proyecto.md);
+  decisión de diseño: [`docs/decisions/011`](decisions/011-agrupacion-cuentas-pagar-por-proveedor-proyecto.md).
 - **Fase 8.7.2, Drenado real por celda + sincronización de migraciones
   (2026-09-12).** Cerró 2 bugs reportados (avisos de "editando" que no se
   actualizaban, Totales sin recalcular tras agregar fila) con las causas E-I sobre

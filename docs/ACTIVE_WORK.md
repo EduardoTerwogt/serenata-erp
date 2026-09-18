@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-17
+**Última actualización:** 2026-09-18
 
 ## Estado
 
@@ -22,55 +22,111 @@ Historia completa de cada una:
 (tracker completo, matriz de 28 hallazgos, gate real de carga:
 [`docs/archive/ef-3-baseline-final.md`](archive/ef-3-baseline-final.md)).
 
-**No hay ninguna iniciativa de Engineering Hardening en curso.** El
-`docs/ROADMAP.md` no tiene todavía una próxima iniciativa comprometida —
-se prioriza en Chat con el estado real del sistema a la vista.
+**Agrupar Cuentas por Pagar por proveedor+proyecto para facturación —
+cerrada por completo (2026-09-18).** 8 bloques, PR
+[#73](https://github.com/EduardoTerwogt/serenata-erp/pull/73) y
+[#74](https://github.com/EduardoTerwogt/serenata-erp/pull/74) mergeados a
+`main`. Historia completa:
+[`docs/archive/agrupacion-cuentas-pagar-por-proveedor-proyecto.md`](archive/agrupacion-cuentas-pagar-por-proveedor-proyecto.md),
+decisión de diseño: [`docs/decisions/011`](decisions/011-agrupacion-cuentas-pagar-por-proveedor-proyecto.md).
+
+**`docs/PLAN.md` vuelve a estado Vacío.** No hay ninguna iniciativa
+multi-sesión en curso ni en definición — se prioriza en Chat con el estado
+real del sistema a la vista (ver `docs/ROADMAP.md` → "Después" para
+material candidato sin comprometer).
 
 **F28 — RESUELTO** (race de concurrencia en la rotación del cookie de sesión de
 `next-auth`), PR [#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71)
 mergeado. Detalle completo:
 [`docs/decisions/010-f28-diferir-race-cookie-nextauth.md`](decisions/010-f28-diferir-race-cookie-nextauth.md).
 
-## Completado en esta sesión (2026-09-17)
+## Completado en esta sesión (2026-09-18)
 
-**Workflow de `docs/PLAN.md` para coordinar entre cuentas de Claude distintas**,
-PR [#72](https://github.com/EduardoTerwogt/serenata-erp/pull/72) (mergeado).
+Cierre de la iniciativa de agrupación de Cuentas por Pagar — Bloques 6, 7 y
+un hotfix de una regresión encontrada al cerrar (Bloque 8).
 
-- **Motivación:** con varias cuentas de Claude trabajando el mismo repo, la
-  memoria automática es local a cada cuenta/máquina — el repo es el único canal
-  real de contexto compartido. Antes, el tracker de una iniciativa grande usaba
-  un nombre distinto cada vez (ej. `docs/EF-3_ENGINEERING_HARDENING.md`), lo que
-  dejó referencias muertas en los skills y en `ARCHITECTURE.md` tras archivarse.
-- **`docs/PLAN.md`** (nuevo): nombre fijo para el tracker de la iniciativa
-  multi-sesión activa. Nace como borrador desde la primera idea confirmada (no
-  cuando el plan ya está terminado), se refina en vivo, se ejecuta bloque por
-  bloque, y se archiva con `git mv` a `docs/archive/<slug>.md` al cerrar. Ciclo
-  de vida completo documentado dentro del propio archivo.
-- Referencias a `docs/PLAN.md` agregadas en `CLAUDE.md`, `README.md`, `AGENTS.md`,
-  `docs/ROADMAP.md`, `docs/PROMPTS.md` y ambos skills de sesión
-  (`serenata-iniciar-fase`, `serenata-cerrar-sesion`).
-- **`CLAUDE.md` optimizado:** 229 → 166 líneas (bajo el límite de 200
-  recomendado por la doc de Claude Code). Detalle de git movido a
-  `.claude/rules/git.md` (carga siempre, sin pérdida de contexto). Principios
-  críticos, patrones obligatorios y reglas de negocio invariables intactos.
-- **Limpieza de referencias muertas a la ruta vieja de EF-3**
-  (`docs/EF-3_ENGINEERING_HARDENING.md` → `docs/archive/ef-3-engineering-hardening.md`):
-  3 en documentación (`ARCHITECTURE.md` y ambos skills) + ~11 en comentarios de
-  código/tests (k6, repos de proyectos/proveedores, `env-check`,
-  `useQuotationBusinessActions`, `test.yml`). Sin tocar
-  `scripts/validate-ef3-tracker.mjs` ni su test a propósito — `TRACKER_PATHS`
-  prueba ambas rutas como fallback intencional.
-- **Autorizado explícitamente por el usuario:** la excepción doc-only (push
-  directo a `main`) aplica igual en sesiones de Claude Code remotas/en la nube,
-  documentado en `.claude/rules/git.md`.
-- **Tests ejecutados y resultado real:** `tsc --noEmit` limpio, `lint` sin
-  errores nuevos (8 warnings preexistentes, ninguno en archivos tocados),
-  `vitest` 46/46 en los 5 archivos de test tocados. CI del PR en verde:
-  `test`, `tracker-lint`, `smoke-and-critical`, `fresh-db`, `live`, Vercel
-  (preview + comments).
+- **Bloque 6 — Agrupar la vista interna de Cuentas por Pagar (Lista y Por
+  proyecto), PR #73.** El Bloque 3 solo había agrupado el modal de detalle;
+  "Lista" y "Por proyecto" seguían mostrando una fila por item. RPC nueva
+  `buscar_cuentas_pagar_grupos` reemplaza a `buscar_cuentas_pagar` como
+  fuente de "Lista"; `cuentas_por_proyecto()` ampliada con
+  `grupo_estado`/`grupo_monto_total`/`grupo_monto_pagado` para que "Por
+  proyecto" agrupe en JS (`agruparCuentasPagarPorGrupo`). Ambas migraciones
+  verificadas contra `serenata-erp-test` y producción con datos reales. De
+  paso se corrigió un hueco encontrado en el camino: `regimen_fiscal`
+  extraído de la constancia por el parser AI nunca se persistía.
+- **Bloque 7 — Reordenar el detalle de Cuentas por Pagar (modal de grupo),
+  PR #73.** `TabInformacion.tsx` reordenado a
+  folio/responsable(editable)/proyecto/fecha factura → tarjeta "Grupo de
+  facturación" (sin resaltar ningún item como "actual") → cruce fiscal →
+  contacto; Notas e Historial de reasignación al final. Cuentas legacy sin
+  `grupo_id` sintetizan un "grupo" de 1 item para que la tarjeta nunca
+  desaparezca.
+- **PR #73 (Bloques 1-7 completos) mergeado a `main`**, commit `6c60a46`.
+  CI en verde (`test`/`tracker-lint`/`fresh-db`/`smoke-and-critical`/`live`,
+  Vercel preview).
+- **Bloque 8 — Hotfix: regresión de `proyecto_id` en `cuentas_cobrar`, PR
+  #74.** Al revisar el flujo completo antes de cerrar, el usuario encontró
+  que una cotización complementaria aprobada dejaba de aparecer en Cuentas
+  por Cobrar. Causa raíz: `20260917_reconciliar_grupos_en_approve_cotizacion.sql`
+  (Bloque 2) se había escrito sobre una copia vieja de `approve_cotizacion`
+  — de antes de que `20260911_approve_cotizacion_restore_proyecto_id.sql`
+  ya hubiera corregido la falta de `proyecto_id` en el upsert de
+  `cuentas_cobrar` una vez. Corregido en
+  `20260918_fix_approve_cotizacion_cuenta_cobrar_proyecto_id.sql`
+  (restaura `proyecto_id`, mantiene intacto el loop de
+  `reconcile_cuenta_pagar_grupo()`, + backfill de la única fila real
+  afectada en producción, `SH071-A`). Verificado en `serenata-erp-test`
+  (aprobación real de una complementaria de prueba) y producción antes del
+  push. Mergeado a `main`, commit `3640f36`. Documentado como segunda
+  lección de proceso en `docs/decisions/011`.
+- **Cierre de la iniciativa:** `docs/PLAN.md` archivado a
+  `docs/archive/agrupacion-cuentas-pagar-por-proveedor-proyecto.md` (8
+  bloques cerrados en el tracker), resumen agregado a `docs/ROADMAP.md` →
+  "Cerrado", `docs/PLAN.md` recreado vacío. `ARCHITECTURE.md` y
+  `docs/decisions/006`/`011` ya reflejaban el modelo nuevo desde el Bloque
+  5 — verificados sustantivos, sin cambios adicionales necesarios por los
+  Bloques 6-8 (son UI/hotfix, no cambian el modelo de datos descrito ahí).
+
+**Decisiones tomadas en esta sesión:**
+- El criterio de cierre de "prueba manual end-to-end" de `docs/PLAN.md` se
+  dio por cumplido vía la cobertura granular por SQL directo de cada pieza
+  (Bloques 1-5) más la revisión manual real del usuario sobre el Preview
+  (Bloques 6-8) — en vez de exigir un recorrido único de punta a punta
+  adicional. Fue precisamente esa revisión la que encontró la regresión del
+  Bloque 8.
+- Notas e Historial de reasignación se quedan en el modal de detalle (no
+  estaban en la lista de 4 secciones que pidió el usuario para el
+  reordenamiento), movidos al final.
+- Reasignar responsable se queda editable en el campo "Responsable" del
+  modal reordenado.
+- Cuentas sin grupo real (legacy) sintetizan un "grupo" de 1 item en vez de
+  ocultar la tarjeta "Grupo de facturación".
+
+**Tests ejecutados y resultado real:** `tsc --noEmit` limpio, `lint` sin
+errores nuevos (8 warnings preexistentes), `vitest` 885/885 en cada punto de
+verificación (Bloques 6, 7, hotfix). Verificación SQL directa contra
+`serenata-erp-test` y producción para ambas migraciones del Bloque 6, y
+para el hotfix del Bloque 8 (incluida una aprobación real de una
+cotización complementaria de prueba, creada y limpiada en el mismo turno).
+CI de ambos PRs en verde antes de mergear.
 
 ## Deuda técnica
 
+- **Nueva: no hay cobertura automática (unit ni integración) del
+  comportamiento SQL de `approve_cotizacion` respecto a `cuentas_cobrar`.**
+  `lib/server/quotations/__tests__/approval.test.ts` mockea la RPC
+  completa, así que nunca ejercita el SQL real — no habría atrapado la
+  regresión del Bloque 8 ni la atraparía si se repite. No existe ningún
+  harness de test SQL/pgTAP en el repo. Construir uno es una decisión de
+  arquitectura de testing, fuera de alcance del hotfix — queda pendiente,
+  sin plan asignado.
+- **Norma nueva agregada a `docs/decisions/011`:** al reemplazar una
+  función existente vía `CREATE OR REPLACE`, partir siempre de su versión
+  más reciente confirmada (`pg_proc.prosrc` en producción, o el
+  manifiesto), nunca de una copia local desactualizada — la regresión del
+  Bloque 8 fue exactamente este error, y ya había pasado una vez antes en
+  la misma función.
 - **Pendiente de atender en algún momento, no bloqueante — gate real de
   concurrencia de F28 nunca quedó cableado en CI.** Ni el paso `SMOKE`
   de `scripts/loadtest/k6/_diag-cookies-concurrent.js` ni el job
@@ -78,11 +134,10 @@ PR [#72](https://github.com/EduardoTerwogt/serenata-erp/pull/72) (mergeado).
   umbral real `http_req_failed<1%` — ese gate solo se usó antes vía
   ramas throwaway durante el diagnóstico original de F28, nunca se
   agregó como job permanente. El test e2e ya prueba el mecanismo real
-  bajo concurrencia genuina (ver arriba), así que esto no bloquea nada,
-  pero si en algún momento se quiere la confirmación a escala real hay
-  que correr `_diag-cookies-concurrent.js` a mano fuera de `SMOKE=1`
-  (o agregar un job dedicado a `load-test.yml`, mismo patrón que los
-  demás escenarios).
+  bajo concurrencia genuina, así que esto no bloquea nada, pero si en
+  algún momento se quiere la confirmación a escala real hay que correr
+  `_diag-cookies-concurrent.js` a mano fuera de `SMOKE=1` (o agregar un
+  job dedicado a `load-test.yml`, mismo patrón que los demás escenarios).
 - **Frente C (superficie de riesgo) de la auditoría de ingeniería no fue
   parte del alcance de EF-3:** `CRON_SECRET` que falla abierto si no
   existe, e idempotencia que trata cualquier error de INSERT como
@@ -125,10 +180,15 @@ PR [#72](https://github.com/EduardoTerwogt/serenata-erp/pull/72) (mergeado).
 - **Rama remota `fix/totales-general-conflict-drain` (ex-PR #30)** — mismo
   tipo de bloqueo en una sesión anterior. Su código ya está en `main` vía
   PR #29; no tiene trabajo sin mergear. (Arrastrado.)
+- **Ramas ya mergeadas de esta sesión** (`claude/epic-davinci-1fj7ki`,
+  `claude/fix-approve-cotizacion-proyecto-id`) — pueden borrarse desde la
+  UI de GitHub cuando se quiera, sin urgencia (mismo bloqueo de proxy que
+  las de arriba si se intenta desde una sesión de Claude Code).
 
 ## Siguiente paso
 
-**Iniciativa activa: Agrupar Cuentas por Pagar por proveedor+proyecto para
-facturación** — aprobada, lista para ejecutar bloque por bloque. Tracker
-completo, diseño y estado de cada bloque: [`docs/PLAN.md`](PLAN.md). Próximo
-paso: Bloque 1 (esquema `cuentas_pagar_grupos` + función de reconciliación).
+**No hay ninguna iniciativa multi-sesión comprometida.** `docs/PLAN.md`
+está vacío. Material candidato para la próxima iniciativa (sin comprometer
+todavía): `docs/ROADMAP.md` → sección "Después" (agregados del Cotizador,
+Proyectos como herramienta de PM, cerrar la migración visual). Se decide en
+Chat con el estado real del sistema a la vista.
