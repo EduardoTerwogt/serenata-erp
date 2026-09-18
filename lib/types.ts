@@ -142,6 +142,11 @@ export interface ServiceTemplate {
 export interface Cliente {
   id: string
   nombre: string
+  tipo?: string | null
+  contacto?: string | null
+  correo?: string | null
+  telefono?: string | null
+  notas?: string | null
   proyectos: string[]
   activo: boolean
   created_at: string

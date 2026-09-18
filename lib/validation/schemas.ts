@@ -87,6 +87,30 @@ export const ProveedorUpdateSchema = z.object({
   regimen_fiscal: z.enum(['moral', 'fisica']).nullable().optional(),
 })
 
+// ==================== CLIENTES ====================
+// Bloque 5 (docs/PLAN.md): catálogo administrativo -- mismo patrón de
+// Proveedores (PUT + soft-delete vía `activo`), sin roles/banco/clabe/
+// regimen_fiscal ni historial (conceptos que Clientes no tiene).
+
+export const ClienteCreateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido'),
+  tipo: z.string().nullable().optional(),
+  contacto: z.string().nullable().optional(),
+  telefono: z.string().nullable().optional(),
+  correo: z.string().email('Correo inválido').nullable().optional(),
+  notas: z.string().nullable().optional(),
+})
+
+export const ClienteUpdateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido').optional(),
+  tipo: z.string().nullable().optional(),
+  contacto: z.string().nullable().optional(),
+  telefono: z.string().nullable().optional(),
+  correo: z.string().email('Correo inválido').nullable().optional(),
+  notas: z.string().nullable().optional(),
+  activo: z.boolean().optional(),
+})
+
 // ==================== PROYECTOS ====================
 
 export const ProyectoUpdateSchema = z.object({

@@ -42,6 +42,7 @@ import {
   Sparkles,
   Loader2,
   Lock,
+  Users,
 } from 'lucide-react'
 
 // Rediseño Apple-style: los íconos y tonos del nav siguen exactamente
@@ -58,6 +59,9 @@ const ICONS = {
   proyectos: FolderKanban,
   cuentas: Wallet,
   proveedores: UserCog,
+  // Bloque 5 (docs/PLAN.md): sin equivalente en el kit -- Users es la más
+  // descriptiva (mismo criterio que 'google-sheets'/Table más arriba).
+  clientes: Users,
   plantillas: LayoutTemplate,
   admin: Settings,
   'admin-usuarios': Settings,

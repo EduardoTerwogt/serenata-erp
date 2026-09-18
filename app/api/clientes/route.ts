@@ -1,16 +1,26 @@
 import { requireSection } from '@/lib/api-auth'
+import { getClientes } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { z } from 'zod'
-
-const ClientePostSchema = z.object({
-  nombre: z.string().min(1, 'nombre requerido').max(255, 'nombre demasiado largo').trim(),
-})
+import { validate, ClienteCreateSchema } from '@/lib/validation/schemas'
 
 export async function GET(request: Request) {
   const authResult = await requireSection('cotizaciones')
   if (authResult.response) return authResult.response
 
   const { searchParams } = new URL(request.url)
+
+  // Bloque 5 (docs/PLAN.md): catálogo administrativo -- lista completa
+  // (activos e inactivos, todas las columnas), separado del autocomplete de
+  // abajo para no tocar su contrato existente (activo=true, campos acotados).
+  if (searchParams.get('admin') === '1') {
+    try {
+      return Response.json(await getClientes())
+    } catch (error) {
+      console.error('[GET /api/clientes?admin=1] Error:', error)
+      return Response.json({ error: 'Error obteniendo clientes' }, { status: 500 })
+    }
+  }
+
   const q = (searchParams.get('q') ?? '').trim().slice(0, 100)
 
   let query = supabaseAdmin
@@ -38,16 +48,17 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const parsed = ClientePostSchema.safeParse(body)
-    if (!parsed.success) {
-      return Response.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 })
+    const validation = validate(ClienteCreateSchema, body)
+    if (!validation.ok) {
+      return Response.json({ error: validation.error }, { status: 400 })
     }
 
-    const { nombre } = parsed.data
-
+    // Upsert por nombre: preserva el uso existente (crear/encontrar un
+    // cliente al vuelo por texto libre desde una cotización) y el nuevo
+    // (crear desde el catálogo administrativo, Bloque 5) con el mismo POST.
     const { data, error } = await supabaseAdmin
       .from('clientes')
-      .upsert({ nombre, activo: true }, { onConflict: 'nombre' })
+      .upsert({ ...validation.data, activo: true }, { onConflict: 'nombre' })
       .select()
       .maybeSingle()
 

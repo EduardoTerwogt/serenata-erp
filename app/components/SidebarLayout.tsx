@@ -25,6 +25,8 @@ const NAV_LINKS: { href: string; label: string; section: string; icon: IconName;
   { href: '/proyectos', label: 'Proyectos', section: 'proyectos', icon: 'proyectos', tone: 'blue', group: 'Principal' },
   { href: '/cuentas', label: 'Cuentas', section: 'cuentas', icon: 'cuentas', tone: 'green', group: 'Negocio' },
   { href: '/proveedores', label: 'Proveedores', section: 'responsables', icon: 'proveedores', tone: 'indigo', group: 'Operación' },
+  // Bloque 5 (docs/PLAN.md): mismo section guard que GET /api/clientes.
+  { href: '/clientes', label: 'Clientes', section: 'cotizaciones', icon: 'clientes', tone: 'indigo', group: 'Operación' },
   { href: '/planeacion', label: 'Planeación', section: 'planeacion', icon: 'planeacion', tone: 'red', group: 'Operación' },
   { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion', icon: 'plantillas', tone: 'teal', group: 'Operación' },
 ]

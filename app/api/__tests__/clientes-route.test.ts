@@ -44,6 +44,19 @@ describe('GET /api/clientes', () => {
     expect(mocks.fromMock).toHaveBeenCalledTimes(2)
   })
 
+  it('admin=1 (Bloque 5) devuelve el catálogo completo, no el recorte de autocomplete', async () => {
+    mocks.fromMock.mockReturnValue(chainableSelect([
+      { id: '1', nombre: 'ACME', activo: true, proyectos: [] },
+      { id: '2', nombre: 'Inactivo SA', activo: false, proyectos: [] },
+    ]))
+
+    const response = await GET(new Request('http://localhost/api/clientes?admin=1'))
+    const data = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(data).toHaveLength(2)
+  })
+
   it('un POST no deja ningún estado que sirva una respuesta vieja al siguiente GET', async () => {
     mocks.fromMock.mockReturnValue(chainableSelect([{ id: '1', nombre: 'ACME', proyectos: [] }]))
     await GET(new Request('http://localhost/api/clientes'))
