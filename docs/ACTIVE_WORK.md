@@ -30,10 +30,15 @@ cerrada por completo (2026-09-18).** 8 bloques, PR
 [`docs/archive/agrupacion-cuentas-pagar-por-proveedor-proyecto.md`](archive/agrupacion-cuentas-pagar-por-proveedor-proyecto.md),
 decisión de diseño: [`docs/decisions/011`](decisions/011-agrupacion-cuentas-pagar-por-proveedor-proyecto.md).
 
-**`docs/PLAN.md` vuelve a estado Vacío.** No hay ninguna iniciativa
-multi-sesión en curso ni en definición — se prioriza en Chat con el estado
-real del sistema a la vista (ver `docs/ROADMAP.md` → "Después" para
-material candidato sin comprometer).
+**`docs/PLAN.md` — Aprobado, listo para ejecutar (2026-09-18).** Nueva
+iniciativa multi-sesión: 6 bloques en paralelo derivados de las iniciativas
+A-F del roadmap (Plantillas, Cotizaciones UI, Cotizaciones fórmula Costo
+Unitario/Costo Total, Portal, Clientes, PDF de orden de pago) — pasó por 6
+rondas de auditoría externa antes de aprobarse. Ver `docs/PLAN.md` para el
+tracker de bloques, el detalle de cada uno y qué quedó suelto para atención
+individual (historial de cuentas por mes/año, dropdown de impuestos de
+proyecto, calculadora de régimen fiscal, estado de resultados/balance,
+normalizar `cliente_id` como FK).
 
 **F28 — RESUELTO** (race de concurrencia en la rotación del cookie de sesión de
 `next-auth`), PR [#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71)
@@ -187,8 +192,12 @@ CI de ambos PRs en verde antes de mergear.
 
 ## Siguiente paso
 
-**No hay ninguna iniciativa multi-sesión comprometida.** `docs/PLAN.md`
-está vacío. Material candidato para la próxima iniciativa (sin comprometer
-todavía): `docs/ROADMAP.md` → sección "Después" (agregados del Cotizador,
-Proyectos como herramienta de PM, cerrar la migración visual). Se decide en
-Chat con el estado real del sistema a la vista.
+**Ejecutar `docs/PLAN.md`, bloque por bloque.** Los 6 bloques pueden
+avanzar en paralelo (ramas/sesiones distintas, sin compartir archivos salvo
+lo anotado en "Coordinación entre bloques paralelos" del plan). Empezar por
+el Bloque 1 (Plantillas: header de tarjeta) es la recomendación del plan
+por ser el más aislado y simple, pero no es una dependencia real — cualquier
+sesión puede tomar cualquier bloque `Pendiente` del tracker. Recordar la
+regla del propio plan: el Bloque 3 (fórmula Costo Unitario/Costo Total)
+debe mergear a `main` antes de que arranque cualquier trabajo sobre las
+iniciativas sueltas que dependen de él (B-financiera, F).

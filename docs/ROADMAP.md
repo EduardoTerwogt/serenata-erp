@@ -78,10 +78,19 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-**Sin definir a propósito.** Con Engineering Hardening y la agrupación de
-Cuentas por Pagar cerradas (ver "Cerrado" abajo), lo que sigue se prioriza
-en Chat con el estado real del sistema a la vista — deliberadamente no
-precomprometido aquí. Material candidato en "Después".
+**Iniciativas A-F (parcial) — Aprobado, en ejecución vía `docs/PLAN.md`
+(2026-09-18).** De las 6 iniciativas agregadas abajo en "Después", las
+partes que pueden ejecutarse en paralelo sin diseño pendiente ya tienen plan
+aprobado tras 6 rondas de auditoría externa: Plantillas (header de tarjeta),
+Cotizaciones (UI de edición + fórmula Costo Unitario/Costo Total, bloque
+propio), Portal (alias/nombre, ver documentos, tab Historial), Clientes
+(catálogo editable), Cuentas (rediseño PDF de orden de pago) — 6 bloques,
+detalle completo y tracker de estado en `docs/PLAN.md`. Las partes que
+requieren diseño o una decisión de producto no comprometida todavía
+(historial de cuentas por mes/año, dropdown de impuestos/utilidad de
+proyecto, calculadora de régimen fiscal, estado de resultados/balance,
+normalizar `cliente_id` como FK) **siguen sin comprometer**, documentadas
+como "Sueltos" en `docs/PLAN.md` y en la sección "Después" de abajo.
 
 ---
 
