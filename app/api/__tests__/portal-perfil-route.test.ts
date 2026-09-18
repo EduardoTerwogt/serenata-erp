@@ -34,13 +34,21 @@ describe('GET /api/portal/perfil', () => {
     expect(mocks.getProveedorByIdMock).not.toHaveBeenCalled()
   })
 
-  it('retorna el perfil del proveedor', async () => {
-    mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', nombre: 'Jose', telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
+  it('retorna el perfil del proveedor, incluido el alias (Bloque 4a)', async () => {
+    mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', nombre: 'Jose', alias: 'Chok', telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
 
     const response = await GET()
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ nombre: 'Jose', telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
+    await expect(response.json()).resolves.toEqual({ nombre: 'Jose', alias: 'Chok', telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
+  })
+
+  it('sin alias en el proveedor, responde null (nunca undefined)', async () => {
+    mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', nombre: 'Jose', telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
+
+    const response = await GET()
+
+    await expect(response.json()).resolves.toEqual({ nombre: 'Jose', alias: null, telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
   })
 
   it('EF-3 3D-10: un error inesperado (crudo de Supabase) nunca expone su mensaje real al cliente', async () => {
@@ -73,7 +81,16 @@ describe('PATCH /api/portal/perfil', () => {
 
     expect(mocks.updateProveedorMock).toHaveBeenCalledWith('prov-1', { nombre: 'Chok', telefono: '555' })
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ nombre: 'Chok', telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
+    await expect(response.json()).resolves.toEqual({ nombre: 'Chok', alias: null, telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
+  })
+
+  it('actualiza el alias (Bloque 4a: campo nuevo, no reusa nombre)', async () => {
+    mocks.updateProveedorMock.mockResolvedValue({ id: 'prov-1', nombre: 'José Ramírez', alias: 'Chok', telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
+
+    const response = await PATCH(req({ alias: 'Chok' }))
+
+    expect(mocks.updateProveedorMock).toHaveBeenCalledWith('prov-1', { alias: 'Chok' })
+    await expect(response.json()).resolves.toEqual({ nombre: 'José Ramírez', alias: 'Chok', telefono: '555', banco: 'BBVA', clabe: '012', regimen_fiscal: 'fisica' })
   })
 
   it('retorna 400 con payload inválido', async () => {

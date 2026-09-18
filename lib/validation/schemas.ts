@@ -66,6 +66,7 @@ export const CotizacionUpdateSchema = CotizacionBaseSchema.partial().extend({
 
 export const ProveedorCreateSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
+  alias: z.string().nullable().optional(),
   telefono: z.string().nullable().optional(),
   correo: z.string().email('Correo inválido').nullable().optional(),
   banco: z.string().nullable().optional(),
@@ -77,6 +78,7 @@ export const ProveedorCreateSchema = z.object({
 
 export const ProveedorUpdateSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido').optional(),
+  alias: z.string().nullable().optional(),
   telefono: z.string().nullable().optional(),
   correo: z.string().email('Correo inválido').nullable().optional(),
   banco: z.string().nullable().optional(),
@@ -238,6 +240,7 @@ export const DocumentoEstadoValidacionSchema = z.object({
 
 export const PortalSignupSchema = z.object({
   nombre: z.string().trim().min(1).nullable().optional(),
+  alias: z.string().trim().min(1).nullable().optional(),
   correo: z.string().email('Correo inválido'),
   password: z.string().min(8, 'El password debe tener al menos 8 caracteres'),
 })
@@ -256,6 +259,7 @@ export const PortalConfirmarMatchSchema = z.object({
 
 export const PortalPerfilSchema = z.object({
   nombre: z.string().trim().min(1).optional(),
+  alias: z.string().nullable().optional(),
   telefono: z.string().nullable().optional(),
   banco: z.string().nullable().optional(),
   clabe: z.string().nullable().optional(),

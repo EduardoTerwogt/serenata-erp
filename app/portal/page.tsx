@@ -14,12 +14,19 @@ import { StatusBadge, toneForCuentaEstado, toneForValidacionEstado } from '@/com
 import { SectionLoading } from '@/components/ui/SectionLoading'
 import type { ProveedorDocumento, TipoDocumentoProveedor } from '@/lib/types'
 
-type PortalTab = 'datos' | 'documentos' | 'cuentas'
+// Bloque 4c (docs/PLAN.md): "Tus cuentas con Serenata" se mudó de la tab
+// "Cuentas y facturas" a su propia tab "Historial" -- mismo dato, mismo
+// SectionCard, solo cambia dónde vive. Si en el futuro "Historial" se
+// reemplaza por la calculadora de régimen fiscal (Suelto, fuera de este
+// plan), esa migración es la SEGUNDA de este mismo espacio -- no reabrir
+// esta por error pensando que es la primera vez que se mueve.
+type PortalTab = 'datos' | 'documentos' | 'cuentas' | 'historial'
 
 const TABS: FilterTab<PortalTab>[] = [
   { value: 'datos', label: 'Mis datos' },
   { value: 'documentos', label: 'Documentación' },
   { value: 'cuentas', label: 'Cuentas y facturas' },
+  { value: 'historial', label: 'Historial' },
 ]
 
 const TIPO_LABEL: Record<TipoDocumentoProveedor, string> = {
@@ -38,6 +45,7 @@ interface MeResponse {
 
 interface PerfilResponse {
   nombre: string
+  alias: string | null
   telefono: string | null
   banco: string | null
   clabe: string | null
@@ -173,12 +181,15 @@ export default function PortalPage() {
       )}
 
       {tab === 'cuentas' && <TabCuentas grupos={grupos} />}
+
+      {tab === 'historial' && <TabHistorial grupos={grupos} />}
     </div>
   )
 }
 
 function TabDatos({ perfil, correo, onGuardado }: { perfil: PerfilResponse; correo: string | null; onGuardado: () => void }) {
   const [nombre, setNombre] = useState(perfil.nombre)
+  const [alias, setAlias] = useState(perfil.alias ?? '')
   const [telefono, setTelefono] = useState(perfil.telefono ?? '')
   const [banco, setBanco] = useState(perfil.banco ?? '')
   const [clabe, setClabe] = useState(perfil.clabe ?? '')
@@ -192,7 +203,7 @@ function TabDatos({ perfil, correo, onGuardado }: { perfil: PerfilResponse; corr
     setError(null)
     setSuccess(false)
     try {
-      await sendJson('/api/portal/perfil', { nombre, telefono, banco, clabe }, 'Error al guardar', { method: 'PATCH' })
+      await sendJson('/api/portal/perfil', { nombre, alias: alias.trim() || null, telefono, banco, clabe }, 'Error al guardar', { method: 'PATCH' })
       setSuccess(true)
       onGuardado()
       setTimeout(() => setSuccess(false), 3000)
@@ -207,11 +218,21 @@ function TabDatos({ perfil, correo, onGuardado }: { perfil: PerfilResponse; corr
     <form onSubmit={guardar} className="grid gap-[19px] items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
       <SectionCard title="Datos personales" contentClassName="p-4 md:p-6 space-y-4">
         <div>
-          <label className="block text-content font-medium text-body mb-1">Nombre completo o alias</label>
+          <label className="block text-content font-medium text-body mb-1">Nombre completo</label>
           <input
             type="text"
             value={nombre}
             onChange={e => setNombre(e.target.value)}
+            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
+          />
+        </div>
+        <div>
+          <label className="block text-content font-medium text-body mb-1">Alias · nombre corto u operativo (opcional)</label>
+          <input
+            type="text"
+            value={alias}
+            onChange={e => setAlias(e.target.value)}
+            placeholder="Ej. Chok"
             className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
           />
         </div>
@@ -321,7 +342,7 @@ function TabDocumentos({
             <div className="flex-1 min-w-0">
               <p className="text-content text-body">{TIPO_LABEL[tipo]}</p>
               {existentes.length > 0 ? (
-                <p className="text-xs text-faint truncate mt-0.5">{existentes[0].archivo_nombre}</p>
+                <a href={existentes[0].archivo_url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline truncate mt-0.5 block">{existentes[0].archivo_nombre}</a>
               ) : (
                 <p className="text-xs text-faint mt-0.5">Sin documento subido</p>
               )}
@@ -395,7 +416,7 @@ function TabCuentas({ grupos }: { grupos: GrupoPortal[] }) {
   }
 
   return (
-    <div className="grid gap-[19px] items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+    <div className="max-w-xl">
       <SectionCard title="Subir factura" contentClassName="p-4 md:p-6 space-y-4">
         <form onSubmit={subirFactura} className="space-y-4">
           <div>
@@ -462,46 +483,52 @@ function TabCuentas({ grupos }: { grupos: GrupoPortal[] }) {
           </button>
         </form>
       </SectionCard>
-
-      <SectionCard title="Tus cuentas con Serenata" contentClassName="p-0">
-        {!grupos.length ? (
-          <p className="p-4 md:p-6 text-content text-faint">
-            Todavía no tienes cuentas registradas. Cuando Serenata te asigne a un proyecto, aparecerán aquí.
-          </p>
-        ) : (
-          grupos.map((grupo, i) => (
-            <div
-              key={grupo.id}
-              className={`p-4 md:px-6 ${i === grupos.length - 1 ? '' : 'border-b border-hairline'}`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-body font-medium truncate">{grupo.proyecto_nombre || grupo.items[0]?.item_descripcion || 'Proyecto'}</p>
-                  {grupo.items.length > 1 ? (
-                    <p className="text-content text-subtext">{grupo.items.length} conceptos</p>
-                  ) : (
-                    <p className="text-content text-subtext truncate">{grupo.items[0]?.item_descripcion}</p>
-                  )}
-                </div>
-                <div className="flex-none text-right">
-                  <StatusBadge tone={toneForCuentaEstado(grupo.estado)}>{grupo.estado}</StatusBadge>
-                  <p className="mt-1 text-content text-body">{formatMoney(grupo.saldo_pendiente)} pendiente</p>
-                </div>
-              </div>
-              {grupo.items.length > 1 && (
-                <div className="mt-3 space-y-1 border-t border-hairline pt-3">
-                  {grupo.items.map(item => (
-                    <div key={item.id} className="flex items-center justify-between gap-3 text-content text-subtext">
-                      <span className="truncate">{item.item_descripcion}</span>
-                      <span className="flex-none text-body">{formatMoney(item.x_pagar)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </SectionCard>
     </div>
+  )
+}
+
+// Bloque 4c (docs/PLAN.md): mismo SectionCard que antes vivía dentro de
+// TabCuentas, solo mudado a su propia tab -- mismo dato, misma estructura.
+function TabHistorial({ grupos }: { grupos: GrupoPortal[] }) {
+  return (
+    <SectionCard title="Tus cuentas con Serenata" contentClassName="p-0">
+      {!grupos.length ? (
+        <p className="p-4 md:p-6 text-content text-faint">
+          Todavía no tienes cuentas registradas. Cuando Serenata te asigne a un proyecto, aparecerán aquí.
+        </p>
+      ) : (
+        grupos.map((grupo, i) => (
+          <div
+            key={grupo.id}
+            className={`p-4 md:px-6 ${i === grupos.length - 1 ? '' : 'border-b border-hairline'}`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-body font-medium truncate">{grupo.proyecto_nombre || grupo.items[0]?.item_descripcion || 'Proyecto'}</p>
+                {grupo.items.length > 1 ? (
+                  <p className="text-content text-subtext">{grupo.items.length} conceptos</p>
+                ) : (
+                  <p className="text-content text-subtext truncate">{grupo.items[0]?.item_descripcion}</p>
+                )}
+              </div>
+              <div className="flex-none text-right">
+                <StatusBadge tone={toneForCuentaEstado(grupo.estado)}>{grupo.estado}</StatusBadge>
+                <p className="mt-1 text-content text-body">{formatMoney(grupo.saldo_pendiente)} pendiente</p>
+              </div>
+            </div>
+            {grupo.items.length > 1 && (
+              <div className="mt-3 space-y-1 border-t border-hairline pt-3">
+                {grupo.items.map(item => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 text-content text-subtext">
+                    <span className="truncate">{item.item_descripcion}</span>
+                    <span className="flex-none text-body">{formatMoney(item.x_pagar)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </SectionCard>
   )
 }

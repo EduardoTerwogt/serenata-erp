@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button'
 
 interface ProveedorFormValues {
   nombre: string
+  alias: string
   telefono: string
   correo: string
   banco: string
@@ -48,6 +49,7 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
   const { register, handleSubmit, formState: { errors } } = useForm<ProveedorFormValues>({
     defaultValues: {
       nombre: proveedor?.nombre || '',
+      alias: proveedor?.alias || '',
       telefono: proveedor?.telefono || '',
       correo: proveedor?.correo || '',
       banco: proveedor?.banco || '',
@@ -126,6 +128,10 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
               placeholder="Nombre y apellido"
             />
             {errors.nombre && <p className="text-cancelled-fg text-xs mt-1">{errors.nombre.message}</p>}
+          </div>
+          <div className="md:col-span-2">
+            <label className={LABEL_CLASS}>Alias · nombre corto u operativo (opcional)</label>
+            <input {...register('alias')} className={INPUT_CLASS} placeholder="Ej. Chok" />
           </div>
           <div>
             <label className={LABEL_CLASS}>Teléfono</label>

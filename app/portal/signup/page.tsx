@@ -9,6 +9,7 @@ import { StatusBanner } from '@/components/ui/StatusBanner'
 export default function PortalSignupPage() {
   const router = useRouter()
   const [nombre, setNombre] = useState('')
+  const [alias, setAlias] = useState('')
   const [correo, setCorreo] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,7 +20,7 @@ export default function PortalSignupPage() {
     setLoading(true)
     setError(null)
     try {
-      await sendJson('/api/portal/signup', { nombre: nombre || null, correo, password }, 'Error al crear tu cuenta')
+      await sendJson('/api/portal/signup', { nombre: nombre || null, alias: alias || null, correo, password }, 'Error al crear tu cuenta')
       router.push('/portal')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear tu cuenta')
@@ -39,11 +40,21 @@ export default function PortalSignupPage() {
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-panel border border-hairline bg-card p-6">
         <div>
-          <label className="block text-content font-medium text-body mb-1">Nombre o alias (opcional)</label>
+          <label className="block text-content font-medium text-body mb-1">Nombre completo (opcional)</label>
           <input
             type="text"
             value={nombre}
             onChange={e => setNombre(e.target.value)}
+            placeholder="Tu nombre o razón social"
+            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
+          />
+        </div>
+        <div>
+          <label className="block text-content font-medium text-body mb-1">Alias · nombre corto u operativo (opcional)</label>
+          <input
+            type="text"
+            value={alias}
+            onChange={e => setAlias(e.target.value)}
             placeholder="Ej. Chok"
             className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
           />

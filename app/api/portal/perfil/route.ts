@@ -14,6 +14,7 @@ export async function GET() {
     const proveedor = await getProveedorById(portalAuth.proveedorId)
     return Response.json({
       nombre: proveedor.nombre,
+      alias: proveedor.alias ?? null,
       telefono: proveedor.telefono,
       banco: proveedor.banco,
       clabe: proveedor.clabe,
@@ -36,6 +37,7 @@ export async function PATCH(request: Request) {
     const proveedor = await updateProveedor(portalAuth.proveedorId, parsed.data)
     return Response.json({
       nombre: proveedor.nombre,
+      alias: proveedor.alias ?? null,
       telefono: proveedor.telefono,
       banco: proveedor.banco,
       clabe: proveedor.clabe,

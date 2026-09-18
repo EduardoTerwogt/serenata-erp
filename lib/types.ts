@@ -25,6 +25,7 @@ export type TipoDocumentoProveedor =
 export interface Proveedor {
   id: string
   nombre: string
+  alias?: string | null
   telefono: string | null
   correo: string | null
   banco: string | null
