@@ -37,6 +37,12 @@ export interface QuotationComputedItem extends Omit<QuotationFormItem, 'precio_u
   precio_unitario: number
   x_pagar: number
   importe: number
+  // Bloque 3 (docs/PLAN.md): `x_pagar` es el Costo Unitario (neto al
+  // responsable); `costo_total = x_pagar * cantidad` es la fuente de verdad
+  // centralizada para cualquier fórmula derivada (IVA pagado, Costo + IVA
+  // en Partidas, margen) -- nunca recalcular `x_pagar * cantidad` suelto en
+  // otro lugar.
+  costo_total: number
   margen: number
 }
 
@@ -51,10 +57,10 @@ export interface QuotationTotals {
   utilidad_total: number
 }
 
-// Fase 5.1: panel "Impuestos (estimado)". IVA pagado es siempre 16% del X Pagar de
-// cada partida, sin importar el regimen fiscal del responsable -- la retencion no
-// reduce lo acreditable para Serenata, solo cambia el neto que recibe el proveedor
-// (documento maestro seccion 3; decision confirmada 2026-09-06).
+// Fase 5.1: panel "Impuestos (estimado)". IVA pagado es siempre 16% del Costo Total
+// (x_pagar * cantidad, Bloque 3) de cada partida, sin importar el regimen fiscal del
+// responsable -- la retencion no reduce lo acreditable para Serenata, solo cambia el
+// neto que recibe el proveedor (documento maestro seccion 3; decision confirmada 2026-09-06).
 export interface EstimatedTaxes {
   ivaCobrado: number
   ivaPagado: number

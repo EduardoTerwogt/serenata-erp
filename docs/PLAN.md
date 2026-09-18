@@ -38,7 +38,7 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 |---|---|---|---|
 | 1 | C — Plantillas: header de tarjeta | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
 | 2 | A — Cotizaciones: UI de edición (sin fórmula) | En curso (PR abierto, incluye sub-tarea 6 con migración `notas_pdf` no anticipada por el plan) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
-| 3 | A — Cotizaciones: fórmula Costo Unitario/Costo Total (alto riesgo, bloque propio) | Pendiente | — |
+| 3 | A — Cotizaciones: fórmula Costo Unitario/Costo Total (alto riesgo, bloque propio) | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
 | 4 | D — Portal (4a alias/nombre con migración `alias`, 4b ver documentos, 4c tab Historial) | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
 | 5 | E — Clientes: catálogo editable | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
 | 6 | B — Cuentas: rediseño PDF de orden de pago | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
@@ -522,6 +522,20 @@ cambio no introdujo uno nuevo). **`usePlaneacionFlow.ts`/`usePendientesFlow.ts`
 quedan fuera de alcance y no se modifican** — su implementación actual ya
 produce la semántica correcta de Costo Total/Margen; el sweep los registra
 como existentes y correctos, sin requerir ningún cambio.
+
+**Hallazgo propio de la auditoría semántica de cierre (no estaba en ninguna
+ronda anterior):** `generarHistorialProyecto` (`lib/server/repositories/cuentas-pagar.ts`,
+vía `cierre-proyecto.ts` al llevar un proyecto a su etapa final) sumaba
+`item.x_pagar` crudo por responsable+rol para poblar `historial_responsable.x_pagar`
+— el mismo bug de fondo, alimentando "Total acumulado" en el historial de
+Proveedores (`ProveedorModal.tsx`). Corregido a `x_pagar * cantidad` por
+partida. Verificado en producción: 4 de 18 filas de `historial_responsable`
+tenían un proyecto con partidas `cantidad≠1` — las 4 pertenecen al proyecto
+`SH004` ("PRUEBA "), dato de prueba (mismo criterio ya confirmado por el
+usuario para no hacer backfill). Sin test previo para esta función (gap de
+cobertura preexistente, no introducido por este cambio) — verificado por
+inspección directa del código y del dato real en producción, no por test
+automatizado.
 
 ### Bloque 4 — Portal (4a schema + 4b trivial + 4c supuesto)
 

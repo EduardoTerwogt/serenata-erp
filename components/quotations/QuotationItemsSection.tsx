@@ -42,7 +42,7 @@ interface Props {
   /** Id estable de la fila abierta en la tarjeta móvil (nunca el índice: un `replace()` de reconciliación lo desactualiza). */
   editingItemRowId: string | null
   setEditingItemRowId: (value: string | null) => void
-  calcItem: (item: QuotationFormValues['items'][number]) => { importe: number; margen: number }
+  calcItem: (item: QuotationFormValues['items'][number]) => { importe: number; costo_total: number; margen: number }
   /** Keyed por rowId (id estable de la partida), no por índice. */
   handleDescripcionChange: (rowId: string, value: string) => void
   productoSugerencias: Record<string, Producto[]>
@@ -166,7 +166,12 @@ export function QuotationItemsSection({
     }
   }
 
-  const totalXPagar = (editable ? watchedItems : readOnlyItems).reduce((sum, item) => sum + (item.x_pagar || 0), 0)
+  // Bloque 3 (docs/PLAN.md): suma de Costo Total (x_pagar * cantidad), no de
+  // Costo Unitario suelto -- sumar x_pagar crudo subestimaba este total en
+  // cualquier partida con cantidad > 1, el mismo bug que approve_cotizacion.
+  const totalCostoTotal = editable
+    ? watchedItems.reduce((sum, item) => sum + calcItem(item).costo_total, 0)
+    : readOnlyItems.reduce((sum, item) => sum + item.x_pagar * item.cantidad, 0)
 
   const updateDropdownPos = useCallback((index: number) => {
     const el = descInputRefs.current[index]
@@ -197,7 +202,7 @@ export function QuotationItemsSection({
 
   const renderEditableDesktopRow = (fieldId: string, index: number) => {
     const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
-    const { importe, margen } = calcItem(item)
+    const { importe, costo_total, margen } = calcItem(item)
     const statusText = rowStatus(index)
 
     return (
@@ -270,30 +275,38 @@ export function QuotationItemsSection({
           </div>
           <ItemFieldConflictBanner rowId={rowIdAt(index)} field="x_pagar" items={items} />
         </td>
-        <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
+        <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(costo_total)}</td>
+        <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(costo_total))}</td>
         <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(margen)}</td>
         <td className="px-4 py-2"><button type="button" onClick={() => items.removeRow(rowIdAt(index))} className="text-faint hover:text-cancelled-fg disabled:opacity-30 transition-colors">✕</button></td>
       </tr>
     )
   }
 
-  const renderReadOnlyDesktopRow = (item: ReadOnlyItem) => (
-    <tr key={item.id} className="border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt">
-      <td className="px-4 py-3 text-subtext">{item.categoria}</td>
-      <td className="px-4 py-3 text-body">{item.descripcion}</td>
-      <td className="px-4 py-3 text-subtext">{item.cantidad}</td>
-      <td className="px-4 py-3 text-subtext">${fmtCurrency(item.precio_unitario)}</td>
-      <td className="px-4 py-3 text-body font-medium">${fmtCurrency(item.importe ?? (item.cantidad * item.precio_unitario))}</td>
-      <td className="px-4 py-3">{item.responsable_nombre ? <span className="text-subtext">{item.responsable_nombre}</span> : <span className="text-faint italic">Sin asignar</span>}</td>
-      <td className="px-4 py-3 text-subtext">${fmtCurrency(item.x_pagar)}</td>
-      <td className="px-4 py-3 text-subtext">${fmtCurrency(calculateCostoConIva(item.x_pagar))}</td>
-      <td className={`px-4 py-3 font-medium ${(item.margen ?? 0) >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(item.margen ?? 0)}</td>
-    </tr>
-  )
+  const renderReadOnlyDesktopRow = (item: ReadOnlyItem) => {
+    // Costo Total (Bloque 3): mismo concepto que normalizeQuotationItem,
+    // pero ReadOnlyItem viene tal cual del servidor (ItemCotizacion) -- no
+    // pasa por esa función, así que se deriva aquí con la misma fórmula.
+    const costoTotal = item.x_pagar * item.cantidad
+    return (
+      <tr key={item.id} className="border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt">
+        <td className="px-4 py-3 text-subtext">{item.categoria}</td>
+        <td className="px-4 py-3 text-body">{item.descripcion}</td>
+        <td className="px-4 py-3 text-subtext">{item.cantidad}</td>
+        <td className="px-4 py-3 text-subtext">${fmtCurrency(item.precio_unitario)}</td>
+        <td className="px-4 py-3 text-body font-medium">${fmtCurrency(item.importe ?? (item.cantidad * item.precio_unitario))}</td>
+        <td className="px-4 py-3">{item.responsable_nombre ? <span className="text-subtext">{item.responsable_nombre}</span> : <span className="text-faint italic">Sin asignar</span>}</td>
+        <td className="px-4 py-3 text-subtext">${fmtCurrency(item.x_pagar)}</td>
+        <td className="px-4 py-3 text-subtext">${fmtCurrency(costoTotal)}</td>
+        <td className="px-4 py-3 text-subtext">${fmtCurrency(calculateCostoConIva(costoTotal))}</td>
+        <td className={`px-4 py-3 font-medium ${(item.margen ?? 0) >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(item.margen ?? 0)}</td>
+      </tr>
+    )
+  }
 
   const renderEditableMobileCard = (fieldId: string, index: number) => {
     const item = watchedItems[index] || EMPTY_QUOTATION_ITEM
-    const { importe, margen } = calcItem(item)
+    const { importe, costo_total, margen } = calcItem(item)
     const statusText = rowStatus(index)
     return (
       <div key={fieldId} className="rounded-card border border-hairline bg-row p-4 cursor-pointer hover:border-row-alt transition-colors" onClick={() => setEditingItemRowId(rowIdAt(index))}>
@@ -308,10 +321,11 @@ export function QuotationItemsSection({
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-faint">Cant. {item.cantidad || 0}</span>
           <span className="text-faint text-right">P. Unit. ${fmtCurrency(typeof item.precio_unitario === 'number' ? item.precio_unitario : 0)}</span>
-          <span className="text-subtext">X pagar ${fmtCurrency(typeof item.x_pagar === 'number' ? item.x_pagar : 0)}</span>
-          <span className={`text-right font-medium ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>Margen ${fmtCurrency(margen)}</span>
+          <span className="text-subtext">Costo unit. ${fmtCurrency(typeof item.x_pagar === 'number' ? item.x_pagar : 0)}</span>
+          <span className="text-subtext text-right">Costo total ${fmtCurrency(costo_total)}</span>
+          <span className={`col-span-2 text-right font-medium ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>Margen ${fmtCurrency(margen)}</span>
         </div>
-        <div className="text-[13px] text-faint mb-2">Costo+IVA ${fmtCurrency(calculateCostoConIva(item.x_pagar))}</div>
+        <div className="text-[13px] text-faint mb-2">Costo+IVA ${fmtCurrency(calculateCostoConIva(costo_total))}</div>
         <div className="flex justify-between items-center pt-2 border-t border-hairline">
           <span className="text-faint text-xs">{item.responsable_nombre || 'Sin responsable'}</span>
           <span className="text-body font-bold">${fmtCurrency(importe)}</span>
@@ -323,6 +337,8 @@ export function QuotationItemsSection({
   const renderReadOnlyMobileCard = (item: ReadOnlyItem) => {
     const importe = item.importe ?? (item.cantidad * item.precio_unitario)
     const margen = item.margen ?? 0
+    // Costo Total (Bloque 3): mismo criterio que renderReadOnlyDesktopRow.
+    const costoTotal = item.x_pagar * item.cantidad
     return (
       <div key={item.id} className="rounded-card border border-hairline bg-row p-4">
         <div className="flex justify-between items-start gap-3 mb-2">
@@ -335,10 +351,11 @@ export function QuotationItemsSection({
         <div className="grid grid-cols-2 gap-2 text-[13px] mb-2">
           <span className="text-faint">Cant. {item.cantidad}</span>
           <span className="text-faint text-right">P. Unit. ${fmtCurrency(item.precio_unitario)}</span>
-          <span className="text-subtext">X pagar ${fmtCurrency(item.x_pagar)}</span>
-          <span className="text-right text-faint">{item.responsable_nombre || 'Sin responsable'}</span>
+          <span className="text-subtext">Costo unit. ${fmtCurrency(item.x_pagar)}</span>
+          <span className="text-subtext text-right">Costo total ${fmtCurrency(costoTotal)}</span>
+          <span className="col-span-2 text-right text-faint">{item.responsable_nombre || 'Sin responsable'}</span>
         </div>
-        <div className="text-[13px] text-faint mb-2">Costo+IVA ${fmtCurrency(calculateCostoConIva(item.x_pagar))}</div>
+        <div className="text-[13px] text-faint mb-2">Costo+IVA ${fmtCurrency(calculateCostoConIva(costoTotal))}</div>
         <div className="flex justify-end pt-2 border-t border-hairline">
           <span className="text-body font-bold">${fmtCurrency(importe)}</span>
         </div>
@@ -374,7 +391,7 @@ export function QuotationItemsSection({
           <table className="w-full text-content">
             <thead>
               <tr className="h-9 border-b border-hairline">
-                {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'X Pagar', 'Costo + IVA', 'Margen', ...(editable ? [''] : [])].map(h => (
+                {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'Costo Unitario', 'Costo Total', 'Costo + IVA', 'Margen', ...(editable ? [''] : [])].map(h => (
                   <th key={h} className="sn-table-head text-left px-4 py-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -406,7 +423,7 @@ export function QuotationItemsSection({
             </button>
           ) : <span />}
           <span className="text-sm text-subtext">
-            Total X pagar a responsables <span className="font-semibold text-body">${fmtCurrency(totalXPagar)}</span> · neto, sin impuestos del proveedor
+            Total a pagar a responsables <span className="font-semibold text-body">${fmtCurrency(totalCostoTotal)}</span> · neto, sin impuestos del proveedor
           </span>
         </div>
       </div>
@@ -429,11 +446,12 @@ export function QuotationItemsSection({
               <div><label className="sn-label block mb-2">Categoría</label><input {...register(`items.${editingItemIndex}.categoria`)} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'categoria')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'categoria')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'categoria'); register(`items.${editingItemIndex}.categoria`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'categoria') || undefined} className={FULLSCREEN_INPUT_CLASS} placeholder="Categoría" /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="categoria" items={items} /></div>
               <div className="flex gap-3"><div className="flex-1"><label className="sn-label block mb-2">Cantidad</label><input type="number" min="1" {...register(`items.${editingItemIndex}.cantidad`, { valueAsNumber: true })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'cantidad')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'cantidad')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'cantidad'); register(`items.${editingItemIndex}.cantidad`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'cantidad') || undefined} className={`${FULLSCREEN_INPUT_CLASS} text-center`} /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="cantidad" items={items} /></div><div className="flex-[2]"><label className="sn-label block mb-2">Precio unitario</label><div className="relative"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-subtext">$</span><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'precio_unitario')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'precio_unitario')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'precio_unitario'); register(`items.${editingItemIndex}.precio_unitario`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'precio_unitario') || undefined} className={FULLSCREEN_MONEY_INPUT_CLASS} /></div><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="precio_unitario" items={items} /></div></div>
               <div><label className="sn-label block mb-2">Responsable</label><Select {...register(`items.${editingItemIndex}.responsable_id`)} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'responsable_id')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'responsable_id')} onChange={(e) => items.changeResponsable(rowIdAt(editingItemIndex), e.target.value)} data-busy={cellBusy(editingItemIndex, 'responsable_id') || undefined} size="lg" className="w-full"><option value="">Sin asignar</option>{responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}</Select><input type="hidden" {...register(`items.${editingItemIndex}.responsable_nombre`)} /><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="responsable_id" items={items} /></div>
-              <div><label className="sn-label block mb-2">Por pagar al responsable</label><div className="relative"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-subtext">$</span><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'x_pagar'); register(`items.${editingItemIndex}.x_pagar`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'x_pagar') || undefined} className={FULLSCREEN_MONEY_INPUT_CLASS} /></div><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="x_pagar" items={items} /></div>
+              <div><label className="sn-label block mb-2">Costo Unitario</label><div className="relative"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-subtext">$</span><input type="number" min="0" step="0.01" {...register(`items.${editingItemIndex}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(editingItemIndex), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(editingItemIndex), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(editingItemIndex), 'x_pagar'); register(`items.${editingItemIndex}.x_pagar`).onChange(e) }} data-busy={cellBusy(editingItemIndex, 'x_pagar') || undefined} className={FULLSCREEN_MONEY_INPUT_CLASS} /></div><ItemFieldConflictBanner rowId={rowIdAt(editingItemIndex)} field="x_pagar" items={items} /></div>
             </div>
             <div className="rounded-panel border border-hairline bg-card p-4 mt-6">
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Importe</span><span className="text-subtext text-content font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).importe)}</span></div>
-              <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo + IVA</span><span className="text-subtext text-content font-medium">${fmtCurrency(calculateCostoConIva((watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).x_pagar))}</span></div>
+              <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo Total</span><span className="text-subtext text-content font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).costo_total)}</span></div>
+              <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo + IVA</span><span className="text-subtext text-content font-medium">${fmtCurrency(calculateCostoConIva(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).costo_total))}</span></div>
               <div className="flex justify-between"><span className="text-faint text-content">Margen</span><span className={`text-content font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
             {<button type="button" onClick={() => { items.removeRow(rowIdAt(editingItemIndex)); setEditingItemRowId(null) }} className="w-full text-cancelled-fg hover:opacity-80 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}

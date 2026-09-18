@@ -21,4 +21,5 @@ paths:
 - La especificación visual completa vive en el skill `.claude/skills/serenata-design/`:
   se copian los valores, no los componentes.
 - Toda pantalla que muestre dinero respeta las fórmulas de
-  `docs/decisions/006-reglas-de-negocio-invariables.md`. "X Pagar" es neto.
+  `docs/decisions/006-reglas-de-negocio-invariables.md`. "Costo Unitario"
+  (antes "X Pagar") es neto; "Costo Total" = Costo Unitario × Cantidad.

@@ -33,10 +33,10 @@ describe('buildPersistedQuotationItems', () => {
     expect(result[1].orden).toBe(1)
   })
 
-  it('calcula importe y margen correctamente', () => {
+  it('calcula importe y margen correctamente (Bloque 3: margen sobre Costo Total, no Costo Unitario suelto)', () => {
     const result = buildPersistedQuotationItems('SH001', [item()])
     expect(result[0].importe).toBe(2000) // 2 * 1000
-    expect(result[0].margen).toBe(1200)  // 2000 - 800
+    expect(result[0].margen).toBe(400)   // 2000 - (800 * 2)
   })
 
   it('preserva responsable del item anterior cuando preservePreviousResponsables=true', () => {
