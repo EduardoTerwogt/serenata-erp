@@ -74,10 +74,6 @@ interface Props {
   dateLabel: string
   fechaEntregaValue?: string
   locacionValue?: string
-  notasField?: {
-    value: string
-    onChange: (value: string) => void
-  }
   conflicts?: Partial<Record<QuotationGeneralField, QuotationGeneralFieldConflict>>
   onResolveConflict?: (field: QuotationGeneralField, resolution: 'theirs' | 'mine') => void
 }
@@ -115,7 +111,6 @@ export function QuotationGeneralInfoSection({
   dateLabel,
   fechaEntregaValue = '',
   locacionValue = '',
-  notasField,
   conflicts,
   onResolveConflict,
 }: Props) {
@@ -219,24 +214,11 @@ export function QuotationGeneralInfoSection({
             columnas iguales -- así se ve en la referencia del skill. */}
         <div className="hidden md:block" />
 
-        <div>
-          <label className="sn-label mb-1.5 block whitespace-nowrap">Fecha de Cotización</label>
-          <p className="py-2 text-content text-body whitespace-nowrap">{dateLabel}</p>
+        <div className="text-right">
+          <label className="sn-label mb-1.5 block whitespace-nowrap text-right">Fecha de Cotización</label>
+          <p className="py-2 text-content text-body whitespace-nowrap text-right">{dateLabel}</p>
         </div>
       </div>
-
-      {notasField && (
-        <div className="mt-4">
-          <label className="sn-label mb-1.5 block">Notas del evento · Uso interno, no sale en el PDF</label>
-          <textarea
-            value={notasField.value}
-            onChange={e => notasField.onChange(e.target.value)}
-            rows={2}
-            placeholder="Sin notas..."
-            className="w-full resize-y rounded-[8px] border border-hairline bg-input px-3 py-2.5 text-content text-body placeholder-faint focus:outline-none focus:border-accent-quiet"
-          />
-        </div>
-      )}
       </div>
     </div>
   )

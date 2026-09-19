@@ -99,14 +99,6 @@ export async function createOrReplaceCotizacion(payload: Record<string, unknown>
   await saveCotizacionAtomic(payload)
 }
 
-export async function saveNotasInternas(id: string, notas: string | null) {
-  const { error } = await supabaseAdmin
-    .from('cotizaciones')
-    .update({ notas_internas: notas })
-    .eq('id', id)
-  if (error) throw error
-}
-
 /**
  * Bloque 2 (docs/PLAN.md) sub-tarea 6: `notas_pdf` es un campo nuevo,
  * distinto de `notas_internas` -- comparte el mismo pop-up ("Nota de
@@ -114,11 +106,22 @@ export async function saveNotasInternas(id: string, notas: string | null) {
  * guardan juntos en un solo UPDATE en vez de duplicar por completo el
  * mecanismo de dirty/debounce de `useQuotationNotasAutosave` para un
  * segundo campo de texto sin conflicto multi-usuario real (T7).
+ *
+ * Ambos campos son opcionales para que POST/PUT de cotizaciones puedan
+ * mandar solo el que trae el body sin pisar el otro a `null` -- ver
+ * `docs/PLAN.md` corrección: la pantalla de "Nueva Cotización" no tenía
+ * forma de guardar `notas_pdf` porque las rutas de creación/edición solo
+ * conocían `notas_internas`.
  */
-export async function saveNotas(id: string, notas: { notas_internas: string | null; notas_pdf: string | null }) {
+export async function saveNotas(id: string, notas: { notas_internas?: string | null; notas_pdf?: string | null }) {
+  const update: Record<string, string | null> = {}
+  if (notas.notas_internas !== undefined) update.notas_internas = notas.notas_internas
+  if (notas.notas_pdf !== undefined) update.notas_pdf = notas.notas_pdf
+  if (Object.keys(update).length === 0) return
+
   const { error } = await supabaseAdmin
     .from('cotizaciones')
-    .update(notas)
+    .update(update)
     .eq('id', id)
   if (error) throw error
 }

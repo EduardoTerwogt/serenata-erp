@@ -134,6 +134,7 @@ export interface SaveQuotationOptions {
   es_complementaria_de?: string
   reservation_token?: string | null
   notas_internas?: string | null
+  notas_pdf?: string | null
 }
 
 export interface UpdateQuotationOptions {
@@ -145,4 +146,5 @@ export interface UpdateQuotationOptions {
   responsables: Proveedor[]
   currentQuotation: Cotizacion | null
   notas_internas?: string | null
+  notas_pdf?: string | null
 }

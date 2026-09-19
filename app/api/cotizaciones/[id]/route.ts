@@ -10,7 +10,7 @@ import {
   buildUpdateCotizacionPayload,
   createOrReplaceCotizacion,
   runQuotationNonCriticalAutosaves,
-  saveNotasInternas,
+  saveNotas,
 } from '@/lib/server/quotations/persistence'
 import { CotizacionUpdateSchema, validate } from '@/lib/validation/schemas'
 
@@ -62,8 +62,8 @@ export async function PUT(
     )
 
     await createOrReplaceCotizacion(payload)
-    if (parsed.notas_internas !== undefined) {
-      await saveNotasInternas(id, parsed.notas_internas ?? null)
+    if (parsed.notas_internas !== undefined || parsed.notas_pdf !== undefined) {
+      await saveNotas(id, { notas_internas: parsed.notas_internas, notas_pdf: parsed.notas_pdf })
     }
     await runQuotationNonCriticalAutosaves(payload.cliente, payload.proyecto, inputItems ?? [], 'PUT /api/cotizaciones/:id')
 
