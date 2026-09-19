@@ -106,12 +106,27 @@ export async function mockPortalDashboardConMatch(page: Page) {
 }
 
 // Mismatch de SUBTOTAL -- el wrapper del Portal (lib/server/portal/factura-mensaje-proveedor.ts)
-// lo vuelve genérico y sin `ejemplo`, para no revelar el monto esperado en el mensaje de error.
+// muestra ambos montos (XML vs. esperado) e invita a contactar a Serenata
+// si el esperado está mal, sin `ejemplo` (ya redundante con el panel
+// "Simulador de factura", siempre visible).
 export async function mockPortalFacturaBloqueada(page: Page) {
   await page.route('**/api/portal/cuentas/grupos/*/factura', async (route) => {
     await fulfillJson(
       route,
-      { error: 'Tu factura no corresponde a lo esperado para este proyecto. Contacta a tu contacto en Serenata para revisarlo.' },
+      { error: 'El Subtotal de tu factura es de $900.00 y lo correspondiente al proyecto es $1000.00. Si el subtotal de Serenata está mal, ponte en contacto con nosotros.' },
+      422
+    )
+  })
+}
+
+// Mismatch de RETENCIONES (IVA y/o ISR retenido) -- el wrapper del Portal
+// lo vuelve un mensaje genérico de régimen fiscal, sin `ejemplo` (remite al
+// panel "Simulador de factura" en su lugar).
+export async function mockPortalFacturaRegimenIncorrecto(page: Page) {
+  await page.route('**/api/portal/cuentas/grupos/*/factura', async (route) => {
+    await fulfillJson(
+      route,
+      { error: 'Los impuestos aplicados no corresponden a tu régimen fiscal. En el simulador de factura (panel lateral) puedes ver el desglose esperado de tu factura acorde a tu régimen.' },
       422
     )
   })

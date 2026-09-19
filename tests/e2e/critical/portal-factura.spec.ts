@@ -3,6 +3,7 @@ import {
   mockPortalDashboard,
   mockPortalFacturaBloqueada,
   mockPortalFacturaDesgloseIncorrecto,
+  mockPortalFacturaRegimenIncorrecto,
   mockPortalFacturaValida,
 } from '../utils/portal-mocks'
 
@@ -21,12 +22,23 @@ async function seleccionarYSubir(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: 'Validar y subir factura' }).click()
 }
 
-test('mismatch de subtotal: mensaje genérico, sin exponer el monto esperado ni el bloque de ejemplo', async ({ page }) => {
+test('mismatch de subtotal: muestra ambos montos e invita a contactar a Serenata, sin el bloque de ejemplo', async ({ page }) => {
   await mockPortalFacturaBloqueada(page)
   await irATabCuentas(page)
   await seleccionarYSubir(page)
 
-  await expect(page.getByText('no corresponde a lo esperado', { exact: false })).toBeVisible()
+  await expect(page.getByText('$900.00', { exact: false })).toBeVisible()
+  await expect(page.getByText('ponte en contacto con nosotros', { exact: false })).toBeVisible()
+  await expect(page.getByText('Así debe quedar tu factura:')).not.toBeVisible()
+  await expect(page.getByText('Tu factura se subió correctamente')).not.toBeVisible()
+})
+
+test('mismatch de retenciones: mensaje genérico de régimen fiscal, sin el bloque de ejemplo', async ({ page }) => {
+  await mockPortalFacturaRegimenIncorrecto(page)
+  await irATabCuentas(page)
+  await seleccionarYSubir(page)
+
+  await expect(page.getByText('no corresponden a tu régimen fiscal', { exact: false })).toBeVisible()
   await expect(page.getByText('Así debe quedar tu factura:')).not.toBeVisible()
   await expect(page.getByText('Tu factura se subió correctamente')).not.toBeVisible()
 })
