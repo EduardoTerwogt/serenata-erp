@@ -12,9 +12,18 @@ export async function mockPortalSignup(page: Page) {
   })
 }
 
-const PERFIL_DEFAULT = { nombre: 'Antonio Gutierrez', telefono: null, banco: null, clabe: null, regimen_fiscal: null }
+const PERFIL_DEFAULT: { nombre: string; telefono: null; banco: null; clabe: null; regimen_fiscal: 'moral' | 'fisica' | null } = {
+  nombre: 'Antonio Gutierrez',
+  telefono: null,
+  banco: null,
+  clabe: null,
+  regimen_fiscal: null,
+}
 
-export async function mockPortalDashboard(page: Page, overrides: { grupos?: unknown[]; documentos?: unknown[] } = {}) {
+export async function mockPortalDashboard(
+  page: Page,
+  overrides: { grupos?: unknown[]; documentos?: unknown[]; perfil?: Partial<typeof PERFIL_DEFAULT> } = {}
+) {
   await page.route('**/api/portal/me', async (route) => {
     await fulfillJson(route, {
       id: 'prov-1',
@@ -26,7 +35,7 @@ export async function mockPortalDashboard(page: Page, overrides: { grupos?: unkn
   })
 
   await page.route('**/api/portal/perfil', async (route) => {
-    await fulfillJson(route, PERFIL_DEFAULT)
+    await fulfillJson(route, { ...PERFIL_DEFAULT, ...overrides.perfil })
   })
 
   await page.route('**/api/portal/documentos', async (route) => {

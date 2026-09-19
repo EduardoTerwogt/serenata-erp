@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getJson, sendJson, sendFormData } from '@/lib/client/api'
 import { SectionHero } from '@/components/ui/SectionHero'
@@ -14,6 +14,7 @@ import { Icon } from '@/components/ui/Icon'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { StatusBadge, toneForCuentaEstado, toneForValidacionEstado } from '@/components/ui/StatusBadge'
 import { SectionLoading } from '@/components/ui/SectionLoading'
+import { TableFooter } from '@/components/ui/TableFooter'
 import type { ProveedorDocumento, TipoDocumentoProveedor, RegimenFiscal } from '@/lib/types'
 import { calcularEjemploFactura, type EjemploFacturaEsperado } from '@/lib/shared/factura-fiscal'
 
@@ -216,7 +217,7 @@ function TabDatos({ perfil, correo, onGuardado }: { perfil: PerfilResponse; corr
           type="text"
           value={alias}
           onChange={e => setAlias(e.target.value)}
-          placeholder="Ej. Chok"
+          placeholder="nickname"
         />
         <TextField label="Teléfono" type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} />
         <TextField label="Correo" type="email" value={correo ?? ''} disabled />
@@ -232,7 +233,7 @@ function TabDatos({ perfil, correo, onGuardado }: { perfil: PerfilResponse; corr
               ? 'Persona física con honorarios'
               : perfil.regimen_fiscal === 'moral'
                 ? 'Persona moral'
-                : 'Se detecta automáticamente al subir tu constancia de situación fiscal'}
+                : 'Pendiente de subir constancia fiscal, sube desde la sección Documentación'}
           </p>
         </div>
 
@@ -332,6 +333,42 @@ function DesgloseFactura({ ejemplo }: { ejemplo: EjemploFacturaEsperado }) {
   )
 }
 
+function CampoArchivo({
+  label,
+  file,
+  accept,
+  onChange,
+  inputRef,
+}: {
+  label: string
+  file: File | null
+  accept: string
+  onChange: (file: File | null) => void
+  inputRef: React.RefObject<HTMLInputElement | null>
+}) {
+  return (
+    <div>
+      <span className="sn-label">{label}</span>
+      <div className="mt-1.5 flex items-center gap-[13px] rounded-[var(--radius-sm)] border border-hairline bg-input py-2 pl-3.5 pr-2">
+        <Icon name="file-text" size={16} className="text-faint flex-none" />
+        <span className="flex-1 min-w-0 truncate text-content text-body">
+          {file ? file.name : 'Ningún archivo seleccionado'}
+        </span>
+        <label className="cursor-pointer flex-none rounded-control border border-hairline bg-row px-3 py-1.5 text-sm text-body transition-colors hover:bg-row-alt">
+          Elegir archivo
+          <input
+            ref={inputRef}
+            type="file"
+            className="hidden"
+            accept={accept}
+            onChange={e => onChange(e.target.files?.[0] ?? null)}
+          />
+        </label>
+      </div>
+    </div>
+  )
+}
+
 function TabCuentas({
   grupos,
   regimenFiscal,
@@ -348,6 +385,8 @@ function TabCuentas({
   const [error, setError] = useState<string | null>(null)
   const [ejemplo, setEjemplo] = useState<EjemploFacturaEsperado | null>(null)
   const [success, setSuccess] = useState(false)
+  const xmlInputRef = useRef<HTMLInputElement>(null)
+  const pdfInputRef = useRef<HTMLInputElement>(null)
 
   const gruposFacturables = grupos.filter(g => g.facturable)
   const grupoSeleccionado = gruposFacturables.find(g => g.id === grupoId) ?? null
@@ -382,8 +421,17 @@ function TabCuentas({
       // El grupo recién facturado pasa a FACTURADO -- ya no debe seguir
       // seleccionable en "Proyecto al que corresponde". Recargar desde el
       // padre (en vez de solo actualizar estado local) para que quede
-      // reflejado también en la tabla de historial de abajo.
+      // reflejado también en la tabla de historial de abajo. Limpiar
+      // también el XML/PDF ya subidos (bug real: se quedaban seleccionados
+      // en el formulario después de una subida exitosa) -- estado Y el
+      // <input> nativo, para poder volver a elegir el mismo archivo en una
+      // factura futura sin que el navegador ignore el cambio por ser el
+      // mismo File.
       setGrupoId('')
+      setXml(null)
+      setPdf(null)
+      if (xmlInputRef.current) xmlInputRef.current.value = ''
+      if (pdfInputRef.current) pdfInputRef.current.value = ''
       onFacturada()
     } catch {
       setError('Error al subir tu factura')
@@ -408,20 +456,8 @@ function TabCuentas({
                 ))}
               </Select>
             </div>
-            <TextField
-              label="Archivo XML"
-              type="file"
-              accept="text/xml,application/xml,.xml"
-              onChange={e => setXml(e.target.files?.[0] ?? null)}
-              className="file:mr-3 file:rounded-control file:border-0 file:bg-row file:px-3 file:py-1.5 file:text-body"
-            />
-            <TextField
-              label="Archivo PDF"
-              type="file"
-              accept="application/pdf"
-              onChange={e => setPdf(e.target.files?.[0] ?? null)}
-              className="file:mr-3 file:rounded-control file:border-0 file:bg-row file:px-3 file:py-1.5 file:text-body"
-            />
+            <CampoArchivo label="Archivo XML" file={xml} accept="text/xml,application/xml,.xml" onChange={setXml} inputRef={xmlInputRef} />
+            <CampoArchivo label="Archivo PDF" file={pdf} accept="application/pdf" onChange={setPdf} inputRef={pdfInputRef} />
 
             {error && <StatusBanner tone="error">{error}</StatusBanner>}
             {success && <StatusBanner tone="success">Tu factura se subió correctamente. Serenata la revisará para procesar tu pago.</StatusBanner>}
@@ -468,7 +504,21 @@ function conceptosDe(grupo: GrupoPortal): string {
 // tonos), no la lista de tarjetas apiladas que tenía antes. Así el
 // proveedor ve de inmediato, en la misma pantalla donde acaba de subir su
 // factura, que quedó validada/recibida y en qué estado de pago está.
+// Mismo tamaño de página que app/cotizaciones/page.tsx (PAGE_SIZE) -- ahí
+// pagina server-side vía RPC porque la tabla es global a toda la empresa;
+// acá el proveedor ya trae TODOS sus grupos en un solo fetch a
+// /api/portal/cuentas (siempre un dataset chico, acotado a un proveedor),
+// así que paginar en cliente sobre el arreglo ya cargado es suficiente --
+// no amerita un endpoint paginado nuevo para este volumen.
+const HISTORIAL_PAGE_SIZE = 10
+
 function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
+  const [pagina, setPagina] = useState(1)
+  const pageCount = Math.max(1, Math.ceil(grupos.length / HISTORIAL_PAGE_SIZE))
+  const paginaActual = Math.min(pagina, pageCount)
+  const inicio = (paginaActual - 1) * HISTORIAL_PAGE_SIZE
+  const gruposPagina = grupos.slice(inicio, inicio + HISTORIAL_PAGE_SIZE)
+
   return (
     <SectionCard title="Tus cuentas con Serenata" contentClassName="p-0">
       {!grupos.length ? (
@@ -493,7 +543,7 @@ function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
                 </tr>
               </thead>
               <tbody>
-                {grupos.map(grupo => (
+                {gruposPagina.map(grupo => (
                   <tr key={grupo.id} className="h-[46px] border-b border-hairline last:border-0 odd:bg-row">
                     <td className="truncate px-[var(--row-pad-x)] align-middle text-ink">
                       {grupo.proyecto_nombre || grupo.items[0]?.item_descripcion || 'Proyecto'}
@@ -510,7 +560,7 @@ function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
           </div>
 
           <div className="divide-y divide-hairline md:hidden">
-            {grupos.map(grupo => (
+            {gruposPagina.map(grupo => (
               <div key={grupo.id} className="p-4">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <p className="truncate text-[15px] font-medium text-body">
@@ -526,6 +576,15 @@ function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
               </div>
             ))}
           </div>
+
+          <TableFooter
+            shown={gruposPagina.length}
+            total={grupos.length}
+            unit="cuentas"
+            page={paginaActual}
+            pageCount={pageCount}
+            onPageChange={setPagina}
+          />
         </div>
       )}
     </SectionCard>

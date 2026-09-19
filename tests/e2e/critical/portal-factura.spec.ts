@@ -8,6 +8,21 @@ import {
   mockPortalFacturaValida,
 } from '../utils/portal-mocks'
 
+function grupoDePrueba(i: number) {
+  return {
+    id: `grupo-${i}`,
+    es_grupo: true,
+    facturable: false,
+    proyecto_id: `SH0${i}`,
+    proyecto_nombre: `Proyecto ${i}`,
+    estado: 'PAGADO',
+    monto_total: 1000,
+    monto_pagado: 1000,
+    saldo_pendiente: 0,
+    items: [{ id: `cuenta-${i}`, item_descripcion: 'Item', cantidad: 1, x_pagar: 1000, cotizacion_id: `SH0${i}` }],
+  }
+}
+
 async function irATabCuentas(
   page: import('@playwright/test').Page,
   dashboardMock: (page: import('@playwright/test').Page) => Promise<void> = mockPortalDashboard
@@ -84,6 +99,28 @@ test('tras subir con éxito, la cuenta ya no aparece seleccionable y pasa al his
   await expect(page.getByRole('option', { name: /Spot Verano/ })).toHaveCount(0)
   // Y debe verse ahora en la tabla de historial, al fondo de esta misma pantalla.
   await expect(page.getByText('FACTURADO').first()).toBeVisible()
+  // Bug real (2026-09-19): el XML/PDF ya subidos se quedaban seleccionados
+  // en el formulario después de un envío exitoso -- deben limpiarse por
+  // completo, texto y <input> nativo, para poder subir otra factura.
+  await expect(page.getByText('Ningún archivo seleccionado')).toHaveCount(2)
+  await expect(page.locator('input[type="file"]').nth(0)).toHaveValue('')
+  await expect(page.locator('input[type="file"]').nth(1)).toHaveValue('')
+})
+
+test('historial con más de 10 cuentas: pagina en vez de volverse una tabla larguísima', async ({ page }) => {
+  const grupos = Array.from({ length: 11 }, (_, i) => grupoDePrueba(i + 1))
+  await mockPortalDashboard(page, { grupos })
+  await page.goto('/portal')
+  await page.getByRole('button', { name: 'Cuentas y facturas' }).click()
+
+  await expect(page.getByText('Mostrando 10 de 11', { exact: false })).toBeVisible()
+  await expect(page.getByText('Proyecto 1').first()).toBeVisible()
+  await expect(page.getByText('Proyecto 11')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Página siguiente' }).click()
+
+  await expect(page.getByText('Mostrando 1 de 11', { exact: false })).toBeVisible()
+  await expect(page.getByText('Proyecto 11').first()).toBeVisible()
 })
 
 test('simulador de factura: se autollena al elegir proyecto, sin subir archivos', async ({ page }) => {
