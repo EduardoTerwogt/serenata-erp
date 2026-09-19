@@ -375,7 +375,7 @@ export function QuotationItemsSection({
                   value=""
                   onChange={e => { if (e.target.value) void handleApplyTemplate(e.target.value) }}
                   disabled={applyingTemplate}
-                  className="min-h-[44px] md:min-h-0"
+                  size="lg"
                 >
                   <option value="">{applyingTemplate ? 'Aplicando plantilla…' : 'Plantilla de servicios…'}</option>
                   {templates.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}

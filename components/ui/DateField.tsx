@@ -37,7 +37,11 @@ export const DateField = forwardRef<HTMLInputElement, DateFieldProps>(function D
             }
           })
         }}
-        className={className}
+        // Un <button> alinea su texto al centro y no respeta ::placeholder
+        // como un <input> -- sin esto, "Seleccionar fecha" salía centrado y
+        // en el color de texto normal en vez del gris tenue del resto de
+        // los placeholders de Datos Generales.
+        className={`${className} text-left ${value ? '' : 'text-faint'}`}
       >
         {value ? formatDateDisplay(value) : placeholder}
       </button>
