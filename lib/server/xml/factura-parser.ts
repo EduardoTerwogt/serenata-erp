@@ -2,6 +2,8 @@
  * XML CFDI parser para facturas electrónicas
  */
 
+import { XMLParser, XMLValidator } from 'fast-xml-parser'
+
 export interface FacturaData {
   folio?: string
   fecha_emision?: string
@@ -20,30 +22,31 @@ export interface FacturaData {
   error?: string
 }
 
-// Extrae todas las ocurrencias de un tag autocontenido (p. ej.
-// <cfdi:Traslado Impuesto="002" Importe="160.00" />) y regresa sus atributos
-// como objetos, sin depender del orden en que aparezcan los atributos.
-function extractTagAttrs(xmlContent: string, tagName: string): Record<string, string>[] {
-  const tagRegex = new RegExp(`<(?:\\w+:)?${tagName}\\b([^>]*)/?>`, 'gi')
-  const attrRegex = /([\w:]+)\s*=\s*["']([^"']*)["']/g
-  const results: Record<string, string>[] = []
-  let tagMatch: RegExpExecArray | null
-  while ((tagMatch = tagRegex.exec(xmlContent)) !== null) {
-    const attrs: Record<string, string> = {}
-    let attrMatch: RegExpExecArray | null
-    attrRegex.lastIndex = 0
-    while ((attrMatch = attrRegex.exec(tagMatch[1])) !== null) {
-      attrs[attrMatch[1]] = attrMatch[2]
-    }
-    results.push(attrs)
-  }
-  return results
+// Parser XML real (no regex) -- ver nota de diseño larga en parseFacturaXML
+// sobre por qué se migró de extracción por regex a un parser de verdad.
+// `removeNSPrefix` quita el prefijo de namespace de tags Y atributos
+// (cfdi:Comprobante -> Comprobante, tfd:TimbreFiscalDigital ->
+// TimbreFiscalDigital) sin importar qué prefijo use el PAC/emisor.
+// `isArray` fuerza array SIEMPRE para Traslado/Retencion -- sin esto,
+// fast-xml-parser da un objeto suelto cuando hay un solo nodo y un array
+// cuando hay más de uno, y el código de suma tendría que ramificar por caso.
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '',
+  removeNSPrefix: true,
+  parseAttributeValue: false,
+  isArray: (tagName) => tagName === 'Traslado' || tagName === 'Retencion',
+})
+
+interface ImpuestoNodo {
+  Impuesto?: string
+  Importe?: string
 }
 
-function sumImporteByImpuesto(tags: Record<string, string>[], codigoImpuesto: string): number {
-  return tags
-    .filter((t) => t.Impuesto === codigoImpuesto)
-    .reduce((sum, t) => sum + (parseFloat(t.Importe) || 0), 0)
+function sumImporteByImpuesto(nodos: ImpuestoNodo[] | undefined, codigoImpuesto: string): number {
+  return (nodos ?? [])
+    .filter((n) => n.Impuesto === codigoImpuesto)
+    .reduce((sum, n) => sum + (parseFloat(n.Importe ?? '') || 0), 0)
 }
 
 export interface ResultadoValidacionFactura {
@@ -52,61 +55,59 @@ export interface ResultadoValidacionFactura {
 }
 
 /**
- * Parsea un XML de factura CFDI y extrae datos clave
+ * Parsea un XML de factura CFDI y extrae datos clave.
+ *
+ * Parser XML real (fast-xml-parser), no regex sobre el texto. El intento
+ * original con regex funcionaba para lecturas de un solo atributo plano
+ * (Folio, Total...) pero no entiende jerarquía/anidamiento -- eso causó un
+ * bug real (reportado 2026-09-19, folio 369): un CFDI válido trae los nodos
+ * Traslado/Retencion DOS VECES (una por cada Concepto, desglose por
+ * renglón, y otra en el Impuestos a nivel Comprobante, resumen agregado) y
+ * sumar por regex sobre el XML completo contaba ambas, duplicando el monto
+ * ($6,400.00 leído cuando el XML declaraba $3,200.00). Un parser real
+ * elimina esa clase de bug por construcción: `comprobante.Impuestos` es
+ * inequívocamente el nodo hermano de `comprobante.Conceptos`, nunca lo que
+ * hay adentro de cada Concepto ni de Complemento -- no hace falta ninguna
+ * regla de "acotar el texto a partir de tal cierre de tag".
+ *
+ * `removeNSPrefix` hace esto además independiente del prefijo de namespace
+ * que use el PAC/emisor (cfdi:, algún otro) y el esquema (CFDI 3.3 y 4.0
+ * comparten los mismos nombres de atributo: Folio, Fecha, Total, SubTotal,
+ * Rfc, Impuesto, Importe -- son parte del XSD que exige el SAT para poder
+ * timbrar, no varían por proveedor).
  */
 export function parseFacturaXML(xmlContent: string): FacturaData {
+  const validacion = XMLValidator.validate(xmlContent)
+  if (validacion !== true) {
+    return { error: `XML mal formado: ${validacion.err?.msg ?? 'estructura inválida'}` }
+  }
+
   try {
-    // Extraer folio - buscar en atributo Folio del Comprobante
-    const folioMatch = xmlContent.match(/Folio\s*=\s*["']([^"']+)["']/)
-    const folio = folioMatch?.[1]
+    const parsed = xmlParser.parse(xmlContent)
+    const comprobante = parsed?.Comprobante
+    if (!comprobante || typeof comprobante !== 'object') {
+      return { error: 'El XML no contiene un nodo Comprobante válido' }
+    }
 
-    // Extraer fecha - buscar en atributo Fecha
-    const fechaMatch = xmlContent.match(/Fecha\s*=\s*["']([^"']+)["']/)
-    const fecha = fechaMatch?.[1]?.split('T')?.[0]
-
-    // Extraer monto total - buscar Total del Comprobante.
-    // No basta con /Total\s*=\s*.../: "SubTotal" contiene "Total" como substring, y en
-    // cualquier CFDI real SubTotal aparece antes que Total en el XML, así que un regex sin
-    // anclar hace match con SubTotal primero. El lookbehind exige que "Total" no esté
-    // precedido por una letra (descarta "SubTotal").
-    const montoMatch = xmlContent.match(/(?<![a-zA-Z])Total\s*=\s*["']([^"']+)["']/)
-    const monto = montoMatch ? parseFloat(montoMatch[1]) : undefined
-
-    // SubTotal -- mismo cuidado que Total: no hay substring conflictivo en
-    // este caso, pero se ancla igual por consistencia.
-    const subtotalMatch = xmlContent.match(/(?<![a-zA-Z])SubTotal\s*=\s*["']([^"']+)["']/)
-    const subtotal = subtotalMatch ? parseFloat(subtotalMatch[1]) : undefined
+    const folio: string | undefined = comprobante.Folio
+    const fecha = typeof comprobante.Fecha === 'string' ? comprobante.Fecha.split('T')[0] : undefined
+    const monto = comprobante.Total != null ? parseFloat(comprobante.Total) : undefined
+    const subtotal = comprobante.SubTotal != null ? parseFloat(comprobante.SubTotal) : undefined
 
     // RFC emisor/receptor y UUID de timbrado -- informativos por ahora: no
     // hay un RFC esperado guardado en clientes/proveedores todavía, así que
     // no bloquean la validación, solo se extraen para mostrarse en el
     // detalle del documento.
-    const rfcEmisorMatch = xmlContent.match(/<cfdi:Emisor\b[^>]*\bRfc\s*=\s*["']([^"']+)["']/i)
-    const rfcReceptorMatch = xmlContent.match(/<cfdi:Receptor\b[^>]*\bRfc\s*=\s*["']([^"']+)["']/i)
-    const uuidMatch = xmlContent.match(/<tfd:TimbreFiscalDigital\b[^>]*\bUUID\s*=\s*["']([^"']+)["']/i)
+    const rfcEmisor: string | undefined = comprobante.Emisor?.Rfc
+    const rfcReceptor: string | undefined = comprobante.Receptor?.Rfc
+    const uuid: string | undefined = comprobante.Complemento?.TimbreFiscalDigital?.UUID
 
     // Desglose fiscal -- Impuesto 002 = IVA, 001 = ISR (catálogo c_Impuesto
     // del SAT). Ambos nodos son opcionales en el CFDI: un proveedor persona
-    // moral típicamente no trae cfdi:Retenciones.
-    //
-    // BUG REAL (reportado 2026-09-19 con un CFDI real, folio 369): un CFDI
-    // trae los nodos Traslado/Retencion DOS VECES -- una vez dentro de cada
-    // cfdi:Concepto (desglose por renglón) y otra vez en el cfdi:Impuestos
-    // a nivel cfdi:Comprobante (resumen agregado, hermano de
-    // cfdi:Conceptos). Sumar sobre el XML completo cuenta ambas ocurrencias
-    // y duplica (o más, con N conceptos) el monto real -- el caso reportado
-    // leyó $6,400.00 de IVA trasladado cuando el XML real declaraba
-    // $3,200.00. Los fixtures de test anteriores (CFDI_PERSONA_MORAL/FISICA
-    // en factura-parser.test.ts) solo tenían el nivel documento, por eso el
-    // bug no se detectó antes. Fix: acotar la extracción al bloque que
-    // viene DESPUÉS de cerrar cfdi:Conceptos -- ahí solo vive el resumen a
-    // nivel documento, ya agregado correctamente por el emisor/PAC.
-    const conceptosCierre = xmlContent.match(/<\/(?:\w+:)?Conceptos>/)
-    const bloqueImpuestosComprobante = conceptosCierre
-      ? xmlContent.slice(conceptosCierre.index! + conceptosCierre[0].length)
-      : xmlContent
-    const traslados = extractTagAttrs(bloqueImpuestosComprobante, 'Traslado')
-    const retenciones = extractTagAttrs(bloqueImpuestosComprobante, 'Retencion')
+    // moral típicamente no trae Retenciones. Lee EXCLUSIVAMENTE
+    // comprobante.Impuestos (nunca desciende a Conceptos ni a Complemento).
+    const traslados: ImpuestoNodo[] | undefined = comprobante.Impuestos?.Traslados?.Traslado
+    const retenciones: ImpuestoNodo[] | undefined = comprobante.Impuestos?.Retenciones?.Retencion
     const ivaTrasladado = sumImporteByImpuesto(traslados, '002')
     const ivaRetenido = sumImporteByImpuesto(retenciones, '002')
     const isrRetenido = sumImporteByImpuesto(retenciones, '001')
@@ -123,9 +124,9 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
       fecha_emision: fecha,
       monto_total: monto || 0,
       subtotal,
-      rfc_emisor: rfcEmisorMatch?.[1],
-      rfc_receptor: rfcReceptorMatch?.[1],
-      uuid_timbrado: uuidMatch?.[1],
+      rfc_emisor: rfcEmisor,
+      rfc_receptor: rfcReceptor,
+      uuid_timbrado: uuid,
       iva_trasladado: ivaTrasladado,
       iva_retenido: ivaRetenido,
       isr_retenido: isrRetenido,
