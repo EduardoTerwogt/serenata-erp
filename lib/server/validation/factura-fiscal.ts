@@ -6,6 +6,29 @@ export { calcularEjemploFactura, type EjemploFacturaEsperado } from '@/lib/share
 
 const TOLERANCIA_CENTAVOS = 0.01
 
+// Tolerancia adicional SOLO para la retención de IVA (nunca para
+// subtotal/IVA trasladado/ISR retenido/total, que siguen exactos al
+// centavo -- ver por qué cada uno abajo). Causa real, no adivinada
+// (reportado 2026-09-19, cotización SH077, factura real de un proveedor
+// persona física): la tasa de retención de IVA es 2/3 de 16% = 10.6666...%,
+// decimal PERIÓDICO -- no tiene representación finita exacta en base 10, a
+// diferencia de IVA trasladado (16%) e ISR retenido (10%, ambos exactos).
+// Cada software de facturación trunca/redondea el atributo `TasaOCuota` a
+// distinta cantidad de decimales antes de calcular el Importe (el XML real
+// declaró `TasaOCuota="0.106600"` en vez de "0.106667"), produciendo un
+// Importe legítimamente distinto al que sale de aplicar nuestra fracción
+// exacta -- $533.00 declarado vs $533.33 esperado sobre un subtotal de
+// $5,000 (diferencia de $0.33, un 0.0067% del subtotal).
+//
+// Por eso la tolerancia es PROPORCIONAL al subtotal, no un monto fijo
+// adivinado: el error real escala con el monto de la factura (mismo
+// redondeo de tasa, base más grande -> diferencia en pesos más grande). Un
+// monto fijo (ej. "$1") sería demasiado laxo en facturas chicas y
+// insuficiente en facturas grandes. 0.03% del subtotal da ~4x el margen
+// del caso real observado (0.0067%) mantiene TOLERANCIA_CENTAVOS como piso
+// para que nunca sea MÁS estricto que hoy en facturas muy pequeñas.
+const TOLERANCIA_TASA_RETENCION_IVA = 0.0003 // 0.03% del subtotal
+
 /**
  * Validación fiscal profunda de una factura de proveedor (CFDI): confirma
  * que el desglose de impuestos declarado en el XML (traslados/retenciones)
@@ -70,12 +93,17 @@ export function validarFacturaFiscalProveedor(
   if (esFisica) {
     const ivaRetenidoEsperado = round2(subtotalDeclarado * TASA_RETENCION_IVA)
     const isrRetenidoEsperado = round2(subtotalDeclarado * TASA_RETENCION_ISR)
-    if (Math.abs(ivaRetenidoDeclarado - ivaRetenidoEsperado) > TOLERANCIA_CENTAVOS) {
+    const toleranciaIvaRetenido = Math.max(TOLERANCIA_CENTAVOS, subtotalDeclarado * TOLERANCIA_TASA_RETENCION_IVA)
+    if (Math.abs(ivaRetenidoDeclarado - ivaRetenidoEsperado) > toleranciaIvaRetenido) {
       mismatches.push({
         campo: 'iva_retenido',
         mensaje: `Retención de IVA no coincide: XML $${ivaRetenidoDeclarado.toFixed(2)} vs esperado $${ivaRetenidoEsperado.toFixed(2)} (2/3 del IVA, persona física con honorarios).`,
       })
     }
+    // ISR retenido se queda en TOLERANCIA_CENTAVOS a propósito: su tasa
+    // (10%) es exacta en base 10, no un decimal periódico como el IVA
+    // retenido -- no hay una causa real de redondeo que justifique
+    // ampliarla aquí.
     if (Math.abs(isrRetenidoDeclarado - isrRetenidoEsperado) > TOLERANCIA_CENTAVOS) {
       mismatches.push({
         campo: 'isr_retenido',
