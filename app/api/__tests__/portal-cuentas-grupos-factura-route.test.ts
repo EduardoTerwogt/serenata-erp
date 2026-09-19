@@ -104,18 +104,40 @@ describe('POST /api/portal/cuentas/grupos/[id]/factura', () => {
     expect(mocks.uploadFileToDriveMock).not.toHaveBeenCalled()
   })
 
-  it('bloquea (422) con el ejemplo cuando la validación fiscal encuentra un mismatch', async () => {
+  it('bloquea (422) con mensaje genérico y SIN ejemplo cuando el mismatch es de subtotal', async () => {
     mocks.parseFacturaXMLMock.mockReturnValue({ subtotal: 900, monto_total: 1044 })
     mocks.validarFacturaFiscalProveedorMock.mockReturnValue({
       estado_validacion: 'revision',
       detalle_validacion: 'Subtotal no coincide: XML $900.00 vs esperado $1000.00.',
+      mismatches: [{ campo: 'subtotal', mensaje: 'Subtotal no coincide: XML $900.00 vs esperado $1000.00.' }],
     })
 
     const response = await POST(buildRequest(), params())
 
     expect(response.status).toBe(422)
     const body = await response.json()
-    expect(body.error).toContain('Subtotal no coincide')
+    expect(body.error).not.toContain('900')
+    expect(body.error).not.toContain('1000')
+    expect(body.error).toMatch(/no corresponde a lo esperado/)
+    expect(body.ejemplo).toBeUndefined()
+    expect(mocks.uploadFileToDriveMock).not.toHaveBeenCalled()
+    expect(mocks.createDocumentoCuentaPagarMock).not.toHaveBeenCalled()
+    expect(mocks.marcarGrupoFacturadoMock).not.toHaveBeenCalled()
+  })
+
+  it('bloquea (422) con el mensaje específico y el ejemplo cuando el mismatch es de desglose (subtotal correcto)', async () => {
+    mocks.parseFacturaXMLMock.mockReturnValue({ subtotal: 1000, iva_trasladado: 0, monto_total: 1000 })
+    mocks.validarFacturaFiscalProveedorMock.mockReturnValue({
+      estado_validacion: 'revision',
+      detalle_validacion: 'IVA trasladado no coincide: XML $0.00 vs esperado $160.00 (16% del subtotal).',
+      mismatches: [{ campo: 'iva_trasladado', mensaje: 'IVA trasladado no coincide: XML $0.00 vs esperado $160.00 (16% del subtotal).' }],
+    })
+
+    const response = await POST(buildRequest(), params())
+
+    expect(response.status).toBe(422)
+    const body = await response.json()
+    expect(body.error).toContain('IVA trasladado no coincide')
     expect(body.ejemplo).toEqual({ subtotal: 1000, iva_trasladado: 160, iva_retenido: 0, isr_retenido: 0, total: 1160, explicacion: 'ejemplo' })
     expect(mocks.uploadFileToDriveMock).not.toHaveBeenCalled()
     expect(mocks.createDocumentoCuentaPagarMock).not.toHaveBeenCalled()

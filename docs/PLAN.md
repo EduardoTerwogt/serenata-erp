@@ -1,12 +1,13 @@
 # Plan de la iniciativa activa
 
-**Estado:** Borrador (2026-09-19) — agrupación de los "Sueltos" que quedaron
-fuera de PR [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) en
-una nueva iniciativa. Lógica de negocio y UI ya validadas en sesión con un
-simulador y mockups interactivos (links abajo) para 3 de los 4 bloques; el
-cuarto (filtro de estado en Cuentas) llega a su arranque con el diseño
-todavía sin cerrar, a propósito, sin bloquear la aprobación ni ejecución de
-los otros 3.
+**Estado:** Aprobado, listo para ejecutar (2026-09-19) — agrupación de los
+"Sueltos" que quedaron fuera de PR
+[#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) en una nueva
+iniciativa. Lógica de negocio y UI ya validadas en sesión con un simulador y
+mockups interactivos (links abajo) para 3 de los 4 bloques; el cuarto
+(filtro de estado en Cuentas) llega a su arranque con el diseño todavía sin
+cerrar, a propósito, sin bloquear la aprobación ni ejecución de los otros 3.
+Bloque 1 en curso — ver tracker abajo.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -165,7 +166,7 @@ diseñar cuando le toca arrancar, sin detener la ejecución de los otros 3.
 
 | # | Bloque | Estado |
 |---|---|---|
-| 1 | Portal: simulador de factura | Pendiente |
+| 1 | Portal: simulador de factura | En curso |
 | 2 | Cuentas: dropdown de impuestos y utilidad de proyecto | Pendiente |
 | 3 | Clientes: `cliente_id` como FK real | Pendiente |
 | 4 | Cuentas: filtro de estado en vista principal | Pendiente — diseño sin cerrar |

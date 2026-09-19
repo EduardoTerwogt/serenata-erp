@@ -117,4 +117,38 @@ describe('validarFacturaFiscalProveedor', () => {
       expect(result.estado_validacion).toBe('validado')
     })
   })
+
+  describe('campo mismatches (consumido por el wrapper del Portal)', () => {
+    it('un subtotal incorrecto produce un mismatch con campo "subtotal"', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 900, iva_trasladado: 144, iva_retenido: 0, isr_retenido: 0, monto_total: 1044 },
+        1000,
+        'moral'
+      )
+      expect(result.mismatches).toContainEqual(expect.objectContaining({ campo: 'subtotal' }))
+    })
+
+    it('un desglose incorrecto con subtotal correcto no incluye campo "subtotal"', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 1000, iva_trasladado: 0, iva_retenido: 0, isr_retenido: 0, monto_total: 1000 },
+        1000,
+        'moral'
+      )
+      expect(result.mismatches).toEqual([expect.objectContaining({ campo: 'iva_trasladado' })])
+    })
+
+    it('no leer el subtotal produce mismatches con campo "lectura_xml"', () => {
+      const result = validarFacturaFiscalProveedor({ monto_total: 1160 }, 1000, 'moral')
+      expect(result.mismatches).toEqual([expect.objectContaining({ campo: 'lectura_xml' })])
+    })
+
+    it('un resultado validado no incluye mismatches', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 1000, iva_trasladado: 160, iva_retenido: 0, isr_retenido: 0, monto_total: 1160 },
+        1000,
+        'moral'
+      )
+      expect(result.mismatches).toBeUndefined()
+    })
+  })
 })

@@ -105,12 +105,26 @@ export async function mockPortalDashboardConMatch(page: Page) {
   })
 }
 
+// Mismatch de SUBTOTAL -- el wrapper del Portal (lib/server/portal/factura-mensaje-proveedor.ts)
+// lo vuelve genérico y sin `ejemplo`, para no revelar el monto esperado en el mensaje de error.
 export async function mockPortalFacturaBloqueada(page: Page) {
   await page.route('**/api/portal/cuentas/grupos/*/factura', async (route) => {
     await fulfillJson(
       route,
+      { error: 'Tu factura no corresponde a lo esperado para este proyecto. Contacta a tu contacto en Serenata para revisarlo.' },
+      422
+    )
+  })
+}
+
+// Mismatch de DESGLOSE (subtotal correcto) -- sigue mostrando el mensaje
+// específico y el `ejemplo`, igual que antes del wrapper.
+export async function mockPortalFacturaDesgloseIncorrecto(page: Page) {
+  await page.route('**/api/portal/cuentas/grupos/*/factura', async (route) => {
+    await fulfillJson(
+      route,
       {
-        error: 'Subtotal no coincide: XML $900.00 vs esperado $1000.00.',
+        error: 'IVA trasladado no coincide: XML $0.00 vs esperado $160.00 (16% del subtotal).',
         ejemplo: {
           subtotal: 1000,
           iva_trasladado: 160,

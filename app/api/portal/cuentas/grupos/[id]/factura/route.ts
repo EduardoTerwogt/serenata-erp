@@ -4,7 +4,8 @@ import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
-import { validarFacturaFiscalProveedor, calcularEjemploFactura } from '@/lib/server/validation/factura-fiscal'
+import { calcularEjemploFactura } from '@/lib/server/validation/factura-fiscal'
+import { validarFacturaParaProveedor } from '@/lib/server/portal/factura-mensaje-proveedor'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 import { RegimenFiscal } from '@/lib/types'
@@ -77,12 +78,14 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
-    const validacion = validarFacturaFiscalProveedor(facturaData, Number(grupo.monto_total || 0), regimenFiscal)
+    const validacion = validarFacturaParaProveedor(facturaData, Number(grupo.monto_total || 0), regimenFiscal)
     if (validacion.estado_validacion === 'revision') {
       return Response.json(
         {
-          error: validacion.detalle_validacion,
-          ejemplo: calcularEjemploFactura(Number(grupo.monto_total || 0), regimenFiscal),
+          error: validacion.mensaje_proveedor,
+          ...(validacion.mostrar_ejemplo
+            ? { ejemplo: calcularEjemploFactura(Number(grupo.monto_total || 0), regimenFiscal) }
+            : {}),
         },
         { status: 422 }
       )

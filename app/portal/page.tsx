@@ -12,7 +12,8 @@ import { Icon } from '@/components/ui/Icon'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { StatusBadge, toneForCuentaEstado, toneForValidacionEstado } from '@/components/ui/StatusBadge'
 import { SectionLoading } from '@/components/ui/SectionLoading'
-import type { ProveedorDocumento, TipoDocumentoProveedor } from '@/lib/types'
+import type { ProveedorDocumento, TipoDocumentoProveedor, RegimenFiscal } from '@/lib/types'
+import { calcularEjemploFactura, type EjemploFacturaEsperado } from '@/lib/shared/factura-fiscal'
 
 // Bloque 4c (docs/PLAN.md): "Tus cuentas con Serenata" se mudó de la tab
 // "Cuentas y facturas" a su propia tab "Historial" -- mismo dato, mismo
@@ -71,15 +72,6 @@ interface GrupoPortal {
   monto_pagado: number
   saldo_pendiente: number
   items: GrupoPortalItem[]
-}
-
-interface EjemploFactura {
-  subtotal: number
-  iva_trasladado: number
-  iva_retenido: number
-  isr_retenido: number
-  total: number
-  explicacion: string
 }
 
 function formatMoney(value: number) {
@@ -180,7 +172,7 @@ export default function PortalPage() {
         />
       )}
 
-      {tab === 'cuentas' && <TabCuentas grupos={grupos} />}
+      {tab === 'cuentas' && <TabCuentas grupos={grupos} regimenFiscal={perfil?.regimen_fiscal ?? null} />}
 
       {tab === 'historial' && <TabHistorial grupos={grupos} />}
     </div>
@@ -371,16 +363,34 @@ function TabDocumentos({
   )
 }
 
-function TabCuentas({ grupos }: { grupos: GrupoPortal[] }) {
+function DesgloseFactura({ ejemplo }: { ejemplo: EjemploFacturaEsperado }) {
+  return (
+    <dl className="space-y-1 text-content text-subtext">
+      <div className="flex justify-between"><dt>Subtotal</dt><dd className="text-body">{formatMoney(ejemplo.subtotal)}</dd></div>
+      <div className="flex justify-between"><dt>IVA trasladado (16%)</dt><dd className="text-body">{formatMoney(ejemplo.iva_trasladado)}</dd></div>
+      {ejemplo.iva_retenido > 0 && (
+        <div className="flex justify-between"><dt>IVA retenido</dt><dd className="text-body">-{formatMoney(ejemplo.iva_retenido)}</dd></div>
+      )}
+      {ejemplo.isr_retenido > 0 && (
+        <div className="flex justify-between"><dt>ISR retenido</dt><dd className="text-body">-{formatMoney(ejemplo.isr_retenido)}</dd></div>
+      )}
+      <div className="flex justify-between border-t border-hairline pt-1 mt-1"><dt className="text-body font-medium">Total</dt><dd className="text-body font-medium">{formatMoney(ejemplo.total)}</dd></div>
+    </dl>
+  )
+}
+
+function TabCuentas({ grupos, regimenFiscal }: { grupos: GrupoPortal[]; regimenFiscal: RegimenFiscal | null }) {
   const [grupoId, setGrupoId] = useState('')
   const [xml, setXml] = useState<File | null>(null)
   const [pdf, setPdf] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [ejemplo, setEjemplo] = useState<EjemploFactura | null>(null)
+  const [ejemplo, setEjemplo] = useState<EjemploFacturaEsperado | null>(null)
   const [success, setSuccess] = useState(false)
 
   const gruposFacturables = grupos.filter(g => g.facturable)
+  const grupoSeleccionado = gruposFacturables.find(g => g.id === grupoId) ?? null
+  const simulador = calcularEjemploFactura(grupoSeleccionado?.monto_total ?? 0, regimenFiscal)
 
   const subirFactura = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -416,7 +426,7 @@ function TabCuentas({ grupos }: { grupos: GrupoPortal[] }) {
   }
 
   return (
-    <div className="max-w-xl">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-[19px] items-start">
       <SectionCard title="Subir factura" contentClassName="p-4 md:p-6 space-y-4">
         <form onSubmit={subirFactura} className="space-y-4">
           <div>
@@ -459,17 +469,7 @@ function TabCuentas({ grupos }: { grupos: GrupoPortal[] }) {
           {ejemplo && (
             <div className="rounded-control border border-hairline bg-row p-3.5">
               <p className="text-content font-medium text-body mb-2">Así debe quedar tu factura:</p>
-              <dl className="space-y-1 text-content text-subtext">
-                <div className="flex justify-between"><dt>Subtotal</dt><dd className="text-body">{formatMoney(ejemplo.subtotal)}</dd></div>
-                <div className="flex justify-between"><dt>IVA trasladado (16%)</dt><dd className="text-body">{formatMoney(ejemplo.iva_trasladado)}</dd></div>
-                {ejemplo.iva_retenido > 0 && (
-                  <div className="flex justify-between"><dt>IVA retenido</dt><dd className="text-body">-{formatMoney(ejemplo.iva_retenido)}</dd></div>
-                )}
-                {ejemplo.isr_retenido > 0 && (
-                  <div className="flex justify-between"><dt>ISR retenido</dt><dd className="text-body">-{formatMoney(ejemplo.isr_retenido)}</dd></div>
-                )}
-                <div className="flex justify-between border-t border-hairline pt-1 mt-1"><dt className="text-body font-medium">Total</dt><dd className="text-body font-medium">{formatMoney(ejemplo.total)}</dd></div>
-              </dl>
+              <DesgloseFactura ejemplo={ejemplo} />
               <p className="mt-3 text-content text-faint">{ejemplo.explicacion}</p>
             </div>
           )}
@@ -482,6 +482,16 @@ function TabCuentas({ grupos }: { grupos: GrupoPortal[] }) {
             {subiendo ? 'Subiendo...' : 'Validar y subir factura'}
           </button>
         </form>
+      </SectionCard>
+
+      <SectionCard title="Simulador de factura" contentClassName="p-4 md:p-6 space-y-3">
+        <p className="text-content text-subtext">
+          {grupoSeleccionado
+            ? 'Así debe quedar tu factura para este proyecto:'
+            : 'Elige un proyecto en "Subir factura" para ver cómo debe quedar tu factura.'}
+        </p>
+        <DesgloseFactura ejemplo={simulador} />
+        {grupoSeleccionado && <p className="mt-3 text-content text-faint">{simulador.explicacion}</p>}
       </SectionCard>
     </div>
   )

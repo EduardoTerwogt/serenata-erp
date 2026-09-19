@@ -46,9 +46,27 @@ function sumImporteByImpuesto(tags: Record<string, string>[], codigoImpuesto: st
     .reduce((sum, t) => sum + (parseFloat(t.Importe) || 0), 0)
 }
 
+export type CampoMismatchFactura =
+  | 'lectura_xml'
+  | 'subtotal'
+  | 'iva_trasladado'
+  | 'iva_retenido'
+  | 'isr_retenido'
+  | 'total_vs_desglose'
+
+export interface MismatchFactura {
+  campo: CampoMismatchFactura
+  mensaje: string
+}
+
 export interface ResultadoValidacionFactura {
   estado_validacion: 'validado' | 'revision'
   detalle_validacion: string | null
+  // Solo poblado por validarFacturaFiscalProveedor() -- permite a un caller
+  // (el wrapper del Portal) distinguir un mismatch de subtotal (mensaje
+  // genérico al proveedor) de uno de desglose (mensaje específico), sin
+  // reparsear detalle_validacion.
+  mismatches?: MismatchFactura[]
 }
 
 /**
