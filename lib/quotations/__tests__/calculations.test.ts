@@ -4,7 +4,6 @@ import {
   normalizeQuotationItem,
   calculateDiscountAmount,
   calculateQuotationTotals,
-  calculateCostoConIva,
   calculateEstimatedTaxes,
 } from '../calculations'
 import type { QuotationFormItem } from '../types'
@@ -221,20 +220,6 @@ describe('calculateQuotationTotals', () => {
     expect(result.subtotal).toBe(0)
     expect(result.total).toBe(0)
     expect(result.iva).toBe(0)
-  })
-})
-
-// ==================== calculateCostoConIva ====================
-
-describe('calculateCostoConIva', () => {
-  it('calcula 16% fijo sobre el costo total (x_pagar * cantidad, Bloque 3)', () => {
-    expect(calculateCostoConIva(1000)).toBe(1160)
-  })
-
-  it('retorna 0 para costo total vacío o nulo', () => {
-    expect(calculateCostoConIva('')).toBe(0)
-    expect(calculateCostoConIva(null)).toBe(0)
-    expect(calculateCostoConIva(undefined)).toBe(0)
   })
 })
 

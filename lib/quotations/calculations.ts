@@ -12,8 +12,8 @@ export function normalizeQuotationItem(item: QuotationFormItem): QuotationComput
   // Bloque 3 (docs/PLAN.md): x_pagar es el Costo Unitario -- el costo real
   // del renglón es costo_total = x_pagar * cantidad. Único lugar del
   // frontend que calcula esta fórmula; todo consumidor derivado
-  // (calculateCostoConIva, calculateEstimatedTaxes, la columna "Costo
-  // Total" en Partidas) parte de este campo, nunca de x_pagar suelto.
+  // (calculateEstimatedTaxes, la columna "Costo Total" en Partidas) parte
+  // de este campo, nunca de x_pagar suelto.
   const costo_total = x_pagar * cantidad
   const margen = importe - costo_total
 
@@ -83,13 +83,6 @@ export function calculateQuotationTotals({
     margen_total,
     utilidad_total,
   }
-}
-
-// Fase 5.1: columna informativa "Costo + IVA" en Partidas. Siempre 16% fijo sobre
-// Costo Total (Bloque 3: x_pagar * cantidad, no X Pagar suelto) -- no depende del
-// regimen fiscal del responsable (ver EstimatedTaxes).
-export function calculateCostoConIva(costoTotal: number | '' | null | undefined): number {
-  return round2(toNumberOrZero(costoTotal as number | '' | null | undefined) * 1.16)
 }
 
 export function calculateEstimatedTaxes(

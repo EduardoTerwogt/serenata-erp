@@ -6,7 +6,7 @@ import { UseFormRegister } from 'react-hook-form'
 import { Producto, Proveedor, ServiceTemplate } from '@/lib/types'
 import { EMPTY_QUOTATION_ITEM } from '@/lib/quotations/mappers'
 import { QuotationFormValues } from '@/lib/quotations/types'
-import { calculateCostoConIva, toNumberOrZero } from '@/lib/quotations/calculations'
+import { toNumberOrZero } from '@/lib/quotations/calculations'
 import { fmtCurrency } from '@/lib/quotations/format'
 import { QuotationItemCellField } from '@/hooks/useQuotationPresence'
 import { QuotationItemsController } from '@/hooks/useQuotationItems'
@@ -276,7 +276,6 @@ export function QuotationItemsSection({
           <ItemFieldConflictBanner rowId={rowIdAt(index)} field="x_pagar" items={items} />
         </td>
         <td className="px-3 py-2 text-subtext whitespace-nowrap">${fmtCurrency(costo_total)}</td>
-        <td className="px-3 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(costo_total))}</td>
         <td className={`px-3 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(margen)}</td>
         <td className="px-3 py-2"><button type="button" onClick={() => items.removeRow(rowIdAt(index))} className="text-faint hover:text-cancelled-fg disabled:opacity-30 transition-colors">✕</button></td>
       </tr>
@@ -298,7 +297,6 @@ export function QuotationItemsSection({
         <td className="px-3 py-3">{item.responsable_nombre ? <span className="text-subtext">{item.responsable_nombre}</span> : <span className="text-faint italic">Sin asignar</span>}</td>
         <td className="px-3 py-3 text-subtext">${fmtCurrency(item.x_pagar)}</td>
         <td className="px-3 py-3 text-subtext">${fmtCurrency(costoTotal)}</td>
-        <td className="px-3 py-3 text-subtext">${fmtCurrency(calculateCostoConIva(costoTotal))}</td>
         <td className={`px-3 py-3 font-medium ${(item.margen ?? 0) >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(item.margen ?? 0)}</td>
       </tr>
     )
@@ -325,7 +323,6 @@ export function QuotationItemsSection({
           <span className="text-subtext text-right">Costo total ${fmtCurrency(costo_total)}</span>
           <span className={`col-span-2 text-right font-medium ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>Margen ${fmtCurrency(margen)}</span>
         </div>
-        <div className="text-[13px] text-faint mb-2">Costo+IVA ${fmtCurrency(calculateCostoConIva(costo_total))}</div>
         <div className="flex justify-between items-center pt-2 border-t border-hairline">
           <span className="text-faint text-xs">{item.responsable_nombre || 'Sin responsable'}</span>
           <span className="text-body font-bold">${fmtCurrency(importe)}</span>
@@ -355,7 +352,6 @@ export function QuotationItemsSection({
           <span className="text-subtext text-right">Costo total ${fmtCurrency(costoTotal)}</span>
           <span className="col-span-2 text-right text-faint">{item.responsable_nombre || 'Sin responsable'}</span>
         </div>
-        <div className="text-[13px] text-faint mb-2">Costo+IVA ${fmtCurrency(calculateCostoConIva(costoTotal))}</div>
         <div className="flex justify-end pt-2 border-t border-hairline">
           <span className="text-body font-bold">${fmtCurrency(importe)}</span>
         </div>
@@ -391,7 +387,7 @@ export function QuotationItemsSection({
           <table className="w-full text-content">
             <thead>
               <tr className="h-9 border-b border-hairline">
-                {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'Costo Unitario', 'Costo Total', 'Costo + IVA', 'Margen', ...(editable ? [''] : [])].map(h => (
+                {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'Costo Unitario', 'Costo Total', 'Margen', ...(editable ? [''] : [])].map(h => (
                   <th key={h} className="sn-table-head text-left px-3 py-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -451,7 +447,6 @@ export function QuotationItemsSection({
             <div className="rounded-panel border border-hairline bg-card p-4 mt-6">
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Importe</span><span className="text-subtext text-content font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).importe)}</span></div>
               <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo Total</span><span className="text-subtext text-content font-medium">${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).costo_total)}</span></div>
-              <div className="flex justify-between mb-2"><span className="text-faint text-content">Costo + IVA</span><span className="text-subtext text-content font-medium">${fmtCurrency(calculateCostoConIva(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).costo_total))}</span></div>
               <div className="flex justify-between"><span className="text-faint text-content">Margen</span><span className={`text-content font-medium ${calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(calcItem(watchedItems[editingItemIndex] || EMPTY_QUOTATION_ITEM).margen)}</span></div>
             </div>
             {<button type="button" onClick={() => { items.removeRow(rowIdAt(editingItemIndex)); setEditingItemRowId(null) }} className="w-full text-cancelled-fg hover:opacity-80 py-3 text-content mt-6 transition-colors disabled:opacity-40">Eliminar partida</button>}

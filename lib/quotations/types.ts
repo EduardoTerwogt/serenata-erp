@@ -39,9 +39,8 @@ export interface QuotationComputedItem extends Omit<QuotationFormItem, 'precio_u
   importe: number
   // Bloque 3 (docs/PLAN.md): `x_pagar` es el Costo Unitario (neto al
   // responsable); `costo_total = x_pagar * cantidad` es la fuente de verdad
-  // centralizada para cualquier fórmula derivada (IVA pagado, Costo + IVA
-  // en Partidas, margen) -- nunca recalcular `x_pagar * cantidad` suelto en
-  // otro lugar.
+  // centralizada para cualquier fórmula derivada (IVA pagado, margen) --
+  // nunca recalcular `x_pagar * cantidad` suelto en otro lugar.
   costo_total: number
   margen: number
 }
