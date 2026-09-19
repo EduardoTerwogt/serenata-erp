@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-18 (agrupación de observaciones)
+**Última actualización:** 2026-09-19 (agrupación de "Sueltos" post-PR #76 en `docs/PLAN.md`)
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -78,11 +78,27 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-**Sin definir a propósito.** La iniciativa que ocupó esta sección
-(Plantillas, Cotizaciones, Portal, Clientes, Cuentas — 6 bloques, aprobada
-2026-09-18) cerró completa — ver "Cerrado" abajo. Los "Sueltos" que quedaron
-fuera de ese plan siguen sin comprometer — se agrupan y priorizan en Chat
-cuando se retomen, igual que el resto de "Después".
+**Agrupación de "Sueltos" post-PR #76 (borrador 2026-09-19).** 4 de los 5
+"Sueltos" que quedaron fuera del plan cerrado en PR
+[#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) se agruparon
+en una nueva iniciativa — lógica de negocio y UI ya validadas con un
+simulador y mockups interactivos en la misma sesión. Tracker completo,
+orden de ejecución, riesgos y validación: `docs/PLAN.md`.
+
+- **Portal — simulador de factura** (antes "calculadora de régimen
+  fiscal"): el motor de validación fiscal (XML, retenciones) ya existe en
+  `main`; el bloque expone un panel de solo lectura junto a "Subir
+  factura".
+- **Cuentas — dropdown de impuestos a pagar y utilidad bruta/neta de
+  proyecto**: fórmula ya definida y validada (retenciones/IVA no restan
+  utilidad; ISR sí, como estimación) — agrega régimen RESICO.
+- **Clientes — normalizar `cliente_id` como FK real**: migración aditiva
+  con clasificación `safe_match`/`ambiguous`/`no_match`, nunca
+  autoasignación silenciosa.
+- **Cuentas — filtro de estado en la vista principal** (acceso a cuentas
+  cerradas, no solo pendientes): único bloque de los 4 sin diseño cerrado
+  — se termina de definir al abrir el bloque, último en el orden de
+  ejecución para no bloquear a los otros 3.
 
 ---
 
@@ -94,33 +110,19 @@ ni tiene alcance de iniciativa definido.
 
 ### Sueltos pendientes (2026-09-19)
 
-Quedaron fuera del plan cerrado en PR
-[#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) (detalle
-completo de qué se evaluó y por qué quedó fuera de ese alcance:
-[`docs/archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md`](archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md)):
-
-- **Cuentas — dropdown de impuestos a pagar y utilidad bruta/neta de
-  proyecto.** Requiere diseño ("UI tipo Apple" pedida explícitamente); el
-  agregado ya puede calcularse sobre Costo Total (la fórmula corregida está
-  en `main` desde PR #76).
-- **Cuentas — historial de cuentas por mes/año.** Decisión de UX pendiente.
-- **Portal — calculadora de régimen fiscal.** Requiere diseño; ocupa el
-  espacio que liberó el tab "Historial" (ya migrado en PR #76).
 - **Dashboard — estado de resultados y balance + export a Sheets.**
-  Pendiente definir alcance contable exacto antes de poder planear el
-  detalle.
-- **Clientes — normalizar `cliente_id` como FK real** en
-  cotizaciones/proyectos/cuentas_cobrar (candidato nuevo, identificado al
-  cerrar el catálogo editable de Clientes en PR #76): decisión de producto
-  pendiente, no es un bloqueo técnico.
+  Pendiente definir alcance contable exacto (devengado vs. flujo de caja,
+  categorías de gasto, balance con activos/pasivos o solo P&L) antes de
+  poder planear el detalle — decisión de negocio previa a cualquier diseño
+  técnico. Dejado explícitamente fuera de la agrupación de "Siguiente" por
+  decisión del usuario (2026-09-19); ya existe un bloque `fiscal` en
+  `getResumenDashboard()` (cash-basis, no resta `gastos_fijos`) y un export
+  a Sheets tabla-por-tabla (no de reporte calculado) como punto de partida
+  cuando se retome.
 - **Fuera de alcance, sin cambios:** Planeación (evaluar quitar la sección,
   ligado a RAG/chatbot); RAG/chatbot; editor de PDFs tipo Canva; migrar
   administración de Sheets externo a la app; refinar módulo de Proyectos;
   limpieza de datos de prueba (app + BD).
-
-Antes de arrancar cualquiera de estos puntos, agruparlos en una iniciativa
-coherente y decidir orden y alcance en Chat — mismo proceso que ya se siguió
-para el plan cerrado en PR #76.
 
 ---
 

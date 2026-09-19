@@ -4,14 +4,18 @@
 
 ## Estado
 
-**`docs/PLAN.md` — Vacío.** La iniciativa de 6 bloques (Plantillas, Cotizaciones
-UI+fórmula, Portal, Clientes, PDF de orden de pago) cerró completa esta sesión.
-Historia completa:
-[`docs/archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md`](archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md).
-Resumen en `docs/ROADMAP.md` → "Cerrado". No hay ninguna iniciativa
-multi-sesión en curso ni en definición ahora mismo — lo que sigue son los
-"Sueltos" documentados en `docs/ROADMAP.md` → "Después", sin agrupar ni
-priorizar todavía.
+**`docs/PLAN.md` — Borrador (agrupación de "Sueltos" post-PR #76).** En esta
+misma sesión, tras cerrar la iniciativa de 6 bloques (Plantillas,
+Cotizaciones UI+fórmula, Portal, Clientes, PDF de orden de pago — historia:
+[`docs/archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md`](archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md),
+resumen en `docs/ROADMAP.md` → "Cerrado"), se agruparon 4 de los 5 "Sueltos"
+en una nueva iniciativa: Portal (simulador de factura), Cuentas (dropdown de
+impuestos/utilidad de proyecto), Clientes (`cliente_id` FK) y Cuentas
+(filtro de estado en vista principal). Lógica de negocio y UI ya validadas
+con un simulador y 2 mockups interactivos (links en `docs/PLAN.md`). El
+suelto de Dashboard quedó explícitamente fuera, en `docs/ROADMAP.md` →
+"Después". Detalle completo, orden de ejecución, riesgos y validación:
+`docs/PLAN.md`.
 
 **Engineering Hardening (EF-1+EF-2+EF-3)** y **Agrupar Cuentas por Pagar por
 proveedor+proyecto** siguen cerrados de sesiones anteriores — sin cambios,
@@ -158,11 +162,12 @@ mergear. CI de `main` post-merge: `fresh-db` en verde tras un reintento
 
 ## Siguiente paso
 
-**No hay iniciativa multi-sesión activa.** Antes de arrancar cualquiera de
-los "Sueltos" de `docs/ROADMAP.md` → "Después" (dropdown de impuestos/
-utilidad de proyecto, historial de cuentas por mes/año, calculadora de
-régimen fiscal, estado de resultados/balance, `cliente_id` como FK real),
-agruparlos en una iniciativa coherente y decidir orden/alcance en Chat,
-igual que se hizo para la que acaba de cerrar. Si el usuario confirma la
-hipótesis de `SUPABASE_JWT_SECRET` en Preview, ese es un fix puntual de una
-sola sesión (no una iniciativa), fuera de `docs/PLAN.md`.
+**`docs/PLAN.md` en Borrador, listo para pasar a Aprobado.** Orden de
+ejecución decidido: (1) Portal — simulador de factura, (2) Cuentas —
+dropdown de impuestos y utilidad de proyecto, (3) Clientes — `cliente_id`
+como FK real, (4) Cuentas — filtro de estado en vista principal (el único
+sin diseño cerrado; se termina de definir al abrir ese bloque). Una sesión
+futura confirma el plan como "Aprobado, listo para ejecutar" y arranca por
+el bloque 1. Si el usuario confirma la hipótesis de `SUPABASE_JWT_SECRET`
+en Preview, ese es un fix puntual de una sola sesión (no una iniciativa),
+fuera de `docs/PLAN.md`.
