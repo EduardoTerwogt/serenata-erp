@@ -7,6 +7,7 @@ import {
   formatCurrencyPdf,
   JsPDFWithAutoTable,
 } from '@/lib/server/pdf/pdf-base-config'
+import { getSerenataLogoBase64, SERENATA_RATIO } from '@/lib/server/pdf/cotizacion-pdf-helpers'
 import { formatDateDisplay } from '@/lib/format-date'
 
 export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuffer {
@@ -14,6 +15,20 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
 
   const pageWidth = doc.internal.pageSize.getWidth()
   const margin = PDF_CONFIG.margins.left
+
+  // Bloque 6 (docs/PLAN.md): alinear con cotizacion-pdf.ts/hoja-llamado-pdf.ts,
+  // los otros 2 generadores que sí cargan el logo -- este era el único de los 4
+  // sin logo.
+  const serenataLogoPng = getSerenataLogoBase64()
+  if (serenataLogoPng) {
+    const logoH = 32
+    const logoW = logoH * SERENATA_RATIO
+    try {
+      doc.addImage(serenataLogoPng, pageWidth - margin - logoW, 14, logoW, logoH)
+    } catch (e) {
+      console.warn('Error añadiendo logo Serenata:', e)
+    }
+  }
 
   // Header
   let currentY = PDF_CONFIG.margins.top

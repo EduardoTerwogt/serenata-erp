@@ -1,8 +1,13 @@
 import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
-import { saveNotasInternas } from '@/lib/server/quotations/persistence'
+import { saveNotas } from '@/lib/server/quotations/persistence'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
+
+function normalizeNotasField(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  return value == null ? null : String(value)
+}
 
 export async function PATCH(
   request: Request,
@@ -14,13 +19,14 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json().catch(() => ({}))
-    const notas = typeof body?.notas_internas === 'string'
-      ? body.notas_internas
-      : body?.notas_internas == null
-        ? null
-        : String(body.notas_internas)
+    const notas_internas = normalizeNotasField(body?.notas_internas)
+    // Bloque 2 sub-tarea 6: campo nuevo, no reusa notas_internas -- ver
+    // saveNotas en lib/server/quotations/persistence.ts. El cliente
+    // (useQuotationNotasAutosave) siempre manda los dos valores vigentes
+    // juntos, así que no hace falta leer el estado previo aquí.
+    const notas_pdf = normalizeNotasField(body?.notas_pdf)
 
-    await saveNotasInternas(id, notas)
+    await saveNotas(id, { notas_internas, notas_pdf })
     // Evento confirmado por servidor tras el commit -- antes Notas solo se
     // refrescaba vía `section_saved` (aviso del navegador que guardó, sin
     // acuse del servidor). EF-2 1D-1: en after().

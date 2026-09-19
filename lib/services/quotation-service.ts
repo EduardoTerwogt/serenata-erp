@@ -70,9 +70,10 @@ export async function fetchQuotationsPage(params: QuotationsPageParams = {}): Pr
   }
 }
 
-export async function saveQuotationNotes(id: string, notasInternas: string | null): Promise<Cotizacion> {
+export async function saveQuotationNotes(id: string, notasInternas: string | null, notasPdf: string | null): Promise<Cotizacion> {
   return sendJson(`/api/cotizaciones/${id}/notas`, {
     notas_internas: notasInternas,
+    notas_pdf: notasPdf,
   }, 'Error guardando notas internas', { method: 'PATCH' })
 }
 
@@ -102,6 +103,7 @@ export async function saveNewQuotation(
   if (options.tipo) body.tipo = options.tipo
   if (options.es_complementaria_de) body.es_complementaria_de = options.es_complementaria_de
   if (options.notas_internas !== undefined) body.notas_internas = options.notas_internas
+  if (options.notas_pdf !== undefined) body.notas_pdf = options.notas_pdf
 
   const expectedItemsCount = data.items.length
   const savedQuotation = await sendJson<Cotizacion>('/api/cotizaciones', body, 'Error al guardar')
@@ -145,6 +147,7 @@ export async function updateQuotation(
     ...basePayload,
     items,
     ...(options.notas_internas !== undefined ? { notas_internas: options.notas_internas } : {}),
+    ...(options.notas_pdf !== undefined ? { notas_pdf: options.notas_pdf } : {}),
   }, 'Error al actualizar cotización', { method: 'PUT' })
 
   return fetchQuotationDetail(id)

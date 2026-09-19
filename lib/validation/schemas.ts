@@ -52,6 +52,7 @@ const CotizacionBaseSchema = z.object({
   descuento_valor: z.coerce.number().min(0).optional().default(0),
   items: z.array(ItemCotizacionSchema).optional().default([]),
   notas_internas: z.string().nullable().optional(),
+  notas_pdf: z.string().nullable().optional(),
 })
 
 export const CotizacionCreateSchema = CotizacionBaseSchema.extend({
@@ -66,6 +67,7 @@ export const CotizacionUpdateSchema = CotizacionBaseSchema.partial().extend({
 
 export const ProveedorCreateSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
+  alias: z.string().nullable().optional(),
   telefono: z.string().nullable().optional(),
   correo: z.string().email('Correo inválido').nullable().optional(),
   banco: z.string().nullable().optional(),
@@ -77,6 +79,7 @@ export const ProveedorCreateSchema = z.object({
 
 export const ProveedorUpdateSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido').optional(),
+  alias: z.string().nullable().optional(),
   telefono: z.string().nullable().optional(),
   correo: z.string().email('Correo inválido').nullable().optional(),
   banco: z.string().nullable().optional(),
@@ -85,6 +88,30 @@ export const ProveedorUpdateSchema = z.object({
   notas: z.string().nullable().optional(),
   activo: z.boolean().optional(),
   regimen_fiscal: z.enum(['moral', 'fisica']).nullable().optional(),
+})
+
+// ==================== CLIENTES ====================
+// Bloque 5 (docs/PLAN.md): catálogo administrativo -- mismo patrón de
+// Proveedores (PUT + soft-delete vía `activo`), sin roles/banco/clabe/
+// regimen_fiscal ni historial (conceptos que Clientes no tiene).
+
+export const ClienteCreateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido'),
+  tipo: z.string().nullable().optional(),
+  contacto: z.string().nullable().optional(),
+  telefono: z.string().nullable().optional(),
+  correo: z.string().email('Correo inválido').nullable().optional(),
+  notas: z.string().nullable().optional(),
+})
+
+export const ClienteUpdateSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido').optional(),
+  tipo: z.string().nullable().optional(),
+  contacto: z.string().nullable().optional(),
+  telefono: z.string().nullable().optional(),
+  correo: z.string().email('Correo inválido').nullable().optional(),
+  notas: z.string().nullable().optional(),
+  activo: z.boolean().optional(),
 })
 
 // ==================== PROYECTOS ====================
@@ -214,6 +241,7 @@ export const DocumentoEstadoValidacionSchema = z.object({
 
 export const PortalSignupSchema = z.object({
   nombre: z.string().trim().min(1).nullable().optional(),
+  alias: z.string().trim().min(1).nullable().optional(),
   correo: z.string().email('Correo inválido'),
   password: z.string().min(8, 'El password debe tener al menos 8 caracteres'),
 })
@@ -232,6 +260,7 @@ export const PortalConfirmarMatchSchema = z.object({
 
 export const PortalPerfilSchema = z.object({
   nombre: z.string().trim().min(1).optional(),
+  alias: z.string().nullable().optional(),
   telefono: z.string().nullable().optional(),
   banco: z.string().nullable().optional(),
   clabe: z.string().nullable().optional(),

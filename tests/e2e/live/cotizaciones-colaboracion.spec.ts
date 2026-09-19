@@ -413,17 +413,27 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     test.setTimeout(120_000)
 
     const notaA = `Nota escrita por A ${Date.now()}`
+    // Bloque 2 sub-tarea 8: "Nota de evento" ahora vive en un pop-up -- abrirlo
+    // antes de tocar el textarea, en ambas páginas.
+    await pageA.getByRole('button', { name: 'Nota de evento' }).click()
     const notasA = pageA.locator('textarea[placeholder="Sin notas..."]')
     await notasA.click()
     await notasA.fill(notaA)
     await notasA.blur()
 
+    await pageB.getByRole('button', { name: 'Nota de evento' }).click()
     await expect(pageB.locator('textarea[placeholder="Sin notas..."]')).toHaveValue(notaA, { timeout: 30_000 })
 
     await expect.poll(async () => {
       const cotizacion = await leerCotizacionDelServidor(cotizacionId)
       return cotizacion.notas_internas
     }, { timeout: 30_000 }).toBe(notaA)
+
+    // pageA/pageB persisten entre tests de este describe -- el overlay del
+    // modal (fixed inset-0, z-50) bloquearía los clicks de los tests
+    // siguientes si se deja abierto.
+    await pageA.getByRole('button', { name: 'Cerrar' }).click()
+    await pageB.getByRole('button', { name: 'Cerrar' }).click()
   })
 
   // Fase 8 (hardening pre-Proyectos): las 3 pruebas que siguen son las que la

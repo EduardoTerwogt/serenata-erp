@@ -58,7 +58,8 @@ El detalle completo de cada uno está en `.claude/rules/`.
 6. **Bugs = causa raíz.** Trazar → diagnosticar → arreglar. Sin atajos ni retries ciegos.
 7. **Buscar antes de crear.** Si ya existe infraestructura parecida, se extiende; no
    se construye un segundo motor en paralelo.
-8. **"X Pagar" siempre es el monto neto al proveedor.** Todo cálculo de utilidad,
+8. **"Costo Unitario" (antes "X Pagar") siempre es el monto neto al proveedor por
+   unidad; "Costo Total" = Costo Unitario × Cantidad.** Todo cálculo de utilidad,
    margen o impuestos parte de ahí. Fórmulas completas, modelo fiscal y glosario en
    `docs/decisions/006-reglas-de-negocio-invariables.md`.
 

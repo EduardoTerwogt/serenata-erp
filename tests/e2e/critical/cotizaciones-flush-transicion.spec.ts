@@ -173,7 +173,17 @@ test.describe('flush previo a Generar/Aprobar', () => {
     await login(page, `/cotizaciones/${id}`)
     await expect(page.getByRole('heading', { name: id })).toBeVisible()
 
+    // Bloque 2 sub-tarea 8: "Nota de evento" ahora vive en un pop-up -- abrirlo
+    // para llegar al textarea. El overlay del modal (fixed inset-0, z-50)
+    // intercepta clicks fuera de su tarjeta, así que un click forzado sobre
+    // "Generar Cotización" mientras sigue abierto en realidad golpea el
+    // overlay (cierra el modal) y no el botón. Lo que este test verifica es
+    // que `notasDirtyRef` (no un blur) bloquea "Generar Cotización" mientras
+    // el PATCH de notas sigue sin resolver, no que el modal deba seguir
+    // abierto -- cerrarlo con su botón real antes del click normal.
+    await page.getByRole('button', { name: 'Nota de evento' }).click()
     await page.locator('textarea[placeholder="Sin notas..."]').fill('Llamado 6am, cambia todo')
+    await page.getByRole('button', { name: 'Cerrar' }).click()
     await page.getByRole('button', { name: 'Generar Cotización' }).click()
 
     await expect(page.getByText('Hay cambios recientes que no se guardaron correctamente. Revisa antes de generar.')).toBeVisible()

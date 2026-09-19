@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { SectionLoading } from '@/components/ui/SectionLoading'
+import { calculateServiceTemplateSummary } from '@/lib/service-templates/calculations'
 
 function formatMoney(value: number) {
   return value.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
@@ -132,13 +133,25 @@ export default function PlantillasServiciosPage() {
         </div>
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
-          {filtrados.map(template => (
+          {filtrados.map(template => {
+            const summary = calculateServiceTemplateSummary(template.items)
+            return (
             <div key={template.id} className="rounded-panel border border-hairline bg-card flex flex-col min-w-0">
-              <div className="p-5 border-b border-hairline">
-                <h3 className="text-h3 font-semibold text-ink leading-snug">{template.nombre}</h3>
-                {template.descripcion && (
-                  <p className="mt-1.5 text-[length:var(--text-md)] text-subtext leading-snug">{template.descripcion}</p>
-                )}
+              <div className="p-5 border-b border-hairline flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-h3 font-semibold text-ink leading-snug">{template.nombre}</h3>
+                  {template.descripcion && (
+                    <p className="mt-1.5 text-[length:var(--text-md)] text-subtext leading-snug">{template.descripcion}</p>
+                  )}
+                </div>
+                <div className="flex-none text-right">
+                  <div className="text-body font-semibold text-ink">{formatMoney(summary.precioTotal)}</div>
+                  {summary.utilidadConocida && (
+                    <div className="mt-1 text-[length:var(--text-md)] text-subtext">
+                      Utilidad {formatMoney(summary.utilidad)}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex-1 p-5 flex flex-col gap-2.5">
@@ -171,7 +184,8 @@ export default function PlantillasServiciosPage() {
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

@@ -65,17 +65,26 @@ describe('POST /api/portal/signup', () => {
     expect(response.status).toBe(409)
   })
 
-  it('crea la cuenta con el alias tal cual cuando se proporciona', async () => {
+  it('crea la cuenta con el nombre tal cual cuando se proporciona, sin alias', async () => {
     const response = await POST(req({ nombre: 'Chok', correo: 'jose@correo.com', password: 'password123' }))
 
     expect(response.status).toBe(200)
     expect(mocks.crearProveedorDesdeSignupMock).toHaveBeenCalledWith({
       nombre: 'Chok',
+      alias: null,
       correo: 'jose@correo.com',
       password_hash: 'hash123',
       regimen_fiscal: null,
     })
     expect(mocks.setPortalSessionCookieMock).toHaveBeenCalledWith('prov-1', 0)
+  })
+
+  it('Bloque 4a: alias es un campo propio, distinto de nombre', async () => {
+    await POST(req({ nombre: 'José Ramírez', alias: 'Chok', correo: 'jose@correo.com', password: 'password123' }))
+
+    expect(mocks.crearProveedorDesdeSignupMock).toHaveBeenCalledWith(
+      expect.objectContaining({ nombre: 'José Ramírez', alias: 'Chok' })
+    )
   })
 
   it('usa el prefijo del correo como nombre cuando no se da alias', async () => {

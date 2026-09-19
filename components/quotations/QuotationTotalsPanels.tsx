@@ -2,6 +2,7 @@
 
 import { EstimatedTaxes, QuotationTotals } from '@/lib/quotations/types'
 import { fmtCurrency } from '@/lib/quotations/format'
+import { Select } from '@/components/ui/Select'
 
 type QuotationTotalsField = 'porcentaje_fee' | 'iva_activo' | 'descuento_tipo' | 'descuento_valor'
 
@@ -182,20 +183,22 @@ export function QuotationTotalsPanels({
               <div className="text-subtext flex-1 min-w-0">
                 <div className="mb-2">Descuento</div>
                 <div className="flex flex-wrap gap-2">
-                  <select
+                  <Select
                     value={descuento_tipo}
                     onChange={e => setDescuentoTipo(e.target.value as 'monto' | 'porcentaje')}
-                    className={MINI_INPUT_CLASS}
                   >
                     <option value="monto">$ Monto</option>
                     <option value="porcentaje">% Porcentaje</option>
-                  </select>
+                  </Select>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    value={descuento_valor}
-                    onChange={e => setDescuentoValor(parseFloat(e.target.value) || 0)}
+                    // Mismo criterio que TemplateItemsSection: 0 se trata como "vacío" en
+                    // pantalla para que se vea el placeholder en vez de forzar un "0".
+                    value={descuento_valor === 0 ? '' : descuento_valor}
+                    onChange={e => setDescuentoValor(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                    placeholder="0.00"
                     className={`w-24 ${MINI_INPUT_CLASS}`}
                   />
                 </div>

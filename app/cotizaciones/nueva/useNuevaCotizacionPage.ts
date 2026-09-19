@@ -34,6 +34,7 @@ export function useNuevaCotizacionPage() {
   const [descuento_tipo, setDescuentoTipo] = useState<'monto' | 'porcentaje'>('monto')
   const [descuento_valor, setDescuentoValor] = useState(0)
   const [notasInternas, setNotasInternas] = useState('')
+  const [notasPdf, setNotasPdf] = useState('')
   const isSubmitting = useRef(false)
   const [draftId, setDraftId] = useState<string | null>(null)
   const [autosaveStatus, setAutosaveStatus] = useState<DraftAutosaveStatus>('idle')
@@ -157,12 +158,13 @@ export function useNuevaCotizacionPage() {
     fecha_entrega: watchedValues.fecha_entrega || '',
     locacion: watchedValues.locacion || '',
     notas: notasInternas,
+    notas_pdf: notasPdf,
     porcentaje_fee,
     iva_activo,
     descuento_tipo,
     descuento_valor,
     items: (watchedItems || []).map((item) => [item.categoria, item.descripcion, item.cantidad, item.precio_unitario, item.responsable_id, item.x_pagar]),
-  }), [descuento_tipo, descuento_valor, iva_activo, notasInternas, porcentaje_fee, watchedItems, watchedValues])
+  }), [descuento_tipo, descuento_valor, iva_activo, notasInternas, notasPdf, porcentaje_fee, watchedItems, watchedValues])
 
   const complementariaFields = useMemo(
     () => esComplementaria ? { tipo: 'COMPLEMENTARIA' as const, es_complementaria_de: complementaria_de } : {},
@@ -200,6 +202,7 @@ export function useNuevaCotizacionPage() {
           responsables,
           currentQuotation: null,
           notas_internas: notasInternas || null,
+          notas_pdf: notasPdf || null,
         })
       } else {
         const cotizacion = await saveNewQuotation(payload, {
@@ -209,6 +212,7 @@ export function useNuevaCotizacionPage() {
           descuento_tipo,
           descuento_valor,
           notas_internas: notasInternas || null,
+          notas_pdf: notasPdf || null,
           ...complementariaFields,
         })
         draftIdRef.current = cotizacion.id
@@ -227,7 +231,7 @@ export function useNuevaCotizacionPage() {
         void persistDraft()
       }
     }
-  }, [complementariaFields, descuento_tipo, descuento_valor, draftSignature, getValues, iva_activo, notasInternas, porcentaje_fee, responsables])
+  }, [complementariaFields, descuento_tipo, descuento_valor, draftSignature, getValues, iva_activo, notasInternas, notasPdf, porcentaje_fee, responsables])
 
   useEffect(() => {
     if (!draftIdRef.current && !canAutosaveQuotationDraft(getValues())) return
@@ -282,6 +286,7 @@ export function useNuevaCotizacionPage() {
             responsables,
             currentQuotation: null,
             notas_internas: notasInternas || null,
+            notas_pdf: notasPdf || null,
           })
         : await saveNewQuotation(data, {
             estado: 'EMITIDA',
@@ -290,6 +295,7 @@ export function useNuevaCotizacionPage() {
             descuento_tipo,
             descuento_valor,
             notas_internas: notasInternas || null,
+            notas_pdf: notasPdf || null,
             ...complementariaFields,
           })
       const pdfResult = await generateQuotationPdf(cotizacion, data.items, { skipDownload: true })
@@ -329,6 +335,8 @@ export function useNuevaCotizacionPage() {
     setDescuentoValor,
     notasInternas,
     setNotasInternas,
+    notasPdf,
+    setNotasPdf,
     calcItem,
     handleClienteChange,
     handleProyectoChange,

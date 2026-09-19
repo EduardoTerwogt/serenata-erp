@@ -8,6 +8,7 @@ import { CandidatoMatchProveedor, CuentaPagar, CuentaPagarGrupo, Proveedor, Prov
 
 export async function crearProveedorDesdeSignup(data: {
   nombre: string
+  alias?: string | null
   correo: string
   password_hash: string
   regimen_fiscal: Proveedor['regimen_fiscal']
@@ -16,6 +17,7 @@ export async function crearProveedorDesdeSignup(data: {
     .from('proveedores')
     .insert({
       nombre: data.nombre,
+      alias: data.alias ?? null,
       correo: data.correo,
       password_hash: data.password_hash,
       regimen_fiscal: data.regimen_fiscal,

@@ -26,6 +26,7 @@ import { QuotationGeneralInfoSection } from '@/components/quotations/QuotationGe
 import { QuotationItemsSection } from '@/components/quotations/QuotationItemsSection'
 import { QuotationTotalsPanels } from '@/components/quotations/QuotationTotalsPanels'
 import { QuotationCopyItemsModal } from '@/components/quotations/QuotationCopyItemsModal'
+import { Modal } from '@/components/ui/Modal'
 import { SkeletonQuotationDetail } from '@/app/components/ui/SkeletonQuotationDetail'
 import { mapItemToFormItem } from '@/lib/quotations/collaboration'
 
@@ -123,6 +124,15 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   } = quotationForm
 
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'EMITIDA'
+  // Bloque 2 sub-tarea 7: el botón "Crear plantilla" de Partidas se muestra
+  // solo a quien ya tiene sección `planeacion` -- sin ampliar el guard de
+  // `POST /api/service-templates` (supuesto 4 de docs/PLAN.md).
+  const userSections = useMemo(
+    () => (session?.user as { sections?: string[] })?.sections ?? [],
+    [session?.user]
+  )
+  const canCreateTemplate = userSections.includes('planeacion')
+  const [showNotasModal, setShowNotasModal] = useState(false)
   const {
     onlineUsers,
     sectionEditors,
@@ -226,6 +236,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   // archivo para la explicación completa de por qué existe.
   const {
     notasInternas,
+    notasPdf,
     notasDirtyRef,
     notasLockHeldRef,
     persistNotasAutosave,
@@ -233,6 +244,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     handleNotasFocus,
     handleNotasBlur,
     trackedHandleNotasChange,
+    trackedHandleNotasPdfChange,
     clearNotasIdleReleaseTimer,
     resetNotasFromServer,
   } = useQuotationNotasAutosave({
@@ -546,9 +558,11 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
             </div>
           )}
           <div className="flex flex-wrap gap-2">
-            {cotizacion.estado === 'BORRADOR' && <><button onClick={generarCotizacion} disabled={guardando || generandoPdf} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : guardando ? 'Generando...' : 'Generar Cotización'}</button></>}
-            {cotizacion.estado === 'EMITIDA' && <><button onClick={generarPDF} disabled={generandoPdf} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={cancelarCotizacion} disabled={cancelando} className="text-subtext hover:bg-[var(--hover-overlay)] hover:text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button><button onClick={aprobar} disabled={aprobando || guardando} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors disabled:opacity-50 min-h-[44px]">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</button></>}
-            {cotizacion.estado === 'APROBADA' && <><button onClick={generarPDF} disabled={generandoPdf} className="border border-hairline bg-input hover:bg-row-alt text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</button><button onClick={cancelarCotizacion} disabled={cancelando} className="text-subtext hover:bg-[var(--hover-overlay)] hover:text-body px-4 py-3 rounded-control text-content transition-colors disabled:opacity-50 min-h-[44px]">{cancelando ? 'Cancelando...' : 'Cancelar'}</button><button onClick={crearComplementaria} className="bg-accent hover:bg-accent-pressed text-accent-ink px-4 py-3 rounded-control text-content font-semibold transition-colors min-h-[44px]">Crear Complementaria</button></>}
+            <Button href={`/api/cotizaciones/${id}/generar-pdf?mode=inline`} target="_blank" rel="noopener noreferrer" variant="secondary" size="lg">Vista previa</Button>
+            <Button onClick={() => setShowNotasModal(true)} variant="secondary" size="lg" iconLeft="edit">Nota de evento{notasInternas && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}</Button>
+            {cotizacion.estado === 'BORRADOR' && <Button onClick={generarCotizacion} disabled={guardando || generandoPdf} variant="primary" size="lg">{generandoPdf ? 'Guardando en Drive...' : guardando ? 'Generando...' : 'Generar Cotización'}</Button>}
+            {cotizacion.estado === 'EMITIDA' && <><Button onClick={generarPDF} disabled={generandoPdf} variant="secondary" size="lg">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</Button><Button onClick={cancelarCotizacion} disabled={cancelando} variant="ghost" size="lg">{cancelando ? 'Cancelando...' : 'Cancelar'}</Button><Button onClick={aprobar} disabled={aprobando || guardando} variant="primary" size="lg">{aprobando ? 'Aprobando...' : 'Aprobar Cotización'}</Button></>}
+            {cotizacion.estado === 'APROBADA' && <><Button onClick={generarPDF} disabled={generandoPdf} variant="secondary" size="lg">{generandoPdf ? 'Guardando en Drive...' : 'Generar PDF'}</Button><Button onClick={cancelarCotizacion} disabled={cancelando} variant="ghost" size="lg">{cancelando ? 'Cancelando...' : 'Cancelar'}</Button><Button onClick={crearComplementaria} variant="primary" size="lg">Crear Complementaria</Button></>}
           </div>
         </div>
       </div>
@@ -573,7 +587,25 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      {(notasInternas || esEditable) && <div ref={notasSectionRef} className={`bg-row/60 border rounded-panel p-4 ${sectionEditors.notas ? 'border-accent-quiet/70' : 'border-hairline'}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}><SectionEditBadge section="notas" /><p className="sn-label mb-2">Notas del evento (uso interno)</p>{esEditable ? <textarea value={notasInternas} onChange={e => trackedHandleNotasChange(e.target.value)} rows={3} placeholder="Sin notas..." className="w-full bg-transparent text-body text-content resize-none outline-none placeholder-faint disabled:opacity-50 disabled:cursor-not-allowed" /> : <p className="text-subtext text-content whitespace-pre-wrap">{notasInternas || '—'}</p>}</div>}
+      {showNotasModal && (
+        <Modal title="Nota de evento" subtitle="Uso interno, no sale en el PDF" onClose={() => setShowNotasModal(false)}>
+          <div ref={notasSectionRef} className={`rounded-panel ${sectionEditors.notas ? 'ring-1 ring-accent-quiet/70' : ''}`} onFocusCapture={handleNotasFocus} onBlurCapture={handleNotasBlur}>
+            <SectionEditBadge section="notas" />
+            <p className="sn-label mb-2">Nota de evento · uso interno, no sale en el PDF</p>
+            {esEditable ? (
+              <textarea value={notasInternas} onChange={e => trackedHandleNotasChange(e.target.value)} rows={4} placeholder="Sin notas..." className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-body text-content resize-none outline-none placeholder-faint focus:border-accent-quiet disabled:opacity-50 disabled:cursor-not-allowed" />
+            ) : (
+              <p className="text-subtext text-content whitespace-pre-wrap">{notasInternas || '—'}</p>
+            )}
+            <p className="sn-label mb-2 mt-4">Notas del PDF · se imprimen debajo de Totales</p>
+            {esEditable ? (
+              <textarea value={notasPdf} onChange={e => trackedHandleNotasPdfChange(e.target.value)} rows={4} placeholder="Sin notas para el PDF..." className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-body text-content resize-none outline-none placeholder-faint focus:border-accent-quiet disabled:opacity-50 disabled:cursor-not-allowed" />
+            ) : (
+              <p className="text-subtext text-content whitespace-pre-wrap">{notasPdf || '—'}</p>
+            )}
+          </div>
+        </Modal>
+      )}
 
       <div ref={generalSectionRef} className={`rounded-panel ${sectionEditors.general ? 'ring-1 ring-accent-quiet/70' : ''}`} onFocusCapture={handleGeneralFocus} onBlurCapture={handleGeneralBlur}>
         <div className="px-1"><SectionEditBadge section="general" /></div>
@@ -582,7 +614,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
 
       <div ref={partidasSectionRef} className={`rounded-panel ${sectionEditors.partidas ? 'ring-1 ring-accent-quiet/70 ring-offset-0' : ''}`} onFocusCapture={() => esEditable && setActiveSection('partidas')} onBlurCapture={handlePartidasBlur}>
         <div className="px-1"><SectionEditBadge section="partidas" /></div>
-        <QuotationItemsSection editable={!!esEditable} register={register} watchedItems={watchedItems} fields={fields} editingItemRowId={editingItemRowId} setEditingItemRowId={setEditingItemRowId} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onCopyClick={() => setShowCopyModal(true)} items={itemsController} />      </div>
+        <QuotationItemsSection editable={!!esEditable} register={register} watchedItems={watchedItems} fields={fields} editingItemRowId={editingItemRowId} setEditingItemRowId={setEditingItemRowId} calcItem={calcItem} handleDescripcionChange={handleDescripcionChange} productoSugerencias={productoSugerencias} mostrarProductoDropdown={mostrarProductoDropdown} setMostrarProductoDropdown={setMostrarProductoDropdown} responsables={responsables} readOnlyItems={cotizacion.items || []} onCopyClick={() => setShowCopyModal(true)} canCreateTemplate={canCreateTemplate} items={itemsController} />      </div>
 
       <QuotationCopyItemsModal open={showCopyModal} onClose={() => setShowCopyModal(false)} excludeCotizacionId={id} onImport={itemsController.importItems} />
 

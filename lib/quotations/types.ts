@@ -37,6 +37,11 @@ export interface QuotationComputedItem extends Omit<QuotationFormItem, 'precio_u
   precio_unitario: number
   x_pagar: number
   importe: number
+  // Bloque 3 (docs/PLAN.md): `x_pagar` es el Costo Unitario (neto al
+  // responsable); `costo_total = x_pagar * cantidad` es la fuente de verdad
+  // centralizada para cualquier fórmula derivada (IVA pagado, margen) --
+  // nunca recalcular `x_pagar * cantidad` suelto en otro lugar.
+  costo_total: number
   margen: number
 }
 
@@ -51,10 +56,10 @@ export interface QuotationTotals {
   utilidad_total: number
 }
 
-// Fase 5.1: panel "Impuestos (estimado)". IVA pagado es siempre 16% del X Pagar de
-// cada partida, sin importar el regimen fiscal del responsable -- la retencion no
-// reduce lo acreditable para Serenata, solo cambia el neto que recibe el proveedor
-// (documento maestro seccion 3; decision confirmada 2026-09-06).
+// Fase 5.1: panel "Impuestos (estimado)". IVA pagado es siempre 16% del Costo Total
+// (x_pagar * cantidad, Bloque 3) de cada partida, sin importar el regimen fiscal del
+// responsable -- la retencion no reduce lo acreditable para Serenata, solo cambia el
+// neto que recibe el proveedor (documento maestro seccion 3; decision confirmada 2026-09-06).
 export interface EstimatedTaxes {
   ivaCobrado: number
   ivaPagado: number
@@ -94,6 +99,7 @@ export interface QuotationPdfPayload {
   porcentaje_fee: number
   descuento_tipo: DescuentoTipo
   descuento_valor: number
+  notas: string | null
 }
 
 export type QuotationLikeForPdf = Pick<
@@ -113,6 +119,7 @@ export type QuotationLikeForPdf = Pick<
   | 'iva_activo'
   | 'descuento_tipo'
   | 'descuento_valor'
+  | 'notas_pdf'
 >
 
 export interface SaveQuotationOptions {
@@ -126,6 +133,7 @@ export interface SaveQuotationOptions {
   es_complementaria_de?: string
   reservation_token?: string | null
   notas_internas?: string | null
+  notas_pdf?: string | null
 }
 
 export interface UpdateQuotationOptions {
@@ -137,4 +145,5 @@ export interface UpdateQuotationOptions {
   responsables: Proveedor[]
   currentQuotation: Cotizacion | null
   notas_internas?: string | null
+  notas_pdf?: string | null
 }

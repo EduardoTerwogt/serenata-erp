@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
     const { correo, password } = parsed.data
     const nombre = parsed.data.nombre?.trim() || correo.split('@')[0]
+    const alias = parsed.data.alias?.trim() || null
 
     // Fase 2.4: por IP -- frena creación masiva de cuentas.
     const ip = getClientIp(request)
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
     const passwordHash = await hashPassword(password)
     const proveedor = await crearProveedorDesdeSignup({
       nombre,
+      alias,
       correo,
       password_hash: passwordHash,
       regimen_fiscal: null,

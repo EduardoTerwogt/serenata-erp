@@ -8,9 +8,13 @@ design kit, así que un feature nuevo podía reinterpretarlas sin darse cuenta.
 
 ## Decisión
 
-**"X Pagar" (columna de la cotización) es SIEMPRE el monto neto al proveedor.** El
-proveedor o colaborador suma sus propios impuestos sobre esa cifra; Serenata no se
-los descuenta ni se los agrega al cotizar.
+**"Costo Unitario" (columna de la cotización, antes "X Pagar") es SIEMPRE el monto
+neto al proveedor por unidad.** El proveedor o colaborador suma sus propios
+impuestos sobre esa cifra; Serenata no se los descuenta ni se los agrega al
+cotizar. El **Costo Total** del renglón es `Costo Unitario × Cantidad` — el monto
+real que corresponde pagar por esa partida (Bloque 3, `docs/PLAN.md`; antes de esa
+corrección, cualquier renglón con Cantidad > 1 subestimaba lo que se le debía al
+proveedor).
 
 **Modelo de precios:**
 - Fee de agencia por defecto **15%** sobre el subtotal (`porcentaje_fee`, configurable
@@ -27,8 +31,9 @@ General      = Subtotal + Fee Agencia
 IVA          = 16% sobre General
 TOTAL        = General + IVA − Descuento
 
-Margen (renglón) = Importe − X Pagar
-Margen Total     = Σ Márgenes
+Costo Total (renglón) = Costo Unitario × Cantidad
+Margen (renglón)      = Importe − Costo Total
+Margen Total          = Σ Márgenes
 Utilidad Total   = Margen Total + Fee Agencia
 Margen %         = Utilidad Total ÷ Subtotal
 ```
@@ -38,12 +43,14 @@ un proveedor con varios renglones dentro del mismo proyecto factura y cobra
 el total acumulado, no renglón por renglón.
 
 ```
-monto_total_grupo = Σ X Pagar de los renglones del proveedor dentro del proyecto
+monto_total_grupo = Σ Costo Total de los renglones del proveedor dentro del proyecto
 ```
 
 El cruce fiscal (persona moral / persona física con honorarios, fórmulas de
-abajo) se calcula sobre `monto_total_grupo`, nunca sobre el `X Pagar` de un
-renglón individual, cuando el renglón pertenece a un grupo.
+abajo) se calcula sobre `monto_total_grupo`, nunca sobre el Costo Unitario de un
+renglón individual, cuando el renglón pertenece a un grupo. `cuentas_pagar.x_pagar`
+(la columna materializada, distinta de "Costo Unitario" de la cotización) ya
+guarda el Costo Total de cada renglón desde que se aprueba la cotización.
 
 **Modelo fiscal de proveedores** (`lib/server/validation/factura-fiscal.ts`, según
 `regimen_fiscal`; `null`/`undefined` se trata como **moral**):
@@ -59,8 +66,8 @@ bug en este sistema.
 
 ## Alternativas descartadas
 
-- **Tratar "X Pagar" como bruto** — se confirmó explícitamente que no; el proveedor
-  suma sus impuestos encima.
+- **Tratar "Costo Unitario" como bruto** — se confirmó explícitamente que no; el
+  proveedor suma sus impuestos encima.
 - **Aplicar un tratamiento fiscal único a todos los proveedores** — no funciona: el
   régimen determina si hay retenciones.
 
@@ -76,7 +83,8 @@ bug en este sistema.
 - **Cotización:** Cliente, Proyecto, Fecha de Entrega, Locación, Fecha de Cotización,
   Partidas. Folio auto-incremental (`SH001`, `SH002`…), id = folio texto.
 - **Partida:** Categoría, Descripción, Cantidad, Precio Unitario, Importe,
-  Responsable, X Pagar, Margen.
+  Responsable, Costo Unitario (antes "X Pagar"), Costo Total (Costo Unitario ×
+  Cantidad), Margen (Importe − Costo Total).
 - **Tipos de cotización:** `PRINCIPAL` y `COMPLEMENTARIA`.
 - **Estados de cotización:** `BORRADOR` → `EMITIDA` → `APROBADA` | `CANCELADA`.
   Al aprobar se crean Proyecto + cuentas por cobrar y por pagar en una transacción.

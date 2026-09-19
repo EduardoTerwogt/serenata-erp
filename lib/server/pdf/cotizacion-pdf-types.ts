@@ -21,6 +21,7 @@ export interface CotizacionPDFData {
   porcentaje_fee: number
   descuento_tipo: 'monto' | 'porcentaje'
   descuento_valor: number
+  notas?: string | null
 }
 
 export type TotalsRow = {

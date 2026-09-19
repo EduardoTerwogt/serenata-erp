@@ -262,8 +262,16 @@ export async function generarHistorialProyecto(proyectoId: string, proyecto: Pro
     const key = `${resolvedResponsableId}__${normalizeRole(role)}`
     const existing = rowsMap.get(key)
 
+    // Bloque 3 (docs/PLAN.md): x_pagar es el Costo Unitario -- el monto real
+    // pagado al responsable por esta partida es x_pagar * cantidad (Costo
+    // Total), no el unitario suelto. Hallazgo propio de la auditoría
+    // semántica de cierre del bloque: generarHistorialProyecto alimenta
+    // "Total acumulado" en el historial de Proveedores (ProveedorModal.tsx)
+    // y tenía este mismo bug, sin estar en la lista original del plan.
+    const costoTotalItem = (item.x_pagar || 0) * (item.cantidad || 0)
+
     if (existing) {
-      existing.x_pagar += item.x_pagar || 0
+      existing.x_pagar += costoTotalItem
       continue
     }
 
@@ -275,7 +283,7 @@ export async function generarHistorialProyecto(proyectoId: string, proyecto: Pro
       cliente: proyecto.cliente,
       fecha_evento: proyecto.fecha_entrega || null,
       rol_en_proyecto: role,
-      x_pagar: item.x_pagar || 0,
+      x_pagar: costoTotalItem,
     })
   }
 

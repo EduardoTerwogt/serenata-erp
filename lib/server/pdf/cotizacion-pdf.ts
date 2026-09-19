@@ -171,6 +171,27 @@ export function generateCotizacionPdf(data: CotizacionPDFData): ArrayBuffer {
 
   currentY = currentY + bannerH + 8.8
 
+  // Bloque 2 (docs/PLAN.md) sub-tarea 6: campo nuevo, distinto de "Nota de
+  // evento" (notas_internas, uso interno, nunca sale aquí). Mismo patrón de
+  // banda negra de título que NOTAS GENERALES en hoja-llamado-pdf.ts.
+  const notas = (data.notas || '').trim()
+  if (notas) {
+    doc.setFillColor(26, 26, 26)
+    doc.rect(margin, currentY, contentW, 8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.setTextColor(255, 255, 255)
+    doc.text('NOTAS', margin + 2, currentY + 5.5)
+    currentY += 10
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(0, 0, 0)
+    const wrappedNotas = doc.splitTextToSize(notas, contentW)
+    doc.text(wrappedNotas, margin, currentY)
+    currentY += wrappedNotas.length * 4.8 + 6
+  }
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9.6)
   doc.setTextColor(0, 0, 0)

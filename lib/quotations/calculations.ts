@@ -9,7 +9,13 @@ export function normalizeQuotationItem(item: QuotationFormItem): QuotationComput
   const x_pagar = toNumberOrZero(item.x_pagar)
   const cantidad = item.cantidad || 0
   const importe = cantidad * precio_unitario
-  const margen = importe - x_pagar
+  // Bloque 3 (docs/PLAN.md): x_pagar es el Costo Unitario -- el costo real
+  // del renglón es costo_total = x_pagar * cantidad. Único lugar del
+  // frontend que calcula esta fórmula; todo consumidor derivado
+  // (calculateEstimatedTaxes, la columna "Costo Total" en Partidas) parte
+  // de este campo, nunca de x_pagar suelto.
+  const costo_total = x_pagar * cantidad
+  const margen = importe - costo_total
 
   return {
     ...item,
@@ -17,6 +23,7 @@ export function normalizeQuotationItem(item: QuotationFormItem): QuotationComput
     precio_unitario,
     x_pagar,
     importe,
+    costo_total,
     margen,
   }
 }
@@ -25,6 +32,7 @@ export function calculateQuotationItem(item: QuotationFormItem) {
   const normalizedItem = normalizeQuotationItem(item)
   return {
     importe: normalizedItem.importe,
+    costo_total: normalizedItem.costo_total,
     margen: normalizedItem.margen,
   }
 }
@@ -77,19 +85,13 @@ export function calculateQuotationTotals({
   }
 }
 
-// Fase 5.1: columna informativa "Costo + IVA" en Partidas. Siempre 16% fijo sobre
-// X Pagar -- no depende del regimen fiscal del responsable (ver EstimatedTaxes).
-export function calculateCostoConIva(xPagar: number | '' | null | undefined): number {
-  return round2(toNumberOrZero(xPagar as number | '' | null | undefined) * 1.16)
-}
-
 export function calculateEstimatedTaxes(
   items: QuotationFormItem[],
   totals: Pick<QuotationTotals, 'iva' | 'utilidad_total'>
 ): EstimatedTaxes {
   const normalizedItems = items.map(normalizeQuotationItem)
   const ivaCobrado = totals.iva
-  const ivaPagado = round2(normalizedItems.reduce((sum, item) => sum + item.x_pagar * 0.16, 0))
+  const ivaPagado = round2(normalizedItems.reduce((sum, item) => sum + item.costo_total * 0.16, 0))
   const ivaNeto = round2(ivaCobrado - ivaPagado)
   // No hay ISR sobre una perdida -- se acota a 0 para el estimado.
   const isrEstimado = round2(Math.max(0, totals.utilidad_total) * 0.30)

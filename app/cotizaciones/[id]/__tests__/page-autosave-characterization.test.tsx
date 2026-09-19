@@ -299,6 +299,9 @@ describe('page.tsx -- characterization de autosave/flush/reconciliación (3D-0)'
     const notesDeferred = deferred<Cotizacion>()
     mocks.saveQuotationNotesMock.mockReturnValue(notesDeferred.promise)
 
+    // Bloque 2 sub-tarea 8: "Nota de evento" ahora vive en un pop-up -- el
+    // textarea solo existe en el DOM tras abrirlo.
+    await act(async () => { fireEvent.click(screen.getByText('Nota de evento')) })
     const textarea = container.querySelector('textarea') as HTMLTextAreaElement
     expect(textarea).toBeTruthy()
 
@@ -307,7 +310,7 @@ describe('page.tsx -- characterization de autosave/flush/reconciliación (3D-0)'
     expect(mocks.saveQuotationNotesMock).not.toHaveBeenCalled()
 
     await FLUSH(1)
-    expect(mocks.saveQuotationNotesMock).toHaveBeenCalledWith(cot.id, 'Nota del evento')
+    expect(mocks.saveQuotationNotesMock).toHaveBeenCalledWith(cot.id, 'Nota del evento', null)
 
     notesDeferred.resolve({ ...cot, notas_internas: 'Nota del evento' })
     await FLUSH(0)
@@ -405,6 +408,9 @@ describe('page.tsx -- characterization de autosave/flush/reconciliación (3D-0)'
     const { container } = await renderPage(cot)
     mocks.saveQuotationNotesMock.mockRejectedValueOnce(new Error('Conflicto simulado'))
 
+    // Bloque 2 sub-tarea 8: "Nota de evento" ahora vive en un pop-up -- el
+    // textarea solo existe en el DOM tras abrirlo.
+    await act(async () => { fireEvent.click(screen.getByText('Nota de evento')) })
     const textarea = container.querySelector('textarea') as HTMLTextAreaElement
     await act(async () => { fireEvent.focus(textarea); fireEvent.change(textarea, { target: { value: 'Nota en conflicto' } }) })
     await FLUSH(800)

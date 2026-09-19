@@ -25,6 +25,7 @@ export type TipoDocumentoProveedor =
 export interface Proveedor {
   id: string
   nombre: string
+  alias?: string | null
   telefono: string | null
   correo: string | null
   banco: string | null
@@ -142,6 +143,11 @@ export interface ServiceTemplate {
 export interface Cliente {
   id: string
   nombre: string
+  tipo?: string | null
+  contacto?: string | null
+  correo?: string | null
+  telefono?: string | null
+  notas?: string | null
   proyectos: string[]
   activo: boolean
   created_at: string
@@ -174,6 +180,7 @@ export interface Cotizacion {
   drive_file_id?: string | null
   calendar_event_id?: string | null
   notas_internas?: string | null
+  notas_pdf?: string | null
 }
 
 export interface Proyecto {
