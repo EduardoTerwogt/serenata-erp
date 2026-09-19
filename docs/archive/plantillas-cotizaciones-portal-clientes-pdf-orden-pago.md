@@ -1,10 +1,13 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, listo para ejecutar (2026-09-18) — 6 rondas de auditoría
-externa cerradas. Nace directo en este estado (no pasó por "Borrador"/"En
-refinamiento" en el documento vivo porque el loop plan-auditoría-reedición
-completo corrió en la misma sesión, ver "Historial del loop de auditoría"
-más abajo).
+**Estado:** Cerrado (2026-09-19) — los 6 bloques mergeados a `main` en PR
+[#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76), commit
+`2689963`. Aprobado el 2026-09-18 tras 6 rondas de auditoría externa; nació
+directo en ese estado (no pasó por "Borrador"/"En refinamiento" en el
+documento vivo porque el loop plan-auditoría-reedición completo corrió en la
+misma sesión, ver "Historial del loop de auditoría" más abajo). Archivado
+desde `docs/PLAN.md` al cerrar — ver `docs/ROADMAP.md` → "Cerrado" para el
+resumen.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a la
 vez** — nace como borrador desde la primera idea, se refina en vivo (crear →
@@ -36,12 +39,19 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 
 | Bloque | Iniciativa | Estado | Rama/PR |
 |---|---|---|---|
-| 1 | C — Plantillas: header de tarjeta | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
-| 2 | A — Cotizaciones: UI de edición (sin fórmula) | En curso (PR abierto, incluye sub-tarea 6 con migración `notas_pdf` no anticipada por el plan) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
-| 3 | A — Cotizaciones: fórmula Costo Unitario/Costo Total (alto riesgo, bloque propio) | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
-| 4 | D — Portal (4a alias/nombre con migración `alias`, 4b ver documentos, 4c tab Historial) | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
-| 5 | E — Clientes: catálogo editable | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
-| 6 | B — Cuentas: rediseño PDF de orden de pago | En curso (PR abierto) | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
+| 1 | C — Plantillas: header de tarjeta | **Cerrado** — mergeado a `main`, commit `2689963` | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
+| 2 | A — Cotizaciones: UI de edición (sin fórmula) | **Cerrado** — mergeado a `main`, commit `2689963` (incluyó sub-tarea 6 con migración `notas_pdf` no anticipada por el plan, más una ronda adicional de correcciones de UI pedidas al revisar: paridad Nueva/Editar, botones unificados a `Button`, alineación de Datos Generales, remoción completa de la columna "Costo + IVA") | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
+| 3 | A — Cotizaciones: fórmula Costo Unitario/Costo Total (alto riesgo, bloque propio) | **Cerrado** — mergeado a `main`, commit `2689963` | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
+| 4 | D — Portal (4a alias/nombre con migración `alias`, 4b ver documentos, 4c tab Historial) | **Cerrado** — mergeado a `main`, commit `2689963` | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
+| 5 | E — Clientes: catálogo editable | **Cerrado** — mergeado a `main`, commit `2689963` | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
+| 6 | B — Cuentas: rediseño PDF de orden de pago | **Cerrado** — mergeado a `main`, commit `2689963` | `claude/ecstatic-clarke-l73d8g` / [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) |
+
+**Cierre de la iniciativa completa: 2026-09-19.** Los 6 bloques quedaron
+implementados y verificados en el PR antes de mergear (nada del plan quedó
+sin implementar). Detalle de la ronda adicional de correcciones de UI
+pedidas por el usuario tras revisar el PR: `docs/ACTIVE_WORK.md` (bitácora
+de la sesión que cerró esta iniciativa) y el propio historial de commits del
+PR #76.
 
 Los 6 bloques pueden avanzar **en paralelo** (ramas/sesiones distintas, sin
 compartir archivos salvo lo anotado en "Coordinación entre bloques
