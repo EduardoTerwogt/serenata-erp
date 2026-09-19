@@ -116,6 +116,57 @@ const CFDI_FISICA_MULTI_CONCEPTO = `
   </cfdi:Comprobante>
 `
 
+// Namespace inventado (no "cfdi") -- confirma que la extracción no depende
+// del prefijo literal, solo del nombre del elemento sin prefijo.
+const CFDI_OTRO_NAMESPACE = `
+  <fact:Comprobante Folio="X1" Fecha="2026-05-01T09:00:00" SubTotal="500.00" Total="580.00">
+    <fact:Emisor Rfc="OTR010101AAA" />
+    <fact:Impuestos>
+      <fact:Traslados>
+        <fact:Traslado Impuesto="002" Importe="80.00" />
+      </fact:Traslados>
+    </fact:Impuestos>
+  </fact:Comprobante>
+`
+
+// Un complemento (cualquiera, aquí un namespace ficticio "otro") trae por
+// coincidencia un elemento llamado Traslado -- con el parser real esto
+// nunca se suma porque solo se lee comprobante.Impuestos, nunca
+// comprobante.Complemento. Con el enfoque de regex anterior (aunque ya
+// scopeado a "después de Conceptos") este caso SÍ se habría sumado por
+// error, porque Complemento también cae después de Conceptos.
+const CFDI_COMPLEMENTO_CON_TAG_COLISIONANTE = `
+  <cfdi:Comprobante Folio="X2" Fecha="2026-05-01T09:00:00" SubTotal="500.00" Total="580.00">
+    <cfdi:Conceptos>
+      <cfdi:Concepto Importe="500.00" />
+    </cfdi:Conceptos>
+    <cfdi:Impuestos>
+      <cfdi:Traslados>
+        <cfdi:Traslado Impuesto="002" Importe="80.00" />
+      </cfdi:Traslados>
+    </cfdi:Impuestos>
+    <cfdi:Complemento>
+      <otro:AlgunComplemento>
+        <otro:Traslado Impuesto="002" Importe="9999.00" />
+      </otro:AlgunComplemento>
+    </cfdi:Complemento>
+  </cfdi:Comprobante>
+`
+
+// Documento con dos tasas de IVA distintas (ej. 16% y 0%) en el resumen a
+// nivel documento -- confirma que sumImporteByImpuesto suma TODAS las
+// líneas del mismo código de impuesto, no solo la primera.
+const CFDI_DOS_TASAS_IVA = `
+  <cfdi:Comprobante Folio="X3" Fecha="2026-05-01T09:00:00" SubTotal="1000.00" Total="1080.00">
+    <cfdi:Impuestos>
+      <cfdi:Traslados>
+        <cfdi:Traslado Impuesto="002" TasaOCuota="0.160000" Importe="80.00" />
+        <cfdi:Traslado Impuesto="002" TasaOCuota="0.000000" Importe="0.00" />
+      </cfdi:Traslados>
+    </cfdi:Impuestos>
+  </cfdi:Comprobante>
+`
+
 describe('xml/factura-parser', () => {
   it('parsea folio, fecha, monto, RFCs y UUID de un CFDI básico', () => {
     const result = parseFacturaXML(CFDI_BASICO)
@@ -203,6 +254,31 @@ describe('xml/factura-parser', () => {
       expect(result.iva_trasladado).toBe(160)
       expect(result.iva_retenido).toBe(106.67)
       expect(result.isr_retenido).toBe(100)
+    })
+
+    it('funciona igual con cualquier prefijo de namespace, no solo "cfdi"', () => {
+      const result = parseFacturaXML(CFDI_OTRO_NAMESPACE)
+      expect(result.error).toBeUndefined()
+      expect(result.folio).toBe('X1')
+      expect(result.rfc_emisor).toBe('OTR010101AAA')
+      expect(result.iva_trasladado).toBe(80)
+    })
+
+    it('ignora un tag llamado Traslado dentro de Complemento (otro namespace/complemento)', () => {
+      const result = parseFacturaXML(CFDI_COMPLEMENTO_CON_TAG_COLISIONANTE)
+      // Si esto diera 8079 (80 + 9999... no, 9999) el bug habría regresado
+      // por otra vía: sumar cualquier "Traslado" en Complemento.
+      expect(result.iva_trasladado).toBe(80)
+    })
+
+    it('suma todas las líneas de Traslado con el mismo código de impuesto (varias tasas)', () => {
+      const result = parseFacturaXML(CFDI_DOS_TASAS_IVA)
+      expect(result.iva_trasladado).toBe(80)
+    })
+
+    it('reporta error explícito si el XML está mal formado (tag sin cerrar)', () => {
+      const result = parseFacturaXML('<cfdi:Comprobante Folio="X" Fecha="2026-01-01"><cfdi:Emisor Rfc="A" />')
+      expect(result.error).toBeTruthy()
     })
   })
 
