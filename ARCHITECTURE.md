@@ -353,7 +353,8 @@ evidencia, no cuenta como terminado.
 | Idempotencia de cliente (pagos y bulk-import de partidas) | `lib/client/__tests__/pagoIdempotency.test.ts`, `bulkImportIdempotency.test.ts`, `lib/server/__tests__/idempotency.test.ts`, `tests/e2e/live/bulk-replace-items-rpc.spec.ts` |
 | Proyectos (detalle, tareas, cronograma, tipos, reporte de cierre) | smoke de proyectos |
 | Proveedores (lista + modal, historial, régimen fiscal) | `tests/e2e/critical/proveedores.spec.ts` |
-| Portal de proveedores (signup, login, confirmar identidad, subir factura) | `smoke/portal-signup.spec.ts`, `critical/portal-factura.spec.ts` |
+| Portal de proveedores (signup, login, confirmar identidad, subir factura, alias separado de nombre completo, ver documentos ya subidos, tab "Historial") | `smoke/portal-signup.spec.ts`, `critical/portal-factura.spec.ts` |
+| Clientes (catálogo editable: lista + modal, mismo patrón `PUT`+soft-delete `activo` que Proveedores) | `app/api/__tests__/clientes-route.test.ts` (sin e2e dedicado todavía) |
 | Planeación (extracción AI, pendientes, soft delete) | `critical/planeacion.spec.ts` |
 | Plantillas de servicios (cotizaciones nuevas) | `critical/plantillas-servicios.spec.ts` |
 | Admin de usuarios y sync a Google Sheets | `critical/admin-usuarios.spec.ts` |
