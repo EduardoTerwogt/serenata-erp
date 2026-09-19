@@ -381,8 +381,8 @@ export function QuotationItemsSection({
                   {templates.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                 </Select>
               )}
-              {onCopyClick && <button type="button" onClick={onCopyClick} className="flex items-center gap-2 border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0"><Icon name="copy" size={15} />Copiar desde otra cotización</button>}
-              {canCreateTemplate && watchedItems.length > 0 && <button type="button" onClick={() => setShowCreateTemplateModal(true)} className="flex items-center gap-2 border border-hairline bg-input hover:bg-row-alt text-body px-3 py-2 rounded-control text-[14.5px] transition-colors min-h-[44px] md:min-h-0"><Icon name="plus" size={15} />Crear plantilla</button>}
+              {onCopyClick && <Button onClick={onCopyClick} variant="secondary" size="lg" iconLeft="copy">Copiar desde otra cotización</Button>}
+              {canCreateTemplate && watchedItems.length > 0 && <Button onClick={() => setShowCreateTemplateModal(true)} variant="secondary" size="lg" iconLeft="plus">Crear plantilla</Button>}
             </div>
           )}
         </div>

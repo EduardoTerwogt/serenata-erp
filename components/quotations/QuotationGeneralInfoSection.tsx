@@ -124,9 +124,9 @@ export function QuotationGeneralInfoSection({
       <div className="p-4 md:p-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[repeat(4,minmax(130px,200px))_1fr_auto] md:items-start">
         <div className="relative">
-          <label className="sn-label mb-1.5 block">Cliente</label>
+          <label className="sn-label mb-1.5 block pl-2.5">Cliente</label>
           {readOnlyAsText ? (
-            <p className="py-2 text-body">{clienteInput || '—'}</p>
+            <p className="py-2 text-body pl-2.5">{clienteInput || '—'}</p>
           ) : isReadOnly ? (
             <input value={clienteInput} readOnly className={`${INPUT_CLASS} cursor-not-allowed opacity-60`} />
           ) : (
@@ -157,9 +157,9 @@ export function QuotationGeneralInfoSection({
         </div>
 
         <div className="relative">
-          <label className="sn-label mb-1.5 block">Proyecto</label>
+          <label className="sn-label mb-1.5 block pl-2.5">Proyecto</label>
           {readOnlyAsText ? (
-            <p className="py-2 text-body">{proyectoInput || '—'}</p>
+            <p className="py-2 text-body pl-2.5">{proyectoInput || '—'}</p>
           ) : isReadOnly ? (
             <input value={proyectoInput} readOnly className={`${INPUT_CLASS} cursor-not-allowed opacity-60`} />
           ) : (
@@ -186,9 +186,9 @@ export function QuotationGeneralInfoSection({
         </div>
 
         <div>
-          <label className="sn-label mb-1.5 block">Fecha de Entrega</label>
+          <label className="sn-label mb-1.5 block pl-2.5">Fecha de Entrega</label>
           {readOnlyAsText ? (
-            <p className="py-2 text-body">{formatDateDisplay(fechaEntregaValue)}</p>
+            <p className="py-2 text-body pl-2.5">{formatDateDisplay(fechaEntregaValue)}</p>
           ) : (
             <DateField {...register('fecha_entrega', onFechaEntregaChange ? {
               onChange: (event) => onFechaEntregaChange(event.target.value),
@@ -198,9 +198,9 @@ export function QuotationGeneralInfoSection({
         </div>
 
         <div>
-          <label className="sn-label mb-1.5 block">Locación</label>
+          <label className="sn-label mb-1.5 block pl-2.5">Locación</label>
           {readOnlyAsText ? (
-            <p className="py-2 text-body">{locacionValue || '—'}</p>
+            <p className="py-2 text-body pl-2.5">{locacionValue || '—'}</p>
           ) : (
             <input {...register('locacion', onLocacionChange ? {
               onChange: (event) => onLocacionChange(event.target.value),
