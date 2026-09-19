@@ -15,6 +15,7 @@ import { StatusBanner } from '@/components/ui/StatusBanner'
 import { StatusBadge, toneForCuentaEstado, toneForValidacionEstado } from '@/components/ui/StatusBadge'
 import { SectionLoading } from '@/components/ui/SectionLoading'
 import { TableFooter } from '@/components/ui/TableFooter'
+import { Modal } from '@/components/ui/Modal'
 import type { ProveedorDocumento, TipoDocumentoProveedor, RegimenFiscal } from '@/lib/types'
 import { calcularEjemploFactura, type EjemploFacturaEsperado } from '@/lib/shared/factura-fiscal'
 
@@ -171,6 +172,7 @@ export default function PortalPage() {
             }
             cargarTodo()
           }}
+          onEliminado={cargarTodo}
         />
       )}
 
@@ -251,12 +253,17 @@ function TabDatos({ perfil, correo, onGuardado }: { perfil: PerfilResponse; corr
 function TabDocumentos({
   documentos,
   onSubido,
+  onEliminado,
 }: {
   documentos: ProveedorDocumento[]
   onSubido: (requiereConfirmacion: boolean) => void
+  onEliminado: () => void
 }) {
   const [subiendo, setSubiendo] = useState<TipoDocumentoProveedor | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [borrar, setBorrar] = useState<ProveedorDocumento | null>(null)
+  const [eliminando, setEliminando] = useState(false)
+  const [errorBorrar, setErrorBorrar] = useState<string | null>(null)
 
   const subir = async (tipo: TipoDocumentoProveedor, file: File) => {
     setSubiendo(tipo)
@@ -274,11 +281,27 @@ function TabDocumentos({
     }
   }
 
+  const confirmarBorrar = async () => {
+    if (!borrar) return
+    setEliminando(true)
+    setErrorBorrar(null)
+    try {
+      await getJson<{ success: boolean }>(`/api/portal/documentos/${borrar.id}`, 'Error al borrar el documento', { method: 'DELETE' })
+      setBorrar(null)
+      onEliminado()
+    } catch (err) {
+      setErrorBorrar(err instanceof Error ? err.message : 'Error al borrar el documento')
+    } finally {
+      setEliminando(false)
+    }
+  }
+
   return (
     <SectionCard title="Mis documentos" contentClassName="p-0">
       {error && <div className="p-4"><StatusBanner tone="error">{error}</StatusBanner></div>}
       {(Object.keys(TIPO_LABEL) as TipoDocumentoProveedor[]).map((tipo, i, arr) => {
         const existentes = documentos.filter(d => d.tipo === tipo)
+        const actual = existentes[0]
         return (
           <div
             key={tipo}
@@ -287,14 +310,27 @@ function TabDocumentos({
             <Icon name="file-text" size={16} className="text-faint flex-none" />
             <div className="flex-1 min-w-0">
               <p className="text-content text-body">{TIPO_LABEL[tipo]}</p>
-              {existentes.length > 0 ? (
-                <a href={existentes[0].archivo_url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline truncate mt-0.5 block">{existentes[0].archivo_nombre}</a>
+              {actual ? (
+                <a href={actual.archivo_url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline truncate mt-0.5 block">{actual.archivo_nombre}</a>
               ) : (
                 <p className="text-xs text-faint mt-0.5">Sin documento subido</p>
               )}
             </div>
-            {existentes.length > 0 && (
-              <StatusBadge tone={toneForValidacionEstado(existentes[0].estado_validacion)}>{existentes[0].estado_validacion}</StatusBadge>
+            {actual && (
+              <StatusBadge tone={toneForValidacionEstado(actual.estado_validacion)}>{actual.estado_validacion}</StatusBadge>
+            )}
+            {/* Un documento ya validado no se puede borrar desde acá (ver
+                DELETE /api/portal/documentos/[id]) -- ofrecer el botón sería
+                un callejón sin salida garantizado. */}
+            {actual && actual.estado_validacion !== 'validado' && (
+              <button
+                type="button"
+                onClick={() => setBorrar(actual)}
+                aria-label={`Borrar ${TIPO_LABEL[tipo]}`}
+                className="flex-none text-faint hover:text-cancelled-fg transition-colors p-1.5"
+              >
+                <Icon name="trash" size={16} />
+              </button>
             )}
             <label className="cursor-pointer flex-none border border-hairline bg-input hover:bg-row-alt text-body px-3 py-1.5 rounded-control text-sm transition-colors">
               {subiendo === tipo ? 'Subiendo...' : existentes.length ? 'Subir otro' : 'Subir'}
@@ -313,6 +349,23 @@ function TabDocumentos({
           </div>
         )
       })}
+
+      {borrar && (
+        <Modal onClose={() => { setBorrar(null); setErrorBorrar(null) }} title="Borrar documento" subtitle={TIPO_LABEL[borrar.tipo]}>
+          <p className="text-body">
+            Se borra &quot;{borrar.archivo_nombre}&quot; por completo, de tu lista y del almacenamiento de Serenata. No se puede deshacer.
+          </p>
+          {errorBorrar && <StatusBanner tone="error">{errorBorrar}</StatusBanner>}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={() => { setBorrar(null); setErrorBorrar(null) }} disabled={eliminando}>
+              Mantener
+            </Button>
+            <Button onClick={confirmarBorrar} disabled={eliminando}>
+              {eliminando ? 'Borrando...' : 'Sí, borrar'}
+            </Button>
+          </div>
+        </Modal>
+      )}
     </SectionCard>
   )
 }

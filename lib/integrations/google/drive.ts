@@ -375,6 +375,20 @@ export async function createDriveFolder(name: string, parentId: string): Promise
 }
 
 /**
+ * `uploadFileToDrive`/`driveService.uploadPdf` solo devuelven la URL
+ * pública del archivo (webViewLink), nunca el fileId por separado -- ningún
+ * caller lo necesitaba hasta ahora. En vez de ensanchar esa firma (12+
+ * callers en rutas de facturas/pagos que solo consumen el string), se
+ * extrae el fileId de la URL cuando hace falta borrar: el formato es
+ * siempre `.../file/d/{fileId}/...`, tanto el que arma Google
+ * (`webViewLink`) como el fallback que construye este mismo archivo.
+ */
+export function extractDriveFileId(url: string): string | null {
+  const match = url.match(/\/file\/d\/([^/]+)/)
+  return match ? match[1] : null
+}
+
+/**
  * EF-3A 3A-4: borrado permanente (no a la papelera) -- el cleanup de carga
  * existe precisamente para no dejar carpetas/archivos huérfanos en Drive de
  * test acumulándose corrida tras corrida. Idempotente: un 404 de Google

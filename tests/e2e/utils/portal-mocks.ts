@@ -217,3 +217,42 @@ export async function mockPortalDashboardFacturaExitosa(page: Page) {
     await fulfillJson(route, { success: true })
   })
 }
+
+// Punto 3 (2026-09-20): "Mis documentos" antes solo dejaba "Subir otro",
+// nunca borrar uno ya subido. Self-contained (mismo motivo que
+// mockPortalDashboardFacturaExitosa): /api/portal/documentos necesita
+// cambiar de respuesta a mitad del test, antes/después del DELETE.
+export async function mockPortalDocumentosConBorrado(page: Page) {
+  let documentos = [
+    { id: 'doc-ine', proveedor_id: 'prov-1', tipo: 'INE', archivo_url: 'https://drive.google.com/file/d/abc/view', archivo_nombre: 'ine.jpg', estado_validacion: 'pendiente' },
+    { id: 'doc-constancia', proveedor_id: 'prov-1', tipo: 'CONSTANCIA_SITUACION_FISCAL', archivo_url: 'https://drive.google.com/file/d/def/view', archivo_nombre: 'constancia.pdf', estado_validacion: 'validado' },
+  ]
+
+  await page.route('**/api/portal/me', async (route) => {
+    await fulfillJson(route, { id: 'prov-1', nombre: 'Antonio Gutierrez', correo: 'antonio@correo.com', portal_estado: 'activo', candidato: null })
+  })
+
+  await page.route('**/api/portal/perfil', async (route) => {
+    await fulfillJson(route, PERFIL_DEFAULT)
+  })
+
+  await page.route('**/api/portal/cuentas', async (route) => {
+    await fulfillJson(route, { grupos: [] })
+  })
+
+  await page.route('**/api/portal/documentos', async (route) => {
+    await fulfillJson(route, { documentos })
+  })
+
+  await page.route('**/api/portal/documentos/*', async (route) => {
+    if (route.request().method() !== 'DELETE') return route.fallback()
+    const id = route.request().url().split('/').pop()
+    const doc = documentos.find(d => d.id === id)
+    if (doc?.estado_validacion === 'validado') {
+      await fulfillJson(route, { error: 'Este documento ya fue validado -- contacta a Serenata si necesitas reemplazarlo' }, 409)
+      return
+    }
+    documentos = documentos.filter(d => d.id !== id)
+    await fulfillJson(route, { success: true })
+  })
+}

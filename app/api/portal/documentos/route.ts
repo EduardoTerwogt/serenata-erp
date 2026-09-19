@@ -22,9 +22,11 @@ const TIPOS_VALIDOS: TipoDocumentoProveedor[] = [
   'COMPROBANTE_BANCARIO',
 ]
 
-// Solo estos dos disparan el matching de identidad -- comprobante de
-// domicilio/bancario no traen un nombre legal útil para cruzar.
-const TIPOS_CON_IDENTIDAD: TipoDocumentoProveedor[] = ['INE', 'CONSTANCIA_SITUACION_FISCAL']
+// Solo estos dos disparan extracción por IA (document-parser.ts) --
+// comprobante de domicilio/bancario no traen un nombre legal ni régimen
+// fiscal útil para leer. OJO: esto ya NO significa que ambos validen
+// identidad -- ver TIPOS_CON_MATCHING_IDENTIDAD abajo.
+const TIPOS_CON_EXTRACCION_IA: TipoDocumentoProveedor[] = ['INE', 'CONSTANCIA_SITUACION_FISCAL']
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -74,19 +76,30 @@ export async function POST(request: Request) {
     // Matching de identidad (Fase 5.5): se dispara aquí, no en el signup --
     // el proveedor se registra ligero (correo/password/alias) y el nombre
     // legal + el cruce contra proveedores ya cargados por staff llegan
-    // cuando sube su INE/constancia. La lectura del documento nunca bloquea
-    // la subida (ver document-parser.ts) -- si falla, el documento igual
-    // queda guardado, simplemente no se dispara matching esta vez.
+    // cuando sube su INE. La lectura del documento nunca bloquea la subida
+    // (ver document-parser.ts) -- si falla, el documento igual queda
+    // guardado, simplemente no se dispara matching esta vez.
+    //
+    // Bug real (2026-09-20): el matching corría también con la Constancia
+    // de Situación Fiscal. Hay proveedores que facturan por medio de
+    // terceros (el RFC/nombre de la constancia es el de un intermediario,
+    // no el de la persona que realmente colabora con Serenata) -- cruzar
+    // por ese nombre fusionaba o pedía confirmar la cuenta equivocada. La
+    // identidad SOLO se valida con una identificación oficial (INE hoy;
+    // pasaporte/otra oficial si se agrega un tipo de documento para eso).
+    // La constancia sigue disparando extracción (para regimen_fiscal), solo
+    // deja de alimentar el matching.
     let requiereConfirmacion = false
-    if (TIPOS_CON_IDENTIDAD.includes(tipo as TipoDocumentoProveedor)) {
+    if (TIPOS_CON_EXTRACCION_IA.includes(tipo as TipoDocumentoProveedor)) {
       const proveedorActual = await getProveedorById(portalAuth.proveedorId)
       const esConstancia = tipo === 'CONSTANCIA_SITUACION_FISCAL'
+      const esIne = tipo === 'INE'
       const activo = proveedorActual?.portal_estado === 'activo'
 
       if (activo || esConstancia) {
         const datos = await extraerDatosIdentidad(file)
 
-        if (activo && datos.nombre_completo) {
+        if (esIne && activo && datos.nombre_completo) {
           const candidatos = await buscarCandidatosMatch(datos.nombre_completo, portalAuth.proveedorId)
           if (candidatos.length > 0) {
             await updateProveedor(portalAuth.proveedorId, {

@@ -114,3 +114,32 @@ export async function getProveedorDocumentos(proveedorId: string): Promise<Prove
   if (error) throw error
   return data as ProveedorDocumento[]
 }
+
+export async function getProveedorDocumentoById(id: string): Promise<ProveedorDocumento | null> {
+  const { data, error } = await supabaseAdmin
+    .from('proveedor_documentos')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data as ProveedorDocumento | null
+}
+
+export async function updateProveedorDocumento(id: string, updates: Partial<ProveedorDocumento>): Promise<ProveedorDocumento> {
+  const { data, error } = await supabaseAdmin
+    .from('proveedor_documentos')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as ProveedorDocumento
+}
+
+export async function deleteProveedorDocumento(id: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('proveedor_documentos')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}

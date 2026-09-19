@@ -79,11 +79,11 @@ describe('POST /api/portal/documentos', () => {
     expect(mocks.updateProveedorMock).not.toHaveBeenCalled()
   })
 
-  it('sube la constancia y encuentra un candidato -- marca pendiente_confirmacion', async () => {
-    mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: 'Jose Antonio Gutierrez Hernandez', regimen_fiscal: 'fisica' })
+  it('sube el INE y encuentra un candidato -- marca pendiente_confirmacion', async () => {
+    mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: 'Jose Antonio Gutierrez Hernandez', regimen_fiscal: null })
     mocks.buscarCandidatosMatchMock.mockResolvedValue([{ id: 'cand-1', nombre: 'Antonio Gutierrez', score: 0.5 }])
 
-    const response = await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+    const response = await POST(buildRequest('INE'))
 
     const body = await response.json()
     expect(body.requiere_confirmacion).toBe(true)
@@ -91,6 +91,23 @@ describe('POST /api/portal/documentos', () => {
       portal_estado: 'pendiente_confirmacion',
       match_candidato_id: 'cand-1',
     })
+  })
+
+  // Bug real (2026-09-20): antes, subir la Constancia de Situación Fiscal
+  // también disparaba matching -- hay proveedores que facturan por medio de
+  // terceros, así que el nombre_completo de la constancia (el del tercero,
+  // no el del colaborador real) fusionaba o pedía confirmar la cuenta
+  // equivocada. La identidad solo se valida con INE.
+  it('sube la constancia y encuentra un candidato por nombre -- NO dispara matching, sigue activo', async () => {
+    mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: 'Jose Antonio Gutierrez Hernandez', regimen_fiscal: 'fisica' })
+    mocks.buscarCandidatosMatchMock.mockResolvedValue([{ id: 'cand-1', nombre: 'Antonio Gutierrez', score: 0.5 }])
+
+    const response = await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+    const body = await response.json()
+    expect(body.requiere_confirmacion).toBe(false)
+    expect(mocks.buscarCandidatosMatchMock).not.toHaveBeenCalled()
+    expect(mocks.updateProveedorMock).not.toHaveBeenCalledWith('prov-1', expect.objectContaining({ portal_estado: 'pendiente_confirmacion' }))
   })
 
   it('sube la constancia y persiste regimen_fiscal cuando el proveedor todavía no tiene uno asignado', async () => {
