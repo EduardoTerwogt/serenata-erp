@@ -78,19 +78,11 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-**Iniciativas A-F (parcial) — Aprobado, en ejecución vía `docs/PLAN.md`
-(2026-09-18).** De las 6 iniciativas agregadas abajo en "Después", las
-partes que pueden ejecutarse en paralelo sin diseño pendiente ya tienen plan
-aprobado tras 6 rondas de auditoría externa: Plantillas (header de tarjeta),
-Cotizaciones (UI de edición + fórmula Costo Unitario/Costo Total, bloque
-propio), Portal (alias/nombre, ver documentos, tab Historial), Clientes
-(catálogo editable), Cuentas (rediseño PDF de orden de pago) — 6 bloques,
-detalle completo y tracker de estado en `docs/PLAN.md`. Las partes que
-requieren diseño o una decisión de producto no comprometida todavía
-(historial de cuentas por mes/año, dropdown de impuestos/utilidad de
-proyecto, calculadora de régimen fiscal, estado de resultados/balance,
-normalizar `cliente_id` como FK) **siguen sin comprometer**, documentadas
-como "Sueltos" en `docs/PLAN.md` y en la sección "Después" de abajo.
+**Sin definir a propósito.** La iniciativa que ocupó esta sección
+(Plantillas, Cotizaciones, Portal, Clientes, Cuentas — 6 bloques, aprobada
+2026-09-18) cerró completa — ver "Cerrado" abajo. Los "Sueltos" que quedaron
+fuera de ese plan siguen sin comprometer — se agrupan y priorizan en Chat
+cuando se retomen, igual que el resto de "Después".
 
 ---
 
@@ -98,171 +90,37 @@ como "Sueltos" en `docs/PLAN.md` y en la sección "Después" de abajo.
 
 **Sin definir a propósito.** Se prioriza en Chat, con el estado real del
 sistema a la vista. Ninguno de los puntos de abajo está comprometido todavía
-ni tiene alcance de iniciativa definido — son observaciones puntuales del
-usuario, por módulo, **sin agrupar ni planear**. Antes de arrancar cualquiera,
-agruparlos en iniciativas coherentes (algunos ya se ven relacionados entre
-módulos, p.ej. Cuentas por Cobrar con la lógica de agrupación por
-proveedor+proyecto que ya existe en Cuentas por Pagar) y decidir orden y
-alcance en Chat.
+ni tiene alcance de iniciativa definido.
 
-### Observaciones agrupadas en iniciativas (2026-09-18, agrupado 2026-09-18)
+### Sueltos pendientes (2026-09-19)
 
-Las observaciones sueltas del roadmap de producto se evaluaron contra el
-código real (exploración de Cotizaciones/edición, Cuentas, Portal,
-Plantillas, Dashboard y General) y se agruparon en iniciativas coherentes.
-Ninguna está comprometida todavía — se elige orden y se arranca en Chat,
-creando `docs/PLAN.md` recién ahí. Se marca qué va directo a implementación
-(patrón ya reusable en el repo) y qué necesita pasar antes por la sección de
-diseño (UI genuinamente nueva).
+Quedaron fuera del plan cerrado en PR
+[#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) (detalle
+completo de qué se evaluó y por qué quedó fuera de ese alcance:
+[`docs/archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md`](archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md)):
 
-**Iniciativa A — Cotizaciones: edición (UI + una fórmula).** Todo vive en
-`app/cotizaciones/[id]/page.tsx` + hooks `useQuotation*`/
-`components/quotations/*`. Ningún punto requiere migración de esquema.
-Directo a implementación, sin diseño nuevo (reusan `Select`/`Modal` ya
-existentes en la pantalla o en Cuentas): alinear labels/inputs de Datos
-Generales; ajustar anchos de columna de Partidas (sospechosa: Descripción,
-`w-44`); unificar dropdowns (`responsable_id`, `descuento_tipo`, plantilla)
-al primitivo `Select`; forzar `$` en "P. Unitario"/"Costo Unitario"; botón
-"Vista previa" de PDF (modo `inline` nuevo en `generar-pdf/route.ts`);
-sección de notas visibles en el PDF debajo de Totales/Utilidad (siguiendo el
-patrón ya usado en `hoja-llamado-pdf.ts`, campo nuevo, no reusar "Notas del
-evento" interna); botón "crear plantilla" en Partidas (define antes si
-`POST /api/service-templates` se amplía a `requireAnySection(['planeacion','cotizaciones'])`
-o el botón solo se muestra a quien ya tiene `planeacion`); mover "Nota de
-evento" a un pop-up (reusa `Modal` + patrón de "Alertas de Cobro" de
-Cuentas — cuidado al desenganchar el autosave de notas de un contenedor que
-hoy depende de estar visible en el DOM).
-Directo a implementación: Descuento con 0 solo como placeholder (cambia el
-tipo de `descuento_valor` a `number | ''`/`null`, mismo patrón que
-`precio_unitario`/`x_pagar`) — sin dependencias, va con el resto de UI de
-arriba.
+- **Cuentas — dropdown de impuestos a pagar y utilidad bruta/neta de
+  proyecto.** Requiere diseño ("UI tipo Apple" pedida explícitamente); el
+  agregado ya puede calcularse sobre Costo Total (la fórmula corregida está
+  en `main` desde PR #76).
+- **Cuentas — historial de cuentas por mes/año.** Decisión de UX pendiente.
+- **Portal — calculadora de régimen fiscal.** Requiere diseño; ocupa el
+  espacio que liberó el tab "Historial" (ya migrado en PR #76).
+- **Dashboard — estado de resultados y balance + export a Sheets.**
+  Pendiente definir alcance contable exacto antes de poder planear el
+  detalle.
+- **Clientes — normalizar `cliente_id` como FK real** en
+  cotizaciones/proyectos/cuentas_cobrar (candidato nuevo, identificado al
+  cerrar el catálogo editable de Clientes en PR #76): decisión de producto
+  pendiente, no es un bloqueo técnico.
+- **Fuera de alcance, sin cambios:** Planeación (evaluar quitar la sección,
+  ligado a RAG/chatbot); RAG/chatbot; editor de PDFs tipo Canva; migrar
+  administración de Sheets externo a la app; refinar módulo de Proyectos;
+  limpieza de datos de prueba (app + BD).
 
-**Bloque aparte, de mayor riesgo (RPC/schema, no UI): fórmula Costo
-Unitario/Costo Total.** En Partidas, agregar columna visible "Costo Total" =
-Costo Unitario × Cantidad; "Costo + IVA" pasa a calcularse sobre ese Costo
-Total y queda oculta (sigue alimentando Impuestos); renombrar "X
-Pagar"→"Costo Unitario"; Margen = Importe − Costo Total. **Auditado:** hoy
-`x_pagar` se guarda y se usa tal cual como monto total de la partida
-(`approve_cotizacion` copia `i.x_pagar` sin multiplicar por `i.cantidad`
-hacia `cuentas_pagar`) — el usuario confirmó que la fórmula nueva debe
-propagarse a **todo** lo que dependa de ese monto (Cuentas por Pagar, grupos
-de facturación, márgenes), no solo a la vista de la cotización. Por eso este
-punto ya no es "solo UI": toca `approve_cotizacion` (RPC crítica,
-`SECURITY DEFINER`), hay que revisar `reconcile_cuenta_pagar_grupo()` /
-`cuentas_por_proyecto()` / cualquier función que sume `x_pagar` para
-totales, y actualizar `docs/decisions/006` (`monto_total_grupo = Σ X Pagar`
-→ `Σ (Costo Unitario × Cantidad)`). Por la regla de no mezclar refactor de
-UI con cambio de schema/RPC, **va en su propio bloque**, separado del resto
-de la Iniciativa A. Auditoría real en producción (2026-09-18): de 178
-partidas con pago, 13 tienen Cantidad≠1; 7 ya generaron Cuentas por Pagar
-(6 `PENDIENTE`, 1 `EN_PROCESO_PAGO` con orden de pago ya generada), nada
-`PAGADO` — el usuario decidió que **no hace falta backfill** de esas filas
-(son datos de prueba que se limpiarán antes de uso real); si el ajuste es
-rápido se puede aplicar de paso, si no, se deja tal cual.
-
-**Iniciativa B — Cuentas: mejoras menores.** La agrupación de Cuentas por
-Cobrar por cliente+proyecto (análoga a la de Por Pagar) **se descartó por
-decisión del usuario** — "como está ahora ya funciona bien"; no vuelve a
-evaluarse. La columna "Proyecto" en la tabla de Por Cobrar **ya existe**
-(`CuentasTable.tsx`, dato ya viene de `buscar_cuentas_cobrar`) — verificar
-si el pedido original se refería a otra vista antes de dar por cerrado.
-Requieren diseño antes de implementar: dropdown de cuenta con impuestos a
-pagar y utilidad bruta/neta del proyecto (agregado a nivel proyecto que no
-existe hoy — solo hay cruce fiscal por cuenta/grupo vía
-`calcularCrucePagoProveedor`; UI "tipo Apple" pedida explícitamente);
-historial de cuentas agrupado por mes/año (decisión de UX, no solo estilo);
-rediseño del PDF de ficha de órdenes de pago.
-
-**Iniciativa C — Plantillas: header de tarjeta (quick win aislado).**
-Precio total a la derecha + utilidad como subtítulo (solo si se conoce el
-costo). Sin migración — se deriva de `items` ya existentes
-(`precio_unitario`/`x_pagar`). Directo a implementación, sin diseño nuevo.
-Módulo aislado, sin dependencias con las demás iniciativas — candidato a ir
-primero.
-
-**Iniciativa D — Portal.** Separar "nombre completo" y "alias" en dos
-campos: requiere migración (columna nueva en `proveedores`) + tocar
-`Proveedor`/`PortalPerfilSchema`/`TabDatos` + revisar si `alias` entra al
-matching de `match_proveedor_por_nombre` — directo a implementación (dos
-inputs, sin UI nueva), pero es el único punto con cambio de esquema, va en
-bloque propio. Habilitar "ver" documentos ya subidos: trivial, el dato
-(`archivo_url`) ya viaja en `GET /api/portal/documentos`, solo falta el
-link. Migrar "Tus cuentas con Serenata" a un tab "Historial": ya existe
-mockup del design system — directo, sin diseño nuevo. Calculadora de
-régimen fiscal + desglose en el lugar que deja libre ese tab (confirmado:
-reemplaza el espacio actual): la lógica ya existe y se reusa completa
-(`calcularEjemploFactura`, `lib/server/validation/factura-fiscal.ts`, misma
-que ya valida facturas — no duplicar) pero la presentación visual es nueva
-→ pasa por diseño. Pendiente de definir alcance, no entra a esta ronda:
-si todos los documentos necesitan extracción AI — ya está parcialmente
-resuelto (`TIPOS_CON_IDENTIDAD` limita la IA a INE/Constancia fiscal); lo
-que falta definir es si se agrega una vía alterna de lectura sin tokens.
-
-**Iniciativa E — General: catálogo de clientes editable.** Tabla `clientes`
-ya existe, hoy solo `GET`/`POST` (upsert implícito), sin vista de admin ni
-`PATCH`/`DELETE`. Sigue el mismo patrón ya construido para Proveedores
-(`app/proveedores/`, lista + modal) — directo a implementación, sin diseño
-nuevo real. Falta decidir manejo de dependencias al borrar un cliente con
-cotizaciones asociadas (soft delete vs. bloqueo) al planear el bloque.
-
-**Iniciativa F — Dashboard: estado de resultados y balance + export a
-Sheets.** El Dashboard ya tiene RPCs agregadas y la tubería Sheets
-(`sync-down.ts`/`schema.ts`/`AdminSheets.tsx`) ya soporta exportar tablas
-nuevas — la infraestructura de export se reusa directo. Pero "estado de
-resultados" y "balance general" como estados financieros formales son más
-que los agregados actuales (ingresos−egresos, ISR 30%) — **pendiente de
-definir alcance contable** (qué renglones exactos los componen) antes de
-poder planear el detalle; no es un bloqueo técnico.
-
-**Fuera de alcance de esta ronda** (candidatas de largo plazo, sin
-iniciativa ni orden asignado): Planeación — evaluar quitar la sección
-(ligado a RAG/chatbot); RAG/chatbot — no hay infraestructura de
-embeddings/vector store hoy, requiere decisión de producto primero; Editor
-de PDFs tipo Canva — reescritura completa (los 4 generadores actuales usan
-`jsPDF` imperativo, sin edición interactiva; único reuso posible es
-`pdf-base-config.ts`, branding); Migrar administración de Sheets externo a
-la app — no se identificó en el código a qué Sheet se refiere, requiere
-descubrimiento con el usuario; Refinar módulo de Proyectos — alcance sin
-definir; Limpiar datos de prueba (app + BD) — tarea puntual de operación
-(script ad-hoc), se ejecuta cuando se pida, confirmando antes qué entorno
-(test vs. producción).
-
-#### Paralelización y secuenciación entre iniciativas (evaluado 2026-09-18)
-
-**En paralelo, sin chocar** (archivos/tablas distintos, sin dependencia de
-datos): Iniciativa A salvo el bloque de fórmula (UI pura de Cotizaciones,
-incluye Descuento placeholder); Iniciativa C (aislada); Iniciativa D salvo
-la calculadora fiscal (que espera diseño, no depende de A); Iniciativa E
-(aislada); Iniciativa B en sus partes no financieras (columna Proyecto,
-historial por mes/año, rediseño de PDF de orden de pago — el PDF solo lee
-el monto ya calculado, no duplica la fórmula). El bloque de fórmula
-Costo Unitario/Costo Total de A también puede desarrollarse en paralelo a
-todo esto (no comparte archivos), pero debe **mergear primero** que lo de
-abajo.
-
-**Deben esperar a que el bloque de fórmula de A esté en `main`:** la pieza
-de Iniciativa B "dropdown de cuenta con impuestos a pagar y utilidad
-bruta/neta del proyecto" (el agregado debe calcularse sobre el monto ya
-corregido, no sobre `x_pagar` crudo) y la Iniciativa F completa (mismo
-motivo, además de seguir pendiente de definir alcance contable — ya iba de
-última de todos modos).
-
-**Coordinación de proceso, no dependencia real:** migraciones numeradas por
-fecha (el bloque de fórmula de A y la migración de alias de D podrían
-chocar de nombre si corren el mismo día en ramas paralelas — se resuelve al
-mergear); `lib/types.ts` lo tocan D (`Proveedor.alias`) y E (`Cliente`) en
-secciones distintas, sin conflicto lógico.
-
-**Orden recomendado:** (1) en paralelo, A sin fórmula + C + D sin
-calculadora + E + B no-financieras — cinco frentes simultáneos; (2) bloque
-de fórmula de A (puede arrancar junto con 1, pero cierra antes de empezar
-3); (3) B (dropdown impuestos/utilidad de proyecto) + F completa, al final.
-
-Material previo (roadmap de producto de 2026-09-04, Fase 5) ya entregado o
-superpuesto con lo de arriba: agregados del Cotizador (copiar entre
-cotizaciones, columna Costo + IVA, calculadora de impuestos — ver Cotizaciones
-arriba), Proyectos como herramienta de PM con asistente sobre el historial
-(ver General arriba), y cerrar la migración visual.
+Antes de arrancar cualquiera de estos puntos, agruparlos en una iniciativa
+coherente y decidir orden y alcance en Chat — mismo proceso que ya se siguió
+para el plan cerrado en PR #76.
 
 ---
 
@@ -290,6 +148,26 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Plantillas, Cotizaciones, Portal, Clientes y Cuentas — 6 bloques en
+  paralelo (2026-09-19).** Cerró la primera iniciativa agrupada del roadmap
+  de producto (agrupada 2026-09-18, aprobada tras 6 rondas de auditoría
+  externa): header de tarjeta con utilidad en Plantillas; UI de edición de
+  Cotizaciones (paridad completa Nueva/Editar en Vista previa, Nota de
+  evento y Crear plantilla; botones unificados al primitivo `Button`;
+  alineación de Datos Generales; remoción de la columna "Costo + IVA" de
+  Partidas) + la fórmula Costo Unitario/Costo Total corregida en
+  `approve_cotizacion`/`patch_item_cotizacion` (antes no multiplicaba por
+  Cantidad); Portal de Proveedores (columna `alias` separada de `nombre`,
+  ver documentos ya subidos, tab "Historial"); catálogo de Clientes
+  editable (`PUT` + soft-delete, mismo patrón que Proveedores); rediseño
+  del PDF de orden de pago con logo. PR
+  [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) mergeado a
+  `main`. Quedaron fuera, documentados como "Sueltos" en "Después": dropdown
+  de impuestos/utilidad de proyecto, historial de cuentas por mes/año,
+  calculadora de régimen fiscal, estado de resultados/balance, y
+  `cliente_id` como FK real. Historia completa, diseño y tracker de los 6
+  bloques:
+  [`docs/archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md`](archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md).
 - **Agrupar Cuentas por Pagar por proveedor+proyecto para facturación
   (2026-09-18).** `cuentas_pagar` era 1:1 por renglón de cotización — un
   proveedor con varios renglones en el mismo proyecto recibía una solicitud
