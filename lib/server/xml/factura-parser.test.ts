@@ -184,9 +184,25 @@ describe('xml/factura-parser', () => {
     expect(result.monto_total).not.toBe(1000)
   })
 
-  it('reporta error si faltan folio o fecha', () => {
+  it('reporta error si falta la fecha', () => {
     const result = parseFacturaXML('<cfdi:Comprobante Total="100.00" />')
     expect(result.error).toBeTruthy()
+  })
+
+  // BUG REAL (reportado 2026-09-19, cotización SH077): una factura real,
+  // válida y timbrada por el SAT (UUID, Sello, Certificado, SelloSAT
+  // presentes) pero SIN atributo Folio se rechazaba con "No se pudieron
+  // extraer folio y/o fecha del XML". Folio es explícitamente opcional en
+  // el XSD de CFDI 3.3/4.0 (`use="optional"`) -- exigirlo rechazaba
+  // facturas legítimas de emisores que no usan folio propio.
+  it('NO rechaza un CFDI válido sin atributo Folio (opcional en el XSD del SAT)', () => {
+    const result = parseFacturaXML(
+      '<cfdi:Comprobante Fecha="2026-05-20T13:45:43" SubTotal="5000.00" Total="4767.00"><cfdi:Emisor Rfc="OEPG820316L66" /></cfdi:Comprobante>'
+    )
+    expect(result.error).toBeUndefined()
+    expect(result.folio).toBeUndefined()
+    expect(result.fecha_emision).toBe('2026-05-20')
+    expect(result.monto_total).toBe(4767)
   })
 
   describe('validarMontoFactura (informativa, ya existente)', () => {
