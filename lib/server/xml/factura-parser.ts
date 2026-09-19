@@ -112,10 +112,22 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
     const ivaRetenido = sumImporteByImpuesto(retenciones, '002')
     const isrRetenido = sumImporteByImpuesto(retenciones, '001')
 
-    // Validar que al menos tengamos folio y fecha
-    if (!folio || !fecha) {
+    // Validar que al menos tengamos fecha -- es el único de los dos
+    // realmente obligatorio en el XSD de CFDI 3.3/4.0 y el único que se
+    // consume después (calcularDeadline(), fecha_factura guardada en
+    // cuentas_cobrar). `Folio` es EXPLÍCITAMENTE opcional en el esquema del
+    // SAT (`use="optional"`) -- un emisor puede no llevar folio propio y
+    // depender solo del UUID de timbrado como identificador. Bug real
+    // (reportado 2026-09-19, folio de cotización SH077): una factura real,
+    // válida y timbrada, sin atributo Folio, se rechazaba con "No se
+    // pudieron extraer folio y/o fecha del XML" -- exigía un campo que el
+    // propio SAT no exige, y que además nunca se usa en ningún lado del
+    // repo (ni `folio` ni `uuid_timbrado` se leen fuera de este archivo,
+    // a diferencia de `fecha_emision`/`monto_total`, que sí gatean lógica
+    // real). Nunca volver a agregar folio a este check.
+    if (!fecha) {
       return {
-        error: 'No se pudieron extraer folio y/o fecha del XML'
+        error: 'No se pudo extraer la fecha del XML'
       }
     }
 
