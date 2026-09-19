@@ -207,8 +207,8 @@ export function QuotationItemsSection({
 
     return (
       <tr key={fieldId} className="border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)]">
-        <td className="px-4 py-2"><input {...register(`items.${index}.categoria`)} onFocus={() => items.cellFocus(rowIdAt(index), 'categoria')} onBlur={() => items.cellBlur(rowIdAt(index), 'categoria')} onChange={(e) => { items.cellChange(rowIdAt(index), 'categoria'); register(`items.${index}.categoria`).onChange(e) }} data-busy={cellBusy(index, 'categoria') || undefined} className={`w-28 ${CELL_INPUT_CLASS}`} /><ItemFieldConflictBanner rowId={rowIdAt(index)} field="categoria" items={items} /></td>
-        <td className="px-4 py-2">
+        <td className="px-3 py-2"><input {...register(`items.${index}.categoria`)} onFocus={() => items.cellFocus(rowIdAt(index), 'categoria')} onBlur={() => items.cellBlur(rowIdAt(index), 'categoria')} onChange={(e) => { items.cellChange(rowIdAt(index), 'categoria'); register(`items.${index}.categoria`).onChange(e) }} data-busy={cellBusy(index, 'categoria') || undefined} className={`w-24 ${CELL_INPUT_CLASS}`} /><ItemFieldConflictBanner rowId={rowIdAt(index)} field="categoria" items={items} /></td>
+        <td className="px-3 py-2">
           <div className="relative">
             <input
               {...register(`items.${index}.descripcion`)}
@@ -229,7 +229,7 @@ export function QuotationItemsSection({
                   <div
                     key={i}
                     onMouseDown={() => items.selectProduct(rowIdAt(index), p)}
-                    className="px-3 py-2 text-content border-b border-hairline last:border-0 hover:bg-row cursor-pointer text-body"
+                    className="px-4 py-2 text-content border-b border-hairline last:border-0 hover:bg-row cursor-pointer text-body"
                   >
                     <div className="font-medium">{p.descripcion}</div>
                     {p.categoria && <div className="text-subtext text-xs">{p.categoria}</div>}
@@ -242,16 +242,16 @@ export function QuotationItemsSection({
           {statusText && <p className="mt-1 text-[11px] text-accent-quiet">{statusText}</p>}
           <ItemFieldConflictBanner rowId={rowIdAt(index)} field="descripcion" items={items} />
         </td>
-        <td className="px-4 py-2"><input type="number" min="1" {...register(`items.${index}.cantidad`, { valueAsNumber: true })} onFocus={() => items.cellFocus(rowIdAt(index), 'cantidad')} onBlur={() => items.cellBlur(rowIdAt(index), 'cantidad')} onChange={(e) => { items.cellChange(rowIdAt(index), 'cantidad'); register(`items.${index}.cantidad`).onChange(e) }} data-busy={cellBusy(index, 'cantidad') || undefined} className={`w-16 ${CELL_INPUT_CLASS}`} /><ItemFieldConflictBanner rowId={rowIdAt(index)} field="cantidad" items={items} /></td>
-        <td className="px-4 py-2">
+        <td className="px-3 py-2"><input type="number" min="1" {...register(`items.${index}.cantidad`, { valueAsNumber: true })} onFocus={() => items.cellFocus(rowIdAt(index), 'cantidad')} onBlur={() => items.cellBlur(rowIdAt(index), 'cantidad')} onChange={(e) => { items.cellChange(rowIdAt(index), 'cantidad'); register(`items.${index}.cantidad`).onChange(e) }} data-busy={cellBusy(index, 'cantidad') || undefined} className={`w-16 ${CELL_INPUT_CLASS}`} /><ItemFieldConflictBanner rowId={rowIdAt(index)} field="cantidad" items={items} /></td>
+        <td className="px-3 py-2">
           <div className="relative">
             <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-subtext">$</span>
             <input type="number" min="0" step="0.01" {...register(`items.${index}.precio_unitario`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(index), 'precio_unitario')} onBlur={() => items.cellBlur(rowIdAt(index), 'precio_unitario')} onChange={(e) => { items.cellChange(rowIdAt(index), 'precio_unitario'); register(`items.${index}.precio_unitario`).onChange(e) }} data-busy={cellBusy(index, 'precio_unitario') || undefined} className={`w-28 ${MONEY_CELL_INPUT_CLASS}`} />
           </div>
           <ItemFieldConflictBanner rowId={rowIdAt(index)} field="precio_unitario" items={items} />
         </td>
-        <td className="px-4 py-2 text-body font-medium whitespace-nowrap">${fmtCurrency(importe)}</td>
-        <td className="px-4 py-2">
+        <td className="px-3 py-2 text-body font-medium whitespace-nowrap">${fmtCurrency(importe)}</td>
+        <td className="px-3 py-2">
           <Select
             {...register(`items.${index}.responsable_id`)}
             onFocus={() => items.cellFocus(rowIdAt(index), 'responsable_id')}
@@ -260,7 +260,7 @@ export function QuotationItemsSection({
               items.changeResponsable(rowIdAt(index), e.target.value)
             }}
             data-busy={cellBusy(index, 'responsable_id') || undefined}
-            className="w-36"
+            className="w-32"
           >
             <option value="">Sin asignar</option>
             {responsables.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
@@ -268,17 +268,17 @@ export function QuotationItemsSection({
           <input type="hidden" {...register(`items.${index}.responsable_nombre`)} />
           <ItemFieldConflictBanner rowId={rowIdAt(index)} field="responsable_id" items={items} />
         </td>
-        <td className="px-4 py-2">
+        <td className="px-3 py-2">
           <div className="relative">
             <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-subtext">$</span>
             <input type="number" min="0" step="0.01" {...register(`items.${index}.x_pagar`, { setValueAs: (v: unknown) => v === '' || v === null || v === undefined ? '' : (Number(v) || 0) })} onFocus={() => items.cellFocus(rowIdAt(index), 'x_pagar')} onBlur={() => items.cellBlur(rowIdAt(index), 'x_pagar')} onChange={(e) => { items.cellChange(rowIdAt(index), 'x_pagar'); register(`items.${index}.x_pagar`).onChange(e) }} data-busy={cellBusy(index, 'x_pagar') || undefined} className={`w-28 ${MONEY_CELL_INPUT_CLASS}`} />
           </div>
           <ItemFieldConflictBanner rowId={rowIdAt(index)} field="x_pagar" items={items} />
         </td>
-        <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(costo_total)}</td>
-        <td className="px-4 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(costo_total))}</td>
-        <td className={`px-4 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(margen)}</td>
-        <td className="px-4 py-2"><button type="button" onClick={() => items.removeRow(rowIdAt(index))} className="text-faint hover:text-cancelled-fg disabled:opacity-30 transition-colors">✕</button></td>
+        <td className="px-3 py-2 text-subtext whitespace-nowrap">${fmtCurrency(costo_total)}</td>
+        <td className="px-3 py-2 text-subtext whitespace-nowrap">${fmtCurrency(calculateCostoConIva(costo_total))}</td>
+        <td className={`px-3 py-2 font-medium whitespace-nowrap ${margen >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(margen)}</td>
+        <td className="px-3 py-2"><button type="button" onClick={() => items.removeRow(rowIdAt(index))} className="text-faint hover:text-cancelled-fg disabled:opacity-30 transition-colors">✕</button></td>
       </tr>
     )
   }
@@ -290,16 +290,16 @@ export function QuotationItemsSection({
     const costoTotal = item.x_pagar * item.cantidad
     return (
       <tr key={item.id} className="border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt">
-        <td className="px-4 py-3 text-subtext">{item.categoria}</td>
-        <td className="px-4 py-3 text-body">{item.descripcion}</td>
-        <td className="px-4 py-3 text-subtext">{item.cantidad}</td>
-        <td className="px-4 py-3 text-subtext">${fmtCurrency(item.precio_unitario)}</td>
-        <td className="px-4 py-3 text-body font-medium">${fmtCurrency(item.importe ?? (item.cantidad * item.precio_unitario))}</td>
-        <td className="px-4 py-3">{item.responsable_nombre ? <span className="text-subtext">{item.responsable_nombre}</span> : <span className="text-faint italic">Sin asignar</span>}</td>
-        <td className="px-4 py-3 text-subtext">${fmtCurrency(item.x_pagar)}</td>
-        <td className="px-4 py-3 text-subtext">${fmtCurrency(costoTotal)}</td>
-        <td className="px-4 py-3 text-subtext">${fmtCurrency(calculateCostoConIva(costoTotal))}</td>
-        <td className={`px-4 py-3 font-medium ${(item.margen ?? 0) >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(item.margen ?? 0)}</td>
+        <td className="px-3 py-3 text-subtext">{item.categoria}</td>
+        <td className="px-3 py-3 text-body">{item.descripcion}</td>
+        <td className="px-3 py-3 text-subtext">{item.cantidad}</td>
+        <td className="px-3 py-3 text-subtext">${fmtCurrency(item.precio_unitario)}</td>
+        <td className="px-3 py-3 text-body font-medium">${fmtCurrency(item.importe ?? (item.cantidad * item.precio_unitario))}</td>
+        <td className="px-3 py-3">{item.responsable_nombre ? <span className="text-subtext">{item.responsable_nombre}</span> : <span className="text-faint italic">Sin asignar</span>}</td>
+        <td className="px-3 py-3 text-subtext">${fmtCurrency(item.x_pagar)}</td>
+        <td className="px-3 py-3 text-subtext">${fmtCurrency(costoTotal)}</td>
+        <td className="px-3 py-3 text-subtext">${fmtCurrency(calculateCostoConIva(costoTotal))}</td>
+        <td className={`px-3 py-3 font-medium ${(item.margen ?? 0) >= 0 ? 'text-approved-fg' : 'text-cancelled-fg'}`}>${fmtCurrency(item.margen ?? 0)}</td>
       </tr>
     )
   }
@@ -392,7 +392,7 @@ export function QuotationItemsSection({
             <thead>
               <tr className="h-9 border-b border-hairline">
                 {['Categoría', 'Descripción', 'Cant.', 'P. Unit.', 'Importe', 'Responsable', 'Costo Unitario', 'Costo Total', 'Costo + IVA', 'Margen', ...(editable ? [''] : [])].map(h => (
-                  <th key={h} className="sn-table-head text-left px-4 py-3 whitespace-nowrap">{h}</th>
+                  <th key={h} className="sn-table-head text-left px-3 py-3 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
