@@ -159,3 +159,52 @@ export async function mockPortalFacturaValida(page: Page) {
     await fulfillJson(route, { success: true })
   })
 }
+
+// Bug real (2026-09-19): tras subir una factura con éxito, el cliente no
+// recargaba /api/portal/cuentas -- el grupo recién facturado seguía
+// apareciendo seleccionable en el formulario. Este mock simula la
+// transición real de estado en el servidor (ABIERTO/facturable ->
+// FACTURADO/no facturable) para probar que el cliente sí vuelve a pedir
+// /api/portal/cuentas después del 200 y refleja el cambio, tanto en el
+// <select> como en la tabla de historial. Self-contained (no se compone
+// con mockPortalDashboard) porque /api/portal/cuentas necesita cambiar de
+// respuesta a mitad del test, igual que mockPortalDashboardConMatch.
+export async function mockPortalDashboardFacturaExitosa(page: Page) {
+  let facturado = false
+
+  await page.route('**/api/portal/me', async (route) => {
+    await fulfillJson(route, { id: 'prov-1', nombre: 'Antonio Gutierrez', correo: 'antonio@correo.com', portal_estado: 'activo', candidato: null })
+  })
+
+  await page.route('**/api/portal/perfil', async (route) => {
+    await fulfillJson(route, PERFIL_DEFAULT)
+  })
+
+  await page.route('**/api/portal/documentos', async (route) => {
+    await fulfillJson(route, { documentos: [] })
+  })
+
+  await page.route('**/api/portal/cuentas', async (route) => {
+    await fulfillJson(route, {
+      grupos: [
+        {
+          id: 'grupo-1',
+          es_grupo: true,
+          facturable: !facturado,
+          proyecto_id: 'SH001',
+          proyecto_nombre: 'Spot Verano',
+          estado: facturado ? 'FACTURADO' : 'ABIERTO',
+          monto_total: 1000,
+          monto_pagado: 0,
+          saldo_pendiente: 1000,
+          items: [{ id: 'cuenta-1', item_descripcion: 'Audio en vivo', cantidad: 1, x_pagar: 1000, cotizacion_id: 'SH001' }],
+        },
+      ],
+    })
+  })
+
+  await page.route('**/api/portal/cuentas/grupos/*/factura', async (route) => {
+    facturado = true
+    await fulfillJson(route, { success: true })
+  })
+}

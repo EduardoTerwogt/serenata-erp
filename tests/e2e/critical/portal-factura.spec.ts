@@ -1,14 +1,18 @@
 import { test, expect } from '@playwright/test'
 import {
   mockPortalDashboard,
+  mockPortalDashboardFacturaExitosa,
   mockPortalFacturaBloqueada,
   mockPortalFacturaDesgloseIncorrecto,
   mockPortalFacturaRegimenIncorrecto,
   mockPortalFacturaValida,
 } from '../utils/portal-mocks'
 
-async function irATabCuentas(page: import('@playwright/test').Page) {
-  await mockPortalDashboard(page)
+async function irATabCuentas(
+  page: import('@playwright/test').Page,
+  dashboardMock: (page: import('@playwright/test').Page) => Promise<void> = mockPortalDashboard
+) {
+  await dashboardMock(page)
   await page.goto('/portal')
   await page.getByRole('button', { name: 'Cuentas y facturas' }).click()
 }
@@ -62,6 +66,24 @@ test('factura válida: se sube y confirma éxito', async ({ page }) => {
   await seleccionarYSubir(page)
 
   await expect(page.getByText('Tu factura se subió correctamente')).toBeVisible()
+})
+
+test('tras subir con éxito, la cuenta ya no aparece seleccionable y pasa al historial como FACTURADO', async ({ page }) => {
+  await irATabCuentas(page, mockPortalDashboardFacturaExitosa)
+
+  await expect(page.getByRole('option', { name: /Spot Verano/ })).toHaveCount(1)
+  // El badge de estado se renderiza dos veces (tabla desktop + tarjeta
+  // mobile, ambas en el DOM, alternadas por CSS) -- .first() como en el
+  // resto de los tests de esta pantalla.
+  await expect(page.getByText('ABIERTO').first()).toBeVisible()
+
+  await seleccionarYSubir(page)
+
+  await expect(page.getByText('Tu factura se subió correctamente')).toBeVisible()
+  // El grupo recién facturado ya no debe seguir en las opciones del select.
+  await expect(page.getByRole('option', { name: /Spot Verano/ })).toHaveCount(0)
+  // Y debe verse ahora en la tabla de historial, al fondo de esta misma pantalla.
+  await expect(page.getByText('FACTURADO').first()).toBeVisible()
 })
 
 test('simulador de factura: se autollena al elegir proyecto, sin subir archivos', async ({ page }) => {

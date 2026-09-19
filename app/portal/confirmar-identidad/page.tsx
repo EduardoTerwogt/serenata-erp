@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { getJson, sendJson } from '@/lib/client/api'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { SectionLoading } from '@/components/ui/SectionLoading'
+import { Button } from '@/components/ui/Button'
 
 interface MeResponse {
   id: string
@@ -60,22 +61,12 @@ export default function ConfirmarIdentidadPage() {
         {error && <StatusBanner tone="error" className="mb-4 text-left">{error}</StatusBanner>}
 
         <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            disabled={enviando}
-            onClick={() => responder(true)}
-            className="w-full bg-accent hover:bg-accent-pressed text-accent-ink py-2.5 rounded-control font-medium transition-colors disabled:opacity-50"
-          >
+          <Button type="button" disabled={enviando} onClick={() => responder(true)} fullWidth>
             Sí, soy {me.candidato.nombre}
-          </button>
-          <button
-            type="button"
-            disabled={enviando}
-            onClick={() => responder(false)}
-            className="w-full border border-hairline bg-input hover:bg-row-alt text-body py-2.5 rounded-control font-medium transition-colors disabled:opacity-50"
-          >
+          </Button>
+          <Button type="button" variant="secondary" disabled={enviando} onClick={() => responder(false)} fullWidth>
             No, esa cuenta no es mía
-          </button>
+          </Button>
         </div>
       </div>
     </div>

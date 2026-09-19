@@ -8,6 +8,8 @@ import { SectionCard } from '@/components/ui/SectionCard'
 import { FilterTabs, type FilterTab } from '@/components/ui/FilterTabs'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
+import { TextField } from '@/components/ui/TextField'
+import { Select } from '@/components/ui/Select'
 import { Icon } from '@/components/ui/Icon'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { StatusBadge, toneForCuentaEstado, toneForValidacionEstado } from '@/components/ui/StatusBadge'
@@ -15,19 +17,18 @@ import { SectionLoading } from '@/components/ui/SectionLoading'
 import type { ProveedorDocumento, TipoDocumentoProveedor, RegimenFiscal } from '@/lib/types'
 import { calcularEjemploFactura, type EjemploFacturaEsperado } from '@/lib/shared/factura-fiscal'
 
-// Bloque 4c (docs/PLAN.md): "Tus cuentas con Serenata" se mudó de la tab
-// "Cuentas y facturas" a su propia tab "Historial" -- mismo dato, mismo
-// SectionCard, solo cambia dónde vive. Si en el futuro "Historial" se
-// reemplaza por la calculadora de régimen fiscal (Suelto, fuera de este
-// plan), esa migración es la SEGUNDA de este mismo espacio -- no reabrir
-// esta por error pensando que es la primera vez que se mueve.
-type PortalTab = 'datos' | 'documentos' | 'cuentas' | 'historial'
+// Bloque 1 (docs/PLAN.md): "Historial" deja de ser su propia tab -- la tabla
+// "Tus cuentas con Serenata" se mueve al fondo de "Cuentas y facturas"
+// (TabCuentas, función TablaHistorial más abajo), así el proveedor ve de
+// inmediato que su factura recién subida quedó recibida/en proceso, sin
+// cambiar de tab. Si esto se vuelve a mover en el futuro, esta es ya la
+// segunda ubicación, no la primera (antes vivió en un tab propio).
+type PortalTab = 'datos' | 'documentos' | 'cuentas'
 
 const TABS: FilterTab<PortalTab>[] = [
   { value: 'datos', label: 'Mis datos' },
   { value: 'documentos', label: 'Documentación' },
   { value: 'cuentas', label: 'Cuentas y facturas' },
-  { value: 'historial', label: 'Historial' },
 ]
 
 const TIPO_LABEL: Record<TipoDocumentoProveedor, string> = {
@@ -172,9 +173,9 @@ export default function PortalPage() {
         />
       )}
 
-      {tab === 'cuentas' && <TabCuentas grupos={grupos} regimenFiscal={perfil?.regimen_fiscal ?? null} />}
-
-      {tab === 'historial' && <TabHistorial grupos={grupos} />}
+      {tab === 'cuentas' && (
+        <TabCuentas grupos={grupos} regimenFiscal={perfil?.regimen_fiscal ?? null} onFacturada={cargarTodo} />
+      )}
     </div>
   )
 }
@@ -209,68 +210,24 @@ function TabDatos({ perfil, correo, onGuardado }: { perfil: PerfilResponse; corr
   return (
     <form onSubmit={guardar} className="grid gap-[19px] items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
       <SectionCard title="Datos personales" contentClassName="p-4 md:p-6 space-y-4">
-        <div>
-          <label className="block text-content font-medium text-body mb-1">Nombre completo</label>
-          <input
-            type="text"
-            value={nombre}
-            onChange={e => setNombre(e.target.value)}
-            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
-          />
-        </div>
-        <div>
-          <label className="block text-content font-medium text-body mb-1">Alias · nombre corto u operativo (opcional)</label>
-          <input
-            type="text"
-            value={alias}
-            onChange={e => setAlias(e.target.value)}
-            placeholder="Ej. Chok"
-            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
-          />
-        </div>
-        <div>
-          <label className="block text-content font-medium text-body mb-1">Teléfono</label>
-          <input
-            type="tel"
-            value={telefono}
-            onChange={e => setTelefono(e.target.value)}
-            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
-          />
-        </div>
-        <div>
-          <label className="block text-content font-medium text-body mb-1">Correo</label>
-          <input
-            type="email"
-            value={correo ?? ''}
-            disabled
-            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-faint"
-          />
-        </div>
+        <TextField label="Nombre completo" type="text" value={nombre} onChange={e => setNombre(e.target.value)} />
+        <TextField
+          label="Alias · nombre corto u operativo (opcional)"
+          type="text"
+          value={alias}
+          onChange={e => setAlias(e.target.value)}
+          placeholder="Ej. Chok"
+        />
+        <TextField label="Teléfono" type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} />
+        <TextField label="Correo" type="email" value={correo ?? ''} disabled />
       </SectionCard>
 
       <SectionCard title="Datos bancarios y fiscales" contentClassName="p-4 md:p-6 space-y-4">
+        <TextField label="Banco" type="text" value={banco} onChange={e => setBanco(e.target.value)} />
+        <TextField label="CLABE · 18 dígitos" type="text" value={clabe} onChange={e => setClabe(e.target.value)} maxLength={18} />
         <div>
-          <label className="block text-content font-medium text-body mb-1">Banco</label>
-          <input
-            type="text"
-            value={banco}
-            onChange={e => setBanco(e.target.value)}
-            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
-          />
-        </div>
-        <div>
-          <label className="block text-content font-medium text-body mb-1">CLABE · 18 dígitos</label>
-          <input
-            type="text"
-            value={clabe}
-            onChange={e => setClabe(e.target.value)}
-            maxLength={18}
-            className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
-          />
-        </div>
-        <div>
-          <label className="block text-content font-medium text-body mb-1">Régimen fiscal</label>
-          <p className="text-content text-body">
+          <span className="sn-label">Régimen fiscal</span>
+          <p className="mt-1.5 text-content text-body">
             {perfil.regimen_fiscal === 'fisica'
               ? 'Persona física con honorarios'
               : perfil.regimen_fiscal === 'moral'
@@ -282,13 +239,9 @@ function TabDatos({ perfil, correo, onGuardado }: { perfil: PerfilResponse; corr
         {error && <StatusBanner tone="error">{error}</StatusBanner>}
         {success && <StatusBanner tone="success">Guardado</StatusBanner>}
 
-        <button
-          type="submit"
-          disabled={guardando}
-          className="w-full bg-accent hover:bg-accent-pressed text-accent-ink py-2.5 rounded-control font-medium transition-colors disabled:opacity-50"
-        >
+        <Button type="submit" disabled={guardando} fullWidth>
           {guardando ? 'Guardando...' : 'Guardar cambios'}
-        </button>
+        </Button>
       </SectionCard>
     </form>
   )
@@ -379,7 +332,15 @@ function DesgloseFactura({ ejemplo }: { ejemplo: EjemploFacturaEsperado }) {
   )
 }
 
-function TabCuentas({ grupos, regimenFiscal }: { grupos: GrupoPortal[]; regimenFiscal: RegimenFiscal | null }) {
+function TabCuentas({
+  grupos,
+  regimenFiscal,
+  onFacturada,
+}: {
+  grupos: GrupoPortal[]
+  regimenFiscal: RegimenFiscal | null
+  onFacturada: () => void
+}) {
   const [grupoId, setGrupoId] = useState('')
   const [xml, setXml] = useState<File | null>(null)
   const [pdf, setPdf] = useState<File | null>(null)
@@ -418,6 +379,12 @@ function TabCuentas({ grupos, regimenFiscal }: { grupos: GrupoPortal[]; regimenF
         return
       }
       setSuccess(true)
+      // El grupo recién facturado pasa a FACTURADO -- ya no debe seguir
+      // seleccionable en "Proyecto al que corresponde". Recargar desde el
+      // padre (en vez de solo actualizar estado local) para que quede
+      // reflejado también en la tabla de historial de abajo.
+      setGrupoId('')
+      onFacturada()
     } catch {
       setError('Error al subir tu factura')
     } finally {
@@ -426,80 +393,82 @@ function TabCuentas({ grupos, regimenFiscal }: { grupos: GrupoPortal[]; regimenF
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-[19px] items-start">
-      <SectionCard title="Subir factura" contentClassName="p-4 md:p-6 space-y-4">
-        <form onSubmit={subirFactura} className="space-y-4">
-          <div>
-            <label className="block text-content font-medium text-body mb-1">Proyecto al que corresponde</label>
-            <select
-              value={grupoId}
-              onChange={e => setGrupoId(e.target.value)}
-              className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body focus:outline-none focus:border-accent"
-            >
-              <option value="">Selecciona un proyecto...</option>
-              {gruposFacturables.map(g => (
-                <option key={g.id} value={g.id}>
-                  {(g.proyecto_nombre || 'Proyecto')} · {formatMoney(g.monto_total)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-content font-medium text-body mb-1">Archivo XML</label>
-            <input
+    <div className="flex flex-col gap-[19px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[19px] items-start">
+        <SectionCard title="Subir factura" contentClassName="p-4 md:p-6 space-y-4">
+          <form onSubmit={subirFactura} className="space-y-4">
+            <div>
+              <span className="sn-label">Proyecto al que corresponde</span>
+              <Select value={grupoId} onChange={e => setGrupoId(e.target.value)} className="mt-1.5 w-full">
+                <option value="">Selecciona un proyecto...</option>
+                {gruposFacturables.map(g => (
+                  <option key={g.id} value={g.id}>
+                    {(g.proyecto_nombre || 'Proyecto')} · {formatMoney(g.monto_total)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <TextField
+              label="Archivo XML"
               type="file"
               accept="text/xml,application/xml,.xml"
               onChange={e => setXml(e.target.files?.[0] ?? null)}
-              className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body file:mr-3 file:rounded-control file:border-0 file:bg-row file:px-3 file:py-1.5 file:text-body"
+              className="file:mr-3 file:rounded-control file:border-0 file:bg-row file:px-3 file:py-1.5 file:text-body"
             />
-          </div>
-          <div>
-            <label className="block text-content font-medium text-body mb-1">Archivo PDF</label>
-            <input
+            <TextField
+              label="Archivo PDF"
               type="file"
               accept="application/pdf"
               onChange={e => setPdf(e.target.files?.[0] ?? null)}
-              className="w-full bg-input border border-hairline rounded-control px-3 py-2.5 text-content text-body file:mr-3 file:rounded-control file:border-0 file:bg-row file:px-3 file:py-1.5 file:text-body"
+              className="file:mr-3 file:rounded-control file:border-0 file:bg-row file:px-3 file:py-1.5 file:text-body"
             />
-          </div>
 
-          {error && <StatusBanner tone="error">{error}</StatusBanner>}
-          {success && <StatusBanner tone="success">Tu factura se subió correctamente. Serenata la revisará para procesar tu pago.</StatusBanner>}
+            {error && <StatusBanner tone="error">{error}</StatusBanner>}
+            {success && <StatusBanner tone="success">Tu factura se subió correctamente. Serenata la revisará para procesar tu pago.</StatusBanner>}
 
-          {ejemplo && (
-            <div className="rounded-control border border-hairline bg-row p-3.5">
-              <p className="text-content font-medium text-body mb-2">Así debe quedar tu factura:</p>
-              <DesgloseFactura ejemplo={ejemplo} />
-              <p className="mt-3 text-content text-faint">{ejemplo.explicacion}</p>
-            </div>
-          )}
+            {ejemplo && (
+              <div className="rounded-control border border-hairline bg-row p-3.5">
+                <p className="text-content font-medium text-body mb-2">Así debe quedar tu factura:</p>
+                <DesgloseFactura ejemplo={ejemplo} />
+                <p className="mt-3 text-content text-faint">{ejemplo.explicacion}</p>
+              </div>
+            )}
 
-          <button
-            type="submit"
-            disabled={subiendo}
-            className="w-full bg-accent hover:bg-accent-pressed text-accent-ink py-2.5 rounded-control font-medium transition-colors disabled:opacity-50"
-          >
-            {subiendo ? 'Subiendo...' : 'Validar y subir factura'}
-          </button>
-        </form>
-      </SectionCard>
+            <Button type="submit" disabled={subiendo} fullWidth>
+              {subiendo ? 'Subiendo...' : 'Validar y subir factura'}
+            </Button>
+          </form>
+        </SectionCard>
 
-      <SectionCard title="Simulador de factura" contentClassName="p-4 md:p-6 space-y-3">
-        <p className="text-content text-subtext">
-          {grupoSeleccionado
-            ? 'Así debe quedar tu factura para este proyecto:'
-            : 'Elige un proyecto en "Subir factura" para ver cómo debe quedar tu factura.'}
-        </p>
-        <DesgloseFactura ejemplo={simulador} />
-        {grupoSeleccionado && <p className="mt-3 text-content text-faint">{simulador.explicacion}</p>}
-      </SectionCard>
+        <SectionCard title="Simulador de factura" contentClassName="p-4 md:p-6 space-y-3">
+          <p className="text-content text-subtext">
+            {grupoSeleccionado
+              ? 'Así debe quedar tu factura para este proyecto:'
+              : 'Elige un proyecto en "Subir factura" para ver cómo debe quedar tu factura.'}
+          </p>
+          <DesgloseFactura ejemplo={simulador} />
+          {grupoSeleccionado && <p className="mt-3 text-content text-faint">{simulador.explicacion}</p>}
+        </SectionCard>
+      </div>
+
+      <TablaHistorial grupos={grupos} />
     </div>
   )
 }
 
-// Bloque 4c (docs/PLAN.md): mismo SectionCard que antes vivía dentro de
-// TabCuentas, solo mudado a su propia tab -- mismo dato, misma estructura.
-function TabHistorial({ grupos }: { grupos: GrupoPortal[] }) {
+function conceptosDe(grupo: GrupoPortal): string {
+  if (grupo.items.length > 1) return `${grupo.items.length} conceptos`
+  return grupo.items[0]?.item_descripcion || '—'
+}
+
+// Bloque 1 (docs/PLAN.md): "Tus cuentas con Serenata" deja de vivir en su
+// propia tab ("Historial") y se muestra al fondo de "Cuentas y facturas",
+// como tabla -- mismo patrón visual que app/cotizaciones/page.tsx (tabla
+// desktop con colgroup+table-fixed, cards en mobile, StatusBadge de 4
+// tonos), no la lista de tarjetas apiladas que tenía antes. Así el
+// proveedor ve de inmediato, en la misma pantalla donde acaba de subir su
+// factura, que quedó validada/recibida y en qué estado de pago está.
+function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
   return (
     <SectionCard title="Tus cuentas con Serenata" contentClassName="p-0">
       {!grupos.length ? (
@@ -507,37 +476,57 @@ function TabHistorial({ grupos }: { grupos: GrupoPortal[] }) {
           Todavía no tienes cuentas registradas. Cuando Serenata te asigne a un proyecto, aparecerán aquí.
         </p>
       ) : (
-        grupos.map((grupo, i) => (
-          <div
-            key={grupo.id}
-            className={`p-4 md:px-6 ${i === grupos.length - 1 ? '' : 'border-b border-hairline'}`}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-body font-medium truncate">{grupo.proyecto_nombre || grupo.items[0]?.item_descripcion || 'Proyecto'}</p>
-                {grupo.items.length > 1 ? (
-                  <p className="text-content text-subtext">{grupo.items.length} conceptos</p>
-                ) : (
-                  <p className="text-content text-subtext truncate">{grupo.items[0]?.item_descripcion}</p>
-                )}
-              </div>
-              <div className="flex-none text-right">
-                <StatusBadge tone={toneForCuentaEstado(grupo.estado)}>{grupo.estado}</StatusBadge>
-                <p className="mt-1 text-content text-body">{formatMoney(grupo.saldo_pendiente)} pendiente</p>
-              </div>
-            </div>
-            {grupo.items.length > 1 && (
-              <div className="mt-3 space-y-1 border-t border-hairline pt-3">
-                {grupo.items.map(item => (
-                  <div key={item.id} className="flex items-center justify-between gap-3 text-content text-subtext">
-                    <span className="truncate">{item.item_descripcion}</span>
-                    <span className="flex-none text-body">{formatMoney(item.x_pagar)}</span>
-                  </div>
+        <div className="overflow-hidden">
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full table-fixed text-[length:var(--text-md)]">
+              <colgroup>
+                <col style={{ width: '32%' }} />
+                <col style={{ width: '28%' }} />
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '22%' }} />
+              </colgroup>
+              <thead>
+                <tr className="h-9">
+                  {['Proyecto', 'Conceptos', 'Saldo pendiente', 'Estado'].map(h => (
+                    <th key={h} className="sn-table-head truncate px-[var(--row-pad-x)] text-left align-middle">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {grupos.map(grupo => (
+                  <tr key={grupo.id} className="h-[46px] border-b border-hairline last:border-0 odd:bg-row">
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-ink">
+                      {grupo.proyecto_nombre || grupo.items[0]?.item_descripcion || 'Proyecto'}
+                    </td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{conceptosDe(grupo)}</td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle font-semibold text-ink">{formatMoney(grupo.saldo_pendiente)}</td>
+                    <td className="px-[var(--row-pad-x)] align-middle">
+                      <StatusBadge tone={toneForCuentaEstado(grupo.estado)}>{grupo.estado}</StatusBadge>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
-        ))
+
+          <div className="divide-y divide-hairline md:hidden">
+            {grupos.map(grupo => (
+              <div key={grupo.id} className="p-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="truncate text-[15px] font-medium text-body">
+                    {grupo.proyecto_nombre || grupo.items[0]?.item_descripcion || 'Proyecto'}
+                  </p>
+                  <StatusBadge tone={toneForCuentaEstado(grupo.estado)} className="flex-shrink-0">{grupo.estado}</StatusBadge>
+                </div>
+                <p className="mb-3 truncate text-content text-subtext">{conceptosDe(grupo)}</p>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-lg font-bold text-body">{formatMoney(grupo.saldo_pendiente)}</span>
+                  <span className="flex-shrink-0 text-xs text-faint">pendiente</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </SectionCard>
   )
