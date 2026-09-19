@@ -106,8 +106,25 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
     // Desglose fiscal -- Impuesto 002 = IVA, 001 = ISR (catálogo c_Impuesto
     // del SAT). Ambos nodos son opcionales en el CFDI: un proveedor persona
     // moral típicamente no trae cfdi:Retenciones.
-    const traslados = extractTagAttrs(xmlContent, 'Traslado')
-    const retenciones = extractTagAttrs(xmlContent, 'Retencion')
+    //
+    // BUG REAL (reportado 2026-09-19 con un CFDI real, folio 369): un CFDI
+    // trae los nodos Traslado/Retencion DOS VECES -- una vez dentro de cada
+    // cfdi:Concepto (desglose por renglón) y otra vez en el cfdi:Impuestos
+    // a nivel cfdi:Comprobante (resumen agregado, hermano de
+    // cfdi:Conceptos). Sumar sobre el XML completo cuenta ambas ocurrencias
+    // y duplica (o más, con N conceptos) el monto real -- el caso reportado
+    // leyó $6,400.00 de IVA trasladado cuando el XML real declaraba
+    // $3,200.00. Los fixtures de test anteriores (CFDI_PERSONA_MORAL/FISICA
+    // en factura-parser.test.ts) solo tenían el nivel documento, por eso el
+    // bug no se detectó antes. Fix: acotar la extracción al bloque que
+    // viene DESPUÉS de cerrar cfdi:Conceptos -- ahí solo vive el resumen a
+    // nivel documento, ya agregado correctamente por el emisor/PAC.
+    const conceptosCierre = xmlContent.match(/<\/(?:\w+:)?Conceptos>/)
+    const bloqueImpuestosComprobante = conceptosCierre
+      ? xmlContent.slice(conceptosCierre.index! + conceptosCierre[0].length)
+      : xmlContent
+    const traslados = extractTagAttrs(bloqueImpuestosComprobante, 'Traslado')
+    const retenciones = extractTagAttrs(bloqueImpuestosComprobante, 'Retencion')
     const ivaTrasladado = sumImporteByImpuesto(traslados, '002')
     const ivaRetenido = sumImporteByImpuesto(retenciones, '002')
     const isrRetenido = sumImporteByImpuesto(retenciones, '001')

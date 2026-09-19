@@ -525,6 +525,22 @@ Trampas reales, no teóricas. Cada una costó un bug:
   `20260916_fix_cuentas_por_proyecto_missing_index.sql`, aplicada a test y
   producción). No explicó por sí solo el hallazgo más grande del gate de
   carga de 3E-1 — ver F28 arriba.
+- **`parseFacturaXML()` duplicaba IVA trasladado/retenciones cuando el CFDI
+  tiene más de un nodo `cfdi:Impuestos` (bug real, reportado 2026-09-19 con
+  un CFDI real vía Portal, folio SH076).** Un CFDI válido trae
+  `cfdi:Traslado`/`cfdi:Retencion` **dos veces**: una por cada
+  `cfdi:Concepto` (desglose por renglón) y otra en el `cfdi:Impuestos` a
+  nivel `cfdi:Comprobante` (resumen agregado, hermano de
+  `cfdi:Conceptos`). `extractTagAttrs()` sumaba sobre el XML completo sin
+  distinguir nivel, así que contaba ambas ocurrencias -- el caso real leyó
+  IVA trasladado $6,400.00 cuando el XML declaraba $3,200.00 (exactamente
+  el doble). Los fixtures de test anteriores solo tenían el nivel
+  documento, por eso no se detectó antes. Fix
+  (`lib/server/xml/factura-parser.ts`): acotar la extracción al bloque que
+  viene después de cerrar `cfdi:Conceptos` -- ahí solo vive el resumen ya
+  agregado por el emisor/PAC. `lib/server/xml/factura-parser.test.ts`
+  agrega fixtures con la estructura real de dos niveles (single y
+  multi-concepto) como regresión.
 - **`GET /api/productos` (carga completa sin `q`, usada por
   `useQuotationForm` para el autofill client-side) tiene `.limit(2000)`
   explícito — antes no tenía ninguno y dependía en silencio del tope por

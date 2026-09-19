@@ -44,6 +44,78 @@ const CFDI_PERSONA_FISICA = `
   </cfdi:Comprobante>
 `
 
+// CFDI real (folio 369, reportado 2026-09-19): trae cfdi:Impuestos DOS
+// veces -- una por cada cfdi:Concepto (desglose del renglón) y otra a
+// nivel cfdi:Comprobante (resumen agregado, después de cerrar
+// cfdi:Conceptos). Reproduce la estructura exacta que causó el bug real:
+// sumar Traslado/Retencion sobre el XML completo los contaba dos veces.
+const CFDI_CON_IMPUESTOS_POR_CONCEPTO_Y_DOCUMENTO = `
+  <cfdi:Comprobante Folio="369" Fecha="2026-09-01T12:59:00" SubTotal="20000.00" Total="23200.00">
+    <cfdi:Emisor Rfc="ALE211125DC7" Nombre="Agata Leasing" />
+    <cfdi:Receptor Rfc="SHE241008TX5" Nombre="Serenata House" />
+    <cfdi:Conceptos>
+      <cfdi:Concepto Importe="20000.00">
+        <cfdi:Impuestos>
+          <cfdi:Traslados>
+            <cfdi:Traslado Base="20000.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="3200.00" />
+          </cfdi:Traslados>
+        </cfdi:Impuestos>
+      </cfdi:Concepto>
+    </cfdi:Conceptos>
+    <cfdi:Impuestos TotalImpuestosTrasladados="3200.00">
+      <cfdi:Traslados>
+        <cfdi:Traslado Base="20000.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="3200.00" />
+      </cfdi:Traslados>
+    </cfdi:Impuestos>
+    <cfdi:Complemento>
+      <tfd:TimbreFiscalDigital UUID="2af333b5-6446-428c-947f-1030a56fe82e" />
+    </cfdi:Complemento>
+  </cfdi:Comprobante>
+`
+
+// Mismo caso pero persona física con 2 conceptos -- confirma que ni el
+// número de renglones ni las retenciones (también duplicadas por
+// concepto) rompen la suma a nivel documento.
+const CFDI_FISICA_MULTI_CONCEPTO = `
+  <cfdi:Comprobante Folio="F2" Fecha="2026-09-01T12:59:00" SubTotal="1000.00" Total="1053.33">
+    <cfdi:Emisor Rfc="FIS010101AAA" Nombre="Proveedor Persona Física" />
+    <cfdi:Receptor Rfc="SER010101AAA" Nombre="Serenata House" />
+    <cfdi:Conceptos>
+      <cfdi:Concepto Importe="600.00">
+        <cfdi:Impuestos>
+          <cfdi:Retenciones>
+            <cfdi:Retencion Impuesto="002" Importe="64.00" />
+            <cfdi:Retencion Impuesto="001" Importe="60.00" />
+          </cfdi:Retenciones>
+          <cfdi:Traslados>
+            <cfdi:Traslado Base="600.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="96.00" />
+          </cfdi:Traslados>
+        </cfdi:Impuestos>
+      </cfdi:Concepto>
+      <cfdi:Concepto Importe="400.00">
+        <cfdi:Impuestos>
+          <cfdi:Retenciones>
+            <cfdi:Retencion Impuesto="002" Importe="42.67" />
+            <cfdi:Retencion Impuesto="001" Importe="40.00" />
+          </cfdi:Retenciones>
+          <cfdi:Traslados>
+            <cfdi:Traslado Base="400.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="64.00" />
+          </cfdi:Traslados>
+        </cfdi:Impuestos>
+      </cfdi:Concepto>
+    </cfdi:Conceptos>
+    <cfdi:Impuestos TotalImpuestosTrasladados="160.00" TotalImpuestosRetenidos="106.67">
+      <cfdi:Retenciones>
+        <cfdi:Retencion Impuesto="002" Importe="106.67" />
+        <cfdi:Retencion Impuesto="001" Importe="100.00" />
+      </cfdi:Retenciones>
+      <cfdi:Traslados>
+        <cfdi:Traslado Base="1000.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="160.00" />
+      </cfdi:Traslados>
+    </cfdi:Impuestos>
+  </cfdi:Comprobante>
+`
+
 describe('xml/factura-parser', () => {
   it('parsea folio, fecha, monto, RFCs y UUID de un CFDI básico', () => {
     const result = parseFacturaXML(CFDI_BASICO)
@@ -111,6 +183,22 @@ describe('xml/factura-parser', () => {
 
     it('extrae IVA trasladado y ambas retenciones de un CFDI de persona física', () => {
       const result = parseFacturaXML(CFDI_PERSONA_FISICA)
+      expect(result.subtotal).toBe(1000)
+      expect(result.iva_trasladado).toBe(160)
+      expect(result.iva_retenido).toBe(106.67)
+      expect(result.isr_retenido).toBe(100)
+    })
+
+    it('BUG REAL (folio 369, 2026-09-19): no duplica el IVA trasladado cuando el CFDI trae cfdi:Impuestos por Concepto ADEMÁS del resumen a nivel documento', () => {
+      const result = parseFacturaXML(CFDI_CON_IMPUESTOS_POR_CONCEPTO_Y_DOCUMENTO)
+      expect(result.subtotal).toBe(20000)
+      expect(result.monto_total).toBe(23200)
+      // Antes del fix daba 6400 (3200 del Concepto + 3200 del documento).
+      expect(result.iva_trasladado).toBe(3200)
+    })
+
+    it('no duplica retenciones con múltiples Conceptos, cada uno con su propio desglose', () => {
+      const result = parseFacturaXML(CFDI_FISICA_MULTI_CONCEPTO)
       expect(result.subtotal).toBe(1000)
       expect(result.iva_trasladado).toBe(160)
       expect(result.iva_retenido).toBe(106.67)
