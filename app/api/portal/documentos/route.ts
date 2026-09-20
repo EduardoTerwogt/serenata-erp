@@ -154,28 +154,29 @@ export async function POST(request: Request) {
       detalle_validacion: detalleValidacion,
     })
 
-    // La Constancia de Situación Fiscal es de "verdad única": el proveedor
-    // solo debe tener UNA en todo momento, la más reciente que subió --
-    // nunca varias acumuladas de distintos regímenes. Se borra cualquier
-    // constancia previa (documento + archivo en Drive, best-effort) recién
-    // AHORA que la nueva ya quedó creada con éxito, para no perder la
-    // anterior si algo falla antes de este punto.
-    if (tipo === 'CONSTANCIA_SITUACION_FISCAL') {
-      const documentosExistentes = await getProveedorDocumentos(portalAuth.proveedorId)
-      const constanciasViejas = documentosExistentes.filter(
-        d => d.tipo === 'CONSTANCIA_SITUACION_FISCAL' && d.id !== documento.id
-      )
-      for (const vieja of constanciasViejas) {
-        const fileId = extractDriveFileId(vieja.archivo_url)
-        if (fileId) {
-          try {
-            await deleteDriveFile(fileId)
-          } catch (err) {
-            console.error('[portal/documentos][POST] No se pudo borrar la constancia anterior de Drive (se reemplaza igual el registro):', err)
-          }
+    // Cada tipo de documento (constancia, INE, comprobante de domicilio,
+    // comprobante bancario) es de "verdad única": el proveedor solo debe
+    // tener UNO de cada tipo en todo momento, el más reciente que subió --
+    // nunca varios acumulados. Se borra cualquier documento anterior del
+    // MISMO tipo (documento + archivo en Drive, best-effort) recién AHORA
+    // que el nuevo ya quedó creado con éxito, para no perder el anterior si
+    // algo falla antes de este punto. Empezó acotado a la constancia (el
+    // caso real reportado: régimen fiscal desactualizado); el usuario pidió
+    // extenderlo a los otros tres tipos con la misma lógica.
+    const documentosExistentes = await getProveedorDocumentos(portalAuth.proveedorId)
+    const documentosViejosDelMismoTipo = documentosExistentes.filter(
+      d => d.tipo === tipo && d.id !== documento.id
+    )
+    for (const viejo of documentosViejosDelMismoTipo) {
+      const fileId = extractDriveFileId(viejo.archivo_url)
+      if (fileId) {
+        try {
+          await deleteDriveFile(fileId)
+        } catch (err) {
+          console.error('[portal/documentos][POST] No se pudo borrar el documento anterior de Drive (se reemplaza igual el registro):', err)
         }
-        await deleteProveedorDocumento(vieja.id)
       }
+      await deleteProveedorDocumento(viejo.id)
     }
 
     return Response.json({ success: true, documento, requiere_confirmacion: requiereConfirmacion })
