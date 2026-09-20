@@ -341,6 +341,10 @@ export interface CuentaPagar {
   grupo_estado?: EstadoCuentaPagarGrupo | null
   grupo_monto_total?: number | null
   grupo_monto_pagado?: number | null
+  // Bloque 2 (docs/PLAN.md): poblado por cuentas_por_proyecto() (LEFT JOIN a
+  // proveedores) para que calcularCierreProyecto aplique la retención
+  // correcta por grupo sin una query aparte.
+  proveedor_regimen_fiscal?: RegimenFiscal | null
 }
 
 // Agrupa cuentas_pagar del mismo proveedor dentro del mismo proyecto para

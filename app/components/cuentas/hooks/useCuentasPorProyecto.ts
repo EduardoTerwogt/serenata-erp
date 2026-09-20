@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CuentaCobrar, CuentaPagar } from '@/lib/types'
 import { getJson } from '@/lib/client/api'
+import { CierreProyecto } from '@/lib/shared/cierre-proyecto'
 
-export interface ProyectoConCuentas {
+export interface ProyectoConCuentasRPC {
   proyecto: {
     id: string
     folio: string
@@ -16,6 +17,14 @@ export interface ProyectoConCuentas {
   cuentas_pagar: CuentaPagar[]
   total_cobrar: number
   total_pagar: number
+  margen_total_proyecto: number
+  fee_agencia_proyecto: number
+  utilidad_total_proyecto: number
+  iva_total_proyecto: number
+}
+
+export interface ProyectoConCuentas extends ProyectoConCuentasRPC {
+  cierre: CierreProyecto
 }
 
 export function useCuentasPorProyecto() {
