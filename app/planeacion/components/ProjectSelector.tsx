@@ -17,7 +17,7 @@ export default function ClienteProyectoSelector({
   loading,
 }: ClienteProyectoSelectorProps) {
   const { setValue } = useForm<QuotationFormValues>({
-    defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [] },
+    defaultValues: { cliente: '', cliente_id: null, proyecto: '', fecha_entrega: '', locacion: '', items: [] },
   })
   // Reuse the quotation form hook for client autocomplete
   const {
@@ -65,16 +65,16 @@ export default function ClienteProyectoSelector({
         />
         {mostrarClienteDropdown && clienteSugerencias.length > 0 && (
           <div className="absolute z-50 w-full mt-1 rounded-control border border-hairline bg-card shadow-overlay max-h-48 overflow-y-auto">
-            {clienteSugerencias.map((nombre, i) => (
+            {clienteSugerencias.map((cliente) => (
               <div
-                key={i}
+                key={cliente.id}
                 onMouseDown={() => {
-                  handleSelectCliente(nombre)
+                  handleSelectCliente(cliente.nombre)
                   setMostrarClienteDropdown(false)
                 }}
                 className="px-4 py-3 hover:bg-row cursor-pointer text-body text-sm"
               >
-                {nombre}
+                {cliente.nombre}
               </div>
             ))}
           </div>

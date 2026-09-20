@@ -142,6 +142,7 @@ describe('POST /api/cotizaciones', () => {
       'Evento de marca',
       [{ descripcion: 'Audio', precio_unitario: 1000, x_pagar: 800 }],
       'POST /api/cotizaciones',
+      'SH007',
     )
     expect(response.status).toBe(201)
     await expect(response.json()).resolves.toEqual({ id: 'SH007', estado: 'BORRADOR' })

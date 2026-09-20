@@ -19,6 +19,7 @@ export interface QuotationFormItem {
 
 export interface QuotationFormValues {
   cliente: string
+  cliente_id: string | null
   proyecto: string
   fecha_entrega: string
   locacion: string

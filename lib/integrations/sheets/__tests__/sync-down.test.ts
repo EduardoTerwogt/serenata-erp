@@ -184,7 +184,7 @@ describe('syncTableDownByName -- paginación por keyset', () => {
     const headerRow = writtenRows[0]
     expect(headerRow).not.toContain('created_at')
     expect(headerRow).toEqual([
-      'id', 'cotizacion_id', 'cliente', 'proyecto', 'monto_total',
+      'id', 'cotizacion_id', 'cliente', 'cliente_id', 'proyecto', 'monto_total',
       'estado', 'fecha_vencimiento', 'fecha_pago', 'notas',
     ])
   })

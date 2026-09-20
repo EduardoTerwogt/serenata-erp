@@ -65,7 +65,7 @@ export async function PUT(
     if (parsed.notas_internas !== undefined || parsed.notas_pdf !== undefined) {
       await saveNotas(id, { notas_internas: parsed.notas_internas, notas_pdf: parsed.notas_pdf })
     }
-    await runQuotationNonCriticalAutosaves(payload.cliente, payload.proyecto, inputItems ?? [], 'PUT /api/cotizaciones/:id')
+    await runQuotationNonCriticalAutosaves(payload.cliente, payload.proyecto, inputItems ?? [], 'PUT /api/cotizaciones/:id', id)
 
     return Response.json(await getCotizacionById(id))
   } catch (error) {

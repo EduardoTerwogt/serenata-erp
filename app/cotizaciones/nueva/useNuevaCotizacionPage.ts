@@ -51,6 +51,7 @@ export function useNuevaCotizacionPage() {
   const { register, control, watch, handleSubmit, setValue, getValues } = useForm<QuotationFormValues>({
     defaultValues: {
       cliente: clienteParam,
+      cliente_id: null,
       proyecto: proyectoParam,
       fecha_entrega: fechaEntregaParam,
       locacion: locacionParam,

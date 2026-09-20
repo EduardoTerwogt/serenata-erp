@@ -80,7 +80,7 @@ export async function POST(
     const updatedQuotation = await recalculateQuotationHeader(id)
     const createdItem = (updatedQuotation.items || []).find((item) => item.id === itemId)
     // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
-    after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items') })
+    after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items', id) })
     // Evento confirmado por servidor tras el commit -- payload chico (ids +
     // revision + timestamp, nunca la partida completa). EF-2 1D-1: en
     // after(), igual que el autosave de arriba -- serverless puede cortar

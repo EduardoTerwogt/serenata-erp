@@ -31,6 +31,7 @@ export async function PATCH(
     // Solo viajan las claves que llegaron: la RPC conserva el resto de la fila.
     const patch: Record<string, unknown> = {
       ...(typeof body?.cliente === 'string' ? { cliente: body.cliente } : {}),
+      ...(typeof body?.cliente_id === 'string' || body?.cliente_id === null ? { cliente_id: body.cliente_id ?? '' } : {}),
       ...(typeof body?.proyecto === 'string' ? { proyecto: body.proyecto } : {}),
       ...(typeof body?.fecha_entrega === 'string' || body?.fecha_entrega === null ? { fecha_entrega: body.fecha_entrega ?? '' } : {}),
       ...(typeof body?.locacion === 'string' || body?.locacion === null ? { locacion: body.locacion ?? '' } : {}),
@@ -51,7 +52,7 @@ export async function PATCH(
     }
 
     const actualizada = data as Cotizacion
-    await runQuotationNonCriticalAutosaves(actualizada.cliente, actualizada.proyecto, [], 'PATCH /api/cotizaciones/:id/general')
+    await runQuotationNonCriticalAutosaves(actualizada.cliente, actualizada.proyecto, [], 'PATCH /api/cotizaciones/:id/general', id)
     // EF-2 1D-1: en after() -- fire-and-forget puede perderse si la
     // función serverless termina antes de que la promesa resuelva.
     after(async () => {

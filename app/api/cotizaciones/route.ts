@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       await saveNotas(folio, { notas_internas: parsed.notas_internas, notas_pdf: parsed.notas_pdf })
     }
     await consumeReservedQuotationFolio(folio, reservationToken || null)
-    await runQuotationNonCriticalAutosaves(cotizacionData.cliente, cotizacionData.proyecto, inputItems, 'POST /api/cotizaciones')
+    await runQuotationNonCriticalAutosaves(cotizacionData.cliente, cotizacionData.proyecto, inputItems, 'POST /api/cotizaciones', folio)
 
     return Response.json(await getCotizacionById(folio), { status: 201 })
   } catch (error) {

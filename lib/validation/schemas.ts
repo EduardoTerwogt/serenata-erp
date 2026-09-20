@@ -40,6 +40,7 @@ export const ItemCotizacionSchema = z.object({
 
 const CotizacionBaseSchema = z.object({
   cliente: z.string().min(1, 'El cliente es requerido'),
+  cliente_id: z.string().uuid().nullable().optional(),
   proyecto: z.string().min(1, 'El proyecto es requerido'),
   fecha_entrega: z.string().nullable().optional(),
   locacion: z.string().nullable().optional(),

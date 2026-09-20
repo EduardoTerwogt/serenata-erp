@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-20T01:44:07.354Z",
-  "count": 98,
+  "generated_at": "2026-09-20T01:47:44.776Z",
+  "count": 99,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -99,6 +99,7 @@
     "20260920_clientes_add_cliente_id_columns.sql",
     "20260920_clientes_cliente_id_backfill_clasificacion.sql",
     "20260920_cuentas_por_proyecto_utilidad_impuestos.sql",
-    "20260920_proveedores_add_regimen_fiscal_resico.sql"
+    "20260920_proveedores_add_regimen_fiscal_resico.sql",
+    "20260920_rpcs_cliente_id_dual_write.sql"
   ]
 }

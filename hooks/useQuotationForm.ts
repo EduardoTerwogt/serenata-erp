@@ -9,7 +9,7 @@ import { QuotationFormItem, QuotationFormValues } from '@/lib/quotations/types'
 
 // Fase 1: Caché de catálogos a nivel de módulo — evita refetch en navegación y remounts
 interface CatalogosCache {
-  clientes: { nombre: string; proyectos: string[] }[]
+  clientes: { id: string; nombre: string; proyectos: string[] }[]
   productos: Producto[]
   ts: number
 }
@@ -20,7 +20,7 @@ export function useQuotationForm(
   setValue: UseFormSetValue<QuotationFormValues>,
   watchedItems: QuotationFormItem[]
 ) {
-  const [listaClientes, setListaClientes] = useState<{ nombre: string; proyectos: string[] }[]>([])
+  const [listaClientes, setListaClientes] = useState<{ id: string; nombre: string; proyectos: string[] }[]>([])
   const [listaProductos, setListaProductos] = useState<Producto[]>([])
   const [clienteInput, setClienteInput] = useState('')
   const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
@@ -41,7 +41,7 @@ export function useQuotationForm(
 
     try {
       const [clientes, productos] = await Promise.all([
-        getJson<{ nombre: string; proyectos: string[] }[]>('/api/clientes?q=', 'Error clientes'),
+        getJson<{ id: string; nombre: string; proyectos: string[] }[]>('/api/clientes?q=', 'Error clientes'),
         getJson<Producto[]>('/api/productos?q=', 'Error productos'),
       ])
       const newClientes = clientes || []
@@ -86,7 +86,7 @@ export function useQuotationForm(
     return listaClientes
       .filter((cliente) => cliente.nombre.toLowerCase().includes(clienteInput.toLowerCase()))
       .slice(0, 8)
-      .map((cliente) => cliente.nombre)
+      .map((cliente) => ({ id: cliente.id, nombre: cliente.nombre }))
   }, [clienteInput, listaClientes])
 
   const proyectosDelCliente = useMemo(() => {
@@ -102,6 +102,11 @@ export function useQuotationForm(
   const handleClienteChange = useCallback((valor: string) => {
     setClienteInput(valor)
     setValue('cliente', valor)
+    // Bloque 3 (docs/PLAN.md): un texto que ya no matchea ningún cliente del
+    // catálogo no debe arrastrar un cliente_id viejo -- solo un match exacto
+    // por nombre lo fija de nuevo (tecleo libre, sin elegir del dropdown).
+    const match = listaClientes.find((cliente) => cliente.nombre.toLowerCase() === valor.trim().toLowerCase())
+    setValue('cliente_id', match?.id ?? null)
 
     if (valor.length < 2) {
       setMostrarClienteDropdown(false)
@@ -162,9 +167,10 @@ export function useQuotationForm(
     setMostrarProductoDropdown((prev) => ({ ...prev, [rowId]: false }))
   }, [indexOfRow, setValue])
 
-  const seleccionarCliente = useCallback((cliente: string) => {
-    setClienteInput(cliente)
-    setValue('cliente', cliente)
+  const seleccionarCliente = useCallback((cliente: { id: string; nombre: string }) => {
+    setClienteInput(cliente.nombre)
+    setValue('cliente', cliente.nombre)
+    setValue('cliente_id', cliente.id)
     setMostrarClienteDropdown(false)
   }, [setValue])
 

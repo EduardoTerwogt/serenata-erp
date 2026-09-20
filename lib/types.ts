@@ -162,6 +162,7 @@ export interface Cliente {
 export interface Cotizacion {
   id: string
   cliente: string
+  cliente_id?: string | null
   proyecto: string
   fecha_entrega: string | null
   locacion: string | null

@@ -8,11 +8,16 @@ async function saveCotizacionAtomic(payload: Record<string, unknown>) {
   if (error) throw error
 }
 
-async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: unknown) {
+// Bloque 3 (docs/PLAN.md): además de resolver/crear el cliente, retorna su
+// id para que runQuotationNonCriticalAutosaves haga dual-write de
+// cotizaciones.cliente_id -- el selector de UI (cuando manda cliente_id
+// explícito) ya lo fija de antemano, así que ese caso queda intacto (ver
+// guard `cliente_id IS NULL` abajo).
+async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: unknown): Promise<string | null> {
   const cliente = String(clienteValue || '').trim()
   const proyecto = String(proyectoValue || '').trim()
 
-  if (!cliente) return
+  if (!cliente) return null
 
   const { data: clienteExistente, error: clienteFetchError } = await supabaseAdmin
     .from('clientes')
@@ -34,18 +39,21 @@ async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: un
       .eq('id', clienteExistente.id)
 
     if (updateError) throw updateError
-    return
+    return clienteExistente.id
   }
 
-  const { error: insertError } = await supabaseAdmin
+  const { data: clienteCreado, error: insertError } = await supabaseAdmin
     .from('clientes')
     .insert({
       nombre: cliente,
       proyectos: proyecto ? [proyecto] : [],
       activo: true,
     })
+    .select('id')
+    .single()
 
   if (insertError) throw insertError
+  return clienteCreado.id
 }
 
 async function autosaveProductos(items: Partial<ItemCotizacion>[]) {
@@ -77,9 +85,22 @@ export async function runQuotationNonCriticalAutosaves(
     | 'PATCH /api/cotizaciones/:id/general'
     | 'PATCH /api/cotizaciones/:id/totales'
     | 'POST /api/cotizaciones/:id/items'
-    | 'PATCH /api/cotizaciones/:id/items/:itemId'
+    | 'PATCH /api/cotizaciones/:id/items/:itemId',
+  cotizacionId: string
 ) {
-  const tasks: Promise<unknown>[] = [autosaveClienteYProyecto(clienteValue, proyectoValue)]
+  // Bloque 3: `IS NULL` evita pisar un cliente_id ya fijado por el selector
+  // de UI (Datos generales) con el resuelto/creado aquí por texto libre.
+  const tasks: Promise<unknown>[] = [
+    autosaveClienteYProyecto(clienteValue, proyectoValue).then(async (clienteId) => {
+      if (!clienteId) return
+      const { error } = await supabaseAdmin
+        .from('cotizaciones')
+        .update({ cliente_id: clienteId })
+        .eq('id', cotizacionId)
+        .is('cliente_id', null)
+      if (error) throw error
+    }),
+  ]
 
   if (items.length > 0) {
     tasks.push(autosaveProductos(items))
@@ -187,6 +208,7 @@ export async function buildCreateCotizacionPayload(
   const payload = {
     id: folio,
     cliente: cotizacionData.cliente,
+    cliente_id: cotizacionData.cliente_id ?? cotizacionActual?.cliente_id ?? null,
     proyecto: cotizacionData.proyecto,
     fecha_entrega: cotizacionData.fecha_entrega,
     locacion: cotizacionData.locacion,
@@ -209,6 +231,7 @@ export async function buildUpdateCotizacionPayload(
   id: string,
   previousCotizacion: {
     cliente: string
+    cliente_id?: string | null
     proyecto: string
     fecha_entrega: string | null
     locacion: string | null
@@ -262,6 +285,7 @@ export async function buildUpdateCotizacionPayload(
   return {
     id,
     cliente: cotizacionData.cliente ?? previousCotizacion.cliente,
+    cliente_id: cotizacionData.cliente_id ?? previousCotizacion.cliente_id ?? null,
     proyecto: cotizacionData.proyecto ?? previousCotizacion.proyecto,
     fecha_entrega: cotizacionData.fecha_entrega ?? previousCotizacion.fecha_entrega,
     locacion: cotizacionData.locacion ?? previousCotizacion.locacion,

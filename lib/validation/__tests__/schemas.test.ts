@@ -108,6 +108,33 @@ describe('CotizacionCreateSchema', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  it('acepta cliente_id como uuid válido', () => {
+    const result = CotizacionCreateSchema.safeParse({
+      cliente: 'Coca Cola',
+      proyecto: 'Spot TV',
+      cliente_id: '11111111-1111-4111-8111-111111111111',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('acepta cliente_id null (sin match seguro en el catálogo, Bloque 3)', () => {
+    const result = CotizacionCreateSchema.safeParse({
+      cliente: 'Coca Cola',
+      proyecto: 'Spot TV',
+      cliente_id: null,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rechaza cliente_id que no es un uuid válido', () => {
+    const result = CotizacionCreateSchema.safeParse({
+      cliente: 'Coca Cola',
+      proyecto: 'Spot TV',
+      cliente_id: 'no-es-un-uuid',
+    })
+    expect(result.success).toBe(false)
+  })
 })
 
 // ==================== CotizacionUpdateSchema ====================

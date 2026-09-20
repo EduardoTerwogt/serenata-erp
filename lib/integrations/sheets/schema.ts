@@ -22,7 +22,7 @@ export const TABLE_SCHEMAS: TableSchema[] = [
     table: 'cotizaciones',
     pk: 'id',
     columns: [
-      'id', 'cliente', 'proyecto', 'fecha_entrega', 'locacion',
+      'id', 'cliente', 'cliente_id', 'proyecto', 'fecha_entrega', 'locacion',
       'fecha_cotizacion', 'tipo', 'es_complementaria_de', 'estado',
       'subtotal', 'fee_agencia', 'general', 'iva', 'total',
       'margen_total', 'utilidad_total', 'porcentaje_fee', 'iva_activo',
@@ -47,7 +47,7 @@ export const TABLE_SCHEMAS: TableSchema[] = [
     table: 'proyectos',
     pk: 'id',
     columns: [
-      'id', 'cliente', 'proyecto', 'fecha_entrega', 'locacion',
+      'id', 'cliente', 'cliente_id', 'proyecto', 'fecha_entrega', 'locacion',
       'horarios', 'punto_encuentro', 'estado', 'notas', 'created_at',
     ],
     readonly: ['created_at'],
@@ -85,7 +85,7 @@ export const TABLE_SCHEMAS: TableSchema[] = [
     pk: 'id',
     columns: [
       'id', 'responsable_id', 'cotizacion_id', 'proyecto_id',
-      'proyecto_nombre', 'cliente', 'fecha_evento', 'rol_en_proyecto',
+      'proyecto_nombre', 'cliente', 'cliente_id', 'fecha_evento', 'rol_en_proyecto',
       'x_pagar', 'created_at',
     ],
     readonly: ['created_at'],
@@ -95,7 +95,7 @@ export const TABLE_SCHEMAS: TableSchema[] = [
     table: 'cuentas_cobrar',
     pk: 'id',
     columns: [
-      'id', 'cotizacion_id', 'cliente', 'proyecto', 'monto_total',
+      'id', 'cotizacion_id', 'cliente', 'cliente_id', 'proyecto', 'monto_total',
       'estado', 'fecha_vencimiento', 'fecha_pago', 'notas',
     ],
     readonly: [],
