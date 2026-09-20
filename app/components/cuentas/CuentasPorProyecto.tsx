@@ -74,6 +74,9 @@ export function CuentasPorProyecto({ proyectos, term, onSelectCobrar, onSelectPa
               <span className="text-[length:var(--text-md)] text-subtext">
                 Por pagar <span className="font-semibold text-ink">${fmt(pendientePagar)}</span>
               </span>
+              <span className="text-[length:var(--text-md)] text-subtext">
+                Utilidad <span className="font-semibold text-ink">${fmt(grupo.cierre.utilidad_neta)}</span>
+              </span>
             </button>
 
             {abrir && (
@@ -161,6 +164,69 @@ export function CuentasPorProyecto({ proyectos, term, onSelectCobrar, onSelectPa
                       </table>
                     )}
                   </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <p className="mb-2 sn-label">Cierre del proyecto (estimado)</p>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="overflow-hidden rounded-control border border-hairline">
+                      {grupo.cierre.quien_cuanto_cuando.length === 0 ? (
+                        <p className="p-4 text-[length:var(--text-base)] italic text-faint">Sin proveedores facturados todavía</p>
+                      ) : (
+                        <table className="w-full table-fixed text-[length:var(--text-md)]">
+                          <colgroup>
+                            <col style={{ width: '38%' }} />
+                            <col style={{ width: '32%' }} />
+                            <col style={{ width: '30%' }} />
+                          </colgroup>
+                          <thead>
+                            <tr className="h-9">
+                              <th className="sn-table-head truncate px-4 text-left align-middle">Quién</th>
+                              <th className="sn-table-head truncate px-4 text-right align-middle">Cuánto</th>
+                              <th className="sn-table-head truncate px-4 text-right align-middle">Cuándo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {grupo.cierre.quien_cuanto_cuando.map((q, i) => (
+                              <tr key={q.proveedor_id ?? i} className="h-[46px] border-t border-hairline odd:bg-row">
+                                <td className="truncate px-4 align-middle font-medium text-ink">{q.proveedor_nombre}</td>
+                                <td className="truncate px-4 text-right align-middle text-subtext">${fmt(q.total_a_transferir)}</td>
+                                <td className="truncate px-4 text-right align-middle text-faint text-[length:var(--text-xs)]">
+                                  Día 17 del mes siguiente
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+
+                    <div className="bg-row border border-hairline rounded-control p-4 space-y-2">
+                      <div className="flex justify-between text-content">
+                        <span className="text-subtext">Utilidad Bruta</span>
+                        <span className="text-body">${fmt(grupo.cierre.utilidad_bruta)}</span>
+                      </div>
+                      <div className="flex justify-between text-content">
+                        <span className="text-subtext">ISR estimado de Serenata (30%)</span>
+                        <span className="text-body">-${fmt(grupo.cierre.isr_serenata_estimado)}</span>
+                      </div>
+                      <div className="flex justify-between items-baseline pt-2 border-t border-hairline">
+                        <span className="text-body font-semibold text-content">Utilidad Neta (estimada)</span>
+                        <span className="text-ink font-bold text-h3">${fmt(grupo.cierre.utilidad_neta)}</span>
+                      </div>
+                      <div className="flex justify-between text-content pt-2 border-t border-hairline">
+                        <span className="text-subtext">IVA neto a enterar (informativo)</span>
+                        <span className="text-body">${fmt(grupo.cierre.iva_neto_a_enterar)}</span>
+                      </div>
+                      <div className="flex justify-between text-content">
+                        <span className="text-subtext">Retenciones a enterar por proveedores (informativo)</span>
+                        <span className="text-body">${fmt(grupo.cierre.iva_retenido_total + grupo.cierre.isr_retenido_total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-faint text-eyebrow mt-2">
+                    Estimación, no el pago real: retenciones e IVA son dinero de terceros que se declara a más tardar el día 17 del mes siguiente; el ISR real de Serenata usa el coeficiente de utilidad del ejercicio anterior (Art. 14 LISR), no esta tasa plana.
+                  </p>
                 </div>
               </div>
             )}
