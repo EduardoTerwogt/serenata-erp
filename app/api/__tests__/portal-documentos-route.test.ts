@@ -166,6 +166,71 @@ describe('POST /api/portal/documentos', () => {
     expect(mocks.buscarCandidatosMatchMock).not.toHaveBeenCalled()
   })
 
+  // Punto 2 (2026-09-20): auto-clasificación híbrida -- la misma lectura de
+  // IA que ya corre para matching/régimen también decide estado_validacion.
+  // Staff puede corregir después vía PATCH (ver
+  // app/api/__tests__/proveedores-documentos-id-route.test.ts).
+  describe('auto-clasificación de estado_validacion', () => {
+    it('INE legible (nombre extraído) -- se crea como validado', async () => {
+      mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: 'Jose Gutierrez', regimen_fiscal: null })
+
+      await POST(buildRequest('INE'))
+
+      expect(mocks.createProveedorDocumentoMock).toHaveBeenCalledWith(
+        expect.objectContaining({ estado_validacion: 'validado', detalle_validacion: null })
+      )
+    })
+
+    it('INE ilegible (IA no extrajo nombre) -- se crea en revision con motivo', async () => {
+      mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: null, regimen_fiscal: null })
+
+      await POST(buildRequest('INE'))
+
+      expect(mocks.createProveedorDocumentoMock).toHaveBeenCalledWith(
+        expect.objectContaining({ estado_validacion: 'revision', detalle_validacion: expect.stringContaining('nombre completo') })
+      )
+    })
+
+    it('constancia legible (régimen extraído) -- se crea como validado', async () => {
+      mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: null, regimen_fiscal: 'moral' })
+
+      await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+      expect(mocks.createProveedorDocumentoMock).toHaveBeenCalledWith(
+        expect.objectContaining({ estado_validacion: 'validado', detalle_validacion: null })
+      )
+    })
+
+    it('constancia ilegible (IA no extrajo régimen) -- se crea en revision con motivo', async () => {
+      mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: null, regimen_fiscal: null })
+
+      await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+      expect(mocks.createProveedorDocumentoMock).toHaveBeenCalledWith(
+        expect.objectContaining({ estado_validacion: 'revision', detalle_validacion: expect.stringContaining('régimen fiscal') })
+      )
+    })
+
+    it('comprobante de domicilio/bancario no pasan por IA -- se crean pendiente (nadie los clasifica todavía)', async () => {
+      await POST(buildRequest('COMPROBANTE_DOMICILIO'))
+
+      expect(mocks.createProveedorDocumentoMock).toHaveBeenCalledWith(
+        expect.objectContaining({ estado_validacion: 'pendiente', detalle_validacion: null })
+      )
+    })
+
+    it('INE subido sin proveedor activo (sin extracción) -- se crea pendiente, no revision', async () => {
+      mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'pendiente_confirmacion' })
+
+      await POST(buildRequest('INE'))
+
+      expect(mocks.extraerDatosIdentidadMock).not.toHaveBeenCalled()
+      expect(mocks.createProveedorDocumentoMock).toHaveBeenCalledWith(
+        expect.objectContaining({ estado_validacion: 'pendiente' })
+      )
+    })
+  })
+
   it('retorna 400 con tipo de documento inválido', async () => {
     const response = await POST(buildRequest('OTRO_TIPO'))
     expect(response.status).toBe(400)

@@ -10,7 +10,7 @@ import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { extraerDatosIdentidad } from '@/lib/server/portal/document-parser'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
-import { TipoDocumentoProveedor } from '@/lib/types'
+import { EstadoValidacionDocumento, TipoDocumentoProveedor } from '@/lib/types'
 
 const ROUTE_GET = 'GET /api/portal/documentos'
 const ROUTE_POST = 'POST /api/portal/documentos'
@@ -66,12 +66,6 @@ export async function POST(request: Request) {
     if (!googleEnv) return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
 
     const archivoUrl = await uploadFileToDrive(file, `/Proveedores/${portalAuth.proveedorId}`, file.name, googleEnv.driveFolderId)
-    const documento = await createProveedorDocumento({
-      proveedor_id: portalAuth.proveedorId,
-      tipo: tipo as TipoDocumentoProveedor,
-      archivo_url: archivoUrl,
-      archivo_nombre: file.name,
-    })
 
     // Matching de identidad (Fase 5.5): se dispara aquí, no en el signup --
     // el proveedor se registra ligero (correo/password/alias) y el nombre
@@ -90,6 +84,16 @@ export async function POST(request: Request) {
     // La constancia sigue disparando extracción (para regimen_fiscal), solo
     // deja de alimentar el matching.
     let requiereConfirmacion = false
+    // Punto 2 (2026-09-20): auto-clasificación híbrida -- la misma lectura
+    // de IA que ya corre para matching/régimen también clasifica el
+    // documento. 'validado' si se pudo leer el dato esperado, 'revision'
+    // (con motivo) si no. Comprobante de domicilio/bancario no pasan por
+    // IA (el prompt de document-parser.ts es específico a identidad/fiscal,
+    // no a otros tipos) -- se quedan en 'pendiente' hasta que staff los
+    // revise a mano. Staff siempre puede corregir cualquier estado después
+    // (ver PATCH /api/proveedores/[id]/documentos/[docId]).
+    let estadoValidacion: EstadoValidacionDocumento = 'pendiente'
+    let detalleValidacion: string | null = null
     if (TIPOS_CON_EXTRACCION_IA.includes(tipo as TipoDocumentoProveedor)) {
       const proveedorActual = await getProveedorById(portalAuth.proveedorId)
       const esConstancia = tipo === 'CONSTANCIA_SITUACION_FISCAL'
@@ -117,8 +121,29 @@ export async function POST(request: Request) {
         if (esConstancia && datos.regimen_fiscal && !proveedorActual?.regimen_fiscal) {
           await updateProveedor(portalAuth.proveedorId, { regimen_fiscal: datos.regimen_fiscal })
         }
+
+        if (esIne) {
+          estadoValidacion = datos.nombre_completo ? 'validado' : 'revision'
+          detalleValidacion = datos.nombre_completo
+            ? null
+            : 'No se pudo leer el nombre completo en el documento -- confirma que sea una identificación oficial legible.'
+        } else if (esConstancia) {
+          estadoValidacion = datos.regimen_fiscal ? 'validado' : 'revision'
+          detalleValidacion = datos.regimen_fiscal
+            ? null
+            : 'No se pudo leer el régimen fiscal en el documento -- confirma que sea la Constancia de Situación Fiscal vigente.'
+        }
       }
     }
+
+    const documento = await createProveedorDocumento({
+      proveedor_id: portalAuth.proveedorId,
+      tipo: tipo as TipoDocumentoProveedor,
+      archivo_url: archivoUrl,
+      archivo_nombre: file.name,
+      estado_validacion: estadoValidacion,
+      detalle_validacion: detalleValidacion,
+    })
 
     return Response.json({ success: true, documento, requiere_confirmacion: requiereConfirmacion })
   } catch (error) {
