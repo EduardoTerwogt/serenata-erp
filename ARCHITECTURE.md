@@ -348,13 +348,13 @@ evidencia, no cuenta como terminado.
 | Cotizaciones (CRUD, folio atómico, PDF, emitir) | `tests/e2e/critical/cotizaciones-*.spec.ts`, live `basic.spec.ts` |
 | Aprobar / cancelar cotización (RPC transaccional) | live: crear → emitir → aprobar → cuentas → cancelar y revertir |
 | Cuentas por cobrar (factura, complemento, pagos parciales) | crítico + live de concurrencia |
-| Cuentas por pagar (factura, pagos, órdenes de pago con PDF real) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia |
+| Cuentas por pagar (factura, pagos, órdenes de pago con PDF real; utilidad de proyecto y cierre fiscal estimado — chip "Utilidad" + tabla Quién/Cuánto/Cuándo en `CuentasPorProyecto.tsx`, cálculo puro en `lib/shared/cierre-proyecto.ts`) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia, `lib/shared/__tests__/cierre-proyecto.test.ts`, `tests/e2e/critical/cuentas-cierre-proyecto.spec.ts` |
 | Registrar pago sin carreras (cobrar y pagar) | `tests/e2e/live/cuentas-*-concurrency.spec.ts` |
 | Idempotencia de cliente (pagos y bulk-import de partidas) | `lib/client/__tests__/pagoIdempotency.test.ts`, `bulkImportIdempotency.test.ts`, `lib/server/__tests__/idempotency.test.ts`, `tests/e2e/live/bulk-replace-items-rpc.spec.ts` |
 | Proyectos (detalle, tareas, cronograma, tipos, reporte de cierre) | smoke de proyectos |
-| Proveedores (lista + modal, historial, régimen fiscal, revisión de documentos del Portal: validar/marcar en revisión con motivo) | `tests/e2e/critical/proveedores.spec.ts`, `app/api/__tests__/proveedores-documentos-route.test.ts`, `proveedores-documentos-id-route.test.ts` |
+| Proveedores (lista + modal, historial, régimen fiscal (moral / física / RESICO), revisión de documentos del Portal: validar/marcar en revisión con motivo) | `tests/e2e/critical/proveedores.spec.ts`, `app/api/__tests__/proveedores-documentos-route.test.ts`, `proveedores-documentos-id-route.test.ts` |
 | Portal de proveedores (signup, login, confirmar identidad; subir factura + simulador de factura; alias; documentos con auto-clasificación híbrida, borrado y reemplazo automático del mismo tipo al subir uno nuevo; matching de identidad solo por INE; "Tus cuentas con Serenata" como tabla paginada al fondo de "Cuentas y facturas", ya no un tab propio) | `smoke/portal-signup.spec.ts`, `smoke/portal-documentos.spec.ts`, `smoke/portal-mis-datos.spec.ts`, `critical/portal-factura.spec.ts` |
-| Clientes (catálogo editable: lista + modal, mismo patrón `PUT`+soft-delete `activo` que Proveedores) | `app/api/__tests__/clientes-route.test.ts` (sin e2e dedicado todavía) |
+| Clientes (catálogo editable: lista + modal, mismo patrón `PUT`+soft-delete `activo` que Proveedores; `cliente_id` como FK real en `cotizaciones`/`proyectos`/`cuentas_cobrar`/`historial_responsable`, dual-write con clasificación de 3 cubetas para el backfill) | `app/api/__tests__/clientes-route.test.ts` (sin e2e dedicado todavía), `lib/validation/__tests__/schemas.test.ts` (casos `cliente_id`), `docs/decisions/014-cliente-id-fk-clasificacion.md` |
 | Planeación (extracción AI, pendientes, soft delete) | `critical/planeacion.spec.ts` |
 | Plantillas de servicios (cotizaciones nuevas) | `critical/plantillas-servicios.spec.ts` |
 | Admin de usuarios y sync a Google Sheets | `critical/admin-usuarios.spec.ts` |

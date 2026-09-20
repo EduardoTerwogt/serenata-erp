@@ -57,6 +57,20 @@ guarda el Costo Total de cada renglón desde que se aprueba la cotización.
 - **Persona moral:** IVA 16% trasladado, acreditable, sin retenciones.
 - **Persona física con honorarios:** IVA 16% trasladado + retención de IVA de 2/3
   (10.6667% del subtotal) + retención de ISR del 10% del subtotal.
+- **Persona física RESICO** (Art. 113-J LISR): IVA 16% trasladado + retención de
+  IVA de 2/3 (igual que física con honorarios) + retención de ISR del **1.25%**
+  del subtotal (vs. 10% de física con honorarios).
+
+**Utilidad de proyecto (Bloque 2, PR #79)** (`lib/shared/cierre-proyecto.ts`,
+usado por `cuentas_por_proyecto()` y `CuentasPorProyecto.tsx`):
+- **Utilidad Bruta** = suma de la Utilidad Total (Margen Total + Fee Agencia) de
+  todas las cotizaciones `APROBADA` del proyecto (principal + complementarias).
+- Retenciones e IVA de proveedores **no restan** la Utilidad de Serenata — son
+  dinero de terceros (SAT / proveedor); se muestran aparte, informativas.
+- **Utilidad Neta** = Utilidad Bruta − ISR estimado (30% sobre Utilidad Bruta,
+  nunca negativo). Es "estimado": el pago real de ISR usa el coeficiente de
+  utilidad del ejercicio anterior (Art. 14 LISR) y puede ser 0 si hubo pérdida
+  el ejercicio previo.
 
 ## Razón
 
