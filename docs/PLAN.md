@@ -1,13 +1,16 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, listo para ejecutar (2026-09-19) — agrupación de los
+**Estado:** Aprobado, en ejecución (2026-09-19/20) — agrupación de los
 "Sueltos" que quedaron fuera de PR
 [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) en una nueva
 iniciativa. Lógica de negocio y UI ya validadas en sesión con un simulador y
 mockups interactivos (links abajo) para 3 de los 4 bloques; el cuarto
 (filtro de estado en Cuentas) llega a su arranque con el diseño todavía sin
 cerrar, a propósito, sin bloquear la aprobación ni ejecución de los otros 3.
-Bloque 1 en curso — ver tracker abajo.
+**Bloque 1 cerrado** (PR #77, mergeado en `647686b`) — ver tracker abajo.
+Bloque 2 es el siguiente a ejecutar; todavía sin código ni sesión dedicada
+(la lógica de negocio y el mockup ya están validados, ver "Los sueltos:
+estado real" abajo).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -33,7 +36,12 @@ sesión aparte.
 ## Los sueltos: estado real
 
 **1. Portal — simulador de factura** (antes "calculadora de régimen fiscal").
-**Alcance corregido: la mitad del trabajo ya existe en `main`.** El motor de
+**✅ Cerrado — PR #77, mergeado a `main` en `647686b`.** Detalle completo de
+lo que se implementó (más 3 bugs reales de validación fiscal y 3 fixes de
+UX de Documentación encontrados al probar) en `docs/ACTIVE_WORK.md` y
+`docs/decisions/013-portal-documentos-verdad-unica.md`. Descripción
+original del alcance, sin editar, abajo. **Alcance corregido: la mitad del
+trabajo ya existía en `main`.** El motor de
 validación fiscal profunda que el usuario pidió (comparar la factura real
 del proveedor contra lo esperado, aceptar o explicar por qué no) **ya está
 construido y en producción**:
@@ -166,8 +174,8 @@ diseñar cuando le toca arrancar, sin detener la ejecución de los otros 3.
 
 | # | Bloque | Estado |
 |---|---|---|
-| 1 | Portal: simulador de factura | En curso |
-| 2 | Cuentas: dropdown de impuestos y utilidad de proyecto | Pendiente |
+| 1 | Portal: simulador de factura | Cerrado — PR [#77](https://github.com/EduardoTerwogt/serenata-erp/pull/77), commit `647686b` |
+| 2 | Cuentas: dropdown de impuestos y utilidad de proyecto | En curso — siguiente a ejecutar, sin código todavía |
 | 3 | Clientes: `cliente_id` como FK real | Pendiente |
 | 4 | Cuentas: filtro de estado en vista principal | Pendiente — diseño sin cerrar |
 

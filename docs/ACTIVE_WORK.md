@@ -1,173 +1,186 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-19
+**Última actualización:** 2026-09-20
 
 ## Estado
 
-**`docs/PLAN.md` — Borrador (agrupación de "Sueltos" post-PR #76).** En esta
-misma sesión, tras cerrar la iniciativa de 6 bloques (Plantillas,
-Cotizaciones UI+fórmula, Portal, Clientes, PDF de orden de pago — historia:
-[`docs/archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md`](archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md),
-resumen en `docs/ROADMAP.md` → "Cerrado"), se agruparon 4 de los 5 "Sueltos"
-en una nueva iniciativa: Portal (simulador de factura), Cuentas (dropdown de
-impuestos/utilidad de proyecto), Clientes (`cliente_id` FK) y Cuentas
-(filtro de estado en vista principal). Lógica de negocio y UI ya validadas
-con un simulador y 2 mockups interactivos (links en `docs/PLAN.md`). El
-suelto de Dashboard quedó explícitamente fuera, en `docs/ROADMAP.md` →
-"Después". Detalle completo, orden de ejecución, riesgos y validación:
+**`docs/PLAN.md` — Aprobado, en ejecución.** Bloque 1 (Portal: simulador de
+factura) cerrado esta sesión — PR [#77](https://github.com/EduardoTerwogt/serenata-erp/pull/77),
+mergeado a `main` en `647686b`. Bloque 2 (Cuentas: dropdown de impuestos y
+utilidad de proyecto) es el siguiente a ejecutar — lógica de negocio y
+mockup ya validados en sesión anterior, sin código todavía. Detalle
+completo, orden de ejecución, riesgos y validación de los 4 bloques:
 `docs/PLAN.md`.
 
 **Engineering Hardening (EF-1+EF-2+EF-3)** y **Agrupar Cuentas por Pagar por
 proveedor+proyecto** siguen cerrados de sesiones anteriores — sin cambios,
 ver `docs/ROADMAP.md` → "Cerrado" para el historial completo de ambas.
 
-## Completado en esta sesión (2026-09-18/19)
+## Completado en esta sesión (2026-09-19/20)
 
-**PR [#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) — los 6
-bloques de `docs/PLAN.md` mergeados a `main`** (commit `2689963`, en una sola
-rama/PR por desviación autorizada del usuario, cada bloque en su propio
-commit):
+**Bloque 1 completo — PR [#77](https://github.com/EduardoTerwogt/serenata-erp/pull/77)
+mergeado a `main` (commit `647686b`).** El PR [#78](https://github.com/EduardoTerwogt/serenata-erp/pull/78)
+(hotfix del parser XML) se cerró sin mergear por separado — sus 4 commits
+ya estaban cherry-pickeados dentro de #77, verificado con `git diff` entre
+ambas ramas antes de cerrar (sin ningún cambio exclusivo de #78 ausente en
+#77).
 
-- **Bloque 1 — Plantillas: header de tarjeta.** Precio total + utilidad
-  (solo si todos los items tienen costo conocido), `lib/service-templates/calculations.ts` nuevo.
-- **Bloque 2 — Cotizaciones: UI de edición.** Alineación de Datos Generales
-  (Cliente/Proyecto/Fecha de Entrega/Locación izquierda, Fecha de Cotización
-  derecha), `$` en inputs de dinero, botón "Vista previa" de PDF, notas
-  visibles en el PDF (`notas_pdf`, campo nuevo separado de `notas_internas`,
-  soportado ahora en creación Y edición — antes solo en el `PATCH` dedicado),
-  botón "crear plantilla", modal de "Nota de evento". Ronda adicional pedida
-  por el usuario tras revisar: paridad completa Nueva/Editar (Vista previa,
-  Nota de evento y Crear plantilla faltaban en `cotizaciones/nueva`);
-  unificación de todos los botones de la app al primitivo `Button`
-  (`variant`/`size`, antes mezclaban tamaños); `Select` para "Plantilla de
-  servicios…" (antes más alto que sus botones hermanos); `DateField` con
-  placeholder alineado a la izquierda y en gris tenue (antes centrado y
-  oscuro, por ser un `<button>` sin estilos de `::placeholder`); remoción
-  completa de la columna "Costo + IVA" de Partidas (desktop, mobile,
-  fullscreen) — no solo hacerla accesible con scroll, que fue mi primera
-  interpretación equivocada del pedido; corregido tras que el usuario
-  aclarara explícitamente que no la quiere visible en ningún lado de
-  Partidas. `calculateCostoConIva` eliminado de `lib/quotations/calculations.ts`
-  (sin relación con `calculateEstimatedTaxes`/IVA pagado, que sigue intacto).
-- **Bloque 3 — Cotizaciones: fórmula Costo Unitario/Costo Total (alto
-  riesgo).** `approve_cotizacion`/`patch_item_cotizacion` corregidas para
-  multiplicar por `cantidad`; `normalizeQuotationItem` centraliza
-  `costo_total`; matriz de casos y auditoría semántica de cierre completas
-  (ver `docs/archive/.../plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md`
-  para el detalle punto por punto).
-- **Bloque 4 — Portal.** Columna `alias` separada de `nombre` en
-  `proveedores` (migración aditiva, `nombre` sin tocar); ver documentos ya
-  subidos; "Tus cuentas con Serenata" migrado a tab "Historial".
-- **Bloque 5 — Clientes: catálogo editable.** `PUT`/`GET` por id, mismo
-  patrón `activo` (soft-delete) que Proveedores; `app/clientes/` (lista +
-  modal), sin FK real todavía (`cliente` sigue denormalizado como texto).
-- **Bloque 6 — Cuentas: rediseño del PDF de orden de pago.** Logo vía
-  `pdf-base-config.ts`, alineado con los otros 3 generadores.
+### Simulador de factura (alcance original del bloque)
 
-**Cierre de la iniciativa:** `docs/PLAN.md` archivado a
-`docs/archive/plantillas-cotizaciones-portal-clientes-pdf-orden-pago.md`,
-resumen agregado a `docs/ROADMAP.md` → "Cerrado", sección "Siguiente"/"Después"
-actualizadas para reflejar qué quedó hecho vs. qué sigue como "Sueltos"
-(dropdown de impuestos/utilidad de proyecto, historial de cuentas por
-mes/año, calculadora de régimen fiscal, estado de resultados/balance,
-`cliente_id` como FK real — este último, candidato nuevo detectado al cerrar
-el Bloque 5), `docs/PLAN.md` recreado vacío. `ARCHITECTURE.md` actualizado:
-fila nueva de Clientes en "Módulos y cobertura", fila de Portal ampliada con
-alias/documentos/historial.
+- Mensaje genérico (sin exponer el monto esperado de Serenata) cuando el
+  mismatch es de **subtotal**; mensaje específico + bloque de ejemplo
+  cuando es de **desglose** (IVA/retenciones) — wrapper nuevo
+  `lib/server/portal/factura-mensaje-proveedor.ts`, sin tocar
+  `validarFacturaFiscalProveedor()` (sigue siendo la fuente de verdad para
+  staff).
+- Panel "Simulador de factura" en `TabCuentas`: se autollena con
+  `calcularEjemploFactura()` (movida a `lib/shared/factura-fiscal.ts`,
+  módulo puro) al elegir proyecto — el proveedor nunca escribe un monto a
+  mano.
 
-**CI de PR #76:** todas las suites en verde antes de mergear
-(`tsc`/`lint`/`vitest`/`smoke`/`critical`/`fresh-db`/`live`, Preview de
-Vercel desplegando bien) — un fallo de `fresh-db` por rate limit de la API
-de GitHub al resolver la última release del Supabase CLI (externo, no del
-diff) se reintentó una vez y pasó, mismo patrón ya visto antes.
+### Cierre real del bloque (pruebas manuales del usuario sobre el Preview)
 
-**Después de mergear a `main`:** el mismo fallo externo de `fresh-db`
-(rate limit del Supabase CLI) volvió a aparecer en el push de merge a
-`main` — reintentado una vez, en verde en el segundo intento.
+- Fix de refresco: tras subir una factura con éxito, la cuenta ya no sigue
+  seleccionable y aparece de inmediato en el historial como `FACTURADO`.
+- "Historial" deja de ser tab propio: tabla paginada (10/página, mismo
+  patrón que `cotizaciones`) al fondo de "Cuentas y facturas".
+- Portal completo (login, signup, confirmar identidad, Mis datos,
+  Documentación, Cuentas y facturas) migrado a los primitivos
+  `TextField`/`Button`/`Select`/`Modal` — antes tenía `<input>`/`<button>`
+  crudos que no respetaban el design system.
+- Proporciones de los campos de archivo corregidas (el "Choose file" nativo
+  del navegador no cabía en el control de 32px de `TextField`).
+
+### 3 bugs reales de validación fiscal (parser XML → parser real)
+
+Encontrados probando con facturas reales de distintos proveedores
+(cotizaciones SH076/SH077), corregidos en `lib/server/xml/factura-parser.ts`:
+
+1. **Duplicación de IVA trasladado/retenciones** — `parseFacturaXML()`
+   sumaba por regex sobre el XML completo sin distinguir nivel; un CFDI
+   real trae `Traslado`/`Retencion` una vez por `Concepto` y otra a nivel
+   `Comprobante`. Fix definitivo: se reemplazó la extracción por regex por
+   un parser XML real (`fast-xml-parser`) — el bug queda eliminado por
+   construcción, no por una regla de scoping de texto.
+2. **`Folio` exigido cuando es opcional en el XSD del SAT** — rechazaba
+   facturas válidas y timbradas sin ese atributo.
+3. **Tolerancia de redondeo en retención de IVA** — 2/3×16% es un decimal
+   periódico; distintos PACs redondean distinto. Tolerancia proporcional al
+   subtotal (0.03%), solo en `iva_retenido` (ISR sigue exacto al centavo).
+
+Gotcha completo documentado en `ARCHITECTURE.md` → "Gotchas del repo".
+
+### 3 bugs reales más en Documentación del Portal (segunda ronda de pruebas)
+
+Documentados a fondo en `docs/decisions/013-portal-documentos-verdad-unica.md`:
+
+1. **Matching de identidad solo por INE.** Subir la constancia ya no
+   dispara `buscarCandidatosMatch()` — hay proveedores que facturan por
+   terceros, y el nombre de la constancia no es el del colaborador real.
+2. **`estado_validacion` de documentos, auto-clasificación híbrida**
+   (decisión del usuario entre 4 opciones ofrecidas). INE/constancia
+   legibles → `validado`; ilegibles → `revision` con motivo (misma IA que
+   ya corre para matching/régimen). Comprobante de domicilio/bancario
+   quedan `pendiente` hasta revisión manual. Nueva sección "Documentos" en
+   `ProveedorModal.tsx` (staff): botones Validar / Marcar en revisión.
+   Migración `20260919_proveedor_documentos_detalle_validacion` (columna
+   `detalle_validacion`), aplicada y verificada en `serenata-erp-test` y
+   producción.
+3. **Cada tipo de documento (constancia, INE, comprobante de domicilio,
+   comprobante bancario) es de "verdad única".** Subir uno nuevo borra el
+   anterior del mismo tipo (documento + archivo en Drive, best-effort).
+   Empezó acotado a la constancia (el régimen fiscal no se actualizaba con
+   una constancia nueva — guard `!proveedorActual?.regimen_fiscal`
+   quitado, ahora siempre pisa) y se generalizó a los otros 3 tipos por
+   pedido explícito del usuario tras confirmar que la constancia quedó
+   bien.
+
+### Otros fixes de UX del Portal (rondas de revisión manual)
+
+- Botón de borrar por documento en "Documentación" (oculto si ya está
+  `validado`), con modal de confirmación — antes solo dejaba "Subir otro".
+- Botón de borrar reposicionado al extremo derecho de la fila (quedaba en
+  medio, entre el badge de estado y "Subir otro").
+- Placeholder de Alias simplificado a "nickname".
+- Mensaje de régimen fiscal sin detectar: "Pendiente de subir constancia
+  fiscal, sube desde la sección Documentación" (antes un texto genérico
+  que no distinguía si ya se había subido algo).
 
 ## Decisiones tomadas en esta sesión
 
-- **"Costo + IVA" no vuelve a aparecer en ningún lado de Partidas** (desktop,
-  mobile, fullscreen) — decisión explícita del usuario tras corregir mi
-  primera interpretación ("dejarla accesible con scroll" no era lo pedido).
-  No alimenta ningún otro cálculo (`calculateEstimatedTaxes`/IVA pagado usa
-  su propia fórmula sobre `costo_total`, no depende de la función eliminada).
-- **Todos los botones de la app pasan por el primitivo `Button`** —
-  unificación pedida explícitamente por inconsistencia visual entre
-  pantallas.
-- **Investigar pero no arreglar** la aparente pérdida de la colaboración en
-  tiempo real (ver "Problemas abiertos" abajo) — instrucción explícita del
-  usuario, standing hasta que pida lo contrario.
+- **Identidad del Portal se valida solo con INE, nunca con la constancia**
+  — ver `docs/decisions/013-portal-documentos-verdad-unica.md`.
+- **`regimen_fiscal` siempre refleja la última constancia subida, sin
+  excepción** — reversa explícita de la regla anterior ("nunca pisar lo
+  que staff corrigió a mano"). Decisión del usuario: la constancia manda.
+- **`estado_validacion` se resuelve híbrido** (auto-clasificación por IA +
+  corrección manual de staff) — elegido explícitamente por el usuario
+  entre 4 opciones ofrecidas (auto puro, manual puro, híbrido, dejarlo sin
+  resolver).
+- **Reemplazo automático al subir un documento nuevo aplica a los 4
+  tipos** (constancia, INE, comprobante de domicilio, comprobante
+  bancario), no solo a la constancia — generalización pedida explícitamente
+  tras validar el comportamiento con la constancia.
+- **PR #78 se cierra sin mergear** — su contenido completo ya estaba
+  incluido en PR #77 vía cherry-pick; mergear ambos habría sido redundante
+  y arriesgaba un merge confuso sobre el mismo código.
 
 ## Tests ejecutados y resultado real
 
-`tsc --noEmit` limpio, `lint` sin errores nuevos, `vitest` en verde en cada
-punto de verificación de los 6 bloques (2 tests removidos junto con
-`calculateCostoConIva`, sin reemplazo porque la función ya no existe).
-`test:e2e:smoke`/`test:e2e:critical`/`live` en verde en el PR antes de
-mergear. CI de `main` post-merge: `fresh-db` en verde tras un reintento
-(rate limit externo, no relacionado al diff).
+`tsc --noEmit` limpio, `lint` sin errores nuevos (8 warnings preexistentes,
+sin relación con el diff) en cada punto de verificación. `vitest`: 947/947
+en verde en el último commit antes de mergear. CI del PR #77 en verde
+(`tracker-lint`/`test`/`smoke-and-critical`/`fresh-db`/`live`) antes de
+mergear, en el commit `2a9b5e0`. Migración `20260919_proveedor_documentos_detalle_validacion`
+aplicada y verificada con `execute_sql` en `serenata-erp-test`
+(`ozrtsludmcguvgqdjicn`) y producción (`fwmyoqokcjtldiofuxdg`).
+
+e2e nuevos/actualizados esta sesión: `smoke/portal-documentos.spec.ts`
+(nuevo, borrado de documentos), `smoke/portal-mis-datos.spec.ts` (nuevo,
+mensaje de régimen fiscal), `critical/portal-factura.spec.ts` (limpieza de
+archivos tras éxito, paginación del historial, mismatches de
+subtotal/desglose/régimen, simulador).
 
 ## Problemas encontrados que siguen abiertos
 
-- **Colaboración en tiempo real (Presence) parece no funcionar en Preview —
-  solo diagnosticado, NO arreglado (instrucción explícita del usuario).**
-  El usuario abrió 2 sesiones y no vio ninguna señal de presencia. Cero
-  commits de este PR tocaron `hooks/useQuotationPresence.ts`,
-  `lib/realtime/*` ni `app/api/realtime/token/route.ts`, y el suite `live`
-  que prueba exactamente esto pasó en cada commit — descarta una regresión
-  de código introducida en esta sesión. Hipótesis más probable, sin
-  confirmar (no se pudo verificar desde este entorno: egress a
-  `*.vercel.app` bloqueado en el sandbox): `SUPABASE_JWT_SECRET` con
-  alcance de Vercel distinto entre "Production" y "Preview" — ya estaba
-  anotado como pendiente de investigar en una sesión anterior (ver debajo,
-  ahora con una hipótesis concreta de por qué importa: `app/api/realtime/token/route.ts`
-  responde 500 "Realtime no configurado" si el secreto falta en el
-  ambiente que sirve el request). Verificación pendiente y barata: revisar
-  Vercel → Settings → Environment Variables → confirmar que
-  `SUPABASE_JWT_SECRET` tiene el scope "Preview" marcado, o probar
-  colaboración directo contra Production. No tocar el código de Presence
-  sin que el usuario lo pida explícitamente.
+Ninguno nuevo de esta sesión. Los heredados de la sesión anterior (Presence
+en Preview, `SUPABASE_JWT_SECRET` por ambiente) siguen sin tocar — ver
+`docs/archive/` si hace falta el detalle histórico.
 
 ## Deuda técnica
 
-- **Nueva: `app/clientes/` (Bloque 5) sin cobertura e2e.** Solo tiene test
-  de la ruta API (`app/api/__tests__/clientes-route.test.ts`); no hay
-  `tests/e2e/critical/clientes.spec.ts` equivalente al de Proveedores.
-  Riesgo bajo (mismo patrón ya probado en Proveedores), pero es un gap real.
-- **`SUPABASE_JWT_SECRET` con valores distintos entre "Production" y
-  "Preview" en Vercel** — ahora con sospecha concreta de impacto (ver
-  "Problemas abiertos" arriba). Verificar el scope antes de descartar esta
-  entrada. (Arrastrado, ahora con contexto nuevo.)
-- **Pendiente, requiere decisión de arquitectura:** el job `tracker-lint`
-  de `.github/workflows/test.yml` seguía validando los 40 bloques de EF-3;
-  con `docs/PLAN.md` vacío ahora mismo, no hay ningún tracker activo que
-  validar hasta la próxima iniciativa — generalizarlo sigue pendiente,
-  mismo alcance que antes. (Arrastrado.)
-- **Verificación completa de Google OAuth (fuera de modo Prueba) sigue
-  pendiente.** (Arrastrado.)
-- **No se pudo confirmar con certeza cuál cuenta de test es
-  `PLAYWRIGHT_TEST_EMAIL` exacta.** (Arrastrado.)
+- **Documentos duplicados que ya existían en producción antes de este fix
+  no se limpiaron retroactivamente.** El reemplazo "verdad única" es
+  *lazy*: se dispara recién la próxima vez que ese proveedor suba un
+  documento de ese tipo. Si se quiere una base ya limpia sin esperar,
+  hace falta un backfill one-off (borrar duplicados existentes,
+  quedándose con el más reciente por `proveedor_id`+`tipo`). Bajo riesgo,
+  sin urgencia — el sistema converge solo con el uso normal.
+- **`tracker-lint` de `test.yml` sigue sin generalizarse** fuera de los 40
+  bloques de EF-3 — con una iniciativa nueva activa (`docs/PLAN.md`), sigue
+  sin haber urgencia real de resolverlo. (Arrastrado.)
+- **Verificación completa de Google OAuth (fuera de modo Prueba)** sigue
+  pendiente. (Arrastrado.)
 - **`AUTH_SECRET`/`NEXTAUTH_SECRET` coexistiendo en Vercel producción** —
   sin tocar, solo anotado. (Arrastrado.)
+- **`SUPABASE_JWT_SECRET` con valores distintos entre "Production" y
+  "Preview" en Vercel** — sospecha de sesión anterior sobre por qué
+  Presence no se ve en Preview, sin verificar todavía. (Arrastrado.)
 
 ## Pendiente de limpieza manual (no bloquea nada)
 
-- Ramas remotas de sesiones anteriores ya mergeadas o throwaway
-  (`claude/ef3e1-baseline-tmp`, `fix/totales-general-conflict-drain`,
-  `claude/epic-davinci-1fj7ki`, `claude/fix-approve-cotizacion-proyecto-id`)
-  siguen sin borrar por el bloqueo de policy del proxy de egress contra la
-  API de GitHub (`403` en `git push --delete`/`DELETE` directo). Borrar
-  desde la UI de GitHub cuando se quiera, sin urgencia. (Arrastrado.)
+- Ramas remotas ya mergeadas o cerradas sin uso
+  (`fix/parse-factura-xml-iva-duplicado` recién cerrada, más las
+  arrastradas de sesiones anteriores) siguen sin borrar por el bloqueo de
+  policy del proxy de egress contra la API de GitHub. Borrar desde la UI
+  de GitHub cuando se quiera, sin urgencia. (Arrastrado.)
 
 ## Siguiente paso
 
-**`docs/PLAN.md` en Borrador, listo para pasar a Aprobado.** Orden de
-ejecución decidido: (1) Portal — simulador de factura, (2) Cuentas —
-dropdown de impuestos y utilidad de proyecto, (3) Clientes — `cliente_id`
-como FK real, (4) Cuentas — filtro de estado en vista principal (el único
-sin diseño cerrado; se termina de definir al abrir ese bloque). Una sesión
-futura confirma el plan como "Aprobado, listo para ejecutar" y arranca por
-el bloque 1. Si el usuario confirma la hipótesis de `SUPABASE_JWT_SECRET`
-en Preview, ese es un fix puntual de una sola sesión (no una iniciativa),
-fuera de `docs/PLAN.md`.
+Abrir **Bloque 2 — Cuentas: dropdown de impuestos a pagar y utilidad
+bruta/neta de proyecto** en una sesión futura (`/serenata-iniciar-fase`).
+Lógica de negocio y fórmulas ya validadas y aprobadas en `docs/PLAN.md`
+(retenciones/IVA no restan utilidad de Serenata; ISR estimado 30% sí;
+vista "Cierre del proyecto"; gap de RESICO persona física ya investigado y
+en alcance). Mockup de referencia confirmado, link en `docs/PLAN.md` →
+"Artefactos de referencia".

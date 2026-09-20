@@ -352,8 +352,8 @@ evidencia, no cuenta como terminado.
 | Registrar pago sin carreras (cobrar y pagar) | `tests/e2e/live/cuentas-*-concurrency.spec.ts` |
 | Idempotencia de cliente (pagos y bulk-import de partidas) | `lib/client/__tests__/pagoIdempotency.test.ts`, `bulkImportIdempotency.test.ts`, `lib/server/__tests__/idempotency.test.ts`, `tests/e2e/live/bulk-replace-items-rpc.spec.ts` |
 | Proyectos (detalle, tareas, cronograma, tipos, reporte de cierre) | smoke de proyectos |
-| Proveedores (lista + modal, historial, régimen fiscal) | `tests/e2e/critical/proveedores.spec.ts` |
-| Portal de proveedores (signup, login, confirmar identidad, subir factura, alias separado de nombre completo, ver documentos ya subidos, tab "Historial") | `smoke/portal-signup.spec.ts`, `critical/portal-factura.spec.ts` |
+| Proveedores (lista + modal, historial, régimen fiscal, revisión de documentos del Portal: validar/marcar en revisión con motivo) | `tests/e2e/critical/proveedores.spec.ts`, `app/api/__tests__/proveedores-documentos-route.test.ts`, `proveedores-documentos-id-route.test.ts` |
+| Portal de proveedores (signup, login, confirmar identidad; subir factura + simulador de factura; alias; documentos con auto-clasificación híbrida, borrado y reemplazo automático del mismo tipo al subir uno nuevo; matching de identidad solo por INE; "Tus cuentas con Serenata" como tabla paginada al fondo de "Cuentas y facturas", ya no un tab propio) | `smoke/portal-signup.spec.ts`, `smoke/portal-documentos.spec.ts`, `smoke/portal-mis-datos.spec.ts`, `critical/portal-factura.spec.ts` |
 | Clientes (catálogo editable: lista + modal, mismo patrón `PUT`+soft-delete `activo` que Proveedores) | `app/api/__tests__/clientes-route.test.ts` (sin e2e dedicado todavía) |
 | Planeación (extracción AI, pendientes, soft delete) | `critical/planeacion.spec.ts` |
 | Plantillas de servicios (cotizaciones nuevas) | `critical/plantillas-servicios.spec.ts` |
@@ -566,3 +566,45 @@ Trampas reales, no teóricas. Cada una costó un bug:
   real: un catálogo de producción que algún día lo supere (hoy 40 filas)
   volvería a perder productos del autofill en silencio — sigue siendo el
   patrón "traer todo el catálogo" del Frente A del roadmap, sin resolver.
+- **El matching de identidad del Portal (Fase 5.5) solo se dispara con INE,
+  nunca con la Constancia de Situación Fiscal (bug real, 2026-09-20).**
+  Antes `POST /api/portal/documentos` corría `buscarCandidatosMatch()` con
+  el nombre extraído de cualquiera de los dos documentos -- hay
+  proveedores que facturan por medio de terceros (la constancia trae el
+  RFC/nombre de un intermediario, no el de quien realmente colabora con
+  Serenata), y cruzar por ese nombre fusionaba o pedía confirmar la cuenta
+  equivocada. La constancia sigue disparando extracción de IA (para
+  `regimen_fiscal`); solo dejó de alimentar el matching. Ver
+  `docs/decisions/013-portal-documentos-verdad-unica.md`.
+- **`proveedor_documentos.estado_validacion` nunca se movía de `pendiente`
+  -- ningún mecanismo, automático ni manual, lo escribía (bug real,
+  2026-09-20; `proveedor_documentos_resumen()` ya contaba "documentación
+  con errores" leyendo ese campo, pero nada lo poblaba).** Resuelto
+  híbrido: `POST /api/portal/documentos` auto-clasifica con la misma IA
+  que ya lee INE/constancia (`validado` si el dato esperado se pudo leer,
+  `revision` con motivo si no); comprobante de domicilio/bancario no
+  pasan por IA y quedan `pendiente` hasta revisión manual. Staff corrige
+  cualquier estado desde una sección "Documentos" nueva en
+  `app/proveedores/components/ProveedorModal.tsx`, vía
+  `PATCH /api/proveedores/[id]/documentos/[docId]` (mismo
+  `DocumentoEstadoValidacionSchema` que ya usaban `cuentas_pagar`/
+  `cuentas_cobrar`, sin ningún frontend conectado hasta ahora). Detalle y
+  motivo de la decisión: `docs/decisions/013-portal-documentos-verdad-unica.md`.
+- **Cada tipo de documento del Portal (constancia, INE, comprobante de
+  domicilio, comprobante bancario) es de "verdad única": subir uno nuevo
+  borra el anterior del mismo tipo (registro + archivo en Drive,
+  best-effort), para que el proveedor solo tenga uno vigente por tipo.**
+  Empezó acotado a la constancia -- bug real (2026-09-20): subir una
+  segunda con régimen distinto no actualizaba nada en Mis datos ni
+  Cuentas y facturas, porque `regimen_fiscal` solo se seteaba si el
+  proveedor **no tenía ninguno todavía** ("nunca pisar lo que staff
+  corrigió a mano"). Decisión explícita del usuario: la constancia manda,
+  siempre la más reciente -- se quitó ese guard (cada constancia legible
+  pisa el régimen anterior sin excepción) y luego se generalizó el
+  reemplazo a los otros 3 tipos, mismo pedido explícito. `uploadFileToDrive()`
+  nunca devolvió el `fileId` por separado (solo la URL) -- en vez de
+  ensanchar esa firma (12+ callers en rutas de facturas/pagos que solo
+  consumen el string), se agregó `extractDriveFileId()`
+  (`lib/integrations/google/drive.ts`) que lo deriva del patrón
+  `.../file/d/{fileId}/...` que la URL siempre tiene. Detalle completo:
+  `docs/decisions/013-portal-documentos-verdad-unica.md`.
