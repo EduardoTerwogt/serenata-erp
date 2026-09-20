@@ -5,8 +5,9 @@ import {
   getProveedorById,
   buscarCandidatosMatch,
   updateProveedor,
+  deleteProveedorDocumento,
 } from '@/lib/db'
-import { uploadFileToDrive } from '@/lib/integrations/google/drive'
+import { uploadFileToDrive, extractDriveFileId, deleteDriveFile } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { extraerDatosIdentidad } from '@/lib/server/portal/document-parser'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
@@ -115,10 +116,18 @@ export async function POST(request: Request) {
         }
 
         // La Constancia de Situación Fiscal es la única fuente confiable
-        // del régimen fiscal real -- se persiste automáticamente cuando el
-        // proveedor todavía no tiene uno asignado, nunca pisando un valor
-        // que staff ya haya corregido/confirmado a mano.
-        if (esConstancia && datos.regimen_fiscal && !proveedorActual?.regimen_fiscal) {
+        // del régimen fiscal real -- se persiste automáticamente.
+        //
+        // Bug real (2026-09-20): antes solo se setaba si el proveedor
+        // todavía no tenía régimen asignado ("nunca pisar lo que staff
+        // corrigió a mano"). Eso rompía el caso real: proveedor sube una
+        // constancia, luego sube OTRA con régimen distinto -- el segundo
+        // valor nunca se reflejaba ni en Mis datos ni en Cuentas y
+        // facturas, se quedaban con el régimen de la primera para siempre.
+        // Decisión explícita del usuario: la constancia manda, siempre la
+        // más reciente -- cada nueva lectura legible pisa cualquier valor
+        // anterior, sin excepción.
+        if (esConstancia && datos.regimen_fiscal) {
           await updateProveedor(portalAuth.proveedorId, { regimen_fiscal: datos.regimen_fiscal })
         }
 
@@ -144,6 +153,30 @@ export async function POST(request: Request) {
       estado_validacion: estadoValidacion,
       detalle_validacion: detalleValidacion,
     })
+
+    // La Constancia de Situación Fiscal es de "verdad única": el proveedor
+    // solo debe tener UNA en todo momento, la más reciente que subió --
+    // nunca varias acumuladas de distintos regímenes. Se borra cualquier
+    // constancia previa (documento + archivo en Drive, best-effort) recién
+    // AHORA que la nueva ya quedó creada con éxito, para no perder la
+    // anterior si algo falla antes de este punto.
+    if (tipo === 'CONSTANCIA_SITUACION_FISCAL') {
+      const documentosExistentes = await getProveedorDocumentos(portalAuth.proveedorId)
+      const constanciasViejas = documentosExistentes.filter(
+        d => d.tipo === 'CONSTANCIA_SITUACION_FISCAL' && d.id !== documento.id
+      )
+      for (const vieja of constanciasViejas) {
+        const fileId = extractDriveFileId(vieja.archivo_url)
+        if (fileId) {
+          try {
+            await deleteDriveFile(fileId)
+          } catch (err) {
+            console.error('[portal/documentos][POST] No se pudo borrar la constancia anterior de Drive (se reemplaza igual el registro):', err)
+          }
+        }
+        await deleteProveedorDocumento(vieja.id)
+      }
+    }
 
     return Response.json({ success: true, documento, requiere_confirmacion: requiereConfirmacion })
   } catch (error) {

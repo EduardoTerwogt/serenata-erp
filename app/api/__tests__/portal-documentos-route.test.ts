@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
   getProveedorByIdMock: vi.fn(),
   buscarCandidatosMatchMock: vi.fn(),
   updateProveedorMock: vi.fn(),
+  deleteProveedorDocumentoMock: vi.fn(),
   uploadFileToDriveMock: vi.fn(),
+  extractDriveFileIdMock: vi.fn(),
+  deleteDriveFileMock: vi.fn(),
   getGoogleEnvMock: vi.fn(),
   extraerDatosIdentidadMock: vi.fn(),
 }))
@@ -22,10 +25,13 @@ vi.mock('@/lib/db', () => ({
   getProveedorById: mocks.getProveedorByIdMock,
   buscarCandidatosMatch: mocks.buscarCandidatosMatchMock,
   updateProveedor: mocks.updateProveedorMock,
+  deleteProveedorDocumento: mocks.deleteProveedorDocumentoMock,
 }))
 
 vi.mock('@/lib/integrations/google/drive', () => ({
   uploadFileToDrive: mocks.uploadFileToDriveMock,
+  extractDriveFileId: mocks.extractDriveFileIdMock,
+  deleteDriveFile: mocks.deleteDriveFileMock,
 }))
 
 vi.mock('@/lib/integrations/google/env', () => ({
@@ -55,6 +61,10 @@ describe('POST /api/portal/documentos', () => {
     mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo' })
     mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: null, regimen_fiscal: null })
     mocks.buscarCandidatosMatchMock.mockResolvedValue([])
+    mocks.getProveedorDocumentosMock.mockResolvedValue([])
+    mocks.deleteProveedorDocumentoMock.mockResolvedValue(undefined)
+    mocks.extractDriveFileIdMock.mockReturnValue(null)
+    mocks.deleteDriveFileMock.mockResolvedValue(undefined)
   })
 
   it('sube un comprobante de domicilio sin disparar matching', async () => {
@@ -119,13 +129,18 @@ describe('POST /api/portal/documentos', () => {
     expect(mocks.updateProveedorMock).toHaveBeenCalledWith('prov-1', { regimen_fiscal: 'moral' })
   })
 
-  it('nunca pisa un regimen_fiscal que staff ya asignó a mano', async () => {
+  // Bug real (2026-09-20): antes esto NO actualizaba (protegía cualquier
+  // regimen_fiscal ya asignado, incluido uno puesto por una constancia
+  // vieja). El proveedor subía una segunda constancia con régimen
+  // distinto y ni Mis datos ni Cuentas y facturas reflejaban el cambio.
+  // Decisión explícita del usuario: la constancia manda, siempre pisa.
+  it('constancia nueva con régimen distinto al ya asignado -- SÍ lo actualiza (la constancia más reciente manda)', async () => {
     mocks.getProveedorByIdMock.mockResolvedValue({ id: 'prov-1', portal_estado: 'activo', regimen_fiscal: 'moral' })
     mocks.extraerDatosIdentidadMock.mockResolvedValue({ nombre_completo: null, regimen_fiscal: 'fisica' })
 
     await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
 
-    expect(mocks.updateProveedorMock).not.toHaveBeenCalledWith('prov-1', expect.objectContaining({ regimen_fiscal: expect.anything() }))
+    expect(mocks.updateProveedorMock).toHaveBeenCalledWith('prov-1', { regimen_fiscal: 'fisica' })
   })
 
   it('constancia sin régimen fiscal legible -- no llama a updateProveedor por eso', async () => {
@@ -228,6 +243,71 @@ describe('POST /api/portal/documentos', () => {
       expect(mocks.createProveedorDocumentoMock).toHaveBeenCalledWith(
         expect.objectContaining({ estado_validacion: 'pendiente' })
       )
+    })
+  })
+
+  // Bug real (2026-09-20): la Constancia de Situación Fiscal es de "verdad
+  // única" -- el proveedor solo debe tener una en todo momento, la más
+  // reciente. Antes se acumulaban todas las que subía sin límite y sin
+  // borrar nada de Drive.
+  describe('constancia como verdad única (reemplaza la anterior)', () => {
+    it('sube una constancia nueva habiendo una vieja -- borra la vieja (documento + Drive)', async () => {
+      mocks.getProveedorDocumentosMock.mockResolvedValue([
+        { id: 'doc-nueva', proveedor_id: 'prov-1', tipo: 'CONSTANCIA_SITUACION_FISCAL', archivo_url: 'https://drive.google.com/file/d/nueva/view' },
+        { id: 'doc-vieja', proveedor_id: 'prov-1', tipo: 'CONSTANCIA_SITUACION_FISCAL', archivo_url: 'https://drive.google.com/file/d/vieja/view' },
+      ])
+      mocks.createProveedorDocumentoMock.mockResolvedValue({ id: 'doc-nueva' })
+      mocks.extractDriveFileIdMock.mockImplementation((url: string) => url.match(/\/file\/d\/([^/]+)/)?.[1] ?? null)
+
+      await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+      expect(mocks.deleteDriveFileMock).toHaveBeenCalledWith('vieja')
+      expect(mocks.deleteDriveFileMock).not.toHaveBeenCalledWith('nueva')
+      expect(mocks.deleteProveedorDocumentoMock).toHaveBeenCalledWith('doc-vieja')
+      expect(mocks.deleteProveedorDocumentoMock).not.toHaveBeenCalledWith('doc-nueva')
+    })
+
+    it('primera constancia que sube el proveedor -- no intenta borrar nada', async () => {
+      mocks.getProveedorDocumentosMock.mockResolvedValue([{ id: 'doc-1', proveedor_id: 'prov-1', tipo: 'CONSTANCIA_SITUACION_FISCAL', archivo_url: 'https://drive.google.com/file/d/doc-1/view' }])
+
+      await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+      expect(mocks.deleteDriveFileMock).not.toHaveBeenCalled()
+      expect(mocks.deleteProveedorDocumentoMock).not.toHaveBeenCalled()
+    })
+
+    it('si Drive falla al borrar la constancia vieja, igual borra su registro en la base (best-effort)', async () => {
+      mocks.getProveedorDocumentosMock.mockResolvedValue([
+        { id: 'doc-nueva', proveedor_id: 'prov-1', tipo: 'CONSTANCIA_SITUACION_FISCAL', archivo_url: 'https://drive.google.com/file/d/nueva/view' },
+        { id: 'doc-vieja', proveedor_id: 'prov-1', tipo: 'CONSTANCIA_SITUACION_FISCAL', archivo_url: 'https://drive.google.com/file/d/vieja/view' },
+      ])
+      mocks.createProveedorDocumentoMock.mockResolvedValue({ id: 'doc-nueva' })
+      mocks.extractDriveFileIdMock.mockReturnValue('vieja')
+      mocks.deleteDriveFileMock.mockRejectedValue(new Error('Drive caído'))
+
+      await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+      expect(mocks.deleteProveedorDocumentoMock).toHaveBeenCalledWith('doc-vieja')
+    })
+
+    it('borrar la constancia vieja nunca toca documentos de otro tipo (INE, comprobantes)', async () => {
+      mocks.getProveedorDocumentosMock.mockResolvedValue([
+        { id: 'doc-nueva', proveedor_id: 'prov-1', tipo: 'CONSTANCIA_SITUACION_FISCAL', archivo_url: 'https://drive.google.com/file/d/nueva/view' },
+        { id: 'doc-ine', proveedor_id: 'prov-1', tipo: 'INE', archivo_url: 'https://drive.google.com/file/d/ine/view' },
+      ])
+      mocks.createProveedorDocumentoMock.mockResolvedValue({ id: 'doc-nueva' })
+
+      await POST(buildRequest('CONSTANCIA_SITUACION_FISCAL'))
+
+      expect(mocks.deleteProveedorDocumentoMock).not.toHaveBeenCalledWith('doc-ine')
+    })
+
+    it('subir un INE no dispara ningún borrado de documentos (solo aplica a la constancia)', async () => {
+      mocks.getProveedorDocumentosMock.mockResolvedValue([{ id: 'doc-ine-vieja', proveedor_id: 'prov-1', tipo: 'INE', archivo_url: 'https://drive.google.com/file/d/x/view' }])
+
+      await POST(buildRequest('INE'))
+
+      expect(mocks.deleteProveedorDocumentoMock).not.toHaveBeenCalled()
     })
   })
 

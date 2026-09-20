@@ -319,19 +319,6 @@ function TabDocumentos({
             {actual && (
               <StatusBadge tone={toneForValidacionEstado(actual.estado_validacion)}>{actual.estado_validacion}</StatusBadge>
             )}
-            {/* Un documento ya validado no se puede borrar desde acá (ver
-                DELETE /api/portal/documentos/[id]) -- ofrecer el botón sería
-                un callejón sin salida garantizado. */}
-            {actual && actual.estado_validacion !== 'validado' && (
-              <button
-                type="button"
-                onClick={() => setBorrar(actual)}
-                aria-label={`Borrar ${TIPO_LABEL[tipo]}`}
-                className="flex-none text-faint hover:text-cancelled-fg transition-colors p-1.5"
-              >
-                <Icon name="trash" size={16} />
-              </button>
-            )}
             <label className="cursor-pointer flex-none border border-hairline bg-input hover:bg-row-alt text-body px-3 py-1.5 rounded-control text-sm transition-colors">
               {subiendo === tipo ? 'Subiendo...' : existentes.length ? 'Subir otro' : 'Subir'}
               <input
@@ -346,6 +333,20 @@ function TabDocumentos({
                 }}
               />
             </label>
+            {/* Al extremo derecho de la fila -- Un documento ya validado no
+                se puede borrar desde acá (ver DELETE
+                /api/portal/documentos/[id]), ofrecer el botón sería un
+                callejón sin salida garantizado. */}
+            {actual && actual.estado_validacion !== 'validado' && (
+              <button
+                type="button"
+                onClick={() => setBorrar(actual)}
+                aria-label={`Borrar ${TIPO_LABEL[tipo]}`}
+                className="flex-none text-faint hover:text-cancelled-fg transition-colors p-1.5"
+              >
+                <Icon name="trash" size={16} />
+              </button>
+            )}
           </div>
         )
       })}
