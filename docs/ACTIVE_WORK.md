@@ -7,12 +7,12 @@
 **`docs/PLAN.md` — Aprobado, en ejecución.** Bloque 1 (Portal: simulador de
 factura) cerrado — PR [#77](https://github.com/EduardoTerwogt/serenata-erp/pull/77),
 mergeado a `main` en `647686b`. **Bloques 2 (Cuentas: utilidad de proyecto) y
-3 (Clientes: `cliente_id` FK) con código completo**, PR
-[#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79) abierto en
-borrador, pendiente de CI/Preview y merge — ambos quedaron en el mismo PR
-por ser sesión en la nube sobre una sola rama asignada. Bloque 4 (filtro de
-estado en Cuentas) sigue pendiente, diseño sin cerrar. Detalle completo,
-orden de ejecución, riesgos y validación de los 4 bloques: `docs/PLAN.md`.
+3 (Clientes: `cliente_id` FK) cerrados** — PR
+[#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79), mergeado a
+`main` en `578f53b` (ambos quedaron en el mismo PR por ser sesión en la nube
+sobre una sola rama asignada). Bloque 4 (filtro de estado en Cuentas) sigue
+pendiente, diseño sin cerrar. Detalle completo, orden de ejecución, riesgos y
+validación de los 4 bloques: `docs/PLAN.md`.
 
 **Engineering Hardening (EF-1+EF-2+EF-3)** y **Agrupar Cuentas por Pagar por
 proveedor+proyecto** siguen cerrados de sesiones anteriores — sin cambios,
@@ -177,7 +177,7 @@ en Preview, `SUPABASE_JWT_SECRET` por ambiente) siguen sin tocar — ver
   policy del proxy de egress contra la API de GitHub. Borrar desde la UI
   de GitHub cuando se quiera, sin urgencia. (Arrastrado.)
 
-## Completado en esta sesión — Bloques 2 y 3 (PR #79)
+## Completado en esta sesión — Bloques 2 y 3 (PR #79, mergeado en `578f53b`)
 
 **Bloque 2 — Cuentas: utilidad de proyecto y cierre fiscal.** Régimen fiscal
 `resico` agregado (persona física RESICO, Art. 113-J LISR) y unificadas las 3
@@ -208,11 +208,10 @@ columna en ningún ambiente — probablemente falla siempre en producción. Ver
 
 ## Siguiente paso
 
-1. Cerrar PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79)
-   (CI en verde + Preview de Vercel desplegando bien) y mergear.
-2. Abrir **Bloque 4 — Cuentas: filtro de estado en vista principal** en una
+1. Abrir **Bloque 4 — Cuentas: filtro de estado en vista principal** en una
    sesión futura (`/serenata-iniciar-fase`) — único bloque sin diseño
    cerrado; falta decidir agrupación de estados e integración con las vistas
-   existentes (ver `docs/PLAN.md`, punto 4 de "Los sueltos").
-3. Considerar como fix rápido, fuera de esta iniciativa: el bug de
+   existentes (ver `docs/PLAN.md`, punto 4 de "Los sueltos"). Con esto
+   cerraría la iniciativa completa de `docs/PLAN.md`.
+2. Considerar como fix rápido, fuera de esta iniciativa: el bug de
    `POST /api/clientes` documentado en `docs/decisions/014`.

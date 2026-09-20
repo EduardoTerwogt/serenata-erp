@@ -8,11 +8,10 @@ mockups interactivos (links abajo) para 3 de los 4 bloques; el cuarto
 (filtro de estado en Cuentas) llega a su arranque con el diseño todavía sin
 cerrar, a propósito, sin bloquear la aprobación ni ejecución de los otros 3.
 **Bloque 1 cerrado** (PR #77, mergeado en `647686b`) — ver tracker abajo.
-**Bloques 2 y 3 con código completo, PR
-[#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79) en revisión**
-(sesión en la nube sobre una sola rama asignada — ambos bloques quedaron en
-el mismo PR en vez de PRs separados). Bloque 4 (filtro de estado) sigue
-pendiente, diseño sin cerrar.
+**Bloques 2 y 3 cerrados** (PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79),
+mergeado a `main` en `578f53b` — sesión en la nube sobre una sola rama
+asignada, ambos bloques quedaron en el mismo PR en vez de PRs separados).
+Bloque 4 (filtro de estado) sigue pendiente, diseño sin cerrar.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -177,8 +176,8 @@ diseñar cuando le toca arrancar, sin detener la ejecución de los otros 3.
 | # | Bloque | Estado |
 |---|---|---|
 | 1 | Portal: simulador de factura | Cerrado — PR [#77](https://github.com/EduardoTerwogt/serenata-erp/pull/77), commit `647686b` |
-| 2 | Cuentas: dropdown de impuestos y utilidad de proyecto | Código completo — PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79), pendiente de merge |
-| 3 | Clientes: `cliente_id` como FK real | Código completo — PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79), pendiente de merge |
+| 2 | Cuentas: dropdown de impuestos y utilidad de proyecto | Cerrado — PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79), commit `578f53b` |
+| 3 | Clientes: `cliente_id` como FK real | Cerrado — PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79), commit `578f53b` |
 | 4 | Cuentas: filtro de estado en vista principal | Pendiente — diseño sin cerrar |
 
 ## Riesgos
