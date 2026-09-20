@@ -32,7 +32,7 @@ interface UseQuotationGeneralAutosaveOptions {
   setProyectoInput: (value: string) => void
   handleClienteChange: (value: string) => void
   handleProyectoChange: (value: string) => void
-  seleccionarCliente: (value: string) => void
+  seleccionarCliente: (value: { id: string; nombre: string }) => void
   seleccionarProyecto: (value: string) => void
 }
 
@@ -178,6 +178,13 @@ export function useQuotationGeneralAutosave({
     setIsSavingGeneral(true)
     const value = getGeneralFieldValue(field)
     const patch: Record<string, unknown> = { [field]: value }
+    // Bloque 3 (docs/PLAN.md): cliente_id viaja junto con cliente en la misma
+    // ronda -- ambos cambian juntos (tecleo libre resuelto por match exacto o
+    // selección del dropdown), así que no necesita su propio tracking de
+    // dirty/base/conflicto independiente.
+    if (field === 'cliente') {
+      patch.cliente_id = getValues('cliente_id') ?? null
+    }
     const baseValue = generalFieldBaseRef.current[field]
     const base = baseValue !== undefined ? { [field]: baseValue } : undefined
     // La promesa CRUDA de `patchQuotationGeneral` rechaza en CUALQUIER 409,
@@ -262,7 +269,7 @@ export function useQuotationGeneralAutosave({
       }
     )
     return trackMutation(semantic)
-  }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease, setCotizacion, setError, trackMutation])
+  }, [clearGeneralFieldConflict, clearGeneralIdleReleaseTimer, cotizacion, getGeneralFieldValue, getValues, patchQuotationGeneral, releaseSection, scheduleGeneralIdleRelease, setCotizacion, setError, trackMutation])
 
   /**
    * Drenado real para General (mismo patrón que `persistItemCellAutosave`
@@ -421,7 +428,7 @@ export function useQuotationGeneralAutosave({
 
   const trackedHandleClienteChange = useCallback((value: string) => { handleGeneralFocus(); markGeneralFieldDirty('cliente'); handleClienteChange(value) }, [handleClienteChange, handleGeneralFocus, markGeneralFieldDirty])
   const trackedHandleProyectoChange = useCallback((value: string) => { handleGeneralFocus(); markGeneralFieldDirty('proyecto'); handleProyectoChange(value) }, [handleGeneralFocus, handleProyectoChange, markGeneralFieldDirty])
-  const trackedSelectCliente = useCallback((value: string) => { handleGeneralFocus(); markGeneralFieldDirty('cliente'); seleccionarCliente(value) }, [handleGeneralFocus, markGeneralFieldDirty, seleccionarCliente])
+  const trackedSelectCliente = useCallback((value: { id: string; nombre: string }) => { handleGeneralFocus(); markGeneralFieldDirty('cliente'); seleccionarCliente(value) }, [handleGeneralFocus, markGeneralFieldDirty, seleccionarCliente])
   const trackedSelectProyecto = useCallback((value: string) => { handleGeneralFocus(); markGeneralFieldDirty('proyecto'); seleccionarProyecto(value) }, [handleGeneralFocus, markGeneralFieldDirty, seleccionarProyecto])
   const trackedHandleFechaEntregaChange = useCallback(() => { handleGeneralFocus(); markGeneralFieldDirty('fecha_entrega') }, [handleGeneralFocus, markGeneralFieldDirty])
   const trackedHandleLocacionChange = useCallback(() => { handleGeneralFocus(); markGeneralFieldDirty('locacion') }, [handleGeneralFocus, markGeneralFieldDirty])

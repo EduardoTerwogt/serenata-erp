@@ -54,6 +54,17 @@ describe('extraerDatosIdentidad', () => {
     expect(callArgs.messages[0].content[0].type).toBe('image')
   })
 
+  it('extrae régimen "resico" cuando la constancia dice RESICO', async () => {
+    mocks.createMock.mockResolvedValue(
+      textResponse('{"nombre_completo": "Maria Lopez Sanchez", "regimen_fiscal": "resico"}')
+    )
+    const file = new File(['contenido'], 'constancia.pdf', { type: 'application/pdf' })
+
+    const result = await extraerDatosIdentidad(file)
+
+    expect(result).toEqual({ nombre_completo: 'Maria Lopez Sanchez', regimen_fiscal: 'resico' })
+  })
+
   it('envía el documento como bloque "document" cuando es PDF', async () => {
     mocks.createMock.mockResolvedValue(textResponse('{"nombre_completo": "Renta de Equipo MX", "regimen_fiscal": "moral"}'))
     const file = new File(['contenido'], 'constancia.pdf', { type: 'application/pdf' })

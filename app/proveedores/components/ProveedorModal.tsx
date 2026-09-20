@@ -223,6 +223,7 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
             <option value="">Aún no se sabe (se asume moral / 16% sin retención)</option>
             <option value="moral">Persona moral (IVA 16%, sin retención)</option>
             <option value="fisica">Persona física con honorarios (retención IVA 2/3 + ISR 10%)</option>
+            <option value="resico">Persona física RESICO (retención IVA 2/3 + ISR 1.25%)</option>
           </select>
           <p className="text-faint text-xs mt-1.5">Se usa para estimar impuestos en Cotizaciones y Cuentas por Pagar. Actualízalo cuando llegue la constancia de situación fiscal.</p>
         </div>

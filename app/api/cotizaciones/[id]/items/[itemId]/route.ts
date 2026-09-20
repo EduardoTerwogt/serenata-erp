@@ -102,7 +102,7 @@ export async function PATCH(
       const updatedQuotation = await recalculateQuotationHeader(id)
       updatedItem = (updatedQuotation.items || []).find((item) => item.id === itemId) ?? itemPatcheado
       // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
-      after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, [updatedItem], 'PATCH /api/cotizaciones/:id/items/:itemId') })
+      after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, [updatedItem], 'PATCH /api/cotizaciones/:id/items/:itemId', id) })
     } catch (recalcError) {
       console.error('[PATCH /api/cotizaciones/:id/items/:itemId] El patch se guardó pero falló el recálculo del encabezado:', recalcError)
     }

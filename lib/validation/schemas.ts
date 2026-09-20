@@ -40,6 +40,7 @@ export const ItemCotizacionSchema = z.object({
 
 const CotizacionBaseSchema = z.object({
   cliente: z.string().min(1, 'El cliente es requerido'),
+  cliente_id: z.string().uuid().nullable().optional(),
   proyecto: z.string().min(1, 'El proyecto es requerido'),
   fecha_entrega: z.string().nullable().optional(),
   locacion: z.string().nullable().optional(),
@@ -74,7 +75,7 @@ export const ProveedorCreateSchema = z.object({
   clabe: z.string().nullable().optional(),
   roles: z.array(z.string()).optional().default([]),
   notas: z.string().nullable().optional(),
-  regimen_fiscal: z.enum(['moral', 'fisica']).nullable().optional(),
+  regimen_fiscal: z.enum(['moral', 'fisica', 'resico']).nullable().optional(),
 })
 
 export const ProveedorUpdateSchema = z.object({
@@ -87,7 +88,7 @@ export const ProveedorUpdateSchema = z.object({
   roles: z.array(z.string()).optional(),
   notas: z.string().nullable().optional(),
   activo: z.boolean().optional(),
-  regimen_fiscal: z.enum(['moral', 'fisica']).nullable().optional(),
+  regimen_fiscal: z.enum(['moral', 'fisica', 'resico']).nullable().optional(),
 })
 
 // ==================== CLIENTES ====================

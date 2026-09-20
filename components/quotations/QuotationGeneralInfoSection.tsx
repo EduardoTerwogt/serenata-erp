@@ -6,8 +6,14 @@ import { DateField } from '@/components/ui/DateField'
 import { formatDateDisplay } from '@/lib/format-date'
 
 interface ClienteOption {
+  id: string
   nombre: string
   proyectos: string[]
+}
+
+interface ClienteSeleccionado {
+  id: string
+  nombre: string
 }
 
 type QuotationGeneralField = 'cliente' | 'proyecto' | 'fecha_entrega' | 'locacion'
@@ -54,7 +60,7 @@ interface Props {
   setValue: UseFormSetValue<QuotationFormValues>
   clienteInput: string
   proyectoInput: string
-  clienteSugerencias: string[]
+  clienteSugerencias: ClienteSeleccionado[]
   mostrarClienteDropdown: boolean
   setMostrarClienteDropdown: (value: boolean) => void
   proyectosDelCliente: string[]
@@ -63,9 +69,9 @@ interface Props {
   listaClientes: ClienteOption[]
   handleClienteChange: (value: string) => void
   handleProyectoChange: (value: string) => void
-  seleccionarCliente: (value: string) => void
+  seleccionarCliente: (value: ClienteSeleccionado) => void
   setProyectoInput: (value: string) => void
-  onClienteSelected?: (value: string) => void
+  onClienteSelected?: (value: ClienteSeleccionado) => void
   onProyectoSelected?: (value: string) => void
   onFechaEntregaChange?: (value: string) => void
   onLocacionChange?: (value: string) => void
@@ -137,20 +143,20 @@ export function QuotationGeneralInfoSection({
                   const match = listaClientes.find(c => c.nombre.toLowerCase() === clienteInput.trim().toLowerCase())
                   if (match) {
                     if (onClienteSelected) {
-                      onClienteSelected(match.nombre)
+                      onClienteSelected(match)
                     } else {
-                      seleccionarCliente(match.nombre)
+                      seleccionarCliente(match)
                     }
                   }
                 }
               }, 200)} autoComplete="off" placeholder="Nombre del cliente" className={INPUT_CLASS} />
-              {mostrarClienteDropdown && clienteSugerencias.length > 0 && <div className={DROPDOWN_CLASS}>{clienteSugerencias.map((nombre, i) => <div key={i} onMouseDown={() => {
+              {mostrarClienteDropdown && clienteSugerencias.length > 0 && <div className={DROPDOWN_CLASS}>{clienteSugerencias.map((cliente) => <div key={cliente.id} onMouseDown={() => {
                 if (onClienteSelected) {
-                  onClienteSelected(nombre)
+                  onClienteSelected(cliente)
                 } else {
-                  seleccionarCliente(nombre)
+                  seleccionarCliente(cliente)
                 }
-              }} className={DROPDOWN_ITEM_CLASS}>{nombre}</div>)}</div>}
+              }} className={DROPDOWN_ITEM_CLASS}>{cliente.nombre}</div>)}</div>}
             </>
           )}
           <GeneralFieldConflictBanner field="cliente" conflict={conflicts?.cliente} onResolve={onResolveConflict} />

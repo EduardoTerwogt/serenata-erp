@@ -1,5 +1,7 @@
 import { Page } from '@playwright/test'
 import { fulfillJson } from './http'
+import { calcularCierreProyecto } from '@/lib/shared/cierre-proyecto'
+import { CuentaPagar, RegimenFiscal } from '@/lib/types'
 
 export const E2E_IDS = {
   cobrarId: 'cc-1',
@@ -474,8 +476,17 @@ export async function mockCuentasApis(page: Page) {
   // Fase 5.3 Bloque 3: vista "Por proyecto" es la vista por default de
   // /cuentas -- sin este mock, ese fetch pasa de largo hacia el servidor
   // real (Playwright solo intercepta llamadas de red del navegador) y
-  // falla contra el Supabase de prueba (example.supabase.co).
+  // falla contra el Supabase de prueba (example.supabase.co). Bloque 2
+  // (docs/PLAN.md): esta ruta ahora también hace el trabajo que en
+  // producción hace app/api/cuentas/por-proyecto/route.ts (agregar
+  // margen/fee/iva de proyecto + calcularCierreProyecto), porque Playwright
+  // intercepta la llamada de red ANTES de que el servidor real la procese.
   await page.route('**/api/cuentas/por-proyecto', async (route) => {
+    const margenTotalProyecto = 2000
+    const feeAgenciaProyecto = 1000
+    const ivaTotalProyecto = 1520
+    const cuentasPagarConRegimen = cuentasPagar.map((c) => ({ ...c, proveedor_regimen_fiscal: null as RegimenFiscal | null })) as (CuentaPagar & { proveedor_regimen_fiscal: RegimenFiscal | null })[]
+
     await fulfillJson(route, {
       proyectos: [
         {
@@ -487,9 +498,14 @@ export async function mockCuentasApis(page: Page) {
             estado: 'RODAJE',
           },
           cuentas_cobrar: cuentasCobrar,
-          cuentas_pagar: cuentasPagar,
+          cuentas_pagar: cuentasPagarConRegimen,
           total_cobrar: cobrarCuenta.monto_total,
           total_pagar: pagarCuenta.x_pagar,
+          margen_total_proyecto: margenTotalProyecto,
+          fee_agencia_proyecto: feeAgenciaProyecto,
+          utilidad_total_proyecto: margenTotalProyecto + feeAgenciaProyecto,
+          iva_total_proyecto: ivaTotalProyecto,
+          cierre: calcularCierreProyecto(cuentasPagarConRegimen, margenTotalProyecto, feeAgenciaProyecto, ivaTotalProyecto),
         },
       ],
     })

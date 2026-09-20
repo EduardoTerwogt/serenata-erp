@@ -7,7 +7,7 @@ export type EstadoCuentaPagar = 'PENDIENTE' | 'EN_PROCESO_PAGO' | 'PAGADO'
 export type EstadoCuentaPagarGrupo = 'ABIERTO' | 'FACTURADO' | 'EN_PROCESO_PAGO' | 'PAGADO'
 export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO'
 
-export type RegimenFiscal = 'moral' | 'fisica'
+export type RegimenFiscal = 'moral' | 'fisica' | 'resico'
 
 export type PortalEstado = 'pendiente_confirmacion' | 'activo'
 export type TipoDocumentoProveedor =
@@ -35,7 +35,8 @@ export interface Proveedor {
   activo: boolean
   created_at: string
   // Escenario fiscal del proveedor (Fase 5.1/5.3): 'moral' = IVA 16% acreditable sin
-  // retencion; 'fisica' = persona fisica con honorarios, retencion IVA 2/3 + ISR 10%.
+  // retencion; 'fisica' = persona fisica con honorarios, retencion IVA 2/3 + ISR 10%;
+  // 'resico' = persona fisica RESICO, retencion IVA 2/3 + ISR 1.25% (Art. 113-J LISR).
   // null = no capturado aun -> se trata como 'moral' por default en los calculos.
   regimen_fiscal: RegimenFiscal | null
   // Portal de proveedores (Fase 5.5): la identidad del portal ES esta misma
@@ -161,6 +162,7 @@ export interface Cliente {
 export interface Cotizacion {
   id: string
   cliente: string
+  cliente_id?: string | null
   proyecto: string
   fecha_entrega: string | null
   locacion: string | null
@@ -340,6 +342,10 @@ export interface CuentaPagar {
   grupo_estado?: EstadoCuentaPagarGrupo | null
   grupo_monto_total?: number | null
   grupo_monto_pagado?: number | null
+  // Bloque 2 (docs/PLAN.md): poblado por cuentas_por_proyecto() (LEFT JOIN a
+  // proveedores) para que calcularCierreProyecto aplique la retención
+  // correcta por grupo sin una query aparte.
+  proveedor_regimen_fiscal?: RegimenFiscal | null
 }
 
 // Agrupa cuentas_pagar del mismo proveedor dentro del mismo proyecto para

@@ -31,9 +31,19 @@ describe('GET /api/cuentas/por-proyecto', () => {
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
-  it('llama la RPC cuentas_por_proyecto y envuelve el resultado en { proyectos }', async () => {
+  it('llama la RPC cuentas_por_proyecto y envuelve el resultado en { proyectos }, agregando el cierre fiscal calculado', async () => {
     const filas = [
-      { proyecto: { id: 'SH003', folio: 'SH003', nombre: 'Doc', cliente: 'X', estado: 'RODAJE' }, cuentas_cobrar: [], cuentas_pagar: [], total_cobrar: 0, total_pagar: 0 },
+      {
+        proyecto: { id: 'SH003', folio: 'SH003', nombre: 'Doc', cliente: 'X', estado: 'RODAJE' },
+        cuentas_cobrar: [],
+        cuentas_pagar: [],
+        total_cobrar: 0,
+        total_pagar: 0,
+        margen_total_proyecto: 4000,
+        fee_agencia_proyecto: 1500,
+        utilidad_total_proyecto: 5500,
+        iva_total_proyecto: 1600,
+      },
     ]
     mocks.rpcMock.mockResolvedValue({ data: filas, error: null })
 
@@ -42,7 +52,15 @@ describe('GET /api/cuentas/por-proyecto', () => {
     expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_por_proyecto')
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body).toEqual({ proyectos: filas })
+    expect(body.proyectos).toHaveLength(1)
+    expect(body.proyectos[0]).toMatchObject(filas[0])
+    expect(body.proyectos[0].cierre).toMatchObject({
+      quien_cuanto_cuando: [],
+      utilidad_bruta: 5500,
+      isr_serenata_estimado: 1650,
+      utilidad_neta: 3850,
+      utilidad_libre_estimada: 3850,
+    })
   })
 
   it('responde 500 sin exponer el error interno si la RPC falla', async () => {

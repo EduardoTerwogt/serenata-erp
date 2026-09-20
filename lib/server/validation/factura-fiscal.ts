@@ -1,6 +1,6 @@
 import { FacturaData, MismatchFactura, ResultadoValidacionFactura } from '@/lib/server/xml/factura-parser'
 import { RegimenFiscal } from '@/lib/types'
-import { round2, TASA_IVA, TASA_RETENCION_IVA, TASA_RETENCION_ISR } from '@/lib/shared/factura-fiscal'
+import { round2, TASA_IVA, TASA_RETENCION_IVA, obtenerRetencionesPorRegimen } from '@/lib/shared/factura-fiscal'
 
 export { calcularEjemploFactura, type EjemploFacturaEsperado } from '@/lib/shared/factura-fiscal'
 
@@ -38,6 +38,8 @@ const TOLERANCIA_TASA_RETENCION_IVA = 0.0003 // 0.03% del subtotal
  * - Persona moral: IVA 16% trasladado, sin retenciones.
  * - Persona física con honorarios: IVA 16% trasladado + retención de IVA
  *   2/3 (10.6667%) + retención de ISR 10%, todo sobre el subtotal.
+ * - Persona física RESICO: mismo IVA trasladado + retención de IVA que
+ *   física con honorarios, pero retención de ISR 1.25% (Art. 113-J LISR).
  *
  * `regimenFiscal` null/undefined se trata como 'moral' -- mismo default que
  * usa el resto del negocio cuando el proveedor aún no lo tiene capturado
@@ -67,7 +69,8 @@ export function validarFacturaFiscalProveedor(
     }
   }
 
-  const esFisica = regimenFiscal === 'fisica'
+  const { retieneIva, tasaIsr } = obtenerRetencionesPorRegimen(regimenFiscal)
+  const labelRegimen = regimenFiscal === 'resico' ? 'persona física (RESICO)' : 'persona física con honorarios'
   const subtotalDeclarado = facturaData.subtotal
   const ivaTrasladadoDeclarado = facturaData.iva_trasladado ?? 0
   const ivaRetenidoDeclarado = facturaData.iva_retenido ?? 0
@@ -90,24 +93,24 @@ export function validarFacturaFiscalProveedor(
     })
   }
 
-  if (esFisica) {
+  if (retieneIva) {
     const ivaRetenidoEsperado = round2(subtotalDeclarado * TASA_RETENCION_IVA)
-    const isrRetenidoEsperado = round2(subtotalDeclarado * TASA_RETENCION_ISR)
+    const isrRetenidoEsperado = round2(subtotalDeclarado * tasaIsr)
     const toleranciaIvaRetenido = Math.max(TOLERANCIA_CENTAVOS, subtotalDeclarado * TOLERANCIA_TASA_RETENCION_IVA)
     if (Math.abs(ivaRetenidoDeclarado - ivaRetenidoEsperado) > toleranciaIvaRetenido) {
       mismatches.push({
         campo: 'iva_retenido',
-        mensaje: `Retención de IVA no coincide: XML $${ivaRetenidoDeclarado.toFixed(2)} vs esperado $${ivaRetenidoEsperado.toFixed(2)} (2/3 del IVA, persona física con honorarios).`,
+        mensaje: `Retención de IVA no coincide: XML $${ivaRetenidoDeclarado.toFixed(2)} vs esperado $${ivaRetenidoEsperado.toFixed(2)} (2/3 del IVA, ${labelRegimen}).`,
       })
     }
-    // ISR retenido se queda en TOLERANCIA_CENTAVOS a propósito: su tasa
-    // (10%) es exacta en base 10, no un decimal periódico como el IVA
-    // retenido -- no hay una causa real de redondeo que justifique
+    // ISR retenido se queda en TOLERANCIA_CENTAVOS a propósito: sus tasas
+    // (10%, 1.25%) son exactas en base 10, no un decimal periódico como el
+    // IVA retenido -- no hay una causa real de redondeo que justifique
     // ampliarla aquí.
     if (Math.abs(isrRetenidoDeclarado - isrRetenidoEsperado) > TOLERANCIA_CENTAVOS) {
       mismatches.push({
         campo: 'isr_retenido',
-        mensaje: `Retención de ISR no coincide: XML $${isrRetenidoDeclarado.toFixed(2)} vs esperado $${isrRetenidoEsperado.toFixed(2)} (10% del subtotal, persona física con honorarios).`,
+        mensaje: `Retención de ISR no coincide: XML $${isrRetenidoDeclarado.toFixed(2)} vs esperado $${isrRetenidoEsperado.toFixed(2)} (${tasaIsr * 100}% del subtotal, ${labelRegimen}).`,
       })
     }
   } else {

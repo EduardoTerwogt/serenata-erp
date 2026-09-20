@@ -85,6 +85,29 @@ describe('validarFacturaFiscalProveedor', () => {
     })
   })
 
+  describe('persona física RESICO', () => {
+    it('valida cuando trae IVA 16% + retención IVA 2/3 + retención ISR 1.25%', () => {
+      // Total = 1000 + 160 - 106.67 - 12.5 = 1040.83
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 1000, iva_trasladado: 160, iva_retenido: 106.67, isr_retenido: 12.5, monto_total: 1040.83 },
+        1000,
+        'resico'
+      )
+      expect(result.estado_validacion).toBe('validado')
+    })
+
+    it('marca revision si la retención de ISR usa la tasa de física con honorarios (10%) en vez de RESICO (1.25%)', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 1000, iva_trasladado: 160, iva_retenido: 106.67, isr_retenido: 100, monto_total: 953.33 },
+        1000,
+        'resico'
+      )
+      expect(result.estado_validacion).toBe('revision')
+      expect(result.detalle_validacion).toContain('Retención de ISR no coincide')
+      expect(result.detalle_validacion).toContain('1.25%')
+    })
+  })
+
   describe('tolerancia de redondeo en retención de IVA (2/3 de 16% es decimal periódico)', () => {
     // Caso real (2026-09-19, cotización SH077): el XML declaró
     // TasaOCuota="0.106600" (redondeado) en vez de la fracción exacta

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-19T23:57:52.159Z",
-  "count": 94,
+  "generated_at": "2026-09-20T01:47:44.776Z",
+  "count": 99,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -95,6 +95,11 @@
     "20260918_fix_patch_item_cotizacion_costo_total.sql",
     "20260918_migracion_retroactiva_cuentas_pagar_grupos.sql",
     "20260918_proveedores_add_alias.sql",
-    "20260919_proveedor_documentos_detalle_validacion.sql"
+    "20260919_proveedor_documentos_detalle_validacion.sql",
+    "20260920_clientes_add_cliente_id_columns.sql",
+    "20260920_clientes_cliente_id_backfill_clasificacion.sql",
+    "20260920_cuentas_por_proyecto_utilidad_impuestos.sql",
+    "20260920_proveedores_add_regimen_fiscal_resico.sql",
+    "20260920_rpcs_cliente_id_dual_write.sql"
   ]
 }

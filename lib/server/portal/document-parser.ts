@@ -12,7 +12,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const DatosIdentidadSchema = z.object({
   nombre_completo: z.string().min(1).nullable(),
-  regimen_fiscal: z.enum(['moral', 'fisica']).nullable(),
+  regimen_fiscal: z.enum(['moral', 'fisica', 'resico']).nullable(),
 })
 
 export interface DatosIdentidadDocumento {
@@ -28,10 +28,10 @@ type SupportedImageType = (typeof SUPPORTED_IMAGE_TYPES)[number]
 const PROMPT = `Lees documentos de identidad/fiscales mexicanos (INE, Constancia de Situación Fiscal del SAT) para un portal de proveedores. Extrae SOLO lo que el documento diga explícitamente -- nunca inventes ni infieras si no está claramente visible.
 
 - "nombre_completo": el nombre legal completo tal como aparece en el documento (nombre(s) + apellidos). null si no es legible o el documento no es de este tipo.
-- "regimen_fiscal": SOLO si el documento es una Constancia de Situación Fiscal y el régimen es identificable -- "moral" si dice "Personas Morales" o similar, "fisica" si dice "Persona Física" (con o sin actividad empresarial/honorarios). null si no aplica o no es legible (ej. si el documento es un INE, siempre null aquí).
+- "regimen_fiscal": SOLO si el documento es una Constancia de Situación Fiscal y el régimen es identificable -- "moral" si dice "Personas Morales" o similar; "resico" si dice "Régimen Simplificado de Confianza" o "RESICO" (persona física); "fisica" si dice "Persona Física" con cualquier otro régimen (ej. "Actividades Empresariales y Profesionales", honorarios) y NO menciona RESICO. null si no aplica o no es legible (ej. si el documento es un INE, siempre null aquí).
 
 Retorna SOLO JSON válido, sin markdown ni explicaciones:
-{"nombre_completo": "..." o null, "regimen_fiscal": "moral" | "fisica" | null}`
+{"nombre_completo": "..." o null, "regimen_fiscal": "moral" | "fisica" | "resico" | null}`
 
 /**
  * Nunca tira error que bloquee el signup -- si Claude no está configurado,

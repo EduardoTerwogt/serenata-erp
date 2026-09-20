@@ -93,7 +93,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   const { pendingMutationsRef, trackMutation } = useQuotationMutationTracker()
 
   const { register, control, watch, reset, setValue, getValues } = useForm<QuotationFormValues>({
-    defaultValues: { cliente: '', proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
+    defaultValues: { cliente: '', cliente_id: null, proyecto: '', fecha_entrega: '', locacion: '', items: [{ ...EMPTY_QUOTATION_ITEM }] },
   })
   const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' })
   const watchedItems = watch('items')
@@ -307,7 +307,7 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
     resetGeneralFromServer(cot)
     resetTotalsFromServer(cot)
     for (const item of cot.items || []) recordServerItem(item)
-    reset({ cliente: cot.cliente, proyecto: cot.proyecto, fecha_entrega: cot.fecha_entrega || '', locacion: cot.locacion || '', items: (cot.items || []).map(mapItemToFormItem) })
+    reset({ cliente: cot.cliente, cliente_id: cot.cliente_id ?? null, proyecto: cot.proyecto, fecha_entrega: cot.fecha_entrega || '', locacion: cot.locacion || '', items: (cot.items || []).map(mapItemToFormItem) })
   }, [recordServerItem, reset, resetGeneralFromServer, resetNotasFromServer, resetTotalsFromServer])
 
   // applyNotasOnly: EF-3 3D-4, ver hooks/useQuotationNotasAutosave.ts.

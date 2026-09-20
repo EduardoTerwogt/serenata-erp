@@ -116,6 +116,7 @@ describe('PUT /api/cotizaciones/[id]', () => {
       'Evento nuevo',
       [{ descripcion: 'Audio', precio_unitario: 1000 }],
       'PUT /api/cotizaciones/:id',
+      'SH001',
     )
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual(updatedCotizacion)

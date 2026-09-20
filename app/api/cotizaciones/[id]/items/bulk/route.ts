@@ -158,7 +158,8 @@ export async function POST(
             updatedQuotation.cliente,
             updatedQuotation.proyecto,
             createdItems as Partial<ItemCotizacion>[],
-            'POST /api/cotizaciones/:id/items'
+            'POST /api/cotizaciones/:id/items',
+            id
           )
         })
 
