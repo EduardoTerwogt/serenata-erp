@@ -5,12 +5,14 @@
 ## Estado
 
 **`docs/PLAN.md` — Aprobado, en ejecución.** Bloque 1 (Portal: simulador de
-factura) cerrado esta sesión — PR [#77](https://github.com/EduardoTerwogt/serenata-erp/pull/77),
-mergeado a `main` en `647686b`. Bloque 2 (Cuentas: dropdown de impuestos y
-utilidad de proyecto) es el siguiente a ejecutar — lógica de negocio y
-mockup ya validados en sesión anterior, sin código todavía. Detalle
-completo, orden de ejecución, riesgos y validación de los 4 bloques:
-`docs/PLAN.md`.
+factura) cerrado — PR [#77](https://github.com/EduardoTerwogt/serenata-erp/pull/77),
+mergeado a `main` en `647686b`. **Bloques 2 (Cuentas: utilidad de proyecto) y
+3 (Clientes: `cliente_id` FK) con código completo**, PR
+[#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79) abierto en
+borrador, pendiente de CI/Preview y merge — ambos quedaron en el mismo PR
+por ser sesión en la nube sobre una sola rama asignada. Bloque 4 (filtro de
+estado en Cuentas) sigue pendiente, diseño sin cerrar. Detalle completo,
+orden de ejecución, riesgos y validación de los 4 bloques: `docs/PLAN.md`.
 
 **Engineering Hardening (EF-1+EF-2+EF-3)** y **Agrupar Cuentas por Pagar por
 proveedor+proyecto** siguen cerrados de sesiones anteriores — sin cambios,
@@ -175,12 +177,42 @@ en Preview, `SUPABASE_JWT_SECRET` por ambiente) siguen sin tocar — ver
   policy del proxy de egress contra la API de GitHub. Borrar desde la UI
   de GitHub cuando se quiera, sin urgencia. (Arrastrado.)
 
+## Completado en esta sesión — Bloques 2 y 3 (PR #79)
+
+**Bloque 2 — Cuentas: utilidad de proyecto y cierre fiscal.** Régimen fiscal
+`resico` agregado (persona física RESICO, Art. 113-J LISR) y unificadas las 3
+reimplementaciones binarias moral/física en `obtenerRetencionesPorRegimen`
+(`lib/shared/factura-fiscal.ts`). RPC `cuentas_por_proyecto()` extendida con
+margen/fee/utilidad/IVA por proyecto + nuevo módulo puro
+`lib/shared/cierre-proyecto.ts` (`calcularCierreProyecto`, agrupa por grupo
+de facturación, nunca tasa plana). UI: chip "Utilidad" + sección "Cierre del
+proyecto" en `CuentasPorProyecto.tsx`.
+
+**Bloque 3 — Clientes: `cliente_id` como FK real.** Esquema aditivo +
+backfill clasificado en 3 cubetas (`safe_match`/`ambiguous`/`no_match`,
+nunca asignación forzada — ver `docs/decisions/014`); 100% clasificado y
+verificado en `supabase-test` (6594 filas) y producción (168 filas, 100%
+`safe_match`). Dual-write en `save_cotizacion`, `patch_cotizacion_general`,
+`approve_cotizacion`, `buscar_cotizaciones`, `buscar_cuentas_cobrar`,
+`cuentas_por_proyecto` + selector de cliente real en Cotizaciones (único
+lugar con texto libre) + mirror de Sheets (4 tablas).
+
+**Hallazgo fuera de alcance, documentado:** `POST /api/clientes` usa
+`upsert(onConflict:'nombre')` sin que exista ningún `UNIQUE` real sobre esa
+columna en ningún ambiente — probablemente falla siempre en producción. Ver
+`docs/decisions/014-cliente-id-fk-clasificacion.md`.
+
+**Tests:** `tsc`/`lint` limpios, `vitest` 964/964, e2e critical 80/80 y smoke
+26/26 en verde. Migraciones aplicadas y verificadas en `supabase-test`
+(`ozrtsludmcguvgqdjicn`) y producción (`fwmyoqokcjtldiofuxdg`).
+
 ## Siguiente paso
 
-Abrir **Bloque 2 — Cuentas: dropdown de impuestos a pagar y utilidad
-bruta/neta de proyecto** en una sesión futura (`/serenata-iniciar-fase`).
-Lógica de negocio y fórmulas ya validadas y aprobadas en `docs/PLAN.md`
-(retenciones/IVA no restan utilidad de Serenata; ISR estimado 30% sí;
-vista "Cierre del proyecto"; gap de RESICO persona física ya investigado y
-en alcance). Mockup de referencia confirmado, link en `docs/PLAN.md` →
-"Artefactos de referencia".
+1. Cerrar PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79)
+   (CI en verde + Preview de Vercel desplegando bien) y mergear.
+2. Abrir **Bloque 4 — Cuentas: filtro de estado en vista principal** en una
+   sesión futura (`/serenata-iniciar-fase`) — único bloque sin diseño
+   cerrado; falta decidir agrupación de estados e integración con las vistas
+   existentes (ver `docs/PLAN.md`, punto 4 de "Los sueltos").
+3. Considerar como fix rápido, fuera de esta iniciativa: el bug de
+   `POST /api/clientes` documentado en `docs/decisions/014`.
