@@ -74,7 +74,7 @@ export const ProveedorCreateSchema = z.object({
   clabe: z.string().nullable().optional(),
   roles: z.array(z.string()).optional().default([]),
   notas: z.string().nullable().optional(),
-  regimen_fiscal: z.enum(['moral', 'fisica']).nullable().optional(),
+  regimen_fiscal: z.enum(['moral', 'fisica', 'resico']).nullable().optional(),
 })
 
 export const ProveedorUpdateSchema = z.object({
@@ -87,7 +87,7 @@ export const ProveedorUpdateSchema = z.object({
   roles: z.array(z.string()).optional(),
   notas: z.string().nullable().optional(),
   activo: z.boolean().optional(),
-  regimen_fiscal: z.enum(['moral', 'fisica']).nullable().optional(),
+  regimen_fiscal: z.enum(['moral', 'fisica', 'resico']).nullable().optional(),
 })
 
 // ==================== CLIENTES ====================

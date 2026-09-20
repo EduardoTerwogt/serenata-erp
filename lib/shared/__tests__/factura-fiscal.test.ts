@@ -24,6 +24,16 @@ describe('calcularEjemploFactura', () => {
     expect(ejemplo.explicacion).toContain('persona física')
   })
 
+  it('persona física RESICO: IVA trasladado + retención IVA 2/3 + retención ISR 1.25%', () => {
+    const ejemplo = calcularEjemploFactura(1000, 'resico')
+    expect(ejemplo.subtotal).toBe(1000)
+    expect(ejemplo.iva_trasladado).toBe(160)
+    expect(ejemplo.iva_retenido).toBeCloseTo(106.67, 2)
+    expect(ejemplo.isr_retenido).toBe(12.5)
+    expect(ejemplo.total).toBeCloseTo(1000 + 160 - 106.67 - 12.5, 2)
+    expect(ejemplo.explicacion).toContain('RESICO')
+  })
+
   it('null/undefined regimen_fiscal se trata como moral (mismo default que el resto del negocio)', () => {
     const ejemplo = calcularEjemploFactura(1000, null)
     expect(ejemplo.iva_retenido).toBe(0)

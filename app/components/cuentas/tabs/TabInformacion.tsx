@@ -129,12 +129,19 @@ function HistorialResponsable({ cargar }: { cargar: () => Promise<{ historial: H
 
 function CrucePagoFiscal({ neto, regimenFiscal, esGrupo }: { neto: number; regimenFiscal: RegimenFiscal | null | undefined; esGrupo?: boolean }) {
   const cruce = calcularCrucePagoProveedor(neto, regimenFiscal)
-  const esFisica = regimenFiscal === 'fisica'
+  const tieneRetenciones = cruce.retencionIva > 0 || cruce.retencionIsr > 0
+  const regimenLabel =
+    regimenFiscal === 'fisica'
+      ? 'Persona física con honorarios'
+      : regimenFiscal === 'resico'
+        ? 'Persona física (RESICO)'
+        : 'Persona moral'
+  const isrLabel = regimenFiscal === 'resico' ? '1.25%' : '10%'
 
   return (
     <div className="pt-4 border-t border-hairline">
       <p className="text-subtext text-content mb-2">
-        Cruce fiscal · {esFisica ? 'Persona física con honorarios' : 'Persona moral'}
+        Cruce fiscal · {regimenLabel}
       </p>
       <div className="bg-row border border-hairline rounded-control p-4 space-y-2">
         <div className="flex justify-between text-content">
@@ -145,14 +152,14 @@ function CrucePagoFiscal({ neto, regimenFiscal, esGrupo }: { neto: number; regim
           <span className="text-subtext">IVA 16% que agrega el proveedor</span>
           <span className="text-body">${fmt(cruce.iva)}</span>
         </div>
-        {esFisica && (
+        {tieneRetenciones && (
           <>
             <div className="flex justify-between text-content">
               <span className="text-subtext">Retención de IVA · 2/3 (10.6667%)</span>
               <span className="text-body">-${fmt(cruce.retencionIva)}</span>
             </div>
             <div className="flex justify-between text-content">
-              <span className="text-subtext">Retención de ISR · 10%</span>
+              <span className="text-subtext">Retención de ISR · {isrLabel}</span>
               <span className="text-body">-${fmt(cruce.retencionIsr)}</span>
             </div>
           </>

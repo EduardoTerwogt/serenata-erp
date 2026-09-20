@@ -3,6 +3,7 @@ import { RegimenFiscal } from '@/lib/types'
 export const TASA_IVA = 0.16
 export const TASA_RETENCION_IVA = (2 / 3) * TASA_IVA // 10.6667%
 export const TASA_RETENCION_ISR = 0.10
+export const TASA_RETENCION_ISR_RESICO = 0.0125 // Art. 113-J LISR
 
 export function round2(value: number): number {
   return Math.round(value * 100) / 100
@@ -15,6 +16,26 @@ export interface EjemploFacturaEsperado {
   isr_retenido: number
   total: number
   explicacion: string
+}
+
+export interface RetencionesRegimen {
+  retieneIva: boolean
+  tasaIsr: number
+}
+
+/**
+ * Única fuente de verdad de qué retenciones aplican por régimen fiscal --
+ * moral/null/undefined nunca retienen; física con honorarios e persona
+ * física RESICO sí retienen IVA (misma tasa 2/3), pero difieren en la tasa
+ * de ISR retenido (10% vs 1.25%, Art. 113-J LISR). Quien necesite decidir
+ * "¿este régimen retiene?" llama esto, nunca compara contra 'fisica' a mano.
+ */
+export function obtenerRetencionesPorRegimen(
+  regimenFiscal: RegimenFiscal | null | undefined
+): RetencionesRegimen {
+  if (regimenFiscal === 'fisica') return { retieneIva: true, tasaIsr: TASA_RETENCION_ISR }
+  if (regimenFiscal === 'resico') return { retieneIva: true, tasaIsr: TASA_RETENCION_ISR_RESICO }
+  return { retieneIva: false, tasaIsr: 0 }
 }
 
 /**
@@ -35,16 +56,19 @@ export function calcularEjemploFactura(
   montoNetoEsperado: number,
   regimenFiscal: RegimenFiscal | null | undefined
 ): EjemploFacturaEsperado {
-  const esFisica = regimenFiscal === 'fisica'
+  const { retieneIva, tasaIsr } = obtenerRetencionesPorRegimen(regimenFiscal)
   const subtotal = round2(montoNetoEsperado)
   const ivaTrasladado = round2(subtotal * TASA_IVA)
-  const ivaRetenido = esFisica ? round2(subtotal * TASA_RETENCION_IVA) : 0
-  const isrRetenido = esFisica ? round2(subtotal * TASA_RETENCION_ISR) : 0
+  const ivaRetenido = retieneIva ? round2(subtotal * TASA_RETENCION_IVA) : 0
+  const isrRetenido = tasaIsr > 0 ? round2(subtotal * tasaIsr) : 0
   const total = round2(subtotal + ivaTrasladado - ivaRetenido - isrRetenido)
 
-  const explicacion = esFisica
-    ? 'Como persona física con honorarios, tu factura debe incluir el IVA trasladado (16%) y además las retenciones que Serenata te aplica: IVA retenido (2/3 del IVA) e ISR retenido (10% del subtotal). El Total es lo que Serenata te transferirá.'
-    : 'Como persona moral, tu factura solo lleva el IVA trasladado (16%) sobre el subtotal, sin ninguna retención. El Total es lo que Serenata te transferirá.'
+  const explicacion =
+    regimenFiscal === 'resico'
+      ? 'Como persona física en RESICO, tu factura debe incluir el IVA trasladado (16%) y además las retenciones que Serenata te aplica: IVA retenido (2/3 del IVA) e ISR retenido (1.25% del subtotal, Art. 113-J LISR). El Total es lo que Serenata te transferirá.'
+      : retieneIva
+        ? 'Como persona física con honorarios, tu factura debe incluir el IVA trasladado (16%) y además las retenciones que Serenata te aplica: IVA retenido (2/3 del IVA) e ISR retenido (10% del subtotal). El Total es lo que Serenata te transferirá.'
+        : 'Como persona moral, tu factura solo lleva el IVA trasladado (16%) sobre el subtotal, sin ninguna retención. El Total es lo que Serenata te transferirá.'
 
   return { subtotal, iva_trasladado: ivaTrasladado, iva_retenido: ivaRetenido, isr_retenido: isrRetenido, total, explicacion }
 }

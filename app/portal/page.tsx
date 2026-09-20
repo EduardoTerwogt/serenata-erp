@@ -53,7 +53,7 @@ interface PerfilResponse {
   telefono: string | null
   banco: string | null
   clabe: string | null
-  regimen_fiscal: 'moral' | 'fisica' | null
+  regimen_fiscal: RegimenFiscal | null
 }
 
 interface GrupoPortalItem {
@@ -233,9 +233,11 @@ function TabDatos({ perfil, correo, onGuardado }: { perfil: PerfilResponse; corr
           <p className="mt-1.5 text-content text-body">
             {perfil.regimen_fiscal === 'fisica'
               ? 'Persona física con honorarios'
-              : perfil.regimen_fiscal === 'moral'
-                ? 'Persona moral'
-                : 'Pendiente de subir constancia fiscal, sube desde la sección Documentación'}
+              : perfil.regimen_fiscal === 'resico'
+                ? 'Persona física (RESICO)'
+                : perfil.regimen_fiscal === 'moral'
+                  ? 'Persona moral'
+                  : 'Pendiente de subir constancia fiscal, sube desde la sección Documentación'}
           </p>
         </div>
 
