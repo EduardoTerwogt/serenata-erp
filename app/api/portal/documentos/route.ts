@@ -5,12 +5,13 @@ import {
   getProveedorById,
   buscarCandidatosMatch,
   updateProveedor,
+  deleteProveedorDocumento,
 } from '@/lib/db'
-import { uploadFileToDrive } from '@/lib/integrations/google/drive'
+import { uploadFileToDrive, extractDriveFileId, deleteDriveFile } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { extraerDatosIdentidad } from '@/lib/server/portal/document-parser'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
-import { TipoDocumentoProveedor } from '@/lib/types'
+import { EstadoValidacionDocumento, TipoDocumentoProveedor } from '@/lib/types'
 
 const ROUTE_GET = 'GET /api/portal/documentos'
 const ROUTE_POST = 'POST /api/portal/documentos'
@@ -22,9 +23,11 @@ const TIPOS_VALIDOS: TipoDocumentoProveedor[] = [
   'COMPROBANTE_BANCARIO',
 ]
 
-// Solo estos dos disparan el matching de identidad -- comprobante de
-// domicilio/bancario no traen un nombre legal útil para cruzar.
-const TIPOS_CON_IDENTIDAD: TipoDocumentoProveedor[] = ['INE', 'CONSTANCIA_SITUACION_FISCAL']
+// Solo estos dos disparan extracción por IA (document-parser.ts) --
+// comprobante de domicilio/bancario no traen un nombre legal ni régimen
+// fiscal útil para leer. OJO: esto ya NO significa que ambos validen
+// identidad -- ver TIPOS_CON_MATCHING_IDENTIDAD abajo.
+const TIPOS_CON_EXTRACCION_IA: TipoDocumentoProveedor[] = ['INE', 'CONSTANCIA_SITUACION_FISCAL']
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -64,29 +67,44 @@ export async function POST(request: Request) {
     if (!googleEnv) return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
 
     const archivoUrl = await uploadFileToDrive(file, `/Proveedores/${portalAuth.proveedorId}`, file.name, googleEnv.driveFolderId)
-    const documento = await createProveedorDocumento({
-      proveedor_id: portalAuth.proveedorId,
-      tipo: tipo as TipoDocumentoProveedor,
-      archivo_url: archivoUrl,
-      archivo_nombre: file.name,
-    })
 
     // Matching de identidad (Fase 5.5): se dispara aquí, no en el signup --
     // el proveedor se registra ligero (correo/password/alias) y el nombre
     // legal + el cruce contra proveedores ya cargados por staff llegan
-    // cuando sube su INE/constancia. La lectura del documento nunca bloquea
-    // la subida (ver document-parser.ts) -- si falla, el documento igual
-    // queda guardado, simplemente no se dispara matching esta vez.
+    // cuando sube su INE. La lectura del documento nunca bloquea la subida
+    // (ver document-parser.ts) -- si falla, el documento igual queda
+    // guardado, simplemente no se dispara matching esta vez.
+    //
+    // Bug real (2026-09-20): el matching corría también con la Constancia
+    // de Situación Fiscal. Hay proveedores que facturan por medio de
+    // terceros (el RFC/nombre de la constancia es el de un intermediario,
+    // no el de la persona que realmente colabora con Serenata) -- cruzar
+    // por ese nombre fusionaba o pedía confirmar la cuenta equivocada. La
+    // identidad SOLO se valida con una identificación oficial (INE hoy;
+    // pasaporte/otra oficial si se agrega un tipo de documento para eso).
+    // La constancia sigue disparando extracción (para regimen_fiscal), solo
+    // deja de alimentar el matching.
     let requiereConfirmacion = false
-    if (TIPOS_CON_IDENTIDAD.includes(tipo as TipoDocumentoProveedor)) {
+    // Punto 2 (2026-09-20): auto-clasificación híbrida -- la misma lectura
+    // de IA que ya corre para matching/régimen también clasifica el
+    // documento. 'validado' si se pudo leer el dato esperado, 'revision'
+    // (con motivo) si no. Comprobante de domicilio/bancario no pasan por
+    // IA (el prompt de document-parser.ts es específico a identidad/fiscal,
+    // no a otros tipos) -- se quedan en 'pendiente' hasta que staff los
+    // revise a mano. Staff siempre puede corregir cualquier estado después
+    // (ver PATCH /api/proveedores/[id]/documentos/[docId]).
+    let estadoValidacion: EstadoValidacionDocumento = 'pendiente'
+    let detalleValidacion: string | null = null
+    if (TIPOS_CON_EXTRACCION_IA.includes(tipo as TipoDocumentoProveedor)) {
       const proveedorActual = await getProveedorById(portalAuth.proveedorId)
       const esConstancia = tipo === 'CONSTANCIA_SITUACION_FISCAL'
+      const esIne = tipo === 'INE'
       const activo = proveedorActual?.portal_estado === 'activo'
 
       if (activo || esConstancia) {
         const datos = await extraerDatosIdentidad(file)
 
-        if (activo && datos.nombre_completo) {
+        if (esIne && activo && datos.nombre_completo) {
           const candidatos = await buscarCandidatosMatch(datos.nombre_completo, portalAuth.proveedorId)
           if (candidatos.length > 0) {
             await updateProveedor(portalAuth.proveedorId, {
@@ -98,13 +116,67 @@ export async function POST(request: Request) {
         }
 
         // La Constancia de Situación Fiscal es la única fuente confiable
-        // del régimen fiscal real -- se persiste automáticamente cuando el
-        // proveedor todavía no tiene uno asignado, nunca pisando un valor
-        // que staff ya haya corregido/confirmado a mano.
-        if (esConstancia && datos.regimen_fiscal && !proveedorActual?.regimen_fiscal) {
+        // del régimen fiscal real -- se persiste automáticamente.
+        //
+        // Bug real (2026-09-20): antes solo se setaba si el proveedor
+        // todavía no tenía régimen asignado ("nunca pisar lo que staff
+        // corrigió a mano"). Eso rompía el caso real: proveedor sube una
+        // constancia, luego sube OTRA con régimen distinto -- el segundo
+        // valor nunca se reflejaba ni en Mis datos ni en Cuentas y
+        // facturas, se quedaban con el régimen de la primera para siempre.
+        // Decisión explícita del usuario: la constancia manda, siempre la
+        // más reciente -- cada nueva lectura legible pisa cualquier valor
+        // anterior, sin excepción.
+        if (esConstancia && datos.regimen_fiscal) {
           await updateProveedor(portalAuth.proveedorId, { regimen_fiscal: datos.regimen_fiscal })
         }
+
+        if (esIne) {
+          estadoValidacion = datos.nombre_completo ? 'validado' : 'revision'
+          detalleValidacion = datos.nombre_completo
+            ? null
+            : 'No se pudo leer el nombre completo en el documento -- confirma que sea una identificación oficial legible.'
+        } else if (esConstancia) {
+          estadoValidacion = datos.regimen_fiscal ? 'validado' : 'revision'
+          detalleValidacion = datos.regimen_fiscal
+            ? null
+            : 'No se pudo leer el régimen fiscal en el documento -- confirma que sea la Constancia de Situación Fiscal vigente.'
+        }
       }
+    }
+
+    const documento = await createProveedorDocumento({
+      proveedor_id: portalAuth.proveedorId,
+      tipo: tipo as TipoDocumentoProveedor,
+      archivo_url: archivoUrl,
+      archivo_nombre: file.name,
+      estado_validacion: estadoValidacion,
+      detalle_validacion: detalleValidacion,
+    })
+
+    // Cada tipo de documento (constancia, INE, comprobante de domicilio,
+    // comprobante bancario) es de "verdad única": el proveedor solo debe
+    // tener UNO de cada tipo en todo momento, el más reciente que subió --
+    // nunca varios acumulados. Se borra cualquier documento anterior del
+    // MISMO tipo (documento + archivo en Drive, best-effort) recién AHORA
+    // que el nuevo ya quedó creado con éxito, para no perder el anterior si
+    // algo falla antes de este punto. Empezó acotado a la constancia (el
+    // caso real reportado: régimen fiscal desactualizado); el usuario pidió
+    // extenderlo a los otros tres tipos con la misma lógica.
+    const documentosExistentes = await getProveedorDocumentos(portalAuth.proveedorId)
+    const documentosViejosDelMismoTipo = documentosExistentes.filter(
+      d => d.tipo === tipo && d.id !== documento.id
+    )
+    for (const viejo of documentosViejosDelMismoTipo) {
+      const fileId = extractDriveFileId(viejo.archivo_url)
+      if (fileId) {
+        try {
+          await deleteDriveFile(fileId)
+        } catch (err) {
+          console.error('[portal/documentos][POST] No se pudo borrar el documento anterior de Drive (se reemplaza igual el registro):', err)
+        }
+      }
+      await deleteProveedorDocumento(viejo.id)
     }
 
     return Response.json({ success: true, documento, requiere_confirmacion: requiereConfirmacion })

@@ -525,6 +525,32 @@ Trampas reales, no teóricas. Cada una costó un bug:
   `20260916_fix_cuentas_por_proyecto_missing_index.sql`, aplicada a test y
   producción). No explicó por sí solo el hallazgo más grande del gate de
   carga de 3E-1 — ver F28 arriba.
+- **`parseFacturaXML()` parseaba CFDI por regex sobre el texto plano, no por
+  estructura -- causó un bug real de duplicación (reportado 2026-09-19 con
+  un CFDI real vía Portal, folio SH076): un CFDI válido trae
+  `cfdi:Traslado`/`cfdi:Retencion` **dos veces** (una por cada
+  `cfdi:Concepto`, desglose por renglón, y otra en el `cfdi:Impuestos` a
+  nivel `cfdi:Comprobante`, resumen agregado); sumar por regex sobre el XML
+  completo sin distinguir nivel contaba ambas ocurrencias -- el caso real
+  leyó IVA trasladado $6,400.00 cuando el XML declaraba $3,200.00
+  (exactamente el doble). Los fixtures de test anteriores solo tenían el
+  nivel documento, por eso no se detectó antes.** Fix definitivo
+  (`lib/server/xml/factura-parser.ts`): se reemplazó la extracción por
+  regex por un parser XML real (`fast-xml-parser`, con `removeNSPrefix`
+  para ser independiente del prefijo de namespace). Con árbol real,
+  `comprobante.Impuestos` es inequívocamente el nodo hermano de
+  `comprobante.Conceptos` -- el bug de duplicación (y toda la clase de bugs
+  de "el regex no entiende jerarquía") queda eliminado por construcción,
+  no por una regla de scoping de texto. `lib/server/xml/factura-parser.test.ts`
+  cubre: estructura real de dos niveles (single/multi-concepto), namespace
+  arbitrario (no solo `cfdi:`), un tag colisionante dentro de `Complemento`
+  (`Traslado` de otro complemento, que con un scoping por regex sí se
+  habría sumado por error), múltiples líneas de la misma tasa de impuesto,
+  y XML mal formado. `CampoMismatchFactura`/`MismatchFactura`
+  (`lib/server/xml/factura-parser.ts`) no cambiaron -- son independientes
+  del método de parseo. `complemento-parser.ts` (complementos de pago) NO
+  se migró -- solo lee atributos planos a nivel único, sin riesgo de
+  duplicación por anidamiento; se deja como está hasta que haga falta.
 - **`GET /api/productos` (carga completa sin `q`, usada por
   `useQuotationForm` para el autofill client-side) tiene `.limit(2000)`
   explícito — antes no tenía ninguno y dependía en silencio del tope por

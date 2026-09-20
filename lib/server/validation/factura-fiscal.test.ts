@@ -85,6 +85,53 @@ describe('validarFacturaFiscalProveedor', () => {
     })
   })
 
+  describe('tolerancia de redondeo en retención de IVA (2/3 de 16% es decimal periódico)', () => {
+    // Caso real (2026-09-19, cotización SH077): el XML declaró
+    // TasaOCuota="0.106600" (redondeado) en vez de la fracción exacta
+    // 0.106667, produciendo Importe=$533.00 en vez de los $533.33 que
+    // salen de nuestra fórmula exacta. Con subtotal 5000: tolerancia =
+    // max(0.01, 5000*0.0003) = 1.50 -- cubre la diferencia real de 0.33.
+    it('valida una retención de IVA calculada con una tasa redondeada por el emisor (factura real SH077)', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 5000, iva_trasladado: 800, iva_retenido: 533, isr_retenido: 500, monto_total: 4767 },
+        5000,
+        'fisica'
+      )
+      expect(result.estado_validacion).toBe('validado')
+    })
+
+    it('la tolerancia escala con el subtotal, no es un monto fijo', () => {
+      // Mismo % de diferencia (0.33 sobre 5000 = 0.0066%) aplicado a un
+      // subtotal 10x mayor -- la tolerancia (proporcional) sigue cubriéndolo.
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 50000, iva_trasladado: 8000, iva_retenido: 5330, isr_retenido: 5000, monto_total: 47670 },
+        50000,
+        'fisica'
+      )
+      expect(result.estado_validacion).toBe('validado')
+    })
+
+    it('sigue marcando revision si la retención de IVA está genuinamente mal (no es solo redondeo de tasa)', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 5000, iva_trasladado: 800, iva_retenido: 0, isr_retenido: 500, monto_total: 5300 },
+        5000,
+        'fisica'
+      )
+      expect(result.estado_validacion).toBe('revision')
+      expect(result.detalle_validacion).toContain('Retención de IVA no coincide')
+    })
+
+    it('la retención de ISR NO gana tolerancia extra -- su tasa (10%) es exacta, sin causa real de redondeo', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 5000, iva_trasladado: 800, iva_retenido: 533.33, isr_retenido: 495, monto_total: 4771.67 },
+        5000,
+        'fisica'
+      )
+      expect(result.estado_validacion).toBe('revision')
+      expect(result.detalle_validacion).toContain('Retención de ISR no coincide')
+    })
+  })
+
   describe('casos generales', () => {
     it('marca revision si no se pudo leer el monto total', () => {
       const result = validarFacturaFiscalProveedor({}, 1000, 'moral')
@@ -115,6 +162,40 @@ describe('validarFacturaFiscalProveedor', () => {
         'moral'
       )
       expect(result.estado_validacion).toBe('validado')
+    })
+  })
+
+  describe('campo mismatches (consumido por el wrapper del Portal)', () => {
+    it('un subtotal incorrecto produce un mismatch con campo "subtotal"', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 900, iva_trasladado: 144, iva_retenido: 0, isr_retenido: 0, monto_total: 1044 },
+        1000,
+        'moral'
+      )
+      expect(result.mismatches).toContainEqual(expect.objectContaining({ campo: 'subtotal' }))
+    })
+
+    it('un desglose incorrecto con subtotal correcto no incluye campo "subtotal"', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 1000, iva_trasladado: 0, iva_retenido: 0, isr_retenido: 0, monto_total: 1000 },
+        1000,
+        'moral'
+      )
+      expect(result.mismatches).toEqual([expect.objectContaining({ campo: 'iva_trasladado' })])
+    })
+
+    it('no leer el subtotal produce mismatches con campo "lectura_xml"', () => {
+      const result = validarFacturaFiscalProveedor({ monto_total: 1160 }, 1000, 'moral')
+      expect(result.mismatches).toEqual([expect.objectContaining({ campo: 'lectura_xml' })])
+    })
+
+    it('un resultado validado no incluye mismatches', () => {
+      const result = validarFacturaFiscalProveedor(
+        { subtotal: 1000, iva_trasladado: 160, iva_retenido: 0, isr_retenido: 0, monto_total: 1160 },
+        1000,
+        'moral'
+      )
+      expect(result.mismatches).toBeUndefined()
     })
   })
 })

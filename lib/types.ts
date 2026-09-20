@@ -55,6 +55,11 @@ export interface ProveedorDocumento {
   archivo_url: string
   archivo_nombre: string
   estado_validacion: EstadoValidacionDocumento
+  // Punto 2 (2026-09-20): motivo cuando estado_validacion = 'revision' --
+  // auto-clasificación que no pudo leer el documento, o nota de staff al
+  // corregir a mano. NULL en pendiente/validado. Mismo campo que ya existe
+  // en DocumentoCuentaCobrar/DocumentoCuentaPagar.
+  detalle_validacion: string | null
   created_at: string
 }
 

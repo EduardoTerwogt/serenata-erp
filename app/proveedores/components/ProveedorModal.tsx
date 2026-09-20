@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Proveedor, HistorialResponsable, RegimenFiscal } from '@/lib/types'
+import { Proveedor, HistorialResponsable, ProveedorDocumento, TipoDocumentoProveedor, RegimenFiscal } from '@/lib/types'
 import { formatDateDisplay } from '@/lib/format-date'
 import { ResponsiveTableCard } from '@/components/ResponsiveTableCard'
 import { Modal } from '@/components/ui/Modal'
@@ -10,6 +10,17 @@ import { StatusBanner } from '@/components/ui/StatusBanner'
 import { FilterTabs } from '@/components/ui/FilterTabs'
 import { Icon } from '@/components/ui/Icon'
 import { Button } from '@/components/ui/Button'
+import { StatusBadge, toneForValidacionEstado } from '@/components/ui/StatusBadge'
+
+// Mismas etiquetas que app/portal/page.tsx (TIPO_LABEL) -- se duplica en vez
+// de compartir un módulo nuevo, mismo criterio que TIPO_DOC_LABEL en
+// app/components/cuentas/tabs/TabDocumentos.tsx (cada pantalla trae la suya).
+const TIPO_LABEL: Record<TipoDocumentoProveedor, string> = {
+  CONSTANCIA_SITUACION_FISCAL: 'Constancia de situación fiscal',
+  INE: 'INE',
+  COMPROBANTE_DOMICILIO: 'Comprobante de domicilio',
+  COMPROBANTE_BANCARIO: 'Comprobante bancario',
+}
 
 interface ProveedorFormValues {
   nombre: string
@@ -43,6 +54,9 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
   const [historial, setHistorial] = useState<HistorialResponsable[]>([])
   const [historialError, setHistorialError] = useState<string | null>(null)
   const [loadingHistorial, setLoadingHistorial] = useState(!esNuevo)
+  const [documentos, setDocumentos] = useState<ProveedorDocumento[]>([])
+  const [documentosError, setDocumentosError] = useState<string | null>(null)
+  const [loadingDocumentos, setLoadingDocumentos] = useState(!esNuevo)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -70,6 +84,22 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
       .catch(e => setHistorialError(String(e)))
       .finally(() => setLoadingHistorial(false))
   }, [proveedor])
+
+  const cargarDocumentos = () => {
+    if (!proveedor) return
+    fetch(`/api/proveedores/${proveedor.id}/documentos`)
+      .then(async r => {
+        const json = await r.json()
+        if (!r.ok) throw new Error(json.error || `HTTP ${r.status}`)
+        return json
+      })
+      .then(data => setDocumentos(Array.isArray(data.documentos) ? data.documentos : []))
+      .catch(e => setDocumentosError(String(e)))
+      .finally(() => setLoadingDocumentos(false))
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- cargarDocumentos se recrea cada render; solo debe correr cuando cambia `proveedor` (mismo patrón que el useEffect del historial arriba).
+  useEffect(() => { cargarDocumentos() }, [proveedor])
 
   const agregarRol = () => {
     const rol = rolInput.trim()
@@ -204,6 +234,26 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
 
         {!esNuevo && (
           <div>
+            <span className="sn-label block mb-2.5">Documentos</span>
+            {documentosError && <StatusBanner tone="error">Error cargando documentos: {documentosError}</StatusBanner>}
+            {!loadingDocumentos && documentos.length === 0 && (
+              <p className="text-faint text-content italic py-2">Sin documentos subidos por el Portal todavía</p>
+            )}
+            <div className="space-y-2">
+              {documentos.map(doc => (
+                <DocumentoStaffRow
+                  key={doc.id}
+                  proveedorId={proveedor!.id}
+                  documento={doc}
+                  onPatched={actualizado => setDocumentos(prev => prev.map(d => (d.id === actualizado.id ? actualizado : d)))}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!esNuevo && (
+          <div>
             <div className="flex items-baseline gap-3 mb-2.5">
               <span className="sn-label">Historial de proyectos</span>
               <div className="flex-1" />
@@ -278,5 +328,101 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
         </div>
       </form>
     </Modal>
+  )
+}
+
+// Punto 2 (2026-09-20): auto-clasificación híbrida -- POST /api/portal/documentos
+// ya clasifica con IA al subir, pero staff siempre puede corregirlo acá
+// (PATCH /api/proveedores/[id]/documentos/[docId]). Fila autocontenida: cada
+// documento maneja su propio estado de edición del motivo de "revisión".
+function DocumentoStaffRow({
+  proveedorId,
+  documento,
+  onPatched,
+}: {
+  proveedorId: string
+  documento: ProveedorDocumento
+  onPatched: (documento: ProveedorDocumento) => void
+}) {
+  const [editandoMotivo, setEditandoMotivo] = useState(false)
+  const [motivo, setMotivo] = useState(documento.detalle_validacion ?? '')
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const patch = async (payload: { estado_validacion: 'validado' | 'revision'; detalle_validacion?: string | null }) => {
+    setGuardando(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/proveedores/${proveedorId}/documentos/${documento.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
+      onPatched(json.documento)
+      setEditandoMotivo(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al actualizar')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <div className="p-3 bg-row rounded-control">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-body text-content font-medium truncate">{TIPO_LABEL[documento.tipo]}</p>
+          <a href={documento.archivo_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline text-xs truncate block mt-0.5">
+            {documento.archivo_nombre}
+          </a>
+        </div>
+        <StatusBadge tone={toneForValidacionEstado(documento.estado_validacion)}>{documento.estado_validacion}</StatusBadge>
+      </div>
+
+      {documento.estado_validacion === 'revision' && documento.detalle_validacion && !editandoMotivo && (
+        <p className="mt-2 text-eyebrow text-cancelled-fg bg-cancelled-bg border border-cancelled-fg/30 rounded-control px-2.5 py-1.5">
+          {documento.detalle_validacion}
+        </p>
+      )}
+      {error && <p className="mt-2 text-xs text-cancelled-fg">{error}</p>}
+
+      {!editandoMotivo ? (
+        <div className="flex gap-2 mt-2.5">
+          {documento.estado_validacion !== 'validado' && (
+            <Button variant="secondary" size="md" disabled={guardando} onClick={() => patch({ estado_validacion: 'validado' })}>
+              Validar
+            </Button>
+          )}
+          <Button variant="ghost" size="md" disabled={guardando} onClick={() => setEditandoMotivo(true)}>
+            Marcar en revisión
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 mt-2.5 sm:flex-row sm:items-center">
+          <input
+            type="text"
+            value={motivo}
+            onChange={e => setMotivo(e.target.value)}
+            placeholder="Motivo (ej. foto borrosa, documento vencido)"
+            className={`flex-1 ${INPUT_CLASS}`}
+          />
+          <div className="flex gap-2 flex-none">
+            <Button
+              variant="secondary"
+              size="md"
+              disabled={guardando || !motivo.trim()}
+              onClick={() => patch({ estado_validacion: 'revision', detalle_validacion: motivo.trim() })}
+            >
+              Guardar
+            </Button>
+            <Button variant="ghost" size="md" disabled={guardando} onClick={() => setEditandoMotivo(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
