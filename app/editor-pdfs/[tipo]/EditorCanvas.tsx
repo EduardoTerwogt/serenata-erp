@@ -196,6 +196,16 @@ function renderElementContent(el: PdfElement) {
     return (
       <div
         style={{
+          // `bgToken` (barras de color: "NOTAS"/"COSTOS"/header) sin este
+          // fondo el texto blanco típico de estas barras queda invisible
+          // sobre el lienzo blanco -- aproximado, no pixel-perfect contra el
+          // PDF real (ahí `el.y` es el borde INFERIOR de la caja; acá sigue
+          // siendo el borde superior, igual que cualquier otro elemento).
+          height: el.bgToken ? '100%' : undefined,
+          display: el.bgToken ? 'flex' : undefined,
+          alignItems: el.bgToken ? 'center' : undefined,
+          backgroundColor: el.bgToken ? safeColor(el.bgToken) : undefined,
+          paddingLeft: el.bgToken ? 4 : undefined,
           fontSize: mmToPx(el.size) * 0.6,
           fontWeight: el.bold ? 700 : 400,
           textAlign: el.align,
@@ -205,7 +215,7 @@ function renderElementContent(el: PdfElement) {
           whiteSpace: 'nowrap',
         }}
       >
-        {el.text || <span className="italic text-faint">(vacío)</span>}
+        {el.text || (el.bgToken ? null : <span className="italic text-faint">(vacío)</span>)}
       </div>
     )
   }
