@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getClientes } from '@/lib/db'
+import { createCliente, getClientes } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { validate, ClienteCreateSchema } from '@/lib/validation/schemas'
 
@@ -53,23 +53,10 @@ export async function POST(request: Request) {
       return Response.json({ error: validation.error }, { status: 400 })
     }
 
-    // Upsert por nombre: preserva el uso existente (crear/encontrar un
-    // cliente al vuelo por texto libre desde una cotización) y el nuevo
-    // (crear desde el catálogo administrativo, Bloque 5) con el mismo POST.
-    const { data, error } = await supabaseAdmin
-      .from('clientes')
-      .upsert({ ...validation.data, activo: true }, { onConflict: 'nombre' })
-      .select()
-      .maybeSingle()
-
-    if (error) {
-      console.error('[POST /api/clientes] Error:', error)
-      return Response.json({ error: 'Error creando cliente' }, { status: 500 })
-    }
-
-    return Response.json(data, { status: 201 })
+    const cliente = await createCliente({ ...validation.data, activo: true })
+    return Response.json(cliente, { status: 201 })
   } catch (e) {
-    console.error('[POST /api/clientes] Error inesperado:', e)
+    console.error('[POST /api/clientes] Error:', e)
     return Response.json({ error: 'Error inesperado' }, { status: 500 })
   }
 }
