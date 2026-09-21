@@ -140,9 +140,9 @@ resto en `docs/archive/` y sesiones previas.
 
 ## Siguiente paso
 
-1. Abrir PR en borrador desde `claude/zen-cray-4lre07` hacia `main` (el
-   diff ya no es 100% `.md` — código nuevo en `lib/server/pdf/` — no aplica
-   la excepción doc-only) y esperar CI en verde antes de mergear.
+1. PR #81 (`claude/zen-cray-4lre07` → `main`) abierto en borrador y bajo
+   seguimiento (`subscribe_pr_activity`) — esperar CI en verde antes de
+   mergear.
 2. Abrir una sesión nueva (`/serenata-iniciar-fase`) y arrancar el Bloque 2
    de `docs/PLAN.md`: modelo de template tipado (`PdfTemplate`/`PdfElement`),
    validación Zod, catálogo de variables, mapa de tokens `--sn-*` y
