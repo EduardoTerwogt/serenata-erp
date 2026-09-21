@@ -78,32 +78,35 @@ describe('PdfPlantillasRepository', () => {
     expect(updateArg.applied_at).toEqual(expect.any(String))
   })
 
-  it('restaurar rechaza para un documento sin baseline todavía (Bloques 8-9)', async () => {
+  it('restaurar rechaza para un documento sin baseline todavía (Bloque 9)', async () => {
     await expect(PdfPlantillasRepository.restaurar('orden_pago', 'user-1')).rejects.toThrow(
       /todavía no tiene una plantilla baseline/
     )
     expect(mocks.fromMock).not.toHaveBeenCalled()
   })
 
-  it('migrar rechaza para un documento sin baseline todavía (Bloques 8-9)', async () => {
+  it('migrar rechaza para un documento sin baseline todavía (Bloque 9)', async () => {
     await expect(PdfPlantillasRepository.migrar('orden_pago', 'user-1')).rejects.toThrow(
       /todavía no tiene una plantilla baseline/
     )
     expect(mocks.fromMock).not.toHaveBeenCalled()
   })
 
-  it('migrar inserta la primera fila de cotizacion con el baseline real', async () => {
-    const c = chain({ data: { id: 'row-1', tipo_documento: 'cotizacion' }, error: null })
-    mocks.fromMock.mockReturnValue(c)
+  it.each(['cotizacion', 'hoja_llamado', 'reporte_cierre'] as const)(
+    'migrar inserta la primera fila de %s con el baseline real',
+    async tipo => {
+      const c = chain({ data: { id: 'row-1', tipo_documento: tipo }, error: null })
+      mocks.fromMock.mockReturnValue(c)
 
-    await PdfPlantillasRepository.migrar('cotizacion', 'user-1')
+      await PdfPlantillasRepository.migrar(tipo, 'user-1')
 
-    const insertArg = c.insert.mock.calls[0][0]
-    expect(insertArg.tipo_documento).toBe('cotizacion')
-    expect(insertArg.active_schema).toMatchObject({ tipoDocumento: 'cotizacion' })
-    expect(insertArg.applied_by).toBe('user-1')
-    expect(insertArg.applied_at).toEqual(expect.any(String))
-  })
+      const insertArg = c.insert.mock.calls[0][0]
+      expect(insertArg.tipo_documento).toBe(tipo)
+      expect(insertArg.active_schema).toMatchObject({ tipoDocumento: tipo })
+      expect(insertArg.applied_by).toBe('user-1')
+      expect(insertArg.applied_at).toEqual(expect.any(String))
+    }
+  )
 
   it('restaurar usa el baseline real de cotizacion (ya no rechaza)', async () => {
     const c = chain({ data: { id: 'row-1', active_schema: SAMPLE_TEMPLATE }, error: null })

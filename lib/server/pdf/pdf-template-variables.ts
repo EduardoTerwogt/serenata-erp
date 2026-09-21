@@ -177,6 +177,14 @@ const REPORTE_CIERRE_SCHEMA: Schema = {
     total_cobrado: leaf('number', 'Total cobrado'),
     total_pagado: leaf('number', 'Total pagado'),
   }),
+  // Bloque 8: la tabla financiera real es UNA fila con estos 3 valores --
+  // `rowsBinding` necesita un array, así que `data.financiero` debe llegar
+  // también envuelto como `[data.financiero]` (mismo objeto, 1 elemento).
+  financiero_fila: arr({
+    total_cotizado: leaf('number', 'Total cotizado'),
+    total_cobrado: leaf('number', 'Total cobrado'),
+    total_pagado: leaf('number', 'Total pagado'),
+  }),
   hitos: arr({
     titulo: leaf('string', 'Título del hito'),
     planeado: leaf('date', 'Fecha planeada'),

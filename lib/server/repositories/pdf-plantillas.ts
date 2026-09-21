@@ -1,6 +1,8 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import type { PdfDocumentType, PdfTemplate } from '@/lib/server/pdf/pdf-template-schema'
 import { buildCotizacionBaseline } from '@/lib/server/pdf/default-templates/cotizacion'
+import { buildHojaLlamadoBaseline } from '@/lib/server/pdf/default-templates/hoja-llamado'
+import { buildReporteCierreBaseline } from '@/lib/server/pdf/default-templates/reporte-cierre'
 
 export interface PdfPlantillaRow {
   id: string
@@ -18,14 +20,16 @@ export interface PdfPlantillaRow {
  * Baseline por tipo de documento (docs/PLAN.md, "Diseño activo vs.
  * borrador"): vive en código, se lee solo para copiarla a una fila
  * concreta (nunca como referencia viva). La reconstrucción real del PDF
- * actual como schema es trabajo de los Bloques 7-9 (uno por documento,
- * empezando por Cotización, Bloque 7 -- cerrado). Orden de pago, Hoja de
- * llamado y Reporte de cierre siguen en los Bloques 8-9.
+ * actual como schema es trabajo de los Bloques 7-9 (uno por documento) --
+ * Cotización (Bloque 7) y Hoja de llamado/Reporte de cierre (Bloque 8)
+ * cerrados. Orden de pago sigue en el Bloque 9.
  */
 function getBaselineTemplate(tipo: PdfDocumentType): PdfTemplate {
   if (tipo === 'cotizacion') return buildCotizacionBaseline()
+  if (tipo === 'hoja_llamado') return buildHojaLlamadoBaseline()
+  if (tipo === 'reporte_cierre') return buildReporteCierreBaseline()
   throw new Error(
-    `El documento "${tipo}" todavía no tiene una plantilla baseline (se migra en los Bloques 8-9 de docs/PLAN.md).`
+    `El documento "${tipo}" todavía no tiene una plantilla baseline (se migra en el Bloque 9 de docs/PLAN.md).`
   )
 }
 
