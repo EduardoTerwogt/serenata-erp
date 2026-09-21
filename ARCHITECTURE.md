@@ -114,9 +114,15 @@ de errores, JSON, FormData y binario. No duplicar ese manejo en cada hook.
 `lib/server/repositories/`. `lib/db.ts` quedó como fachada de compatibilidad; no
 volver a concentrarle lógica.
 
-**5. PDFs.** `lib/server/pdf/` con `jspdf` + `jspdf-autotable`. Se suben a Google
-Drive; si ya existe `drive_file_id`, se **actualiza** el archivo en vez de crear
-uno nuevo.
+**5. PDFs.** `lib/server/pdf/` con `jspdf` + `jspdf-autotable` — 4 generadores
+(cotización, orden de pago, hoja de llamado, reporte de cierre), cada uno con su
+propio shape de datos de entrada, sin schema compartido. **El comportamiento con
+Drive no es uniforme entre los 4** (verificado leyendo cada ruta, 2026-09-21):
+solo Cotización reusa `drive_file_id` (`driveService.updateFile()` si ya existe);
+Orden de pago sube siempre un archivo nuevo (`uploadFileToDrive()`, API distinta,
+sin reuso); Hoja de llamado y Reporte de cierre no suben a Drive en absoluto — es
+descarga directa. Plan de migración a un motor de plantillas: `docs/PLAN.md`
+("Editor de PDFs").
 
 **6. Datos.** Supabase directo para lecturas y escrituras simples; **RPCs de
 PostgreSQL** para todo lo que deba ser atómico: aprobar y cancelar cotización,
@@ -461,6 +467,19 @@ Trampas reales, no teóricas. Cada una costó un bug:
   de proceso. Las 4 cachés locales que existían quedaron retiradas por
   completo tras EF-3 3B-7 (`folio.ts`, el último): ya no queda ningún
   `CacheManager` activo en el repo.
+- **Los 4 generadores de `lib/server/pdf/` no comparten convenciones entre
+  sí** (encontrado auditando el código para el plan del Editor de PDFs,
+  2026-09-21): 3 de 4 usan `mm`, Orden de pago usa `pt` (ignora
+  `PDF_CONFIG.page` los otros 3); `pdf-base-config.ts` define helpers
+  (`drawPdfHeader`, `drawDivider`, `drawSectionHeading`) que **ningún**
+  generador usa — cada uno reimplementa su propio header con números
+  mágicos; `formatCurrencyPdf()` (base-config) y el `fmtMoney()` local de
+  `reporte-cierre-pdf.ts` dan salidas ligeramente distintas. Más importante
+  para cualquier cambio futuro: **ninguno de los 4 repite header/footer/logo
+  si el contenido fuerza una segunda página** — `checkPageSpace()`/
+  `addPage()` solo resetean `currentY`, la página 2 (si llega a existir)
+  queda sin logo ni footer. No asumir soporte de multipágina real solo
+  porque el código tiene `addPage()`.
 - **`RealtimeClient.removeChannel()` (`@supabase/realtime-js`) solo da de
   baja el canal si `unsubscribe()` resuelve `'ok'`.** Con `'timed out'` o
   `'error'` el canal queda registrado en el cliente igual, y

@@ -55,6 +55,14 @@ Bloque 1 (spike del renderer) arranca en la próxima sesión.
   tracker de estado, riesgos y validación actualizados.
 - Diff completo de la sesión es 100% `.md` → commit + push directo a
   `main` (excepción doc-only de `.claude/rules/git.md`, sin rama ni PR).
+- Al cerrar sesión: corregida una imprecisión real en `ARCHITECTURE.md`
+  §5 "PDFs" — documentaba el reuso de `drive_file_id` como si aplicara a
+  los 4 generadores; solo es cierto para Cotización (confirmado leyendo
+  cada ruta). Agregado un gotcha nuevo sobre las inconsistencias reales
+  entre los 4 generadores (unidades mezcladas mm/pt, helpers de
+  `pdf-base-config.ts` sin usar, sin repetición de header/footer en
+  páginas adicionales) — relevante para el Bloque 1 que arranca la
+  próxima sesión.
 
 ## Tests ejecutados y resultado real
 
