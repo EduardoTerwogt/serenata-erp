@@ -1,21 +1,57 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-21
+**Última actualización:** 2026-09-21 (sesión 2)
 
 ## Estado
 
-**`docs/PLAN.md` — Aprobado, "Editor de PDFs".** Módulo de sidebar para
-editar visualmente los 4 PDFs que genera Serenata (tablas, posición libre,
-texto y color acotado a la paleta del design system), con un flujo
-diseño-activo/borrador explícito y elementos obligatorios/legales
+**`docs/PLAN.md` — Aprobado, en ejecución, "Editor de PDFs".** Módulo de
+sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
+posición libre, texto y color acotado a la paleta del design system), con
+un flujo diseño-activo/borrador explícito y elementos obligatorios/legales
 protegidos. Arquitectura decidida: schema JSON + renderer sobre jsPDF
-(sin dependencia nueva). Sesión 100% documentación: dos rondas de
-auditoría (Claude contra el código real de los 4 generadores/permisos/
-tokens, y el usuario contra la propuesta de Claude) cerraron todas las
-decisiones técnicas y de producto pendientes — **sin código tocado**. El
-Bloque 1 (spike del renderer) arranca en la próxima sesión.
+(sin dependencia nueva). **Bloque 1 (spike del renderer) cerrado en esta
+sesión** — `lib/server/pdf/template-renderer.ts` (primitivos de render,
+sin schema tipado ni Zod todavía — eso es Bloque 2) validado contra el
+paquete real (`jspdf`/`jspdf-autotable` instalados, antes no había
+`node_modules` en el checkout) con datos reales de `serenata-erp-test`.
+Bloque 2 (modelo de template + validación) arranca en la próxima sesión.
 
-## Completado en esta sesión — Editor de PDFs pasa de Borrador a Aprobado
+## Completado en esta sesión — Bloque 1: spike del renderer
+
+- Rama de la sesión (`claude/zen-cray-4lre07`) ya alineada con `origin/main`;
+  sin trabajo pendiente de otra sesión.
+- `npm ci` para tener `node_modules` real (no estaba instalado en el
+  checkout) — permitió verificar contra el paquete real, no solo contra
+  los `.d.ts`, los 2 riesgos P1 marcados como "no verificado" en el plan.
+- Datos reales vía MCP `supabase-test` (`items_cotizacion`, cotización
+  `SH2402`): 2 partidas reales (categoría "Equipo") usadas como semilla y
+  repetidas (120 filas, 4 categorías) para forzar overflow a 3+ páginas —
+  el volumen real de partidas de cotización no llega hoy a necesitar
+  multipágina, pero el mecanismo debe sostenerlo.
+- `lib/server/pdf/template-renderer.ts` (nuevo): `renderText`/`renderLine`/
+  `renderImage`, `renderGroupedTable` (agrupa igual que `buildItemsBody` de
+  `cotizacion-pdf-helpers.ts` — etiqueta en la primera fila del grupo, fila
+  espaciadora entre grupos, sin API nativa de agrupado en autoTable),
+  `redrawSticky` y `contentHeight`.
+- **`sticky` header/footer:** resuelto con `doc.getNumberOfPages()` +
+  `doc.setPage(n)` corrido después de renderizar el resto, no con el hook
+  `didDrawPage` de `jspdf-autotable` que proponía el plan como primera
+  opción — ese hook solo dispara para tablas, y una página nueva la puede
+  generar cualquier elemento, no solo la tabla. `docs/PLAN.md` actualizado
+  con la decisión.
+- **`spacing`/tracking:** confirmado soporte nativo en jsPDF real vía
+  `doc.setCharSpace(mm)`/`getCharSpace()` — no hace falta simular tracking
+  insertando espacios.
+- `lib/server/pdf/template-renderer.spike.test.ts` (nuevo, 4 tests, verdes):
+  cubre los 4 riesgos de arriba. Reusa `getIsoLogoBase64()` de
+  `cotizacion-pdf-helpers.ts` para el elemento imagen — no se creó ningún
+  asset nuevo.
+- `tsc --noEmit`, `lint` (0 errores, solo warnings preexistentes ajenos a
+  este cambio) y `npm test` completos (125 archivos / 969 tests) en verde.
+- `docs/PLAN.md` actualizado: Bloque 1 → Cerrado en el tracker, 2 riesgos
+  P1 resueltos con su justificación técnica.
+
+## Completado en sesión anterior — Editor de PDFs pasa de Borrador a Aprobado
 
 - Investigación exhaustiva del código real (3 subagentes en paralelo +
   lectura directa): los 4 generadores PDF completos (`lib/server/pdf/*.ts`),
@@ -66,16 +102,28 @@ Bloque 1 (spike del renderer) arranca en la próxima sesión.
 
 ## Tests ejecutados y resultado real
 
-No aplica — sesión sin cambios de código, config, migraciones ni rutas.
+- `npx tsc --noEmit` → verde.
+- `npm run lint` → 0 errores (8 warnings preexistentes, ninguno en archivos
+  tocados esta sesión).
+- `npm test` → 125 archivos / 969 tests, verde, incluido el nuevo
+  `template-renderer.spike.test.ts` (4 tests).
+- No se corrieron e2e: el cambio es un módulo nuevo sin UI ni ruta todavía
+  (Bloque 4/5), no hay flujo de usuario que ejercite este código aún.
 
 ## Problemas encontrados que siguen abiertos
 
-Ninguno nuevo. Nota de entorno: durante la investigación, uno de los
-subagentes reportó ver bloques `system-reminder` inyectados que no
-correspondían a ninguna herramienta invocada (simulaban instrucciones de
-servidores MCP y un archivo de reglas no leído) — los ignoró correctamente
-como contenido, sin cambiar su comportamiento. Queda como nota, no bloqueó
-nada de esta sesión.
+- **Fuera de alcance, solo nota:** el advisor de Supabase (`supabase-test`)
+  reporta RLS deshabilitado en `public.cliente_id_backfill_clasificacion`
+  (severidad crítica). No es parte de esta iniciativa ni de este plan —
+  no se tocó. Señalarlo al usuario para decidir si amerita una tarea aparte.
+- Warning benigno preexistente de `jspdf-autotable` ("Of the table content,
+  N units width could not fit page") aparece también en el spike nuevo —
+  ya estaba presente en `cotizacion-pdf.test.ts` antes de esta sesión, no
+  es una regresión introducida por `template-renderer.ts`.
+- Nota de entorno (sesión anterior, sigue abierta como nota): un
+  subagente reportó ver bloques `system-reminder` inyectados que no
+  correspondían a ninguna herramienta invocada — los ignoró correctamente
+  como contenido, sin cambiar su comportamiento. No bloqueó nada.
 
 ## Deuda técnica (arrastrada, sin cambios esta sesión)
 
@@ -92,12 +140,17 @@ resto en `docs/archive/` y sesiones previas.
 
 ## Siguiente paso
 
-1. Abrir una sesión nueva (`/serenata-iniciar-fase`) y arrancar el Bloque 1
-   de `docs/PLAN.md`: spike técnico del `template-renderer` sobre jsPDF
-   (texto, imagen, línea, tabla con `groupBy`, `sticky` header/footer —
-   validar `didDrawPage` de `jspdf-autotable` contra el paquete real,
-   spacing/tracking, multipágina básica), con datos reales de
-   `serenata-erp-test`.
-2. Considerar corregir el valor de acento en `.claude/rules/ui.md`
+1. Abrir PR en borrador desde `claude/zen-cray-4lre07` hacia `main` (el
+   diff ya no es 100% `.md` — código nuevo en `lib/server/pdf/` — no aplica
+   la excepción doc-only) y esperar CI en verde antes de mergear.
+2. Abrir una sesión nueva (`/serenata-iniciar-fase`) y arrancar el Bloque 2
+   de `docs/PLAN.md`: modelo de template tipado (`PdfTemplate`/`PdfElement`),
+   validación Zod, catálogo de variables, mapa de tokens `--sn-*` y
+   `renderFromTemplate()` sobre los primitivos ya probados en
+   `template-renderer.ts`.
+3. Considerar corregir el valor de acento en `.claude/rules/ui.md`
    (`#FF5A1A` → `#FE7B01`) como ajuste puntual, fuera de la iniciativa del
    Editor de PDFs.
+4. Considerar si el RLS deshabilitado en
+   `cliente_id_backfill_clasificacion` amerita una tarea aparte (ver
+   "Problemas encontrados").

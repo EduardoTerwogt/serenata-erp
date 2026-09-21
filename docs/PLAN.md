@@ -1,10 +1,11 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, listo para ejecutar (2026-09-21) — arquitectura del
-motor de plantillas, schema, workflow activo/borrador y bloques cerrados
-tras dos rondas de auditoría (Claude contra el repo real, y el usuario
-contra la propuesta de Claude). Bloque 1 (spike técnico) arranca en la
-próxima sesión.
+**Estado:** Aprobado, en ejecución (2026-09-21) — arquitectura del motor de
+plantillas, schema, workflow activo/borrador y bloques cerrados tras dos
+rondas de auditoría (Claude contra el repo real, y el usuario contra la
+propuesta de Claude). Bloque 1 (spike técnico) cerrado esta sesión — ver
+tracker. Bloque 2 (modelo de template + validación) arranca en la próxima
+sesión.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -297,7 +298,7 @@ Así un schema que la preview acepta nunca es rechazado después por
 | # | Bloque | Estado |
 |---|---|---|
 | 0 | Auditoría y cierre de especificación | **Cerrado** (este documento) |
-| 1 | Spike del renderer (texto/imagen/línea/tabla+`groupBy`, `sticky` header/footer, spacing, multipágina básica, datos reales de `serenata-erp-test`) | Pendiente — arranca al abrir la próxima sesión |
+| 1 | Spike del renderer (texto/imagen/línea/tabla+`groupBy`, `sticky` header/footer, spacing, multipágina básica, datos reales de `serenata-erp-test`) | **Cerrado** — `lib/server/pdf/template-renderer.ts` + `template-renderer.spike.test.ts` (4 tests, verdes) |
 | 2 | Modelo de template + validación (tipos, Zod, catálogo de variables, mapa de tokens, `renderFromTemplate()`) | Pendiente |
 | 3 | Persistencia + permisos (`pdf_plantillas`, API, auth, autosave, activo/borrador, aplicar, restaurar) | Pendiente |
 | 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | Pendiente |
@@ -310,11 +311,26 @@ Así un schema que la preview acepta nunca es rechazado después por
 
 ## Riesgos
 
-- **P1 — `sticky` header/footer vía `didDrawPage`:** no verificado contra
-  el paquete real en este entorno (sin `node_modules`) — primer punto del
-  spike.
+- **P1 — `sticky` header/footer, resuelto en el spike (Bloque 1):** no vía
+  `didDrawPage` de `jspdf-autotable` (acoplaría el sticky a que el elemento
+  que dispara páginas nuevas sea siempre una tabla) sino con
+  `doc.getNumberOfPages()` + `doc.setPage(n)` corrido **después** de
+  renderizar el resto — cubre páginas generadas por cualquier elemento.
+  Implementado en `redrawSticky()` (`template-renderer.ts`), probado
+  forzando 120 filas reales (categoría/descripción/cantidad/importe de
+  `items_cotizacion`, cotización `SH2402` de `serenata-erp-test`,
+  repetidas) a 3+ páginas.
+- **P1 — `spacing`/tracking, resuelto en el spike:** jsPDF soporta tracking
+  nativo vía `doc.setCharSpace(mm)`/`getCharSpace()` — no hace falta
+  simularlo insertando espacios entre caracteres. Verificado contra
+  `jspdf@4.2.1` real (antes solo se sabía por el `.d.ts`, sin
+  `node_modules` en el checkout).
 - **P1 — Multipágina:** funcionalidad nueva, no preservación de
-  comportamiento existente — dimensionar como feature nueva.
+  comportamiento existente — dimensionar como feature nueva. Mecanismo
+  base probado en el spike (arriba); falta el cálculo real de
+  `contentHeight()` restando el alto de `sticky` variable por template
+  (el spike usa un alto fijo de ejemplo, no medido desde el contenido real
+  del header/footer).
 - **P1 — Estructura anidada de Orden de pago:** diferido a Bloque 9 a
   propósito.
 - **P1 — Fidelidad visual de Cotización:** reproducir el diseño actual
