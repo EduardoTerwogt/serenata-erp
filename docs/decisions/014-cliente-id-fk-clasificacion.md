@@ -94,3 +94,17 @@ pantalla de reconciliación manual futura. Solo `safe_match` escribe
   (no estaba en la lista original de `docs/PLAN.md`).
 - El bug real de `POST /api/clientes` (`onConflict: 'nombre'` sin
   constraint) queda pendiente, documentado aquí para no perderlo.
+
+## Adenda (2026-09-21) — bug de `POST /api/clientes` resuelto
+
+Fix chico fuera de alcance de una iniciativa, ejecutado en sesión aparte: PR
+[#80](https://github.com/EduardoTerwogt/serenata-erp/pull/80), mergeado a
+`main` en `b1765a8`. Se confirmó que el único caller real hoy es el catálogo
+administrativo (`ClienteModal` → "Nuevo cliente") — el uso de "crear al
+vuelo por texto libre desde Cotizaciones" que motivó el `upsert` ya no
+existe, reemplazado por el selector de `cliente_id` real de este mismo
+Bloque 3. El `upsert(onConflict:'nombre')` se reemplazó por un `insert`
+plano (`createCliente()` en `lib/server/repositories/clientes.ts`), mismo
+patrón que `createProveedor` — incluida la misma decisión implícita de
+permitir nombres duplicados en el catálogo, sin `UNIQUE` nuevo. No se tocó
+la clasificación en 3 cubetas de este documento.
