@@ -516,11 +516,26 @@ export function renderFromTemplate(
   const sortedFlow = sortFlowElements(flowEls)
 
   const computedBottom = new Map<string, number>()
+  // Todos los elementos, visibles u ocultos por `visibleIf` -- necesario para
+  // saltar un ancestro oculto en la cadena de `flowAfter` (ej. NOTAS vacío:
+  // GENERALES debe encadenar directo después del banner, no caer a una `y`
+  // fija).
+  const allById = new Map(template.elements.map(el => [el.id, el]))
+
+  /** Bordes inferior real de `id`, saltando hacia arriba por `flowAfter` si
+   * `id` no se renderizó (oculto). `undefined` si no hay ningún ancestro
+   * visible en la cadena -- ahí `resolveY` cae a la `y` fija del elemento. */
+  function resolveFlowTarget(id: string): number | undefined {
+    if (computedBottom.has(id)) return computedBottom.get(id)
+    const target = allById.get(id)
+    return target?.flowAfter !== undefined ? resolveFlowTarget(target.flowAfter) : undefined
+  }
 
   function resolveY(el: PdfElement, estimatedHeight: number): number {
     let y = el.y
-    if (el.flowAfter !== undefined && computedBottom.has(el.flowAfter)) {
-      y = computedBottom.get(el.flowAfter)! + (el.gap ?? 0)
+    if (el.flowAfter !== undefined) {
+      const bottom = resolveFlowTarget(el.flowAfter)
+      if (bottom !== undefined) y = bottom + (el.gap ?? 0)
     }
     if (
       el.flowAfter !== undefined &&

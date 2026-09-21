@@ -454,6 +454,76 @@ describe('renderFromTemplate', () => {
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
   })
 
+  it('Bloque 7: flowAfter salta un ancestro oculto por visibleIf hasta el siguiente visible (NOTAS vacío)', () => {
+    const template: PdfTemplate = {
+      tipoDocumento: 'cotizacion',
+      page: basePage(),
+      elements: [
+        {
+          id: 'banner',
+          type: 'text',
+          x: 15,
+          y: 200,
+          w: 100,
+          text: 'Banner',
+          size: 10,
+          bold: false,
+          align: 'left',
+          colorToken: 'sn-ink',
+        },
+        {
+          id: 'notas',
+          type: 'text',
+          x: 15,
+          y: 20,
+          w: 100,
+          text: 'Notas: {{notas}}',
+          size: 10,
+          bold: false,
+          align: 'left',
+          colorToken: 'sn-ink',
+          visibleIf: 'notas',
+          flowAfter: 'banner',
+          gap: 8.8,
+        },
+        {
+          id: 'generales',
+          type: 'text',
+          x: 15,
+          y: 20,
+          w: 100,
+          text: 'GENERALES:',
+          size: 9.6,
+          bold: true,
+          align: 'left',
+          colorToken: 'sn-ink',
+          flowAfter: 'notas',
+          gap: 4.8,
+        },
+      ],
+    }
+
+    // Sin notas: GENERALES debe caer justo después de "Banner" (banner
+    // bottom + 4.8), NO en su `y` fija de 20 -- comprobado indirectamente
+    // forzando overflow: con gap suficientemente grande se ve una página
+    // nueva, señal de que sí se está usando el borde real del banner.
+    const sinNotas = createSpikeDoc(basePage())
+    const templateForzado: PdfTemplate = {
+      ...template,
+      elements: template.elements.map(el => (el.id === 'generales' ? { ...el, gap: 90 } : el)),
+    }
+    expect(() => renderFromTemplate(sinNotas, templateForzado, { notas: '' }, RESOLVE_COLOR)).not.toThrow()
+    // "Banner" está cerca de y=200-204; +90 de gap supera el margen inferior
+    // (297-20=277) y fuerza una página nueva -- si el fallback hubiese usado
+    // la `y` fija de 20, jamás se acercaría al límite de página.
+    expect(sinNotas.getNumberOfPages()).toBe(2)
+
+    // Con notas: la cadena completa (banner -> notas -> generales) tampoco
+    // debe lanzar excepción.
+    const conNotas = createSpikeDoc(basePage())
+    expect(() => renderFromTemplate(conNotas, template, { notas: 'Aplica IVA' }, RESOLVE_COLOR)).not.toThrow()
+  })
+
   it('Bloque 7: un texto largo hace wrap dentro de `w` en vez de salirse de la página', () => {
     const doc = createSpikeDoc(basePage())
     const longText =
