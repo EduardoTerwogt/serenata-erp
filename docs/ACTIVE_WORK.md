@@ -9,12 +9,16 @@ sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
 posición libre, texto y color acotado a la paleta del design system), con
 un flujo diseño-activo/borrador explícito y elementos obligatorios/legales
 protegidos. Arquitectura decidida: schema JSON + renderer sobre jsPDF
-(sin dependencia nueva). **Bloque 1 (spike del renderer) cerrado en esta
-sesión** — `lib/server/pdf/template-renderer.ts` (primitivos de render,
-sin schema tipado ni Zod todavía — eso es Bloque 2) validado contra el
-paquete real (`jspdf`/`jspdf-autotable` instalados, antes no había
-`node_modules` en el checkout) con datos reales de `serenata-erp-test`.
-Bloque 2 (modelo de template + validación) arranca en la próxima sesión.
+(sin dependencia nueva). **Bloque 1 cerrado** (spike del renderer).
+**Bloque 2 cerrado** (schema tipado + Zod + `renderFromTemplate()` +
+mapa de tokens de color + catálogo de variables, integrados). **Bloque 3
+parcial**: persistencia (`pdf_plantillas`) y permisos (`editor-pdfs`)
+cerrados; falta la API (POST draft/aplicar/restaurar) para poder arrancar
+el Bloque 4. El Bloque 2 y la parte no-API del Bloque 3 se ejecutaron **en
+paralelo** (5 subagentes sobre archivos disjuntos, ver `docs/PLAN.md`
+"Dependencias reales entre bloques") — el usuario pidió explícitamente
+paralelizar donde no hubiera dependencia real, y solo serializar el
+trabajo que desbloquea bloques futuros.
 
 ## Completado en esta sesión — Bloque 1: spike del renderer
 
@@ -50,6 +54,56 @@ Bloque 2 (modelo de template + validación) arranca en la próxima sesión.
   este cambio) y `npm test` completos (125 archivos / 969 tests) en verde.
 - `docs/PLAN.md` actualizado: Bloque 1 → Cerrado en el tracker, 2 riesgos
   P1 resueltos con su justificación técnica.
+
+## Completado en esta sesión — Bloque 2 (completo) + Bloque 3 (parcial), en paralelo
+
+El usuario pidió revisar qué bloques se pueden paralelizar y ejecutar así,
+serializando solo lo que desbloquea trabajo futuro. Grafo de dependencias
+documentado en `docs/PLAN.md` → "Dependencias reales entre bloques y
+ejecución en paralelo". Resultado: 5 piezas sin archivos en común
+corrieron en 5 subagentes en paralelo (background), cada uno validando
+`tsc`/`lint`/tests de sus propios archivos y sin hacer `git commit` — la
+integración y cada commit los hizo esta sesión después de verificar en
+verde:
+
+- **Track A** (`lib/server/pdf/pdf-template-schema.ts`, nuevo +
+  `renderFromTemplate()` en `template-renderer.ts`): tipos + Zod de
+  `PdfTemplate`/`PdfElement` exactos a la sección "Schema" del plan;
+  `renderFromTemplate()` interpola `{{variable}}`, resuelve colores vía un
+  `resolveColor` inyectado por parámetro (desacoplado a propósito de
+  Track B) y arma tablas desde `rowsBinding`.
+- **Track B** (`lib/server/pdf/pdf-color-tokens.ts`, nuevo): mapa
+  `--sn-*` → RGB (ink, naranja, superficies, 7 chips), confirmando
+  `--sn-orange: #FE7B01` leyendo `app/globals.css` directo (no el valor
+  desactualizado de `.claude/rules/ui.md`). `resolveColorToken()` lanza
+  explícito ante un token inexistente.
+- **Track C** (`lib/server/pdf/pdf-template-variables.ts`, nuevo):
+  catálogo de variables por `tipo_documento`, leyendo los 4 shapes de
+  datos reales fragmentados (incluida la estructura anidada
+  responsable→evento→items de Orden de pago).
+- **Track D** (`db/migrations/20260921_add_pdf_plantillas_table.sql`,
+  nuevo): tabla del modelo de 3 capas (`active_schema`/`draft_schema`),
+  RLS `service_role`-only, aplicada y verificada en `serenata-erp-test`
+  (sin hallazgos nuevos de seguridad).
+- **Track E**: sección de permisos `editor-pdfs` en los 4 archivos de auth
+  (heredada por `admin`) + ícono `layout-template` — sin tocar
+  `SidebarLayout.tsx` (eso es Bloque 4).
+- **Integración** (secuencial, hecha por esta sesión después de los 5
+  tracks): cableó B y C dentro de A vía un segundo `superRefine` en
+  `PdfTemplateSchema` — bloquea un `colorToken` o una `{{variable}}`
+  inexistentes, mismo pipeline que van a usar preview y "Aplicar diseño".
+  4 tests de integración nuevos.
+- 5 commits separados (uno por track + uno de integración + un fix de
+  manifest que quedó fuera por error del primer commit) — cada uno
+  verificado en verde antes de pushear, no un commit único al final.
+- `tsc`/`lint`/`npm test` completos: 129 archivos / **999 tests** en
+  verde. `docs/PLAN.md` actualizado: Bloque 2 → Cerrado, Bloque 3 → Parcial.
+- PR #81 recibió un `live` E2E rojo en un commit intermedio
+  (`canceling statement due to statement timeout` en Postgres) — no
+  relacionado al código de esta sesión, consistente con la contención ya
+  documentada en `e2e.yml` sobre `serenata-erp-test` compartido (probable
+  candidato: la migración del Track D corriendo contra esa misma base
+  mientras el E2E vivía). Commits posteriores dispararon un run nuevo.
 
 ## Completado en sesión anterior — Editor de PDFs pasa de Borrador a Aprobado
 
@@ -102,13 +156,17 @@ Bloque 2 (modelo de template + validación) arranca en la próxima sesión.
 
 ## Tests ejecutados y resultado real
 
-- `npx tsc --noEmit` → verde.
-- `npm run lint` → 0 errores (8 warnings preexistentes, ninguno en archivos
-  tocados esta sesión).
-- `npm test` → 125 archivos / 969 tests, verde, incluido el nuevo
-  `template-renderer.spike.test.ts` (4 tests).
-- No se corrieron e2e: el cambio es un módulo nuevo sin UI ni ruta todavía
-  (Bloque 4/5), no hay flujo de usuario que ejercite este código aún.
+- `npx tsc --noEmit` → verde en cada commit (Bloque 1, cada track por
+  separado, e integración final).
+- `npm run lint` → 0 errores en todo momento (8 warnings preexistentes,
+  ninguno en archivos tocados esta sesión).
+- `npm test` → progresó de 969 (Bloque 1) a **999 tests / 129 archivos**
+  tras Bloque 2 completo, siempre en verde.
+- No se corrieron e2e locales: los cambios son módulos nuevos sin UI ni
+  ruta todavía (Bloque 4/5), no hay flujo de usuario que los ejercite aún.
+  El E2E de CI (PR #81) sí corrió por cada push — ver "Problemas
+  encontrados" por el `live` rojo en un commit intermedio, ya no vigente
+  en el HEAD actual.
 
 ## Problemas encontrados que siguen abiertos
 
@@ -141,13 +199,14 @@ resto en `docs/archive/` y sesiones previas.
 ## Siguiente paso
 
 1. PR #81 (`claude/zen-cray-4lre07` → `main`) abierto en borrador y bajo
-   seguimiento (`subscribe_pr_activity`) — esperar CI en verde antes de
+   seguimiento (`subscribe_pr_activity`) — esperar CI en verde en el HEAD
+   actual (varios pushes desde el `live` rojo mencionado arriba) antes de
    mergear.
-2. Abrir una sesión nueva (`/serenata-iniciar-fase`) y arrancar el Bloque 2
-   de `docs/PLAN.md`: modelo de template tipado (`PdfTemplate`/`PdfElement`),
-   validación Zod, catálogo de variables, mapa de tokens `--sn-*` y
-   `renderFromTemplate()` sobre los primitivos ya probados en
-   `template-renderer.ts`.
+2. Terminar el Bloque 3: rutas API (`POST` draft/aplicar/restaurar) que
+   consumen A+D+E juntos — `requireSection('editor-pdfs')` primero,
+   payload validado con `PdfTemplateSchema`, copiando el patrón de
+   `app/api/service-templates/route.ts`. Esto desbloquea el Bloque 4
+   (catálogo `/editor-pdfs`).
 3. Considerar corregir el valor de acento en `.claude/rules/ui.md`
    (`#FF5A1A` → `#FE7B01`) como ajuste puntual, fuera de la iniciativa del
    Editor de PDFs.
