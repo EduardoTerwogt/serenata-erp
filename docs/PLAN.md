@@ -301,7 +301,7 @@ Así un schema que la preview acepta nunca es rechazado después por
 | 1 | Spike del renderer (texto/imagen/línea/tabla+`groupBy`, `sticky` header/footer, spacing, multipágina básica, datos reales de `serenata-erp-test`) | **Cerrado** — `lib/server/pdf/template-renderer.ts` + `template-renderer.spike.test.ts` (4 tests, verdes) |
 | 2 | Modelo de template + validación (tipos, Zod, catálogo de variables, mapa de tokens, `renderFromTemplate()`) | **Cerrado** — tracks A/B/C + integración (color/variables cableados en `PdfTemplateSchema`) |
 | 3 | Persistencia + permisos (`pdf_plantillas`, API, auth, autosave, activo/borrador, aplicar, restaurar) | **Cerrado** — `PdfPlantillasRepository` + `/api/editor-pdfs/[tipo]` (GET, `draft` PATCH/DELETE, `aplicar`/`restaurar` POST). `restaurar` responde 501 hasta que exista un baseline (Bloques 7-9) |
-| 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | Pendiente |
+| 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | **Cerrado** — `app/editor-pdfs/page.tsx` + nav en `SidebarLayout.tsx`. Verificado en navegador real (login vía `AUTH_USERS_DEV_FALLBACK`, sección `editor-pdfs`): nav, header, y fallback correcto (banner de error + "No migrado") cuando Supabase no es alcanzable |
 | 5 | Editor visual (canvas, selección/multi-select, drag, resize, snap, alinear, distribuir, capas, inspector, variables, advertencia legal — sin undo/redo, sin dependencia nueva) | Pendiente |
 | 6 | Preview real (reusa patrón `Content-Disposition: inline`) | Pendiente |
 | 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | Pendiente |
