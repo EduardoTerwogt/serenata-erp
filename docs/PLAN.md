@@ -134,6 +134,49 @@ negocio:
 (`pdf-template-variables.ts`) con un `sampleType: 'boolean'` nuevo — es una
 condición (`visibleIf`), no texto interpolable.
 
+**Extensiones mecánicas posteriores (mismo Bloque 7, continuación directa de
+lo ya aprobado, sin nueva decisión de producto):**
+- `cotizacion.id` (folio, mostrado al cliente como "# Cotización" en
+  `buildHeaderBody`) se agregó al catálogo de variables — se había excluido
+  por error como "id interno".
+- `PdfTableColumnSchema.format?: 'currency'` — formatea la celda con
+  `formatCurrencyPdf` (antes: número crudo sin formato).
+- `TableElement.groupTotalOf?: string` — nombre del campo de fila a sumar
+  por grupo; una columna con `field: '__groupTotal'` muestra esa suma solo
+  en la primera fila de cada grupo, igual que "Total categoría" en
+  `buildItemsBody`.
+
+**Extensión de arquitectura — posición relativa (`flowAfter`/`gap`), decisión
+del usuario en sesión 2026-09-21):** el generador real de Cotización no
+posiciona el banner de totales, NOTAS y los bloques legales en una `y` fija
+— usa `currentY = lastAutoTable.finalY + gap`, dependiente de cuántos ítems
+tenga la tabla (1 a docenas). Un `y` fijo en el schema de Bloques 1-6
+produce solapamiento (tabla larga) o huecos (tabla corta) reales en el PDF
+entregado al cliente. Se evaluaron 3 opciones (posición relativa, posición
+fija aproximada, forzar salto de página); el usuario eligió la primera.
+
+- **`PdfElementBase.flowAfter?: string` + `gap?: number`** — sin
+  `flowAfter`, comportamiento idéntico a Bloques 1-6 (`y` fija). Con
+  `flowAfter` (id de otro elemento del mismo template), `renderFromTemplate`
+  usa el borde inferior REAL de ese elemento, calculado **después** de
+  renderizarlo (no estimado) + `gap`, como `y` efectiva — agrega página si
+  no entra en la actual. Reproduce el patrón ya usado en los 4 generadores,
+  generalizado y reutilizable en Bloques 8/9 (mismo problema: tabla de
+  ítems seguida de bloques de tamaño fijo).
+- Validado: `flowAfter` debe referenciar un id real del template, no puede
+  autoreferenciarse, no aplica a elementos `sticky`, y se rechaza cualquier
+  ciclo. Nuevo requisito: ids únicos por template (antes no se exigía).
+- Alto de bloques de texto medido con las métricas nativas de jsPDF
+  (`splitTextToSize` + `getTextDimensions`), no con una constante inventada.
+  El banner de totales ahora calcula su alto según la cantidad de filas
+  visibles (antes fijo en `h`), replicando `Math.max(totalRowsH + padV*2,
+  28)` del generador real — con `h` fijo, filas condicionales (Descuento +
+  IVA) podían desbordar la caja.
+- El orden de render de los elementos de flujo sigue siendo por `zIndex`,
+  pero adelanta cualquier elemento con `flowAfter` hasta después del
+  elemento que referencia (necesario para conocer su borde real antes de
+  resolver la `y` del que sigue).
+
 El schema persistido no es una lista plana de elementos — es el template
 completo, con la página y sus márgenes (lo que el usuario edita cuando
 "cambia márgenes", nunca simulado moviendo elementos a mano):
