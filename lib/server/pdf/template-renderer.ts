@@ -71,6 +71,7 @@ export interface SpikeTableColumn {
   field: string
   align?: 'left' | 'center' | 'right'
   w: number
+  format?: 'currency'
 }
 
 export interface SpikeTableElement {
@@ -80,6 +81,9 @@ export interface SpikeTableElement {
   cols: SpikeTableColumn[]
   rows: Record<string, unknown>[]
   groupBy?: string
+  // Bloque 7: campo de fila a sumar por grupo -- ver PdfTableColumnSchema
+  // ('__groupTotal') y pdf-template-schema.ts para la validación.
+  groupTotalOf?: string
   // Estilo opcional (Bloque 2, `renderFromTemplate`): ausentes = comportamiento
   // idéntico al spike original (tema `striped` por defecto de autoTable).
   headColor?: [number, number, number]
@@ -133,6 +137,28 @@ export function renderImage(doc: jsPDF, el: SpikeImageElement): void {
  * opción nativa de agrupado de autoTable (no existe) — es transformación de
  * datos previa al `body`.
  */
+/**
+ * Celda de una columna de datos. `'__groupTotal'` (Bloque 7) es el field
+ * reservado para "Total categoría": no lee la fila, muestra `groupTotal` solo
+ * en la primera fila del grupo (igual que `buildItemsBody`). `format:
+ * 'currency'` aplica `formatCurrencyPdf` al valor numérico crudo.
+ */
+function formatCell(
+  col: SpikeTableColumn,
+  row: Record<string, unknown>,
+  isFirstInGroup: boolean,
+  groupTotal: number
+): string {
+  if (col.field === '__groupTotal') {
+    return isFirstInGroup ? formatCurrencyPdf(groupTotal) : ''
+  }
+  const raw = row[col.field]
+  if (col.format === 'currency') {
+    return formatCurrencyPdf(Number(raw) || 0)
+  }
+  return String(raw ?? '')
+}
+
 export function renderGroupedTable(doc: jsPDF, el: SpikeTableElement, startY: number): number {
   const body: (string | number)[][] = []
 
@@ -144,10 +170,13 @@ export function renderGroupedTable(doc: jsPDF, el: SpikeTableElement, startY: nu
     })
     groups.forEach((g, gi) => {
       const groupRows = el.rows.filter(r => String(r[el.groupBy as string] ?? '') === g)
+      const groupTotal = el.groupTotalOf
+        ? groupRows.reduce((sum, r) => sum + (Number(r[el.groupTotalOf as string]) || 0), 0)
+        : 0
       groupRows.forEach((row, ri) => {
         body.push([
           ri === 0 ? g : '',
-          ...el.cols.filter(c => c.field !== el.groupBy).map(c => String(row[c.field] ?? '')),
+          ...el.cols.filter(c => c.field !== el.groupBy).map(c => formatCell(c, row, ri === 0, groupTotal)),
         ])
       })
       if (gi < groups.length - 1) {
@@ -156,7 +185,7 @@ export function renderGroupedTable(doc: jsPDF, el: SpikeTableElement, startY: nu
     })
   } else {
     el.rows.forEach(row => {
-      body.push(el.cols.map(c => String(row[c.field] ?? '')))
+      body.push(el.cols.map(c => formatCell(c, row, false, 0)))
     })
   }
 
@@ -313,7 +342,7 @@ function renderTableElement(
   const rows = resolveRowsBinding(data, el.rowsBinding)
   const cols = el.cols
     .filter(c => c.visible)
-    .map(c => ({ label: c.label, field: c.field, align: c.align, w: c.w }))
+    .map(c => ({ label: c.label, field: c.field, align: c.align, w: c.w, format: c.format }))
 
   renderGroupedTable(
     doc,
@@ -324,6 +353,7 @@ function renderTableElement(
       cols,
       rows,
       groupBy: el.groupBy,
+      groupTotalOf: el.groupTotalOf,
       bordered: el.bordered,
       zebra: el.zebra,
       headColor: el.headerColorToken ? resolveColor(el.headerColorToken) : undefined,

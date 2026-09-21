@@ -8,10 +8,14 @@
  * (`CotizacionPDFData`, `OrdenPagoPreviewResult`, `HojaDeLlamadoData`,
  * `ReporteCierrePdfData`) — este catálogo es nuevo y aislado, y solo declara
  * los paths que cada generador realmente consume. Se excluyen identificadores
- * internos (`id`, `*_id`) sin valor como texto interpolado, los flags de
- * cálculo (`iva_activo`, `descuento_tipo`) y los 3 bloques legales
- * hardcodeados de Cotización (`cotizacion-pdf-helpers.ts:163-176`), que son
- * `legal:true` con contenido fijo editable en el schema, no datos.
+ * internos (`*_id`) sin valor como texto interpolado, los flags de
+ * cálculo (`descuento_tipo`) y los 3 bloques legales hardcodeados de
+ * Cotización (`cotizacion-pdf-helpers.ts:163-176`), que son `legal:true` con
+ * contenido fijo editable en el schema, no datos. Excepción: `cotizacion.id`
+ * SÍ se incluye -- `buildHeaderBody` lo muestra al cliente como
+ * "# Cotización", no es un id interno de base de datos. `iva_activo` también
+ * se incluye pese a ser un flag de cálculo: condiciona la fila "IVA" del
+ * banner de totales (`visibleIf`), no solo el cálculo interno.
  */
 
 export type TipoDocumento = 'cotizacion' | 'orden_pago' | 'hoja_llamado' | 'reporte_cierre'
@@ -47,6 +51,7 @@ function arr(children: Schema): FieldNode {
 
 // Refleja CotizacionPDFData (lib/server/pdf/cotizacion-pdf-types.ts).
 const COTIZACION_SCHEMA: Schema = {
+  id: leaf('string', '# Cotización (folio)'),
   cliente: leaf('string', 'Cliente'),
   proyecto: leaf('string', 'Proyecto'),
   fecha_entrega: leaf('date', 'Fecha de entrega'),

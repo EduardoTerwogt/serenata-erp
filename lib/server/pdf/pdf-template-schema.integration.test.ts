@@ -167,3 +167,45 @@ describe('pdf-template-schema: totals-banner (Bloque 7, piloto Cotización)', ()
     expect(result.success).toBe(true)
   })
 })
+
+describe('pdf-template-schema: format y groupTotalOf de tabla (Bloque 7)', () => {
+  function tableTemplate(overrides: Partial<{ groupTotalOf: string; format: 'currency' }> = {}) {
+    return {
+      tipoDocumento: 'cotizacion' as const,
+      page: BASE_PAGE,
+      elements: [
+        {
+          id: 'items',
+          x: 10,
+          y: 10,
+          w: 180,
+          type: 'table' as const,
+          cols: [
+            { label: 'Categoría', field: 'categoria', align: 'left' as const, w: 40, visible: true },
+            { label: 'Importe', field: 'importe', align: 'right' as const, w: 30, visible: true, format: overrides.format },
+            { label: 'Total categoría', field: '__groupTotal', align: 'right' as const, w: 30, visible: true },
+          ],
+          rowsBinding: 'items',
+          groupBy: 'categoria',
+          groupTotalOf: overrides.groupTotalOf ?? 'importe',
+          bordered: true,
+          lightHead: false,
+          zebra: false,
+        },
+      ],
+    }
+  }
+
+  it('acepta format: currency en una columna y groupTotalOf real', () => {
+    const result = PdfTemplateSchema.safeParse(tableTemplate({ format: 'currency' }))
+    expect(result.success).toBe(true)
+  })
+
+  it('rechaza groupTotalOf que no existe en el catálogo para el rowsBinding', () => {
+    const result = PdfTemplateSchema.safeParse(tableTemplate({ groupTotalOf: 'campo_inventado' }))
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some(i => i.message.includes('Variable inexistente'))).toBe(true)
+    }
+  })
+})

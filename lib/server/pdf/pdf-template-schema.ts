@@ -99,10 +99,18 @@ export type TextElement = z.infer<typeof TextElementSchema>
 
 export const PdfTableColumnSchema = z.object({
   label: z.string(),
+  // `field` normal = path dentro de cada fila de `rowsBinding` (ej.
+  // 'importe'). Field reservado `'__groupTotal'` (Bloque 7): no lee la fila,
+  // muestra la suma de `TableElement.groupTotalOf` del grupo -- solo en la
+  // primera fila de cada grupo, igual que "Total categoría" en
+  // `buildItemsBody` (cotizacion-pdf-helpers.ts).
   field: z.string().min(1),
   align: z.enum(['left', 'center', 'right']),
   w: z.number().positive('w de columna debe ser mayor a 0'),
   visible: z.boolean(),
+  // formatea el valor de la celda con `formatCurrencyPdf` en vez de mostrar
+  // el número crudo (Bloque 7: precio_unitario/importe de Cotización).
+  format: z.enum(['currency']).optional(),
 })
 
 export type PdfTableColumn = z.infer<typeof PdfTableColumnSchema>
@@ -114,6 +122,11 @@ export const TableElementSchema = PdfElementBaseSchema.extend({
   rowsBinding: z.string().min(1, 'rowsBinding es requerido'),
   // solo Cotización lo necesita hoy
   groupBy: z.string().optional(),
+  // nombre del campo de fila a sumar por grupo (ej. 'importe') -- requiere una
+  // columna con field: '__groupTotal' para mostrarse (Bloque 7, "Total
+  // categoría" de Cotización). Se valida contra el catálogo más abajo como
+  // `${rowsBinding}[].${groupTotalOf}`.
+  groupTotalOf: z.string().optional(),
   bordered: z.boolean(),
   lightHead: z.boolean(),
   zebra: z.boolean(),
@@ -301,6 +314,10 @@ export const PdfTemplateSchema = z
           checkVariable(row.valueVariable, `rows.${rowIndex}.valueVariable`)
           if (row.visibleIf) checkVariable(row.visibleIf, `rows.${rowIndex}.visibleIf`)
         })
+      }
+
+      if (el.type === 'table' && el.groupTotalOf) {
+        checkVariable(`${el.rowsBinding}[].${el.groupTotalOf}`, 'groupTotalOf')
       }
     })
   })

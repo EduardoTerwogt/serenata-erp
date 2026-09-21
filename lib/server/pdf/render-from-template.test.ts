@@ -305,6 +305,48 @@ describe('renderFromTemplate', () => {
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
   })
 
+  it('Bloque 7: formatea columnas con format:"currency" y calcula el total por grupo (__groupTotal)', () => {
+    const doc = createSpikeDoc(basePage())
+    const template: PdfTemplate = {
+      tipoDocumento: 'cotizacion',
+      page: basePage(),
+      elements: [
+        {
+          id: 'tabla',
+          type: 'table',
+          x: 15,
+          y: 40,
+          w: 180,
+          cols: [
+            { label: 'Categoría', field: 'categoria', align: 'left', w: 40, visible: true },
+            { label: 'Descripción', field: 'descripcion', align: 'left', w: 60, visible: true },
+            { label: 'Precio unitario', field: 'precio_unitario', align: 'right', w: 25, visible: true, format: 'currency' },
+            { label: 'Importe', field: 'importe', align: 'right', w: 25, visible: true, format: 'currency' },
+            { label: 'Total categoría', field: '__groupTotal', align: 'right', w: 30, visible: true },
+          ],
+          rowsBinding: 'items',
+          groupBy: 'categoria',
+          groupTotalOf: 'importe',
+          bordered: true,
+          lightHead: false,
+          zebra: false,
+        },
+      ],
+    }
+
+    const data = {
+      items: [
+        { categoria: 'Equipo', descripcion: 'Grúa importada', precio_unitario: 4000, importe: 4000 },
+        { categoria: 'Equipo', descripcion: 'Dolly importado', precio_unitario: 2500, importe: 2500 },
+        { categoria: 'Personal', descripcion: 'Operador', precio_unitario: 1500, importe: 1500 },
+      ],
+    }
+
+    expect(() => renderFromTemplate(doc, template, data, RESOLVE_COLOR)).not.toThrow()
+    const bytes = Buffer.from(doc.output('arraybuffer'))
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
   it('Bloque 7: un texto largo hace wrap dentro de `w` en vez de salirse de la página', () => {
     const doc = createSpikeDoc(basePage())
     const longText =
