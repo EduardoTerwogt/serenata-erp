@@ -300,7 +300,7 @@ Así un schema que la preview acepta nunca es rechazado después por
 | 0 | Auditoría y cierre de especificación | **Cerrado** (este documento) |
 | 1 | Spike del renderer (texto/imagen/línea/tabla+`groupBy`, `sticky` header/footer, spacing, multipágina básica, datos reales de `serenata-erp-test`) | **Cerrado** — `lib/server/pdf/template-renderer.ts` + `template-renderer.spike.test.ts` (4 tests, verdes) |
 | 2 | Modelo de template + validación (tipos, Zod, catálogo de variables, mapa de tokens, `renderFromTemplate()`) | **Cerrado** — tracks A/B/C + integración (color/variables cableados en `PdfTemplateSchema`) |
-| 3 | Persistencia + permisos (`pdf_plantillas`, API, auth, autosave, activo/borrador, aplicar, restaurar) | **Parcial** — tracks D/E cerrados (migración + permisos); falta la API (POST draft/aplicar/restaurar) |
+| 3 | Persistencia + permisos (`pdf_plantillas`, API, auth, autosave, activo/borrador, aplicar, restaurar) | **Cerrado** — `PdfPlantillasRepository` + `/api/editor-pdfs/[tipo]` (GET, `draft` PATCH/DELETE, `aplicar`/`restaurar` POST). `restaurar` responde 501 hasta que exista un baseline (Bloques 7-9) |
 | 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | Pendiente |
 | 5 | Editor visual (canvas, selección/multi-select, drag, resize, snap, alinear, distribuir, capas, inspector, variables, advertencia legal — sin undo/redo, sin dependencia nueva) | Pendiente |
 | 6 | Preview real (reusa patrón `Content-Disposition: inline`) | Pendiente |
