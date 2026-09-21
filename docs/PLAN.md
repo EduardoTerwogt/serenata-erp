@@ -3,9 +3,10 @@
 **Estado:** Aprobado, en ejecución (2026-09-21) — arquitectura del motor de
 plantillas, schema, workflow activo/borrador y bloques cerrados tras dos
 rondas de auditoría (Claude contra el repo real, y el usuario contra la
-propuesta de Claude). Bloque 1 (spike técnico) cerrado esta sesión — ver
-tracker. Bloque 2 (modelo de template + validación) arranca en la próxima
-sesión.
+propuesta de Claude). Bloques 1-7 cerrados esta sesión (ver tracker) — el
+Editor de PDFs ya migra y renderiza Cotización con su plantilla real. Quedan
+Bloques 8 (Hoja de llamado + Reporte de cierre), 9 (Orden de pago) y 10
+(extensibilidad).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -369,7 +370,7 @@ Así un schema que la preview acepta nunca es rechazado después por
 | 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | **Cerrado** — `app/editor-pdfs/page.tsx` + nav en `SidebarLayout.tsx`. Verificado en navegador real (login vía `AUTH_USERS_DEV_FALLBACK`, sección `editor-pdfs`): nav, header, y fallback correcto (banner de error + "No migrado") cuando Supabase no es alcanzable |
 | 5 | Editor visual (canvas, selección/multi-select, drag, resize, snap, alinear, distribuir, capas, inspector, variables, advertencia legal — sin undo/redo, sin dependencia nueva) | **Cerrado** — `app/editor-pdfs/[tipo]/` (`page.tsx`, `EditorCanvas.tsx`, `Inspector.tsx`, `geometry.ts`). Verificado en navegador real con una plantilla de prueba insertada temporalmente en `serenata-erp-test` (borrada después): selección, drag, resize, multi-select, alinear, capas, agregar/eliminar, confirmación de texto legal y autosave (`PATCH .../draft`) funcionando de punta a punta |
 | 6 | Preview real (reusa patrón `Content-Disposition: inline`) | **Cerrado** — `GET /api/editor-pdfs/[tipo]/preview` + `lib/server/pdf/pdf-sample-data.ts`. Verificado con la pipeline de producción real (sin mocks): PDF válido generado y leído (`{{cliente}}` interpolado, tabla agrupada, estilos) |
-| 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | Pendiente |
+| 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | **Cerrado** — `lib/server/pdf/default-templates/cotizacion.ts` reconstruye el PDF real completo (header, tabla+groupTotal+currency, banner de 6 filas, NOTAS condicional, GENERALES/COSTOS/CANCELACIÓN con `flowAfter`). Comparado visualmente contra `generateCotizacionPdf()` con los mismos datos (SH2402): banner idéntico en valores/colores, misma estructura. Acción "migrar" agregada (faltaba una forma de crear la primera fila de `pdf_plantillas`). Verificado en navegador real (cookie `e2e-bypass`, APIs interceptadas con Playwright): "no migrado" → migrar → editor visual con el baseline real, legible y editable. Extensiones de schema/renderer de este bloque: `visibleIf`, `totals-banner`, `flowAfter`/`gap` (posición relativa — decisión de arquitectura aprobada por el usuario), `format:'currency'`, `groupTotalOf`, `align:'justify'`, token `--sn-yellow`. Gaps de fidelidad aceptados: fechas sin formatear, sin fallback "—" en locación vacía, sin bold-italic por celda, header modelado como 12 elementos en vez de una tabla real |
 | 8 | Hoja de llamado + Reporte de cierre (estructura simple, sin anidado) | Pendiente |
 | 9 | Orden de pago (estructura responsable→evento→tabla — decide `repeating-group` vs. loop híbrido con Cotización ya probado como base) | Pendiente |
 | 10 | Extensibilidad (dar de alta un 5º tipo de documento) | Pendiente |

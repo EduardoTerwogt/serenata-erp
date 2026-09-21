@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-21 (sesión 2)
+**Última actualización:** 2026-09-21 (sesión 3)
 
 ## Estado
 
@@ -8,19 +8,92 @@
 sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
 posición libre, texto y color acotado a la paleta del design system), con
 un flujo diseño-activo/borrador explícito y elementos obligatorios/legales
-protegidos. Arquitectura decidida: schema JSON + renderer sobre jsPDF
-(sin dependencia nueva). **Bloque 1 cerrado** (spike del renderer).
-**Bloque 2 cerrado** (schema tipado + Zod + `renderFromTemplate()` +
-mapa de tokens de color + catálogo de variables, integrados). **Bloque 3
-parcial**: persistencia (`pdf_plantillas`) y permisos (`editor-pdfs`)
-cerrados; falta la API (POST draft/aplicar/restaurar) para poder arrancar
-el Bloque 4. El Bloque 2 y la parte no-API del Bloque 3 se ejecutaron **en
-paralelo** (5 subagentes sobre archivos disjuntos, ver `docs/PLAN.md`
-"Dependencias reales entre bloques") — el usuario pidió explícitamente
-paralelizar donde no hubiera dependencia real, y solo serializar el
-trabajo que desbloquea bloques futuros.
+protegidos. Arquitectura: schema JSON + renderer sobre jsPDF (sin
+dependencia nueva). **Bloques 1-7 cerrados** — ver tracker completo en
+`docs/PLAN.md`. El editor ya migra y renderiza Cotización con su plantilla
+real (piloto del Bloque 7, mayor riesgo del plan), comparada visualmente
+contra el generador de producción con los mismos datos. Quedan **Bloque 8**
+(Hoja de llamado + Reporte de cierre), **Bloque 9** (Orden de pago,
+depende explícitamente del patrón de 7) y **Bloque 10** (extensibilidad).
+El usuario pidió ser avisado solo cuando el plan completo (los 10 bloques)
+esté implementado y el editor listo para pruebas de uso reales — todavía
+no es el caso.
 
-## Completado en esta sesión — Bloque 1: spike del renderer
+## Completado en esta sesión (sesión 3) — Bloque 7: piloto Cotización
+
+Continuación autónoma tras el cierre de Bloques 1-6 (sesión 2, PR #81 ya
+mergeado a `main`). El usuario pidió revisar y paralelizar bloques donde no
+hubiera dependencia real (ver sesión 2 abajo) y avisar solo al terminar el
+plan completo.
+
+- **Extensión de schema (aprobada por el usuario vía 3 opciones
+  presentadas)**: el banner de totales real de Cotización (filas
+  condicionales Descuento/IVA, color por fila, fondo relleno) no entraba en
+  `TableElement`/`TextElement` sin perder fidelidad. Se agregó
+  `visibleIf?: string` (elemento condicional a los datos) y un elemento
+  nuevo `TotalsBannerElement`, más wrap real de texto largo (`maxWidth`).
+- **3 extensiones mecánicas** (continuación directa, sin nueva decisión):
+  `cotizacion.id` al catálogo de variables (excluido por error como "id
+  interno" — se muestra al cliente como "# Cotización"),
+  `format:'currency'` por columna de tabla, `groupTotalOf`/columna
+  reservada `'__groupTotal'` (total por categoría).
+- **Decisión de arquitectura (aprobada por el usuario, 3 opciones
+  presentadas)**: el generador real posiciona banner/NOTAS/bloques legales
+  con `currentY = lastAutoTable.finalY + gap` — depende de cuántos ítems
+  tenga la tabla, no es una `y` fija. Se agregó `flowAfter`/`gap` a
+  `PdfElementBase`: la `y` efectiva de un elemento encadenado es el borde
+  inferior REAL (post-render) del elemento referenciado + `gap`, saltando
+  ancestros ocultos por `visibleIf` (ej. GENERALES sin NOTAS). Reutilizable
+  en Bloques 8/9 (mismo problema: tabla dinámica seguida de bloques fijos).
+  En el camino se corrigieron 2 bugs reales del mecanismo (no específicos
+  de Cotización): un elemento con `bgToken+h` encadenado justo después de
+  otro con `bgToken+h` podía pintar encima del anterior si el gap no
+  compensaba el alto de la caja; y un gap pensado para la baseline cruda de
+  un texto plano no compensaba el alto ya sumado en el borde calculado.
+- **`align:'justify'`** agregado a `TextElement` (jsPDF ya lo soporta
+  nativo) — los bloques GENERALES/CANCELACIÓN lo usan en el generador real.
+- **Token `--sn-yellow`** agregado al design system (aprobado por el
+  usuario, aditivo): la fila "Descuento" del banner usa un amarillo sin
+  equivalente entre los tokens `--sn-*` existentes.
+- **`lib/server/pdf/default-templates/cotizacion.ts`**: baseline real
+  reconstruyendo `cotizacion-pdf.ts` + helpers completo (header de 6 filas,
+  logo ISO, tabla de partidas agrupada con total por categoría y moneda
+  formateada, banner de 6 filas, NOTAS condicional, GENERALES/COSTOS/
+  CANCELACIÓN encadenados con `flowAfter`). Validado visualmente
+  comparando contra `generateCotizacionPdf()` con los mismos datos
+  (cliente/proyecto/ítems equivalentes a SH2402): banner con valores
+  idénticos, misma estructura, mismo artefacto preexistente de
+  `align:'justify'` en la última línea corta de CANCELACIÓN (confirmado NO
+  es una regresión — ya existe en el PDF de producción actual).
+- **Acción "migrar"** agregada (`PdfPlantillasRepository.migrar`, `POST
+  /api/editor-pdfs/[tipo]/migrar`, botón "Migrar este documento"): antes
+  solo existía "restaurar", que requiere una fila `pdf_plantillas` ya
+  existente — no había forma de crear la primera fila de un documento
+  desde la UI.
+- **Verificado en navegador real** (Chromium headless, cookie
+  `e2e-bypass` + `PLAYWRIGHT_E2E_BYPASS=true` en dev — sin Supabase real en
+  este sandbox, APIs interceptadas con `page.route()` devolviendo el
+  baseline real): pantalla "no migrado" → clic en "Migrar este documento" →
+  editor visual carga el baseline real, legible y editable. En el camino se
+  encontró y arregló un gap real de `EditorCanvas.tsx` (Bloque 5, sin
+  ejercitar hasta este piloto): `bgToken` nunca se pintaba como fondo en el
+  canvas — las 6 etiquetas del header (texto blanco pensado para fondo
+  negro) quedaban invisibles sobre el lienzo blanco.
+- Gaps de fidelidad conocidos y aceptados (documentados en
+  `cotizacion.ts`): fechas sin formatear (`formatDateDisplay` no existe en
+  el motor de templates, limitación del Bloque 2 no específica de este
+  documento), sin fallback "—" en locación vacía, sin bold-italic por celda
+  en la tabla, header modelado como 12 `TextElement` en vez de una tabla
+  real (`TableElement` asume filas homogéneas, no pares label/valor
+  heterogéneos).
+- `docs/PLAN.md` actualizado: Bloque 7 → Cerrado en el tracker, con el
+  detalle de las 3 extensiones de schema/arquitectura de esta sesión.
+- Commits separados por pieza (schema, renderer, color token, baseline,
+  migrar, fixes de canvas), cada uno validado (`tsc`/`lint`/`vitest`) antes
+  de pushear a `claude/zen-cray-4lre07` (PR #82, en borrador, bajo
+  seguimiento).
+
+## Completado en sesión anterior (sesión 2) — Bloque 1: spike del renderer
 
 - Rama de la sesión (`claude/zen-cray-4lre07`) ya alineada con `origin/main`;
   sin trabajo pendiente de otra sesión.
@@ -55,7 +128,7 @@ trabajo que desbloquea bloques futuros.
 - `docs/PLAN.md` actualizado: Bloque 1 → Cerrado en el tracker, 2 riesgos
   P1 resueltos con su justificación técnica.
 
-## Completado en esta sesión — Bloque 2 (completo) + Bloque 3 (parcial), en paralelo
+## Completado en sesión anterior (sesión 2) — Bloque 2 (completo) + Bloque 3 (parcial), en paralelo
 
 El usuario pidió revisar qué bloques se pueden paralelizar y ejecutar así,
 serializando solo lo que desbloquea trabajo futuro. Grafo de dependencias
@@ -105,7 +178,7 @@ verde:
   candidato: la migración del Track D corriendo contra esa misma base
   mientras el E2E vivía). Commits posteriores dispararon un run nuevo.
 
-## Completado en sesión anterior — Editor de PDFs pasa de Borrador a Aprobado
+## Completado en sesión 1 — Editor de PDFs pasa de Borrador a Aprobado
 
 - Investigación exhaustiva del código real (3 subagentes en paralelo +
   lectura directa): los 4 generadores PDF completos (`lib/server/pdf/*.ts`),
@@ -156,17 +229,27 @@ verde:
 
 ## Tests ejecutados y resultado real
 
-- `npx tsc --noEmit` → verde en cada commit (Bloque 1, cada track por
-  separado, e integración final).
+- `npx tsc --noEmit` → verde en cada commit de las 3 sesiones (Bloque 1,
+  cada track por separado, integración, y cada pieza del Bloque 7).
 - `npm run lint` → 0 errores en todo momento (8 warnings preexistentes,
-  ninguno en archivos tocados esta sesión).
-- `npm test` → progresó de 969 (Bloque 1) a **999 tests / 129 archivos**
-  tras Bloque 2 completo, siempre en verde.
-- No se corrieron e2e locales: los cambios son módulos nuevos sin UI ni
-  ruta todavía (Bloque 4/5), no hay flujo de usuario que los ejercite aún.
-  El E2E de CI (PR #81) sí corrió por cada push — ver "Problemas
-  encontrados" por el `live` rojo en un commit intermedio, ya no vigente
-  en el HEAD actual.
+  ninguno en archivos tocados por esta iniciativa).
+- `npm test` → progresó de 969 (Bloque 1, sesión 2) a **1074 tests / 135
+  archivos** al cierre del Bloque 7 (sesión 3), siempre en verde antes de
+  cada push.
+- **Bloque 7 (sesión 3), verificado en navegador real** (no solo
+  suites): Chromium headless vía Playwright, cookie `e2e-bypass` +
+  `PLAYWRIGHT_E2E_BYPASS=true` (sin Supabase real en este sandbox — APIs
+  interceptadas devolviendo el baseline real generado por
+  `buildCotizacionBaseline()`, no un mock inventado). Flujo completo "no
+  migrado" → "Migrar este documento" → editor visual con el baseline
+  cargado, legible y sin errores de consola reales (el único mensaje es un
+  warning benigno de React en modo dev por `eval()`, no relacionado).
+  Comparación visual pixel-por-bloque contra `generateCotizacionPdf()` con
+  datos equivalentes a SH2402 (leyendo ambos PDFs con el lector de
+  documentos) — ver detalle de gaps aceptados arriba.
+- Bloques 1-6 (sesiones 1-2): sin e2e locales corridos entonces (módulos
+  sin UI ni ruta todavía); el E2E de CI (PR #81) sí corrió por cada push y
+  ya está en `main`.
 
 ## Problemas encontrados que siguen abiertos
 
@@ -198,18 +281,23 @@ resto en `docs/archive/` y sesiones previas.
 
 ## Siguiente paso
 
-1. PR #81 (`claude/zen-cray-4lre07` → `main`) abierto en borrador y bajo
-   seguimiento (`subscribe_pr_activity`) — esperar CI en verde en el HEAD
-   actual (varios pushes desde el `live` rojo mencionado arriba) antes de
-   mergear.
-2. Terminar el Bloque 3: rutas API (`POST` draft/aplicar/restaurar) que
-   consumen A+D+E juntos — `requireSection('editor-pdfs')` primero,
-   payload validado con `PdfTemplateSchema`, copiando el patrón de
-   `app/api/service-templates/route.ts`. Esto desbloquea el Bloque 4
-   (catálogo `/editor-pdfs`).
-3. Considerar corregir el valor de acento en `.claude/rules/ui.md`
-   (`#FF5A1A` → `#FE7B01`) como ajuste puntual, fuera de la iniciativa del
-   Editor de PDFs.
-4. Considerar si el RLS deshabilitado en
+El usuario pidió que se le avise recién cuando **el plan completo (10
+bloques)** esté implementado y el editor listo para pruebas de uso reales
+— no antes. Quedan:
+
+1. **Bloque 8** — Hoja de llamado + Reporte de cierre (estructura simple,
+   sin anidado; reusa `flowAfter` tal como quedó del Bloque 7 para
+   cualquier tabla dinámica seguida de bloques fijos).
+2. **Bloque 9** — Orden de pago (estructura responsable→evento→tabla;
+   decide `repeating-group` vs. loop híbrido, usando Cotización ya migrada
+   como base — dependencia explícita del plan).
+3. **Bloque 10** — Extensibilidad: dar de alta un 5º tipo de documento
+   real, probando que el motor generaliza más allá de los 4 actuales.
+4. PR #82 (`claude/zen-cray-4lre07` → `main`) sigue en borrador, bajo
+   seguimiento (`subscribe_pr_activity`) — mergear solo cuando todo el plan
+   esté cerrado y CI en verde, no bloque por bloque.
+5. Pendientes antiguos, sin acción aún (fuera del alcance de esta
+   iniciativa): corregir el acento desactualizado en `.claude/rules/ui.md`
+   (`#FF5A1A` → `#FE7B01`); decidir si el RLS deshabilitado en
    `cliente_id_backfill_clasificacion` amerita una tarea aparte (ver
    "Problemas encontrados").
