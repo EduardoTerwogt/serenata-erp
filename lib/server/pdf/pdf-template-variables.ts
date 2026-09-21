@@ -139,6 +139,23 @@ const HOJA_LLAMADO_SCHEMA: Schema = {
     // `descuento_monto` en Cotización).
     telefono: leaf('string', 'Teléfono del responsable (resuelto)'),
   }),
+  // Bloque 8: las tablas CREW y EQUIPO TÉCNICO del generador real son
+  // `items` FILTRADO por categoría (`categoria.toLowerCase() === 'crew'` y
+  // su complemento) -- `rowsBinding` resuelve un path, no filtra un array,
+  // así que ambos subconjuntos deben llegar ya separados en `data` (mismo
+  // shape que `items`).
+  crew_items: arr({
+    descripcion: leaf('string', 'Rol (crew)'),
+    responsable_nombre: leaf('string', 'Nombre del responsable'),
+    notas: leaf('string', 'Notas del ítem'),
+    telefono: leaf('string', 'Teléfono del responsable (resuelto)'),
+  }),
+  equipo_items: arr({
+    descripcion: leaf('string', 'Descripción del ítem de equipo'),
+    cantidad: leaf('number', 'Cantidad'),
+    responsable_nombre: leaf('string', 'Nombre del responsable'),
+    notas: leaf('string', 'Notas del ítem'),
+  }),
   responsables: arr({
     nombre: leaf('string', 'Nombre del responsable'),
     telefono: leaf('string', 'Teléfono del responsable'),
