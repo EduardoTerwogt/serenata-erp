@@ -9,15 +9,56 @@ sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
 posición libre, texto y color acotado a la paleta del design system), con
 un flujo diseño-activo/borrador explícito y elementos obligatorios/legales
 protegidos. Arquitectura: schema JSON + renderer sobre jsPDF (sin
-dependencia nueva). **Bloques 1-7 cerrados** — ver tracker completo en
-`docs/PLAN.md`. El editor ya migra y renderiza Cotización con su plantilla
-real (piloto del Bloque 7, mayor riesgo del plan), comparada visualmente
-contra el generador de producción con los mismos datos. Quedan **Bloque 8**
-(Hoja de llamado + Reporte de cierre), **Bloque 9** (Orden de pago,
-depende explícitamente del patrón de 7) y **Bloque 10** (extensibilidad).
-El usuario pidió ser avisado solo cuando el plan completo (los 10 bloques)
-esté implementado y el editor listo para pruebas de uso reales — todavía
-no es el caso.
+dependencia nueva). **Bloques 1-8 cerrados** — ver tracker completo en
+`docs/PLAN.md`. El editor ya migra y renderiza Cotización, Hoja de llamado
+y Reporte de cierre con su plantilla real, cada una comparada visualmente
+contra su generador de producción con los mismos datos. Queda **Bloque 9**
+(Orden de pago, depende explícitamente del patrón del Bloque 7) y
+**Bloque 10** (extensibilidad). El usuario pidió ser avisado solo cuando
+el plan completo (los 10 bloques) esté implementado y el editor listo para
+pruebas de uso reales — todavía no es el caso.
+
+## Completado en esta sesión (sesión 3) — Bloque 8: Hoja de llamado + Reporte de cierre
+
+Continuación directa tras el cierre del Bloque 7 (mismo día, misma sesión).
+Ambos documentos, clasificados "menor riesgo" en el plan (sin tabla
+agrupada ni banner de totales), reusan los mecanismos del Bloque 7 sin
+necesitar otra decisión de arquitectura.
+
+- **`TableElement.emptyText?: string`** (extensión mecánica de schema):
+  CREW (Hoja de llamado) e hitos (Reporte de cierre) muestran un texto fijo
+  en vez de una tabla vacía cuando el array de datos no tiene filas —
+  patrón que Bloques 1-7 no necesitaban (Cotización siempre asume ítems).
+- **Campos precalculados agregados al catálogo** (mismo patrón que
+  `descuento_monto` de Cotización — el motor de templates no hace joins ni
+  filtra arrays, esa lógica vive en la capa de datos): `crew_items`/
+  `equipo_items` (`items.filter()` por categoría), `items[].telefono`
+  (join contra `responsables`), `fecha_generacion` (fecha de hoy, no un
+  dato del documento), `financiero_fila` (`[data.financiero]`, envuelto
+  porque `rowsBinding` necesita un array), `equipo_texto`/
+  `incidencias_texto` (join y fallback ya resueltos).
+- **`lib/server/pdf/default-templates/hoja-llamado.ts`** y
+  **`reporte-cierre.ts`**: baseline completo de cada generador real
+  (header, bloque de info sin fondo negro — más simple que el header de
+  Cotización, sin el problema de orden de pintado que sí tuvo esa
+  plantilla —, NOTAS/EQUIPO/CRONOGRAMA/INCIDENCIAS con `flowAfter`,
+  footer). Comparados visualmente contra `generateHojaDeLlamadoPdf()` y
+  `generateReporteCierrePdf()` con datos equivalentes: paridad alta, sin
+  bugs de solapamiento nuevos — el único defecto visual notado (texto de
+  NOTAS pegado a su barra en Hoja de llamado) se confirmó preexistente en
+  el PDF de producción actual, no una regresión.
+- **Verificado en navegador real** (mismo mecanismo que Cotización: cookie
+  `e2e-bypass`, APIs interceptadas con Playwright devolviendo cada
+  baseline real): flujo "no migrado" → "Migrar este documento" → editor
+  visual cargado, sin errores de consola nuevos, para ambos documentos.
+- `PdfPlantillasRepository.migrar()`/`restaurar()` ahora soportan 3 de los
+  4 tipos de documento (cotizacion, hoja_llamado, reporte_cierre) — solo
+  orden_pago sigue pendiente (Bloque 9).
+- `docs/PLAN.md` actualizado: Bloque 8 → Cerrado en el tracker.
+- Commits separados por pieza (emptyText, catálogo de variables x2, ambos
+  baselines), cada uno validado (`tsc`/`lint`/`vitest`, 1085 tests en verde
+  al cierre) antes de pushear a `claude/zen-cray-4lre07` (PR #82, en
+  borrador, bajo seguimiento).
 
 ## Completado en esta sesión (sesión 3) — Bloque 7: piloto Cotización
 
@@ -233,9 +274,9 @@ verde:
   cada track por separado, integración, y cada pieza del Bloque 7).
 - `npm run lint` → 0 errores en todo momento (8 warnings preexistentes,
   ninguno en archivos tocados por esta iniciativa).
-- `npm test` → progresó de 969 (Bloque 1, sesión 2) a **1074 tests / 135
-  archivos** al cierre del Bloque 7 (sesión 3), siempre en verde antes de
-  cada push.
+- `npm test` → progresó de 969 (Bloque 1, sesión 2) a 1074 (cierre Bloque 7)
+  y **1085 tests / 137 archivos** al cierre del Bloque 8, siempre en verde
+  antes de cada push.
 - **Bloque 7 (sesión 3), verificado en navegador real** (no solo
   suites): Chromium headless vía Playwright, cookie `e2e-bypass` +
   `PLAYWRIGHT_E2E_BYPASS=true` (sin Supabase real en este sandbox — APIs
@@ -285,18 +326,15 @@ El usuario pidió que se le avise recién cuando **el plan completo (10
 bloques)** esté implementado y el editor listo para pruebas de uso reales
 — no antes. Quedan:
 
-1. **Bloque 8** — Hoja de llamado + Reporte de cierre (estructura simple,
-   sin anidado; reusa `flowAfter` tal como quedó del Bloque 7 para
-   cualquier tabla dinámica seguida de bloques fijos).
-2. **Bloque 9** — Orden de pago (estructura responsable→evento→tabla;
+1. **Bloque 9** — Orden de pago (estructura responsable→evento→tabla;
    decide `repeating-group` vs. loop híbrido, usando Cotización ya migrada
    como base — dependencia explícita del plan).
-3. **Bloque 10** — Extensibilidad: dar de alta un 5º tipo de documento
+2. **Bloque 10** — Extensibilidad: dar de alta un 5º tipo de documento
    real, probando que el motor generaliza más allá de los 4 actuales.
-4. PR #82 (`claude/zen-cray-4lre07` → `main`) sigue en borrador, bajo
+3. PR #82 (`claude/zen-cray-4lre07` → `main`) sigue en borrador, bajo
    seguimiento (`subscribe_pr_activity`) — mergear solo cuando todo el plan
    esté cerrado y CI en verde, no bloque por bloque.
-5. Pendientes antiguos, sin acción aún (fuera del alcance de esta
+4. Pendientes antiguos, sin acción aún (fuera del alcance de esta
    iniciativa): corregir el acento desactualizado en `.claude/rules/ui.md`
    (`#FF5A1A` → `#FE7B01`); decidir si el RLS deshabilitado en
    `cliente_id_backfill_clasificacion` amerita una tarea aparte (ver
