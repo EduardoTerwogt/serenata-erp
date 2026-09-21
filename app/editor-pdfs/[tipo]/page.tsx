@@ -192,6 +192,13 @@ export default function EditorPdfTipoPage() {
             {saveStatus === 'saved' && 'Guardado'}
             {saveStatus === 'error' && 'Error al guardar'}
           </span>
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={() => window.open(`/api/editor-pdfs/${tipo}/preview`, '_blank')}
+          >
+            Vista previa
+          </Button>
           <Button variant="ghost" size="md" onClick={handleDescartar}>Descartar cambios</Button>
           <Button variant="ghost" size="md" onClick={() => setConfirmRestaurar(true)}>Restaurar plantilla</Button>
           <Button variant="primary" size="md" onClick={handleAplicar}>Aplicar diseño</Button>
