@@ -141,6 +141,13 @@ export const TableElementSchema = PdfElementBaseSchema.extend({
   // categoría" de Cotización). Se valida contra el catálogo más abajo como
   // `${rowsBinding}[].${groupTotalOf}`.
   groupTotalOf: z.string().optional(),
+  // Bloque 8 (Hoja de llamado / Reporte de cierre): varias tablas reales
+  // (CREW, hitos) muestran un texto en vez de la tabla cuando `rowsBinding`
+  // resuelve a un array vacío (ej. "Sin crew asignado") -- sin esto,
+  // renderGroupedTable dibujaría una tabla con solo encabezado y 0 filas,
+  // distinto del PDF real. Sin `emptyText`, comportamiento idéntico a
+  // Bloque 1-7 (tabla vacía con encabezado, como Cotización ya asumía).
+  emptyText: z.string().min(1).optional(),
   bordered: z.boolean(),
   lightHead: z.boolean(),
   zebra: z.boolean(),

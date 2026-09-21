@@ -335,7 +335,11 @@ function buildSpikeImage(el: ImageElement): SpikeImageElement | null {
 
 /** Devuelve el `finalY` real de la tabla (Bloque 7: lo consume `flowAfter`
  * de elementos que deben ir justo debajo, igual que `lastAutoTable.finalY`
- * en los 4 generadores reales). */
+ * en los 4 generadores reales). Bloque 8: con `rowsBinding` vacío y
+ * `emptyText` definido, no dibuja la tabla -- reproduce el patrón real
+ * (`if (crewItems.length > 0) { tabla } else { texto }`) de Hoja de
+ * llamado/Reporte de cierre: mismo offset fijo (+5 el texto, +12 el
+ * siguiente bloque) que usan los 4 generadores para este caso. */
 function renderTableElement(
   doc: jsPDF,
   el: TableElement,
@@ -343,6 +347,15 @@ function renderTableElement(
   resolveColor: (token: string) => [number, number, number]
 ): number {
   const rows = resolveRowsBinding(data, el.rowsBinding)
+
+  if (rows.length === 0 && el.emptyText) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...resolveColor('ink-faint'))
+    doc.text(el.emptyText, el.x, el.y + 5)
+    return el.y + 12
+  }
+
   const cols = el.cols
     .filter(c => c.visible)
     .map(c => ({ label: c.label, field: c.field, align: c.align, w: c.w, format: c.format }))

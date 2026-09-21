@@ -580,6 +580,59 @@ describe('renderFromTemplate', () => {
     expect(() => renderFromTemplate(doc, template, {}, RESOLVE_COLOR)).not.toThrow()
   })
 
+  it('Bloque 8: emptyText reemplaza la tabla por un texto cuando rowsBinding resuelve a un array vacío', () => {
+    const template: PdfTemplate = {
+      tipoDocumento: 'hoja_llamado',
+      page: basePage(),
+      elements: [
+        {
+          id: 'crew',
+          type: 'table',
+          x: 15,
+          y: 40,
+          w: 180,
+          cols: [{ label: 'Nombre', field: 'nombre', align: 'left', w: 180, visible: true }],
+          rowsBinding: 'crew',
+          emptyText: 'Sin crew asignado',
+          bordered: false,
+          lightHead: false,
+          zebra: false,
+        },
+        {
+          id: 'siguiente',
+          type: 'text',
+          x: 15,
+          y: 20,
+          w: 100,
+          text: 'Siguiente bloque',
+          size: 10,
+          bold: false,
+          align: 'left',
+          colorToken: 'sn-ink',
+          flowAfter: 'crew',
+          gap: 3,
+        },
+      ],
+    }
+
+    const vacio = createSpikeDoc(basePage())
+    expect(() => renderFromTemplate(vacio, template, { crew: [] }, RESOLVE_COLOR)).not.toThrow()
+
+    const conFilas = createSpikeDoc(basePage())
+    expect(() =>
+      renderFromTemplate(conFilas, template, { crew: [{ nombre: 'Ana' }, { nombre: 'Beto' }] }, RESOLVE_COLOR)
+    ).not.toThrow()
+
+    // La versión con filas ocupa más espacio (tabla real con encabezado +
+    // 2 filas) que el mensaje de texto -- el elemento siguiente debería
+    // caer en una y distinta en cada caso, señal de que emptyText realmente
+    // evitó dibujar (y ocupar el alto de) la tabla real.
+    const bytesVacio = Buffer.from(vacio.output('arraybuffer'))
+    const bytesConFilas = Buffer.from(conFilas.output('arraybuffer'))
+    expect(bytesVacio.subarray(0, 4).toString()).toBe('%PDF')
+    expect(bytesConFilas.length).not.toBe(bytesVacio.length)
+  })
+
   it('Bloque 7: un texto largo hace wrap dentro de `w` en vez de salirse de la página', () => {
     const doc = createSpikeDoc(basePage())
     const longText =
