@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import type { PdfDocumentType, PdfTemplate } from '@/lib/server/pdf/pdf-template-schema'
+import { buildCotizacionBaseline } from '@/lib/server/pdf/default-templates/cotizacion'
 
 export interface PdfPlantillaRow {
   id: string
@@ -18,11 +19,13 @@ export interface PdfPlantillaRow {
  * borrador"): vive en código, se lee solo para copiarla a una fila
  * concreta (nunca como referencia viva). La reconstrucción real del PDF
  * actual como schema es trabajo de los Bloques 7-9 (uno por documento,
- * empezando por Cotización) -- ninguno está migrado todavía.
+ * empezando por Cotización, Bloque 7 -- cerrado). Orden de pago, Hoja de
+ * llamado y Reporte de cierre siguen en los Bloques 8-9.
  */
 function getBaselineTemplate(tipo: PdfDocumentType): PdfTemplate {
+  if (tipo === 'cotizacion') return buildCotizacionBaseline()
   throw new Error(
-    `El documento "${tipo}" todavía no tiene una plantilla baseline (se migra en los Bloques 7-9 de docs/PLAN.md).`
+    `El documento "${tipo}" todavía no tiene una plantilla baseline (se migra en los Bloques 8-9 de docs/PLAN.md).`
   )
 }
 
@@ -105,6 +108,30 @@ export const PdfPlantillasRepository = {
     if (error) {
       console.error('[pdf-plantillas] Error aplicando diseño:', error)
       throw new Error('Failed to aplicar diseño')
+    }
+
+    return data
+  },
+
+  /**
+   * Migrar: primera vez que un documento pasa del generador hardcodeado
+   * viejo al Editor de PDFs (docs/PLAN.md, Bloques 7-9) -- crea la fila que
+   * `restaurar`/`aplicar`/`saveDraft` (todas `UPDATE ... WHERE
+   * tipo_documento`) requieren y que todavía no existe. Copia concreta del
+   * baseline de código, igual que `restaurar` -- nunca una referencia viva.
+   */
+  async migrar(tipo: PdfDocumentType, userId: string): Promise<PdfPlantillaRow> {
+    const baseline = getBaselineTemplate(tipo)
+    const now = new Date().toISOString()
+    const { data, error } = await supabaseAdmin
+      .from('pdf_plantillas')
+      .insert({ tipo_documento: tipo, active_schema: baseline, applied_at: now, applied_by: userId })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('[pdf-plantillas] Error migrando documento:', error)
+      throw new Error('Failed to migrar documento')
     }
 
     return data

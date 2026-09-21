@@ -11,6 +11,7 @@ import { PdfPlantillasRepository } from '../pdf-plantillas'
 function chain(result: { data: unknown; error: unknown }) {
   const c = {
     select: vi.fn(() => c),
+    insert: vi.fn((_arg: Record<string, unknown>) => c),
     update: vi.fn((_arg: Record<string, unknown>) => c),
     eq: vi.fn(() => c),
     maybeSingle: vi.fn(async () => result),
@@ -77,10 +78,40 @@ describe('PdfPlantillasRepository', () => {
     expect(updateArg.applied_at).toEqual(expect.any(String))
   })
 
-  it('restaurar rechaza porque ningún documento tiene baseline todavía (Bloques 7-9)', async () => {
-    await expect(PdfPlantillasRepository.restaurar('cotizacion', 'user-1')).rejects.toThrow(
+  it('restaurar rechaza para un documento sin baseline todavía (Bloques 8-9)', async () => {
+    await expect(PdfPlantillasRepository.restaurar('orden_pago', 'user-1')).rejects.toThrow(
       /todavía no tiene una plantilla baseline/
     )
     expect(mocks.fromMock).not.toHaveBeenCalled()
+  })
+
+  it('migrar rechaza para un documento sin baseline todavía (Bloques 8-9)', async () => {
+    await expect(PdfPlantillasRepository.migrar('orden_pago', 'user-1')).rejects.toThrow(
+      /todavía no tiene una plantilla baseline/
+    )
+    expect(mocks.fromMock).not.toHaveBeenCalled()
+  })
+
+  it('migrar inserta la primera fila de cotizacion con el baseline real', async () => {
+    const c = chain({ data: { id: 'row-1', tipo_documento: 'cotizacion' }, error: null })
+    mocks.fromMock.mockReturnValue(c)
+
+    await PdfPlantillasRepository.migrar('cotizacion', 'user-1')
+
+    const insertArg = c.insert.mock.calls[0][0]
+    expect(insertArg.tipo_documento).toBe('cotizacion')
+    expect(insertArg.active_schema).toMatchObject({ tipoDocumento: 'cotizacion' })
+    expect(insertArg.applied_by).toBe('user-1')
+    expect(insertArg.applied_at).toEqual(expect.any(String))
+  })
+
+  it('restaurar usa el baseline real de cotizacion (ya no rechaza)', async () => {
+    const c = chain({ data: { id: 'row-1', active_schema: SAMPLE_TEMPLATE }, error: null })
+    mocks.fromMock.mockReturnValue(c)
+
+    await PdfPlantillasRepository.restaurar('cotizacion', 'user-1')
+
+    const updateArg = c.update.mock.calls[0][0]
+    expect(updateArg.active_schema).toMatchObject({ tipoDocumento: 'cotizacion' })
   })
 })

@@ -38,6 +38,7 @@ export default function EditorPdfTipoPage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [confirmRestaurar, setConfirmRestaurar] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [migrando, setMigrando] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const tipo = tipoResult.success ? tipoResult.data : null
@@ -125,6 +126,21 @@ export default function EditorPdfTipoPage() {
     }
   }
 
+  async function handleMigrar() {
+    if (!tipo) return
+    setActionError(null)
+    setMigrando(true)
+    try {
+      const fresh = await sendJson<PdfPlantillaRow>(`/api/editor-pdfs/${tipo}/migrar`, {}, 'Error migrando el documento', { method: 'POST' })
+      setRow(fresh)
+      setTemplate(fresh.active_schema)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Error migrando el documento')
+    } finally {
+      setMigrando(false)
+    }
+  }
+
   async function handleRestaurar() {
     if (!tipo) return
     setConfirmRestaurar(false)
@@ -170,9 +186,17 @@ export default function EditorPdfTipoPage() {
           <p className="text-lg text-subtext">
             Este documento todavía no se migró al Editor de PDFs (Bloques 7-9 de docs/PLAN.md).
           </p>
-          <div className="mt-4">
-            <Button variant="secondary" size="md" onClick={() => router.push('/editor-pdfs')}>
+          {actionError && (
+            <div className="mt-4 rounded-control bg-cancelled-bg px-4 py-3 text-sm text-cancelled-fg">
+              {actionError}
+            </div>
+          )}
+          <div className="mt-4 flex justify-center gap-2">
+            <Button variant="ghost" size="md" onClick={() => router.push('/editor-pdfs')}>
               Volver al catálogo
+            </Button>
+            <Button variant="primary" size="md" onClick={handleMigrar} disabled={migrando}>
+              {migrando ? 'Migrando…' : 'Migrar este documento'}
             </Button>
           </div>
         </div>
