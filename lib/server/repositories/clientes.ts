@@ -10,6 +10,16 @@ export async function getClientes() {
   return (data || []) as Cliente[]
 }
 
+export async function createCliente(cliente: Partial<Cliente>) {
+  const { data, error } = await supabaseAdmin
+    .from('clientes')
+    .insert(cliente)
+    .select()
+    .single()
+  if (error) throw error
+  return data as Cliente
+}
+
 export async function getClienteById(id: string) {
   const { data, error } = await supabaseAdmin
     .from('clientes')

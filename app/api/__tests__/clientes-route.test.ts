@@ -21,7 +21,8 @@ function chainableSelect(data: unknown) {
     order: vi.fn(() => chain),
     ilike: vi.fn(() => chain),
     limit: vi.fn(() => chain),
-    upsert: vi.fn(() => chain),
+    insert: vi.fn(() => chain),
+    single: vi.fn(async () => ({ data, error: null })),
     maybeSingle: vi.fn(async () => ({ data, error: null })),
     then: (resolve: (v: { data: unknown; error: null }) => void) => resolve({ data, error: null }),
   }
@@ -71,5 +72,24 @@ describe('GET /api/clientes', () => {
 
     expect(mocks.fromMock).toHaveBeenCalled()
     expect(response.status).toBe(200)
+  })
+})
+
+describe('POST /api/clientes', () => {
+  beforeEach(() => {
+    mocks.fromMock.mockReset()
+  })
+
+  it('inserta con `insert`, nunca con `upsert`/`onConflict` sin UNIQUE real sobre `nombre`', async () => {
+    const chain = chainableSelect({ id: 'new-1', nombre: 'Nuevo', proyectos: [] })
+    mocks.fromMock.mockReturnValue(chain)
+
+    const response = await POST(new Request('http://localhost/api/clientes', {
+      method: 'POST',
+      body: JSON.stringify({ nombre: 'Nuevo' }),
+    }))
+
+    expect(response.status).toBe(201)
+    expect(chain.insert).toHaveBeenCalledWith(expect.objectContaining({ nombre: 'Nuevo', activo: true }))
   })
 })
