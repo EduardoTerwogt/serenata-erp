@@ -299,8 +299,8 @@ Así un schema que la preview acepta nunca es rechazado después por
 |---|---|---|
 | 0 | Auditoría y cierre de especificación | **Cerrado** (este documento) |
 | 1 | Spike del renderer (texto/imagen/línea/tabla+`groupBy`, `sticky` header/footer, spacing, multipágina básica, datos reales de `serenata-erp-test`) | **Cerrado** — `lib/server/pdf/template-renderer.ts` + `template-renderer.spike.test.ts` (4 tests, verdes) |
-| 2 | Modelo de template + validación (tipos, Zod, catálogo de variables, mapa de tokens, `renderFromTemplate()`) | Pendiente |
-| 3 | Persistencia + permisos (`pdf_plantillas`, API, auth, autosave, activo/borrador, aplicar, restaurar) | Pendiente |
+| 2 | Modelo de template + validación (tipos, Zod, catálogo de variables, mapa de tokens, `renderFromTemplate()`) | **En curso** — tracks A/B/C en paralelo (ver "Dependencias reales") |
+| 3 | Persistencia + permisos (`pdf_plantillas`, API, auth, autosave, activo/borrador, aplicar, restaurar) | **En curso** — tracks D/E en paralelo (API pendiente de integración) |
 | 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | Pendiente |
 | 5 | Editor visual (canvas, selección/multi-select, drag, resize, snap, alinear, distribuir, capas, inspector, variables, advertencia legal — sin undo/redo, sin dependencia nueva) | Pendiente |
 | 6 | Preview real (reusa patrón `Content-Disposition: inline`) | Pendiente |
@@ -308,6 +308,49 @@ Así un schema que la preview acepta nunca es rechazado después por
 | 8 | Hoja de llamado + Reporte de cierre (estructura simple, sin anidado) | Pendiente |
 | 9 | Orden de pago (estructura responsable→evento→tabla — decide `repeating-group` vs. loop híbrido con Cotización ya probado como base) | Pendiente |
 | 10 | Extensibilidad (dar de alta un 5º tipo de documento) | Pendiente |
+
+## Dependencias reales entre bloques y ejecución en paralelo
+
+El tracker de arriba lista los bloques en orden de entrega, pero el orden no
+es 100% secuencial — hay trabajo independiente que se puede paralelizar.
+Grafo real (no solo el orden del tracker):
+
+- **2 → 3(API), 5, 6, 7, 8, 9** — el schema tipado (`PdfTemplate`/`PdfElement`)
+  y `renderFromTemplate()` son el contrato que consume casi todo lo demás.
+- **3(migración `pdf_plantillas`) y 3(permisos `editor-pdfs`) no dependen de 2**
+  — son plumbing de datos/auth independiente del schema de elementos.
+  Solo la validación Zod de las rutas API (POST draft/aplicar/restaurar)
+  depende de 2.
+- **4 → 3(API)**, **5 → 2 (tipos) y 3 (persistencia para autosave)**,
+  **6 → 2 (`renderFromTemplate`) y 3 (`draft_schema`)**.
+- **7, 8, 9 → 2-6 completos** (pipeline funcional de punta a punta).
+- **9 → 7 explícitamente** (la decisión `repeating-group` vs. loop híbrido usa
+  Cotización ya migrada como base) — dependencia real, no solo de orden.
+- **10 → 7, 8, 9** (extensibilidad se prueba con múltiples tipos reales ya
+  migrados).
+
+**Dentro de 2 y 3 hay 5 piezas sin archivos en común, paralelizables entre
+sí sin conflicto** (sesión 2026-09-21, después de cerrar el Bloque 1):
+
+| Track | Bloque | Entregable | Archivos |
+|---|---|---|---|
+| A | 2 (core) | Tipos + Zod de `PdfTemplate`/`PdfElement`, `renderFromTemplate()` sobre los primitivos del Bloque 1 (recibe el resolver de color **por parámetro**, no importa `pdf-color-tokens.ts` — se cablea en integración) | `lib/server/pdf/pdf-template-schema.ts` (nuevo), `template-renderer.ts` (extendido) |
+| B | 2 (tokens) | Mapa `--sn-*` → RGB para jsPDF | `lib/server/pdf/pdf-color-tokens.ts` (nuevo) |
+| C | 2 (variables) | Catálogo de variables por `tipo_documento` | `lib/server/pdf/pdf-template-variables.ts` (nuevo) |
+| D | 3 (datos) | Migración `pdf_plantillas` (RLS `service_role`), aplicada a `serenata-erp-test` | `db/migrations/*.sql` (nuevo) |
+| E | 3 (permisos) | Sección `editor-pdfs` en los 4 archivos de auth + ícono | `lib/auth-callbacks.ts`, `lib/authz.ts`, `lib/api-auth.ts`, `app/admin/components/AdminUsuarios.tsx`, `components/ui/Icon.tsx` |
+
+**Integración (secuencial, después de A-E, es el trabajo que desbloquea 4/5/6):**
+cablear el resolver de color de B y la validación de variables de C dentro
+de A (Zod refinement + `renderFromTemplate`), y las rutas API de 3 usando
+A+D+E juntos. Bloque 4 no arranca hasta que esa integración cierre.
+
+**Lo que NO se paralelizó a propósito:** 4/5/6/7/8/9/10 — cada uno consume
+el resultado real del anterior (API, tipos, persistencia), no solo su
+intención; partirlos antes de tener esa base sólida generaría rework, no
+ahorro. 8 y 9 sí podrían correr en paralelo entre sí una vez cerrado 7,
+excepto que 9 depende explícitamente del patrón de 7 — se re-evalúa al
+llegar ahí.
 
 ## Riesgos
 
