@@ -551,12 +551,18 @@ export function renderFromTemplate(
     switch (el.type) {
       case 'text': {
         const text = el.upper ? interpolateText(el.text, data).toUpperCase() : interpolateText(el.text, data)
-        const height = measureTextBlockHeight(doc, text, el.size, el.bold, el.w)
-        const y = resolveY(el, height)
+        const textHeight = measureTextBlockHeight(doc, text, el.size, el.bold, el.w)
+        // Con `bgToken`+`h` (barra de color, ej. "NOTAS"/"COSTOS"), `y` ya es
+        // el borde inferior de la caja (drawTextBackground dibuja de `y-h` a
+        // `y`) -- el borde real para `flowAfter` es ese `y`, no `y +
+        // alto del texto` (que dejaría un hueco del tamaño del texto después
+        // de la barra).
+        const boxHeight = el.h
+        const y = resolveY(el, boxHeight ?? textHeight)
         const elAtY = { ...el, y }
         drawTextBackground(doc, elAtY, resolveColor)
         renderText(doc, buildSpikeText(elAtY, data, resolveColor))
-        computedBottom.set(el.id, y + height)
+        computedBottom.set(el.id, boxHeight !== undefined ? y : y + textHeight)
         break
       }
       case 'line': {

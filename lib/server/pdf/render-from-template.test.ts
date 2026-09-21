@@ -524,6 +524,62 @@ describe('renderFromTemplate', () => {
     expect(() => renderFromTemplate(conNotas, template, { notas: 'Aplica IVA' }, RESOLVE_COLOR)).not.toThrow()
   })
 
+  it('Bloque 7: flowAfter usa el borde de la caja (bgToken+h), no y+alto de texto, para una barra de color', () => {
+    const doc = createSpikeDoc(basePage())
+    const template: PdfTemplate = {
+      tipoDocumento: 'cotizacion',
+      page: basePage(),
+      elements: [
+        {
+          id: 'bar',
+          type: 'text',
+          x: 15,
+          y: 108, // borde inferior de la barra (drawTextBackground dibuja y-h..y)
+          w: 100,
+          h: 8,
+          text: 'NOTAS',
+          size: 10,
+          bold: true,
+          align: 'left',
+          colorToken: 'sn-ink',
+          bgToken: 'sn-ink',
+        },
+        {
+          id: 'debajo',
+          type: 'text',
+          x: 15,
+          y: 20,
+          w: 100,
+          text: 'Contenido debajo de la barra',
+          size: 8.5,
+          bold: false,
+          align: 'left',
+          colorToken: 'sn-ink',
+          flowAfter: 'bar',
+          gap: 2,
+        },
+      ],
+    }
+
+    // Con gap=2, "debajo" debe caer cerca de y=110 (108+2) -- muy lejos de
+    // eso si el bug sumara además el alto del texto "NOTAS" (~3mm) sin
+    // querer, o muy lejos de 20 (su y fija, si flowAfter no se aplicara).
+    // Verificado indirectamente: forzar overflow con un gap que solo cruza
+    // el margen si la base es ~110, no si fuera ~113 o si cayera en 20.
+    const conGapQueSoloDesbordaDesde110: PdfTemplate = {
+      ...template,
+      elements: template.elements.map(el => (el.id === 'debajo' ? { ...el, gap: 170 } : el)),
+    }
+    // 108 + 170 = 278 > 277 (297-20) -- debe agregar página.
+    const doc2 = createSpikeDoc(basePage())
+    expect(() =>
+      renderFromTemplate(doc2, conGapQueSoloDesbordaDesde110, {}, RESOLVE_COLOR)
+    ).not.toThrow()
+    expect(doc2.getNumberOfPages()).toBe(2)
+
+    expect(() => renderFromTemplate(doc, template, {}, RESOLVE_COLOR)).not.toThrow()
+  })
+
   it('Bloque 7: un texto largo hace wrap dentro de `w` en vez de salirse de la página', () => {
     const doc = createSpikeDoc(basePage())
     const longText =
