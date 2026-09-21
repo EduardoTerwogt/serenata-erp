@@ -1,10 +1,11 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, listo para ejecutar (2026-09-21) — arquitectura del
-motor de plantillas, schema, workflow activo/borrador y bloques cerrados
-tras dos rondas de auditoría (Claude contra el repo real, y el usuario
-contra la propuesta de Claude). Bloque 1 (spike técnico) arranca en la
-próxima sesión.
+**Estado:** Aprobado, en ejecución (2026-09-21) — arquitectura del motor de
+plantillas, schema, workflow activo/borrador y bloques cerrados tras dos
+rondas de auditoría (Claude contra el repo real, y el usuario contra la
+propuesta de Claude). Bloque 1 (spike técnico) cerrado esta sesión — ver
+tracker. Bloque 2 (modelo de template + validación) arranca en la próxima
+sesión.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -297,24 +298,82 @@ Así un schema que la preview acepta nunca es rechazado después por
 | # | Bloque | Estado |
 |---|---|---|
 | 0 | Auditoría y cierre de especificación | **Cerrado** (este documento) |
-| 1 | Spike del renderer (texto/imagen/línea/tabla+`groupBy`, `sticky` header/footer, spacing, multipágina básica, datos reales de `serenata-erp-test`) | Pendiente — arranca al abrir la próxima sesión |
-| 2 | Modelo de template + validación (tipos, Zod, catálogo de variables, mapa de tokens, `renderFromTemplate()`) | Pendiente |
-| 3 | Persistencia + permisos (`pdf_plantillas`, API, auth, autosave, activo/borrador, aplicar, restaurar) | Pendiente |
-| 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | Pendiente |
-| 5 | Editor visual (canvas, selección/multi-select, drag, resize, snap, alinear, distribuir, capas, inspector, variables, advertencia legal — sin undo/redo, sin dependencia nueva) | Pendiente |
-| 6 | Preview real (reusa patrón `Content-Disposition: inline`) | Pendiente |
+| 1 | Spike del renderer (texto/imagen/línea/tabla+`groupBy`, `sticky` header/footer, spacing, multipágina básica, datos reales de `serenata-erp-test`) | **Cerrado** — `lib/server/pdf/template-renderer.ts` + `template-renderer.spike.test.ts` (4 tests, verdes) |
+| 2 | Modelo de template + validación (tipos, Zod, catálogo de variables, mapa de tokens, `renderFromTemplate()`) | **Cerrado** — tracks A/B/C + integración (color/variables cableados en `PdfTemplateSchema`) |
+| 3 | Persistencia + permisos (`pdf_plantillas`, API, auth, autosave, activo/borrador, aplicar, restaurar) | **Cerrado** — `PdfPlantillasRepository` + `/api/editor-pdfs/[tipo]` (GET, `draft` PATCH/DELETE, `aplicar`/`restaurar` POST). `restaurar` responde 501 hasta que exista un baseline (Bloques 7-9) |
+| 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | **Cerrado** — `app/editor-pdfs/page.tsx` + nav en `SidebarLayout.tsx`. Verificado en navegador real (login vía `AUTH_USERS_DEV_FALLBACK`, sección `editor-pdfs`): nav, header, y fallback correcto (banner de error + "No migrado") cuando Supabase no es alcanzable |
+| 5 | Editor visual (canvas, selección/multi-select, drag, resize, snap, alinear, distribuir, capas, inspector, variables, advertencia legal — sin undo/redo, sin dependencia nueva) | **Cerrado** — `app/editor-pdfs/[tipo]/` (`page.tsx`, `EditorCanvas.tsx`, `Inspector.tsx`, `geometry.ts`). Verificado en navegador real con una plantilla de prueba insertada temporalmente en `serenata-erp-test` (borrada después): selección, drag, resize, multi-select, alinear, capas, agregar/eliminar, confirmación de texto legal y autosave (`PATCH .../draft`) funcionando de punta a punta |
+| 6 | Preview real (reusa patrón `Content-Disposition: inline`) | **Cerrado** — `GET /api/editor-pdfs/[tipo]/preview` + `lib/server/pdf/pdf-sample-data.ts`. Verificado con la pipeline de producción real (sin mocks): PDF válido generado y leído (`{{cliente}}` interpolado, tabla agrupada, estilos) |
 | 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | Pendiente |
 | 8 | Hoja de llamado + Reporte de cierre (estructura simple, sin anidado) | Pendiente |
 | 9 | Orden de pago (estructura responsable→evento→tabla — decide `repeating-group` vs. loop híbrido con Cotización ya probado como base) | Pendiente |
 | 10 | Extensibilidad (dar de alta un 5º tipo de documento) | Pendiente |
 
+## Dependencias reales entre bloques y ejecución en paralelo
+
+El tracker de arriba lista los bloques en orden de entrega, pero el orden no
+es 100% secuencial — hay trabajo independiente que se puede paralelizar.
+Grafo real (no solo el orden del tracker):
+
+- **2 → 3(API), 5, 6, 7, 8, 9** — el schema tipado (`PdfTemplate`/`PdfElement`)
+  y `renderFromTemplate()` son el contrato que consume casi todo lo demás.
+- **3(migración `pdf_plantillas`) y 3(permisos `editor-pdfs`) no dependen de 2**
+  — son plumbing de datos/auth independiente del schema de elementos.
+  Solo la validación Zod de las rutas API (POST draft/aplicar/restaurar)
+  depende de 2.
+- **4 → 3(API)**, **5 → 2 (tipos) y 3 (persistencia para autosave)**,
+  **6 → 2 (`renderFromTemplate`) y 3 (`draft_schema`)**.
+- **7, 8, 9 → 2-6 completos** (pipeline funcional de punta a punta).
+- **9 → 7 explícitamente** (la decisión `repeating-group` vs. loop híbrido usa
+  Cotización ya migrada como base) — dependencia real, no solo de orden.
+- **10 → 7, 8, 9** (extensibilidad se prueba con múltiples tipos reales ya
+  migrados).
+
+**Dentro de 2 y 3 hay 5 piezas sin archivos en común, paralelizables entre
+sí sin conflicto** (sesión 2026-09-21, después de cerrar el Bloque 1):
+
+| Track | Bloque | Entregable | Archivos |
+|---|---|---|---|
+| A | 2 (core) | Tipos + Zod de `PdfTemplate`/`PdfElement`, `renderFromTemplate()` sobre los primitivos del Bloque 1 (recibe el resolver de color **por parámetro**, no importa `pdf-color-tokens.ts` — se cablea en integración) | `lib/server/pdf/pdf-template-schema.ts` (nuevo), `template-renderer.ts` (extendido) |
+| B | 2 (tokens) | Mapa `--sn-*` → RGB para jsPDF | `lib/server/pdf/pdf-color-tokens.ts` (nuevo) |
+| C | 2 (variables) | Catálogo de variables por `tipo_documento` | `lib/server/pdf/pdf-template-variables.ts` (nuevo) |
+| D | 3 (datos) | Migración `pdf_plantillas` (RLS `service_role`), aplicada a `serenata-erp-test` | `db/migrations/*.sql` (nuevo) |
+| E | 3 (permisos) | Sección `editor-pdfs` en los 4 archivos de auth + ícono | `lib/auth-callbacks.ts`, `lib/authz.ts`, `lib/api-auth.ts`, `app/admin/components/AdminUsuarios.tsx`, `components/ui/Icon.tsx` |
+
+**Integración (secuencial, después de A-E, es el trabajo que desbloquea 4/5/6):**
+cablear el resolver de color de B y la validación de variables de C dentro
+de A (Zod refinement + `renderFromTemplate`), y las rutas API de 3 usando
+A+D+E juntos. Bloque 4 no arranca hasta que esa integración cierre.
+
+**Lo que NO se paralelizó a propósito:** 4/5/6/7/8/9/10 — cada uno consume
+el resultado real del anterior (API, tipos, persistencia), no solo su
+intención; partirlos antes de tener esa base sólida generaría rework, no
+ahorro. 8 y 9 sí podrían correr en paralelo entre sí una vez cerrado 7,
+excepto que 9 depende explícitamente del patrón de 7 — se re-evalúa al
+llegar ahí.
+
 ## Riesgos
 
-- **P1 — `sticky` header/footer vía `didDrawPage`:** no verificado contra
-  el paquete real en este entorno (sin `node_modules`) — primer punto del
-  spike.
+- **P1 — `sticky` header/footer, resuelto en el spike (Bloque 1):** no vía
+  `didDrawPage` de `jspdf-autotable` (acoplaría el sticky a que el elemento
+  que dispara páginas nuevas sea siempre una tabla) sino con
+  `doc.getNumberOfPages()` + `doc.setPage(n)` corrido **después** de
+  renderizar el resto — cubre páginas generadas por cualquier elemento.
+  Implementado en `redrawSticky()` (`template-renderer.ts`), probado
+  forzando 120 filas reales (categoría/descripción/cantidad/importe de
+  `items_cotizacion`, cotización `SH2402` de `serenata-erp-test`,
+  repetidas) a 3+ páginas.
+- **P1 — `spacing`/tracking, resuelto en el spike:** jsPDF soporta tracking
+  nativo vía `doc.setCharSpace(mm)`/`getCharSpace()` — no hace falta
+  simularlo insertando espacios entre caracteres. Verificado contra
+  `jspdf@4.2.1` real (antes solo se sabía por el `.d.ts`, sin
+  `node_modules` en el checkout).
 - **P1 — Multipágina:** funcionalidad nueva, no preservación de
-  comportamiento existente — dimensionar como feature nueva.
+  comportamiento existente — dimensionar como feature nueva. Mecanismo
+  base probado en el spike (arriba); falta el cálculo real de
+  `contentHeight()` restando el alto de `sticky` variable por template
+  (el spike usa un alto fijo de ejemplo, no medido desde el contenido real
+  del header/footer).
 - **P1 — Estructura anidada de Orden de pago:** diferido a Bloque 9 a
   propósito.
 - **P1 — Fidelidad visual de Cotización:** reproducir el diseño actual

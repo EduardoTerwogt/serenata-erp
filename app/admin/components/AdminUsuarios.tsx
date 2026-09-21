@@ -19,6 +19,7 @@ const ALL_SECTIONS = [
   { id: 'cuentas', label: 'Cuentas' },
   { id: 'responsables', label: 'Proveedores' },
   { id: 'planeacion', label: 'Planeación' },
+  { id: 'editor-pdfs', label: 'Editor de PDFs' },
 ]
 
 interface Usuario {

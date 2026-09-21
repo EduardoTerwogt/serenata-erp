@@ -29,6 +29,7 @@ const NAV_LINKS: { href: string; label: string; section: string; icon: IconName;
   { href: '/clientes', label: 'Clientes', section: 'cotizaciones', icon: 'clientes', tone: 'indigo', group: 'Operación' },
   { href: '/planeacion', label: 'Planeación', section: 'planeacion', icon: 'planeacion', tone: 'red', group: 'Operación' },
   { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion', icon: 'plantillas', tone: 'teal', group: 'Operación' },
+  { href: '/editor-pdfs', label: 'Editor de PDFs', section: 'editor-pdfs', icon: 'editor-pdfs', tone: 'purple', group: 'Operación' },
 ]
 
 const ADMIN_LINKS: { href: string; label: string; icon: IconName; tone: NavChipTone; group: string }[] = [
