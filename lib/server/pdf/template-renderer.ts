@@ -14,6 +14,15 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
+import { getIsoLogoBase64, getSerenataLogoBase64 } from '@/lib/server/pdf/cotizacion-pdf-helpers'
+import type {
+  ImageElement,
+  LineElement,
+  PdfElement,
+  PdfTemplate,
+  TableElement,
+  TextElement,
+} from '@/lib/server/pdf/pdf-template-schema'
 
 export interface SpikePageConfig {
   width: number
@@ -65,6 +74,12 @@ export interface SpikeTableElement {
   cols: SpikeTableColumn[]
   rows: Record<string, unknown>[]
   groupBy?: string
+  // Estilo opcional (Bloque 2, `renderFromTemplate`): ausentes = comportamiento
+  // idéntico al spike original (tema `striped` por defecto de autoTable).
+  headColor?: [number, number, number]
+  borderColor?: [number, number, number]
+  bordered?: boolean
+  zebra?: boolean
 }
 
 export type SpikeElement =
@@ -141,7 +156,13 @@ export function renderGroupedTable(doc: jsPDF, el: SpikeTableElement, startY: nu
     margin: { left: el.x },
     head: [el.cols.map(c => c.label)],
     body,
-    styles: { fontSize: 8.5, cellPadding: 1.5 },
+    styles: {
+      fontSize: 8.5,
+      cellPadding: 1.5,
+      ...(el.borderColor ? { lineColor: el.borderColor, lineWidth: 0.1 } : {}),
+    },
+    ...(el.bordered ? { theme: 'grid' as const } : el.zebra ? { theme: 'striped' as const } : {}),
+    ...(el.headColor ? { headStyles: { fillColor: el.headColor } } : {}),
     columnStyles: Object.fromEntries(el.cols.map((c, i) => [i, { cellWidth: c.w, halign: c.align ?? 'left' }])),
   })
 
@@ -172,4 +193,189 @@ export function redrawSticky(doc: jsPDF, page: SpikePageConfig, stickyElements: 
  * márgenes menos el alto reservado a header/footer sticky. */
 export function contentHeight(page: SpikePageConfig, headerH: number, footerH: number): number {
   return page.height - page.margins.top - page.margins.bottom - headerH - footerH
+}
+
+// ==================== renderFromTemplate (Bloque 2, Track A) ====================
+
+const VARIABLE_PATTERN = /\{\{\s*([\w.]+)\s*\}\}/g
+
+/** Resuelve un path con notación de puntos (`cliente.nombre`) contra `data`. */
+function getByPath(source: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((acc, key) => {
+    if (acc === null || acc === undefined || typeof acc !== 'object') return undefined
+    return (acc as Record<string, unknown>)[key]
+  }, source)
+}
+
+/**
+ * Interpola `{{variable.path}}` contra `data`. Si la variable no existe se
+ * deja el placeholder literal — validar su existencia es responsabilidad del
+ * catálogo de variables (Track C), no de esta función.
+ */
+function interpolateText(text: string, data: Record<string, unknown>): string {
+  return text.replace(VARIABLE_PATTERN, (literal, path: string) => {
+    const value = getByPath(data, path)
+    return value === undefined || value === null ? literal : String(value)
+  })
+}
+
+function resolveRowsBinding(data: Record<string, unknown>, rowsBinding: string): Record<string, unknown>[] {
+  const value = getByPath(data, rowsBinding)
+  return Array.isArray(value) ? (value as Record<string, unknown>[]) : []
+}
+
+type StickyCapableElement = TextElement | LineElement | ImageElement
+
+function isStickyRenderable(el: PdfElement): el is StickyCapableElement & { sticky: 'header' | 'footer' } {
+  // TableElement no tiene shape en StickyElement/redrawSticky — si llega
+  // marcada `sticky` por error de schema, se renderiza en el flujo normal en
+  // vez de perderse silenciosamente.
+  return el.type !== 'table' && el.sticky !== undefined
+}
+
+function buildSpikeText(
+  el: TextElement,
+  data: Record<string, unknown>,
+  resolveColor: (token: string) => [number, number, number]
+): SpikeTextElement {
+  let text = interpolateText(el.text, data)
+  if (el.upper) text = text.toUpperCase()
+  return {
+    type: 'text',
+    x: el.x,
+    y: el.y,
+    text,
+    size: el.size,
+    bold: el.bold,
+    align: el.align,
+    spacing: el.spacing,
+    color: resolveColor(el.colorToken),
+  }
+}
+
+/**
+ * `bgToken` solo se dibuja cuando el elemento define `h` (alto concreto) —
+ * sin él no hay una caja bien definida detrás del texto y no se inventa una.
+ */
+function drawTextBackground(
+  doc: jsPDF,
+  el: TextElement,
+  resolveColor: (token: string) => [number, number, number]
+): void {
+  if (!el.bgToken || el.h === undefined) return
+  const [r, g, b] = resolveColor(el.bgToken)
+  doc.setFillColor(r, g, b)
+  doc.rect(el.x, el.y - el.h, el.w, el.h, 'F')
+}
+
+function buildSpikeLine(
+  el: LineElement,
+  resolveColor: (token: string) => [number, number, number]
+): SpikeLineElement {
+  return {
+    type: 'line',
+    x: el.x,
+    y: el.y,
+    w: el.w,
+    color: resolveColor(el.colorToken),
+    weight: el.weight,
+  }
+}
+
+function resolveLogoData(src: ImageElement['src']): string | null {
+  return src === 'logo-iso' ? getIsoLogoBase64() : getSerenataLogoBase64()
+}
+
+function buildSpikeImage(el: ImageElement): SpikeImageElement | null {
+  const data = resolveLogoData(el.src)
+  if (!data) return null
+  // `h` es opcional en el schema; sin alto explícito se usa `w` (fallback
+  // cuadrado) — el editor visual (Bloque 5) siempre fija ambos.
+  return { type: 'image', x: el.x, y: el.y, w: el.w, h: el.h ?? el.w, data }
+}
+
+function renderTableElement(
+  doc: jsPDF,
+  el: TableElement,
+  data: Record<string, unknown>,
+  resolveColor: (token: string) => [number, number, number]
+): void {
+  const rows = resolveRowsBinding(data, el.rowsBinding)
+  const cols = el.cols
+    .filter(c => c.visible)
+    .map(c => ({ label: c.label, field: c.field, align: c.align, w: c.w }))
+
+  renderGroupedTable(
+    doc,
+    {
+      type: 'table',
+      x: el.x,
+      y: el.y,
+      cols,
+      rows,
+      groupBy: el.groupBy,
+      bordered: el.bordered,
+      zebra: el.zebra,
+      headColor: el.headerColorToken ? resolveColor(el.headerColorToken) : undefined,
+      borderColor: el.borderColorToken ? resolveColor(el.borderColorToken) : undefined,
+    },
+    el.y
+  )
+}
+
+function buildStickyElement(
+  el: StickyCapableElement & { sticky: 'header' | 'footer' },
+  data: Record<string, unknown>,
+  resolveColor: (token: string) => [number, number, number]
+): StickyElement | null {
+  if (el.type === 'text') return { ...buildSpikeText(el, data, resolveColor), sticky: el.sticky }
+  if (el.type === 'line') return { ...buildSpikeLine(el, resolveColor), sticky: el.sticky }
+  const image = buildSpikeImage(el)
+  return image ? { ...image, sticky: el.sticky } : null
+}
+
+/**
+ * Renderer final del schema tipado (Bloque 2, docs/PLAN.md): recorre
+ * `template.elements`, separa los `sticky` del resto, renderiza el flujo
+ * normal ordenado por `zIndex` con los primitivos de arriba, interpola
+ * `{{variable}}` contra `data`, resuelve `colorToken`/`bgToken`/
+ * `headerColorToken`/`borderColorToken` con `resolveColor` (inyectado — no
+ * importa `pdf-color-tokens.ts`, eso se cablea en la integración) y termina
+ * redibujando los `sticky` con `redrawSticky`.
+ */
+export function renderFromTemplate(
+  doc: jsPDF,
+  template: PdfTemplate,
+  data: Record<string, unknown>,
+  resolveColor: (token: string) => [number, number, number]
+): void {
+  const stickyEls = template.elements.filter(isStickyRenderable)
+  const flowEls = template.elements.filter(el => !isStickyRenderable(el))
+  const sortedFlow = [...flowEls].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+
+  for (const el of sortedFlow) {
+    switch (el.type) {
+      case 'text':
+        drawTextBackground(doc, el, resolveColor)
+        renderText(doc, buildSpikeText(el, data, resolveColor))
+        break
+      case 'line':
+        renderLine(doc, buildSpikeLine(el, resolveColor))
+        break
+      case 'image': {
+        const image = buildSpikeImage(el)
+        if (image) renderImage(doc, image)
+        break
+      }
+      case 'table':
+        renderTableElement(doc, el, data, resolveColor)
+        break
+    }
+  }
+
+  const sticky = stickyEls
+    .map(el => buildStickyElement(el, data, resolveColor))
+    .filter((el): el is StickyElement => el !== null)
+
+  redrawSticky(doc, template.page, sticky)
 }
