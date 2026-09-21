@@ -63,6 +63,7 @@ const ICONS = {
   // descriptiva (mismo criterio que 'google-sheets'/Table más arriba).
   clientes: Users,
   plantillas: LayoutTemplate,
+  'editor-pdfs': LayoutTemplate,
   admin: Settings,
   'admin-usuarios': Settings,
   'google-sheets': Table,
