@@ -333,18 +333,21 @@ function buildSpikeImage(el: ImageElement): SpikeImageElement | null {
   return { type: 'image', x: el.x, y: el.y, w: el.w, h: el.h ?? el.w, data }
 }
 
+/** Devuelve el `finalY` real de la tabla (Bloque 7: lo consume `flowAfter`
+ * de elementos que deben ir justo debajo, igual que `lastAutoTable.finalY`
+ * en los 4 generadores reales). */
 function renderTableElement(
   doc: jsPDF,
   el: TableElement,
   data: Record<string, unknown>,
   resolveColor: (token: string) => [number, number, number]
-): void {
+): number {
   const rows = resolveRowsBinding(data, el.rowsBinding)
   const cols = el.cols
     .filter(c => c.visible)
     .map(c => ({ label: c.label, field: c.field, align: c.align, w: c.w, format: c.format }))
 
-  renderGroupedTable(
+  return renderGroupedTable(
     doc,
     {
       type: 'table',
@@ -364,26 +367,43 @@ function renderTableElement(
 }
 
 /**
+ * Alto del banner de totales, igual a `bannerH` en `cotizacion-pdf.ts`:
+ * crece con la cantidad de filas VISIBLES (Descuento/IVA condicionales)
+ * hasta un mínimo de 28mm -- una `h` fija no alcanza cuando se muestran
+ * más filas de las que el editor previó.
+ */
+function computeBannerHeight(visibleRowCount: number): number {
+  if (visibleRowCount === 0) return 0
+  const rowH = 5.5
+  const rowGap = 1.6
+  const padV = 3.1
+  const totalRowsH = visibleRowCount * rowH + (visibleRowCount - 1) * rowGap
+  return Math.max(totalRowsH + padV * 2, 28)
+}
+
+/**
  * Banner de totales (Bloque 7, piloto Cotización): fondo relleno +
  * filas label/valor con color propio por fila, filtradas por `visibleIf`
  * (docs/PLAN.md — reproduce `buildTotalsRows` de
  * cotizacion-pdf-helpers.ts, donde Descuento/IVA aparecen solo con datos
  * reales). Layout de filas fijo (no editable) para calzar exacto con el
- * diseño real: mismas constantes que el generador actual.
+ * diseño real: mismas constantes que el generador actual. `height` y
+ * `visibleRows` se calculan antes de llamar (Bloque 7: `renderFromTemplate`
+ * los necesita también para decidir la `y` efectiva vía `flowAfter`).
  */
 function renderTotalsBanner(
   doc: jsPDF,
   el: TotalsBannerElement,
   data: Record<string, unknown>,
-  resolveColor: (token: string) => [number, number, number]
+  resolveColor: (token: string) => [number, number, number],
+  height: number,
+  visibleRows: TotalsBannerElement['rows']
 ): void {
-  const h = el.h ?? 28
+  if (visibleRows.length === 0) return
+
   const [bgR, bgG, bgB] = resolveColor(el.bgColorToken)
   doc.setFillColor(bgR, bgG, bgB)
-  doc.rect(el.x, el.y, el.w, h, 'F')
-
-  const visibleRows = el.rows.filter(row => !row.visibleIf || Boolean(getByPath(data, row.visibleIf)))
-  if (visibleRows.length === 0) return
+  doc.rect(el.x, el.y, el.w, height, 'F')
 
   const padV = 3.1
   const rowH = 5.5
@@ -410,6 +430,19 @@ function renderTotalsBanner(
   })
 }
 
+/**
+ * Alto real (mm) de un bloque de texto con wrap, usando las métricas nativas
+ * de jsPDF (`splitTextToSize` + `getTextDimensions`) en vez de una constante
+ * inventada -- necesario para encadenar `flowAfter` sin adivinar cuánto
+ * ocupó el texto anterior.
+ */
+function measureTextBlockHeight(doc: jsPDF, text: string, size: number, bold: boolean, w: number): number {
+  doc.setFont('helvetica', bold ? 'bold' : 'normal')
+  doc.setFontSize(size)
+  const lines = doc.splitTextToSize(text, w)
+  return doc.getTextDimensions(lines, { fontSize: size }).h
+}
+
 function buildStickyElement(
   el: StickyCapableElement & { sticky: 'header' | 'footer' },
   data: Record<string, unknown>,
@@ -422,13 +455,49 @@ function buildStickyElement(
 }
 
 /**
+ * Orden de render de los elementos de flujo: por `zIndex` como base (igual
+ * que antes de Bloque 7), pero adelantando cualquier elemento con
+ * `flowAfter` hasta después del elemento que referencia -- necesario para
+ * conocer su borde inferior REAL antes de resolver la `y` del que sigue.
+ * Zod ya garantiza ids únicos y ausencia de ciclos; el `visited` de abajo
+ * es solo para no recorrer dos veces el mismo elemento.
+ */
+function sortFlowElements(elements: PdfElement[]): PdfElement[] {
+  const zSorted = [...elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+  const byId = new Map(zSorted.map(el => [el.id, el]))
+  const visited = new Set<string>()
+  const result: PdfElement[] = []
+
+  function visit(el: PdfElement) {
+    if (visited.has(el.id)) return
+    visited.add(el.id)
+    const dep = el.flowAfter ? byId.get(el.flowAfter) : undefined
+    if (dep) visit(dep)
+    result.push(el)
+  }
+
+  zSorted.forEach(visit)
+  return result
+}
+
+/**
  * Renderer final del schema tipado (Bloque 2, docs/PLAN.md): recorre
  * `template.elements`, separa los `sticky` del resto, renderiza el flujo
- * normal ordenado por `zIndex` con los primitivos de arriba, interpola
- * `{{variable}}` contra `data`, resuelve `colorToken`/`bgToken`/
+ * normal ordenado por `zIndex`/`flowAfter` con los primitivos de arriba,
+ * interpola `{{variable}}` contra `data`, resuelve `colorToken`/`bgToken`/
  * `headerColorToken`/`borderColorToken` con `resolveColor` (inyectado — no
  * importa `pdf-color-tokens.ts`, eso se cablea en la integración) y termina
  * redibujando los `sticky` con `redrawSticky`.
+ *
+ * `flowAfter` (Bloque 7, piloto Cotización): un elemento sin `flowAfter` usa
+ * su `y` fija, igual que Bloques 1-6. Con `flowAfter`, la `y` efectiva es el
+ * borde inferior REAL (post-render) del elemento referenciado + `gap` --
+ * reproduce `currentY = lastAutoTable.finalY + gap` de los 4 generadores
+ * reales, donde la tabla de ítems puede tener 1 o 50 filas. Si esa `y`
+ * efectiva no entra en la página (menos margen inferior), se agrega una
+ * página nueva antes de dibujar -- solo para elementos encadenados: uno sin
+ * `flowAfter` conserva el comportamiento exacto de Bloques 1-6 (se dibuja en
+ * su `y`, sin salto de página automático).
  */
 export function renderFromTemplate(
   doc: jsPDF,
@@ -444,28 +513,65 @@ export function renderFromTemplate(
   )
   const stickyEls = visibleElements.filter(isStickyRenderable)
   const flowEls = visibleElements.filter(el => !isStickyRenderable(el))
-  const sortedFlow = [...flowEls].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+  const sortedFlow = sortFlowElements(flowEls)
+
+  const computedBottom = new Map<string, number>()
+
+  function resolveY(el: PdfElement, estimatedHeight: number): number {
+    let y = el.y
+    if (el.flowAfter !== undefined && computedBottom.has(el.flowAfter)) {
+      y = computedBottom.get(el.flowAfter)! + (el.gap ?? 0)
+    }
+    if (
+      el.flowAfter !== undefined &&
+      y + estimatedHeight > template.page.height - template.page.margins.bottom
+    ) {
+      doc.addPage()
+      y = template.page.margins.top
+    }
+    return y
+  }
 
   for (const el of sortedFlow) {
     switch (el.type) {
-      case 'text':
-        drawTextBackground(doc, el, resolveColor)
-        renderText(doc, buildSpikeText(el, data, resolveColor))
-        break
-      case 'line':
-        renderLine(doc, buildSpikeLine(el, resolveColor))
-        break
-      case 'image': {
-        const image = buildSpikeImage(el)
-        if (image) renderImage(doc, image)
+      case 'text': {
+        const text = el.upper ? interpolateText(el.text, data).toUpperCase() : interpolateText(el.text, data)
+        const height = measureTextBlockHeight(doc, text, el.size, el.bold, el.w)
+        const y = resolveY(el, height)
+        const elAtY = { ...el, y }
+        drawTextBackground(doc, elAtY, resolveColor)
+        renderText(doc, buildSpikeText(elAtY, data, resolveColor))
+        computedBottom.set(el.id, y + height)
         break
       }
-      case 'table':
-        renderTableElement(doc, el, data, resolveColor)
+      case 'line': {
+        const y = resolveY(el, 0)
+        renderLine(doc, buildSpikeLine({ ...el, y }, resolveColor))
+        computedBottom.set(el.id, y)
         break
-      case 'totals-banner':
-        renderTotalsBanner(doc, el, data, resolveColor)
+      }
+      case 'image': {
+        const h = el.h ?? el.w
+        const y = resolveY(el, h)
+        const image = buildSpikeImage({ ...el, y })
+        if (image) renderImage(doc, image)
+        computedBottom.set(el.id, y + h)
         break
+      }
+      case 'table': {
+        const y = resolveY(el, 0)
+        const finalY = renderTableElement(doc, { ...el, y }, data, resolveColor)
+        computedBottom.set(el.id, finalY)
+        break
+      }
+      case 'totals-banner': {
+        const visibleRows = el.rows.filter(row => !row.visibleIf || Boolean(getByPath(data, row.visibleIf)))
+        const height = computeBannerHeight(visibleRows.length)
+        const y = resolveY(el, height)
+        renderTotalsBanner(doc, { ...el, y }, data, resolveColor, height, visibleRows)
+        computedBottom.set(el.id, y + height)
+        break
+      }
     }
   }
 

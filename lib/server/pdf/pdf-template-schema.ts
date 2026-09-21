@@ -71,6 +71,17 @@ export const PdfElementBaseSchema = z.object({
   // documento). Path validado contra el catálogo real (Track C) más abajo,
   // igual que las variables `{{...}}` de texto.
   visibleIf: z.string().min(1).optional(),
+  // Bloque 7 (piloto Cotización, decisión de arquitectura aprobada por el
+  // usuario en sesión 2026-09-21): el generador real posiciona el banner de
+  // totales/NOTAS/bloques legales con `currentY = lastAutoTable.finalY +
+  // gap` -- depende de cuántos ítems tenga la tabla, no es una y fija. Con
+  // `flowAfter` (id de otro elemento del mismo template) el renderer usa el
+  // borde inferior REAL de ese elemento (post-render) + `gap` como y
+  // efectiva, en vez de `y`. Sin `flowAfter`, `y` se usa tal cual (mismo
+  // comportamiento que Bloques 1-6). El editor sigue mostrando `y` como
+  // posición representativa en el canvas.
+  flowAfter: z.string().min(1).optional(),
+  gap: z.number().optional(),
 })
 
 export type PdfElementBase = z.infer<typeof PdfElementBaseSchema>
@@ -318,6 +329,67 @@ export const PdfTemplateSchema = z
 
       if (el.type === 'table' && el.groupTotalOf) {
         checkVariable(`${el.rowsBinding}[].${el.groupTotalOf}`, 'groupTotalOf')
+      }
+    })
+  })
+  .superRefine((template, ctx) => {
+    const idCounts = new Map<string, number>()
+    template.elements.forEach(el => idCounts.set(el.id, (idCounts.get(el.id) ?? 0) + 1))
+
+    template.elements.forEach((el, index) => {
+      if ((idCounts.get(el.id) ?? 0) > 1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['elements', index, 'id'],
+          message: `id duplicado: "${el.id}" -- los ids deben ser únicos (flowAfter depende de esto)`,
+        })
+      }
+
+      if (el.flowAfter === undefined) return
+
+      if (el.flowAfter === el.id) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['elements', index, 'flowAfter'],
+          message: 'flowAfter no puede referenciar el propio elemento',
+        })
+        return
+      }
+
+      if (el.sticky) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['elements', index, 'flowAfter'],
+          message: 'flowAfter no aplica a elementos sticky (se redibujan idénticos en cada página)',
+        })
+        return
+      }
+
+      if (!idCounts.has(el.flowAfter)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['elements', index, 'flowAfter'],
+          message: `flowAfter referencia un id inexistente: "${el.flowAfter}"`,
+        })
+        return
+      }
+
+      // Detección de ciclos: recorrer la cadena de flowAfter desde este
+      // elemento; si se vuelve a `el.id` antes de agotarla, hay un ciclo.
+      const byId = new Map(template.elements.map(other => [other.id, other]))
+      const seen = new Set<string>([el.id])
+      let current: string | undefined = el.flowAfter
+      while (current !== undefined) {
+        if (seen.has(current)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['elements', index, 'flowAfter'],
+            message: `flowAfter forma un ciclo con "${current}"`,
+          })
+          break
+        }
+        seen.add(current)
+        current = byId.get(current)?.flowAfter
       }
     })
   })

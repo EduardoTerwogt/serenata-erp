@@ -347,6 +347,113 @@ describe('renderFromTemplate', () => {
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
   })
 
+  it('Bloque 7: flowAfter posiciona un elemento debajo del borde real del anterior y agrega página si no entra', () => {
+    const doc = createSpikeDoc(basePage())
+    const template: PdfTemplate = {
+      tipoDocumento: 'cotizacion',
+      page: basePage(),
+      elements: [
+        {
+          id: 'a',
+          type: 'text',
+          x: 15,
+          y: 250,
+          w: 100,
+          text: 'Bloque A',
+          size: 10,
+          bold: false,
+          align: 'left',
+          colorToken: 'sn-ink',
+        },
+        {
+          id: 'b',
+          type: 'text',
+          x: 15,
+          y: 20, // authored y ignorada -- se usa flowAfter
+          w: 100,
+          text: 'Bloque B',
+          size: 10,
+          bold: false,
+          align: 'left',
+          colorToken: 'sn-ink',
+          flowAfter: 'a',
+          gap: 40, // fuerza que no entre en la página (bottom margin en 277mm)
+        },
+      ],
+    }
+
+    expect(() => renderFromTemplate(doc, template, {}, RESOLVE_COLOR)).not.toThrow()
+    expect(doc.getNumberOfPages()).toBe(2)
+  })
+
+  it('Bloque 7: flowAfter ubica el banner de totales según el finalY real de la tabla, con pocos o muchos ítems', () => {
+    const buildTemplate = (): PdfTemplate => ({
+      tipoDocumento: 'cotizacion',
+      page: basePage(),
+      elements: [
+        {
+          id: 'tabla',
+          type: 'table',
+          x: 15,
+          y: 40,
+          w: 180,
+          cols: [
+            { label: 'Categoría', field: 'categoria', align: 'left', w: 90, visible: true },
+            { label: 'Importe', field: 'importe', align: 'right', w: 90, visible: true, format: 'currency' },
+          ],
+          rowsBinding: 'items',
+          groupBy: 'categoria',
+          bordered: true,
+          lightHead: false,
+          zebra: false,
+        },
+        {
+          id: 'banner',
+          type: 'totals-banner',
+          x: 15,
+          y: 200, // authored y ignorada -- se usa flowAfter
+          w: 180,
+          bgColorToken: 'sn-ink',
+          flowAfter: 'tabla',
+          gap: 5.5,
+          rows: [
+            {
+              label: 'TOTAL',
+              valueVariable: 'total',
+              labelColorToken: 'sn-ink',
+              valueColorToken: 'sn-ink',
+              bold: true,
+              fontSize: 10.5,
+            },
+          ],
+        },
+      ],
+    })
+
+    const pocos = createSpikeDoc(basePage())
+    const itemsPocos = [{ categoria: 'Equipo', importe: 4000 }]
+    expect(() =>
+      renderFromTemplate(pocos, buildTemplate(), { items: itemsPocos, total: 4000 }, RESOLVE_COLOR)
+    ).not.toThrow()
+    const pagesPocos = pocos.getNumberOfPages()
+
+    const muchos = createSpikeDoc(basePage())
+    const itemsMuchos = Array.from({ length: 80 }, (_, i) => ({
+      categoria: i % 2 === 0 ? 'Equipo' : 'Personal',
+      importe: 1000 + i,
+    }))
+    expect(() =>
+      renderFromTemplate(muchos, buildTemplate(), { items: itemsMuchos, total: 90000 }, RESOLVE_COLOR)
+    ).not.toThrow()
+    const pagesMuchos = muchos.getNumberOfPages()
+
+    // Con muchos ítems la tabla fuerza multipágina y el banner igual se
+    // ubica sin excepción, en vez de quedar fijo tapando la tabla.
+    expect(pagesMuchos).toBeGreaterThan(pagesPocos)
+    const bytes = Buffer.from(muchos.output('arraybuffer'))
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
   it('Bloque 7: un texto largo hace wrap dentro de `w` en vez de salirse de la página', () => {
     const doc = createSpikeDoc(basePage())
     const longText =

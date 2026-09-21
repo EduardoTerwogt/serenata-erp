@@ -209,3 +209,72 @@ describe('pdf-template-schema: format y groupTotalOf de tabla (Bloque 7)', () =>
     }
   })
 })
+
+describe('pdf-template-schema: flowAfter (Bloque 7, posición relativa)', () => {
+  function chainTemplate(overrides: Partial<{ flowAfter: string; secondSticky: boolean; secondId: string }> = {}) {
+    return {
+      tipoDocumento: 'cotizacion' as const,
+      page: BASE_PAGE,
+      elements: [
+        {
+          id: 'primero',
+          x: 10,
+          y: 10,
+          w: 50,
+          type: 'text' as const,
+          text: 'Primero',
+          size: 10,
+          bold: false,
+          align: 'left' as const,
+          colorToken: 'orange',
+        },
+        {
+          id: overrides.secondId ?? 'segundo',
+          x: 10,
+          y: 200,
+          w: 50,
+          type: 'text' as const,
+          text: 'Segundo',
+          size: 10,
+          bold: false,
+          align: 'left' as const,
+          colorToken: 'orange',
+          flowAfter: overrides.flowAfter ?? 'primero',
+          gap: 5,
+          ...(overrides.secondSticky ? { sticky: 'footer' as const } : {}),
+        },
+      ],
+    }
+  }
+
+  it('acepta flowAfter referenciando un id real del template', () => {
+    expect(PdfTemplateSchema.safeParse(chainTemplate()).success).toBe(true)
+  })
+
+  it('rechaza flowAfter que referencia un id inexistente', () => {
+    const result = PdfTemplateSchema.safeParse(chainTemplate({ flowAfter: 'no-existe' }))
+    expect(result.success).toBe(false)
+  })
+
+  it('rechaza flowAfter que se referencia a sí mismo', () => {
+    const result = PdfTemplateSchema.safeParse(chainTemplate({ flowAfter: 'segundo' }))
+    expect(result.success).toBe(false)
+  })
+
+  it('rechaza flowAfter en un elemento sticky', () => {
+    const result = PdfTemplateSchema.safeParse(chainTemplate({ secondSticky: true }))
+    expect(result.success).toBe(false)
+  })
+
+  it('rechaza un ciclo de flowAfter entre dos elementos', () => {
+    const template = chainTemplate()
+    template.elements[0] = { ...template.elements[0], flowAfter: 'segundo' } as (typeof template.elements)[0]
+    const result = PdfTemplateSchema.safeParse(template)
+    expect(result.success).toBe(false)
+  })
+
+  it('rechaza ids duplicados en el template', () => {
+    const result = PdfTemplateSchema.safeParse(chainTemplate({ secondId: 'primero' }))
+    expect(result.success).toBe(false)
+  })
+})
