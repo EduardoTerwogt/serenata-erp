@@ -64,6 +64,13 @@ export const PdfElementBaseSchema = z.object({
   required: z.boolean().optional(),
   // editar el CONTENIDO pide confirmación
   legal: z.boolean().optional(),
+  // Bloque 7 (docs/PLAN.md, piloto Cotización): el elemento entero solo se
+  // renderiza si este path resuelve a un valor truthy en los datos reales
+  // -- cubre bloques condicionales del generador actual (NOTAS solo si
+  // data.notas no está vacío, sin inventar un "elemento oculto" ad hoc por
+  // documento). Path validado contra el catálogo real (Track C) más abajo,
+  // igual que las variables `{{...}}` de texto.
+  visibleIf: z.string().min(1).optional(),
 })
 
 export type PdfElementBase = z.infer<typeof PdfElementBaseSchema>
@@ -139,6 +146,41 @@ export const LineElementSchema = PdfElementBaseSchema.extend({
 
 export type LineElement = z.infer<typeof LineElementSchema>
 
+// ==================== TOTALS BANNER ====================
+
+/**
+ * Banner de totales (Bloque 7, piloto Cotización): el generador actual
+ * arma una lista de filas label/valor cuya PRESENCIA depende de datos
+ * (Descuento solo si hay descuento, IVA solo si `iva_activo`) y cuyo COLOR
+ * es distinto por fila (gris/blanco/naranja/amarillo) sobre un fondo
+ * relleno — no es una tabla de datos genérica ni un texto suelto, así que
+ * no entra en `TableElement`/`TextElement` sin perder fidelidad visual y
+ * de negocio real. `visibleIf` por fila reusa el mismo mecanismo que
+ * `PdfElementBase.visibleIf`, a nivel de fila en vez de elemento completo.
+ */
+export const TotalsBannerRowSchema = z.object({
+  label: z.string().min(1),
+  // path en los datos con el monto de esta fila, ej. 'subtotal'
+  valueVariable: z.string().min(1),
+  labelColorToken: z.string().min(1),
+  valueColorToken: z.string().min(1),
+  bold: z.boolean(),
+  fontSize: z.number().positive(),
+  // ej. "Descuento" se muestra como "-$ 100.00"
+  negate: z.boolean().optional(),
+  visibleIf: z.string().min(1).optional(),
+})
+
+export type TotalsBannerRow = z.infer<typeof TotalsBannerRowSchema>
+
+export const TotalsBannerElementSchema = PdfElementBaseSchema.extend({
+  type: z.literal('totals-banner'),
+  bgColorToken: z.string().min(1),
+  rows: z.array(TotalsBannerRowSchema).min(1, 'El banner requiere al menos una fila'),
+})
+
+export type TotalsBannerElement = z.infer<typeof TotalsBannerElementSchema>
+
 // ==================== UNIÓN DISCRIMINADA ====================
 
 export const PdfElementSchema = z.discriminatedUnion('type', [
@@ -146,6 +188,7 @@ export const PdfElementSchema = z.discriminatedUnion('type', [
   TableElementSchema,
   ImageElementSchema,
   LineElementSchema,
+  TotalsBannerElementSchema,
 ])
 
 export type PdfElement = z.infer<typeof PdfElementSchema>
@@ -213,7 +256,17 @@ export const PdfTemplateSchema = z
                   ['headerColorToken', el.headerColorToken],
                   ['borderColorToken', el.borderColorToken],
                 ]
-              : []
+              : el.type === 'totals-banner'
+                ? [
+                    ['bgColorToken', el.bgColorToken],
+                    ...el.rows.flatMap(
+                      (row, rowIndex): Array<[string, string | undefined]> => [
+                        [`rows.${rowIndex}.labelColorToken`, row.labelColorToken],
+                        [`rows.${rowIndex}.valueColorToken`, row.valueColorToken],
+                      ]
+                    ),
+                  ]
+                : []
 
       colorFields.forEach(([field, token]) => {
         if (token !== undefined && !(token in COLOR_TOKENS)) {
@@ -225,15 +278,28 @@ export const PdfTemplateSchema = z
         }
       })
 
+      const checkVariable = (path: string, field: string) => {
+        if (!isValidVariablePath(template.tipoDocumento, path)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['elements', index, field],
+            message: `Variable inexistente para ${template.tipoDocumento}: ${path}`,
+          })
+        }
+      }
+
+      if (el.visibleIf) checkVariable(el.visibleIf, 'visibleIf')
+
       if (el.type === 'text') {
-        extractVariablePaths(el.text).forEach(varPath => {
-          if (!isValidVariablePath(template.tipoDocumento, varPath)) {
-            ctx.addIssue({
-              code: 'custom',
-              path: ['elements', index, 'text'],
-              message: `Variable inexistente para ${template.tipoDocumento}: {{${varPath}}}`,
-            })
-          }
+        extractVariablePaths(el.text).forEach(varPath =>
+          checkVariable(varPath, 'text')
+        )
+      }
+
+      if (el.type === 'totals-banner') {
+        el.rows.forEach((row, rowIndex) => {
+          checkVariable(row.valueVariable, `rows.${rowIndex}.valueVariable`)
+          if (row.visibleIf) checkVariable(row.visibleIf, `rows.${rowIndex}.visibleIf`)
         })
       }
     })

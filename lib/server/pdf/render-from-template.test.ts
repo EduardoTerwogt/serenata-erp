@@ -195,4 +195,143 @@ describe('renderFromTemplate', () => {
 
     expect(() => renderFromTemplate(doc, template, {}, RESOLVE_COLOR)).not.toThrow()
   })
+
+  it('Bloque 7: omite un elemento entero cuando visibleIf es falsy (bloque NOTAS condicional)', () => {
+    const doc = createSpikeDoc(basePage())
+    const template: PdfTemplate = {
+      tipoDocumento: 'cotizacion',
+      page: basePage(),
+      elements: [
+        {
+          id: 'notas',
+          type: 'text',
+          x: 15,
+          y: 20,
+          w: 100,
+          text: 'Notas: {{notas}}',
+          size: 10,
+          bold: false,
+          align: 'left',
+          colorToken: 'sn-ink',
+          visibleIf: 'notas',
+        },
+      ],
+    }
+
+    expect(() => renderFromTemplate(doc, template, { notas: '' }, RESOLVE_COLOR)).not.toThrow()
+    // Sin notas, el único elemento de la plantilla no se dibuja -- no hay
+    // forma directa de verificar "no se dibujó" sin parsear el PDF, pero al
+    // menos confirma que no revienta con data que apaga visibleIf.
+    const withNotas = createSpikeDoc(basePage())
+    expect(() =>
+      renderFromTemplate(withNotas, template, { notas: 'Aplica IVA' }, RESOLVE_COLOR)
+    ).not.toThrow()
+  })
+
+  it('Bloque 7: renderiza un totals-banner filtrando filas por visibleIf', () => {
+    const doc = createSpikeDoc(basePage())
+    const template: PdfTemplate = {
+      tipoDocumento: 'cotizacion',
+      page: basePage(),
+      elements: [
+        {
+          id: 'banner',
+          type: 'totals-banner',
+          x: 15,
+          y: 200,
+          w: 180,
+          h: 28,
+          bgColorToken: 'sn-ink',
+          required: true,
+          rows: [
+            {
+              label: 'Subtotal',
+              valueVariable: 'subtotal',
+              labelColorToken: 'sn-ink',
+              valueColorToken: 'sn-ink',
+              bold: false,
+              fontSize: 9.5,
+            },
+            {
+              label: 'Descuento',
+              valueVariable: 'descuento_valor',
+              labelColorToken: 'sn-orange',
+              valueColorToken: 'sn-orange',
+              bold: false,
+              fontSize: 9.5,
+              negate: true,
+              visibleIf: 'descuento_valor',
+            },
+            {
+              label: 'IVA (16%)',
+              valueVariable: 'iva',
+              labelColorToken: 'sn-ink',
+              valueColorToken: 'sn-ink',
+              bold: false,
+              fontSize: 9.5,
+              visibleIf: 'iva_activo',
+            },
+            {
+              label: 'TOTAL',
+              valueVariable: 'total',
+              labelColorToken: 'sn-ink',
+              valueColorToken: 'sn-ink',
+              bold: true,
+              fontSize: 10.5,
+            },
+          ],
+        },
+      ],
+    }
+
+    // Sin descuento ni IVA activo: solo Subtotal + TOTAL deberían dibujarse,
+    // sin romper nada aunque falten esos campos.
+    expect(() =>
+      renderFromTemplate(doc, template, { subtotal: 1000, total: 1000, descuento_valor: 0, iva_activo: false }, RESOLVE_COLOR)
+    ).not.toThrow()
+
+    // Con descuento e IVA activos, las 4 filas se dibujan.
+    const docFull = createSpikeDoc(basePage())
+    expect(() =>
+      renderFromTemplate(
+        docFull,
+        template,
+        { subtotal: 1000, descuento_valor: 100, iva: 144, iva_activo: true, total: 1044 },
+        RESOLVE_COLOR
+      )
+    ).not.toThrow()
+
+    const bytes = Buffer.from(docFull.output('arraybuffer'))
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
+  })
+
+  it('Bloque 7: un texto largo hace wrap dentro de `w` en vez de salirse de la página', () => {
+    const doc = createSpikeDoc(basePage())
+    const longText =
+      'Este presupuesto es 100% modular y se adaptará a las necesidades del cliente. ' +
+      'Una vez aterrizada la propuesta al 100% se ajustarán los costos en consecuencia.'
+    const template: PdfTemplate = {
+      tipoDocumento: 'cotizacion',
+      page: basePage(),
+      elements: [
+        {
+          id: 'legal',
+          type: 'text',
+          x: 15,
+          y: 250,
+          w: 90,
+          text: longText,
+          size: 8.5,
+          bold: false,
+          align: 'left',
+          colorToken: 'sn-ink',
+          legal: true,
+        },
+      ],
+    }
+
+    expect(() => renderFromTemplate(doc, template, {}, RESOLVE_COLOR)).not.toThrow()
+    const bytes = Buffer.from(doc.output('arraybuffer'))
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
+  })
 })

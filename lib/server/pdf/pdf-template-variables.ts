@@ -19,7 +19,11 @@ export type TipoDocumento = 'cotizacion' | 'orden_pago' | 'hoja_llamado' | 'repo
 export interface VariableDef {
   path: string
   label: string
-  sampleType: 'string' | 'number' | 'date' | 'array'
+  // 'boolean' es para condiciones (`visibleIf`), no para interpolar en
+  // texto -- Bloque 7 (piloto Cotización): filas/elementos condicionales
+  // como "IVA" (solo si `iva_activo`) necesitan un path real y validado,
+  // igual que cualquier otra variable.
+  sampleType: 'string' | 'number' | 'date' | 'array' | 'boolean'
 }
 
 type FieldNode =
@@ -63,6 +67,10 @@ const COTIZACION_SCHEMA: Schema = {
   porcentaje_fee: leaf('number', 'Porcentaje de fee'),
   descuento_valor: leaf('number', 'Valor de descuento'),
   notas: leaf('string', 'Notas'),
+  // Bloque 7: condición real de la fila "IVA (16%)" del banner de totales
+  // (cotizacion-pdf-helpers.ts > buildTotalsRows) -- no es texto
+  // interpolable, es la condición de `visibleIf`.
+  iva_activo: leaf('boolean', 'IVA activo'),
 }
 
 // Refleja OrdenPagoPreviewResult (lib/server/ordenes-pago/build.ts:30-39).

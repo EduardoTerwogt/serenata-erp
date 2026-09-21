@@ -20,6 +20,8 @@ function sampleLeaf(variable: VariableDef, index: number): unknown {
       return new Date().toISOString().slice(0, 10)
     case 'array':
       return [`Item ${index + 1}A`, `Item ${index + 1}B`]
+    case 'boolean':
+      return true
     default:
       return `${variable.label} ${index + 1}`
   }

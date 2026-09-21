@@ -112,6 +112,28 @@ Se descartan explícitamente:
 
 ## Schema
 
+**Extensión Bloque 7 (piloto Cotización, aprobada por el usuario en sesión
+2026-09-21):** el generador real de Cotización tiene 3 cosas que el schema
+original (Bloque 2) no podía representar sin perder fidelidad visual o de
+negocio:
+1. **`visibleIf?: string` en `PdfElementBase`** — el elemento entero solo
+   se renderiza si ese path resuelve a un valor truthy en los datos reales
+   (ej. el bloque NOTAS solo aparece si `data.notas` no está vacío).
+2. **`TotalsBannerElement`** (`type: 'totals-banner'`) — fondo relleno
+   (`bgColorToken`) + filas `{label, valueVariable, labelColorToken,
+   valueColorToken, bold, fontSize, negate?, visibleIf?}`. Reproduce
+   `buildTotalsRows()` de `cotizacion-pdf-helpers.ts`: la fila "Descuento"
+   solo existe si hay descuento, "IVA (16%)" solo si `iva_activo`, cada
+   fila tiene su propio color — no es una tabla de datos genérica ni texto
+   suelto, así que no entra en `TableElement`/`TextElement`.
+3. **`TextElement` con wrap real** (`maxWidth` inyectado como `el.w` en
+   `renderFromTemplate`) — los bloques legales (GENERALES/COSTOS/
+   CANCELACIÓN) son párrafos largos; sin wrap se salían del ancho.
+
+`iva_activo` se agregó al catálogo de variables de Cotización
+(`pdf-template-variables.ts`) con un `sampleType: 'boolean'` nuevo — es una
+condición (`visibleIf`), no texto interpolable.
+
 El schema persistido no es una lista plana de elementos — es el template
 completo, con la página y sus márgenes (lo que el usuario edita cuando
 "cambia márgenes", nunca simulado moviendo elementos a mano):

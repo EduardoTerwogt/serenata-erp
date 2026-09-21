@@ -219,17 +219,32 @@ function renderElementContent(el: PdfElement) {
       </div>
     )
   }
-  // table
-  return (
-    <div className="h-full w-full overflow-hidden border border-hairline bg-app text-[9px] text-subtext">
-      <div className="flex border-b border-hairline bg-row px-1 py-0.5 font-medium text-body">
-        {el.cols.filter(c => c.visible).map(c => (
-          <span key={c.field} className="truncate px-1" style={{ flexBasis: `${(c.w / el.w) * 100}%` }}>
-            {c.label}
-          </span>
-        ))}
+  if (el.type === 'table') {
+    return (
+      <div className="h-full w-full overflow-hidden border border-hairline bg-app text-[9px] text-subtext">
+        <div className="flex border-b border-hairline bg-row px-1 py-0.5 font-medium text-body">
+          {el.cols.filter(c => c.visible).map(c => (
+            <span key={c.field} className="truncate px-1" style={{ flexBasis: `${(c.w / el.w) * 100}%` }}>
+              {c.label}
+            </span>
+          ))}
+        </div>
+        <div className="px-1 py-0.5 italic">rowsBinding: {el.rowsBinding}{el.groupBy ? ` · groupBy: ${el.groupBy}` : ''}</div>
       </div>
-      <div className="px-1 py-0.5 italic">rowsBinding: {el.rowsBinding}{el.groupBy ? ` · groupBy: ${el.groupBy}` : ''}</div>
+    )
+  }
+  // totals-banner
+  return (
+    <div
+      className="flex h-full w-full flex-col justify-center gap-0.5 overflow-hidden px-2 py-1 text-[9px]"
+      style={{ backgroundColor: safeColor(el.bgColorToken) }}
+    >
+      {el.rows.map((row, i) => (
+        <div key={i} className="flex justify-between gap-2" style={{ color: safeColor(row.valueColorToken) }}>
+          <span className="truncate" style={{ color: safeColor(row.labelColorToken) }}>{row.label}</span>
+          <span>{`{{${row.valueVariable}}}`}</span>
+        </div>
+      ))}
     </div>
   )
 }

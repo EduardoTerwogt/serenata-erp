@@ -13,7 +13,7 @@
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
+import { formatCurrencyPdf, JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
 import { getIsoLogoBase64, getSerenataLogoBase64 } from '@/lib/server/pdf/cotizacion-pdf-helpers'
 import type {
   ImageElement,
@@ -22,6 +22,7 @@ import type {
   PdfTemplate,
   TableElement,
   TextElement,
+  TotalsBannerElement,
 } from '@/lib/server/pdf/pdf-template-schema'
 
 export interface SpikePageConfig {
@@ -40,6 +41,11 @@ export interface SpikeTextElement {
   align?: 'left' | 'center' | 'right'
   spacing?: number
   color?: [number, number, number]
+  // Bloque 7: los bloques legales (GENERALES/COSTOS/CANCELACIÓN) son
+  // párrafos largos -- sin esto, jsPDF no hace wrap y el texto se sale del
+  // ancho del elemento. Opcional: los textos cortos existentes (spike,
+  // Bloque 1-6) no lo necesitan y siguen igual.
+  maxWidth?: number
 }
 
 export interface SpikeLineElement {
@@ -103,7 +109,10 @@ export function renderText(doc: jsPDF, el: SpikeTextElement): void {
   // `spacing` = tracking entre caracteres. jsPDF lo soporta nativo vía
   // setCharSpace(mm) — no hace falta simularlo insertando espacios.
   doc.setCharSpace(el.spacing ?? 0)
-  doc.text(el.text, el.x, el.y, { align: el.align ?? 'left' })
+  doc.text(el.text, el.x, el.y, {
+    align: el.align ?? 'left',
+    ...(el.maxWidth !== undefined ? { maxWidth: el.maxWidth } : {}),
+  })
   doc.setCharSpace(0)
 }
 
@@ -250,6 +259,7 @@ function buildSpikeText(
     align: el.align,
     spacing: el.spacing,
     color: resolveColor(el.colorToken),
+    maxWidth: el.w,
   }
 }
 
@@ -323,6 +333,53 @@ function renderTableElement(
   )
 }
 
+/**
+ * Banner de totales (Bloque 7, piloto Cotización): fondo relleno +
+ * filas label/valor con color propio por fila, filtradas por `visibleIf`
+ * (docs/PLAN.md — reproduce `buildTotalsRows` de
+ * cotizacion-pdf-helpers.ts, donde Descuento/IVA aparecen solo con datos
+ * reales). Layout de filas fijo (no editable) para calzar exacto con el
+ * diseño real: mismas constantes que el generador actual.
+ */
+function renderTotalsBanner(
+  doc: jsPDF,
+  el: TotalsBannerElement,
+  data: Record<string, unknown>,
+  resolveColor: (token: string) => [number, number, number]
+): void {
+  const h = el.h ?? 28
+  const [bgR, bgG, bgB] = resolveColor(el.bgColorToken)
+  doc.setFillColor(bgR, bgG, bgB)
+  doc.rect(el.x, el.y, el.w, h, 'F')
+
+  const visibleRows = el.rows.filter(row => !row.visibleIf || Boolean(getByPath(data, row.visibleIf)))
+  if (visibleRows.length === 0) return
+
+  const padV = 3.1
+  const rowH = 5.5
+  const rowGap = 1.6
+  const padRight = 7
+  const valueMinW = 30
+  const gapLV = 1.4
+  const valueX = el.x + el.w - padRight
+  const labelX = valueX - valueMinW - gapLV
+  let ty = el.y + padV + rowH * 0.75
+
+  visibleRows.forEach((row, i) => {
+    if (i > 0) ty += rowH + rowGap
+    const rawValue = getByPath(data, row.valueVariable)
+    const amount = typeof rawValue === 'number' ? rawValue : Number(rawValue) || 0
+    const formatted = row.negate ? `-${formatCurrencyPdf(amount)}` : formatCurrencyPdf(amount)
+
+    doc.setFont('helvetica', row.bold ? 'bold' : 'normal')
+    doc.setFontSize(row.fontSize)
+    doc.setTextColor(...resolveColor(row.labelColorToken))
+    doc.text(row.label, labelX, ty, { align: 'right' })
+    doc.setTextColor(...resolveColor(row.valueColorToken))
+    doc.text(formatted, valueX, ty, { align: 'right' })
+  })
+}
+
 function buildStickyElement(
   el: StickyCapableElement & { sticky: 'header' | 'footer' },
   data: Record<string, unknown>,
@@ -349,8 +406,14 @@ export function renderFromTemplate(
   data: Record<string, unknown>,
   resolveColor: (token: string) => [number, number, number]
 ): void {
-  const stickyEls = template.elements.filter(isStickyRenderable)
-  const flowEls = template.elements.filter(el => !isStickyRenderable(el))
+  // Bloque 7: un elemento entero puede estar condicionado a los datos
+  // (NOTAS solo si hay texto, IVA solo si iva_activo) -- se descarta antes
+  // de separar sticky/flujo, así no se dibuja ni ocupa espacio en ninguno.
+  const visibleElements = template.elements.filter(
+    el => !el.visibleIf || Boolean(getByPath(data, el.visibleIf))
+  )
+  const stickyEls = visibleElements.filter(isStickyRenderable)
+  const flowEls = visibleElements.filter(el => !isStickyRenderable(el))
   const sortedFlow = [...flowEls].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
 
   for (const el of sortedFlow) {
@@ -369,6 +432,9 @@ export function renderFromTemplate(
       }
       case 'table':
         renderTableElement(doc, el, data, resolveColor)
+        break
+      case 'totals-banner':
+        renderTotalsBanner(doc, el, data, resolveColor)
         break
     }
   }
