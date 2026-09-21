@@ -210,6 +210,30 @@ describe('pdf-template-schema: format y groupTotalOf de tabla (Bloque 7)', () =>
   })
 })
 
+describe('pdf-template-schema: align justify (Bloque 7, bloques legales)', () => {
+  it('acepta align: justify en un TextElement', () => {
+    const template = {
+      tipoDocumento: 'cotizacion' as const,
+      page: BASE_PAGE,
+      elements: [
+        {
+          id: 'el-1',
+          x: 10,
+          y: 10,
+          w: 50,
+          type: 'text' as const,
+          text: 'Cliente: {{cliente}}',
+          size: 10,
+          bold: false,
+          align: 'justify' as const,
+          colorToken: 'orange',
+        },
+      ],
+    }
+    expect(PdfTemplateSchema.safeParse(template).success).toBe(true)
+  })
+})
+
 describe('pdf-template-schema: flowAfter (Bloque 7, posición relativa)', () => {
   function chainTemplate(overrides: Partial<{ flowAfter: string; secondSticky: boolean; secondId: string }> = {}) {
     return {

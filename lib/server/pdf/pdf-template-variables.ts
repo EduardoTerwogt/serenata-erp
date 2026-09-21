@@ -70,7 +70,16 @@ const COTIZACION_SCHEMA: Schema = {
   iva: leaf('number', 'IVA'),
   total: leaf('number', 'Total'),
   porcentaje_fee: leaf('number', 'Porcentaje de fee'),
-  descuento_valor: leaf('number', 'Valor de descuento'),
+  descuento_valor: leaf('number', 'Valor de descuento configurado (% o monto fijo, según descuento_tipo)'),
+  // Bloque 7: el generador real (`calculateDiscount()`) computa el monto
+  // final en pesos a partir de descuento_tipo+descuento_valor+general, no
+  // existe como campo plano en CotizacionPDFData -- el banner de totales
+  // necesita el monto YA calculado (no la config cruda) para mostrar y
+  // condicionar (`visibleIf`) la fila "Descuento" correctamente. Se agrega
+  // aquí como el campo que la capa que arma `data` para el renderer deberá
+  // incluir (igual que subtotal/general/iva/total, ya precalculados fuera
+  // del generador de PDF).
+  descuento_monto: leaf('number', 'Monto de descuento (calculado)'),
   notas: leaf('string', 'Notas'),
   // Bloque 7: condición real de la fila "IVA (16%)" del banner de totales
   // (cotizacion-pdf-helpers.ts > buildTotalsRows) -- no es texto

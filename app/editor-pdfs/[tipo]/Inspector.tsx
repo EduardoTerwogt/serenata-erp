@@ -243,10 +243,11 @@ export function Inspector({
                 <input type="checkbox" checked={single.upper ?? false} onChange={e => updateSingle({ upper: e.target.checked })} className="h-4 w-4 rounded border-hairline bg-input accent-[var(--color-accent)]" />
                 Mayúsculas
               </label>
-              <Select value={single.align} onChange={e => updateSingle({ align: e.target.value as 'left' | 'center' | 'right' })}>
+              <Select value={single.align} onChange={e => updateSingle({ align: e.target.value as 'left' | 'center' | 'right' | 'justify' })}>
                 <option value="left">Izquierda</option>
                 <option value="center">Centro</option>
                 <option value="right">Derecha</option>
+                <option value="justify">Justificado</option>
               </Select>
               <ColorSwatchPicker value={single.colorToken} onChange={token => updateSingle({ colorToken: token })} />
             </>

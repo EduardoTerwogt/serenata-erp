@@ -95,7 +95,10 @@ export const TextElementSchema = PdfElementBaseSchema.extend({
   text: z.string(),
   size: z.number().positive('size debe ser mayor a 0'),
   bold: z.boolean(),
-  align: z.enum(['left', 'center', 'right']),
+  // 'justify' (Bloque 7, piloto Cotización): los bloques legales
+  // (GENERALES/CANCELACIÓN) usan `{align:'justify', maxWidth}` en el
+  // generador real -- jsPDF ya lo soporta nativo en `doc.text()`.
+  align: z.enum(['left', 'center', 'right', 'justify']),
   spacing: z.number().optional(),
   // nombre del token --sn-*, no el hex — validez del token no se valida
   // aquí (Track B).

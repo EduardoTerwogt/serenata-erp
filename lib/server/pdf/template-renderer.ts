@@ -38,7 +38,7 @@ export interface SpikeTextElement {
   text: string
   size: number
   bold?: boolean
-  align?: 'left' | 'center' | 'right'
+  align?: 'left' | 'center' | 'right' | 'justify'
   spacing?: number
   color?: [number, number, number]
   // Bloque 7: los bloques legales (GENERALES/COSTOS/CANCELACIÓN) son
