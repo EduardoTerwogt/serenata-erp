@@ -132,11 +132,22 @@ const HOJA_LLAMADO_SCHEMA: Schema = {
     cantidad: leaf('number', 'Cantidad'),
     responsable_nombre: leaf('string', 'Nombre del responsable'),
     notas: leaf('string', 'Notas del ítem'),
+    // Bloque 8: el generador real busca el teléfono en `data.responsables`
+    // por `responsable_id` (`getPhone()`) -- el motor de templates no hace
+    // joins entre arrays, así que este campo debe llegar ya resuelto en
+    // cada ítem cuando se arme `data` para el renderer (igual que
+    // `descuento_monto` en Cotización).
+    telefono: leaf('string', 'Teléfono del responsable (resuelto)'),
   }),
   responsables: arr({
     nombre: leaf('string', 'Nombre del responsable'),
     telefono: leaf('string', 'Teléfono del responsable'),
   }),
+  // Bloque 8: el pie de página real imprime "Generado el {fecha}" con la
+  // fecha de HOY al momento de generar el PDF, no un dato de la cotización
+  // -- no es interpolable desde datos del documento, debe inyectarse en
+  // `data` al momento de renderizar (igual que un campo calculado más).
+  fecha_generacion: leaf('string', 'Fecha de generación del PDF (hoy)'),
 }
 
 // Refleja ReporteCierrePdfData (lib/server/pdf/reporte-cierre-pdf.ts).
@@ -159,6 +170,15 @@ const REPORTE_CIERRE_SCHEMA: Schema = {
     nombre: leaf('string', 'Nombre del integrante'),
     roles: leaf('array', 'Roles'),
   }),
+  // Bloque 8: el generador real arma un párrafo uniendo `equipo` con sus
+  // roles ("Nombre (Rol1, Rol2), Nombre2, ...") y cae a un texto fijo si
+  // está vacío -- ese join/fallback es lógica de negocio, no algo que el
+  // motor de templates deba reproducir con una sintaxis nueva. Debe llegar
+  // ya armado en `data` (igual que `descuento_monto`/`fecha_generacion`).
+  equipo_texto: leaf('string', 'Equipo y roles, ya armado como texto'),
+  // Mismo caso que equipo_texto: `data.incidencias.trim() || 'Sin
+  // incidencias registradas.'` ya resuelto.
+  incidencias_texto: leaf('string', 'Incidencias, con fallback ya resuelto'),
 }
 
 const SCHEMAS: Record<TipoDocumento, Schema> = {
