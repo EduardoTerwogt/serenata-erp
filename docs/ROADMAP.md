@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-19 (agrupación de "Sueltos" post-PR #76 en `docs/PLAN.md`)
+**Última actualización:** 2026-09-21 (Sueltos post-PR #76 cerrado parcial — 3/4 bloques; Editor de PDFs abre en `docs/PLAN.md`)
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -78,27 +78,18 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-**Agrupación de "Sueltos" post-PR #76 (borrador 2026-09-19).** 4 de los 5
-"Sueltos" que quedaron fuera del plan cerrado en PR
-[#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) se agruparon
-en una nueva iniciativa — lógica de negocio y UI ya validadas con un
-simulador y mockups interactivos en la misma sesión. Tracker completo,
-orden de ejecución, riesgos y validación: `docs/PLAN.md`.
+**Editor de PDFs (borrador 2026-09-21).** Módulo nuevo del sidebar —
+catálogo de los PDFs que genera Serenata (cotización, orden de pago, hoja
+de llamado, reporte de cierre, + los que se agreguen a futuro) con un
+editor visual por plantilla: tablas personalizables, posicionamiento libre
+de elementos, texto (negrita/tamaño/alineación/espaciado) y color acotado a
+la paleta del design system (`--sn-*` de `app/globals.css`). Alcance, mockup
+validado con el usuario y opciones de arquitectura del motor de plantillas:
+`docs/PLAN.md`.
 
-- **Portal — simulador de factura** (antes "calculadora de régimen
-  fiscal"): el motor de validación fiscal (XML, retenciones) ya existe en
-  `main`; el bloque expone un panel de solo lectura junto a "Subir
-  factura".
-- **Cuentas — dropdown de impuestos a pagar y utilidad bruta/neta de
-  proyecto**: fórmula ya definida y validada (retenciones/IVA no restan
-  utilidad; ISR sí, como estimación) — agrega régimen RESICO.
-- **Clientes — normalizar `cliente_id` como FK real**: migración aditiva
-  con clasificación `safe_match`/`ambiguous`/`no_match`, nunca
-  autoasignación silenciosa.
-- **Cuentas — filtro de estado en la vista principal** (acceso a cuentas
-  cerradas, no solo pendientes): único bloque de los 4 sin diseño cerrado
-  — se termina de definir al abrir el bloque, último en el orden de
-  ejecución para no bloquear a los otros 3.
+Reemplaza en este slot a la iniciativa "Sueltos post-PR #76" (bloques 1-3
+cerrados, bloque 4 diferido — ver "Después" abajo y
+[`docs/archive/sueltos-portal-utilidad-cliente-id-fk.md`](archive/sueltos-portal-utilidad-cliente-id-fk.md)).
 
 ---
 
@@ -108,8 +99,24 @@ orden de ejecución, riesgos y validación: `docs/PLAN.md`.
 sistema a la vista. Ninguno de los puntos de abajo está comprometido todavía
 ni tiene alcance de iniciativa definido.
 
-### Sueltos pendientes (2026-09-19)
+### Sueltos pendientes (2026-09-19, actualizado 2026-09-21)
 
+- **Cuentas — filtro de estado en la vista principal** (acceso a cuentas
+  cerradas, no solo pendientes). Diferido el 2026-09-21 desde la iniciativa
+  "Sueltos post-PR #76" para liberar el slot de `docs/PLAN.md` a "Editor de
+  PDFs" — no por falta de prioridad. Único bloque de esa iniciativa sin
+  diseño cerrado: falta decidir (a) cómo agrupar los ~8 estados reales en
+  tabs manejables (2 propuestas ya exploradas en mockup: A: 4 grupos
+  [preferida en principio], B: un tab por estado) y (b) cómo integrar ese
+  filtro **dentro** de las vistas que ya existen (Por proyecto en acordeón,
+  Lista paginada, tarjetas de métricas) en vez de reemplazarlas por una
+  lista plana. Patrón a reutilizar: `app/cotizaciones/page.tsx` ya resuelve
+  esto con `FilterTabs` + badge de conteo + RPC server-side
+  (`buscar_cotizaciones`); las RPCs de Cuentas (`buscar_cuentas_cobrar`,
+  `buscar_cuentas_pagar_grupos`) hoy solo tienen `pendientes_count` binario,
+  sin filtro ni conteo por estado — habría que extenderlas igual que
+  `buscar_cotizaciones`. Historia completa:
+  [`docs/archive/sueltos-portal-utilidad-cliente-id-fk.md`](archive/sueltos-portal-utilidad-cliente-id-fk.md).
 - **Dashboard — estado de resultados y balance + export a Sheets.**
   Pendiente definir alcance contable exacto (devengado vs. flujo de caja,
   categorías de gasto, balance con activos/pasivos o solo P&L) antes de
@@ -120,9 +127,9 @@ ni tiene alcance de iniciativa definido.
   a Sheets tabla-por-tabla (no de reporte calculado) como punto de partida
   cuando se retome.
 - **Fuera de alcance, sin cambios:** Planeación (evaluar quitar la sección,
-  ligado a RAG/chatbot); RAG/chatbot; editor de PDFs tipo Canva; migrar
-  administración de Sheets externo a la app; refinar módulo de Proyectos;
-  limpieza de datos de prueba (app + BD).
+  ligado a RAG/chatbot); RAG/chatbot; migrar administración de Sheets
+  externo a la app; refinar módulo de Proyectos; limpieza de datos de
+  prueba (app + BD).
 
 ---
 
@@ -150,6 +157,17 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Sueltos post-PR #76 — Portal (simulador de factura), utilidad de
+  proyecto y `cliente_id` FK (cerrado parcial, 2026-09-21).** 3 de los 4
+  bloques agrupados el 2026-09-19: simulador de factura del Portal (PR
+  [#77](https://github.com/EduardoTerwogt/serenata-erp/pull/77), commit
+  `647686b`); dropdown de impuestos a pagar y utilidad bruta/neta de
+  proyecto, y `cliente_id` como FK real en Clientes (ambos en PR
+  [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79), commit
+  `578f53b`). El 4° bloque (filtro de estado en Cuentas) se diferió por
+  decisión del usuario para dar paso a la iniciativa "Editor de PDFs" — ver
+  "Después" → "Sueltos pendientes". Historia completa, diseño y tracker:
+  [`docs/archive/sueltos-portal-utilidad-cliente-id-fk.md`](archive/sueltos-portal-utilidad-cliente-id-fk.md).
 - **Plantillas, Cotizaciones, Portal, Clientes y Cuentas — 6 bloques en
   paralelo (2026-09-19).** Cerró la primera iniciativa agrupada del roadmap
   de producto (agrupada 2026-09-18, aprobada tras 6 rondas de auditoría

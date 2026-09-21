@@ -1,17 +1,9 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, en ejecución (2026-09-19/20) — agrupación de los
-"Sueltos" que quedaron fuera de PR
-[#76](https://github.com/EduardoTerwogt/serenata-erp/pull/76) en una nueva
-iniciativa. Lógica de negocio y UI ya validadas en sesión con un simulador y
-mockups interactivos (links abajo) para 3 de los 4 bloques; el cuarto
-(filtro de estado en Cuentas) llega a su arranque con el diseño todavía sin
-cerrar, a propósito, sin bloquear la aprobación ni ejecución de los otros 3.
-**Bloque 1 cerrado** (PR #77, mergeado en `647686b`) — ver tracker abajo.
-**Bloques 2 y 3 cerrados** (PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79),
-mergeado a `main` en `578f53b` — sesión en la nube sobre una sola rama
-asignada, ambos bloques quedaron en el mismo PR en vez de PRs separados).
-Bloque 4 (filtro de estado) sigue pendiente, diseño sin cerrar.
+**Estado:** Borrador (2026-09-21) — alcance y herramientas del editor
+validadas con el usuario (incluido un mockup interactivo); arquitectura del
+motor de plantillas (opción A/B/C) pendiente de decidir antes de pasar a
+"Aprobado".
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -24,207 +16,176 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 
 ## Contexto
 
-`docs/ACTIVE_WORK.md` señalaba que no había iniciativa multi-sesión activa
-tras el cierre de PR #76. `docs/ROADMAP.md` → "Después" dejó 5 "Sueltos" sin
-agrupar, cada uno con una decisión de negocio/UX/producto pendiente y sin
-alcance de bloques definido. En sesión de `/serenata-iniciar-fase`
-(2026-09-19) se decidió agruparlos — mismo proceso que ya se usó para el plan
-cerrado en PR #76 — **dejando fuera, por decisión explícita del usuario, el
-suelto de Dashboard** (estado de resultados/balance + export a Sheets), que
-se queda en `docs/ROADMAP.md` → "Después" sin tocar, para retomar en otra
-sesión aparte.
+`docs/ROADMAP.md` → "Después" marcaba "editor de PDFs tipo Canva" como
+**fuera de alcance, sin cambios** desde el cierre de PR #76. El usuario pidió
+retomarlo en sesión de `/serenata-iniciar-fase` (2026-09-21), en vez de
+continuar con el Bloque 4 pendiente (filtro de estado en Cuentas) de la
+iniciativa que ocupaba este archivo — ese Bloque 4 se diferió por decisión
+explícita del usuario y se movió a `docs/ROADMAP.md` → "Después" como
+pendiente suelto; historia completa de los bloques 1-3 (cerrados) y la nota
+de cierre:
+[`docs/archive/sueltos-portal-utilidad-cliente-id-fk.md`](archive/sueltos-portal-utilidad-cliente-id-fk.md).
 
-## Los sueltos: estado real
+**Estado actual del código** (confirmado leyendo `lib/server/pdf/` y
+`.claude/rules/pdf.md`): los 4 PDFs del sistema (cotización, orden de pago,
+hoja de llamado, reporte de cierre) se generan 100% programáticamente con
+`jsPDF`+`jspdf-autotable` (`lib/server/pdf/pdf-base-config.ts` centraliza
+colores/fuentes/márgenes). Cualquier ajuste visual hoy requiere tocar
+código.
 
-**1. Portal — simulador de factura** (antes "calculadora de régimen fiscal").
-**✅ Cerrado — PR #77, mergeado a `main` en `647686b`.** Detalle completo de
-lo que se implementó (más 3 bugs reales de validación fiscal y 3 fixes de
-UX de Documentación encontrados al probar) en `docs/ACTIVE_WORK.md` y
-`docs/decisions/013-portal-documentos-verdad-unica.md`. Descripción
-original del alcance, sin editar, abajo. **Alcance corregido: la mitad del
-trabajo ya existía en `main`.** El motor de
-validación fiscal profunda que el usuario pidió (comparar la factura real
-del proveedor contra lo esperado, aceptar o explicar por qué no) **ya está
-construido y en producción**:
-- `validarFacturaFiscalProveedor()` (`lib/server/validation/factura-fiscal.ts:67-139`)
-  ya compara subtotal, IVA trasladado y (si aplica) retenciones IVA/ISR
-  declarados en el **XML** contra lo esperado, con tolerancia de un
-  centavo, y ya distingue mensajes por campo.
-- Ya conectada a 3 rutas reales: `app/api/cuentas-pagar/[id]/subir-factura/route.ts`,
-  `app/api/cuentas-pagar/grupos/[id]/subir-factura/route.ts` y
-  `app/api/portal/cuentas/grupos/[id]/factura/route.ts` (la que usa el
-  Portal hoy). El upload ya exige **XML** (`parseFacturaXML`), con PDF solo
-  como respaldo visual — la duda XML-vs-PDF ya está resuelta en el código.
-- `estado_validacion: 'validado'|'revision'` + `detalle_validacion` ya se
-  guarda por documento y se muestra como badge en `TabDocumentos.tsx`. Sin
-  confirmar y a verificar al abrir el bloque: si `'validado'` ya programa
-  pago automático o sigue siendo informativo.
-- **Cambio real de comportamiento pedido:** hoy la función devuelve el
-  mismo tipo de mensaje (monto exacto XML vs. esperado) para cualquier
-  discrepancia, incluida la de subtotal. El usuario pidió que el mensaje de
-  subtotal sea **genérico** ("no corresponde, contacta a tu contacto de
-  Serenata"), mientras que los mensajes de desglose (IVA/retenciones)
-  sigan siendo específicos como hoy — vía wrapper nuevo, sin tocar
-  `validarFacturaFiscalProveedor` (que sigue sirviendo al flujo de staff
-  con el detalle completo).
-- **Lo genuinamente nuevo:** un panel **de solo lectura** en el tab
-  "Cuentas y facturas" del Portal (`PortalTab` `'cuentas'`), al costado del
-  módulo de subir factura. Empieza en $0; al elegir proyecto/grupo se
-  autollena con `calcularEjemploFactura()` (ya existe) — el proveedor
-  nunca escribe un monto a mano.
-- `regimen_fiscal` ya se lee y muestra (solo lectura) en `TabDatos`.
+## El editor: alcance según el usuario
 
-**2. Cuentas — dropdown de impuestos a pagar y utilidad bruta/neta de
-proyecto.** Lógica de negocio ya definida esta sesión, investigada contra
-reglas reales del SAT y validada con simulador interactivo:
-- **Retenciones (IVA 10.6667% + ISR 10%/1.25%) e IVA trasladado NO restan
-  la utilidad de Serenata** — es dinero de terceros redirigido al SAT, no
-  gasto de Serenata. Sí es obligación real de flujo de efectivo: se declara
-  y paga a más tardar el **día 17 del mes siguiente** a la facturación (o
-  el siguiente día hábil).
-- **El ISR de Serenata (30%) sí es gasto real, pero no se paga por
-  proyecto con tasa plana mes a mes** — el pago provisional mensual usa el
-  coeficiente de utilidad del ejercicio anterior (Art. 14 LISR); si hubo
-  pérdida, el coeficiente es 0 y no hay pago ese mes aunque el proyecto sea
-  rentable. Por eso se muestra como **estimación**, nunca el pago real.
-- **Fórmula aprobada:** Utilidad Bruta = Utilidad Total
-  (docs/decisions/006, Margen Total + Fee Agencia). Utilidad Neta =
-  Utilidad Bruta − ISR estimado (30%). Retenciones/IVA se muestran aparte,
-  informativas, sin restar.
-- **Vista "Cierre del proyecto"** (pedida explícitamente, más allá del
-  dropdown original): tabla Quién/Cuánto/Cuándo (proveedor neto,
-  retenciones a enterar, IVA neto de Serenata a enterar, ISR estimado) +
-  "Utilidad libre estimada" = Utilidad Bruta − ISR estimado.
-- **Gap real encontrado, ya en alcance:** `regimen_fiscal` hoy solo
-  distingue `moral`/`fisica`. Falta **RESICO persona física** (retención
-  ISR 1.25%, Art. 113-J LISR — mismo IVA retenido 10.6667%). Investigado y
-  descartado agregar más tipos: arrendamiento de un proveedor física usa
-  la misma tasa que "física — honorarios"; el resto del catálogo
-  `c_RegimenFiscal` del SAT no es realista para un proveedor de Serenata.
-- Extiende `cuentas_por_proyecto()` (RPC) para agregar
-  margen/utilidad/impuestos por proyecto; UI como chip "Utilidad" inline
-  en el acordeón existente de `CuentasPorProyecto.tsx` (mockup confirmado
-  abajo), no pantalla aparte. Si hace falta, formaliza la fórmula en un
-  `docs/decisions/01X` nuevo.
+Precisado en dos rondas de intercambio durante la sesión:
 
-**3. Clientes — normalizar `cliente_id` como FK real.** `clientes` ya
-existe con `id uuid`. `cliente` sigue `text not null` en `cotizaciones`,
-`proyectos` y `cuentas_cobrar` — sin FK. Blast radius mapeado: RPCs
-`save_cotizacion`, `approve_cotizacion` (copia `cliente` al aprobar),
-`buscar_cotizaciones`, `buscar_cuentas_cobrar`, `cuentas_por_proyecto`;
-`autosaveClienteYProyecto()` (segundo puente texto→catálogo); schema de
-Sheets (`lib/integrations/sheets/schema.ts`, 4 tablas). Migración aditiva:
-primero **clasifica** cada fila existente contra `clientes` en tres
-cubetas — `safe_match` (coincidencia inequívoca), `ambiguous` (más de un
-candidato o coincidencia parcial) y `no_match` (sin candidato) — antes de
-escribir ningún `cliente_id`. Solo `safe_match` se asigna automáticamente;
-`ambiguous`/`no_match` quedan `cliente_id NULL` explícito, nunca una
-asignación forzada. Define en el bloque cómo se resuelven después
-(candidato: reconciliación manual en `/clientes`). Dual-write mientras
-conviven `cliente` (texto) y `cliente_id`; actualizar las RPCs,
-`autosaveClienteYProyecto()`, UI (texto libre → selector) y
-`lib/integrations/sheets/schema.ts`. Nunca un cutover de un solo paso sobre
-datos financieros.
+- **Módulo nuevo del sidebar**, "Editor PDFs" — no un panel dentro de otro
+  módulo existente.
+- **Catálogo**: lista de los PDFs que existen hoy por nombre (cotización,
+  orden de pago, hoja de llamado, reporte de cierre) + cualquier PDF nuevo
+  que se agregue a futuro. Click sobre uno → entra a esa plantilla en modo
+  editor.
+- **Herramientas de edición acotadas a propósito** — no se busca paridad con
+  Canva:
+  - Personalizar **tablas** (hoy generadas con `jspdf-autotable`).
+  - Posicionar/alinear elementos **libremente** (no solo parámetros fijos).
+  - **Tipografía:** se mantiene la fuente actual (Helvetica) — el usuario no
+    pide cambiar la familia tipográfica todavía (la traerá explícitamente
+    cuando quiera cambiarla). Sí pide editar sobre esa misma fuente:
+    **negrita, tamaño, alineación, espaciado**.
+  - **Color:** editable por elemento (texto, fondo de tabla/etiqueta), pero
+    **acotado a la paleta ya establecida** — swatches de los tokens `--sn-*`
+    de `app/globals.css` (mismo catálogo que usa el resto del producto:
+    tintas de ink/texto, acento naranja y sus variantes, superficies, los 7
+    tonos de chip de navegación), nunca un selector de color libre. Mismo
+    principio que ya aplica en el resto de la UI (`CLAUDE.md`: "Nunca
+    `gray-*` ni `#f97316`").
+- Empieza en una plantilla **propuesta por defecto** (calcada del PDF actual)
+  y a partir de ahí se rediseña libremente.
 
-**4. Cuentas — filtro de estado en la vista principal (acceso a cuentas
-cerradas).** Redefinido tras hablarlo con el usuario: no es "historial por
-mes/año" con gráficas (eso queda como insumo para una futura iniciativa de
-**Dashboard**, fuera de esta). El problema real: la vista principal de
-Cuentas (`CuentasPorProyecto`/`CuentasTable`) solo muestra cuentas
-pendientes — una cuenta pagada/cerrada deja de ser accesible. Patrón a
-reutilizar: `app/cotizaciones/page.tsx` ya resuelve esto con `FilterTabs` +
-badge de conteo + RPC server-side (`buscar_cotizaciones`); Cuentas ya tiene
-el mismo mecanismo (`buscar_cuentas_cobrar`). **Único bloque de los 4 sin
-diseño cerrado, a propósito, al final:** falta decidir (a) cómo agrupar los
-~7 estados reales en tabs manejables (2 propuestas en el mockup — A: 4
-grupos [preferida en principio], B: un tab por estado) y (b) cómo integrar
-ese filtro **dentro** de las vistas que ya existen (Por proyecto en
-acordeón, Lista paginada, tarjetas de métricas) en vez de reemplazarlas por
-una lista plana — error real del primer mockup que el usuario señaló.
+**Mockup interactivo validado con el usuario en sesión**
+(https://claude.ai/artifact/71nqoQ31msihVcE3tr1Bde): catálogo + editor sobre
+las 4 plantillas reales, rediseñadas con la paleta del design system —
+acento naranja en un solo lugar por documento (nunca repetido en cada
+banda), bandas de sección con tinte suave en vez de negro sólido, tablas con
+encabezado claro y tracking (como `DataTable`), logo real de Serenata como
+elemento de imagen editable. Valida el patrón de props por elemento
+(texto/tabla/imagen/línea + posición libre) antes de comprometerse a una
+arquitectura de schema. Pendiente de reflejar ahí: panel de color por
+swatches (pedido después de la última actualización del mockup) — no
+bloquea este borrador, se ilustra en una iteración futura del mockup si
+hace falta.
 
-**Fuera de esta iniciativa:** Dashboard — estado de resultados/balance +
-export a Sheets. Ya existe un bloque `fiscal` en `getResumenDashboard()`
-pero es cash-basis y no resta `gastos_fijos`; el export a Sheets existente
-es un espejo tabla-por-tabla, no un writer de reporte calculado. Bloqueo
-real: "definir alcance contable exacto" — decisión de negocio previa a
-cualquier diseño técnico.
+## Infraestructura reutilizable
 
-## Artefactos de referencia (simulador y mockups, confirmados con el usuario)
+- **Nav:** `app/components/SidebarLayout.tsx:22-32` — array `NAV_LINKS`
+  (`href`, `label`, `section`, `icon`, `tone`, `group`). Agregar el módulo
+  nuevo es una entrada más ahí, mismo patrón que `Plantillas`/`Planeación`.
+- **Permisos:** `AppSection` (tipo en `auth.ts`) + `ALL_SECTIONS` en
+  `lib/api-auth.ts:12` — hoy
+  `['admin','dashboard','cotizaciones','proyectos','cuentas','responsables','planeacion']`.
+  Un módulo nuevo necesita su propia sección (ej. `'editor-pdfs'`) agregada
+  ahí y en el catálogo de permisos de usuario (falta ubicar dónde se asignan
+  secciones a usuarios — a confirmar al abrir el bloque de scaffold).
+- **Rutas API:** patrón `requireSection('<sección>')` primero, copiando una
+  ruta hermana (regla obligatoria de `CLAUDE.md`).
+- `lib/server/pdf/pdf-base-config.ts` — colores/fuentes/márgenes hoy
+  hardcodeados; es la fuente de la plantilla default de partida.
+- Cada generador actual (`cotizacion-pdf.ts`, `orden-pago-pdf.ts`,
+  `hoja-llamado-pdf.ts`, `reporte-cierre-pdf.ts`) ya define qué campos/tablas
+  necesita cada documento — son la fuente de verdad de las variables de
+  datos que el editor debe poder bindear.
+- Flujo de subida a Drive (`drive_file_id`, reusa archivo si ya existe) no
+  se toca — el editor solo cambia cómo se genera el PDF, no el guardado.
 
-- **Simulador de utilidad de proyecto** (bloque 2):
-  https://claude.ai/artifact/W9y8smtQ6ur93zgNXNo6LP — cadena de totales,
-  comparación de 3 regímenes, las 3 utilidades, cierre del proyecto.
-- **Mockup de Cuentas — chip "Utilidad" en el acordeón** (bloque 2):
-  https://claude.ai/artifact/Xdrb8Sbw41AhaEa2ebZmhp — referencia de
-  aceptación visual del bloque.
-- **Mockup de filtro de estado y simulador de factura** (bloques 1 y 4):
-  https://claude.ai/artifact/MiJvk4duRGhZgKgZqxxbdP — panel A: 2 propuestas
-  de agrupación de estados (con la limitación anotada de que aún no
-  integran las vistas existentes). Panel B: simulador de factura del
-  Portal confirmado.
+## Opciones de arquitectura del motor de plantillas
 
-## Orden de ejecución
+- **A (recomendada) — Schema JSON + motor tipo `pdfme`:** editor visual
+  React que produce un schema declarativo por elemento (texto, tabla,
+  imagen, línea) con posición/tamaño/estilo + placeholders de datos;
+  generador server-side vía `pdf-lib` (sin navegador headless). El set de
+  props que pide el usuario (bold/tamaño/alineación/espaciado/color de
+  texto, tablas como tipo de elemento propio, posición libre) es
+  prácticamente el modelo nativo de este tipo de librería. Encaja con
+  Vercel serverless.
+  - Riesgo: tablas de filas dinámicas (partidas de cotización, líneas de
+    orden de pago) necesitan mapearse bien dentro del schema — cantidad de
+    filas variable con estilo por columna consistente.
+- **B — Editor HTML/CSS (tipo grapesjs) + Puppeteer/Playwright a PDF:**
+  máxima fidelidad visual pero Puppeteer en funciones serverless de Vercel
+  es pesado (cold starts, tamaño de función) — mal encaje con la
+  arquitectura actual. Se descarta salvo que A resulte insuficiente para
+  reproducir las tablas actuales.
+- **C — Parametrizar jsPDF actual (formulario de config, sin canvas):**
+  mínimo esfuerzo pero no permite posicionamiento libre — no cumple lo
+  pedido. Se descarta.
 
-**Simulador de factura del Portal → Utilidad de proyecto → `cliente_id` FK
-→ Filtro de estado en Cuentas.** El único criterio real es "qué ya está
-resuelto vs. qué sigue abierto": los primeros 3 tienen su lógica de negocio
-y su UI ya validadas en esta sesión; el filtro de estado se termina de
-diseñar cuando le toca arrancar, sin detener la ejecución de los otros 3.
+## Bloques propuestos (borrador, se refina con el usuario antes de aprobar)
+
+1. Spike técnico: validar el motor de schema+render elegido reproduciendo
+   una tabla real de cotización (filas variables) + los controles de texto
+   pedidos (bold/tamaño/alineación/espaciado/color), sobre datos reales de
+   test.
+2. Scaffold del módulo: nueva sección de permisos (`AppSection`/
+   `ALL_SECTIONS`), entrada en `NAV_LINKS` (`SidebarLayout.tsx`), ruta nueva
+   con `requireSection` en cada endpoint.
+3. Modelo de datos: tabla `pdf_plantillas` (tipo de documento, schema JSON,
+   versión, autor/fecha) + migración numerada.
+4. Catálogo: vista de lista de plantillas por nombre → entra al editor.
+5. Editor visual: canvas de posicionamiento libre + panel de tablas + panel
+   de texto (bold/tamaño/alineación/espaciado) + panel de color por
+   swatches (tokens `--sn-*` vigentes en `app/globals.css`, no hex libre) +
+   variables de datos disponibles por tipo de documento.
+6. Piloto: migrar un documento real del generador jsPDF actual al nuevo
+   motor, con plantilla default idéntica al PDF de hoy (mismo look).
+7. Migrar los 3 documentos restantes.
+8. Extensibilidad: cómo se da de alta un tipo de documento PDF nuevo a
+   futuro como editable en el catálogo.
 
 ## Bloques y tracker de estado
 
 | # | Bloque | Estado |
 |---|---|---|
-| 1 | Portal: simulador de factura | Cerrado — PR [#77](https://github.com/EduardoTerwogt/serenata-erp/pull/77), commit `647686b` |
-| 2 | Cuentas: dropdown de impuestos y utilidad de proyecto | Cerrado — PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79), commit `578f53b` |
-| 3 | Clientes: `cliente_id` como FK real | Cerrado — PR [#79](https://github.com/EduardoTerwogt/serenata-erp/pull/79), commit `578f53b` |
-| 4 | Cuentas: filtro de estado en vista principal | Pendiente — diseño sin cerrar |
+| 1 | Spike técnico: motor de schema+render | Pendiente — arranca al aprobar el plan |
+| 2 | Scaffold del módulo (permisos, nav, rutas) | Pendiente |
+| 3 | Modelo de datos: `pdf_plantillas` | Pendiente |
+| 4 | Catálogo de plantillas | Pendiente |
+| 5 | Editor visual (canvas, tablas, texto, color) | Pendiente |
+| 6 | Piloto: migrar el primer documento real | Pendiente |
+| 7 | Migrar los 3 documentos restantes | Pendiente |
+| 8 | Extensibilidad para PDFs nuevos | Pendiente |
 
 ## Riesgos
 
-- **P1 — Bloque 1 (simulador de factura):** el wrapper de mensajes que
-  distingue subtotal (genérico) de desglose (específico) no debe tocar
-  `validarFacturaFiscalProveedor()` en sí — sigue siendo la fuente de
-  verdad para el flujo interno de staff con el detalle completo.
-- **P1 — Bloque 2 (utilidad de proyecto):** agregar "impuestos a pagar" por
-  proyecto mezclando regímenes (moral/física/RESICO) sin aplicar la
-  retención correcta por renglón antes de sumar produciría una cifra
-  fiscal incorrecta. Debe reusar `calcularEjemploFactura` por renglón,
-  nunca una tasa plana a nivel proyecto.
-- **P1 — Bloque 2, migración de `regimen_fiscal`:** agregar `'resico'` al
-  CHECK es aditivo, pero todo lugar que asuma solo 2 valores (tipos,
-  validaciones, UI) debe actualizarse a la vez.
-- **P1 — Bloque 3 (`cliente_id` FK):** toca `approve_cotizacion` (RPC
-  financiera crítica) y el contrato de Sheets. Mitigación: aditivo +
-  backfill clasificado + dual-write, nunca un `ALTER` destructivo en el
-  mismo bloque que el cutover.
-- **P0 — Bloque 3, backfill silencioso:** un backfill por "mejor
-  coincidencia" sin distinguir `safe_match`/`ambiguous`/`no_match` puede
-  relacionar una cotización histórica con el cliente equivocado — peor que
-  dejarla sin `cliente_id`. Mitigación: la clasificación de 3 cubetas es
-  obligatoria antes de escribir cualquier `cliente_id`.
-- **P2 — Bloque 4 (filtro de estado):** riesgo técnico bajo, pero es el
-  único que llega a su inicio sin diseño cerrado — no arrancarlo sin
-  resolver primero cómo convive con las vistas existentes.
+- **P1 — Fidelidad visual:** la plantilla default debe verse igual que el
+  PDF actual antes de considerar migrado cada documento.
+- **P1 — Tablas dinámicas:** filas variables (partidas de cotización,
+  líneas de orden de pago) dentro de un schema de posiciones fijas —
+  resolver en el spike técnico (bloque 1).
+- **P2 — Permisos del módulo nuevo** mal alcanzados (cualquier sección
+  existente vs. una dedicada) — a decidir en el bloque 2.
+- **P2 — Validación de schema:** un editor mal restringido podría romper el
+  documento (texto que se sale de la página, campo de datos inexistente) —
+  validar antes de guardar.
+- **P2 — Paleta de color hardcodeada:** si el schema guarda el hex resuelto
+  en vez del nombre del token, un cambio futuro en el design system
+  (`--sn-orange`, etc.) dejaría el PDF desincronizado en silencio.
+  Mitigación: el schema guarda el **nombre del token**, no el hex, y el
+  renderer lo resuelve contra `app/globals.css` al generar.
 
 ## Validación
 
-- Cada bloque cierra con `tsc`/`lint`/`vitest` en verde + el e2e crítico
-  que toque antes de pasar al siguiente, igual que la iniciativa de PR #76.
-- Bloque 1: un subtotal incorrecto nunca expone el monto esperado de
-  Serenata en el mensaje al proveedor; un desglose incorrecto sí explica
-  exactamente qué campo está mal, igual que hoy.
-- Bloque 2: contra un proyecto real con proveedores de los tres regímenes,
-  el agregado de impuestos coincide con la suma manual de
-  `calcularEjemploFactura` por renglón, y "Utilidad antes de impuestos" =
-  "Utilidad después de retenciones" siempre.
-- Bloque 3: en `supabase-test`, el 100% de las filas existentes queda
-  **clasificado** (no que el 100% tiene `cliente_id`); solo `safe_match`
-  recibe `cliente_id` automático; `ambiguous`/`no_match` quedan `NULL` y
-  visibles en un listado de pendientes; smoke contra Sheets.
-- Bloque 4: no arranca hasta resolver la integración con las vistas
-  existentes — con mockup nuevo si el usuario lo pide, mismo proceso que
-  los otros 3.
+- Cada documento migrado se compara contra el PDF actual con datos reales
+  de test antes de reemplazar el generador viejo.
+- Flujo de subida a Drive (`drive_file_id`) probado sin cambios.
+- El catálogo respeta `requireSection` igual que el resto de los módulos.
+- Los swatches de color del editor son exactamente los tokens `--sn-*`
+  vigentes en `app/globals.css` — ninguno inventado ni desactualizado.
+- Cada bloque cierra con `tsc`/`lint`/`vitest` en verde + el e2e crítico que
+  toque antes de pasar al siguiente.
+
+## Artefactos de referencia
+
+- **Editor PDFs — catálogo + editor, 4 plantillas rediseñadas:**
+  https://claude.ai/artifact/71nqoQ31msihVcE3tr1Bde
 
 ## Ciclo de vida
 
@@ -232,7 +193,8 @@ diseñar cuando le toca arrancar, sin detener la ejecución de los otros 3.
 2. **Borrador** (este estado) — una idea se confirma con alcance de
    iniciativa.
 3. **En refinamiento** — el loop crear → revisar → mejorar ocurre editando
-   este archivo directamente.
+   este archivo directamente. Próximo paso: decidir la opción de
+   arquitectura (A/B/C) con el usuario.
 4. **Aprobado** — cualquier sesión o cuenta puede tomarlo desde aquí y
    ejecutar bloque por bloque, actualizando el tracker de estado conforme
    avanza.

@@ -4,44 +4,43 @@
 
 ## Estado
 
-**`docs/PLAN.md` — Aprobado, en ejecución.** Sin cambios esta sesión: sigue
-Bloque 4 (filtro de estado en Cuentas) como único bloque pendiente, diseño
-sin cerrar. Bloques 1, 2 y 3 ya cerrados (PR #77 y #79). Detalle completo,
-orden de ejecución, riesgos y validación de los 4 bloques: `docs/PLAN.md`.
+**`docs/PLAN.md` — Borrador, "Editor de PDFs".** Nueva iniciativa: módulo de
+sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
+posición libre, texto y color acotado a la paleta del design system).
+Reemplaza en `docs/PLAN.md` a "Sueltos post-PR #76", que cerró parcial esta
+misma sesión (3/4 bloques; el 4° — filtro de estado en Cuentas — se diferió
+a `docs/ROADMAP.md` → "Después" por decisión del usuario, para liberar el
+slot del tracker). Sesión 100% documentación: alcance y arquitectura del
+motor de plantillas validados con el usuario y con un mockup interactivo
+(https://claude.ai/artifact/71nqoQ31msihVcE3tr1Bde), pero **sin código
+tocado** — falta decidir la opción de arquitectura (A/B/C, ver `docs/PLAN.md`)
+antes de pasar a "Aprobado" y arrancar el Bloque 1.
 
-## Completado en esta sesión — fix `POST /api/clientes` (PR #80, mergeado en `b1765a8`)
+## Completado en esta sesión — cierre parcial de Sueltos + apertura de Editor de PDFs
 
-Fix puntual fuera de la iniciativa de `docs/PLAN.md` (a pedido explícito del
-usuario, en vez de abrir Bloque 4). `POST /api/clientes` usaba
-`.upsert({...}, {onConflict:'nombre'})`, pero `clientes.nombre` nunca tuvo
-un `UNIQUE` real (hallazgo de `docs/decisions/014`) — `ON CONFLICT` fallaba
-con `42P10` en cada ejecución, así que la ruta probablemente nunca creó un
-cliente en producción.
-
-Se confirmó que el único caller real hoy es el catálogo administrativo
-(`ClienteModal` → "Nuevo cliente"); el uso de "crear/encontrar al vuelo por
-texto libre desde Cotizaciones" que motivó el `upsert` ya no existe —
-reemplazado por el selector de `cliente_id` real del Bloque 3. Se reemplazó
-el `upsert` por un `insert` plano vía nueva `createCliente()` en
-`lib/server/repositories/clientes.ts`, mismo patrón que `createProveedor`
-(mismo catálogo administrativo, mismo comportamiento: permite nombres
-duplicados, sin `UNIQUE` nuevo ni motor de deduplicación en paralelo). Test
-agregado que cubre el bug real. Detalle completo:
-`docs/decisions/014-cliente-id-fk-clasificacion.md` (adenda 2026-09-21).
+- `docs/PLAN.md` recreado con el borrador de "Editor de PDFs" (contexto,
+  alcance preciso pedido por el usuario, infraestructura reutilizable,
+  opciones de arquitectura, bloques propuestos, riesgos, validación, link
+  al mockup).
+- Iniciativa anterior archivada:
+  `git mv docs/PLAN.md docs/archive/sueltos-portal-utilidad-cliente-id-fk.md`,
+  con nota de cierre (bloques 1-3 cerrados en PR #77/#79, bloque 4
+  diferido).
+- `docs/ROADMAP.md`: resumen de Sueltos 1-3 en "Cerrado"; Bloque 4 (filtro
+  de estado en Cuentas) movido a "Después" → "Sueltos pendientes" junto al
+  suelto de Dashboard; "Siguiente" apunta ahora a Editor de PDFs; quitado
+  "editor de PDFs tipo Canva" de "Fuera de alcance, sin cambios" (ya no
+  aplica).
+- Diff completo de la sesión es 100% `.md` → commit + push directo a `main`
+  (excepción doc-only de `.claude/rules/git.md`, sin rama ni PR).
 
 ## Tests ejecutados y resultado real
 
-`tsc --noEmit` y `lint` limpios (solo warnings preexistentes, no
-relacionados). `vitest`: 965/965 en verde (964 previos + 1 nuevo). CI del
-PR #80 en verde (6/6 checks: `test`, `tracker-lint`, `smoke-and-critical`,
-`fresh-db`, `live`, `Vercel Preview Comments`) y ambos Preview de Vercel
-(`serenata-erp`, `serenata-erp-loadtest`) desplegados en `Ready` antes de
-mergear.
+No aplica — sesión sin cambios de código, config, migraciones ni rutas.
 
 ## Problemas encontrados que siguen abiertos
 
-Ninguno nuevo. El bug de `POST /api/clientes` documentado en
-`docs/decisions/014` quedó resuelto esta sesión (ver arriba).
+Ninguno nuevo.
 
 ## Deuda técnica (arrastrada, sin cambios esta sesión)
 
@@ -55,8 +54,11 @@ nuevo esta sesión.
 
 ## Siguiente paso
 
-1. Abrir **Bloque 4 — Cuentas: filtro de estado en vista principal** en una
-   sesión futura (`/serenata-iniciar-fase`) — único bloque sin diseño
-   cerrado; falta decidir agrupación de estados e integración con las vistas
-   existentes (ver `docs/PLAN.md`, punto 4 de "Los sueltos"). Con esto
-   cerraría la iniciativa completa de `docs/PLAN.md`.
+1. Decidir con el usuario la arquitectura del motor de plantillas del
+   Editor de PDFs (opción A — schema JSON tipo `pdfme`, recomendada — vs.
+   B/C, ver `docs/PLAN.md`) y pasar el plan a "Aprobado".
+2. Con el plan aprobado, arrancar Bloque 1 (spike técnico) en una sesión
+   futura (`/serenata-iniciar-fase`).
+3. Bloque 4 de la iniciativa anterior (filtro de estado en Cuentas) sigue
+   disponible como pendiente suelto en `docs/ROADMAP.md` → "Después" si se
+   prioriza antes que el Editor de PDFs.
