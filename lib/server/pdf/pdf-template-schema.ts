@@ -3,19 +3,22 @@
  * sección "Schema"). Tipos + schemas Zod equivalentes para `PdfTemplate` y
  * la unión discriminada `PdfElement`, exactamente como los describe el plan.
  *
- * Reglas de validación estructurales incluidas aquí (no dependen de otras
- * piezas en construcción): rangos de x/y/w/h dentro de `page.width/height`,
- * `elements` no vacío, `TableElement.cols` no vacío, `rowsBinding` no vacío.
+ * Reglas de validación estructurales: rangos de x/y/w/h dentro de
+ * `page.width/height`, `elements` no vacío, `TableElement.cols` no vacío,
+ * `rowsBinding` no vacío.
  *
- * Explícitamente FUERA de este archivo (se integran después, ver
- * docs/PLAN.md "Dependencias reales entre bloques"):
- * - Validar que `colorToken`/`bgToken`/`headerColorToken`/`borderColorToken`
- *   sean tokens reales — lo resuelve `pdf-color-tokens.ts` (Track B).
- * - Validar que `{{variable}}` exista en el catálogo — lo resuelve
- *   `pdf-template-variables.ts` (Track C).
+ * Integración (docs/PLAN.md "Dependencias reales entre bloques", cerrada
+ * tras los 5 tracks paralelos de Bloques 2-3): el segundo `superRefine`
+ * de abajo cablea `pdf-color-tokens.ts` (Track B) y
+ * `pdf-template-variables.ts` (Track C) para bloquear "Aplicar diseño"
+ * ante un token de color o una `{{variable}}` inexistentes — mismo
+ * pipeline único que usa la vista previa (ver "Seguridad del schema y
+ * pipeline único preview/aplicar").
  */
 
 import { z } from 'zod'
+import { COLOR_TOKENS } from '@/lib/server/pdf/pdf-color-tokens'
+import { isValidVariablePath } from '@/lib/server/pdf/pdf-template-variables'
 
 // ==================== TIPO DE DOCUMENTO ====================
 
@@ -147,6 +150,14 @@ export const PdfElementSchema = z.discriminatedUnion('type', [
 
 export type PdfElement = z.infer<typeof PdfElementSchema>
 
+// ==================== VARIABLES {{...}} ====================
+
+const VARIABLE_PATTERN = /\{\{\s*([\w.[\]]+)\s*\}\}/g
+
+function extractVariablePaths(text: string): string[] {
+  return Array.from(text.matchAll(VARIABLE_PATTERN), match => match[1])
+}
+
 // ==================== TEMPLATE ====================
 
 export const PdfTemplateSchema = z
@@ -183,6 +194,46 @@ export const PdfTemplateSchema = z
           code: 'custom',
           path: ['elements', index, 'h'],
           message: `h excede el alto de la página (${template.page.height})`,
+        })
+      }
+    })
+  })
+  .superRefine((template, ctx) => {
+    template.elements.forEach((el, index) => {
+      const colorFields: Array<[string, string | undefined]> =
+        el.type === 'text'
+          ? [
+              ['colorToken', el.colorToken],
+              ['bgToken', el.bgToken],
+            ]
+          : el.type === 'line'
+            ? [['colorToken', el.colorToken]]
+            : el.type === 'table'
+              ? [
+                  ['headerColorToken', el.headerColorToken],
+                  ['borderColorToken', el.borderColorToken],
+                ]
+              : []
+
+      colorFields.forEach(([field, token]) => {
+        if (token !== undefined && !(token in COLOR_TOKENS)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['elements', index, field],
+            message: `Token de color inválido: "${token}"`,
+          })
+        }
+      })
+
+      if (el.type === 'text') {
+        extractVariablePaths(el.text).forEach(varPath => {
+          if (!isValidVariablePath(template.tipoDocumento, varPath)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['elements', index, 'text'],
+              message: `Variable inexistente para ${template.tipoDocumento}: {{${varPath}}}`,
+            })
+          }
         })
       }
     })
