@@ -42,6 +42,9 @@ export const COLOR_TOKENS: Record<string, [number, number, number]> = {
   'chip-teal': [47, 168, 140], // --sn-chip-teal #2FA88C
   'chip-green': [47, 168, 79], // --sn-chip-green #2FA84F
   'chip-indigo': [91, 107, 214], // --sn-chip-indigo #5B6BD6
+
+  // Bloque 7 (piloto Cotización): fila "Descuento" del banner de totales.
+  yellow: [245, 208, 66], // --sn-yellow #F5D042
 }
 
 /**

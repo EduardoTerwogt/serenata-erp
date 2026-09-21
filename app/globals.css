@@ -92,6 +92,13 @@
   --sn-chip-green: #2FA84F;
   --sn-chip-indigo: #5B6BD6;
 
+  /* --- Editor de PDFs (Bloque 7): amarillo del banner de totales de
+     Cotización (fila "Descuento" en el generador legado), sin equivalente
+     entre los tokens de marca/tinta/chip existentes. Mismo tono en ambos
+     temas, igual que los chips de arriba -- no es un color de UI temática,
+     es un swatch fijo de marca/documento. --- */
+  --sn-yellow: #F5D042;
+
   /* --- textura de marca: ya no decora el sidebar/topbar por default en el
      sistema nuevo (ver readme del skill) -- se deja el token por si algún
      loader/splash la vuelve a usar más adelante. --- */

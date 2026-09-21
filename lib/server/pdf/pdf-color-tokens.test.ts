@@ -43,6 +43,10 @@ describe('pdf/pdf-color-tokens', () => {
     }
   })
 
+  it('cubre yellow (Bloque 7, fila Descuento del banner de Cotización)', () => {
+    expect(resolveColorToken('yellow')).toEqual([245, 208, 66])
+  })
+
   it('todas las tripletas RGB están en rango 0-255', () => {
     for (const rgb of Object.values(COLOR_TOKENS)) {
       expect(rgb).toHaveLength(3)
