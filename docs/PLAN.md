@@ -1,12 +1,11 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, en ejecución (2026-09-21) — arquitectura del motor de
+**Estado:** Aprobado, en ejecución (2026-09-22) — arquitectura del motor de
 plantillas, schema, workflow activo/borrador y bloques cerrados tras dos
 rondas de auditoría (Claude contra el repo real, y el usuario contra la
-propuesta de Claude). Bloques 1-8 cerrados esta sesión (ver tracker) — el
-Editor de PDFs ya migra y renderiza Cotización, Hoja de llamado y Reporte
-de cierre con su plantilla real. Queda Bloque 9 (Orden de pago) y 10
-(extensibilidad).
+propuesta de Claude). Bloques 1-9 cerrados (ver tracker) — el Editor de
+PDFs ya migra y renderiza los 4 documentos con su plantilla real. Queda
+Bloque 10 (extensibilidad).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -245,6 +244,50 @@ instalada) o un loop sobre `doc.getNumberOfPages()` — **no verificado
 contra el paquete instalado en este checkout** (sin `node_modules` en este
 entorno), primer punto a confirmar en el Bloque 1.
 
+**Extensión de arquitectura — `repeating-group` (Bloque 9, decisión del
+usuario en sesión 2026-09-21, opción A del artefacto de comparación
+publicado durante la sesión):** Orden de pago no es una lista de campos
+fijos como los otros 3 documentos — repite un bloque completo por
+responsable, y dentro de cada responsable repite otro bloque por evento.
+El schema de Bloques 2-8 no tenía forma de repetir un *grupo* de
+elementos (solo tablas de filas homogéneas). Se evaluaron 3 opciones
+(elemento `repeating-group` nuevo, loop híbrido fuera de
+`renderFromTemplate`, aplanar a un `groupBy` de 2 niveles); el usuario
+eligió la primera por mantener "un solo renderer para los 4 documentos".
+
+```ts
+type RepeatingGroupElement = PdfElementBase & {
+  type: 'repeating-group'
+  rowsBinding: string       // array en el contexto actual (fila del padre si está anidado)
+  itemGap: number           // espacio entre el fin de una instancia y el inicio de la siguiente
+  itemHeight: number        // estimación de alto por instancia, solo para decidir salto de página
+  children: PdfElement[]    // recursivo -- un repeating-group puede contener otro
+}
+```
+
+`children` se autora en las mismas coordenadas absolutas que cualquier
+elemento, como si fuera la única instancia empezando en la `y` propia del
+grupo — `renderFlowElements` (`template-renderer.ts`, ahora recursivo en
+vez del loop plano de Bloques 1-8) traslada esas coordenadas para cada fila
+real, con `flowAfter`/ids resueltos por NIVEL (un hijo solo puede
+`flowAfter` a un hermano de su mismo array, nunca cruzar de nivel) pero ids
+únicos exigidos en TODA la plantilla. `itemGap` debe ser ≥ el `h` del
+primer hijo si ese hijo tiene `bgToken` (una caja se dibuja hacia ARRIBA
+desde su `y`) — de lo contrario la fila siguiente pinta encima de la
+anterior (bug real encontrado y corregido durante este bloque).
+
+De paso, dos extensiones mecánicas más (necesarias para las cajas de total
+de Orden de pago, generalizadas al resto): `TextElement.format?: 'currency'
+| 'date'` (formatea cada `{{variable}}` interpolada, no el texto completo)
+y el mismo `format` agregado a `PdfTableColumn` para `'date'`. Al
+implementar `format:'currency'` con `align:'right'` se encontró y corrigió
+un bug real preexistente: `x` en un `TextElement` es el punto de ANCLA de
+jsPDF según `align` (borde derecho si es `'right'`, centro si es
+`'center'`), no el borde izquierdo de una caja `[x, x+w]` — `textAnchorX()`
+calcula el ancla real a partir de la caja. Esto corrigió también un bug ya
+existente en Hoja de llamado (`footer-fecha`, Bloque 8) que nunca se había
+notado.
+
 ## Elementos obligatorios y legales por documento
 
 | Documento | `required` | `legal` | Opcional |
@@ -372,7 +415,7 @@ Así un schema que la preview acepta nunca es rechazado después por
 | 6 | Preview real (reusa patrón `Content-Disposition: inline`) | **Cerrado** — `GET /api/editor-pdfs/[tipo]/preview` + `lib/server/pdf/pdf-sample-data.ts`. Verificado con la pipeline de producción real (sin mocks): PDF válido generado y leído (`{{cliente}}` interpolado, tabla agrupada, estilos) |
 | 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | **Cerrado** — `lib/server/pdf/default-templates/cotizacion.ts` reconstruye el PDF real completo (header, tabla+groupTotal+currency, banner de 6 filas, NOTAS condicional, GENERALES/COSTOS/CANCELACIÓN con `flowAfter`). Comparado visualmente contra `generateCotizacionPdf()` con los mismos datos (SH2402): banner idéntico en valores/colores, misma estructura. Acción "migrar" agregada (faltaba una forma de crear la primera fila de `pdf_plantillas`). Verificado en navegador real (cookie `e2e-bypass`, APIs interceptadas con Playwright): "no migrado" → migrar → editor visual con el baseline real, legible y editable. Extensiones de schema/renderer de este bloque: `visibleIf`, `totals-banner`, `flowAfter`/`gap` (posición relativa — decisión de arquitectura aprobada por el usuario), `format:'currency'`, `groupTotalOf`, `align:'justify'`, token `--sn-yellow`. Gaps de fidelidad aceptados: fechas sin formatear, sin fallback "—" en locación vacía, sin bold-italic por celda, header modelado como 12 elementos en vez de una tabla real |
 | 8 | Hoja de llamado + Reporte de cierre (estructura simple, sin anidado) | **Cerrado** — `lib/server/pdf/default-templates/{hoja-llamado,reporte-cierre}.ts`. Comparados visualmente contra sus generadores reales con datos equivalentes: paridad alta, sin bugs de solapamiento nuevos. Nueva extensión de schema: `TableElement.emptyText?: string` (CREW/hitos muestran texto en vez de tabla vacía). Campos precalculados agregados al catálogo (mismo patrón que `descuento_monto`): `crew_items`/`equipo_items`, `items[].telefono`, `fecha_generacion`, `financiero_fila`, `equipo_texto`/`incidencias_texto`. Verificado en navegador real (mismo flujo migrar→editor que Cotización) |
-| 9 | Orden de pago (estructura responsable→evento→tabla — decide `repeating-group` vs. loop híbrido con Cotización ya probado como base) | Pendiente |
+| 9 | Orden de pago (estructura responsable→evento→tabla) | **Cerrado** — decisión de arquitectura: opción A del artefacto de comparación (`repeating-group`, elemento nuevo de `PdfElement`, aprobada por el usuario en sesión 2026-09-21). `lib/server/pdf/default-templates/orden-pago.ts` es un **rediseño**, no una reconstrucción 1:1 (a pedido explícito del usuario, extendido a los otros 3 documentos también — ver más abajo): misma jerarquía de datos (responsable→evento→ítems, 3 niveles de total) pero colores/tipografía/espaciado tomados de `--sn-*` en vez de los RGB sueltos del generador viejo (`orden-pago-pdf.ts` usa unidades `pt`, el motor usa `mm` — otro motivo para no clonar geometría). Extensiones de schema/renderer: `RepeatingGroupElement` (`rowsBinding`/`itemGap`/`itemHeight`/`children` recursivo, `renderFlowElements` recursivo con traslado de coordenadas por instancia en `template-renderer.ts`), `TextElement.format:'currency'\|'date'` (cajas de total; también corrige un bug real de posicionamiento para `align:'right'`/`'center'` — `x` debe ser el borde izquierdo de la caja, `textAnchorX()` calcula el ancla real de jsPDF), `PdfTableColumn.format` extendido con `'date'`. Verificado: render sin excepción con 0/2/10 responsables (multipágina), sin solapamientos (bug real encontrado y corregido: `itemGap` de un grupo repetido debe ser ≥ el `h` de su primer hijo si tiene `bgToken`), editor visual en navegador real (aparece como capa `repeating-group · requerido`, editable como caja única — editar visualmente **una instancia representativa** de los `children` queda fuera de este bloque, documentado en `EditorCanvas.tsx`). **Reskin extendido a los otros 3 documentos** (decisión del usuario, no solo Orden de pago): `format:'date'` (vía `formatDateDisplay`, con fallback "—" incluido) cierra el gap de fechas crudas que Cotización/Hoja de llamado/Reporte de cierre documentaban desde sus bloques — de paso corrigió un bug real preexistente en Hoja de llamado (`footer-fecha` con `align:'right'` mal posicionado, la misma clase de bug de `textAnchorX`) |
 | 10 | Extensibilidad (dar de alta un 5º tipo de documento) | Pendiente |
 
 ## Dependencias reales entre bloques y ejecución en paralelo
@@ -440,8 +483,9 @@ llegar ahí.
   `contentHeight()` restando el alto de `sticky` variable por template
   (el spike usa un alto fijo de ejemplo, no medido desde el contenido real
   del header/footer).
-- **P1 — Estructura anidada de Orden de pago:** diferido a Bloque 9 a
-  propósito.
+- **P1 — Estructura anidada de Orden de pago:** resuelto en Bloque 9 con
+  `RepeatingGroupElement` (opción A del artefacto de comparación, aprobada
+  por el usuario) — ver tracker.
 - **P1 — Fidelidad visual de Cotización:** reproducir el diseño actual
   antes de estilizarlo, sin cambios accidentales de layout.
 - **P1 — Activo vs. borrador:** frontera inequívoca (`autosave →

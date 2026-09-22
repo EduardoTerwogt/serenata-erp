@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-21 (sesión 3)
+**Última actualización:** 2026-09-22 (sesión 3)
 
 ## Estado
 
@@ -9,14 +9,83 @@ sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
 posición libre, texto y color acotado a la paleta del design system), con
 un flujo diseño-activo/borrador explícito y elementos obligatorios/legales
 protegidos. Arquitectura: schema JSON + renderer sobre jsPDF (sin
-dependencia nueva). **Bloques 1-8 cerrados** — ver tracker completo en
-`docs/PLAN.md`. El editor ya migra y renderiza Cotización, Hoja de llamado
-y Reporte de cierre con su plantilla real, cada una comparada visualmente
-contra su generador de producción con los mismos datos. Queda **Bloque 9**
-(Orden de pago, depende explícitamente del patrón del Bloque 7) y
-**Bloque 10** (extensibilidad). El usuario pidió ser avisado solo cuando
-el plan completo (los 10 bloques) esté implementado y el editor listo para
-pruebas de uso reales — todavía no es el caso.
+dependencia nueva). **Bloques 1-9 cerrados** — ver tracker completo en
+`docs/PLAN.md`. El editor ya migra y renderiza los 4 documentos con su
+plantilla real. Cotización/Hoja de llamado/Reporte de cierre reconstruyen
+el PDF de producción 1:1; Orden de pago (Bloque 9) es un **rediseño**
+aplicando el design system (`repeating-group`, decisión de arquitectura
+aprobada por el usuario), y a pedido del usuario ese mismo criterio de
+diseño (`format:'date'`, cerrando el gap de fechas crudas) se extendió
+también a los otros 3. Queda **Bloque 10** (extensibilidad). El usuario
+pidió ser avisado solo cuando el plan completo (los 10 bloques) esté
+implementado y el editor listo para pruebas de uso reales — todavía no es
+el caso.
+
+## Completado en esta sesión (sesión 3) — Bloque 9: Orden de pago (rediseño)
+
+Continuación tras el cierre del Bloque 8. El usuario, al aprobar la opción
+recomendada del artefacto de comparación para la arquitectura de
+repetición, pidió además rediseñar Orden de pago aplicando el design
+system (no clonar el generador viejo 1:1 como los otros 3), y extender ese
+mismo criterio a Cotización/Hoja de llamado/Reporte de cierre.
+
+- **Decisión de arquitectura (aprobada por el usuario vía artefacto visual
+  con 3 opciones)**: `RepeatingGroupElement` (`type: 'repeating-group'`,
+  `rowsBinding`/`itemGap`/`itemHeight`/`children: PdfElement[]` recursivo)
+  — nuevo tipo de `PdfElement`, en vez de un loop híbrido fuera del
+  renderer o aplanar a un `groupBy` de 2 niveles (habría perdido las cajas
+  de color propias de cada nivel).
+- **`template-renderer.ts` reescrito para recursión**: el loop plano de
+  Bloques 1-8 (`renderFromTemplate`) pasó a `renderFlowElements()`,
+  llamado recursivamente por cada fila de un `repeating-group` con un
+  `translateY` que traduce las coordenadas "de diseño" (autoradas como si
+  fuera la única instancia) a la posición real de cada fila. `flowAfter`
+  se resuelve por NIVEL (un hijo solo encadena con un hermano de su mismo
+  array); los ids, en cambio, deben ser únicos en TODA la plantilla
+  (`pdf-template-schema.ts`, los 3 `superRefine` ahora recorren
+  `children` recursivo).
+- **Bug real encontrado y corregido**: `itemGap` de un grupo repetido debe
+  ser ≥ el `h` del primer hijo si tiene `bgToken` (la caja se dibuja hacia
+  ARRIBA desde su propia `y`) — con un `itemGap` menor, la fila siguiente
+  pintaba encima del texto de la anterior. Encontrado en el chequeo visual
+  del render con datos reales.
+- **Bug real preexistente encontrado y corregido**: `x` en un
+  `TextElement` es el punto de ANCLA de jsPDF según `align` (borde derecho
+  si `'right'`, centro si `'center'`), no el borde izquierdo de una caja
+  `[x, x+w]` — nuevo helper `textAnchorX()` calcula el ancla real. Esto ya
+  afectaba a Hoja de llamado (Bloque 8, `footer-fecha`) sin que nadie lo
+  hubiera notado — corregido también.
+- **`TextElement.format?: 'currency' | 'date'`** (nueva extensión de
+  schema): formatea cada `{{variable}}` interpolada dentro del texto (no
+  el string completo — un texto puede mezclar literal + variable). También
+  agregado a `PdfTableColumn.format` para `'date'` (columnas
+  `planeado`/`real` de la tabla de hitos, Reporte de cierre).
+- **`lib/server/pdf/default-templates/orden-pago.ts`** (nuevo, rediseño no
+  1:1): jerarquía de datos idéntica al generador real (responsable→
+  evento→ítems, 3 niveles de total) pero colores/tipografía/espaciado de
+  `--sn-*` (`orange`/`ink`/`surface-alt`/`surface-alt-2` en vez de los RGB
+  sueltos de `orden-pago-pdf.ts`, que además usa unidades `pt` — otro
+  motivo para no clonar geometría). `contacto_texto`/`fecha_generacion`
+  agregados al catálogo de variables (mismo patrón que `descuento_monto`).
+- **Reskin extendido a los otros 3 documentos** (a pedido explícito del
+  usuario): `format:'date'` aplicado a `fecha_entrega`/`fecha_cotizacion`
+  (Cotización), `fecha_entrega` (Hoja de llamado), `fecha_cierre` +
+  columnas de hitos (Reporte de cierre) — cierra el gap de fidelidad de
+  fechas crudas sin formato que los 3 archivos documentaban desde sus
+  bloques originales, con el fallback "—" de `formatDateDisplay` incluido
+  gratis para campos vacíos.
+- **Verificado**: render sin excepción con 0, 2 y 10 responsables
+  (multipágina real, sin solapamientos); PDF leído visualmente en cada
+  paso del debugging (bugs de arriba encontrados así); editor visual en
+  navegador real (`repeating-group` aparece como capa "requerido",
+  editable como caja única — editar visualmente **una instancia
+  representativa** de los `children` queda fuera de este bloque,
+  documentado en `EditorCanvas.tsx`); `tsc`/lint/`vitest` completos en
+  verde (1092 tests) antes de cada push.
+- `PdfPlantillasRepository.migrar()`/`restaurar()` ahora soportan los 4
+  tipos de documento.
+- `docs/PLAN.md` actualizado: Bloque 9 → Cerrado en el tracker, con el
+  detalle de la extensión de schema en la sección "Schema".
 
 ## Completado en esta sesión (sesión 3) — Bloque 8: Hoja de llamado + Reporte de cierre
 
@@ -324,17 +393,14 @@ resto en `docs/archive/` y sesiones previas.
 
 El usuario pidió que se le avise recién cuando **el plan completo (10
 bloques)** esté implementado y el editor listo para pruebas de uso reales
-— no antes. Quedan:
+— no antes. Queda:
 
-1. **Bloque 9** — Orden de pago (estructura responsable→evento→tabla;
-   decide `repeating-group` vs. loop híbrido, usando Cotización ya migrada
-   como base — dependencia explícita del plan).
-2. **Bloque 10** — Extensibilidad: dar de alta un 5º tipo de documento
+1. **Bloque 10** — Extensibilidad: dar de alta un 5º tipo de documento
    real, probando que el motor generaliza más allá de los 4 actuales.
-3. PR #82 (`claude/zen-cray-4lre07` → `main`) sigue en borrador, bajo
+2. PR #82 (`claude/zen-cray-4lre07` → `main`) sigue en borrador, bajo
    seguimiento (`subscribe_pr_activity`) — mergear solo cuando todo el plan
    esté cerrado y CI en verde, no bloque por bloque.
-4. Pendientes antiguos, sin acción aún (fuera del alcance de esta
+3. Pendientes antiguos, sin acción aún (fuera del alcance de esta
    iniciativa): corregir el acento desactualizado en `.claude/rules/ui.md`
    (`#FF5A1A` → `#FE7B01`); decidir si el RLS deshabilitado en
    `cliente_id_backfill_clasificacion` amerita una tarea aparte (ver
