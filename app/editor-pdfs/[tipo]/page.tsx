@@ -10,8 +10,10 @@ import { getJson, sendJson } from '@/lib/client/api'
 import { PdfDocumentTypeSchema, PdfTemplateSchema, type PdfElement, type PdfTemplate } from '@/lib/server/pdf/pdf-template-schema'
 import { resolveColorToken } from '@/lib/server/pdf/pdf-color-tokens'
 import { EditorCanvas } from './EditorCanvas'
-import { Inspector } from './Inspector'
-import { Toolbar } from './Toolbar'
+import { LayersPanel } from './LayersPanel'
+import { EditorHeader } from './EditorHeader'
+import { ContextualToolbar } from './toolbar/ContextualToolbar'
+import { selectionFromIds, selectionIds, type EditorSelection } from './selection'
 
 interface PdfPlantillaRow {
   active_schema: PdfTemplate
@@ -34,7 +36,9 @@ export default function EditorPdfTipoPage() {
 
   const [row, setRow] = useState<PdfPlantillaRow | null | 'loading' | 'not-found'>('loading')
   const [template, setTemplate] = useState<PdfTemplate | null>(null)
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [selection, setSelection] = useState<EditorSelection>({ type: 'none' })
+  const selectedIds = selectionIds(selection)
+  const selectIds = useCallback((ids: string[]) => setSelection(selectionFromIds(ids)), [])
   const [snapGrid, setSnapGrid] = useState(2)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [confirmRestaurar, setConfirmRestaurar] = useState(false)
@@ -150,7 +154,7 @@ export default function EditorPdfTipoPage() {
       try {
         resolveColorToken(selectedText)
       } catch {
-        // token inválido -- no rompe la UI, el Inspector lo deja elegir de nuevo
+        // token inválido -- no rompe la UI, el swatch de color lo deja elegir de nuevo
       }
     }
   }, [selectedText])
@@ -185,16 +189,23 @@ export default function EditorPdfTipoPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Toolbar
+      <EditorHeader
         tipoLabel={LABELS[tipo] ?? tipo}
-        template={template}
-        selectedIds={selectedIds}
-        onChangeElements={updateElements}
         saveStatus={saveStatus}
         onPreview={() => window.open(`/api/editor-pdfs/${tipo}/preview`, '_blank')}
         onDescartar={handleDescartar}
         onRestaurar={() => setConfirmRestaurar(true)}
         onAplicar={handleAplicar}
+      />
+
+      <ContextualToolbar
+        template={template}
+        selection={selection}
+        onChangeElements={updateElements}
+        onChangeTemplate={updateTemplate}
+        onSelect={selectIds}
+        snapGrid={snapGrid}
+        onChangeSnapGrid={setSnapGrid}
       />
 
       {actionError && (
@@ -206,19 +217,16 @@ export default function EditorPdfTipoPage() {
           <EditorCanvas
             template={template}
             selectedIds={selectedIds}
-            onSelect={setSelectedIds}
+            onSelect={selectIds}
             onChangeElements={updateElements}
             snapGrid={snapGrid}
           />
         </div>
-        <Inspector
+        <LayersPanel
           template={template}
           selectedIds={selectedIds}
-          onSelect={setSelectedIds}
+          onSelect={selectIds}
           onChangeElements={updateElements}
-          onChangeTemplate={updateTemplate}
-          snapGrid={snapGrid}
-          onChangeSnapGrid={setSnapGrid}
         />
       </div>
 

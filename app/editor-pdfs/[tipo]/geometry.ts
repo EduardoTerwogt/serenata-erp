@@ -37,7 +37,7 @@ export function boundingBoxOf(elements: PdfElement[]): BoundingBox | null {
   )
 }
 
-/** Etiqueta legible de una capa -- compartida entre Inspector (lista de capas) y EditorCanvas (etiqueta flotante sobre la selección). */
+/** Etiqueta legible de una capa -- compartida entre LayersPanel (lista de capas) y EditorCanvas (etiqueta flotante sobre la selección). */
 export function layerLabel(el: PdfElement): string {
   if (el.type === 'text') return el.text.trim() ? el.text.slice(0, 28) : '(texto vacío)'
   if (el.type === 'table') return `Tabla · ${el.rowsBinding}`
