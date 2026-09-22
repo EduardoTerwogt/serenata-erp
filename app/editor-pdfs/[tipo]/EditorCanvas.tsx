@@ -180,12 +180,26 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
     >
       {sorted.map(el => {
         const isSelected = selectedIds.includes(el.id)
+        // Alto: `el.h` explícito es una decisión de diseño deliberada (ej. las
+        // cajas de fondo del header, tamaño fijo independiente del texto) y
+        // gana siempre. Solo cuando NO hay `h` explícito (texto envuelto sin
+        // alto fijo: generales-line1/2, costos-text, etc.) se usa el alto que
+        // resolveTemplateLayout ya calculó (bottom - y, jsPDF/Helvetica) --
+        // sin esto, el navegador (Inter) envuelve distinto que el PDF real y
+        // el siguiente elemento del flujo se dibuja encima. overflow:hidden
+        // de respaldo: la fuente de verdad de alto real sigue siendo "Vista
+        // previa" (el PDF real), este cálculo es solo para que el lienzo no
+        // se vea roto mientras se edita.
+        const layoutEntry = layoutById?.get(el.id)
+        const computedHeight = layoutEntry ? layoutEntry.bottom - layoutEntry.y : undefined
+        const boxHeight = el.h !== undefined ? el.h : computedHeight && computedHeight > 0 ? computedHeight : undefined
         const style: React.CSSProperties = {
           position: 'absolute',
           left: mmToPx(el.x),
           top: mmToPx(resolvedY(el)),
           width: mmToPx(el.w),
-          height: el.h !== undefined ? mmToPx(el.h) : undefined,
+          height: boxHeight !== undefined ? mmToPx(boxHeight) : undefined,
+          overflow: boxHeight !== undefined ? 'hidden' : undefined,
           zIndex: el.zIndex ?? 0,
           outline: isSelected
             ? '2px solid rgb(254,123,1)'
