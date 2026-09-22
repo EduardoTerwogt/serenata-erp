@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-21 (sesión 2)
+**Última actualización:** 2026-09-22 (sesión 3, sincronizado a `main`)
 
 ## Estado
 
@@ -9,16 +9,21 @@ sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
 posición libre, texto y color acotado a la paleta del design system), con
 un flujo diseño-activo/borrador explícito y elementos obligatorios/legales
 protegidos. Arquitectura decidida: schema JSON + renderer sobre jsPDF
-(sin dependencia nueva). **Bloque 1 cerrado** (spike del renderer).
-**Bloque 2 cerrado** (schema tipado + Zod + `renderFromTemplate()` +
-mapa de tokens de color + catálogo de variables, integrados). **Bloque 3
-parcial**: persistencia (`pdf_plantillas`) y permisos (`editor-pdfs`)
-cerrados; falta la API (POST draft/aplicar/restaurar) para poder arrancar
-el Bloque 4. El Bloque 2 y la parte no-API del Bloque 3 se ejecutaron **en
-paralelo** (5 subagentes sobre archivos disjuntos, ver `docs/PLAN.md`
-"Dependencias reales entre bloques") — el usuario pidió explícitamente
-paralelizar donde no hubiera dependencia real, y solo serializar el
-trabajo que desbloquea bloques futuros.
+(sin dependencia nueva). **Bloques 0-6 cerrados** (PR #81 mergeado a
+`main`: spike, schema+Zod, persistencia+API+permisos, catálogo
+`/editor-pdfs`, editor visual/canvas, preview real).
+
+**Bloque 7 (piloto Cotización) parcial, en PR #83, todavía no mergeado a
+`main`:** layout de flujo real (`flowAfter`/`visibleIf`/tipo
+`totals-banner`) que corrige un `active_schema` corrupto de Cotización en
+producción, más un primer rediseño visual del lienzo. Ese mismo PR define
+también, aprobado pero sin ejecutar, el **Bloque 11** (rediseño completo
+de la interacción del lienzo estilo Canva: selección explícita, toolbar
+contextual, manipulación directa transaccional, undo/redo real). El
+detalle día a día de esa sesión (log completo, hallazgos, decisiones) vive
+en la rama `claude/great-davinci-2v8c94` — esta copia en `main` se
+mantiene corregida solo en lo que ya es cierto para el código mergeado,
+sin adelantar contenido de un PR todavía abierto.
 
 ## Completado en esta sesión — Bloque 1: spike del renderer
 
@@ -198,18 +203,20 @@ resto en `docs/archive/` y sesiones previas.
 
 ## Siguiente paso
 
-1. PR #81 (`claude/zen-cray-4lre07` → `main`) abierto en borrador y bajo
-   seguimiento (`subscribe_pr_activity`) — esperar CI en verde en el HEAD
-   actual (varios pushes desde el `live` rojo mencionado arriba) antes de
-   mergear.
-2. Terminar el Bloque 3: rutas API (`POST` draft/aplicar/restaurar) que
-   consumen A+D+E juntos — `requireSection('editor-pdfs')` primero,
-   payload validado con `PdfTemplateSchema`, copiando el patrón de
-   `app/api/service-templates/route.ts`. Esto desbloquea el Bloque 4
-   (catálogo `/editor-pdfs`).
-3. Considerar corregir el valor de acento en `.claude/rules/ui.md`
+1. **PR #81 ya mergeado a `main`** (Bloques 0-6 cerrados). Pendiente:
+   mergear **PR #83** (`claude/great-davinci-2v8c94` → `main`, CI en
+   verde) — cierra el Bloque 7 parcial (layout de flujo + fix de datos
+   corruptos) y es el primer paso (Housekeeping) del Bloque 11.
+2. Tras mergear PR #83: retomar en una rama nueva la ejecución del
+   Bloque 11 (rediseño de interacción del lienzo, estilo Canva) — plan
+   completo en `docs/PLAN.md` una vez sincronizado desde esa rama.
+3. Terminar el Bloque 7 de verdad: la ruta que genera el PDF final de
+   Cotización todavía usa `cotizacion-pdf.ts` hardcodeado, no
+   `renderFromTemplate()` — falta el data-adapter real y verificar
+   fidelidad visual contra el PDF real con datos de `serenata-erp-test`.
+4. Considerar corregir el valor de acento en `.claude/rules/ui.md`
    (`#FF5A1A` → `#FE7B01`) como ajuste puntual, fuera de la iniciativa del
    Editor de PDFs.
-4. Considerar si el RLS deshabilitado en
+5. Considerar si el RLS deshabilitado en
    `cliente_id_backfill_clasificacion` amerita una tarea aparte (ver
    "Problemas encontrados").

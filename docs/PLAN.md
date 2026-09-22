@@ -1,11 +1,19 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, en ejecución (2026-09-21) — arquitectura del motor de
-plantillas, schema, workflow activo/borrador y bloques cerrados tras dos
-rondas de auditoría (Claude contra el repo real, y el usuario contra la
-propuesta de Claude). Bloque 1 (spike técnico) cerrado esta sesión — ver
-tracker. Bloque 2 (modelo de template + validación) arranca en la próxima
-sesión.
+**Estado:** Aprobado, en ejecución (última actualización 2026-09-22) —
+arquitectura del motor de plantillas, schema, workflow activo/borrador y
+bloques cerrados tras dos rondas de auditoría (Claude contra el repo real,
+y el usuario contra la propuesta de Claude). **Bloques 0-6 cerrados**
+(PR #81 mergeado a `main` — ver tracker). **Bloque 7 (piloto Cotización):
+parcial**, en curso en PR #83 (`claude/great-davinci-2v8c94`), todavía
+**no mergeado a `main`** — layout de flujo real (`flowAfter`/`visibleIf`/
+tipo `totals-banner`) y un primer rediseño visual del lienzo. Ese mismo PR
+también define, sin ejecutar todavía, el **Bloque 11** (rediseño de la
+interacción del lienzo estilo Canva: selección explícita, toolbar
+contextual, manipulación directa, undo/redo real) — detalle completo
+disponible en esa rama una vez mergeada; esta versión de `docs/PLAN.md`
+en `main` no repite ese detalle para no describir código que `main`
+todavía no tiene.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
