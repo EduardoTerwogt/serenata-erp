@@ -29,7 +29,7 @@ describe('EditorCanvas -- drag transaccional', () => {
     const onChangeElements = vi.fn()
     const onSelect = vi.fn()
 
-    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} />)
+    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} zoom={1} />)
 
     const el = screen.getByTestId('el-t1')
     fireEvent.pointerDown(el, { clientX: 100, clientY: 100 })
@@ -44,12 +44,30 @@ describe('EditorCanvas -- drag transaccional', () => {
     expect(onChangeElements).toHaveBeenCalledTimes(1)
   })
 
+  it('con zoom=2 el mismo desplazamiento en px mueve la mitad en mm (Bloque 11.4)', () => {
+    const template = baseTemplate([textEl('t1')])
+    const onChangeElements = vi.fn()
+    const onSelect = vi.fn()
+
+    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} zoom={2} />)
+
+    const el = screen.getByTestId('el-t1')
+    fireEvent.pointerDown(el, { clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(window, { clientX: 160, clientY: 100 }) // 60px de delta
+    fireEvent.pointerUp(window, { clientX: 160, clientY: 100 })
+
+    const updater = onChangeElements.mock.calls[0][0] as (els: PdfElement[]) => PdfElement[]
+    const t1 = updater(template.elements).find(e => e.id === 't1') as { x: number }
+    // 60px / (CANVAS_SCALE=3 * zoom=2) = 10mm -- a zoom=1 el mismo delta en px hubiera sido 20mm.
+    expect(t1.x).toBe(30) // 20 (x inicial) + 10
+  })
+
   it('redimensionar (resize-se) llama onChangeElements exactamente una vez y mueve el elemento correcto', () => {
     const template = baseTemplate([textEl('t1')])
     const onChangeElements = vi.fn()
     const onSelect = vi.fn()
 
-    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} />)
+    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} zoom={1} />)
 
     const handle = screen.getByTestId('resize-se')
 
@@ -71,7 +89,7 @@ describe('EditorCanvas -- drag transaccional', () => {
     const onChangeElements = vi.fn()
     const onSelect = vi.fn()
 
-    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} />)
+    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} zoom={1} />)
 
     const handle = screen.getByTestId('resize-se')
     fireEvent.pointerDown(handle, { clientX: 100, clientY: 100 })
@@ -91,7 +109,7 @@ describe('EditorCanvas -- edición directa de texto (doble-click)', () => {
     const onChangeElements = vi.fn()
     const onSelect = vi.fn()
 
-    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} />)
+    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} zoom={1} />)
 
     fireEvent.doubleClick(screen.getByTestId('el-t1'))
     const editable = screen.getByTestId('el-t1').querySelector('[contenteditable="true"]') as HTMLElement
@@ -111,7 +129,7 @@ describe('EditorCanvas -- edición directa de texto (doble-click)', () => {
     const onChangeElements = vi.fn()
     const onSelect = vi.fn()
 
-    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} />)
+    render(<EditorCanvas template={template} selectedIds={['t1']} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} zoom={1} />)
 
     fireEvent.doubleClick(screen.getByTestId('el-t1'))
     const editable = screen.getByTestId('el-t1').querySelector('[contenteditable="true"]') as HTMLElement
@@ -129,7 +147,7 @@ describe('EditorCanvas -- edición directa de texto (doble-click)', () => {
     const onChangeElements = vi.fn()
     const onSelect = vi.fn()
 
-    render(<EditorCanvas template={template} selectedIds={[]} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} />)
+    render(<EditorCanvas template={template} selectedIds={[]} onSelect={onSelect} onChangeElements={onChangeElements} snapGrid={0} zoom={1} />)
 
     fireEvent.doubleClick(screen.getByTestId('el-l1'))
     expect(screen.getByTestId('el-l1').querySelector('[contenteditable="true"]')).toBeNull()

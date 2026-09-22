@@ -6,7 +6,7 @@ import { resolveTemplateLayout } from '@/lib/server/pdf/pdf-template-layout'
 import { buildSampleData } from '@/lib/server/pdf/pdf-sample-data'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { layerLabel, mmToPx, pxToMm, snapToGrid } from './geometry'
+import { layerLabel, mmToPxZoomed, pxToMmZoomed, snapToGrid } from './geometry'
 import { PDF_FONT_STACK, safeColor, textElementStyle, textOuterWrapperStyle } from './text-style'
 import { TextEditOverlay } from './TextEditOverlay'
 
@@ -16,6 +16,8 @@ interface EditorCanvasProps {
   onSelect: (ids: string[]) => void
   onChangeElements: (updater: (elements: PdfElement[]) => PdfElement[]) => void
   snapGrid: number
+  /** Zoom del lienzo (Bloque 11.4, docs/PLAN.md) -- 1 = 100%. */
+  zoom: number
 }
 
 type DragMode = 'move' | 'resize-se' | 'resize-nw' | 'resize-ne' | 'resize-sw'
@@ -76,15 +78,18 @@ function computeDragBox(start: Box, dx: number, dy: number, mode: DragMode, snap
   return { x: snapToGrid(x, snapGrid), y: snapToGrid(y, snapGrid), w: snappedW, h: snappedH }
 }
 
-export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements, snapGrid }: EditorCanvasProps) {
+export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements, snapGrid, zoom }: EditorCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const [liveDrag, setLiveDrag] = useState<{ overrides: Map<string, Box> } | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [pendingLegalEdit, setPendingLegalEdit] = useState<{ id: string; text: string } | null>(null)
 
-  const pageW = mmToPx(template.page.width)
-  const pageH = mmToPx(template.page.height)
+  const toPx = (mm: number) => mmToPxZoomed(mm, zoom)
+  const toMm = (px: number) => pxToMmZoomed(px, zoom)
+
+  const pageW = toPx(template.page.width)
+  const pageH = toPx(template.page.height)
 
   // Datos sintéticos del catálogo de variables (mismos que la vista previa
   // real, Bloque 6) -- solo hace falta resolver el layout de verdad (jsPDF +
@@ -108,7 +113,7 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
 
   function clientToMm(clientX: number, clientY: number) {
     const rect = canvasRef.current!.getBoundingClientRect()
-    return { x: pxToMm(clientX - rect.left), y: pxToMm(clientY - rect.top) }
+    return { x: toMm(clientX - rect.left), y: toMm(clientY - rect.top) }
   }
 
   /**
@@ -268,10 +273,10 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
         const boxHeight = explicitH !== undefined ? explicitH : computedHeight && computedHeight > 0 ? computedHeight : undefined
         const style: React.CSSProperties = {
           position: 'absolute',
-          left: mmToPx(effectiveX),
-          top: mmToPx(effectiveY),
-          width: mmToPx(effectiveW),
-          height: boxHeight !== undefined ? mmToPx(boxHeight) : undefined,
+          left: toPx(effectiveX),
+          top: toPx(effectiveY),
+          width: toPx(effectiveW),
+          height: boxHeight !== undefined ? toPx(boxHeight) : undefined,
           zIndex: el.zIndex ?? 0,
           outline: isSelected
             ? '2px solid rgb(254,123,1)'
@@ -292,9 +297,9 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
             data-testid={`el-${el.id}`}
           >
             {isEditing && el.type === 'text' ? (
-              <TextEditOverlay element={el} onCommit={text => commitEdit(el, text)} onCancel={() => setEditingId(null)} />
+              <TextEditOverlay element={el} zoom={zoom} onCommit={text => commitEdit(el, text)} onCancel={() => setEditingId(null)} />
             ) : (
-              renderElementContent(el)
+              renderElementContent(el, zoom)
             )}
             {isSelected && selectedIds.length === 1 && !isEditing && (
               <>
@@ -317,10 +322,10 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
         <div
           className="absolute border border-dashed"
           style={{
-            left: mmToPx(Math.min(marquee.x0, marquee.x1)),
-            top: mmToPx(Math.min(marquee.y0, marquee.y1)),
-            width: mmToPx(Math.abs(marquee.x1 - marquee.x0)),
-            height: mmToPx(Math.abs(marquee.y1 - marquee.y0)),
+            left: toPx(Math.min(marquee.x0, marquee.x1)),
+            top: toPx(Math.min(marquee.y0, marquee.y1)),
+            width: toPx(Math.abs(marquee.x1 - marquee.x0)),
+            height: toPx(Math.abs(marquee.y1 - marquee.y0)),
             borderColor: 'rgb(254,123,1)',
             background: 'rgba(254,123,1,0.08)',
           }}
@@ -340,19 +345,19 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
   )
 }
 
-function renderElementContent(el: PdfElement) {
+function renderElementContent(el: PdfElement, zoom: number) {
   if (el.type === 'text') {
     const isBackgroundOnly = el.text.trim() === '' && el.bgToken !== undefined
     return (
       <div style={textOuterWrapperStyle(el)}>
-        <div style={textElementStyle(el)}>
+        <div style={textElementStyle(el, zoom)}>
           {el.text || (isBackgroundOnly ? null : <span className="italic text-faint">(vacío)</span>)}
         </div>
       </div>
     )
   }
   if (el.type === 'line') {
-    return <div style={{ width: '100%', height: mmToPx(el.weight), background: safeColor(el.colorToken) }} />
+    return <div style={{ width: '100%', height: mmToPxZoomed(el.weight, zoom), background: safeColor(el.colorToken) }} />
   }
   if (el.type === 'image') {
     // Placeholder (no hay preview real del asset en el lienzo) -- `opacity`
@@ -377,15 +382,15 @@ function renderElementContent(el: PdfElement) {
     return (
       <div
         className="flex w-full flex-col justify-center gap-1 px-3"
-        style={{ height: mmToPx(bannerH), backgroundColor: safeColor(el.bgColorToken), fontFamily: PDF_FONT_STACK }}
+        style={{ height: mmToPxZoomed(bannerH, zoom), backgroundColor: safeColor(el.bgColorToken), fontFamily: PDF_FONT_STACK }}
       >
         {el.rows.map((row, i) => (
           <div key={i} className="flex items-center justify-between" style={{ fontWeight: row.bold ? 700 : 400 }}>
-            <span style={{ color: safeColor(row.labelColorToken), fontSize: mmToPx(row.fontSize) * 0.5 }}>
+            <span style={{ color: safeColor(row.labelColorToken), fontSize: mmToPxZoomed(row.fontSize, zoom) * 0.5 }}>
               {row.label}
               {row.visibleIf && <span className="ml-1 italic text-faint">({row.visibleIf})</span>}
             </span>
-            <span style={{ color: safeColor(row.valueColorToken), fontSize: mmToPx(row.fontSize) * 0.5 }}>
+            <span style={{ color: safeColor(row.valueColorToken), fontSize: mmToPxZoomed(row.fontSize, zoom) * 0.5 }}>
               {row.negate ? '-' : ''}
               {`{{${row.valueVariable}}}`}
             </span>

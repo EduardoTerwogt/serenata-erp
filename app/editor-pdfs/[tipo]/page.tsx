@@ -16,6 +16,7 @@ import { ContextualToolbar } from './toolbar/ContextualToolbar'
 import { selectionFromIds, selectionIds, type EditorSelection } from './selection'
 import { useEditorHistory } from './history'
 import { useEditorKeyboardShortcuts } from './useEditorKeyboardShortcuts'
+import { mmToPx, ZOOM_MAX, ZOOM_MIN } from './geometry'
 
 interface PdfPlantillaRow {
   active_schema: PdfTemplate
@@ -43,6 +44,8 @@ export default function EditorPdfTipoPage() {
   const selectedIds = selectionIds(selection)
   const selectIds = useCallback((ids: string[]) => setSelection(selectionFromIds(ids)), [])
   const [snapGrid, setSnapGrid] = useState(2)
+  const [zoom, setZoom] = useState(1)
+  const canvasWrapperRef = useRef<HTMLDivElement>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [confirmRestaurar, setConfirmRestaurar] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -104,6 +107,17 @@ export default function EditorPdfTipoPage() {
 
   function updateElements(updater: (elements: PdfElement[]) => PdfElement[]) {
     updateTemplate(t => ({ ...t, elements: updater(t.elements) }))
+  }
+
+  /** Zoom/viewport mínimo viable (Bloque 11.4, docs/PLAN.md): calcula el zoom que hace caber la página completa en el ancho visible del contenedor. */
+  function fitToPage() {
+    const container = canvasWrapperRef.current
+    if (!container || !template) return
+    const padding = 48 // p-6 (24px) a cada lado del contenedor, ver className abajo
+    const available = container.clientWidth - padding
+    if (available <= 0) return
+    const fitted = available / mmToPx(template.page.width)
+    setZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, fitted)))
   }
 
   async function handleAplicar() {
@@ -222,6 +236,9 @@ export default function EditorPdfTipoPage() {
         onSelect={selectIds}
         snapGrid={snapGrid}
         onChangeSnapGrid={setSnapGrid}
+        zoom={zoom}
+        onChangeZoom={setZoom}
+        onFitToPage={fitToPage}
       />
 
       {actionError && (
@@ -229,13 +246,14 @@ export default function EditorPdfTipoPage() {
       )}
 
       <div className="flex gap-4 overflow-auto">
-        <div className="flex-1 overflow-auto bg-app p-6">
+        <div ref={canvasWrapperRef} className="flex-1 overflow-auto bg-app p-6">
           <EditorCanvas
             template={template}
             selectedIds={selectedIds}
             onSelect={selectIds}
             onChangeElements={updateElements}
             snapGrid={snapGrid}
+            zoom={zoom}
           />
         </div>
         <LayersPanel

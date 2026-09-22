@@ -11,6 +11,37 @@ export function pxToMm(px: number): number {
   return px / CANVAS_SCALE
 }
 
+/**
+ * Zoom/viewport mínimo viable (Bloque 11.4, docs/PLAN.md): mismas
+ * conversiones que `mmToPx`/`pxToMm`, con un factor de escala extra
+ * (`CANVAS_SCALE * zoom`) -- un solo lugar centraliza el efecto del zoom
+ * para que drag/resize/marquee/tamaño de texto no se desincronicen del
+ * lienzo. `zoom = 1` es idéntico a `mmToPx`/`pxToMm`.
+ */
+export function mmToPxZoomed(mm: number, zoom: number): number {
+  return mm * CANVAS_SCALE * zoom
+}
+
+export function pxToMmZoomed(px: number, zoom: number): number {
+  return px / (CANVAS_SCALE * zoom)
+}
+
+/** Niveles discretos de zoom (Bloque 11.4) -- rango mínimo viable, 50%-200%. */
+export const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
+export const ZOOM_MIN = ZOOM_STEPS[0]
+export const ZOOM_MAX = ZOOM_STEPS[ZOOM_STEPS.length - 1]
+
+/** Siguiente nivel de zoom hacia arriba/abajo desde `current` (no tiene que ser exactamente un valor de ZOOM_STEPS, ej. tras "Ajustar a página"). */
+export function stepZoom(current: number, direction: 1 | -1): number {
+  if (direction === 1) {
+    const next = ZOOM_STEPS.find(z => z > current + 1e-6)
+    return next ?? ZOOM_MAX
+  }
+  const reversed = [...ZOOM_STEPS].reverse()
+  const next = reversed.find(z => z < current - 1e-6)
+  return next ?? ZOOM_MIN
+}
+
 /** Redondea al múltiplo de `grid` (mm) más cercano. */
 export function snapToGrid(value: number, grid: number): number {
   if (grid <= 0) return value

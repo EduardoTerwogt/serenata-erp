@@ -18,6 +18,9 @@ interface ContextualToolbarProps {
   onSelect: (ids: string[]) => void
   snapGrid: number
   onChangeSnapGrid: (grid: number) => void
+  zoom: number
+  onChangeZoom: (zoom: number) => void
+  onFitToPage: () => void
 }
 
 /**
@@ -34,6 +37,9 @@ export function ContextualToolbar({
   onSelect,
   snapGrid,
   onChangeSnapGrid,
+  zoom,
+  onChangeZoom,
+  onFitToPage,
 }: ContextualToolbarProps) {
   const context = resolveToolbarContext(selection, template.elements)
 
@@ -48,7 +54,15 @@ export function ContextualToolbar({
   return (
     <div className="flex min-h-[52px] flex-none flex-wrap items-center gap-2 rounded-panel border border-hairline bg-card px-4 py-2.5">
       {context.kind === 'empty' && (
-        <EmptyToolbar template={template} onChangeTemplate={onChangeTemplate} snapGrid={snapGrid} onChangeSnapGrid={onChangeSnapGrid} />
+        <EmptyToolbar
+          template={template}
+          onChangeTemplate={onChangeTemplate}
+          snapGrid={snapGrid}
+          onChangeSnapGrid={onChangeSnapGrid}
+          zoom={zoom}
+          onChangeZoom={onChangeZoom}
+          onFitToPage={onFitToPage}
+        />
       )}
       {context.kind === 'text' && (
         <TextToolbar

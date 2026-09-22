@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { align, boundingBoxOf, distributeHorizontal, distributeVertical, mmToPx, pxToMm, snapToGrid } from './geometry'
+import {
+  align,
+  boundingBoxOf,
+  distributeHorizontal,
+  distributeVertical,
+  mmToPx,
+  mmToPxZoomed,
+  pxToMm,
+  pxToMmZoomed,
+  snapToGrid,
+  stepZoom,
+  ZOOM_MAX,
+  ZOOM_MIN,
+} from './geometry'
 import type { PdfElement } from '@/lib/server/pdf/pdf-template-schema'
 
 function line(id: string, x: number, y: number, w: number, h = 10): PdfElement {
@@ -10,6 +23,37 @@ describe('geometry: mm/px', () => {
   it('convierte mm a px y de vuelta sin pérdida', () => {
     expect(mmToPx(10)).toBe(30)
     expect(pxToMm(30)).toBe(10)
+  })
+})
+
+describe('geometry: mm/px con zoom (Bloque 11.4)', () => {
+  it('zoom=1 es idéntico a mmToPx/pxToMm', () => {
+    expect(mmToPxZoomed(10, 1)).toBe(mmToPx(10))
+    expect(pxToMmZoomed(30, 1)).toBe(pxToMm(30))
+  })
+
+  it('zoom escala proporcionalmente y es invertible', () => {
+    expect(mmToPxZoomed(10, 2)).toBe(60) // 10 * 3 * 2
+    expect(pxToMmZoomed(60, 2)).toBe(10)
+    expect(mmToPxZoomed(10, 0.5)).toBe(15)
+    expect(pxToMmZoomed(15, 0.5)).toBe(10)
+  })
+})
+
+describe('geometry: stepZoom (Bloque 11.4)', () => {
+  it('sube/baja al siguiente nivel discreto', () => {
+    expect(stepZoom(1, 1)).toBe(1.25)
+    expect(stepZoom(1, -1)).toBe(0.75)
+  })
+
+  it('se satura en los extremos en vez de salirse del rango', () => {
+    expect(stepZoom(ZOOM_MAX, 1)).toBe(ZOOM_MAX)
+    expect(stepZoom(ZOOM_MIN, -1)).toBe(ZOOM_MIN)
+  })
+
+  it('un zoom "fuera de escalón" (ej. tras Ajustar a página) redondea al escalón más cercano en la dirección pedida', () => {
+    expect(stepZoom(0.9, 1)).toBe(1) // sube al primer escalón mayor a 0.9
+    expect(stepZoom(0.9, -1)).toBe(0.75) // baja al primer escalón menor a 0.9
   })
 })
 

@@ -6,6 +6,7 @@ import { textElementStyle, textOuterWrapperStyle } from './text-style'
 
 interface TextEditOverlayProps {
   element: TextElement
+  zoom: number
   onCommit: (text: string) => void
   onCancel: () => void
 }
@@ -23,7 +24,7 @@ interface TextEditOverlayProps {
  * evita los problemas conocidos de contentEditable controlado (cursor que
  * salta) y hace trivial que Escape revierta sin tocar el modelo.
  */
-export function TextEditOverlay({ element, onCommit, onCancel }: TextEditOverlayProps) {
+export function TextEditOverlay({ element, zoom, onCommit, onCancel }: TextEditOverlayProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -65,7 +66,7 @@ export function TextEditOverlay({ element, onCommit, onCancel }: TextEditOverlay
         onBlur={commit}
         onKeyDown={handleKeyDown}
         onPointerDown={e => e.stopPropagation()}
-        style={{ ...textElementStyle(element), outline: 'none' }}
+        style={{ ...textElementStyle(element, zoom), outline: 'none' }}
       />
     </div>
   )

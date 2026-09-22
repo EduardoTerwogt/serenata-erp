@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { TextElement } from '@/lib/server/pdf/pdf-template-schema'
 import { resolveColorToken } from '@/lib/server/pdf/pdf-color-tokens'
-import { mmToPx } from './geometry'
+import { mmToPxZoomed } from './geometry'
 
 // El PDF real dibuja con Helvetica (jsPDF) -- el lienzo usa Helvetica/Arial
 // en vez de heredar Inter (la fuente de la UI) para que el envuelto de texto
@@ -27,11 +27,11 @@ export function safeColor(token: string): string {
  * de estilo evita repetir el bug de mismatch de métricas ya corregido en
  * `82e59a2` (el overlay divergiendo del render estático).
  */
-export function textElementStyle(el: TextElement): CSSProperties {
+export function textElementStyle(el: TextElement, zoom = 1): CSSProperties {
   return {
     width: '100%',
     fontFamily: PDF_FONT_STACK,
-    fontSize: mmToPx(el.size) * 0.6,
+    fontSize: mmToPxZoomed(el.size, zoom) * 0.6,
     fontWeight: el.bold ? 700 : 400,
     textAlign: el.align,
     color: safeColor(el.colorToken),
