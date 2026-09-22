@@ -121,8 +121,15 @@ Drive no es uniforme entre los 4** (verificado leyendo cada ruta, 2026-09-21):
 solo Cotización reusa `drive_file_id` (`driveService.updateFile()` si ya existe);
 Orden de pago sube siempre un archivo nuevo (`uploadFileToDrive()`, API distinta,
 sin reuso); Hoja de llamado y Reporte de cierre no suben a Drive en absoluto — es
-descarga directa. Plan de migración a un motor de plantillas: `docs/PLAN.md`
-("Editor de PDFs").
+descarga directa. **Estos 4 generadores siguen siendo la ruta real de generación
+de PDF en producción hoy** (`app/api/cotizaciones/[id]/generar-pdf/route.ts` y
+equivalentes llaman `generate*Pdf()` directo) — el "Editor de PDFs" (iniciativa
+cerrada, `docs/archive/editor-de-pdfs.md`) construyó un motor de plantillas
+paralelo (`pdf-template-schema.ts`+`template-renderer.ts`, tabla
+`pdf_plantillas`) con una plantilla base real por documento, pero **no
+reemplazó** estos 4 generadores — cambiar una plantilla en el editor no cambia
+todavía el PDF que reciben clientes/proveedores. Ver "Editor de PDFs" en
+"Módulos y cobertura" para el detalle de qué sí quedó listo.
 
 **6. Datos.** Supabase directo para lecturas y escrituras simples; **RPCs de
 PostgreSQL** para todo lo que deba ser atómico: aprobar y cancelar cotización,
@@ -369,6 +376,7 @@ evidencia, no cuenta como terminado.
 | Revocación de sesión de staff (`session_version`) | `__tests__/proxy.test.ts`, `__tests__/auth-callbacks.test.ts`, `lib/__tests__/api-auth.test.ts`, `tests/e2e/live/staff-session-revocation.spec.ts` |
 | Resiliencia de Realtime (backoff, convergencia en remount, refresco de token) | `lib/realtime/__tests__/useRealtimeChannel.test.ts`, `tests/e2e/live/realtime-channel-reconnection.spec.ts` |
 | Infraestructura de carga real (k6, targets local/serverless, identidades de staff/Portal, volumen sembrado, cleanup por `runId` en Postgres+Drive, telemetría de `pg_stat_statements`) | `docs/archive/ef-3-engineering-hardening.md` §11 (3A-1..3A-6), `docs/archive/ef-3-baseline-previo.md` |
+| Editor de PDFs — motor (schema tipado `PdfElement`/`PdfTemplate`, `renderFromTemplate()` con `flowAfter`/`repeating-group`/`totals-banner`, catálogo de variables y tokens de color, persistencia activo/borrador en `pdf_plantillas`) y plantilla base real para los 4 documentos | `lib/server/pdf/*.test.ts`, `lib/server/pdf/default-templates/*.test.ts`, `template-renderer.extensibility.test.ts`; **no cubierto por e2e** — ver gaps abajo |
 
 **Edición colaborativa de cotizaciones: READY.** La auditoría de Fase 8 dejó cinco
 huecos abiertos, cerrados en la Fase 8.7: flush real previo a toda transición de
@@ -391,6 +399,16 @@ módulo de referencia: lo que aquí funciona (Postgres como única autoridad, br
 confirmado como mecanismo primario, conflictos por campo y por identidad con `409`,
 polling solo como fallback) es el patrón a replicar en Proyectos y Cuentas cuando
 necesiten edición colaborativa.
+
+**Editor de PDFs — gaps encontrados en pruebas de uso reales (2026-09-22),
+no cubiertos por los tests automatizados de arriba** (esos tests validan el
+motor de render, no la experiencia de edición): el canvas visual
+(`app/editor-pdfs/[tipo]/EditorCanvas.tsx`, Bloque 5) nunca tuvo una pasada
+de diseño real — texto sin wrap se solapa de forma ilegible con plantillas
+reales (muchos elementos), y el panel de capas solo muestra
+`"<tipo> · requerido"` repetido, sin nombre identificable por elemento. No es
+un bug puntual: motiva una iniciativa de rediseño propia (ver
+`docs/ROADMAP.md` → "Siguiente"), no un parche sobre el canvas actual.
 
 Lo que está construido **a medias a propósito** vive en `docs/ROADMAP.md`.
 

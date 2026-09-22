@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-21 (Sueltos post-PR #76 cerrado parcial — 3/4 bloques; Editor de PDFs abre en `docs/PLAN.md`)
+**Última actualización:** 2026-09-22 (Editor de PDFs cerrado — 10 bloques; abre "Rediseño del editor visual de PDFs")
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -78,18 +78,20 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-**Editor de PDFs (borrador 2026-09-21).** Módulo nuevo del sidebar —
-catálogo de los PDFs que genera Serenata (cotización, orden de pago, hoja
-de llamado, reporte de cierre, + los que se agreguen a futuro) con un
-editor visual por plantilla: tablas personalizables, posicionamiento libre
-de elementos, texto (negrita/tamaño/alineación/espaciado) y color acotado a
-la paleta del design system (`--sn-*` de `app/globals.css`). Alcance, mockup
-validado con el usuario y opciones de arquitectura del motor de plantillas:
-`docs/PLAN.md`.
+**Rediseño del editor visual de PDFs (por definir, 2026-09-22).** La
+iniciativa "Editor de PDFs" (10 bloques, ver "Cerrado" abajo) entregó el
+motor de plantillas y una plantilla real por documento, pero las pruebas de
+uso real del usuario encontraron que el canvas de edición
+(`app/editor-pdfs/[tipo]/EditorCanvas.tsx`) no tiene un nivel de diseño
+aceptable: texto sin wrap se solapa de forma ilegible con plantillas reales
+de varios elementos, y el panel de capas no distingue un elemento de otro
+(`"text · requerido"` repetido sin nombre). El usuario pidió tratarlo como
+iniciativa propia, con mockups visuales (skill `serenata-design`) como punto
+de partida antes de tocar código — todavía sin alcance ni `docs/PLAN.md`
+definidos; arrancar con `serenata-iniciar-fase` o pidiendo el mockup
+directamente.
 
-Reemplaza en este slot a la iniciativa "Sueltos post-PR #76" (bloques 1-3
-cerrados, bloque 4 diferido — ver "Después" abajo y
-[`docs/archive/sueltos-portal-utilidad-cliente-id-fk.md`](archive/sueltos-portal-utilidad-cliente-id-fk.md)).
+Reemplaza en este slot a "Editor de PDFs" (cerrado, ver abajo).
 
 ---
 
@@ -146,6 +148,12 @@ confirmar: cerrarlos es una iniciativa con alcance propio, no un fix incidental.
   no existen.
 - **Plantillas de servicios** — completas para cotizaciones nuevas; la integración con
   cotizaciones COMPLEMENTARIA es parcial.
+- **Editor de PDFs** — el motor de plantillas y una plantilla real por documento
+  existen y están probados, pero **no reemplazan** a los 4 generadores viejos
+  (`lib/server/pdf/{cotizacion,orden-pago,hoja-llamado,reporte-cierre}-pdf.ts`):
+  cambiar una plantilla en el editor no cambia el PDF real que reciben
+  clientes/proveedores todavía. El canvas de edición tampoco tiene un nivel de
+  diseño aceptable (ver "Siguiente" y `ARCHITECTURE.md` → "Módulos y cobertura").
 
 **Rediseño visual (Fase 5.7)** salió de esta lista el 2026-09-11: verificado que las
 pantallas y primitivos que quedaban pendientes ya usan los tokens `--sn-*`. Detalle
@@ -157,6 +165,25 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Editor de PDFs — motor de plantillas + 4 documentos migrados (10
+  bloques, 2026-09-21/22).** Schema tipado (`PdfElement`/`PdfTemplate`,
+  Zod) + `renderFromTemplate()` sobre `jsPDF`/`jspdf-autotable`, con
+  `flowAfter`/`gap` (posición relativa a un elemento anterior),
+  `totals-banner`, `repeating-group` (repetición anidada de un bloque
+  completo — Orden de pago, responsable→evento), `format:'currency'|'date'`
+  y catálogo de variables/tokens de color por documento. Persistencia
+  activo/borrador en `pdf_plantillas` (Supabase), editor visual en
+  `/editor-pdfs` (catálogo + canvas + inspector). Los 4 documentos reales
+  tienen su plantilla base migrada: Cotización/Hoja de llamado/Reporte de
+  cierre reconstruyen el PDF de producción 1:1; Orden de pago es un
+  rediseño con el design system (decisión del usuario), extendido después a
+  los otros 3 (`format:'date'`). Bloque 10 probó la extensibilidad del motor
+  con un documento sintético, sin dar de alta un 5º tipo real (decisión del
+  usuario). **Ver "Features a medias" y "Siguiente"**: el motor no
+  reemplaza todavía a los generadores viejos, y el canvas de edición quedó
+  con un gap real de UX encontrado en pruebas de uso — motivó la iniciativa
+  de rediseño de "Siguiente" en vez de cerrarse como terminado sin más.
+  Historia completa: [`docs/archive/editor-de-pdfs.md`](archive/editor-de-pdfs.md).
 - **Sueltos post-PR #76 — Portal (simulador de factura), utilidad de
   proyecto y `cliente_id` FK (cerrado parcial, 2026-09-21).** 3 de los 4
   bloques agrupados el 2026-09-19: simulador de factura del Portal (PR
