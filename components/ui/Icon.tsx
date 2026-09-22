@@ -63,6 +63,8 @@ import {
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
   MoreHorizontal,
+  Undo2,
+  Redo2,
 } from 'lucide-react'
 
 // Rediseño Apple-style: los íconos y tonos del nav siguen exactamente
@@ -143,6 +145,8 @@ const ICONS = {
   'align-v-center': AlignVerticalJustifyCenter,
   'align-v-end': AlignVerticalJustifyEnd,
   more: MoreHorizontal,
+  undo: Undo2,
+  redo: Redo2,
 } as const
 
 export type IconName = keyof typeof ICONS

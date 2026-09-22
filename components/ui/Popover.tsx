@@ -17,6 +17,14 @@ interface PopoverProps {
 
 const DEFAULT_PANEL_CLASS = 'rounded-panel border border-hairline bg-card shadow-raised z-20'
 
+// Coordinación global (Bloque 11, docs/PLAN.md): "nunca hay más de un
+// popover abierto a la vez -- abrir uno cierra cualquier otro", mismo
+// criterio que el `openPanel: 'color' | 'position' | null` que usaba el
+// `Toolbar.tsx` original, generalizado acá para que cualquier instancia
+// (en cualquier toolbar) coordine sin que sus padres compartan estado.
+const POPOVER_OPEN_EVENT = 'sn-popover-open'
+let popoverIdCounter = 0
+
 /**
  * Popover/Dropdown compartido (Bloque 11.1, docs/PLAN.md) -- reemplaza los 3
  * casos ad hoc que existían (`UserMenu.tsx`, `QuotationGeneralInfoSection.tsx`,
@@ -43,11 +51,24 @@ export function Popover({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [flip, setFlip] = useState(false)
+  const idRef = useRef<number>(0)
+  if (idRef.current === 0) idRef.current = ++popoverIdCounter
 
   function setOpen(next: boolean) {
+    if (next) document.dispatchEvent(new CustomEvent<number>(POPOVER_OPEN_EVENT, { detail: idRef.current }))
     if (onOpenChange) onOpenChange(next)
     if (controlledOpen === undefined) setInternalOpen(next)
   }
+
+  useEffect(() => {
+    if (!open) return
+    function onOtherPopoverOpen(e: Event) {
+      if ((e as CustomEvent<number>).detail !== idRef.current) setOpen(false)
+    }
+    document.addEventListener(POPOVER_OPEN_EVENT, onOtherPopoverOpen)
+    return () => document.removeEventListener(POPOVER_OPEN_EVENT, onOtherPopoverOpen)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   useEffect(() => {
     if (!open || !closeOnEscape) return

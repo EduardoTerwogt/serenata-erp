@@ -14,6 +14,8 @@ import { LayersPanel } from './LayersPanel'
 import { EditorHeader } from './EditorHeader'
 import { ContextualToolbar } from './toolbar/ContextualToolbar'
 import { selectionFromIds, selectionIds, type EditorSelection } from './selection'
+import { useEditorHistory } from './history'
+import { useEditorKeyboardShortcuts } from './useEditorKeyboardShortcuts'
 
 interface PdfPlantillaRow {
   active_schema: PdfTemplate
@@ -35,7 +37,8 @@ export default function EditorPdfTipoPage() {
   const tipoResult = PdfDocumentTypeSchema.safeParse(params.tipo)
 
   const [row, setRow] = useState<PdfPlantillaRow | null | 'loading' | 'not-found'>('loading')
-  const [template, setTemplate] = useState<PdfTemplate | null>(null)
+  const history = useEditorHistory(next => scheduleAutosave(next))
+  const template = history.present
   const [selection, setSelection] = useState<EditorSelection>({ type: 'none' })
   const selectedIds = selectionIds(selection)
   const selectIds = useCallback((ids: string[]) => setSelection(selectionFromIds(ids)), [])
@@ -58,7 +61,7 @@ export default function EditorPdfTipoPage() {
           return
         }
         setRow(data)
-        setTemplate(data.draft_schema ?? data.active_schema)
+        history.reset(data.draft_schema ?? data.active_schema)
       })
       .catch(() => {
         if (!cancelled) setRow('not-found')
@@ -66,6 +69,10 @@ export default function EditorPdfTipoPage() {
     return () => {
       cancelled = true
     }
+    // history.reset es estable en el sentido que importa acá (recrea el objeto
+    // cada render, pero no cambia lo que hace) -- incluirla en deps
+    // dispararía el fetch en cada render en vez de solo cuando cambia `tipo`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipo])
 
   const scheduleAutosave = useCallback(
@@ -91,12 +98,8 @@ export default function EditorPdfTipoPage() {
   )
 
   function updateTemplate(updater: (t: PdfTemplate) => PdfTemplate) {
-    setTemplate(prev => {
-      if (!prev) return prev
-      const next = updater(prev)
-      scheduleAutosave(next)
-      return next
-    })
+    if (!template) return
+    history.commit(updater(template))
   }
 
   function updateElements(updater: (elements: PdfElement[]) => PdfElement[]) {
@@ -111,7 +114,7 @@ export default function EditorPdfTipoPage() {
       setSaveStatus('idle')
       const fresh = await getJson<PdfPlantillaRow>(`/api/editor-pdfs/${tipo}`, 'Error recargando')
       setRow(fresh)
-      setTemplate(fresh.active_schema)
+      history.reset(fresh.active_schema)
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Error aplicando el diseño')
     }
@@ -123,7 +126,7 @@ export default function EditorPdfTipoPage() {
     try {
       const fresh = await sendJson<PdfPlantillaRow>(`/api/editor-pdfs/${tipo}/draft`, undefined, 'Error descartando', { method: 'DELETE' })
       setRow(fresh)
-      setTemplate(fresh.active_schema)
+      history.reset(fresh.active_schema)
       setSaveStatus('idle')
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Error descartando cambios')
@@ -137,7 +140,7 @@ export default function EditorPdfTipoPage() {
     try {
       const fresh = await sendJson<PdfPlantillaRow>(`/api/editor-pdfs/${tipo}/restaurar`, {}, 'Error restaurando', { method: 'POST' })
       setRow(fresh)
-      setTemplate(fresh.active_schema)
+      history.reset(fresh.active_schema)
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Error restaurando la plantilla')
     }
@@ -158,6 +161,15 @@ export default function EditorPdfTipoPage() {
       }
     }
   }, [selectedText])
+
+  useEditorKeyboardShortcuts({
+    selection,
+    elements: template?.elements ?? [],
+    onSelect: selectIds,
+    onChangeElements: updateElements,
+    onUndo: history.undo,
+    onRedo: history.redo,
+  })
 
   if (!tipo) {
     return <p className="text-cancelled-fg">Tipo de documento inválido.</p>
@@ -196,6 +208,10 @@ export default function EditorPdfTipoPage() {
         onDescartar={handleDescartar}
         onRestaurar={() => setConfirmRestaurar(true)}
         onAplicar={handleAplicar}
+        onUndo={history.undo}
+        onRedo={history.redo}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
       />
 
       <ContextualToolbar
