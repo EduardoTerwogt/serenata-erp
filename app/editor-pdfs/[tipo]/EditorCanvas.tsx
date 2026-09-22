@@ -1,11 +1,14 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import type { PdfElement, PdfTemplate } from '@/lib/server/pdf/pdf-template-schema'
-import { resolveColorToken } from '@/lib/server/pdf/pdf-color-tokens'
+import type { PdfElement, PdfTemplate, TextElement } from '@/lib/server/pdf/pdf-template-schema'
 import { resolveTemplateLayout } from '@/lib/server/pdf/pdf-template-layout'
 import { buildSampleData } from '@/lib/server/pdf/pdf-sample-data'
+import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import { layerLabel, mmToPx, pxToMm, snapToGrid } from './geometry'
+import { PDF_FONT_STACK, safeColor, textElementStyle, textOuterWrapperStyle } from './text-style'
+import { TextEditOverlay } from './TextEditOverlay'
 
 interface EditorCanvasProps {
   template: PdfTemplate
@@ -17,21 +20,68 @@ interface EditorCanvasProps {
 
 type DragMode = 'move' | 'resize-se' | 'resize-nw' | 'resize-ne' | 'resize-sw'
 
-function rgb([r, g, b]: [number, number, number]): string {
-  return `rgb(${r}, ${g}, ${b})`
+interface Box {
+  x: number
+  y: number
+  w: number
+  h?: number
 }
 
-function safeColor(token: string): string {
-  try {
-    return rgb(resolveColorToken(token))
-  } catch {
-    return 'rgb(150,150,150)'
+/**
+ * Calcula la caja final de un elemento durante un gesto de drag/resize a
+ * partir de su posición al INICIO del gesto (`start`) + el delta acumulado
+ * (`dx`/`dy`) -- función pura, reusada tanto para el preview en vivo
+ * (`liveDrag`, cada `pointermove`) como para el commit único al soltar
+ * (`pointerup`), así ambos coinciden exactamente. `preserveRatio` (Shift)
+ * bloquea el ratio w:h inicial del gesto -- genérico, no solo para imágenes.
+ */
+function computeDragBox(start: Box, dx: number, dy: number, mode: DragMode, snapGrid: number, preserveRatio: boolean): Box {
+  if (mode === 'move') {
+    return { x: snapToGrid(start.x + dx, snapGrid), y: snapToGrid(start.y + dy, snapGrid), w: start.w, h: start.h }
   }
+
+  let x = start.x
+  let y = start.y
+  let w = start.w
+  let h = start.h
+
+  if (mode === 'resize-se') {
+    w = start.w + dx
+    if (start.h !== undefined) h = start.h + dy
+  } else if (mode === 'resize-ne') {
+    y = start.y + dy
+    w = start.w + dx
+    if (start.h !== undefined) h = start.h - dy
+  } else if (mode === 'resize-sw') {
+    x = start.x + dx
+    w = start.w - dx
+    if (start.h !== undefined) h = start.h + dy
+  } else {
+    x = start.x + dx
+    y = start.y + dy
+    w = start.w - dx
+    if (start.h !== undefined) h = start.h - dy
+  }
+
+  if (preserveRatio && start.h !== undefined && start.h > 0 && start.w > 0) {
+    const ratio = start.h / start.w
+    h = w * ratio
+    if (mode === 'resize-ne' || mode === 'resize-nw') {
+      y = start.y + start.h - h
+    }
+  }
+
+  const snappedW = Math.max(2, snapToGrid(w, snapGrid))
+  const snappedH = h !== undefined ? Math.max(2, snapToGrid(h, snapGrid)) : undefined
+  return { x: snapToGrid(x, snapGrid), y: snapToGrid(y, snapGrid), w: snappedW, h: snappedH }
 }
 
 export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements, snapGrid }: EditorCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null)
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  const [liveDrag, setLiveDrag] = useState<{ overrides: Map<string, Box> } | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [pendingLegalEdit, setPendingLegalEdit] = useState<{ id: string; text: string } | null>(null)
 
   const pageW = mmToPx(template.page.width)
   const pageH = mmToPx(template.page.height)
@@ -61,6 +111,14 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
     return { x: pxToMm(clientX - rect.left), y: pxToMm(clientY - rect.top) }
   }
 
+  /**
+   * Manipulación directa transaccional (Bloque 11.2, docs/PLAN.md): el
+   * estado en vivo del gesto es local (`liveDrag`, mismo patrón que
+   * `startMarquee` ya usaba correctamente) -- `onChangeElements` se llama
+   * UNA sola vez, en `pointerup`, no en cada `pointermove` (el bug que
+   * este bloque corrige: antes cada frame de drag era un PATCH de autosave
+   * independiente).
+   */
   function startDrag(e: React.PointerEvent, el: PdfElement, mode: DragMode) {
     e.stopPropagation()
     if (!selectedIds.includes(el.id)) {
@@ -70,60 +128,38 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
     const startElements = template.elements.filter(x => selectedIds.includes(x.id) || x.id === el.id)
     const startPositions = new Map(startElements.map(x => [x.id, { x: x.x, y: x.y, w: x.w, h: x.h }]))
 
-    function onMove(ev: PointerEvent) {
-      const now = clientToMm(ev.clientX, ev.clientY)
+    function computeOverrides(clientX: number, clientY: number, shiftKey: boolean): Map<string, Box> {
+      const now = clientToMm(clientX, clientY)
       const dx = now.x - startPointer.x
       const dy = now.y - startPointer.y
-
-      onChangeElements(elements =>
-        elements.map(current => {
-          const start = startPositions.get(current.id)
-          if (!start) return current
-          // `y` de un elemento con `flowAfter` se recalcula siempre al
-          // renderizar (pdf-template-layout.ts) -- arrastrarlo verticalmente
-          // no tendría efecto visible, así que se ignora `dy` para no
-          // confundir con un movimiento que no pasa nada.
-          const effectiveDy = isFlowLocked(current) ? 0 : dy
-
-          if (mode === 'move') {
-            return { ...current, x: snapToGrid(start.x + dx, snapGrid), y: snapToGrid(start.y + effectiveDy, snapGrid) }
-          }
-          if (mode === 'resize-se') {
-            return {
-              ...current,
-              w: Math.max(2, snapToGrid(start.w + dx, snapGrid)),
-              h: start.h !== undefined ? Math.max(2, snapToGrid(start.h + effectiveDy, snapGrid)) : current.h,
-            }
-          }
-          if (mode === 'resize-ne') {
-            return {
-              ...current,
-              y: snapToGrid(start.y + effectiveDy, snapGrid),
-              w: Math.max(2, snapToGrid(start.w + dx, snapGrid)),
-              h: start.h !== undefined ? Math.max(2, snapToGrid(start.h - effectiveDy, snapGrid)) : current.h,
-            }
-          }
-          if (mode === 'resize-sw') {
-            return {
-              ...current,
-              x: snapToGrid(start.x + dx, snapGrid),
-              w: Math.max(2, snapToGrid(start.w - dx, snapGrid)),
-              h: start.h !== undefined ? Math.max(2, snapToGrid(start.h + effectiveDy, snapGrid)) : current.h,
-            }
-          }
-          // resize-nw
-          return {
-            ...current,
-            x: snapToGrid(start.x + dx, snapGrid),
-            y: snapToGrid(start.y + effectiveDy, snapGrid),
-            w: Math.max(2, snapToGrid(start.w - dx, snapGrid)),
-            h: start.h !== undefined ? Math.max(2, snapToGrid(start.h - effectiveDy, snapGrid)) : current.h,
-          }
-        })
-      )
+      const overrides = new Map<string, Box>()
+      startPositions.forEach((start, id) => {
+        const current = template.elements.find(x => x.id === id)
+        if (!current) return
+        // `y` de un elemento con `flowAfter` se recalcula siempre al
+        // renderizar (pdf-template-layout.ts) -- arrastrarlo verticalmente
+        // no tendría efecto visible, así que se ignora `dy` para no
+        // confundir con un movimiento que no pasa nada.
+        const effectiveDy = isFlowLocked(current) ? 0 : dy
+        overrides.set(id, computeDragBox(start, dx, effectiveDy, mode, snapGrid, shiftKey && mode !== 'move'))
+      })
+      return overrides
     }
 
-    function onUp() {
+    function onMove(ev: PointerEvent) {
+      setLiveDrag({ overrides: computeOverrides(ev.clientX, ev.clientY, ev.shiftKey) })
+    }
+
+    function onUp(ev: PointerEvent) {
+      const overrides = computeOverrides(ev.clientX, ev.clientY, ev.shiftKey)
+      onChangeElements(elements =>
+        elements.map(current => {
+          const box = overrides.get(current.id)
+          if (!box) return current
+          return { ...current, x: box.x, y: box.y, w: box.w, h: box.h }
+        })
+      )
+      setLiveDrag(null)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
@@ -167,6 +203,34 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
     window.addEventListener('pointerup', onUp)
   }
 
+  /**
+   * Edición directa de texto (Bloque 11.2, docs/PLAN.md): doble-click en un
+   * texto entra a `editing`. Commit en blur/Enter (si no `wrap`); Escape
+   * revierte sin llamar `onChangeElements` -- `TextEditOverlay` nunca toca
+   * el modelo hasta que se confirma. Texto `legal` pide confirmación en el
+   * mismo punto que ya usaba `Inspector.tsx` antes de este bloque.
+   */
+  function startEditing(el: TextElement) {
+    if (!selectedIds.includes(el.id) || selectedIds.length > 1) onSelect([el.id])
+    setEditingId(el.id)
+  }
+
+  function commitEdit(el: TextElement, text: string) {
+    setEditingId(null)
+    if (text === el.text) return
+    if (el.legal) {
+      setPendingLegalEdit({ id: el.id, text })
+      return
+    }
+    onChangeElements(elements => elements.map(e => (e.id === el.id ? { ...e, text } : e)))
+  }
+
+  function confirmLegalEdit() {
+    if (!pendingLegalEdit) return
+    onChangeElements(elements => elements.map(e => (e.id === pendingLegalEdit.id ? { ...e, text: pendingLegalEdit.text } : e)))
+    setPendingLegalEdit(null)
+  }
+
   const sorted = [...template.elements]
     .filter(el => layoutById?.get(el.id)?.visible ?? true)
     .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
@@ -180,6 +244,11 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
     >
       {sorted.map(el => {
         const isSelected = selectedIds.includes(el.id)
+        const isEditing = editingId === el.id
+        const override = liveDrag?.overrides.get(el.id)
+        const effectiveX = override?.x ?? el.x
+        const effectiveY = override?.y ?? resolvedY(el)
+        const effectiveW = override?.w ?? el.w
         // Alto: `el.h` explícito es una decisión de diseño deliberada (ej. las
         // cajas de fondo del header, tamaño fijo independiente del texto) y
         // gana siempre. Solo cuando NO hay `h` explícito (texto envuelto sin
@@ -195,12 +264,13 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
         // previa" (el PDF real).
         const layoutEntry = layoutById?.get(el.id)
         const computedHeight = layoutEntry ? layoutEntry.bottom - layoutEntry.y : undefined
-        const boxHeight = el.h !== undefined ? el.h : computedHeight && computedHeight > 0 ? computedHeight : undefined
+        const explicitH = override?.h ?? el.h
+        const boxHeight = explicitH !== undefined ? explicitH : computedHeight && computedHeight > 0 ? computedHeight : undefined
         const style: React.CSSProperties = {
           position: 'absolute',
-          left: mmToPx(el.x),
-          top: mmToPx(resolvedY(el)),
-          width: mmToPx(el.w),
+          left: mmToPx(effectiveX),
+          top: mmToPx(effectiveY),
+          width: mmToPx(effectiveW),
           height: boxHeight !== undefined ? mmToPx(boxHeight) : undefined,
           zIndex: el.zIndex ?? 0,
           outline: isSelected
@@ -214,9 +284,19 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
         }
 
         return (
-          <div key={el.id} style={style} onPointerDown={e => startDrag(e, el, 'move')} data-testid={`el-${el.id}`}>
-            {renderElementContent(el)}
-            {isSelected && selectedIds.length === 1 && (
+          <div
+            key={el.id}
+            style={style}
+            onPointerDown={isEditing ? undefined : e => startDrag(e, el, 'move')}
+            onDoubleClick={el.type === 'text' && !isEditing ? () => startEditing(el) : undefined}
+            data-testid={`el-${el.id}`}
+          >
+            {isEditing && el.type === 'text' ? (
+              <TextEditOverlay element={el} onCommit={text => commitEdit(el, text)} onCancel={() => setEditingId(null)} />
+            ) : (
+              renderElementContent(el)
+            )}
+            {isSelected && selectedIds.length === 1 && !isEditing && (
               <>
                 <div className="pointer-events-none absolute -top-6 left-0 flex items-center gap-1 whitespace-nowrap rounded-control bg-ink px-2 py-0.5 text-[10px] text-card shadow-card">
                   {layerLabel(el)}
@@ -246,44 +326,26 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
           }}
         />
       )}
+
+      {pendingLegalEdit && (
+        <Modal title="Confirmar edición de texto legal" onClose={() => setPendingLegalEdit(null)}>
+          <p className="text-body">Este elemento está marcado como texto legal. ¿Confirmas que quieres cambiar su contenido?</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" size="md" onClick={() => setPendingLegalEdit(null)}>Cancelar</Button>
+            <Button variant="primary" size="md" onClick={confirmLegalEdit}>Confirmar cambio</Button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
-
-// El PDF real dibuja con Helvetica (jsPDF) -- el lienzo usa Helvetica/Arial
-// en vez de heredar Inter (la fuente de la UI) para que el envuelto de texto
-// en el navegador se acerque al que ya calculó resolveTemplateLayout.ts con
-// las métricas de jsPDF. Nunca va a ser idéntico -- por eso "Vista previa"
-// (el PDF real) sigue siendo la fuente de verdad, esto es solo para que el
-// lienzo no se vea roto mientras se edita.
-const PDF_FONT_STACK = "Helvetica, Arial, 'Liberation Sans', sans-serif"
 
 function renderElementContent(el: PdfElement) {
   if (el.type === 'text') {
     const isBackgroundOnly = el.text.trim() === '' && el.bgToken !== undefined
     return (
-      <div
-        style={{
-          height: '100%',
-          display: 'flex',
-          alignItems: el.wrap ? 'flex-start' : 'center',
-          padding: el.bgToken ? '0 4px' : undefined,
-          backgroundColor: el.bgToken ? safeColor(el.bgToken) : undefined,
-        }}
-      >
-        <div
-          style={{
-            width: '100%',
-            fontFamily: PDF_FONT_STACK,
-            fontSize: mmToPx(el.size) * 0.6,
-            fontWeight: el.bold ? 700 : 400,
-            textAlign: el.align,
-            color: safeColor(el.colorToken),
-            textTransform: el.upper ? 'uppercase' : undefined,
-            overflow: el.wrap ? undefined : 'hidden',
-            whiteSpace: el.wrap ? 'pre-wrap' : 'nowrap',
-          }}
-        >
+      <div style={textOuterWrapperStyle(el)}>
+        <div style={textElementStyle(el)}>
           {el.text || (isBackgroundOnly ? null : <span className="italic text-faint">(vacío)</span>)}
         </div>
       </div>
@@ -358,6 +420,7 @@ function ResizeHandle({ corner, onPointerDown }: { corner: 'nw' | 'ne' | 'sw' | 
   return (
     <div
       onPointerDown={onPointerDown}
+      data-testid={`resize-${corner}`}
       className="absolute h-2.5 w-2.5 rounded-full border-2 border-[rgb(254,123,1)] bg-white shadow-card"
       style={{ position: 'absolute', ...pos }}
     />
