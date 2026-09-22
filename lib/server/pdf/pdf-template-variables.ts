@@ -96,6 +96,13 @@ const ORDEN_PAGO_SCHEMA: Schema = {
       telefono: leaf('string', 'Teléfono del responsable'),
       banco: leaf('string', 'Banco del responsable'),
       clabe: leaf('string', 'CLABE del responsable'),
+      // Bloque 9: el generador real arma "Correo: x · Tel: y · Banco: z ·
+      // CLABE: w" filtrando los campos vacíos (`.filter(Boolean).join(' ·
+      // ')`) -- ese join condicional es lógica de negocio, no algo que el
+      // motor de templates deba reproducir con sintaxis nueva (mismo caso
+      // que `equipo_texto` en Reporte de cierre). Debe llegar ya armado en
+      // `data`.
+      contacto_texto: leaf('string', 'Correo/Tel/Banco/CLABE, ya armado como texto'),
     }),
     total_responsable: leaf('number', 'Total del responsable'),
     eventos: arr({
@@ -115,6 +122,11 @@ const ORDEN_PAGO_SCHEMA: Schema = {
     items_totales: leaf('number', 'Total de ítems'),
     total_general: leaf('number', 'Total general'),
   }),
+  // Bloque 9: mismo caso que `fecha_generacion` de Hoja de llamado -- el pie
+  // "Generado: {fecha}" real usa la fecha de HOY al momento de generar el
+  // PDF, no un dato de la orden, así que debe inyectarse en `data` al
+  // momento de renderizar.
+  fecha_generacion: leaf('string', 'Fecha de generación del PDF (hoy)'),
 }
 
 // Refleja HojaDeLlamadoData (lib/server/pdf/hoja-llamado-pdf.ts).
@@ -233,4 +245,18 @@ export function getVariablesForDocumento(tipo: TipoDocumento): VariableDef[] {
 
 export function isValidVariablePath(tipo: TipoDocumento, path: string): boolean {
   return getVariablesForDocumento(tipo).some((variable) => variable.path === path)
+}
+
+/**
+ * Bloque 9 (`repeating-group`, Orden de pago): valida que `path` sea un
+ * arreglo de FILAS (un `arr()` del catálogo), no cualquier variable -- así
+ * `rowsBinding: 'responsables'` o, anidado, `rowsBinding: 'eventos'` (con
+ * prefijo `responsables[].`) se validan contra el catálogo real en vez de
+ * aceptar cualquier string. Un `leaf('array', ...)` (ej. `equipo[].roles`,
+ * un arreglo de strings sin sub-campos) no cuenta -- no tiene filas que
+ * `renderFlowElements` pueda recorrer con `children`.
+ */
+export function isValidArrayPath(tipo: TipoDocumento, path: string): boolean {
+  const prefix = `${path}[].`
+  return getVariablesForDocumento(tipo).some((variable) => variable.path.startsWith(prefix))
 }

@@ -14,6 +14,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatCurrencyPdf, JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
+import { formatDateDisplay } from '@/lib/format-date'
 import { getIsoLogoBase64, getSerenataLogoBase64 } from '@/lib/server/pdf/cotizacion-pdf-helpers'
 import type {
   ImageElement,
@@ -71,7 +72,7 @@ export interface SpikeTableColumn {
   field: string
   align?: 'left' | 'center' | 'right'
   w: number
-  format?: 'currency'
+  format?: 'currency' | 'date'
 }
 
 export interface SpikeTableElement {
@@ -155,6 +156,9 @@ function formatCell(
   const raw = row[col.field]
   if (col.format === 'currency') {
     return formatCurrencyPdf(Number(raw) || 0)
+  }
+  if (col.format === 'date') {
+    return formatDateDisplay(raw as string | undefined)
   }
   return String(raw ?? '')
 }
@@ -249,11 +253,28 @@ function getByPath(source: unknown, path: string): unknown {
  * Interpola `{{variable.path}}` contra `data`. Si la variable no existe se
  * deja el placeholder literal — validar su existencia es responsabilidad del
  * catálogo de variables (Track C), no de esta función.
+ *
+ * `format` (Bloque 9): cada variable que resuelva a número (`'currency'`,
+ * vía `formatCurrencyPdf`) o a string de fecha ISO (`'date'`, vía
+ * `formatDateDisplay` -- también cubre el fallback "—" para fechas vacías)
+ * pasa por el formateador antes de insertarse -- el texto completo puede
+ * mezclar literal + variable (ej. "TOTAL EVENTO: {{subtotal}}", "Cerrado el
+ * {{fecha_cierre}}"), así que el formato se aplica por variable, no al
+ * string resultante entero.
  */
-function interpolateText(text: string, data: Record<string, unknown>): string {
+function interpolateText(
+  text: string,
+  data: Record<string, unknown>,
+  format?: 'currency' | 'date'
+): string {
   return text.replace(VARIABLE_PATTERN, (literal, path: string) => {
     const value = getByPath(data, path)
-    return value === undefined || value === null ? literal : String(value)
+    if (format === 'date' && (value === undefined || value === null || typeof value === 'string')) {
+      return formatDateDisplay(value as string | undefined)
+    }
+    if (value === undefined || value === null) return literal
+    if (format === 'currency' && typeof value === 'number') return formatCurrencyPdf(value)
+    return String(value)
   })
 }
 
@@ -271,16 +292,37 @@ function isStickyRenderable(el: PdfElement): el is StickyCapableElement & { stic
   return el.type !== 'table' && el.sticky !== undefined
 }
 
+/**
+ * jsPDF interpreta `x` como el punto de ANCLA según `align` (borde
+ * izquierdo si es 'left', borde DERECHO si es 'right', centro si es
+ * 'center') -- no como el borde izquierdo de una caja `[x, x+w]` sin
+ * importar la alineación. `el.x`/`el.w` en el schema SÍ son una caja (así
+ * dibuja `drawTextBackground`, y así lo autora cualquier plantilla), así
+ * que hay que traducir antes de pasarle el ancla real a jsPDF -- sin esto,
+ * un texto `align:'right'` con `x` en el borde IZQUIERDO de su caja termina
+ * con el borde derecho del texto en `x` (fuera de la caja, hacia la
+ * izquierda), no alineado contra `x+w` como se espera. Encontrado con el
+ * primer uso real de `align:'right'` en un `TextElement` suelto (Bloque 9,
+ * cajas de total de Orden de pago) -- `renderText`/`SpikeTextElement` (la
+ * primitiva de más abajo) se dejan intactos, siguen tomando `x` como ancla
+ * cruda; esta función es la única que necesita saber que existe una caja.
+ */
+function textAnchorX(el: { x: number; w: number; align: TextElement['align'] }): number {
+  if (el.align === 'right') return el.x + el.w
+  if (el.align === 'center') return el.x + el.w / 2
+  return el.x
+}
+
 function buildSpikeText(
   el: TextElement,
   data: Record<string, unknown>,
   resolveColor: (token: string) => [number, number, number]
 ): SpikeTextElement {
-  let text = interpolateText(el.text, data)
+  let text = interpolateText(el.text, data, el.format)
   if (el.upper) text = text.toUpperCase()
   return {
     type: 'text',
-    x: el.x,
+    x: textAnchorX(el),
     y: el.y,
     text,
     size: el.size,
@@ -472,8 +514,10 @@ function buildStickyElement(
  * que antes de Bloque 7), pero adelantando cualquier elemento con
  * `flowAfter` hasta después del elemento que referencia -- necesario para
  * conocer su borde inferior REAL antes de resolver la `y` del que sigue.
- * Zod ya garantiza ids únicos y ausencia de ciclos; el `visited` de abajo
- * es solo para no recorrer dos veces el mismo elemento.
+ * Zod ya garantiza ids únicos (en toda la plantilla) y ausencia de ciclos
+ * DENTRO de este mismo array de hermanos (`flowAfter` no cruza de nivel,
+ * ver pdf-template-schema.ts); el `visited` de abajo es solo para no
+ * recorrer dos veces el mismo elemento.
  */
 function sortFlowElements(elements: PdfElement[]): PdfElement[] {
   const zSorted = [...elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
@@ -494,46 +538,43 @@ function sortFlowElements(elements: PdfElement[]): PdfElement[] {
 }
 
 /**
- * Renderer final del schema tipado (Bloque 2, docs/PLAN.md): recorre
- * `template.elements`, separa los `sticky` del resto, renderiza el flujo
- * normal ordenado por `zIndex`/`flowAfter` con los primitivos de arriba,
- * interpola `{{variable}}` contra `data`, resuelve `colorToken`/`bgToken`/
- * `headerColorToken`/`borderColorToken` con `resolveColor` (inyectado — no
- * importa `pdf-color-tokens.ts`, eso se cablea en la integración) y termina
- * redibujando los `sticky` con `redrawSticky`.
+ * Recorre un array de hermanos (`template.elements` de primer nivel, o
+ * `children` de un `repeating-group`) y los dibuja, resolviendo `flowAfter`
+ * DENTRO de ese mismo array -- cada nivel es un ámbito aislado, igual que
+ * valida `pdf-template-schema.ts`. `data` es el contexto de datos de este
+ * nivel (el documento completo en el nivel superior; la fila actual dentro
+ * de un `repeating-group`). `translateY` es cuánto sumarle a la `y`
+ * autorada de cada elemento SIN `flowAfter` para ubicarlo en la instancia
+ * real que se está dibujando (0 en el nivel superior; en cada fila de un
+ * grupo repetido, la distancia entre el tope real de esa fila y la `y`
+ * propia del `repeating-group`, ver el `case 'repeating-group'` abajo).
  *
- * `flowAfter` (Bloque 7, piloto Cotización): un elemento sin `flowAfter` usa
- * su `y` fija, igual que Bloques 1-6. Con `flowAfter`, la `y` efectiva es el
- * borde inferior REAL (post-render) del elemento referenciado + `gap` --
- * reproduce `currentY = lastAutoTable.finalY + gap` de los 4 generadores
- * reales, donde la tabla de ítems puede tener 1 o 50 filas. Si esa `y`
- * efectiva no entra en la página (menos margen inferior), se agrega una
- * página nueva antes de dibujar -- solo para elementos encadenados: uno sin
- * `flowAfter` conserva el comportamiento exacto de Bloques 1-6 (se dibuja en
- * su `y`, sin salto de página automático).
+ * Devuelve el borde inferior real de cada elemento de este nivel (mismo
+ * significado que `computedBottom` antes de Bloque 9, ahora por ámbito en
+ * vez de global) -- el nivel padre lo usa para saber dónde termina una fila
+ * completa del grupo repetido.
  */
-export function renderFromTemplate(
+function renderFlowElements(
   doc: jsPDF,
-  template: PdfTemplate,
+  elements: PdfElement[],
   data: Record<string, unknown>,
-  resolveColor: (token: string) => [number, number, number]
-): void {
+  resolveColor: (token: string) => [number, number, number],
+  page: PdfTemplate['page'],
+  translateY: number
+): Map<string, number> {
   // Bloque 7: un elemento entero puede estar condicionado a los datos
   // (NOTAS solo si hay texto, IVA solo si iva_activo) -- se descarta antes
-  // de separar sticky/flujo, así no se dibuja ni ocupa espacio en ninguno.
-  const visibleElements = template.elements.filter(
-    el => !el.visibleIf || Boolean(getByPath(data, el.visibleIf))
-  )
-  const stickyEls = visibleElements.filter(isStickyRenderable)
-  const flowEls = visibleElements.filter(el => !isStickyRenderable(el))
-  const sortedFlow = sortFlowElements(flowEls)
+  // de ordenar/dibujar, así no ocupa espacio. Evaluado contra el `data` de
+  // ESTE nivel (la fila actual, si es un grupo repetido).
+  const visible = elements.filter(el => !el.visibleIf || Boolean(getByPath(data, el.visibleIf)))
+  const sortedFlow = sortFlowElements(visible)
 
   const computedBottom = new Map<string, number>()
-  // Todos los elementos, visibles u ocultos por `visibleIf` -- necesario para
-  // saltar un ancestro oculto en la cadena de `flowAfter` (ej. NOTAS vacío:
-  // GENERALES debe encadenar directo después del banner, no caer a una `y`
-  // fija).
-  const allById = new Map(template.elements.map(el => [el.id, el]))
+  // Todos los elementos de ESTE nivel, visibles u ocultos por `visibleIf`
+  // -- necesario para saltar un ancestro oculto en la cadena de `flowAfter`
+  // (ej. NOTAS vacío: GENERALES debe encadenar directo después del banner,
+  // no caer a una `y` fija). No incluye otros niveles (ver docstring).
+  const allById = new Map(elements.map(el => [el.id, el]))
 
   /** Bordes inferior real de `id`, saltando hacia arriba por `flowAfter` si
    * `id` no se renderizó (oculto). `undefined` si no hay ningún ancestro
@@ -545,17 +586,17 @@ export function renderFromTemplate(
   }
 
   function resolveY(el: PdfElement, estimatedHeight: number): number {
-    let y = el.y
+    let y = el.y + translateY
     if (el.flowAfter !== undefined) {
       const bottom = resolveFlowTarget(el.flowAfter)
       if (bottom !== undefined) y = bottom + (el.gap ?? 0)
     }
     if (
       el.flowAfter !== undefined &&
-      y + estimatedHeight > template.page.height - template.page.margins.bottom
+      y + estimatedHeight > page.height - page.margins.bottom
     ) {
       doc.addPage()
-      y = template.page.margins.top
+      y = page.margins.top
     }
     return y
   }
@@ -563,7 +604,9 @@ export function renderFromTemplate(
   for (const el of sortedFlow) {
     switch (el.type) {
       case 'text': {
-        const text = el.upper ? interpolateText(el.text, data).toUpperCase() : interpolateText(el.text, data)
+        const text = el.upper
+          ? interpolateText(el.text, data, el.format).toUpperCase()
+          : interpolateText(el.text, data, el.format)
         const textHeight = measureTextBlockHeight(doc, text, el.size, el.bold, el.w)
         // Con `bgToken`+`h` (barra de color, ej. "NOTAS"/"COSTOS"), `y` ya es
         // el borde inferior de la caja (drawTextBackground dibuja de `y-h` a
@@ -606,8 +649,68 @@ export function renderFromTemplate(
         computedBottom.set(el.id, y + height)
         break
       }
+      case 'repeating-group': {
+        const rows = resolveRowsBinding(data, el.rowsBinding)
+        // `resolveY(el, 0)` ubica el TOPE de la primera instancia -- mismo
+        // mecanismo que cualquier otro elemento (fijo o `flowAfter`). A
+        // partir de ahí, `cursor` avanza fila a fila; `el.itemHeight` es
+        // solo una estimación para decidir un salto de página ANTES de
+        // dibujar la fila (el alto real depende de cuántos ítems tenga esa
+        // fila -- no se sabe hasta dibujarla).
+        let cursor = resolveY(el, 0)
+        let lastBottom = cursor
+        for (const row of rows) {
+          if (cursor + el.itemHeight > page.height - page.margins.bottom) {
+            doc.addPage()
+            cursor = page.margins.top
+          }
+          // `el.y` (sin traslado) es el marco de referencia en el que se
+          // autoraron `children` (ver docstring de `RepeatingGroupElement`)
+          // -- la distancia entre `cursor` (tope real de ESTA fila) y `el.y`
+          // es lo que hay que sumarle a la `y` de cada hijo sin `flowAfter`.
+          const childTranslate = cursor - el.y
+          const childBottoms = renderFlowElements(doc, el.children, row, resolveColor, page, childTranslate)
+          const rowBottom = childBottoms.size > 0 ? Math.max(...Array.from(childBottoms.values())) : cursor
+          lastBottom = rowBottom
+          cursor = rowBottom + el.itemGap
+        }
+        computedBottom.set(el.id, lastBottom)
+        break
+      }
     }
   }
+
+  return computedBottom
+}
+
+/**
+ * Renderer final del schema tipado (Bloque 2, docs/PLAN.md): separa los
+ * `sticky` del resto, renderiza el flujo normal con `renderFlowElements`
+ * (recursivo desde Bloque 9, para soportar `repeating-group`) y termina
+ * redibujando los `sticky` con `redrawSticky`.
+ *
+ * `flowAfter` (Bloque 7, piloto Cotización): un elemento sin `flowAfter` usa
+ * su `y` fija, igual que Bloques 1-6. Con `flowAfter`, la `y` efectiva es el
+ * borde inferior REAL (post-render) del elemento referenciado + `gap` --
+ * reproduce `currentY = lastAutoTable.finalY + gap` de los 4 generadores
+ * reales, donde la tabla de ítems puede tener 1 o 50 filas. Si esa `y`
+ * efectiva no entra en la página (menos margen inferior), se agrega una
+ * página nueva antes de dibujar -- solo para elementos encadenados: uno sin
+ * `flowAfter` conserva el comportamiento exacto de Bloques 1-6 (se dibuja en
+ * su `y`, sin salto de página automático).
+ */
+export function renderFromTemplate(
+  doc: jsPDF,
+  template: PdfTemplate,
+  data: Record<string, unknown>,
+  resolveColor: (token: string) => [number, number, number]
+): void {
+  const stickyEls = template.elements
+    .filter(isStickyRenderable)
+    .filter(el => !el.visibleIf || Boolean(getByPath(data, el.visibleIf)))
+  const flowEls = template.elements.filter(el => !isStickyRenderable(el))
+
+  renderFlowElements(doc, flowEls, data, resolveColor, template.page, 0)
 
   const sticky = stickyEls
     .map(el => buildStickyElement(el, data, resolveColor))

@@ -18,7 +18,7 @@
 
 import { z } from 'zod'
 import { COLOR_TOKENS } from '@/lib/server/pdf/pdf-color-tokens'
-import { isValidVariablePath } from '@/lib/server/pdf/pdf-template-variables'
+import { isValidArrayPath, isValidVariablePath } from '@/lib/server/pdf/pdf-template-variables'
 
 // ==================== TIPO DE DOCUMENTO ====================
 
@@ -105,6 +105,18 @@ export const TextElementSchema = PdfElementBaseSchema.extend({
   colorToken: z.string().min(1),
   bgToken: z.string().min(1).optional(),
   upper: z.boolean().optional(),
+  // Bloque 9 (Orden de pago): las cajas de total (evento/responsable/
+  // general) son texto simple con un monto interpolado, no una tabla ni un
+  // `totals-banner` -- sin esto se mostraría el número crudo (ej. "7000" en
+  // vez de "$ 7,000.00"), mismo `formatCurrencyPdf` que ya usan las columnas
+  // de tabla (`PdfTableColumn.format`). Formatea CADA `{{variable}}` que
+  // resuelva a número (`'currency'`) o string de fecha ISO (`'date'`, vía
+  // `formatDateDisplay` -- también cubre el "gap de fidelidad" documentado
+  // en cotizacion.ts/hoja-llamado.ts/reporte-cierre.ts: fechas crudas sin
+  // formatear y sin fallback "—" cuando vienen vacías) dentro del texto, no
+  // el texto completo -- un texto como "TOTAL EVENTO: {{subtotal}}" o
+  // "Cerrado el {{fecha_cierre}}" mezcla literal + variable.
+  format: z.enum(['currency', 'date']).optional(),
 })
 
 export type TextElement = z.infer<typeof TextElementSchema>
@@ -122,9 +134,11 @@ export const PdfTableColumnSchema = z.object({
   align: z.enum(['left', 'center', 'right']),
   w: z.number().positive('w de columna debe ser mayor a 0'),
   visible: z.boolean(),
-  // formatea el valor de la celda con `formatCurrencyPdf` en vez de mostrar
-  // el número crudo (Bloque 7: precio_unitario/importe de Cotización).
-  format: z.enum(['currency']).optional(),
+  // formatea el valor de la celda con `formatCurrencyPdf` (Bloque 7:
+  // precio_unitario/importe de Cotización) o `formatDateDisplay` (Bloque 9:
+  // columnas `planeado`/`real` de la tabla de hitos de Reporte de cierre)
+  // en vez de mostrar el valor crudo.
+  format: z.enum(['currency', 'date']).optional(),
 })
 
 export type PdfTableColumn = z.infer<typeof PdfTableColumnSchema>
@@ -215,6 +229,77 @@ export const TotalsBannerElementSchema = PdfElementBaseSchema.extend({
 
 export type TotalsBannerElement = z.infer<typeof TotalsBannerElementSchema>
 
+// ==================== REPEATING GROUP ====================
+
+/**
+ * Bloque 9 (Orden de pago, decisión de arquitectura aprobada por el usuario
+ * en sesión 2026-09-21, opción A del artefacto de comparación): un bloque de
+ * elementos que se repite una vez por fila de `rowsBinding` -- necesario
+ * porque Orden de pago no es una lista de campos fijos como los otros 3
+ * documentos, sino 2 niveles de repetición real (responsable → evento).
+ *
+ * `children` es recursivo (un `repeating-group` puede contener otro, como
+ * evento anidado dentro de responsable) -- de ahí el tipo declarado a mano
+ * y el `z.lazy` en vez de dejar que Zod infiera el ciclo solo.
+ *
+ * Convención de coordenadas: `children` se autora en las mismas coordenadas
+ * absolutas de página que cualquier otro elemento, como si esta fuera la
+ * ÚNICA instancia dibujada empezando en `y` (el `y` propio de este elemento,
+ * no una `y` relativa a 0) -- el renderer traslada esas coordenadas para
+ * cada fila real (`template-renderer.ts`, `renderFlowElements`). `itemGap`
+ * es el espacio vertical entre el fin de una instancia y el inicio de la
+ * siguiente (distinto de `gap`, que es el espacio entre este grupo y su
+ * propio `flowAfter`). `itemHeight` es una estimación de alto por instancia
+ * (mm) usada solo para decidir un salto de página ANTES de dibujar cada
+ * fila -- aproximada a propósito (el alto real varía con la tabla de ítems
+ * de cada evento), igual de aproximada que la falta de estimación que ya
+ * tienen las tablas normales hoy.
+ */
+// Tipos declarados a mano (no `z.infer`): `RepeatingGroupElement` y
+// `PdfElement` se referencian mutuamente (un grupo repetido contiene
+// `PdfElement[]`, y `PdfElement` incluye `RepeatingGroupElement`) -- un
+// alias derivado de `z.infer<typeof PdfElementSchema>` entra en un ciclo
+// real ahí (Zod necesita el tipo de `PdfElementSchema` para tipar
+// `RepeatingGroupElementSchema.children`, que a su vez es un miembro DE
+// `PdfElementSchema`). Declarar la forma a mano rompe el ciclo a nivel de
+// tipos; el único cast (`children` más abajo) lo rompe a nivel de Zod.
+export type PdfElement =
+  | TextElement
+  | TableElement
+  | ImageElement
+  | LineElement
+  | TotalsBannerElement
+  | RepeatingGroupElement
+
+export type RepeatingGroupElement = PdfElementBase & {
+  type: 'repeating-group'
+  // nombre del array en los datos del contexto actual (fila del padre si
+  // está anidado, `data` completo si es de primer nivel), ej. 'responsables'
+  // o 'eventos'.
+  rowsBinding: string
+  itemGap: number
+  itemHeight: number
+  children: PdfElement[]
+}
+
+// Referencia diferida a `PdfElementSchema` (declarado más abajo, con
+// `RepeatingGroupElementSchema` como uno de sus miembros -- ciclo real de
+// VALORES, no solo de tipos). Una celda mutable (`const` con una propiedad
+// que sí cambia) en vez de un `let` reasignado -- el `z.lazy` de abajo lee
+// `.current` recién al parsear (nunca al construir el schema), para
+// entonces ya se asignó justo después de declarar `PdfElementSchema`.
+const pdfElementSchemaRef: { current?: z.ZodTypeAny } = {}
+
+export const RepeatingGroupElementSchema = PdfElementBaseSchema.extend({
+  type: z.literal('repeating-group'),
+  rowsBinding: z.string().min(1, 'rowsBinding es requerido'),
+  itemGap: z.number().min(0),
+  itemHeight: z.number().min(0),
+  children: z.lazy(() =>
+    z.array(pdfElementSchemaRef.current!).min(1, 'El grupo repetido requiere al menos un elemento hijo')
+  ) as unknown as z.ZodType<PdfElement[]>,
+})
+
 // ==================== UNIÓN DISCRIMINADA ====================
 
 export const PdfElementSchema = z.discriminatedUnion('type', [
@@ -223,9 +308,10 @@ export const PdfElementSchema = z.discriminatedUnion('type', [
   ImageElementSchema,
   LineElementSchema,
   TotalsBannerElementSchema,
+  RepeatingGroupElementSchema,
 ])
 
-export type PdfElement = z.infer<typeof PdfElementSchema>
+pdfElementSchemaRef.current = PdfElementSchema
 
 // ==================== VARIABLES {{...}} ====================
 
@@ -244,164 +330,221 @@ export const PdfTemplateSchema = z
     elements: z.array(PdfElementSchema).min(1, 'La plantilla debe tener al menos un elemento'),
   })
   .superRefine((template, ctx) => {
-    template.elements.forEach((el, index) => {
-      if (el.x < 0 || el.x > template.page.width) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['elements', index, 'x'],
-          message: `x fuera del rango de la página (0-${template.page.width})`,
-        })
-      }
-      if (el.y < 0 || el.y > template.page.height) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['elements', index, 'y'],
-          message: `y fuera del rango de la página (0-${template.page.height})`,
-        })
-      }
-      if (el.w > template.page.width) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['elements', index, 'w'],
-          message: `w excede el ancho de la página (${template.page.width})`,
-        })
-      }
-      if (el.h !== undefined && el.h > template.page.height) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['elements', index, 'h'],
-          message: `h excede el alto de la página (${template.page.height})`,
-        })
-      }
-    })
-  })
-  .superRefine((template, ctx) => {
-    template.elements.forEach((el, index) => {
-      const colorFields: Array<[string, string | undefined]> =
-        el.type === 'text'
-          ? [
-              ['colorToken', el.colorToken],
-              ['bgToken', el.bgToken],
-            ]
-          : el.type === 'line'
-            ? [['colorToken', el.colorToken]]
-            : el.type === 'table'
-              ? [
-                  ['headerColorToken', el.headerColorToken],
-                  ['borderColorToken', el.borderColorToken],
-                ]
-              : el.type === 'totals-banner'
-                ? [
-                    ['bgColorToken', el.bgColorToken],
-                    ...el.rows.flatMap(
-                      (row, rowIndex): Array<[string, string | undefined]> => [
-                        [`rows.${rowIndex}.labelColorToken`, row.labelColorToken],
-                        [`rows.${rowIndex}.valueColorToken`, row.valueColorToken],
-                      ]
-                    ),
-                  ]
-                : []
-
-      colorFields.forEach(([field, token]) => {
-        if (token !== undefined && !(token in COLOR_TOKENS)) {
+    // Bloque 9: `repeating-group.children` se autora en las mismas
+    // coordenadas absolutas de página que cualquier otro elemento (ver
+    // docstring de `RepeatingGroupElement`), así que el mismo chequeo de
+    // rango aplica recursivo, sin distinción de nivel.
+    function validateRanges(elements: PdfElement[], basePath: (string | number)[]) {
+      elements.forEach((el, index) => {
+        const path = [...basePath, index]
+        if (el.x < 0 || el.x > template.page.width) {
           ctx.addIssue({
             code: 'custom',
-            path: ['elements', index, field],
-            message: `Token de color inválido: "${token}"`,
+            path: [...path, 'x'],
+            message: `x fuera del rango de la página (0-${template.page.width})`,
           })
+        }
+        if (el.y < 0 || el.y > template.page.height) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [...path, 'y'],
+            message: `y fuera del rango de la página (0-${template.page.height})`,
+          })
+        }
+        if (el.w > template.page.width) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [...path, 'w'],
+            message: `w excede el ancho de la página (${template.page.width})`,
+          })
+        }
+        if (el.h !== undefined && el.h > template.page.height) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [...path, 'h'],
+            message: `h excede el alto de la página (${template.page.height})`,
+          })
+        }
+        if (el.type === 'repeating-group') {
+          validateRanges(el.children, [...path, 'children'])
         }
       })
-
-      const checkVariable = (path: string, field: string) => {
-        if (!isValidVariablePath(template.tipoDocumento, path)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['elements', index, field],
-            message: `Variable inexistente para ${template.tipoDocumento}: ${path}`,
-          })
-        }
-      }
-
-      if (el.visibleIf) checkVariable(el.visibleIf, 'visibleIf')
-
-      if (el.type === 'text') {
-        extractVariablePaths(el.text).forEach(varPath =>
-          checkVariable(varPath, 'text')
-        )
-      }
-
-      if (el.type === 'totals-banner') {
-        el.rows.forEach((row, rowIndex) => {
-          checkVariable(row.valueVariable, `rows.${rowIndex}.valueVariable`)
-          if (row.visibleIf) checkVariable(row.visibleIf, `rows.${rowIndex}.visibleIf`)
-        })
-      }
-
-      if (el.type === 'table' && el.groupTotalOf) {
-        checkVariable(`${el.rowsBinding}[].${el.groupTotalOf}`, 'groupTotalOf')
-      }
-    })
+    }
+    validateRanges(template.elements, ['elements'])
   })
   .superRefine((template, ctx) => {
+    // Bloque 9: las variables `{{...}}`/`visibleIf`/`groupTotalOf` de un
+    // elemento DENTRO de un `repeating-group` son relativas a la FILA
+    // actual, no al documento completo (ej. `{{responsable.nombre}}` dentro
+    // del grupo `responsables`) -- `varPrefix` acumula el path real del
+    // catálogo (`responsables[].`, luego `responsables[].eventos[].` si hay
+    // anidamiento) para validar cada variable contra el path completo, igual
+    // que ya hace `groupTotalOf` con `${rowsBinding}[].${groupTotalOf}`.
+    function validateContent(
+      elements: PdfElement[],
+      basePath: (string | number)[],
+      varPrefix: string
+    ) {
+      elements.forEach((el, index) => {
+        const path = [...basePath, index]
+
+        const colorFields: Array<[string, string | undefined]> =
+          el.type === 'text'
+            ? [
+                ['colorToken', el.colorToken],
+                ['bgToken', el.bgToken],
+              ]
+            : el.type === 'line'
+              ? [['colorToken', el.colorToken]]
+              : el.type === 'table'
+                ? [
+                    ['headerColorToken', el.headerColorToken],
+                    ['borderColorToken', el.borderColorToken],
+                  ]
+                : el.type === 'totals-banner'
+                  ? [
+                      ['bgColorToken', el.bgColorToken],
+                      ...el.rows.flatMap(
+                        (row, rowIndex): Array<[string, string | undefined]> => [
+                          [`rows.${rowIndex}.labelColorToken`, row.labelColorToken],
+                          [`rows.${rowIndex}.valueColorToken`, row.valueColorToken],
+                        ]
+                      ),
+                    ]
+                  : []
+
+        colorFields.forEach(([field, token]) => {
+          if (token !== undefined && !(token in COLOR_TOKENS)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: [...path, field],
+              message: `Token de color inválido: "${token}"`,
+            })
+          }
+        })
+
+        const checkVariable = (varPath: string, field: string) => {
+          const fullPath = `${varPrefix}${varPath}`
+          if (!isValidVariablePath(template.tipoDocumento, fullPath)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: [...path, field],
+              message: `Variable inexistente para ${template.tipoDocumento}: ${fullPath}`,
+            })
+          }
+        }
+
+        if (el.visibleIf) checkVariable(el.visibleIf, 'visibleIf')
+
+        if (el.type === 'text') {
+          extractVariablePaths(el.text).forEach(varPath =>
+            checkVariable(varPath, 'text')
+          )
+        }
+
+        if (el.type === 'totals-banner') {
+          el.rows.forEach((row, rowIndex) => {
+            checkVariable(row.valueVariable, `rows.${rowIndex}.valueVariable`)
+            if (row.visibleIf) checkVariable(row.visibleIf, `rows.${rowIndex}.visibleIf`)
+          })
+        }
+
+        if (el.type === 'table' && el.groupTotalOf) {
+          checkVariable(`${el.rowsBinding}[].${el.groupTotalOf}`, 'groupTotalOf')
+        }
+
+        if (el.type === 'repeating-group') {
+          const fullRowsBinding = `${varPrefix}${el.rowsBinding}`
+          if (!isValidArrayPath(template.tipoDocumento, fullRowsBinding)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: [...path, 'rowsBinding'],
+              message: `rowsBinding no es un arreglo de filas válido para ${template.tipoDocumento}: ${fullRowsBinding}`,
+            })
+          }
+          validateContent(el.children, [...path, 'children'], `${fullRowsBinding}[].`)
+        }
+      })
+    }
+    validateContent(template.elements, ['elements'], '')
+  })
+  .superRefine((template, ctx) => {
+    // Bloque 9: los ids deben ser únicos en TODA la plantilla (incluidos los
+    // anidados dentro de `repeating-group`) -- evita confusión en el editor
+    // visual entre un id de nivel superior y uno anidado. `flowAfter`, en
+    // cambio, solo puede referenciar un id DEL MISMO NIVEL (mismo array de
+    // hermanos) -- así es como `renderFlowElements` (template-renderer.ts)
+    // resuelve cada instancia repetida de forma aislada, sin conocer ids de
+    // otro nivel.
     const idCounts = new Map<string, number>()
-    template.elements.forEach(el => idCounts.set(el.id, (idCounts.get(el.id) ?? 0) + 1))
+    function collectIds(elements: PdfElement[]) {
+      elements.forEach(el => {
+        idCounts.set(el.id, (idCounts.get(el.id) ?? 0) + 1)
+        if (el.type === 'repeating-group') collectIds(el.children)
+      })
+    }
+    collectIds(template.elements)
 
-    template.elements.forEach((el, index) => {
-      if ((idCounts.get(el.id) ?? 0) > 1) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['elements', index, 'id'],
-          message: `id duplicado: "${el.id}" -- los ids deben ser únicos (flowAfter depende de esto)`,
-        })
-      }
+    function validateScope(elements: PdfElement[], basePath: (string | number)[]) {
+      const byId = new Map(elements.map(other => [other.id, other]))
 
-      if (el.flowAfter === undefined) return
+      elements.forEach((el, index) => {
+        const path = [...basePath, index]
 
-      if (el.flowAfter === el.id) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['elements', index, 'flowAfter'],
-          message: 'flowAfter no puede referenciar el propio elemento',
-        })
-        return
-      }
-
-      if (el.sticky) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['elements', index, 'flowAfter'],
-          message: 'flowAfter no aplica a elementos sticky (se redibujan idénticos en cada página)',
-        })
-        return
-      }
-
-      if (!idCounts.has(el.flowAfter)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['elements', index, 'flowAfter'],
-          message: `flowAfter referencia un id inexistente: "${el.flowAfter}"`,
-        })
-        return
-      }
-
-      // Detección de ciclos: recorrer la cadena de flowAfter desde este
-      // elemento; si se vuelve a `el.id` antes de agotarla, hay un ciclo.
-      const byId = new Map(template.elements.map(other => [other.id, other]))
-      const seen = new Set<string>([el.id])
-      let current: string | undefined = el.flowAfter
-      while (current !== undefined) {
-        if (seen.has(current)) {
+        if ((idCounts.get(el.id) ?? 0) > 1) {
           ctx.addIssue({
             code: 'custom',
-            path: ['elements', index, 'flowAfter'],
-            message: `flowAfter forma un ciclo con "${current}"`,
+            path: [...path, 'id'],
+            message: `id duplicado: "${el.id}" -- los ids deben ser únicos en toda la plantilla (flowAfter depende de esto)`,
           })
-          break
         }
-        seen.add(current)
-        current = byId.get(current)?.flowAfter
-      }
-    })
+
+        if (el.flowAfter !== undefined) {
+          if (el.flowAfter === el.id) {
+            ctx.addIssue({
+              code: 'custom',
+              path: [...path, 'flowAfter'],
+              message: 'flowAfter no puede referenciar el propio elemento',
+            })
+          } else if (el.sticky) {
+            ctx.addIssue({
+              code: 'custom',
+              path: [...path, 'flowAfter'],
+              message: 'flowAfter no aplica a elementos sticky (se redibujan idénticos en cada página)',
+            })
+          } else if (!byId.has(el.flowAfter)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: [...path, 'flowAfter'],
+              message: `flowAfter referencia un id inexistente en el mismo nivel: "${el.flowAfter}"`,
+            })
+          } else {
+            // Detección de ciclos: recorrer la cadena de flowAfter desde
+            // este elemento; si se vuelve a `el.id` antes de agotarla, hay
+            // un ciclo. Acotada al mismo nivel (`byId` solo tiene hermanos).
+            const seen = new Set<string>([el.id])
+            let current: string | undefined = el.flowAfter
+            while (current !== undefined) {
+              if (seen.has(current)) {
+                ctx.addIssue({
+                  code: 'custom',
+                  path: [...path, 'flowAfter'],
+                  message: `flowAfter forma un ciclo con "${current}"`,
+                })
+                break
+              }
+              seen.add(current)
+              current = byId.get(current)?.flowAfter
+            }
+          }
+        }
+
+        if (el.type === 'repeating-group') {
+          validateScope(el.children, [...path, 'children'])
+        }
+      })
+    }
+    validateScope(template.elements, ['elements'])
   })
 
 export type PdfTemplate = z.infer<typeof PdfTemplateSchema>
