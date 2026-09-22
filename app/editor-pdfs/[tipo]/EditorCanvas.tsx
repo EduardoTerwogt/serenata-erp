@@ -231,19 +231,31 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
 
 function renderElementContent(el: PdfElement) {
   if (el.type === 'text') {
+    const isBackgroundOnly = el.text.trim() === '' && el.bgToken !== undefined
     return (
       <div
         style={{
-          fontSize: mmToPx(el.size) * 0.6,
-          fontWeight: el.bold ? 700 : 400,
-          textAlign: el.align,
-          color: safeColor(el.colorToken),
-          textTransform: el.upper ? 'uppercase' : undefined,
-          overflow: 'hidden',
-          whiteSpace: 'nowrap',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          padding: el.bgToken ? '0 4px' : undefined,
+          backgroundColor: el.bgToken ? safeColor(el.bgToken) : undefined,
         }}
       >
-        {el.text || <span className="italic text-faint">(vacío)</span>}
+        <div
+          style={{
+            width: '100%',
+            fontSize: mmToPx(el.size) * 0.6,
+            fontWeight: el.bold ? 700 : 400,
+            textAlign: el.align,
+            color: safeColor(el.colorToken),
+            textTransform: el.upper ? 'uppercase' : undefined,
+            overflow: 'hidden',
+            whiteSpace: el.wrap ? 'pre-wrap' : 'nowrap',
+          }}
+        >
+          {el.text || (isBackgroundOnly ? null : <span className="italic text-faint">(vacío)</span>)}
+        </div>
       </div>
     )
   }
