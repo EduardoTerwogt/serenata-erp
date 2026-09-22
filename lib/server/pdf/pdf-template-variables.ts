@@ -19,7 +19,7 @@ export type TipoDocumento = 'cotizacion' | 'orden_pago' | 'hoja_llamado' | 'repo
 export interface VariableDef {
   path: string
   label: string
-  sampleType: 'string' | 'number' | 'date' | 'array'
+  sampleType: 'string' | 'number' | 'date' | 'array' | 'boolean'
 }
 
 type FieldNode =
@@ -43,6 +43,7 @@ function arr(children: Schema): FieldNode {
 
 // Refleja CotizacionPDFData (lib/server/pdf/cotizacion-pdf-types.ts).
 const COTIZACION_SCHEMA: Schema = {
+  id: leaf('string', 'Folio de cotización'),
   cliente: leaf('string', 'Cliente'),
   proyecto: leaf('string', 'Proyecto'),
   fecha_entrega: leaf('date', 'Fecha de entrega'),
@@ -59,9 +60,14 @@ const COTIZACION_SCHEMA: Schema = {
   fee_agencia: leaf('number', 'Fee de agencia'),
   general: leaf('number', 'Costos generales'),
   iva: leaf('number', 'IVA'),
+  iva_activo: leaf('boolean', 'IVA activo'),
   total: leaf('number', 'Total'),
   porcentaje_fee: leaf('number', 'Porcentaje de fee'),
   descuento_valor: leaf('number', 'Valor de descuento'),
+  // Monto ya calculado (calculateDiscount() en cotizacion-pdf-helpers.ts) --
+  // 0 cuando no hay descuento, lo que además sirve como su propio
+  // `visibleIf` en el banner de totales.
+  descuento_monto: leaf('number', 'Monto de descuento'),
   notas: leaf('string', 'Notas'),
 }
 

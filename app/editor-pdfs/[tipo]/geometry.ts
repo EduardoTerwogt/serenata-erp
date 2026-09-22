@@ -1,4 +1,4 @@
-import type { PdfElement } from '@/lib/server/pdf/pdf-template-schema'
+import type { PdfElement, PdfPage } from '@/lib/server/pdf/pdf-template-schema'
 
 /** px por mm en el canvas del editor (A4 a 210mm × 297mm ⇒ 630×891px). */
 export const CANVAS_SCALE = 3
@@ -35,6 +35,15 @@ export function boundingBoxOf(elements: PdfElement[]): BoundingBox | null {
     }),
     { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
   )
+}
+
+/** Etiqueta legible de una capa -- compartida entre Inspector (lista de capas) y EditorCanvas (etiqueta flotante sobre la selección). */
+export function layerLabel(el: PdfElement): string {
+  if (el.type === 'text') return el.text.trim() ? el.text.slice(0, 28) : '(texto vacío)'
+  if (el.type === 'table') return `Tabla · ${el.rowsBinding}`
+  if (el.type === 'image') return `Imagen · ${el.src}`
+  if (el.type === 'line') return 'Línea'
+  return `Banner de totales (${el.rows.length})`
 }
 
 export type AlignMode = 'left' | 'center-h' | 'right' | 'top' | 'center-v' | 'bottom'
@@ -86,6 +95,51 @@ export function distributeHorizontal(elements: PdfElement[]): PdfElement[] {
   })
 
   return elements.map(el => positioned.find(p => p.id === el.id) ?? el)
+}
+
+/** Trae `id` al frente (zIndex máximo actual + 1) dentro de `elements`. */
+export function bringToFront(elements: PdfElement[], id: string): PdfElement[] {
+  const maxZ = Math.max(0, ...elements.map(el => el.zIndex ?? 0))
+  return elements.map(el => (el.id === id ? { ...el, zIndex: maxZ + 1 } : el))
+}
+
+/** Manda `id` al fondo (zIndex mínimo actual - 1) dentro de `elements`. */
+export function sendToBack(elements: PdfElement[], id: string): PdfElement[] {
+  const minZ = Math.min(0, ...elements.map(el => el.zIndex ?? 0))
+  return elements.map(el => (el.id === id ? { ...el, zIndex: minZ - 1 } : el))
+}
+
+/**
+ * Alinea `elements` contra los márgenes de la página (no contra su propio
+ * bbox como `align()`) -- útil para un solo elemento seleccionado, donde
+ * alinear contra sí mismo no tiene sentido. Elementos con `flowAfter` no se
+ * tocan en el eje Y (su `y` es derivada, moverla no tendría efecto visible
+ * -- mismo criterio que el arrastre en EditorCanvas.tsx).
+ */
+export function alignToPage(elements: PdfElement[], mode: AlignMode, page: PdfPage): PdfElement[] {
+  const contentLeft = page.margins.left
+  const contentRight = page.width - page.margins.right
+  const contentTop = page.margins.top
+  const contentBottom = page.height - page.margins.bottom
+
+  return elements.map(el => {
+    switch (mode) {
+      case 'left':
+        return { ...el, x: contentLeft }
+      case 'right':
+        return { ...el, x: contentRight - el.w }
+      case 'center-h':
+        return { ...el, x: (contentLeft + contentRight) / 2 - el.w / 2 }
+      case 'top':
+        return el.flowAfter ? el : { ...el, y: contentTop }
+      case 'bottom':
+        return el.flowAfter ? el : { ...el, y: contentBottom - (el.h ?? 0) }
+      case 'center-v':
+        return el.flowAfter ? el : { ...el, y: (contentTop + contentBottom) / 2 - (el.h ?? 0) / 2 }
+      default:
+        return el
+    }
+  })
 }
 
 export function distributeVertical(elements: PdfElement[]): PdfElement[] {

@@ -4,16 +4,22 @@
 arquitectura del motor de plantillas, schema, workflow activo/borrador y
 bloques cerrados tras dos rondas de auditoría (Claude contra el repo real,
 y el usuario contra la propuesta de Claude). **Bloques 0-6 cerrados**
-(PR #81 mergeado a `main` — ver tracker). **Bloque 7 (piloto Cotización):
-parcial**, en curso en PR #83 (`claude/great-davinci-2v8c94`), todavía
-**no mergeado a `main`** — layout de flujo real (`flowAfter`/`visibleIf`/
-tipo `totals-banner`) y un primer rediseño visual del lienzo. Ese mismo PR
-también define, sin ejecutar todavía, el **Bloque 11** (rediseño de la
-interacción del lienzo estilo Canva: selección explícita, toolbar
-contextual, manipulación directa, undo/redo real) — detalle completo
-disponible en esa rama una vez mergeada; esta versión de `docs/PLAN.md`
-en `main` no repite ese detalle para no describir código que `main`
-todavía no tiene.
+(PR #81 mergeado a `main`). **Bloque 7 (piloto Cotización) parcial:**
+layout de flujo real (`flowAfter`/`visibleIf`/tipo `totals-banner`)
+implementado en schema + renderer + editor — ver `docs/ACTIVE_WORK.md`,
+"Completado en esta sesión (3)" para el detalle completo, incluida la
+corrección de un `active_schema` corrupto en producción que motivó este
+trabajo. Falta migrar de verdad la ruta que genera el PDF de Cotización
+para que use `renderFromTemplate()` en vez de `cotizacion-pdf.ts`.
+
+**PR #83** (layout de flujo + fix de datos corruptos + primer pase visual
+del lienzo) está en verde, listo para mergear a `main` — es el primer paso
+de ejecución del **Bloque 11** de abajo (Housekeeping). **Bloque 11
+(rediseño de interacción del editor, estilo Canva) definido y aprobado por
+el usuario en esta sesión, ejecución todavía no iniciada** — ver sección
+dedicada más abajo. Reemplaza la decisión "Sin undo/redo en el MVP" de
+"Criterios de aceptación": el usuario pidió explícitamente undo/redo real
+como parte de este bloque.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -172,6 +178,20 @@ type LineElement = PdfElementBase & {
 }
 ```
 
+**Ampliado en sesión 3 (Bloque 7, layout de flujo real)** — `PdfElementBase`
+gana `flowAfter?: string` + `flowGap?: number` (posición `y` derivada del
+borde inferior real de otro elemento, no un valor fijo — necesario porque
+el alto de la tabla de partidas y del banner de totales depende de los
+datos reales) y `visibleIf?: string` (oculta el elemento si la variable es
+falsy). `TextElement` gana `wrap?: boolean`, `format?: 'date'|'currency'`,
+y `align` admite `'justify'`. `TableElement.cols[]` gana `format?:
+'currency'`. Nuevo tipo `TotalsBannerElement` (`rows[]` con
+`label`/`valueVariable`/colores/`bold`/`fontSize`/`negate`/`visibleIf` +
+`bgColorToken`, alto dinámico según filas visibles). Implementación real:
+`lib/server/pdf/pdf-template-schema.ts` + `pdf-template-layout.ts` (nuevo,
+resuelve el layout) + `template-renderer.ts`. Detalle completo en
+`docs/ACTIVE_WORK.md`, "Completado en esta sesión (3)".
+
 **`sticky` en vez de `page: number`:** verificado en los 4 generadores
 reales — ninguno repite header/footer en páginas adicionales hoy
 (`checkPageSpace()`/`addPage()` solo resetean `currentY`, nunca redibujan
@@ -312,10 +332,11 @@ Así un schema que la preview acepta nunca es rechazado después por
 | 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | **Cerrado** — `app/editor-pdfs/page.tsx` + nav en `SidebarLayout.tsx`. Verificado en navegador real (login vía `AUTH_USERS_DEV_FALLBACK`, sección `editor-pdfs`): nav, header, y fallback correcto (banner de error + "No migrado") cuando Supabase no es alcanzable |
 | 5 | Editor visual (canvas, selección/multi-select, drag, resize, snap, alinear, distribuir, capas, inspector, variables, advertencia legal — sin undo/redo, sin dependencia nueva) | **Cerrado** — `app/editor-pdfs/[tipo]/` (`page.tsx`, `EditorCanvas.tsx`, `Inspector.tsx`, `geometry.ts`). Verificado en navegador real con una plantilla de prueba insertada temporalmente en `serenata-erp-test` (borrada después): selección, drag, resize, multi-select, alinear, capas, agregar/eliminar, confirmación de texto legal y autosave (`PATCH .../draft`) funcionando de punta a punta |
 | 6 | Preview real (reusa patrón `Content-Disposition: inline`) | **Cerrado** — `GET /api/editor-pdfs/[tipo]/preview` + `lib/server/pdf/pdf-sample-data.ts`. Verificado con la pipeline de producción real (sin mocks): PDF válido generado y leído (`{{cliente}}` interpolado, tabla agrupada, estilos) |
-| 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | Pendiente |
+| 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | **Parcial** — layout de flujo real (`flowAfter`/`visibleIf`/`totals-banner`) implementado y probado; `active_schema` válido migrado a test+prod. Falta el data-adapter real y reemplazar `cotizacion-pdf.ts` en la ruta de generación |
 | 8 | Hoja de llamado + Reporte de cierre (estructura simple, sin anidado) | Pendiente |
 | 9 | Orden de pago (estructura responsable→evento→tabla — decide `repeating-group` vs. loop híbrido con Cotización ya probado como base) | Pendiente |
 | 10 | Extensibilidad (dar de alta un 5º tipo de documento) | Pendiente |
+| 11 | Rediseño de interacción del lienzo (estilo Canva: selección explícita, toolbar contextual, manipulación directa, undo/redo) — ver sección dedicada abajo | Aprobado, no iniciado |
 
 ## Dependencias reales entre bloques y ejecución en paralelo
 
@@ -359,6 +380,151 @@ intención; partirlos antes de tener esa base sólida generaría rework, no
 ahorro. 8 y 9 sí podrían correr en paralelo entre sí una vez cerrado 7,
 excepto que 9 depende explícitamente del patrón de 7 — se re-evalúa al
 llegar ahí.
+
+## Bloque 11 — Rediseño de interacción del lienzo (estilo Canva)
+
+**Contexto:** el primer pase de "rediseño Canva" (`Toolbar.tsx`, capas con
+íconos, selección con etiqueta flotante, incluido en PR #83) cambió
+apariencia sin cambiar la arquitectura de interacción de fondo — el
+`Inspector.tsx` seguía siendo la interfaz primaria, cada `pointermove` de
+un drag era un commit independiente al autosave, no había edición directa
+de texto ni historial. El usuario, tras probar el deploy real, pidió un
+rediseño de la interacción misma, con una crítica arquitectónica de 10+
+puntos. Este bloque es la respuesta completa, con especificación de
+interacción exacta (no solo arquitectura de archivos) y dos rondas de
+decisiones de producto confirmadas con `AskUserQuestion`.
+
+### Decisiones confirmadas
+
+- **Undo/redo:** completo en este bloque — revierte la decisión "sin
+  undo/redo en el MVP" de "Criterios de aceptación" arriba.
+- **Imagen/Tabla:** `ImageElement` gana `opacity`/`fit` (schema nuevo,
+  Bloque 11.0); tabla no necesita schema nuevo, solo UI de columnas sobre
+  `cols[]` (ya soporta todo lo necesario).
+- **Fasificación:** selección + toolbars contextuales + Popover +
+  Capas-secundario primero (11.1), luego manipulación directa (11.2),
+  historial (11.3), zoom al final (11.4) — zoom es mínimo viable y no
+  bloquea el resto.
+- **Escape al editar texto:** revierte al contenido de antes de editar
+  (no comete). Blur/Enter confirman.
+- **Click fuera con un popover abierto:** solo cierra el popover, la
+  selección del elemento se conserva.
+- **Estrategia de PR:** mergear PR #83 tal como está primero (Bloque 0),
+  rama y PR nuevos para este bloque.
+- **"Agrupar" (multi-select):** deshabilitado con tooltip — requiere un
+  `groupId` nuevo en `PdfElementBaseSchema` que el producto no pidió
+  todavía; no se agrega la abstracción sin decisión explícita.
+
+### Header permanente vs. toolbar contextual — separados
+
+Dos barras físicamente distintas: `EditorHeader.tsx` (nuevo) —
+breadcrumb, estado de guardado, Vista previa, Descartar, Restaurar,
+**Aplicar diseño**, Deshacer/Rehacer — nunca cambia con la selección, son
+acciones de documento. `ContextualToolbar.tsx` (reemplaza al `Toolbar.tsx`
+de PR #83) — solo controles que dependen de la selección; con
+`{type:'none'}` es `EmptyToolbar` (ajustes de página + snap + zoom);
+nunca contiene Preview/Aplicar/Guardar.
+
+### Especificación de interacción (resumen — detalle completo en el plan de ejecución)
+
+- **Selección:** `EditorSelection` (`none`/`single`/`multiple`, nuevo
+  `selection.ts`). Click selecciona; Shift+click extiende/reduce;
+  drag-en-vacío = marquee (ya existe, se conserva); click-en-vacío
+  deselecciona salvo que solo cierre un popover abierto (no ambos a la
+  vez); Escape cierra popover primero, luego deselecciona; Delete/
+  Backspace borra lo no-`required`; flechas hacen nudge de 1mm (5mm con
+  Shift), cada nudge es un commit; Cmd/Ctrl+A selecciona todo con foco
+  fuera de un input.
+- **Edición directa de texto (doble-click):** overlay `contentEditable`
+  que reusa **la misma función de estilo** (`textElementStyle()`,
+  extraída de `renderElementContent`) que el render estático — mismo
+  `fontFamily`/`fontSize`/`textAlign`/`whiteSpace`/`width`, para no
+  repetir el bug de mismatch de métricas ya corregido en `82e59a2`. Sin
+  scroll interno, sin crecer la caja. Commit en blur/Enter (si no
+  `wrap`); Escape revierte al texto original sin generar historial.
+  Confirmación de texto `legal` se dispara en el mismo punto que hoy.
+- **Resize:** 4 esquinas, Shift bloquea proporción (genérico, no solo
+  imágenes), mínimo 2mm, feedback en vivo vía estado local, un solo
+  commit al soltar.
+- **Popovers (`components/ui/Popover.tsx`, nuevo compartido):** Escape
+  cierra el más reciente; click fuera cierra solo el popover
+  (`stopPropagation` en el backdrop); flip automático si no cabe en el
+  viewport; nunca más de uno abierto a la vez.
+- **Zoom/viewport (mínimo viable, 11.4):** zoom +/-, 100%, ajustar a
+  página; pan = scroll normal del contenedor; `mmToPx`/`pxToMm` ganan un
+  parámetro de zoom para que drag/resize/marquee/popovers no se
+  desincronicen del lienzo.
+
+### Arquitectura técnica
+
+- `selection.ts` (nuevo) + `resolveToolbarContext()`: unión discriminada
+  `ToolbarContext` (`empty`/`text`/`line`/`image`/`table`/
+  `totals-banner`/`multiple`) que angosta el `element` por tipo — elimina
+  los `if (el.type === ...)` dispersos.
+- `ContextualToolbar.tsx` se parte por tipo: `TextToolbar`, `LineToolbar`,
+  `ImageToolbar`, `TableToolbar` (nuevo: CRUD real de columnas, sin tocar
+  schema), `TotalsBannerToolbar`, `MultiSelectToolbar`, `EmptyToolbar` —
+  bajo `app/editor-pdfs/[tipo]/toolbar/`.
+- `Inspector.tsx` → `LayersPanel.tsx`: se queda solo con la lista de
+  capas + agregar/eliminar elementos, colapsable, secundario. El bloque
+  "Propiedades" completo migra a las toolbars/popovers de arriba.
+- **Manipulación directa:** `EditorCanvas.tsx` — `startDrag` pasa de
+  commit-por-`pointermove` a estado local `liveDrag` (mismo patrón que
+  `startMarquee`, que ya lo hace bien), un solo `onChangeElements` en
+  `pointerup`.
+- **Historial:** `history.ts` (nuevo) — `useEditorHistory()` envuelve el
+  chokepoint existente `updateTemplate` de `page.tsx` (past/present/
+  future, tope 50), atajos `Ctrl/Cmd+Z`/`Shift+Z`/`Ctrl+Y` con guardas de
+  foco (no interceptar inputs nativos).
+- **Bloque 11.0 (prerequisito de schema):** `ImageElementSchema` gana
+  `opacity?: number` (0-1) y `fit?: 'stretch'|'contain'` — render en
+  `template-renderer.ts` (`doc.setGState`) y `EditorCanvas.tsx` (CSS).
+  `fit: 'cover'` fuera de alcance (complejidad de clipping en jsPDF).
+
+### Invariante de arquitectura (backend, sin cambios)
+
+Todas las acciones nuevas de UI siguen pasando por el mismo camino ya
+existente, sin excepción — nunca se agregan endpoints por campo:
+
+```
+UI (Toolbar/Popover/Canvas/History) → page.tsx: updateTemplate/updateElements
+→ PdfTemplate completo → PdfTemplateSchema.safeParse (Zod, mismo pipeline
+que /draft y /aplicar) → PATCH /api/editor-pdfs/[tipo]/draft → pdf_plantillas.draft_schema
+```
+
+Ningún bloque de 11 toca `app/api/editor-pdfs/[tipo]/{draft,aplicar,restaurar}/route.ts`.
+
+### Bloques entregables
+
+0. **Housekeeping** — mergear PR #83 a `main`, rama y PR nuevos.
+1. **11.0** — Schema `ImageElement` (opacity/fit) + render servidor/lienzo.
+2. **11.1** — `selection.ts`, `Popover.tsx`, `EditorHeader.tsx` + split
+   completo de `ContextualToolbar.tsx`, `Inspector.tsx` → `LayersPanel.tsx`.
+   Sin tocar `EditorCanvas.tsx` todavía.
+3. **11.2** — `liveDrag` transaccional + Shift-proporción en resize;
+   `TextEditOverlay.tsx` (doble-click). Tests que verifican exactamente
+   una llamada a `onChangeElements` por gesto.
+4. **11.3** — `history.ts`, atajos de teclado, botones Deshacer/Rehacer.
+5. **11.4** — Zoom/viewport mínimo.
+
+Cada bloque: commit + push separado, `tsc`/`lint`/`test` en verde antes
+de seguir al siguiente.
+
+### Definition of Done (checklist de aceptación UX, además de lo técnico)
+
+Selección (click/shift-click/marquee/deselección/Cmd+A), texto (doble-
+click edita in-place idéntico al render estático, Enter/blur confirman,
+Escape revierte), transformación (drag/resize fluidos, Shift-proporción,
+un solo commit por gesto verificado con test, undo revierte el gesto
+completo), toolbar (sin Inspector permanente de "Propiedades", header y
+toolbar contextual separados, Aplicar solo en el header, controles
+avanzados en popovers, popovers cierran con Escape/click-fuera y nunca se
+salen del viewport), historial (atajos funcionan, botones en el header,
+un gesto = una entrada), persistencia (autosave un PATCH por commit no
+por `pointermove`, undo/redo también autoguarda, reload conserva el
+draft, preview sigue usando el PDF real, Aplicar diseño sin cambios).
+Verificación manual real en el preview de Vercel obligatoria para 11.2
+(los tests unitarios no bastan para confirmar fluidez).
 
 ## Riesgos
 

@@ -64,6 +64,17 @@ export const PdfElementBaseSchema = z.object({
   required: z.boolean().optional(),
   // editar el CONTENIDO pide confirmación
   legal: z.boolean().optional(),
+  // Layout de flujo: cuando está presente, `y` deja de ser la posición real
+  // -- se resuelve en render/edición como el borde inferior del elemento
+  // `flowAfter` (mismo `id` de otro elemento) más `flowGap` (mm). Necesario
+  // porque el contenido de arriba (ej. la tabla de partidas) tiene alto
+  // variable según los datos reales -- ver lib/server/pdf/pdf-template-layout.ts.
+  flowAfter: z.string().min(1).optional(),
+  flowGap: z.number().optional(),
+  // El elemento (y su contribución de alto al flujo) se omite si esta
+  // variable no existe o es falsy en los datos -- mismo catálogo de
+  // pdf-template-variables.ts.
+  visibleIf: z.string().min(1).optional(),
 })
 
 export type PdfElementBase = z.infer<typeof PdfElementBaseSchema>
@@ -77,13 +88,19 @@ export const TextElementSchema = PdfElementBaseSchema.extend({
   text: z.string(),
   size: z.number().positive('size debe ser mayor a 0'),
   bold: z.boolean(),
-  align: z.enum(['left', 'center', 'right']),
+  align: z.enum(['left', 'center', 'right', 'justify']),
   spacing: z.number().optional(),
   // nombre del token --sn-*, no el hex — validez del token no se valida
   // aquí (Track B).
   colorToken: z.string().min(1),
   bgToken: z.string().min(1).optional(),
   upper: z.boolean().optional(),
+  // multilínea: se envuelve dentro de `w` (jsPDF `splitTextToSize`). Sin
+  // esto el texto se dibuja en una sola línea (comportamiento original).
+  wrap: z.boolean().optional(),
+  // formatea el valor interpolado de `{{variable}}` antes de insertarlo --
+  // mismo formateo que ya usan los 4 generadores reales.
+  format: z.enum(['date', 'currency']).optional(),
 })
 
 export type TextElement = z.infer<typeof TextElementSchema>
@@ -96,6 +113,9 @@ export const PdfTableColumnSchema = z.object({
   align: z.enum(['left', 'center', 'right']),
   w: z.number().positive('w de columna debe ser mayor a 0'),
   visible: z.boolean(),
+  // formatea el valor de la celda si es numérico -- mismo formateo que ya
+  // usan los 4 generadores reales (formatCurrencyPdf).
+  format: z.enum(['currency']).optional(),
 })
 
 export type PdfTableColumn = z.infer<typeof PdfTableColumnSchema>
@@ -139,6 +159,44 @@ export const LineElementSchema = PdfElementBaseSchema.extend({
 
 export type LineElement = z.infer<typeof LineElementSchema>
 
+// ==================== TOTALS-BANNER ====================
+
+// Refleja buildTotalsRows() (cotizacion-pdf-helpers.ts): banda de fondo con
+// filas label/valor apiladas y alto dinámico según cuántas filas queden
+// visibles -- por eso no tiene `h` fijo en el schema, se calcula en render
+// (ver pdf-template-layout.ts).
+export const TotalsBannerRowSchema = z.object({
+  label: z.string().min(1),
+  // path al valor numérico en los datos, ej. 'subtotal' -- se formatea como
+  // moneda siempre (es lo único que renderiza este elemento).
+  valueVariable: z.string().min(1),
+  labelColorToken: z.string().min(1),
+  valueColorToken: z.string().min(1),
+  bold: z.boolean(),
+  fontSize: z.number().positive('fontSize debe ser mayor a 0'),
+  // antepone "-" al valor (ej. renglón de descuento).
+  negate: z.boolean().optional(),
+  // la fila se omite (y no ocupa alto) si esta variable no existe o es
+  // falsy -- independiente del `visibleIf` del elemento completo.
+  visibleIf: z.string().min(1).optional(),
+})
+
+export type TotalsBannerRow = z.infer<typeof TotalsBannerRowSchema>
+
+export const TotalsBannerElementSchema = PdfElementBaseSchema.extend({
+  type: z.literal('totals-banner'),
+  rows: z.array(TotalsBannerRowSchema).min(1, 'El banner requiere al menos una fila'),
+  bgColorToken: z.string().min(1),
+  // mm -- por defecto igual a los valores ya usados en cotizacion-pdf.ts
+  // (rowH 5.5 / rowGap 1.6 / padV 3.1 / alto mínimo 28).
+  rowHeight: z.number().positive().optional(),
+  rowGap: z.number().optional(),
+  padY: z.number().optional(),
+  minHeight: z.number().optional(),
+})
+
+export type TotalsBannerElement = z.infer<typeof TotalsBannerElementSchema>
+
 // ==================== UNIÓN DISCRIMINADA ====================
 
 export const PdfElementSchema = z.discriminatedUnion('type', [
@@ -146,6 +204,7 @@ export const PdfElementSchema = z.discriminatedUnion('type', [
   TableElementSchema,
   ImageElementSchema,
   LineElementSchema,
+  TotalsBannerElementSchema,
 ])
 
 export type PdfElement = z.infer<typeof PdfElementSchema>
@@ -175,7 +234,10 @@ export const PdfTemplateSchema = z
           message: `x fuera del rango de la página (0-${template.page.width})`,
         })
       }
-      if (el.y < 0 || el.y > template.page.height) {
+      // `y` de un elemento con `flowAfter` es un placeholder -- se recalcula
+      // siempre en render/edición (pdf-template-layout.ts), así que no se
+      // valida contra el rango de página.
+      if (!el.flowAfter && (el.y < 0 || el.y > template.page.height)) {
         ctx.addIssue({
           code: 'custom',
           path: ['elements', index, 'y'],
@@ -199,40 +261,105 @@ export const PdfTemplateSchema = z
     })
   })
   .superRefine((template, ctx) => {
+    // flowAfter: debe apuntar a un id existente, no a sí mismo, y la cadena
+    // completa no puede formar un ciclo -- si no, el layout de flujo
+    // (pdf-template-layout.ts) nunca podría resolver un orden.
+    const idsInTemplate = new Set(template.elements.map(el => el.id))
     template.elements.forEach((el, index) => {
-      const colorFields: Array<[string, string | undefined]> =
+      if (el.flowAfter === undefined) return
+      if (el.flowAfter === el.id) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['elements', index, 'flowAfter'],
+          message: 'flowAfter no puede apuntar al propio elemento',
+        })
+        return
+      }
+      if (!idsInTemplate.has(el.flowAfter)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['elements', index, 'flowAfter'],
+          message: `flowAfter apunta a un id inexistente: "${el.flowAfter}"`,
+        })
+      }
+    })
+
+    const flowAfterById = new Map(template.elements.map(el => [el.id, el.flowAfter]))
+    template.elements.forEach((el, index) => {
+      const visited = new Set<string>()
+      let current: string | undefined = el.id
+      while (current !== undefined) {
+        if (visited.has(current)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['elements', index, 'flowAfter'],
+            message: 'flowAfter forma un ciclo entre elementos',
+          })
+          break
+        }
+        visited.add(current)
+        current = flowAfterById.get(current)
+      }
+    })
+  })
+  .superRefine((template, ctx) => {
+    template.elements.forEach((el, index) => {
+      const colorFields: Array<[(string | number)[], string | undefined]> =
         el.type === 'text'
           ? [
-              ['colorToken', el.colorToken],
-              ['bgToken', el.bgToken],
+              [['colorToken'], el.colorToken],
+              [['bgToken'], el.bgToken],
             ]
           : el.type === 'line'
-            ? [['colorToken', el.colorToken]]
+            ? [[['colorToken'], el.colorToken]]
             : el.type === 'table'
               ? [
-                  ['headerColorToken', el.headerColorToken],
-                  ['borderColorToken', el.borderColorToken],
+                  [['headerColorToken'], el.headerColorToken],
+                  [['borderColorToken'], el.borderColorToken],
                 ]
-              : []
+              : el.type === 'totals-banner'
+                ? [
+                    [['bgColorToken'], el.bgColorToken],
+                    ...el.rows.flatMap((row, rowIndex): Array<[(string | number)[], string | undefined]> => [
+                      [['rows', rowIndex, 'labelColorToken'], row.labelColorToken],
+                      [['rows', rowIndex, 'valueColorToken'], row.valueColorToken],
+                    ]),
+                  ]
+                : []
 
       colorFields.forEach(([field, token]) => {
         if (token !== undefined && !(token in COLOR_TOKENS)) {
           ctx.addIssue({
             code: 'custom',
-            path: ['elements', index, field],
+            path: ['elements', index, ...field],
             message: `Token de color inválido: "${token}"`,
           })
         }
       })
 
+      const checkVariablePath = (path: (string | number)[], varPath: string) => {
+        if (!isValidVariablePath(template.tipoDocumento, varPath)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['elements', index, ...path],
+            message: `Variable inexistente para ${template.tipoDocumento}: {{${varPath}}}`,
+          })
+        }
+      }
+
       if (el.type === 'text') {
-        extractVariablePaths(el.text).forEach(varPath => {
-          if (!isValidVariablePath(template.tipoDocumento, varPath)) {
-            ctx.addIssue({
-              code: 'custom',
-              path: ['elements', index, 'text'],
-              message: `Variable inexistente para ${template.tipoDocumento}: {{${varPath}}}`,
-            })
+        extractVariablePaths(el.text).forEach(varPath => checkVariablePath(['text'], varPath))
+      }
+
+      if (el.visibleIf !== undefined) {
+        checkVariablePath(['visibleIf'], el.visibleIf)
+      }
+
+      if (el.type === 'totals-banner') {
+        el.rows.forEach((row, rowIndex) => {
+          checkVariablePath(['rows', rowIndex, 'valueVariable'], row.valueVariable)
+          if (row.visibleIf !== undefined) {
+            checkVariablePath(['rows', rowIndex, 'visibleIf'], row.visibleIf)
           }
         })
       }

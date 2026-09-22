@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-22 (sesión 3, sincronizado a `main`)
+**Última actualización:** 2026-09-22 (sesión 3)
 
 ## Estado
 
@@ -9,23 +9,112 @@ sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
 posición libre, texto y color acotado a la paleta del design system), con
 un flujo diseño-activo/borrador explícito y elementos obligatorios/legales
 protegidos. Arquitectura decidida: schema JSON + renderer sobre jsPDF
-(sin dependencia nueva). **Bloques 0-6 cerrados** (PR #81 mergeado a
-`main`: spike, schema+Zod, persistencia+API+permisos, catálogo
-`/editor-pdfs`, editor visual/canvas, preview real).
+(sin dependencia nueva). **Bloques 0-6 cerrados** (spike, schema+Zod,
+persistencia+API+permisos, catálogo `/editor-pdfs`, editor visual/canvas,
+preview real — PR #81 mergeado a `main` en sesión 2). **Bloque 7 (piloto
+Cotización): parcial** — layout de flujo real implementado (ver abajo),
+falta migrar de verdad la ruta que genera el PDF final para que use el
+renderer nuevo en vez de `cotizacion-pdf.ts` hardcodeado, y la fidelidad
+visual completa contra el PDF real. Esta corrección de estado reemplaza la
+anterior de esta misma sección (sesión 2 quedó desactualizada tras el
+merge de PR #81 — no se corrigió al abrir sesión 3, causó confusión real:
+ver "Completado en esta sesión" abajo).
 
-**Bloque 7 (piloto Cotización) parcial, en PR #83, todavía no mergeado a
-`main`:** layout de flujo real (`flowAfter`/`visibleIf`/tipo
-`totals-banner`) que corrige un `active_schema` corrupto de Cotización en
-producción, más un primer rediseño visual del lienzo. Ese mismo PR define
-también, aprobado pero sin ejecutar, el **Bloque 11** (rediseño completo
-de la interacción del lienzo estilo Canva: selección explícita, toolbar
-contextual, manipulación directa transaccional, undo/redo real). El
-detalle día a día de esa sesión (log completo, hallazgos, decisiones) vive
-en la rama `claude/great-davinci-2v8c94` — esta copia en `main` se
-mantiene corregida solo en lo que ya es cierto para el código mergeado,
-sin adelantar contenido de un PR todavía abierto.
+**Nota de proceso importante:** al auditar el estado real (sesión 3), se
+encontró que `pdf_plantillas.active_schema` de `cotizacion` en
+**producción** tenía datos (`flowAfter`, `gap`, un tipo de elemento
+`totals-banner`) que **nunca existieron en ningún código de este repo**
+(confirmado con `git grep` sobre todo el historial) — llegaron por una
+escritura directa a la base de datos que se saltó la validación Zod de la
+API (`/api/editor-pdfs/[tipo]/draft` y `.../aplicar` la habrían rechazado).
+Ver detalle completo abajo.
 
-## Completado en esta sesión — Bloque 1: spike del renderer
+**Bloque 11 (rediseño de interacción del lienzo, estilo Canva) aprobado
+en esta sesión, ejecución no iniciada.** El primer pase visual de PR #83
+(`Toolbar.tsx`, capas con íconos) no fue suficiente para el usuario —
+pidió selección explícita, toolbar contextual, manipulación directa
+transaccional y undo/redo real. Plan completo (decisiones de producto,
+especificación de interacción gesto por gesto, arquitectura técnica,
+Definition of Done) en `docs/PLAN.md` → "Bloque 11". Primer paso de
+ejecución: mergear PR #83 a `main` (Housekeeping, Bloque 0 de esa
+sección) — todavía no ejecutado, ver "Siguiente paso" abajo.
+
+## Completado en esta sesión (3) — Layout de flujo real + fix de datos corruptos
+
+El usuario pidió rediseñar la UX/UI del lienzo del editor (estilo Canva).
+Al revisar el estado real antes de diseñar, se encontró que Bloques 3-6 ya
+estaban cerrados y mergeados (esta sección de arriba estaba desactualizada)
+y, sobre todo, que el `active_schema` de Cotización en **producción** tenía
+`flowAfter`/`gap`/un tipo `totals-banner` sin ningún código que los
+interpretara — causaba que el lienzo mostrara todo apilado/ilegible (lo que
+el usuario reportó como problema de UX/UI). Causa raíz real: layout de
+flujo nunca implementado, no un problema de diseño visual. Se decidió
+implementarlo antes de tocar la UX/UI del lienzo.
+
+- **`lib/server/pdf/pdf-template-schema.ts`:** `PdfElementBaseSchema` +=
+  `flowAfter`/`flowGap` (posición derivada del borde inferior real de otro
+  elemento) y `visibleIf` (oculta el elemento y no aporta alto si la
+  variable es falsy). `TextElementSchema` += `wrap`, `format`
+  (`date`/`currency`), `align: 'justify'`. `PdfTableColumnSchema` +=
+  `format: 'currency'`. Nuevo tipo de elemento `totals-banner` (rows[] +
+  `bgColorToken`, alto dinámico). `superRefine` nuevo: `flowAfter` debe
+  apuntar a un id existente, no a sí mismo, sin ciclos; tokens de color y
+  `{{variable}}`/`visibleIf` validados también en los campos nuevos.
+- **`lib/server/pdf/pdf-template-layout.ts` (nuevo):** `resolveTemplateLayout()`
+  — topo-sort por `flowAfter`, resuelve `y` real por tipo (texto envuelto
+  vía `splitTextToSize`, tabla vía `autoTable` descartable + `finalY` real,
+  imagen/línea/totals-banner con fórmulas), respeta `visibleIf`. Módulo
+  autocontenido a propósito (sin importar `template-renderer.ts`) para que
+  tanto el renderer de servidor como `EditorCanvas.tsx` (cliente) lo usen
+  sin import circular — jsPDF es isomórfico, corre igual en el navegador.
+- **`template-renderer.ts`:** `renderFromTemplate()` resuelve el layout antes
+  de dibujar (usa la `y` real, no `el.y`), agrega el render de
+  `totals-banner`, soporta texto envuelto/justificado/formateado.
+- **`EditorCanvas.tsx`:** usa el layout resuelto en vez de `el.y` crudo;
+  corregido un bug real (cualquier tipo de elemento desconocido, incluido
+  `totals-banner`, caía en el branch de tabla por el `else` final — ahora
+  tiene su propio render). Arrastrar un elemento con `flowAfter` solo mueve
+  `x` (la `y` es derivada, moverla no tendría efecto visible).
+- **`Inspector.tsx`:** campos `flowAfter`/`flowGap`/`visibleIf` genéricos,
+  `wrap`/`format`/`justify` para texto, panel de propiedades y `+ Banner de
+  totales` para el tipo nuevo, capas con etiqueta legible en vez de solo
+  el tipo.
+- **`pdf-template-variables.ts`:** `sampleType: 'boolean'` nuevo; agregado
+  `iva_activo`, `descuento_monto` e `id` (folio) al catálogo de
+  `cotizacion` — faltaban y bloqueaban construir un schema real válido.
+- Tests nuevos: `pdf-template-layout.test.ts` (6), `pdf-template-schema.flow.test.ts`
+  (13), `template-renderer.flow.test.ts` (2) — 21 tests nuevos, cubren
+  encadenamiento de flujo, alto real de tabla/banner, `visibleIf`,
+  detección de ciclos, y un render de punta a punta con datos reales.
+  `tsc --noEmit`, `lint` (0 errores) y `npm test` completos (137 archivos /
+  1062 tests) en verde. `npm run build`: falla en este checkout por falta
+  de `SUPABASE_URL`/env vars (esperado, no hay `.env.local` — limitación de
+  entorno documentada en `CLAUDE.md`, no del código: compilación TS y
+  bundling sí terminaron en verde antes de ese punto).
+- **Migración `20260922_fix_cotizacion_active_schema_flow_layout.sql`:**
+  reemplaza el `active_schema` corrupto de `cotizacion` por uno válido
+  contra el schema nuevo, reconstruyendo el contenido real del PDF
+  (encabezado, RESUMEN, tabla agrupada, banner de totales, notas
+  condicionales, GENERALES/COSTOS/CANCELACIÓN) — aplicada a
+  `serenata-erp-test` y a producción, verificada (39 elementos, `draft_schema`
+  en null en ambas).
+- **Decisión menor, sin token real:** no existe ningún `--sn-*` amarillo en
+  `app/globals.css` (el amarillo del renglón de descuento en
+  `cotizacion-pdf-helpers.ts`, `#F5D042`, es un hex suelto sin token — deuda
+  ya existente, no introducida aquí). Se usó `orange-soft` como sustituto en
+  vez de inventar un token nuevo sin aprobación. Pendiente decidir si vale
+  la pena agregar un token amarillo real al design system.
+- **Fuera de alcance a propósito, notado para quien retome Bloque 7:**
+  columna "Total categoría" (subtotal por grupo, `groupTotalOf` en los
+  datos corruptos originales) no se reprodujo — es una feature de tabla
+  separada del layout de flujo, no implementada en el schema. Fidelidad
+  visual pixel-a-pixel contra el PDF real de `cotizacion-pdf.ts` no se
+  verificó (la migración de datos es funcionalmente válida, no
+  necesariamente idéntica al PDF de producción). El rediseño UX/UI del
+  lienzo (estilo Canva, pedido original del usuario) sigue pendiente —
+  era justamente el siguiente paso cuando se encontró este bug.
+
+## Completado en sesión anterior (2) — Bloque 1: spike del renderer
 
 - Rama de la sesión (`claude/zen-cray-4lre07`) ya alineada con `origin/main`;
   sin trabajo pendiente de otra sesión.
@@ -203,20 +292,24 @@ resto en `docs/archive/` y sesiones previas.
 
 ## Siguiente paso
 
-1. **PR #81 ya mergeado a `main`** (Bloques 0-6 cerrados). Pendiente:
-   mergear **PR #83** (`claude/great-davinci-2v8c94` → `main`, CI en
-   verde) — cierra el Bloque 7 parcial (layout de flujo + fix de datos
-   corruptos) y es el primer paso (Housekeeping) del Bloque 11.
-2. Tras mergear PR #83: retomar en una rama nueva la ejecución del
-   Bloque 11 (rediseño de interacción del lienzo, estilo Canva) — plan
-   completo en `docs/PLAN.md` una vez sincronizado desde esa rama.
-3. Terminar el Bloque 7 de verdad: la ruta que genera el PDF final de
+1. **Bloque 11 (rediseño de interacción del lienzo, estilo Canva) —
+   plan aprobado, ejecución no iniciada.** Empieza por el Housekeeping:
+   marcar PR #83 listo y mergearlo a `main`, abrir rama y PR nuevos, y
+   ejecutar 11.0-11.4 en orden. Detalle completo en `docs/PLAN.md` →
+   "Bloque 11".
+2. Terminar el Bloque 7 de verdad: la ruta que genera el PDF final de
    Cotización todavía usa `cotizacion-pdf.ts` hardcodeado, no
-   `renderFromTemplate()` — falta el data-adapter real y verificar
-   fidelidad visual contra el PDF real con datos de `serenata-erp-test`.
-4. Considerar corregir el valor de acento en `.claude/rules/ui.md`
+   `renderFromTemplate()` — falta el data-adapter real (mapear
+   `CotizacionPDFData` a las variables del catálogo, incluido calcular
+   `descuento_monto` con `calculateDiscount()`), verificar fidelidad visual
+   contra el PDF real con datos de `serenata-erp-test`, y decidir si vale
+   la pena la columna "Total categoría" (`groupTotalOf`, no implementada).
+3. Considerar corregir el valor de acento en `.claude/rules/ui.md`
    (`#FF5A1A` → `#FE7B01`) como ajuste puntual, fuera de la iniciativa del
    Editor de PDFs.
-5. Considerar si el RLS deshabilitado en
+4. Considerar si el RLS deshabilitado en
    `cliente_id_backfill_clasificacion` amerita una tarea aparte (ver
    "Problemas encontrados").
+5. Considerar si vale la pena un token `--sn-*` amarillo real (hoy no
+   existe; el renglón de descuento del banner de totales usa `orange-soft`
+   como sustituto — ver "Completado en esta sesión (3)").

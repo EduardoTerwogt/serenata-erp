@@ -43,6 +43,25 @@ import {
   Loader2,
   Lock,
   Users,
+  Bold,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  CaseSensitive,
+  Minus,
+  Image as ImageIcon,
+  DollarSign,
+  BringToFront,
+  SendToBack,
+  Table2,
+  Type,
+  AlignHorizontalJustifyStart,
+  AlignHorizontalJustifyCenter,
+  AlignHorizontalJustifyEnd,
+  AlignVerticalJustifyStart,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
 } from 'lucide-react'
 
 // Rediseño Apple-style: los íconos y tonos del nav siguen exactamente
@@ -101,6 +120,27 @@ const ICONS = {
   sparkles: Sparkles,
   loader: Loader2,
   lock: Lock,
+  // Editor de PDFs (docs/PLAN.md, Bloque 7 -- rediseño del lienzo): toolbar
+  // contextual, capas e íconos de tipo de elemento.
+  bold: Bold,
+  'align-left': AlignLeft,
+  'align-center': AlignCenter,
+  'align-right': AlignRight,
+  'align-justify': AlignJustify,
+  'case-sensitive': CaseSensitive,
+  minus: Minus,
+  image: ImageIcon,
+  'dollar-sign': DollarSign,
+  'bring-to-front': BringToFront,
+  'send-to-back': SendToBack,
+  'table-2': Table2,
+  type: Type,
+  'align-h-start': AlignHorizontalJustifyStart,
+  'align-h-center': AlignHorizontalJustifyCenter,
+  'align-h-end': AlignHorizontalJustifyEnd,
+  'align-v-start': AlignVerticalJustifyStart,
+  'align-v-center': AlignVerticalJustifyCenter,
+  'align-v-end': AlignVerticalJustifyEnd,
 } as const
 
 export type IconName = keyof typeof ICONS

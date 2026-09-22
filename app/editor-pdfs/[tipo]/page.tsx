@@ -11,6 +11,7 @@ import { PdfDocumentTypeSchema, PdfTemplateSchema, type PdfElement, type PdfTemp
 import { resolveColorToken } from '@/lib/server/pdf/pdf-color-tokens'
 import { EditorCanvas } from './EditorCanvas'
 import { Inspector } from './Inspector'
+import { Toolbar } from './Toolbar'
 
 interface PdfPlantillaRow {
   active_schema: PdfTemplate
@@ -184,26 +185,17 @@ export default function EditorPdfTipoPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SectionHero title={LABELS[tipo] ?? tipo} />
-        <div className="flex items-center gap-2">
-          <span className="text-[length:var(--text-sm)] text-subtext">
-            {saveStatus === 'saving' && 'Guardando…'}
-            {saveStatus === 'saved' && 'Guardado'}
-            {saveStatus === 'error' && 'Error al guardar'}
-          </span>
-          <Button
-            variant="ghost"
-            size="md"
-            onClick={() => window.open(`/api/editor-pdfs/${tipo}/preview`, '_blank')}
-          >
-            Vista previa
-          </Button>
-          <Button variant="ghost" size="md" onClick={handleDescartar}>Descartar cambios</Button>
-          <Button variant="ghost" size="md" onClick={() => setConfirmRestaurar(true)}>Restaurar plantilla</Button>
-          <Button variant="primary" size="md" onClick={handleAplicar}>Aplicar diseño</Button>
-        </div>
-      </div>
+      <Toolbar
+        tipoLabel={LABELS[tipo] ?? tipo}
+        template={template}
+        selectedIds={selectedIds}
+        onChangeElements={updateElements}
+        saveStatus={saveStatus}
+        onPreview={() => window.open(`/api/editor-pdfs/${tipo}/preview`, '_blank')}
+        onDescartar={handleDescartar}
+        onRestaurar={() => setConfirmRestaurar(true)}
+        onAplicar={handleAplicar}
+      />
 
       {actionError && (
         <div className="rounded-control bg-cancelled-bg px-4 py-3 text-sm text-cancelled-fg">{actionError}</div>
