@@ -294,9 +294,9 @@ resto en `docs/archive/` y sesiones previas.
 
 1. **Bloque 11 (rediseño de interacción del lienzo, estilo Canva) —
    plan aprobado, ejecución no iniciada.** Empieza por el Housekeeping:
-   marcar PR #83 listo y mergearlo a `main` (CI verde, sin conflictos),
-   abrir rama y PR nuevos, y ejecutar 11.0-11.4 en orden. Detalle completo
-   en `docs/PLAN.md` → "Bloque 11".
+   marcar PR #83 listo y mergearlo a `main`, abrir rama y PR nuevos, y
+   ejecutar 11.0-11.4 en orden. Detalle completo en `docs/PLAN.md` →
+   "Bloque 11".
 2. Terminar el Bloque 7 de verdad: la ruta que genera el PDF final de
    Cotización todavía usa `cotizacion-pdf.ts` hardcodeado, no
    `renderFromTemplate()` — falta el data-adapter real (mapear
