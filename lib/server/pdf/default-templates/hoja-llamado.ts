@@ -19,8 +19,6 @@
  * `fecha_generacion` (fecha de hoy).
  *
  * Gaps de fidelidad aceptados:
- * - Fechas sin formatear, sin fallback "Por definir" en campos vacíos
- *   (mismos gaps de Cotización, no específicos de este documento).
  * - La columna "Hora de Llamado" de CREW está siempre vacía en el
  *   generador real (nunca se llena desde ningún dato) — se reproduce con
  *   un `field` que no existe en ningún item, así que resuelve vacío igual.
@@ -34,6 +32,12 @@
  *   una tabla real o el texto de "vacío" (`emptyText` ya representa el
  *   punto de inicio siguiente, una tabla real necesita +10 más) — un solo
  *   `gap` no puede ser exacto en los dos casos a la vez.
+ *
+ * Bloque 9 (rediseño, "estado casi final"): `fecha_entrega` (fila "Fecha:")
+ * y `footer-fecha` ahora usan `format: 'date'`/ya llegan pre-formateados
+ * -- cerraba el gap de fidelidad de fechas crudas que este archivo
+ * documentaba antes. `footer-fecha` también corrige un bug real de
+ * posicionamiento encontrado en Bloque 9 -- ver su comentario.
  */
 
 import type { PdfTemplate, TextElement } from '@/lib/server/pdf/pdf-template-schema'
@@ -46,8 +50,8 @@ const INFO_TOP = 36
 const INFO_LABEL_W = 44
 const INFO_VALUE_W = 210 - MARGIN - 80 - INFO_LABEL_W // margin:{left:14,right:80} real, col0=44 -> 72
 
-const INFO_ROWS: { label: string; path: string }[] = [
-  { label: 'Fecha:', path: 'fecha_entrega' },
+const INFO_ROWS: { label: string; path: string; format?: 'date' }[] = [
+  { label: 'Fecha:', path: 'fecha_entrega', format: 'date' },
   { label: 'Cliente:', path: 'cliente' },
   { label: 'Locación:', path: 'locacion' },
   { label: 'Horarios:', path: 'horarios' },
@@ -83,6 +87,7 @@ function infoElements(): TextElement[] {
         bold: false,
         align: 'left',
         colorToken: 'ink',
+        format: row.format,
         required: true,
         zIndex: i * 2 + 1,
       },
@@ -278,9 +283,15 @@ export function buildHojaLlamadoBaseline(): PdfTemplate {
       {
         id: 'footer-fecha',
         type: 'text',
-        x: 100,
+        // Bug encontrado en Bloque 9 (ver template-renderer.ts,
+        // `textAnchorX`): para `align:'right'`, `x` debe ser el borde
+        // IZQUIERDO de la caja (`w` hasta el margen derecho real), nunca la
+        // coordenada de ancla directa -- con `x:100` este texto rendía
+        // con su borde derecho a la mitad de la página en vez de contra el
+        // margen derecho (`pageW - margin` en el generador real).
+        x: MARGIN,
         y: 200, // ignorada -- flowAfter resuelve la y real
-        w: 96,
+        w: CONTENT_W,
         text: 'Generado el {{fecha_generacion}}',
         size: 7,
         bold: false,

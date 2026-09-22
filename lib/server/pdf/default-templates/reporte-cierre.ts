@@ -10,11 +10,15 @@
  * `rowsBinding` necesita un array, la tabla real es de una sola fila),
  * `equipo_texto`/`incidencias_texto` (join y fallback ya aplicados).
  *
- * Gaps de fidelidad aceptados: fechas sin formatear (mismo gap que
- * Cotización/Hoja de llamado); `crew-label`/`cronograma`→`incidencias-label`
+ * Gaps de fidelidad aceptados: `crew-label`/`cronograma`→`incidencias-label`
  * usan un `gap` de compromiso porque el generador real tiene un offset
  * distinto según si el bloque anterior fue una tabla real o el texto de
  * "sin hitos" (mismo caso que Hoja de llamado, ver ese archivo).
+ *
+ * Bloque 9 (rediseño, "estado casi final"): `fecha_cierre` y las columnas
+ * `planeado`/`real` de la tabla de hitos ahora usan `format: 'date'` --
+ * cerraba el gap de fidelidad de fechas crudas que este archivo documentaba
+ * antes.
  */
 
 import type { PdfTemplate } from '@/lib/server/pdf/pdf-template-schema'
@@ -71,6 +75,7 @@ export function buildReporteCierreBaseline(): PdfTemplate {
         bold: false,
         align: 'left',
         colorToken: 'ink-muted',
+        format: 'date',
         required: true,
         zIndex: 2,
       },
@@ -153,8 +158,8 @@ export function buildReporteCierreBaseline(): PdfTemplate {
         w: CONTENT_W,
         cols: [
           { label: 'Hito', field: 'titulo', align: 'left', w: 90, visible: true },
-          { label: 'Planeado', field: 'planeado', align: 'left', w: 46, visible: true },
-          { label: 'Real', field: 'real', align: 'left', w: 46, visible: true },
+          { label: 'Planeado', field: 'planeado', align: 'left', w: 46, visible: true, format: 'date' },
+          { label: 'Real', field: 'real', align: 'left', w: 46, visible: true, format: 'date' },
         ],
         rowsBinding: 'hitos',
         emptyText: 'Sin hitos registrados.',

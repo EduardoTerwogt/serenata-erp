@@ -18,11 +18,22 @@
  * Gaps residuales de fidelidad, aceptados conscientemente (no bloquean la
  * comparación visual, revisar si el chequeo contra datos reales los marca
  * como inaceptables):
- * - Fechas (`fecha_entrega`/`fecha_cotizacion`) se interpolan crudas -- el
- *   generador real las pasa por `formatDateDisplay()`. Ningún tipo de
- *   documento tiene hoy formato de fecha en el motor de templates
- *   (limitación del Bloque 2, no específica de Cotización).
- * - `locacion` no cae a "—" cuando viene vacía (el generador real sí).
+ * - `locacion` no cae a "—" cuando viene vacía (el generador real sí) --
+ *   distinto del caso de fechas (ver abajo), es un campo de texto libre, no
+ *   hay un formateador genérico al que engancharle un fallback sin inventar
+ *   un mecanismo nuevo solo para este campo.
+ * - La tabla de partidas no tiene "Categoría" en bold-italic en la primera
+ *   fila de cada grupo (estilo por celda no soportado por el schema hoy).
+ * - El bloque de header se modela como 12 TextElement (6 pares
+ *   etiqueta/valor) en vez de una tabla real -- `TableElement` asume un
+ *   array homogéneo de filas (`rowsBinding`+`cols`), no un layout
+ *   label/valor de campos heterogéneos. Se protegen igual con
+ *   `required: true`.
+ *
+ * Bloque 9 (rediseño, "estado casi final"): `fecha_entrega`/
+ * `fecha_cotizacion` ahora usan `format: 'date'` (`formatDateDisplay`, con
+ * fallback "—" incluido) -- cerraba el gap de fidelidad que este archivo
+ * documentaba antes.
  * - La tabla de partidas no tiene "Categoría" en bold-italic en la primera
  *   fila de cada grupo (estilo por celda no soportado por el schema hoy).
  * - El bloque de header se modela como 12 TextElement (6 pares
@@ -50,12 +61,12 @@ const HEADER_BOTTOM = HEADER_TOP + 6 * HEADER_ROW_H // 46.9
 const HEADER_LABEL_W = 44
 const HEADER_VALUE_W = 64
 
-const HEADER_ROWS: { label: string; path: string }[] = [
+const HEADER_ROWS: { label: string; path: string; format?: 'date' }[] = [
   { label: 'Cliente:', path: 'cliente' },
   { label: 'Proyecto:', path: 'proyecto' },
-  { label: 'Fecha de entrega:', path: 'fecha_entrega' },
+  { label: 'Fecha de entrega:', path: 'fecha_entrega', format: 'date' },
   { label: 'Locación:', path: 'locacion' },
-  { label: 'Fecha de cotización:', path: 'fecha_cotizacion' },
+  { label: 'Fecha de cotización:', path: 'fecha_cotizacion', format: 'date' },
   { label: '# Cotización', path: 'id' },
 ]
 
@@ -137,6 +148,7 @@ function headerElements(): TextElement[] {
         bold: false,
         align: 'left',
         colorToken: 'ink',
+        format: row.format,
         required: true,
         zIndex: 12 + i * 2 + 1,
       },
