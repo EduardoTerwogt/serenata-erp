@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-21T19:35:45.385Z",
-  "count": 100,
+  "generated_at": "2026-09-22T17:02:37.863Z",
+  "count": 101,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -101,6 +101,7 @@
     "20260920_cuentas_por_proyecto_utilidad_impuestos.sql",
     "20260920_proveedores_add_regimen_fiscal_resico.sql",
     "20260920_rpcs_cliente_id_dual_write.sql",
-    "20260921_add_pdf_plantillas_table.sql"
+    "20260921_add_pdf_plantillas_table.sql",
+    "20260922_fix_cotizacion_active_schema_flow_layout.sql"
   ]
 }

@@ -1,8 +1,10 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { PdfElement, PdfTemplate } from '@/lib/server/pdf/pdf-template-schema'
 import { resolveColorToken } from '@/lib/server/pdf/pdf-color-tokens'
+import { resolveTemplateLayout } from '@/lib/server/pdf/pdf-template-layout'
+import { buildSampleData } from '@/lib/server/pdf/pdf-sample-data'
 import { mmToPx, pxToMm, snapToGrid } from './geometry'
 
 interface EditorCanvasProps {
@@ -34,6 +36,26 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
   const pageW = mmToPx(template.page.width)
   const pageH = mmToPx(template.page.height)
 
+  // Datos sintéticos del catálogo de variables (mismos que la vista previa
+  // real, Bloque 6) -- solo hace falta resolver el layout de verdad (jsPDF +
+  // autoTable descartables) cuando el template usa `flowAfter`/`visibleIf`;
+  // el caso común (posiciones absolutas) no paga ese costo en cada frame de
+  // drag.
+  const hasFlowLayout = template.elements.some(el => el.flowAfter !== undefined || el.visibleIf !== undefined)
+  const layoutById = useMemo(() => {
+    if (!hasFlowLayout) return null
+    const sampleData = buildSampleData(template.tipoDocumento)
+    return new Map(resolveTemplateLayout(template, sampleData).map(r => [r.id, r]))
+  }, [template, hasFlowLayout])
+
+  function resolvedY(el: PdfElement): number {
+    return layoutById?.get(el.id)?.y ?? el.y
+  }
+
+  function isFlowLocked(el: PdfElement): boolean {
+    return el.flowAfter !== undefined
+  }
+
   function clientToMm(clientX: number, clientY: number) {
     const rect = canvasRef.current!.getBoundingClientRect()
     return { x: pxToMm(clientX - rect.left), y: pxToMm(clientY - rect.top) }
@@ -57,23 +79,28 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
         elements.map(current => {
           const start = startPositions.get(current.id)
           if (!start) return current
+          // `y` de un elemento con `flowAfter` se recalcula siempre al
+          // renderizar (pdf-template-layout.ts) -- arrastrarlo verticalmente
+          // no tendría efecto visible, así que se ignora `dy` para no
+          // confundir con un movimiento que no pasa nada.
+          const effectiveDy = isFlowLocked(current) ? 0 : dy
 
           if (mode === 'move') {
-            return { ...current, x: snapToGrid(start.x + dx, snapGrid), y: snapToGrid(start.y + dy, snapGrid) }
+            return { ...current, x: snapToGrid(start.x + dx, snapGrid), y: snapToGrid(start.y + effectiveDy, snapGrid) }
           }
           if (mode === 'resize-se') {
             return {
               ...current,
               w: Math.max(2, snapToGrid(start.w + dx, snapGrid)),
-              h: start.h !== undefined ? Math.max(2, snapToGrid(start.h + dy, snapGrid)) : current.h,
+              h: start.h !== undefined ? Math.max(2, snapToGrid(start.h + effectiveDy, snapGrid)) : current.h,
             }
           }
           if (mode === 'resize-ne') {
             return {
               ...current,
-              y: snapToGrid(start.y + dy, snapGrid),
+              y: snapToGrid(start.y + effectiveDy, snapGrid),
               w: Math.max(2, snapToGrid(start.w + dx, snapGrid)),
-              h: start.h !== undefined ? Math.max(2, snapToGrid(start.h - dy, snapGrid)) : current.h,
+              h: start.h !== undefined ? Math.max(2, snapToGrid(start.h - effectiveDy, snapGrid)) : current.h,
             }
           }
           if (mode === 'resize-sw') {
@@ -81,16 +108,16 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
               ...current,
               x: snapToGrid(start.x + dx, snapGrid),
               w: Math.max(2, snapToGrid(start.w - dx, snapGrid)),
-              h: start.h !== undefined ? Math.max(2, snapToGrid(start.h + dy, snapGrid)) : current.h,
+              h: start.h !== undefined ? Math.max(2, snapToGrid(start.h + effectiveDy, snapGrid)) : current.h,
             }
           }
           // resize-nw
           return {
             ...current,
             x: snapToGrid(start.x + dx, snapGrid),
-            y: snapToGrid(start.y + dy, snapGrid),
+            y: snapToGrid(start.y + effectiveDy, snapGrid),
             w: Math.max(2, snapToGrid(start.w - dx, snapGrid)),
-            h: start.h !== undefined ? Math.max(2, snapToGrid(start.h - dy, snapGrid)) : current.h,
+            h: start.h !== undefined ? Math.max(2, snapToGrid(start.h - effectiveDy, snapGrid)) : current.h,
           }
         })
       )
@@ -125,7 +152,10 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
         maxY: Math.max(start.y, now.y),
       }
       const hit = template.elements
-        .filter(el => el.x < box.maxX && el.x + el.w > box.minX && el.y < box.maxY && el.y + (el.h ?? 8) > box.minY)
+        .filter(el => {
+          const y = resolvedY(el)
+          return el.x < box.maxX && el.x + el.w > box.minX && y < box.maxY && y + (el.h ?? 8) > box.minY
+        })
         .map(el => el.id)
       if (hit.length > 0) onSelect(ev.shiftKey ? Array.from(new Set([...selectedIds, ...hit])) : hit)
       setMarquee(null)
@@ -137,7 +167,9 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
     window.addEventListener('pointerup', onUp)
   }
 
-  const sorted = [...template.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+  const sorted = [...template.elements]
+    .filter(el => layoutById?.get(el.id)?.visible ?? true)
+    .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
 
   return (
     <div
@@ -151,12 +183,18 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
         const style: React.CSSProperties = {
           position: 'absolute',
           left: mmToPx(el.x),
-          top: mmToPx(el.y),
+          top: mmToPx(resolvedY(el)),
           width: mmToPx(el.w),
           height: el.h !== undefined ? mmToPx(el.h) : undefined,
           zIndex: el.zIndex ?? 0,
-          outline: isSelected ? '2px solid rgb(254,123,1)' : el.sticky ? '1px dashed rgb(150,150,150)' : undefined,
-          cursor: 'move',
+          outline: isSelected
+            ? '2px solid rgb(254,123,1)'
+            : el.sticky
+              ? '1px dashed rgb(150,150,150)'
+              : isFlowLocked(el)
+                ? '1px dotted rgb(180,180,185)'
+                : undefined,
+          cursor: isFlowLocked(el) ? 'ew-resize' : 'move',
         }
 
         return (
@@ -216,6 +254,33 @@ function renderElementContent(el: PdfElement) {
     return (
       <div className="flex h-full w-full items-center justify-center border border-dashed border-hairline bg-app text-[10px] text-subtext">
         {el.src}
+      </div>
+    )
+  }
+  if (el.type === 'totals-banner') {
+    const rowH = el.rowHeight ?? 5.5
+    const rowGap = el.rowGap ?? 1.6
+    const padY = el.padY ?? 3.1
+    const minHeight = el.minHeight ?? 28
+    const rowsH = el.rows.length * rowH + Math.max(0, el.rows.length - 1) * rowGap
+    const bannerH = Math.max(rowsH + padY * 2, minHeight)
+    return (
+      <div
+        className="flex w-full flex-col justify-center gap-1 px-3"
+        style={{ height: mmToPx(bannerH), backgroundColor: safeColor(el.bgColorToken) }}
+      >
+        {el.rows.map((row, i) => (
+          <div key={i} className="flex items-center justify-between" style={{ fontWeight: row.bold ? 700 : 400 }}>
+            <span style={{ color: safeColor(row.labelColorToken), fontSize: mmToPx(row.fontSize) * 0.5 }}>
+              {row.label}
+              {row.visibleIf && <span className="ml-1 italic text-faint">({row.visibleIf})</span>}
+            </span>
+            <span style={{ color: safeColor(row.valueColorToken), fontSize: mmToPx(row.fontSize) * 0.5 }}>
+              {row.negate ? '-' : ''}
+              {`{{${row.valueVariable}}}`}
+            </span>
+          </div>
+        ))}
       </div>
     )
   }

@@ -13,8 +13,15 @@
 
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { formatCurrencyPdf } from '@/lib/server/pdf/pdf-base-config'
 import { JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
 import { getIsoLogoBase64, getSerenataLogoBase64 } from '@/lib/server/pdf/cotizacion-pdf-helpers'
+import {
+  getByPath,
+  interpolateText,
+  resolveRowsBinding,
+  resolveTemplateLayout,
+} from '@/lib/server/pdf/pdf-template-layout'
 import type {
   ImageElement,
   LineElement,
@@ -22,6 +29,7 @@ import type {
   PdfTemplate,
   TableElement,
   TextElement,
+  TotalsBannerElement,
 } from '@/lib/server/pdf/pdf-template-schema'
 
 export interface SpikePageConfig {
@@ -37,9 +45,12 @@ export interface SpikeTextElement {
   text: string
   size: number
   bold?: boolean
-  align?: 'left' | 'center' | 'right'
+  align?: 'left' | 'center' | 'right' | 'justify'
   spacing?: number
   color?: [number, number, number]
+  /** Envuelto (Bloque 2, `renderFromTemplate`): líneas ya partidas + ancho máximo -- ausentes = una sola línea (comportamiento original del spike). */
+  lines?: string[]
+  maxWidth?: number
 }
 
 export interface SpikeLineElement {
@@ -65,6 +76,12 @@ export interface SpikeTableColumn {
   field: string
   align?: 'left' | 'center' | 'right'
   w: number
+  format?: 'currency'
+}
+
+function formatCellValue(value: unknown, format: SpikeTableColumn['format']): string {
+  if (format === 'currency' && typeof value === 'number') return formatCurrencyPdf(value)
+  return String(value ?? '')
 }
 
 export interface SpikeTableElement {
@@ -103,7 +120,11 @@ export function renderText(doc: jsPDF, el: SpikeTextElement): void {
   // `spacing` = tracking entre caracteres. jsPDF lo soporta nativo vía
   // setCharSpace(mm) — no hace falta simularlo insertando espacios.
   doc.setCharSpace(el.spacing ?? 0)
-  doc.text(el.text, el.x, el.y, { align: el.align ?? 'left' })
+  if (el.lines) {
+    doc.text(el.lines, el.x, el.y, { align: el.align ?? 'left', maxWidth: el.maxWidth })
+  } else {
+    doc.text(el.text, el.x, el.y, { align: el.align ?? 'left' })
+  }
   doc.setCharSpace(0)
 }
 
@@ -138,7 +159,7 @@ export function renderGroupedTable(doc: jsPDF, el: SpikeTableElement, startY: nu
       groupRows.forEach((row, ri) => {
         body.push([
           ri === 0 ? g : '',
-          ...el.cols.filter(c => c.field !== el.groupBy).map(c => String(row[c.field] ?? '')),
+          ...el.cols.filter(c => c.field !== el.groupBy).map(c => formatCellValue(row[c.field], c.format)),
         ])
       })
       if (gi < groups.length - 1) {
@@ -147,7 +168,7 @@ export function renderGroupedTable(doc: jsPDF, el: SpikeTableElement, startY: nu
     })
   } else {
     el.rows.forEach(row => {
-      body.push(el.cols.map(c => String(row[c.field] ?? '')))
+      body.push(el.cols.map(c => formatCellValue(row[c.field], c.format)))
     })
   }
 
@@ -197,50 +218,24 @@ export function contentHeight(page: SpikePageConfig, headerH: number, footerH: n
 
 // ==================== renderFromTemplate (Bloque 2, Track A) ====================
 
-const VARIABLE_PATTERN = /\{\{\s*([\w.]+)\s*\}\}/g
-
-/** Resuelve un path con notación de puntos (`cliente.nombre`) contra `data`. */
-function getByPath(source: unknown, path: string): unknown {
-  return path.split('.').reduce<unknown>((acc, key) => {
-    if (acc === null || acc === undefined || typeof acc !== 'object') return undefined
-    return (acc as Record<string, unknown>)[key]
-  }, source)
-}
-
-/**
- * Interpola `{{variable.path}}` contra `data`. Si la variable no existe se
- * deja el placeholder literal — validar su existencia es responsabilidad del
- * catálogo de variables (Track C), no de esta función.
- */
-function interpolateText(text: string, data: Record<string, unknown>): string {
-  return text.replace(VARIABLE_PATTERN, (literal, path: string) => {
-    const value = getByPath(data, path)
-    return value === undefined || value === null ? literal : String(value)
-  })
-}
-
-function resolveRowsBinding(data: Record<string, unknown>, rowsBinding: string): Record<string, unknown>[] {
-  const value = getByPath(data, rowsBinding)
-  return Array.isArray(value) ? (value as Record<string, unknown>[]) : []
-}
-
 type StickyCapableElement = TextElement | LineElement | ImageElement
 
 function isStickyRenderable(el: PdfElement): el is StickyCapableElement & { sticky: 'header' | 'footer' } {
-  // TableElement no tiene shape en StickyElement/redrawSticky — si llega
-  // marcada `sticky` por error de schema, se renderiza en el flujo normal en
-  // vez de perderse silenciosamente.
-  return el.type !== 'table' && el.sticky !== undefined
+  // TableElement y TotalsBannerElement no tienen shape en
+  // StickyElement/redrawSticky — si llegan marcados `sticky` por error de
+  // schema, se renderizan en el flujo normal en vez de perderse en silencio.
+  return el.type !== 'table' && el.type !== 'totals-banner' && el.sticky !== undefined
 }
 
 function buildSpikeText(
+  doc: jsPDF,
   el: TextElement,
   data: Record<string, unknown>,
   resolveColor: (token: string) => [number, number, number]
 ): SpikeTextElement {
-  let text = interpolateText(el.text, data)
+  let text = interpolateText(el.text, data, el.format)
   if (el.upper) text = text.toUpperCase()
-  return {
+  const base: SpikeTextElement = {
     type: 'text',
     x: el.x,
     y: el.y,
@@ -251,6 +246,10 @@ function buildSpikeText(
     spacing: el.spacing,
     color: resolveColor(el.colorToken),
   }
+  if (!el.wrap) return base
+  doc.setFont('helvetica', el.bold ? 'bold' : 'normal')
+  doc.setFontSize(el.size)
+  return { ...base, lines: doc.splitTextToSize(text, el.w) as string[], maxWidth: el.w }
 }
 
 /**
@@ -303,7 +302,7 @@ function renderTableElement(
   const rows = resolveRowsBinding(data, el.rowsBinding)
   const cols = el.cols
     .filter(c => c.visible)
-    .map(c => ({ label: c.label, field: c.field, align: c.align, w: c.w }))
+    .map(c => ({ label: c.label, field: c.field, align: c.align, w: c.w, format: c.format }))
 
   renderGroupedTable(
     doc,
@@ -324,14 +323,62 @@ function renderTableElement(
 }
 
 function buildStickyElement(
+  doc: jsPDF,
   el: StickyCapableElement & { sticky: 'header' | 'footer' },
   data: Record<string, unknown>,
   resolveColor: (token: string) => [number, number, number]
 ): StickyElement | null {
-  if (el.type === 'text') return { ...buildSpikeText(el, data, resolveColor), sticky: el.sticky }
+  if (el.type === 'text') return { ...buildSpikeText(doc, el, data, resolveColor), sticky: el.sticky }
   if (el.type === 'line') return { ...buildSpikeLine(el, resolveColor), sticky: el.sticky }
   const image = buildSpikeImage(el)
   return image ? { ...image, sticky: el.sticky } : null
+}
+
+/**
+ * `totals-banner`: banda de fondo con filas label/valor apiladas y alto
+ * dinámico (docs/PLAN.md, sección "Bloques" #7) — mismo layout que
+ * `buildTotalsRows()`/el dibujo manual en `cotizacion-pdf.ts`, generalizado
+ * a schema. Solo cuenta/dibuja las filas cuyo `visibleIf` de fila (si
+ * existe) sea verdadero. La fórmula de `bannerH` está duplicada a propósito
+ * en `pdf-template-layout.ts` (`totalsBannerHeight`) -- ese cálculo corre
+ * antes de tener un `doc` real (mide sobre un doc descartable), mantener
+ * ambas en sync si cambia.
+ */
+function renderTotalsBanner(
+  doc: jsPDF,
+  el: TotalsBannerElement,
+  data: Record<string, unknown>,
+  resolveColor: (token: string) => [number, number, number]
+): void {
+  const visibleRows = el.rows.filter(row => row.visibleIf === undefined || Boolean(getByPath(data, row.visibleIf)))
+  const rowH = el.rowHeight ?? 5.5
+  const rowGap = el.rowGap ?? 1.6
+  const padY = el.padY ?? 3.1
+  const minHeight = el.minHeight ?? 28
+  const rowsH = visibleRows.length * rowH + Math.max(0, visibleRows.length - 1) * rowGap
+  const bannerH = Math.max(rowsH + padY * 2, minHeight)
+
+  const [bgR, bgG, bgB] = resolveColor(el.bgColorToken)
+  doc.setFillColor(bgR, bgG, bgB)
+  doc.rect(el.x, el.y, el.w, bannerH, 'F')
+
+  const valueRightX = el.x + el.w - 7
+  const labelRightX = valueRightX - 30 - 1.4
+  let ty = el.y + padY + rowH * 0.75
+
+  visibleRows.forEach((row, i) => {
+    if (i > 0) ty += rowH + rowGap
+    const rawValue = getByPath(data, row.valueVariable)
+    const value = typeof rawValue === 'number' ? formatCurrencyPdf(rawValue) : String(rawValue ?? '')
+    doc.setFont('helvetica', row.bold ? 'bold' : 'normal')
+    doc.setFontSize(row.fontSize)
+    doc.setTextColor(...resolveColor(row.labelColorToken))
+    doc.text(row.label, labelRightX, ty, { align: 'right' })
+    doc.setTextColor(...resolveColor(row.valueColorToken))
+    doc.text(row.negate && typeof rawValue === 'number' && rawValue > 0 ? `-${value}` : value, valueRightX, ty, {
+      align: 'right',
+    })
+  })
 }
 
 /**
@@ -353,28 +400,41 @@ export function renderFromTemplate(
   const flowEls = template.elements.filter(el => !isStickyRenderable(el))
   const sortedFlow = [...flowEls].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
 
+  // Resuelve `y` real para los elementos con `flowAfter` (pdf-template-layout.ts)
+  // -- el alto real de lo que está arriba (sobre todo la tabla de partidas)
+  // solo se conoce con los datos reales, nunca con un valor fijo adivinado.
+  const layout = resolveTemplateLayout(template, data)
+  const layoutById = new Map(layout.map(r => [r.id, r]))
+
   for (const el of sortedFlow) {
-    switch (el.type) {
+    const resolvedPosition = layoutById.get(el.id)
+    if (!resolvedPosition || !resolvedPosition.visible) continue
+    const positioned = { ...el, y: resolvedPosition.y } as PdfElement
+
+    switch (positioned.type) {
       case 'text':
-        drawTextBackground(doc, el, resolveColor)
-        renderText(doc, buildSpikeText(el, data, resolveColor))
+        drawTextBackground(doc, positioned, resolveColor)
+        renderText(doc, buildSpikeText(doc, positioned, data, resolveColor))
         break
       case 'line':
-        renderLine(doc, buildSpikeLine(el, resolveColor))
+        renderLine(doc, buildSpikeLine(positioned, resolveColor))
         break
       case 'image': {
-        const image = buildSpikeImage(el)
+        const image = buildSpikeImage(positioned)
         if (image) renderImage(doc, image)
         break
       }
       case 'table':
-        renderTableElement(doc, el, data, resolveColor)
+        renderTableElement(doc, positioned, data, resolveColor)
+        break
+      case 'totals-banner':
+        renderTotalsBanner(doc, positioned, data, resolveColor)
         break
     }
   }
 
   const sticky = stickyEls
-    .map(el => buildStickyElement(el, data, resolveColor))
+    .map(el => buildStickyElement(doc, el, data, resolveColor))
     .filter((el): el is StickyElement => el !== null)
 
   redrawSticky(doc, template.page, sticky)

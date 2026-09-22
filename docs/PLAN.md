@@ -1,11 +1,16 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, en ejecución (2026-09-21) — arquitectura del motor de
-plantillas, schema, workflow activo/borrador y bloques cerrados tras dos
-rondas de auditoría (Claude contra el repo real, y el usuario contra la
-propuesta de Claude). Bloque 1 (spike técnico) cerrado esta sesión — ver
-tracker. Bloque 2 (modelo de template + validación) arranca en la próxima
-sesión.
+**Estado:** Aprobado, en ejecución (última actualización 2026-09-22) —
+arquitectura del motor de plantillas, schema, workflow activo/borrador y
+bloques cerrados tras dos rondas de auditoría (Claude contra el repo real,
+y el usuario contra la propuesta de Claude). **Bloques 0-6 cerrados**
+(PR #81 mergeado a `main`). **Bloque 7 (piloto Cotización) parcial:**
+layout de flujo real (`flowAfter`/`visibleIf`/tipo `totals-banner`)
+implementado en schema + renderer + editor — ver `docs/ACTIVE_WORK.md`,
+"Completado en esta sesión (3)" para el detalle completo, incluida la
+corrección de un `active_schema` corrupto en producción que motivó este
+trabajo. Falta migrar de verdad la ruta que genera el PDF de Cotización
+para que use `renderFromTemplate()` en vez de `cotizacion-pdf.ts`.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -164,6 +169,20 @@ type LineElement = PdfElementBase & {
 }
 ```
 
+**Ampliado en sesión 3 (Bloque 7, layout de flujo real)** — `PdfElementBase`
+gana `flowAfter?: string` + `flowGap?: number` (posición `y` derivada del
+borde inferior real de otro elemento, no un valor fijo — necesario porque
+el alto de la tabla de partidas y del banner de totales depende de los
+datos reales) y `visibleIf?: string` (oculta el elemento si la variable es
+falsy). `TextElement` gana `wrap?: boolean`, `format?: 'date'|'currency'`,
+y `align` admite `'justify'`. `TableElement.cols[]` gana `format?:
+'currency'`. Nuevo tipo `TotalsBannerElement` (`rows[]` con
+`label`/`valueVariable`/colores/`bold`/`fontSize`/`negate`/`visibleIf` +
+`bgColorToken`, alto dinámico según filas visibles). Implementación real:
+`lib/server/pdf/pdf-template-schema.ts` + `pdf-template-layout.ts` (nuevo,
+resuelve el layout) + `template-renderer.ts`. Detalle completo en
+`docs/ACTIVE_WORK.md`, "Completado en esta sesión (3)".
+
 **`sticky` en vez de `page: number`:** verificado en los 4 generadores
 reales — ninguno repite header/footer en páginas adicionales hoy
 (`checkPageSpace()`/`addPage()` solo resetean `currentY`, nunca redibujan
@@ -304,7 +323,7 @@ Así un schema que la preview acepta nunca es rechazado después por
 | 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | **Cerrado** — `app/editor-pdfs/page.tsx` + nav en `SidebarLayout.tsx`. Verificado en navegador real (login vía `AUTH_USERS_DEV_FALLBACK`, sección `editor-pdfs`): nav, header, y fallback correcto (banner de error + "No migrado") cuando Supabase no es alcanzable |
 | 5 | Editor visual (canvas, selección/multi-select, drag, resize, snap, alinear, distribuir, capas, inspector, variables, advertencia legal — sin undo/redo, sin dependencia nueva) | **Cerrado** — `app/editor-pdfs/[tipo]/` (`page.tsx`, `EditorCanvas.tsx`, `Inspector.tsx`, `geometry.ts`). Verificado en navegador real con una plantilla de prueba insertada temporalmente en `serenata-erp-test` (borrada después): selección, drag, resize, multi-select, alinear, capas, agregar/eliminar, confirmación de texto legal y autosave (`PATCH .../draft`) funcionando de punta a punta |
 | 6 | Preview real (reusa patrón `Content-Disposition: inline`) | **Cerrado** — `GET /api/editor-pdfs/[tipo]/preview` + `lib/server/pdf/pdf-sample-data.ts`. Verificado con la pipeline de producción real (sin mocks): PDF válido generado y leído (`{{cliente}}` interpolado, tabla agrupada, estilos) |
-| 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | Pendiente |
+| 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | **Parcial** — layout de flujo real (`flowAfter`/`visibleIf`/`totals-banner`) implementado y probado; `active_schema` válido migrado a test+prod. Falta el data-adapter real y reemplazar `cotizacion-pdf.ts` en la ruta de generación |
 | 8 | Hoja de llamado + Reporte de cierre (estructura simple, sin anidado) | Pendiente |
 | 9 | Orden de pago (estructura responsable→evento→tabla — decide `repeating-group` vs. loop híbrido con Cotización ya probado como base) | Pendiente |
 | 10 | Extensibilidad (dar de alta un 5º tipo de documento) | Pendiente |

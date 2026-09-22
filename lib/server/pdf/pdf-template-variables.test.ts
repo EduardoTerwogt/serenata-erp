@@ -42,7 +42,7 @@ describe('pdf/pdf-template-variables', () => {
     for (const tipo of tipos) {
       for (const variable of getVariablesForDocumento(tipo)) {
         expect(variable.label.length).toBeGreaterThan(0)
-        expect(['string', 'number', 'date', 'array']).toContain(variable.sampleType)
+        expect(['string', 'number', 'date', 'array', 'boolean']).toContain(variable.sampleType)
       }
     }
   })

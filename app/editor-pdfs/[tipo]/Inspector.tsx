@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { PdfElement, PdfTemplate } from '@/lib/server/pdf/pdf-template-schema'
+import type { PdfElement, PdfTemplate, TotalsBannerRow } from '@/lib/server/pdf/pdf-template-schema'
 import { COLOR_TOKENS } from '@/lib/server/pdf/pdf-color-tokens'
 import { getVariablesForDocumento } from '@/lib/server/pdf/pdf-template-variables'
 import { Button } from '@/components/ui/Button'
@@ -24,6 +24,14 @@ let nextIdCounter = 0
 function newId(prefix: string) {
   nextIdCounter += 1
   return `${prefix}-${Date.now()}-${nextIdCounter}`
+}
+
+function layerLabel(el: PdfElement): string {
+  if (el.type === 'text') return el.text.trim() ? el.text.slice(0, 28) : '(texto vacío)'
+  if (el.type === 'table') return `Tabla · ${el.rowsBinding}`
+  if (el.type === 'image') return `Imagen · ${el.src}`
+  if (el.type === 'line') return 'Línea'
+  return `Banner de totales (${el.rows.length})`
 }
 
 const ALIGN_BUTTONS: { mode: AlignMode; label: string }[] = [
@@ -55,6 +63,11 @@ export function Inspector({
     onChangeElements(elements => elements.map(el => (el.id === single.id ? ({ ...el, ...patch } as PdfElement) : el)))
   }
 
+  function updateTotalsRow(el: Extract<PdfElement, { type: 'totals-banner' }>, index: number, patch: Partial<TotalsBannerRow>) {
+    const rows = el.rows.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    onChangeElements(elements => elements.map(e => (e.id === el.id ? { ...e, rows } : e)))
+  }
+
   function requestTextChange(el: PdfElement, text: string) {
     if (el.type !== 'text') return
     if (el.legal) {
@@ -74,6 +87,8 @@ export function Inspector({
 
   function addElement(type: PdfElement['type']) {
     const base = { id: newId(type), x: 20, y: 20, w: 60, zIndex: (template.elements.length ?? 0) + 1 }
+    const variables = getVariablesForDocumento(template.tipoDocumento)
+    const firstNumberVar = variables.find(v => v.sampleType === 'number')?.path ?? variables[0]?.path ?? 'total'
     let el: PdfElement
     if (type === 'text') {
       el = { ...base, type: 'text', text: 'Nuevo texto', size: 10, bold: false, align: 'left', colorToken: 'ink' }
@@ -81,6 +96,14 @@ export function Inspector({
       el = { ...base, type: 'line', h: 1, colorToken: 'ink', weight: 0.5 }
     } else if (type === 'image') {
       el = { ...base, h: 20, type: 'image', src: 'logo-serenata' }
+    } else if (type === 'totals-banner') {
+      el = {
+        ...base,
+        w: 120,
+        type: 'totals-banner',
+        bgColorToken: 'ink',
+        rows: [{ label: 'Total', valueVariable: firstNumberVar, labelColorToken: 'surface', valueColorToken: 'surface', bold: true, fontSize: 10.5 }],
+      }
     } else {
       el = {
         ...base,
@@ -136,7 +159,8 @@ export function Inspector({
                 }`}
               >
                 <span className="truncate">
-                  {el.type} {el.required && '· requerido'} {el.sticky && `· ${el.sticky}`}
+                  {layerLabel(el)} {el.required && '· requerido'} {el.sticky && `· ${el.sticky}`}
+                  {el.flowAfter && ' · flujo'}
                 </span>
               </button>
             ))}
@@ -148,6 +172,7 @@ export function Inspector({
         <Button variant="secondary" size="md" onClick={() => addElement('line')}>+ Línea</Button>
         <Button variant="secondary" size="md" onClick={() => addElement('image')}>+ Imagen</Button>
         <Button variant="secondary" size="md" onClick={() => addElement('table')}>+ Tabla</Button>
+        <Button variant="secondary" size="md" onClick={() => addElement('totals-banner')}>+ Banner de totales</Button>
         {selected.length > 0 && (
           <Button
             variant="ghost"
@@ -216,6 +241,37 @@ export function Inspector({
             <Button variant="ghost" size="md" onClick={sendToBack}>Al fondo</Button>
           </div>
 
+          <div className="flex flex-col gap-2 border-t border-hairline pt-3">
+            <span className="sn-label">Flujo</span>
+            <Select
+              value={single.flowAfter ?? ''}
+              onChange={e => updateSingle({ flowAfter: e.target.value || undefined })}
+            >
+              <option value="">Posición fija (X/Y)</option>
+              {template.elements
+                .filter(el => el.id !== single.id)
+                .map(el => (
+                  <option key={el.id} value={el.id}>
+                    Después de: {layerLabel(el)}
+                  </option>
+                ))}
+            </Select>
+            {single.flowAfter && (
+              <TextField
+                label="Espacio (mm)"
+                type="number"
+                value={single.flowGap ?? 0}
+                onChange={e => updateSingle({ flowGap: Number(e.target.value) })}
+              />
+            )}
+            <TextField
+              label="Visible si (variable, opcional)"
+              value={single.visibleIf ?? ''}
+              onChange={e => updateSingle({ visibleIf: e.target.value || undefined })}
+              placeholder="ej. notas"
+            />
+          </div>
+
           {single.type === 'text' && (
             <>
               <label className="flex flex-col gap-1.5">
@@ -243,10 +299,20 @@ export function Inspector({
                 <input type="checkbox" checked={single.upper ?? false} onChange={e => updateSingle({ upper: e.target.checked })} className="h-4 w-4 rounded border-hairline bg-input accent-[var(--color-accent)]" />
                 Mayúsculas
               </label>
-              <Select value={single.align} onChange={e => updateSingle({ align: e.target.value as 'left' | 'center' | 'right' })}>
+              <label className="flex items-center gap-2 text-[length:var(--text-base)] text-body">
+                <input type="checkbox" checked={single.wrap ?? false} onChange={e => updateSingle({ wrap: e.target.checked })} className="h-4 w-4 rounded border-hairline bg-input accent-[var(--color-accent)]" />
+                Envolver texto (párrafo)
+              </label>
+              <Select value={single.align} onChange={e => updateSingle({ align: e.target.value as 'left' | 'center' | 'right' | 'justify' })}>
                 <option value="left">Izquierda</option>
                 <option value="center">Centro</option>
                 <option value="right">Derecha</option>
+                <option value="justify">Justificado</option>
+              </Select>
+              <Select value={single.format ?? ''} onChange={e => updateSingle({ format: (e.target.value || undefined) as 'date' | 'currency' | undefined })}>
+                <option value="">Sin formato</option>
+                <option value="date">Fecha</option>
+                <option value="currency">Moneda</option>
               </Select>
               <ColorSwatchPicker value={single.colorToken} onChange={token => updateSingle({ colorToken: token })} />
             </>
@@ -278,6 +344,77 @@ export function Inspector({
                 <input type="checkbox" checked={single.zebra} onChange={e => updateSingle({ zebra: e.target.checked })} className="h-4 w-4 rounded border-hairline bg-input accent-[var(--color-accent)]" />
                 Zebra
               </label>
+            </>
+          )}
+
+          {single.type === 'totals-banner' && (
+            <>
+              <ColorSwatchPicker value={single.bgColorToken} onChange={token => updateSingle({ bgColorToken: token })} />
+              <div className="flex flex-col gap-2">
+                <span className="sn-label">Filas</span>
+                {single.rows.map((row, i) => (
+                  <div key={i} className="flex flex-col gap-1.5 rounded-control border border-hairline p-2">
+                    <div className="flex gap-1.5">
+                      <TextField
+                        value={row.label}
+                        onChange={e => updateTotalsRow(single, i, { label: e.target.value })}
+                        placeholder="Etiqueta"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="md"
+                        onClick={() => updateSingle({ rows: single.rows.filter((_, ri) => ri !== i) })}
+                        disabled={single.rows.length <= 1}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                    <Select
+                      value={row.valueVariable}
+                      onChange={e => updateTotalsRow(single, i, { valueVariable: e.target.value })}
+                    >
+                      {getVariablesForDocumento(template.tipoDocumento).map(v => (
+                        <option key={v.path} value={v.path}>{v.label}</option>
+                      ))}
+                    </Select>
+                    <label className="flex items-center gap-2 text-[length:var(--text-sm)] text-body">
+                      <input type="checkbox" checked={row.bold} onChange={e => updateTotalsRow(single, i, { bold: e.target.checked })} className="h-4 w-4 rounded border-hairline bg-input accent-[var(--color-accent)]" />
+                      Negrita
+                    </label>
+                    <label className="flex items-center gap-2 text-[length:var(--text-sm)] text-body">
+                      <input type="checkbox" checked={row.negate ?? false} onChange={e => updateTotalsRow(single, i, { negate: e.target.checked })} className="h-4 w-4 rounded border-hairline bg-input accent-[var(--color-accent)]" />
+                      Negativo (descuento)
+                    </label>
+                    <TextField
+                      label="Visible si (opcional)"
+                      value={row.visibleIf ?? ''}
+                      onChange={e => updateTotalsRow(single, i, { visibleIf: e.target.value || undefined })}
+                      placeholder="ej. descuento_monto"
+                    />
+                  </div>
+                ))}
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() =>
+                    updateSingle({
+                      rows: [
+                        ...single.rows,
+                        {
+                          label: 'Nueva fila',
+                          valueVariable: getVariablesForDocumento(template.tipoDocumento)[0]?.path ?? 'total',
+                          labelColorToken: 'surface',
+                          valueColorToken: 'surface',
+                          bold: false,
+                          fontSize: 9.5,
+                        },
+                      ],
+                    })
+                  }
+                >
+                  + Fila
+                </Button>
+              </div>
             </>
           )}
         </div>
