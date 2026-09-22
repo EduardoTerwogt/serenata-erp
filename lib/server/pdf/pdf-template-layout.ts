@@ -36,6 +36,15 @@ export interface ResolvedElement {
 // 4.55mm/línea a 8.5pt (generales/costos/cancelación) -- ambos ~0.53-0.56.
 const LINE_HEIGHT_MM_PER_PT = 0.55
 
+/**
+ * mm por punto tipográfico real (25.4mm/pulgada ÷ 72pt/pulgada) -- distinto
+ * de `LINE_HEIGHT_MM_PER_PT` (que aproxima alto de línea, no tamaño de
+ * fuente). `EditorCanvas.tsx` la usa para que el tamaño de texto del lienzo
+ * no diverja del PDF real (antes: factores `*0.6`/`*0.5` sin justificar en
+ * el lienzo -- docs/PLAN.md, Gap #3 / Roadmap P0-C).
+ */
+export const MM_PER_PT = 25.4 / 72
+
 export function getByPath(source: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((acc, key) => {
     if (acc === null || acc === undefined || typeof acc !== 'object') return undefined
@@ -67,9 +76,12 @@ function isVisible(el: PdfElement, data: Record<string, unknown>): boolean {
  * Alto real (mm) de un `totals-banner` -- misma fórmula que ya usa
  * cotizacion-pdf.ts (rowH 5.5 / rowGap 1.6 / padV 3.1 / mínimo 28), ahora
  * parametrizable desde el schema. Solo cuenta las filas visibles (su propio
- * `visibleIf` de fila, no el del elemento).
+ * `visibleIf` de fila, no el del elemento). Única fuente de esta fórmula --
+ * `template-renderer.ts` (`renderTotalsBanner`) la importa en vez de
+ * recalcularla (antes duplicada a propósito en ambos archivos, docs/PLAN.md
+ * Gap #4 / Roadmap P0-C; mantener en sync si cambia).
  */
-function totalsBannerHeight(el: Extract<PdfElement, { type: 'totals-banner' }>, data: Record<string, unknown>): number {
+export function totalsBannerHeight(el: Extract<PdfElement, { type: 'totals-banner' }>, data: Record<string, unknown>): number {
   const visibleRows = el.rows.filter(row => row.visibleIf === undefined || Boolean(getByPath(data, row.visibleIf)))
   const rowH = el.rowHeight ?? 5.5
   const rowGap = el.rowGap ?? 1.6

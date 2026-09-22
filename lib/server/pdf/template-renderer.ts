@@ -21,6 +21,7 @@ import {
   interpolateText,
   resolveRowsBinding,
   resolveTemplateLayout,
+  totalsBannerHeight,
 } from '@/lib/server/pdf/pdf-template-layout'
 import type {
   ImageElement,
@@ -339,10 +340,9 @@ function buildStickyElement(
  * dinámico (docs/PLAN.md, sección "Bloques" #7) — mismo layout que
  * `buildTotalsRows()`/el dibujo manual en `cotizacion-pdf.ts`, generalizado
  * a schema. Solo cuenta/dibuja las filas cuyo `visibleIf` de fila (si
- * existe) sea verdadero. La fórmula de `bannerH` está duplicada a propósito
- * en `pdf-template-layout.ts` (`totalsBannerHeight`) -- ese cálculo corre
- * antes de tener un `doc` real (mide sobre un doc descartable), mantener
- * ambas en sync si cambia.
+ * existe) sea verdadero. `bannerH` se calcula con `totalsBannerHeight()`
+ * (`pdf-template-layout.ts`), única fuente de la fórmula -- antes duplicada
+ * a propósito acá, consolidada en Roadmap P0-C.
  */
 function renderTotalsBanner(
   doc: jsPDF,
@@ -354,9 +354,7 @@ function renderTotalsBanner(
   const rowH = el.rowHeight ?? 5.5
   const rowGap = el.rowGap ?? 1.6
   const padY = el.padY ?? 3.1
-  const minHeight = el.minHeight ?? 28
-  const rowsH = visibleRows.length * rowH + Math.max(0, visibleRows.length - 1) * rowGap
-  const bannerH = Math.max(rowsH + padY * 2, minHeight)
+  const bannerH = totalsBannerHeight(el, data)
 
   const [bgR, bgG, bgB] = resolveColor(el.bgColorToken)
   doc.setFillColor(bgR, bgG, bgB)

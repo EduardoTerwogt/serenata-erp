@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTemplateLayout } from '@/lib/server/pdf/pdf-template-layout'
+import { resolveTemplateLayout, totalsBannerHeight } from '@/lib/server/pdf/pdf-template-layout'
 import type { PdfElement, PdfTemplate } from '@/lib/server/pdf/pdf-template-schema'
 
 /**
@@ -131,5 +131,36 @@ describe('pdf-template-layout (resolveTemplateLayout)', () => {
       text('b', { flowAfter: 'a' } as Partial<Extract<PdfElement, { type: 'text' }>>),
     ])
     expect(() => resolveTemplateLayout(t, {})).toThrow(/ciclo|inexistente/)
+  })
+})
+
+describe('totalsBannerHeight (fuente única de la fórmula -- docs/PLAN.md Gap #4 / Roadmap P0-C)', () => {
+  const bannerEl = (rows: Array<{ visibleIf?: string }>): Extract<PdfElement, { type: 'totals-banner' }> => ({
+    id: 'b',
+    type: 'totals-banner',
+    x: 10,
+    y: 50,
+    w: 150,
+    bgColorToken: 'ink',
+    rows: rows.map((r, i) => ({
+      label: `Fila ${i}`,
+      valueVariable: 'subtotal',
+      labelColorToken: 'surface',
+      valueColorToken: 'surface',
+      bold: false,
+      fontSize: 9.5,
+      ...r,
+    })),
+  })
+
+  it('solo cuenta filas visibles (visibleIf de fila), igual que renderFromTemplate/EditorCanvas', () => {
+    const rows = [{}, {}, {}, {}, {}, { visibleIf: 'descuento_monto' }]
+    const conDescuentoVisible = totalsBannerHeight(bannerEl(rows), { descuento_monto: 100 })
+    const sinDescuento = totalsBannerHeight(bannerEl(rows), { descuento_monto: 0 })
+    expect(conDescuentoVisible).toBeGreaterThan(sinDescuento)
+  })
+
+  it('respeta el mínimo (28mm) con pocas filas', () => {
+    expect(totalsBannerHeight(bannerEl([{}]), {})).toBe(28)
   })
 })

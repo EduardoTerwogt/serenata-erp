@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from 'react'
 import type { PdfElement, PdfTemplate } from '@/lib/server/pdf/pdf-template-schema'
 import { resolveColorToken } from '@/lib/server/pdf/pdf-color-tokens'
-import { resolveTemplateLayout } from '@/lib/server/pdf/pdf-template-layout'
+import { MM_PER_PT, getByPath, resolveTemplateLayout, totalsBannerHeight } from '@/lib/server/pdf/pdf-template-layout'
 import { buildSampleData } from '@/lib/server/pdf/pdf-sample-data'
 import { layerLabel, mmToPx, pxToMm, snapToGrid } from './geometry'
 
@@ -37,16 +37,19 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
   const pageH = mmToPx(template.page.height)
 
   // Datos sintéticos del catálogo de variables (mismos que la vista previa
-  // real, Bloque 6) -- solo hace falta resolver el layout de verdad (jsPDF +
-  // autoTable descartables) cuando el template usa `flowAfter`/`visibleIf`;
-  // el caso común (posiciones absolutas) no paga ese costo en cada frame de
-  // drag.
+  // real, Bloque 6) -- también alimentan el alto real del totals-banner
+  // (renderElementContent), única fuente compartida con
+  // resolveTemplateLayout/renderFromTemplate, ver totalsBannerHeight().
+  const sampleData = useMemo(() => buildSampleData(template.tipoDocumento), [template.tipoDocumento])
+
+  // Resolver el layout de verdad (jsPDF + autoTable descartables) solo hace
+  // falta cuando el template usa `flowAfter`/`visibleIf`; el caso común
+  // (posiciones absolutas) no paga ese costo en cada frame de drag.
   const hasFlowLayout = template.elements.some(el => el.flowAfter !== undefined || el.visibleIf !== undefined)
   const layoutById = useMemo(() => {
     if (!hasFlowLayout) return null
-    const sampleData = buildSampleData(template.tipoDocumento)
     return new Map(resolveTemplateLayout(template, sampleData).map(r => [r.id, r]))
-  }, [template, hasFlowLayout])
+  }, [template, hasFlowLayout, sampleData])
 
   function resolvedY(el: PdfElement): number {
     return layoutById?.get(el.id)?.y ?? el.y
@@ -215,7 +218,7 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
 
         return (
           <div key={el.id} style={style} onPointerDown={e => startDrag(e, el, 'move')} data-testid={`el-${el.id}`}>
-            {renderElementContent(el)}
+            {renderElementContent(el, sampleData)}
             {isSelected && selectedIds.length === 1 && (
               <>
                 <div className="pointer-events-none absolute -top-6 left-0 flex items-center gap-1 whitespace-nowrap rounded-control bg-ink px-2 py-0.5 text-[10px] text-card shadow-card">
@@ -258,7 +261,7 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
 // lienzo no se vea roto mientras se edita.
 const PDF_FONT_STACK = "Helvetica, Arial, 'Liberation Sans', sans-serif"
 
-function renderElementContent(el: PdfElement) {
+function renderElementContent(el: PdfElement, data: Record<string, unknown>) {
   if (el.type === 'text') {
     const isBackgroundOnly = el.text.trim() === '' && el.bgToken !== undefined
     return (
@@ -275,7 +278,11 @@ function renderElementContent(el: PdfElement) {
           style={{
             width: '100%',
             fontFamily: PDF_FONT_STACK,
-            fontSize: mmToPx(el.size) * 0.6,
+            // `el.size` es en puntos (igual que doc.setFontSize en jsPDF) --
+            // MM_PER_PT convierte a mm real antes de escalar a px, en vez del
+            // factor *0.6 sin justificar que había antes (docs/PLAN.md, Gap
+            // #3 / Roadmap P0-C).
+            fontSize: mmToPx(el.size * MM_PER_PT),
             fontWeight: el.bold ? 700 : 400,
             textAlign: el.align,
             color: safeColor(el.colorToken),
@@ -300,24 +307,24 @@ function renderElementContent(el: PdfElement) {
     )
   }
   if (el.type === 'totals-banner') {
-    const rowH = el.rowHeight ?? 5.5
-    const rowGap = el.rowGap ?? 1.6
-    const padY = el.padY ?? 3.1
-    const minHeight = el.minHeight ?? 28
-    const rowsH = el.rows.length * rowH + Math.max(0, el.rows.length - 1) * rowGap
-    const bannerH = Math.max(rowsH + padY * 2, minHeight)
+    // Alto real vía totalsBannerHeight() -- única fuente compartida con
+    // resolveTemplateLayout/renderFromTemplate (docs/PLAN.md, Gap #4 /
+    // Roadmap P0-C; antes un tercer cálculo acá, sin filtrar por
+    // `visibleIf` de fila como los otros dos).
+    const bannerH = totalsBannerHeight(el, data)
+    const visibleRows = el.rows.filter(row => row.visibleIf === undefined || Boolean(getByPath(data, row.visibleIf)))
     return (
       <div
         className="flex w-full flex-col justify-center gap-1 px-3"
         style={{ height: mmToPx(bannerH), backgroundColor: safeColor(el.bgColorToken), fontFamily: PDF_FONT_STACK }}
       >
-        {el.rows.map((row, i) => (
+        {visibleRows.map((row, i) => (
           <div key={i} className="flex items-center justify-between" style={{ fontWeight: row.bold ? 700 : 400 }}>
-            <span style={{ color: safeColor(row.labelColorToken), fontSize: mmToPx(row.fontSize) * 0.5 }}>
+            <span style={{ color: safeColor(row.labelColorToken), fontSize: mmToPx(row.fontSize * MM_PER_PT) }}>
               {row.label}
               {row.visibleIf && <span className="ml-1 italic text-faint">({row.visibleIf})</span>}
             </span>
-            <span style={{ color: safeColor(row.valueColorToken), fontSize: mmToPx(row.fontSize) * 0.5 }}>
+            <span style={{ color: safeColor(row.valueColorToken), fontSize: mmToPx(row.fontSize * MM_PER_PT) }}>
               {row.negate ? '-' : ''}
               {`{{${row.valueVariable}}}`}
             </span>
