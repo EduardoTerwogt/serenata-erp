@@ -29,15 +29,38 @@ escritura directa a la base de datos que se saltó la validación Zod de la
 API (`/api/editor-pdfs/[tipo]/draft` y `.../aplicar` la habrían rechazado).
 Ver detalle completo abajo.
 
-**Bloque 11 (rediseño de interacción del lienzo, estilo Canva) aprobado
-en esta sesión, ejecución no iniciada.** El primer pase visual de PR #83
-(`Toolbar.tsx`, capas con íconos) no fue suficiente para el usuario —
-pidió selección explícita, toolbar contextual, manipulación directa
-transaccional y undo/redo real. Plan completo (decisiones de producto,
-especificación de interacción gesto por gesto, arquitectura técnica,
-Definition of Done) en `docs/PLAN.md` → "Bloque 11". Primer paso de
-ejecución: mergear PR #83 a `main` (Housekeeping, Bloque 0 de esa
-sección) — todavía no ejecutado, ver "Siguiente paso" abajo.
+**Bloque 11 (rediseño de interacción del lienzo, estilo Canva): en
+progreso.** El primer pase visual de PR #83 (`Toolbar.tsx`, capas con
+íconos) no fue suficiente para el usuario — pidió selección explícita,
+toolbar contextual, manipulación directa transaccional y undo/redo real.
+Plan completo (decisiones de producto, especificación de interacción
+gesto por gesto, arquitectura técnica, Definition of Done) en
+`docs/PLAN.md` → "Bloque 11". Housekeeping cerrado: PR #83 mergeado a
+`main`, rama `claude/bloque-11-interaccion-editor-pdfs` y PR #84 (borrador)
+abiertos. **Bloque 11.0 cerrado** (`ImageElement` gana `opacity`/`fit`) —
+ver detalle abajo. Sigue 11.1 (selección, `Popover.tsx`, split de
+`ContextualToolbar.tsx`, `LayersPanel.tsx`).
+
+## Completado en esta sesión (4) — Bloque 11.0: `ImageElement` opacity/fit
+
+- `lib/server/pdf/pdf-template-schema.ts`: `ImageElementSchema` +=
+  `opacity?: number` (0-1) y `fit?: 'stretch'|'contain'`.
+- `lib/server/pdf/template-renderer.ts`: `renderImage()` aplica opacity
+  real vía `doc.setGState()`; `buildSpikeImage()` calcula el recuadro de
+  `fit: 'contain'` preservando el ratio real del asset (`ISO_RATIO`/
+  `SERENATA_RATIO` de `cotizacion-pdf-helpers.ts`), centrado dentro de la
+  caja — sin deformar el logo.
+- `EditorCanvas.tsx`: `opacity` visible en el placeholder de imagen del
+  lienzo (no hay preview real del asset ahí, solo el nombre del `src`);
+  `fit` no tiene efecto visual sin imagen real, pero sí se aplica en el
+  PDF final — documentado en un comentario en el código.
+- Test nuevo en `render-from-template.test.ts` (imagen con
+  `opacity`+`fit:contain`, sin excepción, PDF válido). `tsc`/`lint`/
+  `npm test` completos (137 archivos / 1063 tests) en verde.
+- "Recortar" (crop arbitrario) y `fit: 'cover'` quedaron fuera de
+  alcance a propósito (complejidad de clipping en jsPDF) — decisión ya
+  documentada en `docs/PLAN.md` → "Bloque 11" → "Riesgos / decisiones
+  abiertas".
 
 ## Completado en esta sesión (3) — Layout de flujo real + fix de datos corruptos
 
