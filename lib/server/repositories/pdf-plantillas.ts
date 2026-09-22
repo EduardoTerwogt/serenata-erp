@@ -3,6 +3,7 @@ import type { PdfDocumentType, PdfTemplate } from '@/lib/server/pdf/pdf-template
 import { buildCotizacionBaseline } from '@/lib/server/pdf/default-templates/cotizacion'
 import { buildHojaLlamadoBaseline } from '@/lib/server/pdf/default-templates/hoja-llamado'
 import { buildReporteCierreBaseline } from '@/lib/server/pdf/default-templates/reporte-cierre'
+import { buildOrdenPagoBaseline } from '@/lib/server/pdf/default-templates/orden-pago'
 
 export interface PdfPlantillaRow {
   id: string
@@ -19,18 +20,17 @@ export interface PdfPlantillaRow {
 /**
  * Baseline por tipo de documento (docs/PLAN.md, "Diseño activo vs.
  * borrador"): vive en código, se lee solo para copiarla a una fila
- * concreta (nunca como referencia viva). La reconstrucción real del PDF
- * actual como schema es trabajo de los Bloques 7-9 (uno por documento) --
- * Cotización (Bloque 7) y Hoja de llamado/Reporte de cierre (Bloque 8)
- * cerrados. Orden de pago sigue en el Bloque 9.
+ * concreta (nunca como referencia viva). Cotización (Bloque 7), Hoja de
+ * llamado/Reporte de cierre (Bloque 8) y Orden de pago (Bloque 9, la
+ * única rediseñada -- no una reconstrucción 1:1 del generador viejo, ver
+ * default-templates/orden-pago.ts) cerrados.
  */
 function getBaselineTemplate(tipo: PdfDocumentType): PdfTemplate {
   if (tipo === 'cotizacion') return buildCotizacionBaseline()
   if (tipo === 'hoja_llamado') return buildHojaLlamadoBaseline()
   if (tipo === 'reporte_cierre') return buildReporteCierreBaseline()
-  throw new Error(
-    `El documento "${tipo}" todavía no tiene una plantilla baseline (se migra en el Bloque 9 de docs/PLAN.md).`
-  )
+  if (tipo === 'orden_pago') return buildOrdenPagoBaseline()
+  throw new Error(`El documento "${tipo}" todavía no tiene una plantilla baseline.`)
 }
 
 export const PdfPlantillasRepository = {

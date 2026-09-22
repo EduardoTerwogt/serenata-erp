@@ -78,21 +78,7 @@ describe('PdfPlantillasRepository', () => {
     expect(updateArg.applied_at).toEqual(expect.any(String))
   })
 
-  it('restaurar rechaza para un documento sin baseline todavía (Bloque 9)', async () => {
-    await expect(PdfPlantillasRepository.restaurar('orden_pago', 'user-1')).rejects.toThrow(
-      /todavía no tiene una plantilla baseline/
-    )
-    expect(mocks.fromMock).not.toHaveBeenCalled()
-  })
-
-  it('migrar rechaza para un documento sin baseline todavía (Bloque 9)', async () => {
-    await expect(PdfPlantillasRepository.migrar('orden_pago', 'user-1')).rejects.toThrow(
-      /todavía no tiene una plantilla baseline/
-    )
-    expect(mocks.fromMock).not.toHaveBeenCalled()
-  })
-
-  it.each(['cotizacion', 'hoja_llamado', 'reporte_cierre'] as const)(
+  it.each(['cotizacion', 'hoja_llamado', 'reporte_cierre', 'orden_pago'] as const)(
     'migrar inserta la primera fila de %s con el baseline real',
     async tipo => {
       const c = chain({ data: { id: 'row-1', tipo_documento: tipo }, error: null })
@@ -108,13 +94,16 @@ describe('PdfPlantillasRepository', () => {
     }
   )
 
-  it('restaurar usa el baseline real de cotizacion (ya no rechaza)', async () => {
-    const c = chain({ data: { id: 'row-1', active_schema: SAMPLE_TEMPLATE }, error: null })
-    mocks.fromMock.mockReturnValue(c)
+  it.each(['cotizacion', 'hoja_llamado', 'reporte_cierre', 'orden_pago'] as const)(
+    'restaurar usa el baseline real de %s',
+    async tipo => {
+      const c = chain({ data: { id: 'row-1', active_schema: SAMPLE_TEMPLATE }, error: null })
+      mocks.fromMock.mockReturnValue(c)
 
-    await PdfPlantillasRepository.restaurar('cotizacion', 'user-1')
+      await PdfPlantillasRepository.restaurar(tipo, 'user-1')
 
-    const updateArg = c.update.mock.calls[0][0]
-    expect(updateArg.active_schema).toMatchObject({ tipoDocumento: 'cotizacion' })
-  })
+      const updateArg = c.update.mock.calls[0][0]
+      expect(updateArg.active_schema).toMatchObject({ tipoDocumento: tipo })
+    }
+  )
 })

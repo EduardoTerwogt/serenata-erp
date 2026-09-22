@@ -243,6 +243,21 @@ function renderElementContent(el: PdfElement) {
       </div>
     )
   }
+  if (el.type === 'repeating-group') {
+    // Bloque 9: el canvas edita el árbol plano de `template.elements` -- un
+    // `repeating-group` aparece aquí como UNA caja arrastrable/redimensionable
+    // más (igual que una tabla), pero sus `children` (anidados, no parte de
+    // ese árbol plano) todavía no se editan visualmente. Editar "una
+    // instancia representativa" dentro del grupo es un modo de canvas nuevo,
+    // fuera de este bloque -- ver el artefacto de la decisión de arquitectura
+    // (docs/PLAN.md, Bloque 9).
+    return (
+      <div className="flex h-full w-full flex-col justify-center gap-0.5 overflow-hidden border border-dashed border-hairline bg-app px-2 py-1 text-[9px] text-subtext">
+        <span className="font-medium text-body">🔁 {el.rowsBinding}</span>
+        <span className="italic">{el.children.length} elemento(s) por fila · itemGap {el.itemGap}</span>
+      </div>
+    )
+  }
   // totals-banner
   return (
     <div
