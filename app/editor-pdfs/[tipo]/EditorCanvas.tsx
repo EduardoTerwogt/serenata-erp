@@ -5,7 +5,7 @@ import type { PdfElement, PdfTemplate } from '@/lib/server/pdf/pdf-template-sche
 import { resolveColorToken } from '@/lib/server/pdf/pdf-color-tokens'
 import { resolveTemplateLayout } from '@/lib/server/pdf/pdf-template-layout'
 import { buildSampleData } from '@/lib/server/pdf/pdf-sample-data'
-import { mmToPx, pxToMm, snapToGrid } from './geometry'
+import { layerLabel, mmToPx, pxToMm, snapToGrid } from './geometry'
 
 interface EditorCanvasProps {
   template: PdfTemplate
@@ -216,6 +216,11 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
             {renderElementContent(el)}
             {isSelected && selectedIds.length === 1 && (
               <>
+                <div className="pointer-events-none absolute -top-6 left-0 flex items-center gap-1 whitespace-nowrap rounded-control bg-ink px-2 py-0.5 text-[10px] text-card shadow-card">
+                  {layerLabel(el)}
+                  {el.legal && <span className="opacity-60">· legal</span>}
+                  {el.flowAfter && <span className="opacity-60">· flujo</span>}
+                </div>
                 <ResizeHandle corner="nw" onPointerDown={e => startDrag(e, el, 'resize-nw')} />
                 <ResizeHandle corner="ne" onPointerDown={e => startDrag(e, el, 'resize-ne')} />
                 <ResizeHandle corner="sw" onPointerDown={e => startDrag(e, el, 'resize-sw')} />
@@ -327,16 +332,16 @@ function renderElementContent(el: PdfElement) {
 
 function ResizeHandle({ corner, onPointerDown }: { corner: 'nw' | 'ne' | 'sw' | 'se'; onPointerDown: (e: React.PointerEvent) => void }) {
   const pos: React.CSSProperties = {
-    nw: { top: -4, left: -4, cursor: 'nwse-resize' },
-    ne: { top: -4, right: -4, cursor: 'nesw-resize' },
-    sw: { bottom: -4, left: -4, cursor: 'nesw-resize' },
-    se: { bottom: -4, right: -4, cursor: 'nwse-resize' },
+    nw: { top: -5, left: -5, cursor: 'nwse-resize' },
+    ne: { top: -5, right: -5, cursor: 'nesw-resize' },
+    sw: { bottom: -5, left: -5, cursor: 'nesw-resize' },
+    se: { bottom: -5, right: -5, cursor: 'nwse-resize' },
   }[corner]
 
   return (
     <div
       onPointerDown={onPointerDown}
-      className="absolute h-2 w-2 rounded-full border border-white bg-[rgb(254,123,1)]"
+      className="absolute h-2.5 w-2.5 rounded-full border-2 border-[rgb(254,123,1)] bg-white shadow-card"
       style={{ position: 'absolute', ...pos }}
     />
   )

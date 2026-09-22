@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button'
 import { TextField } from '@/components/ui/TextField'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
-import { align, boundingBoxOf, distributeHorizontal, distributeVertical, type AlignMode } from './geometry'
+import { Icon, type IconName } from '@/components/ui/Icon'
+import { align, boundingBoxOf, bringToFront, distributeHorizontal, distributeVertical, layerLabel, sendToBack, type AlignMode } from './geometry'
 
 interface InspectorProps {
   template: PdfTemplate
@@ -26,12 +27,12 @@ function newId(prefix: string) {
   return `${prefix}-${Date.now()}-${nextIdCounter}`
 }
 
-function layerLabel(el: PdfElement): string {
-  if (el.type === 'text') return el.text.trim() ? el.text.slice(0, 28) : '(texto vacío)'
-  if (el.type === 'table') return `Tabla · ${el.rowsBinding}`
-  if (el.type === 'image') return `Imagen · ${el.src}`
-  if (el.type === 'line') return 'Línea'
-  return `Banner de totales (${el.rows.length})`
+const LAYER_ICON: Record<PdfElement['type'], IconName> = {
+  text: 'type',
+  table: 'table-2',
+  image: 'image',
+  line: 'minus',
+  'totals-banner': 'dollar-sign',
 }
 
 const ALIGN_BUTTONS: { mode: AlignMode; label: string }[] = [
@@ -128,18 +129,6 @@ export function Inspector({
     onSelect([])
   }
 
-  function bringToFront() {
-    if (!single) return
-    const maxZ = Math.max(0, ...template.elements.map(el => el.zIndex ?? 0))
-    updateSingle({ zIndex: maxZ + 1 })
-  }
-
-  function sendToBack() {
-    if (!single) return
-    const minZ = Math.min(0, ...template.elements.map(el => el.zIndex ?? 0))
-    updateSingle({ zIndex: minZ - 1 })
-  }
-
   const box = boundingBoxOf(selected)
 
   return (
@@ -154,14 +143,15 @@ export function Inspector({
                 key={el.id}
                 type="button"
                 onClick={e => onSelect(e.shiftKey ? [...selectedIds, el.id] : [el.id])}
-                className={`flex items-center justify-between rounded-control px-2 py-1 text-left text-[length:var(--text-sm)] ${
-                  selectedIds.includes(el.id) ? 'bg-row-alt text-ink' : 'text-body hover:bg-row'
+                className={`flex items-center gap-2 rounded-control px-2 py-1.5 text-left text-[length:var(--text-sm)] ${
+                  selectedIds.includes(el.id) ? 'bg-accent-tint text-accent' : 'text-body hover:bg-row'
                 }`}
               >
-                <span className="truncate">
-                  {layerLabel(el)} {el.required && '· requerido'} {el.sticky && `· ${el.sticky}`}
-                  {el.flowAfter && ' · flujo'}
-                </span>
+                <Icon name={LAYER_ICON[el.type]} size={14} className="flex-none text-faint" />
+                <span className="min-w-0 flex-1 truncate">{layerLabel(el)}</span>
+                {el.required && <LayerBadge tone="neutral">req.</LayerBadge>}
+                {el.flowAfter && <LayerBadge tone="accent">flujo</LayerBadge>}
+                {el.sticky && <LayerBadge tone="neutral">{el.sticky}</LayerBadge>}
               </button>
             ))}
         </div>
@@ -237,8 +227,8 @@ export function Inspector({
           </div>
 
           <div className="flex gap-2">
-            <Button variant="ghost" size="md" onClick={bringToFront}>Al frente</Button>
-            <Button variant="ghost" size="md" onClick={sendToBack}>Al fondo</Button>
+            <Button variant="ghost" size="md" onClick={() => onChangeElements(els => bringToFront(els, single.id))}>Al frente</Button>
+            <Button variant="ghost" size="md" onClick={() => onChangeElements(els => sendToBack(els, single.id))}>Al fondo</Button>
           </div>
 
           <div className="flex flex-col gap-2 border-t border-hairline pt-3">
@@ -478,6 +468,18 @@ export function Inspector({
         </Modal>
       )}
     </div>
+  )
+}
+
+function LayerBadge({ tone, children }: { tone: 'neutral' | 'accent'; children: React.ReactNode }) {
+  return (
+    <span
+      className={`flex-none rounded-pill px-1.5 py-0.5 text-[9px] font-medium ${
+        tone === 'accent' ? 'bg-accent-tint text-accent' : 'bg-row-alt text-faint'
+      }`}
+    >
+      {children}
+    </span>
   )
 }
 
