@@ -185,11 +185,14 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
         // gana siempre. Solo cuando NO hay `h` explícito (texto envuelto sin
         // alto fijo: generales-line1/2, costos-text, etc.) se usa el alto que
         // resolveTemplateLayout ya calculó (bottom - y, jsPDF/Helvetica) --
-        // sin esto, el navegador (Inter) envuelve distinto que el PDF real y
-        // el siguiente elemento del flujo se dibuja encima. overflow:hidden
-        // de respaldo: la fuente de verdad de alto real sigue siendo "Vista
-        // previa" (el PDF real), este cálculo es solo para que el lienzo no
-        // se vea roto mientras se edita.
+        // acerca al lienzo a lo que el PDF real hace, pero no es exacto (la
+        // fuente que dibuja el lienzo -- ver renderElementContent -- es
+        // Helvetica/Arial para acercarse a las métricas de jsPDF, nunca
+        // idéntica). Deliberadamente SIN overflow:hidden: si el envuelto real
+        // del navegador difiere un poco, preferible ver una leve superposición
+        // (se nota que algo está desalineado) a que el texto desaparezca
+        // recortado -- la fuente de verdad de alto real sigue siendo "Vista
+        // previa" (el PDF real).
         const layoutEntry = layoutById?.get(el.id)
         const computedHeight = layoutEntry ? layoutEntry.bottom - layoutEntry.y : undefined
         const boxHeight = el.h !== undefined ? el.h : computedHeight && computedHeight > 0 ? computedHeight : undefined
@@ -199,7 +202,6 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
           top: mmToPx(resolvedY(el)),
           width: mmToPx(el.w),
           height: boxHeight !== undefined ? mmToPx(boxHeight) : undefined,
-          overflow: boxHeight !== undefined ? 'hidden' : undefined,
           zIndex: el.zIndex ?? 0,
           outline: isSelected
             ? '2px solid rgb(254,123,1)'
@@ -248,6 +250,14 @@ export function EditorCanvas({ template, selectedIds, onSelect, onChangeElements
   )
 }
 
+// El PDF real dibuja con Helvetica (jsPDF) -- el lienzo usa Helvetica/Arial
+// en vez de heredar Inter (la fuente de la UI) para que el envuelto de texto
+// en el navegador se acerque al que ya calculó resolveTemplateLayout.ts con
+// las métricas de jsPDF. Nunca va a ser idéntico -- por eso "Vista previa"
+// (el PDF real) sigue siendo la fuente de verdad, esto es solo para que el
+// lienzo no se vea roto mientras se edita.
+const PDF_FONT_STACK = "Helvetica, Arial, 'Liberation Sans', sans-serif"
+
 function renderElementContent(el: PdfElement) {
   if (el.type === 'text') {
     const isBackgroundOnly = el.text.trim() === '' && el.bgToken !== undefined
@@ -256,7 +266,7 @@ function renderElementContent(el: PdfElement) {
         style={{
           height: '100%',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: el.wrap ? 'flex-start' : 'center',
           padding: el.bgToken ? '0 4px' : undefined,
           backgroundColor: el.bgToken ? safeColor(el.bgToken) : undefined,
         }}
@@ -264,12 +274,13 @@ function renderElementContent(el: PdfElement) {
         <div
           style={{
             width: '100%',
+            fontFamily: PDF_FONT_STACK,
             fontSize: mmToPx(el.size) * 0.6,
             fontWeight: el.bold ? 700 : 400,
             textAlign: el.align,
             color: safeColor(el.colorToken),
             textTransform: el.upper ? 'uppercase' : undefined,
-            overflow: 'hidden',
+            overflow: el.wrap ? undefined : 'hidden',
             whiteSpace: el.wrap ? 'pre-wrap' : 'nowrap',
           }}
         >
@@ -298,7 +309,7 @@ function renderElementContent(el: PdfElement) {
     return (
       <div
         className="flex w-full flex-col justify-center gap-1 px-3"
-        style={{ height: mmToPx(bannerH), backgroundColor: safeColor(el.bgColorToken) }}
+        style={{ height: mmToPx(bannerH), backgroundColor: safeColor(el.bgColorToken), fontFamily: PDF_FONT_STACK }}
       >
         {el.rows.map((row, i) => (
           <div key={i} className="flex items-center justify-between" style={{ fontWeight: row.bold ? 700 : 400 }}>
