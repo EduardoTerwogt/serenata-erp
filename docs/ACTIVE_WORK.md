@@ -4,22 +4,55 @@
 
 ## Estado
 
-**`docs/PLAN.md` — Aprobado, en ejecución, "Editor de PDFs".** Módulo de
-sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
-posición libre, texto y color acotado a la paleta del design system), con
-un flujo diseño-activo/borrador explícito y elementos obligatorios/legales
-protegidos. Arquitectura: schema JSON + renderer sobre jsPDF (sin
-dependencia nueva). **Bloques 1-9 cerrados** — ver tracker completo en
-`docs/PLAN.md`. El editor ya migra y renderiza los 4 documentos con su
-plantilla real. Cotización/Hoja de llamado/Reporte de cierre reconstruyen
-el PDF de producción 1:1; Orden de pago (Bloque 9) es un **rediseño**
-aplicando el design system (`repeating-group`, decisión de arquitectura
-aprobada por el usuario), y a pedido del usuario ese mismo criterio de
-diseño (`format:'date'`, cerrando el gap de fechas crudas) se extendió
-también a los otros 3. Queda **Bloque 10** (extensibilidad). El usuario
-pidió ser avisado solo cuando el plan completo (los 10 bloques) esté
-implementado y el editor listo para pruebas de uso reales — todavía no es
-el caso.
+**`docs/PLAN.md` — Completo, los 10 bloques cerrados. Editor de PDFs listo
+para pruebas de uso reales.** Módulo de sidebar para editar visualmente los
+4 PDFs que genera Serenata (tablas, posición libre, texto y color acotado a
+la paleta del design system), con un flujo diseño-activo/borrador explícito
+y elementos obligatorios/legales protegidos. Arquitectura: schema JSON +
+renderer sobre jsPDF (sin dependencia nueva). El editor migra y renderiza
+los 4 documentos con su plantilla real. Cotización/Hoja de llamado/Reporte
+de cierre reconstruyen el PDF de producción 1:1; Orden de pago (Bloque 9)
+es un **rediseño** aplicando el design system (`repeating-group`, decisión
+de arquitectura aprobada por el usuario), y a pedido del usuario ese mismo
+criterio de diseño (`format:'date'`, cerrando el gap de fechas crudas) se
+extendió también a los otros 3. Bloque 10 (extensibilidad) probó que el
+motor genérico soporta un documento nuevo sin cambios de código, con una
+prueba técnica en vez de un 5º documento de producción real (decisión del
+usuario). **El usuario ya fue avisado de que el plan está completo** — ver
+"Siguiente paso".
+
+## Completado en esta sesión (sesión 3) — Bloque 10: Extensibilidad (cierra el plan)
+
+Última pieza del plan. `docs/PLAN.md`/`docs/ROADMAP.md` no especificaban
+qué documento real debía ser el 5º tipo — no hay un 5º generador hoy en el
+código para migrar, y darlo de alta real habría significado inventar un
+documento de negocio sin pedido explícito. Se preguntó al usuario: eligió
+una **prueba técnica**, no un documento de producción.
+
+- **`lib/server/pdf/template-renderer.extensibility.test.ts`** (nuevo):
+  arma "Recibo de anticipo", un documento sintético (nombres de campo que
+  no existen en ningún catálogo real) que combina, en una forma que
+  NINGUNO de los 4 documentos reales ejercita: `repeating-group` de **un
+  solo nivel** (Orden de pago, el único que lo usa, lo anida a 2 niveles),
+  `totals-banner` con una fila `visibleIf` fuera de Cotización,
+  `TableElement.emptyText` fuera de Hoja de llamado/Reporte de cierre,
+  `format:'currency'`/`'date'` combinados en el mismo texto y en columnas
+  de tabla, y `align:'justify'` fuera de Cotización.
+- **No toca** `PdfDocumentTypeSchema`, `pdf_plantillas`, el catálogo de
+  variables por documento ni el catálogo/UI del editor — no aparece en el
+  sidebar, no es usable por nadie, vive solo como este test.
+- **Verificado**: cada elemento pasa `PdfElementSchema` (genérico, no
+  depende de `tipoDocumento`); `renderFromTemplate()` (el renderer real,
+  sin mocks) lo renderiza sin excepción en una sola página, con y sin las
+  ramas condicionales activas; leído visualmente (PDF a `/tmp`, borrado
+  después) — sin solapamientos, formato de moneda/fecha correcto, fallback
+  de `emptyText` correcto.
+- `docs/PLAN.md` actualizado: Bloque 10 → Cerrado, **"Estado" pasa a
+  "Completo — los 10 bloques cerrados"**.
+- `tsc`/lint/`vitest` completos en verde (1095 tests) antes de push.
+- **El usuario fue avisado** (instrucción explícita de esta sesión: recién
+  al completar el plan de 10 bloques) de que el Editor de PDFs está listo
+  para pruebas de uso reales.
 
 ## Completado en esta sesión (sesión 3) — Bloque 9: Orden de pago (rediseño)
 
@@ -391,16 +424,13 @@ resto en `docs/archive/` y sesiones previas.
 
 ## Siguiente paso
 
-El usuario pidió que se le avise recién cuando **el plan completo (10
-bloques)** esté implementado y el editor listo para pruebas de uso reales
-— no antes. Queda:
+**Los 10 bloques del plan están cerrados — el usuario ya fue avisado.**
+Queda:
 
-1. **Bloque 10** — Extensibilidad: dar de alta un 5º tipo de documento
-   real, probando que el motor generaliza más allá de los 4 actuales.
-2. PR #82 (`claude/zen-cray-4lre07` → `main`) sigue en borrador, bajo
-   seguimiento (`subscribe_pr_activity`) — mergear solo cuando todo el plan
-   esté cerrado y CI en verde, no bloque por bloque.
-3. Pendientes antiguos, sin acción aún (fuera del alcance de esta
+1. PR #82 (`claude/zen-cray-4lre07` → `main`) sigue en borrador, bajo
+   seguimiento (`subscribe_pr_activity`) — mergear cuando el usuario decida
+   que las pruebas de uso reales salieron bien y CI siga en verde.
+2. Pendientes antiguos, sin acción aún (fuera del alcance de esta
    iniciativa): corregir el acento desactualizado en `.claude/rules/ui.md`
    (`#FF5A1A` → `#FE7B01`); decidir si el RLS deshabilitado en
    `cliente_id_backfill_clasificacion` amerita una tarea aparte (ver
