@@ -31,7 +31,7 @@ export default function EditorPdfTipoPage() {
   const router = useRouter()
   const tipoResult = PdfDocumentTypeSchema.safeParse(params.tipo)
 
-  const [row, setRow] = useState<PdfPlantillaRow | null | 'loading' | 'not-found'>('loading')
+  const [row, setRow] = useState<PdfPlantillaRow | null | 'loading' | 'not-found' | 'error'>('loading')
   const [template, setTemplate] = useState<PdfTemplate | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [snapGrid, setSnapGrid] = useState(2)
@@ -57,7 +57,12 @@ export default function EditorPdfTipoPage() {
         setTemplate(data.draft_schema ?? data.active_schema)
       })
       .catch(() => {
-        if (!cancelled) setRow('not-found')
+        // Bug real encontrado en sesión 2026-09-22 (pruebas de uso reales):
+        // un fetch fallido (500, red) caía en el mismo estado que "no
+        // migrado" -- mostraba "Migrar este documento" en vez del error
+        // real, ocultando problemas genuinos (ej. `pdf_plantillas` sin
+        // migrar a producción) detrás de una UI que parecía normal.
+        if (!cancelled) setRow('error')
       })
     return () => {
       cancelled = true
@@ -176,6 +181,20 @@ export default function EditorPdfTipoPage() {
 
   if (row === 'loading') {
     return <SectionLoading />
+  }
+
+  if (row === 'error') {
+    return (
+      <div className="flex flex-col gap-4">
+        <SectionHero title={LABELS[tipo] ?? tipo} />
+        <div className="rounded-panel border border-hairline bg-card p-12 text-center">
+          <p className="text-lg text-cancelled-fg">
+            No se pudo cargar la plantilla. Puede ser un problema temporal de conexión con Supabase —
+            reintentá recargando la página.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (row === 'not-found') {
