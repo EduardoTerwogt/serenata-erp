@@ -195,4 +195,30 @@ describe('renderFromTemplate', () => {
 
     expect(() => renderFromTemplate(doc, template, {}, RESOLVE_COLOR)).not.toThrow()
   })
+
+  it('renderiza una imagen con opacity y fit:contain sin excepción (Bloque 11.0)', () => {
+    const doc = createSpikeDoc(basePage())
+    const template: PdfTemplate = {
+      tipoDocumento: 'cotizacion',
+      page: basePage(),
+      elements: [
+        {
+          id: 'logo',
+          type: 'image',
+          x: 15,
+          y: 15,
+          w: 60,
+          h: 20,
+          src: 'logo-serenata',
+          opacity: 0.4,
+          fit: 'contain',
+        },
+      ],
+    }
+
+    expect(() => renderFromTemplate(doc, template, {}, RESOLVE_COLOR)).not.toThrow()
+
+    const bytes = Buffer.from(doc.output('arraybuffer'))
+    expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
+  })
 })

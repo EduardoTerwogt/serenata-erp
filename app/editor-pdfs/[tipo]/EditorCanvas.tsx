@@ -293,8 +293,14 @@ function renderElementContent(el: PdfElement) {
     return <div style={{ width: '100%', height: mmToPx(el.weight), background: safeColor(el.colorToken) }} />
   }
   if (el.type === 'image') {
+    // Placeholder (no hay preview real del asset en el lienzo) -- `opacity`
+    // sí se ve acá; `fit` no tiene efecto visual sin una imagen real de por
+    // medio, pero ambos se aplican de verdad en el PDF (`template-renderer.ts`).
     return (
-      <div className="flex h-full w-full items-center justify-center border border-dashed border-hairline bg-app text-[10px] text-subtext">
+      <div
+        className="flex h-full w-full items-center justify-center border border-dashed border-hairline bg-app text-[10px] text-subtext"
+        style={{ opacity: el.opacity ?? 1 }}
+      >
         {el.src}
       </div>
     )

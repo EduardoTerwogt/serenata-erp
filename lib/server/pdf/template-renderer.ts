@@ -15,7 +15,12 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatCurrencyPdf } from '@/lib/server/pdf/pdf-base-config'
 import { JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
-import { getIsoLogoBase64, getSerenataLogoBase64 } from '@/lib/server/pdf/cotizacion-pdf-helpers'
+import {
+  getIsoLogoBase64,
+  getSerenataLogoBase64,
+  ISO_RATIO,
+  SERENATA_RATIO,
+} from '@/lib/server/pdf/cotizacion-pdf-helpers'
 import {
   getByPath,
   interpolateText,
@@ -69,6 +74,7 @@ export interface SpikeImageElement {
   w: number
   h: number
   data: string
+  opacity?: number // ausente = 1
 }
 
 export interface SpikeTableColumn {
@@ -135,7 +141,10 @@ export function renderLine(doc: jsPDF, el: SpikeLineElement): void {
 }
 
 export function renderImage(doc: jsPDF, el: SpikeImageElement): void {
+  const opacity = el.opacity ?? 1
+  if (opacity !== 1) doc.setGState(doc.GState({ opacity }))
   doc.addImage(el.data, el.x, el.y, el.w, el.h)
+  if (opacity !== 1) doc.setGState(doc.GState({ opacity: 1 }))
 }
 
 /**
@@ -285,12 +294,36 @@ function resolveLogoData(src: ImageElement['src']): string | null {
   return src === 'logo-iso' ? getIsoLogoBase64() : getSerenataLogoBase64()
 }
 
+// Ratio real (ancho/alto) de cada asset de marca -- usado solo por `fit: 'contain'`
+// para no deformar el logo dentro de una caja con proporción distinta.
+function logoRatio(src: ImageElement['src']): number {
+  return src === 'logo-iso' ? ISO_RATIO : SERENATA_RATIO
+}
+
 function buildSpikeImage(el: ImageElement): SpikeImageElement | null {
   const data = resolveLogoData(el.src)
   if (!data) return null
   // `h` es opcional en el schema; sin alto explícito se usa `w` (fallback
   // cuadrado) — el editor visual (Bloque 5) siempre fija ambos.
-  return { type: 'image', x: el.x, y: el.y, w: el.w, h: el.h ?? el.w, data }
+  const boxW = el.w
+  const boxH = el.h ?? el.w
+  let x = el.x
+  let y = el.y
+  let w = boxW
+  let h = boxH
+  if (el.fit === 'contain') {
+    const ratio = logoRatio(el.src)
+    if (boxW / boxH > ratio) {
+      h = boxH
+      w = h * ratio
+    } else {
+      w = boxW
+      h = w / ratio
+    }
+    x = el.x + (boxW - w) / 2
+    y = el.y + (boxH - h) / 2
+  }
+  return { type: 'image', x, y, w, h, data, opacity: el.opacity }
 }
 
 function renderTableElement(

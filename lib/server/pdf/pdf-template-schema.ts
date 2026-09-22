@@ -145,6 +145,8 @@ export const ImageElementSchema = PdfElementBaseSchema.extend({
   type: z.literal('image'),
   // MVP: solo assets de marca existentes
   src: z.enum(['logo-iso', 'logo-serenata']),
+  opacity: z.number().min(0).max(1).optional(), // ausente = 1 (comportamiento actual)
+  fit: z.enum(['stretch', 'contain']).optional(), // ausente = 'stretch' (comportamiento actual)
 })
 
 export type ImageElement = z.infer<typeof ImageElementSchema>
