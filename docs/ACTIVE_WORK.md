@@ -92,15 +92,17 @@ uno resuelto en esta sesión:
   `resolveTemplateLayout()` que las posiciones resueltas coinciden con los
   valores reales de `cotizacion-pdf.ts` (instrumentado con `jsPDF`/
   `autoTable` reales, datos de muestra con y sin notas).
-- `npm run lint` y la suite completa de `vitest` **no se pudieron correr
-  completas en esta sesión** (el classifier de auto-mode bloqueó `npm run
-  lint` y `vitest run` sobre un directorio, por "Modify Shared Resources" —
-  no relacionado al contenido del cambio). Sí corrió en verde un archivo de
-  test existente (`pdf-template-schema.integration.test.ts`, 4/4) como
-  smoke check. **Pendiente correr la suite completa antes de mergear
-  PR #84** (probablemente sin problema, ya que el fix de esta sesión no
-  tocó ningún `.ts`/`.tsx`, solo datos vía migración — pero no se confirmó
-  con la suite entera).
+- `npm run lint` y `vitest run` sobre un directorio **no se pudieron correr
+  localmente en esta sesión** (el classifier de auto-mode los bloqueó por
+  "Modify Shared Resources" — no relacionado al contenido del cambio). Sí
+  corrió en verde localmente un archivo de test existente
+  (`pdf-template-schema.integration.test.ts`, 4/4) como smoke check.
+  **Confirmado en CI tras el push** (notificación `check_suite.completed`,
+  commit `737f41f`): jobs `test`, `fresh-db` (migraciones desde Postgres
+  vacío — valida que la migración nueva es reproducible) y `tracker-lint`
+  de GitHub Actions, más ambos deploys de Vercel, todos `success`. No
+  corrieron `smoke-and-critical`/`live` (e2e) para este push — diff
+  doc+migración, sin cambios de app code que los dispare.
 
 ## Problemas encontrados que siguen abiertos
 
@@ -110,7 +112,6 @@ uno resuelto en esta sesión:
   centrado del logo, colapso de invisibles en `flowAfter`) — documentados,
   no bloqueantes para cerrar Bloque 11 (son de fidelidad de Cotización/
   Bloque 7, no de la interacción del lienzo que es el alcance de Bloque 11).
-- Suite completa de tests no confirmada en verde esta sesión (ver arriba).
 
 ## Deuda técnica (arrastrada, sin cambios esta sesión)
 
@@ -123,17 +124,16 @@ falta un token `--sn-*` amarillo real (el renglón de descuento usa
 
 ## Siguiente paso
 
-1. **Correr la suite completa (`tsc`/`lint`/`npm test`) contra el HEAD
-   actual de PR #84** para confirmar que el fix de esta sesión no rompió
-   nada (no se pudo verificar completo por el bloqueo de permisos de esta
-   sesión).
+1. ~~Correr la suite completa contra el HEAD actual de PR #84~~ —
+   **confirmado en verde por CI** (`test`, `fresh-db`, `tracker-lint`,
+   commit `737f41f`, ver "Tests ejecutados" arriba).
 2. Pedir al usuario que revise las env vars de **Preview** en Vercel
    (Project Settings → Environment Variables) para que apunten a
    `serenata-erp-test`, no a producción.
 3. Verificación manual final del preview de PR #84 con el `active_schema`
    ya corregido — correr el checklist completo de Definition of Done de
    Bloque 11 en `docs/PLAN.md`.
-4. Mergear PR #84 a `main` solo cuando 1-3 estén en verde de verdad.
+4. Mergear PR #84 a `main` solo cuando 2-3 estén en verde de verdad.
 5. Retomar Bloque 7 (migrar la ruta real de Cotización a
    `renderFromTemplate()`) — el contexto de fidelidad queda en
    `docs/decisions/015-...`.
