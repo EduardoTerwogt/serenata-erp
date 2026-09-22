@@ -1,25 +1,23 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, en ejecución (última actualización 2026-09-22) —
-arquitectura del motor de plantillas, schema, workflow activo/borrador y
-bloques cerrados tras dos rondas de auditoría (Claude contra el repo real,
-y el usuario contra la propuesta de Claude). **Bloques 0-6 cerrados**
-(PR #81 mergeado a `main`). **Bloque 7 (piloto Cotización) parcial:**
+**Estado:** Aprobado, en ejecución — **reestructurado el 2026-09-22**: el
+objetivo pasó de "editor tipo Canva" a **diseñador visual de plantillas PDF
+determinista** (ver "Principio rector" y "Qué cambió en la reestructura"
+abajo). **Bloques 0-6 cerrados** (PR #81 y PR #83, ambos mergeados a
+`main`). **Bloque 11 (rediseño de interacción estilo Canva) queda
+sustituido** — no se ejecuta como estaba especificado; lo que sí sirve al
+objetivo nuevo se recupera, a menor prioridad, en "Roadmap por prioridad".
+**Próximo bloque de ejecución: P0** — conectar Cotización al pipeline real
+(`renderFromTemplate()`), no la UI del editor.
+
+**Bloque 7 (piloto Cotización), arrastrado sin cambios de contenido:**
 layout de flujo real (`flowAfter`/`visibleIf`/tipo `totals-banner`)
 implementado en schema + renderer + editor — ver `docs/ACTIVE_WORK.md`,
 "Completado en esta sesión (3)" para el detalle completo, incluida la
-corrección de un `active_schema` corrupto en producción que motivó este
-trabajo. Falta migrar de verdad la ruta que genera el PDF de Cotización
-para que use `renderFromTemplate()` en vez de `cotizacion-pdf.ts`.
-
-**PR #83** (layout de flujo + fix de datos corruptos + primer pase visual
-del lienzo) está en verde, listo para mergear a `main` — es el primer paso
-de ejecución del **Bloque 11** de abajo (Housekeeping). **Bloque 11
-(rediseño de interacción del editor, estilo Canva) definido y aprobado por
-el usuario en esta sesión, ejecución todavía no iniciada** — ver sección
-dedicada más abajo. Reemplaza la decisión "Sin undo/redo en el MVP" de
-"Criterios de aceptación": el usuario pidió explícitamente undo/redo real
-como parte de este bloque.
+corrección de un `active_schema` corrupto en producción que motivó ese
+trabajo. Lo que falta de Bloque 7 (migrar de verdad la ruta que genera el
+PDF de Cotización) es ahora, con la reestructura, el contenido exacto de
+P0 — ver el desglose P0-A/B/C.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -51,6 +49,162 @@ encontró un error real en el modelo de activo/borrador (confundía
 para que el PDF de producción cambiara sin pasar por "Aplicar diseño"), más
 2 puntos del schema que faltaban (márgenes de página, pipeline compartido
 entre preview y validación). Las 4 quedan corregidas en este documento.
+
+**Reestructura (2026-09-22):** tras usar el editor en producción, el
+usuario decidió que "tipo Canva" no era el objetivo correcto — no necesita
+competir con Canva, necesita definir el diseño visual de los 4 PDFs **una
+sola vez** de forma que el renderer lo reproduzca de forma determinista,
+sin que el modelo tenga que reinterpretar un PDF de referencia cada vez que
+se pide un ajuste. Una auditoría completa del código real en esa misma
+sesión (schema, renderer, layout, los 4 generadores PDF, UI del editor,
+rutas API, estado real de PR #83) encontró un hallazgo crítico no
+reflejado hasta entonces en este documento: **ningún PDF real de
+producción usa `renderFromTemplate()`** — los 4 generadores hardcodeados
+siguen siendo la única fuente de lo que un usuario descarga, incluso para
+Cotización, que ya tiene un `active_schema` migrado. El editor visual, tal
+como existía hasta ese momento, era una maqueta desconectada del pipeline
+real. El usuario validó la auditoría, una propuesta de reestructura y un
+mockup interactivo del editor bajo el nuevo enfoque, y confirmó 4
+decisiones que gobiernan todo lo que sigue en este documento: Bloque 11
+sustituido (no recortado); el próximo bloque de ejecución es cerrar ese
+gap de Cotización antes de seguir con UI; el baseline en código sigue
+siendo necesario; el import de PDF de referencia se agrega al roadmap como
+feature futura, con expectativas realistas (no extracción exacta
+automática).
+
+## Principio rector
+
+> Serenata necesita una forma de definir visualmente el diseño exacto de
+> sus documentos PDF una sola vez y convertir ese diseño en una plantilla
+> declarativa que el renderer respete de forma determinista.
+
+El editor existe para resolver ese problema — no para ser Canva. El
+criterio de éxito ya no es "¿se siente como Canva?"; es **"¿puedo diseñar
+visualmente una plantilla y obtener un PDF que respete ese diseño, sin que
+el modelo tenga que reinterpretarlo?"**.
+
+## Qué cambió en la reestructura
+
+| | Antes | Después |
+|---|---|---|
+| Criterio de éxito | Fluidez de interacción tipo Canva | El PDF real respeta el diseño sin reinterpretación |
+| Bloque 11 | Selección + manipulación directa + undo/redo + toolbars contextuales, plan aprobado con 5 sub-bloques | **Sustituido** — lo útil (selección clara, toolbar contextual limpia, snap) baja a P1/P4, sin la especificación original |
+| Próximo bloque | Ejecutar Bloque 11 | Cerrar el Gap #1: conectar Cotización al pipeline real (P0) |
+| Baseline (`default-templates/`) | Bloque 7-9, sin fecha firme | Se mantiene como necesario, ubicado en P2 |
+| Import de PDF de referencia | No contemplado | Nuevo en el roadmap (P2), con el límite explícito de que no reemplaza revisión humana |
+
+Detalle completo de los 7 hallazgos que motivaron esto en "Gap analysis" y
+el desglose de prioridades en "Roadmap por prioridad", ambas secciones
+nuevas más abajo.
+
+## Gap analysis (auditoría 2026-09-22, motivó la reestructura)
+
+Estado real del código, auditado directamente — no lo que este documento
+decía antes de esta fecha.
+
+| # | Gap | Severidad |
+|---|---|---|
+| 1 | Ninguna ruta de generación real usa `renderFromTemplate()` — Cotización tiene `active_schema` migrado pero `app/api/cotizaciones/[id]/generar-pdf/route.ts` sigue llamando `generateCotizacionPdf()` hardcodeado, sin mirar la tabla | **Crítico** |
+| 2 | Baseline (`lib/server/pdf/default-templates/{tipo}.ts`) nunca implementado → `PdfPlantillasRepository.getBaselineTemplate()` hace `throw`, "Restaurar plantilla" responde 501 siempre, para los 4 documentos | Alto |
+| 3 | Factores de conversión mm→px de tamaño de fuente en el lienzo (`EditorCanvas.tsx`, `*0.6` texto / `*0.5` totals-banner) son arbitrarios, sin justificación documentada — fuente real de divergencia canvas/PDF, directo al criterio de éxito de determinismo | Alto |
+| 4 | Fórmula de alto del totals-banner duplicada en `pdf-template-layout.ts` (`totalsBannerHeight`) y `template-renderer.ts` (`renderTotalsBanner`) — a propósito según su propio comentario, deuda de sincronización real | Medio |
+| 5 | Orden de pago, Hoja de llamado, Reporte de cierre: sin fila en `pdf_plantillas`, 0% migrados | Medio (esperado, son los Bloques 8-9) |
+| 6 | `orden-pago-generator.ts` (HTML para un renderer Puppeteer) no aparece invocado en ningún grep fuera de sí mismo — candidato a limpieza, fuera de esta iniciativa | Bajo |
+| 7 | Interacción del lienzo: commit por `pointermove` (no transaccional), sin edición in-place, sin undo/redo — era el foco completo de Bloque 11, baja de prioridad bajo el objetivo nuevo | Bajo |
+
+Lo que **no** falta: el schema ya cubre texto/tabla/imagen/línea/banner de
+totales, `flowAfter`/`visibleIf` para layout dinámico, formato
+fecha/moneda y agrupación de tabla (`groupBy`) — no hay una capacidad
+estructural ausente para reproducir los 4 diseños existentes. El problema
+no es el schema, es que no está conectado a la salida real (Gap #1).
+
+## Contrato Diseño → PDF
+
+Ya existe implícitamente en `renderFromTemplate()`, bien reforzado por
+Zod. Verificado campo por campo contra el código real:
+
+| Template define | Renderer garantiza | Nota |
+|---|---|---|
+| x / y / w / h | Posición y dimensiones | `y` es un placeholder si el elemento tiene `flowAfter` — se recalcula siempre |
+| font / size / bold / align | Tipografía | Helvetica fijo (14 fuentes estándar de jsPDF) |
+| colorToken / bgToken | Color | Validado contra los tokens `--sn-*` reales |
+| zIndex | Orden de dibujo | Flow ordenado antes que los elementos `sticky` |
+| table cols[] | Geometría de columnas | `columnStyles` de `autoTable` |
+| margins | Área útil de página | `page.margins` |
+| flowAfter / flowGap | Relación de flujo | Topo-sort real (Kahn), `pdf-template-layout.ts` |
+| visibleIf | Visibilidad | A nivel elemento y a nivel fila de `totals-banner` |
+| {{variable}} | Contenido | Interpolación real, nunca posición |
+
+**El renderer sí puede resolver dinámicamente** (no rompe el contrato):
+alto real de tabla/texto envuelto/banner según los datos, número de
+páginas, salto de página. **El renderer nunca modifica:** posición base,
+estilos definidos, orden explícito, contenido de un elemento `legal`.
+
+## Roadmap por prioridad
+
+Reemplaza al tracker de bloques como criterio de **orden de ejecución** —
+el tracker de bloques (más abajo) se mantiene por trazabilidad pero es
+secundario a esto. P4 nunca bloquea P0.
+
+P0 se divide en 3 sub-prioridades de distinta naturaleza a propósito: no
+pesan lo mismo. Sacar el generador hardcodeado del camino es el cambio que
+demuestra que la arquitectura dejó de ser una maqueta; los factores mm→px
+y la fórmula duplicada son deuda real pero de otra categoría.
+
+- **P0-A — conectar Cotización al pipeline real (el cambio que importa):**
+  `CotizacionPDFData` → data-adapter → `PdfTemplate` → `renderFromTemplate()`
+  → PDF real. Concretamente: mapear `CotizacionPDFData` al catálogo de
+  variables (incl. `calculateDiscount()`) y cablear
+  `app/api/cotizaciones/[id]/generar-pdf/route.ts` a `renderFromTemplate()`
+  cuando exista `active_schema`. Bloqueante para el resto de P0.
+- **P0-B — Render Parity Gate (equivalencia visual canvas ↔ PDF real,
+  criterio de aceptación de P0, no una consideración de diseño):** con
+  datos de ejemplo conocidos y el template de Cotización ya migrado,
+  generar el PDF real vía `renderFromTemplate()` y compararlo contra lo
+  que muestra el canvas del editor para ese mismo template — corregir
+  cualquier divergencia real de posición, tamaño, tipografía o geometría.
+  Este es el gate que evita reemplazar el problema original ("le doy un
+  PDF a Claude y sale parecido pero distinto") por una versión nueva del
+  mismo problema ("diseño en el canvas y el PDF sale ligeramente
+  distinto"). **P0 no se declara cerrado sin este gate en verde.**
+- **P0-C — eliminar inconsistencias conocidas del renderer:** resolver los
+  factores mm→px arbitrarios del lienzo (Gap #3) y consolidar la fórmula
+  duplicada del totals-banner (Gap #4). No bloquea P0-A — se resuelve en
+  paralelo o inmediatamente después, y alimenta directamente el gate de
+  P0-B.
+- **P1 — diseñador visual funcional:** mantener lo ya construido (canvas,
+  inspector, selección, marquee); documentar el Contrato Diseño→PDF de
+  arriba en la práctica de uso diario; alcance recortado de lo que era
+  Bloque 11 — solo selección clara + toolbar contextual limpia + snap, sin
+  manipulación transaccional/undo-redo/edición in-place.
+- **P2 — variables, baseline e import de referencia:** catálogo de
+  variables y datos de ejemplo (ya maduro, sin trabajo nuevo); implementar
+  `lib/server/pdf/default-templates/{tipo}.ts` real (Restaurar plantilla
+  deja de responder 501); feature de import de PDF/imagen de referencia
+  — ver "Import de referencia: alcance realista" abajo.
+- **P3 — tablas, flujo y multipágina en los 3 documentos restantes:** Hoja
+  de llamado + Reporte de cierre (Bloque 8), Orden de pago (Bloque 9,
+  estructura anidada).
+- **P4 — refinamiento UX (ex-Bloque 11, si sobra tiempo):** drag/resize
+  transaccional (`liveDrag`), edición de texto in-place, undo/redo con
+  historial, zoom/viewport. Nunca bloquea P0-P3.
+
+### Import de referencia: alcance realista
+
+Un PDF puede tener texto convertido a paths, fuentes no disponibles,
+posiciones absolutas sin semántica, tablas sin estructura de tabla,
+elementos rasterizados, transparencias y agrupaciones — **no es extraíble
+a un `PdfTemplate` exacto de forma puramente automática.** El flujo
+correcto:
+
+```
+PDF/imagen → análisis/extracción → PdfTemplate PROPUESTO
+           → revisión humana en el editor → PdfTemplate aprobado
+```
+
+Nunca `PDF → PdfTemplate exacto automático`. La arquitectura de extracción
+se define al llegar a P2 — esta nota solo fija la expectativa correcta
+desde ahora.
 
 ## El editor: alcance según el usuario
 
@@ -332,11 +486,12 @@ Así un schema que la preview acepta nunca es rechazado después por
 | 4 | Catálogo (`/editor-pdfs`, 4 documentos, estado de cambios sin aplicar) | **Cerrado** — `app/editor-pdfs/page.tsx` + nav en `SidebarLayout.tsx`. Verificado en navegador real (login vía `AUTH_USERS_DEV_FALLBACK`, sección `editor-pdfs`): nav, header, y fallback correcto (banner de error + "No migrado") cuando Supabase no es alcanzable |
 | 5 | Editor visual (canvas, selección/multi-select, drag, resize, snap, alinear, distribuir, capas, inspector, variables, advertencia legal — sin undo/redo, sin dependencia nueva) | **Cerrado** — `app/editor-pdfs/[tipo]/` (`page.tsx`, `EditorCanvas.tsx`, `Inspector.tsx`, `geometry.ts`). Verificado en navegador real con una plantilla de prueba insertada temporalmente en `serenata-erp-test` (borrada después): selección, drag, resize, multi-select, alinear, capas, agregar/eliminar, confirmación de texto legal y autosave (`PATCH .../draft`) funcionando de punta a punta |
 | 6 | Preview real (reusa patrón `Content-Disposition: inline`) | **Cerrado** — `GET /api/editor-pdfs/[tipo]/preview` + `lib/server/pdf/pdf-sample-data.ts`. Verificado con la pipeline de producción real (sin mocks): PDF válido generado y leído (`{{cliente}}` interpolado, tabla agrupada, estilos) |
-| 7 | Piloto: Cotización (mayor riesgo en un solo nivel — tabla agrupada, banner de totales, bloques legales) | **Parcial** — layout de flujo real (`flowAfter`/`visibleIf`/`totals-banner`) implementado y probado; `active_schema` válido migrado a test+prod. Falta el data-adapter real y reemplazar `cotizacion-pdf.ts` en la ruta de generación |
-| 8 | Hoja de llamado + Reporte de cierre (estructura simple, sin anidado) | Pendiente |
-| 9 | Orden de pago (estructura responsable→evento→tabla — decide `repeating-group` vs. loop híbrido con Cotización ya probado como base) | Pendiente |
+| 7 | Piloto: Cotización — ahora **el contenido exacto de P0-A/B/C** (ver "Roadmap por prioridad") | Layout de flujo real (`flowAfter`/`visibleIf`/`totals-banner`) implementado y probado; `active_schema` válido migrado a test+prod. Falta el data-adapter real, reemplazar `cotizacion-pdf.ts` en la ruta de generación (P0-A), y el Render Parity Gate (P0-B) — condición de cierre, no solo el wiring |
+| 8 | Hoja de llamado + Reporte de cierre (estructura simple, sin anidado) — P3 | Pendiente |
+| 9 | Orden de pago (estructura responsable→evento→tabla — decide `repeating-group` vs. loop híbrido con Cotización ya probado como base) — P3 | Pendiente |
 | 10 | Extensibilidad (dar de alta un 5º tipo de documento) | Pendiente |
-| 11 | Rediseño de interacción del lienzo (estilo Canva: selección explícita, toolbar contextual, manipulación directa, undo/redo) — ver sección dedicada abajo | Aprobado, no iniciado |
+| 11 | Rediseño de interacción del lienzo (estilo Canva: selección explícita, toolbar contextual, manipulación directa, undo/redo) | **Sustituido** en la reestructura de 2026-09-22 — no se ejecuta como estaba especificado. Lo útil (selección clara, toolbar contextual limpia, snap) baja a P1/P4, ver "Roadmap por prioridad". Sección dedicada abajo se conserva como referencia histórica |
+| — | Baseline real (`default-templates/{tipo}.ts`) + import de PDF/imagen de referencia | **Nuevo** — P2, ver "Roadmap por prioridad" e "Import de referencia: alcance realista" |
 
 ## Dependencias reales entre bloques y ejecución en paralelo
 
@@ -382,6 +537,15 @@ excepto que 9 depende explícitamente del patrón de 7 — se re-evalúa al
 llegar ahí.
 
 ## Bloque 11 — Rediseño de interacción del lienzo (estilo Canva)
+
+> **Sustituido en la reestructura de 2026-09-22** — esta sección completa
+> queda como referencia histórica de lo que se decidió y por qué, no como
+> hoja de ruta vigente. **PR #83 ya está mergeado a `main`**
+> (`1fd06fe`, confirmado con `git log`) — las referencias de abajo a
+> mergearlo como paso pendiente están desactualizadas a propósito, se
+> dejan intactas por fidelidad histórica. Lo que sigue vigente de este
+> bloque (selección clara, toolbar contextual limpia, snap) vive ahora en
+> "Roadmap por prioridad" → P1/P4.
 
 **Contexto:** el primer pase de "rediseño Canva" (`Toolbar.tsx`, capas con
 íconos, selección con etiqueta flotante, incluido en PR #83) cambió
@@ -528,6 +692,11 @@ Verificación manual real en el preview de Vercel obligatoria para 11.2
 
 ## Riesgos
 
+- **P1 — Factores mm→px arbitrarios en el lienzo (Gap #3, hallazgo de la
+  auditoría 2026-09-22):** `EditorCanvas.tsx` usa `mmToPx(el.size) * 0.6`
+  para texto y `* 0.5` para `totals-banner`, sin justificación
+  documentada — fuente real de divergencia canvas/PDF. Resolver como parte
+  de P0-C, verificado por el Render Parity Gate de P0-B.
 - **P1 — `sticky` header/footer, resuelto en el spike (Bloque 1):** no vía
   `didDrawPage` de `jspdf-autotable` (acoplaría el sticky a que el elemento
   que dispara páginas nuevas sea siempre una tabla) sino con
@@ -594,7 +763,16 @@ autosave con indicador de estado visible, preview real, restaurar diseño
 base, aplicar manualmente, confirmar que el diseño activo no cambia antes
 de aplicar y que sí cambia después, lógica de negocio y datos intactos,
 comportamiento de Drive intacto, multipágina soportada, integridad de
-elementos obligatorios. Sin undo/redo en el MVP (decisión del usuario).
+elementos obligatorios. Sin undo/redo en el MVP (decisión del usuario,
+superada solo si P4 se ejecuta).
+
+**Render Parity Gate (agregado en la reestructura de 2026-09-22, criterio
+de aceptación explícito de P0, ver "Roadmap por prioridad" → P0-B):** para
+Cotización, con datos de ejemplo conocidos y el template ya migrado, el
+PDF generado vía `renderFromTemplate()` debe coincidir visualmente con lo
+que mostraba el canvas del editor para ese mismo template — posición,
+tamaño, tipografía y geometría. No basta con que el generador use
+`renderFromTemplate()`; el bloque no se cierra sin este gate en verde.
 
 ## Artefactos de referencia
 

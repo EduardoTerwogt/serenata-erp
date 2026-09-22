@@ -1,43 +1,89 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-22 (sesión 3)
+**Última actualización:** 2026-09-22 (sesión 4)
 
 ## Estado
 
-**`docs/PLAN.md` — Aprobado, en ejecución, "Editor de PDFs".** Módulo de
-sidebar para editar visualmente los 4 PDFs que genera Serenata (tablas,
-posición libre, texto y color acotado a la paleta del design system), con
-un flujo diseño-activo/borrador explícito y elementos obligatorios/legales
-protegidos. Arquitectura decidida: schema JSON + renderer sobre jsPDF
-(sin dependencia nueva). **Bloques 0-6 cerrados** (spike, schema+Zod,
-persistencia+API+permisos, catálogo `/editor-pdfs`, editor visual/canvas,
-preview real — PR #81 mergeado a `main` en sesión 2). **Bloque 7 (piloto
-Cotización): parcial** — layout de flujo real implementado (ver abajo),
-falta migrar de verdad la ruta que genera el PDF final para que use el
-renderer nuevo en vez de `cotizacion-pdf.ts` hardcodeado, y la fidelidad
-visual completa contra el PDF real. Esta corrección de estado reemplaza la
-anterior de esta misma sección (sesión 2 quedó desactualizada tras el
-merge de PR #81 — no se corrigió al abrir sesión 3, causó confusión real:
-ver "Completado en esta sesión" abajo).
+**`docs/PLAN.md` — Aprobado, en ejecución, "Editor de PDFs" →
+reestructurado en sesión 4 a "Diseñador visual de plantillas PDF
+determinista".** El objetivo dejó de ser un editor tipo Canva — ver
+`docs/PLAN.md` → "Principio rector" y "Qué cambió en la reestructura" para
+el detalle completo. **Bloques 0-6 cerrados** (PR #81 y **PR #83, ambos
+mergeados a `main`** — PR #83 se confirmó mergeado en sesión 4, la nota de
+"todavía no ejecutado" de sesión 3 quedó desactualizada). **Próximo bloque
+de ejecución: P0** — conectar Cotización al pipeline real
+(`renderFromTemplate()`), no la UI del editor. Ver "Siguiente paso" abajo.
 
-**Nota de proceso importante:** al auditar el estado real (sesión 3), se
-encontró que `pdf_plantillas.active_schema` de `cotizacion` en
-**producción** tenía datos (`flowAfter`, `gap`, un tipo de elemento
-`totals-banner`) que **nunca existieron en ningún código de este repo**
-(confirmado con `git grep` sobre todo el historial) — llegaron por una
-escritura directa a la base de datos que se saltó la validación Zod de la
-API (`/api/editor-pdfs/[tipo]/draft` y `.../aplicar` la habrían rechazado).
-Ver detalle completo abajo.
+**Nota de proceso importante (sesión 3, sigue vigente):** al auditar el
+estado real, se encontró que `pdf_plantillas.active_schema` de
+`cotizacion` en **producción** tenía datos (`flowAfter`, `gap`, un tipo de
+elemento `totals-banner`) que **nunca existieron en ningún código de este
+repo** (confirmado con `git grep` sobre todo el historial) — llegaron por
+una escritura directa a la base de datos que se saltó la validación Zod de
+la API (`/api/editor-pdfs/[tipo]/draft` y `.../aplicar` la habrían
+rechazado). Ver detalle completo abajo.
 
-**Bloque 11 (rediseño de interacción del lienzo, estilo Canva) aprobado
-en esta sesión, ejecución no iniciada.** El primer pase visual de PR #83
-(`Toolbar.tsx`, capas con íconos) no fue suficiente para el usuario —
-pidió selección explícita, toolbar contextual, manipulación directa
-transaccional y undo/redo real. Plan completo (decisiones de producto,
-especificación de interacción gesto por gesto, arquitectura técnica,
-Definition of Done) en `docs/PLAN.md` → "Bloque 11". Primer paso de
-ejecución: mergear PR #83 a `main` (Housekeeping, Bloque 0 de esa
-sección) — todavía no ejecutado, ver "Siguiente paso" abajo.
+**Bloque 11 (rediseño de interacción del lienzo, estilo Canva): sustituido
+en sesión 4, no se ejecuta.** Fue aprobado en sesión 3 pero, tras usar el
+editor en producción, el usuario decidió que ese no era el objetivo
+correcto — ver "Completado en esta sesión (4)" abajo y `docs/PLAN.md` →
+"Bloque 11" (se conserva como referencia histórica) y "Roadmap por
+prioridad" (lo que sí sigue vigente, a menor prioridad).
+
+## Completado en esta sesión (4) — Reestructura del Editor de PDFs
+
+El usuario pidió, vía `/serenata-iniciar-fase`, retomar la iniciativa; el
+siguiente paso documentado era ejecutar Bloque 11. Antes de arrancar, el
+usuario pidió replantear el objetivo del editor: no un editor tipo Canva,
+sino un diseñador visual de plantillas PDF **deterministas** — ver el
+mensaje completo del usuario y la discusión en el historial de esta sesión
+para el razonamiento detallado (no reproducido aquí).
+
+- **Auditoría completa del código real** (schema, renderer, layout, los 4
+  generadores PDF, UI del editor, rutas API, estado real de PR #83, un
+  subagente cubrió generadores/UI/API/variables/baseline en paralelo):
+  encontró el hallazgo crítico de la reestructura — **ningún PDF real de
+  producción usa `renderFromTemplate()`**, los 4 generadores hardcodeados
+  siguen siendo la única fuente de lo que un usuario descarga, incluso
+  para Cotización con `active_schema` ya migrado. Confirmó además que
+  **PR #83 ya está mergeado a `main`** (`1fd06fe`, `docs/ACTIVE_WORK.md` y
+  `docs/PLAN.md` tenían ese dato desactualizado).
+- **Artefacto de propuesta** (auditoría + gap analysis + roadmap P0-P4)
+  publicado y validado con el usuario.
+- **Mockup interactivo del editor** bajo el nuevo enfoque (catálogo +
+  lienzo Cotización + inspector con mm reales + toggle lienzo/vista previa
+  + variables) — encontró y corrigió en vivo 2 bugs reales del propio
+  mockup: `computeFlow()` no resolvía `flowAfter` en orden topológico
+  (dos pasadas fijas en vez de Kahn, igual al bug que habría tenido
+  `pdf-template-layout.ts` real si no usara topo-sort) y el factor de
+  conversión pt→px del texto estaba ~4x inflado.
+- **4 decisiones confirmadas con el usuario** (ver `docs/PLAN.md` →
+  "Contexto" y "Roadmap por prioridad" para el detalle): Bloque 11
+  sustituido, no recortado; próximo bloque = cerrar el gap de Cotización
+  (P0) antes de UI; baseline en código sigue siendo necesario (P2); import
+  de PDF de referencia se agrega como feature nueva (P2), con la
+  expectativa explícita de que no reemplaza revisión humana.
+- **Feedback de una segunda ronda** (vía plan mode) afinó el roadmap antes
+  de escribirlo: P0 se dividió en **P0-A** (conectar Cotización al
+  pipeline real — el cambio que importa), **P0-B** (Render Parity Gate:
+  el PDF real debe coincidir visualmente con el canvas, criterio de
+  aceptación explícito, no solo una consideración de diseño) y **P0-C**
+  (eliminar mm→px arbitrario y la fórmula duplicada del totals-banner —
+  deuda real pero de otra categoría, no bloquea P0-A); y el import de PDF
+  de referencia se reformuló explícitamente como
+  `PDF → extracción → PdfTemplate PROPUESTO → revisión humana → aprobado`,
+  nunca extracción exacta automática.
+- **`docs/PLAN.md` reescrito**: nuevo "Principio rector", "Qué cambió en
+  la reestructura", "Gap analysis" (7 hallazgos con severidad), "Contrato
+  Diseño → PDF" (tabla formal), "Roadmap por prioridad" (P0-A/B/C a P4),
+  tracker de bloques actualizado (Bloque 7 = contenido de P0, Bloque 11 =
+  sustituido, fila nueva de baseline+import), Riesgos y Criterios de
+  aceptación con el Render Parity Gate agregado. Nada del Schema,
+  Multipágina, Diseño activo/borrador, Catálogo de variables, Seguridad,
+  Infraestructura reutilizable cambió — esa arquitectura sigue vigente.
+- Diff completo de la sesión es 100% `.md` (`docs/PLAN.md` +
+  `docs/ACTIVE_WORK.md`) → commit + push directo a `main` (excepción
+  doc-only de `.claude/rules/git.md`, sin rama ni PR).
 
 ## Completado en esta sesión (3) — Layout de flujo real + fix de datos corruptos
 
@@ -292,24 +338,32 @@ resto en `docs/archive/` y sesiones previas.
 
 ## Siguiente paso
 
-1. **Bloque 11 (rediseño de interacción del lienzo, estilo Canva) —
-   plan aprobado, ejecución no iniciada.** Empieza por el Housekeeping:
-   marcar PR #83 listo y mergearlo a `main`, abrir rama y PR nuevos, y
-   ejecutar 11.0-11.4 en orden. Detalle completo en `docs/PLAN.md` →
-   "Bloque 11".
-2. Terminar el Bloque 7 de verdad: la ruta que genera el PDF final de
-   Cotización todavía usa `cotizacion-pdf.ts` hardcodeado, no
-   `renderFromTemplate()` — falta el data-adapter real (mapear
-   `CotizacionPDFData` a las variables del catálogo, incluido calcular
-   `descuento_monto` con `calculateDiscount()`), verificar fidelidad visual
-   contra el PDF real con datos de `serenata-erp-test`, y decidir si vale
-   la pena la columna "Total categoría" (`groupTotalOf`, no implementada).
-3. Considerar corregir el valor de acento en `.claude/rules/ui.md`
+1. **P0 — conectar Cotización al pipeline real** (reemplaza al antiguo
+   punto 1 de esta lista, "Bloque 11" — sustituido, ver arriba). Abrir
+   rama y PR nuevos (este cambio de sesión 4 fue doc-only, directo a
+   `main`; el trabajo de código de P0 sí sigue el flujo normal rama+PR).
+   Detalle completo en `docs/PLAN.md` → "Roadmap por prioridad":
+   - **P0-A:** data-adapter real (mapear `CotizacionPDFData` a las
+     variables del catálogo, incluido calcular `descuento_monto` con
+     `calculateDiscount()`) y cablear
+     `app/api/cotizaciones/[id]/generar-pdf/route.ts` a
+     `renderFromTemplate()` cuando exista `active_schema`.
+   - **P0-B — Render Parity Gate:** comparar el PDF real generado contra
+     lo que muestra el canvas para el mismo template con datos de
+     `serenata-erp-test`; corregir cualquier divergencia de posición,
+     tamaño, tipografía o geometría. No se cierra P0 sin esto en verde.
+   - **P0-C:** resolver los factores mm→px arbitrarios del lienzo
+     (`EditorCanvas.tsx`, `*0.6`/`*0.5`) y consolidar la fórmula duplicada
+     del totals-banner (`pdf-template-layout.ts`/`template-renderer.ts`).
+   - Pendiente también, sin prioridad asignada todavía dentro de P0:
+     decidir si vale la pena la columna "Total categoría"
+     (`groupTotalOf`, no implementada).
+2. Considerar corregir el valor de acento en `.claude/rules/ui.md`
    (`#FF5A1A` → `#FE7B01`) como ajuste puntual, fuera de la iniciativa del
    Editor de PDFs.
-4. Considerar si el RLS deshabilitado en
+3. Considerar si el RLS deshabilitado en
    `cliente_id_backfill_clasificacion` amerita una tarea aparte (ver
    "Problemas encontrados").
-5. Considerar si vale la pena un token `--sn-*` amarillo real (hoy no
+4. Considerar si vale la pena un token `--sn-*` amarillo real (hoy no
    existe; el renglón de descuento del banner de totales usa `orange-soft`
    como sustituto — ver "Completado en esta sesión (3)").
