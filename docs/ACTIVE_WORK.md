@@ -29,6 +29,16 @@ escritura directa a la base de datos que se saltó la validación Zod de la
 API (`/api/editor-pdfs/[tipo]/draft` y `.../aplicar` la habrían rechazado).
 Ver detalle completo abajo.
 
+**Bloque 11 (rediseño de interacción del lienzo, estilo Canva) aprobado
+en esta sesión, ejecución no iniciada.** El primer pase visual de PR #83
+(`Toolbar.tsx`, capas con íconos) no fue suficiente para el usuario —
+pidió selección explícita, toolbar contextual, manipulación directa
+transaccional y undo/redo real. Plan completo (decisiones de producto,
+especificación de interacción gesto por gesto, arquitectura técnica,
+Definition of Done) en `docs/PLAN.md` → "Bloque 11". Primer paso de
+ejecución: mergear PR #83 a `main` (Housekeeping, Bloque 0 de esa
+sección) — todavía no ejecutado, ver "Siguiente paso" abajo.
+
 ## Completado en esta sesión (3) — Layout de flujo real + fix de datos corruptos
 
 El usuario pidió rediseñar la UX/UI del lienzo del editor (estilo Canva).
@@ -282,11 +292,11 @@ resto en `docs/archive/` y sesiones previas.
 
 ## Siguiente paso
 
-1. Retomar el rediseño UX/UI del lienzo del editor (estilo Canva, pedido
-   original de esta sesión) — ahora sobre datos y layout reales, no sobre
-   el `active_schema` corrupto. Usar `serenata-design` (mockup interactivo
-   como Artifact, mismo patrón que el mockup de referencia en
-   `docs/PLAN.md`) antes de tocar código de producción.
+1. **Bloque 11 (rediseño de interacción del lienzo, estilo Canva) —
+   plan aprobado, ejecución no iniciada.** Empieza por el Housekeeping:
+   marcar PR #83 listo y mergearlo a `main` (CI verde, sin conflictos),
+   abrir rama y PR nuevos, y ejecutar 11.0-11.4 en orden. Detalle completo
+   en `docs/PLAN.md` → "Bloque 11".
 2. Terminar el Bloque 7 de verdad: la ruta que genera el PDF final de
    Cotización todavía usa `cotizacion-pdf.ts` hardcodeado, no
    `renderFromTemplate()` — falta el data-adapter real (mapear
