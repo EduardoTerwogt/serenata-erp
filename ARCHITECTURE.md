@@ -121,8 +121,8 @@ Drive no es uniforme entre los 4** (verificado leyendo cada ruta, 2026-09-21):
 solo Cotización reusa `drive_file_id` (`driveService.updateFile()` si ya existe);
 Orden de pago sube siempre un archivo nuevo (`uploadFileToDrive()`, API distinta,
 sin reuso); Hoja de llamado y Reporte de cierre no suben a Drive en absoluto — es
-descarga directa. **Cotización** (rediseño PR #86) y **Orden de pago**
-(bloque 2) ya no usan autotable: dibujo manual en mm con Inter embebida
+descarga directa. **Cotización** (rediseño PR #86), **Orden de pago** (PR #88)
+y **Hoja de llamado** (bloque 3) ya no usan autotable: dibujo manual en mm con Inter embebida
 (`lib/server/pdf/fonts/inter.ts`) y helpers compartidos
 (`lib/server/pdf/pdf-draw.ts`), paginación real (encabezado compacto,
 encabezados repetidos, pie "Página N de M"). Los
@@ -474,15 +474,14 @@ Trampas reales, no teóricas. Cada una costó un bug:
   completo tras EF-3 3B-7 (`folio.ts`, el último): ya no queda ningún
   `CacheManager` activo en el repo.
 - **Los generadores de `lib/server/pdf/` no comparten convenciones entre
-  sí** (auditado 2026-09-21; Cotización y Orden de pago se rehicieron
-  después, ver capa 5 — lo de abajo aplica a Hoja de llamado y Reporte de
-  cierre): `pdf-base-config.ts` define helpers
+  sí** (auditado 2026-09-21; Cotización, Orden de pago y Hoja de llamado se
+  rehicieron después, ver capa 5 — lo de abajo aplica a Reporte de cierre): `pdf-base-config.ts` define helpers
   (`drawPdfHeader`, `drawDivider`, `drawSectionHeading`) que **ningún**
   generador usa — cada uno reimplementa su propio header con números
   mágicos; `formatCurrencyPdf()` (base-config) y el `fmtMoney()` local de
   `reporte-cierre-pdf.ts` dan salidas ligeramente distintas. Más importante
-  para cualquier cambio futuro: **Hoja de llamado y Reporte de cierre no
-  repiten header/footer/logo si el contenido fuerza una segunda página** — `checkPageSpace()`/
+  para cualquier cambio futuro: **Reporte de cierre no repite
+  header/footer/logo si el contenido fuerza una segunda página** — `checkPageSpace()`/
   `addPage()` solo resetean `currentY`, la página 2 (si llega a existir)
   queda sin logo ni footer. No asumir soporte de multipágina real solo
   porque el código tiene `addPage()`.

@@ -116,3 +116,15 @@ export function ellipsize(doc: jsPDF, text: string, width: number): string {
   while (t.length > 1 && doc.getTextWidth(t + '…') > width) t = t.slice(0, -1)
   return t.trimEnd() + '…'
 }
+
+/**
+ * Parte `text` a `width` en máximo `max` líneas; si sobra texto, la última
+ * línea termina en "…".
+ */
+export function clampLines(doc: jsPDF, text: string, width: number, max: number): string[] {
+  const lines = wrapLines(doc, text, width).filter((l) => l.length > 0)
+  if (lines.length <= max) return lines
+  const out = lines.slice(0, max)
+  out[max - 1] = ellipsize(doc, `${out[max - 1]} ${lines.slice(max).join(' ')}`, width)
+  return out
+}

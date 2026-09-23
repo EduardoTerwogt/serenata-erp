@@ -2,8 +2,7 @@
 
 **Estado:** Aprobado, en ejecución (2026-09-23) — **Actualización de formatos
 PDF vía Claude Design.** Bloques 1 (Cotización, PR #86) y 2 (Orden de pago,
-PR #88) cerrados. Siguiente: hoja de llamado o reporte de cierre, a elección
-del usuario.
+PR #88) cerrados. Bloque 3 (Hoja de llamado) en curso, en PR.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -55,8 +54,9 @@ implementa directo en su generador jsPDF.
   `drawJustified` (justificado palabra por palabra; `Tw` no funciona con
   fuentes Identity-H), `hline`, `ellipsize`, `wrapLines`. El patrón de
   paginación (medir bloques → repartir en páginas → dibujar → pie
-  "Página N de M" al final) está en `cotizacion-pdf.ts` y
-  `orden-pago-pdf.ts`.
+  "Página N de M" al final) está en `cotizacion-pdf.ts`,
+  `orden-pago-pdf.ts` y `hoja-llamado-pdf.ts`. `clampLines` (máx. N líneas
+  con "…") se agregó en el bloque 3.
 - Logos: `public/logo iso.png`, `public/serenata naranja.png` (vía
   `cotizacion-pdf-helpers.ts`).
 - Paleta del diseño de Cotización (tinta `#1D1D1F`, acento `#FE7B01`, grises
@@ -68,7 +68,7 @@ implementa directo en su generador jsPDF.
 |---|---|---|
 | 1 | Cotización | **Cerrado** — PR [#86](https://github.com/EduardoTerwogt/serenata-erp/pull/86), `bcfaa08` |
 | 2 | Orden de pago | **Cerrado** — PR [#88](https://github.com/EduardoTerwogt/serenata-erp/pull/88), `9088e7e`. Agrega `fecha_entrega` al evento del preview (`lib/server/ordenes-pago/build.ts`, ya venía en la RPC) y extrae `pdf-draw.ts` |
-| 3 | Hoja de llamado | Pendiente |
+| 3 | Hoja de llamado | **En curso** — implementado en rama `claude/laughing-maxwell-qxscit`, PR abierto. Horarios convertidos a 12 h con am/pm (`toTwelveHour`), equipo técnico agrupado por responsable, cliente fuera del encabezado (decisión del diseño). Agrega `clampLines` a `pdf-draw.ts` |
 | 4 | Reporte de cierre | Pendiente — tiene su propio `fmtMoney()` distinto de `formatCurrencyPdf()` |
 
 El orden de 2-4 lo decide el usuario. Cada bloque es independiente (rama +
