@@ -127,6 +127,12 @@ ni tiene alcance de iniciativa definido.
   ligado a RAG/chatbot); RAG/chatbot; migrar administración de Sheets
   externo a la app; refinar módulo de Proyectos; limpieza de datos de
   prueba (app + BD).
+- **Rediseño del PDF de reporte de cierre** — diferido el 2026-09-23 de la
+  iniciativa "Actualización de formatos PDF vía Claude Design": se hace junto
+  con la definición del módulo de Proyectos, porque su contenido depende de
+  ella. Mismo flujo que los otros 3 PDFs (Claude Design → `.zip` → Claude
+  Code, prompt en `docs/PROMPTS.md`); `lib/server/pdf/reporte-cierre-pdf.ts`
+  sigue con el formato anterior mientras tanto.
 
 ---
 

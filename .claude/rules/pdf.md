@@ -13,6 +13,6 @@ paths:
   eliminó el 2026-09-23).
 - **Cambios de diseño:** se diseñan en Claude Design y el HTML se implementa
   directo en el generador — flujo en `docs/PLAN.md`, motivo en
-  `docs/decisions/015-pdfs-disenados-en-claude-design.md`. Cotización y Orden
-  de pago ya usan dibujo manual con Inter embebida (`fonts/inter.ts`) y sin
+  `docs/decisions/015-pdfs-disenados-en-claude-design.md`. Cotización, Orden
+  de pago y Hoja de llamado ya usan dibujo manual con Inter embebida (`fonts/inter.ts`) y sin
   autotable; reusar los helpers de `pdf-draw.ts` en vez de reinventarlos.

@@ -92,5 +92,9 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
 
 ## Siguiente paso
 
-1. Bloque 3 o 4 de `docs/PLAN.md`: hoja de llamado o reporte de cierre,
-   mismo flujo (Claude Design → `.zip` → Claude Code).
+1. **Hoja de llamado (bloque 3) en PR** — `lib/server/pdf/hoja-llamado-pdf.ts`
+   reescrito según el diseño. Pendiente: visto bueno del usuario y merge con
+   CI verde.
+2. Reporte de cierre (bloque 4): **diferido** hasta definir el módulo de
+   Proyectos (decisión del usuario). Al mergear el bloque 3 se cierra la
+   iniciativa y `docs/PLAN.md` se archiva.
