@@ -121,8 +121,12 @@ Drive no es uniforme entre los 4** (verificado leyendo cada ruta, 2026-09-21):
 solo Cotización reusa `drive_file_id` (`driveService.updateFile()` si ya existe);
 Orden de pago sube siempre un archivo nuevo (`uploadFileToDrive()`, API distinta,
 sin reuso); Hoja de llamado y Reporte de cierre no suben a Drive en absoluto — es
-descarga directa. Plan de migración a un motor de plantillas: `docs/PLAN.md`
-("Editor de PDFs").
+descarga directa. **Cotización** (rediseño PR #86) ya no usa autotable: dibujo
+manual en mm con Inter embebida (`lib/server/pdf/fonts/inter.ts`), paginación
+real (encabezado compacto, columnas repetidas, pie "Página N de M"). Los
+cambios de formato se diseñan en Claude Design y se implementan en código
+(`docs/decisions/015-pdfs-disenados-en-claude-design.md`, plan en
+`docs/PLAN.md`); no hay editor de plantillas ni tabla de plantillas en uso.
 
 **6. Datos.** Supabase directo para lecturas y escrituras simples; **RPCs de
 PostgreSQL** para todo lo que deba ser atómico: aprobar y cancelar cotización,
@@ -351,7 +355,7 @@ evidencia, no cuenta como terminado.
 
 | Módulo | Evidencia |
 |---|---|
-| Cotizaciones (CRUD, folio atómico, PDF, emitir) | `tests/e2e/critical/cotizaciones-*.spec.ts`, live `basic.spec.ts` |
+| Cotizaciones (CRUD, folio atómico, PDF, emitir) | `tests/e2e/critical/cotizaciones-*.spec.ts`, live `basic.spec.ts`, `lib/server/pdf/__tests__/cotizacion-pdf.test.ts` (fuente embebida, paginación) |
 | Aprobar / cancelar cotización (RPC transaccional) | live: crear → emitir → aprobar → cuentas → cancelar y revertir |
 | Cuentas por cobrar (factura, complemento, pagos parciales) | crítico + live de concurrencia |
 | Cuentas por pagar (factura, pagos, órdenes de pago con PDF real; utilidad de proyecto y cierre fiscal estimado — chip "Utilidad" + tabla Quién/Cuánto/Cuándo en `CuentasPorProyecto.tsx`, cálculo puro en `lib/shared/cierre-proyecto.ts`) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia, `lib/shared/__tests__/cierre-proyecto.test.ts`, `tests/e2e/critical/cuentas-cierre-proyecto.spec.ts` |
@@ -467,16 +471,17 @@ Trampas reales, no teóricas. Cada una costó un bug:
   de proceso. Las 4 cachés locales que existían quedaron retiradas por
   completo tras EF-3 3B-7 (`folio.ts`, el último): ya no queda ningún
   `CacheManager` activo en el repo.
-- **Los 4 generadores de `lib/server/pdf/` no comparten convenciones entre
-  sí** (encontrado auditando el código para el plan del Editor de PDFs,
-  2026-09-21): 3 de 4 usan `mm`, Orden de pago usa `pt` (ignora
+- **Los generadores de `lib/server/pdf/` no comparten convenciones entre
+  sí** (auditado 2026-09-21; Cotización se rehízo después, ver capa 5 — lo
+  de abajo aplica a los otros 3): 3 de 4 usan `mm`, Orden de pago usa `pt` (ignora
   `PDF_CONFIG.page` los otros 3); `pdf-base-config.ts` define helpers
   (`drawPdfHeader`, `drawDivider`, `drawSectionHeading`) que **ningún**
   generador usa — cada uno reimplementa su propio header con números
   mágicos; `formatCurrencyPdf()` (base-config) y el `fmtMoney()` local de
   `reporte-cierre-pdf.ts` dan salidas ligeramente distintas. Más importante
-  para cualquier cambio futuro: **ninguno de los 4 repite header/footer/logo
-  si el contenido fuerza una segunda página** — `checkPageSpace()`/
+  para cualquier cambio futuro: **Orden de pago, Hoja de llamado y Reporte de
+  cierre no repiten header/footer/logo si el contenido fuerza una segunda
+  página** — `checkPageSpace()`/
   `addPage()` solo resetean `currentY`, la página 2 (si llega a existir)
   queda sin logo ni footer. No asumir soporte de multipágina real solo
   porque el código tiene `addPage()`.
