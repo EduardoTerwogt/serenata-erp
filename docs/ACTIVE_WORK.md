@@ -1,75 +1,78 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-23 (sesión 5)
+**Última actualización:** 2026-09-23 (sesión 5, cierre)
 
 ## Estado
 
-**`docs/PLAN.md` — Aprobado, en ejecución: "Actualización de formatos PDF vía
-Claude Design".** Bloques 1 (Cotización, PR #86) y 2 (Orden de pago, PR #88)
-cerrados. El "Editor de
-PDFs" se canceló y se eliminó por completo (PR #87, `bc371fc`, y tabla
-`pdf_plantillas` borrada en test y producción).
-Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
-`docs/decisions/015-pdfs-disenados-en-claude-design.md`.
+**`docs/PLAN.md` — Vacío.** La iniciativa "Actualización de formatos PDF vía
+Claude Design" cerró completa esta sesión: los 3 bloques en alcance
+(Cotización, Orden de pago, Hoja de llamado) están en producción. Historia:
+`docs/archive/actualizacion-formatos-pdf-claude-design.md`. Motivo del
+enfoque: `docs/decisions/015-pdfs-disenados-en-claude-design.md`. No hay
+ninguna iniciativa multi-sesión abierta ahora mismo.
 
 ## Completado en esta sesión (5)
 
-- **Decisión de producto:** en lugar de terminar el editor visual dentro de
-  la app, los PDFs se diseñan en Claude Design (design system Apple-style) y
-  el HTML se implementa directo en jsPDF. Documentado en la decisión 015.
+- **Decisión de producto:** los PDFs se diseñan en Claude Design (design
+  system Apple-style) y el HTML se implementa directo en jsPDF, en vez de
+  terminar el editor visual dentro de la app. Documentado en la decisión 015.
+- **Editor de PDFs cancelado y eliminado por completo** (PR
+  [#87](https://github.com/EduardoTerwogt/serenata-erp/pull/87), mergeado,
+  `bc371fc`): código (`app/editor-pdfs/`, `app/api/editor-pdfs/`,
+  `template-renderer`, `pdf-template-*`, `pdf-sample-data`,
+  `pdf-color-tokens`, repositorio, sección de permisos, entrada de sidebar)
+  y tabla `pdf_plantillas` (migración
+  `20260923_drop_pdf_plantillas_editor_pdfs.sql`, autorizada por el usuario,
+  aplicada en `serenata-erp-test` y en producción).
 - **Rediseño del PDF de Cotización** (PR
   [#86](https://github.com/EduardoTerwogt/serenata-erp/pull/86), mergeado,
-  `bcfaa08`): `lib/server/pdf/cotizacion-pdf.ts` reescrito sin autotable;
-  Inter embebida (`lib/server/pdf/fonts/inter.ts`, subset Latin, OFL);
-  banda de encabezado con isotipo, tabla con hairlines, banda de totales,
-  Notas y Generales justificados; paginación con encabezado compacto,
-  columnas repetidas, "cont." en grupos partidos y pie "Página N de M";
-  acento `#FE7B01`. Se quitaron los helpers de autotable que quedaron sin
-  uso.
-- **Eliminación del Editor de PDFs** (PR
-  [#87](https://github.com/EduardoTerwogt/serenata-erp/pull/87), mergeado,
-  `bc371fc`): `app/editor-pdfs/`, `app/api/editor-pdfs/`, sus tests,
-  `template-renderer`, `pdf-template-*`, `pdf-sample-data`,
-  `pdf-color-tokens`, `repositories/pdf-plantillas`, la sección de permisos
-  `editor-pdfs` (`lib/auth-callbacks.ts`, `lib/authz.ts`, `lib/api-auth.ts`,
-  `AdminUsuarios.tsx`), la entrada del sidebar y los íconos solo usados por
-  el editor (`components/ui/Icon.tsx`).
-- **Base de datos:** migración
-  `db/migrations/20260923_drop_pdf_plantillas_editor_pdfs.sql` (borra
-  `pdf_plantillas` y quita `'editor-pdfs'` de `usuarios.sections`),
-  autorizada por el usuario y **aplicada en `serenata-erp-test` y en
-  producción** después del merge. Verificado en ambas: la tabla no existe y
-  ningún usuario conserva la sección.
+  `bcfaa08`): dibujo manual sin autotable, Inter embebida
+  (`lib/server/pdf/fonts/inter.ts`, subset Latin, OFL), banda de encabezado
+  con isotipo, tabla con hairlines, banda de totales, Notas y Generales
+  justificados, paginación con encabezado compacto y pie "Página N de M",
+  acento `#FE7B01`.
 - **Rediseño del PDF de Orden de pago** (PR
   [#88](https://github.com/EduardoTerwogt/serenata-erp/pull/88), mergeado,
-  `9088e7e`): `lib/server/pdf/orden-pago-pdf.ts` reescrito (resumen en
-  encabezado, banda por proveedor con CLABE/banco/correo, evento con fecha
-  de entrega, totales por evento/proveedor/general, paginación con banda
-  "cont."); `fecha_entrega` agregado a `OrdenPagoPreviewResult`; helpers
-  extraídos a `lib/server/pdf/pdf-draw.ts` (Cotización verificada idéntica
-  pixel a pixel). CI verde y visto bueno del usuario.
-- **Documentación:** `docs/PLAN.md` nuevo (flujo + tracker de los 4 PDFs);
-  plan viejo archivado con banner de cancelado; decisión 015; `ROADMAP.md`
-  (Siguiente + Cerrado); `ARCHITECTURE.md` (capa 5 y gotcha de PDFs);
-  `.claude/rules/pdf.md`; `docs/PROMPTS.md` (prompt "Rediseñar un PDF en
-  Claude Design"); `.claude/rules/ui.md` (acento corregido a `#FE7B01`,
-  deuda arrastrada de la sesión 4).
+  `9088e7e`): resumen en encabezado, banda por proveedor con
+  CLABE/banco/correo, evento con fecha de entrega, totales por
+  evento/proveedor/general, paginación con banda "cont.". Se agregó
+  `fecha_entrega` a `OrdenPagoPreviewResult` (ya venía en la RPC). Los
+  helpers de dibujo se extrajeron de `cotizacion-pdf.ts` a
+  `lib/server/pdf/pdf-draw.ts` — Cotización se verificó idéntica pixel a
+  pixel tras la extracción.
+- **Rediseño del PDF de Hoja de llamado** (PR
+  [#89](https://github.com/EduardoTerwogt/serenata-erp/pull/89), mergeado,
+  `aca7184`): fecha/horarios/locación/punto de encuentro legibles de un
+  vistazo con "Por definir" cuando faltan; horarios convertidos a 12 h con
+  am/pm (`toTwelveHour`); notas generales en caja gris (corrige el texto
+  encimado del formato anterior); equipo técnico agrupado por responsable;
+  paginación con títulos "(cont.)" y encabezado de tabla repetido. Se agregó
+  `clampLines` a `pdf-draw.ts`.
+- **Reporte de cierre (bloque 4) diferido** por decisión del usuario: se
+  rediseña junto con la definición del módulo de Proyectos, de la que
+  depende su contenido. Movido a `docs/ROADMAP.md` → "Después".
+- **Documentación:** `docs/PLAN.md` recreado vacío; iniciativa archivada en
+  `docs/archive/actualizacion-formatos-pdf-claude-design.md`;
+  `docs/ROADMAP.md` (Siguiente + Cerrado); `ARCHITECTURE.md` (capa 5 y
+  gotcha de PDFs); `.claude/rules/pdf.md`; `docs/PROMPTS.md` (prompt
+  "Rediseñar un PDF en Claude Design"); `.claude/rules/ui.md` (acento
+  corregido a `#FE7B01`).
 
 ## Tests ejecutados y resultado real
 
-- PR #86: `tsc`, lint (0 errores, 8 warnings preexistentes), `npm test`
-  (1065 verdes), `npm run build` verde local; en CI `test`,
-  `smoke-and-critical`, `live`, `tracker-lint` y `fresh-db` verdes
-  (`fresh-db` falló una vez antes de correr nada por rate limit de GitHub al
-  bajar la CLI de Supabase; el re-run pasó).
-- Revisión visual: los 3 escenarios del diseño (corto, largo de 3 páginas,
-  casos límite) renderizados a PNG y aprobados por el usuario.
-- Eliminación del editor: `tsc` verde, lint 0 errores, `npm test` 968 verdes
-  (baja de 1065 por los tests del editor eliminados), `npm run build` verde;
-  en CI de PR #87 `test`, `smoke-and-critical`, `live`, `fresh-db` y
-  `tracker-lint` verdes.
-- Orden de pago: `tsc`, lint 0 errores, `npm test` 972 verdes, build verde;
-  CI de PR #88 todo verde; 3 escenarios del diseño renderizados a PNG.
+- Los 3 PR (#86, #88, #89): `tsc`, lint (0 errores, 8 warnings preexistentes
+  sin cambio), `npm test` en verde en cada uno (978 al cerrar), `npm run
+  build` verde. CI de los 3 PR: `test`, `smoke-and-critical`, `live`,
+  `fresh-db`, `tracker-lint` verdes.
+- Revisión visual: los 3 escenarios de diseño (corto, largo multipágina,
+  casos límite) de cada PDF renderizados a PNG y aprobados por el usuario
+  antes de cada merge.
+- **Flake confirmado en PR #89:** `smoke-and-critical` falló una vez en
+  `tests/e2e/smoke/portal-documentos.spec.ts` (locator ambiguo de Playwright,
+  `getByText('ine.jpg')` con dos coincidencias) — archivo no tocado por el
+  diff. Re-run pasó limpio; no se investiga más a fondo por ahora, pero si
+  se repite en otro PR conviene revisar ese test (afinar el locator a
+  `getByRole('link', { name: 'ine.jpg' })` en vez de texto genérico).
 
 ## Problemas encontrados que siguen abiertos
 
@@ -77,24 +80,23 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
   reporta RLS deshabilitado en `public.cliente_id_backfill_clasificacion`
   (crítico). No se tocó.
 - Desde una sesión en la nube no se puede leer un proyecto de Claude Design
-  por link (`/design-login` es interactivo). Solución: subir el `.zip`
-  exportado (así se hizo con Cotización).
+  por link (`/design-login` es interactivo). Solución usada las 3 veces:
+  subir el `.zip` exportado del proyecto.
 
 ## Deuda técnica
 
 - PDF de Cotización pesa ~780 KB, casi todo por los PNG de los logos (ya
-  pasaba antes del rediseño).
-- Arrastrada: Presence sin verificar en Preview, `SUPABASE_JWT_SECRET`
-  distinto entre Production/Preview en Vercel, `AUTH_SECRET`/`NEXTAUTH_SECRET`
-  coexistiendo en producción, `tracker-lint` de `test.yml` sin generalizar
-  fuera de EF-3, verificación completa de Google OAuth pendiente, ramas
-  remotas ya mergeadas sin borrar por policy del proxy de egress.
+  pasaba antes del rediseño); no se optimizó, no bloqueaba nada.
+- Arrastrada, sin cambios esta sesión: Presence sin verificar en Preview,
+  `SUPABASE_JWT_SECRET` distinto entre Production/Preview en Vercel,
+  `AUTH_SECRET`/`NEXTAUTH_SECRET` coexistiendo en producción, `tracker-lint`
+  de `test.yml` sin generalizar fuera de EF-3, verificación completa de
+  Google OAuth pendiente, ramas remotas ya mergeadas sin borrar por policy
+  del proxy de egress.
 
 ## Siguiente paso
 
-1. **Hoja de llamado (bloque 3) en PR** — `lib/server/pdf/hoja-llamado-pdf.ts`
-   reescrito según el diseño. Pendiente: visto bueno del usuario y merge con
-   CI verde.
-2. Reporte de cierre (bloque 4): **diferido** hasta definir el módulo de
-   Proyectos (decisión del usuario). Al mergear el bloque 3 se cierra la
-   iniciativa y `docs/PLAN.md` se archiva.
+No hay iniciativa multi-sesión activa. Para retomar PDFs: rediseñar Reporte
+de cierre cuando se defina el módulo de Proyectos (`docs/ROADMAP.md` →
+"Después"). Para cualquier otro trabajo, priorizar en Chat con el estado
+real del sistema a la vista (`docs/ROADMAP.md` → "Siguiente"/"Después").

@@ -78,15 +78,9 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-**Actualización de formatos PDF vía Claude Design (aprobado 2026-09-23).**
-Cada uno de los 4 PDFs (cotización, orden de pago, hoja de llamado, reporte
-de cierre) se rediseña una vez en Claude Design sobre el design system de
-Serenata y el HTML se implementa directo en su generador jsPDF. Cotización
-ya cerrada (PR [#86](https://github.com/EduardoTerwogt/serenata-erp/pull/86));
-quedan los otros 3. Flujo y tracker: `docs/PLAN.md`. Motivo:
-`docs/decisions/015-pdfs-disenados-en-claude-design.md`.
-
-Reemplaza a la iniciativa "Editor de PDFs" (cancelada, ver "Cerrado").
+**Sin definir a propósito.** Se prioriza en Chat, con el estado real del
+sistema a la vista. La última iniciativa ("Actualización de formatos PDF vía
+Claude Design") cerró completa el 2026-09-23 — ver "Cerrado".
 
 ---
 
@@ -128,11 +122,12 @@ ni tiene alcance de iniciativa definido.
   externo a la app; refinar módulo de Proyectos; limpieza de datos de
   prueba (app + BD).
 - **Rediseño del PDF de reporte de cierre** — diferido el 2026-09-23 de la
-  iniciativa "Actualización de formatos PDF vía Claude Design": se hace junto
-  con la definición del módulo de Proyectos, porque su contenido depende de
-  ella. Mismo flujo que los otros 3 PDFs (Claude Design → `.zip` → Claude
-  Code, prompt en `docs/PROMPTS.md`); `lib/server/pdf/reporte-cierre-pdf.ts`
-  sigue con el formato anterior mientras tanto.
+  iniciativa "Actualización de formatos PDF vía Claude Design" (cerrada, ver
+  "Cerrado"): se hace junto con la definición del módulo de Proyectos, porque
+  su contenido depende de ella. Mismo flujo que los otros 3 PDFs (Claude
+  Design → `.zip` → Claude Code, prompt en `docs/PROMPTS.md`);
+  `lib/server/pdf/reporte-cierre-pdf.ts` sigue con el formato anterior
+  mientras tanto.
 
 ---
 
@@ -160,6 +155,21 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Actualización de formatos PDF vía Claude Design (2026-09-23).** Cada PDF
+  se diseña una vez en Claude Design sobre el design system de Serenata y el
+  HTML se implementa directo en su generador jsPDF — reemplaza al "Editor de
+  PDFs" cancelado (ver abajo). Bloques 1 Cotización
+  (PR [#86](https://github.com/EduardoTerwogt/serenata-erp/pull/86)), 2 Orden
+  de pago (PR [#88](https://github.com/EduardoTerwogt/serenata-erp/pull/88))
+  y 3 Hoja de llamado
+  (PR [#89](https://github.com/EduardoTerwogt/serenata-erp/pull/89))
+  cerrados y en producción. El bloque 4 (Reporte de cierre) se difirió a
+  "Después" hasta definir el módulo de Proyectos. Se extrajeron helpers de
+  dibujo compartidos a `lib/server/pdf/pdf-draw.ts` e Inter embebida a
+  `lib/server/pdf/fonts/inter.ts`. Historia completa:
+  [`docs/archive/actualizacion-formatos-pdf-claude-design.md`](archive/actualizacion-formatos-pdf-claude-design.md).
+  Motivo del cambio de enfoque:
+  [`docs/decisions/015-pdfs-disenados-en-claude-design.md`](decisions/015-pdfs-disenados-en-claude-design.md).
 - **Editor de PDFs — cancelado y eliminado (2026-09-23).** Editor visual de
   plantillas dentro de la app (PR [#81](https://github.com/EduardoTerwogt/serenata-erp/pull/81),
   [#83](https://github.com/EduardoTerwogt/serenata-erp/pull/83); bloques 0-7
