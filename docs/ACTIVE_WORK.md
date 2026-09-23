@@ -6,7 +6,8 @@
 
 **`docs/PLAN.md` — Aprobado, en ejecución: "Actualización de formatos PDF vía
 Claude Design".** Bloque 1 (Cotización) cerrado en PR #86. El "Editor de
-PDFs" se canceló y su código se eliminó (PR de esta sesión, ver abajo).
+PDFs" se canceló y se eliminó por completo (PR #87, `bc371fc`, y tabla
+`pdf_plantillas` borrada en test y producción).
 Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
 `docs/decisions/015-pdfs-disenados-en-claude-design.md`.
 
@@ -24,13 +25,20 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
   columnas repetidas, "cont." en grupos partidos y pie "Página N de M";
   acento `#FE7B01`. Se quitaron los helpers de autotable que quedaron sin
   uso.
-- **Eliminación del Editor de PDFs** (rama `claude/laughing-maxwell-qxscit`,
-  PR nuevo): `app/editor-pdfs/`, `app/api/editor-pdfs/`, sus tests,
+- **Eliminación del Editor de PDFs** (PR
+  [#87](https://github.com/EduardoTerwogt/serenata-erp/pull/87), mergeado,
+  `bc371fc`): `app/editor-pdfs/`, `app/api/editor-pdfs/`, sus tests,
   `template-renderer`, `pdf-template-*`, `pdf-sample-data`,
   `pdf-color-tokens`, `repositories/pdf-plantillas`, la sección de permisos
   `editor-pdfs` (`lib/auth-callbacks.ts`, `lib/authz.ts`, `lib/api-auth.ts`,
   `AdminUsuarios.tsx`), la entrada del sidebar y los íconos solo usados por
   el editor (`components/ui/Icon.tsx`).
+- **Base de datos:** migración
+  `db/migrations/20260923_drop_pdf_plantillas_editor_pdfs.sql` (borra
+  `pdf_plantillas` y quita `'editor-pdfs'` de `usuarios.sections`),
+  autorizada por el usuario y **aplicada en `serenata-erp-test` y en
+  producción** después del merge. Verificado en ambas: la tabla no existe y
+  ningún usuario conserva la sección.
 - **Documentación:** `docs/PLAN.md` nuevo (flujo + tracker de los 4 PDFs);
   plan viejo archivado con banner de cancelado; decisión 015; `ROADMAP.md`
   (Siguiente + Cerrado); `ARCHITECTURE.md` (capa 5 y gotcha de PDFs);
@@ -48,16 +56,12 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
 - Revisión visual: los 3 escenarios del diseño (corto, largo de 3 páginas,
   casos límite) renderizados a PNG y aprobados por el usuario.
 - Eliminación del editor: `tsc` verde, lint 0 errores, `npm test` 968 verdes
-  (baja de 1065 por los tests del editor eliminados), `npm run build` verde.
+  (baja de 1065 por los tests del editor eliminados), `npm run build` verde;
+  en CI de PR #87 `test`, `smoke-and-critical`, `live`, `fresh-db` y
+  `tracker-lint` verdes.
 
 ## Problemas encontrados que siguen abiertos
 
-- **Borrado de `pdf_plantillas` (autorizado por el usuario):** migración
-  `db/migrations/20260923_drop_pdf_plantillas_editor_pdfs.sql` (borra la
-  tabla y quita `'editor-pdfs'` de `usuarios.sections`). **Aplicada en
-  `serenata-erp-test`** (verificado: tabla inexistente, 0 usuarios con la
-  sección). **Producción: se aplica justo después de mergear el PR #87** —
-  antes no, porque el código desplegado en `main` todavía lee la tabla.
 - **Fuera de alcance, solo nota:** el advisor de Supabase (`supabase-test`)
   reporta RLS deshabilitado en `public.cliente_id_backfill_clasificacion`
   (crítico). No se tocó.
@@ -79,9 +83,6 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
 
 ## Siguiente paso
 
-1. Mergear el PR de eliminación del editor cuando CI esté en verde.
-2. Aplicar la migración de `pdf_plantillas` en producción después del merge
-   (arriba).
-3. Elegir el siguiente PDF (orden de pago, hoja de llamado o reporte de
+1. Elegir el siguiente PDF (orden de pago, hoja de llamado o reporte de
    cierre), diseñarlo en Claude Design con el prompt de `docs/PROMPTS.md` y
    subir el `.zip` a Claude Code.
