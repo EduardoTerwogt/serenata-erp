@@ -95,4 +95,6 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
 1. **Hoja de llamado (bloque 3) en PR** — `lib/server/pdf/hoja-llamado-pdf.ts`
    reescrito según el diseño. Pendiente: visto bueno del usuario y merge con
    CI verde.
-2. Después: reporte de cierre (bloque 4), mismo flujo.
+2. Reporte de cierre (bloque 4): **diferido** hasta definir el módulo de
+   Proyectos (decisión del usuario). Al mergear el bloque 3 se cierra la
+   iniciativa y `docs/PLAN.md` se archiva.

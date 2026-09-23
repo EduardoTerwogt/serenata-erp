@@ -69,10 +69,10 @@ implementa directo en su generador jsPDF.
 | 1 | Cotización | **Cerrado** — PR [#86](https://github.com/EduardoTerwogt/serenata-erp/pull/86), `bcfaa08` |
 | 2 | Orden de pago | **Cerrado** — PR [#88](https://github.com/EduardoTerwogt/serenata-erp/pull/88), `9088e7e`. Agrega `fecha_entrega` al evento del preview (`lib/server/ordenes-pago/build.ts`, ya venía en la RPC) y extrae `pdf-draw.ts` |
 | 3 | Hoja de llamado | **En curso** — implementado en rama `claude/laughing-maxwell-qxscit`, PR abierto. Horarios convertidos a 12 h con am/pm (`toTwelveHour`), equipo técnico agrupado por responsable, cliente fuera del encabezado (decisión del diseño). Agrega `clampLines` a `pdf-draw.ts` |
-| 4 | Reporte de cierre | Pendiente — tiene su propio `fmtMoney()` distinto de `formatCurrencyPdf()` |
+| 4 | Reporte de cierre | **Diferido** (decisión del usuario, 2026-09-23) — se rediseña cuando se defina el módulo de Proyectos, del que depende su contenido. Queda en `docs/ROADMAP.md` → "Después". Nota técnica: tiene su propio `fmtMoney()` distinto de `formatCurrencyPdf()` |
 
-El orden de 2-4 lo decide el usuario. Cada bloque es independiente (rama +
-PR propios).
+Cada bloque es independiente (rama + PR propios). Con el bloque 4 diferido,
+la iniciativa se cierra al mergear el bloque 3.
 
 ## Riesgos
 
