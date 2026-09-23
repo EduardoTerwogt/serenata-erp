@@ -6,8 +6,9 @@
 
 **`docs/PLAN.md` — Vacío.** No hay iniciativa multi-sesión abierta. Esta
 sesión atendió la deuda técnica que seguía viva en `main` (`9b3b303`) con un
-plan de una sola sesión (auditado 2 rondas por el usuario): un PR en
-borrador sobre `claude/clever-galileo-2w49pi` + pasos manuales fuera del PR.
+plan de una sola sesión (auditado 2 rondas por el usuario). **PR
+[#90](https://github.com/EduardoTerwogt/serenata-erp/pull/90) mergeado a
+`main` (`55c2f73`).** Quedan los pasos manuales de abajo.
 
 ## Fase 0 — auditoría previa (hallazgos)
 
@@ -89,17 +90,20 @@ borrador sobre `claude/clever-galileo-2w49pi` + pasos manuales fuera del PR.
 - Local: `test:e2e:smoke` 26/26, `test:e2e:critical` 80/80, `npm run build`
   verde (con las mismas env de CI; sin ellas falla por `supabaseUrl`, igual
   que en `main`).
-- CI del PR #90: `test` verde. `fresh-db` rojo por infraestructura (ghcr.io
-  `toomanyrequests` al bajar imágenes de Supabase, antes de aplicar
-  migraciones), reproducido en el re-run; documentado en el PR. `live` y
-  `smoke-and-critical`: ver el PR.
+- CI del PR #90 en el head `83e42f5`: `test`, `smoke-and-critical`,
+  **`live` (incluye el test causal de `bulk`: el evento sí hace converger al
+  otro colaborador)** y `fresh-db` en verde. `fresh-db` falló 3 veces antes
+  por infraestructura (ghcr.io `toomanyrequests` al bajar imágenes de
+  Supabase, antes de aplicar migraciones) y pasó al reintentar ~3 h después.
+  Si se repite, no es el código: reintentar cuando ghcr libere el límite.
 
 ## Pendiente manual (fuera del PR)
 
-- **M1 — `NEXTAUTH_SECRET` en Vercel:** (a) confirmar que `AUTH_SECRET`
-  existe en Production y Preview; (b) merge del PR; (c) login/logout de
-  staff y Portal en Preview y prod; (d) borrar `NEXTAUTH_SECRET` en Vercel;
-  (e) repetir (c). No se espera invalidación de sesiones (Fase 0 punto 5).
+- **M1 — `NEXTAUTH_SECRET` en Vercel:** (a) ✅ `AUTH_SECRET` confirmado por
+  el usuario en todos los entornos; (b) ✅ merge del PR #90; (c) login/logout
+  de staff y Portal en Preview y prod; (d) borrar `NEXTAUTH_SECRET` en
+  Vercel; (e) repetir (c). No se espera invalidación de sesiones (Fase 0
+  punto 5).
 - **M2 — auditoría de entornos:** confirmar que Production usa Supabase prod
   con su `SUPABASE_JWT_SECRET` y Preview usa `serenata-erp-test` con el suyo.
 - **V1 — Presence en Preview real** (2 usuarios, 2 navegadores, ida y vuelta).
@@ -117,6 +121,5 @@ borrador sobre `claude/clever-galileo-2w49pi` + pasos manuales fuera del PR.
 
 ## Siguiente paso
 
-Cerrar el PR de deuda técnica (CI verde, incluido `live` con el test causal
-de `bulk`) y luego los pasos manuales M1/M2/V1/V2. Después, priorizar en
+Pasos manuales M1 (c–e), M2, V1 y V2 (PR #90 ya en `main`). Después, priorizar en
 Chat (`docs/ROADMAP.md` → "Siguiente"/"Después").
