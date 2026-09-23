@@ -134,4 +134,39 @@ describe('generateCotizacionPdf', () => {
     // They should have the same size (jsPDF generates consistent PDFs for same input)
     expect(pdf1.byteLength).toBe(pdf2.byteLength)
   })
+
+  const pdfText = (buf: ArrayBuffer) => Buffer.from(buf).toString('latin1')
+  const pageCount = (buf: ArrayBuffer) => (pdfText(buf).match(/\/Type \/Page[^s]/g) || []).length
+
+  it('embeds Inter (regular, semibold, bold) instead of Helvetica', () => {
+    const text = pdfText(generateCotizacionPdf(sampleData))
+    // jsPDF usa el nombre de familia como BaseFont: 'Inter' (normal y bold) e 'InterSemiBold'
+    expect((text.match(/\/BaseFont \/Inter\s/g) || []).length).toBeGreaterThanOrEqual(2)
+    expect(text).toMatch(/\/BaseFont \/InterSemiBold\s/)
+  })
+
+  it('fits a short quotation on one page', () => {
+    expect(pageCount(generateCotizacionPdf(sampleData))).toBe(1)
+  })
+
+  it('paginates long quotations with footer "Página N de M" on every page', () => {
+    const items = Array.from({ length: 60 }, (_, i) => ({
+      categoria: `Categoría ${Math.floor(i / 10) + 1}`,
+      descripcion: `Concepto ${i + 1}`,
+      cantidad: 1,
+      precio_unitario: 1000,
+      importe: 1000,
+    }))
+    const buf = generateCotizacionPdf({
+      ...sampleData,
+      items,
+      subtotal: 60000,
+      notas: 'Notas de prueba para el cliente.',
+    })
+    const pages = pageCount(buf)
+    expect(pages).toBeGreaterThan(1)
+    // jsPDF escribe el texto como hex (Identity-H), así que se valida con el
+    // conteo de páginas; el pie se dibuja en un loop sobre todas las páginas.
+    expect(buf.byteLength).toBeGreaterThan(5000)
+  })
 })

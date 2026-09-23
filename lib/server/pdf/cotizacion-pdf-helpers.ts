@@ -1,20 +1,12 @@
 import fs from 'fs'
 import path from 'path'
-import type { RowInput } from 'jspdf-autotable'
-import { formatCurrencyPdf } from '@/lib/server/pdf/pdf-base-config'
-import { formatDateDisplay } from '@/lib/format-date'
-import { CotizacionPDFData, TotalsRow } from '@/lib/server/pdf/cotizacion-pdf-types'
+import { CotizacionPDFData } from '@/lib/server/pdf/cotizacion-pdf-types'
 
 const ISO_LOGO_PATH = path.join(process.cwd(), 'public', 'logo iso.png')
 const SERENATA_LOGO_PATH = path.join(process.cwd(), 'public', 'serenata naranja.png')
 
 export const ISO_RATIO = 447 / 448
 export const SERENATA_RATIO = 441 / 62
-
-const ORANGE: [number, number, number] = [249, 115, 22]
-const WHITE: [number, number, number] = [255, 255, 255]
-const GRAY: [number, number, number] = [187, 187, 187]
-const YELLOW: [number, number, number] = [245, 208, 66]
 
 export function loadImageAsBase64(filePath: string): string | null {
   try {
@@ -39,125 +31,10 @@ export function getSerenataLogoBase64() {
   return loadImageAsBase64(SERENATA_LOGO_PATH)
 }
 
-export function buildHeaderBody(data: CotizacionPDFData) {
-  return [
-    ['Cliente:', data.cliente],
-    ['Proyecto:', data.proyecto],
-    ['Fecha de entrega:', formatDateDisplay(data.fecha_entrega)],
-    ['Locación:', data.locacion || '—'],
-    ['Fecha de cotización:', formatDateDisplay(data.fecha_cotizacion)],
-    ['# Cotización', data.id],
-  ]
-}
-
-export function buildItemsBody(data: CotizacionPDFData) {
-  const categories: string[] = []
-  data.items.forEach(item => {
-    if (!categories.includes(item.categoria)) categories.push(item.categoria)
-  })
-
-  const itemsBody: RowInput[] = []
-  categories.forEach((cat, catIdx) => {
-    const catItems = data.items.filter(i => i.categoria === cat)
-    const catTotal = catItems.reduce((s, i) => s + (i.importe || 0), 0)
-    const isLastCat = catIdx === categories.length - 1
-
-    catItems.forEach((item, idx) => {
-      const noPrice = !item.precio_unitario || !item.cantidad
-      const precioCell = noPrice ? '$ - ,00' : formatCurrencyPdf(item.precio_unitario)
-      const importeCell = noPrice ? '$ - ,00' : formatCurrencyPdf(item.importe)
-
-      itemsBody.push([
-        idx === 0 ? { content: cat, styles: { fontStyle: 'bolditalic' } } : '',
-        item.descripcion,
-        item.cantidad || '',
-        precioCell,
-        importeCell,
-        idx === 0 ? formatCurrencyPdf(catTotal) : '',
-      ])
-    })
-
-    itemsBody.push([
-      {
-        content: '',
-        colSpan: 6,
-        styles: {
-          minCellHeight: isLastCat ? 11.3 : 5.6,
-          fillColor: [255, 255, 255] as [number, number, number],
-          lineWidth: 0,
-        },
-      },
-    ])
-  })
-
-  return itemsBody
-}
-
 export function calculateDiscount(data: CotizacionPDFData) {
   return data.descuento_tipo === 'porcentaje'
     ? data.general * (data.descuento_valor / 100)
     : data.descuento_valor
-}
-
-export function buildTotalsRows(data: CotizacionPDFData, descuento: number): TotalsRow[] {
-  return [
-    {
-      label: 'Subtotal',
-      value: formatCurrencyPdf(data.subtotal),
-      labelColor: GRAY,
-      valueColor: WHITE,
-      bold: false,
-      fontSize: 9.5,
-    },
-    {
-      label: 'Fee de agencia',
-      value: formatCurrencyPdf(data.fee_agencia),
-      labelColor: GRAY,
-      valueColor: WHITE,
-      bold: false,
-      fontSize: 9.5,
-    },
-    {
-      label: 'General',
-      value: formatCurrencyPdf(data.general),
-      labelColor: ORANGE,
-      valueColor: ORANGE,
-      bold: true,
-      fontSize: 10.5,
-    },
-    ...(descuento > 0
-      ? [
-          {
-            label: 'Descuento',
-            value: `-${formatCurrencyPdf(descuento)}`,
-            labelColor: YELLOW,
-            valueColor: YELLOW,
-            bold: false,
-            fontSize: 9.5,
-          },
-        ]
-      : []),
-    ...(data.iva_activo
-      ? [
-          {
-            label: 'IVA (16%)',
-            value: formatCurrencyPdf(data.iva),
-            labelColor: GRAY,
-            valueColor: WHITE,
-            bold: false,
-            fontSize: 9.5,
-          },
-        ]
-      : []),
-    {
-      label: 'TOTAL',
-      value: formatCurrencyPdf(data.total),
-      labelColor: WHITE,
-      valueColor: WHITE,
-      bold: true,
-      fontSize: 10.5,
-    },
-  ]
 }
 
 export function getCostosText() {
