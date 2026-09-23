@@ -39,6 +39,19 @@ const PRODUCTO_AUTOFILL = {
   x_pagar_sugerido: 20000,
 }
 
+// Mismo valor que RECONCILIACION_MS en app/cotizaciones/[id]/page.tsx: el poll de
+// red de seguridad que relee la cotización aunque no llegue ningún evento.
+const RECONCILIACION_MS = 20_000
+
+interface FrameRecibido { at: number; texto: string }
+
+/** `item_confirmed` de un bulk: sin item_id, con `operation: 'bulk'`. El texto se
+ * busca por substring porque con el serializer 2.0.0 de realtime-js un broadcast
+ * puede llegar como frame binario con el payload JSON embebido. */
+function esBulkConfirmado(frame: FrameRecibido) {
+  return frame.texto.includes('item_confirmed') && /"operation"\s*:\s*"bulk"/.test(frame.texto)
+}
+
 function filas(page: Page) {
   return page.locator('table tbody tr')
 }
@@ -111,6 +124,11 @@ test.describe('live: colaboración real entre dos usuarios', () => {
   let pageB: Page
   let cotizacionId = ''
   let origenId = ''
+  // Lo que B recibe por el socket de Realtime y cuándo relee la cotización
+  // (GET /api/cotizaciones/:id): permite distinguir "B convergió por el evento"
+  // de "B convergió porque el poll de reconciliación tapó un evento perdido".
+  const framesB: FrameRecibido[] = []
+  const lecturasB: number[] = []
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(180_000)
@@ -152,6 +170,14 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     contextB = await browser.newContext()
     pageB = await contextB.newPage()
     vigilarErrores(pageB, 'B')
+    pageB.on('websocket', (ws) => {
+      ws.on('framereceived', ({ payload }) => {
+        framesB.push({ at: Date.now(), texto: typeof payload === 'string' ? payload : payload.toString('latin1') })
+      })
+    })
+    pageB.on('request', (req) => {
+      if (req.method() === 'GET' && new URL(req.url()).pathname === `/api/cotizaciones/${cotizacionId}`) lecturasB.push(Date.now())
+    })
     await login(pageB, '/cotizaciones', { email: USUARIO_B.email, password: USUARIO_B.password })
 
     await pageA.goto(`/cotizaciones/${cotizacionId}`)
@@ -306,10 +332,30 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     await pageA.getByPlaceholder('Buscar por folio, cliente o proyecto...').fill(origenId)
     await pageA.getByRole('button').filter({ hasText: origenId }).first().click()
     await pageA.getByText(/Seleccionar todo \(\d+\)/).click()
+
+    // Causalidad del evento `bulk` (antes se descartaba en el listener y B solo
+    // convergía por el poll de 20s, que tapaba el bug). Se sincroniza con un
+    // latido del poll de B y se exige que B converja ANTES del siguiente: si el
+    // broadcast no llega o se descarta, esto falla aunque después el poll deje
+    // el estado bien.
+    const lecturasPrevias = lecturasB.length
+    await expect
+      .poll(() => lecturasB.length, { timeout: RECONCILIACION_MS + 10_000, message: 'B nunca hizo su lectura periódica de la cotización' })
+      .toBeGreaterThan(lecturasPrevias)
+    const siguienteLatido = lecturasB[lecturasB.length - 1] + RECONCILIACION_MS
+    const framesPrevios = framesB.length
+
     await pageA.getByRole('button', { name: /Traer a cotización actual/ }).click()
 
+    await expect(filas(pageB)).toHaveCount(antes + 2, { timeout: Math.max(1, siguienteLatido - 1_000 - Date.now()) })
+    const evento = framesB.slice(framesPrevios).find(esBulkConfirmado)
+    expect(evento, 'B no recibió item_confirmed con operation "bulk" por el canal').toBeDefined()
+    expect(
+      lecturasB.some((t) => t >= evento!.at && t <= evento!.at + 3_000),
+      'B recibió el evento bulk pero no releyó la cotización a raíz de él'
+    ).toBe(true)
+
     await expect(filas(pageA)).toHaveCount(antes + 2, { timeout: 60_000 })
-    await expect(filas(pageB)).toHaveCount(antes + 2, { timeout: 60_000 })
 
     const cotizacion = await leerCotizacionDelServidor(cotizacionId)
     const descripciones = cotizacion.items.map((item) => item.descripcion)
