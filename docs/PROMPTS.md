@@ -110,6 +110,54 @@ Usa un subagente para [buscar/clasificar X en todo el repo] y tráeme solo el
 resumen: cuántos usos, cuáles requieren corrección, cuáles son razonables.
 ```
 
+## Rediseñar un PDF en Claude Design
+
+Flujo completo y motivo: `docs/PLAN.md` y
+`docs/decisions/015-pdfs-disenados-en-claude-design.md`. **Paso 1**, en
+Claude Design con el design system de Serenata activo y un PDF real del
+formato actual adjunto (ajustar las secciones del documento):
+
+```
+Rediseña el PDF de [DOCUMENTO] de Serenata House. Adjunto el PDF actual.
+
+## Objetivo
+Conservar la estructura, el orden de secciones y el carácter del formato
+actual; hacerlo más estilizado y alineado con el design system de Serenata y
+con el PDF de Cotización ya rediseñado (tinta #1D1D1F, acento #FE7B01,
+hairlines, bandas oscuras redondeadas). No es un rediseño desde cero.
+
+## Restricción técnica (obligatoria)
+Se implementa con jsPDF (coordenadas fijas), NO con HTML→PDF:
+- A4 vertical 210 × 297 mm. Márgenes y posiciones en mm.
+- Inter en máximo 3 pesos (Regular, SemiBold, Bold). Tamaños en pt.
+- Solo colores planos en hex. Sin gradientes, sombras, blur ni transparencias.
+- Radios simples en mm. Sin íconos de CDN. Imágenes: isotipo y wordmark naranja.
+- Grosor y color de cada línea.
+
+## Contenido y orden (conservar)
+[Listar secciones, campos y textos legales EXACTOS del PDF actual.]
+
+## Estados (cada uno en su propia página A4)
+A. Caso corto (1 página). B. Caso largo multipágina: cómo continúa la tabla,
+encabezado/pie de página, qué pasa si el bloque final no cabe. C. Casos
+límite (textos largos, campos vacíos). Datos realistas de productora en CDMX.
+
+## Entregables
+1. HTML con cada página a 210×297 mm reales (CSS en mm).
+2. Tabla de especificación: márgenes, anchos y altos en mm; tamaño/peso/color
+   de cada estilo de texto; paleta hex con uso; líneas; paddings; reglas de
+   salto de página.
+3. Lista corta de qué cambió respecto al formato actual.
+```
+
+**Paso 2**, en Claude Code: exportar el proyecto de Claude Design como
+`.zip`, subirlo al chat y pedir:
+
+```
+Implementa el formato de [DOCUMENTO] del zip adjunto en su generador de
+lib/server/pdf/ siguiendo docs/PLAN.md. Si tienes dudas, pregúntame.
+```
+
 ## Cerrar sesión
 
 ```

@@ -9,7 +9,7 @@ import { logStructured, newRequestId } from '@/lib/server/observability/log'
 const ROUTE = 'requireAuthenticated'
 
 const E2E_BYPASS_COOKIE = 'e2e-bypass'
-const ALL_SECTIONS: AppSection[] = ['admin', 'dashboard', 'cotizaciones', 'proyectos', 'cuentas', 'responsables', 'planeacion', 'editor-pdfs']
+const ALL_SECTIONS: AppSection[] = ['admin', 'dashboard', 'cotizaciones', 'proyectos', 'cuentas', 'responsables', 'planeacion']
 
 async function shouldBypassForE2E() {
   if (process.env.PLAYWRIGHT_E2E_BYPASS !== 'true') return false

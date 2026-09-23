@@ -9,7 +9,7 @@ import { normalizeUserSections } from '@/lib/authz'
  * carga `next/server` de una forma que Vitest no resuelve bajo Next 16.
  * Mismo comportamiento que cuando vivían inline dentro de `callbacks`.
  */
-export type AppSection = 'admin' | 'dashboard' | 'cotizaciones' | 'proyectos' | 'cuentas' | 'responsables' | 'planeacion' | 'editor-pdfs'
+export type AppSection = 'admin' | 'dashboard' | 'cotizaciones' | 'proyectos' | 'cuentas' | 'responsables' | 'planeacion'
 
 export function jwtCallback({ token, user }: { token: JWT; user?: User }): JWT {
   if (user) {
