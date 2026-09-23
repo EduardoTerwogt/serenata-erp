@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-21 (Sueltos post-PR #76 cerrado parcial — 3/4 bloques; Editor de PDFs abre en `docs/PLAN.md`)
+**Última actualización:** 2026-09-23 (Editor de PDFs cancelado y eliminado; abre "Actualización de formatos PDF vía Claude Design" en `docs/PLAN.md`, Cotización ya cerrada)
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -78,18 +78,15 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-**Editor de PDFs (borrador 2026-09-21).** Módulo nuevo del sidebar —
-catálogo de los PDFs que genera Serenata (cotización, orden de pago, hoja
-de llamado, reporte de cierre, + los que se agreguen a futuro) con un
-editor visual por plantilla: tablas personalizables, posicionamiento libre
-de elementos, texto (negrita/tamaño/alineación/espaciado) y color acotado a
-la paleta del design system (`--sn-*` de `app/globals.css`). Alcance, mockup
-validado con el usuario y opciones de arquitectura del motor de plantillas:
-`docs/PLAN.md`.
+**Actualización de formatos PDF vía Claude Design (aprobado 2026-09-23).**
+Cada uno de los 4 PDFs (cotización, orden de pago, hoja de llamado, reporte
+de cierre) se rediseña una vez en Claude Design sobre el design system de
+Serenata y el HTML se implementa directo en su generador jsPDF. Cotización
+ya cerrada (PR [#86](https://github.com/EduardoTerwogt/serenata-erp/pull/86));
+quedan los otros 3. Flujo y tracker: `docs/PLAN.md`. Motivo:
+`docs/decisions/015-pdfs-disenados-en-claude-design.md`.
 
-Reemplaza en este slot a la iniciativa "Sueltos post-PR #76" (bloques 1-3
-cerrados, bloque 4 diferido — ver "Después" abajo y
-[`docs/archive/sueltos-portal-utilidad-cliente-id-fk.md`](archive/sueltos-portal-utilidad-cliente-id-fk.md)).
+Reemplaza a la iniciativa "Editor de PDFs" (cancelada, ver "Cerrado").
 
 ---
 
@@ -157,6 +154,17 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Editor de PDFs — cancelado y eliminado (2026-09-23).** Editor visual de
+  plantillas dentro de la app (PR [#81](https://github.com/EduardoTerwogt/serenata-erp/pull/81),
+  [#83](https://github.com/EduardoTerwogt/serenata-erp/pull/83); bloques 0-7
+  parcial). Una auditoría encontró que ningún PDF de producción llegó a usar
+  el motor de plantillas, y el usuario solo necesitaba definir cada diseño
+  una vez. Se eliminó todo el código (ruta `/editor-pdfs`, API, renderer,
+  schema, repositorio, sección de permisos `editor-pdfs`); la tabla
+  `pdf_plantillas` queda pendiente de la confirmación del usuario para
+  borrarla (ver `docs/ACTIVE_WORK.md`). Lo sustituye el flujo Claude Design →
+  código (`docs/decisions/015-pdfs-disenados-en-claude-design.md`). Historia:
+  [`docs/archive/editor-pdfs-cancelado.md`](archive/editor-pdfs-cancelado.md).
 - **Sueltos post-PR #76 — Portal (simulador de factura), utilidad de
   proyecto y `cliente_id` FK (cerrado parcial, 2026-09-21).** 3 de los 4
   bloques agrupados el 2026-09-19: simulador de factura del Portal (PR

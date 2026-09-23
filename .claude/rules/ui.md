@@ -7,7 +7,7 @@ paths:
 
 - Usar los tokens de `app/globals.css`: `bg-app`, `bg-surface`, `bg-row`,
   `text-content`, `text-body`, `border-hairline`, `rounded-panel`, `sn-label`,
-  acento `#FF5A1A`.
+  acento `--sn-orange` (`#FE7B01`).
 - **No usar `gray-*`, `#f97316` ni el azul secundario** — son del estilo anterior.
 - La migración de Fase 5.7 (login, `AdminSheets`, primitivos de `components/ui/*`,
   `ResponsiveTableCard`, `Skeleton*`) ya está aplicada — verificado 2026-09-11. Ver
