@@ -14,7 +14,9 @@ SUPABASE_SERVICE_ROLE_KEY=
 # Realtime -- ver db/migrations/20260909_realtime_broadcast_authorization.sql.
 SUPABASE_JWT_SECRET=
 
-# Auth (NextAuth v5)
+# Auth (NextAuth v5). AUTH_SECRET es la única variable canónica: firma la
+# sesión de staff (NextAuth + lib/session-token.ts) y la del Portal
+# (lib/portal-auth.ts). NEXTAUTH_SECRET ya no se lee -- no configurarla.
 AUTH_SECRET=
 AUTH_TRUST_HOST=true
 NEXTAUTH_URL=

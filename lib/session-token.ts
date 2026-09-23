@@ -11,10 +11,13 @@ export type SessionTokenClaims = {
   exp?: number
 }
 
+// AUTH_SECRET es la única variable canónica (igual que lib/portal-auth.ts):
+// sin fallback a NEXTAUTH_SECRET, para que staff y Portal nunca firmen o
+// verifiquen con secretos distintos sin que nadie lo note.
 function sessionSecret() {
-  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET
+  const secret = process.env.AUTH_SECRET
   if (!secret) {
-    throw new Error('[session-token] Falta AUTH_SECRET/NEXTAUTH_SECRET en el entorno')
+    throw new Error('[session-token] Falta AUTH_SECRET en el entorno')
   }
   return secret
 }
