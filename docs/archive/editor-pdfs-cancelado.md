@@ -1,7 +1,7 @@
 > **CANCELADO — 2026-09-23.** Esta iniciativa se canceló y **todo su código se
 > eliminó de `main`** (ruta `/editor-pdfs`, API `/api/editor-pdfs/*`, renderer
-> de plantillas, schema, repositorio `pdf_plantillas`, sección de permisos
-> `editor-pdfs`). Ningún PDF de producción llegó a usar `renderFromTemplate()`.
+> de plantillas, schema, repositorio y tabla `pdf_plantillas`, sección de
+> permisos `editor-pdfs`). Ningún PDF de producción llegó a usar `renderFromTemplate()`.
 > La reemplaza el flujo "diseño en Claude Design → HTML → implementación directa
 > en el generador jsPDF", ya probado con Cotización (PR #86). Motivo y
 > alternativas: `docs/decisions/015-pdfs-disenados-en-claude-design.md`.

@@ -160,9 +160,8 @@ Si aparece otro feature a medias, documentarlo aquí.
   parcial). Una auditoría encontró que ningún PDF de producción llegó a usar
   el motor de plantillas, y el usuario solo necesitaba definir cada diseño
   una vez. Se eliminó todo el código (ruta `/editor-pdfs`, API, renderer,
-  schema, repositorio, sección de permisos `editor-pdfs`); la tabla
-  `pdf_plantillas` queda pendiente de la confirmación del usuario para
-  borrarla (ver `docs/ACTIVE_WORK.md`). Lo sustituye el flujo Claude Design →
+  schema, repositorio, sección de permisos `editor-pdfs`) y la tabla
+  `pdf_plantillas` (migración `20260923_drop_pdf_plantillas_editor_pdfs.sql`). Lo sustituye el flujo Claude Design →
   código (`docs/decisions/015-pdfs-disenados-en-claude-design.md`). Historia:
   [`docs/archive/editor-pdfs-cancelado.md`](archive/editor-pdfs-cancelado.md).
 - **Sueltos post-PR #76 — Portal (simulador de factura), utilidad de

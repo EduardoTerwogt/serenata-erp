@@ -24,8 +24,8 @@ editor no se iba a usar.
    generador jsPDF correspondiente de `lib/server/pdf/`, con tests y revisión
    visual (PDF → PNG) antes del PR.
 3. El Editor de PDFs se **elimina por completo** (código, rutas, API,
-   sección de permisos). La tabla `pdf_plantillas` queda en la base hasta que
-   el usuario confirme la migración que la borra (ver `docs/ACTIVE_WORK.md`).
+   sección de permisos) y la tabla `pdf_plantillas` se borra con la migración
+   `20260923_drop_pdf_plantillas_editor_pdfs.sql`, autorizada por el usuario.
 
 Probado con Cotización: PR #86 (`bcfaa08`).
 
