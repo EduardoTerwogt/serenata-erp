@@ -8,14 +8,17 @@ test('borrar un documento pendiente: pide confirmación y desaparece de la lista
   await page.goto('/portal')
   await page.getByRole('button', { name: 'Documentación' }).click()
 
-  await expect(page.getByText('ine.jpg')).toBeVisible()
+  // Por rol, no por texto: `getByText` hace match por substring y también
+  // agarra el párrafo del modal ('Se borra "ine.jpg"…'), que sigue abierto
+  // mientras el DELETE está en vuelo -- dos coincidencias, strict mode violation.
+  await expect(page.getByRole('link', { name: 'ine.jpg' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Borrar INE' }).click()
   await expect(page.getByText('Se borra "ine.jpg" por completo', { exact: false })).toBeVisible()
 
   await page.getByRole('button', { name: 'Sí, borrar' }).click()
 
-  await expect(page.getByText('ine.jpg')).not.toBeVisible()
+  await expect(page.getByRole('link', { name: 'ine.jpg' })).not.toBeVisible()
   await expect(page.getByText('Sin documento subido').first()).toBeVisible()
 })
 
@@ -36,5 +39,5 @@ test('cancelar el borrado ("Mantener") no borra el documento', async ({ page }) 
   await page.getByRole('button', { name: 'Borrar INE' }).click()
   await page.getByRole('button', { name: 'Mantener' }).click()
 
-  await expect(page.getByText('ine.jpg')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'ine.jpg' })).toBeVisible()
 })

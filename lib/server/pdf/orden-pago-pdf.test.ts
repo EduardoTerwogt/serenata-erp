@@ -107,4 +107,8 @@ describe('pdf/orden-pago-pdf', () => {
     const bytes = Buffer.from(generateOrdenPagoPdf(preview(0, 0)))
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF')
   })
+
+  it('comprime los logos (sin compress el isotipo solo pesaba ~590 KB)', () => {
+    expect(generateOrdenPagoPdf(preview(12, 15)).byteLength).toBeLessThan(200_000)
+  })
 })

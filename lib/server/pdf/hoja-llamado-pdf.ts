@@ -130,7 +130,9 @@ type Block =
   | EqRow
 
 export function generateHojaDeLlamadoPdf(data: HojaDeLlamadoData): ArrayBuffer {
-  const doc = new jsPDF('p', 'mm', 'a4')
+  // compress: jsPDF incrusta los PNG decodificados como RGB crudo (el isotipo
+  // de 4 KB ocupaba ~590 KB); Flate sin pérdida baja el PDF ~95% sin cambio visual.
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
   const fonts = registerFonts(doc)
   const f = (kind: FontKind, size: number) => fonts.set(doc, kind, size)
   const isoLogoPng = getIsoLogoBase64()

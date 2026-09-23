@@ -63,6 +63,10 @@ describe('pdf/hoja-llamado-pdf', () => {
     )
     expect(pageCount(buf)).toBe(1)
   })
+
+  it('comprime los logos (sin compress el isotipo solo pesaba ~590 KB)', () => {
+    expect(generateHojaDeLlamadoPdf(data(20, 25)).byteLength).toBeLessThan(200_000)
+  })
 })
 
 describe('toTwelveHour', () => {

@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-23 (Editor de PDFs cancelado y eliminado; abre "Actualización de formatos PDF vía Claude Design" en `docs/PLAN.md`, Cotización ya cerrada)
+**Última actualización:** 2026-09-23 (deuda técnica post-EF-3: RLS de `cliente_id_backfill_clasificacion`, PDFs comprimidos, `AUTH_SECRET` canónico, `tracker-lint` retirado, test causal del evento `bulk` — ver "Cerrado")
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -61,8 +61,8 @@ Los frentes A-E de abajo reflejan el estado real tras EF-3.
 | Frente | Qué resuelve | P | Estado tras EF-3 |
 |---|---|---|---|
 | **A. Escalabilidad del acceso a datos** | El patrón "traer toda la tabla y filtrar en JS". Incluía un bug latente: `getCuentasPagar()` tenía `.limit(500)` y varias rutas buscaban por ID dentro de esa lista, así que con 501+ cuentas una cuenta válida respondía "no encontrada" sin error ni log. | P0 | **Cerrado por EF-3 (3B-1..3B-12).** RPCs server-side para CxC/CxP/Órdenes de pago/Dashboard/resumen de documentos de proveedores (paginación, búsqueda, totales y agregados en SQL). El `.limit(500)` de `getCuentasPagar()` fue eliminado de paso en 3B-10 al reemplazar `getResumenDashboard()` por agregados SQL. |
-| **B. Correctness serverless** | Trabajo que asumía un proceso único de larga vida corriendo en funciones efímeras: broadcasts con `void Promise`, caches en `Map`, debounce de Sheets con `setTimeout`. Incluía un evento `bulk` de Realtime que se descartaba en silencio. | P0/P1 | **Prácticamente cerrado.** Broadcasts vía `after()` (EF-2 1D-1). Las 4 cachés locales retiradas — las 3 de EF-2 (1D-3) más `folio.ts` en 3B-7 (`CacheManager`/`invalidateFolioCache()` removidos, la RPC de preview se llama directo). `triggerSheetsSync()` y sus 31 call sites eliminados (3C-1); `sync-down.ts` paginado (3C-2); lock de Sheets con lease/renovación/recuperación de huérfanos (3C-3); retención de `rate_limits` + safety-net diario vía el mismo lock (3C-4). El evento `bulk` de Realtime descartado en silencio no fue parte del alcance de EF-3 — sigue sin tocar. |
-| **C. Superficie de riesgo** | `supabaseAdmin` accesible desde cualquier ruta, sin revocación de sesión para staff, `CRON_SECRET` que falla abierto si no existe, e idempotencia que trata cualquier error de INSERT como duplicado. | P1 | **Parcial, sin cambio en EF-3.** `supabaseAdmin` aislado (EF-2 1B-1) y revocación de sesión de staff (EF-2 1B-2a/1B-2b) siguen siendo lo único resuelto. `CRON_SECRET` fail-open e idempotencia de INSERT no fueron parte del alcance de EF-3 — siguen pendientes. Además, EF-3 encontró un hallazgo nuevo de esta misma familia: **F28**, race de concurrencia real en la rotación del cookie de sesión de `next-auth` — **resuelto** en PR [#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71), ver más arriba y `docs/decisions/010-f28-diferir-race-cookie-nextauth.md`. |
+| **B. Correctness serverless** | Trabajo que asumía un proceso único de larga vida corriendo en funciones efímeras: broadcasts con `void Promise`, caches en `Map`, debounce de Sheets con `setTimeout`. Incluía un evento `bulk` de Realtime que se descartaba en silencio. | P0/P1 | **Prácticamente cerrado.** Broadcasts vía `after()` (EF-2 1D-1). Las 4 cachés locales retiradas — las 3 de EF-2 (1D-3) más `folio.ts` en 3B-7 (`CacheManager`/`invalidateFolioCache()` removidos, la RPC de preview se llama directo). `triggerSheetsSync()` y sus 31 call sites eliminados (3C-1); `sync-down.ts` paginado (3C-2); lock de Sheets con lease/renovación/recuperación de huérfanos (3C-3); retención de `rate_limits` + safety-net diario vía el mismo lock (3C-4). El evento `bulk` de Realtime ya no se descarta (`hooks/useQuotationPresence.ts` deja pasar `operation: 'bulk'` sin `item_id`); desde 2026-09-23 un test live causal (`cotizaciones-colaboracion.spec.ts`, importar partidas) exige que el otro colaborador converja por el evento y no por el poll de 20s. |
+| **C. Superficie de riesgo** | `supabaseAdmin` accesible desde cualquier ruta, sin revocación de sesión para staff, `CRON_SECRET` que falla abierto si no existe, e idempotencia que trata cualquier error de INSERT como duplicado. | P1 | **Parcial, sin cambio en EF-3.** `supabaseAdmin` aislado (EF-2 1B-1) y revocación de sesión de staff (EF-2 1B-2a/1B-2b) siguen siendo lo único resuelto. `CRON_SECRET` fail-open e idempotencia de INSERT también están resueltos (verificado 2026-09-23): `app/api/keep-alive/route.ts` falla cerrado (500) sin el secreto (1B-3) y `lib/server/idempotency.ts` solo trata `23505` como duplicado. Además, EF-3 encontró un hallazgo nuevo de esta misma familia: **F28**, race de concurrencia real en la rotación del cookie de sesión de `next-auth` — **resuelto** en PR [#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71), ver más arriba y `docs/decisions/010-f28-diferir-race-cookie-nextauth.md`. |
 | **D. Mantenibilidad** | `app/cotizaciones/[id]/page.tsx` con ~2,400 líneas y demasiadas responsabilidades, manejo de errores inconsistente, y lógica de upload duplicada en tres módulos. | P1/P2 | **Cerrado por EF-3 (3D-0..3D-12).** `page.tsx` bajó de 2,388 a ~660 líneas extrayendo los 7 hooks planeados, incluido `useQuotationItemCellsAutosave` (3D-5 — inicialmente pausado por decisión del usuario, retomado y cerrado dentro de EF-3 con prueba manual real contra `serenata-erp-loadtest`). `DomainError`+logger adoptado en ~15 rutas más (financieras, Portal completo, Proyectos). Deduplicación de upload de factura hecha (`lib/server/uploads/factura-validation.ts`, CxP/CxC/Portal). |
 | **E. Pruebas de carga** | Los tests actuales prueban correctness con 2-10 sesiones, no capacidad. Faltaba una suite (k6) que respondiera objetivamente "¿aguanta si mañana entran 100 personas?". | P1 | **Cerrado, con respuesta real y un hallazgo diferido.** Los 8 escenarios k6 (3A-5/3A-6) y el gate real de 8 escenarios × local/serverless (3E-1) corrieron sobre el código final de EF-3. `http_req_duration` (p95<800ms/p99<1500ms) pasó siempre en los 7 escenarios concurrentes, en ambos entornos. `http_req_failed` (rate<1%) solo pasó en `portal.js` (150 VUs limpio) — los otros 6 escenarios rompían por **F28** (ver Frente C), no por capacidad real del sistema. Root-caused a fondo y **resuelto** (PR [#71](https://github.com/EduardoTerwogt/serenata-erp/pull/71)); no fue deuda oculta. |
 
@@ -121,6 +121,16 @@ ni tiene alcance de iniciativa definido.
   ligado a RAG/chatbot); RAG/chatbot; migrar administración de Sheets
   externo a la app; refinar módulo de Proyectos; limpieza de datos de
   prueba (app + BD).
+- **`cliente_id_backfill_clasificacion` — decidir si se borra** cuando se
+  confirme que terminó la reconciliación manual de ambiguous/no_match
+  (decisión 014). Desde 2026-09-23 está cerrada a la Data API (RLS + sin
+  grants para anon/authenticated); mientras siga, no hay riesgo.
+- **Advisor de Supabase, avisos WARN restantes** (sin ERROR desde
+  2026-09-23): 10 funciones con `search_path` mutable
+  (`generate_folio_cc/cp`, triggers `update_*_updated_at`,
+  `match_proveedor_por_nombre`, `jsonb_null_as_empty_string`, …) y la
+  extensión `pg_trgm` en `public`. No explotables vía la app hoy; un bloque
+  chico cuando se retome deuda.
 - **Rediseño del PDF de reporte de cierre** — diferido el 2026-09-23 de la
   iniciativa "Actualización de formatos PDF vía Claude Design" (cerrada, ver
   "Cerrado"): se hace junto con la definición del módulo de Proyectos, porque
@@ -155,6 +165,22 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Deuda técnica post-EF-3 (2026-09-23).** Auditoría contra `main`
+  (`9b3b303`) + cierre de lo que seguía vivo, en un solo PR:
+  RLS + `REVOKE` de anon/authenticated en `cliente_id_backfill_clasificacion`
+  (el único ERROR del advisor; en prod anon tenía CRUD completo sobre 168
+  filas), aplicado en test y prod; PDFs de Cotización/Orden de pago/Hoja de
+  llamado con `compress: true` (el isotipo PNG de 4 KB se incrustaba como RGB
+  crudo de ~590 KB; −83 a −96% de peso, 0 píxeles distintos); `AUTH_SECRET`
+  como única variable de sesión (sin fallback a `NEXTAUTH_SECRET`);
+  `tracker-lint` (validador del tracker de EF-3, ya archivado) retirado de
+  CI; locator ambiguo del flake de `portal-documentos.spec.ts` corregido; y
+  test live causal para el evento `bulk` de Realtime. `CRON_SECRET` e
+  idempotencia de INSERT resultaron ya resueltos. `SUPABASE_JWT_SECRET`
+  distinto entre Production y Preview se reclasificó como auditoría de
+  configuración, no deuda: es lo correcto si cada entorno apunta a su propio
+  proyecto Supabase (verificación manual en Vercel pendiente, ver
+  `docs/ACTIVE_WORK.md`).
 - **Actualización de formatos PDF vía Claude Design (2026-09-23).** Cada PDF
   se diseña una vez en Claude Design sobre el design system de Serenata y el
   HTML se implementa directo en su generador jsPDF — reemplaza al "Editor de

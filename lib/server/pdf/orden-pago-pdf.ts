@@ -98,7 +98,9 @@ type Block =
   | { kind: 'grand'; amount: string; summary: string; h: number }
 
 export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuffer {
-  const doc = new jsPDF('p', 'mm', 'a4')
+  // compress: jsPDF incrusta los PNG decodificados como RGB crudo (el isotipo
+  // de 4 KB ocupaba ~590 KB); Flate sin pérdida baja el PDF ~95% sin cambio visual.
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
   const fonts = registerFonts(doc)
   const isoLogoPng = getIsoLogoBase64()
   const serenataLogoPng = getSerenataLogoBase64()

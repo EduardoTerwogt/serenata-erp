@@ -1,102 +1,122 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-23 (sesión 5, cierre)
+**Última actualización:** 2026-09-23 (sesión 6, deuda técnica post-EF-3)
 
 ## Estado
 
-**`docs/PLAN.md` — Vacío.** La iniciativa "Actualización de formatos PDF vía
-Claude Design" cerró completa esta sesión: los 3 bloques en alcance
-(Cotización, Orden de pago, Hoja de llamado) están en producción. Historia:
-`docs/archive/actualizacion-formatos-pdf-claude-design.md`. Motivo del
-enfoque: `docs/decisions/015-pdfs-disenados-en-claude-design.md`. No hay
-ninguna iniciativa multi-sesión abierta ahora mismo.
+**`docs/PLAN.md` — Vacío.** No hay iniciativa multi-sesión abierta. Esta
+sesión atendió la deuda técnica que seguía viva en `main` (`9b3b303`) con un
+plan de una sola sesión (auditado 2 rondas por el usuario): un PR en
+borrador sobre `claude/clever-galileo-2w49pi` + pasos manuales fuera del PR.
 
-## Completado en esta sesión (5)
+## Fase 0 — auditoría previa (hallazgos)
 
-- **Decisión de producto:** los PDFs se diseñan en Claude Design (design
-  system Apple-style) y el HTML se implementa directo en jsPDF, en vez de
-  terminar el editor visual dentro de la app. Documentado en la decisión 015.
-- **Editor de PDFs cancelado y eliminado por completo** (PR
-  [#87](https://github.com/EduardoTerwogt/serenata-erp/pull/87), mergeado,
-  `bc371fc`): código (`app/editor-pdfs/`, `app/api/editor-pdfs/`,
-  `template-renderer`, `pdf-template-*`, `pdf-sample-data`,
-  `pdf-color-tokens`, repositorio, sección de permisos, entrada de sidebar)
-  y tabla `pdf_plantillas` (migración
-  `20260923_drop_pdf_plantillas_editor_pdfs.sql`, autorizada por el usuario,
-  aplicada en `serenata-erp-test` y en producción).
-- **Rediseño del PDF de Cotización** (PR
-  [#86](https://github.com/EduardoTerwogt/serenata-erp/pull/86), mergeado,
-  `bcfaa08`): dibujo manual sin autotable, Inter embebida
-  (`lib/server/pdf/fonts/inter.ts`, subset Latin, OFL), banda de encabezado
-  con isotipo, tabla con hairlines, banda de totales, Notas y Generales
-  justificados, paginación con encabezado compacto y pie "Página N de M",
-  acento `#FE7B01`.
-- **Rediseño del PDF de Orden de pago** (PR
-  [#88](https://github.com/EduardoTerwogt/serenata-erp/pull/88), mergeado,
-  `9088e7e`): resumen en encabezado, banda por proveedor con
-  CLABE/banco/correo, evento con fecha de entrega, totales por
-  evento/proveedor/general, paginación con banda "cont.". Se agregó
-  `fecha_entrega` a `OrdenPagoPreviewResult` (ya venía en la RPC). Los
-  helpers de dibujo se extrajeron de `cotizacion-pdf.ts` a
-  `lib/server/pdf/pdf-draw.ts` — Cotización se verificó idéntica pixel a
-  pixel tras la extracción.
-- **Rediseño del PDF de Hoja de llamado** (PR
-  [#89](https://github.com/EduardoTerwogt/serenata-erp/pull/89), mergeado,
-  `aca7184`): fecha/horarios/locación/punto de encuentro legibles de un
-  vistazo con "Por definir" cuando faltan; horarios convertidos a 12 h con
-  am/pm (`toTwelveHour`); notas generales en caja gris (corrige el texto
-  encimado del formato anterior); equipo técnico agrupado por responsable;
-  paginación con títulos "(cont.)" y encabezado de tabla repetido. Se agregó
-  `clampLines` a `pdf-draw.ts`.
-- **Reporte de cierre (bloque 4) diferido** por decisión del usuario: se
-  rediseña junto con la definición del módulo de Proyectos, de la que
-  depende su contenido. Movido a `docs/ROADMAP.md` → "Después".
-- **Documentación:** `docs/PLAN.md` recreado vacío; iniciativa archivada en
-  `docs/archive/actualizacion-formatos-pdf-claude-design.md`;
-  `docs/ROADMAP.md` (Siguiente + Cerrado); `ARCHITECTURE.md` (capa 5 y
-  gotcha de PDFs); `.claude/rules/pdf.md`; `docs/PROMPTS.md` (prompt
-  "Rediseñar un PDF en Claude Design"); `.claude/rules/ui.md` (acento
-  corregido a `#FE7B01`).
+1. **`bulk` Realtime:** productor (`items/bulk/route.ts`, `item_id: null`,
+   `operation: 'bulk'`, vía `after()`) → consumidor
+   (`useQuotationPresence.ts:247`, ya no lo descarta) → `page.tsx`
+   (`latestItemConfirmed` → `reconciliarConServidor()`). El test live de
+   importar partidas solo comprobaba el estado final con timeout de 60 s, así
+   que el poll de 20 s (`RECONCILIACION_MS`) podía tapar un evento perdido.
+2. **`cliente_id_backfill_clasificacion`:** RLS apagado en test y prod, y por
+   los grants por defecto `anon`/`authenticated` tenían
+   SELECT/INSERT/UPDATE/DELETE (prod: 168 filas; test: 6,594). Ningún código
+   de la app la lee. Era el único ERROR del advisor de prod.
+3. **`tracker-lint`:** solo lo usaban `test.yml`,
+   `scripts/validate-ef3-tracker.mjs` y su test. Ningún `needs:`; `main` sin
+   branch protection ni rulesets, así que no es un required check.
+4. **Peso de los PDFs:** jsPDF decodifica el isotipo PNG (4 KB) y lo incrusta
+   como RGB crudo sin comprimir: 447×448×3 = 587 KB por PDF, más ~107 KB
+   del logo Serenata. Inter (~75 KB) no era la causa.
+5. **Secretos de auth:** NextAuth (`next-auth/lib/env.js`) y
+   `lib/session-token.ts` ya priorizan `AUTH_SECRET` sobre
+   `NEXTAUTH_SECRET`; el Portal solo lee `AUTH_SECRET`. Si `AUTH_SECRET`
+   existe en el entorno (el Portal no funcionaría sin él), `NEXTAUTH_SECRET`
+   no se lee en ningún lado: quitarlo **no** invalida sesiones.
+
+## Completado en esta sesión (6)
+
+- **B1 — RLS + REVOKE** en `cliente_id_backfill_clasificacion`
+  (`db/migrations/20260923_rls_cliente_id_backfill_clasificacion.sql`),
+  aplicada en `serenata-erp-test` y en producción. Verificado en ambos:
+  `relrowsecurity = true`; `has_table_privilege` false para
+  S/I/U/D de anon y authenticated; `SET ROLE anon|authenticated` → SELECT e
+  INSERT rechazados con `42501`; `service_role` lee; advisor sin ERROR. La
+  tabla se conserva (decisión del usuario: no está confirmado que la
+  reconciliación manual haya terminado) — anotado en ROADMAP → "Después".
+- **B2 — flake de `portal-documentos.spec.ts`:** `getByText('ine.jpg')` hace
+  match por substring y también agarraba el párrafo del modal de
+  confirmación ('Se borra "ine.jpg"…'), abierto mientras el DELETE está en
+  vuelo. Cambiado a `getByRole('link', { name: 'ine.jpg' })` (el nombre del
+  archivo es un `<a>`). Sin tocar aserciones, timeouts ni retries.
+- **B3 — `tracker-lint` retirado:** job de `test.yml`,
+  `scripts/validate-ef3-tracker.mjs` y su test. La historia de EF-3 queda en
+  `docs/archive/`.
+- **B4 — PDFs comprimidos:** `compress: true` en `new jsPDF` de Cotización,
+  Orden de pago y Hoja de llamado (misma causa raíz en los 3). Reporte de
+  cierre no se tocó (diferido con Proyectos). Test de regresión de peso
+  (< 200 KB) en los 3, verificado que falla sin el fix.
+- **B5 — `AUTH_SECRET` canónico:** `lib/session-token.ts` sin fallback a
+  `NEXTAUTH_SECRET`, falla explícito; test nuevo
+  `lib/__tests__/session-token.test.ts` (falla sin el fix);
+  `docs/ENV.md` actualizado.
+- **V-bulk — test live causal:** el test "importar partidas…" de
+  `tests/e2e/live/cotizaciones-colaboracion.spec.ts` ahora observa los
+  frames del socket de B y sus GET de la cotización: se sincroniza con un
+  latido del poll y exige que B converja **antes** del siguiente, que haya
+  llegado `item_confirmed` con `operation: 'bulk'` y que B relea en ≤ 3 s
+  tras el evento. Solo corre en el job `live` de CI.
+- **Docs:** `docs/ROADMAP.md` (Frentes B y C al día: `CRON_SECRET`,
+  idempotencia y `bulk` resueltos; nuevos "Después"; entrada en "Cerrado").
 
 ## Tests ejecutados y resultado real
 
-- Los 3 PR (#86, #88, #89): `tsc`, lint (0 errores, 8 warnings preexistentes
-  sin cambio), `npm test` en verde en cada uno (978 al cerrar), `npm run
-  build` verde. CI de los 3 PR: `test`, `smoke-and-critical`, `live`,
-  `fresh-db`, `tracker-lint` verdes.
-- Revisión visual: los 3 escenarios de diseño (corto, largo multipágina,
-  casos límite) de cada PDF renderizados a PNG y aprobados por el usuario
-  antes de cada merge.
-- **Flake confirmado en PR #89:** `smoke-and-critical` falló una vez en
-  `tests/e2e/smoke/portal-documentos.spec.ts` (locator ambiguo de Playwright,
-  `getByText('ine.jpg')` con dos coincidencias) — archivo no tocado por el
-  diff. Re-run pasó limpio; no se investiga más a fondo por ahora, pero si
-  se repite en otro PR conviene revisar ese test (afinar el locator a
-  `getByRole('link', { name: 'ine.jpg' })` en vez de texto genérico).
+- `npx tsc --noEmit` limpio; `npm run lint` 0 errores (8 warnings
+  preexistentes); `npm test` 963/963 (bajan de 978 por los tests del
+  validador de EF-3 retirado; +5 nuevos).
+- B4, método fijado antes del cambio: 3 escenarios × 3 PDFs
+  (corto/largo/límite), antes vs. después. Páginas y `MediaBox` iguales,
+  `pdftotext -layout` idéntico byte a byte, mismas fuentes y mismas imágenes
+  (dimensiones y cantidad); `pdftoppm -r 150` + `compare -metric AE`:
+  **0 píxeles distintos** en las 27 páginas (incluso sin fuzz).
+  Tamaños: Cotización 778→37 KB, 843→46 KB, 801→40 KB; Orden de pago
+  149→27 KB, 914→57 KB, 840→44 KB; Hoja de llamado 643→27 KB,
+  669→33 KB, 644→26 KB.
+- B2: spec nuevo `--repeat-each=20` → 60/60 en verde (local). El spec
+  viejo también pasó 60/60 en local: el flake (visto una vez en CI, PR #89)
+  no se reprodujo aquí; el fix se sostiene por el análisis del DOM (dos
+  coincidencias de `ine.jpg` mientras el modal sigue abierto), no por
+  reproducción.
+- Local: `test:e2e:smoke` 26/26, `test:e2e:critical` 80/80, `npm run build`
+  verde (con las mismas env de CI; sin ellas falla por `supabaseUrl`, igual
+  que en `main`).
+- CI del PR #90: `test` verde. `fresh-db` rojo por infraestructura (ghcr.io
+  `toomanyrequests` al bajar imágenes de Supabase, antes de aplicar
+  migraciones), reproducido en el re-run; documentado en el PR. `live` y
+  `smoke-and-critical`: ver el PR.
 
-## Problemas encontrados que siguen abiertos
+## Pendiente manual (fuera del PR)
 
-- **Fuera de alcance, solo nota:** el advisor de Supabase (`supabase-test`)
-  reporta RLS deshabilitado en `public.cliente_id_backfill_clasificacion`
-  (crítico). No se tocó.
-- Desde una sesión en la nube no se puede leer un proyecto de Claude Design
-  por link (`/design-login` es interactivo). Solución usada las 3 veces:
-  subir el `.zip` exportado del proyecto.
+- **M1 — `NEXTAUTH_SECRET` en Vercel:** (a) confirmar que `AUTH_SECRET`
+  existe en Production y Preview; (b) merge del PR; (c) login/logout de
+  staff y Portal en Preview y prod; (d) borrar `NEXTAUTH_SECRET` en Vercel;
+  (e) repetir (c). No se espera invalidación de sesiones (Fase 0 punto 5).
+- **M2 — auditoría de entornos:** confirmar que Production usa Supabase prod
+  con su `SUPABASE_JWT_SECRET` y Preview usa `serenata-erp-test` con el suyo.
+- **V1 — Presence en Preview real** (2 usuarios, 2 navegadores, ida y vuelta).
+- **V2 — Google:** (a) login con Google → sesión; (b) autorización de Drive →
+  callback → token guardado → llamada real a Drive.
+- **Housekeeping:** borrar ramas remotas ya mergeadas (GitHub → Branches →
+  Merged); el proxy de esta sesión no lo permite.
 
 ## Deuda técnica
 
-- PDF de Cotización pesa ~780 KB, casi todo por los PNG de los logos (ya
-  pasaba antes del rediseño); no se optimizó, no bloqueaba nada.
-- Arrastrada, sin cambios esta sesión: Presence sin verificar en Preview,
-  `SUPABASE_JWT_SECRET` distinto entre Production/Preview en Vercel,
-  `AUTH_SECRET`/`NEXTAUTH_SECRET` coexistiendo en producción, `tracker-lint`
-  de `test.yml` sin generalizar fuera de EF-3, verificación completa de
-  Google OAuth pendiente, ramas remotas ya mergeadas sin borrar por policy
-  del proxy de egress.
+- Advisor de Supabase (WARN, sin ERROR): 10 funciones con `search_path`
+  mutable y `pg_trgm` en `public` — anotado en ROADMAP → "Después".
+- Arrastrada sin cambios: Presence sin verificar en Preview (V1),
+  verificación completa de Google OAuth (V2).
 
 ## Siguiente paso
 
-No hay iniciativa multi-sesión activa. Para retomar PDFs: rediseñar Reporte
-de cierre cuando se defina el módulo de Proyectos (`docs/ROADMAP.md` →
-"Después"). Para cualquier otro trabajo, priorizar en Chat con el estado
-real del sistema a la vista (`docs/ROADMAP.md` → "Siguiente"/"Después").
+Cerrar el PR de deuda técnica (CI verde, incluido `live` con el test causal
+de `bulk`) y luego los pasos manuales M1/M2/V1/V2. Después, priorizar en
+Chat (`docs/ROADMAP.md` → "Siguiente"/"Después").
