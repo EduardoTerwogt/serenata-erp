@@ -1,8 +1,8 @@
 # Plan de la iniciativa activa
 
 **Estado:** Aprobado, en ejecución (2026-09-23) — **Actualización de formatos
-PDF vía Claude Design.** Bloque 1 (Cotización) cerrado en PR #86. Siguiente:
-elegir el próximo documento con el usuario.
+PDF vía Claude Design.** Bloque 1 (Cotización) cerrado en PR #86. Bloque 2
+(Orden de pago) en curso, en PR.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -47,13 +47,15 @@ implementa directo en su generador jsPDF.
 
 - `lib/server/pdf/fonts/inter.ts` — Inter Regular/SemiBold/Bold para jsPDF
   (subset Latin, ~18 KB c/u, OFL en `Inter-OFL.txt`).
-- `lib/server/pdf/cotizacion-pdf.ts` — helpers de dibujo: `trackedText`
-  (mayúsculas con tracking, alineación correcta), `drawJustified`
-  (justificado palabra por palabra; `Tw` no funciona con fuentes
-  Identity-H), `hline`, `ellipsize`, paginación en dos fases con pie
-  "Página N de M". **Al implementar el segundo documento, extraerlos a un
-  módulo compartido** (p. ej. `lib/server/pdf/pdf-draw.ts`) en vez de
-  copiarlos.
+- `lib/server/pdf/pdf-draw.ts` — helpers de dibujo compartidos (extraídos
+  en el bloque 2): `registerFonts` (Inter con fallback a Helvetica),
+  `centerBaseline` (línea base de texto centrado, equivalente a CSS),
+  `trackedText` (mayúsculas con tracking, alineación correcta),
+  `drawJustified` (justificado palabra por palabra; `Tw` no funciona con
+  fuentes Identity-H), `hline`, `ellipsize`, `wrapLines`. El patrón de
+  paginación (medir bloques → repartir en páginas → dibujar → pie
+  "Página N de M" al final) está en `cotizacion-pdf.ts` y
+  `orden-pago-pdf.ts`.
 - Logos: `public/logo iso.png`, `public/serenata naranja.png` (vía
   `cotizacion-pdf-helpers.ts`).
 - Paleta del diseño de Cotización (tinta `#1D1D1F`, acento `#FE7B01`, grises
@@ -64,7 +66,7 @@ implementa directo en su generador jsPDF.
 | # | Bloque | Estado |
 |---|---|---|
 | 1 | Cotización | **Cerrado** — PR [#86](https://github.com/EduardoTerwogt/serenata-erp/pull/86), `bcfaa08` |
-| 2 | Orden de pago | Pendiente — generador en `pt`, no `mm` (ver gotcha en `ARCHITECTURE.md`); estructura responsable→evento→tabla |
+| 2 | Orden de pago | **En curso** — implementado en rama `claude/laughing-maxwell-qxscit`, PR abierto. Agrega `fecha_entrega` al evento del preview (`lib/server/ordenes-pago/build.ts`, ya venía en la RPC) |
 | 3 | Hoja de llamado | Pendiente |
 | 4 | Reporte de cierre | Pendiente — tiene su propio `fmtMoney()` distinto de `formatCurrencyPdf()` |
 

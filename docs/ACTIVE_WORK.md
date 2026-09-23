@@ -71,8 +71,6 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
 
 ## Deuda técnica
 
-- Helpers de dibujo de `cotizacion-pdf.ts` viven en ese archivo; extraerlos
-  a un módulo compartido al migrar el segundo PDF (ver `docs/PLAN.md`).
 - PDF de Cotización pesa ~780 KB, casi todo por los PNG de los logos (ya
   pasaba antes del rediseño).
 - Arrastrada: Presence sin verificar en Preview, `SUPABASE_JWT_SECRET`
@@ -83,6 +81,8 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
 
 ## Siguiente paso
 
-1. Elegir el siguiente PDF (orden de pago, hoja de llamado o reporte de
-   cierre), diseñarlo en Claude Design con el prompt de `docs/PROMPTS.md` y
-   subir el `.zip` a Claude Code.
+1. **Orden de pago (bloque 2) en PR** — rediseño implementado
+   (`lib/server/pdf/orden-pago-pdf.ts`, helpers extraídos a
+   `lib/server/pdf/pdf-draw.ts`, `fecha_entrega` agregado al preview).
+   Pendiente: visto bueno del usuario sobre el PDF y merge con CI verde.
+2. Después: hoja de llamado o reporte de cierre, mismo flujo.
