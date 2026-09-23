@@ -1,8 +1,9 @@
 # Plan de la iniciativa activa
 
 **Estado:** Aprobado, en ejecución (2026-09-23) — **Actualización de formatos
-PDF vía Claude Design.** Bloque 1 (Cotización) cerrado en PR #86. Bloque 2
-(Orden de pago) en curso, en PR.
+PDF vía Claude Design.** Bloques 1 (Cotización, PR #86) y 2 (Orden de pago,
+PR #88) cerrados. Siguiente: hoja de llamado o reporte de cierre, a elección
+del usuario.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -66,7 +67,7 @@ implementa directo en su generador jsPDF.
 | # | Bloque | Estado |
 |---|---|---|
 | 1 | Cotización | **Cerrado** — PR [#86](https://github.com/EduardoTerwogt/serenata-erp/pull/86), `bcfaa08` |
-| 2 | Orden de pago | **En curso** — implementado en rama `claude/laughing-maxwell-qxscit`, PR abierto. Agrega `fecha_entrega` al evento del preview (`lib/server/ordenes-pago/build.ts`, ya venía en la RPC) |
+| 2 | Orden de pago | **Cerrado** — PR [#88](https://github.com/EduardoTerwogt/serenata-erp/pull/88), `9088e7e`. Agrega `fecha_entrega` al evento del preview (`lib/server/ordenes-pago/build.ts`, ya venía en la RPC) y extrae `pdf-draw.ts` |
 | 3 | Hoja de llamado | Pendiente |
 | 4 | Reporte de cierre | Pendiente — tiene su propio `fmtMoney()` distinto de `formatCurrencyPdf()` |
 

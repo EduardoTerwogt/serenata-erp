@@ -5,7 +5,8 @@
 ## Estado
 
 **`docs/PLAN.md` — Aprobado, en ejecución: "Actualización de formatos PDF vía
-Claude Design".** Bloque 1 (Cotización) cerrado en PR #86. El "Editor de
+Claude Design".** Bloques 1 (Cotización, PR #86) y 2 (Orden de pago, PR #88)
+cerrados. El "Editor de
 PDFs" se canceló y se eliminó por completo (PR #87, `bc371fc`, y tabla
 `pdf_plantillas` borrada en test y producción).
 Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
@@ -39,6 +40,14 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
   autorizada por el usuario y **aplicada en `serenata-erp-test` y en
   producción** después del merge. Verificado en ambas: la tabla no existe y
   ningún usuario conserva la sección.
+- **Rediseño del PDF de Orden de pago** (PR
+  [#88](https://github.com/EduardoTerwogt/serenata-erp/pull/88), mergeado,
+  `9088e7e`): `lib/server/pdf/orden-pago-pdf.ts` reescrito (resumen en
+  encabezado, banda por proveedor con CLABE/banco/correo, evento con fecha
+  de entrega, totales por evento/proveedor/general, paginación con banda
+  "cont."); `fecha_entrega` agregado a `OrdenPagoPreviewResult`; helpers
+  extraídos a `lib/server/pdf/pdf-draw.ts` (Cotización verificada idéntica
+  pixel a pixel). CI verde y visto bueno del usuario.
 - **Documentación:** `docs/PLAN.md` nuevo (flujo + tracker de los 4 PDFs);
   plan viejo archivado con banner de cancelado; decisión 015; `ROADMAP.md`
   (Siguiente + Cerrado); `ARCHITECTURE.md` (capa 5 y gotcha de PDFs);
@@ -59,6 +68,8 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
   (baja de 1065 por los tests del editor eliminados), `npm run build` verde;
   en CI de PR #87 `test`, `smoke-and-critical`, `live`, `fresh-db` y
   `tracker-lint` verdes.
+- Orden de pago: `tsc`, lint 0 errores, `npm test` 972 verdes, build verde;
+  CI de PR #88 todo verde; 3 escenarios del diseño renderizados a PNG.
 
 ## Problemas encontrados que siguen abiertos
 
@@ -81,8 +92,5 @@ Historia del editor: `docs/archive/editor-pdfs-cancelado.md`. Motivo:
 
 ## Siguiente paso
 
-1. **Orden de pago (bloque 2) en PR** — rediseño implementado
-   (`lib/server/pdf/orden-pago-pdf.ts`, helpers extraídos a
-   `lib/server/pdf/pdf-draw.ts`, `fecha_entrega` agregado al preview).
-   Pendiente: visto bueno del usuario sobre el PDF y merge con CI verde.
-2. Después: hoja de llamado o reporte de cierre, mismo flujo.
+1. Bloque 3 o 4 de `docs/PLAN.md`: hoja de llamado o reporte de cierre,
+   mismo flujo (Claude Design → `.zip` → Claude Code).
