@@ -1,20 +1,28 @@
 /**
  * Generador de PDF de Cotización - Server-side
- * Migrado desde lib/pdf.ts para ejecutarse en servidor
- * Reutiliza estilos de pdf-base-config y helpers extraídos de layout
+ *
+ * Diseño: "Cotizacion PDF.dc.html" (Claude Design, design system Apple-style
+ * Serenata, 2026-09-23). Coordenadas en mm, tamaños de texto en pt. Dibujo
+ * manual con jsPDF (sin autotable) para controlar paginación, hairlines y
+ * alineación exacta sobre los dos márgenes de texto (x 21 y x 189).
+ *
+ * Paginación:
+ * - Una fila nunca se parte entre páginas; el encabezado de columnas se repite.
+ * - Un grupo no empieza en una página si no caben al menos 2 de sus filas.
+ * - Si un grupo continúa, la primera fila de la nueva página repite la
+ *   categoría con "cont." debajo; el total de categoría queda en la original.
+ * - Banda de totales + Notas + Generales se mueven juntas; si no caben, pasan
+ *   a la siguiente página arrastrando las 2 últimas filas de la tabla.
+ * - Páginas siguientes: encabezado compacto. Todas: pie con "Página N de M".
  */
 
 import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import type { LineWidths } from 'jspdf-autotable'
-import { JsPDFWithAutoTable } from '@/lib/server/pdf/pdf-base-config'
 import { CotizacionPDFData } from '@/lib/server/pdf/cotizacion-pdf-types'
+import { formatCurrencyPdf } from '@/lib/server/pdf/pdf-base-config'
+import { formatDateDisplay } from '@/lib/format-date'
 import {
   ISO_RATIO,
   SERENATA_RATIO,
-  buildHeaderBody,
-  buildItemsBody,
-  buildTotalsRows,
   calculateDiscount,
   getCancelacionText,
   getCostosText,
@@ -22,227 +30,562 @@ import {
   getIsoLogoBase64,
   getSerenataLogoBase64,
 } from '@/lib/server/pdf/cotizacion-pdf-helpers'
+import { INTER_BOLD_BASE64, INTER_REGULAR_BASE64, INTER_SEMIBOLD_BASE64 } from '@/lib/server/pdf/fonts/inter'
+
+type RGB = [number, number, number]
+
+// Paleta del diseño (solo estos colores)
+const C = {
+  ink: [29, 29, 31] as RGB, // #1D1D1F
+  body: [58, 58, 60] as RGB, // #3A3A3C
+  secondary: [110, 110, 115] as RGB, // #6E6E73
+  tertiary: [152, 152, 157] as RGB, // #98989D
+  labelOnDark: [161, 161, 166] as RGB, // #A1A1A6
+  dividerOnDark: [72, 72, 74] as RGB, // #48484A
+  groupStart: [199, 199, 204] as RGB, // #C7C7CC
+  sectionDivider: [210, 210, 215] as RGB, // #D2D2D7
+  hairline: [229, 229, 234] as RGB, // #E5E5EA
+  accent: [254, 123, 1] as RGB, // #FE7B01
+  discount: [255, 204, 77] as RGB, // #FFCC4D
+  white: [255, 255, 255] as RGB,
+}
+
+// Retícula (mm)
+const PAGE_W = 210
+const MARGIN = 13 // bandas y líneas: x 13 → 197
+const BAND_W = PAGE_W - 2 * MARGIN // 184
+const TEXT_L = 21 // texto: x 21 → 189
+const TEXT_R = 189
+const TEXT_W = TEXT_R - TEXT_L // 168
+const LIMIT_Y = 278
+const FIRST_BAND_Y = 16
+const CONT_CONTENT_Y = 31
+const PT = 25.4 / 72 // mm por pt
+const TRACK = 0.4 * PT // tracking de etiquetas en mayúsculas (0.06em a 6.5 pt)
+
+// Tabla
+const COL = {
+  cat: { x: 21, w: 30 },
+  desc: { x: 51, w: 61 },
+  qtyCenter: 117.5,
+  unitRight: 145,
+  amountRight: 167,
+  totalRight: 189,
+}
+const COL_HEADER_H = 6.5
+const ROW_PAD = 1.6
+const ROW_LH = 3.8
+const CONT_LH = 3
+const GROUP_GAP = 2.5
+const TABLE_TO_TOTALS = 8
+
+type FontKind = 'regular' | 'semibold' | 'bold'
+
+interface Fonts {
+  set(doc: jsPDF, kind: FontKind, size: number): void
+}
+
+function registerFonts(doc: jsPDF): Fonts {
+  try {
+    doc.addFileToVFS('Inter-Regular.ttf', INTER_REGULAR_BASE64)
+    doc.addFont('Inter-Regular.ttf', 'Inter', 'normal')
+    doc.addFileToVFS('Inter-SemiBold.ttf', INTER_SEMIBOLD_BASE64)
+    doc.addFont('Inter-SemiBold.ttf', 'InterSemiBold', 'normal')
+    doc.addFileToVFS('Inter-Bold.ttf', INTER_BOLD_BASE64)
+    doc.addFont('Inter-Bold.ttf', 'Inter', 'bold')
+    return {
+      set(d, kind, size) {
+        if (kind === 'semibold') d.setFont('InterSemiBold', 'normal')
+        else d.setFont('Inter', kind === 'bold' ? 'bold' : 'normal')
+        d.setFontSize(size)
+      },
+    }
+  } catch (e) {
+    console.warn('Error registrando Inter en PDF de cotización, se usa Helvetica:', e)
+    return {
+      set(d, kind, size) {
+        d.setFont('helvetica', kind === 'regular' ? 'normal' : 'bold')
+        d.setFontSize(size)
+      },
+    }
+  }
+}
+
+/** Línea base aproximada de la primera línea en una caja de interlínea `lh`. */
+const baseline = (top: number, lh: number) => top + 0.72 * lh
+
+function hline(doc: jsPDF, y: number, x1: number, x2: number, w: number, color: RGB) {
+  doc.setDrawColor(...color)
+  doc.setLineWidth(w)
+  doc.line(x1, y, x2, y)
+}
+
+/** Texto justificado palabra por palabra (Tw no aplica a fuentes Identity-H). */
+function drawJustified(doc: jsPDF, text: string, x: number, y: number, width: number, lh: number): number {
+  const paragraphs = text.split('\n')
+  paragraphs.forEach((para) => {
+    const lines: string[] = doc.splitTextToSize(para, width)
+    lines.forEach((line, i) => {
+      const words = line.trim().split(/\s+/)
+      const isLast = i === lines.length - 1
+      if (isLast || words.length < 2) {
+        doc.text(line.trim(), x, y)
+      } else {
+        const wordsW = words.reduce((s, w) => s + doc.getTextWidth(w), 0)
+        const gap = (width - wordsW) / (words.length - 1)
+        let cx = x
+        words.forEach((w) => {
+          doc.text(w, cx, y)
+          cx += doc.getTextWidth(w) + gap
+        })
+      }
+      y += lh
+    })
+  })
+  return y
+}
+
+function countLines(doc: jsPDF, text: string, width: number): number {
+  return text.split('\n').reduce((n, p) => n + (doc.splitTextToSize(p, width) as string[]).length, 0)
+}
 
 /**
- * Genera PDF de cotización en server-side
- * Retorna ArrayBuffer para servir como descarga
+ * Texto en mayúsculas con tracking. jsPDF no incluye charSpace al alinear a la
+ * derecha/centro, así que se calcula la x izquierda con el ancho visible real.
  */
+function trackedText(doc: jsPDF, text: string, x: number, y: number, cs: number, align: 'left' | 'center' | 'right' = 'left') {
+  const w = doc.getTextWidth(text) + (text.length - 1) * cs
+  const left = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x
+  doc.text(text, left, y, { charSpace: cs })
+  return w
+}
+
+/** Recorta con "…" para que quepa en `width`. */
+function ellipsize(doc: jsPDF, text: string, width: number): string {
+  if (doc.getTextWidth(text) <= width) return text
+  let t = text
+  while (t.length > 1 && doc.getTextWidth(t + '…') > width) t = t.slice(0, -1)
+  return t.trimEnd() + '…'
+}
+
+interface Row {
+  cat: string
+  catLines: string[]
+  descLines: string[]
+  qty: string
+  unit: string
+  amount: string
+  noPrice: boolean
+  groupFirst: boolean
+  groupTotal: string
+}
+
+interface PlacedRow extends Row {
+  showCat: boolean
+  cont: boolean
+  gapBefore: boolean
+  border: 'none' | 'group' | 'row'
+  h: number
+}
+
 export function generateCotizacionPdf(data: CotizacionPDFData): ArrayBuffer {
   const doc = new jsPDF('p', 'mm', 'a4')
-  const pageW = 210
-  const margin = 11.5
-  const contentW = pageW - 2 * margin
-
+  const fonts = registerFonts(doc)
   const isoLogoPng = getIsoLogoBase64()
   const serenataLogoPng = getSerenataLogoBase64()
   const descuento = calculateDiscount(data)
 
-  autoTable(doc, {
-    startY: 10,
-    margin: { left: margin, right: 39 },
-    theme: 'grid',
-    styles: {
-      fontSize: 8.5,
-      cellPadding: { top: 1.35, right: 2.1, bottom: 1.35, left: 2.1 },
-      valign: 'middle' as const,
-      textColor: [0, 0, 0] as [number, number, number],
-      lineWidth: 0.15,
-      lineColor: [235, 235, 235] as [number, number, number],
-    },
-    body: buildHeaderBody(data),
-    columnStyles: {
-      0: {
-        fontStyle: 'bold',
-        cellWidth: 44,
-        fillColor: [26, 26, 26] as [number, number, number],
-        textColor: [255, 255, 255] as [number, number, number],
-      },
-      1: {
-        cellWidth: 64,
-        fillColor: [255, 255, 255] as [number, number, number],
-      },
-    },
+  // ── Filas de la tabla, agrupadas por categoría en orden de aparición ──
+  const categories: string[] = []
+  data.items.forEach((item) => {
+    if (!categories.includes(item.categoria)) categories.push(item.categoria)
+  })
+  const groups: Row[][] = categories.map((cat) => {
+    const catItems = data.items.filter((i) => i.categoria === cat)
+    const catTotal = catItems.reduce((s, i) => s + (i.importe || 0), 0)
+    fonts.set(doc, 'semibold', 8)
+    const catLines: string[] = doc.splitTextToSize(cat || '', COL.cat.w - 2)
+    return catItems.map((item, idx) => {
+      const noPrice = !item.precio_unitario || !item.cantidad
+      fonts.set(doc, 'regular', 8)
+      return {
+        cat,
+        catLines,
+        descLines: doc.splitTextToSize(item.descripcion || '', COL.desc.w - 2),
+        qty: item.cantidad ? String(item.cantidad) : '',
+        unit: noPrice ? '$ - ,00' : formatCurrencyPdf(item.precio_unitario),
+        amount: noPrice ? '$ - ,00' : formatCurrencyPdf(item.importe),
+        noPrice,
+        groupFirst: idx === 0,
+        groupTotal: idx === 0 ? formatCurrencyPdf(catTotal) : '',
+      }
+    })
   })
 
-  if (isoLogoPng) {
-    const headerFinalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY
-    const isoH = headerFinalY - 10
-    const isoW = isoH * ISO_RATIO
-    try {
-      doc.addImage(isoLogoPng, pageW - margin - isoW, 10, isoW, isoH)
-    } catch (e) {
-      console.warn('Error añadiendo logo ISO:', e)
+  const place = (r: Row, firstOnPage: boolean): PlacedRow => {
+    const showCat = r.groupFirst || firstOnPage
+    const cont = !r.groupFirst && firstOnPage
+    const catH = showCat ? r.catLines.length * ROW_LH + (cont ? CONT_LH : 0) : 0
+    const contentH = Math.max(r.descLines.length * ROW_LH, catH, ROW_LH)
+    const gapBefore = r.groupFirst && !firstOnPage
+    return {
+      ...r,
+      showCat,
+      cont,
+      gapBefore,
+      border: firstOnPage ? 'none' : r.groupFirst ? 'group' : 'row',
+      h: 2 * ROW_PAD + contentH + (gapBefore ? GROUP_GAP : 0),
     }
   }
 
-  let currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 8
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(0, 0, 0)
-  doc.text('RESUMEN:', margin, currentY)
-  currentY += 8
+  // ── Encabezado de la página 1 (medición) ──
+  const headerFields: Array<{ label: string; value: string; accent?: boolean }> = [
+    { label: 'Cliente', value: data.cliente || '—' },
+    { label: 'Proyecto', value: data.proyecto || '—' },
+    { label: 'Locación', value: data.locacion || '—' },
+    { label: 'Fecha de entrega', value: formatDateDisplay(data.fecha_entrega) },
+    { label: 'Fecha de cotización', value: formatDateDisplay(data.fecha_cotizacion) },
+    { label: '# Cotización', value: data.id, accent: true },
+  ]
+  const HDR_PAD_V = 4
+  const HDR_LABEL_W = 32
+  const HDR_GAP = 3
+  const HDR_ROW_GAP = 1.5
+  const HDR_LH = 4.2
+  const LOGO_SIZE = 32.3 // 122 px del diseño
+  const hdrValueX = TEXT_L + HDR_LABEL_W + HDR_GAP
+  const hdrValueW = TEXT_R - LOGO_SIZE - 8 - hdrValueX
+  fonts.set(doc, 'semibold', 8.5)
+  const hdrValues = headerFields.map((f) => doc.splitTextToSize(f.value, hdrValueW) as string[])
+  const hdrColH =
+    hdrValues.reduce((s, v) => s + v.length * HDR_LH, 0) + (headerFields.length - 1) * HDR_ROW_GAP
+  const hdrBandH = Math.max(hdrColH, LOGO_SIZE) + 2 * HDR_PAD_V
+  const firstTableY = FIRST_BAND_Y + hdrBandH + 9 + 5 + 3 // banda + aire + "Resumen" + aire
 
-  autoTable(doc, {
-    startY: currentY,
-    margin: { left: margin, right: margin },
-    head: [['Categoría', 'Descripción', 'Cant.', 'P. Unitario', 'Importe', 'Total categoría']],
-    body: buildItemsBody(data),
-    styles: {
-      fontSize: 9,
-      cellPadding: { top: 1.23, right: 2.1, bottom: 1.23, left: 2.1 },
-      textColor: [0, 0, 0] as [number, number, number],
-      lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0 } as Partial<LineWidths>,
-      lineColor: [235, 235, 235] as [number, number, number],
-    },
-    headStyles: {
-      fillColor: [26, 26, 26] as [number, number, number],
-      textColor: [255, 255, 255] as [number, number, number],
-      fontStyle: 'bold',
-      fontSize: 9.5,
-      cellPadding: { top: 1.75, right: 2.1, bottom: 1.75, left: 2.1 },
-      lineWidth: 0,
-    },
-    columnStyles: {
-      0: { cellWidth: 24 },
-      1: { cellWidth: 73 },
-      2: { cellWidth: 13, halign: 'center' as const },
-      3: { cellWidth: 24, halign: 'right' as const },
-      4: { cellWidth: 24, halign: 'right' as const },
-      5: {
-        cellWidth: 29,
-        halign: 'right' as const,
-        fontStyle: 'bold',
-        lineWidth: { top: 0, right: 0, bottom: 0.15, left: 0.15 } as Partial<LineWidths>,
-        lineColor: [235, 235, 235] as [number, number, number],
-      },
-    },
-  })
+  // ── Bloque final (medición): totales + notas + generales ──
+  const totals: Array<{ label: string; value: string; kind: 'normal' | 'general' | 'discount' }> = [
+    { label: 'Subtotal', value: formatCurrencyPdf(data.subtotal), kind: 'normal' },
+    { label: 'Fee de agencia', value: formatCurrencyPdf(data.fee_agencia), kind: 'normal' },
+    { label: 'General', value: formatCurrencyPdf(data.general), kind: 'general' },
+  ]
+  if (descuento > 0) totals.push({ label: 'Descuento', value: `− ${formatCurrencyPdf(descuento)}`, kind: 'discount' })
+  if (data.iva_activo) totals.push({ label: 'IVA (16%)', value: formatCurrencyPdf(data.iva), kind: 'normal' })
+  const T_ROW = 4.3
+  const T_GENERAL = 5
+  const T_SEP = 0.8
+  const totalsInnerH =
+    totals.reduce((s, t) => s + (t.kind === 'general' ? T_GENERAL + 2 * T_SEP : T_ROW), 0) + 1.5 + 1.5 + 6
+  const totalsBandH = totalsInnerH + 2 * HDR_PAD_V
 
-  currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 5.5
-  const rightColW = 72
-  const leftColW = contentW - rightColW
-  const totalsRows = buildTotalsRows(data, descuento)
-
-  const rowH = 5.5
-  const rowGap = 1.6
-  const padV = 3.1
-  const totalRowsH = totalsRows.length * rowH + (totalsRows.length - 1) * rowGap
-  const bannerH = Math.max(totalRowsH + padV * 2, 28)
-
-  if (currentY + bannerH > 270) {
-    doc.addPage()
-    currentY = 15
-  }
-
-  doc.setFillColor(26, 26, 26)
-  doc.rect(margin, currentY, contentW, bannerH, 'F')
-
-  if (serenataLogoPng) {
-    const padH = 4.9
-    const maxLogoW = leftColW - padH * 2
-    const logoW = maxLogoW
-    const logoH = logoW / SERENATA_RATIO
-    const logoX = margin + padH
-    const logoY = currentY + (bannerH - logoH) / 2
-    try {
-      doc.addImage(serenataLogoPng, logoX, logoY, logoW, logoH)
-    } catch (e) {
-      console.warn('Error añadiendo logo Serenata:', e)
-    }
-  }
-
-  const rightZoneX = margin + leftColW
-  const padRight = 7
-  const valueMinW = 30
-  const gapLV = 1.4
-  const valueRightX = rightZoneX + rightColW - padRight
-  const labelRightX = valueRightX - valueMinW - gapLV
-  let ty = currentY + padV + rowH * 0.75
-
-  totalsRows.forEach((row, i) => {
-    if (i > 0) ty += rowH + rowGap
-    doc.setFont('helvetica', row.bold ? 'bold' : 'normal')
-    doc.setFontSize(row.fontSize)
-    doc.setTextColor(...row.labelColor)
-    doc.text(row.label, labelRightX, ty, { align: 'right' })
-    doc.setTextColor(...row.valueColor)
-    doc.text(row.value, valueRightX, ty, { align: 'right' })
-  })
-
-  currentY = currentY + bannerH + 8.8
-
-  // Bloque 2 (docs/PLAN.md) sub-tarea 6: campo nuevo, distinto de "Nota de
-  // evento" (notas_internas, uso interno, nunca sale aquí). Mismo patrón de
-  // banda negra de título que NOTAS GENERALES en hoja-llamado-pdf.ts.
   const notas = (data.notas || '').trim()
-  if (notas) {
-    doc.setFillColor(26, 26, 26)
-    doc.rect(margin, currentY, contentW, 8, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.setTextColor(255, 255, 255)
-    doc.text('NOTAS', margin + 2, currentY + 5.5)
-    currentY += 10
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(0, 0, 0)
-    const wrappedNotas = doc.splitTextToSize(notas, contentW)
-    doc.text(wrappedNotas, margin, currentY)
-    currentY += wrappedNotas.length * 4.8 + 6
-  }
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.6)
-  doc.setTextColor(0, 0, 0)
-  doc.text('GENERALES:', margin, currentY)
-  const gw = doc.getTextWidth('GENERALES:')
-  doc.line(margin, currentY + 0.8, margin + gw, currentY + 0.8)
-  currentY += 4.8
+  const NOTES_X = 51
+  const NOTES_W = 138
+  fonts.set(doc, 'regular', 8.5)
+  const notesH = notas ? 9 + 4 + Math.max(countLines(doc, notas, NOTES_W), 1) * 4.2 : 0
 
   const generales = getGeneralesText()
+  const LEGAL_LH = 3.1
+  fonts.set(doc, 'semibold', 6.5)
+  const g1 = countLines(doc, generales.line1, TEXT_W)
+  fonts.set(doc, 'regular', 6.5)
+  const g2 = countLines(doc, generales.line2, TEXT_W)
+  const gCancel = countLines(doc, getCancelacionText(), TEXT_W)
+  const gCostos = countLines(doc, getCostosText(), TEXT_W)
+  const generalesH =
+    9 + 4 + 4.2 + 2 + (g1 + g2) * LEGAL_LH + 2.5 + (LEGAL_LH + 1.2 + gCancel * LEGAL_LH) + 2.5 + (LEGAL_LH + 1.2 + gCostos * LEGAL_LH)
+  const blockH = totalsBandH + notesH + generalesH
 
-  doc.setFontSize(8.5)
-  doc.setFont('helvetica', 'bold')
-  const line1 = doc.splitTextToSize(generales.line1, contentW)
-  doc.text(line1, margin, currentY, { align: 'justify', maxWidth: contentW })
-  currentY += line1.length * 4.55
+  // ── Paginación de la tabla ──
+  const pages: PlacedRow[][] = [[]]
+  let y = firstTableY + COL_HEADER_H
+  for (const group of groups) {
+    group.forEach((r, idx) => {
+      const cur = pages[pages.length - 1]
+      let placed = place(r, cur.length === 0)
+      let need = placed.h
+      // Un grupo no empieza si no caben al menos 2 de sus filas
+      if (idx === 0 && group.length > 1 && cur.length > 0) {
+        need += place(group[1], false).h
+      }
+      if (y + need > LIMIT_Y && cur.length > 0) {
+        pages.push([])
+        y = CONT_CONTENT_Y + COL_HEADER_H
+        placed = place(r, true)
+      }
+      pages[pages.length - 1].push(placed)
+      y += placed.h
+    })
+  }
 
-  doc.setFont('helvetica', 'normal')
-  const line2 = doc.splitTextToSize(generales.line2, contentW)
-  doc.text(line2, margin, currentY, { align: 'justify', maxWidth: contentW })
-  currentY += line2.length * 4.55 + 1.0
+  // ¿Cabe el bloque final después de la tabla?
+  let lastPage = pages[pages.length - 1]
+  const hasRows = lastPage.length > 0
+  let blockOnNewPage = false
+  if (y + (hasRows ? TABLE_TO_TOTALS : 0) + blockH > LIMIT_Y) {
+    if (lastPage.length > 2) {
+      const moved = lastPage.splice(-2)
+      const np = moved.map((r, i) => place(r, i === 0))
+      pages.push(np)
+      lastPage = np
+      y = CONT_CONTENT_Y + COL_HEADER_H + np.reduce((s, r) => s + r.h, 0)
+    } else {
+      blockOnNewPage = true
+    }
+  }
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.8)
-  doc.setTextColor(255, 255, 255)
-  const costosLabelW = doc.getTextWidth('COSTOS') + 6
-  doc.setFillColor(26, 26, 26)
-  doc.rect(margin, currentY, costosLabelW, 6, 'F')
-  doc.text('COSTOS', margin + 3, currentY + 4.2)
-  currentY += 6 + 6.2
+  // ── Dibujo ──
+  const drawCompactHeader = () => {
+    const top = 14
+    if (isoLogoPng) {
+      try {
+        doc.addImage(isoLogoPng, 'PNG', MARGIN, top, 7, 7 / ISO_RATIO)
+      } catch (e) {
+        console.warn('Error añadiendo logo ISO:', e)
+      }
+    }
+    const tx = MARGIN + 7 + 3
+    fonts.set(doc, 'semibold', 6.5)
+    doc.setTextColor(...C.tertiary)
+    const contW = trackedText(doc, 'CONTINUACIÓN', MARGIN + BAND_W, baseline(top, 3.8), TRACK, 'right')
+    fonts.set(doc, 'semibold', 9)
+    doc.setTextColor(...C.ink)
+    doc.text(`Cotización ${data.id}`, tx, baseline(top, 3.8))
+    fonts.set(doc, 'regular', 7)
+    doc.setTextColor(...C.secondary)
+    const sub = ellipsize(doc, `${data.cliente} · ${data.proyecto}`, MARGIN + BAND_W - contW - 3 - tx)
+    doc.text(sub, tx, baseline(top + 3.8 + 0.6, 3))
+    hline(doc, 25, MARGIN, MARGIN + BAND_W, 0.2, C.sectionDivider)
+  }
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(17, 17, 17)
-  const costos = doc.splitTextToSize(getCostosText(), contentW)
-  doc.text(costos, margin, currentY)
-  currentY += costos.length * 4.55
+  const drawColumnHeader = (top: number) => {
+    fonts.set(doc, 'semibold', 6.5)
+    doc.setTextColor(...C.secondary)
+    const by = top + COL_HEADER_H - 1.6 - 3 + 0.72 * 3
+    trackedText(doc, 'CATEGORÍA', COL.cat.x, by, TRACK)
+    trackedText(doc, 'DESCRIPCIÓN', COL.desc.x, by, TRACK)
+    trackedText(doc, 'CANT.', COL.qtyCenter, by, TRACK, 'center')
+    trackedText(doc, 'P. UNITARIO', COL.unitRight, by, TRACK, 'right')
+    trackedText(doc, 'IMPORTE', COL.amountRight, by, TRACK, 'right')
+    trackedText(doc, 'TOTAL CAT.', COL.totalRight, by, TRACK, 'right')
+    hline(doc, top + COL_HEADER_H, MARGIN, MARGIN + BAND_W, 0.3, C.ink)
+    return top + COL_HEADER_H
+  }
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.8)
-  doc.setTextColor(255, 255, 255)
-  const cancelLabelW = doc.getTextWidth('CANCELACIÓN') + 6
-  doc.setFillColor(26, 26, 26)
-  doc.rect(margin, currentY, cancelLabelW, 6, 'F')
-  doc.text('CANCELACIÓN', margin + 3, currentY + 4.2)
-  currentY += 6 + 6.2
+  const drawRow = (r: PlacedRow, top: number) => {
+    let t = top
+    if (r.gapBefore) t += GROUP_GAP
+    if (r.border === 'group') hline(doc, t, MARGIN, MARGIN + BAND_W, 0.2, C.groupStart)
+    else if (r.border === 'row') hline(doc, t, MARGIN, MARGIN + BAND_W, 0.15, C.hairline)
+    const by = t + ROW_PAD + 0.72 * ROW_LH
+    if (r.showCat) {
+      fonts.set(doc, 'semibold', 8)
+      doc.setTextColor(...C.ink)
+      doc.text(r.catLines, COL.cat.x, by, { lineHeightFactor: ROW_LH / (8 * PT) })
+      if (r.cont) {
+        fonts.set(doc, 'regular', 6.5)
+        doc.setTextColor(...C.tertiary)
+        doc.text('cont.', COL.cat.x, t + ROW_PAD + r.catLines.length * ROW_LH + 0.72 * CONT_LH)
+      }
+    }
+    fonts.set(doc, 'regular', 8)
+    doc.setTextColor(...C.body)
+    doc.text(r.descLines, COL.desc.x, by, { lineHeightFactor: ROW_LH / (8 * PT) })
+    doc.text(r.qty, COL.qtyCenter, by, { align: 'center' })
+    doc.setTextColor(...(r.noPrice ? C.tertiary : C.body))
+    doc.text(r.unit, COL.unitRight, by, { align: 'right' })
+    doc.setTextColor(...(r.noPrice ? C.tertiary : C.ink))
+    doc.text(r.amount, COL.amountRight, by, { align: 'right' })
+    if (r.groupTotal) {
+      fonts.set(doc, 'semibold', 8)
+      doc.setTextColor(...C.ink)
+      doc.text(r.groupTotal, COL.totalRight, by, { align: 'right' })
+    }
+    return top + r.h
+  }
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(17, 17, 17)
-  const cancelacion = doc.splitTextToSize(getCancelacionText(), contentW)
-  doc.text(cancelacion, margin, currentY, { align: 'justify', maxWidth: contentW })
+  const drawFirstHeader = () => {
+    doc.setFillColor(...C.ink)
+    doc.roundedRect(MARGIN, FIRST_BAND_Y, BAND_W, hdrBandH, 3, 3, 'F')
+    let ty = FIRST_BAND_Y + (hdrBandH - hdrColH) / 2
+    headerFields.forEach((f, i) => {
+      const lines = hdrValues[i]
+      const by = baseline(ty, HDR_LH)
+      fonts.set(doc, 'semibold', 6.5)
+      doc.setTextColor(...C.labelOnDark)
+      trackedText(doc, f.label.toUpperCase(), TEXT_L, by, TRACK)
+      fonts.set(doc, 'semibold', 8.5)
+      doc.setTextColor(...(f.accent ? C.accent : C.white))
+      doc.text(lines, hdrValueX, by, { lineHeightFactor: HDR_LH / (8.5 * PT) })
+      ty += lines.length * HDR_LH + HDR_ROW_GAP
+    })
+    if (isoLogoPng) {
+      try {
+        const logoH = LOGO_SIZE / ISO_RATIO
+        doc.addImage(isoLogoPng, 'PNG', TEXT_R - LOGO_SIZE, FIRST_BAND_Y + (hdrBandH - logoH) / 2, LOGO_SIZE, logoH)
+      } catch (e) {
+        console.warn('Error añadiendo logo ISO:', e)
+      }
+    }
+    const resumenTop = FIRST_BAND_Y + hdrBandH + 9
+    fonts.set(doc, 'bold', 11)
+    doc.setTextColor(...C.ink)
+    doc.text('Resumen', TEXT_L, baseline(resumenTop, 5))
+  }
+
+  // Cursor con salto de página para texto que, en el caso extremo, no cabe
+  // completo en una página nueva (notas muy largas).
+  let cursorY = 0
+  const newPage = () => {
+    doc.addPage()
+    drawCompactHeader()
+    cursorY = CONT_CONTENT_Y
+  }
+  const ensure = (h: number) => {
+    if (cursorY + h > LIMIT_Y) newPage()
+  }
+
+  const drawTotalsBand = (top: number) => {
+    doc.setFillColor(...C.ink)
+    doc.roundedRect(MARGIN, top, BAND_W, totalsBandH, 3, 3, 'F')
+    if (serenataLogoPng) {
+      try {
+        const w = 39.8
+        const h = w / SERENATA_RATIO
+        doc.addImage(serenataLogoPng, 'PNG', TEXT_L, top + (totalsBandH - h) / 2, w, h)
+      } catch (e) {
+        console.warn('Error añadiendo logo Serenata:', e)
+      }
+    }
+    const bx1 = TEXT_R - 84
+    let ty = top + HDR_PAD_V
+    totals.forEach((t) => {
+      if (t.kind === 'general') {
+        ty += T_SEP
+        hline(doc, ty, bx1, TEXT_R, 0.2, C.dividerOnDark)
+        ty += T_SEP
+        fonts.set(doc, 'semibold', 10)
+        doc.setTextColor(...C.accent)
+        doc.text(t.label, bx1, baseline(ty, T_GENERAL))
+        doc.text(t.value, TEXT_R, baseline(ty, T_GENERAL), { align: 'right' })
+        ty += T_GENERAL
+        return
+      }
+      fonts.set(doc, 'regular', 8.5)
+      doc.setTextColor(...(t.kind === 'discount' ? C.discount : C.labelOnDark))
+      doc.text(t.label, bx1, baseline(ty, T_ROW))
+      doc.setTextColor(...(t.kind === 'discount' ? C.discount : C.white))
+      doc.text(t.value, TEXT_R, baseline(ty, T_ROW), { align: 'right' })
+      ty += T_ROW
+    })
+    ty += 1.5
+    hline(doc, ty, bx1, TEXT_R, 0.3, C.dividerOnDark)
+    ty += 1.5
+    const by = baseline(ty, 6)
+    fonts.set(doc, 'bold', 7.5)
+    doc.setTextColor(...C.white)
+    trackedText(doc, 'TOTAL', bx1, by, 0.6 * PT)
+    fonts.set(doc, 'bold', 14)
+    doc.text(formatCurrencyPdf(data.total), TEXT_R, by, { align: 'right' })
+  }
+
+  const drawSectionTop = () => {
+    ensure(9 + 4 + 4.2)
+    cursorY += 9
+    hline(doc, cursorY, MARGIN, MARGIN + BAND_W, 0.2, C.sectionDivider)
+    cursorY += 4
+  }
+
+  const drawNotes = () => {
+    if (!notas) return
+    drawSectionTop()
+    fonts.set(doc, 'bold', 9)
+    doc.setTextColor(...C.ink)
+    doc.text('Notas', TEXT_L, baseline(cursorY, 4.2))
+    fonts.set(doc, 'regular', 8.5)
+    doc.setTextColor(...C.body)
+    const lines = notas.split('\n').flatMap((p) => doc.splitTextToSize(p, NOTES_W) as string[])
+    lines.forEach((line) => {
+      ensure(4.2)
+      doc.text(line, NOTES_X, baseline(cursorY, 4.2))
+      cursorY += 4.2
+    })
+  }
+
+  const drawLegalParagraph = (text: string, kind: FontKind, color: RGB) => {
+    text.split('\n').forEach((para) => {
+      fonts.set(doc, kind, 6.5)
+      const n = countLines(doc, para, TEXT_W)
+      ensure(n * LEGAL_LH)
+      doc.setTextColor(...color)
+      cursorY = drawJustified(doc, para, TEXT_L, baseline(cursorY, LEGAL_LH), TEXT_W, LEGAL_LH) - 0.72 * LEGAL_LH
+    })
+  }
+
+  const drawLegalSubtitle = (text: string) => {
+    ensure(LEGAL_LH + 1.2 + LEGAL_LH)
+    fonts.set(doc, 'bold', 6.5)
+    doc.setTextColor(...C.ink)
+    trackedText(doc, text, TEXT_L, baseline(cursorY, LEGAL_LH), 0.25 * PT)
+    cursorY += LEGAL_LH + 1.2
+  }
+
+  const drawGenerales = () => {
+    drawSectionTop()
+    fonts.set(doc, 'bold', 9)
+    doc.setTextColor(...C.ink)
+    doc.text('Generales:', TEXT_L, baseline(cursorY, 4.2))
+    cursorY += 4.2 + 2
+    drawLegalParagraph(generales.line1, 'semibold', C.body)
+    drawLegalParagraph(generales.line2, 'regular', C.secondary)
+    cursorY += 2.5
+    drawLegalSubtitle('CANCELACIÓN')
+    drawLegalParagraph(getCancelacionText(), 'regular', C.secondary)
+    cursorY += 2.5
+    drawLegalSubtitle('COSTOS')
+    drawLegalParagraph(getCostosText(), 'regular', C.secondary)
+  }
+
+  pages.forEach((rows, pi) => {
+    let top: number
+    if (pi === 0) {
+      drawFirstHeader()
+      top = firstTableY
+    } else {
+      doc.addPage()
+      drawCompactHeader()
+      top = CONT_CONTENT_Y
+    }
+    if (rows.length > 0 || pi === 0) {
+      top = drawColumnHeader(top)
+      rows.forEach((r) => {
+        top = drawRow(r, top)
+      })
+    }
+    cursorY = top
+  })
+
+  if (blockOnNewPage) {
+    newPage()
+  } else if (lastPage.length > 0) {
+    cursorY += TABLE_TO_TOTALS
+  }
+  ensure(totalsBandH)
+  drawTotalsBand(cursorY)
+  cursorY += totalsBandH
+  drawNotes()
+  drawGenerales()
+
+  // ── Pie en todas las páginas ──
+  const total = doc.getNumberOfPages()
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i)
+    hline(doc, 283, TEXT_L, TEXT_R, 0.2, C.hairline)
+    fonts.set(doc, 'regular', 6.5)
+    doc.setTextColor(...C.tertiary)
+    const by = baseline(283 + 2.2, 3)
+    doc.text(`Serenata House Entertainment · Cotización ${data.id}`, TEXT_L, by)
+    doc.text(`Página ${i} de ${total}`, TEXT_R, by, { align: 'right' })
+  }
 
   return doc.output('arraybuffer') as ArrayBuffer
 }

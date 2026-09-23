@@ -23,12 +23,3 @@ export interface CotizacionPDFData {
   descuento_valor: number
   notas?: string | null
 }
-
-export type TotalsRow = {
-  label: string
-  value: string
-  labelColor: [number, number, number]
-  valueColor: [number, number, number]
-  bold: boolean
-  fontSize: number
-}
