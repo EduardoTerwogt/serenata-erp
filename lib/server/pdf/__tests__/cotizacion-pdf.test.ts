@@ -169,4 +169,8 @@ describe('generateCotizacionPdf', () => {
     // conteo de páginas; el pie se dibuja en un loop sobre todas las páginas.
     expect(buf.byteLength).toBeGreaterThan(5000)
   })
+
+  it('comprime los logos (sin compress el isotipo solo pesaba ~590 KB)', () => {
+    expect(generateCotizacionPdf(sampleData).byteLength).toBeLessThan(200_000)
+  })
 })
