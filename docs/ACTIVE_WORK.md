@@ -81,9 +81,18 @@ borrador sobre `claude/clever-galileo-2w49pi` + pasos manuales fuera del PR.
   Tamaños: Cotización 778→37 KB, 843→46 KB, 801→40 KB; Orden de pago
   149→27 KB, 914→57 KB, 840→44 KB; Hoja de llamado 643→27 KB,
   669→33 KB, 644→26 KB.
-- B2: spec nuevo `--repeat-each=20` → 60/60 en verde (local).
-- (ver resultados de smoke/critical/build y CI abajo — se completan al
-  cerrar el PR)
+- B2: spec nuevo `--repeat-each=20` → 60/60 en verde (local). El spec
+  viejo también pasó 60/60 en local: el flake (visto una vez en CI, PR #89)
+  no se reprodujo aquí; el fix se sostiene por el análisis del DOM (dos
+  coincidencias de `ine.jpg` mientras el modal sigue abierto), no por
+  reproducción.
+- Local: `test:e2e:smoke` 26/26, `test:e2e:critical` 80/80, `npm run build`
+  verde (con las mismas env de CI; sin ellas falla por `supabaseUrl`, igual
+  que en `main`).
+- CI del PR #90: `test` verde. `fresh-db` rojo por infraestructura (ghcr.io
+  `toomanyrequests` al bajar imágenes de Supabase, antes de aplicar
+  migraciones), reproducido en el re-run; documentado en el PR. `live` y
+  `smoke-and-critical`: ver el PR.
 
 ## Pendiente manual (fuera del PR)
 
