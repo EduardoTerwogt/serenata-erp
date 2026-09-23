@@ -10,6 +10,8 @@ export interface OrdenPagoPreviewItem {
 export interface OrdenPagoPreviewEvento {
   cotizacion_folio: string
   proyecto: string
+  /** Fecha de entrega de la cotización (yyyy-mm-dd); se imprime en el PDF. */
+  fecha_entrega: string | null
   items: OrdenPagoPreviewItem[]
   subtotal: number
 }
@@ -67,6 +69,7 @@ export function buildOrdenPagoPreview(cuentasPendientes: CuentaPagarConJoins[]):
       evento = {
         cotizacion_folio: cuenta.cotizacion_id,
         proyecto: cuenta.proyecto_nombre || cuenta.cotizaciones?.proyecto || 'Sin proyecto',
+        fecha_entrega: cuenta.cotizaciones?.fecha_entrega || null,
         items: [],
         subtotal: 0,
       }
