@@ -37,8 +37,15 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
   `.claude/rules/migraciones.md`: `pg_trgm` en `extensions`; toda función
   nueva fija `search_path`.
 
-## Pendiente manual (arrastrado de la sesión 6, PR #90)
+## Pasos manuales (arrastrados de la sesión 6, PR #90)
 
+- **M1 — `NEXTAUTH_SECRET`: ✅ (2026-09-24).** Vía Vercel MCP quedó solo
+  en Development (el MCP no puede borrar variables); redeploy de producción
+  `dpl_FKAT3A1MXA3cXGWGYu2pFZqnTZ4e` y Preview
+  `dpl_CJgsMXDc71gCzyWqM1y7qcHpmxQG`. Verificado por el usuario: sesiones
+  abiertas de staff y Portal en prod sobrevivieron; login/logout OK en prod
+  y Preview. **Falta (usuario, cuando quiera):** borrar la entrada restante
+  de Development en el dashboard — no la lee nada.
 - **M2 — auditoría de entornos: ✅ corregido y verificado (2026-09-24).**
   Hallazgo: en Vercel `serenata-erp`, URL/anon/service_role de Supabase eran
   una sola entrada para Production+Preview+Development apuntando a **prod**
@@ -97,7 +104,7 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
 
 ## Siguiente paso
 
-Pasos manuales cerrados (M2, V1 y V2; M1 diferido a ROADMAP → "Después").
+Pasos manuales cerrados (M1, M2, V1 y V2).
 Queda solo el housekeeping de ramas. Antes de fin de año: decidir el formato
 de folios CC/CP para 2027. Después, priorizar en Chat
 (`docs/ROADMAP.md` → "Siguiente"/"Después"; incluye el bug de Presence).

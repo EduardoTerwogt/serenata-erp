@@ -125,14 +125,6 @@ ni tiene alcance de iniciativa definido.
   confirme que terminó la reconciliación manual de ambiguous/no_match
   (decisión 014). Desde 2026-09-23 está cerrada a la Data API (RLS + sin
   grants para anon/authenticated); mientras siga, no hay riesgo.
-- **Quitar `NEXTAUTH_SECRET` de Vercel (ex-M1, diferido 2026-09-24 por
-  decisión del usuario para una de las últimas iniciativas).** Limpieza sin
-  impacto funcional: desde el PR #90 el código solo lee `AUTH_SECRET`
-  (confirmado en todos los entornos). Pasos: (1) login/logout de staff y
-  Portal en Preview y prod, dejando una sesión de staff abierta; (2) borrar
-  `NEXTAUTH_SECRET` en todos los entornos de `serenata-erp` (y
-  `serenata-erp-loadtest` si la tiene) + Redeploy sin caché; (3) repetir
-  (1) y confirmar que la sesión abierta sigue viva.
 - **Colaboración en vivo — el aviso "X está editando" no se quita al salir
   (visto en V1, 2026-09-24; no grave, diferido por decisión del usuario).**
   Repro: sesión A edita la sección de partidas de una cotización; sesión B
@@ -182,6 +174,15 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Pasos manuales post-deuda técnica (2026-09-24).** M1: `NEXTAUTH_SECRET`
+  fuera de Production y Preview en Vercel (solo la lee NextAuth como fallback
+  de `AUTH_SECRET`, que existe en todos los entornos); redeploy de prod y
+  Preview, sesiones de staff y Portal abiertas sobrevivieron y login/logout
+  OK. M2: los Previews usaban la base de **producción** — separados a
+  `serenata-erp-test` (Supabase y Google). V1: colaboración verificada en
+  Preview con 2 usuarios (bug leve de Presence anotado en "Después"). V2: no
+  existe login con Google; Drive de prod funcionando; Drive apagado en
+  Preview.
 - **Advisor de Supabase sin WARN (2026-09-24).** `search_path` fijo vía
   `ALTER FUNCTION … SET` (sin reescribir cuerpos, decisión 005) en las 10
   funciones marcadas, y `pg_trgm` movida de `public` a `extensions` (los
