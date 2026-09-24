@@ -424,6 +424,12 @@ llave anónima no lee nada. Es la razón de que la colaboración no use
 
 Trampas reales, no teóricas. Cada una costó un bug:
 
+- **`pg_trgm` está en el esquema `extensions`, no en `public`** (desde
+  2026-09-24, migración `20260924_advisor_search_path_pg_trgm.sql`). Una
+  función con `SET search_path = public` que llame `similarity()` falla con
+  "function does not exist": agregar `extensions` a su `search_path`
+  (como `match_proveedor_por_nombre`). Los índices GIN `gin_trgm_ops` y los
+  `ILIKE` no se ven afectados.
 - **Cotizaciones COMPLEMENTARIA afectan al Proyecto de la PRINCIPAL.** Al aprobarse
   suman al proyecto y las cuentas del padre. No tratarlas como independientes.
 - **Escribir en cotizaciones / proyectos / cuentas YA NO dispara sync a Google

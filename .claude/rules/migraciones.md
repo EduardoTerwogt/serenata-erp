@@ -15,6 +15,11 @@ paths:
     migración nueva en vez de editar la vieja.
 - Todo cambio aplicado a producción se guarda aquí como archivo numerado y se commitea.
 - `SECURITY DEFINER` debe fijar `search_path`. Revisar permisos `EXECUTE`.
+- **Toda función nueva fija `search_path`** (`SET search_path = public, pg_temp`
+  como mínimo), sea o no `SECURITY DEFINER` — el advisor la marca WARN si no.
+- `pg_trgm` vive en `extensions` desde 2026-09-24: una función que use
+  `similarity()`/operadores trigram necesita `public, extensions, pg_temp` en su
+  `search_path` (o calificar `extensions.similarity`).
 - El upsert de partidas va siempre acotado por `cotizacion_id`, nunca genérico.
 - El job `Migrations` de CI reconstruye el schema desde un Postgres vacío en cada
   push: si una migración no es reproducible desde cero, ahí falla.
