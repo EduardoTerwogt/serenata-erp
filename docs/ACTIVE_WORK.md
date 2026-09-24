@@ -76,18 +76,28 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
   colaboración funciona. El usuario vio un "ligero bug, nada grave" y
   decidió dejarlo así: el aviso "X está editando" no se quita en B cuando
   A sale de la cotización (repro completo en ROADMAP → "Después").
-- **V2 — Google:** (a) login con Google → sesión; (b) autorización de Drive →
-  callback → token guardado → llamada real a Drive.
+- **V2 — Google: ✅ cerrado (2026-09-24).** (a) **No aplica:** la app no
+  tiene login con Google — `auth.ts` solo usa `Credentials` (email +
+  contraseña); el ítem venía de un supuesto que el código no respalda.
+  (b) Drive en producción funciona: subidas reales registradas en prod hasta
+  el 2026-09-21 (`proveedor_documentos`), `documentos_cuentas_pagar` hasta
+  el 19-sep; el token de prod (`GOOGLE_DRIVE_REFRESH_TOKEN`, Production +
+  Development) no se tocó. Drive en **Preview queda apagado por decisión
+  del usuario** (sin refresh token en Preview → error explícito "Google
+  Drive no configurado"); Drive real contra test ya lo cubre el job `live`
+  de CI con su propio token y carpeta.
 - **Housekeeping:** borrar ramas remotas ya mergeadas (GitHub → Branches →
   Merged); el proxy de esta sesión no lo permite.
 
 ## Deuda técnica
 
-- Arrastrada: verificación completa de Google OAuth (V2), que ahora
-  incluye habilitar Drive en Preview.
+- Drive deshabilitado en Preview a propósito (ver V2). Si algún día hace
+  falta, generar token vía `/api/integrations/drive/authorize` con una
+  cuenta de pruebas + carpeta de test accesible con scope `drive.file`.
 
 ## Siguiente paso
 
-Paso manual V2 (M2 y V1 cerrados; M1 diferido a ROADMAP → "Después") (PR #90 ya en `main`). Antes de fin de año: decidir el
-formato de folios CC/CP para 2027 (ROADMAP → "Después"). Después, priorizar en
-Chat (`docs/ROADMAP.md` → "Siguiente"/"Después").
+Pasos manuales cerrados (M2, V1 y V2; M1 diferido a ROADMAP → "Después").
+Queda solo el housekeeping de ramas. Antes de fin de año: decidir el formato
+de folios CC/CP para 2027. Después, priorizar en Chat
+(`docs/ROADMAP.md` → "Siguiente"/"Después"; incluye el bug de Presence).
