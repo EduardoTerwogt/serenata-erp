@@ -125,6 +125,12 @@ ni tiene alcance de iniciativa definido.
   confirme que terminó la reconciliación manual de ambiguous/no_match
   (decisión 014). Desde 2026-09-23 está cerrada a la Data API (RLS + sin
   grants para anon/authenticated); mientras siga, no hay riesgo.
+- **Presence más fluido (opcional).** Tras #93 el aviso de edición tarda
+  hasta 15 s en reflejarse en ráfagas, por el límite del servidor de 5
+  eventos de Presence por cliente en 30 s (decisión 016). Si se quiere más
+  fluidez: pedir a Supabase subir `max_client_presence_events_per_window`
+  del proyecto y ajustar el presupuesto de `lib/realtime/presence-publisher.ts`
+  en consecuencia. El usuario dio la colaboración por cerrada (2026-09-24).
 - **Rediseño del PDF de reporte de cierre** — diferido el 2026-09-23 de la
   iniciativa "Actualización de formatos PDF vía Claude Design" (cerrada, ver
   "Cerrado"): se hace junto con la definición del módulo de Proyectos, porque
@@ -168,6 +174,8 @@ Si aparece otro feature a medias, documentarlo aquí.
   heartbeat, y el aviso se quita solo al salir de la sección/celda (la
   inactividad de 5 s suelta solo el bloqueo de datos). Detalle:
   [`docs/decisions/016`](decisions/016-presence-realtime-js-fijado-y-presupuesto.md).
+  PR [#93](https://github.com/EduardoTerwogt/serenata-erp/pull/93) (`3487981`);
+  probado a mano por el usuario, que dio el feature de colaboración por cerrado.
 - **Folios CC/CP por año (2026-09-24).** `generate_folio_cc/cp` pasan a
   `siguiente_folio(serie)`: año en curso (hora CDMX) y consecutivo que
   reinicia cada año (CC-2027-00001), sobre la tabla `folio_contadores`

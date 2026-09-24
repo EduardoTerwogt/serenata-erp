@@ -67,13 +67,25 @@ Se encontraron **dos causas raíz independientes**:
 - El fix de la librería es el oficial de Supabase; fijar la versión exacta
   evita el cambio de token de 2.113 sin arrastrar el resto del diff.
 - Enviar solo cuando cambia y agrupar ráfagas es lo que recomienda Supabase
-  para este error. Las alternativas eran peores: quitar el resaltado de celda
-  elimina una función; mandar awareness por Broadcast desde el navegador está
-  cerrado por RLS (decisión 003); pasarla por una ruta API agrega carga al
-  servidor en cada foco; subir el límite del proyecto no corrige el envío por
-  tecla y multiplica el tráfico hacia todos los suscriptores.
+  para este error.
 - Separar aviso y bloqueo conserva exactamente la convergencia de datos de
   antes y cumple el comportamiento visual pedido.
+
+## Alternativas descartadas
+
+- **Subir todo `supabase-js` a la última versión:** trae el cambio de token
+  de 2.113 (rompe el canal privado) y reintentos automáticos de postgrest.
+- **`patch-package` sobre 2.100:** parchar código compilado a mano es frágil
+  y agrega una herramienta; el fix oficial ya existe.
+- **Quitar el timer de 5 s por completo:** habría dejado de aplicar cambios
+  ajenos en la sección mientras el cursor siguiera ahí (regresión de datos).
+- **Quitar el resaltado de celda:** elimina una función.
+- **Awareness por Broadcast desde el navegador:** cerrado por RLS (decisión 003).
+- **Awareness por una ruta API:** carga al servidor en cada foco.
+- **Solo subir el límite del proyecto:** no corrige el envío por tecla y
+  multiplica el tráfico hacia todos los suscriptores.
+- **Vencimiento por `online_at` en el receptor:** tapaba el síntoma sin
+  arreglar la causa.
 
 ## Consecuencias
 
