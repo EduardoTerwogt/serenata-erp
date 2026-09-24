@@ -39,8 +39,17 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
 
 ## Pendiente manual (arrastrado de la sesión 6, PR #90)
 
-- **M2 — auditoría de entornos:** confirmar que Production usa Supabase prod
-  con su `SUPABASE_JWT_SECRET` y Preview usa `serenata-erp-test` con el suyo.
+- **M2 — auditoría de entornos: ❌ FALLA (verificado vía Vercel MCP,
+  2026-09-24).** En el proyecto Vercel `serenata-erp`,
+  `NEXT_PUBLIC_SUPABASE_URL` (= `fwmyoqokcjtldiofuxdg`, **prod**),
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` son **una
+  sola entrada para Production + Preview + Development**: los Previews leen
+  y escriben la base de producción. `SUPABASE_JWT_SECRET` sí tiene entradas
+  separadas para Production y Preview (tipo sensitive, no legibles): si la
+  de Preview es la de test, Realtime/Presence falla en Previews (relacionado
+  con V1). Las variables de Google (Drive, Sheets, Calendar) también son
+  compartidas. `serenata-erp-loadtest` tiene sus propias variables (sensitive).
+  Pendiente decisión del usuario sobre el fix (separar Preview → test).
 - **V1 — Presence en Preview real** (2 usuarios, 2 navegadores, ida y vuelta).
 - **V2 — Google:** (a) login con Google → sesión; (b) autorización de Drive →
   callback → token guardado → llamada real a Drive.
