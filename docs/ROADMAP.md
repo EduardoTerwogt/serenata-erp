@@ -125,6 +125,14 @@ ni tiene alcance de iniciativa definido.
   confirme que terminó la reconciliación manual de ambiguous/no_match
   (decisión 014). Desde 2026-09-23 está cerrada a la Data API (RLS + sin
   grants para anon/authenticated); mientras siga, no hay riesgo.
+- **Quitar `NEXTAUTH_SECRET` de Vercel (ex-M1, diferido 2026-09-24 por
+  decisión del usuario para una de las últimas iniciativas).** Limpieza sin
+  impacto funcional: desde el PR #90 el código solo lee `AUTH_SECRET`
+  (confirmado en todos los entornos). Pasos: (1) login/logout de staff y
+  Portal en Preview y prod, dejando una sesión de staff abierta; (2) borrar
+  `NEXTAUTH_SECRET` en todos los entornos de `serenata-erp` (y
+  `serenata-erp-loadtest` si la tiene) + Redeploy sin caché; (3) repetir
+  (1) y confirmar que la sesión abierta sigue viva.
 - **Folios CC/CP con año fijo:** `generate_folio_cc/cp` usan `seq_cc_2026`/
   `seq_cp_2026` y el prefijo literal `'CC-2026-'`/`'CP-2026-'`; en 2027 los
   folios seguirán diciendo 2026. Decidir antes de fin de año si el folio

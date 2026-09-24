@@ -39,12 +39,6 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
 
 ## Pendiente manual (arrastrado de la sesión 6, PR #90)
 
-- **M1 — `NEXTAUTH_SECRET` en Vercel:** (a) ✅ `AUTH_SECRET` confirmado por
-  el usuario en todos los entornos; (b) ✅ merge del PR #90; (c) login/logout
-  de staff y Portal en Preview y prod; (d) borrar `NEXTAUTH_SECRET` en
-  Vercel; (e) repetir (c). No se espera invalidación de sesiones: NextAuth
-  y `lib/session-token.ts` ya priorizan `AUTH_SECRET`, así que
-  `NEXTAUTH_SECRET` no se lee en ningún lado.
 - **M2 — auditoría de entornos:** confirmar que Production usa Supabase prod
   con su `SUPABASE_JWT_SECRET` y Preview usa `serenata-erp-test` con el suyo.
 - **V1 — Presence en Preview real** (2 usuarios, 2 navegadores, ida y vuelta).
@@ -60,6 +54,6 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
 
 ## Siguiente paso
 
-Pasos manuales M1 (c–e), M2, V1 y V2 (PR #90 ya en `main`). Antes de fin de año: decidir el
+Pasos manuales M2, V1 y V2 (M1 diferido a ROADMAP → "Después") (PR #90 ya en `main`). Antes de fin de año: decidir el
 formato de folios CC/CP para 2027 (ROADMAP → "Después"). Después, priorizar en
 Chat (`docs/ROADMAP.md` → "Siguiente"/"Después").
