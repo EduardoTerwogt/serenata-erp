@@ -18,3 +18,7 @@ paths:
 - La reconciliación no pisa lo que el usuario está escribiendo: conserva filas en
   edición, agrega con `append`, y al reconstruir restaura foco y cursor.
 - Contexto completo: `docs/decisions/002-*` y `docs/decisions/003-*`.
+- **Presence solo vía `publishPresence`** (`lib/realtime/presence-publisher.ts`),
+  nunca `channel.track()` directo: el servidor cierra el canal con > 5 eventos de
+  Presence por cliente en 30 s. `@supabase/realtime-js` está fijado en 2.112.0 —
+  no subirlo sin leer `docs/decisions/016-*`.
