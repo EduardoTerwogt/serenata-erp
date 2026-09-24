@@ -64,6 +64,14 @@ mejor que antes"). Todo está en `main`.
   `*_confirmed`. Vigilar si se repite ahora.
 - El MCP de Vercel no tiene alcance de team para logs de runtime ni para
   abrir URLs de deployment (403).
+- **El build depende de descargar Inter de Google Fonts** (`app/fonts.ts`,
+  `next/font/google`). El 2026-09-24 `Test Suite` falló en `c10c30b` (commit
+  solo de docs) únicamente en `next build`, con "Can't resolve
+  …/font/google/font"; el mismo código pasó antes y después. Si se repite,
+  migrar a `next/font/local` con el archivo de la fuente en el repo.
+- CI de `main` tras #93 (`e010b7a`): `Test Suite`, `Migrations` y `E2E`
+  (smoke-and-critical + `live`) en verde. El `Migrations` del commit de merge
+  falló antes de correr tests (rate limit al resolver el CLI de Supabase).
 
 ## Siguiente paso
 
