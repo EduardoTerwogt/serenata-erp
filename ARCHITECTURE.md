@@ -250,6 +250,20 @@ recibirlos del nuevo hook.
   Un remount inmediato del mismo topic (StrictMode, cambio de `key`) espera la
   remoción del canal anterior antes de reconectar -- ver gotcha de
   `removeChannel()` más abajo, EF-2 1A-1.
+- **Presence con presupuesto y versión fijada** ([`docs/decisions/016`](docs/decisions/016-presence-realtime-js-fijado-y-presupuesto.md)).
+  El servidor de Realtime cierra el canal si un cliente manda más de 5 eventos de
+  Presence en 30 s. Toda publicación pasa por `publishPresence`
+  (`lib/realtime/presence-publisher.ts`): token bucket de 2 con +1 cada 15 s,
+  cambios agrupados en 150 ms, sin reenviar un estado idéntico, re-publicación en
+  cada `SUBSCRIBED`. No hay heartbeat de Presence. `@supabase/realtime-js` está
+  fijado en **2.112.0** (`overrides`): 2.100 no aplicaba las bajas de Presence (el
+  aviso "X está editando" quedaba pegado) y ≥ 2.113 reemplaza nuestro JWT de
+  Realtime por la anon key en cada heartbeat.
+- **Aviso de edición ≠ bloqueo de datos.** El aviso de sección/celda se quita solo
+  al salir (blur). Los timers de inactividad de 5 s (`SECTION_IDLE_RELEASE_MS`,
+  `ITEM_CELL_IDLE_RELEASE_MS`) sueltan únicamente el bloqueo de datos
+  (`*LockHeldRef`, `itemFocusedCellsRef`) para que la reconciliación aplique cambios
+  ajenos aunque el cursor siga en la sección.
 
 **Aún no generalizado a propósito:** el protocolo `base`/`mutation_id`/conflict sigue
 siendo específico de Cotizaciones. Se decide su forma genérica cuando Proyectos exista

@@ -121,6 +121,12 @@ export function useQuotationGeneralAutosave({
     if (generalIdleReleaseTimerRef.current !== null) { window.clearTimeout(generalIdleReleaseTimerRef.current); generalIdleReleaseTimerRef.current = null }
   }, [])
 
+  // Tras SECTION_IDLE_RELEASE_MS sin escribir, suelta SOLO el bloqueo de datos
+  // (`generalLockHeldRef`), para que la reconciliación vuelva a aplicar en esta
+  // sección los cambios de otro colaborador aunque el cursor siga aquí. El aviso
+  // de Presence ("X está editando") NO se suelta por inactividad: solo al salir de
+  // la sección (blur) -- decisión del usuario, docs/decisions/016. Antes ambos se
+  // soltaban juntos aquí.
   const scheduleGeneralIdleRelease = useCallback(() => {
     clearGeneralIdleReleaseTimer()
     if (!generalLockHeldRef.current) return
@@ -128,9 +134,8 @@ export function useQuotationGeneralAutosave({
       generalIdleReleaseTimerRef.current = null
       if (!generalLockHeldRef.current || generalDirtyRef.current || isSavingGeneral) return
       generalLockHeldRef.current = false
-      releaseSection('general')
     }, SECTION_IDLE_RELEASE_MS)
-  }, [clearGeneralIdleReleaseTimer, isSavingGeneral, releaseSection])
+  }, [clearGeneralIdleReleaseTimer, isSavingGeneral])
 
   // Fetch crudo (no sendJson/getJson): esos helpers colapsan cualquier
   // respuesta no-2xx en un Error genérico y perderían el payload {fields}

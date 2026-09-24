@@ -103,6 +103,12 @@ export function useQuotationTotalesAutosave({
     if (totalsIdleReleaseTimerRef.current !== null) { window.clearTimeout(totalsIdleReleaseTimerRef.current); totalsIdleReleaseTimerRef.current = null }
   }, [])
 
+  // Tras SECTION_IDLE_RELEASE_MS sin escribir, suelta SOLO el bloqueo de datos
+  // (`totalsLockHeldRef`), para que la reconciliación vuelva a aplicar en esta
+  // sección los cambios de otro colaborador aunque el cursor siga aquí. El aviso
+  // de Presence ("X está editando") NO se suelta por inactividad: solo al salir de
+  // la sección (blur) -- decisión del usuario, docs/decisions/016. Antes ambos se
+  // soltaban juntos aquí.
   const scheduleTotalsIdleRelease = useCallback(() => {
     clearTotalsIdleReleaseTimer()
     if (!totalsLockHeldRef.current) return
@@ -110,9 +116,8 @@ export function useQuotationTotalesAutosave({
       totalsIdleReleaseTimerRef.current = null
       if (!totalsLockHeldRef.current || totalsDirtyRef.current || isSavingTotals) return
       totalsLockHeldRef.current = false
-      releaseSection('totales')
     }, SECTION_IDLE_RELEASE_MS)
-  }, [clearTotalsIdleReleaseTimer, isSavingTotals, releaseSection])
+  }, [clearTotalsIdleReleaseTimer, isSavingTotals])
 
   const patchQuotationTotales = useCallback(async (
     patch: Record<string, unknown>,

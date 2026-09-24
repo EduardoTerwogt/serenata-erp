@@ -626,4 +626,63 @@ describe('page.tsx -- characterization de autosave/flush/reconciliación (3D-0)'
     // original de dirty -- nunca llegó a mandar su propio PATCH.
     expect(clienteInput.value).toBe('Cliente todavía sucio')
   })
+  // ─── docs/decisions/016: el aviso de Presence ("X está editando") solo se
+  // quita al SALIR de la sección/celda; la inactividad de 5 s suelta únicamente
+  // el bloqueo de DATOS (para que los cambios ajenos sigan entrando). Antes el
+  // timer de inactividad soltaba ambos juntos.
+
+  it('T14: General -- con el foco puesto y 5 s sin escribir, el aviso sigue pero los cambios ajenos SÍ entran; salir lo suelta', async () => {
+    const cot = buildCotizacion({ estado: 'EMITIDA' })
+    const { container, emitPresenceUpdate } = await renderPage(cot)
+    const patch = deferred<unknown>()
+    setRoute(`PATCH /api/cotizaciones/${cot.id}/general`, () => patch.promise)
+
+    const locacionInput = container.querySelector('input[name="locacion"]') as HTMLInputElement
+    const clienteInput = container.querySelector('input[placeholder="Nombre del cliente"]') as HTMLInputElement
+
+    await act(async () => { locacionInput.focus() })
+    expect(presenceState.setActiveSection).toHaveBeenCalledWith('general')
+    await act(async () => { fireEvent.change(locacionInput, { target: { value: 'Estudio Sur' } }) })
+    await FLUSH(800)
+    patch.resolve(jsonResponse({ ...cot, locacion: 'Estudio Sur' }))
+    await FLUSH(0)
+
+    // 5 s sin escribir, cursor todavía en la sección.
+    await FLUSH(5_000)
+    expect(presenceState.releaseSection).not.toHaveBeenCalledWith('general')
+
+    // Otro colaborador cambia el cliente: la reconciliación lo aplica aunque el
+    // cursor siga en la sección (el bloqueo de datos sí se soltó por inactividad).
+    mocks.fetchQuotationDetailMock.mockResolvedValue({ ...cot, locacion: 'Estudio Sur', cliente: 'Cliente cambiado por B' })
+    await emitPresenceUpdate({ latestGeneralConfirmed: { cotizacion_id: cot.id, at: new Date().toISOString() } })
+    await FLUSH(0)
+    expect(clienteInput.value).toBe('Cliente cambiado por B')
+    expect(presenceState.releaseSection).not.toHaveBeenCalledWith('general')
+
+    // Salir de la sección sí quita el aviso.
+    await act(async () => { locacionInput.blur() })
+    await FLUSH(0)
+    expect(presenceState.releaseSection).toHaveBeenCalledWith('general')
+  })
+
+  it('T15: celda de partida -- 5 s sin escribir no quita el aviso de la celda; salir de ella lo quita de inmediato', async () => {
+    const cot = buildCotizacion()
+    const { container } = await renderPage(cot)
+    const patch = deferred<unknown>()
+    setRoute(`PATCH /api/cotizaciones/${cot.id}/items/${ITEM_ID}`, () => patch.promise)
+
+    const descInput = container.querySelector('input[name="items.0.descripcion"]') as HTMLInputElement
+    await act(async () => { descInput.focus() })
+    expect(presenceState.lockItemCell).toHaveBeenCalledWith(ITEM_ID, 'descripcion')
+    await act(async () => { fireEvent.change(descInput, { target: { value: 'Nueva descripción' } }) })
+    await FLUSH(800)
+    patch.resolve(jsonResponse({ item: { ...buildItem({ descripcion: 'Nueva descripción' }) } }))
+    await FLUSH(0)
+
+    await FLUSH(5_000)
+    expect(presenceState.releaseItemCell).not.toHaveBeenCalled()
+
+    await act(async () => { descInput.blur() })
+    expect(presenceState.releaseItemCell).toHaveBeenCalledWith(ITEM_ID, 'descripcion')
+  })
 })

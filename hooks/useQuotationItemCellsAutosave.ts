@@ -168,7 +168,12 @@ export function useQuotationItemCellsAutosave({
   const clearItemCellAutosaveTimer = useCallback((key: string) => { const timer = itemCellAutosaveTimersRef.current[key]; if (timer !== null && timer !== undefined) { window.clearTimeout(timer); delete itemCellAutosaveTimersRef.current[key] } }, [])
   const clearItemCellIdleReleaseTimer = useCallback((key: string) => { const timer = itemCellIdleReleaseTimersRef.current[key]; if (timer !== null && timer !== undefined) { window.clearTimeout(timer); delete itemCellIdleReleaseTimersRef.current[key] } }, [])
 
-  const scheduleItemCellIdleRelease = useCallback((rowId: string, field: QuotationItemCellField) => { const key = getItemCellKey(rowId, field); clearItemCellIdleReleaseTimer(key); itemCellIdleReleaseTimersRef.current[key] = window.setTimeout(() => { delete itemCellIdleReleaseTimersRef.current[key]; if (itemDirtyCellsRef.current.has(key) || itemSavingCellsRef.current.has(key)) return; itemFocusedCellsRef.current.delete(key); releaseItemCell(rowId, field) }, ITEM_CELL_IDLE_RELEASE_MS) }, [clearItemCellIdleReleaseTimer, releaseItemCell])
+  // Tras ITEM_CELL_IDLE_RELEASE_MS sin escribir, suelta SOLO el bloqueo de datos de
+  // la celda (`itemFocusedCellsRef`), para que la reconciliación vuelva a aplicar
+  // cambios ajenos en ella. El aviso de Presence de la celda se suelta únicamente
+  // al salir de ella (`handleItemFieldBlur`) -- docs/decisions/016. Antes este
+  // timer soltaba ambos juntos.
+  const scheduleItemCellIdleRelease = useCallback((rowId: string, field: QuotationItemCellField) => { const key = getItemCellKey(rowId, field); clearItemCellIdleReleaseTimer(key); itemCellIdleReleaseTimersRef.current[key] = window.setTimeout(() => { delete itemCellIdleReleaseTimersRef.current[key]; if (itemDirtyCellsRef.current.has(key) || itemSavingCellsRef.current.has(key)) return; itemFocusedCellsRef.current.delete(key) }, ITEM_CELL_IDLE_RELEASE_MS) }, [clearItemCellIdleReleaseTimer])
 
   // Toda mutación de una fila entra en su propia cola: dos borrados seguidos, o un
   // PATCH y un DELETE de la misma partida, se ejecutan en orden y nunca se solapan.
@@ -491,10 +496,14 @@ export function useQuotationItemCellsAutosave({
   const handleItemFieldBlur = useCallback((rowId: string, field: QuotationItemCellField) => {
     const key = getItemCellKey(rowId, field)
     itemFocusedCellsRef.current.delete(key)
+    // Presence refleja el foco, no el guardado: salir de la celda quita el aviso
+    // de inmediato aunque su PATCH siga en vuelo. `releaseItemCell` ignora la
+    // llamada si ya se enfocó otra celda.
+    releaseItemCell(rowId, field)
     clearItemCellAutosaveTimer(key)
     if (itemDirtyCellsRef.current.has(key)) { void persistItemCellAutosave(rowId, field); return }
     scheduleItemCellIdleRelease(rowId, field)
-  }, [clearItemCellAutosaveTimer, persistItemCellAutosave, scheduleItemCellIdleRelease])
+  }, [clearItemCellAutosaveTimer, persistItemCellAutosave, releaseItemCell, scheduleItemCellIdleRelease])
 
   const handleAddRow = useCallback(async () => {
     // Fase 6B: la fila nace con su id definitivo -- nunca cambia durante su vida.

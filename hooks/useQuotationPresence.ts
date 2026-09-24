@@ -7,11 +7,6 @@ import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
 export type QuotationPresenceSection = 'notas' | 'general' | 'partidas' | 'totales'
 export type QuotationItemCellField = 'categoria' | 'descripcion' | 'cantidad' | 'precio_unitario' | 'responsable_id' | 'x_pagar'
 
-// Cada cuánto se re-afirma el registro de Presence propio mientras el canal está
-// habilitado -- red de última instancia contra un diff perdido en el transporte, no
-// el camino primario (ver comentario en el useEffect que lo usa).
-const PRESENCE_HEARTBEAT_MS = 15_000
-
 interface CurrentUser {
   id?: string | null
   email?: string | null
@@ -203,13 +198,12 @@ export function useQuotationPresence({
   const { latestItemConfirmed, latestGeneralConfirmed, latestTotalesConfirmed, latestNotasConfirmed } = confirmedEvents
   const activeSectionRef = useRef<QuotationPresenceSection | null>(null)
   const activeCellRef = useRef<{ rowId: string; field: QuotationItemCellField } | null>(null)
-  // Fase 8 (hardening pre-Proyectos): ids de los `setTimeout` de reintento de
-  // `trackPresence` todavía pendientes -- sin esto, un reintento programado
-  // justo antes de un unmount/reconexión sobrevivía y podía disparar `.track()`
-  // sobre un canal ya reemplazado. Se limpian en `clearPendingTrackRetries`,
-  // más abajo (Fase 8.7 Bloque 2: antes solo se limpiaban en `onSessionEnd`,
-  // no en una reconexión interna).
-  const pendingTrackRetriesRef = useRef<Set<number>>(new Set())
+  // Clave de la última awareness publicada (sección + celda) y su `online_at`:
+  // `online_at` solo cambia cuando la awareness cambia de verdad, así el
+  // payload de una llamada repetida (foco de otra celda de la misma fila ya
+  // publicada, cada tecla vía `lockItemCell`) es idéntico y el publicador no
+  // lo reenvía -- docs/decisions/016.
+  const publishedAwarenessRef = useRef<{ key: string; onlineAt: string } | null>(null)
 
   const identity = useMemo(() => {
     const userId = currentUser?.id || currentUser?.email || `anon:${cotizacionId}`
@@ -267,44 +261,26 @@ export function useQuotationPresence({
     })
   }, [])
 
-  const handleSubscribed = useCallback(async (channel: RealtimeChannel) => {
+  // La publicación del registro propio en cada unión/reconexión la hace
+  // `useRealtimeChannel` (re-publica el último estado deseado al llegar a
+  // SUBSCRIBED); aquí solo se refleja el estado de conexión.
+  const handleSubscribed = useCallback(() => {
     dispatchAwareness({ type: 'set_connected', connected: true })
-    await channel.track({
-      user_id: identity.userId,
-      email: identity.email,
-      name: identity.name,
-      active_section: activeSectionRef.current,
-      entity_id: activeCellRef.current?.rowId ?? null,
-      field: activeCellRef.current?.field ?? null,
-      online_at: new Date().toISOString(),
-    })
-  }, [identity.email, identity.name, identity.userId])
-
-  // Fase 8.7 (Bloque 2): única función de limpieza de los retries de
-  // trackPresence, usada tanto en reconexión interna (onDisconnected) como en
-  // unmount/session end (onSessionEnd). Antes solo corría en onSessionEnd --
-  // una reconexión interna (onDisconnected) nunca la ejecutaba, así que un
-  // retry agendado justo antes de que el canal cayera sobrevivía a la
-  // reconexión y terminaba llamando `.track()` sobre el canal viejo, ya
-  // retirado por `useRealtimeChannel`.
-  const clearPendingTrackRetries = useCallback(() => {
-    const pendingTrackRetries = pendingTrackRetriesRef.current
-    pendingTrackRetries.forEach((timeoutId) => window.clearTimeout(timeoutId))
-    pendingTrackRetries.clear()
   }, [])
 
   const handleDisconnected = useCallback(() => {
-    clearPendingTrackRetries()
     dispatchAwareness({ type: 'set_connected', connected: false })
-  }, [clearPendingTrackRetries])
+  }, [])
 
   const handleSessionEnd = useCallback(() => {
-    clearPendingTrackRetries()
+    // Una sesión nueva (otro topic, re-habilitar) debe volver a publicar su
+    // awareness aunque sea idéntica a la anterior.
+    publishedAwarenessRef.current = null
     dispatchAwareness({ type: 'reset' })
     dispatchConfirmedEvent({ type: 'reset' })
-  }, [clearPendingTrackRetries])
+  }, [])
 
-  const { channelRef } = useRealtimeChannel({
+  const { publishPresence } = useRealtimeChannel({
     topic: enabled ? `cotizacion:${cotizacionId}` : null,
     enabled,
     presenceKeyPrefix: identity.userId,
@@ -314,49 +290,36 @@ export function useQuotationPresence({
     onSessionEnd: handleSessionEnd,
   })
 
-  // `channel.track()` manda un push por el WebSocket y espera un ack; sin red de
-  // reintento, un timeout/blip aislado (nunca vimos un error de la app en logs de CI,
-  // solo el badge que no aparece -- consistente con una promesa rechazada y tragada
-  // en silencio) deja al otro colaborador sin enterarse hasta el próximo cambio real
-  // o el heartbeat de PRESENCE_HEARTBEAT_MS. Reintentar de inmediato, un par de veces,
-  // cierra esa ventana sin cambiar qué se envía ni introducir un mecanismo nuevo.
+  // Único punto de publicación de la awareness propia. El envío real (agrupado,
+  // deduplicado, dentro del presupuesto de Presence del servidor y con
+  // reintentos acotados) lo hace `publishPresence` -- docs/decisions/016. Antes
+  // cada llamada era un `channel.track()` directo (una por tecla en Partidas) más
+  // un heartbeat cada 15 s: excedía el límite de 5 eventos/30 s y el servidor
+  // cerraba el canal.
   const trackPresence = useCallback((section: QuotationPresenceSection | null, cell: { rowId: string; field: QuotationItemCellField } | null) => {
-    const channel = channelRef.current
-    if (!channel) return
-
-    const payload = {
+    const key = JSON.stringify([section, cell?.rowId ?? null, cell?.field ?? null])
+    const previous = publishedAwarenessRef.current
+    const onlineAt = previous && previous.key === key ? previous.onlineAt : new Date().toISOString()
+    publishedAwarenessRef.current = { key, onlineAt }
+    publishPresence({
       user_id: identity.userId,
       email: identity.email,
       name: identity.name,
       active_section: section,
       entity_id: cell?.rowId ?? null,
       field: cell?.field ?? null,
-      online_at: new Date().toISOString(),
-    }
+      online_at: onlineAt,
+    })
+  }, [identity.email, identity.name, identity.userId, publishPresence])
 
-    const intentar = (intentosRestantes: number): void => {
-      void channel.track(payload).catch((error) => {
-        // El propio `.track()` puede seguir en vuelo cuando el canal ya cayó
-        // y `useRealtimeChannel` lo reemplazó -- `clearPendingTrackRetries`
-        // solo alcanza a cancelar los retries YA agendados en ese instante,
-        // no una promesa que rechaza después. Este chequeo cierra ese residual:
-        // si `channelRef.current` ya no es este `channel`, no tiene sentido
-        // reintentar contra uno retirado.
-        if (channelRef.current !== channel) return
-        if (intentosRestantes <= 0) {
-          console.error('[useQuotationPresence] track() agotó reintentos', error)
-          return
-        }
-        const timeoutId = window.setTimeout(() => {
-          pendingTrackRetriesRef.current.delete(timeoutId)
-          if (channelRef.current !== channel) return
-          intentar(intentosRestantes - 1)
-        }, 1_000)
-        pendingTrackRetriesRef.current.add(timeoutId)
-      })
-    }
-    intentar(2)
-  }, [channelRef, identity.email, identity.name, identity.userId])
+  // Estado inicial de cada sesión de canal (montaje, otra cotización, re-habilitar,
+  // cambio de identidad): el fin de sesión anterior borra el estado deseado del
+  // publicador, así que se vuelve a declarar aquí -- es lo que se publica al unirse
+  // mientras nadie haya enfocado nada todavía.
+  useEffect(() => {
+    if (!enabled) return
+    trackPresence(activeSectionRef.current, activeCellRef.current)
+  }, [cotizacionId, enabled, trackPresence])
 
   const setActiveSection = useCallback((section: QuotationPresenceSection | null) => {
     activeSectionRef.current = section
@@ -373,8 +336,8 @@ export function useQuotationPresence({
     // celdas de Partidas -- soltar cualquier sección ya lo encuentra en `null` salvo
     // que se esté saliendo de Partidas. Sin este reset, un usuario que abandona la
     // sección sigue publicando la última celda que enfocó ahí: el otro colaborador
-    // ve "X está editando esta celda" indefinidamente (el heartbeat solo repite el
-    // mismo payload), aunque X ya ni siquiera esté en Partidas.
+    // ve "X está editando esta celda" indefinidamente, aunque X ya ni siquiera esté
+    // en Partidas.
     activeCellRef.current = null
     if (!enabled) return
     trackPresence(null, null)
@@ -393,21 +356,6 @@ export function useQuotationPresence({
     activeCellRef.current = null
     if (!enabled) return
     trackPresence(activeSectionRef.current, null)
-  }, [enabled, trackPresence])
-
-  // Red de última instancia para Presence, mismo espíritu que RECONCILIACION_MS en
-  // page.tsx para los datos: `channel.track()` es fire-and-forget (`.catch(() =>
-  // null)`), así que un diff perdido en el transporte (WebSocket bajo carga, blip de
-  // red) puede dejar a otro colaborador sin enterarse de una sección/celda activa
-  // hasta el próximo cambio real. Re-afirmar el estado actual cada cierto tiempo
-  // autocura eso sin volver a depender de un polling de DATOS -- esto solo repite la
-  // MISMA awareness que ya se trackeó, nunca relee ni decide nada.
-  useEffect(() => {
-    if (!enabled) return
-    const heartbeat = window.setInterval(() => {
-      trackPresence(activeSectionRef.current, activeCellRef.current)
-    }, PRESENCE_HEARTBEAT_MS)
-    return () => window.clearInterval(heartbeat)
   }, [enabled, trackPresence])
 
   const onlineUsers = rawOnlineUsers
@@ -433,7 +381,7 @@ export function useQuotationPresence({
       if (!user.entity_id || !user.field) return
       // Defensa adicional a `releaseSection` limpiando `entity_id`/`field`: cubre
       // cualquier otra ventana donde Presence quede desincronizada (pestaña cerrada
-      // abruptamente antes del release, blip de red antes del próximo heartbeat).
+      // abruptamente antes del release, envío todavía agrupado o esperando presupuesto).
       if (user.active_section !== 'partidas') return
       if (user.user_id === identity.userId) return
       const key = getCellKey(user.entity_id, user.field)
