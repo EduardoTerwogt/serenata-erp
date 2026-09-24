@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-24 (aviso de Presence pegado resuelto — ver "Cerrado")
+**Última actualización:** 2026-09-24 (nueva iniciativa en "Siguiente": rediseño de Cuentas)
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -78,9 +78,12 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-**Sin definir a propósito.** Se prioriza en Chat, con el estado real del
-sistema a la vista. La última iniciativa ("Actualización de formatos PDF vía
-Claude Design") cerró completa el 2026-09-23 — ver "Cerrado".
+- **Rediseño de la sección Cuentas (UX/UI en Claude Design → implementación).**
+  Abierto el 2026-09-24. Primero el diseño en Claude Design sobre una réplica
+  exacta del estado actual. Después, con el HTML final del rediseño, se
+  redefine la arquitectura, el backend y la UI necesarios. Incluye el pendiente
+  "Cuentas — filtro de estado en la vista principal" (ver "Después"), que se
+  resuelve dentro del rediseño. Plan: `docs/PLAN.md`.
 
 ---
 
@@ -93,7 +96,8 @@ ni tiene alcance de iniciativa definido.
 ### Sueltos pendientes (2026-09-19, actualizado 2026-09-21)
 
 - **Cuentas — filtro de estado en la vista principal** (acceso a cuentas
-  cerradas, no solo pendientes). Diferido el 2026-09-21 desde la iniciativa
+  cerradas, no solo pendientes). **Absorbido por "Rediseño de la sección
+  Cuentas" (ver "Siguiente", 2026-09-24).** Diferido el 2026-09-21 desde la iniciativa
   "Sueltos post-PR #76" para liberar el slot de `docs/PLAN.md` a "Editor de
   PDFs" — no por falta de prioridad. Único bloque de esa iniciativa sin
   diseño cerrado: falta decidir (a) cómo agrupar los ~8 estados reales en

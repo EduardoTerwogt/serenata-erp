@@ -1,13 +1,15 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-24 (sesión 8 — cerrada)
+**Última actualización:** 2026-09-24 (sesión 9 — rediseño de Cuentas abierto)
 
 ## Estado
 
-**`docs/PLAN.md` — Vacío.** No hay iniciativa multi-sesión abierta.
+**`docs/PLAN.md` — Borrador: "Rediseño de la sección Cuentas".** Fase de
+diseño en Claude Design. La réplica HTML del estado actual ya se generó
+(sesión 9) y se entregó al usuario. Se espera el HTML final del rediseño para
+planear la implementación.
 **Colaboración en vivo de Cotizaciones: cerrada** por decisión del usuario
-tras la prueba manual del PR #93 ("funciona bien; no tan fluido, pero mucho
-mejor que antes"). Todo está en `main`.
+tras la prueba manual del PR #93. Todo está en `main`.
 
 ## Completado en la sesión 8
 
@@ -75,5 +77,6 @@ mejor que antes"). Todo está en `main`.
 
 ## Siguiente paso
 
-Nada en curso. Priorizar en Chat (`docs/ROADMAP.md` → "Siguiente"/"Después";
-incluye la decisión de borrar `cliente_id_backfill_clasificacion`).
+El usuario rediseña Cuentas en Claude Design a partir de la réplica. Cuando
+entregue el HTML final: seguir `docs/PLAN.md` → Bloque 1 (auditar el diseño
+contra el código y proponer arquitectura/backend/UI, sin implementar).
