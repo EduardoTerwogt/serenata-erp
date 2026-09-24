@@ -49,7 +49,16 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
   de Preview es la de test, Realtime/Presence falla en Previews (relacionado
   con V1). Las variables de Google (Drive, Sheets, Calendar) también son
   compartidas. `serenata-erp-loadtest` tiene sus propias variables (sensitive).
-  Pendiente decisión del usuario sobre el fix (separar Preview → test).
+  **Fix en curso (decisión del usuario: separar Preview → test):** hecho vía
+  MCP — las 3 variables compartidas quedaron en Production + Development
+  (prod) y se crearon entradas solo-Preview de `NEXT_PUBLIC_SUPABASE_URL`
+  (`ozrtsludmcguvgqdjicn`) y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (anon de test).
+  **Falta (usuario, en Vercel):** crear `SUPABASE_SERVICE_ROLE_KEY` solo
+  Preview con la service_role de test (sin ella los Previews nuevos fallan
+  explícito), confirmar que `SUPABASE_JWT_SECRET` de Preview es el legacy JWT
+  secret de test, y Redeploy de un Preview para verificar (peticiones a
+  `ozrtsludmcguvgqdjicn`). Pendiente decidir si Google (Drive/Sheets/Calendar)
+  también se separa en Preview.
 - **V1 — Presence en Preview real** (2 usuarios, 2 navegadores, ida y vuelta).
 - **V2 — Google:** (a) login con Google → sesión; (b) autorización de Drive →
   callback → token guardado → llamada real a Drive.
