@@ -58,9 +58,14 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
   la carpeta de test de CI (`DRIVE_TEST_FOLDER_ID`) y **sin** Sheets ni
   Calendar (el sync falla explícito "no configurado"; `GOOGLE_CALENDAR_ID`
   no lo lee ningún código hoy). `GOOGLE_CLIENT_ID/SECRET` siguen compartidos
-  (misma app OAuth). **Falta (usuario):** `GOOGLE_DRIVE_REFRESH_TOKEN` solo
-  Preview = valor del secreto de GitHub `GOOGLE_DRIVE_REFRESH_TOKEN_TEST`
-  (sin él, Drive queda deshabilitado en Preview) + Redeploy de Preview.
+  (misma app OAuth). **Drive en Preview queda deshabilitado a propósito**
+  (sin `GOOGLE_DRIVE_REFRESH_TOKEN` en Preview: el usuario no tiene el valor
+  de `GOOGLE_DRIVE_REFRESH_TOKEN_TEST`; `getGoogleEnv()` devuelve null y la
+  subida falla explícito). Habilitarlo se resuelve dentro de V2: generar un
+  token nuevo vía `/api/integrations/drive/authorize` (callback de prod, solo
+  muestra el token, no lo persiste) y una carpeta de test accesible con ese
+  token (scope `drive.file`). Redeploy de Preview
+  `dpl_8LhZdXq6TKh49m3GkJGtqrs11uNm`.
   Usuarios de prueba solo en test para V1: `prueba-manual@serenata.test` y
   `prueba-manual-2@serenata.test` (contraseñas entregadas al usuario en la
   sesión, no en el repo). La autorización del canal privado de Realtime en
