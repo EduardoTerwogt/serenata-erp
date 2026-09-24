@@ -33,9 +33,9 @@ de esta sesión está en `main` y aplicado en test y producción.
 
 ## Pasos manuales M1/M2/V1/V2 — todos cerrados
 
-- **M1:** `NEXTAUTH_SECRET` fuera de Production y Preview (NextAuth lee
-  `AUTH_SECRET` primero); sesiones abiertas de staff y Portal sobrevivieron
-  al redeploy.
+- **M1:** `NEXTAUTH_SECRET` eliminada de Vercel en todos los entornos
+  (el usuario borró la última entrada de Development; verificado vía MCP).
+  Sesiones abiertas de staff y Portal sobrevivieron al redeploy.
 - **M2:** los Previews usaban la base de **producción**. Estado actual de
   Vercel `serenata-erp`: Supabase (URL/anon/service_role/JWT secret) y
   Google (carpetas Drive, refresh token, Sheets, Calendar) tienen entradas
@@ -53,8 +53,6 @@ de esta sesión está en `main` y aplicado en test y producción.
 
 ## Pendiente del usuario
 
-- Borrar en Vercel la entrada de `NEXTAUTH_SECRET` que quedó en Development
-  (el MCP de Vercel no puede borrar variables; nada la lee).
 - Borrar ramas remotas ya mergeadas (GitHub → Branches → Merged).
 
 ## Deuda técnica
