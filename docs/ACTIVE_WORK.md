@@ -39,26 +39,21 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
 
 ## Pendiente manual (arrastrado de la sesión 6, PR #90)
 
-- **M2 — auditoría de entornos: ❌ FALLA (verificado vía Vercel MCP,
-  2026-09-24).** En el proyecto Vercel `serenata-erp`,
-  `NEXT_PUBLIC_SUPABASE_URL` (= `fwmyoqokcjtldiofuxdg`, **prod**),
-  `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` son **una
-  sola entrada para Production + Preview + Development**: los Previews leen
-  y escriben la base de producción. `SUPABASE_JWT_SECRET` sí tiene entradas
-  separadas para Production y Preview (tipo sensitive, no legibles): si la
-  de Preview es la de test, Realtime/Presence falla en Previews (relacionado
-  con V1). Las variables de Google (Drive, Sheets, Calendar) también son
-  compartidas. `serenata-erp-loadtest` tiene sus propias variables (sensitive).
-  **Fix en curso (decisión del usuario: separar Preview → test):** hecho vía
-  MCP — las 3 variables compartidas quedaron en Production + Development
-  (prod) y se crearon entradas solo-Preview de `NEXT_PUBLIC_SUPABASE_URL`
-  (`ozrtsludmcguvgqdjicn`) y `NEXT_PUBLIC_SUPABASE_ANON_KEY` (anon de test).
-  **Falta (usuario, en Vercel):** crear `SUPABASE_SERVICE_ROLE_KEY` solo
-  Preview con la service_role de test (sin ella los Previews nuevos fallan
-  explícito), confirmar que `SUPABASE_JWT_SECRET` de Preview es el legacy JWT
-  secret de test, y Redeploy de un Preview para verificar (peticiones a
-  `ozrtsludmcguvgqdjicn`). Pendiente decidir si Google (Drive/Sheets/Calendar)
-  también se separa en Preview.
+- **M2 — auditoría de entornos: ✅ corregido y verificado (2026-09-24).**
+  Hallazgo: en Vercel `serenata-erp`, URL/anon/service_role de Supabase eran
+  una sola entrada para Production+Preview+Development apuntando a **prod**
+  (los Previews leían y escribían producción). Fix: esas 3 quedaron en
+  Production+Development (prod) y Preview tiene entradas propias hacia
+  `serenata-erp-test` (`ozrtsludmcguvgqdjicn`); el usuario cargó la
+  service_role y el `SUPABASE_JWT_SECRET` legacy de test en Preview.
+  Redeploy de Preview `dpl_7aXwSwcM5tXchu5hB9e7ByvPARDJ`. Verificado: un
+  usuario de prod ya no entra al Preview; con
+  `prueba-manual@serenata.test` (usuario creado solo en test) el login y la
+  cotización generan tráfico en los edge logs de **test** (`usuarios`,
+  `cotizaciones`, RPCs, WebSocket de Realtime 101). **Queda abierto:** las
+  variables de Google (Drive/Sheets/Calendar) siguen compartidas entre
+  Preview y prod — decidir si se separan. La autorización del canal privado
+  de Realtime en Preview se confirma con V1.
 - **V1 — Presence en Preview real** (2 usuarios, 2 navegadores, ida y vuelta).
 - **V2 — Google:** (a) login con Google → sesión; (b) autorización de Drive →
   callback → token guardado → llamada real a Drive.
@@ -72,6 +67,6 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
 
 ## Siguiente paso
 
-Pasos manuales M2, V1 y V2 (M1 diferido a ROADMAP → "Después") (PR #90 ya en `main`). Antes de fin de año: decidir el
+Pasos manuales V1 y V2 (M2 cerrado; M1 diferido a ROADMAP → "Después") (PR #90 ya en `main`). Antes de fin de año: decidir el
 formato de folios CC/CP para 2027 (ROADMAP → "Después"). Después, priorizar en
 Chat (`docs/ROADMAP.md` → "Siguiente"/"Después").
