@@ -410,7 +410,7 @@ autoritativa, no una tabla en un documento. Agrupadas por dominio:
 | Cotizaciones | `cotizaciones` (id = folio texto SH001), `items_cotizacion`, `cotizacion_folio_reservations`, `cotizacion_collaboration_events` |
 | Catálogos | `clientes`, `productos`, `service_templates` |
 | Proyectos | `proyectos`, `tipos_proyecto`, `tipo_proyecto_etapas`, `tipo_proyecto_tarea_default`, `proyecto_tareas`, `proyecto_tarea_checklist`, `proyecto_documentos` |
-| Cuentas | `cuentas_cobrar`, `cuentas_pagar`, `cuentas_pagar_grupos`, `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`, `pagos_comprobantes`, `ordenes_pago` |
+| Cuentas | `cuentas_cobrar`, `cuentas_pagar` (folio `CC-/CP-AAAA-NNNNN` por trigger → `siguiente_folio()`, consecutivo que reinicia cada año, año en hora CDMX), `folio_contadores`, `cuentas_pagar_grupos`, `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`, `pagos_comprobantes`, `ordenes_pago` |
 | Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable`, `historial_cambios_responsable_item` |
 | Planeación | `planeacion_pendientes`, `planeacion_event_notas` (soft delete en `eliminada`), `extraction_logs` |
 | Dashboard | `gastos_fijos` |

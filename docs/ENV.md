@@ -3,6 +3,16 @@
 No hay `.env.example` en el repo. Los valores reales viven en Vercel
 (producción) y en GitHub Actions Secrets (CI).
 
+**Vercel, por entorno (desde 2026-09-24):** Production (y Development) apuntan
+a Supabase de producción y a las carpetas/Sheet reales de Google. **Preview
+tiene entradas propias** hacia `serenata-erp-test` (URL, anon, service_role,
+`SUPABASE_JWT_SECRET` legacy de test) y hacia la carpeta de Drive de test, sin
+`GOOGLE_DRIVE_REFRESH_TOKEN` (Drive apagado en Preview), sin
+`GOOGLE_SHEETS_SPREADSHEET_ID` ni `GOOGLE_CALENDAR_ID`. Al agregar una variable
+que apunte a datos (base, carpeta, hoja), crearla **por entorno**, nunca una
+sola entrada para Production + Preview: así fue como los Previews terminaron
+escribiendo en producción.
+
 
 ```
 # Supabase
