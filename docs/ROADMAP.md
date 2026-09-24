@@ -125,12 +125,10 @@ ni tiene alcance de iniciativa definido.
   confirme que terminó la reconciliación manual de ambiguous/no_match
   (decisión 014). Desde 2026-09-23 está cerrada a la Data API (RLS + sin
   grants para anon/authenticated); mientras siga, no hay riesgo.
-- **Advisor de Supabase, avisos WARN restantes** (sin ERROR desde
-  2026-09-23): 10 funciones con `search_path` mutable
-  (`generate_folio_cc/cp`, triggers `update_*_updated_at`,
-  `match_proveedor_por_nombre`, `jsonb_null_as_empty_string`, …) y la
-  extensión `pg_trgm` en `public`. No explotables vía la app hoy; un bloque
-  chico cuando se retome deuda.
+- **Folios CC/CP con año fijo:** `generate_folio_cc/cp` usan `seq_cc_2026`/
+  `seq_cp_2026` y el prefijo literal `'CC-2026-'`/`'CP-2026-'`; en 2027 los
+  folios seguirán diciendo 2026. Decidir antes de fin de año si el folio
+  reinicia por año (secuencia por año) o conserva la numeración.
 - **Rediseño del PDF de reporte de cierre** — diferido el 2026-09-23 de la
   iniciativa "Actualización de formatos PDF vía Claude Design" (cerrada, ver
   "Cerrado"): se hace junto con la definición del módulo de Proyectos, porque
@@ -165,6 +163,13 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Advisor de Supabase sin WARN (2026-09-24).** `search_path` fijo vía
+  `ALTER FUNCTION … SET` (sin reescribir cuerpos, decisión 005) en las 10
+  funciones marcadas, y `pg_trgm` movida de `public` a `extensions` (los
+  índices GIN siguen válidos y en uso). Migración
+  `20260924_advisor_search_path_pg_trgm.sql`, PR
+  [#91](https://github.com/EduardoTerwogt/serenata-erp/pull/91). Quedan solo
+  los INFO `rls_enabled_no_policy`, esperados (la app usa `service_role`).
 - **Deuda técnica post-EF-3 (2026-09-23).** Auditoría contra `main`
   (`9b3b303`) + cierre de lo que seguía vivo, en un solo PR:
   RLS + `REVOKE` de anon/authenticated en `cliente_id_backfill_clasificacion`

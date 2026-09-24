@@ -1,16 +1,38 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-23 (sesión 6, deuda técnica post-EF-3)
+**Última actualización:** 2026-09-24 (sesión 7, advisor WARN de Supabase)
 
 ## Estado
 
-**`docs/PLAN.md` — Vacío.** No hay iniciativa multi-sesión abierta. Esta
-sesión atendió la deuda técnica que seguía viva en `main` (`9b3b303`) con un
-plan de una sola sesión (auditado 2 rondas por el usuario). **PR
-[#90](https://github.com/EduardoTerwogt/serenata-erp/pull/90) mergeado a
-`main` (`55c2f73`).** Quedan los pasos manuales de abajo.
+**`docs/PLAN.md` — Vacío.** Sesión de un solo bloque (ROADMAP → "Después"):
+cerrar los 11 WARN de seguridad del advisor. PR
+[#91](https://github.com/EduardoTerwogt/serenata-erp/pull/91) en borrador;
+migración **ya aplicada en test y producción**.
 
-## Fase 0 — auditoría previa (hallazgos)
+## Sesión 7 — advisor sin WARN
+
+- **Migración** `db/migrations/20260924_advisor_search_path_pg_trgm.sql`:
+  `ALTER EXTENSION pg_trgm SET SCHEMA extensions` (owner `supabase_admin`,
+  pero `postgres` puede moverla — probado con rollback antes) y
+  `ALTER FUNCTION … SET search_path` en las 10 funciones, **sin reescribir
+  cuerpos** (decisión 005). `match_proveedor_por_nombre` lleva
+  `public, extensions, pg_temp` (único llamador trigram de la app,
+  verificado en `pg_proc`); las otras 9, `public, pg_temp`.
+- **Verificado en test:** advisor 0 WARN; `match_proveedor_por_nombre`
+  con hash idéntico antes/después (150 filas); `EXPLAIN … ILIKE` sigue en
+  `idx_responsables_nombre_gin`; 3 GIN válidos; INSERT en cuentas CC/CP
+  genera folio; trigger `updated_at` pisa el valor en las 4 tablas
+  (transacciones con rollback).
+- **Verificado en prod:** advisor 0 WARN (solo INFO
+  `rls_enabled_no_policy`, esperado); match idéntico (9 filas); `pg_trgm`
+  en `extensions`; 3 GIN válidos; `updated_at` OK en cuentas CC/CP y
+  `service_templates` (`planeacion_event_notas` vacía en prod). Los folios
+  **no** se probaron con INSERT en prod a propósito: `nextval` no se revierte
+  con rollback y dejaría huecos en la numeración; mismo cuerpo que en test.
+- Local: `tsc` limpio, lint 0 errores, `npm test` 963/963.
+- Nuevo en ROADMAP → "Después": folios CC/CP con año 2026 fijo.
+
+## Sesión 6 — Fase 0, auditoría previa (hallazgos)
 
 1. **`bulk` Realtime:** productor (`items/bulk/route.ts`, `item_id: null`,
    `operation: 'bulk'`, vía `after()`) → consumidor
@@ -34,7 +56,7 @@ plan de una sola sesión (auditado 2 rondas por el usuario). **PR
    existe en el entorno (el Portal no funcionaría sin él), `NEXTAUTH_SECRET`
    no se lee en ningún lado: quitarlo **no** invalida sesiones.
 
-## Completado en esta sesión (6)
+## Completado en la sesión 6
 
 - **B1 — RLS + REVOKE** en `cliente_id_backfill_clasificacion`
   (`db/migrations/20260923_rls_cliente_id_backfill_clasificacion.sql`),
@@ -114,12 +136,10 @@ plan de una sola sesión (auditado 2 rondas por el usuario). **PR
 
 ## Deuda técnica
 
-- Advisor de Supabase (WARN, sin ERROR): 10 funciones con `search_path`
-  mutable y `pg_trgm` en `public` — anotado en ROADMAP → "Después".
 - Arrastrada sin cambios: Presence sin verificar en Preview (V1),
   verificación completa de Google OAuth (V2).
 
 ## Siguiente paso
 
-Pasos manuales M1 (c–e), M2, V1 y V2 (PR #90 ya en `main`). Después, priorizar en
+CI del PR #91 en verde → merge. Después: pasos manuales M1 (c–e), M2, V1 y V2 (PR #90 ya en `main`). Después, priorizar en
 Chat (`docs/ROADMAP.md` → "Siguiente"/"Después").
