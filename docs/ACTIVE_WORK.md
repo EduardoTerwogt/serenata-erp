@@ -74,8 +74,8 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
   usuario con `prueba-manual@` y `prueba-manual-2@serenata.test` en el
   Preview `dpl_8LhZdXq6TKh49m3GkJGtqrs11uNm` (ya contra test): la
   colaboración funciona. El usuario vio un "ligero bug, nada grave" y
-  decidió dejarlo así; sin descripción todavía (anotado en ROADMAP →
-  "Después").
+  decidió dejarlo así: el aviso "X está editando" no se quita en B cuando
+  A sale de la cotización (repro completo en ROADMAP → "Después").
 - **V2 — Google:** (a) login con Google → sesión; (b) autorización de Drive →
   callback → token guardado → llamada real a Drive.
 - **Housekeeping:** borrar ramas remotas ya mergeadas (GitHub → Branches →
