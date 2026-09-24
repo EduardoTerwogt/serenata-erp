@@ -136,10 +136,6 @@ ni tiene alcance de iniciativa definido.
   fuera, y cómo B procesa el evento `leave` / el estado de "editando" de
   la sección). Reproducible en el Preview contra `serenata-erp-test` con
   `prueba-manual@` y `prueba-manual-2@serenata.test`.
-- **Folios CC/CP con año fijo:** `generate_folio_cc/cp` usan `seq_cc_2026`/
-  `seq_cp_2026` y el prefijo literal `'CC-2026-'`/`'CP-2026-'`; en 2027 los
-  folios seguirán diciendo 2026. Decidir antes de fin de año si el folio
-  reinicia por año (secuencia por año) o conserva la numeración.
 - **Rediseño del PDF de reporte de cierre** — diferido el 2026-09-23 de la
   iniciativa "Actualización de formatos PDF vía Claude Design" (cerrada, ver
   "Cerrado"): se hace junto con la definición del módulo de Proyectos, porque
@@ -174,6 +170,12 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Folios CC/CP por año (2026-09-24).** `generate_folio_cc/cp` pasan a
+  `siguiente_folio(serie)`: año en curso (hora CDMX) y consecutivo que
+  reinicia cada año (CC-2027-00001), sobre la tabla `folio_contadores`
+  (2026 continúa desde las secuencias viejas). Corrige también el truncado
+  de `LPAD` en números ≥ 100000 y quita EXECUTE a anon/authenticated.
+  Migración `20260924_folios_cc_cp_por_anio.sql`.
 - **Pasos manuales post-deuda técnica (2026-09-24).** M1: `NEXTAUTH_SECRET`
   fuera de Production y Preview en Vercel (solo la lee NextAuth como fallback
   de `AUTH_SECRET`, que existe en todos los entornos); redeploy de prod y
