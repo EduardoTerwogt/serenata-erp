@@ -133,6 +133,10 @@ ni tiene alcance de iniciativa definido.
   `NEXTAUTH_SECRET` en todos los entornos de `serenata-erp` (y
   `serenata-erp-loadtest` si la tiene) + Redeploy sin caché; (3) repetir
   (1) y confirmar que la sesión abierta sigue viva.
+- **Colaboración en vivo — "ligero bug" visto en V1 (2026-09-24).** El
+  usuario lo calificó como no grave y decidió no atenderlo por ahora; falta
+  describirlo (qué acción, qué se esperaba, qué pasó) antes de poder
+  diagnosticar.
 - **Folios CC/CP con año fijo:** `generate_folio_cc/cp` usan `seq_cc_2026`/
   `seq_cp_2026` y el prefijo literal `'CC-2026-'`/`'CP-2026-'`; en 2027 los
   folios seguirán diciendo 2026. Decidir antes de fin de año si el folio

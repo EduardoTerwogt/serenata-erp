@@ -70,7 +70,12 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
   `prueba-manual-2@serenata.test` (contraseñas entregadas al usuario en la
   sesión, no en el repo). La autorización del canal privado de Realtime en
   Preview se confirma con V1.
-- **V1 — Presence en Preview real** (2 usuarios, 2 navegadores, ida y vuelta).
+- **V1 — Presence en Preview real: ✅ (2026-09-24).** Probado por el
+  usuario con `prueba-manual@` y `prueba-manual-2@serenata.test` en el
+  Preview `dpl_8LhZdXq6TKh49m3GkJGtqrs11uNm` (ya contra test): la
+  colaboración funciona. El usuario vio un "ligero bug, nada grave" y
+  decidió dejarlo así; sin descripción todavía (anotado en ROADMAP →
+  "Después").
 - **V2 — Google:** (a) login con Google → sesión; (b) autorización de Drive →
   callback → token guardado → llamada real a Drive.
 - **Housekeeping:** borrar ramas remotas ya mergeadas (GitHub → Branches →
@@ -78,11 +83,11 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
 
 ## Deuda técnica
 
-- Arrastrada sin cambios: Presence sin verificar en Preview (V1),
-  verificación completa de Google OAuth (V2).
+- Arrastrada: verificación completa de Google OAuth (V2), que ahora
+  incluye habilitar Drive en Preview.
 
 ## Siguiente paso
 
-Pasos manuales V1 y V2 (M2 cerrado; M1 diferido a ROADMAP → "Después") (PR #90 ya en `main`). Antes de fin de año: decidir el
+Paso manual V2 (M2 y V1 cerrados; M1 diferido a ROADMAP → "Después") (PR #90 ya en `main`). Antes de fin de año: decidir el
 formato de folios CC/CP para 2027 (ROADMAP → "Después"). Después, priorizar en
 Chat (`docs/ROADMAP.md` → "Siguiente"/"Después").
