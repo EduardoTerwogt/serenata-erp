@@ -50,10 +50,21 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
   usuario de prod ya no entra al Preview; con
   `prueba-manual@serenata.test` (usuario creado solo en test) el login y la
   cotización generan tráfico en los edge logs de **test** (`usuarios`,
-  `cotizaciones`, RPCs, WebSocket de Realtime 101). **Queda abierto:** las
-  variables de Google (Drive/Sheets/Calendar) siguen compartidas entre
-  Preview y prod — decidir si se separan. La autorización del canal privado
-  de Realtime en Preview se confirma con V1.
+  `cotizaciones`, RPCs, WebSocket de Realtime 101). **Google separado
+  también (decisión del usuario):** `GOOGLE_DRIVE_FOLDER_ID`,
+  `GOOGLE_DRIVE_FOLDER_ID_CUENTAS`, `GOOGLE_SHEETS_SPREADSHEET_ID`,
+  `GOOGLE_CALENDAR_ID` y `GOOGLE_DRIVE_REFRESH_TOKEN` quedaron solo en
+  Production+Development; Preview tiene las 2 carpetas de Drive apuntando a
+  la carpeta de test de CI (`DRIVE_TEST_FOLDER_ID`) y **sin** Sheets ni
+  Calendar (el sync falla explícito "no configurado"; `GOOGLE_CALENDAR_ID`
+  no lo lee ningún código hoy). `GOOGLE_CLIENT_ID/SECRET` siguen compartidos
+  (misma app OAuth). **Falta (usuario):** `GOOGLE_DRIVE_REFRESH_TOKEN` solo
+  Preview = valor del secreto de GitHub `GOOGLE_DRIVE_REFRESH_TOKEN_TEST`
+  (sin él, Drive queda deshabilitado en Preview) + Redeploy de Preview.
+  Usuarios de prueba solo en test para V1: `prueba-manual@serenata.test` y
+  `prueba-manual-2@serenata.test` (contraseñas entregadas al usuario en la
+  sesión, no en el repo). La autorización del canal privado de Realtime en
+  Preview se confirma con V1.
 - **V1 — Presence en Preview real** (2 usuarios, 2 navegadores, ida y vuelta).
 - **V2 — Google:** (a) login con Google → sesión; (b) autorización de Drive →
   callback → token guardado → llamada real a Drive.
