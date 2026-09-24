@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-23 (deuda técnica post-EF-3: RLS de `cliente_id_backfill_clasificacion`, PDFs comprimidos, `AUTH_SECRET` canónico, `tracker-lint` retirado, test causal del evento `bulk` — ver "Cerrado")
+**Última actualización:** 2026-09-24 (aviso de Presence pegado resuelto — ver "Cerrado")
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -125,17 +125,6 @@ ni tiene alcance de iniciativa definido.
   confirme que terminó la reconciliación manual de ambiguous/no_match
   (decisión 014). Desde 2026-09-23 está cerrada a la Data API (RLS + sin
   grants para anon/authenticated); mientras siga, no hay riesgo.
-- **Colaboración en vivo — el aviso "X está editando" no se quita al salir
-  (visto en V1, 2026-09-24; no grave, diferido por decisión del usuario).**
-  Repro: sesión A edita la sección de partidas de una cotización; sesión B
-  solo la tiene abierta y recibe el aviso de que A está editando. A sale de
-  la cotización. **Esperado:** el aviso desaparece en B. **Real:** B sigue
-  mostrando que A está viendo y editando la sección. Punto de partida del
-  diagnóstico: el ciclo de vida de Presence en
-  `hooks/useQuotationPresence.ts` (untrack/leave al desmontar o navegar
-  fuera, y cómo B procesa el evento `leave` / el estado de "editando" de
-  la sección). Reproducible en el Preview contra `serenata-erp-test` con
-  `prueba-manual@` y `prueba-manual-2@serenata.test`.
 - **Rediseño del PDF de reporte de cierre** — diferido el 2026-09-23 de la
   iniciativa "Actualización de formatos PDF vía Claude Design" (cerrada, ver
   "Cerrado"): se hace junto con la definición del módulo de Proyectos, porque
@@ -170,6 +159,15 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Colaboración en vivo — aviso "X está editando" pegado (2026-09-24).** Dos
+  causas raíz: (1) bug de `@supabase/realtime-js` 2.100.0 que no aplicaba las
+  bajas de Presence, y (2) el servidor cerraba el canal por exceder 5 eventos de
+  Presence en 30 s (heartbeat de 15 s + un `track()` por tecla; 427 cierres en
+  24 h en test). `realtime-js` fijado en 2.112.0 (`overrides`; ≥ 2.113 rompe
+  nuestro JWT de Realtime), presupuesto de Presence en el cliente, sin
+  heartbeat, y el aviso se quita solo al salir de la sección/celda (la
+  inactividad de 5 s suelta solo el bloqueo de datos). Detalle:
+  [`docs/decisions/016`](decisions/016-presence-realtime-js-fijado-y-presupuesto.md).
 - **Folios CC/CP por año (2026-09-24).** `generate_folio_cc/cp` pasan a
   `siguiente_folio(serie)`: año en curso (hora CDMX) y consecutivo que
   reinicia cada año (CC-2027-00001), sobre la tabla `folio_contadores`
@@ -182,7 +180,7 @@ Si aparece otro feature a medias, documentarlo aquí.
   Preview, sesiones de staff y Portal abiertas sobrevivieron y login/logout
   OK. M2: los Previews usaban la base de **producción** — separados a
   `serenata-erp-test` (Supabase y Google). V1: colaboración verificada en
-  Preview con 2 usuarios (bug leve de Presence anotado en "Después"). V2: no
+  Preview con 2 usuarios (bug leve de Presence, resuelto después — ver arriba). V2: no
   existe login con Google; Drive de prod funcionando; Drive apagado en
   Preview.
 - **Advisor de Supabase sin WARN (2026-09-24).** `search_path` fijo vía

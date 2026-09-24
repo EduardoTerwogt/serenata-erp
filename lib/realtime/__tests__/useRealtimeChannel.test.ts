@@ -30,12 +30,14 @@ vi.mock('@/lib/realtime/authorize', () => ({
 }))
 
 import { useRealtimeChannel, type UseRealtimeChannelOptions } from '../useRealtimeChannel'
+import { __resetPresenceBudgetForTests, PRESENCE_COALESCE_MS, tryConsumePresenceBudget } from '../presence-publisher'
 
 interface FakeChannel {
   id: number
   statusCallback: ((status: string) => void | Promise<void>) | null
   subscribe: ReturnType<typeof vi.fn>
   untrack: ReturnType<typeof vi.fn>
+  track: ReturnType<typeof vi.fn>
 }
 
 function makeFakeChannel(id: number): FakeChannel {
@@ -47,6 +49,7 @@ function makeFakeChannel(id: number): FakeChannel {
       return channel
     }),
     untrack: vi.fn().mockResolvedValue(undefined),
+    track: vi.fn().mockResolvedValue('ok'),
   }
   return channel
 }
@@ -95,6 +98,10 @@ describe('useRealtimeChannel', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
+    // El presupuesto de Presence es estado de módulo (compartido a propósito
+    // entre canales de la pestaña): sin esto, los `untrack` de los cleanups de
+    // tests anteriores lo agotan y, con el reloj falso, nunca se recupera.
+    __resetPresenceBudgetForTests()
     createdChannels = []
     channelsByTopic = new Map()
     currentTopic = `cotizacion:TEST-${Math.random().toString(36).slice(2, 10)}`
@@ -388,5 +395,140 @@ describe('useRealtimeChannel', () => {
     }
 
     expect(unhandledRejections).toHaveLength(0)
+  })
+  it('publishPresence: publica al unirse, agrupa ráfagas y no reenvía un estado idéntico', async () => {
+    const { result } = renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+      initialProps: baseOptions(),
+    })
+    await flush()
+    const channel = createdChannels[0]
+
+    // Antes de SUBSCRIBED no se envía nada (realtime-js lanza si se hace push antes de unirse).
+    act(() => { result.current.publishPresence({ section: null }) })
+    await flush(PRESENCE_COALESCE_MS)
+    expect(channel.track).not.toHaveBeenCalled()
+
+    // Al unirse, publica el último estado deseado.
+    await act(async () => { await channel.statusCallback?.('SUBSCRIBED') })
+    await flush()
+    expect(channel.track).toHaveBeenCalledTimes(1)
+    expect(channel.track).toHaveBeenLastCalledWith({ section: null })
+
+    // Una ráfaga (sección + celda en el mismo gesto) sale como UN envío con el último estado.
+    act(() => {
+      result.current.publishPresence({ section: 'partidas' })
+      result.current.publishPresence({ section: 'partidas', cell: 'r1:descripcion' })
+    })
+    await flush(PRESENCE_COALESCE_MS)
+    expect(channel.track).toHaveBeenCalledTimes(2)
+    expect(channel.track).toHaveBeenLastCalledWith({ section: 'partidas', cell: 'r1:descripcion' })
+
+    // Cada tecla re-declara el mismo estado: no se reenvía.
+    for (let i = 0; i < 20; i++) {
+      act(() => { result.current.publishPresence({ section: 'partidas', cell: 'r1:descripcion' }) })
+      await flush(50)
+    }
+    expect(channel.track).toHaveBeenCalledTimes(2)
+  })
+
+  it('publishPresence: nunca excede el límite del servidor (5 en 30 s) y siempre termina enviando el último estado', async () => {
+    const { result } = renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+      initialProps: baseOptions(),
+    })
+    await flush()
+    const channel = createdChannels[0]
+    await act(async () => { await channel.statusCallback?.('SUBSCRIBED') })
+
+    const sentAt: number[] = []
+    channel.track.mockImplementation(() => { sentAt.push(Date.now()); return Promise.resolve('ok') })
+
+    // Un cambio distinto cada 500 ms durante 60 s: 120 cambios.
+    for (let i = 0; i < 120; i++) {
+      act(() => { result.current.publishPresence({ section: `s${i}` }) })
+      await flush(500)
+    }
+    await flush(20_000)
+
+    for (const start of sentAt) {
+      expect(sentAt.filter((t) => t >= start && t < start + 30_000).length).toBeLessThanOrEqual(4)
+    }
+    expect(channel.track).toHaveBeenLastCalledWith({ section: 's119' })
+  })
+
+  it('publishPresence: tras una reconexión re-publica el estado deseado en el canal nuevo', async () => {
+    const { result } = renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+      initialProps: baseOptions(),
+    })
+    await flush()
+    const first = createdChannels[0]
+    act(() => { result.current.publishPresence({ section: 'general' }) })
+    await act(async () => { await first.statusCallback?.('SUBSCRIBED') })
+    await flush(PRESENCE_COALESCE_MS)
+    expect(first.track).toHaveBeenCalledTimes(1)
+
+    await act(async () => { await first.statusCallback?.('CHANNEL_ERROR') })
+    await flush(1000)
+    const second = createdChannels[1]
+    expect(second).toBeDefined()
+    await act(async () => { await second.statusCallback?.('SUBSCRIBED') })
+    await flush(15_000)
+    expect(second.track).toHaveBeenCalledWith({ section: 'general' })
+    // El canal viejo no recibe nada más.
+    expect(first.track).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishPresence: un track() sin "ok" se reintenta dentro del presupuesto y se rinde tras los reintentos', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { result } = renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+      initialProps: baseOptions(),
+    })
+    await flush()
+    const channel = createdChannels[0]
+    channel.track.mockResolvedValue('timed out')
+    await act(async () => { await channel.statusCallback?.('SUBSCRIBED') })
+    act(() => { result.current.publishPresence({ section: 'totales' }) })
+    await flush(60_000)
+
+    // 1 intento + 2 reintentos, nunca un bucle infinito.
+    expect(channel.track).toHaveBeenCalledTimes(3)
+    expect(errorSpy).toHaveBeenCalledWith('[presence-publisher] track() agotó reintentos', 'timed out')
+    errorSpy.mockRestore()
+  })
+
+  it('cleanup: sin presupuesto de Presence omite el untrack (el phx_leave de removeChannel ya lo cubre)', async () => {
+    const { unmount } = renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+      initialProps: baseOptions(),
+    })
+    await flush()
+    const channel = createdChannels[0]
+    while (tryConsumePresenceBudget()) { /* agotar */ }
+
+    unmount()
+
+    expect(channel.untrack).not.toHaveBeenCalled()
+    expect(mocks.removeChannelMock).toHaveBeenCalledWith(channel)
+  })
+
+  it('si registrar listeners lanza (canal reutilizado todavía uniéndose), lo registra y reconecta en vez de morir en silencio', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const onChannelCreated = vi.fn()
+      .mockImplementationOnce(() => { throw new Error('cannot add `presence` callbacks after `subscribe()`.') })
+    renderHook((opts: UseRealtimeChannelOptions) => useRealtimeChannel(opts), {
+      initialProps: baseOptions({ onChannelCreated }),
+    })
+    await flush()
+    expect(createdChannels).toHaveLength(1)
+    expect(createdChannels[0].subscribe).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[useRealtimeChannel] no se pudieron registrar los listeners del canal, reintentando',
+      currentTopic,
+      expect.any(Error)
+    )
+
+    await flush(1000)
+    expect(mocks.removeChannelMock).toHaveBeenCalledWith(createdChannels[0])
+    expect(createdChannels).toHaveLength(2)
+    expect(createdChannels[1].subscribe).toHaveBeenCalledTimes(1)
+    errorSpy.mockRestore()
   })
 })

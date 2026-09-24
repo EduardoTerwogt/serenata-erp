@@ -56,6 +56,42 @@ function filas(page: Page) {
   return page.locator('table tbody tr')
 }
 
+/**
+ * docs/decisions/016: el servidor de Realtime cierra el canal si un cliente manda
+ * más de 5 eventos de Presence (`track`/`untrack`) en 30 s. Se registra lo que
+ * cada pantalla ENVÍA y RECIBE por el socket para poder afirmar, sobre toda la
+ * corrida, que nunca se excedió ni se recibió el cierre por límite.
+ */
+interface MonitorPresence { enviados: number[]; cierresPorLimite: string[] }
+
+function monitorearPresence(page: Page): MonitorPresence {
+  const monitor: MonitorPresence = { enviados: [], cierresPorLimite: [] }
+  page.on('websocket', (ws) => {
+    ws.on('framesent', ({ payload }) => {
+      const texto = typeof payload === 'string' ? payload : payload.toString('latin1')
+      if (/"type"\s*:\s*"presence"/.test(texto) && /"event"\s*:\s*"(track|untrack)"/.test(texto)) monitor.enviados.push(Date.now())
+    })
+    ws.on('framereceived', ({ payload }) => {
+      const texto = typeof payload === 'string' ? payload : payload.toString('latin1')
+      if (/presence rate limit|ClientPresenceRateLimit/i.test(texto)) monitor.cierresPorLimite.push(texto.slice(0, 300))
+    })
+  })
+  return monitor
+}
+
+function maxEnviosEnVentana(enviados: number[], ventanaMs = 30_000) {
+  return enviados.reduce((max, inicio) => Math.max(max, enviados.filter((t) => t >= inicio && t < inicio + ventanaMs).length), 0)
+}
+
+/** Salir de la sección como lo haría alguien: click en un elemento neutro (el título). */
+async function salirDeLaSeccion(page: Page, cotizacionId: string) {
+  await page.getByRole('heading', { name: cotizacionId, exact: true }).first().click()
+}
+
+function avisoDeEdicion(page: Page) {
+  return page.getByText(/está editando esta sección/)
+}
+
 function celda(page: Page, fila: number, columna: number): Locator {
   return filas(page).nth(fila).locator('td').nth(columna).locator('input')
 }
@@ -129,6 +165,8 @@ test.describe('live: colaboración real entre dos usuarios', () => {
   // de "B convergió porque el poll de reconciliación tapó un evento perdido".
   const framesB: FrameRecibido[] = []
   const lecturasB: number[] = []
+  let presenceA: MonitorPresence
+  let presenceB: MonitorPresence
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(180_000)
@@ -143,6 +181,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     contextA = await browser.newContext()
     pageA = await contextA.newPage()
     vigilarErrores(pageA, 'A')
+    presenceA = monitorearPresence(pageA)
     await login(pageA, '/cotizaciones')
 
     // Fase 8: producto real para el conflicto autofill-vs-edición-manual (punto
@@ -170,6 +209,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     contextB = await browser.newContext()
     pageB = await contextB.newPage()
     vigilarErrores(pageB, 'B')
+    presenceB = monitorearPresence(pageB)
     pageB.on('websocket', (ws) => {
       ws.on('framereceived', ({ payload }) => {
         framesB.push({ at: Date.now(), texto: typeof payload === 'string' ? payload : payload.toString('latin1') })
@@ -395,6 +435,31 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       const cotizacion = await leerCotizacionDelServidor(cotizacionId)
       return { proyecto: cotizacion.proyecto, locacion: cotizacion.locacion }
     }, { timeout: 30_000 }).toEqual({ proyecto: nuevoProyecto, locacion: 'Foro 3 escrito por B' })
+  })
+
+  test('salir de una sección quita el aviso en la otra pantalla, en ambos sentidos (y en Partidas)', async () => {
+    test.setTimeout(180_000)
+    // Bug reportado (V1, 2026-09-24): el aviso "X está editando" nunca se quitaba.
+    // Causa: realtime-js 2.100 no aplicaba las bajas de Presence -- docs/decisions/016.
+    // Presence envía con presupuesto (demora máxima 15 s), de ahí los 30 s.
+
+    // El test anterior deja a A dentro de "Datos generales".
+    await salirDeLaSeccion(pageA, cotizacionId)
+    await expect(avisoDeEdicion(pageB), 'A salió de la sección pero B sigue viendo el aviso').toHaveCount(0, { timeout: 30_000 })
+
+    // B entra y sale de "Datos generales": A ve aparecer y desaparecer el aviso.
+    await pageB.locator('input[placeholder="Lugar del evento"]').click()
+    await expect(avisoDeEdicion(pageA).first()).toBeVisible({ timeout: 30_000 })
+    await salirDeLaSeccion(pageB, cotizacionId)
+    await expect(avisoDeEdicion(pageA), 'B salió de la sección pero A sigue viendo el aviso').toHaveCount(0, { timeout: 30_000 })
+
+    // Partidas: A se queda en una celda (el aviso sigue aunque no escriba) y luego sale.
+    await celda(pageA, 0, COL.cantidad).click()
+    await expect(avisoDeEdicion(pageB).first()).toBeVisible({ timeout: 30_000 })
+    await pageA.waitForTimeout(6_000) // más que la inactividad de 5 s: el aviso NO debe irse solo
+    await expect(avisoDeEdicion(pageB).first()).toBeVisible()
+    await salirDeLaSeccion(pageA, cotizacionId)
+    await expect(avisoDeEdicion(pageB), 'A salió de Partidas pero B sigue viendo el aviso').toHaveCount(0, { timeout: 30_000 })
   })
 
   test('cambiar el fee en una pantalla actualiza los totales de la otra', async () => {
@@ -788,6 +853,17 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     } finally {
       await cleanupLiveCotizacion(raceId).catch((e) => console.error('[live colab] cleanup race:', e))
     }
+  })
+  test('en toda la corrida ningún canal se cerró por el límite de Presence del servidor', async () => {
+    // docs/decisions/016: antes, el heartbeat de 15 s y un track() por tecla
+    // excedían 5 eventos/30 s y el servidor cerraba el canal (427 veces en 24 h
+    // en test). El presupuesto del cliente deja como máximo 4 en cualquier 30 s.
+    expect(presenceA.enviados.length, 'A nunca publicó Presence: el monitor no está viendo el socket').toBeGreaterThan(0)
+    expect(presenceB.enviados.length, 'B nunca publicó Presence: el monitor no está viendo el socket').toBeGreaterThan(0)
+    expect(maxEnviosEnVentana(presenceA.enviados), 'A excedió el presupuesto de Presence').toBeLessThanOrEqual(4)
+    expect(maxEnviosEnVentana(presenceB.enviados), 'B excedió el presupuesto de Presence').toBeLessThanOrEqual(4)
+    expect(presenceA.cierresPorLimite, 'el servidor cerró el canal de A por límite de Presence').toEqual([])
+    expect(presenceB.cierresPorLimite, 'el servidor cerró el canal de B por límite de Presence').toEqual([])
   })
 })
 
@@ -1263,6 +1339,71 @@ test.describe('live: conflicto idéntico no bloquea Generar Cotización', () => 
       await contextB.close()
       await cleanupLiveCotizacion(cotizacionId).catch((e) => console.error('[live 8.7.2 idem] cleanup:', e))
       await cleanupLiveUser(USUARIO_B.email).catch((e) => console.error('[live 8.7.2 idem] cleanup usuario B:', e))
+    }
+  })
+})
+
+/**
+ * docs/decisions/016: salir de la cotización o cerrar la pestaña tiene que sacar a
+ * esa persona de "Colaborando ahora" en la otra pantalla. Con realtime-js 2.100 el
+ * registro se quedaba pegado para siempre (las bajas de Presence no se aplicaban).
+ * Cotización dedicada en BORRADOR: el describe principal termina aprobando la suya,
+ * y una cotización no editable no abre canal.
+ */
+test.describe('live: Presence -- salir de la cotización o cerrar la pestaña', () => {
+  test.skip(!liveEnabled, 'Requiere PLAYWRIGHT_BASE_URL, credenciales reales y el bypass apagado')
+
+  test('salir de la cotización y cerrar la pestaña dejan "Solo tú" en la otra pantalla', async ({ browser }) => {
+    test.setTimeout(180_000)
+
+    await ensureLiveUser(USUARIO_B)
+    const suffix = Date.now()
+
+    const contextA = await browser.newContext()
+    const pageA = await contextA.newPage()
+    vigilarErrores(pageA, 'A')
+    await login(pageA, '/cotizaciones')
+
+    const contextB = await browser.newContext()
+    const pageB = await contextB.newPage()
+    vigilarErrores(pageB, 'B')
+    await login(pageB, '/cotizaciones', { email: USUARIO_B.email, password: USUARIO_B.password })
+
+    const cotizacionId = await crearCotizacion(pageA, `${PREFIJO}PRESENCE-${suffix}`, `Presence ${suffix}`, [
+      { descripcion: 'Partida presence', precio: 1000 },
+    ])
+    const soloTu = pageA.getByText('Solo tú en esta cotización')
+
+    try {
+      await pageA.goto(`/cotizaciones/${cotizacionId}`)
+      await pageB.goto(`/cotizaciones/${cotizacionId}`)
+      await expect(filas(pageA)).toHaveCount(1, { timeout: 30_000 })
+      await expect(filas(pageB)).toHaveCount(1, { timeout: 30_000 })
+      await esperarCanalColaborativo([
+        { page: pageA, veA: NOMBRE_CORTO_B },
+        { page: pageB },
+      ])
+
+      // B entra a una sección y se va de la cotización SIN salir antes de la sección.
+      await celda(pageB, 0, COL.descripcion).click()
+      await expect(avisoDeEdicion(pageA).first()).toBeVisible({ timeout: 30_000 })
+      await pageB.getByRole('link', { name: /Cotizaciones/ }).first().click()
+      await expect(pageB).toHaveURL(/\/cotizaciones$/, { timeout: 30_000 })
+      await expect(soloTu, 'B salió de la cotización pero A lo sigue viendo').toBeVisible({ timeout: 30_000 })
+      await expect(avisoDeEdicion(pageA)).toHaveCount(0)
+
+      // B vuelve: A lo ve de nuevo.
+      await pageB.goto(`/cotizaciones/${cotizacionId}`)
+      await esperarCanalColaborativo([{ page: pageA, veA: NOMBRE_CORTO_B }])
+
+      // B cierra la pestaña.
+      await pageB.close()
+      await expect(soloTu, 'B cerró la pestaña pero A lo sigue viendo').toBeVisible({ timeout: 60_000 })
+    } finally {
+      await contextA.close()
+      await contextB.close()
+      await cleanupLiveCotizacion(cotizacionId).catch((e) => console.error('[live presence] cleanup:', e))
+      await cleanupLiveUser(USUARIO_B.email).catch((e) => console.error('[live presence] cleanup usuario B:', e))
     }
   })
 })

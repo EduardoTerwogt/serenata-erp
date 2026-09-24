@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabaseBrowser } from '@/lib/supabase-browser'
 import { authorizeRealtime, createPrivateChannel, scheduleTokenRefresh } from '@/lib/realtime/authorize'
+import { createPresencePublisher, tryConsumePresenceBudget } from '@/lib/realtime/presence-publisher'
 
 /**
  * Fase 8 (hardening pre-Proyectos): infraestructura de canal privado de
@@ -21,8 +22,12 @@ import { authorizeRealtime, createPrivateChannel, scheduleTokenRefresh } from '@
  * Contiene los 3 fixes de lifecycle reales encontrados en Fase 8 (ver
  * comentarios inline): esperar `removeChannel()` antes de reconectar, cancelar
  * la cadena de refresco de token anterior antes de pedir una nueva, y son
- * responsabilidad del CONSUMIDOR limpiar cualquier timer propio (como los
- * reintentos de `track()`) en `onSessionEnd`.
+ * responsabilidad del CONSUMIDOR limpiar cualquier timer propio en
+ * `onSessionEnd`.
+ *
+ * Presence se publica SOLO vía `publishPresence` (ver
+ * lib/realtime/presence-publisher.ts): el servidor cierra el canal si un
+ * cliente excede 5 eventos de Presence en 30 s -- docs/decisions/016.
  */
 export interface UseRealtimeChannelOptions {
   /** `null`/`undefined` deshabilita -- no se intenta conectar. */
@@ -87,9 +92,21 @@ async function removeChannelWithRetry(channel: RealtimeChannel, topic: string): 
 
 export interface UseRealtimeChannelResult {
   /** Canal activo, o `null` si no hay uno (deshabilitado o reconectando). Ref
-   *  estable: leer `.current` fuera de un efecto (ej. para `channel.track()`)
-   *  es seguro sin incluirla en dependencias, igual que cualquier ref. */
+   *  estable: leer `.current` fuera de un efecto es seguro sin incluirla en
+   *  dependencias, igual que cualquier ref. */
   channelRef: React.RefObject<RealtimeChannel | null>
+  /**
+   * Única vía para publicar el registro de Presence propio -- nunca llamar
+   * `channel.track()` directo (se saltaría el presupuesto de
+   * lib/realtime/presence-publisher.ts y el servidor cerraría el canal).
+   * Guarda el estado deseado y lo envía:
+   * agrupando cambios dentro de `PRESENCE_COALESCE_MS`, solo si difiere de lo
+   * último enviado por este canal, y respetando el presupuesto (si no hay,
+   * espera y manda el ÚLTIMO estado, nunca uno intermedio). Se re-publica
+   * solo en cada `SUBSCRIBED` (unión o reconexión). Debe ser un valor
+   * serializable estable: la igualdad se evalúa por `JSON.stringify`.
+   */
+  publishPresence: (payload: Record<string, unknown>) => void
 }
 
 export function useRealtimeChannel({
@@ -102,6 +119,7 @@ export function useRealtimeChannel({
   onSessionEnd,
 }: UseRealtimeChannelOptions): UseRealtimeChannelResult {
   const channelRef = useRef<RealtimeChannel | null>(null)
+  const [presencePublisher] = useState(createPresencePublisher)
 
   const onChannelCreatedRef = useRef(onChannelCreated)
   const onSubscribedRef = useRef(onSubscribed)
@@ -165,8 +183,6 @@ export function useRealtimeChannel({
         presence: { key: `${presenceKeyPrefix}-${random}` },
       })
 
-      onChannelCreatedRef.current(channel)
-
       const scheduleReconnect = () => {
         if (cancelled || reconnectTimer !== null) return
         reconnectAttempt += 1
@@ -181,10 +197,27 @@ export function useRealtimeChannel({
           // MISMO objeto (ya `isJoined()`), y el primer `.on('presence', ...)`
           // de la reconexión lanzaba esa excepción -- abortando el intento de
           // reconexión a medias, sin llegar nunca a `channel.subscribe()`.
-          await supabaseBrowser.removeChannel(channel).catch(() => null)
+          // Con reintento (igual que el cleanup de desmontaje): un
+          // `removeChannel()` que no confirma 'ok' deja el canal registrado y
+          // `.channel(topic)` lo devolvería de nuevo.
+          await removeChannelWithRetry(channel, topic)
           if (channelRef.current === channel) channelRef.current = null
-          if (!cancelled) connect()
+          if (!cancelled) runConnect()
         }, delayMs)
+      }
+
+      // Si aun así `.channel(topic)` devolvió un canal que no se terminó de
+      // retirar, `.on('presence', ...)` lanza (en la versión fijada, 2.112, también
+      // en estado *joining*, no solo *joined*). Antes esa excepción rechazaba
+      // `connect()` en silencio y el canal quedaba muerto sin log ni
+      // reintento; ahora se registra y se vuelve a intentar con backoff.
+      try {
+        onChannelCreatedRef.current(channel)
+      } catch (e) {
+        console.error('[useRealtimeChannel] no se pudieron registrar los listeners del canal, reintentando', topic, e)
+        channelRef.current = channel
+        scheduleReconnect()
+        return
       }
 
       const join = async () => {
@@ -202,11 +235,13 @@ export function useRealtimeChannel({
           if (status === 'SUBSCRIBED') {
             reconnectAttempt = 0
             await onSubscribedRef.current(channel)
+            if (!cancelled && channelRef.current === channel) presencePublisher.attach(channel)
             return
           }
 
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             console.error('[useRealtimeChannel] canal de Realtime perdió la conexión, reconectando', status)
+            presencePublisher.detach()
             onDisconnectedRef.current()
             scheduleReconnect()
           }
@@ -217,16 +252,28 @@ export function useRealtimeChannel({
       void join()
     }
 
-    void connect()
+    // Nunca `void connect()`: un rechazo quedaría como unhandled rejection y el
+    // canal muerto sin rastro -- fallar explícito.
+    function runConnect() {
+      connect().catch((e) => {
+        console.error('[useRealtimeChannel] connect() falló', topic, e)
+      })
+    }
+
+    runConnect()
 
     return () => {
       cancelled = true
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer)
       cancelTokenRefresh?.()
+      presencePublisher.reset()
       onSessionEndRef.current()
       const channel = channelRef.current
       if (channel) {
-        void channel.untrack().catch(() => null)
+        // `untrack` cuenta contra el límite de Presence del servidor; si no
+        // queda presupuesto se omite -- el `phx_leave` de `removeChannel`
+        // ya borra el registro en el servidor al salir del canal.
+        if (tryConsumePresenceBudget()) void channel.untrack().catch(() => null)
         // Fire-and-forget deliberado (el cleanup de un efecto no puede ser
         // async) -- pero se registra la promesa para que un remount
         // inmediato del mismo topic (ver connect() arriba) la espere antes
@@ -243,7 +290,7 @@ export function useRealtimeChannel({
       }
       channelRef.current = null
     }
-  }, [topic, enabled, presenceKeyPrefix])
+  }, [topic, enabled, presenceKeyPrefix, presencePublisher])
 
-  return { channelRef }
+  return { channelRef, publishPresence: presencePublisher.publish }
 }

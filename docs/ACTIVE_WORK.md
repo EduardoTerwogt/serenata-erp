@@ -1,11 +1,29 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-24 (sesión 7 — cerrada)
+**Última actualización:** 2026-09-24 (sesión 8 — en curso)
 
 ## Estado
 
-**`docs/PLAN.md` — Vacío.** No hay iniciativa multi-sesión abierta. Todo lo
-de esta sesión está en `main` y aplicado en test y producción.
+**`docs/PLAN.md` — Vacío.** Sesión 8: fix de Presence en la colaboración en
+vivo (aviso "X está editando" pegado), en PR — rama
+`claude/trusting-pasteur-rc5mij`. Plan aprobado por el usuario; diseño y
+motivos en `docs/decisions/016-presence-realtime-js-fijado-y-presupuesto.md`.
+
+## En curso — sesión 8
+
+- **Causas raíz:** (1) `@supabase/realtime-js` 2.100.0 no aplicaba las bajas
+  de Presence; (2) el servidor cerraba el canal por > 5 eventos de Presence en
+  30 s (heartbeat de 15 s + `track()` por tecla; 427 cierres en 24 h en test).
+- **Cambios:** `realtime-js` fijado en 2.112.0 (`overrides`), presupuesto de
+  Presence (`lib/realtime/presence-publisher.ts`), sin heartbeat, aviso
+  separado del bloqueo de datos (se quita solo al salir), reconexión sin
+  fallos silenciosos.
+- **Validación local:** `tsc` limpio, lint 0 errores (8 warnings previos),
+  `npm test` 979/979, build OK, e2e smoke 26/26.
+- **Pendiente para mergear:** CI completo del PR (incluido `live` con los
+  tests nuevos de Presence), cero `ClientPresenceRateLimitReached` en los
+  logs de Realtime de test durante la corrida, y repro manual en el Preview
+  con `prueba-manual@` y `prueba-manual-2@serenata.test`.
 
 ## Completado en la sesión 7
 
@@ -70,13 +88,15 @@ de esta sesión está en `main` y aplicado en test y producción.
   re-run del job en `a904f8d` pasó completo. Si se repite, revisar
   primero la ventana de 3 s del test causal (sensible a runner lento) y
   la carga del servidor Next en el test de escala; no es regresión de
-  #91/#92 (no tocan Realtime ni ese flujo).
+  #91/#92 (no tocan Realtime ni ese flujo). **Hipótesis (sesión 8):** el
+  cierre de canales por límite de Presence (decisión 016) hacía perder
+  eventos `*_confirmed`; verificar si `live` se estabiliza tras ese fix.
 - El MCP de Vercel no tiene alcance de team para logs de runtime ni para
   abrir URLs de deployment (403); la verificación de Previews se hizo por
   los logs de Supabase.
 
 ## Siguiente paso
 
-Nada en curso. Priorizar en Chat (`docs/ROADMAP.md` → "Siguiente"/"Después";
-incluye el bug de Presence y la decisión de borrar
+Cerrar el PR de Presence (sesión 8, arriba). Después, priorizar en Chat
+(`docs/ROADMAP.md` → "Siguiente"/"Después"; incluye la decisión de borrar
 `cliente_id_backfill_clasificacion`).
