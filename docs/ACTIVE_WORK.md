@@ -105,6 +105,8 @@ verde en el head `2b23b63`: `test`, `fresh-db`, `smoke-and-critical`,
 ## Siguiente paso
 
 Pasos manuales cerrados (M1, M2, V1 y V2).
-Queda solo el housekeeping de ramas. Antes de fin de año: decidir el formato
-de folios CC/CP para 2027. Después, priorizar en Chat
+Folios CC/CP por año: migración `20260924_folios_cc_cp_por_anio.sql`
+(aplicada y verificada en test; PR abierto, falta CI + prod). Queda el
+housekeeping de ramas y borrar `NEXTAUTH_SECRET` de Development. Después,
+priorizar en Chat
 (`docs/ROADMAP.md` → "Siguiente"/"Después"; incluye el bug de Presence).

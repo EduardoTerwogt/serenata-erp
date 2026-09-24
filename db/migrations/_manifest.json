@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-24T17:03:00.515Z",
-  "count": 104,
+  "generated_at": "2026-09-24T20:21:15.153Z",
+  "count": 105,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -105,6 +105,7 @@
     "20260922_fix_cotizacion_active_schema_flow_layout.sql",
     "20260923_drop_pdf_plantillas_editor_pdfs.sql",
     "20260923_rls_cliente_id_backfill_clasificacion.sql",
-    "20260924_advisor_search_path_pg_trgm.sql"
+    "20260924_advisor_search_path_pg_trgm.sql",
+    "20260924_folios_cc_cp_por_anio.sql"
   ]
 }
