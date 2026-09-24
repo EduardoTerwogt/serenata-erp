@@ -64,6 +64,15 @@ de esta sesión está en `main` y aplicado en test y producción.
   test accesible con scope `drive.file`.
 - Las secuencias `seq_cc_2026`/`seq_cp_2026` quedaron sin uso tras #92
   (no se borraron; se pueden eliminar en una limpieza futura).
+- **Job `live` inestable en `main` (2026-09-24):** tras el merge de #92,
+  `live` falló 2 veces seguidas en tests distintos con el mismo código que
+  pasó en el PR — `cotizaciones-colaboracion-escala` (`ECONNRESET` del
+  servidor Next local al crear la cotización) y el test causal de `bulk`
+  (B recibió el evento pero no releyó dentro de la ventana de 3 s). Un solo
+  re-run del job en `a904f8d` pasó completo. Si se repite, revisar
+  primero la ventana de 3 s del test causal (sensible a runner lento) y
+  la carga del servidor Next en el test de escala; no es regresión de
+  #91/#92 (no tocan Realtime ni ese flujo).
 - El MCP de Vercel no tiene alcance de team para logs de runtime ni para
   abrir URLs de deployment (403); la verificación de Previews se hizo por
   los logs de Supabase.
