@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { obtenerCuentasPorProyecto } from '@/lib/server/cuentas/periodo'
+import { obtenerCuentasPorProyecto } from '@/lib/server/cuentas/periodo-rpc'
 
 // EF-3 3B-9: agrupamiento/suma movidos a SQL vía la RPC cuentas_por_proyecto
 // (db/migrations/20260914_cuentas_por_proyecto.sql) -- antes traía

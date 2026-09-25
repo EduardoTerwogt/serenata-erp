@@ -6,10 +6,8 @@
  * conceptos crudos del año, aquí se derivan con `concepto.ts` y después se
  * filtra, busca, cuenta por mes, se arman los totales con
  * `calcularCierreProyecto` y se pagina. Al cliente solo llega el periodo
- * pedido. La ruta vieja `/api/cuentas/por-proyecto` también vive aquí
- * (`obtenerCuentasPorProyecto`) hasta B8.
+ * pedido. Módulo puro: la lectura de la BD vive en `periodo-rpc.ts`.
  */
-import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { calcularCierreProyecto, type CuentaPagarCierreInput } from '@/lib/shared/cierre-proyecto'
 import { calcularCierreMensual } from '@/lib/shared/cuentas/cierre-mensual'
 import {
@@ -35,20 +33,7 @@ import {
 } from '@/lib/shared/cuentas/periodo-tipos'
 import { round2 } from '@/lib/shared/decimal'
 import { calcularEjemploFactura } from '@/lib/shared/factura-fiscal'
-import type { ProyectoConCuentasRPC } from '@/lib/types'
-import type { CuentasAnioRaw, GrupoAnioRaw, PagoAnioRaw } from './periodo-rpc'
-
-// ── Vista actual (hasta B8) ────────────────────────────────────────────────
-
-/** Lógica de `/api/cuentas/por-proyecto`: la RPC sin año más el cierre por proyecto. */
-export async function obtenerCuentasPorProyecto() {
-  const { data, error } = await supabaseAdmin.rpc('cuentas_por_proyecto')
-  if (error) throw error
-  return (data as ProyectoConCuentasRPC[]).map((p) => ({
-    ...p,
-    cierre: calcularCierreProyecto(p.cuentas_pagar, p.margen_total_proyecto, p.fee_agencia_proyecto, p.iva_total_proyecto),
-  }))
-}
+import type { CuentasAnioRaw, GrupoAnioRaw, PagoAnioRaw } from './periodo-crudo'
 
 // ── Derivación del año ─────────────────────────────────────────────────────
 

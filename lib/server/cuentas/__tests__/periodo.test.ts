@@ -1,10 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: vi.fn() } }))
 
 import { derivarAvisos } from '../avisos'
 import { construirPeriodo, construirProyectos, normalizarBusqueda, pendientesPorAnio, ultimoMesConDatos, type ParametrosPeriodo } from '../periodo'
-import { decodificarCuentasAnio, type CuentasAnioRaw } from '../periodo-rpc'
+import { decodificarCuentasAnio, type CuentasAnioRaw } from '../periodo-crudo'
 import { SIN_PROYECTO_ID } from '@/lib/shared/cuentas/periodo-tipos'
 
 const HOY = '2026-09-24'

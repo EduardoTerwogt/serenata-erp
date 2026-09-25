@@ -455,3 +455,20 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   text-transform: uppercase;
   color: var(--sn-ink-faint);
 }
+
+/* Rediseño de Cuentas (handoff): etiqueta en mayúsculas de 10.5px/600 con
+   tracking .04em en gris medio -- encabezados de tarjetas, tablas y
+   secciones del diseño nuevo. */
+.sn-caption {
+  font-family: var(--font-inter);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sn-folio {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--accent);
+}
