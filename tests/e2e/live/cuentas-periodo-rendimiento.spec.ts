@@ -14,7 +14,13 @@ import { liveEnabled } from '../utils/live-helpers'
  */
 
 const PRESUPUESTO_MS = 800
-const MUESTRAS = 12
+// E7 (sesión 20, autorizado por el usuario): con 12 muestras el "p95" era el
+// máximo y un solo pico de red lo tumbaba; con 40, es la 38.ª muestra.
+const MUESTRAS = 40
+// La primera consulta pesada en cada conexión nueva de Postgres cuesta ~300 ms
+// más (catálogo en frío, medido en serenata-erp-test) y PostgREST reparte las
+// peticiones entre varias conexiones: 2 de calentamiento no alcanzaban.
+const CALENTAMIENTO = 8
 
 function p95(valores: number[]): number {
   const orden = [...valores].sort((a, b) => a - b)
@@ -37,8 +43,8 @@ test.describe('live: rendimiento de la lectura por periodo', () => {
     test(`${nombre}: p95 < ${PRESUPUESTO_MS} ms`, async ({ page }) => {
       await login(page, '/cuentas')
 
-      // Calentamiento: la primera petición compila/abre conexiones.
-      for (let i = 0; i < 2; i++) expect((await page.request.get(url)).ok()).toBe(true)
+      // Calentamiento: las primeras peticiones compilan y abren conexiones del pool.
+      for (let i = 0; i < CALENTAMIENTO; i++) expect((await page.request.get(url)).ok()).toBe(true)
 
       const tiempos: number[] = []
       const fases: string[] = []
