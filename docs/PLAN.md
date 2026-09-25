@@ -169,11 +169,16 @@ abren sin servidor.
     función de Vercel no acepta cuerpos mayores de ~4.5 MB, así que XML y PDF
     se suben **en peticiones separadas**, no juntos en un solo `FormData` como
     hoy.
-16. **Descargar y "Compartir PDF"** usan una ruta propia
-    (`GET /api/ordenes-pago/[id]/pdf`) que sirve el archivo desde Drive con
-    `requireSection('cuentas')`, no el enlace de Drive: el usuario puede no
-    tener permiso en la carpeta. En móvil, "Compartir" usa la Web Share API
-    con el archivo; si el navegador no la soporta, descarga.
+16. **Descargar y "Compartir PDF" usan el enlace de Drive** (`pdf_url`),
+    confirmado por el usuario en la sesión 12.
+    - Los archivos viven en Drive; Supabase solo guarda el enlace, como todos
+      los documentos del sistema.
+    - En móvil, "Compartir" pasa el **enlace** a la Web Share API. Si el
+      navegador no la soporta, lo copia al portapapeles.
+    - `uploadFileToDrive` no fija permisos: cada archivo hereda los de su
+      carpeta. El enlace abre para quien tenga acceso a "Ordenes de Pago" en
+      Drive. Si hay que compartirlo con alguien de fuera, se comparte la
+      carpeta desde Drive. No hay cambios de código ni ruta nueva.
 17. **Comprobante del pago a proveedor (D11):** se adjunta en el formulario de
     "Registrar pago", como en el diseño, y no en Documentos. Si se registró
     sin comprobante, el siguiente paso es "Subir comprobante" y se adjunta
@@ -561,9 +566,9 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - Pie fijo con los totales recalculados.
   - El confirmar de D8 es el propio pie del modal (resumen + "Generar orden
     PDF"), no un segundo diálogo.
-  - `POST` recibe la selección, genera el PDF (supuesto 14) y llama
-    `generar_orden_pago` (B1b). Luego muestra "Orden generada" con
-    Descargar o Compartir (supuesto 16).
+  - `POST` recibe la selección, genera el PDF (supuesto 14), lo sube a Drive
+    y llama `generar_orden_pago` (B1b). Luego muestra "Orden generada" con
+    Descargar o Compartir el enlace de Drive (supuesto 16).
   - `buildOrdenPagoPreview` pasa a usar el saldo en lugar de `x_pagar` y
     agrega el cruce fiscal.
 - Migración de órdenes:
@@ -578,8 +583,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 - `buscar_ordenes_pago` extendida: filtros estado/mes/proveedor/proyecto,
   búsqueda por folio, desglose por orden y conteo de cuentas.
 - Historial (modal de 960px / pantalla móvil): filas que se expanden por
-  proveedor, monto en total a transferir (D20), descarga por la ruta propia.
-- Ruta `GET /api/ordenes-pago/[id]/pdf` (supuesto 16).
+  proveedor, monto en total a transferir (D20), descarga con el enlace de
+  Drive (supuesto 16).
 
 **B7 — Reabrir, volver a cerrar y correcciones (D5, D6).**
 - Tabla `cuentas_reaperturas` (proyecto, abierta por/cuándo/motivo, cerrada
