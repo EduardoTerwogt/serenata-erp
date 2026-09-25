@@ -1,7 +1,8 @@
 # Plan de la iniciativa activa
 
 **Iniciativa:** Rediseño de la sección Cuentas (Claude Design → implementación)
-**Estado:** Borrador en refinamiento.
+**Estado:** Listo para aprobar. Supuestos confirmados y auditoría final
+hecha (sesión 14); no quedan dudas de producto ni de negocio.
 - Sesión 10 (2026-09-25): diseño final recibido y auditado.
 - Sesión 11 (2026-09-25): auditoría end-to-end contra producción (BD, RPCs,
   rutas, UI). Sus hallazgos están en §5.1 y las decisiones D10–D17 que
@@ -13,7 +14,10 @@
 - Sesión 13 (2026-09-25): auditoría de regresiones del plan completo contra
   el código y la BD. Salieron R1–R13 (§5.4), D22–D23 y las reglas
   transversales de §7.0.
-- Falta que el usuario confirme los supuestos de la §4 y apruebe los bloques.
+- Sesión 14 (2026-09-25): el usuario **confirmó los supuestos de la §4**.
+  Auditoría final: A1–A5 (§5.5), decisiones de arquitectura ya integradas en
+  los bloques.
+- Falta que el usuario apruebe el plan para pasarlo a "Aprobado".
 
 Para retomar, ver `docs/ACTIVE_WORK.md` → "Cómo retomar". El zip del diseño
 no está en el repo hasta B0: pedírselo al usuario.
@@ -127,10 +131,10 @@ abren sin servidor.
 
 | # | Tema | Decisión |
 |---|---|---|
-| D22 | Cancelar una cotización aprobada (hoy falla, R1) | Solo se permite **sin dinero ni órdenes**: sin cobros, sin pagos a proveedor y sin cuentas dentro de una orden de pago. Si se permite, borra proyecto, cuentas, grupos y documentos en una sola transacción, en el orden correcto de llaves foráneas. |
+| D22 | Cancelar una cotización aprobada (hoy falla, R1) | Solo se permite **sin dinero ni órdenes**: sin cobros, sin pagos a proveedor y sin cuentas dentro de una orden de pago. Tampoco si alguna de sus cuentas pertenece a un grupo ya facturado (no `ABIERTO`): la factura del proveedor dejaría de cuadrar (misma guarda que la reasignación, decisión 011, A4). Si se permite, borra proyecto, cuentas, grupos y documentos en una sola transacción, en el orden correcto de llaves foráneas. |
 | D23 | Encabezado móvil en `/cuentas` | **Se oculta**: en Cuentas móvil solo queda la barra de pestañas (D19), como en el diseño. El resto de la app no cambia. |
 
-## 4. Supuestos por confirmar (se aplican si no se objetan)
+## 4. Supuestos (confirmados por el usuario en la sesión 14)
 
 1. **Correcciones sobre un proyecto reabierto:** solo admin, igual que reabrir.
    Mientras el proyecto está reabierto, el resto de los usuarios lo ve pero no
@@ -362,6 +366,23 @@ Cierre y `documentos-autofill` (suman `monto_pagado`, que sigue en neto);
 `monto_total` neto); reconciliación de pagos del cliente (`reconcilePago.ts`
 depende de `operation_id`, no del monto).
 
+### 5.5 Auditoría final (sesión 14)
+
+Revisión del plan completo, ya con los supuestos confirmados, buscando
+ambigüedades de implementación. No salió ninguna duda de producto ni de
+negocio. Estas son decisiones de arquitectura, tomadas y ya integradas:
+
+| # | Hueco | Decisión | Bloque |
+|---|---|---|---|
+| A1 | **Dos lugares para el comprobante del pago a proveedor.** Hoy `registrar-pago` sube el archivo y crea una fila `COMPROBANTE_PAGO` en `documentos_cuentas_pagar` **fuera** de la RPC. El plan agregaba `pagos_cuentas_pagar.comprobante`. D11 no decía cuál cuenta. | La fuente de verdad es `pagos_cuentas_pagar.comprobante_url` (el enlace de Drive). Se sube antes y se pasa a la RPC, así queda en la misma transacción que el pago. `registrar-pago` deja de crear la fila de documento. Las 2 filas `COMPROBANTE_PAGO` que existen cuentan para D11 en el backfill. "Adjuntar después" actualiza el pago con una RPC. | B2, B5 |
+| A2 | **El plan no decía dónde se guarda el snapshot del total a transferir.** Hay tres puntos de entrada que facturan: `grupos/[id]/subir-factura`, `portal/cuentas/grupos/[id]/factura` y `cuentas-pagar/[id]/subir-factura`. | Se escribe en el **mismo `UPDATE`** que pasa el grupo a `FACTURADO` (`marcarGrupoFacturado`), en los tres puntos. Se toma el `Total` del CFDI. Una factura en `revision` no cambia el estado, así que sigue el estimado. Test por punto de entrada. | B2 |
+| A3 | **B3 no puede ir en paralelo a B2.** Egresos y "Por pagar" de las tarjetas leen `total_a_transferir` y `monto_transferido`, que nacen en B2. | Secuencial: B2 → B3. | Dependencias |
+| A4 | **Cancelar una complementaria con renglones en un grupo ya facturado** quitaría conceptos de una factura ya validada. | Se bloquea (D22 ampliada). | B1b |
+| A5 | **El job `live` ya es inestable en `main`** (deuda técnica: `bulk` y escala), y el plan agrega varios tests `live` de concurrencia. | Si reaparece durante B1b, se diagnostica la causa raíz antes de sumar tests nuevos. No se reintenta a ciegas ni se marca como flake. | B1b |
+
+**Acción pendiente del usuario** (no bloquea el arranque): antes de B8,
+encender Drive en Preview (R9). Los pasos exactos se dan al inicio de B8.
+
 ## 6. Infraestructura que se reutiliza
 
 - **RPCs de dinero** (no se recrean, se extienden):
@@ -439,7 +460,7 @@ misma ruta detrás de `?v=2`, y se cambia al final.
 - `design_handoff_cuentas/` completo a `docs/design/cuentas/`: README,
   capturas, `abrir-directo/` y `codigo-fuente/`, unos 4 MB. No se generan
   capturas: el handoff ya las trae.
-- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D21, el
+- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D23, A1–A5, el
   modelo de la sección 5, §5.2 (reglas del prototipo que no se adoptan) y los
   supuestos aceptados.
 - Seed para `serenata-erp-test` con las formas de datos de producción (H11):
@@ -469,8 +490,8 @@ son bugs de hoy, no del rediseño.
   - El total lo calcula la ruta a partir de los candidatos. Nunca viene del
     cliente.
 - **`cancel_cotizacion` corregida (R1, D22):**
-  - bloquea si hay cobros o pagos a proveedor registrados, o cuentas en una
-    orden;
+  - bloquea si hay cobros o pagos a proveedor registrados, cuentas en una
+    orden o cuentas en un grupo no `ABIERTO` (A4);
   - si procede, borra en orden de llaves foráneas: documentos, cuentas por
     pagar, grupos, cuentas por cobrar (sus pagos y documentos caen en
     cascada) y al final el proyecto;
@@ -482,9 +503,9 @@ son bugs de hoy, no del rediseño.
 - `registrar_pago_cuenta_pagar` conserva `EN_PROCESO_PAGO` si la cuenta está
   en una orden (H3). Se parte de la definición vigente en `pg_proc`
   (norma de la decisión 011).
-- `PUT /api/cuentas-cobrar` y `PUT /api/cuentas-pagar`: se retiran (sin
-  consumidores en la UI; confirmar con grep) o se reducen a `notas` con Zod
-  (H4).
+- `PUT /api/cuentas-cobrar` y `PUT /api/cuentas-pagar`: **se retiran** (H4).
+  No tienen consumidores en la UI (confirmado con grep); sus tests se
+  eliminan junto con la ruta. Editar notas llega en B7 con PATCH y Zod.
 - CHECK de `cuentas_pagar.estado` (H12).
 - Tests: concurrencia de dos generaciones en `live` y suelta con pago parcial
   en orden.
@@ -541,6 +562,9 @@ va solo.
     pagado`, sin proporción. Así el grupo y la orden cierran al centavo.
   - Una suelta o un grupo sin factura no se paga (supuesto 9).
   - Las firmas viejas se eliminan en la misma migración (§7.0, regla 3).
+  - Recibe `p_comprobante_url` y lo guarda en el pago (A1).
+- Snapshot de `total_a_transferir` en el `UPDATE` a `FACTURADO` de los tres
+  puntos de entrada que facturan (A2).
   - `fecha_pago` de la cuenta = fecha capturada del pago que la salda, no
     `CURRENT_DATE` (R7).
   - `pagos_cuentas_pagar.orden_pago_id` guarda la orden vigente al momento
@@ -733,8 +757,7 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   posible. Se prepara al inicio de B8, no al final.
 - `?v=2` se abre a todos los usuarios (supuesto 20).
 
-**Dependencias:** B0 → B1b → B1 → B2 y B3 (pueden ir en paralelo) → B4 → B5
-→ B6 → B7 → B8. B6 depende también de B2 (montos de la orden) y de B1b
+**Dependencias:** B0 → B1b → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 (A3). B6 depende también de B2 (montos de la orden) y de B1b
 (`generar_orden_pago`).
 
 ## 8. Riesgos
@@ -844,7 +867,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | Auditoría del diseño y plan | Hecho (sesión 10) |
 | Auditoría end-to-end y decisiones D10–D17 | Hecho (sesión 11) |
 | Diseño final (handoff) y re-auditoría, D18–D21 | Hecho (sesión 12) |
-| Auditoría de regresiones R1–R13, D22–D23 | Hecho (sesión 13). Falta confirmar la §4 y aprobar |
+| Auditoría de regresiones R1–R13, D22–D23 | Hecho (sesión 13) |
+| Supuestos confirmados y auditoría final A1–A5 | Hecho (sesión 14). Falta aprobar |
 | B0 Referencia, reglas y seed | Pendiente |
 | B1b Blindaje previo | Pendiente |
 | B1 Derivación y datos fiscales | Pendiente |

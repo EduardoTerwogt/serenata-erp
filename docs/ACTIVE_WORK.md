@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 13: auditoría de regresiones del plan)
+**Última actualización:** 2026-09-25 (sesión 14: supuestos confirmados y auditoría final)
 
 ## Estado
 
@@ -19,7 +19,8 @@ Cuentas".**
   transversales en §7.0. **R1 es un bug vigente:** cancelar una cotización
   aprobada falla en la BD (llave foránea); se corrige en B1b (D22).
 - 23 decisiones confirmadas (D1–D23).
-- **19 supuestos por confirmar** (§4; el 5 y el 7 ya se resolvieron).
+- **Supuestos de la §4 confirmados** (sesión 14). Auditoría final A1–A5:
+  sin dudas de producto ni de negocio. **Falta solo la aprobación del plan.**
 - 10 bloques propuestos (B0, B1b y B1–B8). B1b es nuevo y corrige los bugs
   vigentes antes del rediseño.
 
@@ -63,7 +64,8 @@ servidor contra capturas de la app real, en tema claro y oscuro.
 
 ## Pendiente del usuario
 
-- **Confirmar los supuestos de `docs/PLAN.md` §4 y aprobar los bloques.**
+- **Aprobar `docs/PLAN.md`.**
+- Antes de B8: encender Drive en Preview (R9); los pasos se dan en su momento.
 - **Tener a mano el zip final** (`Serenata_ERP_Cuentas_recreation.zip` con
   `design_handoff_cuentas/`) para la sesión que haga B0. No está en el repo.
 - Borrar ramas remotas ya mergeadas (GitHub → Branches → Merged).
