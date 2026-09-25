@@ -63,6 +63,11 @@ BEGIN
   DELETE FROM cuentas_pagar
    WHERE folio LIKE 'SEEDCU-%' OR cotizacion_id = ANY(v_ids) OR proyecto_id = ANY(v_ids);
   DELETE FROM cuentas_pagar_grupos WHERE proyecto_id = ANY(v_ids);
+  -- Desglose de la orden (B1b): su llave hacia ordenes_pago no tiene cascada.
+  IF to_regclass('public.ordenes_pago_conceptos') IS NOT NULL THEN
+    DELETE FROM ordenes_pago_conceptos
+     WHERE orden_pago_id IN (SELECT id FROM ordenes_pago WHERE id = c_orden OR pdf_nombre LIKE 'SEEDCU %');
+  END IF;
   DELETE FROM ordenes_pago WHERE id = c_orden OR pdf_nombre LIKE 'SEEDCU %';
   -- pagos_comprobantes y documentos_cuentas_cobrar caen en cascada.
   DELETE FROM cuentas_cobrar
@@ -151,6 +156,13 @@ BEGIN
     ('5eedc000-0000-4000-8000-00000000d05a', 'SEEDCU-CP-05A', 'SEEDCU05-A', 'SEEDCU05', '5eedc000-0000-4000-8000-00000000105a', c_prov_b, 'SEEDCU Proveedor Moral',          'Equipo adicional',   1,  3000, 2000, 'PENDIENTE', 0, NULL, c_grp_05a, 'Santander', '014180009876543210', NULL),
     -- Sin proyecto ni cotización (forma legacy).
     ('5eedc000-0000-4000-8000-00000000d099', 'SEEDCU-CP-099', NULL, NULL, NULL, c_prov_a, 'SEEDCU Proveedor Persona Física', 'Gasto sin proyecto', 1, 1500, 0, 'PENDIENTE', 0, NULL, NULL, 'BBVA', '012180001234567891', NULL);
+
+  -- Desglose de la orden vieja, como lo dejó el backfill de B1b.
+  IF to_regclass('public.ordenes_pago_conceptos') IS NOT NULL THEN
+    INSERT INTO ordenes_pago_conceptos (orden_pago_id, cuenta_pagar_id, responsable_id, responsable_nombre, proyecto_id, cotizacion_folio, neto_cubierto, created_at)
+    SELECT c_orden, cp.id, cp.responsable_id, cp.responsable_nombre, cp.proyecto_id, cp.cotizacion_id, cp.x_pagar, '2026-06-20 12:00'
+    FROM cuentas_pagar cp WHERE cp.orden_pago_id = c_orden;
+  END IF;
 
   -- ── Documentos de proveedor ───────────────────────────────────────────
   INSERT INTO documentos_cuentas_pagar (cuentas_pagar_id, grupo_id, tipo, archivo_url, archivo_nombre, estado_validacion, fecha_carga)

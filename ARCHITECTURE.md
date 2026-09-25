@@ -339,9 +339,24 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   `operation_id`) que `registrar_pago_cuenta_pagar`.
 - `generar-orden-pago` toma grupos `FACTURADO` como fuente, elegibles solo
   si **todas** las cotizaciones que le aportan renglones (principal +
-  cualquier complementaria) tienen su evento ya realizado — un `UNION ALL`
-  preserva el criterio anterior (cuenta individual `PENDIENTE` con evento
-  realizado) para cualquier fila que todavía no tenga `grupo_id`.
+  cualquier complementaria) tienen su evento ya realizado (en hora CDMX,
+  `hoy_cdmx()`) y su factura XML está `validado` — un `UNION ALL` agrega las
+  sueltas `PENDIENTE` sin orden, con proveedor, factura validada y saldo.
+  La orden se crea con **una sola RPC atómica**, `generar_orden_pago`
+  (B1b del rediseño de Cuentas): bloquea los candidatos, los revalida,
+  compara su saldo con el que imprimió el PDF (`candidatos_cambiaron` si
+  difiere), escribe la orden y su desglose inmutable
+  (`ordenes_pago_conceptos`, que nadie actualiza ni borra) y marca grupos,
+  hijas y sueltas. La ruta la envuelve en `withIdempotency`. La orden
+  cubre el **saldo** de cada candidato, no su total.
+- `cancel_cotizacion` cancela en cascada: una principal arrastra sus
+  complementarias (APROBADA con sus cuentas, EMITIDA → CANCELADA, BORRADOR
+  se borra) y al final su proyecto; una complementaria solo borra sus
+  cuentas y recalcula los grupos que tocaba. Se bloquea todo
+  (`cancelacion_bloqueada`, P1413) si cualquiera tiene cobros o pagos a
+  proveedor, cuentas en una orden o en un grupo que no esté `ABIERTO`.
+  Detalle en [`docs/decisions/017`](docs/decisions/017-rediseno-cuentas.md)
+  (D22, D28, D31).
 - El Portal de Proveedores (`GET /api/portal/cuentas`) factura por grupo:
   `{ grupos: [...] }`, con las cuentas legacy sin `grupo_id` todavía
   representadas como grupos sintéticos de un solo renglón (visibles, nunca

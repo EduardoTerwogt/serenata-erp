@@ -1,4 +1,4 @@
-import type { CuentaPagarConJoins } from '@/lib/server/repositories/cuentas-pagar'
+import type { CuentaPagarConJoins, OrdenPagoCandidato } from '@/lib/server/repositories/cuentas-pagar'
 
 export interface OrdenPagoPreviewItem {
   descripcion: string
@@ -38,9 +38,25 @@ export interface OrdenPagoPreviewResult {
     total_general: number
   }
   cuentas_ids: string[]
+  /**
+   * Lo que se manda a `generar_orden_pago`: un grupo o una suelta por
+   * candidato, con el saldo que este mismo preview imprime en el PDF.
+   */
+  candidatos: OrdenPagoCandidato[]
 }
 
-export function buildOrdenPagoPreview(cuentasPendientes: CuentaPagarConJoins[]): OrdenPagoPreviewResult {
+function round2(value: number) {
+  return Math.round(value * 100) / 100
+}
+
+/** Saldo neto pendiente de una cuenta: la orden cubre el saldo, no el total (supuesto 13). */
+function saldoCuenta(cuenta: CuentaPagarConJoins) {
+  return round2(Number(cuenta.x_pagar || 0) - Number(cuenta.monto_pagado || 0))
+}
+
+export function buildOrdenPagoPreview(cuentasCandidatas: CuentaPagarConJoins[]): OrdenPagoPreviewResult {
+  // Una hija ya pagada de un grupo con pago parcial no aporta saldo.
+  const cuentasPendientes = cuentasCandidatas.filter((cuenta) => saldoCuenta(cuenta) > 0)
   const groupedByResponsable = new Map<string, OrdenPagoPreviewResponsable>()
 
   for (const cuenta of cuentasPendientes) {
@@ -76,7 +92,7 @@ export function buildOrdenPagoPreview(cuentasPendientes: CuentaPagarConJoins[]):
       responsable.eventos.push(evento)
     }
 
-    const monto = Number(cuenta.x_pagar || 0)
+    const monto = saldoCuenta(cuenta)
     evento.items.push({
       cuenta_id: cuenta.id,
       descripcion: cuenta.item_descripcion || 'Item',
@@ -101,5 +117,20 @@ export function buildOrdenPagoPreview(cuentasPendientes: CuentaPagarConJoins[]):
       total_general: totalGeneral,
     },
     cuentas_ids: cuentasPendientes.map((cuenta) => cuenta.id),
+    candidatos: buildCandidatos(cuentasPendientes),
   }
+}
+
+function buildCandidatos(cuentas: CuentaPagarConJoins[]): OrdenPagoCandidato[] {
+  const porGrupo = new Map<string, number>()
+  const sueltas: OrdenPagoCandidato[] = []
+  for (const cuenta of cuentas) {
+    if (cuenta.grupo_id) {
+      porGrupo.set(cuenta.grupo_id, round2((porGrupo.get(cuenta.grupo_id) ?? 0) + saldoCuenta(cuenta)))
+    } else {
+      sueltas.push({ tipo: 'cuenta', id: cuenta.id, monto_esperado: saldoCuenta(cuenta) })
+    }
+  }
+  const grupos: OrdenPagoCandidato[] = Array.from(porGrupo, ([id, monto]) => ({ tipo: 'grupo', id, monto_esperado: monto }))
+  return [...grupos, ...sueltas]
 }

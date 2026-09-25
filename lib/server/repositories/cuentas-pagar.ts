@@ -8,6 +8,7 @@ import {
   Proyecto,
 } from '@/lib/types'
 import { getItemsByCotizacion } from '@/lib/server/repositories/quotations'
+import { DomainError } from '@/lib/server/errors/domain-error'
 
 export type CuentaPagarConJoins = CuentaPagar & {
   cotizaciones?: { proyecto?: string; fecha_entrega?: string } | null
@@ -339,16 +340,6 @@ export async function deleteDocumentoCuentaPagar(id: string) {
   if (error) throw error
 }
 
-export async function createOrdenPago(orden: Partial<OrdenPago>) {
-  const { data, error } = await supabaseAdmin
-    .from('ordenes_pago')
-    .insert(orden)
-    .select()
-    .single()
-  if (error) throw error
-  return data as OrdenPago
-}
-
 export async function getOrdenPagoById(id: string) {
   const { data, error } = await supabaseAdmin
     .from('ordenes_pago')
@@ -457,20 +448,59 @@ export async function getCuentasPagarGruposFacturadosEventosRealizados() {
   return data as CuentaPagarConJoins[]
 }
 
-export async function updateCuentasPagarGruposEnOrden(grupoIds: string[], ordenId: string) {
-  const { error: grupoError } = await supabaseAdmin
-    .from('cuentas_pagar_grupos')
-    .update({ estado: 'EN_PROCESO_PAGO', orden_pago_id: ordenId })
-    .in('id', grupoIds)
-  if (grupoError) throw grupoError
+export interface OrdenPagoCandidato {
+  tipo: 'grupo' | 'cuenta'
+  id: string
+  /** Saldo neto que la ruta imprimió en el PDF; la RPC lo revalida. */
+  monto_esperado: number
+}
 
-  // Se refleja en las hijas para no romper reportes existentes que ya leen
-  // cuentas_pagar.orden_pago_id/estado a nivel item (y para que la
-  // agregación de ordenes_pago.estado dentro de registrar_pago_grupo_factura,
-  // que sigue leyendo por cuentas_pagar.orden_pago_id, no cambie).
-  const { error: cuentasError } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .update({ estado: 'EN_PROCESO_PAGO', orden_pago_id: ordenId })
-    .in('grupo_id', grupoIds)
-  if (cuentasError) throw cuentasError
+export interface GenerarOrdenPagoResult {
+  orden_pago_id: string
+  total_monto: number
+  grupos: number
+  cuentas: number
+}
+
+/**
+ * Rediseño de Cuentas B1b (docs/PLAN.md, H1, H2, S1, S2): crea la orden, su
+ * desglose inmutable (`ordenes_pago_conceptos`) y marca grupos, hijas y
+ * sueltas en una sola transacción, con los candidatos bloqueados y
+ * revalidados -- db/migrations/20260925_ordenes_pago_generar_atomico.sql.
+ * Los errores esperados de la RPC (ERRCODE P1414) salen como DomainError
+ * con un mensaje seguro; cualquier otro se propaga tal cual.
+ */
+export async function generarOrdenPago(params: {
+  candidatos: OrdenPagoCandidato[]
+  pdfUrl: string | null
+  pdfNombre: string
+  usuario: string
+}): Promise<GenerarOrdenPagoResult> {
+  const { data, error } = await supabaseAdmin.rpc('generar_orden_pago', {
+    p_candidatos: params.candidatos,
+    p_pdf_url: params.pdfUrl,
+    p_pdf_nombre: params.pdfNombre,
+    p_usuario: params.usuario,
+  })
+  if (error) {
+    const message = error.message ?? ''
+    if (error.code === 'P1414' && message.startsWith('candidatos_cambiaron')) {
+      throw new DomainError({
+        code: 'candidatos_cambiaron',
+        status: 409,
+        safeMessage: 'Los saldos cambiaron mientras se generaba la orden. Vuelve a cargar la vista previa e inténtalo de nuevo.',
+        cause: error,
+      })
+    }
+    if (error.code === 'P1414' && message.startsWith('candidato_no_elegible')) {
+      throw new DomainError({
+        code: 'candidato_no_elegible',
+        status: 409,
+        safeMessage: 'Alguna cuenta ya no se puede incluir (entró a otra orden o cambió de estado). Vuelve a cargar la vista previa.',
+        cause: error,
+      })
+    }
+    throw error
+  }
+  return data as GenerarOrdenPagoResult
 }

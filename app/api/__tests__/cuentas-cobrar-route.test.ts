@@ -3,16 +3,16 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   buscarCuentasCobrarMock: vi.fn(),
-  updateCuentaCobrarMock: vi.fn(),
 }))
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({
   buscarCuentasCobrar: mocks.buscarCuentasCobrarMock,
-  updateCuentaCobrar: mocks.updateCuentaCobrarMock,
 }))
 
-import { GET } from '../cuentas-cobrar/route'
+import * as route from '../cuentas-cobrar/route'
+
+const { GET } = route
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -56,5 +56,11 @@ describe('GET /api/cuentas-cobrar', () => {
     expect(res.status).toBe(500)
     const body = await res.json()
     expect(body.error).not.toContain('db down')
+  })
+})
+
+describe('PUT /api/cuentas-cobrar', () => {
+  it('B1b (H4): ya no existe -- estado y monto_pagado solo cambian por sus RPCs', () => {
+    expect('PUT' in route).toBe(false)
   })
 })

@@ -28,7 +28,7 @@ vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: { rpc: mocks.rpcMock, from: mocks.fromMock },
 }))
 
-import { getCuentasPagarGruposFacturadosEventosRealizados, updateCuentasPagarGruposEnOrden, marcarGrupoFacturado } from '../cuentas-pagar'
+import { getCuentasPagarGruposFacturadosEventosRealizados, generarOrdenPago, marcarGrupoFacturado } from '../cuentas-pagar'
 
 describe('getCuentasPagarGruposFacturadosEventosRealizados', () => {
   beforeEach(() => {
@@ -55,29 +55,50 @@ describe('getCuentasPagarGruposFacturadosEventosRealizados', () => {
   })
 })
 
-describe('updateCuentasPagarGruposEnOrden', () => {
+describe('generarOrdenPago', () => {
   beforeEach(() => {
-    mocks.fromMock.mockReset()
+    mocks.rpcMock.mockReset()
   })
 
-  it('actualiza cuentas_pagar_grupos y cuentas_pagar (hijas) con el mismo orden_pago_id', async () => {
-    const gruposChain = mocks.chain()
-    gruposChain.in = vi.fn().mockResolvedValue({ error: null })
-    const cuentasChain = mocks.chain()
-    cuentasChain.in = vi.fn().mockResolvedValue({ error: null })
+  const params = {
+    candidatos: [{ tipo: 'grupo' as const, id: 'grupo-a', monto_esperado: 150 }],
+    pdfUrl: 'https://drive/orden.pdf',
+    pdfNombre: 'orden.pdf',
+    usuario: 'staff@serenata.mx',
+  }
 
-    mocks.fromMock.mockImplementation((table: string) => {
-      if (table === 'cuentas_pagar_grupos') return gruposChain
-      if (table === 'cuentas_pagar') return cuentasChain
-      throw new Error(`tabla inesperada: ${table}`)
+  it('llama la RPC atómica generar_orden_pago con candidatos, PDF y usuario', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: { orden_pago_id: 'orden-1', total_monto: 150, grupos: 1, cuentas: 0 }, error: null })
+    const result = await generarOrdenPago(params)
+    expect(mocks.rpcMock).toHaveBeenCalledWith('generar_orden_pago', {
+      p_candidatos: params.candidatos,
+      p_pdf_url: 'https://drive/orden.pdf',
+      p_pdf_nombre: 'orden.pdf',
+      p_usuario: 'staff@serenata.mx',
     })
+    expect(result.orden_pago_id).toBe('orden-1')
+  })
 
-    await updateCuentasPagarGruposEnOrden(['grupo-a', 'grupo-b'], 'orden-1')
+  it('candidatos_cambiaron (P1414) sale como DomainError 409 con mensaje seguro', async () => {
+    mocks.rpcMock.mockResolvedValue({
+      data: null,
+      error: { code: 'P1414', message: 'candidatos_cambiaron: el saldo del grupo grupo-a es 100.00, no 150.00' },
+    })
+    await expect(generarOrdenPago(params)).rejects.toMatchObject({ name: 'DomainError', status: 409, code: 'candidatos_cambiaron' })
+  })
 
-    expect(gruposChain.update).toHaveBeenCalledWith({ estado: 'EN_PROCESO_PAGO', orden_pago_id: 'orden-1' })
-    expect(gruposChain.in).toHaveBeenCalledWith('id', ['grupo-a', 'grupo-b'])
-    expect(cuentasChain.update).toHaveBeenCalledWith({ estado: 'EN_PROCESO_PAGO', orden_pago_id: 'orden-1' })
-    expect(cuentasChain.in).toHaveBeenCalledWith('grupo_id', ['grupo-a', 'grupo-b'])
+  it('candidato_no_elegible (P1414) sale como DomainError 409', async () => {
+    mocks.rpcMock.mockResolvedValue({
+      data: null,
+      error: { code: 'P1414', message: 'candidato_no_elegible: el grupo grupo-a ya está en otra orden' },
+    })
+    await expect(generarOrdenPago(params)).rejects.toMatchObject({ status: 409, code: 'candidato_no_elegible' })
+  })
+
+  it('cualquier otro error se propaga sin transformar', async () => {
+    const dbError = { code: '08006', message: 'conexión perdida' }
+    mocks.rpcMock.mockResolvedValue({ data: null, error: dbError })
+    await expect(generarOrdenPago(params)).rejects.toBe(dbError)
   })
 })
 

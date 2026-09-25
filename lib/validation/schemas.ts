@@ -295,6 +295,15 @@ export const LoadtestDriveFolderSchema = z.object({
   runId: z.string().uuid(),
 })
 
+// ==================== ÓRDENES DE PAGO ====================
+
+// POST /api/cuentas-pagar/generar-orden-pago. Cuerpo opcional (contrato
+// aditivo, docs/PLAN.md §7.0 regla 1): la UI actual hace POST sin cuerpo; la
+// nueva (B6) manda un UUID por apertura del modal (S9).
+export const GenerarOrdenPagoSchema = z.object({
+  idempotency_key: z.string().uuid().optional(),
+})
+
 // ==================== HELPER ====================
 
 /**
