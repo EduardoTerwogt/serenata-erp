@@ -40,6 +40,12 @@ describe('GET /api/proveedores', () => {
     expect(mocks.getProveedoresMock).toHaveBeenCalledTimes(2)
   })
 
+  it('nunca manda las credenciales del portal al navegador', async () => {
+    mocks.getProveedoresMock.mockResolvedValue([{ id: 'resp-1', nombre: 'Jane Doe', password_hash: '$2b$hash', session_version: 3 }])
+    const body = await (await GET()).json()
+    expect(body).toEqual([{ id: 'resp-1', nombre: 'Jane Doe' }])
+  })
+
   it('un POST no deja ningún estado que sirva una respuesta vieja al siguiente GET', async () => {
     mocks.getProveedoresMock.mockResolvedValue([{ id: 'resp-1', nombre: 'Jane Doe' }])
     await GET()

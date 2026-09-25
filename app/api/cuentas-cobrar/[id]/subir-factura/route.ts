@@ -16,7 +16,7 @@ const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
   PDF_REQUIRED: 'Se requiere archivo PDF de factura',
   XML_INVALID_TYPE: 'El archivo XML debe ser de tipo text/xml o application/xml',
   PDF_INVALID_TYPE: 'El archivo PDF debe ser de tipo application/pdf',
-  FILE_TOO_LARGE: 'El archivo excede el límite de 10 MB',
+  FILE_TOO_LARGE: 'El archivo excede el límite de 4 MB',
 }
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {

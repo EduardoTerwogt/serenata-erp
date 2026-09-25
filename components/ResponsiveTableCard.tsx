@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 
 interface Column {
   key: string
@@ -76,6 +76,19 @@ export function ResponsiveTableCard<T>({
   }
 
   const allWidthsSet = columns.every((col) => col.width)
+  // Filas clicables también se abren con teclado (Enter / Espacio).
+  const interactiva = (item: T) =>
+    onRowClick
+      ? {
+          onClick: () => onRowClick(item),
+          tabIndex: 0,
+          onKeyDown: (e: KeyboardEvent) => {
+            if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return
+            e.preventDefault()
+            onRowClick(item)
+          },
+        }
+      : {}
   const indices = new Map<T, number>()
   grupos.forEach((g) => g.items.forEach((item) => indices.set(item, indices.size)))
 
@@ -115,8 +128,8 @@ export function ResponsiveTableCard<T>({
                 return (
                   <tr
                     key={keyExtractor(item, i)}
-                    onClick={onRowClick ? () => onRowClick(item) : undefined}
-                    className={`h-[46px] border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt ${onRowClick ? 'cursor-pointer' : ''}`}
+                    {...interactiva(item)}
+                    className={`h-[46px] border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt ${onRowClick ? 'cursor-pointer outline-none focus-visible:bg-row-alt focus-visible:shadow-[inset_2px_0_0_var(--sn-orange)]' : ''}`}
                   >
                     {renderDesktopRow(item, i)}
                   </tr>
@@ -142,8 +155,9 @@ export function ResponsiveTableCard<T>({
                 return (
                   <div
                     key={keyExtractor(item, i)}
-                    onClick={onRowClick ? () => onRowClick(item) : undefined}
-                    className={`${j > 0 || Boolean(g.label) || !framed ? 'border-t border-hairline' : ''} ${onRowClick ? 'cursor-pointer' : ''}`}
+                    {...interactiva(item)}
+                    {...(onRowClick ? { role: 'button' } : {})}
+                    className={`${j > 0 || Boolean(g.label) || !framed ? 'border-t border-hairline' : ''} ${onRowClick ? 'cursor-pointer outline-none focus-visible:bg-row-alt' : ''}`}
                   >
                     {renderMobileCard(item, i)}
                   </div>

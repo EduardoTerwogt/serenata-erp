@@ -20,7 +20,9 @@ import { ListaCompacta, ListaProyectos, agruparProyectos } from './Proyectos'
 import { Totales } from './Totales'
 import { useEsAncho, useEsEscritorio } from './ui'
 import { PAGE_SIZE_LISTA, useCuentasDatos } from './useCuentasDatos'
-import { useCuentasUrl, type EstadoCuentas } from './useCuentasUrl'
+import { useCuentasUrl } from './useCuentasUrl'
+import { DetalleConcepto, type PestanaDetalle } from './detalle/DetalleConcepto'
+import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 
 const VISTAS: { value: VistaCuentas; label: string }[] = [
   { value: 'proyectos', label: 'Por proyecto' },
@@ -56,8 +58,10 @@ function gruposLista(p: PeriodoRespuesta, agrupar: boolean): TableGroup<Concepto
  * filtros, totales, tarjetas de proyecto con maestro-detalle y Lista. Un solo
  * árbol para escritorio y móvil (O7); el estado vive en la URL (S15).
  */
-export function CuentasApp({ extras }: { extras?: (ctx: { estado: EstadoCuentas; abrir: ReturnType<typeof useCuentasUrl>['abrir']; cerrar: ReturnType<typeof useCuentasUrl>['cerrar']; recargar: () => void; hoy: string | null }) => ReactNode }) {
-  const { estado, filtrar, abrir, cerrar } = useCuentasUrl()
+const PESTANAS: PestanaDetalle[] = ['info', 'docs', 'pago']
+
+export function CuentasApp() {
+  const { estado, filtrar, abrir, cerrar, reemplazar } = useCuentasUrl()
   const { periodo, resumen, cargando, error, recargar } = useCuentasDatos(estado)
   const escritorio = useEsEscritorio()
   const ancho = useEsAncho()
@@ -311,7 +315,16 @@ export function CuentasApp({ extras }: { extras?: (ctx: { estado: EstadoCuentas;
         />
       )}
 
-      {extras?.({ estado, abrir, cerrar, recargar, hoy: periodo?.hoy ?? resumen?.hoy ?? null })}
+      {estado.det && (
+        <DetalleConcepto
+          conceptoKey={estado.det}
+          tab={PESTANAS.includes(estado.tab as PestanaDetalle) ? (estado.tab as PestanaDetalle) : 'info'}
+          onTab={(t) => reemplazar({ tab: t === 'info' ? null : t })}
+          onClose={() => cerrar({ det: null, tab: null })}
+          onCambio={recargar}
+          hoy={periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()}
+        />
+      )}
     </div>
   )
 }

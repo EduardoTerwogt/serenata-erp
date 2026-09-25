@@ -8,13 +8,13 @@ import {
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+import { MAX_FILE_SIZE, MENSAJE_LIMITE } from '@/lib/server/uploads/factura-validation'
 import { elegirPagoParaComplemento, facturaXmlVigente } from '@/lib/server/cuentas/complemento'
 import { parseComplementoPagoXML, validarComplementoPago } from '@/lib/server/xml/complemento-parser'
 import { SubirComplementoSchema, validate } from '@/lib/validation/schemas'
 import type { PagoComprobante } from '@/lib/types'
 
 const ROUTE = 'POST /api/cuentas-cobrar/[id]/subir-complemento'
-const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 function esXml(file: File) {
   return ['text/xml', 'application/xml'].includes(file.type) || file.name.toLowerCase().endsWith('.xml')
@@ -59,7 +59,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: 'El archivo PDF debe ser de tipo application/pdf' }, { status: 400 })
     }
     if ((xmlFile && xmlFile.size > MAX_FILE_SIZE) || (pdfFile && pdfFile.size > MAX_FILE_SIZE)) {
-      return Response.json({ error: 'El archivo excede el límite de 10 MB' }, { status: 400 })
+      return Response.json({ error: MENSAJE_LIMITE }, { status: 400 })
     }
 
     const cuenta = await getCuentaCobrarById(id)

@@ -17,7 +17,7 @@ export const HOY_E2E = '2026-09-24'
 type EstadoCobro = 'cobrado' | 'sin_complemento' | 'vencido' | 'parcial' | 'facturado' | 'sin_factura'
 type EstadoPago = 'pagado' | 'en_orden' | 'sin_factura' | 'facturado'
 
-interface ProyectoFixture {
+export interface ProyectoFixture {
   id: string
   nombre: string
   cliente: string
@@ -27,7 +27,7 @@ interface ProyectoFixture {
   pagos: [string, string, number, EstadoPago, number?][]
 }
 
-const PROYECTOS: ProyectoFixture[] = [
+export const PROYECTOS: ProyectoFixture[] = [
   { id: 'SH012', nombre: 'Spot Día del Padre', cliente: 'Liverpool', evento: '2024-06-08', margen: 60000, cobros: [['Producción spot 30s', 164000, 164000, 'cobrado']], pagos: [['Mario Hernández', 'Director de fotografía', 36000, 'pagado'], ['Foros Churubusco', 'Renta Foro 2', 41000, 'pagado']] },
   { id: 'SH018', nombre: 'Convención Anual', cliente: 'BBVA México', evento: '2024-11-14', margen: 110000, cobros: [['Producción de evento', 298000, 298000, 'cobrado']], pagos: [['Iluminación Pro CDMX', 'Iluminación escénica', 64000, 'pagado'], ['Catering La Mesa', 'Catering 120 personas', 38000, 'pagado']] },
   { id: 'SH050', nombre: 'Documental Oaxaca', cliente: 'Coca-Cola FEMSA', evento: '2026-06-12', margen: 90000, cobros: [['Documental 15 min', 281880, 281880, 'cobrado']], pagos: [['Mario Hernández', 'Director de fotografía (8 jornadas)', 100000, 'pagado'], ['Transportes Ágiles', 'Traslado equipo CDMX–Oaxaca', 24800, 'pagado']] },
@@ -49,14 +49,26 @@ const PROYECTOS: ProyectoFixture[] = [
   { id: 'SH070', nombre: 'Podcast sin fecha', cliente: 'Grupo Modelo', evento: null, margen: 10000, cobros: [['Temporada piloto', 58000, 0, 'facturado']], pagos: [] },
 ]
 
-const REGIMEN: Record<string, 'moral' | 'fisica' | 'resico'> = { 'Mario Hernández': 'fisica', 'Ana Lucía Rivas': 'fisica', 'José García': 'resico' }
+export const REGIMEN: Record<string, 'moral' | 'fisica' | 'resico'> = { 'Mario Hernández': 'fisica', 'Ana Lucía Rivas': 'fisica', 'José García': 'resico' }
 const factura = (fecha: string, metodo: 'PUE' | 'PPD' = 'PUE') => [{ estado_validacion: 'validado', fecha_carga: `${fecha} 18:00:00`, metodo_pago: metodo }]
 const r2 = (n: number) => Math.round(n * 100) / 100
 
-function transferir(neto: number, reg: 'moral' | 'fisica' | 'resico' = 'moral') {
+export function transferir(neto: number, reg: 'moral' | 'fisica' | 'resico' = 'moral') {
   const ret = reg === 'moral' ? 0 : r2(neto * 0.16 * (2 / 3)) + r2(neto * (reg === 'fisica' ? 0.1 : 0.0125))
   return r2(neto * 1.16 - ret)
 }
+
+/** Pagos registrados durante la prueba (utils/cuentas-detalle-mocks.ts): la lista y el detalle los ven. */
+export interface PagoMock {
+  id: string
+  monto: number
+  fecha_pago: string
+  tipo_pago: string
+  notas: string | null
+  comprobante_url: string | null
+}
+export const registroMock = { cobros: new Map<string, PagoMock[]>(), grupos: new Map<string, PagoMock[]>() }
+const suma = (xs: PagoMock[]) => r2(xs.reduce((s, x) => s + x.monto, 0))
 
 /** Filas crudas del año como las de cuentas_por_proyecto(p_year). */
 export function filasAnio(anio: number) {
@@ -70,7 +82,12 @@ export function filasAnio(anio: number) {
     const fechaFactura = p.evento ?? '2026-09-01'
     p.cobros.forEach(([concepto, total, pagado, estado, venc], k) => {
       const tieneFactura = estado !== 'sin_factura'
-      const pagos = pagado > 0 ? [{ id: `${p.id}-pc${k}`, monto: pagado, fecha_pago: fechaFactura, tipo_pago: 'TRANSFERENCIA', complemento_xml: [], complemento_pdf: [] }] : null
+      const extra = registroMock.cobros.get(`${p.id}-cc${k}`) ?? []
+      const lista = [
+        ...(pagado > 0 ? [{ id: `${p.id}-pc${k}`, monto: pagado, fecha_pago: fechaFactura, tipo_pago: 'TRANSFERENCIA', complemento_xml: [], complemento_pdf: [] }] : []),
+        ...extra.map((x) => ({ id: x.id, monto: x.monto, fecha_pago: x.fecha_pago, tipo_pago: x.tipo_pago, complemento_xml: [], complemento_pdf: [] })),
+      ]
+      const pagos = lista.length ? lista : null
       cobros.push([
         `${p.id}-cc${k}`,
         k === 0 ? p.id : `${p.id}-C${k}`,
@@ -80,7 +97,7 @@ export function filasAnio(anio: number) {
         null,
         concepto,
         total,
-        pagado,
+        r2(pagado + suma(extra)),
         venc ?? null,
         tieneFactura ? (estado === 'sin_complemento' ? '2026-07-01' : fechaFactura) : null,
         tieneFactura ? factura(fechaFactura, estado === 'sin_complemento' ? 'PPD' : 'PUE') : null,
@@ -91,6 +108,9 @@ export function filasAnio(anio: number) {
       const reg = REGIMEN[prov] ?? 'moral'
       const total = transferir(neto, reg)
       const pagado = estado === 'pagado'
+      const extra = registroMock.grupos.get(`${p.id}-g${k}`) ?? []
+      const transferido = r2((pagado ? total : 0) + suma(extra))
+      const pagosG = [...(pagado ? [{ fecha: fechaFactura, monto: total }] : []), ...extra.map((x) => ({ fecha: x.fecha_pago, monto: x.monto }))]
       grupos.push([
         `${p.id}-g${k}`,
         p.id,
@@ -98,13 +118,13 @@ export function filasAnio(anio: number) {
         prov,
         reg,
         neto,
-        pagado ? neto : 0,
+        r2(neto * (transferido / total)),
         estado === 'sin_factura' ? null : total,
-        pagado ? total : 0,
+        transferido,
         estado === 'en_orden' ? 'orden-1' : null,
         estado === 'sin_factura' ? null : [{ estado_validacion: 'validado', fecha_carga: `${fechaFactura} 19:00:00` }],
         pagado ? [{ fecha_carga: `${fechaFactura} 20:00:00` }] : null,
-        pagado ? [{ fecha: fechaFactura, monto: total }] : null,
+        pagosG.length ? pagosG : null,
         items ?? 1,
         items && items > 1 ? `${concepto}` : concepto,
       ])
@@ -120,6 +140,8 @@ function proyectosAnio(anio: number): ProyectoDetalle[] {
 }
 
 export async function mockCuentasPeriodo(page: Page) {
+  registroMock.cobros.clear()
+  registroMock.grupos.clear()
   await page.route(/\/api\/cuentas\/periodo(\?.*)?$/, async (route) => {
     const sp = new URL(route.request().url()).searchParams
     const anio = Number(sp.get('anio')) || 2026

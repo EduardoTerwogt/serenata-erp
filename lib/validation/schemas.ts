@@ -238,6 +238,23 @@ export const DocumentoEstadoValidacionSchema = z.object({
   detalle_validacion: z.string().nullable().optional(),
 })
 
+// Rediseño de Cuentas B5 (supuesto 4): en un cobro, además de marcar la
+// validación, se indica a mano el método (PUE/PPD) de una factura cuyo XML
+// no lo trae. Al menos uno de los dos.
+export const DocumentoCobroPatchSchema = z
+  .object({
+    estado_validacion: z.enum(['pendiente', 'validado', 'revision']).optional(),
+    detalle_validacion: z.string().nullable().optional(),
+    metodo_pago_cfdi: z.enum(['PUE', 'PPD']).optional(),
+  })
+  .refine((v) => v.estado_validacion !== undefined || v.metodo_pago_cfdi !== undefined, { message: 'Indica estado_validacion o metodo_pago_cfdi' })
+
+// Rediseño de Cuentas B5 (supuesto 15): archivo no fiscal subido en su propia
+// petición (el PDF de la factura).
+export const SubirArchivoCuentaSchema = z.object({
+  tipo: z.enum(['FACTURA_PDF', 'FACTURA_PROVEEDOR']),
+})
+
 // ==================== PORTAL DE PROVEEDORES (Fase 5.5) ====================
 
 export const PortalSignupSchema = z.object({

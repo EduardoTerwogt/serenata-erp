@@ -156,6 +156,8 @@ export function useCuentasUrl() {
 
   /** Cambia filtros/periodo (replace) y regresa a la página 1. */
   const filtrar = useCallback((cambios: Partial<EstadoCuentas>) => navegar(destino({ page: 1, ...cambios }), 'replace'), [destino, navegar])
+  /** Cambia algo dentro de la capa abierta (la pestaña del detalle) sin sumar historial. */
+  const reemplazar = useCallback((cambios: Partial<EstadoCuentas>) => navegar(destino(cambios), 'replace'), [destino, navegar])
   /** Abre proyecto, concepto, hoja o pantalla (push). */
   const abrir = useCallback((cambios: Partial<EstadoCuentas>) => navegar(destino(cambios), 'push'), [destino, navegar])
   /** Cierra la capa superior con los cambios indicados (y los que haya junto). */
@@ -176,5 +178,5 @@ export function useCuentasUrl() {
     [destino, navegar, router]
   )
 
-  return { estado, filtrar, abrir, cerrar }
+  return { estado, filtrar, reemplazar, abrir, cerrar }
 }

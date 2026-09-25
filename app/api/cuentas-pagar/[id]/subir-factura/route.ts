@@ -16,7 +16,7 @@ const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
   PDF_REQUIRED: 'Se requiere archivo PDF de factura proveedor',
   XML_INVALID_TYPE: 'El archivo XML debe ser de tipo text/xml o application/xml',
   PDF_INVALID_TYPE: 'El archivo PDF debe ser de tipo application/pdf',
-  FILE_TOO_LARGE: 'El archivo excede el límite de 10 MB',
+  FILE_TOO_LARGE: 'El archivo excede el límite de 4 MB',
 }
 
 function extractFacturaFechaFromXml(xmlContent: string): string | null {
@@ -38,12 +38,14 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const facturaXmlFileInput = formData.get('factura_proveedor_xml') as File | null
     const facturaPdfFileInput = formData.get('factura_proveedor_pdf') as File | null
 
-    const validation = validateFacturaFiles({ xml: facturaXmlFileInput, pdf: facturaPdfFileInput, pdfRequired: true })
+    const validation = validateFacturaFiles({ xml: facturaXmlFileInput, pdf: facturaPdfFileInput, pdfRequired: false })
     if (!validation.ok) {
       return Response.json({ error: VALIDATION_MESSAGES[validation.code] }, { status: 400 })
     }
     const facturaXmlFile = facturaXmlFileInput as File
-    const facturaPdfFile = facturaPdfFileInput as File
+    // Rediseño de Cuentas (supuesto 15): el PDF puede llegar después, en su
+    // propia petición (POST …/documentos), para no pasar el límite de Vercel.
+    const facturaPdfFile = facturaPdfFileInput
 
     const cuenta = await getCuentaPagarById(id)
     if (!cuenta) {
@@ -68,7 +70,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
     const uploadFolderId = resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined)
     const facturaXmlUrl = await uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, uploadFolderId)
-    const facturaPdfUrl = await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, uploadFolderId)
+    const facturaPdfUrl = facturaPdfFile ? await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, uploadFolderId) : null
 
     // Validación fiscal profunda (Fase 5.3 Bloque 0, punto 3): el desglose
     // de impuestos del XML (traslados/retenciones) debe coincidir con lo
@@ -104,12 +106,15 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       total_cfdi: facturaData.error ? null : facturaData.monto_total ?? null,
     })
 
-    const documentoPdf = await createDocumentoCuentaPagar({
-      cuentas_pagar_id: id,
-      tipo: 'FACTURA_PROVEEDOR',
-      archivo_url: facturaPdfUrl,
-      archivo_nombre: facturaPdfFile.name,
-    })
+    const documentoPdf =
+      facturaPdfFile && facturaPdfUrl
+        ? await createDocumentoCuentaPagar({
+            cuentas_pagar_id: id,
+            tipo: 'FACTURA_PROVEEDOR',
+            archivo_url: facturaPdfUrl,
+            archivo_nombre: facturaPdfFile.name,
+          })
+        : null
 
     if (cuadra) {
       await validarFacturaProveedor(documentoXml.id, authResult.session?.user?.email ?? null)
@@ -126,7 +131,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     return Response.json({
       success: true,
-      documentos: [documentoXml, documentoPdf],
+      documentos: documentoPdf ? [documentoXml, documentoPdf] : [documentoXml],
       fecha_factura: fechaFactura,
       factura_data: facturaData,
       validacion_estructural: validacionXml,

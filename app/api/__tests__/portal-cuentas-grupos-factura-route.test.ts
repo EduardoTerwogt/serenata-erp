@@ -223,9 +223,9 @@ describe('POST /api/portal/cuentas/grupos/[id]/factura', () => {
     await expect(response.json()).resolves.toEqual({ error: 'El archivo PDF debe ser de tipo application/pdf' })
   })
 
-  it('EF-3 3D-12: FILE_TOO_LARGE -- "El archivo excede el límite de 10 MB"', async () => {
-    const response = await POST(buildRequest({ xml: new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'factura.xml', { type: 'text/xml' }) }), params())
+  it('EF-3 3D-12: FILE_TOO_LARGE -- "El archivo excede el límite de 4 MB" (supuesto 15)', async () => {
+    const response = await POST(buildRequest({ xml: new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'factura.xml', { type: 'text/xml' }) }), params())
     expect(response.status).toBe(400)
-    await expect(response.json()).resolves.toEqual({ error: 'El archivo excede el límite de 10 MB' })
+    await expect(response.json()).resolves.toEqual({ error: 'El archivo excede el límite de 4 MB' })
   })
 })

@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { Icon } from '@/components/ui/Icon'
 import { useOverlay } from '@/components/ui/useOverlay'
 
@@ -56,6 +56,7 @@ export function Modal({
   children,
 }: ModalProps) {
   useOverlay(onClose, closeOnEscape)
+  const tituloId = useId()
   const sheet = mobile === 'sheet'
 
   const overlay = sheet
@@ -70,6 +71,7 @@ export function Modal({
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby={tituloId}
         className={`flex w-full flex-col overflow-hidden border-hairline bg-card shadow-overlay ${SIZE_CLASS[size]} ${panel}`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -83,7 +85,7 @@ export function Modal({
             <div className="min-w-0">
               {eyebrow && <div className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-accent">{eyebrow}</div>}
               <div className="flex items-center gap-2">
-                <h2 className={`font-bold text-ink ${eyebrow ? 'mt-[3px] text-[17px]' : 'text-h3'}`}>{title}</h2>
+                <h2 id={tituloId} className={`font-bold text-ink ${eyebrow ? 'mt-[3px] text-[17px]' : 'text-h3'}`}>{title}</h2>
                 {headerExtra}
               </div>
               {subtitle && <p className="mt-1 text-subtext text-content">{subtitle}</p>}

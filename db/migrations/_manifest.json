@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T17:32:04.927Z",
-  "count": 113,
+  "generated_at": "2026-09-25T18:41:34.434Z",
+  "count": 114,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -114,6 +114,7 @@
     "20260926_cuentas_b1_datos_cfdi_y_pago_cobro.sql",
     "20260927_cuentas_b2_pagos_total_a_transferir.sql",
     "20260928_cuentas_b2_cuentas_por_proyecto_snapshot.sql",
-    "20260929_cuentas_b3_lectura_por_periodo.sql"
+    "20260929_cuentas_b3_lectura_por_periodo.sql",
+    "20260930_cuentas_b5_adjuntar_comprobante.sql"
   ]
 }
