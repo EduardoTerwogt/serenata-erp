@@ -1,13 +1,13 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-24 (sesión 9 — rediseño de Cuentas abierto)
+**Última actualización:** 2026-09-25 (sesión 10 — plan del rediseño de Cuentas escrito)
 
 ## Estado
 
-**`docs/PLAN.md` — Borrador: "Rediseño de la sección Cuentas".** Fase de
-diseño en Claude Design. La réplica HTML del estado actual ya se generó
-(sesión 9) y se entregó al usuario. Se espera el HTML final del rediseño para
-planear la implementación.
+**`docs/PLAN.md` — Borrador en refinamiento: "Rediseño de la sección
+Cuentas".** El diseño final (`Cuentas-v2`) se recibió y auditó en la sesión
+10. El plan tiene 9 decisiones confirmadas (D1–D9), 8 supuestos por confirmar
+y 9 bloques (B0–B8). Falta la aprobación del usuario.
 **Colaboración en vivo de Cotizaciones: cerrada** por decisión del usuario
 tras la prueba manual del PR #93. Todo está en `main`.
 
@@ -77,6 +77,8 @@ tras la prueba manual del PR #93. Todo está en `main`.
 
 ## Siguiente paso
 
-El usuario rediseña Cuentas en Claude Design a partir de la réplica. Cuando
-entregue el HTML final: seguir `docs/PLAN.md` → Bloque 1 (auditar el diseño
-contra el código y proponer arquitectura/backend/UI, sin implementar).
+El usuario revisa `docs/PLAN.md`: confirma la sección 4 (supuestos) y aprueba
+los bloques. Con la aprobación se marca "Aprobado" y se empieza por B0. El zip
+del diseño está en el chat de la sesión 10; B0 lo copia a
+`docs/design/cuentas-v2/`. Si una sesión nueva no tiene el zip, pedirlo al
+usuario.
