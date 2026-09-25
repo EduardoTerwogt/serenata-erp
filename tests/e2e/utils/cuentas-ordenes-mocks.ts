@@ -59,9 +59,12 @@ export async function mockCuentasOrdenes(page: Page): Promise<LlamadasOrdenes> {
   await page.route(/\/api\/cuentas\/ordenes\/generar$/, async (route: Route) => {
     const body = route.request().postDataJSON() as LlamadasOrdenes['generar'][number]
     llamadas.generar.push(body)
+    // Total a transferir de lo seleccionado, como lo calcula la ruta real (saldo por transferir de cada grupo).
+    const elegidos = candidatos().elegibles.filter((c) => body.seleccion.some((s) => s.id === c.id))
+    const total = Math.round(elegidos.reduce((sum, c) => sum + (c.total_a_transferir ?? 0) - (c.monto_transferido ?? 0), 0) * 100) / 100
     for (const s of body.seleccion) registroMock.ordenados.add(s.id)
     await fulfillJson(route, {
-      orden: { id: 'orden-nueva', pdf_url: 'https://drive.test/nueva.pdf', pdf_nombre: 'O.P 24-Sep SH059,SH061.pdf', cuentas: body.seleccion.length, responsables: body.seleccion.length, total_transferir: 0 },
+      orden: { id: 'orden-nueva', pdf_url: 'https://drive.test/nueva.pdf', pdf_nombre: 'O.P 24-Sep SH059,SH061.pdf', cuentas: body.seleccion.length, responsables: body.seleccion.length, total_transferir: total },
     })
   })
 

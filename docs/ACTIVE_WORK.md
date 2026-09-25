@@ -68,8 +68,12 @@
      `cuentas-b7-correcciones.spec.ts`).
   2. R9: Drive en Preview (lo configura el usuario, pasos abajo).
   3. Prueba manual del usuario en el Preview y aprobación del merge.
-  4. Al aprobar: migraciones a producción, merge, capturas O10 y mover el
-     plan a `docs/archive/`.
+  4. Al aprobar: migraciones a producción, merge y mover el plan a
+     `docs/archive/`.
+- **O10 hecho:** capturas de cada estado (escritorio 1353 px, tablet 1024 px
+  y móvil 390 px; claro y oscuro) lado a lado con el handoff en
+  https://claude.ai/artifact/7mMFzzuwLHomBUiNb18sVw (privado del usuario). Las
+  diferencias intencionales (D3, D4, T8, D32, D33) están anotadas ahí.
 
 ## Completado en las sesiones 9 y 10
 

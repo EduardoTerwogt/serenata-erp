@@ -1309,6 +1309,7 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | B6 Avisos y órdenes | Hecho (sesión 20, rama del PR #96; E2) |
 | B8 Corte y limpieza (antes de B7, D24) | Hecho en código (sesión 20; migraciones 20261004 y 20261006 solo en test; O1b en SQL, E1 y E6). Falta R9: Drive en Preview, lo configura el usuario |
 | B7 Reabrir y correcciones | Hecho (sesión 20, rama del PR #96; migración 20261005 solo en test; D33, D34, E3–E5) |
+| Validación visual O10 | Hecho (sesión 20): capturas lado a lado con el handoff, enlace en `docs/ACTIVE_WORK.md` |
 | Producción | Pendiente: migraciones 20260926–20261006 a `serenata-erp` al aprobar el merge |
 
 ## Ciclo de vida

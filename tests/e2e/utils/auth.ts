@@ -1,4 +1,5 @@
 import { expect, Page } from '@playwright/test'
+import { normalizeUserSections } from '@/lib/authz'
 
 const DEFAULT_EMAIL = 'e2e@serenata.test'
 const DEFAULT_PASSWORD = 'playwright123'
@@ -57,7 +58,8 @@ export async function mockSesionAdmin(page: Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        user: { id: 'e2e-bypass-user', email: 'e2e@serenata.test', name: 'E2E User', sections: ['admin'] },
+        // Como la sesión real: auth.ts guarda las secciones ya normalizadas (admin implica todas).
+        user: { id: 'e2e-bypass-user', email: 'e2e@serenata.test', name: 'E2E User', sections: normalizeUserSections(['admin']) },
         expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       }),
     })

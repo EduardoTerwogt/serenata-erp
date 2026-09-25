@@ -63,6 +63,7 @@ test('nueva orden: excluir un responsable, generar y ver la orden lista', async 
 
   await modal.getByRole('button', { name: 'Generar orden PDF' }).click()
   await expect(modal.getByText('Orden generada')).toBeVisible()
+  await expect(modal.getByText(/1 cuenta · \$79,344\.00/)).toBeVisible()
   expect(llamadas.generar).toHaveLength(1)
   expect(llamadas.generar[0].seleccion).toEqual([{ tipo: 'grupo', id: 'SH061-g0', monto_esperado: 68400 }])
   expect(llamadas.generar[0].idempotency_key).toMatch(/^[0-9a-f-]{36}$/)
