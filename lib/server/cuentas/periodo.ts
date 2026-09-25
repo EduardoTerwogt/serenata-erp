@@ -170,9 +170,10 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
     fee: p.fee_agencia_proyecto,
     iva: p.iva_total_proyecto,
     sin_proyecto: false,
+    reabierta: p.reabierta,
   }))
   if (cobros.has(SIN_PROYECTO_ID) || pagos.has(SIN_PROYECTO_ID) || grupos.has(SIN_PROYECTO_ID)) {
-    bases.push({ id: SIN_PROYECTO_ID, nombre: 'Sin proyecto', cliente: null, fecha_entrega: null, margen: 0, fee: 0, iva: 0, sin_proyecto: true })
+    bases.push({ id: SIN_PROYECTO_ID, nombre: 'Sin proyecto', cliente: null, fecha_entrega: null, margen: 0, fee: 0, iva: 0, sin_proyecto: true, reabierta: false })
   }
 
   return bases.map((b) => {
@@ -264,7 +265,7 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
       sin_fecha: !fecha,
       sin_proyecto: b.sin_proyecto,
       conceptos,
-      cuentas: derivarCuentasProyecto(conceptos),
+      cuentas: derivarCuentasProyecto(conceptos, { reabierta: b.reabierta }),
       totales: totalesDe(conceptos),
       cierre,
       cierre_mensual: calcularCierreMensual({

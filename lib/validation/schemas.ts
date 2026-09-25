@@ -385,6 +385,52 @@ export const CancelarOrdenSchema = z.object({
   motivo: z.string().trim().min(3, { message: 'Escribe el motivo de la cancelación' }).max(500),
 })
 
+// Rediseño de Cuentas B7 (D5, D6): reabrir y corregir, solo admin. El motivo
+// es obligatorio donde queda en el registro (reabrir, anular, quitar,
+// reasignar un concepto pagado).
+const MotivoCorreccionSchema = z.string().trim().min(3, { message: 'Escribe el motivo' }).max(500)
+const FechaCorreccionSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (YYYY-MM-DD)')
+const DominioCorreccionSchema = z.enum(['cobro', 'proveedor'])
+
+export const ReabrirCuentasSchema = z.object({ motivo: MotivoCorreccionSchema })
+
+export const CorreccionCuentasSchema = z.discriminatedUnion('accion', [
+  z.object({
+    accion: z.literal('anular_pago'),
+    dominio: DominioCorreccionSchema,
+    pago_id: z.string().uuid('pago_id inválido'),
+    motivo: MotivoCorreccionSchema,
+  }),
+  z.object({
+    accion: z.literal('baja_documento'),
+    dominio: DominioCorreccionSchema,
+    documento_id: z.string().uuid('documento_id inválido'),
+    motivo: MotivoCorreccionSchema,
+    reemplazado_por: z.string().uuid('reemplazado_por inválido').optional(),
+  }),
+  z.object({
+    accion: z.literal('datos_cobro'),
+    cuenta_id: z.string().uuid('cuenta_id inválido'),
+    fecha_factura: FechaCorreccionSchema.nullable(),
+    fecha_vencimiento: FechaCorreccionSchema.nullable(),
+    notas: z.string().max(2000).nullable(),
+  }),
+  z.object({
+    accion: z.literal('datos_pago'),
+    dominio: DominioCorreccionSchema,
+    pago_id: z.string().uuid('pago_id inválido'),
+    fecha_pago: FechaCorreccionSchema,
+    notas: z.string().max(2000).nullable(),
+  }),
+  z.object({
+    accion: z.literal('proveedor'),
+    cuenta_pagar_id: z.string().uuid('cuenta_pagar_id inválido'),
+    responsable_id: z.string().uuid('responsable_id inválido'),
+    motivo: MotivoCorreccionSchema,
+  }),
+])
+export type CorreccionCuentas = z.infer<typeof CorreccionCuentasSchema>
+
 export const HistorialOrdenesQuerySchema = z.object({
   estado: z.enum(['GENERADA', 'PARCIALMENTE_PAGADA', 'COMPLETADA', 'VENCIDA', 'CANCELADA']).optional(),
   mes: z.string().regex(/^\d{4}-\d{2}$/).optional(),

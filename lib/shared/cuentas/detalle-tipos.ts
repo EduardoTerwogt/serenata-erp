@@ -19,6 +19,32 @@ export interface DocumentoDetalle {
   detalle_validacion: string | null
 }
 
+/** B7: documento dado de baja (quitado o reemplazado); queda en el historial. */
+export interface DocumentoBaja {
+  id: string
+  tipo: string
+  archivo_nombre: string | null
+  archivo_url: string | null
+  eliminado_at: string
+  motivo: string | null
+}
+
+/** B7 (R8): pago anulado; no cuenta en saldos, queda en el historial con su motivo. */
+export interface PagoAnulado {
+  id: string
+  fecha: string
+  monto: number
+  anulado_at: string
+  motivo: string | null
+}
+
+/** B7: lo que el detalle necesita para ofrecer correcciones (solo admin y con las cuentas reabiertas). */
+export interface CorreccionesDetalle {
+  reabierta: boolean
+  bajas: DocumentoBaja[]
+  pagos_anulados: PagoAnulado[]
+}
+
 export interface ProyectoDetalleCorto {
   id: string
   nombre: string
@@ -58,6 +84,7 @@ export interface DetalleCobro {
   factura_pdf: DocumentoDetalle | null
   pagos: PagoCobroDetalle[]
   concepto: ConceptoDerivado
+  correcciones: CorreccionesDetalle
 }
 
 export interface PagoProveedorDetalle {
@@ -105,6 +132,7 @@ export interface DetallePago {
   /** Estado guardado del grupo ('ABIERTO' permite reasignar, D21). */
   estado_bd: string
   concepto: ConceptoDerivado
+  correcciones: CorreccionesDetalle
 }
 
 export type DetalleConcepto = DetalleCobro | DetallePago

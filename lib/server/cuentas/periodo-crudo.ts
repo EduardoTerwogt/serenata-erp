@@ -22,6 +22,8 @@ export interface ProyectoAnioRaw {
   fee_agencia_proyecto: number
   utilidad_total_proyecto: number
   iva_total_proyecto: number
+  /** B7: reapertura activa (D17: con ella las cuentas no están cerradas). */
+  reabierta: boolean
 }
 
 export interface CobroAnioRaw {
@@ -116,6 +118,7 @@ export function decodificarCuentasAnio(data: unknown): CuentasAnioRaw {
       fee_agencia_proyecto: num(f[6]),
       utilidad_total_proyecto: num(f[7]),
       iva_total_proyecto: num(f[8]),
+      reabierta: f[9] === true,
     })),
     cobros: (raw.cobros ?? []).map((f) => ({
       id: String(f[0]),

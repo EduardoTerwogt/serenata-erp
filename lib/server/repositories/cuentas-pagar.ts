@@ -295,6 +295,8 @@ export async function getDocumentosCuentaPagar(cuentaId: string) {
     .from('documentos_cuentas_pagar')
     .select('*')
     .eq('cuentas_pagar_id', cuentaId)
+    // B7: un documento dado de baja nunca es vigente (T7).
+    .is('eliminado_at', null)
     .order('fecha_carga', { ascending: false })
   if (error) throw error
   return data as DocumentoCuentaPagar[]
@@ -309,14 +311,6 @@ export async function updateDocumentoCuentaPagar(id: string, updates: Partial<Do
     .single()
   if (error) throw error
   return data as DocumentoCuentaPagar
-}
-
-export async function deleteDocumentoCuentaPagar(id: string) {
-  const { error } = await supabaseAdmin
-    .from('documentos_cuentas_pagar')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
 }
 
 // ==================== Agrupación de Cuentas por Pagar (docs/PLAN.md) ====================
@@ -353,6 +347,8 @@ export async function getDocumentosCuentaPagarGrupo(grupoId: string) {
     .from('documentos_cuentas_pagar')
     .select('*')
     .eq('grupo_id', grupoId)
+    // B7: un documento dado de baja nunca es vigente (T7).
+    .is('eliminado_at', null)
     .order('fecha_carga', { ascending: false })
   if (error) throw error
   return data as DocumentoCuentaPagar[]

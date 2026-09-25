@@ -5,7 +5,7 @@
  * la lista, así que el detalle y la tarjeta nunca dicen cosas distintas.
  */
 import { derivarCobro, derivarPago, type DocumentoXmlInput, type MetodoPagoCfdi } from '@/lib/shared/cuentas/concepto'
-import type { DetalleCobro, DetallePago, DocumentoDetalle, ProyectoDetalleCorto } from '@/lib/shared/cuentas/detalle-tipos'
+import type { CorreccionesDetalle, DetalleCobro, DetallePago, DocumentoDetalle, ProyectoDetalleCorto } from '@/lib/shared/cuentas/detalle-tipos'
 import { round2 } from '@/lib/shared/decimal'
 import { calcularEjemploFactura } from '@/lib/shared/factura-fiscal'
 import type { RegimenFiscal } from '@/lib/types'
@@ -20,6 +20,43 @@ export interface DocumentoFila {
   detalle_validacion?: string | null
   metodo_pago_cfdi?: string | null
   pago_id?: string | null
+  /** B7: baja lógica. Un documento dado de baja nunca es el vigente (T7). */
+  eliminado_at?: string | null
+  eliminado_motivo?: string | null
+}
+
+/** B7: campos de anulación de un pago (R8). */
+interface Anulable {
+  anulado_at?: string | null
+  anulado_motivo?: string | null
+}
+
+/**
+ * B7: separa lo vigente de lo corregido. Los documentos dados de baja y los
+ * pagos anulados no cuentan para nada (vigente, saldos, derivación) y se
+ * listan aparte en el historial.
+ */
+function separar<P extends Anulable & { id: string }>(
+  documentos: DocumentoFila[],
+  pagos: P[],
+  pagoAnulado: (p: P) => { fecha: string; monto: number },
+  reabierta: boolean
+): { docs: DocumentoFila[]; pagos: P[]; correcciones: CorreccionesDetalle } {
+  return {
+    docs: documentos.filter((d) => !d.eliminado_at),
+    pagos: pagos.filter((p) => !p.anulado_at),
+    correcciones: {
+      reabierta,
+      bajas: documentos
+        .filter((d) => d.eliminado_at)
+        .map((d) => ({ id: d.id, tipo: d.tipo, archivo_nombre: d.archivo_nombre, archivo_url: d.archivo_url, eliminado_at: d.eliminado_at!, motivo: d.eliminado_motivo ?? null }))
+        .sort((a, b) => b.eliminado_at.localeCompare(a.eliminado_at)),
+      pagos_anulados: pagos
+        .filter((p) => p.anulado_at)
+        .map((p) => ({ id: p.id, ...pagoAnulado(p), anulado_at: p.anulado_at!, motivo: p.anulado_motivo ?? null }))
+        .sort((a, b) => b.anulado_at.localeCompare(a.anulado_at)),
+    },
+  }
 }
 
 const aDoc = (d: DocumentoFila): DocumentoDetalle => ({
@@ -61,10 +98,13 @@ export interface CobroFilas {
   }
   proyecto: ProyectoDetalleCorto | null
   documentos: DocumentoFila[]
-  pagos: { id: string; monto: number; tipo_pago: string; fecha_pago: string; comprobante_url: string | null; notas: string | null; created_at?: string }[]
+  pagos: ({ id: string; monto: number; tipo_pago: string; fecha_pago: string; comprobante_url: string | null; notas: string | null; created_at?: string } & Anulable)[]
+  /** B7: las cuentas del proyecto están reabiertas. */
+  reabierta?: boolean
 }
 
-export function armarDetalleCobro({ cuenta, proyecto, documentos, pagos }: CobroFilas, hoy: string): DetalleCobro {
+export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: todosPagos, reabierta = false }: CobroFilas, hoy: string): DetalleCobro {
+  const { docs: documentos, pagos, correcciones } = separar(todos, todosPagos, (p) => ({ fecha: p.fecha_pago, monto: round2(Number(p.monto)) }), reabierta)
   const facturaXml = vigente(documentos, 'FACTURA_XML')
   const orden = [...pagos].sort((a, b) => (a.fecha_pago + (a.created_at ?? '')).localeCompare(b.fecha_pago + (b.created_at ?? '')))
   const concepto = derivarCobro(
@@ -121,6 +161,7 @@ export function armarDetalleCobro({ cuenta, proyecto, documentos, pagos }: Cobro
       }
     }),
     concepto,
+    correcciones,
   }
 }
 
@@ -154,11 +195,14 @@ export interface PagoFilas {
   proveedor: { id: string; nombre: string; regimen_fiscal: RegimenFiscal | null; correo: string | null; telefono: string | null; banco: string | null; clabe: string | null } | null
   proyecto: ProyectoDetalleCorto | null
   documentos: DocumentoFila[]
-  pagos: { id: string; fecha_pago: string; tipo_pago: string; monto_transferido: number; comprobante_url: string | null; notas: string | null; estimado: boolean; created_at?: string }[]
+  pagos: ({ id: string; fecha_pago: string; tipo_pago: string; monto_transferido: number; comprobante_url: string | null; notas: string | null; estimado: boolean; created_at?: string } & Anulable)[]
   orden: { id: string; pdf_nombre: string | null; pdf_url: string | null; estado: string; fecha_generacion: string } | null
+  /** B7: las cuentas del proyecto están reabiertas. */
+  reabierta?: boolean
 }
 
-export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyecto, documentos, pagos, orden }: PagoFilas): DetallePago {
+export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyecto, documentos: todos, pagos: todosPagos, orden, reabierta = false }: PagoFilas): DetallePago {
+  const { docs: documentos, pagos, correcciones } = separar(todos, todosPagos, (p) => ({ fecha: p.fecha_pago, monto: round2(Number(p.monto_transferido)) }), reabierta)
   const regimen = proveedor?.regimen_fiscal ?? null
   const neto = round2(Number(destino.neto))
   const estimado = calcularEjemploFactura(neto, regimen)
@@ -233,5 +277,6 @@ export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyec
       : null,
     estado_bd: destino.estado,
     concepto,
+    correcciones,
   }
 }
