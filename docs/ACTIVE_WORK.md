@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 14: supuestos confirmados y auditoría final)
+**Última actualización:** 2026-09-25 (sesión 15: auditoría de optimización)
 
 ## Estado
 
@@ -20,7 +20,9 @@ Cuentas".**
   aprobada falla en la BD (llave foránea); se corrige en B1b (D22).
 - 23 decisiones confirmadas (D1–D23).
 - **Supuestos de la §4 confirmados** (sesión 14). Auditoría final A1–A5:
-  sin dudas de producto ni de negocio. **Falta solo la aprobación del plan.**
+  sin dudas de producto ni de negocio. Auditoría de optimización O1–O10
+  (sesión 15) y D24: el corte (B8) va antes de B7. **Falta solo la aprobación
+  del plan.**
 - 10 bloques propuestos (B0, B1b y B1–B8). B1b es nuevo y corrige los bugs
   vigentes antes del rediseño.
 
@@ -83,7 +85,7 @@ servidor contra capturas de la app real, en tema claro y oscuro.
    - copiar `design_handoff_cuentas/` completo a `docs/design/cuentas/`;
    - escribir la decisión 017;
    - crear el seed de `serenata-erp-test` (H11).
-4. Seguir el grafo B1b → B1 → (B2, B3) → B4 → B5 → B6 → B7 → B8, un PR por
+4. Seguir el grafo B1b → B1 → B2 → B3 → B4 → B5 → B6 → B8 → B7, un PR por
    bloque, actualizando el tracker (§10).
 
 Prompt sugerido para la sesión nueva, con el zip adjunto:

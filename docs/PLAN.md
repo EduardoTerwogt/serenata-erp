@@ -17,6 +17,8 @@ hecha (sesión 14); no quedan dudas de producto ni de negocio.
 - Sesión 14 (2026-09-25): el usuario **confirmó los supuestos de la §4**.
   Auditoría final: A1–A5 (§5.5), decisiones de arquitectura ya integradas en
   los bloques.
+- Sesión 15 (2026-09-25): auditoría de optimización (§5.6), O1–O10
+  integrados. D24: el corte (B8) va antes de B7.
 - Falta que el usuario apruebe el plan para pasarlo a "Aprobado".
 
 Para retomar, ver `docs/ACTIVE_WORK.md` → "Cómo retomar". El zip del diseño
@@ -124,7 +126,7 @@ abren sin servidor.
 |---|---|---|
 | D18 | Monto del pago a proveedor en pantalla | **Todo en total a transferir** (reafirma D3): tablas, "Pagado / Total", encabezado del detalle, barra, saldo, formulario y avisos. El diseño muestra el neto en las tablas y el encabezado; se corrige en la implementación. El neto solo aparece en el cruce fiscal. |
 | D19 | Barra de pestañas móvil | **Solo dentro de `/cuentas`.** El resto de la app conserva su navegación móvil actual. "Más" abre la hoja "Secciones" con los mismos items y permisos que `SidebarLayout`. |
-| D20 | Base del monto de una orden | **Total a transferir**, en "Nueva orden", el modal, el PDF **y el historial**. El historial del diseño muestra neto; se corrige. Las órdenes viejas (neto) se rotulan por `base_monto` (H9). Confirma el supuesto 5. |
+| D20 | Base del monto de una orden | **Total a transferir**, en "Nueva orden", el modal, el PDF **y el historial**. El historial del diseño muestra neto; se corrige. Las 8 órdenes viejas son de prueba (D10) y se muestran como están, sin columna `base_monto` (O6). Confirma el supuesto 5. |
 | D21 | Reasignar responsable | **Solo en conceptos sueltos.** En un concepto agrupado, el select del encabezado se desactiva y se reasigna **renglón por renglón** desde el desglose del grupo, con `reasignar_responsable_cuenta_pagar` sin cambios (grupo `ABIERTO`, o proyecto reabierto por admin, D5). |
 
 **Decisiones de la sesión 13** (auditoría de regresiones):
@@ -133,6 +135,12 @@ abren sin servidor.
 |---|---|---|
 | D22 | Cancelar una cotización aprobada (hoy falla, R1) | Solo se permite **sin dinero ni órdenes**: sin cobros, sin pagos a proveedor y sin cuentas dentro de una orden de pago. Tampoco si alguna de sus cuentas pertenece a un grupo ya facturado (no `ABIERTO`): la factura del proveedor dejaría de cuadrar (misma guarda que la reasignación, decisión 011, A4). Si se permite, borra proyecto, cuentas, grupos y documentos en una sola transacción, en el orden correcto de llaves foráneas. |
 | D23 | Encabezado móvil en `/cuentas` | **Se oculta**: en Cuentas móvil solo queda la barra de pestañas (D19), como en el diseño. El resto de la app no cambia. |
+
+**Decisión de la sesión 15:**
+
+| # | Tema | Decisión |
+|---|---|---|
+| D24 | Orden de corte | **B8 (corte a la UI nueva) va antes de B7 (reabrir y correcciones).** Así se acorta el tiempo con dos UIs en paralelo. La UI actual tampoco tiene reabrir ni anular pagos, así que no hay regresión. B7 se construye solo sobre la UI nueva. |
 
 ## 4. Supuestos (confirmados por el usuario en la sesión 14)
 
@@ -201,7 +209,7 @@ abren sin servidor.
     convención vigente en `lib/quotations/format.ts` y en los PDF.
 19. **Corte a móvil en el breakpoint `md` (768px)** de la app, no en los 720px
     del prototipo, para no crear un segundo breakpoint.
-20. **`?v=2` solo para usuarios con la sección `admin`** mientras duran B4–B7.
+20. **`?v=2` solo para usuarios con la sección `admin`** mientras duran B4–B6.
     La vista nueva escribe sobre datos reales de producción; así se prueba sin
     exponer una UI a medias al resto del equipo. En B8 se abre a todos.
 21. **Las tablas nuevas no se reflejan en Google Sheets**: `pagos_cuentas_pagar`,
@@ -276,8 +284,9 @@ cumpla el formato va a "Sin fecha".
   `/api/cuentas/por-proyecto`. No se porta la lógica fiscal a SQL: sería un
   segundo motor (principio 7).
 - El egreso de Cuentas (total a transferir) no coincide con el "por pagar"
-  del Dashboard (neto, D14). Se rotula distinto: "Por transferir" frente a
-  "Costo por pagar".
+  del Dashboard (neto, D14). Cuentas usa las etiquetas del diseño ("Egresos",
+  "Pagado", "Por pagar") con una nota "IVA incluido, menos retenciones". **El
+  Dashboard no se toca** (O9).
 
 ### 5.1 Hallazgos de la auditoría end-to-end (sesión 11)
 
@@ -294,7 +303,7 @@ Cada uno ya está reflejado en los bloques.
 | H6 | El UUID de la factura (`uuid_timbrado`) se extrae pero **no se guarda**, así que no se puede validar un complemento contra su factura. | B1 |
 | H7 | "Hoy" en UTC en `sync_estados_cuentas_cobrar_vencidas` y en `cuentas_pagar_grupos_facturados_eventos_realizados`. | B3 (helper CDMX) |
 | H8 | Estado de la orden calculado con `monto_pagado >= x_pagar` (neto). Si la conversión transferido → neto no cierra exacta en el último pago, la orden nunca llega a `COMPLETADA`. | B2 |
-| H9 | Las órdenes existentes guardan `total_monto` en neto; las nuevas serán en total a transferir. | B6 (columna `base_monto`) |
+| H9 | Las órdenes existentes guardan `total_monto` en neto; las nuevas serán en total a transferir. | Sin cambio: son datos de prueba (D10, O6) |
 | H10 | `calcularCierreProyecto` siempre estima con el régimen del proveedor. Con el snapshot del CFDI (supuesto 6), cierre y saldo mostrarían números distintos. | B2 |
 | H11 | `serenata-erp-test` tiene 0 cuentas sueltas, 0 órdenes y 0 XML: no reproduce las formas de datos de producción. | B0 (seed) |
 | H12 | Faltan columnas para B7: baja lógica en `documentos_cuentas_*`, anulación en `pagos_comprobantes`, y ampliar el CHECK de `pago_operations.dominio`. `cuentas_pagar.estado` no tiene CHECK. | B2, B7 |
@@ -383,6 +392,26 @@ negocio. Estas son decisiones de arquitectura, tomadas y ya integradas:
 **Acción pendiente del usuario** (no bloquea el arranque): antes de B8,
 encender Drive en Preview (R9). Los pasos exactos se dan al inicio de B8.
 
+### 5.6 Auditoría de optimización (sesión 15)
+
+Se buscaron decisiones correctas pero mejorables: duplicación de lógica,
+trabajo sin valor dado D10 y puntos frágiles. Todas quedan integradas en
+los bloques.
+
+| # | Qué había | Mejora | Por qué |
+|---|---|---|---|
+| O1 | "Pendiente", filtros y conteos por mes en **SQL** (B3), mientras el estado visible y el siguiente paso se derivaban en **TS** (`concepto.ts`): dos implementaciones de la misma regla. | **Una sola derivación, en TS, del lado del servidor.** La RPC `cuentas_anio(p_year)` devuelve los conceptos crudos del año (más "Sin fecha"). La ruta deriva con `concepto.ts` y después filtra, busca, cuenta por mes, calcula totales y pagina. Al cliente solo llega el periodo pedido. Se elimina `cuentas_conceptos` y los filtros en SQL. | Principio 7. Evita que "Pendientes" en SQL y el chip en la UI digan cosas distintas. |
+| O1b | Riesgo de O1: el dataset de carga de test tiene 2,196 proyectos y unos 13,000 conceptos en un año. | **Presupuesto:** p95 < 800 ms de `GET /api/cuentas/periodo` con ese dataset, medido en B3. Si no se cumple, la derivación pasa a una función SQL con un test de paridad contra `concepto.ts` que la mantenga igual. | Decidir con datos, no a ojo. |
+| O2 | "Vencido" se actualiza **escribiendo en cada GET** (`sync_estados_...` en `periodo` y `avisos`, R3). | En pantalla, "Vencido" se **deriva al leer** (`fecha_vencimiento < hoy CDMX`). El `estado` guardado lo actualiza un **cron diario** (`vercel.json`, 00:05 CDMX) que llama a `sync_estados_cuentas_cobrar_vencidas()`, para Sheets y el Dashboard. | Sin escrituras ni bloqueos en lecturas. R3 queda resuelto sin depender de que alguien abra la pantalla. |
+| O3 | `concepto.ts` nacía en B1 con montos en neto y B2 los cambia a total a transferir, así que había que rehacerlo. | `concepto.ts` recibe una **entrada normalizada** (`total`, `pagado`, documentos, orden, método), sin saber en qué unidad vienen los montos. Cada fuente arma esa entrada. | Los tests de B1 siguen valiendo después de B2. |
+| O4 | `generar_orden_pago` sin idempotencia. Un doble envío fallaba bien en la RPC, pero **subía un segundo PDF huérfano** a Drive. | `p_operation_id`, igual que los pagos. La ruta revisa la operación **antes** de generar y subir el PDF; si ya existe, devuelve la misma orden. | No quedan órdenes ni PDFs duplicados. |
+| O5 | Script de backfill de `MetodoPago` que lee Drive desde local. | **Se elimina.** Son 6 facturas de prueba (D10): quedan con el método en "desconocido" y se marca PUE o PPD a mano (supuesto 4). | Menos trabajo, sin credenciales de Drive locales. |
+| O6 | Columna `ordenes_pago.base_monto` solo para rotular 8 órdenes de prueba. | **Se elimina** (D10). | YAGNI. |
+| O7 | Escritorio y móvil como pantallas separadas. | **Un árbol de componentes por pantalla.** `ResponsiveDialog` pinta `Modal` en escritorio y `BottomSheet` en móvil con el mismo contenido. Las tablas pasan a tarjetas por CSS y props, no por componentes duplicados. | La mitad del código de UI y ninguna divergencia de reglas entre dispositivos. |
+| O8 | Corte en B8 después de B7. | D24: el corte va antes de B7. | Menos tiempo con dos UIs. |
+| O9 | El plan proponía renombrar "por pagar" en el Dashboard. | El Dashboard no se toca; la aclaración vive en Cuentas. | D14: "el Dashboard no cambia". |
+| O10 | "Validación visual contra capturas" sin definir cómo. | Playwright toma capturas de cada estado (escritorio y móvil, claro y oscuro) y se adjuntan al PR. Se revisan **lado a lado** con el handoff. **No** es diff de píxeles: los datos son distintos. | Criterio de aceptación verificable. |
+
 ## 6. Infraestructura que se reutiliza
 
 - **RPCs de dinero** (no se recrean, se extienden):
@@ -460,7 +489,8 @@ misma ruta detrás de `?v=2`, y se cambia al final.
 - `design_handoff_cuentas/` completo a `docs/design/cuentas/`: README,
   capturas, `abrir-directo/` y `codigo-fuente/`, unos 4 MB. No se generan
   capturas: el handoff ya las trae.
-- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D23, A1–A5, el
+- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D24, A1–A5,
+  O1–O10, el
   modelo de la sección 5, §5.2 (reglas del prototipo que no se adoptan) y los
   supuestos aceptados.
 - Seed para `serenata-erp-test` con las formas de datos de producción (H11):
@@ -485,6 +515,8 @@ son bugs de hoy, no del rediseño.
   Si otro proceso ya los tomó, falla explícito. El PDF se sube antes; si la
   RPC falla, queda un archivo huérfano en Drive y se registra en el log. La
   ruta la llama en lugar de las tres escrituras sueltas.
+  - Idempotente con `p_operation_id` (O4). La ruta revisa la operación antes
+    de generar y subir el PDF.
   - En B1b la ruta pasa todo lo elegible como selección. La selección por
     responsable llega en B6 sin cambiar la firma.
   - El total lo calcula la ruta a partir de los candidatos. Nunca viene del
@@ -512,7 +544,9 @@ son bugs de hoy, no del rediseño.
 
 **B1 — Derivación y datos fiscales base.**
 - `lib/shared/cuentas/concepto.ts`: estado visible, siguiente paso, vencimiento
-  y cuentas cerradas. Tests unitarios con cada fila de la tabla de la sección 5.
+  (derivado con "hoy" en CDMX, O2) y cuentas cerradas.
+  - Entrada normalizada, sin saber en qué unidad vienen los montos (O3).
+  - Tests unitarios con cada fila de la tabla de la sección 5.
 - Migración:
   - `cuentas_cobrar.metodo_pago_cfdi` (`PUE`/`PPD`/null) y
     `cuentas_cobrar.uuid_cfdi` (H6);
@@ -534,9 +568,9 @@ son bugs de hoy, no del rediseño.
     pago más reciente sin complemento, que es lo que ya hace la UI actual;
   - si algo no cuadra, guarda con `estado_validacion = 'revision'`, igual que
     las facturas.
-- Script de backfill idempotente (supuesto 4, D10): lee los XML de Drive y
-  reporta los que no pudo leer. Corre desde local con credenciales de Drive
-  porque Drive está apagado en Preview.
+- Sin script de backfill (O5): las facturas existentes quedan con
+  `metodo_pago_cfdi` null y se marca PUE o PPD a mano (supuesto 4). Solo las
+  facturas subidas desde B1 se leen del XML.
 
 **B2 — Pagos a proveedor en total a transferir (D3).** Bloque de mayor riesgo;
 va solo.
@@ -581,32 +615,35 @@ va solo.
   centavo.
 
 **B3 — Lectura por periodo (backend).**
-- RPC `cuentas_periodo(p_year, p_month | 'all' | 'sin_fecha', filtros, búsqueda)`:
-  - proyectos del periodo con sus conceptos (estados de BD y lo necesario para
-    derivar);
-  - pendientes por mes y años con pendientes;
-  - totales para las tarjetas.
-- Filtros y búsqueda en SQL (folio, proyecto, cliente, contraparte y concepto).
-- Totales fiscales en la ruta con `calcularCierreProyecto`, no en SQL (§5).
-- RPC `cuentas_conceptos(...)` paginada para la vista Lista.
+- RPC `cuentas_anio(p_year | 'sin_fecha')` (O1): los conceptos crudos del
+  año con lo necesario para derivar (montos, documentos, orden, método de
+  pago, fechas y datos de cotizaciones para el cierre). No filtra ni deriva.
+- RPC `cuentas_anios()`: años con datos, para el select.
+- La ruta deriva con `concepto.ts` y luego filtra, busca (folio, proyecto,
+  cliente, contraparte y concepto), cuenta pendientes por mes, arma los
+  totales con `calcularCierreProyecto` y pagina la Lista. Al cliente solo
+  llega el periodo pedido.
+- Presupuesto p95 < 800 ms con el dataset de carga de test (O1b). Si no se
+  cumple, la derivación pasa a SQL con un test de paridad.
 - Índice por `proyectos.fecha_entrega` (D12).
 - Helper SQL `hoy_cdmx()` que usan las RPCs nuevas. Se corrigen las dos RPCs
   vigentes que usan UTC (H7), partiendo de su versión en `pg_proc`.
-- `GET /api/cuentas/periodo` llama a `sync_estados_cuentas_cobrar_vencidas()`
-  antes de leer, como hoy las rutas viejas (R3), para que "Vencido" siga
-  vigente en Sheets y en el Dashboard después de B8.
-- Rutas `GET /api/cuentas/periodo` y `GET /api/cuentas/conceptos`, con
-  `requireSection('cuentas')` y Zod.
+- Cron diario en `vercel.json` que llama a
+  `sync_estados_cuentas_cobrar_vencidas()` (O2, R3). La ruta nueva no escribe
+  al leer.
+- Ruta `GET /api/cuentas/periodo`, con `requireSection('cuentas')` y Zod.
 - `cuentas_por_proyecto` sigue viva hasta B8.
 
 **Regla para B4–B7:** cada bloque entrega **escritorio y móvil** de sus
 pantallas, en **tema claro y oscuro**, con las capturas del handoff como
-criterio de aceptación. Móvil no se deja para el final: comparte datos,
-hooks y derivación con escritorio y solo cambia el layout.
+criterio de aceptación (O10). Móvil no se deja para el final: es **el mismo
+árbol de componentes** con variantes de layout (O7), no pantallas
+duplicadas.
 
 **B4 — Pantalla principal nueva (`?v=2`).**
 - Primitivos nuevos (§6): ProgressBar, Field, Checkbox, Switch, BottomSheet,
-  SearchableSelect, CuentasTabBar e iconos. Cada uno con su test.
+  `ResponsiveDialog` (O7), SearchableSelect, CuentasTabBar e iconos. Cada uno
+  con su test.
 - **Escritorio** (capturas 01, 02, 07 y 08):
   - encabezado con Avisos (contador) y Orden de pago;
   - pastillas de mes con contador, "Todo el año" y select de año con
@@ -669,8 +706,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 
 **B6 — Avisos y órdenes.** Escritorio: capturas 09–13. Móvil: 04, 05, 11,
 16 y 21.
-- Ruta `GET /api/cuentas/avisos` con las 5 categorías (supuestos 2 y 3).
-  Llama a `sync_estados_cuentas_cobrar_vencidas()` (R3).
+- Ruta `GET /api/cuentas/avisos` con las 5 categorías (supuestos 2 y 3),
+  derivadas con `concepto.ts` (O1, O2).
   `/api/cuentas-cobrar/alertas` sigue viva para la UI actual hasta B8 (R2).
 - Escritorio: panel lateral de 400px "Avisos y órdenes". Móvil: pantallas
   empujadas "‹ Cuentas".
@@ -698,8 +735,6 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
     agrega el cruce fiscal.
 - Migración de órdenes:
   - estado `CANCELADA`, con `cancelada_at/por/motivo`;
-  - `base_monto` (`NETO` para las existentes, `TRANSFERIR` para las nuevas;
-    H9). El historial la rotula;
   - RPC `cancelar_orden_pago`: atómica, simétrica a `generar_orden_pago`
     (B1b), solo si **ningún pago está registrado contra esa orden**
     (`pagos_cuentas_pagar.orden_pago_id`). Cada grupo o suelta vuelve al
@@ -756,8 +791,11 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   el entorno Preview de Vercel), o la prueba de subidas y órdenes no es
   posible. Se prepara al inicio de B8, no al final.
 - `?v=2` se abre a todos los usuarios (supuesto 20).
+- Va antes de B7 (D24). Las cuentas quedan con cierre automático; reabrir y
+  corregir llegan en B7.
 
-**Dependencias:** B0 → B1b → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 (A3). B6 depende también de B2 (montos de la orden) y de B1b
+**Dependencias:** B0 → B1b → B1 → B2 → B3 → B4 → B5 → B6 → **B8 → B7**
+(A3, D24). B7 se construye sobre la UI nueva ya en producción. B6 depende también de B2 (montos de la orden) y de B1b
 (`generar_orden_pago`).
 
 ## 8. Riesgos
@@ -784,7 +822,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 **P1**
 - **Escala.** `cuentas_por_proyecto` trae todo sin paginar. Con ~1,000
   proveedores y años de historia, "Todo el año" y la lista lo resienten.
-  - Mitigación: B3 filtra por periodo en SQL y pagina la lista.
+  - Mitigación: B3 trae solo el año pedido, pagina lo que manda al cliente y
+    tiene presupuesto p95 medido con el dataset de carga (O1b).
 - **Zona horaria.** "Hoy" para vencimientos, órdenes vencidas y "evento ya
   realizado" debe ser CDMX, igual que `siguiente_folio`. Hoy hay RPCs que usan
   UTC.
@@ -851,8 +890,11 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - reabrir, anular pago y volver a cerrar.
 - **E2E live:** registrar y anular pago en concurrencia; dos generaciones de
   orden simultáneas (B1b); generar y cancelar orden contra la base de test.
-- **Visual:** cada pantalla del bloque contra su captura del handoff, en tema
-  claro y oscuro.
+- **Visual (O10):** capturas de Playwright de cada estado (escritorio y
+  móvil, claro y oscuro) adjuntas al PR y revisadas lado a lado con el
+  handoff. No es diff de píxeles.
+- **Rendimiento (O1b):** p95 de `GET /api/cuentas/periodo` < 800 ms con el
+  dataset de carga de test.
 - **Manual:** el usuario en el Preview de B8 con datos reales de test, en
   escritorio y en su teléfono.
 - **Regla de siempre:** tsc, lint, `npm test`, build, smoke, critical y `live`
@@ -868,7 +910,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | Auditoría end-to-end y decisiones D10–D17 | Hecho (sesión 11) |
 | Diseño final (handoff) y re-auditoría, D18–D21 | Hecho (sesión 12) |
 | Auditoría de regresiones R1–R13, D22–D23 | Hecho (sesión 13) |
-| Supuestos confirmados y auditoría final A1–A5 | Hecho (sesión 14). Falta aprobar |
+| Supuestos confirmados y auditoría final A1–A5 | Hecho (sesión 14) |
+| Auditoría de optimización O1–O10, D24 | Hecho (sesión 15). Falta aprobar |
 | B0 Referencia, reglas y seed | Pendiente |
 | B1b Blindaje previo | Pendiente |
 | B1 Derivación y datos fiscales | Pendiente |
@@ -877,8 +920,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | B4 Pantalla principal | Pendiente |
 | B5 Detalle | Pendiente |
 | B6 Avisos y órdenes | Pendiente |
+| B8 Corte y limpieza (antes de B7, D24) | Pendiente |
 | B7 Reabrir y correcciones | Pendiente |
-| B8 Corte y limpieza | Pendiente |
 
 ## Ciclo de vida
 
