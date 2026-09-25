@@ -3,9 +3,16 @@
 **Iniciativa:** Rediseño de la sección Cuentas (Claude Design → implementación)
 **Estado:** **Aprobado** por el usuario (sesión 19, 2026-09-25), después de
 tres rondas de auditoría (sesiones 17–19: S1–S21, T1–T10, V1–V4) y con
-D1–D32 confirmadas. No quedan dudas de producto ni de negocio. Queda una
-sola regla por confirmar, y se confirma al abrir B7 (§5.8, S12). Siguiente
-paso: B0.
+D1–D32 confirmadas. No quedan dudas de producto ni de negocio. S12 quedó
+confirmada en la sesión 20 (se acepta la propuesta). B0 y B1b están en
+`main` (#94, #95).
+- **Sesión 20 (2026-09-25), forma de ejecución de B1–B8 (decisión del
+  usuario):** todos los bloques van en la **misma rama**
+  (`claude/practical-brown-giy5p3`), con un solo PR en borrador para CI. Las
+  migraciones se aplican **solo a `serenata-erp-test`** (el Preview apunta
+  ahí); a producción van **todas juntas al final**, en el mismo momento del
+  merge, cuando el usuario apruebe tras probar el Preview. Drive en Preview
+  (R9): el usuario da el token al llegar a B8.
 - Sesión 10 (2026-09-25): diseño final recibido y auditado.
 - Sesión 11 (2026-09-25): auditoría end-to-end contra producción (BD, RPCs,
   rutas, UI). Sus hallazgos están en §5.1 y las decisiones D10–D17 que
@@ -535,7 +542,7 @@ hallazgos quedan integrados en los bloques.
 | S9 | `withIdempotency` necesita una llave que mande el cliente y espera como máximo 4.5 s, menos de lo que tardan el PDF y Drive: un doble clic recibe "ya se está procesando" en lugar de la misma orden. | El cliente manda `idempotency_key` (UUID por apertura del modal). La UI trata "ya se está procesando" como estado de espera, no como error: vuelve a consultar el preview y muestra la orden si ya existe. | B1b, B6 |
 | S10 | `Modal` solo tiene `lg` (512 px) y `3xl` (768 px), sin pie fijo ni encabezado propio, y su fondo es `bg-black/60`. El diseño pide 780, 820 y 960 px, pie fijo en Generar orden, encabezado con chip y ProgressBar, y fondo `rgba(0,0,0,.28)` en hojas móviles. El panel lateral de 400 px no es un modal. | `Modal` se extiende de forma aditiva: `size` acepta `780`, `820` y `960`; se agregan los slots `header` y `footer` (fijo abajo); Escape cierra; `mobile="sheet"` con fondo `.28`. Nuevo primitivo **`Drawer`** (lateral derecho de 400 px en escritorio, pantalla empujada en móvil). Los modales existentes no cambian. | B4 |
 | S11 | `ResponsiveTableCard` no tiene encabezados de grupo (Lista con "Agrupar por mes") y en móvil pinta tarjetas sueltas; el diseño agrupa las filas en una tarjeta separadas por línea. | Props opcionales: `groups` (encabezado con etiqueta y subtítulo por grupo) y `mobileLayout="list"` (una tarjeta con filas separadas). Los usos actuales no cambian. | B4 |
-| S12 | B7, "reasignar el proveedor en una cuenta ya pagada" (D5), solo decía "se amplía la guarda". No definía qué pasa con los pagos, la factura, el snapshot ni la orden del proveedor anterior, que ya recibió el dinero. | **Propuesta, a confirmar al abrir B7:** una RPC de corrección atómica que exige anular antes los pagos del concepto (B7). Luego da de baja la factura del grupo, que vuelve a `ABIERTO` y pierde el snapshot, y reasigna con la RPC vigente. Si el concepto está en una orden, primero se cancela la orden. No bloquea B0–B8. | B7 |
+| S12 | B7, "reasignar el proveedor en una cuenta ya pagada" (D5), solo decía "se amplía la guarda". No definía qué pasa con los pagos, la factura, el snapshot ni la orden del proveedor anterior, que ya recibió el dinero. | **Confirmada por el usuario (sesión 20):** una RPC de corrección atómica que exige anular antes los pagos del concepto (B7). Luego da de baja la factura del grupo, que vuelve a `ABIERTO` y pierde el snapshot, y reasigna con la RPC vigente. Si el concepto está en una orden, primero se cancela la orden. | B7 |
 | S13 | Barra de pestañas: el diseño usa los iconos `house`, `image`, `wallet` y `ellipsis`. `AppShell` deja `pt-16` para el encabezado móvil que D23 oculta, y no reserva espacio para la barra. | La barra usa los **mismos iconos que el sidebar** (`dashboard`, `proyectos`, `cuentas` y `cotizaciones`, por U8) más `ellipsis`, que es nuevo. Así el mismo destino no tiene dos iconos distintos. `AppShell` recibe `mobileChrome="tabbar"`: en `/cuentas` quita el `pt-16` y deja abajo la altura de la barra más `env(safe-area-inset-bottom)`. | B4 |
 | S14 | En tableta (768–1279 px), el sidebar de 250 px más el maestro-detalle (1fr \| 300 px) con 5 columnas no cabe. | Por debajo de `xl`, el detalle del proyecto ocupa todo el ancho y la lista compacta de proyectos se oculta; se regresa con el chevron del encabezado del proyecto. Desde `xl`, maestro-detalle como en el diseño. Captura de validación a 1024 px. | B4 |
 | S15 | En móvil, "atrás" del navegador sacaba de la app en lugar de cerrar la hoja: el estado en la URL no incluía la hoja ni la pantalla empujada. | El supuesto 8 se amplía: la URL también lleva `det` (concepto abierto), `sheet` y `page` (avisos u órdenes). Abrir una hoja o una pantalla hace `push`; cambiar filtros o periodo hace `replace`. | B4 |
@@ -644,7 +651,8 @@ contra el cuerpo real de las RPCs en producción. **No salió ningún P0.**
      las demás tablas de cuentas;
    - `CREATE OR REPLACE` parte de la definición viva en `pg_proc`, con diff
      explícito;
-   - se aplican a test y a producción **en el mismo bloque**;
+   - se aplican a test y a producción **en el mismo bloque** (B0, B1b). Desde
+     la sesión 20, B1–B8 solo a test; producción al final, junto con el merge;
    - jobs `fresh-db` y `Migrations` en verde.
 3. **Una sola firma por RPC de dinero (R5, S7).** Hoy la firma con
    `p_operation_id` **llama por dentro** a la firma sin él. Al cambiar

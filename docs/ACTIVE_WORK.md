@@ -145,5 +145,12 @@ sesión bloquea unpkg, bajar `react@18.3.1`, `react-dom@18.3.1`,
 
 ## Siguiente paso
 
+**Forma de ejecución (sesión 20, decisión del usuario):** B1–B8 en la misma
+rama `claude/practical-brown-giy5p3`, un solo PR en borrador para CI. Las
+migraciones van solo a `serenata-erp-test` (el Preview apunta ahí). A
+producción van todas juntas cuando el usuario apruebe tras probar el
+Preview. S12 confirmada. Al llegar a B8, el usuario da el token de Drive
+para el Preview (R9).
+
 **B1** (derivación y datos fiscales base, incluido `metodo_pago_cfdi` en la
 fila del XML de la factura). Se abre auditando el código real de su alcance.
