@@ -210,3 +210,7 @@ Base de 390 × 844. La barra de pestañas inferior es de vidrio y navega entre s
 - `codigo-fuente/Cuentas-Movil-Pantallas.dc.html`: lienzo con todas las pantallas móviles, estados y tema oscuro.
 - `codigo-fuente/cuentas-data.js`: datos de ejemplo y todas las reglas (`compute`, `conceptDetail`, `ordenPreview`, `controls`).
 - `codigo-fuente/support.js`: entorno de ejecución de los prototipos. No forma parte del diseño.
+
+## Ajuste posterior: chip de meses (escritorio)
+
+`chip-meses/` trae el rediseño del selector de mes de escritorio (sesión 20): un chip con el periodo que se despliega en la misma fila en la tira de meses. Reemplaza la fila de 12 pastillas de este handoff; la versión móvil no cambia. Al cambiar de año se conserva el mes elegido (D35).

@@ -128,8 +128,9 @@ export function CuentasApp() {
     if (estado.sheet === 'periodo') cerrar({ sheet: null, mes: m, page: 1 })
     else filtrar({ mes: m })
   }
-  // Al cambiar de año el servidor elige el mes: el actual o el último con datos (S16).
-  const onAnio = (a: number) => filtrar({ anio: a, mes: null, proyecto: null })
+  // D35 (sesión 20): al cambiar de año se conserva el mes elegido (o "Todo el
+  // año"). S16 solo decide el mes cuando se entra a un año sin mes en la URL.
+  const onAnio = (a: number) => filtrar({ anio: a, mes, proyecto: null })
 
   const totalProyectos = periodo ? periodo.proyectos.total + periodo.sin_fecha.length : 0
   const alcance = periodo ? `${etiquetaPeriodo(periodo.anio, periodo.mes)} · ${plural(periodo.proyectos.total, 'proyecto', 'proyectos')}` : ''
@@ -242,7 +243,7 @@ export function CuentasApp() {
       {/* Periodo */}
       {periodo && (
         <div className="hidden md:block">
-          <PeriodoEscritorio anio={anio} mes={mes} meses={periodo.meses} resumen={resumen} onMes={onMes} onAnio={onAnio} />
+          <PeriodoEscritorio anio={anio} mes={mes} meses={periodo.meses} resumen={resumen} hoy={periodo.hoy} onMes={onMes} onAnio={onAnio} />
         </div>
       )}
 

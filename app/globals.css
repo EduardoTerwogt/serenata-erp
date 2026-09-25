@@ -472,3 +472,21 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   font-size: 11px;
   color: var(--accent);
 }
+
+/* Rediseño de Cuentas: chip de meses de escritorio (handoff
+   docs/design/cuentas/chip-meses). Solo animan opacity y transform, con la
+   curva del sistema; el retardo de cada pastilla va en línea (cascada). */
+/* La animación termina en la opacidad propia de la pastilla (--sn-mes-op): con
+   fill-mode both, un `to { opacity: 1 }` fijo pisaría el .55 de los meses sin
+   movimientos. */
+@keyframes sn-mes-in { from { opacity: 0; transform: translateX(-8px) scale(.94); } to { opacity: var(--sn-mes-op, 1); transform: none; } }
+@keyframes sn-mes-out { from { opacity: var(--sn-mes-op, 1); transform: none; } to { opacity: 0; transform: translateX(-8px) scale(.94); } }
+@keyframes sn-chip-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+.sn-mes-in { animation: sn-mes-in var(--dur-slow) var(--ease-standard) both; }
+.sn-mes-out { animation: sn-mes-out var(--dur-slow) var(--ease-standard) both; }
+.sn-chip-in { animation: sn-chip-in 220ms var(--ease-standard) both; }
+.sn-sin-scrollbar { scrollbar-width: none; }
+.sn-sin-scrollbar::-webkit-scrollbar { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .sn-mes-in, .sn-mes-out, .sn-chip-in { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+}

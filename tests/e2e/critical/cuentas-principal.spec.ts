@@ -80,18 +80,61 @@ test('Lista de conceptos agrupada por mes en "Todo el año", con "Sin fecha" al 
   await expect(page.getByText(/Mostrando .* conceptos? de \d+ proyectos?/).filter({ visible: true }).first()).toBeVisible()
 })
 
-test('cambiar de año abre el último mes con datos (S16) y el año archivado se ve cerrado', async ({ page }) => {
+test('cambiar de año conserva el mes elegido (D35) y el año archivado se ve cerrado', async ({ page }) => {
   await abrir(page)
   if (esMovil()) {
     await page.getByRole('button', { name: /^Periodo:/ }).click()
-    await page.getByRole('dialog', { name: 'Periodo' }).getByRole('combobox', { name: 'Año' }).selectOption('2024')
-    await page.getByRole('dialog', { name: 'Periodo' }).getByRole('button', { name: 'Cerrar' }).click()
+    const hoja = page.getByRole('dialog', { name: 'Periodo' })
+    await hoja.getByRole('combobox', { name: 'Año' }).selectOption('2024')
+    await expect(page).toHaveURL(/anio=2024/)
+    await expect(page).toHaveURL(/mes=9/)
+    await hoja.getByRole('button', { name: /^Nov/ }).click()
     await expect(page.getByRole('button', { name: 'Periodo: Noviembre 2024' })).toBeVisible()
   } else {
     await page.getByRole('combobox', { name: 'Año' }).selectOption('2024')
+    await expect(page).toHaveURL(/anio=2024/)
+    await expect(page).toHaveURL(/mes=9/)
+    await expect(page.getByRole('button', { name: 'Periodo: Septiembre. Ver todos los meses' })).toBeVisible()
+    await page.getByRole('button', { name: 'Periodo: Septiembre. Ver todos los meses' }).click()
+    await page.getByRole('option', { name: /^Nov/ }).click()
     await expect(page.getByText('Noviembre 2024 · 1 proyecto')).toBeVisible()
   }
   await expect(page.getByRole('button', { name: 'Abrir Convención Anual' })).toContainText('Cerrada')
+})
+
+test('escritorio: el chip de meses se despliega en la fila y se contrae al elegir, con Esc o con ‹', async ({ page }) => {
+  test.skip(esMovil(), 'La versión móvil no cambia: hoja Periodo')
+  await abrir(page)
+  const chip = page.getByRole('button', { name: 'Periodo: Septiembre. Ver todos los meses' })
+  await expect(chip).toHaveAttribute('aria-expanded', 'false')
+  await expect(chip).toContainText('1')
+
+  await chip.click()
+  const tira = page.getByRole('listbox', { name: 'Meses' })
+  await expect(tira.getByRole('option')).toHaveCount(13)
+  await expect(tira.getByRole('option', { name: /^Sep/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(tira.getByRole('option', { name: /^Sep/ })).toBeFocused()
+  // El select de año sigue en la misma fila.
+  await expect(page.getByRole('combobox', { name: 'Año' })).toBeVisible()
+
+  await tira.getByRole('option', { name: /^Ago/ }).click()
+  await expect(page).toHaveURL(/mes=8/)
+  await expect(page.getByRole('button', { name: 'Periodo: Agosto. Ver todos los meses' })).toBeVisible()
+  await expect(tira).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Periodo: Agosto. Ver todos los meses' }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Periodo: Agosto. Ver todos los meses' })).toBeFocused()
+
+  await page.getByRole('button', { name: 'Periodo: Agosto. Ver todos los meses' }).click()
+  await page.getByRole('option', { name: 'Todo el año' }).click()
+  await expect(page).toHaveURL(/mes=todo/)
+  await expect(page.getByRole('button', { name: 'Periodo: Todo el año. Ver todos los meses' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Periodo: Todo el año. Ver todos los meses' }).click()
+  await page.getByRole('button', { name: 'Contraer meses' }).click()
+  await expect(page.getByRole('button', { name: 'Periodo: Todo el año. Ver todos los meses' })).toBeVisible()
+  await expect(page).toHaveURL(/mes=todo/)
 })
 
 test('búsqueda sin resultados muestra el estado vacío', async ({ page }) => {

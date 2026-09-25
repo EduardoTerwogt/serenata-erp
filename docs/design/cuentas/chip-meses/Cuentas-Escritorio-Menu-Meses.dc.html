@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0;background:#F5F5F7;font-family:-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased} a{color:#FE7B01;text-decoration:none} a:hover{color:#E06D00} button{font-family:inherit} @keyframes mesIn{from{opacity:0;transform:translateX(-8px) scale(.94)}to{opacity:1;transform:none}} @keyframes mesOut{from{opacity:1;transform:none}to{opacity:0;transform:translateX(-8px) scale(.94)}} @keyframes trigIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}</style>
+</helmet>
+<div style="height:100vh;min-height:760px;display:flex;background:#F5F5F7;color:#3A3A3C;overflow:hidden">
+<aside style="width:250px;flex:none;background:#EFEFF2;border-right:1px solid #E3E3E8;display:flex;flex-direction:column;padding:16px 12px;box-sizing:border-box">
+<div style="width:26px;height:26px;border-radius:7px;background:#FE7B01;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;margin:0 8px 22px">S</div>
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#6E6E73;padding:0 8px 6px">PRINCIPAL</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:8px;font-size:13.5px"><span style="width:22px;height:22px;border-radius:6px;background:#8E8E93;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></span>Inicio</div>
+<div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:8px;font-size:13.5px"><span style="width:22px;height:22px;border-radius:6px;background:#8E8E93;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><path d="M16 13H8M16 17H8"></path></svg></span>Cotizaciones</div>
+<div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:8px;font-size:13.5px"><span style="width:22px;height:22px;border-radius:6px;background:#2F7FE0;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3-3a2 2 0 0 0-3 0L6 21"></path></svg></span>Proyectos</div>
+</div>
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#6E6E73;padding:14px 8px 6px">NEGOCIO</div>
+<div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:8px;font-size:13.5px;background:rgba(254,123,1,.14);color:#FE7B01;font-weight:600"><span style="width:22px;height:22px;border-radius:6px;background:#FE7B01;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path></svg></span>Cuentas</div>
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#6E6E73;padding:14px 8px 6px">OPERACIÓN</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:8px;font-size:13.5px"><span style="width:22px;height:22px;border-radius:6px;background:#5B5FD6;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"></circle><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path></svg></span>Proveedores</div>
+<div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:8px;font-size:13.5px"><span style="width:22px;height:22px;border-radius:6px;background:#5B5FD6;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"></circle><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>Clientes</div>
+<div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:8px;font-size:13.5px"><span style="width:22px;height:22px;border-radius:6px;background:#E0442E;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg></span>Planeación</div>
+<div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:8px;font-size:13.5px"><span style="width:22px;height:22px;border-radius:6px;background:#2EA37A;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18M9 21V9"></path></svg></span>Plantillas</div>
+</div>
+<div style="flex:1"></div>
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#6E6E73;padding:0 8px 6px">SISTEMA</div>
+<div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 8px;border-radius:8px;font-size:13.5px"><span style="width:22px;height:22px;border-radius:6px;background:#8E8E93;color:#fff;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8"></circle></svg></span>Admin</div>
+</aside>
+
+<div style="flex:1;min-width:0;display:flex;flex-direction:column">
+<header style="height:56px;flex:none;display:flex;align-items:center;gap:19px;padding:0 30px;background:rgba(245,245,247,.72);border-bottom:1px solid #E3E3E8">
+<div style="font-size:11px;font-weight:600;color:#1D1D1F">Cuentas</div>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:28px;height:28px;border-radius:999px;background:#FE7B01;color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center">ET</span>
+<div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.25"><span style="font-size:12.5px;font-weight:600;color:#1D1D1F">Eduardo Terwogt</span><span style="font-size:12.5px;color:#6E6E73">eduardo@serenata.house</span></div>
+</div>
+</header>
+
+<main style="flex:1;min-height:0;overflow:auto;padding:26px 30px 40px;display:flex;flex-direction:column;gap:19px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+<div style="font-size:22px;font-weight:700;letter-spacing:-.01em;color:#1D1D1F">Cuentas</div>
+<div style="display:flex;align-items:center;gap:10px">
+<button style="height:36px;padding:0 16px;border-radius:8px;border:1px solid #DCDCE1;background:#E8E8ED;color:#1D1D1F;font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>Avisos<span style="min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:999px;background:#FE7B01;color:#fff;font-size:11px;font-weight:600;display:inline-flex;align-items:center;justify-content:center">9</span></button>
+<button style="height:36px;padding:0 18px;border-radius:8px;border:0;background:#FE7B01;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><path d="M16 13H8M16 17H8"></path></svg>Orden de pago</button>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;gap:12px">
+<div style="position:relative;display:flex;align-items:center;gap:6px;min-width:0">
+<sc-if value="{{ arrowsVis }}" hint-placeholder-val="{{ false }}">
+<button onClick="{{ prev }}" disabled="{{ prevDisabled }}" title="Mes anterior" style="width:30px;height:30px;border-radius:999px;border:1px solid #E3E3E8;background:#fff;color:#3A3A3C;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;opacity:{{ prevOpacity }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></button>
+</sc-if>
+<sc-if value="{{ closed }}" hint-placeholder-val="{{ true }}">
+<button onClick="{{ toggle }}" title="Ver todos los meses" style="animation:trigIn .22s cubic-bezier(.2,.8,.2,1) both;height:30px;padding:0 0 0 14px;border-radius:999px;border:1px solid {{ trig.border }};background:{{ trig.bg }};color:{{ trig.fg }};font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer">
+<span>{{ label }}</span>
+<sc-if value="{{ hasBadge }}" hint-placeholder-val="{{ true }}"><span style="min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:999px;background:{{ trig.dotBg }};color:{{ trig.dotFg }};font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">{{ badge }}</span></sc-if>
+<span style="display:flex;align-items:center;margin-left:-2px;padding-right:10px;opacity:.85"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span>
+</button>
+</sc-if>
+<sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:4px;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px 0">
+<sc-for list="{{ months }}" as="m" hint-placeholder-count="12">
+<button onClick="{{ m.pick }}" style="animation:{{ anim }} .26s cubic-bezier(.2,.8,.2,1) {{ m.delay }} both;flex:none;height:28px;padding:0 9px;border-radius:999px;border:1px solid {{ m.border }};background:{{ m.bg }};color:{{ m.fg }};opacity:{{ m.opacity }};font-size:12.5px;font-weight:{{ m.weight }};cursor:pointer;display:flex;align-items:center;gap:6px" style-hover="border-color:#FE7B01">{{ m.short }}<sc-if value="{{ m.hasPend }}" hint-placeholder-val="{{ false }}"><span style="min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:999px;background:{{ m.dotBg }};color:{{ m.dotFg }};font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">{{ m.pend }}</span></sc-if></button>
+</sc-for>
+<button onClick="{{ pickAll }}" style="animation:{{ anim }} .26s cubic-bezier(.2,.8,.2,1) {{ allDelay }} both;flex:none;height:28px;padding:0 11px;white-space:nowrap;border-radius:999px;border:1px solid {{ all.border }};background:{{ all.bg }};color:{{ all.fg }};font-size:12.5px;font-weight:600;cursor:pointer" style-hover="border-color:#FE7B01">Todo el año</button>
+<button onClick="{{ close }}" title="Contraer meses" style="animation:{{ anim }} .26s cubic-bezier(.2,.8,.2,1) {{ closeDelay }} both;flex:none;width:28px;height:28px;border-radius:999px;border:1px solid #E3E3E8;background:#fff;color:#3A3A3C;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg></button>
+</div>
+</sc-if>
+<sc-if value="{{ arrowsVis }}" hint-placeholder-val="{{ false }}">
+<button onClick="{{ next }}" disabled="{{ nextDisabled }}" title="Mes siguiente" style="width:30px;height:30px;border-radius:999px;border:1px solid #E3E3E8;background:#fff;color:#3A3A3C;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;opacity:{{ nextOpacity }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></button>
+</sc-if>
+</div>
+<div style="margin-left:auto;flex:none"><button style="white-space:nowrap;height:32px;padding:0 12px 0 14px;border-radius:9px;border:1px solid #DCDCE1;background:#E8E8ED;color:#3A3A3C;font-size:12.5px;display:flex;align-items:center;gap:10px;cursor:pointer">2026 · 6 pendientes<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button></div>
+</div>
+
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+<div style="display:flex;padding:2px;border-radius:9px;background:#E3E3E8">
+<span style="height:28px;padding:0 14px;border-radius:7px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.12);font-size:12.5px;font-weight:600;color:#1D1D1F;display:flex;align-items:center">Por proyecto</span>
+<span style="height:28px;padding:0 14px;font-size:12.5px;color:#6E6E73;display:flex;align-items:center">Lista</span>
+</div>
+<button style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:9px;border:1px solid #DCDCE1;background:#E8E8ED;font-size:12.5px;font-weight:500;color:#3A3A3C;cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg>Filtros<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button style="margin-left:auto;width:32px;height:32px;border-radius:9px;border:1px solid #DCDCE1;background:#E8E8ED;color:#3A3A3C;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:12.5px;font-weight:600;color:#1D1D1F">{{ scope }}</div>
+<sc-if value="{{ isSep }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:22px">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+<div style="background:#fff;border:1px solid #E3E3E8;border-radius:12px;padding:12px 14px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#6E6E73">INGRESOS</div><div style="font-size:17px;font-weight:700;color:#1D1D1F;margin:4px 0 8px">$465,160.00</div><div style="border-top:1px solid #E3E3E8;padding-top:7px;display:grid;grid-template-columns:1fr auto;gap:2px;font-size:11px"><span>Cobrado</span><span>$238,960.00</span><span>Por cobrar</span><span>$226,200.00</span></div></div>
+<div style="background:#fff;border:1px solid #E3E3E8;border-radius:12px;padding:12px 14px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#6E6E73">EGRESOS</div><div style="font-size:17px;font-weight:700;color:#1D1D1F;margin:4px 0 8px">$242,700.00</div><div style="border-top:1px solid #E3E3E8;padding-top:7px;display:grid;grid-template-columns:1fr auto;gap:2px;font-size:11px"><span>Pagado</span><span>$56,300.00</span><span>Por pagar</span><span>$186,400.00</span></div></div>
+<div style="background:#fff;border:1px solid #E3E3E8;border-radius:12px;padding:12px 14px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#6E6E73">UTILIDAD BRUTA</div><div style="font-size:17px;font-weight:700;color:#FE7B01;margin:4px 0 8px">$222,460.00</div><div style="border-top:1px solid #E3E3E8;padding-top:7px;display:grid;grid-template-columns:1fr auto;gap:2px;font-size:11px"><span>ISR estimado</span><span>-$66,738.00</span><span>Neta estimada</span><span>$155,722.00</span></div></div>
+<div style="background:#fff;border:1px solid #E3E3E8;border-radius:12px;padding:12px 14px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:#6E6E73">IMPUESTOS</div><div style="font-size:17px;font-weight:700;color:#1D1D1F;margin:4px 0 8px">$111,011.60</div><div style="border-top:1px solid #E3E3E8;padding-top:7px;display:grid;grid-template-columns:1fr auto;gap:2px;font-size:11px"><span>IVA a enterar</span><span>$35,593.60</span><span>Retenciones</span><span>$8,680.00</span><span>ISR estimado</span><span>$66,738.00</span></div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="background:#fff;border:1px solid #E3E3E8;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px">
+<span style="color:#FE7B01;display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg></span>
+<div style="min-width:0"><div style="display:flex;align-items:baseline;gap:10px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#FE7B01">SH061</span><span style="font-size:14.5px;font-weight:600;color:#1D1D1F">Lanzamiento Aurora 2026</span></div><div style="font-size:12px;color:#6E6E73;margin-top:3px">Grupo Modelo · Evento 18 sep 2026</div></div>
+<span style="min-width:80px;height:20px;padding:0 10px;box-sizing:border-box;border-radius:999px;background:#E3EEFA;color:#1C63B7;font-size:11px;display:inline-flex;align-items:center;justify-content:center">5 pendientes</span>
+<div style="flex:1"></div>
+<div style="text-align:right"><div style="font-size:12px;color:#6E6E73">Por cobrar</div><div style="font-size:14px;font-weight:700;color:#1D1D1F">$226,200.00</div></div>
+<div style="text-align:right"><div style="font-size:12px;color:#6E6E73">Por pagar</div><div style="font-size:14px;font-weight:700;color:#1D1D1F">$186,400.00</div></div>
+<span style="color:#98989D;display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span>
+</div>
+<div style="background:#fff;border:1px solid #E3E3E8;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px">
+<span style="color:#98989D;display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg></span>
+<div style="min-width:0"><div style="display:flex;align-items:baseline;gap:10px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#FE7B01">SH062</span><span style="font-size:14.5px;font-weight:600;color:#1D1D1F">Sesión de fotos Otoño</span></div><div style="font-size:12px;color:#6E6E73;margin-top:3px">Zara México · Evento 10 sep 2026</div></div>
+<span style="min-width:80px;height:20px;padding:0 10px;box-sizing:border-box;border-radius:999px;background:#E2F2E6;color:#218C3E;font-size:11px;display:inline-flex;align-items:center;justify-content:center">Cerrada</span>
+<div style="flex:1"></div>
+<div style="text-align:right"><div style="font-size:12px;color:#6E6E73">Ingreso</div><div style="font-size:14px;font-weight:700;color:#1D1D1F">$64,960.00</div></div>
+<div style="text-align:right"><div style="font-size:12px;color:#6E6E73">Egreso</div><div style="font-size:14px;font-weight:700;color:#1D1D1F">$18,500.00</div></div>
+<span style="color:#98989D;display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></span>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ notSep }}" hint-placeholder-val="{{ false }}">
+<div style="background:#fff;border:1px dashed #D1D1D6;border-radius:12px;padding:34px 20px;text-align:center;font-size:13px;color:#98989D">En esta maqueta solo Septiembre tiene datos. El resto del módulo no cambia.</div>
+</sc-if>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;panelLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cuadricula&quot;,&quot;lista&quot;],&quot;default&quot;:&quot;cuadricula&quot;,&quot;tsType&quot;:&quot;'cuadricula'|'lista'&quot;,&quot;section&quot;:&quot;Menú de meses&quot;},&quot;triggerStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;acento&quot;,&quot;neutro&quot;],&quot;default&quot;:&quot;acento&quot;,&quot;tsType&quot;:&quot;'acento'|'neutro'&quot;,&quot;section&quot;:&quot;Menú de meses&quot;},&quot;showArrows&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Menú de meses&quot;}}">
+const MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const MESL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const PEND = [0,0,0,0,0,0,1,2,1,1,1,0];
+const EMPTY = [1,1,1,1,1,0,0,0,0,0,0,1];
+const CUR = 8, YEAR = 2026, A = '#FE7B01';
+
+class Component extends DCLogic {
+  state = { month: CUR, open: false, closing: false };
+  closeAnim() { if (!this.state.open || this.state.closing) return; this.setState({ closing: true }); clearTimeout(this.t); this.t = setTimeout(() => this.setState({ open: false, closing: false }), 300); }
+  componentDidMount() {
+    this.onKey = e => { if (e.key === 'Escape') this.closeAnim(); };
+    window.addEventListener('keydown', this.onKey);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this.onKey); clearTimeout(this.t); }
+  pick(m) { this.setState({ month: m }); this.closeAnim(); }
+  step(d) {
+    const m = this.state.month === 'all' ? CUR : this.state.month;
+    this.setState({ month: Math.max(0, Math.min(11, m + d)) });
+  }
+  renderVals() {
+    const { month, open } = this.state;
+    const layout = this.props.panelLayout ?? 'cuadricula';
+    const neutral = (this.props.triggerStyle ?? 'acento') === 'neutro';
+    const arrows = this.props.showArrows ?? false;
+    const all = month === 'all';
+    const trig = neutral
+      ? { bg: '#fff', fg: '#1D1D1F', border: open ? A : '#E3E3E8', dotBg: A, dotFg: '#fff', divider: '#E3E3E8', ring: open ? '0 0 0 3px rgba(254,123,1,.18)' : 'none' }
+      : { bg: A, fg: '#fff', border: A, dotBg: '#fff', dotFg: A, divider: 'rgba(255,255,255,.4)', ring: open ? '0 0 0 3px rgba(254,123,1,.25)' : 'none' };
+    const badge = all ? 6 : PEND[month];
+    const months = MES.map((s, i) => {
+      const act = month === i;
+      return {
+        short: s, long: MESL[i], pend: PEND[i], hasPend: PEND[i] > 0,
+        bg: act ? A : '#fff', fg: act ? '#fff' : '#1D1D1F', border: act ? A : '#E3E3E8',
+        opacity: EMPTY[i] && !act ? .55 : 1, weight: act || i === CUR ? 600 : 500,
+        dotBg: act ? '#fff' : A, dotFg: act ? A : '#fff',
+        curMark: i === CUR && !act,
+        rowBg: act ? 'rgba(254,123,1,.08)' : 'transparent', rowFg: act ? A : '#1D1D1F', checkOp: act ? 1 : 0,
+        pick: () => this.pick(i), delay: (this.state.closing ? (13 - i) * 12 : i * 18) + 'ms',
+      };
+    });
+    const m = all ? null : month;
+    return {
+      open, closed: !open, arrowsVis: arrows && !open, months, year: YEAR, trig,
+      label: all ? 'Todo el año' : MESL[month],
+      badge, hasBadge: badge > 0,
+      chevRot: open ? '180deg' : '0deg',
+      toggle: () => this.state.open ? this.closeAnim() : this.setState({ open: true, closing: false }),
+      close: () => this.closeAnim(),
+      anim: this.state.closing ? 'mesOut' : 'mesIn', allDelay: this.state.closing ? '12ms' : '.22s', closeDelay: this.state.closing ? '0ms' : '.24s',
+      pickAll: () => this.pick('all'),
+      goCurrent: e => { e.preventDefault(); this.pick(CUR); },
+      notCurrent: month !== CUR,
+      isGrid: layout === 'cuadricula', isList: layout === 'lista',
+      panelW: layout === 'lista' ? '240px' : '320px',
+      panelLeft: arrows ? '36px' : '0',
+      all: all ? { bg: A, fg: '#fff', border: A, dotBg: '#fff', dotFg: A } : { bg: '#fff', fg: '#1D1D1F', border: '#E3E3E8', dotBg: A, dotFg: '#fff' },
+      showArrows: arrows,
+      prev: () => this.step(-1), next: () => this.step(1),
+      prevDisabled: m === 0, nextDisabled: m === 11,
+      prevOpacity: m === 0 ? .4 : 1, nextOpacity: m === 11 ? .4 : 1,
+      isSep: month === CUR, notSep: month !== CUR,
+      scope: all ? 'Todo 2026' : month === CUR ? 'Septiembre 2026 · 2 proyectos' : MESL[month] + ' 2026',
+    };
+  }
+}
+</script>
+</body>
+</html>
