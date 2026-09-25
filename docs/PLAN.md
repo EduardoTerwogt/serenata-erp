@@ -2,8 +2,9 @@
 
 **Iniciativa:** Rediseño de la sección Cuentas (Claude Design → implementación)
 **Estado:** Listo para aprobar. Supuestos confirmados (sesión 14) y
-auditoría profunda integrada con D25–D29 (sesión 17); no quedan dudas de
-producto ni de negocio. Queda una sola regla por confirmar, y se confirma al
+auditoría profunda integrada con D25–D29 (sesión 17) y segunda auditoría
+contra datos reales con D30–D32 (sesión 18); no quedan dudas de producto ni
+de negocio. Queda una sola regla por confirmar, y se confirma al
 abrir B7 (§5.8, S12).
 - Sesión 10 (2026-09-25): diseño final recibido y auditado.
 - Sesión 11 (2026-09-25): auditoría end-to-end contra producción (BD, RPCs,
@@ -27,6 +28,9 @@ abrir B7 (§5.8, S12).
   frontend, UI contra el handoff y tests), verificada contra el código y
   `pg_proc` de producción. Salieron S1–S21 (§5.8), 3 de ellos P0, y el
   usuario decidió D25–D29.
+- Sesión 18 (2026-09-25): segunda auditoría, ahora contra los **datos
+  reales** de producción. No salió ningún P0. Salieron T1–T10 (§5.9) y el
+  usuario decidió D30–D32.
 - Falta que el usuario apruebe el plan para pasarlo a "Aprobado".
 
 Para retomar, ver `docs/ACTIVE_WORK.md` → "Cómo retomar". El zip del diseño
@@ -160,6 +164,14 @@ abren sin servidor.
 | D28 | Cancelar una principal con complementarias aprobadas | **En cascada**, en la misma transacción, cancelando cada complementaria y después la principal. Se bloquea todo si **cualquiera** de esas cotizaciones tiene cobros, pagos a proveedor, cuentas en una orden o cuentas en un grupo que no esté `ABIERTO` (D22). El error nombra la cotización que bloquea. |
 | D29 | Etiqueta del neto en el cruce fiscal | **"Costo total · neto al proveedor"** en lugar del "X pagar · neto al proveedor" del diseño. Sigue el glosario de la decisión 006 (principio crítico 8). |
 
+**Decisiones de la sesión 18** (segunda auditoría, §5.9):
+
+| # | Tema | Decisión |
+|---|---|---|
+| D30 | IVA negativo en un mes del cierre (D26) | Se sigue la práctica fiscal. En México el IVA se declara **por mes y por contribuyente** (art. 5-D LIVA), así que el IVA a favor que da un proyecto se compensa primero con el de los demás proyectos del mismo mes. Solo si al final la empresa queda con saldo a favor, este se acredita en los meses siguientes hasta agotarlo, o se pide su devolución (art. 6 LIVA). Por eso el cierre de un proyecto **no arrastra** su propio negativo: la fila de ese mes muestra **"IVA a favor"** con el monto, sin fecha límite y con la nota "se acredita en la declaración mensual de la empresa (art. 6 LIVA)". La suma de las filas sigue siendo igual al IVA neto del proyecto, y la tarjeta "Impuestos" del periodo suma las filas con su signo. |
+| D31 | Complementarias no aprobadas de una principal cancelada | **También se cancelan** en la misma transacción de D28: `EMITIDA` pasa a `CANCELADA` y `BORRADOR` se borra con sus items. No queda ninguna complementaria colgada de un proyecto que ya no existe. |
+| D32 | Pago de cliente antes de la factura (anticipo) | **Se permite.** El dinero ya entró y tiene que registrarse. La pestaña "Registrar pago" de un **cobro** no se bloquea: muestra el aviso "Aún no hay factura validada; las cuentas no cerrarán sin ella" y el concepto conserva su siguiente paso ("Emitir factura" o "Revisar factura"). La RPC tampoco bloquea. El bloqueo sin factura sigue igual para los **pagos a proveedor** (supuesto 9). Es una diferencia con el prototipo (`conceptDetail` bloquea el cobro sin factura). No cambia ninguna captura: la móvil 15 es de un pago a proveedor y se conserva tal cual. |
+
 ## 4. Supuestos (confirmados por el usuario en la sesión 14)
 
 1. **Correcciones sobre un proyecto reabierto:** solo admin, igual que reabrir.
@@ -259,6 +271,7 @@ existen. No se agregan estados nuevos a las tablas.
 | Cobro | `PAGADO`, pero a un pago PPD le falta su complemento (D16) | Sin complemento | Subir complemento |
 | Cobro | `PAGADO` + método del XML vigente null | Sin complemento | Indicar PUE o PPD (supuesto 4) |
 | Cobro | `PAGADO` + (PUE o cada pago con su complemento) | Cobrado | — |
+| Pago | suelta sin `responsable_id` ("Sin asignar", decisión 011), en cualquier estado sin saldar (T2) | Sin proveedor | Asignar proveedor (tiene prioridad sobre todo lo demás del pago) |
 | Pago | grupo `ABIERTO` / suelta `PENDIENTE` sin factura | Sin factura | Subir factura |
 | Pago | grupo `FACTURADO` / suelta `PENDIENTE` con factura, sin orden | Facturado | Pagar |
 | Pago | con `orden_pago_id` y saldo > 0 | En orden | En orden de pago |
@@ -274,6 +287,19 @@ XML de factura vigente con `estado_validacion = 'validado'` (D25). Para un
 grupo coincide con `FACTURADO`. Para una suelta y para un cobro se lee del
 documento, no del estado guardado. "En revisión" tiene prioridad sobre
 "Facturado", "En orden" y "Pagado".
+- **Solo el XML** de la factura y del complemento se validan (T1). PDF,
+  comprobantes y "OTRO" nunca pasan por D25: basta con que existan.
+- Cualquier `estado_validacion` distinto de `validado` en un XML cuenta como
+  "En revisión", **incluido `pendiente`**. Las 6 facturas de cobro de
+  producción están en `pendiente` (D10): aparecen como "En revisión" y se
+  validan a mano con el PATCH vigente.
+- **Documento vigente (T7):** hasta B7, el más reciente de su tipo por
+  `fecha_carga`. Desde B7, el más reciente sin `eliminado_at`.
+- **Vencido y En revisión a la vez (T6):** el chip dice "Vencido" (el riesgo
+  de cobranza manda) y el siguiente paso "Revisar factura".
+- Una factura sin `uuid_cfdi` guardado (las anteriores a B1) no permite
+  validar sola sus complementos: quedan en revisión y se validan a mano
+  (T10).
 
 En un cobro PPD con pagos parciales, el complemento de cada pago ya
 registrado se pide desde ese momento: el aviso "Complementos faltantes" lo
@@ -360,6 +386,9 @@ con decisiones ya tomadas y **no se implementan así**:
 | Una sola fecha SAT por impuesto | Una fila por mes de cobro o pago | D26 |
 | "X pagar · neto al proveedor" | "Costo total · neto al proveedor" | D29, glosario de la decisión 006 |
 | Solo existe "Sin factura" / "Facturado" | Además, "En revisión" (tono borrador) cuando el XML no quedó validado | D25 |
+| Grupo de facturación "N conceptos · una factura · un pago" | "N conceptos · una factura" | Se permiten pagos parciales al grupo (decisión 011, T8) |
+| Cobro sin factura: pestaña de pago bloqueada | No se bloquea; aviso y el siguiente paso se conserva | D32 (anticipos) |
+| Sin estado para cuentas sin proveedor | "Sin proveedor" (tono borrador), siguiente paso "Asignar proveedor" | T2 |
 
 ### 5.3 Pendientes del README del handoff y cómo se resuelven
 
@@ -507,6 +536,26 @@ hallazgos quedan integrados en los bloques.
 | S20 | `fmtCurrency` no pone el `$`. | Nuevo `fmtMoney` en `lib/quotations/format.ts`, que envuelve `fmtCurrency` y agrega el `$`. No se toca `fmtCurrency`. | B4 |
 | S21 | Playwright solo tiene el proyecto de escritorio. | Proyecto nuevo `mobile` (viewport de 390 × 844) para los specs de Cuentas, y `colorScheme: 'dark'` para las capturas de O10. | B4, B8 |
 
+### 5.9 Segunda auditoría contra datos reales (sesión 18)
+
+Se repitió la revisión por áreas sobre el plan de la sesión 17, esta vez
+contrastando cada regla con los **datos vivos** de producción (solo
+lectura). El zip del diseño es idéntico al de la sesión 12. **No salió ningún
+P0.** Todo queda integrado en los bloques.
+
+| # | Nivel | Hallazgo | Evidencia | Decisión | Bloque |
+|---|---|---|---|---|---|
+| T1 | P1 | D25 no contemplaba `pendiente`, que es justo el estado de todos los XML de cobro reales. Tampoco aclaraba que PDF y comprobantes no se validan. | Producción: 6 `FACTURA_XML` de cobro en `pendiente`; 2 `COMPROBANTE_PAGO` y 8 PDF en `pendiente` | D25 aplica solo a XML; todo lo distinto de `validado` es "En revisión" (§5). | B1 |
+| T2 | P1 | Faltaba el estado de las sueltas sin proveedor, y hoy entran a órdenes de pago (se le paga a nadie, sin CLABE). | Producción: 4 sueltas sin `responsable_id` dentro de órdenes y 3 `PENDIENTE` | Estado "Sin proveedor" y siguiente paso "Asignar proveedor" (§5). No son elegibles para orden: van a "No incluidas" con el motivo "Falta asignar proveedor". `generar_orden_pago` lo revalida. | B1b, B1, B6 |
+| T3 | P1 | D26 no tenía fórmulas ni regla para un mes con IVA negativo. | — | Fórmulas en B4 y D30. | B4 |
+| T4 | P1 | El snapshot de la factura del proveedor se escribía fuera de la transacción que la da por buena, en cinco rutas. Si la segunda escritura fallaba, quedaba factura validada sin total a transferir, y la RPC de pago no puede estimar en SQL (sería un segundo motor fiscal). | `marcarGrupoFacturado` es un `UPDATE` suelto después del `INSERT` del documento | RPC única `validar_factura_proveedor` (B2) que llaman las cinco rutas. La RPC de pago falla explícito si el total a transferir es null. | B2 |
+| T5 | P1 | La cascada de D28 dejaba vivas las complementarias `EMITIDA` y `BORRADOR`. Al aprobarlas, `approve_cotizacion` falla con "Proyecto base no encontrado". | `approve_cotizacion` en `pg_proc` | D31. | B1b |
+| T6 | P2 | No estaba definida la prioridad entre Vencido y En revisión. | — | Chip "Vencido", siguiente paso "Revisar factura" (§5). | B1 |
+| T7 | P2 | "Documento vigente" solo se definía en B7. | — | Hasta B7, el más reciente por `fecha_carga` (§5). | B1 |
+| T8 | P2 | El encabezado del grupo decía "una factura · un pago", lo que contradice los pagos parciales. | Captura de escritorio 06 | Se quita "un pago" (§5.2). | B5 |
+| T9 | P2 | Registrar un cobro sin factura solo se bloqueaba en la UI, y un anticipo antes de facturar es un caso real. | `conceptDetail` del prototipo ("Anticipo 50%") | D32. | B5 |
+| T10 | P2 | Las facturas anteriores a B1 no tienen UUID guardado, así que su complemento no se puede validar solo. | H6 | Queda en revisión y se valida a mano (§5); aceptable por D10. | B1 |
+
 ## 6. Infraestructura que se reutiliza
 
 - **RPCs de dinero** (no se recrean, se extienden):
@@ -594,8 +643,8 @@ misma ruta detrás de `?v=2`, y se cambia al final.
 - `design_handoff_cuentas/` completo a `docs/design/cuentas/`: README,
   capturas, `abrir-directo/` y `codigo-fuente/`, unos 4 MB. No se generan
   capturas: el handoff ya las trae.
-- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D29, A1–A5,
-  O1–O10, U1–U10, S1–S21, el
+- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D32, A1–A5,
+  O1–O10, U1–U10, S1–S21, T1–T10, el
   modelo de la sección 5, §5.2 (reglas del prototipo que no se adoptan) y los
   supuestos aceptados.
 - Seed para `serenata-erp-test` con las formas de datos de producción (H11):
@@ -604,7 +653,9 @@ misma ruta detrás de `?v=2`, y se cambia al final.
   - orden vieja sin pagar;
   - cobro PPD con dos pagos;
   - factura en `revision` (D25) y complemento con solo XML (D27);
-  - principal con una complementaria aprobada (D28);
+  - principal con una complementaria aprobada y otra `EMITIDA` (D28, D31);
+  - suelta sin proveedor, dentro y fuera de una orden (T2);
+  - factura XML en `pendiente` (T1) y cobro con anticipo sin factura (D32);
   - cuentas sin `proyecto_id`.
   El script es idempotente y vive en `scripts/`. Con él, este bloque ya no es
   solo documentación: va con PR.
@@ -624,7 +675,8 @@ son bugs de hoy, no del rediseño.
   y sueltas de los responsables incluidos, supuesto 13), cada uno con su
   **monto esperado**; no se toma "todo lo elegible" en el servidor. La RPC:
   - bloquea los candidatos con `FOR UPDATE`;
-  - revalida estado, factura validada (D25) y que no estén en otra orden;
+  - revalida estado, factura validada (D25), proveedor asignado (T2) y que
+    no estén en otra orden;
   - recalcula el saldo de cada candidato y lo compara con el esperado. Si
     difiere, falla con `candidatos_cambiaron` (S2);
   - inserta la orden con `total_monto` = Σ de lo validado y una fila de
@@ -656,9 +708,12 @@ son bugs de hoy, no del rediseño.
     cuenta viva (S3);
   - la principal con complementarias aprobadas **cancela en cascada** (D28):
     valida las guardas sobre todas, cancela cada complementaria y al final la
-    principal. Si una bloquea, no se toca nada y el error la nombra;
+    principal. Si una bloquea, no se toca nada y el error la nombra. En la
+    misma transacción, las complementarias `EMITIDA` pasan a `CANCELADA` y
+    las `BORRADOR` se borran con sus items (D31);
   - test `live` de cancelar principal, complementaria y principal con
-    complementaria, más los casos bloqueados.
+    complementarias (aprobada, `EMITIDA` y `BORRADOR`), más los casos
+    bloqueados.
 - `registrar_pago_cuenta_pagar` conserva `EN_PROCESO_PAGO` si la cuenta está
   en una orden (H3). Se parte de la definición vigente en `pg_proc`
   (norma de la decisión 011).
@@ -682,8 +737,10 @@ son bugs de hoy, no del rediseño.
   `calcularEstadoCuentaCobrarDetallado` recibe `hoy` en CDMX como parámetro
   (S6).
 - "Tiene factura" y "tiene complemento" siguen D25 y D27: se derivan del
-  documento vigente `validado`, no del estado guardado. Tests de "En
-  revisión" en factura y complemento.
+  documento vigente `validado`, no del estado guardado. Solo el XML se
+  valida; `pendiente` cuenta como "En revisión" (T1). Documento vigente,
+  prioridad Vencido/En revisión y facturas sin UUID según §5 (T6, T7, T10).
+  Estado "Sin proveedor" (T2). Tests de cada caso.
 - Fecha de "Cerradas automáticamente el …" con fechas de negocio en CDMX
   (S19).
 - Migración:
@@ -746,7 +803,11 @@ va solo.
     cierran al centavo. Nunca se acepta pasarse del total por más de 0.01.
   - El reparto del neto entre las hijas del grupo sigue siendo el prorrateo
     vigente (residuo exacto en la última hija), no se reescribe.
-  - Una suelta o un grupo sin factura no se paga (supuesto 9).
+  - Una suelta o un grupo sin factura validada no se paga (supuesto 9,
+    D25), y una suelta sin proveedor tampoco (T2). La RPC lo verifica, no
+    solo la ruta.
+  - Si el concepto no tiene `total_a_transferir`, la RPC falla explícito
+    (`sin_total_a_transferir`) y no estima (T4).
   - Las firmas viejas se fusionan y se eliminan en la misma migración
     (§7.0, regla 3; S7).
   - Recibe `p_comprobante_url` y lo guarda en el pago (A1).
@@ -758,12 +819,16 @@ va solo.
     de `ordenes_pago_conceptos` (±0.01): 0 → Generada, parcial → Parcial,
     completo → Completada. Ya no se usa `bool_or(monto_pagado > 0)` (R6,
     S1).
-- Snapshot de `total_a_transferir` desde `total_cfdi` del documento (U7),
-  **solo cuando el documento queda `validado`** (D25). En un grupo va en el
-  mismo `UPDATE` que lo pasa a `FACTURADO`. Una suelta no tiene ese
-  `UPDATE`: el snapshot se escribe en `cuentas_pagar` en la misma petición
-  que valida el documento. Aplica en los **cinco** puntos de entrada (A2
-  corregido):
+- RPC nueva **`validar_factura_proveedor(p_documento_id, p_usuario)`**
+  (T4). En una transacción:
+  - marca el XML como `validado`;
+  - lee su `total_cfdi` y lo guarda como snapshot de `total_a_transferir`
+    (U7, D25) en el grupo o en la suelta;
+  - si es un grupo, lo pasa de `ABIERTO` a `FACTURADO` con la misma guarda
+    que `marcarGrupoFacturado`, que se retira.
+  Una factura en `revision` no llama a la RPC y sigue con el estimado. Las
+  **cinco** rutas por donde entra una factura de proveedor la llaman en lugar
+  de sus escrituras sueltas (A2 corregido):
   - grupo: `grupos/[id]/subir-factura`, `portal/cuentas/grupos/[id]/factura`
     y la validación manual `grupos/[id]/documentos/[docId]` (PATCH a
     `validado`, que hoy también llama a `marcarGrupoFacturado`);
@@ -871,8 +936,22 @@ duplicadas.
   (Art. 14 LISR). IVA, retenciones e ISR van **una fila por mes** de cobro o
   pago, con su día 17, más la fila "Al cobrar" / "Al pagar" para lo pendiente
   (D26). La partición va en `lib/shared/cuentas/cierre-mensual.ts` y usa
-  `calcularCierreProyecto` sin cambiarlo; test de que la suma de las filas
-  es igual al total del cierre.
+  `calcularCierreProyecto` sin cambiarlo (T3):
+  - **IVA trasladado del mes** = Σ cobros registrados en el mes ×
+    (IVA / `monto_total` del cobro);
+  - **IVA acreditable del mes** = Σ pagos a proveedor del mes ×
+    (IVA trasladado / total a transferir de su grupo o suelta);
+  - **IVA a enterar del mes** = trasladado − acreditable. Si da negativo, la
+    fila dice **"IVA a favor"**, sin fecha límite, con la nota del art. 6
+    LIVA (D30). No se arrastra a otro mes del proyecto;
+  - **Retenciones del mes** (IVA e ISR) = Σ pagos a proveedor del mes ×
+    (retención / total a transferir);
+  - **ISR estimado del mes** = ISR estimado del proyecto × cobrado en el mes
+    / `monto_total` de los cobros;
+  - lo que todavía no se cobra o no se paga va en "Al cobrar" / "Al pagar";
+  - redondeo al centavo con residuo en la última fila, igual que el
+    prorrateo vigente, para que la suma de las filas sea **exactamente** el
+    total del cierre. Test de cuadre por cada impuesto.
 - Estado en la URL (supuesto 8), incluidos `det`, `sheet` y `page`. Abrir
   hace `push` y filtrar hace `replace` (S15).
 - Estados vacíos: sin resultados, año archivado (todo cerrado) y "Sin fecha".
@@ -887,7 +966,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 - Información:
   - Cobro: campos y notas.
   - Pago: select de responsable **solo en sueltos** (D21); en un grupo, el
-    desglose lleva la reasignación por renglón. Además: grupo de
+    desglose lleva la reasignación por renglón. El encabezado del grupo dice
+    "N conceptos · una factura", sin "un pago" (T8). Además: grupo de
     facturación, régimen, cruce fiscal (el neto se rotula "Costo total ·
     neto al proveedor", D29), contacto, orden vinculada e historial de
     reasignaciones.
@@ -901,7 +981,11 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - Comprobante de pago del proveedor: requerido una vez pagado.
 - Registrar pago:
   - cobro y pago con tipo y fecha;
-  - bloqueado sin factura, con botón "Ir a Documentos" (captura móvil 15);
+  - **pago a proveedor** bloqueado sin factura validada o sin proveedor, con
+    botón "Ir a Documentos" o al select de responsable (captura móvil 15,
+    T2);
+  - **cobro sin factura no se bloquea** (D32): aviso "Aún no hay factura
+    validada; las cuentas no cerrarán sin ella" y se registra el anticipo;
   - estado saldada;
   - historial de pagos;
   - comprobante en el formulario ("Tomar foto o adjuntar", `accept` de imagen
@@ -944,6 +1028,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
     o Compartir el enlace de Drive (supuesto 16).
   - Con `candidatos_cambiaron` recarga el preview y avisa. Con "ya se está
     procesando" espera y vuelve a consultar (S2, S9).
+  - "No incluidas" suma el motivo "Falta asignar proveedor" (T2) a los de
+    supuesto 13.
   - `buildOrdenPagoPreview` pasa a usar el saldo en lugar de `x_pagar` y
     agrega el cruce fiscal.
 - Migración de órdenes:
@@ -1098,8 +1184,14 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - vencida a 15 días en hora CDMX;
   - fechas SAT por cobro o pago, una fila por mes, con la suma igual al
     total del cierre (D26);
-  - "En revisión" en factura y complemento, y complemento incompleto sin
-    XML o sin PDF (D25, D27);
+  - "En revisión" en factura y complemento, `pendiente` como "En revisión",
+    y complemento incompleto sin XML o sin PDF (D25, D27, T1);
+  - "Sin proveedor" y su exclusión de la orden (T2);
+  - partición mensual del cierre con cuadre exacto e "IVA a favor" (D26,
+    D30, T3);
+  - `validar_factura_proveedor` en las cinco rutas y pago que falla sin
+    total a transferir (T4);
+  - cobro con anticipo antes de la factura (D32);
   - tolerancia de ±0.01 en el último pago (S18);
   - cifras del periodo contra `calcularCierreProyecto`.
 - **Migraciones:** job `fresh-db` y `Migrations` en verde.
@@ -1119,7 +1211,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   orden simultáneas (B1b); orden con un pago entre el preview y la
   generación (`candidatos_cambiaron`, S2); generar y cancelar orden,
   verificando que el desglose sigue en el historial (S1); cancelar principal
-  en cascada y los casos bloqueados (D28).
+  en cascada con complementarias aprobadas, `EMITIDA` y `BORRADOR`, y los
+  casos bloqueados (D28, D31).
 - **Visual (O10):** capturas de Playwright de cada estado (escritorio y
   móvil, claro y oscuro) adjuntas al PR y revisadas lado a lado con el
   handoff. No es diff de píxeles.
@@ -1143,7 +1236,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | Supuestos confirmados y auditoría final A1–A5 | Hecho (sesión 14) |
 | Auditoría de optimización O1–O10, D24 | Hecho (sesión 15) |
 | Revisión de reutilización U1–U10 y huecos A2/U7 | Hecho (sesión 16) |
-| Auditoría profunda S1–S21 y decisiones D25–D29 | Hecho (sesión 17). Falta aprobar |
+| Auditoría profunda S1–S21 y decisiones D25–D29 | Hecho (sesión 17) |
+| Segunda auditoría T1–T10 y decisiones D30–D32 | Hecho (sesión 18). Falta aprobar |
 | B0 Referencia, reglas y seed | Pendiente |
 | B1b Blindaje previo | Pendiente |
 | B1 Derivación y datos fiscales | Pendiente |
