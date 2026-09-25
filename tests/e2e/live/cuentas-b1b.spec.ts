@@ -115,8 +115,13 @@ async function limpiar(supabase: Supabase, fx: Fixture) {
   const { data: cuentas } = await supabase.from('cuentas_pagar').select('id, orden_pago_id').eq('responsable_id', fx.proveedorId)
   const ordenIds = Array.from(new Set([...(fx.ordenes), ...(cuentas ?? []).map((c) => c.orden_pago_id).filter(Boolean)]))
 
+  const cuentaIds = (cuentas ?? []).map((c) => c.id)
   if (ordenIds.length) await supabase.from('ordenes_pago_conceptos').delete().in('orden_pago_id', ordenIds)
+  // B2: pagos_cuentas_pagar referencia grupos, cuentas y órdenes.
+  if (grupoIds.length) await supabase.from('pagos_cuentas_pagar').delete().in('grupo_id', grupoIds)
+  if (cuentaIds.length) await supabase.from('pagos_cuentas_pagar').delete().in('cuenta_pagar_id', cuentaIds)
   if (grupoIds.length) await supabase.from('documentos_cuentas_pagar').delete().in('grupo_id', grupoIds)
+  if (cuentaIds.length) await supabase.from('documentos_cuentas_pagar').delete().in('cuentas_pagar_id', cuentaIds)
   await supabase.from('cuentas_pagar').delete().eq('responsable_id', fx.proveedorId)
   if (grupoIds.length) await supabase.from('cuentas_pagar_grupos').delete().in('id', grupoIds)
   if (ordenIds.length) await supabase.from('ordenes_pago').delete().in('id', ordenIds)
@@ -187,15 +192,27 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
         responsable_id: fx.proveedorId,
         responsable_nombre: `${fx.prefix} Proveedor`,
         x_pagar: 1000,
+        total_a_transferir: 1160,
         orden_pago_id: orden.id,
         estado: 'EN_PROCESO_PAGO',
       }).select('id').single())
+      // B2 (D25): sin factura validada no se paga.
+      ok(await supabase.from('documentos_cuentas_pagar').insert({
+        cuentas_pagar_id: cuenta.id,
+        tipo: 'FACTURA_PROVEEDOR_XML',
+        archivo_url: 'https://example.com/live.xml',
+        archivo_nombre: 'live.xml',
+        estado_validacion: 'validado',
+        total_cfdi: 1160,
+      }))
 
+      // B2 (D3): se captura el transferido; el neto aplicado es proporcional.
       const res = must(await supabase.rpc('registrar_pago_cuenta_pagar', { p_cuenta_id: cuenta.id, p_monto: 400 }))
       expect((res as { estado_nuevo: string }).estado_nuevo).toBe('EN_PROCESO_PAGO')
-      const fila = must(await supabase.from('cuentas_pagar').select('estado, monto_pagado').eq('id', cuenta.id).single())
+      const fila = must(await supabase.from('cuentas_pagar').select('estado, monto_pagado, monto_transferido').eq('id', cuenta.id).single())
       expect(fila.estado).toBe('EN_PROCESO_PAGO')
-      expect(Number(fila.monto_pagado)).toBe(400)
+      expect(Number(fila.monto_transferido)).toBe(400)
+      expect(Number(fila.monto_pagado)).toBe(344.83) // 400 × 1000 / 1160
     } finally {
       await limpiar(supabase, fx)
     }

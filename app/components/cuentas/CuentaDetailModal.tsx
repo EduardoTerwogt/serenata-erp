@@ -119,6 +119,12 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
 
   const cuentaCobrar = cuenta.tipo === 'cobrar' ? (detalleCobrar?.cuenta || cuenta) : null
   const cuentaPagar = cuenta.tipo === 'pagar' ? (detallePagar?.cuenta || cuenta) : null
+  // B2 (D3): saldo en total a transferir -- el del grupo si la cuenta está en
+  // uno, el de la suelta si no. null sin snapshot (factura aún no validada).
+  const origenTransferir = detallePagar?.grupo ?? cuentaPagar
+  const saldoPorTransferir = origenTransferir?.total_a_transferir != null
+    ? Math.max(0, Math.round((Number(origenTransferir.total_a_transferir) - Number(origenTransferir.monto_transferido ?? 0)) * 100) / 100)
+    : null
   const visibleFolio = cuenta.cotizacion_id
 
   return (
@@ -260,10 +266,12 @@ export function CuentaDetailModal({ cuenta, onClose, cobrarActions, pagarActions
 
               {tab === 'pago' && cuentaPagar && (
                 <TabRegistrarPago
+                  key={`pagar-${saldoPorTransferir ?? 'sin-saldo'}`}
                   tipo="pagar"
                   cuentaId={cuentaPagar.id}
                   estado={cuentaPagar.estado}
                   grupo={detallePagar?.grupo ?? null}
+                  saldoPorTransferir={saldoPorTransferir}
                   onRegistrarPago={(id, data) => pagarActions.registrarPago(id, data, detallePagar?.grupo?.id)}
                   onRefresh={async () => {
                     await onRefresh()

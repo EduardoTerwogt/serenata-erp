@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   createDocumentoCuentaPagarMock: vi.fn(),
   getProyectoByIdMock: vi.fn(),
   getProveedorByIdMock: vi.fn(),
-  marcarGrupoFacturadoMock: vi.fn(),
+  validarFacturaProveedorMock: vi.fn(),
   uploadFileToDriveMock: vi.fn(),
   getGoogleEnvMock: vi.fn(),
   parseFacturaXMLMock: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('@/lib/db', () => ({
   createDocumentoCuentaPagar: mocks.createDocumentoCuentaPagarMock,
   getProyectoById: mocks.getProyectoByIdMock,
   getProveedorById: mocks.getProveedorByIdMock,
-  marcarGrupoFacturado: mocks.marcarGrupoFacturadoMock,
+  validarFacturaProveedor: mocks.validarFacturaProveedorMock,
 }))
 
 vi.mock('@/lib/integrations/google/drive', () => ({
@@ -69,8 +69,8 @@ describe('POST /api/portal/cuentas/grupos/[id]/factura', () => {
     mocks.getProyectoByIdMock.mockResolvedValue({ id: 'SH001', proyecto: 'Spot Verano' })
     mocks.getGoogleEnvMock.mockReturnValue({ driveFolderIdCuentas: 'folder-cuentas' })
     mocks.uploadFileToDriveMock.mockResolvedValue('https://drive.google.com/file')
-    mocks.createDocumentoCuentaPagarMock.mockResolvedValue({})
-    mocks.marcarGrupoFacturadoMock.mockResolvedValue({ id: 'grupo-1', estado: 'FACTURADO' })
+    mocks.createDocumentoCuentaPagarMock.mockImplementation(async (d: { tipo?: string }) => (d?.tipo === 'FACTURA_PROVEEDOR_XML' ? { id: 'doc-xml', ...d } : { id: 'doc-pdf', ...d }))
+    mocks.validarFacturaProveedorMock.mockResolvedValue({ documento_id: 'doc-xml', estado: 'FACTURADO' })
     mocks.calcularEjemploFacturaMock.mockReturnValue({ subtotal: 1000, iva_trasladado: 160, iva_retenido: 0, isr_retenido: 0, total: 1160, explicacion: 'ejemplo' })
   })
 
@@ -122,7 +122,7 @@ describe('POST /api/portal/cuentas/grupos/[id]/factura', () => {
     expect(body.ejemplo).toBeUndefined()
     expect(mocks.uploadFileToDriveMock).not.toHaveBeenCalled()
     expect(mocks.createDocumentoCuentaPagarMock).not.toHaveBeenCalled()
-    expect(mocks.marcarGrupoFacturadoMock).not.toHaveBeenCalled()
+    expect(mocks.validarFacturaProveedorMock).not.toHaveBeenCalled()
   })
 
   it('bloquea (422) con el mensaje genérico de régimen fiscal y SIN ejemplo cuando el mismatch es de retenciones', async () => {
@@ -159,7 +159,7 @@ describe('POST /api/portal/cuentas/grupos/[id]/factura', () => {
     expect(body.ejemplo).toEqual({ subtotal: 1000, iva_trasladado: 160, iva_retenido: 0, isr_retenido: 0, total: 1160, explicacion: 'ejemplo' })
     expect(mocks.uploadFileToDriveMock).not.toHaveBeenCalled()
     expect(mocks.createDocumentoCuentaPagarMock).not.toHaveBeenCalled()
-    expect(mocks.marcarGrupoFacturadoMock).not.toHaveBeenCalled()
+    expect(mocks.validarFacturaProveedorMock).not.toHaveBeenCalled()
   })
 
   it('bloquea (422) con ejemplo cuando el XML no se puede parsear', async () => {
@@ -185,9 +185,9 @@ describe('POST /api/portal/cuentas/grupos/[id]/factura', () => {
     expect(mocks.uploadFileToDriveMock).toHaveBeenCalledTimes(2)
     expect(mocks.createDocumentoCuentaPagarMock).toHaveBeenCalledTimes(2)
     expect(mocks.createDocumentoCuentaPagarMock).toHaveBeenCalledWith(
-      expect.objectContaining({ grupo_id: 'grupo-1', tipo: 'FACTURA_PROVEEDOR_XML', estado_validacion: 'validado' })
+      expect.objectContaining({ grupo_id: 'grupo-1', tipo: 'FACTURA_PROVEEDOR_XML', estado_validacion: 'pendiente' })
     )
-    expect(mocks.marcarGrupoFacturadoMock).toHaveBeenCalledWith('grupo-1')
+    expect(mocks.validarFacturaProveedorMock).toHaveBeenCalledWith('doc-xml', 'portal:prov-1')
   })
 
   it('EF-3 3D-10: un error inesperado (crudo de Supabase) nunca expone su mensaje real al cliente', async () => {

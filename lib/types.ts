@@ -342,6 +342,13 @@ export interface CuentaPagar {
   grupo_estado?: EstadoCuentaPagarGrupo | null
   grupo_monto_total?: number | null
   grupo_monto_pagado?: number | null
+  // Rediseño de Cuentas B2 (D3, supuesto 6): snapshot del Total del CFDI y lo
+  // transferido. En la suelta viven en la propia cuenta; en un grupo, en
+  // cuentas_pagar_grupos (grupo_*). null = sin factura validada (se estima).
+  total_a_transferir?: number | null
+  monto_transferido?: number | null
+  grupo_total_a_transferir?: number | null
+  grupo_monto_transferido?: number | null
   // Bloque 2 (docs/PLAN.md): poblado por cuentas_por_proyecto() (LEFT JOIN a
   // proveedores) para que calcularCierreProyecto aplique la retención
   // correcta por grupo sin una query aparte.
@@ -360,6 +367,9 @@ export interface CuentaPagarGrupo {
   estado: EstadoCuentaPagarGrupo
   monto_total: number
   monto_pagado: number
+  // B2 (D3): snapshot del Total del CFDI (null sin factura) y lo transferido.
+  total_a_transferir?: number | null
+  monto_transferido?: number
   orden_pago_id: string | null
   created_at: string
   updated_at: string

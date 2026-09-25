@@ -152,5 +152,8 @@ producción van todas juntas cuando el usuario apruebe tras probar el
 Preview. S12 confirmada. Al llegar a B8, el usuario da el token de Drive
 para el Preview (R9).
 
-**B1** (derivación y datos fiscales base, incluido `metodo_pago_cfdi` en la
-fila del XML de la factura). Se abre auditando el código real de su alcance.
+**B1 y B2 hechos** en la rama (migraciones `20260926`–`20260928` aplicadas
+solo en test). Pendiente aplicar a producción al aprobar: todas las de
+`20260926` en adelante, en orden.
+
+**B3** (lectura por periodo). Se abre auditando el código real de su alcance.

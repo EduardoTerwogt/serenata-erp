@@ -407,24 +407,6 @@ export async function getCuentasPagarPorGrupo(grupoId: string): Promise<CuentaPa
   return data as CuentaPagar[]
 }
 
-/**
- * Transición ABIERTO -> FACTURADO. El guard `.eq('estado', 'ABIERTO')` vive
- * en el propio UPDATE -- atómico por construcción (una sola sentencia SQL),
- * sin necesitar una RPC dedicada. Si el grupo ya no estaba ABIERTO (carrera
- * con otra subida, o ya facturado), no actualiza nada y devuelve null --
- * el caller decide qué hacer con eso.
- */
-export async function marcarGrupoFacturado(id: string): Promise<CuentaPagarGrupo | null> {
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_pagar_grupos')
-    .update({ estado: 'FACTURADO', updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('estado', 'ABIERTO')
-    .select()
-  if (error) throw error
-  return data && data.length > 0 ? (data[0] as CuentaPagarGrupo) : null
-}
-
 export async function getDocumentosCuentaPagarGrupo(grupoId: string) {
   const { data, error } = await supabaseAdmin
     .from('documentos_cuentas_pagar')
@@ -503,4 +485,41 @@ export async function generarOrdenPago(params: {
     throw error
   }
   return data as GenerarOrdenPagoResult
+}
+
+export interface ValidarFacturaProveedorResult {
+  documento_id: string
+  grupo_id: string | null
+  cuenta_pagar_id: string | null
+  total_a_transferir: number
+  estado: string
+}
+
+/**
+ * Rediseño de Cuentas B2 (docs/PLAN.md, T4, V3, A2): ÚNICA vía para dejar
+ * una factura XML de proveedor en 'validado'. En la misma transacción guarda
+ * el snapshot del total a transferir y, si es un grupo ABIERTO, lo pasa a
+ * FACTURADO -- db/migrations/20260927_cuentas_b2_pagos_total_a_transferir.sql.
+ * Reemplaza a marcarGrupoFacturado. Si falla, el documento se queda como
+ * estaba ('pendiente' = "En revisión"), nunca validado sin snapshot.
+ */
+export async function validarFacturaProveedor(documentoId: string, usuario: string | null): Promise<ValidarFacturaProveedorResult> {
+  const { data, error } = await supabaseAdmin.rpc('validar_factura_proveedor', {
+    p_documento_id: documentoId,
+    p_usuario: usuario,
+  })
+  if (error) {
+    if (error.code === 'P1415') {
+      throw new DomainError({
+        code: (error.message ?? '').startsWith('sin_total_cfdi') ? 'sin_total_cfdi' : 'factura_invalida',
+        status: 409,
+        safeMessage: (error.message ?? '').startsWith('sin_total_cfdi')
+          ? 'La factura no tiene el total del CFDI guardado; vuelve a subir el XML para validarla.'
+          : 'El documento no es una factura XML de proveedor.',
+        cause: error,
+      })
+    }
+    throw error
+  }
+  return data as ValidarFacturaProveedorResult
 }

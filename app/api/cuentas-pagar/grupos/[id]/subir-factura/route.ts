@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaPagarGrupoById, createDocumentoCuentaPagar, getProyectoById, getProveedorById, marcarGrupoFacturado } from '@/lib/db'
+import { getCuentaPagarGrupoById, createDocumentoCuentaPagar, getProyectoById, getProveedorById, validarFacturaProveedor } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
@@ -90,12 +90,16 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       ? { estado_validacion: 'revision' as const, detalle_validacion: `No se pudo parsear el XML: ${facturaData.error}` }
       : validarFacturaFiscalProveedor(facturaData, Number(grupo.monto_total || 0), regimenFiscal)
 
+    // V3 (Rediseño de Cuentas B2): el XML entra como 'pendiente' aunque
+    // cuadre; SOLO validar_factura_proveedor lo pasa a 'validado', en la
+    // misma transacción que el snapshot y el cambio a FACTURADO.
+    const cuadra = validacionXml.estado_validacion === 'validado'
     const documentoXml = await createDocumentoCuentaPagar({
       grupo_id: id,
       tipo: 'FACTURA_PROVEEDOR_XML',
       archivo_url: facturaXmlUrl,
       archivo_nombre: facturaXmlFile.name,
-      estado_validacion: validacionXml.estado_validacion,
+      estado_validacion: cuadra ? 'pendiente' : validacionXml.estado_validacion,
       detalle_validacion: validacionXml.detalle_validacion,
       // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
       uuid_cfdi: facturaData.uuid_timbrado ?? null,
@@ -112,12 +116,13 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const fechaFactura = extractFacturaFechaFromXml(facturaXmlContent)
 
     // Regla de cierre (docs/PLAN.md): 'revision' (no cuadra) NO cierra el
-    // grupo -- se guarda el documento igual que la ruta legacy, pero el
-    // grupo se queda ABIERTO. Solo 'validado' transiciona a FACTURADO.
-    let grupoActualizado = grupo
-    if (validacionXml.estado_validacion === 'validado') {
-      const facturado = await marcarGrupoFacturado(id)
-      if (facturado) grupoActualizado = facturado
+    // grupo -- se guarda el documento, pero el grupo se queda ABIERTO. Solo
+    // una factura que cuadra se valida (y factura el grupo) vía la RPC.
+    let estadoGrupo = grupo.estado
+    if (cuadra) {
+      const validada = await validarFacturaProveedor(documentoXml.id, authResult.session?.user?.email ?? null)
+      documentoXml.estado_validacion = 'validado'
+      estadoGrupo = validada.estado as typeof grupo.estado
     }
 
     return Response.json({
@@ -127,11 +132,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       factura_data: facturaData,
       validacion_estructural: validacionXml,
       grupo: {
-        id: grupoActualizado.id,
-        proyecto_id: grupoActualizado.proyecto_id,
-        responsable_nombre: grupoActualizado.responsable_nombre,
-        monto_total: grupoActualizado.monto_total,
-        estado: grupoActualizado.estado,
+        id: grupo.id,
+        proyecto_id: grupo.proyecto_id,
+        responsable_nombre: grupo.responsable_nombre,
+        monto_total: grupo.monto_total,
+        estado: estadoGrupo,
       },
     })
   } catch (error) {

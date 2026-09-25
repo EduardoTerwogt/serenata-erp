@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaPagarById, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById } from '@/lib/db'
+import { getCuentaPagarById, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById, validarFacturaProveedor } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
@@ -88,12 +88,16 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       ? { estado_validacion: 'revision' as const, detalle_validacion: `No se pudo parsear el XML: ${facturaData.error}` }
       : validarFacturaFiscalProveedor(facturaData, Number(cuenta.x_pagar || 0), regimenFiscal)
 
+    // V3 (Rediseño de Cuentas B2): el XML entra como 'pendiente' aunque
+    // cuadre; SOLO validar_factura_proveedor lo pasa a 'validado', en la
+    // misma transacción que el snapshot del total a transferir.
+    const cuadra = validacionXml.estado_validacion === 'validado'
     const documentoXml = await createDocumentoCuentaPagar({
       cuentas_pagar_id: id,
       tipo: 'FACTURA_PROVEEDOR_XML',
       archivo_url: facturaXmlUrl,
       archivo_nombre: facturaXmlFile.name,
-      estado_validacion: validacionXml.estado_validacion,
+      estado_validacion: cuadra ? 'pendiente' : validacionXml.estado_validacion,
       detalle_validacion: validacionXml.detalle_validacion,
       // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
       uuid_cfdi: facturaData.uuid_timbrado ?? null,
@@ -106,6 +110,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       archivo_url: facturaPdfUrl,
       archivo_nombre: facturaPdfFile.name,
     })
+
+    if (cuadra) {
+      await validarFacturaProveedor(documentoXml.id, authResult.session?.user?.email ?? null)
+      documentoXml.estado_validacion = 'validado'
+    }
 
     const fechaFactura = extractFacturaFechaFromXml(facturaXmlContent)
 

@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   createDocumentoCuentaPagarMock: vi.fn(),
   getProyectoByIdMock: vi.fn(),
   getProveedorByIdMock: vi.fn(),
-  marcarGrupoFacturadoMock: vi.fn(),
+  validarFacturaProveedorMock: vi.fn(),
   uploadFileToDriveMock: vi.fn(),
   getGoogleEnvMock: vi.fn(),
   parseFacturaXMLMock: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock('@/lib/db', () => ({
   createDocumentoCuentaPagar: mocks.createDocumentoCuentaPagarMock,
   getProyectoById: mocks.getProyectoByIdMock,
   getProveedorById: mocks.getProveedorByIdMock,
-  marcarGrupoFacturado: mocks.marcarGrupoFacturadoMock,
+  validarFacturaProveedor: mocks.validarFacturaProveedorMock,
 }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
@@ -49,7 +49,7 @@ beforeEach(() => {
   mocks.createDocumentoCuentaPagarMock.mockResolvedValue({ id: 'doc-1' })
   mocks.parseFacturaXMLMock.mockReturnValue({ subtotal: 500 })
   mocks.validarFacturaFiscalProveedorMock.mockReturnValue({ estado_validacion: 'validado', detalle_validacion: null })
-  mocks.marcarGrupoFacturadoMock.mockResolvedValue({ ...grupoAbierto, estado: 'FACTURADO' })
+  mocks.validarFacturaProveedorMock.mockResolvedValue({ documento_id: 'doc-1', estado: 'FACTURADO', total_a_transferir: 580 })
 })
 
 describe('POST /api/cuentas-pagar/grupos/[id]/subir-factura', () => {
@@ -62,12 +62,12 @@ describe('POST /api/cuentas-pagar/grupos/[id]/subir-factura', () => {
     expect(mocks.uploadFileToDriveMock).not.toHaveBeenCalled()
   })
 
-  it('factura válida -- crea documentos con grupo_id, cierra el grupo (FACTURADO)', async () => {
+  it('B2 (V3): factura válida -- el XML entra como pendiente y SOLO la RPC lo valida y factura el grupo', async () => {
     const res = await POST(buildRequest(), { params })
     expect(res.status).toBe(200)
-    expect(mocks.createDocumentoCuentaPagarMock).toHaveBeenCalledWith(expect.objectContaining({ grupo_id: 'grupo-1', tipo: 'FACTURA_PROVEEDOR_XML' }))
+    expect(mocks.createDocumentoCuentaPagarMock).toHaveBeenCalledWith(expect.objectContaining({ grupo_id: 'grupo-1', tipo: 'FACTURA_PROVEEDOR_XML', estado_validacion: 'pendiente' }))
     expect(mocks.createDocumentoCuentaPagarMock).toHaveBeenCalledWith(expect.objectContaining({ grupo_id: 'grupo-1', tipo: 'FACTURA_PROVEEDOR' }))
-    expect(mocks.marcarGrupoFacturadoMock).toHaveBeenCalledWith('grupo-1')
+    expect(mocks.validarFacturaProveedorMock).toHaveBeenCalledWith('doc-1', null)
     const body = await res.json()
     expect(body.grupo.estado).toBe('FACTURADO')
   })
@@ -85,7 +85,7 @@ describe('POST /api/cuentas-pagar/grupos/[id]/subir-factura', () => {
     mocks.validarFacturaFiscalProveedorMock.mockReturnValue({ estado_validacion: 'revision', detalle_validacion: 'no cuadra' })
     const res = await POST(buildRequest(), { params })
     expect(res.status).toBe(200)
-    expect(mocks.marcarGrupoFacturadoMock).not.toHaveBeenCalled()
+    expect(mocks.validarFacturaProveedorMock).not.toHaveBeenCalled()
     const body = await res.json()
     expect(body.grupo.estado).toBe('ABIERTO')
   })

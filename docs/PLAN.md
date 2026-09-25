@@ -1280,8 +1280,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | Tercera auditoría V1–V4 | Hecho (sesión 19). **Plan aprobado** |
 | B0 Referencia, reglas y seed | Hecho (sesión 20, PR #94) |
 | B1b Blindaje previo | Hecho (sesión 20, PR #95) |
-| B1 Derivación y datos fiscales | Pendiente |
-| B2 Pagos en total a transferir | Pendiente |
+| B1 Derivación y datos fiscales | Hecho (sesión 20, rama del PR #96; migración solo en test) |
+| B2 Pagos en total a transferir | Hecho (sesión 20, rama del PR #96; migraciones solo en test) |
 | B3 Lectura por periodo | Pendiente |
 | B4 Pantalla principal | Pendiente |
 | B5 Detalle | Pendiente |

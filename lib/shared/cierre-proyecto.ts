@@ -16,6 +16,10 @@ export interface QuienCuantoCuando {
   iva_retenido: number
   isr_retenido: number
   total_a_transferir: number
+  // B2 (H10, supuesto 6): true cuando total_a_transferir es el snapshot del
+  // CFDI validado (o el histórico estimado del backfill), false cuando es el
+  // estimado en vivo con el régimen del proveedor.
+  total_es_snapshot: boolean
 }
 
 export interface CierreProyecto {
@@ -69,6 +73,11 @@ export function calcularCierreProyecto(
     const monto = representante.grupo_monto_total ?? items.reduce((sum, item) => sum + (item.x_pagar || 0), 0)
     const regimenFiscal = representante.proveedor_regimen_fiscal ?? null
     const r = calcularEjemploFactura(monto, regimenFiscal)
+    // H10: con factura validada manda el Total del CFDI (el mismo que usa el
+    // saldo del pago); sin factura, el estimado. IVA y retenciones siguen
+    // estimados por régimen: el CFDI solo guarda su Total.
+    const snapshot = representante.grupo_id ? representante.grupo_total_a_transferir : representante.total_a_transferir
+    const tieneSnapshot = snapshot != null
     return {
       proveedor_id: representante.responsable_id,
       proveedor_nombre: representante.responsable_nombre,
@@ -77,7 +86,8 @@ export function calcularCierreProyecto(
       iva_trasladado: r.iva_trasladado,
       iva_retenido: r.iva_retenido,
       isr_retenido: r.isr_retenido,
-      total_a_transferir: r.total,
+      total_a_transferir: tieneSnapshot ? round2(Number(snapshot)) : r.total,
+      total_es_snapshot: tieneSnapshot,
     }
   })
 

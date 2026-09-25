@@ -310,6 +310,18 @@ export const RegistrarPagoCobroSchema = z.object({
   operation_id: z.string().uuid('operation_id requerido (uuid)'),
 })
 
+// POST /api/cuentas-pagar/[id]/registrar-pago y /grupos/[id]/registrar-pago
+// (multipart). Rediseño de Cuentas B2 (D3): el monto es el TOTAL A
+// TRANSFERIR. tipo_pago y fecha_pago son opcionales (contrato aditivo, R2):
+// la UI actual solo manda monto; se asume transferencia con fecha de hoy CDMX.
+export const RegistrarPagoProveedorSchema = z.object({
+  monto: z.coerce.number().finite().positive('Monto debe ser mayor a 0'),
+  tipo_pago: z.enum(TIPOS_PAGO, { message: 'Tipo de pago inválido (TRANSFERENCIA, EFECTIVO o CHEQUE)' }).optional(),
+  fecha_pago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de pago inválida (YYYY-MM-DD)').optional(),
+  notas: z.string().max(2000).nullable().optional(),
+  operation_id: z.string().uuid('operation_id requerido (uuid)'),
+})
+
 // POST /api/cuentas-cobrar/[id]/subir-complemento (multipart). Los archivos
 // se validan aparte; pago_id es opcional hasta B8 (R2, S8).
 export const SubirComplementoSchema = z.object({

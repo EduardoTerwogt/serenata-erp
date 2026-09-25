@@ -28,6 +28,9 @@ interface TabRegistrarPagoPagarProps {
   // vez, y no se puede registrar mientras el grupo no tenga factura
   // validada (estado ABIERTO).
   grupo?: CuentaPagarGrupo | null
+  // B2 (D3): saldo en TOTAL A TRANSFERIR (IVA incluido, menos retenciones)
+  // del grupo o de la suelta; null si aún no hay factura validada.
+  saldoPorTransferir?: number | null
   onRegistrarPago: (id: string, data: { monto: number; comprobante?: File }) => Promise<unknown>
   onRefresh: () => void
 }
@@ -35,7 +38,9 @@ interface TabRegistrarPagoPagarProps {
 type TabRegistrarPagoProps = TabRegistrarPagoCobrarProps | TabRegistrarPagoPagarProps
 
 export function TabRegistrarPago(props: TabRegistrarPagoProps) {
-  const [monto, setMonto] = useState('')
+  const saldoPorTransferir = props.tipo === 'pagar' ? props.saldoPorTransferir ?? null : null
+  // B2: el pago a proveedor se prellena con el saldo por transferir.
+  const [monto, setMonto] = useState(saldoPorTransferir && saldoPorTransferir > 0 ? saldoPorTransferir.toFixed(2) : '')
   const [tipoPago, setTipoPago] = useState('TRANSFERENCIA')
   const [fechaPago, setFechaPago] = useState(new Date().toISOString().split('T')[0])
   const [notas, setNotas] = useState('')
@@ -46,7 +51,6 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
 
   const grupo = props.tipo === 'pagar' ? props.grupo : null
   const grupoNoFacturado = Boolean(grupo && grupo.estado === 'ABIERTO')
-  const grupoSaldoPendiente = grupo ? grupo.monto_total - grupo.monto_pagado : null
   const showOrdenInfo = props.tipo === 'pagar' && props.estado === 'EN_PROCESO_PAGO'
   const isPagado = props.estado === 'PAGADO'
 
@@ -99,7 +103,9 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
           <Icon name="file-text" size={15} className="flex-none mt-0.5 text-accent" />
           <span>
             Un solo pago cierra <strong className="text-ink">los {(grupo.items?.length ?? 0) || 'varios'} items del grupo a la vez</strong>.
-            Saldo pendiente del grupo: <strong className="text-ink">${fmt(grupoSaldoPendiente ?? 0)}</strong>.
+            {saldoPorTransferir != null && (
+              <>Saldo por transferir del grupo: <strong className="text-ink">${fmt(saldoPorTransferir)}</strong>.</>
+            )}
           </span>
         </div>
       )}
@@ -143,7 +149,9 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-content font-medium text-body mb-2">Monto</label>
+              <label className="block text-content font-medium text-body mb-2">
+                {props.tipo === 'pagar' ? 'Monto transferido (IVA incluido, menos retenciones)' : 'Monto'}
+              </label>
               <input
                 type="number"
                 step="0.01"
