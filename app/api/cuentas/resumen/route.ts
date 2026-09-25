@@ -1,18 +1,16 @@
 import { requireSection } from '@/lib/api-auth'
-import { derivarAvisos } from '@/lib/server/cuentas/avisos'
-import { cargarAniosCuentas, cargarCuentasAnio } from '@/lib/server/cuentas/periodo-rpc'
-import { construirProyectos, pendientesPorAnio } from '@/lib/server/cuentas/periodo'
+import { cargarResumen } from '@/lib/server/cuentas/periodo-rpc'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
-import type { ProyectoDetalle, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 import { crearTiempos } from '@/lib/server/server-timing'
 
 const ROUTE = 'GET /api/cuentas/resumen'
 
 /**
- * Rediseño de Cuentas B3 (docs/PLAN.md, S4): años con su número de proyectos
- * pendientes (select de periodo) y el contador de avisos, derivados sobre
- * todos los años. El cliente la pide una vez por carga.
+ * Rediseño de Cuentas B3 (docs/PLAN.md, S4, O1b): años con su número de
+ * proyectos pendientes (select de periodo) y el contador de avisos, derivados
+ * en SQL sobre todos los años (`cuentas_resumen`). El cliente la pide una vez
+ * por carga.
  */
 export async function GET() {
   const t = crearTiempos()
@@ -21,30 +19,9 @@ export async function GET() {
   t.marcar('auth')
 
   try {
-    const hoy = hoyCdmx()
-    const anios = await cargarAniosCuentas()
-    const crudos = await Promise.all(anios.map(async (anio) => ({ anio, crudo: await cargarCuentasAnio(anio) })))
+    const resumen = await cargarResumen(hoyCdmx())
     t.marcar('rpc')
-    const porAnio = crudos.map(({ anio, crudo }) => ({ anio, proyectos: construirProyectos(crudo, hoy) }))
-
-    // "Sin fecha" y "Sin proyecto" llegan en cada año: se cuentan una sola vez.
-    const vistos = new Set<string>()
-    const todos: ProyectoDetalle[] = []
-    for (const { proyectos } of porAnio) {
-      for (const p of proyectos) {
-        if (vistos.has(p.id)) continue
-        vistos.add(p.id)
-        todos.push(p)
-      }
-    }
-
-    const body: ResumenRespuesta = {
-      hoy,
-      anios: porAnio.map(({ anio, proyectos }) => ({ anio, pendientes: pendientesPorAnio(proyectos, anio) })),
-      avisos: derivarAvisos(todos, hoy).total,
-    }
-    t.marcar('derivar')
-    return t.responder(body)
+    return t.responder(resumen)
   } catch (error) {
     return buildErrorResponse(error, ROUTE)
   }

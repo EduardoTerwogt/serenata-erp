@@ -7,9 +7,10 @@ import { liveEnabled } from '../utils/live-helpers'
  * de las lecturas nuevas contra serenata-erp-test, que trae el dataset de
  * carga (≈2,200 proyectos y ≈13,000 conceptos en un año). Solo lee.
  *
- * Mide del lado del cliente la petición completa (RPC + derivación en TS +
- * respuesta). Si no se cumple, el plan pide pasar la derivación a SQL con un
- * test de paridad (O1b); el número queda en el log para decidir con datos.
+ * Mide del lado del cliente la petición completa. Con la derivación en TS el
+ * año crudo (~4 MB) no cabía en el presupuesto; desde O1b se deriva en SQL
+ * (cuentas-paridad-sql.spec.ts vigila que dé lo mismo). El número y el
+ * Server-Timing quedan en el log para decidir con datos.
  */
 
 const PRESUPUESTO_MS = 800
@@ -29,6 +30,7 @@ test.describe('live: rendimiento de la lectura por periodo', () => {
     ['periodo (todo el año)', '/api/cuentas/periodo?mes=todo'],
     ['periodo (lista, pendientes)', '/api/cuentas/periodo?mes=todo&vista=lista&estado=pendientes'],
     ['resumen', '/api/cuentas/resumen'],
+    ['avisos', '/api/cuentas/avisos'],
   ] as const
 
   for (const [nombre, url] of casos) {
@@ -50,7 +52,7 @@ test.describe('live: rendimiento de la lectura por periodo', () => {
       }
       const valor = p95(tiempos)
       console.log(`[O1b] ${nombre}: p95 ${valor} ms (muestras: ${tiempos.join(', ')})`)
-      // Desglose del servidor por muestra (auth / rpc / derivar / json).
+      // Desglose del servidor por muestra (auth / rpc / json).
       console.log(`[O1b] ${nombre}: server-timing ${fases.map((f) => f.replace(/;dur=/g, ' ').replace(/, /g, ' ')).join(' | ')}`)
       expect(valor).toBeLessThan(PRESUPUESTO_MS)
     })

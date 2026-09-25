@@ -2,11 +2,15 @@
  * Rediseño de Cuentas B3 (docs/PLAN.md, O1, U1, D4, D9, D12, S17): lectura
  * por periodo.
  *
- * Una sola derivación, en TS y del lado del servidor (O1): la RPC trae los
- * conceptos crudos del año, aquí se derivan con `concepto.ts` y después se
- * filtra, busca, cuenta por mes, se arman los totales con
- * `calcularCierreProyecto` y se pagina. Al cliente solo llega el periodo
- * pedido. Módulo puro: la lectura de la BD vive en `periodo-rpc.ts`.
+ * Derivación de referencia en TS: sobre los conceptos crudos se deriva con
+ * `concepto.ts` y después se filtra, busca, cuenta por mes, se arman los
+ * totales con `calcularCierreProyecto` y se pagina.
+ *
+ * Desde O1b la ruta del periodo usa la versión SQL (`cuentas_periodo`) para
+ * no mover el año crudo; esta sigue armando el proyecto seleccionado (sobre
+ * la lectura de ese solo proyecto), alimenta los mocks e2e y es la referencia
+ * del test de paridad (tests/e2e/live/cuentas-paridad-sql.spec.ts). Un cambio
+ * de regla va en los dos lados. Módulo puro: la BD vive en `periodo-rpc.ts`.
  */
 import { calcularCierreProyecto, type CuentaPagarCierreInput } from '@/lib/shared/cierre-proyecto'
 import { calcularCierreMensual } from '@/lib/shared/cuentas/cierre-mensual'
@@ -334,7 +338,10 @@ function totalesPeriodo(proyectos: { p: ProyectoDetalle; conceptos: ConceptoVist
  * - los contadores de mes cuentan proyectos pendientes sin el filtro de
  *   estado; "Sin fecha" y "Sin proyecto" no suman a meses ni totales (S17).
  */
-export function construirPeriodo(proyectos: ProyectoDetalle[], params: ParametrosPeriodo, hoy: string): PeriodoRespuesta {
+type FiltrosConcepto = Pick<ParametrosPeriodo, 'tipo' | 'cliente' | 'proveedor' | 'q'>
+
+/** Filtro de conceptos por tipo, cliente, proveedor y búsqueda (mismo criterio que cuentas_periodo). */
+function filtroConceptos(params: FiltrosConcepto) {
   const q = params.q ? normalizarBusqueda(params.q) : ''
   const conceptoOk = (c: ConceptoVista) =>
     (params.tipo === 'todo' || c.tipo === params.tipo) &&
@@ -342,11 +349,33 @@ export function construirPeriodo(proyectos: ProyectoDetalle[], params: Parametro
     (!params.proveedor || (c.tipo === 'pago' && c.contraparte === params.proveedor))
   const busquedaOk = (p: ProyectoDetalle, c: ConceptoVista) =>
     !q || [p.id, p.nombre, p.cliente ?? '', c.contraparte, c.concepto].some((s) => normalizarBusqueda(s).includes(q))
+  return (p: ProyectoDetalle, c: ConceptoVista) => conceptoOk(c) && busquedaOk(p, c)
+}
+
+/**
+ * Proyecto abierto en el panel (B4): con sus conceptos filtrados, o todos si
+ * ninguno pasa el filtro. `proyectos` puede ser el año completo o la lectura
+ * cruda de ese solo proyecto (O1b).
+ */
+export function seleccionarProyecto(
+  proyectos: ProyectoDetalle[],
+  params: FiltrosConcepto & { proyecto?: string | null }
+): ProyectoDetalle | null {
+  if (!params.proyecto) return null
+  const encontrado = proyectos.find((p) => p.id === params.proyecto)
+  if (!encontrado) return null
+  const pasa = filtroConceptos(params)
+  const filtrados = encontrado.conceptos.filter((c) => pasa(encontrado, c))
+  return { ...encontrado, conceptos: filtrados.length ? filtrados : encontrado.conceptos }
+}
+
+export function construirPeriodo(proyectos: ProyectoDetalle[], params: ParametrosPeriodo, hoy: string): PeriodoRespuesta {
+  const pasa = filtroConceptos(params)
   const estadoOk = (p: ProyectoDetalle) =>
     params.estado === 'todas' || (params.estado === 'pendientes' ? !p.cuentas.cerradas : p.cuentas.cerradas)
 
   const decorados = proyectos
-    .map((p) => ({ p, conceptos: p.conceptos.filter((c) => conceptoOk(c) && busquedaOk(p, c)) }))
+    .map((p) => ({ p, conceptos: p.conceptos.filter((c) => pasa(p, c)) }))
     .filter((x) => x.conceptos.length > 0)
 
   const delAnio = decorados.filter((x) => !x.p.sin_fecha && x.p.anio === params.anio)
@@ -382,15 +411,6 @@ export function construirPeriodo(proyectos: ProyectoDetalle[], params: Parametro
     proveedores: Array.from(new Set(proyectos.flatMap((p) => p.conceptos.filter((c) => c.tipo === 'pago' && c.contraparte_id).map((c) => c.contraparte)))).sort(ORDEN_ES.compare),
   }
 
-  let seleccionado: ProyectoDetalle | null = null
-  if (params.proyecto) {
-    const encontrado = proyectos.find((p) => p.id === params.proyecto)
-    if (encontrado) {
-      const filtrados = encontrado.conceptos.filter((c) => conceptoOk(c) && busquedaOk(encontrado, c))
-      seleccionado = { ...encontrado, conceptos: filtrados.length ? filtrados : encontrado.conceptos }
-    }
-  }
-
   return {
     anio: params.anio,
     mes: params.mes,
@@ -408,7 +428,7 @@ export function construirPeriodo(proyectos: ProyectoDetalle[], params: Parametro
     lista: params.vista === 'lista'
       ? { ...paginar(filas, params.page, params.page_size), proyectos: proyectosConFilas }
       : { ...paginar([], 1, params.page_size), proyectos: 0 },
-    seleccionado,
+    seleccionado: seleccionarProyecto(proyectos, params),
   }
 }
 

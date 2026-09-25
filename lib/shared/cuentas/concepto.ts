@@ -209,7 +209,7 @@ function diasEntre(desde: string, hasta: string): number {
   return Math.round((b - a) / 86400000)
 }
 
-function textoVencimiento(dias: number): string {
+export function textoVencimiento(dias: number): string {
   if (dias < 0) return `Vencido hace ${-dias} ${-dias === 1 ? 'día' : 'días'}`
   if (dias === 0) return 'Vence hoy'
   return `Vence en ${dias} ${dias === 1 ? 'día' : 'días'}`
