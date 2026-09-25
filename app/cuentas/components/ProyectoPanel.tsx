@@ -101,7 +101,8 @@ function Cierre({ p }: { p: ProyectoDetalle }) {
 export function leyendaCierre(p: ProyectoDetalle): string {
   if (p.cuentas.cerradas) return `Cuentas cerradas automáticamente el ${fechaCorta(p.cuentas.fecha_cierre)}`
   if (p.cuentas.reabiertas && p.cuentas.pendientes === 0) return 'Cuentas reabiertas manualmente'
-  return `${plural(p.cuentas.pendientes, 'concepto', 'conceptos')} por resolver`
+  const pendientes = `${plural(p.cuentas.pendientes, 'concepto', 'conceptos')} por resolver`
+  return p.cuentas.reabiertas ? `Cuentas reabiertas · ${pendientes}` : pendientes
 }
 
 function Aviso({ p }: { p: ProyectoDetalle }) {

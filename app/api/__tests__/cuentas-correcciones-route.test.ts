@@ -1,24 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Rediseño de Cuentas B7 (D5, D6, supuesto 10): reabrir, volver a cerrar y
-// correcciones. La lógica vive en las RPCs (live); aquí: permisos, validación,
-// la regla derivada de cerradas/pendientes y la traducción de errores.
+// correcciones. La lógica vive en las RPCs (live); aquí: permisos, validación
+// y la traducción de errores.
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(),
   rpcMock: vi.fn(),
-  proyecto: { id: 'SH061', fecha_entrega: '2026-09-18' } as { id: string; fecha_entrega: string | null } | null,
   proveedor: { id: '11111111-1111-4111-8111-111111111111', nombre: 'Luz y Sonido', telefono: null, correo: null, clabe: null, banco: null },
 }))
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
-vi.mock('@/lib/shared/hoy-cdmx', () => ({ hoyCdmx: () => '2026-09-24' }))
 vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: {
     rpc: mocks.rpcMock,
     from: (tabla: string) => ({
       select: () => ({
         eq: () => ({
-          maybeSingle: async () => ({ data: tabla === 'proyectos' ? mocks.proyecto : mocks.proveedor, error: null }),
+          maybeSingle: async () => ({ data: tabla === 'proveedores' ? mocks.proveedor : null, error: null }),
         }),
       }),
     }),
@@ -29,32 +27,14 @@ import { POST as postCorreccion } from '../cuentas/correcciones/route'
 import { POST as postCerrar } from '../cuentas/proyectos/[id]/cerrar/route'
 import { POST as postReabrir } from '../cuentas/proyectos/[id]/reabrir/route'
 
-// Crudo de un proyecto con un cobro cobrado y cerrado (factura PUE validada, pagado).
-function crudo({ reabierta = false, pagado = 1000 } = {}) {
-  return {
-    proyectos: [['SH061', 'Aurora', 'Modelo', null, '2026-09-18', 0, 0, 0, 0, reabierta]],
-    cobros: [[
-      'cc-1', 'SH061', 'SH061', 'CC-1', 'Modelo', null, 'Aurora', 1000, pagado, null, '2026-09-01',
-      [{ estado_validacion: 'validado', fecha_carga: '2026-09-01 10:00:00', metodo_pago: 'PUE' }],
-      pagado ? [{ id: 'p1', monto: pagado, fecha_pago: '2026-09-05' }] : null,
-    ]],
-    pagos: [],
-    grupos: [],
-  }
-}
-
 const admin = { response: null, session: { user: { email: 'admin@serenata.mx' } } }
 const req = (body: unknown) => new Request('http://x', { method: 'POST', body: JSON.stringify(body) })
 const params = (id = 'SH061') => ({ params: Promise.resolve({ id }) })
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.proyecto = { id: 'SH061', fecha_entrega: '2026-09-18' }
   mocks.requireSectionMock.mockResolvedValue(admin)
-  mocks.rpcMock.mockImplementation(async (fn: string) => {
-    if (fn === 'cuentas_por_proyecto') return { data: crudo(), error: null }
-    return { data: { ok: true }, error: null }
-  })
+  mocks.rpcMock.mockResolvedValue({ data: { ok: true }, error: null })
 })
 
 describe('permisos', () => {
@@ -79,42 +59,28 @@ describe('POST /api/cuentas/proyectos/:id/reabrir', () => {
     expect((await postReabrir(req({ motivo: 'corregir' }), params('sin-proyecto'))).status).toBe(400)
   })
 
-  it('cuentas cerradas: llama la RPC con el motivo y el usuario de la sesión', async () => {
+  it('llama la RPC con el motivo y el usuario de la sesión, con o sin pendientes (sesión 20)', async () => {
     const res = await postReabrir(req({ motivo: '  factura con RFC equivocado ' }), params())
     expect(res.status).toBe(200)
-    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_por_proyecto', { p_year: 2026, p_proyecto: 'SH061' })
+    expect(mocks.rpcMock).toHaveBeenCalledTimes(1)
     expect(mocks.rpcMock).toHaveBeenCalledWith('reabrir_cuentas_proyecto', {
       p_proyecto_id: 'SH061', p_motivo: 'factura con RFC equivocado', p_usuario: 'admin@serenata.mx',
     })
   })
 
-  it('con pendientes (no cerradas) -- 409 sin reabrir', async () => {
-    mocks.rpcMock.mockImplementation(async (fn: string) => (fn === 'cuentas_por_proyecto' ? { data: crudo({ pagado: 0 }), error: null } : { data: {}, error: null }))
-    const res = await postReabrir(req({ motivo: 'corregir' }), params())
-    expect(res.status).toBe(409)
-    expect(mocks.rpcMock).not.toHaveBeenCalledWith('reabrir_cuentas_proyecto', expect.anything())
-  })
-
-  it('un proyecto sin fecha se lee en el año en curso (D9)', async () => {
-    mocks.proyecto = { id: 'SH061', fecha_entrega: null }
-    await postReabrir(req({ motivo: 'corregir' }), params())
-    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_por_proyecto', { p_year: 2026, p_proyecto: 'SH061' })
+  it('proyecto inexistente -- 404 con mensaje seguro', async () => {
+    mocks.rpcMock.mockResolvedValueOnce({ data: null, error: { code: 'P0002', message: 'proyecto_no_encontrado: SH999' } })
+    const res = await postReabrir(req({ motivo: 'corregir' }), params('SH999'))
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toBe('El proyecto no existe.')
   })
 })
 
 describe('POST /api/cuentas/proyectos/:id/cerrar', () => {
-  it('reabiertas y sin pendientes: vuelve a cerrar', async () => {
-    mocks.rpcMock.mockImplementation(async (fn: string) => (fn === 'cuentas_por_proyecto' ? { data: crudo({ reabierta: true }), error: null } : { data: {}, error: null }))
+  it('termina la reapertura con el usuario de la sesión', async () => {
     const res = await postCerrar(req({}), params())
     expect(res.status).toBe(200)
     expect(mocks.rpcMock).toHaveBeenCalledWith('cerrar_cuentas_proyecto', { p_proyecto_id: 'SH061', p_usuario: 'admin@serenata.mx' })
-  })
-
-  it('con pendientes -- 409 con cuántos faltan', async () => {
-    mocks.rpcMock.mockImplementation(async (fn: string) => (fn === 'cuentas_por_proyecto' ? { data: crudo({ reabierta: true, pagado: 0 }), error: null } : { data: {}, error: null }))
-    const res = await postCerrar(req({}), params())
-    expect(res.status).toBe(409)
-    expect((await res.json()).error).toBe('Todavía hay 1 concepto por resolver.')
   })
 })
 

@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCuentaPagarByIdMock: vi.fn(),
+  getDocumentosCuentaPagarMock: vi.fn(async () => []),
   createDocumentoCuentaPagarMock: vi.fn(),
   getProyectoByIdMock: vi.fn(),
   updateCuentaPagarMock: vi.fn(),
@@ -23,11 +24,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({
   getCuentaPagarById: mocks.getCuentaPagarByIdMock,
+  getDocumentosCuentaPagar: mocks.getDocumentosCuentaPagarMock,
   createDocumentoCuentaPagar: mocks.createDocumentoCuentaPagarMock,
   getProyectoById: mocks.getProyectoByIdMock,
   updateCuentaPagar: mocks.updateCuentaPagarMock,
   getProveedorById: mocks.getProveedorByIdMock,
 }))
+vi.mock('@/lib/server/cuentas/reemplazo-factura', () => ({ planearFactura: vi.fn(async () => ({ ok: true, reemplazo: null })), completarReemplazo: vi.fn() }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
 vi.mock('@/lib/server/xml/factura-parser', () => ({ parseFacturaXML: mocks.parseFacturaXMLMock }))

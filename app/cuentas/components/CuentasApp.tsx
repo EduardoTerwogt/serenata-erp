@@ -17,6 +17,7 @@ import { MESES_LARGOS, etiquetaPeriodo, plural } from './formato'
 import { BotonPeriodo, HojaPeriodo, PeriodoEscritorio } from './Periodo'
 import { CuerpoProyecto, EncabezadoProyecto, ProyectoPanel } from './ProyectoPanel'
 import { ListaCompacta, ListaProyectos, agruparProyectos } from './Proyectos'
+import { AccionesReapertura } from './Reapertura'
 import { Totales } from './Totales'
 import { useEsAncho, useEsEscritorio } from './ui'
 import { PAGE_SIZE_LISTA, useCuentasDatos } from './useCuentasDatos'
@@ -174,7 +175,14 @@ export function CuentasApp() {
     // Escritorio con proyecto seleccionado: maestro-detalle desde xl; por
     // debajo el detalle ocupa todo el ancho y se regresa con el chevron (S14).
     if (escritorio && sel) {
-      const panel = <ProyectoPanel p={sel} onAbrirConcepto={abrirConcepto} onVolver={ancho ? undefined : () => cerrar({ proyecto: null })} />
+      const panel = (
+        <ProyectoPanel
+          p={sel}
+          onAbrirConcepto={abrirConcepto}
+          acciones={<AccionesReapertura p={sel} onCambio={recargarTodo} />}
+          onVolver={ancho ? undefined : () => cerrar({ proyecto: null })}
+        />
+      )
       if (!ancho) return panel
       return (
         <div className="grid items-start gap-4" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(220px,300px)' }}>
@@ -327,7 +335,7 @@ export function CuentasApp() {
           }
         >
           <div className="grid grid-cols-1 content-start gap-4 px-4 pb-7 pt-3.5">
-            <CuerpoProyecto p={sel} onAbrirConcepto={abrirConcepto} compacto />
+            <CuerpoProyecto p={sel} onAbrirConcepto={abrirConcepto} compacto acciones={<AccionesReapertura p={sel} onCambio={recargarTodo} bloque />} />
           </div>
         </BottomSheet>
       )}

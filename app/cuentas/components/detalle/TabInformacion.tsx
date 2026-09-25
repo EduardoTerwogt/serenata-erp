@@ -9,6 +9,9 @@ import { fmtMoney } from '@/lib/quotations/format'
 import type { DetalleCobro, DetalleConcepto, DetallePago } from '@/lib/shared/cuentas/detalle-tipos'
 import type { HistorialCambioResponsableItem, RegimenFiscal } from '@/lib/types'
 import { fechaCorta } from '../formato'
+import { EditarDatosCobro, PanelMotivo } from './Correcciones'
+import type { Ejecutar } from './TabDocumentos'
+import { accionesDetalle } from './useDetalle'
 
 const REGIMEN: Record<RegimenFiscal, string> = {
   moral: 'Persona moral',
@@ -20,6 +23,9 @@ interface Props {
   d: DetalleConcepto
   /** Reasigna el proveedor de un renglón (D21); resuelve cuando ya quedó guardado. */
   onReasignar: (itemId: string, responsableId: string, responsableNombre: string) => Promise<unknown>
+  ejecutar: Ejecutar
+  /** B7: admin con las cuentas reabiertas. */
+  corrige: boolean
 }
 
 export function Seccion({ titulo, extra, children }: { titulo: string; extra?: ReactNode; children: ReactNode }) {
@@ -35,11 +41,11 @@ export function Seccion({ titulo, extra, children }: { titulo: string; extra?: R
 }
 
 /** Pestaña Información (B5): campos del cobro, o proveedor, cruce y contacto del pago. */
-export function TabInformacion({ d, onReasignar }: Props) {
-  return d.tipo === 'cobro' ? <InfoCobro d={d} /> : <InfoPago d={d} onReasignar={onReasignar} />
+export function TabInformacion({ d, onReasignar, ejecutar, corrige }: Props) {
+  return d.tipo === 'cobro' ? <InfoCobro d={d} ejecutar={ejecutar} corrige={corrige} /> : <InfoPago d={d} onReasignar={onReasignar} ejecutar={ejecutar} corrige={corrige} />
 }
 
-function InfoCobro({ d }: { d: DetalleCobro }) {
+function InfoCobro({ d, ejecutar, corrige }: { d: DetalleCobro; ejecutar: Ejecutar; corrige: boolean }) {
   const saldo = Math.max(0, d.total - d.pagado)
   const venc = d.concepto.vencimiento
   return (
@@ -69,6 +75,7 @@ function InfoCobro({ d }: { d: DetalleCobro }) {
           <Field label="Notas" value={<span className="whitespace-pre-wrap">{d.notas}</span>} />
         </div>
       )}
+      {corrige && <EditarDatosCobro key={`${d.fecha_factura}|${d.fecha_vencimiento}|${d.notas}`} d={d} ejecutar={ejecutar} />}
     </>
   )
 }
@@ -137,6 +144,60 @@ function SelectProveedor({ actualId, itemId, onReasignar, compacto = false }: { 
   )
 }
 
+/**
+ * B7 (S12): reasignar el proveedor de un concepto ya facturado o pagado. La
+ * RPC exige los pagos anulados y la orden cancelada; da de baja la factura
+ * del grupo y reasigna con la RPC vigente.
+ */
+function ReasignarCorreccion({ cuentaId, actualId, ejecutar }: { cuentaId: string; actualId: string | null; ejecutar: Ejecutar }) {
+  const [opciones, setOpciones] = useState<ProveedorOpcion[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [nuevo, setNuevo] = useState<ProveedorOpcion | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    cargarProveedores()
+      .then((lista) => vivo && setOpciones(lista))
+      .catch((err) => vivo && setError(err instanceof Error ? err.message : 'No se pudieron cargar los proveedores'))
+    return () => {
+      vivo = false
+    }
+  }, [])
+
+  return (
+    <div className="flex basis-full flex-col gap-2">
+      <Select
+        aria-label="Reasignar a otro proveedor"
+        value={nuevo?.id ?? ''}
+        disabled={!opciones}
+        onChange={(e) => setNuevo(opciones?.find((o) => o.id === e.target.value) ?? null)}
+        className="w-full md:w-[260px]"
+      >
+        <option value="" disabled>
+          {opciones ? 'Reasignar a…' : 'Cargando proveedores…'}
+        </option>
+        {opciones
+          ?.filter((o) => o.id !== actualId)
+          .map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.nombre}
+            </option>
+          ))}
+      </Select>
+      {error && <span className="text-[11px] text-cancelled-fg">{error}</span>}
+      {nuevo && (
+        <PanelMotivo
+          texto={`Se reasigna a ${nuevo.nombre}. Antes hay que anular los pagos del concepto y cancelar su orden, si la hay. La factura del grupo se da de baja y el grupo vuelve a quedar sin facturar.`}
+          boton="Reasignar proveedor"
+          placeholder="Ej. el servicio lo dio otro proveedor"
+          onCancelar={() => setNuevo(null)}
+          onConfirmar={(motivo) => ejecutar(() => accionesDetalle.corregir({ accion: 'proveedor', cuenta_pagar_id: cuentaId, responsable_id: nuevo.id, motivo }), 'Proveedor reasignado')}
+        />
+      )}
+    </div>
+  )
+}
+
 function Historial({ cuentaId }: { cuentaId: string }) {
   const [historial, setHistorial] = useState<HistorialCambioResponsableItem[]>([])
   useEffect(() => {
@@ -174,7 +235,7 @@ function Renglon({ k, v, fuerte = false }: { k: string; v: string; fuerte?: bool
   )
 }
 
-function InfoPago({ d, onReasignar }: { d: DetallePago; onReasignar: Props['onReasignar'] }) {
+function InfoPago({ d, onReasignar, ejecutar, corrige }: { d: DetallePago; onReasignar: Props['onReasignar']; ejecutar: Ejecutar; corrige: boolean }) {
   // Un grupo de un solo renglón se ve como un concepto suelto; el desglose es para n > 1.
   const multi = d.items.length > 1
   const unico = multi ? null : d.items[0]
@@ -186,7 +247,9 @@ function InfoPago({ d, onReasignar }: { d: DetallePago; onReasignar: Props['onRe
     ? 'Cuenta sin partida ligada: se reasigna desde el proyecto.'
     : reasignable
       ? 'Cambiarlo aquí también lo actualiza en la partida del proyecto.'
-      : 'La factura ya está registrada: para reasignar, un admin reabre el proyecto.'
+      : corrige
+        ? 'Corrección: reasignar un concepto ya facturado o pagado deja registro.'
+        : 'La factura ya está registrada: para reasignar, un admin reabre las cuentas.'
 
   return (
     <>
@@ -199,6 +262,7 @@ function InfoPago({ d, onReasignar }: { d: DetallePago; onReasignar: Props['onRe
             ) : (
               <span className="text-[14px] text-ink">{d.responsable.nombre}</span>
             )}
+            {!reasignable && corrige && <ReasignarCorreccion key={d.responsable.id ?? ''} cuentaId={unico.cuenta_id} actualId={d.responsable.id} ejecutar={ejecutar} />}
             <div className="flex gap-1.5 text-[11px] leading-[1.45] text-subtext">
               <Icon name="link" size={11} className="mt-0.5 shrink-0" />
               <span>{notaSelect}</span>
@@ -232,13 +296,14 @@ function InfoPago({ d, onReasignar }: { d: DetallePago; onReasignar: Props['onRe
               </span>
               {reasignable && it.item_id && <SelectProveedor actualId={d.responsable.id} itemId={it.item_id} onReasignar={onReasignar} compacto />}
               <span className="whitespace-nowrap text-ink">{fmtMoney(it.neto)}</span>
+              {!reasignable && corrige && <ReasignarCorreccion key={d.responsable.id ?? ''} cuentaId={it.cuenta_id} actualId={d.responsable.id} ejecutar={ejecutar} />}
             </div>
           ))}
           <div className="flex items-center justify-between border-t border-accent/20 px-4 py-2.5 text-[12.5px]">
             <span className="font-semibold text-ink">Total del grupo</span>
             <span className="text-[15px] font-bold text-ink">{fmtMoney(d.neto)}</span>
           </div>
-          {!reasignable && <div className="border-t border-accent/20 px-4 py-2 text-[11px] text-subtext">El grupo ya está facturado: para reasignar un renglón, un admin reabre el proyecto.</div>}
+          {!reasignable && !corrige && <div className="border-t border-accent/20 px-4 py-2 text-[11px] text-subtext">El grupo ya está facturado: para reasignar un renglón, un admin reabre las cuentas.</div>}
         </div>
       )}
 

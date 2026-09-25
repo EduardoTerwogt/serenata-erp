@@ -7,9 +7,9 @@ import { ReabrirCuentasSchema, validate } from '@/lib/validation/schemas'
 const ROUTE = 'POST /api/cuentas/proyectos/:id/reabrir'
 
 /**
- * Rediseño de Cuentas B7 (D5, D6, supuesto 10): reabrir las cuentas cerradas
- * de un proyecto para corregirlas. Solo admin; el motivo es obligatorio y
- * queda registrado con quién y cuándo.
+ * Rediseño de Cuentas B7 (D5, D6, supuesto 10): reabrir las cuentas de un
+ * proyecto para corregirlas, cerradas o con pendientes (sesión 20). Solo
+ * admin; el motivo es obligatorio y queda registrado con quién y cuándo.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('admin')

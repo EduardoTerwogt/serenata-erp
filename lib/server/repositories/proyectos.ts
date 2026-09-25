@@ -70,6 +70,23 @@ export async function getProyectoById(id: string) {
   return data as Proyecto
 }
 
+/**
+ * Rediseño de Cuentas B7: las cuentas del proyecto tienen una reapertura
+ * activa (una por proyecto, índice único). Las RPCs de corrección lo exigen
+ * por su cuenta; esto es para lecturas y guardas previas de las rutas.
+ */
+export async function cuentasReabiertas(proyectoId: string | null): Promise<boolean> {
+  if (!proyectoId) return false
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_reaperturas')
+    .select('id')
+    .eq('proyecto_id', proyectoId)
+    .is('cerrada_at', null)
+    .maybeSingle()
+  if (error) throw error
+  return Boolean(data)
+}
+
 export async function createProyecto(proyecto: Partial<Proyecto>) {
   const { data, error } = await supabaseAdmin
     .from('proyectos')

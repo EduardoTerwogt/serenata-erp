@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useSyncExternalStore } from 'react'
+import { useSession } from 'next-auth/react'
+import { getUserSections } from '@/lib/authz'
 import type { StatusTone } from '@/components/ui/StatusBadge'
 import type { TonoEstado } from '@/lib/shared/cuentas/concepto'
 import type { TarjetaProyecto } from '@/lib/shared/cuentas/periodo-tipos'
@@ -40,3 +42,9 @@ function useMedia(query: string) {
 export const useEsEscritorio = () => useMedia('(min-width: 768px)')
 /** ≥ xl (1280px): maestro-detalle lado a lado (S14). */
 export const useEsAncho = () => useMedia('(min-width: 1280px)')
+
+/** B7 (D6, supuesto 10): reabrir y corregir son solo de la sección admin (la ruta lo vuelve a validar). */
+export function useEsAdmin() {
+  const { data } = useSession()
+  return getUserSections(data?.user as { sections?: string[] } | undefined).includes('admin')
+}

@@ -1,11 +1,12 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaPagarById, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById, validarFacturaProveedor } from '@/lib/db'
+import { getCuentaPagarById, getDocumentosCuentaPagar, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById, validarFacturaProveedor } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
 import { RegimenFiscal } from '@/lib/types'
+import { completarReemplazo, planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 
@@ -51,6 +52,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     if (!cuenta) {
       return Response.json({ error: 'Cuenta por pagar no encontrada' }, { status: 404 })
     }
+    // B7: con una factura vigente validada, subir otra es reemplazarla:
+    // solo admin con las cuentas reabiertas; en una orden, nunca
+    // (reemplazo-factura.ts).
+    const plan = await planearFactura('proveedor', cuenta, await getDocumentosCuentaPagar(id), authResult.session?.user, formData.get('motivo'))
+    if (!plan.ok) return Response.json(plan.body, { status: plan.status })
 
     // Validar contenido XML antes de subir
     const facturaXmlContent = await facturaXmlFile.text()
@@ -120,6 +126,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       await validarFacturaProveedor(documentoXml.id, authResult.session?.user?.email ?? null)
       documentoXml.estado_validacion = 'validado'
     }
+    if (plan.reemplazo) await completarReemplazo(plan.reemplazo, documentoXml.id)
 
     const fechaFactura = extractFacturaFechaFromXml(facturaXmlContent)
 

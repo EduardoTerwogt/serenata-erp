@@ -5,6 +5,7 @@ import { getJson, sendFormData, sendJson } from '@/lib/client/api'
 import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
 import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
 import type { DetalleConcepto } from '@/lib/shared/cuentas/detalle-tipos'
+import type { CorreccionCuentas } from '@/lib/validation/schemas'
 
 export type ObjetivoDetalle = { tipo: 'cobro' | 'grupo' | 'cuenta'; id: string }
 
@@ -53,10 +54,14 @@ export function useDetalle(key: string | null) {
 
 /** Acciones del detalle: todas pasan por las rutas y RPCs existentes. */
 export const accionesDetalle = {
-  /** XML de la factura (se valida en el servidor). */
-  async subirFacturaXml(o: ObjetivoDetalle, xml: File) {
+  /**
+   * XML de la factura (se valida en el servidor). Con `motivo` reemplaza la
+   * vigente validada (B7: admin con las cuentas reabiertas).
+   */
+  async subirFacturaXml(o: ObjetivoDetalle, xml: File, motivo?: string) {
     const fd = new FormData()
     fd.append(o.tipo === 'cobro' ? 'factura_xml' : 'factura_proveedor_xml', xml)
+    if (motivo) fd.append('motivo', motivo)
     return sendFormData(`${base(o)}/subir-factura`, fd, 'No se pudo subir la factura')
   },
 
@@ -114,6 +119,11 @@ export const accionesDetalle = {
     const fd = new FormData()
     fd.append('comprobante', await normalizeComprobante(archivo))
     return sendFormData(`/api/cuentas-pagar/pagos/${pagoId}/comprobante`, fd, 'No se pudo adjuntar el comprobante')
+  },
+
+  /** B7: una corrección (admin con las cuentas reabiertas); cada acción es una RPC atómica. */
+  async corregir(c: CorreccionCuentas) {
+    return sendJson('/api/cuentas/correcciones', c, 'No se pudo aplicar la corrección')
   },
 
   /** Reasigna el proveedor de un renglón con la ruta vigente de partidas (D21). */

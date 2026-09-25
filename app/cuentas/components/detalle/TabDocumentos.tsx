@@ -6,6 +6,7 @@ import { Icon } from '@/components/ui/Icon'
 import { fmtMoney } from '@/lib/quotations/format'
 import type { DetalleCobro, DetalleConcepto, DetallePago, DocumentoDetalle, PagoCobroDetalle } from '@/lib/shared/cuentas/detalle-tipos'
 import { fechaCorta } from '../formato'
+import { HistorialCorrecciones, QuitarDocumento, ReemplazarFactura } from './Correcciones'
 import { accionesDetalle, type ObjetivoDetalle } from './useDetalle'
 
 export type Ejecutar = (accion: () => Promise<unknown>, exito: string) => Promise<void>
@@ -16,11 +17,13 @@ interface Props {
   ejecutar: Ejecutar
   /** Error del lado del cliente (archivo rechazado antes de subir). */
   avisarError: (mensaje: string) => void
+  /** B7: admin con las cuentas reabiertas. */
+  corrige: boolean
 }
 
 /** Límite por archivo (supuesto 15): igual que el servidor (factura-validation.ts). */
 export const LIMITE_ARCHIVO = 4 * 1024 * 1024
-const ACCEPT_XML = '.xml,application/xml,text/xml'
+export const ACCEPT_XML = '.xml,application/xml,text/xml'
 const ACCEPT_PDF = '.pdf,application/pdf'
 export const ACCEPT_COMPROBANTE = 'image/*,.pdf,application/pdf'
 
@@ -118,7 +121,7 @@ const subDoc = (doc: DocumentoDetalle | null, faltante = 'Pendiente de subir') =
 const estadoXml = (doc: DocumentoDetalle | null): EstadoDoc => (!doc ? 'falta' : doc.estado_validacion === 'validado' ? 'valida' : 'revision')
 
 /** Pestaña Documentos (B5): checklist según D11 y complemento por pago (D16, D27, V4). */
-export function TabDocumentos({ d, objetivo, ejecutar, avisarError: rechazo }: Props) {
+export function TabDocumentos({ d, objetivo, ejecutar, avisarError: rechazo, corrige }: Props) {
   return (
     <>
       {d.tipo === 'pago' && d.items.length > 1 && (
@@ -130,9 +133,14 @@ export function TabDocumentos({ d, objetivo, ejecutar, avisarError: rechazo }: P
         </div>
       )}
       <div className="overflow-hidden rounded-panel border border-hairline">
-        {d.tipo === 'cobro' ? <DocsCobro d={d} objetivo={objetivo} ejecutar={ejecutar} rechazo={rechazo} /> : <DocsPago d={d} objetivo={objetivo} ejecutar={ejecutar} rechazo={rechazo} />}
+        {d.tipo === 'cobro' ? (
+          <DocsCobro d={d} objetivo={objetivo} ejecutar={ejecutar} rechazo={rechazo} corrige={corrige} />
+        ) : (
+          <DocsPago d={d} objetivo={objetivo} ejecutar={ejecutar} rechazo={rechazo} corrige={corrige} />
+        )}
       </div>
       <div className="text-[11px] text-subtext">Las imágenes pesadas se reducen antes de subirse. PDFs y otros archivos deben pesar menos de 4 MB.</div>
+      <HistorialCorrecciones c={d.correcciones} tipo="documentos" />
     </>
   )
 }
@@ -142,6 +150,39 @@ interface DocsProps<T> {
   objetivo: ObjetivoDetalle
   ejecutar: Ejecutar
   rechazo: (m: string) => void
+  corrige: boolean
+}
+
+/**
+ * Acciones de la factura XML. Validada, solo se cambia como corrección (B7):
+ * reemplazarla o quitarla. Sin validar, el flujo normal (marcar válida o subir
+ * otra) y, con las cuentas reabiertas, también quitarla.
+ */
+function AccionesFactura({ doc, dominio, objetivo, ejecutar, rechazo, corrige, onSubir, onValidar }: {
+  doc: DocumentoDetalle | null
+  dominio: 'cobro' | 'proveedor'
+  objetivo: ObjetivoDetalle
+  ejecutar: Ejecutar
+  rechazo: (m: string) => void
+  corrige: boolean
+  onSubir: (f: File) => void
+  onValidar: (docId: string) => void
+}) {
+  const quitar = corrige && doc && <QuitarDocumento dominio={dominio} doc={doc} nombre="Factura XML" ejecutar={ejecutar} />
+  if (doc?.estado_validacion === 'validado') {
+    return corrige ? (
+      <>
+        <ReemplazarFactura key={doc.id} objetivo={objetivo} ejecutar={ejecutar} rechazo={rechazo} />
+        {quitar}
+      </>
+    ) : null
+  }
+  return (
+    <>
+      <AccionesXml doc={doc} onSubir={onSubir} onValidar={onValidar} rechazo={rechazo} />
+      {quitar}
+    </>
+  )
 }
 
 function AccionesXml({ doc, onSubir, onValidar, rechazo, etiqueta = 'Subir' }: { doc: DocumentoDetalle | null; onSubir: (f: File) => void; onValidar: (docId: string) => void; rechazo: (m: string) => void; etiqueta?: string }) {
@@ -158,7 +199,7 @@ function AccionesXml({ doc, onSubir, onValidar, rechazo, etiqueta = 'Subir' }: {
   )
 }
 
-function DocsCobro({ d, objetivo, ejecutar, rechazo }: DocsProps<DetalleCobro>) {
+function DocsCobro({ d, objetivo, ejecutar, rechazo, corrige }: DocsProps<DetalleCobro>) {
   const xml = d.factura_xml
   const subirXml = (f: File) => void ejecutar(() => accionesDetalle.subirFacturaXml(objetivo, f), 'Factura XML subida')
   const validar = (docId: string) => void ejecutar(() => accionesDetalle.validarDocumento(objetivo, docId), 'Documento marcado como válido')
@@ -170,7 +211,7 @@ function DocsCobro({ d, objetivo, ejecutar, rechazo }: DocsProps<DetalleCobro>) 
         estado={estadoXml(xml)}
         sub={xml?.estado_validacion === 'revision' && xml.detalle_validacion ? xml.detalle_validacion : subDoc(xml)}
         url={xml?.archivo_url}
-        acciones={<AccionesXml doc={xml} onSubir={subirXml} onValidar={validar} rechazo={rechazo} />}
+        acciones={<AccionesFactura doc={xml} dominio="cobro" objetivo={objetivo} ejecutar={ejecutar} rechazo={rechazo} corrige={corrige} onSubir={subirXml} onValidar={validar} />}
       />
       {xml && d.concepto.metodo_desconocido && (
         <div className="flex flex-wrap items-center gap-3 border-t border-hairline bg-row-alt px-3.5 py-2.5 text-[12.5px]">
@@ -189,15 +230,35 @@ function DocsCobro({ d, objetivo, ejecutar, rechazo }: DocsProps<DetalleCobro>) 
         estado={d.factura_pdf ? 'listo' : 'falta'}
         sub={subDoc(d.factura_pdf)}
         url={d.factura_pdf?.archivo_url}
-        acciones={!d.factura_pdf && <BotonArchivo etiqueta="Subir" accept={ACCEPT_PDF} onArchivo={(f) => void ejecutar(() => accionesDetalle.subirFacturaPdf(objetivo, f), 'Factura PDF subida')} onRechazo={rechazo} />}
+        acciones={
+          d.factura_pdf ? (
+            corrige && <QuitarDocumento dominio="cobro" doc={d.factura_pdf} nombre="Factura PDF" ejecutar={ejecutar} />
+          ) : (
+            <BotonArchivo etiqueta="Subir" accept={ACCEPT_PDF} onArchivo={(f) => void ejecutar(() => accionesDetalle.subirFacturaPdf(objetivo, f), 'Factura PDF subida')} onRechazo={rechazo} />
+          )
+        }
       />
       {d.metodo === 'PPD' && d.pagos.length === 0 && <FilaDoc nombre="Complemento de pago" requisito="Requerido" estado="no_aplica" sub="Se habilita al registrar un pago" />}
-      {d.metodo === 'PPD' && d.pagos.map((p) => <ComplementoPago key={p.id} cobroId={d.id} pago={p} ejecutar={ejecutar} rechazo={rechazo} validar={validar} />)}
+      {d.metodo === 'PPD' && d.pagos.map((p) => <ComplementoPago key={p.id} cobroId={d.id} pago={p} ejecutar={ejecutar} rechazo={rechazo} validar={validar} corrige={corrige} />)}
     </>
   )
 }
 
-function ComplementoPago({ cobroId, pago, ejecutar, rechazo, validar }: { cobroId: string; pago: PagoCobroDetalle; ejecutar: Ejecutar; rechazo: (m: string) => void; validar: (docId: string) => void }) {
+function ComplementoPago({
+  cobroId,
+  pago,
+  ejecutar,
+  rechazo,
+  validar,
+  corrige,
+}: {
+  cobroId: string
+  pago: PagoCobroDetalle
+  ejecutar: Ejecutar
+  rechazo: (m: string) => void
+  validar: (docId: string) => void
+  corrige: boolean
+}) {
   const cual = `pago del ${fechaCorta(pago.fecha)} · ${fmtMoney(pago.monto)}`
   const { complemento: c } = pago
   if (!c.requiere) return <FilaDoc nombre="Complemento de pago" requisito="Anticipo · sin complemento" estado="no_aplica" sub={`El ${cual} es anterior a la factura`} />
@@ -210,7 +271,12 @@ function ComplementoPago({ cobroId, pago, ejecutar, rechazo, validar }: { cobroI
         estado={estadoXml(c.xml)}
         sub={c.xml ? `${subDoc(c.xml)} · ${cual}` : `Pendiente · ${cual}`}
         url={c.xml?.archivo_url}
-        acciones={<AccionesXml doc={c.xml} onSubir={(f) => subir(f, 'xml')} onValidar={validar} rechazo={rechazo} />}
+        acciones={
+          <>
+            <AccionesXml doc={c.xml} onSubir={(f) => subir(f, 'xml')} onValidar={validar} rechazo={rechazo} />
+            {corrige && c.xml && <QuitarDocumento dominio="cobro" doc={c.xml} nombre="Complemento XML" ejecutar={ejecutar} />}
+          </>
+        }
       />
       <FilaDoc
         nombre="Complemento de pago PDF"
@@ -218,13 +284,19 @@ function ComplementoPago({ cobroId, pago, ejecutar, rechazo, validar }: { cobroI
         estado={c.pdf ? 'listo' : 'falta'}
         sub={c.pdf ? `${subDoc(c.pdf)} · ${cual}` : `Pendiente · ${cual}`}
         url={c.pdf?.archivo_url}
-        acciones={!c.pdf && <BotonArchivo etiqueta="Subir" accept={ACCEPT_PDF} onArchivo={(f) => subir(f, 'pdf')} onRechazo={rechazo} />}
+        acciones={
+          c.pdf ? (
+            corrige && <QuitarDocumento dominio="cobro" doc={c.pdf} nombre="Complemento PDF" ejecutar={ejecutar} />
+          ) : (
+            <BotonArchivo etiqueta="Subir" accept={ACCEPT_PDF} onArchivo={(f) => subir(f, 'pdf')} onRechazo={rechazo} />
+          )
+        }
       />
     </>
   )
 }
 
-function DocsPago({ d, objetivo, ejecutar, rechazo }: DocsProps<DetallePago>) {
+function DocsPago({ d, objetivo, ejecutar, rechazo, corrige }: DocsProps<DetallePago>) {
   const xml = d.factura_xml
   const validar = (docId: string) => void ejecutar(() => accionesDetalle.validarDocumento(objetivo, docId), 'Factura marcada como válida')
   return (
@@ -235,7 +307,18 @@ function DocsPago({ d, objetivo, ejecutar, rechazo }: DocsProps<DetallePago>) {
         estado={estadoXml(xml)}
         sub={xml?.estado_validacion === 'revision' && xml.detalle_validacion ? xml.detalle_validacion : subDoc(xml)}
         url={xml?.archivo_url}
-        acciones={<AccionesXml doc={xml} onSubir={(f) => void ejecutar(() => accionesDetalle.subirFacturaXml(objetivo, f), 'Factura XML subida')} onValidar={validar} rechazo={rechazo} />}
+        acciones={
+          <AccionesFactura
+            doc={xml}
+            dominio="proveedor"
+            objetivo={objetivo}
+            ejecutar={ejecutar}
+            rechazo={rechazo}
+            corrige={corrige}
+            onSubir={(f) => void ejecutar(() => accionesDetalle.subirFacturaXml(objetivo, f), 'Factura XML subida')}
+            onValidar={validar}
+          />
+        }
       />
       <FilaDoc
         nombre="Factura de proveedor PDF"
@@ -243,7 +326,13 @@ function DocsPago({ d, objetivo, ejecutar, rechazo }: DocsProps<DetallePago>) {
         estado={d.factura_pdf ? 'listo' : 'falta'}
         sub={subDoc(d.factura_pdf)}
         url={d.factura_pdf?.archivo_url}
-        acciones={!d.factura_pdf && <BotonArchivo etiqueta="Subir" accept={ACCEPT_PDF} onArchivo={(f) => void ejecutar(() => accionesDetalle.subirFacturaPdf(objetivo, f), 'Factura PDF subida')} onRechazo={rechazo} />}
+        acciones={
+          d.factura_pdf ? (
+            corrige && <QuitarDocumento dominio="proveedor" doc={d.factura_pdf} nombre="Factura PDF" ejecutar={ejecutar} />
+          ) : (
+            <BotonArchivo etiqueta="Subir" accept={ACCEPT_PDF} onArchivo={(f) => void ejecutar(() => accionesDetalle.subirFacturaPdf(objetivo, f), 'Factura PDF subida')} onRechazo={rechazo} />
+          )
+        }
       />
       {d.pagos.length === 0 && d.comprobantes.length === 0 && <FilaDoc nombre="Comprobante de pago" requisito="Requerido al pagar" estado="no_aplica" sub="Se habilita al registrar un pago" />}
       {d.pagos.map((p) => (
@@ -268,7 +357,15 @@ function DocsPago({ d, objetivo, ejecutar, rechazo }: DocsProps<DetallePago>) {
         />
       ))}
       {d.comprobantes.map((c) => (
-        <FilaDoc key={c.id} nombre="Comprobante de pago" requisito="Anterior" estado="listo" sub={subDoc(c)} url={c.archivo_url} />
+        <FilaDoc
+          key={c.id}
+          nombre="Comprobante de pago"
+          requisito="Anterior"
+          estado="listo"
+          sub={subDoc(c)}
+          url={c.archivo_url}
+          acciones={corrige && <QuitarDocumento dominio="proveedor" doc={c} nombre="Comprobante" ejecutar={ejecutar} />}
+        />
       ))}
     </>
   )

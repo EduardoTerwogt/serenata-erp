@@ -15,6 +15,9 @@ const r2 = (n: number) => Math.round(n * 100) / 100
 export interface LlamadasDetalle {
   pagos: { url: string; campos: Record<string, string> }[]
   subidas: { url: string; campos: string[] }[]
+  /** B7: reabrir / cerrar y correcciones, con su cuerpo JSON. */
+  reapertura: { url: string; cuerpo: unknown }[]
+  correcciones: unknown[]
 }
 
 function cobroFilas(id: string) {
@@ -55,6 +58,7 @@ function cobroFilas(id: string) {
       },
       proyecto: { id: p.id, nombre: p.nombre, fecha_entrega: p.evento },
       documentos,
+      reabierta: registroMock.reabiertos.has(p.id),
       pagos: [
         ...(pagado > 0 ? [{ id: `${p.id}-pc${k}`, monto: pagado, tipo_pago: 'TRANSFERENCIA', fecha_pago: fechaFactura, comprobante_url: null, notas: null }] : []),
         ...extra.map((x) => ({ id: x.id, monto: x.monto, tipo_pago: x.tipo_pago, fecha_pago: x.fecha_pago, comprobante_url: x.comprobante_url, notas: x.notas })),
@@ -125,6 +129,7 @@ function grupoFilas(id: string) {
     documentos,
     pagos: pagos.map((x) => ({ id: x.id, fecha_pago: x.fecha_pago, tipo_pago: x.tipo_pago, monto_transferido: x.monto, comprobante_url: x.comprobante_url, notas: x.notas, estimado: x.estimado })),
     orden: estado === 'en_orden' ? { id: 'orden-1', pdf_nombre: `OP-${p.id}.pdf`, pdf_url: 'https://drive.test/orden.pdf', estado: 'GENERADA', fecha_generacion: '2026-09-20T12:00:00Z' } : null,
+    reabierta: registroMock.reabiertos.has(p.id),
   })
 }
 
@@ -142,7 +147,7 @@ async function camposDe(route: Route) {
 }
 
 export async function mockCuentasDetalle(page: Page): Promise<LlamadasDetalle> {
-  const llamadas: LlamadasDetalle = { pagos: [], subidas: [] }
+  const llamadas: LlamadasDetalle = { pagos: [], subidas: [], reapertura: [], correcciones: [] }
 
   await page.route(/\/api\/cuentas-cobrar\/([^/]+)\/documentos$/, async (route) => {
     const id = decodeURIComponent(/cuentas-cobrar\/([^/]+)\//.exec(route.request().url())![1])
@@ -187,6 +192,19 @@ export async function mockCuentasDetalle(page: Page): Promise<LlamadasDetalle> {
     llamadas.subidas.push({ url: route.request().url(), campos: Object.keys(await camposDe(route)) })
     await fulfillJson(route, { ok: true }, 201)
   })
+  // B7: reabrir / cerrar cambian el flag que leen la lista y el detalle.
+  await page.route(/\/api\/cuentas\/proyectos\/([^/]+)\/(reabrir|cerrar)$/, async (route) => {
+    const [, id, accion] = /proyectos\/([^/]+)\/(reabrir|cerrar)$/.exec(route.request().url())!
+    llamadas.reapertura.push({ url: route.request().url(), cuerpo: route.request().postDataJSON() })
+    if (accion === 'reabrir') registroMock.reabiertos.add(decodeURIComponent(id))
+    else registroMock.reabiertos.delete(decodeURIComponent(id))
+    await fulfillJson(route, { reapertura_id: 'r1', proyecto_id: id })
+  })
+  await page.route(/\/api\/cuentas\/correcciones$/, async (route) => {
+    llamadas.correcciones.push(route.request().postDataJSON())
+    await fulfillJson(route, { ok: true })
+  })
+
   await page.route(/\/api\/cuentas-pagar\/pagos\/([^/]+)\/comprobante$/, async (route) => {
     llamadas.subidas.push({ url: route.request().url(), campos: Object.keys(await camposDe(route)) })
     await fulfillJson(route, { pago_id: 'x' })

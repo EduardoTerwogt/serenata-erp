@@ -6,8 +6,9 @@ import { SIN_PROYECTO_ID } from '@/lib/shared/cuentas/periodo-tipos'
 const ROUTE = 'POST /api/cuentas/proyectos/:id/cerrar'
 
 /**
- * Rediseño de Cuentas B7 (D5, D6): "Volver a cerrar" termina la reapertura
- * cuando ya no quedan pendientes. Solo admin.
+ * Rediseño de Cuentas B7 (D5, D6): termina la reapertura. Sin pendientes es
+ * "Volver a cerrar"; con pendientes, "Terminar correcciones" (las cuentas se
+ * cierran solas al resolverlos). Solo admin.
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('admin')

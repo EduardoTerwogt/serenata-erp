@@ -117,9 +117,9 @@ BEGIN
 END;
 $$;
 
--- Solo registra la reapertura: que las cuentas estén cerradas (valor
--- derivado, D17) lo valida la ruta con la misma derivación que la pantalla.
--- Idempotente: si ya hay una activa, la devuelve.
+-- Solo registra la reapertura. Un admin reabre con o sin pendientes
+-- (decisión del usuario, sesión 20). Idempotente: si ya hay una activa, la
+-- devuelve.
 CREATE OR REPLACE FUNCTION public.reabrir_cuentas_proyecto(p_proyecto_id text, p_motivo text, p_usuario text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -152,8 +152,9 @@ BEGIN
 END;
 $$;
 
--- Que ya no queden pendientes lo valida la ruta (misma derivación que la
--- pantalla). Idempotente: sin reapertura activa no hace nada.
+-- Termina la reapertura: sin pendientes las cuentas quedan cerradas; con
+-- pendientes se cierran solas al resolverlos (D17). Idempotente: sin
+-- reapertura activa no hace nada.
 CREATE OR REPLACE FUNCTION public.cerrar_cuentas_proyecto(p_proyecto_id text, p_usuario text)
 RETURNS jsonb
 LANGUAGE plpgsql

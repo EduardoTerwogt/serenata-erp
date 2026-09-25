@@ -2,6 +2,7 @@
  * Rediseño de Cuentas B5 (U2): carga de la BD del detalle de un concepto.
  * El armado (y la derivación) vive en detalle-armar.ts, puro.
  */
+import { cuentasReabiertas } from '@/lib/server/repositories/proyectos'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import type { DetalleCobro, DetallePago, ProyectoDetalleCorto } from '@/lib/shared/cuentas/detalle-tipos'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
@@ -9,19 +10,6 @@ import type { RegimenFiscal } from '@/lib/types'
 import { armarDetalleCobro, armarDetallePago, type DocumentoFila, type PagoFilas } from './detalle-armar'
 
 const COLS_DOC = 'id, tipo, archivo_url, archivo_nombre, fecha_carga, estado_validacion, detalle_validacion, eliminado_at, eliminado_motivo'
-
-/** B7: las cuentas del proyecto tienen una reapertura activa. */
-async function reabierta(proyectoId: string | null): Promise<boolean> {
-  if (!proyectoId) return false
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_reaperturas')
-    .select('id')
-    .eq('proyecto_id', proyectoId)
-    .is('cerrada_at', null)
-    .maybeSingle()
-  if (error) throw error
-  return Boolean(data)
-}
 
 async function proyectoCorto(id: string | null): Promise<ProyectoDetalleCorto | null> {
   if (!id) return null
@@ -48,7 +36,7 @@ export async function cargarDetalleCobro(id: string): Promise<DetalleCobro | nul
       .from('pagos_comprobantes')
       .select('id, monto, tipo_pago, fecha_pago, comprobante_url, notas, created_at, anulado_at, anulado_motivo')
       .eq('cuentas_cobrar_id', id),
-    reabierta(cuenta.proyecto_id),
+    cuentasReabiertas(cuenta.proyecto_id),
   ])
   if (docs.error) throw docs.error
   if (pagos.error) throw pagos.error
@@ -113,7 +101,7 @@ export async function cargarDetallePago(objetivo: 'grupo' | 'cuenta', id: string
     destino.orden_pago_id
       ? supabaseAdmin.from('ordenes_pago').select('id, pdf_nombre, pdf_url, estado, fecha_generacion').eq('id', destino.orden_pago_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
-    reabierta(destino.proyecto_id),
+    cuentasReabiertas(destino.proyecto_id),
   ])
   for (const r of [docs, pagos, proveedor, orden]) if (r.error) throw r.error
 

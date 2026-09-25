@@ -8,11 +8,7 @@
  */
 import { DomainError } from '@/lib/server/errors/domain-error'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import type { ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
-import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 import type { CorreccionCuentas } from '@/lib/validation/schemas'
-import { construirProyectos } from './periodo'
-import { cargarCuentasAnio } from './periodo-rpc'
 
 const MENSAJES: Record<string, { status: number; mensaje: string }> = {
   proyecto_no_reabierto: { status: 409, mensaje: 'Las cuentas del proyecto no están reabiertas: un admin debe reabrirlas antes de corregir.' },
@@ -24,6 +20,7 @@ const MENSAJES: Record<string, { status: number; mensaje: string }> = {
   pago_anulado: { status: 409, mensaje: 'El pago está anulado.' },
   en_orden: { status: 409, mensaje: 'Está en una orden de pago: cancela primero la orden.' },
   pagos_activos: { status: 409, mensaje: 'Anula primero los pagos del concepto.' },
+  proyecto_no_encontrado: { status: 404, mensaje: 'El proyecto no existe.' },
   grupo_abierto_existente: { status: 409, mensaje: 'El proveedor ya tiene otro grupo abierto en este proyecto; no se puede reabrir este.' },
   grupo_no_abierto: { status: 409, mensaje: 'El grupo ya está facturado o pagado; no se puede reasignar.' },
 }
@@ -36,23 +33,10 @@ async function llamar<T>(fn: string, args: Record<string, unknown>): Promise<T> 
     const m = MENSAJES[codigo]
     throw new DomainError({ code: codigo, status: m.status, safeMessage: m.mensaje, cause: error })
   }
-  if (error.code === 'P0002') throw new DomainError({ code: 'no_encontrado', status: 404, safeMessage: 'No se encontró el registro.', cause: error })
+  if (error.code === 'P0002') {
+    throw new DomainError({ code: 'no_encontrado', status: 404, safeMessage: MENSAJES[codigo]?.mensaje ?? 'No se encontró el registro.', cause: error })
+  }
   throw error
-}
-
-/**
- * Estado derivado de las cuentas de un proyecto (D17), con la misma
- * derivación que la pantalla: lectura cruda de ese solo proyecto.
- */
-export async function cuentasDelProyecto(proyectoId: string): Promise<ProyectoDetalle | null> {
-  const { data, error } = await supabaseAdmin.from('proyectos').select('id, fecha_entrega').eq('id', proyectoId).maybeSingle()
-  if (error) throw error
-  if (!data) return null
-  const hoy = hoyCdmx()
-  // Un proyecto sin fecha válida aparece en cualquier año (D9).
-  const fecha = typeof data.fecha_entrega === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha_entrega) ? data.fecha_entrega : hoy
-  const crudo = await cargarCuentasAnio(Number(fecha.slice(0, 4)), proyectoId)
-  return construirProyectos(crudo, hoy).find((p) => p.id === proyectoId) ?? null
 }
 
 export interface ResultadoReapertura {
@@ -60,28 +44,22 @@ export interface ResultadoReapertura {
   proyecto_id: string
 }
 
+/**
+ * Reabrir (D5, D6). Un admin puede reabrir en cualquier momento, con o sin
+ * pendientes (decisión del usuario, sesión 20): así un error en un proyecto
+ * que todavía no cierra también se corrige. Idempotente: ya reabiertas
+ * devuelve la reapertura vigente.
+ */
 export async function reabrirCuentas(proyectoId: string, motivo: string, usuario: string): Promise<ResultadoReapertura> {
-  const p = await cuentasDelProyecto(proyectoId)
-  if (!p) throw new DomainError({ code: 'no_encontrado', status: 404, safeMessage: 'El proyecto no tiene cuentas.' })
-  // D17 / prototipo (canReopen): solo se reabre lo que está cerrado. Ya
-  // reabiertas se devuelve la reapertura vigente (la RPC es idempotente).
-  if (!p.cuentas.cerradas && !p.cuentas.reabiertas) {
-    throw new DomainError({ code: 'cuentas_abiertas', status: 409, safeMessage: 'Las cuentas todavía tienen pendientes: solo se reabren cuentas cerradas.' })
-  }
   return llamar('reabrir_cuentas_proyecto', { p_proyecto_id: proyectoId, p_motivo: motivo, p_usuario: usuario })
 }
 
+/**
+ * Termina la reapertura. Sin pendientes las cuentas quedan cerradas ("Volver
+ * a cerrar"); con pendientes vuelven a su estado normal y se cierran solas
+ * al resolverlos (D17: cerradas = sin pendientes y sin reapertura activa).
+ */
 export async function cerrarCuentas(proyectoId: string, usuario: string): Promise<ResultadoReapertura> {
-  const p = await cuentasDelProyecto(proyectoId)
-  if (!p) throw new DomainError({ code: 'no_encontrado', status: 404, safeMessage: 'El proyecto no tiene cuentas.' })
-  // Prototipo (canReclose): solo sin pendientes; si no, se cerrarán solas al resolverlos.
-  if (p.cuentas.pendientes > 0) {
-    throw new DomainError({
-      code: 'cuentas_pendientes',
-      status: 409,
-      safeMessage: `Todavía hay ${p.cuentas.pendientes} ${p.cuentas.pendientes === 1 ? 'concepto' : 'conceptos'} por resolver.`,
-    })
-  }
   return llamar('cerrar_cuentas_proyecto', { p_proyecto_id: proyectoId, p_usuario: usuario })
 }
 

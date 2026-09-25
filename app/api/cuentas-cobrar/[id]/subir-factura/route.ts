@@ -1,9 +1,10 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaCobrarById, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
+import { getCuentaCobrarById, getDocumentosCuentaCobrar, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
 import { parseFacturaXML, validarMontoFactura, validarFacturaClienteXML, calcularDeadline } from '@/lib/server/xml/factura-parser'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
+import { completarReemplazo, planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 import { calcularEstadoCuentaCobrarDetallado } from '@/lib/shared/cuentas/status'
@@ -46,6 +47,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         { status: 404 }
       )
     }
+
+    // B7: con una factura vigente validada, subir otra es reemplazarla:
+    // solo admin con las cuentas reabiertas (reemplazo-factura.ts).
+    const plan = await planearFactura('cobro', cuenta, await getDocumentosCuentaCobrar(id), authResult.session?.user, formData.get('motivo'))
+    if (!plan.ok) return Response.json(plan.body, { status: plan.status })
 
     // Obtener cotización para validar monto
     const cotizacion = await getCotizacionById(cuenta.cotizacion_id)
@@ -134,8 +140,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const validacionXml = validarFacturaClienteXML(facturaData, cotizacion.total)
 
     // Crear registros en BD
+    let xmlNuevoId: string | null = null
     for (const file of uploadedFiles) {
-      await createDocumentoCuentaCobrar({
+      const doc = await createDocumentoCuentaCobrar({
         cuentas_cobrar_id: id,
         tipo: file.type,
         archivo_url: file.url,
@@ -149,7 +156,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
           metodo_pago_cfdi: facturaData.metodo_pago ?? null,
         } : {}),
       })
+      if (file.type === 'FACTURA_XML') xmlNuevoId = doc.id
     }
+    if (plan.reemplazo && xmlNuevoId) await completarReemplazo(plan.reemplazo, xmlNuevoId)
 
     // V2 (Rediseño de Cuentas B1): el estado sale de montos, factura y "hoy"
     // en CDMX, nunca fijo en FACTURADO -- con un anticipo previo, fijarlo

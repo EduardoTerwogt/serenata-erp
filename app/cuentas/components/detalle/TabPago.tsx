@@ -9,6 +9,7 @@ import { TextField } from '@/components/ui/TextField'
 import { fmtMoney } from '@/lib/quotations/format'
 import type { DetalleConcepto } from '@/lib/shared/cuentas/detalle-tipos'
 import { fechaCorta } from '../formato'
+import { CorregirPago, HistorialCorrecciones } from './Correcciones'
 import { ACCEPT_COMPROBANTE, BotonArchivo, type Ejecutar } from './TabDocumentos'
 import { Seccion } from './TabInformacion'
 import { accionesDetalle, type ObjetivoDetalle } from './useDetalle'
@@ -29,6 +30,8 @@ interface Props {
   irA: (t: PestanaDetalle) => void
   /** Fecha de negocio (CDMX) para el default del formulario. */
   hoy: string
+  /** B7: admin con las cuentas reabiertas. */
+  corrige: boolean
 }
 
 function Aviso({ icono, tono, children }: { icono: IconName; tono: 'neutro' | 'acento' | 'ok'; children: ReactNode }) {
@@ -59,7 +62,7 @@ function bloqueo(d: DetalleConcepto): { mensaje: string; boton: string; tab: Pes
 }
 
 /** Pestaña Registrar pago (B5): formulario, bloqueos, saldada e historial. */
-export function TabPago({ d, objetivo, ejecutar, avisarError, irA, hoy }: Props) {
+export function TabPago({ d, objetivo, ejecutar, avisarError, irA, hoy, corrige }: Props) {
   const saldo = Math.max(0, Math.round((d.total - d.pagado) * 100) / 100)
   const bloq = bloqueo(d)
   const saldada = saldo <= 0
@@ -85,7 +88,8 @@ export function TabPago({ d, objetivo, ejecutar, avisarError, irA, hoy }: Props)
         // Se vuelve a montar cuando cambia el pagado: los defaults (monto = saldo) se recalculan.
         <Formulario key={d.pagado} d={d} objetivo={objetivo} saldo={saldo} ejecutar={ejecutar} avisarError={avisarError} hoy={hoy} />
       )}
-      <HistorialPagos d={d} ejecutar={ejecutar} avisarError={avisarError} />
+      <HistorialPagos d={d} ejecutar={ejecutar} avisarError={avisarError} corrige={corrige} />
+      <HistorialCorrecciones c={d.correcciones} tipo="pagos" />
     </>
   )
 }
@@ -192,7 +196,7 @@ function Formulario({ d, objetivo, saldo, ejecutar, avisarError, hoy }: { d: Det
   )
 }
 
-function HistorialPagos({ d, ejecutar, avisarError }: { d: DetalleConcepto; ejecutar: Ejecutar; avisarError: (m: string) => void }) {
+function HistorialPagos({ d, ejecutar, avisarError, corrige }: { d: DetalleConcepto; ejecutar: Ejecutar; avisarError: (m: string) => void; corrige: boolean }) {
   const filas = d.pagos.map((p) => ({
     id: p.id,
     fecha: p.fecha,
@@ -200,6 +204,7 @@ function HistorialPagos({ d, ejecutar, avisarError }: { d: DetalleConcepto; ejec
     nota: d.tipo === 'cobro' && 'complemento' in p && p.complemento.estado === 'anticipo' ? 'Anticipo' : 'estimado' in p && p.estimado ? 'Monto estimado' : '',
     monto: p.monto,
     comprobante: p.comprobante_url,
+    notas: p.notas,
   }))
   const cols = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_104px] items-center gap-x-3 px-3.5'
   return (
@@ -236,6 +241,7 @@ function HistorialPagos({ d, ejecutar, avisarError }: { d: DetalleConcepto; ejec
                 <span className="text-faint">—</span>
               )}
             </span>
+            {corrige && <CorregirPago key={`${p.fecha}|${p.notas ?? ''}`} dominio={d.tipo === 'cobro' ? 'cobro' : 'proveedor'} pago={p} ejecutar={ejecutar} />}
           </div>
         ))}
         {filas.length === 0 && <div className="border-t border-hairline p-3.5 text-[12.5px] text-faint">Sin pagos registrados</div>}

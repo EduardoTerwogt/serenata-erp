@@ -72,6 +72,8 @@ export const registroMock = {
   grupos: new Map<string, PagoMock[]>(),
   /** Grupos que entraron a una orden generada en la prueba (utils/cuentas-ordenes-mocks.ts). */
   ordenados: new Set<string>(),
+  /** B7: proyectos con las cuentas reabiertas en la prueba (utils/cuentas-detalle-mocks.ts). */
+  reabiertos: new Set<string>(),
 }
 const suma = (xs: PagoMock[]) => r2(xs.reduce((s, x) => s + x.monto, 0))
 
@@ -83,7 +85,7 @@ export function filasAnio(anio: number) {
   const grupos: unknown[] = []
   delAnio.forEach((p) => {
     const iva = r2(p.cobros.reduce((s, c) => s + c[1], 0) * (0.16 / 1.16))
-    proyectos.push([p.id, p.nombre, p.cliente, null, p.evento, p.margen, 0, p.margen, iva])
+    proyectos.push([p.id, p.nombre, p.cliente, null, p.evento, p.margen, 0, p.margen, iva, registroMock.reabiertos.has(p.id)])
     const fechaFactura = p.evento ?? '2026-09-01'
     p.cobros.forEach(([concepto, total, pagado, estado, venc], k) => {
       const tieneFactura = estado !== 'sin_factura'
@@ -148,6 +150,7 @@ export async function mockCuentasPeriodo(page: Page) {
   registroMock.cobros.clear()
   registroMock.grupos.clear()
   registroMock.ordenados.clear()
+  registroMock.reabiertos.clear()
   await page.route(/\/api\/cuentas\/periodo(\?.*)?$/, async (route) => {
     const sp = new URL(route.request().url()).searchParams
     const anio = Number(sp.get('anio')) || 2026

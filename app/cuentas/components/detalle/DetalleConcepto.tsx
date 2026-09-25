@@ -11,7 +11,7 @@ import { StatusBanner } from '@/components/ui/StatusBanner'
 import { fmtMoney } from '@/lib/quotations/format'
 import type { DetalleConcepto as Detalle } from '@/lib/shared/cuentas/detalle-tipos'
 import { nombreCobro } from '@/lib/shared/cuentas/concepto'
-import { TONO } from '../ui'
+import { TONO, useEsAdmin } from '../ui'
 import { TabDocumentos } from './TabDocumentos'
 import { TabInformacion } from './TabInformacion'
 import { TabPago } from './TabPago'
@@ -51,6 +51,9 @@ function concepto(d: Detalle) {
  */
 export function DetalleConcepto({ conceptoKey, tab, onTab, onClose, onCambio, hoy }: Props) {
   const { objetivo, detalle: d, error, cargando, recargar } = useDetalle(conceptoKey)
+  const esAdmin = useEsAdmin()
+  // B7 (D5): las correcciones solo aparecen para admin con las cuentas reabiertas.
+  const corrige = Boolean(esAdmin && d?.correcciones.reabierta)
   const [aviso, setAviso] = useState<{ tono: 'success' | 'error'; texto: string } | null>(null)
 
   const tras = async (accion: () => Promise<unknown>, exito: string) => {
@@ -134,9 +137,14 @@ export function DetalleConcepto({ conceptoKey, tab, onTab, onClose, onCambio, ho
       {aviso && <StatusBanner tone={aviso.tono}>{aviso.texto}</StatusBanner>}
       {error && !d && <StatusBanner tone="error">{error}</StatusBanner>}
       {!d && cargando && <SectionLoading className="min-h-[240px]" />}
-      {d && objetivo && tab === 'info' && <TabInformacion d={d} onReasignar={(itemId, id, nombre) => tras(() => accionesDetalle.reasignar(itemId, id, nombre), 'Proveedor reasignado')} />}
-      {d && objetivo && tab === 'docs' && <TabDocumentos d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} />}
-      {d && objetivo && tab === 'pago' && <TabPago d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} irA={onTab} hoy={hoy} />}
+      {corrige && (
+        <StatusBanner tone="info" className="text-[12.5px]">Cuentas reabiertas: puedes anular pagos, quitar o reemplazar documentos y corregir datos. Cada cambio queda registrado.</StatusBanner>
+      )}
+      {d && objetivo && tab === 'info' && (
+        <TabInformacion d={d} ejecutar={tras} corrige={corrige} onReasignar={(itemId, id, nombre) => tras(() => accionesDetalle.reasignar(itemId, id, nombre), 'Proveedor reasignado')} />
+      )}
+      {d && objetivo && tab === 'docs' && <TabDocumentos d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} corrige={corrige} />}
+      {d && objetivo && tab === 'pago' && <TabPago d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} irA={onTab} hoy={hoy} corrige={corrige} />}
     </Modal>
   )
 }

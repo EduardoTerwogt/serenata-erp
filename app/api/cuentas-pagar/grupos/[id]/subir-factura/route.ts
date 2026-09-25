@@ -1,11 +1,12 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaPagarGrupoById, createDocumentoCuentaPagar, getProyectoById, getProveedorById, validarFacturaProveedor } from '@/lib/db'
+import { getCuentaPagarGrupoById, getDocumentosCuentaPagarGrupo, createDocumentoCuentaPagar, getProyectoById, getProveedorById, validarFacturaProveedor } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
 import { RegimenFiscal } from '@/lib/types'
+import { completarReemplazo, planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 
@@ -56,9 +57,13 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     if (!grupo) {
       return Response.json({ error: 'Grupo de cuentas por pagar no encontrado' }, { status: 404 })
     }
-    if (grupo.estado !== 'ABIERTO') {
-      return Response.json({ error: 'grupo_no_abierto', message: `Este grupo ya está en estado ${grupo.estado}; no se puede subir otra factura sobre él.` }, { status: 409 })
-    }
+    // B7: con una factura vigente validada (grupo facturado o con pagos),
+    // subir otra es reemplazarla: solo admin con las cuentas reabiertas
+    // (reemplazo-factura.ts). Sin ella (primera, o la anterior se dio de
+    // baja) procede aunque el grupo ya no esté ABIERTO:
+    // validar_factura_proveedor conserva el snapshot si ya hay pagos.
+    const plan = await planearFactura('proveedor', grupo, await getDocumentosCuentaPagarGrupo(id), authResult.session?.user, formData.get('motivo'))
+    if (!plan.ok) return Response.json(plan.body, { status: plan.status })
 
     const facturaXmlContent = await facturaXmlFile.text()
     if (!facturaXmlContent.trim().startsWith('<')) {
@@ -129,6 +134,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       documentoXml.estado_validacion = 'validado'
       estadoGrupo = validada.estado as typeof grupo.estado
     }
+    if (plan.reemplazo) await completarReemplazo(plan.reemplazo, documentoXml.id)
 
     return Response.json({
       success: true,
