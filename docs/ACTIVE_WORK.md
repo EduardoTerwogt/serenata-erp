@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 20: B0 y B1b mergeados)
+**Última actualización:** 2026-09-25 (sesión 20: B1–B8 y B7 completos en la rama del PR #96, pendiente de revisión del usuario)
 
 ## Estado
 
@@ -54,6 +54,22 @@
   - H3 en `registrar_pago_cuenta_pagar` y CHECK de `cuentas_pagar.estado`.
   Se retiraron los `PUT` genéricos de cuentas (H4). Tests `live` en
   `tests/e2e/live/cuentas-b1b.spec.ts`.
+- **B1–B6, B8 y B7 hechos en la rama `claude/practical-brown-giy5p3`
+  (PR #96, borrador).** Tracker en `docs/PLAN.md` §10.
+  - Migraciones `20260926`–`20261005` aplicadas **solo en
+    `serenata-erp-test`** (el Preview apunta ahí). A producción van todas
+    juntas al aprobar el merge, en orden, verificando cada una.
+  - O1b: la derivación del periodo pasó a SQL con test de paridad (E1).
+  - B7 con dos decisiones nuevas del usuario (D33: un admin reabre siempre;
+    D34: reemplazar una factura validada es corrección de admin) y E1–E5 en
+    §5.11 del plan y en la decisión 017.
+- **Falta para cerrar la iniciativa:**
+  1. CI verde en el PR #96 (incluido el job `live`: paridad SQL, p95 y
+     `cuentas-b7-correcciones.spec.ts`).
+  2. R9: Drive en Preview (lo configura el usuario, pasos abajo).
+  3. Prueba manual del usuario en el Preview y aprobación del merge.
+  4. Al aprobar: migraciones a producción, merge, capturas O10 y mover el
+     plan a `docs/archive/`.
 
 ## Completado en las sesiones 9 y 10
 
@@ -87,12 +103,32 @@ fijar supuestos que el usuario aún puede cambiar. Las de más peso:
 
 ## Tests ejecutados
 
-No aplica: no hubo cambios de código. La réplica se validó abriéndola sin
-servidor contra capturas de la app real, en tema claro y oscuro.
+Sesión 20 (último commit de B7), en local:
+- `npx tsc --noEmit`, `npm run lint` (0 errores; 6 warnings previos) y
+  `npm test`: 133 archivos, 1,104 tests en verde.
+- `npm run build` en verde.
+- e2e crítico de Cuentas (principal, detalle, órdenes, reabrir), escritorio y
+  móvil: 26/26.
+- Los specs `live` corren en CI (job `live` del PR #96). El escenario de
+  anulación de B7 se verificó además en `serenata-erp-test` dentro de un
+  bloque SQL revertido.
 
 ## Pendiente del usuario
 
-- Antes de B8: encender Drive en Preview (R9); los pasos se dan en su momento.
+- **R9, Drive en Preview** (para probar subidas y órdenes en el Preview del
+  PR #96):
+  1. Refresh token de la cuenta de Google de pruebas: el mismo valor del
+     secreto `GOOGLE_DRIVE_REFRESH_TOKEN_TEST` de GitHub, o uno nuevo desde
+     `https://serenata-erp.vercel.app/api/integrations/drive/authorize`
+     (sesión admin; elegir la cuenta con acceso a la carpeta de pruebas
+     `1cofExiUSPDRq9CeH6oU-WSBev1I56m-a`; la página muestra el token).
+  2. Vercel → proyecto → Settings → Environment Variables → Add:
+     `GOOGLE_DRIVE_REFRESH_TOKEN` con ese valor, **solo Preview**
+     (desmarcar Production y Development).
+  3. Confirmar que Preview ya tiene `GOOGLE_DRIVE_FOLDER_ID` y
+     `GOOGLE_DRIVE_FOLDER_ID_CUENTAS` hacia la carpeta de pruebas.
+  4. Deployments → último Preview del PR #96 → ⋯ → Redeploy.
+- Revisar el Preview del PR #96 y decidir el merge.
 - Borrar ramas remotas ya mergeadas (GitHub → Branches → Merged).
 
 ## Cómo retomar (sesión nueva)
@@ -103,15 +139,16 @@ servidor contra capturas de la app real, en tema claro y oscuro.
    Cada bloque se abre auditando el código real de su alcance.
 3. B0 ya está hecho (PR #94) y el diseño vive en `docs/design/cuentas/`.
    B1b también (PR #95).
-4. Seguir el grafo B1 → B2 → B3 → B4 → B5 → B6 → B8 → B7, un PR por
-   bloque, actualizando el tracker (§10).
+4. B1–B8 y B7 ya están en la rama del PR #96 (una sola rama, decisión de
+   la sesión 20). Lo que falta está arriba, en "Falta para cerrar la
+   iniciativa".
 
 Prompt sugerido para la sesión nueva:
 
 ```
 /serenata-iniciar-fase
-Retomamos el rediseño de Cuentas (docs/PLAN.md, aprobado). Sigue el
-siguiente bloque del tracker.
+Retomamos el rediseño de Cuentas (docs/PLAN.md, aprobado). Revisa el
+estado del PR #96 y sigue con lo que falta para cerrar la iniciativa.
 ```
 
 Para ver el diseño en local, servir `docs/design/cuentas/` por HTTP: `python3 -m
