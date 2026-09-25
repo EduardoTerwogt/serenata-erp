@@ -1,4 +1,5 @@
 import type { CuentaPagarConJoins, OrdenPagoCandidato } from '@/lib/server/repositories/cuentas-pagar'
+import type { CruceOrden } from '@/lib/shared/cuentas/ordenes-tipos'
 
 export interface OrdenPagoPreviewItem {
   descripcion: string
@@ -27,6 +28,8 @@ export interface OrdenPagoPreviewResponsable {
   }
   eventos: OrdenPagoPreviewEvento[]
   total_responsable: number
+  /** Rediseño de Cuentas B6 (supuesto 14): cruce fiscal del responsable; el PDF lo imprime si viene. */
+  cruce?: CruceOrden
 }
 
 export interface OrdenPagoPreviewResult {
@@ -36,6 +39,8 @@ export interface OrdenPagoPreviewResult {
     eventos: number
     items_totales: number
     total_general: number
+    /** B6 (supuesto 14, D20): total general a transferir; si viene, es el total de la orden en el PDF. */
+    total_transferir?: number
   }
   cuentas_ids: string[]
   /**

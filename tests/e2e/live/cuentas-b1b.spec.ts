@@ -180,6 +180,61 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
     }
   })
 
+  test('B6: candidatos → orden → cancelar libera el grupo y conserva el desglose (D7, R6, S1)', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    try {
+      const principal = `${fx.prefix}-P`
+      const grupoId = randomUUID()
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId, xPagar: 1000, grupoEstado: 'FACTURADO' })
+      ok(await supabase.from('documentos_cuentas_pagar').insert({
+        grupo_id: grupoId,
+        tipo: 'FACTURA_PROVEEDOR_XML',
+        archivo_url: 'https://example.com/live.xml',
+        archivo_nombre: 'live.xml',
+        estado_validacion: 'validado',
+      }))
+
+      type Candidatos = { elegibles: { id: string; saldo: number; items: unknown[] }[] }
+      const antes = must(await supabase.rpc('cuentas_orden_candidatos', { p_limite_no_incluidas: 0 })) as Candidatos
+      const elegible = antes.elegibles.find((e) => e.id === grupoId)
+      expect(elegible?.saldo).toBe(1000)
+      expect(elegible?.items).toHaveLength(1)
+
+      const generada = must(await supabase.rpc('generar_orden_pago', {
+        p_candidatos: [{ tipo: 'grupo', id: grupoId, monto_esperado: 1000 }],
+        p_pdf_url: null,
+        p_pdf_nombre: `${fx.prefix} B6.pdf`,
+        p_usuario: 'live',
+      })) as { orden_pago_id: string }
+      fx.ordenes.push(generada.orden_pago_id)
+      const enOrden = must(await supabase.rpc('cuentas_orden_candidatos', { p_limite_no_incluidas: 0 })) as Candidatos
+      expect(enOrden.elegibles.some((e) => e.id === grupoId)).toBe(false)
+
+      ok(await supabase.rpc('cancelar_orden_pago', { p_orden_id: generada.orden_pago_id, p_motivo: 'prueba live', p_usuario: 'live' }))
+      const grupo = must(await supabase.from('cuentas_pagar_grupos').select('estado, orden_pago_id').eq('id', grupoId).single())
+      expect(grupo).toEqual({ estado: 'FACTURADO', orden_pago_id: null })
+      const hijas = must(await supabase.from('cuentas_pagar').select('estado, orden_pago_id').eq('grupo_id', grupoId))
+      expect(hijas).toEqual([{ estado: 'PENDIENTE', orden_pago_id: null }])
+      const orden = must(await supabase.from('ordenes_pago').select('estado, cancelada_motivo').eq('id', generada.orden_pago_id).single())
+      expect(orden).toEqual({ estado: 'CANCELADA', cancelada_motivo: 'prueba live' })
+      const conceptos = must(await supabase.from('ordenes_pago_conceptos').select('grupo_id').eq('orden_pago_id', generada.orden_pago_id))
+      expect(conceptos).toEqual([{ grupo_id: grupoId }])
+
+      const otraVez = await supabase.rpc('cancelar_orden_pago', { p_orden_id: generada.orden_pago_id, p_motivo: 'otra', p_usuario: 'live' })
+      expect(otraVez.error?.message ?? '').toMatch(/^orden_cancelada/)
+      const despues = must(await supabase.rpc('cuentas_orden_candidatos', { p_limite_no_incluidas: 0 })) as Candidatos
+      expect(despues.elegibles.some((e) => e.id === grupoId)).toBe(true)
+
+      type Historial = { rows: { id: string; estado: string; cuentas: number }[] }
+      const hist = must(await supabase.rpc('buscar_ordenes_pago', { p_filtros: { q: fx.prefix }, p_page: 1, p_page_size: 5 })) as Historial
+      expect(hist.rows).toEqual([expect.objectContaining({ id: generada.orden_pago_id, estado: 'CANCELADA', cuentas: 1 })])
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
   test('pago parcial de una suelta dentro de una orden conserva EN_PROCESO_PAGO (H3)', async () => {
     const supabase = getLiveSupabaseAdmin()
     const fx = await nuevoFixture(supabase)

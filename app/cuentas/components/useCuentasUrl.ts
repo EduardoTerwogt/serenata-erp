@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { FiltroEstado, FiltroTipo, MesPeriodo, VistaCuentas } from '@/lib/shared/cuentas/periodo-tipos'
 
-export type HojaCuentas = 'periodo' | 'filtros' | 'buscar'
+/** Hojas y modales que se abren con push (S15): 'orden' = Generar orden, 'historial' = Historial de órdenes (B6). */
+export type HojaCuentas = 'periodo' | 'filtros' | 'buscar' | 'orden' | 'historial'
 export type PantallaCuentas = 'avisos' | 'ordenes'
 
 export interface EstadoCuentas {
@@ -67,7 +68,7 @@ function leer(sp: URLSearchParams): EstadoCuentas {
     proyecto: sp.get('proyecto'),
     det: sp.get('det'),
     tab: sp.get('tab'),
-    sheet: (['periodo', 'filtros', 'buscar'] as const).find((h) => h === sp.get('sheet')) ?? null,
+    sheet: (['periodo', 'filtros', 'buscar', 'orden', 'historial'] as const).find((h) => h === sp.get('sheet')) ?? null,
     pantalla: (['avisos', 'ordenes'] as const).find((p) => p === sp.get('page_m')) ?? null,
   }
 }

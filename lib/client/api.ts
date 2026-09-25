@@ -35,6 +35,29 @@ async function handleUnauthorizedResponse(url: string): Promise<void> {
   window.location.href = `/login?callbackUrl=${callbackUrl}`
 }
 
+/**
+ * Error de una respuesta no-OK. Extiende `Error` (el `message` es el mismo
+ * de siempre) y agrega el status y el código de negocio (`{ error: 'codigo',
+ * message }`), para las pantallas que reaccionan distinto a cada caso
+ * (p. ej. `candidatos_cambiaron` recarga el preview de la orden, S2).
+ */
+export class ApiError extends Error {
+  readonly status: number
+  readonly code: string | null
+  constructor(message: string, status: number, code: string | null) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+  }
+}
+
+async function apiError(response: Response, fallbackMessage: string): Promise<ApiError> {
+  const data = await safeParseJson(response.clone())
+  const code = typeof data?.error === 'string' && /^[a-z0-9_]+$/.test(data.error) ? data.error : null
+  return new ApiError(await getApiErrorMessage(response, fallbackMessage), response.status, code)
+}
+
 async function safeParseJson(response: Response): Promise<JsonLike | null> {
   try {
     return await response.json()
@@ -78,7 +101,7 @@ export async function getJson<T>(url: string, fallbackMessage: string, init?: Re
       .then(async (response) => {
         if (!response.ok) {
           if (response.status === 401) await handleUnauthorizedResponse(url)
-          throw new Error(await getApiErrorMessage(response, fallbackMessage))
+          throw await apiError(response, fallbackMessage)
         }
         return response.json() as T
       })
@@ -98,7 +121,7 @@ export async function getJson<T>(url: string, fallbackMessage: string, init?: Re
   const response = await fetch(url, init)
   if (!response.ok) {
     if (response.status === 401) await handleUnauthorizedResponse(url)
-    throw new Error(await getApiErrorMessage(response, fallbackMessage))
+    throw await apiError(response, fallbackMessage)
   }
   return response.json() as Promise<T>
 }
@@ -137,7 +160,7 @@ export async function getArrayBuffer(url: string, fallbackMessage: string, init?
   const response = await fetch(url, init)
   if (!response.ok) {
     if (response.status === 401) await handleUnauthorizedResponse(url)
-    throw new Error(await getApiErrorMessage(response, fallbackMessage))
+    throw await apiError(response, fallbackMessage)
   }
   return response.arrayBuffer()
 }

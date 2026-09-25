@@ -67,7 +67,12 @@ export interface PagoMock {
   notas: string | null
   comprobante_url: string | null
 }
-export const registroMock = { cobros: new Map<string, PagoMock[]>(), grupos: new Map<string, PagoMock[]>() }
+export const registroMock = {
+  cobros: new Map<string, PagoMock[]>(),
+  grupos: new Map<string, PagoMock[]>(),
+  /** Grupos que entraron a una orden generada en la prueba (utils/cuentas-ordenes-mocks.ts). */
+  ordenados: new Set<string>(),
+}
 const suma = (xs: PagoMock[]) => r2(xs.reduce((s, x) => s + x.monto, 0))
 
 /** Filas crudas del año como las de cuentas_por_proyecto(p_year). */
@@ -121,7 +126,7 @@ export function filasAnio(anio: number) {
         r2(neto * (transferido / total)),
         estado === 'sin_factura' ? null : total,
         transferido,
-        estado === 'en_orden' ? 'orden-1' : null,
+        estado === 'en_orden' ? 'orden-1' : registroMock.ordenados.has(`${p.id}-g${k}`) ? 'orden-nueva' : null,
         estado === 'sin_factura' ? null : [{ estado_validacion: 'validado', fecha_carga: `${fechaFactura} 19:00:00` }],
         pagado ? [{ fecha_carga: `${fechaFactura} 20:00:00` }] : null,
         pagosG.length ? pagosG : null,
@@ -142,6 +147,7 @@ function proyectosAnio(anio: number): ProyectoDetalle[] {
 export async function mockCuentasPeriodo(page: Page) {
   registroMock.cobros.clear()
   registroMock.grupos.clear()
+  registroMock.ordenados.clear()
   await page.route(/\/api\/cuentas\/periodo(\?.*)?$/, async (route) => {
     const sp = new URL(route.request().url()).searchParams
     const anio = Number(sp.get('anio')) || 2026

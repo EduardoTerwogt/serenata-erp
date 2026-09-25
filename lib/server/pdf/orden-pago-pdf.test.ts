@@ -113,4 +113,20 @@ describe('pdf/orden-pago-pdf', () => {
   it('comprime los logos (sin compress el isotipo solo pesaba ~590 KB)', () => {
     expect(generateOrdenPagoPdf(preview(12, 15)).byteLength).toBeLessThan(200_000)
   })
+
+  it('con cruce por responsable (B6, supuesto 14) sigue paginando: el cruce agrega líneas, no páginas de más', () => {
+    const base = preview(12, 15)
+    const conCruce = {
+      ...base,
+      responsables: base.responsables.map((r) => ({
+        ...r,
+        cruce: { subtotal: r.total_responsable, iva: r.total_responsable * 0.16, iva_retenido: 10, isr_retenido: 5, total: r.total_responsable * 1.16 - 15 },
+      })),
+      resumen: { ...base.resumen, total_transferir: base.resumen.total_general * 1.16 },
+    }
+    const sin = pageCount(generateOrdenPagoPdf(base))
+    const con = pageCount(generateOrdenPagoPdf(conCruce))
+    expect(con).toBeGreaterThanOrEqual(sin)
+    expect(con).toBeLessThanOrEqual(sin + 2)
+  })
 })

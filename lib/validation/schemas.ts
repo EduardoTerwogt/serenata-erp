@@ -371,6 +371,37 @@ export const GenerarOrdenPagoSchema = z.object({
   idempotency_key: z.string().uuid().optional(),
 })
 
+// Rediseño de Cuentas B6: "Generar orden PDF" manda lo que el usuario dejó
+// marcado, con el saldo neto que vio (la RPC lo revalida, S2), y una llave
+// por apertura del modal (S9).
+export const GenerarOrdenCuentasSchema = z.object({
+  idempotency_key: z.string().uuid({ message: 'idempotency_key inválida' }),
+  seleccion: z
+    .array(
+      z.object({
+        tipo: z.enum(['grupo', 'cuenta']),
+        id: z.string().uuid(),
+        monto_esperado: z.number().positive(),
+      })
+    )
+    .min(1, { message: 'Selecciona al menos un proveedor' })
+    .max(500),
+})
+
+export const CancelarOrdenSchema = z.object({
+  motivo: z.string().trim().min(3, { message: 'Escribe el motivo de la cancelación' }).max(500),
+})
+
+export const HistorialOrdenesQuerySchema = z.object({
+  estado: z.enum(['GENERADA', 'PARCIALMENTE_PAGADA', 'COMPLETADA', 'VENCIDA', 'CANCELADA']).optional(),
+  mes: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  proveedor: z.string().trim().max(200).optional(),
+  proyecto: z.string().trim().max(50).optional(),
+  q: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(100).default(20),
+})
+
 // ==================== HELPER ====================
 
 /**

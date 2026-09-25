@@ -7,6 +7,7 @@ import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { withIdempotency } from '@/lib/server/idempotency'
 import { buildOrdenPagoPreview } from '@/lib/server/ordenes-pago/build'
+import { nombreArchivoOrden } from '@/lib/server/ordenes-pago/nombre'
 import { generateOrdenPagoPdf } from '@/lib/server/pdf/orden-pago-pdf'
 import { buildErrorResponse, DomainError } from '@/lib/server/errors/domain-error'
 import { logStructured, newRequestId } from '@/lib/server/observability/log'
@@ -18,20 +19,7 @@ const ROUTE_POST = 'POST /api/cuentas-pagar/generar-orden-pago'
 const IDEMPOTENCY_SCOPE = 'cuentas-pagar:generar-orden-pago'
 
 function buildOrdenPagoFileName(preview: ReturnType<typeof buildOrdenPagoPreview>) {
-  const now = new Date()
-  const day = String(now.getDate()).padStart(2, '0')
-  const month = now.toLocaleDateString('es-MX', { month: 'short', timeZone: 'UTC' })
-  const monthFormatted = month.replace('.', '').replace(/^./, (value) => value.toUpperCase())
-  const folios = Array.from(
-    new Set(
-      preview.responsables.flatMap((responsable) =>
-        responsable.eventos.map((evento) => evento.cotizacion_folio).filter(Boolean)
-      )
-    )
-  )
-
-  const foliosSegment = folios.join(',')
-  return `O.P ${day}-${monthFormatted} ${foliosSegment}.pdf`
+  return nombreArchivoOrden(preview.responsables.flatMap((responsable) => responsable.eventos.map((evento) => evento.cotizacion_folio)))
 }
 
 function isDriveAuthError(message: string) {

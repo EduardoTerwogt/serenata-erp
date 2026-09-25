@@ -22,6 +22,11 @@ import { useEsAncho, useEsEscritorio } from './ui'
 import { PAGE_SIZE_LISTA, useCuentasDatos } from './useCuentasDatos'
 import { useCuentasUrl } from './useCuentasUrl'
 import { DetalleConcepto, type PestanaDetalle } from './detalle/DetalleConcepto'
+import { GenerarOrden } from './ordenes/GenerarOrden'
+import { HistorialModal } from './ordenes/HistorialOrdenes'
+import { PanelAvisosOrdenes } from './ordenes/PanelAvisosOrdenes'
+import { useAvisos } from './ordenes/useOrdenes'
+import type { AvisoItem } from '@/lib/shared/cuentas/periodo-tipos'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 
 const VISTAS: { value: VistaCuentas; label: string }[] = [
@@ -64,6 +69,34 @@ export function CuentasApp() {
   const { estado, filtrar, abrir, cerrar, reemplazar } = useCuentasUrl()
   const { periodo, resumen, cargando, error, recargar } = useCuentasDatos(estado)
   const escritorio = useEsEscritorio()
+  const avisosPanel = useAvisos(estado.pantalla === 'avisos' || (escritorio && estado.pantalla === 'ordenes'))
+  /** Algo cambió cuentas u órdenes: periodo, resumen y avisos se vuelven a pedir. */
+  const recargarAvisos = avisosPanel.recargar
+  const recargarTodo = useCallback(() => {
+    recargar()
+    recargarAvisos()
+  }, [recargar, recargarAvisos])
+  // B6: tocar un aviso limpia filtros, fija año y mes del evento y abre el proyecto.
+  const abrirAviso = useCallback(
+    (a: AvisoItem) =>
+      cerrar({
+        pantalla: null,
+        sheet: null,
+        anio: a.anio ?? estado.anio,
+        mes: a.mes ?? 'todo',
+        estado: 'todas',
+        tipo: 'todo',
+        cliente: '',
+        proveedor: '',
+        q: '',
+        vista: 'proyectos',
+        page: 1,
+        proyecto: a.proyecto_id,
+        det: null,
+        tab: null,
+      }),
+    [cerrar, estado.anio]
+  )
   const ancho = useEsAncho()
   const [buscando, setBuscando] = useState(false)
 
@@ -321,10 +354,27 @@ export function CuentasApp() {
           tab={PESTANAS.includes(estado.tab as PestanaDetalle) ? (estado.tab as PestanaDetalle) : 'info'}
           onTab={(t) => reemplazar({ tab: t === 'info' ? null : t })}
           onClose={() => cerrar({ det: null, tab: null })}
-          onCambio={recargar}
+          onCambio={recargarTodo}
           hoy={periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()}
         />
       )}
+
+      {estado.pantalla && (
+        <PanelAvisosOrdenes
+          pantalla={estado.pantalla}
+          avisos={avisosPanel.datos}
+          avisosError={avisosPanel.error}
+          escritorio={escritorio}
+          onPantalla={(p) => reemplazar({ pantalla: p })}
+          onClose={() => cerrar({ pantalla: null, sheet: null })}
+          onAviso={abrirAviso}
+          onGenerar={() => abrir({ sheet: 'orden' })}
+          onHistorial={() => abrir({ sheet: 'historial' })}
+          onOrdenCambio={recargarTodo}
+        />
+      )}
+      {estado.sheet === 'orden' && <GenerarOrden escritorio={escritorio} onClose={() => cerrar({ sheet: null })} onGenerada={recargarTodo} />}
+      {estado.sheet === 'historial' && escritorio && <HistorialModal onClose={() => cerrar({ sheet: null })} onOrdenCambio={recargarTodo} />}
     </div>
   )
 }
