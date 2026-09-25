@@ -289,7 +289,8 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
       await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
       await crearCotizacion(supabase, fx, { id: aprobada, estado: 'APROBADA', complementariaDe: principal })
       await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId, xPagar: 500 })
-      await crearCuentas(supabase, fx, { cotizacionId: aprobada, proyectoId: principal, grupoId: randomUUID(), xPagar: 300 })
+      // Mismo proveedor y proyecto: comparte el grupo ABIERTO (índice único parcial).
+      await crearCuentas(supabase, fx, { cotizacionId: aprobada, proyectoId: principal, grupoId, xPagar: 300 })
       ok(await supabase.from('cuentas_pagar').update({ monto_pagado: 100 }).eq('cotizacion_id', aprobada))
 
       const { error } = await supabase.rpc('cancel_cotizacion', { p_id: principal })
