@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Proveedor } from '@/lib/types'
+import { Proveedor, ProveedorCredenciales } from '@/lib/types'
 
 // EF-3 3B-6: getProveedores() lee TODAS las filas activas vía la RPC
 // proveedores_pagina_por_nombre (paginación por keyset con comparación de
@@ -16,7 +16,8 @@ vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcM
 
 import { getProveedores } from '../proveedores'
 
-function proveedorFixture(id: string, nombre: string): Proveedor {
+/** Fila completa, como la devuelve la RPC (`SETOF proveedores`), credenciales incluidas. */
+function proveedorFixture(id: string, nombre: string): Proveedor & ProveedorCredenciales {
   return {
     id,
     nombre,
@@ -42,7 +43,7 @@ describe('getProveedores', () => {
   })
 
   it('concatena 3 páginas keyset (500/500/200) en el orden que ya devuelve la RPC, sin reordenar en Node', async () => {
-    const pages: Proveedor[][] = [
+    const pages: (Proveedor & ProveedorCredenciales)[][] = [
       Array.from({ length: 500 }, (_, i) => proveedorFixture(`a-${i}`, `Nombre ${String(i).padStart(4, '0')}`)),
       Array.from({ length: 500 }, (_, i) => proveedorFixture(`b-${i}`, `Nombre ${String(500 + i).padStart(4, '0')}`)),
       Array.from({ length: 200 }, (_, i) => proveedorFixture(`c-${i}`, `Nombre ${String(1000 + i).padStart(4, '0')}`)),
@@ -109,5 +110,16 @@ describe('getProveedores', () => {
     mocks.rpcMock.mockResolvedValue({ data: null, error: dbError })
 
     await expect(getProveedores()).rejects.toBe(dbError)
+  })
+
+  it('nunca devuelve credenciales del portal: la fila de la RPC se recorta a las columnas públicas', async () => {
+    const fila = { ...proveedorFixture('x1', 'Ana'), password_hash: '$argon2id$secreto', session_version: 7 }
+    mocks.rpcMock.mockResolvedValue({ data: [fila], error: null })
+
+    const [p] = await getProveedores()
+
+    expect(p).not.toHaveProperty('password_hash')
+    expect(p).not.toHaveProperty('session_version')
+    expect(p).toMatchObject({ id: 'x1', nombre: 'Ana', portal_estado: null, activo: true })
   })
 })

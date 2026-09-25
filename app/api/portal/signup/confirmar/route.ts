@@ -1,6 +1,7 @@
 import { requirePortalSession, setPortalSessionCookie } from '@/lib/portal-auth'
 import { validate, PortalConfirmarMatchSchema } from '@/lib/validation/schemas'
 import { confirmarMatch, updateProveedor } from '@/lib/db'
+import { proveedorPublico } from '@/lib/server/repositories/proveedor-publico'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 
 const ROUTE = 'POST /api/portal/signup/confirmar'
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
       // La fila original del signup se borró en la fusión -- la sesión debe
       // re-firmarse apuntando al proveedor sobreviviente (el candidato).
       await setPortalSessionCookie(proveedorFinal.id, proveedorFinal.session_version)
-      return Response.json({ success: true, proveedor: proveedorFinal })
+      return Response.json({ success: true, proveedor: proveedorPublico(proveedorFinal) })
     }
 
     const proveedorActualizado = await updateProveedor(portalAuth.proveedorId, {

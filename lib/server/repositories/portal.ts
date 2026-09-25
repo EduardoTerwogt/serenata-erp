@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { CandidatoMatchProveedor, CuentaPagar, CuentaPagarGrupo, Proveedor, ProveedorDocumento } from '@/lib/types'
+import { CandidatoMatchProveedor, CuentaPagar, CuentaPagarGrupo, Proveedor, ProveedorCredenciales, ProveedorDocumento } from '@/lib/types'
 
 // Fase 5.5 -- Portal de proveedores. La identidad de portal ES la misma
 // fila de `proveedores` (ver migración 20260907_fase55...): estas funciones
@@ -12,7 +12,7 @@ export async function crearProveedorDesdeSignup(data: {
   correo: string
   password_hash: string
   regimen_fiscal: Proveedor['regimen_fiscal']
-}): Promise<Proveedor> {
+}): Promise<Pick<ProveedorCredenciales, 'id' | 'session_version'>> {
   const { data: creado, error } = await supabaseAdmin
     .from('proveedores')
     .insert({
@@ -24,21 +24,26 @@ export async function crearProveedorDesdeSignup(data: {
       activo: true,
       portal_estado: 'activo',
     })
-    .select()
+    // Solo lo que el signup necesita para firmar la sesión.
+    .select('id, session_version')
     .single()
   if (error) throw error
-  return creado as Proveedor
+  return creado as Pick<ProveedorCredenciales, 'id' | 'session_version'>
 }
 
-export async function getProveedorByCorreo(correo: string): Promise<Proveedor | null> {
+/**
+ * Credenciales del portal por correo: la única lectura de `password_hash`
+ * (login y el chequeo de duplicado del signup). Nunca va en una respuesta.
+ */
+export async function getProveedorByCorreo(correo: string): Promise<ProveedorCredenciales | null> {
   const { data, error } = await supabaseAdmin
     .from('proveedores')
-    .select('*')
+    .select('id, portal_estado, password_hash, session_version')
     .eq('correo', correo)
     .not('password_hash', 'is', null)
     .maybeSingle()
   if (error) throw error
-  return data as Proveedor | null
+  return data as ProveedorCredenciales | null
 }
 
 export async function buscarCandidatosMatch(nombre: string, excluirId: string): Promise<CandidatoMatchProveedor[]> {
@@ -58,12 +63,13 @@ export async function buscarCandidatosMatch(nombre: string, excluirId: string): 
 // signup escritas sobre esa fila). Toda la lógica -- incluida la validación
 // de estados y el orden de las operaciones -- vive en la RPC
 // confirmar_match_proveedor (db/migrations/20260909_confirmar_match_proveedor_rpc.sql).
-export async function confirmarMatch(nuevoId: string): Promise<Proveedor> {
+/** La RPC devuelve la fila completa del proveedor sobreviviente: solo servidor (la ruta responde proveedorPublico). */
+export async function confirmarMatch(nuevoId: string): Promise<Proveedor & ProveedorCredenciales> {
   const { data, error } = await supabaseAdmin.rpc('confirmar_match_proveedor', {
     p_proveedor_id: nuevoId,
   })
   if (error) throw error
-  return data as Proveedor
+  return data as Proveedor & ProveedorCredenciales
 }
 
 export async function getCuentasPagarPorProveedor(proveedorId: string): Promise<CuentaPagar[]> {
