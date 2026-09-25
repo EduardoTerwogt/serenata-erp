@@ -166,6 +166,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
                 >
                   <option value="TRANSFERENCIA">Transferencia</option>
                   <option value="EFECTIVO">Efectivo</option>
+                  <option value="CHEQUE">Cheque</option>
                 </select>
               ) : (
                 <input
@@ -234,7 +235,7 @@ export function TabRegistrarPago(props: TabRegistrarPagoProps) {
                     {formatDateDisplay(pago.fecha_pago)}
                   </p>
                   <p className="text-subtext text-eyebrow">
-                    ${fmt(pago.monto)} - {pago.tipo_pago === 'TRANSFERENCIA' ? 'Transferencia' : 'Efectivo'}
+                    ${fmt(pago.monto)} - {pago.tipo_pago === 'TRANSFERENCIA' ? 'Transferencia' : pago.tipo_pago === 'CHEQUE' ? 'Cheque' : 'Efectivo'}
                     {pago.notas && ` - ${pago.notas}`}
                   </p>
                 </div>

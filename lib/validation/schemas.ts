@@ -295,6 +295,28 @@ export const LoadtestDriveFolderSchema = z.object({
   runId: z.string().uuid(),
 })
 
+// ==================== PAGOS DE CLIENTE ====================
+
+// POST /api/cuentas-cobrar/[id]/registrar-pago (multipart). Rediseño de
+// Cuentas B1 (R4): CHEQUE se acepta aquí, en el CHECK de la tabla y dentro
+// de la RPC registrar_pago_cuenta_cobrar.
+export const TIPOS_PAGO = ['TRANSFERENCIA', 'EFECTIVO', 'CHEQUE'] as const
+
+export const RegistrarPagoCobroSchema = z.object({
+  monto: z.coerce.number().finite().positive('Monto debe ser mayor a 0'),
+  tipo_pago: z.enum(TIPOS_PAGO, { message: 'Tipo de pago inválido (TRANSFERENCIA, EFECTIVO o CHEQUE)' }),
+  fecha_pago: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de pago requerida (YYYY-MM-DD)'),
+  notas: z.string().max(2000).nullable().optional(),
+  operation_id: z.string().uuid('operation_id requerido (uuid)'),
+})
+
+// POST /api/cuentas-cobrar/[id]/subir-complemento (multipart). Los archivos
+// se validan aparte; pago_id es opcional hasta B8 (R2, S8).
+export const SubirComplementoSchema = z.object({
+  pago_id: z.string().uuid('pago_id debe ser un uuid').optional(),
+  notas: z.string().max(2000).nullable().optional(),
+})
+
 // ==================== ÓRDENES DE PAGO ====================
 
 // POST /api/cuentas-pagar/generar-orden-pago. Cuerpo opcional (contrato

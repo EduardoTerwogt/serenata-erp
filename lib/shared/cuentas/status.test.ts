@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calcularEstadoCuentaCobrarDetallado, calcularSaldoPendiente } from '@/lib/server/cuentas/status'
+import { calcularEstadoCuentaCobrarDetallado, calcularSaldoPendiente } from '@/lib/shared/cuentas/status'
 import type { EstadoCuentaCobrar } from '@/lib/types'
 
 describe('cuentas/status', () => {
@@ -34,7 +34,7 @@ describe('cuentas/status', () => {
       montoTotal: 100,
       isFacturada: true,
       fechaVencimiento: '2026-01-01',
-      today: new Date('2026-04-09T12:00:00Z'),
+      hoy: '2026-04-09',
     })).toBe('VENCIDO')
   })
 
@@ -42,5 +42,11 @@ describe('cuentas/status', () => {
     // Este test documenta que PENDIENTE es inválido según EstadoCuentaCobrar
     const validEstados: EstadoCuentaCobrar[] = ['FACTURA_PENDIENTE', 'FACTURADO', 'PARCIALMENTE_PAGADO', 'PAGADO', 'VENCIDO']
     expect(validEstados as string[]).not.toContain('PENDIENTE')
+  })
+
+  it('S6: "hoy" es un parámetro de fecha CDMX -- el mismo día del vencimiento todavía no vence', () => {
+    const base = { montoPagado: 0, montoTotal: 100, isFacturada: true, fechaVencimiento: '2026-09-24' }
+    expect(calcularEstadoCuentaCobrarDetallado({ ...base, hoy: '2026-09-24' })).toBe('FACTURADO')
+    expect(calcularEstadoCuentaCobrarDetallado({ ...base, hoy: '2026-09-25' })).toBe('VENCIDO')
   })
 })

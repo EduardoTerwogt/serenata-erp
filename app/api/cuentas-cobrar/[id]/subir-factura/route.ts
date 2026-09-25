@@ -6,6 +6,8 @@ import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
+import { calcularEstadoCuentaCobrarDetallado } from '@/lib/shared/cuentas/status'
+import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 
 const ROUTE = 'POST /api/cuentas-cobrar/[id]/subir-factura'
 
@@ -141,13 +143,28 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         ...(file.type === 'FACTURA_XML' ? {
           estado_validacion: validacionXml.estado_validacion,
           detalle_validacion: validacionXml.detalle_validacion,
+          // Rediseño de Cuentas B1 (U7, D2): datos del CFDI en la fila del XML.
+          uuid_cfdi: facturaData.uuid_timbrado ?? null,
+          total_cfdi: facturaData.monto_total ?? null,
+          metodo_pago_cfdi: facturaData.metodo_pago ?? null,
         } : {}),
       })
     }
 
+    // V2 (Rediseño de Cuentas B1): el estado sale de montos, factura y "hoy"
+    // en CDMX, nunca fijo en FACTURADO -- con un anticipo previo, fijarlo
+    // hacía retroceder el estado guardado (que leen Dashboard y Sheets).
+    const estado = calcularEstadoCuentaCobrarDetallado({
+      montoPagado: Number(cuenta.monto_pagado || 0),
+      montoTotal: Number(cuenta.monto_total || 0),
+      fechaVencimiento: deadline,
+      isFacturada: true,
+      hoy: hoyCdmx(),
+    })
+
     // Actualizar cuenta
     const cuentaActualizada = await updateCuentaCobrar(id, {
-      estado: 'FACTURADO',
+      estado,
       fecha_factura: facturaData.fecha_emision,
       fecha_vencimiento: deadline,
     })

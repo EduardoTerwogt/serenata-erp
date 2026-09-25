@@ -5,7 +5,7 @@ export type EstadoPago = 'PENDIENTE' | 'PAGADO' | 'PARCIAL'
 export type EstadoCuentaCobrar = 'FACTURA_PENDIENTE' | 'FACTURADO' | 'PARCIALMENTE_PAGADO' | 'PAGADO' | 'VENCIDO'
 export type EstadoCuentaPagar = 'PENDIENTE' | 'EN_PROCESO_PAGO' | 'PAGADO'
 export type EstadoCuentaPagarGrupo = 'ABIERTO' | 'FACTURADO' | 'EN_PROCESO_PAGO' | 'PAGADO'
-export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO'
+export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE'
 
 export type RegimenFiscal = 'moral' | 'fisica' | 'resico'
 
@@ -414,6 +414,13 @@ export interface DocumentoCuentaCobrar {
   // 1E-3a: permite reconstruir, en la reconciliación, qué documento
   // corresponde a qué operación de idempotencia financiera.
   operation_id?: string | null
+  // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
+  // metodo_pago_cfdi null = desconocido (supuesto 4).
+  uuid_cfdi?: string | null
+  total_cfdi?: number | null
+  metodo_pago_cfdi?: 'PUE' | 'PPD' | null
+  // D16/D27: pago (pagos_comprobantes) que ampara este archivo de complemento.
+  pago_id?: string | null
 }
 
 export interface DocumentoCuentaPagar {
@@ -430,6 +437,30 @@ export interface DocumentoCuentaPagar {
   estado_validacion: EstadoValidacionDocumento
   detalle_validacion?: string | null
   operation_id?: string | null
+  // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
+  uuid_cfdi?: string | null
+  total_cfdi?: number | null
+}
+
+// Shape de la RPC cuentas_por_proyecto() (db/migrations/20260914_cuentas_por_proyecto.sql
+// y extensiones). Rediseño de Cuentas B1 (docs/PLAN.md, S6): vive aquí y no
+// en el hook de la UI, porque lo importan también las rutas.
+export interface ProyectoConCuentasRPC {
+  proyecto: {
+    id: string
+    folio: string
+    nombre: string
+    cliente: string
+    estado: string
+  }
+  cuentas_cobrar: CuentaCobrar[]
+  cuentas_pagar: CuentaPagar[]
+  total_cobrar: number
+  total_pagar: number
+  margen_total_proyecto: number
+  fee_agencia_proyecto: number
+  utilidad_total_proyecto: number
+  iva_total_proyecto: number
 }
 
 export interface OrdenPago {

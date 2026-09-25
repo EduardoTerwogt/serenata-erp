@@ -205,6 +205,20 @@ describe('xml/factura-parser', () => {
     expect(result.monto_total).toBe(4767)
   })
 
+  describe('MetodoPago (Rediseño de Cuentas B1, D2)', () => {
+    const conMetodo = (metodo: string) => CFDI_BASICO.replace('Total="1160.00"', `Total="1160.00" MetodoPago="${metodo}"`)
+
+    it('lee PUE y PPD', () => {
+      expect(parseFacturaXML(conMetodo('PUE')).metodo_pago).toBe('PUE')
+      expect(parseFacturaXML(conMetodo('PPD')).metodo_pago).toBe('PPD')
+    })
+
+    it('sin atributo o con un valor desconocido queda undefined -- nunca se adivina (supuesto 4)', () => {
+      expect(parseFacturaXML(CFDI_BASICO).metodo_pago).toBeUndefined()
+      expect(parseFacturaXML(conMetodo('XYZ')).metodo_pago).toBeUndefined()
+    })
+  })
+
   describe('validarMontoFactura (informativa, ya existente)', () => {
     it('detecta coincidencia dentro de tolerancia', () => {
       expect(validarMontoFactura(1000, 1000.005).coincide).toBe(true)

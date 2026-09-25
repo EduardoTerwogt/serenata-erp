@@ -97,6 +97,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       archivo_nombre: facturaXmlFile.name,
       estado_validacion: validacionXml.estado_validacion,
       detalle_validacion: validacionXml.detalle_validacion,
+      // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
+      uuid_cfdi: facturaData.uuid_timbrado ?? null,
+      total_cfdi: facturaData.error ? null : facturaData.monto_total ?? null,
     })
 
     const documentoPdf = await createDocumentoCuentaPagar({

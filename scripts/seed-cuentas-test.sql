@@ -18,9 +18,10 @@
 --   (sin proyecto)  una cuenta por cobrar y una por pagar sin
 --             `proyecto_id` ni `cotizacion_id`.
 --
--- El esquema de hoy no guarda el MetodoPago del XML: el PPD de SEEDCU03
--- queda solo en el nombre del archivo. B1 agrega esa columna y extiende
--- este seed.
+-- Desde B1 la fila del XML guarda uuid_cfdi, total_cfdi y metodo_pago_cfdi,
+-- y cada complemento su pago_id: SEEDCU03 es PPD y su primer pago tiene
+-- complemento solo con XML. SEEDCU02 simula una factura anterior a B1 (sin
+-- UUID ni método: "método desconocido", supuesto 4).
 --
 -- Las filas se insertan directo, sin RPCs, a propósito: varias de estas
 -- formas son justo las que las RPCs corregidas ya no producirían (H2, H3,
@@ -183,20 +184,22 @@ BEGIN
     (c_cc_05a, 'SEEDCU-CC-05A', 'SEEDCU05-A', 'SEEDCU05', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias',  6670,    0, 'FACTURA_PENDIENTE', NULL, NULL, NULL),
     (c_cc_sp,  'SEEDCU-CC-99',  NULL,         NULL,       'SEEDCU Cliente Demo', c_cliente, 'Seed · Cobro sin proyecto',             5000,    0, 'FACTURA_PENDIENTE', NULL, NULL, NULL);
 
-  INSERT INTO pagos_comprobantes (cuentas_cobrar_id, monto, tipo_pago, fecha_pago, comprobante_url, archivo_nombre, notas)
+  INSERT INTO pagos_comprobantes (id, cuentas_cobrar_id, monto, tipo_pago, fecha_pago, comprobante_url, archivo_nombre, notas)
   VALUES
-    (c_cc_01,  5000, 'TRANSFERENCIA', '2026-05-25', 'https://example.com/seedcu/SEEDCU01_anticipo.pdf', 'SEEDCU01_anticipo.pdf', 'Anticipo antes de factura (D32)'),
-    (c_cc_03, 13340, 'TRANSFERENCIA', '2026-07-20', 'https://example.com/seedcu/SEEDCU03_pago1.pdf',    'SEEDCU03_pago1.pdf',    'Pago 1 de 2 (PPD)'),
-    (c_cc_03, 13340, 'TRANSFERENCIA', '2026-08-01', 'https://example.com/seedcu/SEEDCU03_pago2.pdf',    'SEEDCU03_pago2.pdf',    'Pago 2 de 2 (PPD)');
+    ('5eedc000-0000-4000-8000-0000000e0011', c_cc_01,  5000, 'TRANSFERENCIA', '2026-05-25', 'https://example.com/seedcu/SEEDCU01_anticipo.pdf', 'SEEDCU01_anticipo.pdf', 'Anticipo antes de factura (D32)'),
+    ('5eedc000-0000-4000-8000-0000000e0031', c_cc_03, 13340, 'TRANSFERENCIA', '2026-07-20', 'https://example.com/seedcu/SEEDCU03_pago1.pdf',    'SEEDCU03_pago1.pdf',    'Pago 1 de 2 (PPD)'),
+    ('5eedc000-0000-4000-8000-0000000e0032', c_cc_03, 13340, 'CHEQUE',        '2026-08-01', 'https://example.com/seedcu/SEEDCU03_pago2.pdf',    'SEEDCU03_pago2.pdf',    'Pago 2 de 2 (PPD)');
 
-  INSERT INTO documentos_cuentas_cobrar (cuentas_cobrar_id, tipo, archivo_url, archivo_nombre, estado_validacion, fecha_carga)
+  -- B1: datos del CFDI en la fila del XML y complemento vinculado a su pago.
+  INSERT INTO documentos_cuentas_cobrar (cuentas_cobrar_id, tipo, archivo_url, archivo_nombre, estado_validacion, fecha_carga, uuid_cfdi, total_cfdi, metodo_pago_cfdi, pago_id)
   VALUES
-    (c_cc_02, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU02.xml',         'SEEDCU02_Factura.xml',             'pendiente', '2026-08-18 09:00'),
-    (c_cc_02, 'FACTURA_PDF',      'https://example.com/seedcu/SEEDCU02.pdf',         'SEEDCU02_Factura.pdf',             'pendiente', '2026-08-18 09:00'),
-    (c_cc_03, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU03.xml',         'SEEDCU03_Factura_PPD.xml',         'validado',  '2026-07-06 09:00'),
-    (c_cc_03, 'FACTURA_PDF',      'https://example.com/seedcu/SEEDCU03.pdf',         'SEEDCU03_Factura_PPD.pdf',         'pendiente', '2026-07-06 09:00'),
-    (c_cc_03, 'COMPLEMENTO_PAGO', 'https://example.com/seedcu/SEEDCU03_rep1.xml',    'SEEDCU03_Complemento_pago1.xml',   'validado',  '2026-07-22 09:00'),  -- sin su PDF (D27)
-    (c_cc_04, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU04.xml',         'SEEDCU04_Factura.xml',             'revision',  '2026-09-15 09:00');
+    (c_cc_02, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU02.xml',      'SEEDCU02_Factura.xml',           'pendiente', '2026-08-18 09:00', NULL, NULL, NULL, NULL),  -- anterior a B1: sin UUID ni método
+    (c_cc_02, 'FACTURA_PDF',      'https://example.com/seedcu/SEEDCU02.pdf',      'SEEDCU02_Factura.pdf',           'pendiente', '2026-08-18 09:00', NULL, NULL, NULL, NULL),
+    (c_cc_03, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU03.xml',      'SEEDCU03_Factura_PPD.xml',       'validado',  '2026-07-06 09:00', 'SEEDCU03-0000-4000-8000-00000000F003', 26680, 'PPD', NULL),
+    (c_cc_03, 'FACTURA_PDF',      'https://example.com/seedcu/SEEDCU03.pdf',      'SEEDCU03_Factura_PPD.pdf',       'pendiente', '2026-07-06 09:00', NULL, NULL, NULL, NULL),
+    -- Pago 1: complemento solo con XML (D27: le falta el PDF). Pago 2: sin complemento.
+    (c_cc_03, 'COMPLEMENTO_PAGO', 'https://example.com/seedcu/SEEDCU03_rep1.xml', 'SEEDCU03_Complemento_pago1.xml', 'validado',  '2026-07-22 09:00', NULL, NULL, NULL, '5eedc000-0000-4000-8000-0000000e0031'),
+    (c_cc_04, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU04.xml',      'SEEDCU04_Factura.xml',           'revision',  '2026-09-15 09:00', 'SEEDCU04-0000-4000-8000-00000000F004', 13340, 'PUE', NULL);
 
   RAISE NOTICE 'seed-cuentas-test: listo (5 proyectos, 1 orden, 3 grupos, 11 cuentas por pagar, 7 por cobrar).';
 END

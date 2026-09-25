@@ -98,4 +98,40 @@ describe('POST /api/cuentas-cobrar/[id]/subir-factura', () => {
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({ error: 'El archivo excede el límite de 10 MB' })
   })
+
+  describe('B1: estado calculado (V2) y datos del CFDI en el documento (U7)', () => {
+    function exito(montoPagado: number) {
+      mocks.getCuentaCobrarByIdMock.mockResolvedValueOnce({ id: 'cuenta-1', cotizacion_id: 'SH001', monto_total: 1000, monto_pagado: montoPagado })
+      mocks.getCotizacionByIdMock.mockResolvedValueOnce({ id: 'SH001', tipo: 'PRINCIPAL', total: 1000 })
+      mocks.getProyectoByIdMock.mockResolvedValueOnce({ id: 'SH001', proyecto: 'Evento' })
+      mocks.parseFacturaXMLMock.mockReturnValueOnce({ fecha_emision: '2026-09-20', monto_total: 1000, uuid_timbrado: 'UUID-1', metodo_pago: 'PPD' })
+      mocks.validarMontoFacturaMock.mockReturnValueOnce({ coincide: true, diferencia: 0 })
+      mocks.validarFacturaClienteXMLMock.mockReturnValueOnce({ estado_validacion: 'validado', detalle_validacion: null })
+      mocks.calcularDeadlineMock.mockReturnValueOnce('2099-10-20')
+      mocks.getGoogleEnvMock.mockReturnValue({ driveFolderIdCuentas: 'folder' })
+      mocks.uploadFileToDriveMock.mockResolvedValue('https://drive/x')
+      mocks.updateCuentaCobrarMock.mockImplementationOnce(async (_id: string, u: unknown) => u)
+      mocks.createDocumentoCuentaCobrarMock.mockClear()
+      mocks.updateCuentaCobrarMock.mockClear()
+    }
+
+    it.each([
+      [0, 'FACTURADO'],
+      [400, 'PARCIALMENTE_PAGADO'],
+      [1000, 'PAGADO'],
+    ])('con %s ya pagado (anticipo) el estado guardado es %s, nunca FACTURADO fijo', async (pagado, esperado) => {
+      exito(pagado)
+      const response = await POST(buildRequest(), { params })
+      expect(response.status).toBe(200)
+      expect(mocks.updateCuentaCobrarMock.mock.calls[0][1]).toMatchObject({ estado: esperado })
+    })
+
+    it('guarda UUID, total y método del CFDI en la fila del XML', async () => {
+      exito(0)
+      await POST(buildRequest(), { params })
+      const xmlDoc = mocks.createDocumentoCuentaCobrarMock.mock.calls.map((c) => c[0]).find((d) => d.tipo === 'FACTURA_XML')
+      expect(xmlDoc).toMatchObject({ uuid_cfdi: 'UUID-1', total_cfdi: 1000, metodo_pago_cfdi: 'PPD' })
+    })
+  })
 })
+

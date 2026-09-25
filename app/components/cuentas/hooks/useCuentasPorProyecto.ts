@@ -1,27 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CuentaCobrar, CuentaPagar } from '@/lib/types'
+import type { ProyectoConCuentasRPC } from '@/lib/types'
 import { getJson } from '@/lib/client/api'
 import { CierreProyecto } from '@/lib/shared/cierre-proyecto'
 
-export interface ProyectoConCuentasRPC {
-  proyecto: {
-    id: string
-    folio: string
-    nombre: string
-    cliente: string
-    estado: string
-  }
-  cuentas_cobrar: CuentaCobrar[]
-  cuentas_pagar: CuentaPagar[]
-  total_cobrar: number
-  total_pagar: number
-  margen_total_proyecto: number
-  fee_agencia_proyecto: number
-  utilidad_total_proyecto: number
-  iva_total_proyecto: number
-}
+// Rediseño de Cuentas B1 (S6): el tipo de la RPC vive en lib/types.ts.
+export type { ProyectoConCuentasRPC }
 
 export interface ProyectoConCuentas extends ProyectoConCuentasRPC {
   cierre: CierreProyecto
