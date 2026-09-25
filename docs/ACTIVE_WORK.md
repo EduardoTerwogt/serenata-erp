@@ -1,11 +1,10 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 18: segunda auditoría contra datos reales y D30–D32)
+**Última actualización:** 2026-09-25 (sesión 19: tercera auditoría V1–V4 y plan aprobado)
 
 ## Estado
 
-**`docs/PLAN.md` — Borrador en refinamiento: "Rediseño de la sección
-Cuentas".**
+**`docs/PLAN.md` — APROBADO: "Rediseño de la sección Cuentas".**
 - Diseño final auditado (sesión 10).
 - Auditoría end-to-end contra producción (sesión 11): 13 hallazgos (§5.1),
   entre ellos bugs vigentes en la generación de órdenes de pago (H1–H3) y
@@ -36,13 +35,15 @@ Cuentas".**
   - IVA negativo en un mes = "IVA a favor", según el art. 6 LIVA;
   - la cascada también cancela las complementarias no aprobadas;
   - se permite registrar un anticipo de cliente antes de la factura.
-- **Falta solo la aprobación del plan.** La mecánica de reasignar una cuenta
-  pagada (S12) se confirma al abrir B7; no bloquea.
+- Tercera auditoría (sesión 19, §5.10): V1–V4, sin P0. Cierra las
+  consecuencias de D32 (anticipos) y T4 (factura de proveedor atómica).
+- **El usuario aprobó el plan (sesión 19).** La mecánica de reasignar una
+  cuenta pagada (S12) se confirma al abrir B7; no bloquea.
 - 10 bloques propuestos (B0, B1b y B1–B8). B1b es nuevo y corrige los bugs
   vigentes antes del rediseño.
 
-**No hay código escrito.** El plan todavía no está aprobado: nada de B0–B8 se
-ha empezado. Todo lo de estas sesiones está en `main` (solo docs).
+**No hay código escrito.** El plan está aprobado, pero nada de B0–B8 se ha
+empezado. Todo lo de estas sesiones está en `main` (solo docs).
 
 ## Completado en las sesiones 9 y 10
 
@@ -81,7 +82,6 @@ servidor contra capturas de la app real, en tema claro y oscuro.
 
 ## Pendiente del usuario
 
-- **Aprobar `docs/PLAN.md`.**
 - Antes de B8: encender Drive en Preview (R9); los pasos se dan en su momento.
 - **Tener a mano el zip final** (`Serenata_ERP_Cuentas_recreation.zip` con
   `design_handoff_cuentas/`) para la sesión que haga B0. No está en el repo.
@@ -91,10 +91,8 @@ servidor contra capturas de la app real, en tema claro y oscuro.
 
 1. Abrir con `/serenata-iniciar-fase`, que lee este archivo y
    `docs/PLAN.md`. No hay que re-auditar: la auditoría ya está en el plan.
-2. Si el usuario aprueba o ajusta la §4 del plan:
-   - aplicar los ajustes;
-   - poner **Estado: Aprobado** en `docs/PLAN.md`;
-   - commit doc-only a `main`.
+2. El plan ya está aprobado (sesión 19): no hay que re-auditarlo completo.
+   Cada bloque se abre auditando el código real de su alcance.
 3. Ejecutar **B0** en una rama con PR en borrador:
    - pedir el zip al usuario si no lo subió;
    - copiar `design_handoff_cuentas/` completo a `docs/design/cuentas/`;
@@ -107,8 +105,8 @@ Prompt sugerido para la sesión nueva, con el zip adjunto:
 
 ```
 /serenata-iniciar-fase
-Retomamos el rediseño de Cuentas (docs/PLAN.md). Confirmo los supuestos de la
-§4 [o: con estos cambios: …]. Aprueba el plan y ejecuta B0 con el zip adjunto.
+Retomamos el rediseño de Cuentas (docs/PLAN.md, aprobado). Ejecuta B0 con el
+zip adjunto.
 ```
 
 Para ver el diseño en local, servir la carpeta por HTTP: `python3 -m
@@ -141,6 +139,5 @@ sesión bloquea unpkg, bajar `react@18.3.1`, `react-dom@18.3.1`,
 
 ## Siguiente paso
 
-El usuario confirma los supuestos de la §4 y aprueba `docs/PLAN.md`.
-Después: **B0**, con el zip del diseño, y enseguida **B1b** (bugs vigentes de
-órdenes de pago).
+**B0**, con el zip del diseño, y enseguida **B1b** (bugs vigentes de órdenes
+de pago y de cancelación de cotizaciones).

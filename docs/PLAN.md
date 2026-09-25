@@ -1,11 +1,11 @@
 # Plan de la iniciativa activa
 
 **Iniciativa:** Rediseño de la sección Cuentas (Claude Design → implementación)
-**Estado:** Listo para aprobar. Supuestos confirmados (sesión 14) y
-auditoría profunda integrada con D25–D29 (sesión 17) y segunda auditoría
-contra datos reales con D30–D32 (sesión 18); no quedan dudas de producto ni
-de negocio. Queda una sola regla por confirmar, y se confirma al
-abrir B7 (§5.8, S12).
+**Estado:** **Aprobado** por el usuario (sesión 19, 2026-09-25), después de
+tres rondas de auditoría (sesiones 17–19: S1–S21, T1–T10, V1–V4) y con
+D1–D32 confirmadas. No quedan dudas de producto ni de negocio. Queda una
+sola regla por confirmar, y se confirma al abrir B7 (§5.8, S12). Siguiente
+paso: B0.
 - Sesión 10 (2026-09-25): diseño final recibido y auditado.
 - Sesión 11 (2026-09-25): auditoría end-to-end contra producción (BD, RPCs,
   rutas, UI). Sus hallazgos están en §5.1 y las decisiones D10–D17 que
@@ -31,7 +31,9 @@ abrir B7 (§5.8, S12).
 - Sesión 18 (2026-09-25): segunda auditoría, ahora contra los **datos
   reales** de producción. No salió ningún P0. Salieron T1–T10 (§5.9) y el
   usuario decidió D30–D32.
-- Falta que el usuario apruebe el plan para pasarlo a "Aprobado".
+- Sesión 19 (2026-09-25): tercera auditoría, centrada en las consecuencias
+  de D32 y T4 y en la coherencia interna del plan. Salieron V1–V4 (§5.10),
+  sin P0. El usuario **aprobó el plan**.
 
 Para retomar, ver `docs/ACTIVE_WORK.md` → "Cómo retomar". El zip del diseño
 no está en el repo hasta B0: pedírselo al usuario.
@@ -268,6 +270,7 @@ existen. No se agregan estados nuevos a las tablas.
 | Cobro | `FACTURADO` | Facturado | Cobrar |
 | Cobro | `PARCIALMENTE_PAGADO` | Parcial | Cobrar |
 | Cobro | `VENCIDO` | Vencido | Cobrar (en rojo, "Vencido hace n días") |
+| Cobro | **cualquier estado** (incluido `PAGADO` por anticipo, D32) sin factura XML validada | Sin factura / En revisión | Emitir factura / Revisar factura (tiene prioridad sobre todo lo demás del cobro, V1) |
 | Cobro | `PAGADO`, pero a un pago PPD le falta su complemento (D16) | Sin complemento | Subir complemento |
 | Cobro | `PAGADO` + método del XML vigente null | Sin complemento | Indicar PUE o PPD (supuesto 4) |
 | Cobro | `PAGADO` + (PUE o cada pago con su complemento) | Cobrado | — |
@@ -300,6 +303,13 @@ documento, no del estado guardado. "En revisión" tiene prioridad sobre
 - Una factura sin `uuid_cfdi` guardado (las anteriores a B1) no permite
   validar sola sus complementos: quedan en revisión y se validan a mano
   (T10).
+
+**Anticipos y complemento (V4):** el complemento solo se pide para los pagos
+con `fecha_pago` **posterior** a la fecha de emisión de la factura PPD
+(`fecha_factura`). Los pagos anteriores son anticipos: siguen el
+procedimiento de anticipos del CFDI, que queda fuera del ERP, y en el
+detalle se muestran como "Anticipo · sin complemento", sin bloquear el
+cierre.
 
 En un cobro PPD con pagos parciales, el complemento de cada pago ya
 registrado se pide desde ese momento: el aviso "Complementos faltantes" lo
@@ -556,6 +566,18 @@ P0.** Todo queda integrado en los bloques.
 | T9 | P2 | Registrar un cobro sin factura solo se bloqueaba en la UI, y un anticipo antes de facturar es un caso real. | `conceptDetail` del prototipo ("Anticipo 50%") | D32. | B5 |
 | T10 | P2 | Las facturas anteriores a B1 no tienen UUID guardado, así que su complemento no se puede validar solo. | H6 | Queda en revisión y se valida a mano (§5); aceptable por D10. | B1 |
 
+### 5.10 Tercera auditoría (sesión 19)
+
+Se revisaron las consecuencias de D32 y T4 y la coherencia interna del plan
+contra el cuerpo real de las RPCs en producción. **No salió ningún P0.**
+
+| # | Nivel | Hallazgo | Evidencia | Decisión | Bloque |
+|---|---|---|---|---|---|
+| V1 | P1 | Un cobro pagado al 100 % por anticipo (D32), sin factura, se derivaba como "Cobrado" y cerraba las cuentas sin factura, en contra de D11. | `registrar_pago_cuenta_cobrar` pone `PAGADO` sin mirar la factura | "Sin factura" y "En revisión" tienen prioridad sobre cualquier estado guardado del cobro (§5), con su test. | B1 |
+| V2 | P1 | `subir-factura` de cobro fija `estado = 'FACTURADO'`: con un anticipo previo, el estado guardado retrocede hasta que corre el cron, y el Dashboard y Sheets lo leen mal mientras tanto. | `app/api/cuentas-cobrar/[id]/subir-factura/route.ts` | La ruta calcula el estado con `calcularEstadoCuentaCobrarDetallado` (montos, factura y hoy en CDMX), no con un valor fijo. | B1 |
+| V3 | P1 | El arreglo de T4 quedaba incompleto: las rutas insertan el XML ya como `validado` y después llaman a la RPC. Si la RPC falla, reaparece el hueco de T4 (factura validada sin total a transferir). El portal también inserta directo como `validado`. | Las 5 rutas de factura de proveedor | Las rutas insertan el XML como `pendiente`; **solo** `validar_factura_proveedor` lo pasa a `validado`, en la misma transacción que el snapshot y el estado del grupo. | B2 |
+| V4 | P2 | Se pedía complemento incluso para pagos anteriores a la factura, un caso que no existe fiscalmente. | CFDI 4.0: el complemento ampara pagos posteriores a una factura PPD | Complemento solo para pagos posteriores a `fecha_factura`; los anteriores son "Anticipo · sin complemento" (§5). | B1, B5 |
+
 ## 6. Infraestructura que se reutiliza
 
 - **RPCs de dinero** (no se recrean, se extienden):
@@ -644,7 +666,7 @@ misma ruta detrás de `?v=2`, y se cambia al final.
   capturas, `abrir-directo/` y `codigo-fuente/`, unos 4 MB. No se generan
   capturas: el handoff ya las trae.
 - Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D32, A1–A5,
-  O1–O10, U1–U10, S1–S21, T1–T10, el
+  O1–O10, U1–U10, S1–S21, T1–T10, V1–V4, el
   modelo de la sección 5, §5.2 (reglas del prototipo que no se adoptan) y los
   supuestos aceptados.
 - Seed para `serenata-erp-test` con las formas de datos de producción (H11):
@@ -740,7 +762,13 @@ son bugs de hoy, no del rediseño.
   documento vigente `validado`, no del estado guardado. Solo el XML se
   valida; `pendiente` cuenta como "En revisión" (T1). Documento vigente,
   prioridad Vencido/En revisión y facturas sin UUID según §5 (T6, T7, T10).
-  Estado "Sin proveedor" (T2). Tests de cada caso.
+  Estado "Sin proveedor" (T2). Un cobro sin factura validada nunca se
+  deriva como "Cobrado", aunque esté `PAGADO` por anticipo (V1). El
+  complemento solo aplica a pagos posteriores a `fecha_factura` (V4). Tests
+  de cada caso.
+- `subir-factura` de cobro calcula el `estado` con
+  `calcularEstadoCuentaCobrarDetallado` en lugar de fijar `FACTURADO`, para
+  no pisar un anticipo previo (V2). Test con anticipo parcial y total.
 - Fecha de "Cerradas automáticamente el …" con fechas de negocio en CDMX
   (S19).
 - Migración:
@@ -828,7 +856,10 @@ va solo.
     que `marcarGrupoFacturado`, que se retira.
   Una factura en `revision` no llama a la RPC y sigue con el estimado. Las
   **cinco** rutas por donde entra una factura de proveedor la llaman en lugar
-  de sus escrituras sueltas (A2 corregido):
+  de sus escrituras sueltas (A2 corregido). Esas rutas, el portal incluido,
+  insertan el XML como `pendiente`, y **solo** la RPC lo pasa a `validado`:
+  si la RPC falla, el documento queda "En revisión" y nunca validado sin
+  snapshot (V3):
   - grupo: `grupos/[id]/subir-factura`, `portal/cuentas/grupos/[id]/factura`
     y la validación manual `grupos/[id]/documentos/[docId]` (PATCH a
     `validado`, que hoy también llama a `marcarGrupoFacturado`);
@@ -1237,7 +1268,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | Auditoría de optimización O1–O10, D24 | Hecho (sesión 15) |
 | Revisión de reutilización U1–U10 y huecos A2/U7 | Hecho (sesión 16) |
 | Auditoría profunda S1–S21 y decisiones D25–D29 | Hecho (sesión 17) |
-| Segunda auditoría T1–T10 y decisiones D30–D32 | Hecho (sesión 18). Falta aprobar |
+| Segunda auditoría T1–T10 y decisiones D30–D32 | Hecho (sesión 18) |
+| Tercera auditoría V1–V4 | Hecho (sesión 19). **Plan aprobado** |
 | B0 Referencia, reglas y seed | Pendiente |
 | B1b Blindaje previo | Pendiente |
 | B1 Derivación y datos fiscales | Pendiente |
