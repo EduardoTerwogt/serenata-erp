@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 11: auditoría end-to-end del plan)
+**Última actualización:** 2026-09-25 (sesión 12: plan re-auditado contra el diseño final)
 
 ## Estado
 
@@ -10,8 +10,13 @@ Cuentas".**
 - Auditoría end-to-end contra producción (sesión 11): 13 hallazgos (§5.1),
   entre ellos bugs vigentes en la generación de órdenes de pago (H1–H3) y
   rutas `PUT` que se saltan las RPCs (H4).
-- 17 decisiones confirmadas (D1–D17).
-- **12 supuestos por confirmar** (sección 4).
+- Diseño final recibido como handoff `design_handoff_cuentas/` (sesión 12):
+  escritorio, **móvil completo**, 34 capturas y README. El plan se re-adaptó:
+  - §5.2: reglas del prototipo que no se adoptan;
+  - §5.3: pendientes del README y cómo se resuelven;
+  - B4–B7 entregan escritorio + móvil, en tema claro y oscuro.
+- 21 decisiones confirmadas (D1–D21).
+- **17 supuestos por confirmar** (§4; el 5 y el 7 ya se resolvieron).
 - 10 bloques propuestos (B0, B1b y B1–B8). B1b es nuevo y corrige los bugs
   vigentes antes del rediseño.
 
@@ -55,10 +60,9 @@ servidor contra capturas de la app real, en tema claro y oscuro.
 
 ## Pendiente del usuario
 
-- **Confirmar los 12 supuestos de `docs/PLAN.md` §4 y aprobar los bloques.**
-- **Tener a mano el zip del diseño** (`Serenata_ERP_Cuentas_recreation.zip`)
-  para subirlo en la sesión que haga B0. No está en el repo. El zip no trae
-  capturas de v2: B0 las genera.
+- **Confirmar los supuestos de `docs/PLAN.md` §4 y aprobar los bloques.**
+- **Tener a mano el zip final** (`Serenata_ERP_Cuentas_recreation.zip` con
+  `design_handoff_cuentas/`) para la sesión que haga B0. No está en el repo.
 - Borrar ramas remotas ya mergeadas (GitHub → Branches → Merged).
 
 ## Cómo retomar (sesión nueva)
@@ -71,8 +75,7 @@ servidor contra capturas de la app real, en tema claro y oscuro.
    - commit doc-only a `main`.
 3. Ejecutar **B0** en una rama con PR en borrador:
    - pedir el zip al usuario si no lo subió;
-   - copiar `Cuentas-v2.dc.html`, `cuentas-data.js`, `support.js` y `_ds/` a
-     `docs/design/cuentas-v2/`, y generar capturas de v2 con Playwright;
+   - copiar `design_handoff_cuentas/` completo a `docs/design/cuentas/`;
    - escribir la decisión 017;
    - crear el seed de `serenata-erp-test` (H11).
 4. Seguir el grafo B1b → B1 → (B2, B3) → B4 → B5 → B6 → B7 → B8, un PR por
@@ -116,6 +119,6 @@ sesión bloquea unpkg, bajar `react@18.3.1`, `react-dom@18.3.1`,
 
 ## Siguiente paso
 
-El usuario confirma los 12 supuestos de la §4 y aprueba `docs/PLAN.md`.
+El usuario confirma los supuestos de la §4 y aprueba `docs/PLAN.md`.
 Después: **B0**, con el zip del diseño, y enseguida **B1b** (bugs vigentes de
 órdenes de pago).

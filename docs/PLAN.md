@@ -6,6 +6,10 @@
 - Sesión 11 (2026-09-25): auditoría end-to-end contra producción (BD, RPCs,
   rutas, UI). Sus hallazgos están en §5.1 y las decisiones D10–D17 que
   salieron de ella, en §3.
+- Sesión 12 (2026-09-25): **diseño final** recibido como paquete de handoff
+  (`design_handoff_cuentas/`, con escritorio, móvil, capturas y README).
+  - Se re-auditó el plan contra ese diseño y salieron D18–D21.
+  - La comparación del diseño con las reglas vigentes está en §5.2 y §5.3.
 - Falta que el usuario confirme los supuestos de la §4 y apruebe los bloques.
 
 Para retomar, ver `docs/ACTIVE_WORK.md` → "Cómo retomar". El zip del diseño
@@ -25,22 +29,40 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 ## 1. Contexto
 
 Se rediseñó `/cuentas` en Claude Design sobre una réplica exacta de la
-pantalla actual (sesión 9). El diseño final es **`Cuentas-v2.dc.html`**, más
-su lógica y datos de ejemplo en `cuentas-data.js`. Llegó en el zip
-`Serenata_ERP_Cuentas_recreation.zip`. Los archivos A (Carpetas), B
-(Maestro-detalle) y C (Por paso) fueron la ronda 1 y quedan descartados.
-`Cuentas Actual` es la réplica de hoy. Confirmado por el usuario.
+pantalla actual (sesión 9). El **diseño final** llegó en la sesión 12 como
+paquete de handoff `design_handoff_cuentas/`, dentro del zip
+`Serenata_ERP_Cuentas_recreation.zip`:
+- `README.md`: reglas, pantallas, tokens y 9 pendientes que el diseño no
+  define (ver §5.3).
+- `capturas/escritorio/` (13 PNG) y `capturas/movil/` (21 PNG, incluidos los
+  estados y el tema oscuro). **Son la referencia visual definitiva.**
+- `abrir-directo/Cuentas-Escritorio.html` y `Cuentas-Movil.html`: prototipos
+  autocontenidos que se abren con doble clic.
+- `codigo-fuente/`: `Cuentas-Escritorio.dc.html`, `Cuentas-Movil.dc.html`,
+  `Cuentas-Movil-Pantallas.dc.html`, `cuentas-data.js` (reglas del prototipo:
+  `compute`, `conceptDetail`, `ordenPreview`) y `support.js`. No se abren
+  solos, porque dependen de `_ds/`, que no viene incluido.
+
+Respecto a `Cuentas-v2` (sesión 10), la lógica de `cuentas-data.js` solo
+agrega `ordenPreview`, la generación de orden con selección por responsable.
+Lo nuevo es la **versión móvil completa**, la generación de orden rediseñada y
+el README. `Cuentas-v2`, la ronda 1 (A/B/C) y `Cuentas Actual` quedan
+sustituidos.
 
 El diseño decide **forma y flujo**. Los números salen de las fórmulas vigentes
 (decisión 006 y `lib/shared/cierre-proyecto.ts`), no de la aritmética
 simplificada del mock. Las operaciones de dinero siguen yendo por RPC atómica
 (principio crítico 2).
 
-**Referencia del diseño en el repo:** el Bloque 0 copia `Cuentas-v2.dc.html`,
-`cuentas-data.js`, `support.js`, `_ds/` y capturas PNG de cada estado a
-`docs/design/cuentas-v2/`. Así cualquier sesión puede abrirlo sin el zip.
-Para verlo en local hay que servir la carpeta por HTTP: carga React, Babel y
-lucide desde unpkg.
+**El diseño no es código para copiar.** Se recrea con los componentes y
+tokens de Serenata (README, "Sobre los archivos"). La lógica de
+`cuentas-data.js` es una especificación de reglas, **sujeta a las decisiones
+de este plan**: donde choca con la decisión 006, con D4 o con D15, gana el
+plan (§5.2).
+
+**Referencia del diseño en el repo:** B0 copia `design_handoff_cuentas/`
+completo a `docs/design/cuentas/`. Los prototipos de `abrir-directo/` se
+abren sin servidor.
 
 ## 2. Qué cambia respecto a hoy
 
@@ -59,12 +81,14 @@ lucide desde unpkg.
 | Cierre del proyecto: una fila por proveedor | Cierre: Proveedores (agregado), IVA a enterar, Retenciones y ISR estimado, cada uno con su fecha límite ante el SAT, más el resumen de utilidad |
 | Detalle: 3 tabs sin contexto | Encabezado con estado, concepto, barra de avance, siguiente paso y saldo. Info con cruce fiscal y bloque "Contacto y pago". Documentos como checklist (requerido/opcional, "Válida"). Pago con estados bloqueado/saldada e historial |
 | Pago a proveedor: monto y comprobante | Monto, **tipo** (Transferencia/Efectivo/**Cheque**), **fecha**, comprobante, notas e **historial de pagos** |
+| Generar orden: preview de todo lo elegible, sin elegir | Modal con **tarjetas por responsable colapsadas**, casilla para incluir o excluir, cruce fiscal por responsable, sección **"No incluidas"** con motivo, pie fijo con total a transferir y confirmación "Orden generada" |
+| Móvil: la pantalla de escritorio encogida y el menú del sidebar | **Diseño móvil propio:** hojas inferiores para proyecto, detalle, filtros y periodo; pantallas empujadas para Avisos y Órdenes; carrusel de totales; barra de pestañas inferior (D19); "Tomar foto o adjuntar" y "Compartir PDF" |
 
 ## 3. Decisiones confirmadas por el usuario (sesión 10)
 
 | # | Tema | Decisión |
 |---|---|---|
-| D1 | Archivo final | Solo `Cuentas-v2`. |
+| D1 | Archivo final | ~~Solo `Cuentas-v2`~~ → sustituido en la sesión 12 por el handoff `design_handoff_cuentas/` (escritorio + móvil). |
 | D2 | Complemento de pago | Solo se exige si la factura es **PPD**. Se lee `MetodoPago` del XML de la factura: PPD → hace falta complemento para cerrar; PUE → no. |
 | D3 | Pagos a proveedor | **Todo en total a transferir**: neto + IVA − retenciones. Captura, "Pagado / Total", barra de avance, saldo y órdenes van en ese monto. |
 | D4 | Números de las tarjetas | Se respeta la forma del diseño, pero los valores salen de las **fórmulas vigentes** (decisión 006 / `calcularCierreProyecto`). |
@@ -87,6 +111,15 @@ lucide desde unpkg.
 | D16 | Complemento de pago (PPD) | **Uno por cada pago registrado**, vinculado a ese pago y validado contra el UUID de la factura y el monto pagado. |
 | D17 | Terminología | La UI dice "Cuentas cerradas" / "Cuentas reabiertas", nunca "Proyecto cerrado": "Cierre de proyecto" ya existe (Reporte de Cierre, etapa final, `proyectos.fecha_cierre_real`) y es otra cosa. |
 
+**Decisiones de la sesión 12** (diseño final):
+
+| # | Tema | Decisión |
+|---|---|---|
+| D18 | Monto del pago a proveedor en pantalla | **Todo en total a transferir** (reafirma D3): tablas, "Pagado / Total", encabezado del detalle, barra, saldo, formulario y avisos. El diseño muestra el neto en las tablas y el encabezado; se corrige en la implementación. El neto solo aparece en el cruce fiscal. |
+| D19 | Barra de pestañas móvil | **Solo dentro de `/cuentas`.** El resto de la app conserva su navegación móvil actual. "Más" abre la hoja "Secciones" con los mismos items y permisos que `SidebarLayout`. |
+| D20 | Base del monto de una orden | **Total a transferir**, en "Nueva orden", el modal, el PDF **y el historial**. El historial del diseño muestra neto; se corrige. Las órdenes viejas (neto) se rotulan por `base_monto` (H9). Confirma el supuesto 5. |
+| D21 | Reasignar responsable | **Solo en conceptos sueltos.** En un concepto agrupado, el select del encabezado se desactiva y se reasigna **renglón por renglón** desde el desglose del grupo, con `reasignar_responsable_cuenta_pagar` sin cambios (grupo `ABIERTO`, o proyecto reabierto por admin, D5). |
+
 ## 4. Supuestos por confirmar (se aplican si no se objetan)
 
 1. **Correcciones sobre un proyecto reabierto:** solo admin, igual que reabrir.
@@ -98,14 +131,13 @@ lucide desde unpkg.
 4. **Facturas ya subidas (backfill de D2):** se reprocesa el XML guardado para
    leer `MetodoPago`. Si no se puede leer, la cuenta queda como "Método de pago
    desconocido" y el detalle pide marcar PUE o PPD a mano. No se adivina.
-5. **Orden de pago (PDF y totales):** en total a transferir, por coherencia con
-   D3.
+5. ~~Orden de pago en total a transferir~~ → **confirmado como D20.**
 6. **Total a transferir de un grupo:** cuando hay factura validada se toma el
    total del CFDI y se guarda como snapshot. Mientras no hay factura se estima
    con el régimen del proveedor (`calcularEjemploFactura`). Si después cambia el
    régimen, el monto ya facturado no se mueve.
-7. **Móvil:** responsive básico. El maestro-detalle se apila en una columna y la
-   lista pasa a tarjetas. El diseño no trae pantallas móviles.
+7. ~~Móvil: responsive básico~~ → **sustituido:** el diseño final trae
+   móvil completo y se implementa tal cual (D19).
 8. **El estado de la vista vive en la URL** (año, mes, vista, filtros,
    búsqueda y proyecto seleccionado). Así se puede compartir y recargar sin
    perderlo.
@@ -119,6 +151,37 @@ lucide desde unpkg.
     grupo "Sin proyecto" dentro de "Sin fecha", no se ocultan.
 12. **Pagos anteriores a B2** (D10): su total a transferir se estima con el
     régimen del proveedor y el historial muestra "monto histórico estimado".
+13. **Elegibles para orden** (diseño, `ordenPreview`): pagos **con saldo** y
+    factura, sin orden, cuyo evento ya pasó.
+    - Incluye el grupo con pago parcial directo (`EN_PROCESO_PAGO` sin
+      orden). Hoy la RPC de candidatos solo toma `FACTURADO`.
+    - La orden cubre el **saldo**, no el total. Hoy `buildOrdenPagoPreview`
+      suma `x_pagar` completo aunque haya pago previo.
+    - "Evento ya pasó" se mide por **cada cotización** del grupo (decisión
+      011, D12), no por la fecha del proyecto como en el mock. El motivo
+      "Evento el <fecha>" muestra la fecha más tardía.
+14. **PDF de la orden** (pendiente 1 del README): se conserva el formato
+    vigente (`lib/server/pdf/orden-pago-pdf.ts`, decisión 015). Se le agregan
+    el cruce fiscal por responsable (subtotal, IVA, retenciones y total a
+    transferir) y el total general a transferir. No hace falta otra ronda de
+    Claude Design salvo que el usuario la pida.
+15. **Límite de archivo: 4 MB por archivo** (diseño; hoy son 10 MB). Una
+    función de Vercel no acepta cuerpos mayores de ~4.5 MB, así que XML y PDF
+    se suben **en peticiones separadas**, no juntos en un solo `FormData` como
+    hoy.
+16. **Descargar y "Compartir PDF"** usan una ruta propia
+    (`GET /api/ordenes-pago/[id]/pdf`) que sirve el archivo desde Drive con
+    `requireSection('cuentas')`, no el enlace de Drive: el usuario puede no
+    tener permiso en la carpeta. En móvil, "Compartir" usa la Web Share API
+    con el archivo; si el navegador no la soporta, descarga.
+17. **Comprobante del pago a proveedor (D11):** se adjunta en el formulario de
+    "Registrar pago", como en el diseño, y no en Documentos. Si se registró
+    sin comprobante, el siguiente paso es "Subir comprobante" y se adjunta
+    desde el historial de pagos ("Ver" / "Adjuntar").
+18. **Moneda con 2 decimales** (`$174,000.00`, pendiente 9 del README):
+    convención vigente en `lib/quotations/format.ts` y en los PDF.
+19. **Corte a móvil en el breakpoint `md` (768px)** de la app, no en los 720px
+    del prototipo, para no crear un segundo breakpoint.
 
 ## 5. Modelo de dominio (lo que el diseño asume y hoy no existe)
 
@@ -216,6 +279,37 @@ Referencia de volumen en producción (2026-09-25):
 - 8 órdenes (6 `GENERADA` desde abril);
 - 6 XML de factura de cobro.
 
+### 5.2 Reglas del prototipo que NO se adoptan
+
+El README del handoff describe la aritmética del mock. Estas reglas chocan
+con decisiones ya tomadas y **no se implementan así**:
+
+| Regla del prototipo | Qué se hace | Por qué |
+|---|---|---|
+| Utilidad bruta = Ingresos − Egresos | `calcularCierreProyecto`: margen + fee de cotizaciones aprobadas | D4, decisión 006. Ingresos y Egresos llevan IVA de terceros. |
+| IVA a enterar = (cobros − pagos) × 16% | IVA cobrado − IVA trasladado por proveedores | Decisión 006. La resta del mock mezcla montos con y sin IVA. |
+| Fecha límite SAT = día 17 del mes siguiente al **evento** | Día 17 del mes siguiente al **cobro o pago** | D15 (flujo de efectivo). |
+| Cruce fiscal de la orden sobre el neto **sumado por responsable** | Cruce por **grupo** (proyecto + proveedor) y luego suma | Decisión 011: una factura por proyecto. Retener sobre la suma cambia el redondeo y no cuadra con los CFDI. |
+| Pagado / Total del pago y saldo en neto | En total a transferir | D18 |
+| Historial de órdenes en neto | En total a transferir | D20 |
+| "Un solo pago cierra los N conceptos del grupo" | Se permiten pagos parciales al grupo (la RPC vigente lo permite). El texto se ajusta a "El pago se reparte entre los N conceptos del grupo". | Decisión 011: el grupo se paga completo en renglones, no en un solo depósito. |
+| Evento realizado por fecha del proyecto | Por fecha de cada cotización | Decisión 011, D12, supuesto 13. |
+| Reabrir visible para todos | Solo admin lo ve y lo ejecuta | D6 |
+
+### 5.3 Pendientes del README del handoff y cómo se resuelven
+
+| # | Pendiente del README | Resolución |
+|---|---|---|
+| 1 | PDF de la orden sin diseño | Supuesto 14 (B6) |
+| 2 | Monto de órdenes: neto o a transferir | D20 |
+| 3 | Pasar conceptos a `en_orden` al generar | RPC `generar_orden_pago` (B1b, B6) |
+| 4 | Fecha actual fija | `hoy_cdmx()` en SQL y helper de fecha CDMX en TS (B3) |
+| 5 | Datos y API | Modelo §5, RPCs y rutas de B1–B7 |
+| 6 | Validación CFDI, almacenamiento y complemento | B1 (parsers, UUID, complemento por pago), Drive vigente, supuesto 15 |
+| 7 | Pestañas móviles Inicio/Proyectos/Cotizaciones | D19: navegan a las rutas existentes |
+| 8 | Estados de escritorio sin captura | Se toman de las capturas móviles; B4 agrega captura de escritorio de cada uno en la validación |
+| 9 | Formato de moneda | Supuesto 18 |
+
 ## 6. Infraestructura que se reutiliza
 
 - **RPCs de dinero** (no se recrean, se extienden):
@@ -238,11 +332,21 @@ Referencia de volumen en producción (2026-09-25):
 - **Estados de cobro:** `lib/server/cuentas/status.ts` y
   `sync_estados_cuentas_cobrar_vencidas`.
 - **UI** (`components/ui`): FilterTabs, StatusBadge, SearchInput, Modal, Select,
-  TextField, DateField, Button, Metric, TableFooter. Falta ProgressBar, un Field
-  reutilizable (hoy vive local en `TabInformacion`) y los iconos nuevos del
-  diseño en `Icon.tsx` (folder, bell, layers, sliders-horizontal, file-down,
-  circle-dashed, circle-check, triangle-alert, rotate-ccw, lock, paperclip,
-  arrow-down-left, arrow-up-right, upload).
+  TextField, DateField, Button, Metric, TableFooter, Icon. Navegación:
+  `components/navigation/Sidebar.tsx`, `components/layout/AppShell.tsx` y los
+  items de `app/components/SidebarLayout.tsx`, que la hoja "Más" reutiliza.
+  **Faltan:**
+  - `ProgressBar`;
+  - `Field` reutilizable (hoy vive local en `TabInformacion`);
+  - `Checkbox` y `Switch` ("Agrupar por mes");
+  - `BottomSheet` (hojas móviles con grabber, 88–92% de alto);
+  - `CuentasTabBar` (barra móvil, solo en Cuentas, D19);
+  - `SearchableSelect` (Cliente y Proveedor con buscador);
+  - iconos nuevos en `Icon.tsx`: `bell`, `folder`, `layers`,
+    `sliders-horizontal`, `file-down`, `circle-check`, `arrow-right-circle`,
+    `camera`, `paperclip`, `info`, `users`, `share`, `arrow-down-left` y
+    `arrow-up-right`. Los que ya existen con otro nombre (`warning`, `close`,
+    `dashboard`, `cuentas`, `calendar`, `lock`) se reutilizan.
 - **Subidas:** `lib/server/uploads/factura-validation.ts` y el flujo de
   Documentos actual (Drive).
 - **Tests:** `tests/e2e/critical/cuentas-*.spec.ts`,
@@ -255,12 +359,12 @@ sigue funcionando hasta el Bloque 8: la nueva se construye al lado, en la
 misma ruta detrás de `?v=2`, y se cambia al final.
 
 **B0 — Referencia, reglas y datos de prueba.**
-- Diseño a `docs/design/cuentas-v2/`.
-  - El zip **no trae capturas de v2**, solo las de la réplica: se generan con
-    Playwright sirviendo el mock.
-  - Se descartan `Cuentas-A/B/C` y `Cuentas Rediseño.dc.html` (ronda 1).
-- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2, D3,
-  D5–D17, el modelo de la sección 5 y los supuestos aceptados.
+- `design_handoff_cuentas/` completo a `docs/design/cuentas/`: README,
+  capturas, `abrir-directo/` y `codigo-fuente/`, unos 4 MB. No se generan
+  capturas: el handoff ya las trae.
+- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D21, el
+  modelo de la sección 5, §5.2 (reglas del prototipo que no se adoptan) y los
+  supuestos aceptados.
 - Seed para `serenata-erp-test` con las formas de datos de producción (H11):
   - sueltas en orden sin factura;
   - grupo con pago parcial sin orden;
@@ -273,7 +377,9 @@ misma ruta detrás de `?v=2`, y se cambia al final.
 **B1b — Blindaje previo (bugs vigentes).** Va antes de todo lo demás porque
 son bugs de hoy, no del rediseño.
 - RPC `generar_orden_pago(p_candidatos, p_pdf_url, p_pdf_nombre, p_total,
-  p_usuario)`, atómica (H1, H2):
+  p_usuario)`, atómica (H1, H2). `p_candidatos` es la **selección** (ids de
+  grupos y sueltas de los responsables incluidos, supuesto 13); no se toma
+  "todo lo elegible" en el servidor. La RPC:
   - bloquea los candidatos con `FOR UPDATE`;
   - revalida su estado;
   - inserta la orden;
@@ -281,6 +387,10 @@ son bugs de hoy, no del rediseño.
   Si otro proceso ya los tomó, falla explícito. El PDF se sube antes; si la
   RPC falla, queda un archivo huérfano en Drive y se registra en el log. La
   ruta la llama en lugar de las tres escrituras sueltas.
+  - En B1b la ruta pasa todo lo elegible como selección. La selección por
+    responsable llega en B6 sin cambiar la firma.
+  - El total lo calcula la ruta a partir de los candidatos. Nunca viene del
+    cliente.
 - `registrar_pago_cuenta_pagar` conserva `EN_PROCESO_PAGO` si la cuenta está
   en una orden (H3). Se parte de la definición vigente en `pg_proc`
   (norma de la decisión 011).
@@ -363,34 +473,99 @@ va solo.
   `requireSection('cuentas')` y Zod.
 - `cuentas_por_proyecto` sigue viva hasta B8.
 
-**B4 — Pantalla principal nueva (`?v=2`).**
-- Barra de periodo, Por proyecto (tarjetas y maestro-detalle), Lista, tarjetas
-  de cifras, panel de filtros con chips y búsqueda, y "Agrupar por mes".
-- Cierre del proyecto con el formato nuevo.
-- Estado en la URL.
-- Estados vacíos ("Sin cuentas en este periodo con estos filtros").
-- Tokens `--sn-*` y primitivos existentes; se agregan ProgressBar, Field e
-  iconos.
+**Regla para B4–B7:** cada bloque entrega **escritorio y móvil** de sus
+pantallas, en **tema claro y oscuro**, con las capturas del handoff como
+criterio de aceptación. Móvil no se deja para el final: comparte datos,
+hooks y derivación con escritorio y solo cambia el layout.
 
-**B5 — Detalle del concepto (modal nuevo).**
-- Encabezado con avance.
+**B4 — Pantalla principal nueva (`?v=2`).**
+- Primitivos nuevos (§6): ProgressBar, Field, Checkbox, Switch, BottomSheet,
+  SearchableSelect, CuentasTabBar e iconos. Cada uno con su test.
+- **Escritorio** (capturas 01, 02, 07 y 08):
+  - encabezado con Avisos (contador) y Orden de pago;
+  - pastillas de mes con contador, "Todo el año" y select de año con
+    pendientes;
+  - Por proyecto / Lista, Filtros (panel de 640px con 4 columnas), chips y
+    búsqueda expandible;
+  - 4 tarjetas de totales;
+  - tarjetas de proyecto y maestro-detalle (detalle a la izquierda, lista a la
+    derecha; tocar el proyecto seleccionado lo deselecciona);
+  - tablas Entradas y Salidas con siguiente paso y vencimiento;
+  - Lista agrupable por mes, con pie "Mostrando N conceptos de M proyectos".
+- **Móvil** (capturas 01–03, 09, 10, 12–14 y 17, 18, 20):
+  - encabezado de 27px con Avisos y Órdenes;
+  - botón de periodo que abre la hoja Periodo (año y cuadrícula de 3 × 4);
+  - búsqueda, filtros en hoja con chips y SearchableSelect ("Ver N
+    proyectos");
+  - carrusel de totales con scroll-snap;
+  - tarjeta de proyecto sin folio;
+  - proyecto abierto en hoja al 92%, **sin** siguiente paso en las filas;
+  - Lista en tarjetas;
+  - `CuentasTabBar` (D19).
+- Reglas de interacción del README:
+  - "Pendientes" cambia el periodo a "Todo el año";
+  - elegir un Cliente limpia "Por pagar" y elegir un Proveedor limpia "Por
+    cobrar";
+  - "Agrupar por mes" solo en "Todo el año";
+  - métricas de la tarjeta: Por cobrar / Por pagar si está abierta, Ingreso /
+    Egreso si está cerrada.
+- Cierre del proyecto con el formato nuevo (§5.2) y el aviso de estimación
+  (Art. 14 LISR).
+- Estado en la URL (supuesto 8).
+- Estados vacíos: sin resultados, año archivado (todo cerrado) y "Sin fecha".
+- Tokens `--sn-*`; moneda con 2 decimales (supuesto 18).
+
+**B5 — Detalle del concepto.** Modal de 780px en escritorio (capturas 03–06)
+y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
+- Encabezado con avance, en total a transferir para pagos (D18).
 - Información:
   - Cobro: campos y notas.
-  - Pago: reasignar, grupo con desglose, cruce fiscal, contacto, orden
-    vinculada e historial de reasignaciones.
+  - Pago: select de responsable **solo en sueltos** (D21); en un grupo, el
+    desglose lleva la reasignación por renglón. Además: grupo de
+    facturación, régimen, cruce fiscal, contacto, orden vinculada e historial
+    de reasignaciones.
 - Documentos: checklist requerido/opcional según D11, "Válida" según
   `estado_validacion`, aviso de grupo.
   - Complemento: **un renglón por pago** (D16), requerido solo si la factura
     es PPD; si el método es desconocido, se pide elegir.
   - Comprobante de pago del proveedor: requerido una vez pagado.
-- Registrar pago: cobro y pago con tipo y fecha, bloqueado sin factura con
-  botón "Ir a Documentos", saldada, historial de pagos.
+- Registrar pago:
+  - cobro y pago con tipo y fecha;
+  - bloqueado sin factura, con botón "Ir a Documentos" (captura móvil 15);
+  - estado saldada;
+  - historial de pagos;
+  - comprobante en el formulario ("Tomar foto o adjuntar", `accept` de imagen
+    y PDF con `capture`), y "Adjuntar" después desde el historial
+    (supuesto 17). Ruta nueva para adjuntar el comprobante a un pago ya
+    registrado.
+- Subidas de 4 MB por archivo, XML y PDF en peticiones separadas
+  (supuesto 15). Se ajustan `factura-validation.ts` y los hooks de subida.
 
-**B6 — Avisos y órdenes.**
+**B6 — Avisos y órdenes.** Escritorio: capturas 09–13. Móvil: 04, 05, 11,
+16 y 21.
 - Ruta `GET /api/cuentas/avisos` con las 5 categorías (supuestos 2 y 3).
   Reemplaza a `/api/cuentas-cobrar/alertas`.
-- Bandeja lateral: Avisos lleva al proyecto y periodo; Órdenes muestra "Nueva
-  orden" con confirmación (D8) y las últimas 5.
+- Escritorio: panel lateral de 400px "Avisos y órdenes". Móvil: pantallas
+  empujadas "‹ Cuentas".
+  - Tocar un aviso limpia filtros, fija año y mes del evento y abre el
+    proyecto.
+  - Órdenes: tarjeta "Nueva orden" y las últimas 5 con "Ver todo (N)". En
+    móvil, filtro de estado en hoja con contadores.
+- **Generar orden** (modal de 820px / hoja al 92%):
+  - `GET /api/cuentas-pagar/generar-orden-pago` devuelve elegibles y "No
+    incluidas" con motivo (supuesto 13), agrupados por responsable y proyecto.
+  - Cruce fiscal por grupo, sumado por responsable (§5.2), con
+    `calcularEjemploFactura` o el snapshot del CFDI.
+  - Tarjetas colapsadas: la casilla incluye o excluye, y tocar la fila la
+    expande.
+  - Pie fijo con los totales recalculados.
+  - El confirmar de D8 es el propio pie del modal (resumen + "Generar orden
+    PDF"), no un segundo diálogo.
+  - `POST` recibe la selección, genera el PDF (supuesto 14) y llama
+    `generar_orden_pago` (B1b). Luego muestra "Orden generada" con
+    Descargar o Compartir (supuesto 16).
+  - `buildOrdenPagoPreview` pasa a usar el saldo en lugar de `x_pagar` y
+    agrega el cruce fiscal.
 - Migración de órdenes:
   - estado `CANCELADA`, con `cancelada_at/por/motivo`;
   - `base_monto` (`NETO` para las existentes, `TRANSFERIR` para las nuevas;
@@ -401,9 +576,10 @@ va solo.
 - `VENCIDA` derivada a 15 días desde `fecha_generacion` en hora CDMX (D7), sin
   columna. Aplica también a las órdenes existentes (D13).
 - `buscar_ordenes_pago` extendida: filtros estado/mes/proveedor/proyecto,
-  búsqueda por folio y desglose por orden.
-- Modal de historial.
-- PDF de la orden en total a transferir (supuesto 5).
+  búsqueda por folio, desglose por orden y conteo de cuentas.
+- Historial (modal de 960px / pantalla móvil): filas que se expanden por
+  proveedor, monto en total a transferir (D20), descarga por la ruta propia.
+- Ruta `GET /api/ordenes-pago/[id]/pdf` (supuesto 16).
 
 **B7 — Reabrir, volver a cerrar y correcciones (D5, D6).**
 - Tabla `cuentas_reaperturas` (proyecto, abierta por/cuándo/motivo, cerrada
@@ -415,6 +591,9 @@ va solo.
   - el CHECK de `pago_operations.dominio` acepta las operaciones de anulación.
 - Admin según el supuesto 10: `requireSection('admin')` en la ruta y
   `p_usuario` en la RPC.
+- UI (escritorio y móvil): Reabrir y Volver a cerrar solo para admin,
+  motivo obligatorio y chip "Reabierta". Las correcciones solo aparecen con el
+  proyecto reabierto.
 - RPCs `reabrir_cuentas_proyecto` / `cerrar_cuentas_proyecto` (solo admin).
 - Correcciones, todas validadas en servidor contra "proyecto reabierto y
   usuario admin":
@@ -433,7 +612,8 @@ va solo.
   (buscar antes).
 - También `cuentas_pagar_pendientes_eventos_realizados` y las secuencias
   `seq_cc_2026` / `seq_cp_2026`, si siguen sin uso.
-- E2E de Cuentas reescritos al flujo nuevo.
+- E2E de Cuentas reescritos al flujo nuevo, en escritorio y en viewport móvil
+  (390px).
 - `ARCHITECTURE.md` actualizado.
 - Prueba manual del usuario en el Preview.
 
@@ -485,11 +665,24 @@ va solo.
 - **Permisos.** Reabrir y corregir exigen admin en servidor, no solo ocultar
   botones.
 
+- **Límite de cuerpo de Vercel (~4.5 MB).** La subida actual manda XML y PDF
+  juntos con un límite de 10 MB por archivo, así que puede fallar en
+  producción con un 413 poco claro.
+  - Mitigación: supuesto 15, más un mensaje explícito si se excede.
+- **Alcance móvil.** Duplica el trabajo de layout de B4–B7.
+  - Mitigación: una sola capa de datos y derivación, componentes de
+    presentación separados por breakpoint, capturas del handoff como criterio
+    de aceptación.
+- **Selección parcial de la orden.** Si la UI manda ids que ya no son
+  elegibles (otra persona generó una orden en medio), la RPC falla
+  explícito, la UI recarga el preview y lo avisa.
+
 **P2**
 - El build depende de Google Fonts (deuda conocida).
-- No hay diseño móvil (supuesto 7).
-- El mock carga React, Babel y lucide desde unpkg; solo afecta a la
-  referencia, no a la app.
+- `codigo-fuente/` del handoff no abre sin `_ds/`. Para ver el diseño se usan
+  `abrir-directo/` y las capturas.
+- Estados de escritorio sin captura (pendiente 8 del README): se validan
+  contra la captura móvil equivalente.
 - Las cifras del mock no coinciden con las reales (D4). Avisar en la prueba
   manual para que no se lean como un bug.
 
@@ -507,16 +700,22 @@ va solo.
 - **Migraciones:** job `fresh-db` y `Migrations` en verde.
 - **Paridad:** pendientes y totales de B3 contra `cuentas_por_proyecto` y
   `dashboard_kpis_cuentas` en `serenata-erp-test`, con el seed de B0.
-- **E2E critical:**
-  - periodo y filtros;
+- **E2E critical** (escritorio y móvil 390px):
+  - periodo y filtros, incluidas "Pendientes → Todo el año" y la limpieza
+    cruzada de Cliente y Proveedor;
   - maestro-detalle;
   - detalle con sus 3 tabs;
   - registrar pago de cobro y de proveedor (total a transferir);
-  - generar y cancelar orden;
+  - generar orden con un responsable excluido, "No incluidas" y cancelar
+    orden;
+  - barra de pestañas y hoja "Más" en móvil;
   - reabrir, anular pago y volver a cerrar.
 - **E2E live:** registrar y anular pago en concurrencia; dos generaciones de
   orden simultáneas (B1b); generar y cancelar orden contra la base de test.
-- **Manual:** el usuario en el Preview de B8 con datos reales de test.
+- **Visual:** cada pantalla del bloque contra su captura del handoff, en tema
+  claro y oscuro.
+- **Manual:** el usuario en el Preview de B8 con datos reales de test, en
+  escritorio y en su teléfono.
 - **Regla de siempre:** tsc, lint, `npm test`, build, smoke, critical y `live`
   en verde en cada PR.
 
@@ -527,7 +726,8 @@ va solo.
 | Réplica del estado actual | Hecho (sesión 9) |
 | Rediseño en Claude Design | Hecho (usuario) |
 | Auditoría del diseño y plan | Hecho (sesión 10) |
-| Auditoría end-to-end y decisiones D10–D17 | Hecho (sesión 11). Falta confirmar la §4 y aprobar |
+| Auditoría end-to-end y decisiones D10–D17 | Hecho (sesión 11) |
+| Diseño final (handoff) y re-auditoría, D18–D21 | Hecho (sesión 12). Falta confirmar la §4 y aprobar |
 | B0 Referencia, reglas y seed | Pendiente |
 | B1b Blindaje previo | Pendiente |
 | B1 Derivación y datos fiscales | Pendiente |
