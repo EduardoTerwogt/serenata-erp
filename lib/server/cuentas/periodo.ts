@@ -29,6 +29,7 @@ import {
   type FiltroTipo,
   type MesPeriodo,
   type MesResumen,
+  type OpcionesFiltros,
   type PeriodoRespuesta,
   type ProyectoDetalle,
   type TarjetaProyecto,
@@ -371,6 +372,18 @@ export function seleccionarProyecto(
   return { ...encontrado, conceptos: filtrados.length ? filtrados : encontrado.conceptos }
 }
 
+/**
+ * Opciones de los filtros del año (O1b, E6): clientes de los cobros y
+ * proveedores asignados de los pagos, sin repetir y en orden español.
+ */
+export function construirOpciones(proyectos: ProyectoDetalle[], anio: number): OpcionesFiltros {
+  return {
+    anio,
+    clientes: Array.from(new Set(proyectos.flatMap((p) => p.conceptos.filter((c) => c.tipo === 'cobro').map((c) => c.contraparte)))).sort(ORDEN_ES.compare),
+    proveedores: Array.from(new Set(proyectos.flatMap((p) => p.conceptos.filter((c) => c.tipo === 'pago' && c.contraparte_id).map((c) => c.contraparte)))).sort(ORDEN_ES.compare),
+  }
+}
+
 export function construirPeriodo(proyectos: ProyectoDetalle[], params: ParametrosPeriodo, hoy: string): PeriodoRespuesta {
   const pasa = filtroConceptos(params)
   const estadoOk = (p: ProyectoDetalle) =>
@@ -408,11 +421,6 @@ export function construirPeriodo(proyectos: ProyectoDetalle[], params: Parametro
   )
   const proyectosConFilas = new Set(filas.map((f) => f.proyecto.id)).size
 
-  const opciones = {
-    clientes: Array.from(new Set(proyectos.flatMap((p) => p.conceptos.filter((c) => c.tipo === 'cobro').map((c) => c.contraparte)))).sort(ORDEN_ES.compare),
-    proveedores: Array.from(new Set(proyectos.flatMap((p) => p.conceptos.filter((c) => c.tipo === 'pago' && c.contraparte_id).map((c) => c.contraparte)))).sort(ORDEN_ES.compare),
-  }
-
   return {
     anio: params.anio,
     mes: params.mes,
@@ -424,7 +432,6 @@ export function construirPeriodo(proyectos: ProyectoDetalle[], params: Parametro
       cerradas: alcance.filter((x) => x.p.cuentas.cerradas).length,
     },
     totales: totalesPeriodo(alcance),
-    opciones,
     proyectos: params.vista === 'proyectos' ? paginar(visibles.map((x) => tarjeta(x.p)), params.page, params.page_size) : paginar([], 1, params.page_size),
     sin_fecha: params.vista === 'proyectos' ? sinFechaVisibles.map((x) => tarjeta(x.p)) : [],
     lista: params.vista === 'lista'

@@ -56,7 +56,7 @@
   `tests/e2e/live/cuentas-b1b.spec.ts`.
 - **B1–B6, B8 y B7 hechos en la rama `claude/practical-brown-giy5p3`
   (PR #96, borrador).** Tracker en `docs/PLAN.md` §10.
-  - Migraciones `20260926`–`20261005` aplicadas **solo en
+  - Migraciones `20260926`–`20261006` aplicadas **solo en
     `serenata-erp-test`** (el Preview apunta ahí). A producción van todas
     juntas al aprobar el merge, en orden, verificando cada una.
   - O1b: la derivación del periodo pasó a SQL con test de paridad (E1).

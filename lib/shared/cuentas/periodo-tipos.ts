@@ -107,12 +107,22 @@ export interface PeriodoRespuesta {
   meses: MesResumen[]
   conteo: { todas: number; pendientes: number; cerradas: number }
   totales: TotalesPeriodo
-  opciones: { clientes: string[]; proveedores: string[] }
   proyectos: Paginado<TarjetaProyecto>
   /** "Sin fecha" y "Sin proyecto" (S17): solo en "Todo el año"; no suman a totales ni a meses. */
   sin_fecha: TarjetaProyecto[]
   lista: Paginado<ConceptoLista> & { proyectos: number }
   seleccionado: ProyectoDetalle | null
+}
+
+/**
+ * Opciones de los filtros Cliente y Proveedor: los del año, sin importar el
+ * mes ni los demás filtros. Van en su propia petición (`/api/cuentas/opciones`),
+ * una vez por año, no en cada lectura del periodo (O1b, E6).
+ */
+export interface OpcionesFiltros {
+  anio: number
+  clientes: string[]
+  proveedores: string[]
 }
 
 export interface ResumenRespuesta {

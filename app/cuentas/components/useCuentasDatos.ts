@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { getJson } from '@/lib/client/api'
-import type { PeriodoRespuesta, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
+import type { OpcionesFiltros, PeriodoRespuesta, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
 import type { EstadoCuentas } from './useCuentasUrl'
 
 const DEBOUNCE_BUSQUEDA_MS = 300
@@ -23,6 +23,18 @@ function queryPeriodo(e: EstadoCuentas, q: string): string {
   sp.set('page', String(e.page))
   sp.set('page_size', String(e.vista === 'lista' ? PAGE_SIZE_LISTA : PAGE_SIZE_PROYECTOS))
   return sp.toString()
+}
+
+/** Opciones de filtro por año (E6): una petición por año en toda la visita a la página. */
+const opcionesPorAnio = new Map<number, Promise<OpcionesFiltros>>()
+function cargarOpciones(anio: number) {
+  let p = opcionesPorAnio.get(anio)
+  if (!p) {
+    p = getJson<OpcionesFiltros>(`/api/cuentas/opciones?anio=${anio}`, 'No se pudieron cargar las opciones de filtro')
+    p.catch(() => opcionesPorAnio.delete(anio))
+    opcionesPorAnio.set(anio, p)
+  }
+  return p
 }
 
 function useDebounced(valor: string, ms: number) {
@@ -79,11 +91,28 @@ export function useCuentasDatos(estado: EstadoCuentas) {
     return () => ac.abort()
   }, [versionResumen])
 
+  // Clientes y proveedores del año que muestra el periodo, para los filtros.
+  const anio = periodo?.anio ?? null
+  const [opciones, setOpciones] = useState<OpcionesFiltros | null>(null)
+  useEffect(() => {
+    if (anio === null) return undefined
+    let vivo = true
+    cargarOpciones(anio)
+      .then((o) => vivo && setOpciones(o))
+      .catch((err) => {
+        // Sin opciones los filtros Cliente y Proveedor quedan vacíos; el resto funciona.
+        if (vivo) console.error('[cuentas] opciones de filtro:', err)
+      })
+    return () => {
+      vivo = false
+    }
+  }, [anio])
+
   /** Vuelve a pedir el periodo y el resumen (después de registrar algo). */
   const recargar = useCallback(() => {
     setVersion((v) => v + 1)
     setVersionResumen((v) => v + 1)
   }, [])
 
-  return { periodo, resumen, cargando, error, recargar }
+  return { periodo, resumen, opciones: opciones && opciones.anio === anio ? opciones : null, cargando, error, recargar }
 }

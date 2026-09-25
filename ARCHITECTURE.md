@@ -391,6 +391,9 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
   genérico de plpgsql (desde la 6.ª llamada por conexión) la misma petición
   pasaba de ~0.4 s a ~4.6 s.
 - Avisos: por categoría viajan los 50 más urgentes y el total real.
+- Las opciones de los filtros Cliente y Proveedor solo dependen del año:
+  van aparte (`cuentas_opciones`, `GET /api/cuentas/opciones?anio=`) y se
+  piden una vez por año, no en cada lectura del periodo.
 - Montos: cobros con IVA; pagos en **total a transferir** (snapshot del CFDI
   o estimado por régimen). El neto solo aparece en el cruce fiscal.
 

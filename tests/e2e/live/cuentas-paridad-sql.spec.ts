@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { AVISOS_POR_CATEGORIA, agruparAvisos, derivarAvisos, type CandidatoAviso } from '@/lib/server/cuentas/avisos'
 import {
+  construirOpciones,
   construirPeriodo,
   construirProyectos,
   pendientesPorAnio,
@@ -41,7 +42,7 @@ test.describe('live: paridad de la derivación SQL con la de TS (O1b)', () => {
   test.skip(!liveEnabled, 'Live integration tests are disabled until PLAYWRIGHT_BASE_URL and live credentials are configured')
   test.setTimeout(300_000)
 
-  test('periodo: mismos meses, conteos, totales, opciones, tarjetas y lista', async () => {
+  test('periodo: mismos meses, conteos, totales, tarjetas y lista', async () => {
     const supabase = getLiveSupabaseAdmin()
     const hoy = hoyCdmx()
     const anio = Number(hoy.slice(0, 4))
@@ -85,6 +86,16 @@ test.describe('live: paridad de la derivación SQL con la de TS (O1b)', () => {
       for (const k of Object.keys(ts) as (keyof typeof ts)[]) {
         expect(sql[k], `${etiqueta} → ${k}`).toEqual(ts[k])
       }
+    }
+  })
+
+  test('opciones de filtro (E6): mismos clientes y proveedores del año', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const hoy = hoyCdmx()
+    const anio = Number(hoy.slice(0, 4))
+    for (const a of [anio, anio - 1, 2001]) {
+      const proyectos = construirProyectos(decodificarCuentasAnio(await rpc(supabase, 'cuentas_por_proyecto', { p_year: a })), hoy)
+      expect(await rpc(supabase, 'cuentas_opciones', { p_year: a }), String(a)).toEqual(construirOpciones(proyectos, a))
     }
   })
 

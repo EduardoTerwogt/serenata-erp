@@ -341,6 +341,10 @@ export const RegistrarPagoProveedorSchema = z.object({
 
 // GET /api/cuentas/periodo (Rediseño de Cuentas B3). Query string: todo
 // llega como texto; año y mes vacíos toman el año y mes actuales en la ruta.
+export const CuentasOpcionesQuerySchema = z.object({
+  anio: z.coerce.number().int().min(2000).max(2100),
+})
+
 export const CuentasPeriodoQuerySchema = z.object({
   anio: z.coerce.number().int().min(2000).max(2100).optional(),
   mes: z.union([z.literal('todo'), z.coerce.number().int().min(1).max(12)]).optional(),

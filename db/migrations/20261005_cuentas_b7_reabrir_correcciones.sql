@@ -7,9 +7,9 @@
 -- 2. Columnas (H12): anulación en pagos_comprobantes (motivo obligatorio,
 --    igual en pagos_cuentas_pagar) y baja lógica con reemplazo en
 --    documentos_cuentas_cobrar / documentos_cuentas_pagar.
--- 3. Reabrir / volver a cerrar. Que las cuentas estén cerradas o ya sin
---    pendientes (valores derivados, D17) lo valida la ruta con la misma
---    derivación que la pantalla; la RPC solo registra.
+-- 3. Reabrir / volver a cerrar: la RPC solo registra. Un admin reabre con
+--    o sin pendientes (D33, sesión 20); cerradas = sin pendientes y sin
+--    reapertura activa (D17).
 -- 4-7. Correcciones, cada una una RPC atómica que exige el proyecto
 --    reabierto (cuentas_reapertura_activa) y deja registro: anular pagos de
 --    cobro y de proveedor, quitar o reemplazar documentos, editar fechas y

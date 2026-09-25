@@ -30,6 +30,9 @@ import { useAvisos } from './ordenes/useOrdenes'
 import type { AvisoItem } from '@/lib/shared/cuentas/periodo-tipos'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 
+/** Mientras llegan las opciones del año, listas vacías estables (no cambian la memo de Filtros). */
+const SIN_OPCIONES: string[] = []
+
 const VISTAS: { value: VistaCuentas; label: string }[] = [
   { value: 'proyectos', label: 'Por proyecto' },
   { value: 'lista', label: 'Lista' },
@@ -68,7 +71,7 @@ const PESTANAS: PestanaDetalle[] = ['info', 'docs', 'pago']
 
 export function CuentasApp() {
   const { estado, filtrar, abrir, cerrar, reemplazar } = useCuentasUrl()
-  const { periodo, resumen, cargando, error, recargar } = useCuentasDatos(estado)
+  const { periodo, resumen, opciones, cargando, error, recargar } = useCuentasDatos(estado)
   const escritorio = useEsEscritorio()
   const avisosPanel = useAvisos(estado.pantalla === 'avisos' || (escritorio && estado.pantalla === 'ordenes'))
   /** Algo cambió cuentas u órdenes: periodo, resumen y avisos se vuelven a pedir. */
@@ -292,7 +295,7 @@ export function CuentasApp() {
       <div className="hidden flex-wrap items-center gap-3 md:flex">
         <FilterTabs tabs={VISTAS} value={estado.vista} onChange={(v) => filtrar({ vista: v, proyecto: null })} />
         {periodo && (
-          <FiltrosEscritorio estado={estado} conteo={periodo.conteo} clientes={periodo.opciones.clientes} proveedores={periodo.opciones.proveedores} mes={mes} onCambio={cambiarFiltros} />
+          <FiltrosEscritorio estado={estado} conteo={periodo.conteo} clientes={opciones?.clientes ?? SIN_OPCIONES} proveedores={opciones?.proveedores ?? SIN_OPCIONES} mes={mes} onCambio={cambiarFiltros} />
         )}
         <Chips estado={estado} onCambio={cambiarFiltros} className="flex-wrap" />
         <div className="ml-auto">
@@ -347,8 +350,8 @@ export function CuentasApp() {
         <HojaFiltros
           estado={estado}
           conteo={periodo.conteo}
-          clientes={periodo.opciones.clientes}
-          proveedores={periodo.opciones.proveedores}
+          clientes={opciones?.clientes ?? SIN_OPCIONES}
+          proveedores={opciones?.proveedores ?? SIN_OPCIONES}
           mes={mes}
           onCambio={cambiarFiltros}
           onClose={() => cerrar({ sheet: null })}

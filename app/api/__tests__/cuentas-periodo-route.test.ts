@@ -11,6 +11,7 @@ vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcM
 vi.mock('@/lib/shared/hoy-cdmx', () => ({ hoyCdmx: () => '2026-09-24' }))
 
 import { GET as getAvisos } from '../cuentas/avisos/route'
+import { GET as getOpciones } from '../cuentas/opciones/route'
 import { GET as getPeriodo } from '../cuentas/periodo/route'
 import { GET as getResumen } from '../cuentas/resumen/route'
 
@@ -36,7 +37,6 @@ const periodoSql = {
     ingresos: { total: 1000, cobrado: 0, por_cobrar: 1000 }, egresos: { total: 0, pagado: 0, por_pagar: 0 },
     utilidad: { bruta: 0, isr_estimado: 0, neta: 0 }, impuestos: { iva_a_enterar: 0, retenciones: 0, isr_estimado: 0, total: 0 },
   },
-  opciones: { clientes: ['Modelo'], proveedores: [] },
   proyectos: { items: [tarjeta], total: 1, page: 1, page_size: 60 },
   sin_fecha: [],
   lista: {
@@ -145,5 +145,28 @@ describe('GET /api/cuentas/avisos', () => {
     expect(body.categorias.map((c: { categoria: string }) => c.categoria)).toEqual(['vencidos', 'por_emitir'])
     expect(body.categorias[0].items[0]).toMatchObject({ detalle: 'Vencido hace 14 días', fecha: '2026-09-10', monto: 1000 })
     expect(body.categorias[1].items[0]).toMatchObject({ detalle: 'Evento 18 sep 2026', fecha: '2026-09-18' })
+  })
+})
+
+describe('GET /api/cuentas/opciones (E6)', () => {
+  it('clientes y proveedores del año, de cuentas_opciones', async () => {
+    const opciones = { anio: 2025, clientes: ['Modelo'], proveedores: ['Luz'] }
+    mocks.rpcMock.mockResolvedValueOnce({ data: opciones, error: null })
+    const res = await getOpciones(new Request('http://x/api/cuentas/opciones?anio=2025'))
+    expect(res.status).toBe(200)
+    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_opciones', { p_year: 2025 })
+    expect(await res.json()).toEqual(opciones)
+  })
+
+  it('sin año válido -- 400 sin tocar la BD', async () => {
+    mocks.rpcMock.mockClear()
+    expect((await getOpciones(new Request('http://x/api/cuentas/opciones'))).status).toBe(400)
+    expect((await getOpciones(new Request('http://x/api/cuentas/opciones?anio=abc'))).status).toBe(400)
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('exige la sección cuentas', async () => {
+    mocks.requireSectionMock.mockResolvedValueOnce({ response: Response.json({ error: 'No autorizado' }, { status: 403 }) })
+    expect((await getOpciones(new Request('http://x/api/cuentas/opciones?anio=2026'))).status).toBe(403)
   })
 })

@@ -604,6 +604,7 @@ cambian reglas de producto (esas son D33 y D34).
 | E3 | H12 pedía ampliar el CHECK de `pago_operations.dominio` para anular. | No hace falta: anular es idempotente por naturaleza (el pago ya anulado devuelve `ya_anulado`), así que no usa `pago_operations`. El CHECK queda igual. | B7 |
 | E4 | ¿Un pago anulado bloquea cancelar la cotización? | Sí, `cancel_cotizacion` no cambia: el pago anulado sigue siendo un registro con historia, y cancelar borraría las cuentas que lo explican. | B7 |
 | E5 | Un grupo ya pagado cuya factura se dio de baja no aceptaba la nueva (`subir-factura` exigía `ABIERTO`). | La guarda es "no hay factura vigente validada" (o D34), no el estado del grupo. `validar_factura_proveedor` conserva el snapshot si ya hay pagos. | B7 |
+| E6 | El p95 < 800 ms del periodo fallaba en CI ante picos de red (mediana ~500 ms): cada respuesta pesaba ~305 KB, y ~300 KB eran las opciones de los filtros (clientes y proveedores del año), en cada cambio de filtro, mes o página. | Las opciones salen del periodo: `cuentas_opciones(p_year)` (migración 20261006) y `GET /api/cuentas/opciones?anio=`, que la pantalla pide una vez por año. El periodo baja a ~5–50 KB y ~35 ms menos en la BD. La paridad SQL/TS cubre también las opciones. | B3, B8 |
 
 ## 6. Infraestructura que se reutiliza
 
@@ -1306,9 +1307,9 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | B4 Pantalla principal | Hecho (sesión 20, rama del PR #96) |
 | B5 Detalle | Hecho (sesión 20, rama del PR #96) |
 | B6 Avisos y órdenes | Hecho (sesión 20, rama del PR #96; E2) |
-| B8 Corte y limpieza (antes de B7, D24) | Hecho en código (sesión 20; migración 20261004 solo en test; O1b en SQL, E1). Falta R9: Drive en Preview, lo configura el usuario |
+| B8 Corte y limpieza (antes de B7, D24) | Hecho en código (sesión 20; migraciones 20261004 y 20261006 solo en test; O1b en SQL, E1 y E6). Falta R9: Drive en Preview, lo configura el usuario |
 | B7 Reabrir y correcciones | Hecho (sesión 20, rama del PR #96; migración 20261005 solo en test; D33, D34, E3–E5) |
-| Producción | Pendiente: migraciones 20260926–20261005 a `serenata-erp` al aprobar el merge |
+| Producción | Pendiente: migraciones 20260926–20261006 a `serenata-erp` al aprobar el merge |
 
 ## Ciclo de vida
 

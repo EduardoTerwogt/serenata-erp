@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { fulfillJson } from './http'
 import { derivarAvisos } from '@/lib/server/cuentas/avisos'
-import { construirPeriodo, construirProyectos, pendientesPorAnio, ultimoMesConDatos } from '@/lib/server/cuentas/periodo'
+import { construirOpciones, construirPeriodo, construirProyectos, pendientesPorAnio, ultimoMesConDatos } from '@/lib/server/cuentas/periodo'
 import { decodificarCuentasAnio } from '@/lib/server/cuentas/periodo-crudo'
 import type { FiltroEstado, FiltroTipo, MesPeriodo, ProyectoDetalle, VistaCuentas } from '@/lib/shared/cuentas/periodo-tipos'
 
@@ -177,6 +177,11 @@ export async function mockCuentasPeriodo(page: Page) {
         HOY_E2E
       )
     )
+  })
+
+  await page.route(/\/api\/cuentas\/opciones(\?.*)?$/, async (route) => {
+    const anio = Number(new URL(route.request().url()).searchParams.get('anio')) || 2026
+    await fulfillJson(route, construirOpciones(proyectosAnio(anio), anio))
   })
 
   await page.route('**/api/cuentas/resumen', async (route) => {

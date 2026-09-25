@@ -4,7 +4,7 @@
  * (lectura cruda) y `periodo-sql.ts` (periodo derivado en SQL).
  */
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import type { CategoriaAviso, MesPeriodo, PeriodoRespuesta, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
+import type { CategoriaAviso, MesPeriodo, OpcionesFiltros, PeriodoRespuesta, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
 import { AVISOS_POR_CATEGORIA, type CandidatoAviso } from './avisos'
 import type { ParametrosPeriodo } from './periodo'
 import { decodificarCuentasAnio, type CuentasAnioRaw } from './periodo-crudo'
@@ -25,6 +25,13 @@ export async function cargarPeriodo(
   const { data, error } = await supabaseAdmin.rpc('cuentas_periodo', { p: { ...params, hoy } })
   if (error) throw error
   return decodificarPeriodoSql(data)
+}
+
+/** Opciones de los filtros del año (E6): se piden una vez por año, no con cada periodo. */
+export async function cargarOpciones(anio: number): Promise<OpcionesFiltros> {
+  const { data, error } = await supabaseAdmin.rpc('cuentas_opciones', { p_year: anio })
+  if (error) throw error
+  return data as OpcionesFiltros
 }
 
 /** Años con pendientes y contador de avisos (S4), sobre todos los años. */

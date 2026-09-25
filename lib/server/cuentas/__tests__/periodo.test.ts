@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 
 import { AVISOS_POR_CATEGORIA, agruparAvisos, derivarAvisos } from '../avisos'
-import { construirPeriodo, construirProyectos, normalizarBusqueda, pendientesPorAnio, ultimoMesConDatos, type ParametrosPeriodo } from '../periodo'
+import { construirOpciones, construirPeriodo, construirProyectos, normalizarBusqueda, pendientesPorAnio, ultimoMesConDatos, type ParametrosPeriodo } from '../periodo'
 import { decodificarCuentasAnio, type CuentasAnioRaw } from '../periodo-crudo'
 import { SIN_PROYECTO_ID } from '@/lib/shared/cuentas/periodo-tipos'
 
@@ -169,10 +169,12 @@ describe('construirPeriodo', () => {
     expect(normalizarBusqueda('Sesión')).toBe('sesion')
   })
 
-  it('opciones de filtro: clientes y proveedores con proveedor asignado', () => {
-    const r = construirPeriodo(proyectos(), params(), HOY)
-    expect(r.opciones.proveedores).toEqual(['Estudio Luz', 'Iluminación Pro'])
-    expect(r.opciones.clientes).toContain('Grupo Modelo')
+  it('opciones de filtro (E6): del año, clientes y proveedores con proveedor asignado, fuera del periodo', () => {
+    const r = construirOpciones(proyectos(), 2026)
+    expect(r.anio).toBe(2026)
+    expect(r.proveedores).toEqual(['Estudio Luz', 'Iluminación Pro'])
+    expect(r.clientes).toContain('Grupo Modelo')
+    expect(construirPeriodo(proyectos(), params(), HOY)).not.toHaveProperty('opciones')
   })
 
   it('pagina la Lista y devuelve el proyecto seleccionado con sus conceptos', () => {
