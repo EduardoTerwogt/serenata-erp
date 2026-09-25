@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 20: B0 mergeado, B1b en PR)
+**Última actualización:** 2026-09-25 (sesión 20: B0 y B1b mergeados)
 
 ## Estado
 
@@ -46,17 +46,14 @@
 - **B0 hecho** (PR #94, mergeado): handoff en `docs/design/cuentas/`,
   decisión `docs/decisions/017-rediseno-cuentas.md` y seed
   `scripts/seed-cuentas-test.sql`, ya aplicado en `serenata-erp-test`.
-- **B1b en curso** (PR en borrador desde la rama
-  `claude/practical-brown-giy5p3`). Las 4 migraciones `20260925_*` **ya
-  están aplicadas en test y en producción**:
+- **B1b hecho** (PR #95, mergeado). Migraciones `20260925_*` aplicadas en
+  test y producción:
   - `ordenes_pago_conceptos`, con backfill de las 8 órdenes (47 conceptos);
   - `generar_orden_pago` atómica, candidatos filtrados (T2, D25) y `hoy_cdmx()`;
   - `cancel_cotizacion` en cascada, con sus guardas;
   - H3 en `registrar_pago_cuenta_pagar` y CHECK de `cuentas_pagar.estado`.
-  El código (ruta de órdenes con la RPC, retiro de los `PUT`, tests
-  unitarios y `live`) espera CI en el PR. Hasta que se mergee, producción
-  corre la ruta vieja de órdenes contra los candidatos nuevos: la ruta vieja
-  sigue funcionando, pero solo con candidatos válidos.
+  Se retiraron los `PUT` genéricos de cuentas (H4). Tests `live` en
+  `tests/e2e/live/cuentas-b1b.spec.ts`.
 
 ## Completado en las sesiones 9 y 10
 
@@ -105,7 +102,7 @@ servidor contra capturas de la app real, en tema claro y oscuro.
 2. El plan ya está aprobado (sesión 19): no hay que re-auditarlo completo.
    Cada bloque se abre auditando el código real de su alcance.
 3. B0 ya está hecho (PR #94) y el diseño vive en `docs/design/cuentas/`.
-   Si el PR de B1b sigue abierto, terminarlo primero (CI verde → merge).
+   B1b también (PR #95).
 4. Seguir el grafo B1 → B2 → B3 → B4 → B5 → B6 → B8 → B7, un PR por
    bloque, actualizando el tracker (§10).
 
@@ -130,7 +127,8 @@ sesión bloquea unpkg, bajar `react@18.3.1`, `react-dom@18.3.1`,
   (`lib/supabase-browser.ts`) y revisar los reintentos de postgrest. La guarda
   `lib/realtime/__tests__/realtime-js-guard.test.ts` falla si se sube sin eso.
 - **El build depende de descargar Inter de Google Fonts** (`app/fonts.ts`).
-  Ya falló una vez de forma intermitente (2026-09-24). Si se repite, migrar a
+  Falló de forma intermitente el 2026-09-24 y otra vez en #95 (2026-09-25,
+  `smoke-and-critical`; pasó al relanzarlo). Si se repite, migrar a
   `next/font/local`.
 - **Job `live` inestable en `main` (visto tras #92).** Hay fallos
   intermitentes en el test causal de `bulk` y en el de escala. Vigilar si se
@@ -147,6 +145,5 @@ sesión bloquea unpkg, bajar `react@18.3.1`, `react-dom@18.3.1`,
 
 ## Siguiente paso
 
-Cerrar **B1b**: CI verde en su PR (incluido `live`, con
-`tests/e2e/live/cuentas-b1b.spec.ts`), mergear y marcar el tracker. Después,
-**B1** (derivación y datos fiscales, incluido `metodo_pago_cfdi`).
+**B1** (derivación y datos fiscales base, incluido `metodo_pago_cfdi` en la
+fila del XML de la factura). Se abre auditando el código real de su alcance.
