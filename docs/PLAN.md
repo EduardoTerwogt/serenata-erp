@@ -3,7 +3,9 @@
 **Iniciativa:** Rediseño de la sección Cuentas (Claude Design → implementación)
 **Estado:** Borrador en refinamiento — diseño final recibido y auditado
 (sesión 10, 2026-09-25). Falta que el usuario confirme los supuestos de la
-sección 4 y apruebe los bloques.
+sección 4 y apruebe los bloques. Para retomar, ver `docs/ACTIVE_WORK.md` →
+"Cómo retomar". El zip del diseño no está en el repo hasta B0: pedírselo al
+usuario.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear

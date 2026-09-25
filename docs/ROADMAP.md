@@ -83,7 +83,8 @@ ejecutados de punta a punta, quedan en
   exacta del estado actual. Después, con el HTML final del rediseño, se
   redefine la arquitectura, el backend y la UI necesarios. Incluye el pendiente
   "Cuentas — filtro de estado en la vista principal" (ver "Después"), que se
-  resuelve dentro del rediseño. Plan: `docs/PLAN.md`.
+  resuelve dentro del rediseño. Plan: `docs/PLAN.md`. Diseño final auditado
+  el 2026-09-25 (bloques B0–B8); falta aprobación.
 
 ---
 
