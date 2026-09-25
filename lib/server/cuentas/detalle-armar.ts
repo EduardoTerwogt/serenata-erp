@@ -51,7 +51,7 @@ export interface CobroFilas {
   cuenta: {
     id: string
     folio: string | null
-    cotizacion_id: string
+    cotizacion_id: string | null
     cliente: string | null
     monto_total: number
     monto_pagado: number | null

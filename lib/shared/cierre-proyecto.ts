@@ -68,10 +68,8 @@ export function calcularCierreProyecto(
   feeAgenciaProyecto: number,
   ivaTotalProyecto: number
 ): CierreProyecto {
-  // Mismo criterio de agrupación que agruparCuentasPagarPorGrupo
-  // (app/components/cuentas/selectors.ts): el cruce fiscal se calcula sobre
-  // el monto total del grupo, nunca sobre el renglón individual
-  // (docs/decisions/006).
+  // El cruce fiscal se calcula sobre el monto total del grupo, nunca sobre
+  // el renglón individual (docs/decisions/006).
   const porGrupo = new Map<string, CuentaPagarConRegimen[]>()
   for (const cuenta of cuentasPagar) {
     const key = cuenta.grupo_id ?? cuenta.id

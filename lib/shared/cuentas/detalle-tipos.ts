@@ -45,7 +45,7 @@ export interface DetalleCobro {
   tipo: 'cobro'
   id: string
   folio: string | null
-  cotizacion_id: string
+  cotizacion_id: string | null
   proyecto: ProyectoDetalleCorto | null
   cliente: string
   total: number

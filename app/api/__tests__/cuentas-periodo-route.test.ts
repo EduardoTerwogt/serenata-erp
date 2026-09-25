@@ -66,7 +66,7 @@ beforeEach(() => {
     if (fn === 'cuentas_periodo') return { data: periodoSql, error: null }
     if (fn === 'cuentas_por_proyecto') return { data: crudoSH061, error: null }
     if (fn === 'cuentas_resumen') return { data: { hoy: '2026-09-24', anios: [{ anio: 2026, pendientes: 1 }], avisos: 2 }, error: null }
-    if (fn === 'cuentas_avisos_items') return { data: candidatosAvisos, error: null }
+    if (fn === 'cuentas_avisos_items') return { data: { items: candidatosAvisos, totales: { vencidos: 1, por_emitir: 75 } }, error: null }
     throw new Error(`RPC inesperada: ${fn}`)
   })
 })
@@ -134,12 +134,14 @@ describe('GET /api/cuentas/resumen', () => {
 })
 
 describe('GET /api/cuentas/avisos', () => {
-  it('agrupa los candidatos de cuentas_avisos_items con sus textos', async () => {
+  it('agrupa los candidatos de cuentas_avisos_items con sus textos y el total real por categoría', async () => {
     const res = await getAvisos()
     expect(res.status).toBe(200)
-    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_avisos_items', { p_hoy: '2026-09-24' })
+    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_avisos_items', { p_hoy: '2026-09-24', p_limite: 50 })
     const body = await res.json()
-    expect(body.total).toBe(2)
+    // El total es el de la BD, no el de los avisos recortados que viajan.
+    expect(body.total).toBe(76)
+    expect(body.categorias.map((c: { total: number }) => c.total)).toEqual([1, 75])
     expect(body.categorias.map((c: { categoria: string }) => c.categoria)).toEqual(['vencidos', 'por_emitir'])
     expect(body.categorias[0].items[0]).toMatchObject({ detalle: 'Vencido hace 14 días', fecha: '2026-09-10', monto: 1000 })
     expect(body.categorias[1].items[0]).toMatchObject({ detalle: 'Evento 18 sep 2026', fecha: '2026-09-18' })

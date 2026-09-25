@@ -4,8 +4,8 @@
  * (lectura cruda) y `periodo-sql.ts` (periodo derivado en SQL).
  */
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import type { MesPeriodo, PeriodoRespuesta, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
-import type { CandidatoAviso } from './avisos'
+import type { CategoriaAviso, MesPeriodo, PeriodoRespuesta, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
+import { AVISOS_POR_CATEGORIA, type CandidatoAviso } from './avisos'
 import type { ParametrosPeriodo } from './periodo'
 import { decodificarCuentasAnio, type CuentasAnioRaw } from './periodo-crudo'
 import { decodificarPeriodoSql } from './periodo-sql'
@@ -34,9 +34,15 @@ export async function cargarResumen(hoy: string): Promise<ResumenRespuesta> {
   return data as ResumenRespuesta
 }
 
-/** Conceptos que entran a cada categoría de avisos; `agruparAvisos` les pone texto y orden. */
-export async function cargarCandidatosAvisos(hoy: string): Promise<CandidatoAviso[]> {
-  const { data, error } = await supabaseAdmin.rpc('cuentas_avisos_items', { p_hoy: hoy })
+/**
+ * Por categoría de avisos, los conceptos más urgentes (ya recortados) y
+ * cuántos hay; `agruparAvisos` les pone texto.
+ */
+export async function cargarCandidatosAvisos(
+  hoy: string
+): Promise<{ items: CandidatoAviso[]; totales: Partial<Record<CategoriaAviso, number>> }> {
+  const { data, error } = await supabaseAdmin.rpc('cuentas_avisos_items', { p_hoy: hoy, p_limite: AVISOS_POR_CATEGORIA })
   if (error) throw error
-  return (data as CandidatoAviso[] | null) ?? []
+  const r = (data ?? {}) as { items?: CandidatoAviso[]; totales?: Partial<Record<CategoriaAviso, number>> }
+  return { items: r.items ?? [], totales: r.totales ?? {} }
 }

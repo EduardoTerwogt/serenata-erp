@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 
-import { derivarAvisos } from '../avisos'
+import { AVISOS_POR_CATEGORIA, agruparAvisos, derivarAvisos } from '../avisos'
 import { construirPeriodo, construirProyectos, normalizarBusqueda, pendientesPorAnio, ultimoMesConDatos, type ParametrosPeriodo } from '../periodo'
 import { decodificarCuentasAnio, type CuentasAnioRaw } from '../periodo-crudo'
 import { SIN_PROYECTO_ID } from '@/lib/shared/cuentas/periodo-tipos'
@@ -199,6 +199,24 @@ describe('derivarAvisos', () => {
     expect(por.por_emitir).toEqual(expect.arrayContaining(['c:cc-2', 'c:cc-4']))
     expect(por.por_emitir).not.toContain('c:cc-5') // sin fecha de evento
     expect(avisos.total).toBe(avisos.categorias.reduce((s, c) => s + c.items.length, 0))
+  })
+
+  it('por categoría viajan solo los más urgentes; el total cuenta todos', () => {
+    const candidatos = Array.from({ length: AVISOS_POR_CATEGORIA + 7 }, (_, i) => ({
+      categoria: 'facturas_proveedor' as const,
+      key: `s:${String(i).padStart(3, '0')}`,
+      proyecto_id: 'SH1', proyecto_nombre: 'X', anio: 2026, mes: 9,
+      fecha_entrega: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
+      contraparte: 'Prov', concepto: 'Renta', monto: 10, venc_dias: null, fecha_vencimiento: null,
+    }))
+    const avisos = agruparAvisos(candidatos, HOY)
+    const cat = avisos.categorias[0]
+    expect(cat.total).toBe(AVISOS_POR_CATEGORIA + 7)
+    expect(cat.items).toHaveLength(AVISOS_POR_CATEGORIA)
+    expect(cat.items[0].fecha).toBe('2026-09-01')
+    expect(avisos.total).toBe(AVISOS_POR_CATEGORIA + 7)
+    // Candidatos ya recortados por la BD: el total viene aparte.
+    expect(agruparAvisos(candidatos.slice(0, 3), HOY, { facturas_proveedor: 900 }).total).toBe(900)
   })
 
   it('complemento faltante en un cobro PPD parcial', () => {

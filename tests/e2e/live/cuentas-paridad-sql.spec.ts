@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { agruparAvisos, derivarAvisos, type CandidatoAviso } from '@/lib/server/cuentas/avisos'
+import { AVISOS_POR_CATEGORIA, agruparAvisos, derivarAvisos, type CandidatoAviso } from '@/lib/server/cuentas/avisos'
 import {
   construirPeriodo,
   construirProyectos,
@@ -10,7 +10,7 @@ import {
 } from '@/lib/server/cuentas/periodo'
 import { decodificarCuentasAnio } from '@/lib/server/cuentas/periodo-crudo'
 import { decodificarPeriodoSql } from '@/lib/server/cuentas/periodo-sql'
-import { SIN_PROYECTO_ID, type ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
+import { SIN_PROYECTO_ID, type CategoriaAviso, type ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 import { getLiveSupabaseAdmin } from '../utils/live-cleanup'
 import { liveEnabled } from '../utils/live-helpers'
@@ -126,6 +126,9 @@ test.describe('live: paridad de la derivación SQL con la de TS (O1b)', () => {
     const avisos = derivarAvisos(todos, hoy)
 
     expect(await rpc(supabase, 'cuentas_resumen', { p_hoy: hoy })).toEqual({ hoy, anios: pendientes, avisos: avisos.total })
-    expect(agruparAvisos(await rpc<CandidatoAviso[]>(supabase, 'cuentas_avisos_items', { p_hoy: hoy }), hoy)).toEqual(avisos)
+    const sql = await rpc<{ items: CandidatoAviso[]; totales: Partial<Record<CategoriaAviso, number>> }>(
+      supabase, 'cuentas_avisos_items', { p_hoy: hoy, p_limite: AVISOS_POR_CATEGORIA }
+    )
+    expect(agruparAvisos(sql.items, hoy, sql.totales)).toEqual(avisos)
   })
 })

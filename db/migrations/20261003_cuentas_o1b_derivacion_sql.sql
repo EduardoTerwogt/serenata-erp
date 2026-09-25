@@ -28,10 +28,13 @@ BEGIN;
 -- forma cruda, solo de ese proyecto ('sin-proyecto' = las cuentas sin
 -- proyecto). La ruta del periodo arma el proyecto seleccionado (conceptos,
 -- cierre y cierre mensual, B4) con construirProyectos sobre esa lectura.
--- Cuerpo igual a 20260929 más el filtro, y el work_mem de 20261001.
+-- Cuerpo igual a 20260929 más el filtro, y el work_mem de 20261001. Sin
+-- año ya no hay forma anidada: su único usuario, /api/cuentas/por-proyecto
+-- de la UI anterior, se retira en el corte (B8).
 DROP FUNCTION IF EXISTS public.cuentas_por_proyecto(integer);
+DROP FUNCTION IF EXISTS public.cuentas_por_proyecto(integer, text);
 
-CREATE FUNCTION public.cuentas_por_proyecto(p_year integer DEFAULT NULL, p_proyecto text DEFAULT NULL)
+CREATE FUNCTION public.cuentas_por_proyecto(p_year integer, p_proyecto text DEFAULT NULL)
 RETURNS json
 LANGUAGE plpgsql
 STABLE
@@ -45,59 +48,7 @@ DECLARE
   v_result json;
 BEGIN
   IF p_year IS NULL THEN
-    -- Versión anterior, sin cambios (20260928); solo el tipo de retorno pasa
-    -- a json, que el cliente lee igual.
-    SELECT COALESCE(
-      jsonb_agg(
-        jsonb_build_object(
-          'proyecto', t.proyecto,
-          'cuentas_cobrar', t.cuentas_cobrar,
-          'cuentas_pagar', t.cuentas_pagar,
-          'total_cobrar', t.total_cobrar,
-          'total_pagar', t.total_pagar,
-          'margen_total_proyecto', t.margen_total_proyecto,
-          'fee_agencia_proyecto', t.fee_agencia_proyecto,
-          'utilidad_total_proyecto', t.utilidad_total_proyecto,
-          'iva_total_proyecto', t.iva_total_proyecto
-        )
-        ORDER BY t.proyecto_created_at DESC, t.proyecto_id DESC
-      ),
-      '[]'::jsonb
-    )::json INTO v_result
-    FROM (
-      SELECT
-        p.id AS proyecto_id,
-        p.created_at AS proyecto_created_at,
-        jsonb_build_object('id', p.id, 'folio', p.id, 'nombre', p.proyecto, 'cliente', p.cliente, 'cliente_id', p.cliente_id, 'estado', p.estado) AS proyecto,
-        COALESCE((SELECT jsonb_agg(cc ORDER BY cc.created_at DESC, cc.id DESC) FROM cuentas_cobrar cc WHERE cc.proyecto_id = p.id), '[]'::jsonb) AS cuentas_cobrar,
-        COALESCE((
-          SELECT jsonb_agg(
-            to_jsonb(cp) || jsonb_build_object(
-              'grupo_estado', g.estado,
-              'grupo_monto_total', g.monto_total,
-              'grupo_monto_pagado', g.monto_pagado,
-              'grupo_total_a_transferir', g.total_a_transferir,
-              'grupo_monto_transferido', g.monto_transferido,
-              'proveedor_regimen_fiscal', pr.regimen_fiscal
-            )
-            ORDER BY cp.created_at DESC, cp.id DESC
-          )
-          FROM cuentas_pagar cp
-          LEFT JOIN cuentas_pagar_grupos g ON g.id = cp.grupo_id
-          LEFT JOIN proveedores pr ON pr.id = cp.responsable_id
-          WHERE cp.proyecto_id = p.id
-        ), '[]'::jsonb) AS cuentas_pagar,
-        ROUND(COALESCE((SELECT SUM(cc.monto_total) FROM cuentas_cobrar cc WHERE cc.proyecto_id = p.id), 0), 2) AS total_cobrar,
-        ROUND(COALESCE((SELECT SUM(cp.x_pagar) FROM cuentas_pagar cp WHERE cp.proyecto_id = p.id), 0), 2) AS total_pagar,
-        ROUND(COALESCE((SELECT SUM(c.margen_total) FROM cotizaciones c WHERE c.estado = 'APROBADA' AND (c.id = p.id OR c.es_complementaria_de = p.id)), 0), 2) AS margen_total_proyecto,
-        ROUND(COALESCE((SELECT SUM(c.fee_agencia) FROM cotizaciones c WHERE c.estado = 'APROBADA' AND (c.id = p.id OR c.es_complementaria_de = p.id)), 0), 2) AS fee_agencia_proyecto,
-        ROUND(COALESCE((SELECT SUM(c.utilidad_total) FROM cotizaciones c WHERE c.estado = 'APROBADA' AND (c.id = p.id OR c.es_complementaria_de = p.id)), 0), 2) AS utilidad_total_proyecto,
-        ROUND(COALESCE((SELECT SUM(c.iva) FROM cotizaciones c WHERE c.estado = 'APROBADA' AND (c.id = p.id OR c.es_complementaria_de = p.id)), 0), 2) AS iva_total_proyecto
-      FROM proyectos p
-      WHERE EXISTS (SELECT 1 FROM cuentas_cobrar cc WHERE cc.proyecto_id = p.id)
-         OR EXISTS (SELECT 1 FROM cuentas_pagar cp WHERE cp.proyecto_id = p.id)
-    ) t;
-    RETURN v_result;
+    RAISE EXCEPTION 'cuentas_por_proyecto: p_year es obligatorio' USING ERRCODE = '22004';
   END IF;
 
   v_desde := lpad(p_year::text, 4, '0') || '-01-01';
@@ -551,7 +502,10 @@ AS $$
          c.created_at,
          'c:' || c.id, 'cobro', 'cobro', c.id::text, c.proyecto_id, c.cotizacion_id, c.folio,
          COALESCE(c.cliente, c.p_cliente, 'Cliente'), c.cliente_id::text,
-         CASE WHEN c.proyecto_id IS NULL OR c.cotizacion_id = c.proyecto_id THEN 'Cotización ' || c.cotizacion_id ELSE 'Complementaria ' || c.cotizacion_id END,
+         -- nombreCobro (concepto.ts).
+         CASE WHEN c.cotizacion_id IS NULL THEN 'Sin cotización'
+              WHEN c.proyecto_id IS NULL OR c.cotizacion_id = c.proyecto_id THEN 'Cotización ' || c.cotizacion_id
+              ELSE 'Complementaria ' || c.cotizacion_id END,
          1, c.v_total, c.v_pagado, false, NULL, NULL, c.fecha_vencimiento::text,
          c.d_estado, c.d_paso, (c.dias IS NOT NULL AND c.dias < 0) AND c.d_paso IN ('emitir_factura', 'revisar_factura', 'cobrar'),
          c.v_saldo, c.dias, c.d_paso IS NULL,
@@ -591,6 +545,11 @@ GRANT EXECUTE ON FUNCTION public.cuentas_conceptos(integer, date) TO service_rol
 -- Devuelve el periodo ya filtrado, contado y paginado, con estados y pasos
 -- como códigos; lib/server/cuentas/periodo-sql.ts les pone etiqueta, tono y
 -- texto. `seleccionado` lo arma TS con la lectura cruda de un solo proyecto.
+-- plan_cache_mode: la consulta depende por completo de los filtros (tipo,
+-- búsqueda, estado, vista). Tras 5 llamadas plpgsql pasa a un plan genérico
+-- que no los conoce y la misma petición saltaba de ~0.4 s a ~4.6 s en cada
+-- conexión del pool (medido en serenata-erp-test); se planea siempre con
+-- los valores reales.
 CREATE OR REPLACE FUNCTION public.cuentas_periodo(p jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -598,6 +557,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 SET work_mem = '16MB'
+SET plan_cache_mode = force_custom_plan
 AS $$
 DECLARE
   v_hoy       date := COALESCE(NULLIF(p->>'hoy', '')::date, hoy_cdmx());
@@ -820,7 +780,13 @@ GRANT EXECUTE ON FUNCTION public.cuentas_periodo(jsonb) TO service_role;
 -- ── Resumen: años con pendientes y avisos (S4) ────────────────────────────
 -- Sobre todos los proyectos una sola vez ("Sin fecha" y "Sin proyecto" no
 -- se repiten por año).
-CREATE OR REPLACE FUNCTION public.cuentas_avisos_items(p_hoy date)
+-- Avisos: por categoría, el total y solo los primeros p_limite (los más
+-- urgentes, mismo orden que agruparAvisos: fecha y luego key). Con el
+-- dataset de carga casi todos los pagos esperan factura: devolverlos todos
+-- eran ~13,000 avisos y 5.5 MB por petición, y un panel que nadie recorre.
+DROP FUNCTION IF EXISTS public.cuentas_avisos_items(date);
+DROP FUNCTION IF EXISTS public.cuentas_avisos_items(date, integer);
+CREATE FUNCTION public.cuentas_avisos_items(p_hoy date, p_limite integer)
 RETURNS jsonb
 LANGUAGE sql
 STABLE
@@ -829,35 +795,46 @@ SET search_path = public, pg_temp
 SET work_mem = '16MB'
 AS $$
   -- Espejo de derivarAvisos (lib/server/cuentas/avisos.ts): qué concepto
-  -- entra a cada categoría; los textos y el orden los pone TS.
+  -- entra a cada categoría; los textos los pone TS.
   WITH con AS MATERIALIZED (SELECT * FROM cuentas_conceptos(NULL, p_hoy)),
   items AS (
-    SELECT CASE WHEN c.venc_dias < 0 THEN 'vencidos' ELSE 'por_vencer' END AS categoria, c.*, c.saldo AS monto
+    SELECT CASE WHEN c.venc_dias < 0 THEN 'vencidos' ELSE 'por_vencer' END AS categoria, c.*, c.saldo AS monto,
+           c.fecha_vencimiento AS fecha_orden
     FROM con c WHERE c.tipo = 'cobro' AND c.venc_dias IS NOT NULL AND c.venc_dias <= 10
     UNION ALL
-    SELECT 'complementos', c.*, c.total
+    SELECT 'complementos', c.*, c.total, c.fecha_entrega
     FROM con c
     WHERE c.tipo = 'cobro'
       AND EXISTS (SELECT 1 FROM jsonb_array_elements(c.complementos) e WHERE (e->>'requiere')::boolean AND e->>'estado' <> 'completo')
     UNION ALL
-    SELECT 'por_emitir', c.*, c.total
+    SELECT 'por_emitir', c.*, c.total, c.fecha_entrega
     FROM con c
     WHERE c.tipo = 'cobro' AND c.paso = 'emitir_factura' AND c.fecha_entrega IS NOT NULL
       AND c.fecha_entrega <= to_char(p_hoy + 30, 'YYYY-MM-DD')
     UNION ALL
-    SELECT 'facturas_proveedor', c.*, CASE WHEN c.saldo > 0 THEN c.saldo ELSE c.total END
+    SELECT 'facturas_proveedor', c.*, CASE WHEN c.saldo > 0 THEN c.saldo ELSE c.total END, c.fecha_entrega
     FROM con c WHERE c.tipo = 'pago' AND c.paso = 'subir_factura'
+  ),
+  ordenados AS (
+    SELECT i.*,
+           row_number() OVER (PARTITION BY i.categoria
+                              ORDER BY COALESCE(i.fecha_orden, '9999') COLLATE "C", i.key COLLATE "C") AS n
+    FROM items i
   )
-  SELECT COALESCE(jsonb_agg(jsonb_build_object(
-           'categoria', i.categoria, 'key', i.key, 'proyecto_id', i.proyecto_key, 'proyecto_nombre', i.proyecto_nombre,
-           'anio', i.anio, 'mes', i.mes, 'fecha_entrega', i.fecha_entrega, 'contraparte', i.contraparte,
-           'concepto', i.concepto, 'monto', i.monto, 'venc_dias', i.venc_dias, 'fecha_vencimiento', i.fecha_vencimiento
-         )), '[]'::jsonb)
-  FROM items i;
+  SELECT jsonb_build_object(
+    'items', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'categoria', o.categoria, 'key', o.key, 'proyecto_id', o.proyecto_key, 'proyecto_nombre', o.proyecto_nombre,
+               'anio', o.anio, 'mes', o.mes, 'fecha_entrega', o.fecha_entrega, 'contraparte', o.contraparte,
+               'concepto', o.concepto, 'monto', o.monto, 'venc_dias', o.venc_dias, 'fecha_vencimiento', o.fecha_vencimiento
+             ) ORDER BY o.categoria, o.n)
+      FROM ordenados o WHERE o.n <= p_limite), '[]'::jsonb),
+    'totales', COALESCE((SELECT jsonb_object_agg(categoria, n) FROM (SELECT categoria, count(*) AS n FROM items GROUP BY categoria) t), '{}'::jsonb)
+  );
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.cuentas_avisos_items(date) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.cuentas_avisos_items(date) TO service_role;
+REVOKE EXECUTE ON FUNCTION public.cuentas_avisos_items(date, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.cuentas_avisos_items(date, integer) TO service_role;
 
 CREATE OR REPLACE FUNCTION public.cuentas_resumen(p_hoy date)
 RETURNS jsonb

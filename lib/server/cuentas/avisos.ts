@@ -83,17 +83,34 @@ function aItem(c: CandidatoAviso): AvisoItem {
   }
 }
 
-export function agruparAvisos(candidatos: CandidatoAviso[], hoy: string): AvisosRespuesta {
-  const items = candidatos.map(aItem)
-  const categorias = ORDEN.map((categoria) => ({
-    categoria,
-    etiqueta: ETIQUETAS[categoria],
-    items: items
-      .filter((i) => i.categoria === categoria)
-      .sort((a, b) => comparar(a.fecha ?? '9999', b.fecha ?? '9999') || comparar(a.key, b.key)),
-  })).filter((c) => c.items.length > 0)
+/** Avisos que viajan por categoría: los más urgentes; el resto solo se cuenta. */
+export const AVISOS_POR_CATEGORIA = 50
 
-  return { hoy, categorias, total: categorias.reduce((s, c) => s + c.items.length, 0) }
+/**
+ * Ordena por fecha y key, deja los primeros AVISOS_POR_CATEGORIA de cada
+ * categoría y les pone texto. `totales` = cuántos hay por categoría cuando
+ * los candidatos ya llegan recortados (cuentas_avisos_items); si no, se
+ * cuentan aquí.
+ */
+export function agruparAvisos(
+  candidatos: CandidatoAviso[],
+  hoy: string,
+  totales?: Partial<Record<CategoriaAviso, number>>
+): AvisosRespuesta {
+  const items = candidatos.map(aItem)
+  const categorias = ORDEN.map((categoria) => {
+    const todos = items
+      .filter((i) => i.categoria === categoria)
+      .sort((a, b) => comparar(a.fecha ?? '9999', b.fecha ?? '9999') || comparar(a.key, b.key))
+    return {
+      categoria,
+      etiqueta: ETIQUETAS[categoria],
+      total: totales ? (totales[categoria] ?? 0) : todos.length,
+      items: todos.slice(0, AVISOS_POR_CATEGORIA),
+    }
+  }).filter((c) => c.total > 0)
+
+  return { hoy, categorias, total: categorias.reduce((s, c) => s + c.total, 0) }
 }
 
 export function derivarAvisos(proyectos: ProyectoDetalle[], hoy: string): AvisosRespuesta {

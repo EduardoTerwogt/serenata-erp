@@ -18,6 +18,7 @@ import {
   derivarCobro,
   derivarCuentasProyecto,
   derivarPago,
+  nombreCobro,
   type ConceptoDerivado,
 } from '@/lib/shared/cuentas/concepto'
 import {
@@ -193,7 +194,7 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
             folio: cc.folio,
             contraparte: cc.cliente ?? b.cliente ?? 'Cliente',
             contraparte_id: cc.cliente_id,
-            concepto: !cc.proyecto_id || cc.cotizacion_id === cc.proyecto_id ? `Cotización ${cc.cotizacion_id}` : `Complementaria ${cc.cotizacion_id}`,
+            concepto: nombreCobro(cc.cotizacion_id, cc.proyecto_id),
             items: 1,
             total: round2(cc.monto_total),
             pagado: round2(cc.monto_pagado),

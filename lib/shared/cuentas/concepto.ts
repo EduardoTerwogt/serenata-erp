@@ -354,6 +354,17 @@ export function derivarPago(input: ConceptoPagoInput): ConceptoDerivado {
   return construir('pagado', null, { saldo, fecha_resuelto: fechaResuelto })
 }
 
+/**
+ * Nombre de un cobro en la lista y el detalle: su cotización, o
+ * "Complementaria" si es de otro folio que el del proyecto. Un cobro sin
+ * cotización (dato heredado) dice "Sin cotización". Mismo texto en SQL
+ * (cuentas_conceptos).
+ */
+export function nombreCobro(cotizacionId: string | null, proyectoId: string | null): string {
+  if (!cotizacionId) return 'Sin cotización'
+  return !proyectoId || cotizacionId === proyectoId ? `Cotización ${cotizacionId}` : `Complementaria ${cotizacionId}`
+}
+
 export function derivarConcepto(input: ConceptoInput, hoy: string): ConceptoDerivado {
   return input.tipo === 'cobro' ? derivarCobro(input, hoy) : derivarPago(input)
 }

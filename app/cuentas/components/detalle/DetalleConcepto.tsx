@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { fmtMoney } from '@/lib/quotations/format'
 import type { DetalleConcepto as Detalle } from '@/lib/shared/cuentas/detalle-tipos'
+import { nombreCobro } from '@/lib/shared/cuentas/concepto'
 import { TONO } from '../ui'
 import { TabDocumentos } from './TabDocumentos'
 import { TabInformacion } from './TabInformacion'
@@ -39,7 +40,7 @@ function eyebrow(d: Detalle) {
 }
 
 function concepto(d: Detalle) {
-  if (d.tipo === 'cobro') return d.proyecto && d.cotizacion_id !== d.proyecto.id ? `Complementaria ${d.cotizacion_id}` : `Cotización ${d.cotizacion_id}`
+  if (d.tipo === 'cobro') return nombreCobro(d.cotizacion_id, d.proyecto?.id ?? null)
   return d.items.length === 1 ? d.items[0].descripcion : `${d.items.length} conceptos`
 }
 

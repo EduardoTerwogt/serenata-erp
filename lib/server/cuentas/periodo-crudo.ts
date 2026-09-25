@@ -26,7 +26,8 @@ export interface ProyectoAnioRaw {
 
 export interface CobroAnioRaw {
   id: string
-  cotizacion_id: string
+  /** null en cobros heredados sin cotización. */
+  cotizacion_id: string | null
   proyecto_id: string | null
   folio: string | null
   cliente: string | null
@@ -118,7 +119,7 @@ export function decodificarCuentasAnio(data: unknown): CuentasAnioRaw {
     })),
     cobros: (raw.cobros ?? []).map((f) => ({
       id: String(f[0]),
-      cotizacion_id: String(f[1]),
+      cotizacion_id: str(f[1]),
       proyecto_id: str(f[2]),
       folio: str(f[3]),
       cliente: str(f[4]),

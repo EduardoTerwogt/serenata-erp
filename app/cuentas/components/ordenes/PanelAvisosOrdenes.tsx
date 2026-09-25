@@ -104,7 +104,7 @@ function ListaAvisos({ avisos, error, onAviso }: { avisos: AvisosRespuesta | nul
         <section key={cat.categoria} aria-label={cat.etiqueta} className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <span className="sn-caption">{cat.etiqueta}</span>
-            <span className="text-[11px] text-subtext">{cat.items.length}</span>
+            <span className="text-[11px] text-subtext">{cat.total}</span>
           </div>
           {cat.items.map((a) => (
             <button
@@ -126,6 +126,11 @@ function ListaAvisos({ avisos, error, onAviso }: { avisos: AvisosRespuesta | nul
               <span className="text-[12px] text-subtext">{a.detalle}</span>
             </button>
           ))}
+          {cat.total > cat.items.length && (
+            <span className="px-1 text-[12px] text-subtext">
+              Y {plural(cat.total - cat.items.length, 'aviso más', 'avisos más')}, los menos urgentes.
+            </span>
+          )}
         </section>
       ))}
     </div>

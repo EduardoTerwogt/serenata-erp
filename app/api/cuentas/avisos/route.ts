@@ -11,7 +11,8 @@ const ROUTE = 'GET /api/cuentas/avisos'
  * Rediseño de Cuentas B6 (docs/PLAN.md, supuestos 2 y 3, D25, D27, S4, O1b):
  * las 5 categorías de avisos sobre todos los años. Qué concepto entra a cada
  * categoría lo decide SQL (`cuentas_avisos_items`, mismo criterio que
- * derivarAvisos); textos y orden, `agruparAvisos`.
+ * derivarAvisos), que devuelve los más urgentes de cada una y su total;
+ * textos, `agruparAvisos`.
  */
 export async function GET() {
   const t = crearTiempos()
@@ -21,9 +22,9 @@ export async function GET() {
 
   try {
     const hoy = hoyCdmx()
-    const candidatos = await cargarCandidatosAvisos(hoy)
+    const { items, totales } = await cargarCandidatosAvisos(hoy)
     t.marcar('rpc')
-    return t.responder(agruparAvisos(candidatos, hoy))
+    return t.responder(agruparAvisos(items, hoy, totales))
   } catch (error) {
     return buildErrorResponse(error, ROUTE)
   }

@@ -141,6 +141,10 @@ export interface AvisoItem {
 
 export interface AvisosRespuesta {
   hoy: string
-  categorias: { categoria: CategoriaAviso; etiqueta: string; items: AvisoItem[] }[]
+  /**
+   * `items` trae solo los más urgentes de la categoría (AVISOS_POR_CATEGORIA);
+   * `total` es cuántos hay en realidad.
+   */
+  categorias: { categoria: CategoriaAviso; etiqueta: string; total: number; items: AvisoItem[] }[]
   total: number
 }
