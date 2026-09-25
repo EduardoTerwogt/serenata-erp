@@ -8,6 +8,8 @@ function round2(value: number): number {
 }
 
 export interface QuienCuantoCuando {
+  /** grupo_id del grupo de facturación, o id de la cuenta suelta: liga el cierre con sus pagos. */
+  clave: string
   proveedor_id: string | null
   proveedor_nombre: string
   regimen_fiscal: RegimenFiscal | null
@@ -76,7 +78,7 @@ export function calcularCierreProyecto(
     porGrupo.set(key, [...(porGrupo.get(key) ?? []), cuenta])
   }
 
-  const quien_cuanto_cuando: QuienCuantoCuando[] = Array.from(porGrupo.values()).map((items) => {
+  const quien_cuanto_cuando: QuienCuantoCuando[] = Array.from(porGrupo.entries()).map(([clave, items]) => {
     const representante = items[0]
     const monto = representante.grupo_monto_total ?? items.reduce((sum, item) => sum + (item.x_pagar || 0), 0)
     const regimenFiscal = representante.proveedor_regimen_fiscal ?? null
@@ -87,6 +89,7 @@ export function calcularCierreProyecto(
     const snapshot = representante.grupo_id ? representante.grupo_total_a_transferir : representante.total_a_transferir
     const tieneSnapshot = snapshot != null
     return {
+      clave,
       proveedor_id: representante.responsable_id,
       proveedor_nombre: representante.responsable_nombre,
       regimen_fiscal: regimenFiscal,

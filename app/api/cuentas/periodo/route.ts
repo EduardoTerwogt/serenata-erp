@@ -1,6 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { cargarCuentasAnio } from '@/lib/server/cuentas/periodo-rpc'
-import { construirPeriodo, construirProyectos } from '@/lib/server/cuentas/periodo'
+import { construirPeriodo, construirProyectos, ultimoMesConDatos } from '@/lib/server/cuentas/periodo'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 import { CuentasPeriodoQuerySchema, validate } from '@/lib/validation/schemas'
@@ -25,8 +25,9 @@ export async function GET(request: Request) {
   try {
     const hoy = hoyCdmx()
     const anio = validation.data.anio ?? Number(hoy.slice(0, 4))
-    const mes = validation.data.mes ?? (anio === Number(hoy.slice(0, 4)) ? Number(hoy.slice(5, 7)) : 'todo')
     const proyectos = construirProyectos(await cargarCuentasAnio(anio), hoy)
+    // S16: sin mes, el actual si es el año en curso; si no, el último mes con datos.
+    const mes = validation.data.mes ?? (anio === Number(hoy.slice(0, 4)) ? Number(hoy.slice(5, 7)) : ultimoMesConDatos(proyectos, anio))
     return Response.json(construirPeriodo(proyectos, { ...validation.data, anio, mes }, hoy))
   } catch (error) {
     return buildErrorResponse(error, ROUTE)

@@ -6,6 +6,7 @@
  * aparece en el cruce fiscal (`cierre`).
  */
 import type { CierreProyecto } from '@/lib/shared/cierre-proyecto'
+import type { FilaCierre } from '@/lib/shared/cuentas/cierre-mensual'
 import type { ConceptoDerivado, CuentasProyectoDerivadas } from '@/lib/shared/cuentas/concepto'
 import type { RegimenFiscal } from '@/lib/types'
 
@@ -68,6 +69,8 @@ export interface TarjetaProyecto {
 export interface ProyectoDetalle extends TarjetaProyecto {
   conceptos: ConceptoVista[]
   cierre: CierreProyecto
+  /** Cierre partido por mes de cobro o pago, con fecha límite SAT (D26, D30). */
+  cierre_mensual: FilaCierre[]
 }
 
 export interface ConceptoLista extends ConceptoVista {
@@ -78,6 +81,8 @@ export interface MesResumen {
   mes: number
   proyectos: number
   pendientes: number
+  /** Proyectos del mes que pasan el filtro de estado: 0 = pastilla atenuada. */
+  visibles: number
 }
 
 export interface TotalesPeriodo {
