@@ -108,11 +108,13 @@ BEGIN
   --   pagos:     id, cotizacion_id, proyecto_id, grupo_id, responsable_id,
   --              responsable_nombre, item_descripcion, x_pagar, monto_pagado,
   --              total_a_transferir, monto_transferido, orden_pago_id,
-  --              regimen_fiscal, facturas_xml, comprobantes, fechas_pago
+  --              regimen_fiscal, facturas_xml, comprobantes, pagos_realizados
   --   grupos:    id, proyecto_id, responsable_id, responsable_nombre,
   --              regimen_fiscal, monto_total, monto_pagado, total_a_transferir,
   --              monto_transferido, orden_pago_id, facturas_xml, comprobantes,
-  --              fechas_pago
+  --              pagos_realizados
+  -- pagos_realizados = [{fecha, monto}] de pagos_cuentas_pagar no anulados,
+  -- monto en total a transferir.
   -- proyecto_id null = "Sin proyecto" (supuesto 11). Documentos y pagos son
   -- objetos (pocos); null = ninguno. En los pagos de un grupo, documentos y
   -- fechas vienen en el grupo.
@@ -194,7 +196,8 @@ BEGIN
     FROM dp GROUP BY id
   ),
   p_fechas AS (
-    SELECT COALESCE(p.grupo_id, p.cuenta_pagar_id) AS id, json_agg(p.fecha_pago ORDER BY p.fecha_pago) AS fechas
+    SELECT COALESCE(p.grupo_id, p.cuenta_pagar_id) AS id,
+           json_agg(json_build_object('fecha', p.fecha_pago, 'monto', p.monto_transferido) ORDER BY p.fecha_pago, p.created_at) AS fechas
     FROM pagos_cuentas_pagar p
     WHERE p.anulado_at IS NULL
       AND (p.grupo_id IN (SELECT id FROM g) OR p.cuenta_pagar_id IN (SELECT id FROM cp WHERE grupo_id IS NULL))

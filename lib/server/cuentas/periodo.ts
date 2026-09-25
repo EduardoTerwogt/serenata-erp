@@ -73,7 +73,7 @@ function conceptoGrupo(grupo: GrupoAnioRaw, hijas: PagoAnioRaw[]): ConceptoVista
     orden_pago_id: grupo.orden_pago_id,
     facturas_xml: grupo.facturas_xml,
     comprobantes: grupo.comprobantes,
-    fechas_pago: grupo.fechas_pago,
+    fechas_pago: grupo.pagos_realizados.map((p) => p.fecha),
   })
   return vista(
     {
@@ -111,7 +111,7 @@ function conceptoSuelta(cuenta: PagoAnioRaw): ConceptoVista {
     orden_pago_id: cuenta.orden_pago_id,
     facturas_xml: cuenta.facturas_xml,
     comprobantes: cuenta.comprobantes,
-    fechas_pago: cuenta.fechas_pago,
+    fechas_pago: cuenta.pagos_realizados.map((p) => p.fecha),
   })
   return vista(
     {

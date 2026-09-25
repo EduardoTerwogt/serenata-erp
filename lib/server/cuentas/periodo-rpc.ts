@@ -40,6 +40,12 @@ export interface CobroAnioRaw {
   pagos: (PagoCobroInput & { tipo_pago?: string })[]
 }
 
+/** Pago a proveedor no anulado: fecha capturada y monto en total a transferir. */
+export interface PagoRealizadoRaw {
+  fecha: string
+  monto: number
+}
+
 export interface PagoAnioRaw {
   id: string
   cotizacion_id: string | null
@@ -57,7 +63,7 @@ export interface PagoAnioRaw {
   regimen_fiscal: RegimenFiscal | null
   facturas_xml: DocumentoXmlInput[]
   comprobantes: ArchivoInput[]
-  fechas_pago: string[]
+  pagos_realizados: PagoRealizadoRaw[]
 }
 
 export interface GrupoAnioRaw {
@@ -73,7 +79,7 @@ export interface GrupoAnioRaw {
   orden_pago_id: string | null
   facturas_xml: DocumentoXmlInput[]
   comprobantes: ArchivoInput[]
-  fechas_pago: string[]
+  pagos_realizados: PagoRealizadoRaw[]
 }
 
 export interface CuentasAnioRaw {
@@ -89,6 +95,8 @@ const num = (v: unknown) => Number(v ?? 0)
 const numOrNull = (v: unknown) => (v === null || v === undefined ? null : Number(v))
 const str = (v: unknown) => (v === null || v === undefined ? null : String(v))
 const lista = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
+const pagosRealizados = (v: unknown): PagoRealizadoRaw[] =>
+  lista<{ fecha: unknown; monto: unknown }>(v).map((p) => ({ fecha: String(p.fecha), monto: num(p.monto) }))
 
 export function decodificarCuentasAnio(data: unknown): CuentasAnioRaw {
   const raw = (data ?? {}) as Record<string, Fila[] | undefined>
@@ -135,7 +143,7 @@ export function decodificarCuentasAnio(data: unknown): CuentasAnioRaw {
       regimen_fiscal: (str(f[12]) as RegimenFiscal | null),
       facturas_xml: lista(f[13]),
       comprobantes: lista(f[14]),
-      fechas_pago: lista<string>(f[15]),
+      pagos_realizados: pagosRealizados(f[15]),
     })),
     grupos: (raw.grupos ?? []).map((f) => ({
       id: String(f[0]),
@@ -150,7 +158,7 @@ export function decodificarCuentasAnio(data: unknown): CuentasAnioRaw {
       orden_pago_id: str(f[9]),
       facturas_xml: lista(f[10]),
       comprobantes: lista(f[11]),
-      fechas_pago: lista<string>(f[12]),
+      pagos_realizados: pagosRealizados(f[12]),
     })),
   }
 }

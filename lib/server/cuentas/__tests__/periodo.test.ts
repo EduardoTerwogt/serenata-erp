@@ -30,16 +30,16 @@ function rpc(): unknown {
       ['cc-6', 'SHX', null, 'CC-6', 'Suelto', null, 'X', 50, 0, null, null, null, null],
     ],
     pagos: [
-      // id, cotizacion_id, proyecto_id, grupo_id, responsable_id, responsable_nombre, item_descripcion, x_pagar, monto_pagado, total_a_transferir, monto_transferido, orden_pago_id, regimen, facturas, comprobantes, fechas
+      // id, cotizacion_id, proyecto_id, grupo_id, responsable_id, responsable_nombre, item_descripcion, x_pagar, monto_pagado, total_a_transferir, monto_transferido, orden_pago_id, regimen, facturas, comprobantes, pagos_realizados
       ['cp-1', 'SH061', 'SH061', 'g-1', 'prov-1', 'Iluminación', 'Paquete ARRI', 37000, 0, null, 0, null, null, null, null, null],
       ['cp-2', 'SH061', 'SH061', 'g-1', 'prov-1', 'Iluminación', 'Generador', 9800, 0, null, 0, null, null, null, null, null],
       ['cp-3', 'SH061', 'SH061', null, null, 'Sin asignar', 'Van', 15600, 0, null, 0, null, null, null, null, null],
       ['cp-4', 'SH062', 'SH062', 'g-2', 'prov-2', 'Estudio Luz', 'Renta', 18500, 18500, 21460, 21460, null, null, null, null, null],
     ],
     grupos: [
-      // id, proyecto_id, responsable_id, responsable_nombre, regimen, monto_total, monto_pagado, total_a_transferir, monto_transferido, orden_pago_id, facturas, comprobantes, fechas
+      // id, proyecto_id, responsable_id, responsable_nombre, regimen, monto_total, monto_pagado, total_a_transferir, monto_transferido, orden_pago_id, facturas, comprobantes, pagos_realizados
       ['g-1', 'SH061', 'prov-1', 'Iluminación Pro', 'moral', 46800, 0, 54288, 0, null, [{ estado_validacion: 'validado', fecha_carga: '2026-09-02 10:00:00' }], null, null],
-      ['g-2', 'SH062', 'prov-2', 'Estudio Luz', 'moral', 18500, 18500, 21460, 21460, null, [{ estado_validacion: 'validado', fecha_carga: '2026-09-11 10:00:00' }], [{ fecha_carga: '2026-09-21 10:00:00' }], ['2026-09-21']],
+      ['g-2', 'SH062', 'prov-2', 'Estudio Luz', 'moral', 18500, 18500, 21460, 21460, null, [{ estado_validacion: 'validado', fecha_carga: '2026-09-11 10:00:00' }], [{ fecha_carga: '2026-09-21 10:00:00' }], [{ fecha: '2026-09-21', monto: 21460 }]],
     ],
   }
 }
@@ -57,8 +57,14 @@ describe('decodificarCuentasAnio', () => {
     const raw: CuentasAnioRaw = decodificarCuentasAnio(rpc())
     expect(raw.proyectos[0]).toMatchObject({ id: 'SH061', fecha_entrega: '2026-09-18', margen_total_proyecto: 20000, iva_total_proyecto: 16000 })
     expect(raw.cobros[1]).toMatchObject({ id: 'cc-2', facturas_xml: [], pagos: [] })
-    expect(raw.pagos[0]).toMatchObject({ grupo_id: 'g-1', total_a_transferir: null, comprobantes: [], fechas_pago: [] })
+    expect(raw.pagos[0]).toMatchObject({ grupo_id: 'g-1', total_a_transferir: null, comprobantes: [], pagos_realizados: [] })
     expect(raw.grupos[0]).toMatchObject({ total_a_transferir: 54288, regimen_fiscal: 'moral' })
+    expect(raw.grupos[1].pagos_realizados).toEqual([{ fecha: '2026-09-21', monto: 21460 }])
+  })
+
+  it('un grupo saldado con factura y comprobante cierra en la fecha de su último evento (S19)', () => {
+    const g2 = proyectos().find((p) => p.id === 'SH062')!.conceptos.find((c) => c.key === 'g:g-2')!
+    expect(g2).toMatchObject({ estado: 'pagado', paso: null, fecha_resuelto: '2026-09-21' })
   })
 
   it('una respuesta vacía no truena', () => {
