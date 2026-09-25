@@ -179,18 +179,22 @@ export interface ConceptoDerivado {
 
 const TOLERANCIA = 0.005
 
+// Construir un Intl.DateTimeFormat cuesta decenas de µs: con miles de
+// conceptos resueltos por año dominaba la derivación (O1b). Uno solo por módulo.
+const FORMATO_CDMX = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Mexico_City',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
 /** Convierte un timestamp de la BD (sin zona = UTC) o una fecha YYYY-MM-DD a fecha de negocio CDMX. */
 export function fechaNegocioCdmx(valor: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor
   const tieneZona = /([zZ]|[+-]\d{2}:?\d{2})$/.test(valor)
   const fecha = new Date(tieneZona ? valor : `${valor.replace(' ', 'T')}Z`)
   if (Number.isNaN(fecha.getTime())) return valor.slice(0, 10)
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Mexico_City',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(fecha)
+  return FORMATO_CDMX.format(fecha)
 }
 
 function vigente<T extends { fecha_carga: string; eliminado?: boolean }>(docs: T[] | undefined): T | null {

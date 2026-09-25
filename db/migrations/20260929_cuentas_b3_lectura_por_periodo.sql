@@ -105,19 +105,22 @@ BEGIN
   --   cobros:    id, cotizacion_id, proyecto_id, folio, cliente, cliente_id,
   --              proyecto, monto_total, monto_pagado, fecha_vencimiento,
   --              fecha_factura, facturas_xml, pagos
-  --   pagos:     id, cotizacion_id, proyecto_id, grupo_id, responsable_id,
-  --              responsable_nombre, item_descripcion, x_pagar, monto_pagado,
-  --              total_a_transferir, monto_transferido, orden_pago_id,
-  --              regimen_fiscal, facturas_xml, comprobantes, pagos_realizados
+  --   pagos:     (solo cuentas SUELTAS) id, cotizacion_id, proyecto_id,
+  --              grupo_id, responsable_id, responsable_nombre,
+  --              item_descripcion, x_pagar, monto_pagado, total_a_transferir,
+  --              monto_transferido, orden_pago_id, regimen_fiscal,
+  --              facturas_xml, comprobantes, pagos_realizados
   --   grupos:    id, proyecto_id, responsable_id, responsable_nombre,
   --              regimen_fiscal, monto_total, monto_pagado, total_a_transferir,
   --              monto_transferido, orden_pago_id, facturas_xml, comprobantes,
-  --              pagos_realizados
+  --              pagos_realizados, n_items, descripcion
   -- pagos_realizados = [{fecha, monto}] de pagos_cuentas_pagar no anulados,
   -- monto en total a transferir.
+  -- Las cuentas hijas de un grupo no viajan (O1b): la lectura por periodo
+  -- solo usa cuántas son y la descripción de la primera; el desglose del grupo
+  -- lo trae el endpoint de detalle. Son la mitad del volumen del año.
   -- proyecto_id null = "Sin proyecto" (supuesto 11). Documentos y pagos son
-  -- objetos (pocos); null = ninguno. En los pagos de un grupo, documentos y
-  -- fechas vienen en el grupo.
+  -- objetos (pocos); null = ninguno.
   WITH
   py AS (
     -- Proyectos del año, más los que no tienen una fecha válida ("Sin fecha", D9).
@@ -175,9 +178,6 @@ BEGIN
     WHERE pc.cuentas_cobrar_id IN (SELECT id FROM cc)
     GROUP BY pc.cuentas_cobrar_id
   ),
-  -- Pagos a proveedor: facturas XML (D25), comprobantes (D11: documentos
-  -- COMPROBANTE_PAGO o pagos con comprobante, A1) y fechas de pago, por grupo
-  -- o por suelta.
   dp AS (
     SELECT COALESCE(d.grupo_id, d.cuentas_pagar_id) AS id, d.tipo, d.estado_validacion, d.fecha_carga
     FROM documentos_cuentas_pagar d
@@ -202,6 +202,13 @@ BEGIN
     WHERE p.anulado_at IS NULL
       AND (p.grupo_id IN (SELECT id FROM g) OR p.cuenta_pagar_id IN (SELECT id FROM cp WHERE grupo_id IS NULL))
     GROUP BY 1
+  ),
+  g_items AS (
+    SELECT cp.grupo_id AS id, count(*) AS n,
+           (array_agg(cp.item_descripcion ORDER BY cp.created_at, cp.id))[1] AS descripcion,
+           (array_agg(cp.responsable_nombre ORDER BY cp.created_at, cp.id))[1] AS responsable_nombre
+    FROM cp WHERE cp.grupo_id IS NOT NULL
+    GROUP BY cp.grupo_id
   ),
   cot AS (
     SELECT COALESCE(c.es_complementaria_de, c.id) AS pid,
@@ -239,17 +246,19 @@ BEGIN
         d.facturas, d.comprobantes, pf.fechas
       ) ORDER BY cp.created_at, cp.id)
       FROM cp
-      LEFT JOIN proveedores pr ON cp.grupo_id IS NULL AND pr.id = cp.responsable_id
-      LEFT JOIN p_docs d ON cp.grupo_id IS NULL AND d.id = cp.id
-      LEFT JOIN p_fechas pf ON cp.grupo_id IS NULL AND pf.id = cp.id
+      LEFT JOIN proveedores pr ON pr.id = cp.responsable_id
+      LEFT JOIN p_docs d ON d.id = cp.id
+      LEFT JOIN p_fechas pf ON pf.id = cp.id
+      WHERE cp.grupo_id IS NULL
     ), '[]'::json),
     'grupos', COALESCE((
       SELECT json_agg(json_build_array(
-        g.id, g.proyecto_id, g.responsable_id, pr.nombre, pr.regimen_fiscal,
+        g.id, g.proyecto_id, g.responsable_id, COALESCE(pr.nombre, gi.responsable_nombre), pr.regimen_fiscal,
         g.monto_total, COALESCE(g.monto_pagado, 0), g.total_a_transferir, g.monto_transferido, g.orden_pago_id,
-        d.facturas, d.comprobantes, pf.fechas
+        d.facturas, d.comprobantes, pf.fechas, COALESCE(gi.n, 0), gi.descripcion
       ) ORDER BY g.created_at, g.id)
       FROM g
+      LEFT JOIN g_items gi ON gi.id = g.id
       LEFT JOIN proveedores pr ON pr.id = g.responsable_id
       LEFT JOIN p_docs d ON d.id = g.id
       LEFT JOIN p_fechas pf ON pf.id = g.id

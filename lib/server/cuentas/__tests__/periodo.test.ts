@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: vi.fn() } }))
 
 import { derivarAvisos } from '../avisos'
-import { construirPeriodo, construirProyectos, normalizarBusqueda, pendientesPorAnio, type ParametrosPeriodo } from '../periodo'
+import { construirPeriodo, construirProyectos, normalizarBusqueda, pendientesPorAnio, ultimoMesConDatos, type ParametrosPeriodo } from '../periodo'
 import { decodificarCuentasAnio, type CuentasAnioRaw } from '../periodo-rpc'
 import { SIN_PROYECTO_ID } from '@/lib/shared/cuentas/periodo-tipos'
 
@@ -31,15 +31,12 @@ function rpc(): unknown {
     ],
     pagos: [
       // id, cotizacion_id, proyecto_id, grupo_id, responsable_id, responsable_nombre, item_descripcion, x_pagar, monto_pagado, total_a_transferir, monto_transferido, orden_pago_id, regimen, facturas, comprobantes, pagos_realizados
-      ['cp-1', 'SH061', 'SH061', 'g-1', 'prov-1', 'Iluminación', 'Paquete ARRI', 37000, 0, null, 0, null, null, null, null, null],
-      ['cp-2', 'SH061', 'SH061', 'g-1', 'prov-1', 'Iluminación', 'Generador', 9800, 0, null, 0, null, null, null, null, null],
       ['cp-3', 'SH061', 'SH061', null, null, 'Sin asignar', 'Van', 15600, 0, null, 0, null, null, null, null, null],
-      ['cp-4', 'SH062', 'SH062', 'g-2', 'prov-2', 'Estudio Luz', 'Renta', 18500, 18500, 21460, 21460, null, null, null, null, null],
     ],
     grupos: [
-      // id, proyecto_id, responsable_id, responsable_nombre, regimen, monto_total, monto_pagado, total_a_transferir, monto_transferido, orden_pago_id, facturas, comprobantes, pagos_realizados
-      ['g-1', 'SH061', 'prov-1', 'Iluminación Pro', 'moral', 46800, 0, 54288, 0, null, [{ estado_validacion: 'validado', fecha_carga: '2026-09-02 10:00:00' }], null, null],
-      ['g-2', 'SH062', 'prov-2', 'Estudio Luz', 'moral', 18500, 18500, 21460, 21460, null, [{ estado_validacion: 'validado', fecha_carga: '2026-09-11 10:00:00' }], [{ fecha_carga: '2026-09-21 10:00:00' }], [{ fecha: '2026-09-21', monto: 21460 }]],
+      // id, proyecto_id, responsable_id, responsable_nombre, regimen, monto_total, monto_pagado, total_a_transferir, monto_transferido, orden_pago_id, facturas, comprobantes, pagos_realizados, n_items, descripcion
+      ['g-1', 'SH061', 'prov-1', 'Iluminación Pro', 'moral', 46800, 0, 54288, 0, null, [{ estado_validacion: 'validado', fecha_carga: '2026-09-02 10:00:00' }], null, null, 2, 'Paquete ARRI'],
+      ['g-2', 'SH062', 'prov-2', 'Estudio Luz', 'moral', 18500, 18500, 21460, 21460, null, [{ estado_validacion: 'validado', fecha_carga: '2026-09-11 10:00:00' }], [{ fecha_carga: '2026-09-21 10:00:00' }], [{ fecha: '2026-09-21', monto: 21460 }], 1, 'Renta'],
     ],
   }
 }
@@ -57,9 +54,10 @@ describe('decodificarCuentasAnio', () => {
     const raw: CuentasAnioRaw = decodificarCuentasAnio(rpc())
     expect(raw.proyectos[0]).toMatchObject({ id: 'SH061', fecha_entrega: '2026-09-18', margen_total_proyecto: 20000, iva_total_proyecto: 16000 })
     expect(raw.cobros[1]).toMatchObject({ id: 'cc-2', facturas_xml: [], pagos: [] })
-    expect(raw.pagos[0]).toMatchObject({ grupo_id: 'g-1', total_a_transferir: null, comprobantes: [], pagos_realizados: [] })
+    expect(raw.pagos[0]).toMatchObject({ id: 'cp-3', grupo_id: null, total_a_transferir: null, comprobantes: [], pagos_realizados: [] })
     expect(raw.grupos[0]).toMatchObject({ total_a_transferir: 54288, regimen_fiscal: 'moral' })
     expect(raw.grupos[1].pagos_realizados).toEqual([{ fecha: '2026-09-21', monto: 21460 }])
+    expect(raw.grupos[0]).toMatchObject({ n_items: 2, descripcion: 'Paquete ARRI' })
   })
 
   it('un grupo saldado con factura y comprobante cierra en la fecha de su último evento (S19)', () => {
@@ -108,14 +106,36 @@ describe('construirProyectos', () => {
   })
 })
 
+describe('ultimoMesConDatos (S16)', () => {
+  it('toma el último mes con proyectos del año, o "todo" si no hay', () => {
+    expect(ultimoMesConDatos(proyectos(), 2026)).toBe(9)
+    expect(ultimoMesConDatos(proyectos(), 2025)).toBe('todo')
+  })
+})
+
 describe('construirPeriodo', () => {
   it('mes: tarjetas del mes, abiertas primero, y contadores de pendientes por mes', () => {
     const r = construirPeriodo(proyectos(), params(), HOY)
     expect(r.proyectos.items.map((p) => p.id)).toEqual(['SH061', 'SH062'])
-    expect(r.meses[8]).toEqual({ mes: 9, proyectos: 2, pendientes: 1 })
-    expect(r.meses[5]).toEqual({ mes: 6, proyectos: 1, pendientes: 1 })
+    expect(r.meses[8]).toEqual({ mes: 9, proyectos: 2, pendientes: 1, visibles: 2 })
+    expect(r.meses[5]).toEqual({ mes: 6, proyectos: 1, pendientes: 1, visibles: 1 })
     expect(r.conteo).toEqual({ todas: 2, pendientes: 1, cerradas: 1 })
     expect(r.sin_fecha).toEqual([])
+  })
+
+  it('con estado "Cerradas", el mes cuenta sus proyectos visibles para atenuar la pastilla', () => {
+    const r = construirPeriodo(proyectos(), params({ estado: 'cerradas' }), HOY)
+    expect(r.meses[8]).toMatchObject({ proyectos: 2, pendientes: 1, visibles: 1 })
+    expect(r.meses[5]).toMatchObject({ proyectos: 1, visibles: 0 })
+  })
+
+  it('el proyecto seleccionado trae su cierre por mes con el cuadre exacto (D26)', () => {
+    const r = construirPeriodo(proyectos(), params({ proyecto: 'SH062' }), HOY)
+    const filas = r.seleccionado!.cierre_mensual
+    const iva = filas.filter((f) => f.concepto === 'iva').reduce((a, f) => a + f.monto, 0)
+    expect(round(iva)).toBe(r.seleccionado!.cierre.iva_neto_a_enterar)
+    expect(filas[0]).toMatchObject({ concepto: 'proveedores', monto: 21460 })
+    expect(r.proyectos.items[0]).not.toHaveProperty('cierre_mensual')
   })
 
   it('totales del periodo (D4): cobros con IVA, pagos en total a transferir, utilidad del cierre', () => {

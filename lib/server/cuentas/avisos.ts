@@ -24,6 +24,8 @@ const ETIQUETAS: Record<CategoriaAviso, string> = {
   por_emitir: 'Facturas por emitir',
 }
 
+const comparar = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
 const ORDEN: CategoriaAviso[] = ['vencidos', 'por_vencer', 'facturas_proveedor', 'complementos', 'por_emitir']
 
 function sumarDias(fecha: string, dias: number): string {
@@ -67,7 +69,7 @@ export function derivarAvisos(proyectos: ProyectoDetalle[], hoy: string): Avisos
     etiqueta: ETIQUETAS[categoria],
     items: items
       .filter((i) => i.categoria === categoria)
-      .sort((a, b) => (a.fecha ?? '9999').localeCompare(b.fecha ?? '9999') || a.key.localeCompare(b.key)),
+      .sort((a, b) => comparar(a.fecha ?? '9999', b.fecha ?? '9999') || comparar(a.key, b.key)),
   })).filter((c) => c.items.length > 0)
 
   return { hoy, categorias, total: categorias.reduce((s, c) => s + c.items.length, 0) }

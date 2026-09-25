@@ -11,6 +11,7 @@
  */
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { calcularCierreProyecto, type CuentaPagarCierreInput } from '@/lib/shared/cierre-proyecto'
+import { calcularCierreMensual } from '@/lib/shared/cuentas/cierre-mensual'
 import {
   derivarCobro,
   derivarCuentasProyecto,
@@ -52,6 +53,7 @@ export async function obtenerCuentasPorProyecto() {
 // ── Derivación del año ─────────────────────────────────────────────────────
 
 const FECHA_VALIDA = /^\d{4}-\d{2}-\d{2}$/
+const ORDEN_ES = new Intl.Collator('es')
 
 function sumar<T>(items: T[], f: (x: T) => number): number {
   return round2(items.reduce((s, x) => s + f(x), 0))
@@ -61,7 +63,7 @@ function vista(base: Omit<ConceptoVista, keyof ConceptoDerivado>, derivado: Conc
   return { ...derivado, ...base }
 }
 
-function conceptoGrupo(grupo: GrupoAnioRaw, hijas: PagoAnioRaw[]): ConceptoVista {
+function conceptoGrupo(grupo: GrupoAnioRaw): ConceptoVista {
   const estimado = grupo.total_a_transferir == null
   const total = estimado ? calcularEjemploFactura(grupo.monto_total, grupo.regimen_fiscal).total : round2(grupo.total_a_transferir!)
   const pagado = round2(grupo.monto_transferido)
@@ -84,10 +86,10 @@ function conceptoGrupo(grupo: GrupoAnioRaw, hijas: PagoAnioRaw[]): ConceptoVista
       proyecto_id: grupo.proyecto_id,
       cotizacion_id: null,
       folio: null,
-      contraparte: grupo.responsable_nombre ?? hijas[0]?.responsable_nombre ?? 'Proveedor',
+      contraparte: grupo.responsable_nombre ?? 'Proveedor',
       contraparte_id: grupo.responsable_id,
-      concepto: hijas.length === 1 ? (hijas[0].item_descripcion ?? 'Concepto') : `${hijas.length} conceptos`,
-      items: hijas.length,
+      concepto: grupo.n_items === 1 ? (grupo.descripcion ?? 'Concepto') : `${grupo.n_items} conceptos`,
+      items: grupo.n_items,
       total,
       pagado,
       total_estimado: estimado,
@@ -179,7 +181,7 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
     iva: p.iva_total_proyecto,
     sin_proyecto: false,
   }))
-  if (cobros.has(SIN_PROYECTO_ID) || pagos.has(SIN_PROYECTO_ID)) {
+  if (cobros.has(SIN_PROYECTO_ID) || pagos.has(SIN_PROYECTO_ID) || grupos.has(SIN_PROYECTO_ID)) {
     bases.push({ id: SIN_PROYECTO_ID, nombre: 'Sin proyecto', cliente: null, fecha_entrega: null, margen: 0, fee: 0, iva: 0, sin_proyecto: true })
   }
 
@@ -188,14 +190,6 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
     const pagosP = pagos.get(b.id) ?? []
     const gruposP = grupos.get(b.id) ?? []
 
-    const hijasPorGrupo = new Map<string, PagoAnioRaw[]>()
-    for (const cp of pagosP) {
-      if (!cp.grupo_id) continue
-      const lista = hijasPorGrupo.get(cp.grupo_id)
-      if (lista) lista.push(cp)
-      else hijasPorGrupo.set(cp.grupo_id, [cp])
-    }
-    const grupoPorId = new Map(gruposP.map((g) => [g.id, g]))
 
     const conceptos: ConceptoVista[] = [
       ...cobrosP.map((cc) =>
@@ -233,25 +227,41 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
           )
         )
       ),
-      ...gruposP.map((g) => conceptoGrupo(g, hijasPorGrupo.get(g.id) ?? [])),
-      ...pagosP.filter((cp) => !cp.grupo_id).map(conceptoSuelta),
+      ...gruposP.map(conceptoGrupo),
+      ...pagosP.map(conceptoSuelta),
     ]
 
-    // El cierre agrupa por grupo con el monto del grupo y su snapshot (H10).
-    const cierreInput: CuentaPagarCierreInput[] = pagosP.map((cp) => {
-      const g = cp.grupo_id ? grupoPorId.get(cp.grupo_id) : undefined
-      return {
+    // El cierre agrupa por grupo con el monto del grupo y su snapshot (H10):
+    // un renglón por grupo (su monto_total manda) y uno por suelta.
+    const cierreInput: CuentaPagarCierreInput[] = [
+      ...gruposP.map((g) => ({
+        id: g.id,
+        grupo_id: g.id,
+        x_pagar: g.monto_total,
+        responsable_id: g.responsable_id,
+        responsable_nombre: g.responsable_nombre ?? 'Proveedor',
+        grupo_monto_total: g.monto_total,
+        grupo_total_a_transferir: g.total_a_transferir,
+        total_a_transferir: null,
+        proveedor_regimen_fiscal: g.regimen_fiscal,
+      })),
+      ...pagosP.map((cp) => ({
         id: cp.id,
-        grupo_id: cp.grupo_id,
+        grupo_id: null,
         x_pagar: cp.x_pagar,
         responsable_id: cp.responsable_id,
-        responsable_nombre: g?.responsable_nombre ?? cp.responsable_nombre ?? 'Proveedor',
-        grupo_monto_total: g?.monto_total ?? null,
-        grupo_total_a_transferir: g?.total_a_transferir ?? null,
+        responsable_nombre: cp.responsable_nombre ?? 'Proveedor',
+        grupo_monto_total: null,
+        grupo_total_a_transferir: null,
         total_a_transferir: cp.total_a_transferir,
-        proveedor_regimen_fiscal: g ? g.regimen_fiscal : cp.regimen_fiscal,
-      }
-    })
+        proveedor_regimen_fiscal: cp.regimen_fiscal,
+      })),
+    ]
+
+    const cierre = calcularCierreProyecto(cierreInput, b.margen, b.fee, b.iva)
+    const pagosProveedor: Record<string, { fecha: string; monto: number }[]> = {}
+    for (const g of gruposP) pagosProveedor[g.id] = g.pagos_realizados
+    for (const cp of pagosP) pagosProveedor[cp.id] = cp.pagos_realizados
 
     const fecha = b.fecha_entrega
     return {
@@ -266,7 +276,12 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
       conceptos,
       cuentas: derivarCuentasProyecto(conceptos),
       totales: totalesDe(conceptos),
-      cierre: calcularCierreProyecto(cierreInput, b.margen, b.fee, b.iva),
+      cierre,
+      cierre_mensual: calcularCierreMensual({
+        cierre,
+        cobros: cobrosP.map((cc) => ({ total: cc.monto_total, pagos: cc.pagos.map((pg) => ({ fecha: pg.fecha_pago, monto: pg.monto })) })),
+        pagosProveedor,
+      }),
     }
   })
 }
@@ -293,9 +308,10 @@ export function normalizarBusqueda(texto: string): string {
 
 function tarjeta(p: ProyectoDetalle): TarjetaProyecto {
   // Sin los conceptos ni el cierre: la tarjeta solo lleva lo que pinta.
-  const { conceptos: _conceptos, cierre: _cierre, ...resto } = p
+  const { conceptos: _conceptos, cierre: _cierre, cierre_mensual: _mensual, ...resto } = p
   void _conceptos
   void _cierre
+  void _mensual
   return resto
 }
 
@@ -353,7 +369,12 @@ export function construirPeriodo(proyectos: ProyectoDetalle[], params: Parametro
 
   const meses: MesResumen[] = Array.from({ length: 12 }, (_, i) => {
     const delMes = delAnio.filter((x) => x.p.mes === i + 1)
-    return { mes: i + 1, proyectos: delMes.length, pendientes: delMes.filter((x) => !x.p.cuentas.cerradas).length }
+    return {
+      mes: i + 1,
+      proyectos: delMes.length,
+      pendientes: delMes.filter((x) => !x.p.cuentas.cerradas).length,
+      visibles: delMes.filter((x) => estadoOk(x.p)).length,
+    }
   })
 
   const alcance = params.mes === 'todo' ? delAnio : delAnio.filter((x) => x.p.mes === params.mes)
@@ -372,8 +393,8 @@ export function construirPeriodo(proyectos: ProyectoDetalle[], params: Parametro
   const proyectosConFilas = new Set(filas.map((f) => f.proyecto.id)).size
 
   const opciones = {
-    clientes: Array.from(new Set(proyectos.flatMap((p) => p.conceptos.filter((c) => c.tipo === 'cobro').map((c) => c.contraparte)))).sort((a, b) => a.localeCompare(b, 'es')),
-    proveedores: Array.from(new Set(proyectos.flatMap((p) => p.conceptos.filter((c) => c.tipo === 'pago' && c.contraparte_id).map((c) => c.contraparte)))).sort((a, b) => a.localeCompare(b, 'es')),
+    clientes: Array.from(new Set(proyectos.flatMap((p) => p.conceptos.filter((c) => c.tipo === 'cobro').map((c) => c.contraparte)))).sort(ORDEN_ES.compare),
+    proveedores: Array.from(new Set(proyectos.flatMap((p) => p.conceptos.filter((c) => c.tipo === 'pago' && c.contraparte_id).map((c) => c.contraparte)))).sort(ORDEN_ES.compare),
   }
 
   let seleccionado: ProyectoDetalle | null = null
@@ -409,4 +430,10 @@ export function construirPeriodo(proyectos: ProyectoDetalle[], params: Parametro
 /** Proyectos con pendientes por año (select de periodo, S4). */
 export function pendientesPorAnio(proyectos: ProyectoDetalle[], anio: number): number {
   return proyectos.filter((p) => !p.sin_fecha && p.anio === anio && !p.cuentas.cerradas).length
+}
+
+/** Último mes del año con proyectos (S16); "Todo el año" si no hay ninguno. */
+export function ultimoMesConDatos(proyectos: ProyectoDetalle[], anio: number): MesPeriodo {
+  const meses = proyectos.filter((p) => !p.sin_fecha && p.anio === anio && p.mes).map((p) => p.mes!)
+  return meses.length ? Math.max(...meses) : 'todo'
 }

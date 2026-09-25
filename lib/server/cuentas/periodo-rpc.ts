@@ -46,6 +46,7 @@ export interface PagoRealizadoRaw {
   monto: number
 }
 
+/** Solo cuentas SUELTAS: las hijas de un grupo no viajan (O1b). */
 export interface PagoAnioRaw {
   id: string
   cotizacion_id: string | null
@@ -80,6 +81,9 @@ export interface GrupoAnioRaw {
   facturas_xml: DocumentoXmlInput[]
   comprobantes: ArchivoInput[]
   pagos_realizados: PagoRealizadoRaw[]
+  /** Cuentas hijas del grupo y descripción de la primera. */
+  n_items: number
+  descripcion: string | null
 }
 
 export interface CuentasAnioRaw {
@@ -159,6 +163,8 @@ export function decodificarCuentasAnio(data: unknown): CuentasAnioRaw {
       facturas_xml: lista(f[10]),
       comprobantes: lista(f[11]),
       pagos_realizados: pagosRealizados(f[12]),
+      n_items: num(f[13]),
+      descripcion: str(f[14]),
     })),
   }
 }
