@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* docs/design/ guarda handoffs de Claude Design (HTML de referencia): fuera del escaneo de clases. */
+@source not "../docs/design";
 
 /*
  * Rediseño Apple-style (skill serenata-design v2): tokens del Serenata Design

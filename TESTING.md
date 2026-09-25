@@ -57,6 +57,18 @@ Si faltara una credencial, Playwright marcaría todo como *skipped* y el job que
 y `tests/e2e/live/cotizaciones-colaboracion.spec.ts` falla explícitamente nombrando
 lo que falta. No quitar esa variable.
 
+### Seed de Cuentas en `serenata-erp-test`
+
+`scripts/seed-cuentas-test.sql` crea las formas de datos de producción que
+Cuentas tiene que manejar: orden vieja sin pagar, sueltas sin factura y sin
+proveedor, grupo con pago parcial, cobro PPD en dos pagos, facturas en
+`pendiente` y `revision`, anticipo sin factura, principal con complementarias
+y cuentas sin proyecto. Todo lleva el prefijo `SEEDCU` y el script es
+idempotente: borra lo suyo y lo recrea. Se corre pegándolo en el SQL Editor de
+`serenata-erp-test` (o con `psql -f`) y se niega a correr en una base sin la
+tabla `loadtest_runs`, que solo existe en test. Los tests no lo necesitan;
+sirve para revisar pantallas y RPCs contra datos con forma real.
+
 ## Modo bypass (solo smoke y critical)
 
 Con `PLAYWRIGHT_E2E_BYPASS=true` más la cookie `e2e-bypass=1` que pone

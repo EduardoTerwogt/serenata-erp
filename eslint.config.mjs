@@ -25,6 +25,9 @@ const eslintConfig = defineConfig([
     // CDN <script> tags, not ES modules) -- it's design-system documentation,
     // never compiled or imported by the app, so it isn't real lint surface.
     ".claude/**",
+    // docs/design/** holds Claude Design handoffs (prototype HTML/JS loaded
+    // via CDN globals): reference material, never compiled or imported.
+    "docs/design/**",
   ]),
 ]);
 

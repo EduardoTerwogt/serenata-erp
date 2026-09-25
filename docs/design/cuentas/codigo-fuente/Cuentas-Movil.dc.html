@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#FE7B01"/><text x="50" y="66" font-family="-apple-system,Helvetica,Arial" font-size="46" font-weight="700" fill="#fff" text-anchor="middle">C</text></svg></template>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/tokens/colors.css">
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/tokens/typography.css">
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/tokens/radius.css">
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/tokens/elevation.css">
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/tokens/motion.css">
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/tokens/base.css">
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/tokens/theme-dark.css">
+<link rel="stylesheet" href="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/styles.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="_ds/apple-style-serenata-design-system-7a73f2e9-639d-4345-a675-69afe9f07f3f/_ds_bundle.js"></script>
+<script src="cuentas-data.js"></script>
+<style>body{margin:0;background:var(--bg-app)} a{color:var(--accent);text-decoration:none} a:hover{color:var(--accent-pressed)}</style>
+</helmet>
+<div style="height:{{ frameH }};width:100%;display:flex;flex-direction:column;position:relative;overflow:hidden;background:var(--bg-app);color:var(--text-body);font-family:var(--font-ui)">
+<sc-if value="{{ statusBar }}" hint-placeholder-val="{{ true }}">
+<div style="height:47px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 28px 0 34px;font-size:15px;font-weight:600;color:var(--text-primary)"><span>9:41</span><span style="display:flex;gap:6px;align-items:center"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="signal" size="{{ 16 }}" hint-size="16px,16px"></x-import><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="wifi" size="{{ 16 }}" hint-size="16px,16px"></x-import><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="battery-full" size="{{ 20 }}" hint-size="20px,20px"></x-import></span></div>
+</sc-if>
+
+<div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;align-content:start;gap:14px;padding:4px 0 24px">
+<div style="padding:0 16px;display:flex;flex-direction:column">
+<sc-if value="{{ showBack }}" hint-placeholder-val="{{ false }}"><button onClick="{{ goBack }}" style="align-self:flex-start;display:flex;align-items:center;gap:2px;height:30px;margin-left:-6px;padding:0;border:0;background:transparent;font:inherit;font-size:15px;color:var(--accent);cursor:pointer"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="chevron-left" size="{{ 22 }}" hint-size="22px,22px"></x-import>Cuentas</button></sc-if>
+<div style="display:flex;align-items:center;gap:8px;min-height:44px">
+<div class="sn-display" style="flex:1;min-width:0;font-size:27px;color:var(--text-primary)">{{ title }}</div>
+<sc-if value="{{ headA }}" hint-placeholder-val="{{ true }}">
+<button onClick="{{ goAvisos }}" style="position:relative;width:36px;height:36px;border-radius:9px;border:1px solid var(--border-subtle);background:var(--surface-card);color:var(--text-body);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="bell" size="{{ 18 }}" hint-size="18px,18px"></x-import><span style="position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:999px;background:var(--accent);color:#fff;font-size:10.5px;font-weight:600;display:flex;align-items:center;justify-content:center">{{ avisosN }}</span></button>
+<button onClick="{{ goOrdenes }}" style="width:36px;height:36px;border-radius:9px;border:0;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="file-text" size="{{ 18 }}" hint-size="18px,18px"></x-import></button>
+</sc-if>
+</div>
+</div>
+
+<sc-if value="{{ showControls }}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{ noSearch }}" hint-placeholder-val="{{ true }}">
+<div style="padding:0 16px;display:flex;gap:8px">
+<button onClick="{{ openMes }}" style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;height:38px;padding:0 12px;border-radius:9px;border:1px solid var(--border-subtle);background:var(--surface-card);font:inherit;font-size:14px;font-weight:600;color:var(--text-primary);cursor:pointer">
+<span style="display:flex;color:var(--accent)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="calendar" size="{{ 16 }}" hint-size="16px,16px"></x-import></span>
+<span style="flex:1;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ monthLabel }}</span>
+<sc-if value="{{ hasScopePend }}" hint-placeholder-val="{{ false }}"><span style="min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:999px;background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">{{ scopePend }}</span></sc-if>
+<span style="display:flex;color:var(--text-muted)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="chevron-down" size="{{ 16 }}" hint-size="16px,16px"></x-import></span>
+</button>
+<button onClick="{{ openSearch }}" style="width:38px;height:38px;flex:none;border-radius:9px;border:1px solid var(--border-subtle);background:var(--surface-card);color:var(--text-body);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="search" size="{{ 18 }}" hint-size="18px,18px"></x-import></button>
+<button onClick="{{ openFiltros }}" style="position:relative;width:38px;height:38px;flex:none;border-radius:9px;border:1px solid {{ fBorder }};background:var(--surface-card);color:var(--text-body);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="sliders-horizontal" size="{{ 18 }}" hint-size="18px,18px"></x-import><sc-if value="{{ hasActive }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:999px;background:var(--accent);color:#fff;font-size:10.5px;font-weight:600;display:flex;align-items:center;justify-content:center">{{ activeN }}</span></sc-if></button>
+</div>
+</sc-if>
+<sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 16px;display:flex;align-items:center;gap:12px">
+<div style="flex:1;min-width:0"><x-import component-from-global-scope="SerenataDesignSystem_993393.SearchInput" value="{{ q }}" on-change="{{ onQuery }}" placeholder="Buscar proyecto, cliente o concepto" style="{{ fullW }}" hint-size="100%,32px"></x-import></div>
+<a href="#" onClick="{{ closeSearch }}" style="font-size:14px">Cancelar</a>
+</div>
+</sc-if>
+<sc-if value="{{ hasActive }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:6px;overflow-x:auto;padding:0 16px;scrollbar-width:none">
+<sc-for list="{{ chips }}" as="c" hint-placeholder-count="0">
+<span style="flex:none;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 6px 0 11px;border-radius:999px;background:var(--surface-card);border:1px solid var(--border-subtle);font-size:12px;color:var(--text-body);white-space:nowrap"><span style="color:var(--text-muted)">{{ c.k }}</span><span style="font-weight:500;color:var(--text-primary)">{{ c.v }}</span><button onClick="{{ c.remove }}" style="width:18px;height:18px;border:0;border-radius:999px;background:var(--surface-row-alt);color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="x" size="{{ 11 }}" hint-size="11px,11px"></x-import></button></span>
+</sc-for>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ showTotals }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="padding:0 16px;font-size:12px;color:var(--text-muted)">{{ totScope }}</div>
+<div style="display:flex;gap:10px;align-items:flex-start;overflow-x:auto;scroll-snap-type:x mandatory;padding:0 16px 4px;scroll-padding:0 16px;scrollbar-width:none">
+<sc-for list="{{ totCards }}" as="t" hint-placeholder-count="4">
+<div style="flex:0 0 74%;scroll-snap-align:start;box-sizing:border-box;background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:12px;padding:8px 12px;box-shadow:var(--shadow-card)">
+<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">{{ t.k }}</span><span style="font-size:17px;font-weight:700;color:{{ t.color }};white-space:nowrap">{{ t.v }}</span></div>
+<div style="display:flex;flex-direction:column;gap:1px;margin-top:5px;padding-top:5px;border-top:1px solid var(--border-subtle)"><sc-for list="{{ t.sub }}" as="l" hint-placeholder-count="2"><div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;line-height:1.35"><span style="color:var(--text-muted)">{{ l.k }}</span><span style="color:var(--text-body);white-space:nowrap">{{ l.v }}</span></div></sc-for></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showSeg }}" hint-placeholder-val="{{ true }}">
+<div style="padding:0 16px;display:flex"><x-import component-from-global-scope="SerenataDesignSystem_993393.FilterTabs" tabs="{{ viewTabs }}" value="{{ view }}" on-change="{{ setView }}" hint-size="172px,34px"></x-import></div>
+</sc-if>
+
+<sc-if value="{{ showEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="margin:0 16px;background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:12px;padding:28px 18px;text-align:center;font-size:13.5px;color:var(--text-faint)">Sin cuentas en este periodo con estos filtros.</div>
+</sc-if>
+
+<sc-if value="{{ showProjects }}" hint-placeholder-val="{{ true }}">
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:18px">
+<sc-for list="{{ groups }}" as="g" hint-placeholder-count="1">
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-if value="{{ g.showHead }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:baseline;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--border-subtle)"><span style="font-size:14.5px;font-weight:600;color:var(--text-primary)">{{ g.label }}</span><span style="font-size:12px;color:var(--text-muted)">{{ g.sub }}</span></div></sc-if>
+<sc-for list="{{ g.projects }}" as="p" hint-placeholder-count="3">
+<div onClick="{{ p.open }}" style="display:flex;flex-direction:column;gap:8px;padding:11px 14px;background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:12px;box-shadow:var(--shadow-card);cursor:pointer">
+<div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.nombre }}</div><div style="font-size:12px;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.cliente }} · {{ p.eventoLabel }}</div></div><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:80px;height:20px;padding:0 10px;border-radius:999px;font-size:10.5px;font-weight:500;white-space:nowrap;background:{{ p.status.bg }};color:{{ p.status.fg }}">{{ p.status.label }}</span></div>
+<div style="display:flex;align-items:center;gap:16px;padding-top:8px;border-top:1px solid var(--border-subtle)">
+<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text-muted)">{{ p.m1Label }}</div><div style="font-size:14px;font-weight:600;color:{{ p.m1Color }};margin-top:1px;white-space:nowrap">{{ p.m1Val }}</div></div>
+<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--text-muted)">{{ p.m2Label }}</div><div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-top:1px;white-space:nowrap">{{ p.m2Val }}</div></div>
+<span style="display:flex;color:var(--text-faint)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="chevron-right" size="{{ 18 }}" hint-size="18px,18px"></x-import></span>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ showLista }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:14px">
+<sc-for list="{{ listGroups }}" as="g" hint-placeholder-count="1">
+<div style="background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden;box-shadow:var(--shadow-card)">
+<sc-if value="{{ g.showHead }}" hint-placeholder-val="{{ false }}"><div style="display:flex;justify-content:space-between;padding:10px 14px;background:var(--surface-row-alt)"><span style="font-size:12.5px;font-weight:600;color:var(--text-primary)">{{ g.label }}</span><span style="font-size:11px;color:var(--text-muted)">{{ g.sub }}</span></div></sc-if>
+<sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="5">
+<div onClick="{{ r.open }}" style="display:flex;gap:10px;padding:9px 14px;border-top:{{ r.border }};cursor:pointer">
+<span style="display:flex;padding-top:2px;color:{{ r.iconColor }}"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="{{ r.icon }}" size="{{ 16 }}" hint-size="16px,16px"></x-import></span>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.contraparte }}</span><span style="display:inline-flex;align-items:center;justify-content:center;min-width:80px;height:20px;padding:0 10px;border-radius:999px;font-size:10.5px;font-weight:500;white-space:nowrap;background:{{ r.b.bg }};color:{{ r.b.fg }}">{{ r.b.label }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px"><span style="flex:1;min-width:0;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.proyecto }} · {{ r.concepto }}</span><span style="color:var(--text-primary);white-space:nowrap">{{ r.pagadoTotal }}</span></div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+<div style="font-size:11px;color:var(--text-muted);text-align:center">{{ listFooter }}</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ pageAvisos }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:18px">
+<sc-for list="{{ avisos }}" as="s" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;justify-content:space-between;font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)"><span>{{ s.label }}</span><span>{{ s.n }}</span></div>
+<sc-for list="{{ s.items }}" as="a" hint-placeholder-count="1">
+<div onClick="{{ a.go }}" style="display:flex;gap:12px;align-items:flex-start;padding:12px 13px;border-radius:12px;background:var(--surface-card);border:1px solid var(--border-subtle);cursor:pointer">
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:center;gap:8px"><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;color:var(--accent)">{{ a.folio }}</span><span style="display:inline-flex;align-items:center;justify-content:center;min-width:80px;height:18px;padding:0 9px;border-radius:999px;font-size:10px;font-weight:500;white-space:nowrap;background:{{ s.b.bg }};color:{{ s.b.fg }}">{{ s.b.label }}</span></div>
+<div style="font-size:13.5px;font-weight:500;color:var(--text-primary);margin-top:6px">{{ a.title }}</div>
+<div style="font-size:12px;color:var(--text-muted);margin-top:2px">{{ a.detail }}</div>
+</div>
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span style="font-size:13.5px;font-weight:600;color:var(--text-primary);white-space:nowrap">{{ a.monto }}</span><span style="display:flex;color:var(--text-faint)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="chevron-right" size="{{ 16 }}" hint-size="16px,16px"></x-import></span></div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ pageOrdenes }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:16px">
+<div style="padding:15px;border-radius:12px;border:1px solid var(--border-subtle);background:var(--surface-card);box-shadow:var(--shadow-card);display:flex;flex-direction:column;gap:12px">
+<div style="font-size:15px;font-weight:600;color:var(--text-primary)">Nueva orden de pago</div>
+<div style="font-size:13px;line-height:1.5;color:var(--text-muted)">Incluye pagos a proveedor facturados de eventos ya realizados: <b style="color:var(--text-primary);font-weight:600">{{ opTraySum }}</b></div>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="primary" size="lg" icon-left="file-text" on-click="{{ openOP }}" disabled="{{ opEmpty }}" hint-size="100%,36px">Revisar y generar</x-import>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">HISTORIAL DE ÓRDENES</span>
+<button onClick="{{ openOrdFiltro }}" style="display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:9px;border:1px solid {{ ordFBorder }};background:var(--surface-card);font:inherit;font-size:13px;font-weight:500;color:var(--text-body);cursor:pointer"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="sliders-horizontal" size="{{ 14 }}" hint-size="14px,14px"></x-import>{{ ordFLabel }}<x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="chevron-down" size="{{ 14 }}" hint-size="14px,14px"></x-import></button>
+</div>
+<div style="background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden">
+<sc-for list="{{ ordRows }}" as="o" hint-placeholder-count="5">
+<div style="border-top:{{ o.border }}">
+<div onClick="{{ o.toggle }}" style="display:flex;align-items:center;gap:10px;min-height:56px;padding:9px 14px;box-sizing:border-box;cursor:pointer">
+<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ o.name }}</div><div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:var(--text-muted);white-space:nowrap"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:80px;height:18px;padding:0 8px;border-radius:999px;font-size:10px;font-weight:500;background:{{ o.b.bg }};color:{{ o.b.fg }}">{{ o.b.label }}</span>{{ o.fecha }} · {{ o.cuentas }}</div></div>
+<span style="font-size:13px;font-weight:600;color:var(--text-primary);white-space:nowrap">{{ o.monto }}</span>
+<span style="display:flex;color:var(--text-faint)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="{{ o.chev }}" size="{{ 16 }}" hint-size="16px,16px"></x-import></span>
+</div>
+<sc-if value="{{ o.open }}" hint-placeholder-val="{{ false }}">
+<div style="padding:2px 14px 12px;background:var(--surface-row-alt)">
+<sc-for list="{{ o.items }}" as="it" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:10px;min-height:34px;font-size:12px;border-top:1px solid var(--border-subtle)"><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10.5px;color:var(--accent)">{{ it.folio }}</span><span style="flex:1;min-width:0;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.prov }}</span><span style="color:var(--text-primary);white-space:nowrap">{{ it.monto }}</span></div>
+</sc-for>
+<div style="display:flex;justify-content:flex-end;padding-top:8px"><a href="#" onClick="{{ prevent }}" style="display:flex;align-items:center;gap:6px;font-size:12.5px"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="file-down" size="{{ 14 }}" hint-size="14px,14px"></x-import>Descargar PDF</a></div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ ordEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:18px 14px;text-align:center;font-size:12.5px;color:var(--text-faint)">Sin órdenes con este estado</div></sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+
+<nav style="flex:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:6px 4px 22px;background:var(--surface-topbar);backdrop-filter:var(--blur-soft);-webkit-backdrop-filter:var(--blur-soft);border-top:1px solid var(--border-subtle)">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+<button onClick="{{ t.go }}" style="display:flex;flex-direction:column;align-items:center;gap:3px;height:44px;justify-content:center;border:0;background:transparent;font:inherit;font-size:10px;font-weight:500;color:{{ t.color }};cursor:pointer;padding:0">
+<span style="position:relative;display:flex"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="{{ t.icon }}" size="{{ 22 }}" hint-size="22px,22px"></x-import><sc-if value="{{ t.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-4px;right:-9px;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:999px;background:var(--accent);color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center">{{ t.badge }}</span></sc-if></span>
+<span>{{ t.label }}</span>
+</button>
+</sc-for>
+</nav>
+
+<sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeSel }}" style="position:absolute;inset:0;z-index:20;background:rgba(0,0,0,.28)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:92%;z-index:21;background:var(--surface-card);border-radius:14px 14px 0 0;box-shadow:var(--shadow-overlay);display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:none;display:flex;justify-content:center;padding:7px 0 2px"><span style="width:36px;height:5px;border-radius:3px;background:var(--border-subtle)"></span></div>
+<div style="flex:none;display:flex;align-items:flex-start;gap:10px;padding:8px 16px 14px;border-bottom:1px solid var(--border-subtle)">
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:center;gap:8px"><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;color:var(--accent)">{{ sel.folio }}</span><span style="display:inline-flex;align-items:center;justify-content:center;min-width:80px;height:20px;padding:0 10px;border-radius:999px;font-size:10.5px;font-weight:500;background:{{ sel.status.bg }};color:{{ sel.status.fg }}">{{ sel.status.label }}</span></div>
+<div style="font-size:19px;font-weight:700;color:var(--text-primary);margin-top:6px">{{ sel.nombre }}</div>
+<div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">{{ sel.cliente }} · {{ sel.eventoLabel }}</div>
+</div>
+<button onClick="{{ closeSel }}" style="width:30px;height:30px;border-radius:999px;border:0;background:var(--surface-row-alt);color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="x" size="{{ 16 }}" hint-size="16px,16px"></x-import></button>
+</div>
+<div style="flex:1;min-height:0;overflow:auto;padding:14px 16px 28px;display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;align-content:start;gap:16px">
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+<div style="padding:10px;border-radius:10px;background:var(--surface-row-alt);min-width:0"><div style="font-size:10.5px;color:var(--text-muted)">{{ sel.m1Label }}</div><div style="font-size:13.5px;font-weight:700;color:{{ sel.m1Color }};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sel.m1Val }}</div></div>
+<div style="padding:10px;border-radius:10px;background:var(--surface-row-alt);min-width:0"><div style="font-size:10.5px;color:var(--text-muted)">{{ sel.m2Label }}</div><div style="font-size:13.5px;font-weight:700;color:var(--text-primary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sel.m2Val }}</div></div>
+<div style="padding:10px;border-radius:10px;background:var(--surface-row-alt);min-width:0"><div style="font-size:10.5px;color:var(--text-muted)">Utilidad bruta</div><div style="font-size:13.5px;font-weight:700;color:var(--text-primary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sel.utilidad }}</div></div>
+</div>
+<div style="border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface-row-alt)"><span style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">ENTRADAS · CLIENTES</span><span style="font-size:11.5px;color:var(--text-muted)">{{ cobrosSum }}</span></div>
+<sc-for list="{{ sel.cobros }}" as="r" hint-placeholder-count="2">
+<div onClick="{{ r.open }}" style="display:flex;flex-direction:column;gap:2px;padding:9px 14px;border-top:1px solid var(--border-subtle);cursor:pointer">
+<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.contraparte }}</span><span style="display:inline-flex;align-items:center;justify-content:center;min-width:80px;height:20px;padding:0 10px;border-radius:999px;font-size:10.5px;font-weight:500;white-space:nowrap;background:{{ r.b.bg }};color:{{ r.b.fg }}">{{ r.b.label }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px"><span style="flex:1;min-width:0;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.concepto }}</span><span style="color:var(--text-primary);white-space:nowrap">{{ r.pagadoTotal }}</span></div>
+</div>
+</sc-for>
+<sc-if value="{{ cobrosNone }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 14px;border-top:1px solid var(--border-subtle);font-size:12.5px;color:var(--text-faint)">Sin conceptos con estos filtros</div></sc-if>
+</div>
+<div style="border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface-row-alt)"><span style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">SALIDAS · PROVEEDORES</span><span style="font-size:11.5px;color:var(--text-muted)">{{ pagosSum }}</span></div>
+<sc-for list="{{ sel.pagos }}" as="r" hint-placeholder-count="2">
+<div onClick="{{ r.open }}" style="display:flex;flex-direction:column;gap:2px;padding:9px 14px;border-top:1px solid var(--border-subtle);cursor:pointer">
+<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.contraparte }}</span><span style="display:inline-flex;align-items:center;justify-content:center;min-width:80px;height:20px;padding:0 10px;border-radius:999px;font-size:10.5px;font-weight:500;white-space:nowrap;background:{{ r.b.bg }};color:{{ r.b.fg }}">{{ r.b.label }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px"><span style="flex:1;min-width:0;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.concepto }}</span><span style="color:var(--text-primary);white-space:nowrap">{{ r.pagadoTotal }}</span></div>
+</div>
+</sc-for>
+<sc-if value="{{ pagosNone }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 14px;border-top:1px solid var(--border-subtle);font-size:12.5px;color:var(--text-faint)">Sin conceptos con estos filtros</div></sc-if>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">CIERRE DEL PROYECTO (ESTIMADO)</div>
+<div style="border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden">
+<sc-for list="{{ sel.cierreRows }}" as="c" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:12px;min-height:50px;padding:7px 14px;box-sizing:border-box;border-top:{{ c.border }};font-size:12.5px">
+<span style="flex:1;min-width:0"><span style="display:block;font-weight:600;color:var(--text-primary)">{{ c.quien }}</span><span style="display:block;font-size:11px;color:var(--text-muted);margin-top:1px">{{ c.sub }}</span></span>
+<span style="font-weight:600;color:var(--text-primary);white-space:nowrap">{{ c.cuanto }}</span>
+</div>
+</sc-for>
+</div>
+<div style="border-radius:12px;background:var(--surface-row-alt);padding:10px 14px;font-size:12.5px;color:var(--text-body)">
+<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0"><span>Utilidad bruta</span><span style="white-space:nowrap">{{ sel.bruta }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0 9px;border-bottom:1px solid var(--border-subtle)"><span>ISR estimado (30%)</span><span style="white-space:nowrap">{{ sel.isr }}</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0 4px"><span style="font-weight:600;color:var(--text-primary)">Utilidad neta (estimada)</span><span style="font-size:17px;font-weight:700;color:var(--text-primary);white-space:nowrap">{{ sel.neta }}</span></div>
+</div>
+</div>
+<div style="display:flex;gap:8px;font-size:12px;line-height:1.45;color:var(--text-muted)"><span style="display:flex;padding-top:2px"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="info" size="{{ 13 }}" hint-size="13px,13px"></x-import></span><span>{{ sel.cierreLabel }}. La cuenta se cierra sola cuando todo está cobrado, pagado y con documentos.</span></div>
+<sc-if value="{{ sel.canReopen }}" hint-placeholder-val="{{ false }}"><x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="secondary" size="lg" icon-left="rotate-ccw" on-click="{{ sel.onReopen }}" hint-size="100%,36px">Reabrir proyecto</x-import></sc-if>
+<sc-if value="{{ sel.canReclose }}" hint-placeholder-val="{{ false }}"><x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="secondary" size="lg" icon-left="lock" on-click="{{ sel.onReclose }}" hint-size="100%,36px">Volver a cerrar</x-import></sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ detOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeDet }}" style="position:absolute;inset:0;z-index:30;background:rgba(0,0,0,.28)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:88%;z-index:31;background:var(--surface-card);border-radius:14px 14px 0 0;box-shadow:var(--shadow-overlay);display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:none;display:flex;justify-content:center;padding:7px 0 2px"><span style="width:36px;height:5px;border-radius:3px;background:var(--border-subtle)"></span></div>
+<div style="flex:none;padding:6px 16px 12px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--border-subtle)">
+<div style="display:flex;align-items:flex-start;gap:10px">
+<div style="flex:1;min-width:0"><div style="font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)">{{ det.eyebrow }}</div><div style="font-size:17px;font-weight:700;color:var(--text-primary);margin-top:3px">{{ det.title }}</div></div>
+<button onClick="{{ closeDet }}" style="width:30px;height:30px;border-radius:999px;border:0;background:var(--surface-row-alt);color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="x" size="{{ 16 }}" hint-size="16px,16px"></x-import></button>
+</div>
+<div style="display:flex;align-items:center;gap:8px"><span style="display:inline-flex;align-items:center;justify-content:center;min-width:80px;height:20px;padding:0 10px;border-radius:999px;font-size:10.5px;font-weight:500;white-space:nowrap;background:{{ det.b.bg }};color:{{ det.b.fg }}">{{ det.b.label }}</span><span style="flex:1;min-width:0;font-size:13px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ det.concepto }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px"><span style="color:var(--text-muted)">{{ det.proyecto }}</span><span style="font-weight:600;color:var(--text-primary);white-space:nowrap">{{ det.pagadoTotal }}</span></div>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.ProgressBar" value="{{ det.pct }}" tone="{{ det.tone }}" hint-size="100%,5px"></x-import>
+<div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--text-muted)"><span>{{ det.pctLabel }}</span><span>{{ det.saldoLabel }}</span></div>
+<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;background:var(--surface-row-alt);font-size:12px"><span style="display:flex;color:var(--text-muted)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="arrow-right-circle" size="{{ 14 }}" hint-size="14px,14px"></x-import></span><span style="flex:1;min-width:0;font-weight:500;color:var(--text-primary)">{{ det.pasoLabel }}</span><sc-if value="{{ detHasVence }}" hint-placeholder-val="{{ false }}"><span style="white-space:nowrap;color:{{ detVenceColor }}">{{ detVence }}</span></sc-if></div>
+<div style="display:flex;margin-top:4px"><x-import component-from-global-scope="SerenataDesignSystem_993393.FilterTabs" tabs="{{ detTabs }}" value="{{ detTab }}" on-change="{{ setDetTab }}" hint-size="300px,34px"></x-import></div>
+</div>
+<div style="flex:1;min-height:0;overflow:auto;padding:16px 16px 28px;display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;align-content:start;gap:18px">
+
+<sc-if value="{{ detInfoCobro }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 14px">
+<sc-for list="{{ det.fields }}" as="f" hint-placeholder-count="6">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="{{ f.k }}" hint-size="100%,44px"><span style="display:block;font-size:14px;font-weight:{{ f.w }};color:{{ f.color }}">{{ f.v }}</span><sc-if value="{{ f.hasSub }}" hint-placeholder-val="{{ false }}"><span style="display:block;font-size:11px;color:var(--text-muted);margin-top:2px">{{ f.sub }}</span></sc-if></x-import>
+</sc-for>
+</div>
+<sc-if value="{{ det.hasNotas }}" hint-placeholder-val="{{ false }}"><div style="padding-top:14px;border-top:1px solid var(--border-subtle)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="Notas" value="{{ det.notas }}" hint-size="100%,40px"></x-import></div></sc-if>
+</sc-if>
+
+<sc-if value="{{ detInfoPago }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:7px">
+<span class="sn-label">Responsable / proveedor</span>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Select" value="{{ det.responsable }}" on-change="{{ noop }}" options="{{ det.proveedores }}" size="md" hint-size="100%,32px"></x-import>
+<div style="font-size:11px;line-height:1.45;color:var(--text-muted)">Cambiarlo aquí también lo actualiza en la partida del proyecto.</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 14px">
+<sc-for list="{{ det.fields }}" as="f" hint-placeholder-count="6">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Field" label="{{ f.k }}" hint-size="100%,44px"><span style="display:block;font-size:14px;font-weight:{{ f.w }};color:{{ f.color }}">{{ f.v }}</span><sc-if value="{{ f.hasSub }}" hint-placeholder-val="{{ false }}"><span style="display:block;font-size:11px;color:var(--text-muted);margin-top:2px">{{ f.sub }}</span></sc-if></x-import>
+</sc-for>
+</div>
+<sc-if value="{{ det.isGrupo }}" hint-placeholder-val="{{ false }}">
+<div style="border:1px solid rgba(254,123,1,.35);border-radius:12px;background:rgba(254,123,1,.05);overflow:hidden">
+<div style="display:flex;flex-direction:column;gap:3px;padding:11px 14px"><span style="display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--accent)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="layers" size="{{ 13 }}" hint-size="13px,13px"></x-import>GRUPO DE FACTURACIÓN</span><span style="font-size:11.5px;color:var(--text-muted)">{{ det.grupoLabel }}</span></div>
+<sc-for list="{{ det.grupoItems }}" as="it" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:12px;min-height:40px;padding:6px 14px;box-sizing:border-box;border-top:1px solid rgba(254,123,1,.2);font-size:12.5px"><span style="flex:1;color:var(--text-primary)">{{ it.name }} <span style="color:var(--text-faint)">{{ it.qty }}</span></span><span style="color:var(--text-primary);white-space:nowrap">{{ it.monto }}</span></div>
+</sc-for>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid rgba(254,123,1,.2);font-size:12.5px"><span style="font-weight:600;color:var(--text-primary)">Total del grupo</span><span style="font-size:15px;font-weight:700;color:var(--text-primary)">{{ det.grupoTotal }}</span></div>
+</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">CRUCE FISCAL</div>
+<div style="border-radius:12px;background:var(--surface-row-alt);padding:10px 14px;font-size:12.5px">
+<sc-for list="{{ det.cruce }}" as="cx" hint-placeholder-count="2"><div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;color:var(--text-muted)"><span>{{ cx.k }}</span><span style="color:var(--text-body);white-space:nowrap">{{ cx.v }}</span></div></sc-for>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:6px;padding-top:9px;border-top:1px solid var(--border-subtle)"><span style="font-weight:600;color:var(--text-primary)">Total a transferir</span><span style="font-size:16px;font-weight:700;color:var(--text-primary);white-space:nowrap">{{ det.transfer }}</span></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">CONTACTO Y PAGO</div>
+<div style="border:1px solid var(--border-subtle);border-radius:12px;padding:2px 14px;font-size:12.5px">
+<sc-for list="{{ det.contacto }}" as="ct" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:{{ ct.border }}"><span style="color:var(--text-muted)">{{ ct.k }}</span><span style="color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ct.v }}</span></div></sc-for>
+</div>
+</div>
+<sc-if value="{{ det.hasOrden }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;border:1px solid var(--border-subtle)"><span style="display:flex;color:var(--accent)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="file-text" size="{{ 16 }}" hint-size="16px,16px"></x-import></span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:500;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ det.orden }}</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">Orden de pago · {{ det.ordenSub }}</div></div><a href="#" onClick="{{ prevent }}" style="font-size:12.5px">Ver PDF</a></div>
+</sc-if>
+<sc-if value="{{ det.hasReasig }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">HISTORIAL DE REASIGNACIONES</div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--text-muted)"><span>{{ det.reasigFecha }}</span><span>{{ det.reasigFrom }}</span><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="arrow-right" size="{{ 12 }}" hint-size="12px,12px"></x-import><span style="color:var(--text-primary);font-weight:500">{{ det.reasigTo }}</span></div></div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{ detDocs }}" hint-placeholder-val="{{ false }}">
+<sc-if value="{{ det.grupoWarn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:rgba(254,123,1,.07);border:1px solid rgba(254,123,1,.35);font-size:12.5px;line-height:1.5;color:var(--text-body)"><span style="display:flex;padding-top:2px;color:var(--accent)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="triangle-alert" size="{{ 15 }}" hint-size="15px,15px"></x-import></span><span style="flex:1">{{ det.grupoWarnMsg }}</span></div></sc-if>
+<div style="border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden">
+<sc-for list="{{ det.docs }}" as="doc" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:9px 14px;box-sizing:border-box;border-top:{{ doc.border }};opacity:{{ doc.op }}">
+<span style="display:flex;color:{{ doc.iconColor }}"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="{{ doc.icon }}" size="{{ 18 }}" hint-size="18px,18px"></x-import></span>
+<div style="flex:1;min-width:0"><div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:13px;font-weight:500;color:var(--text-primary)">{{ doc.name }}</span><span style="font-size:10.5px;color:var(--text-muted)">{{ doc.req }}</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ doc.sub }}</div></div>
+<sc-if value="{{ doc.loaded }}" hint-placeholder-val="{{ false }}"><a href="#" onClick="{{ prevent }}" style="font-size:13px">Ver</a></sc-if>
+<sc-if value="{{ doc.missing }}" hint-placeholder-val="{{ false }}"><x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="secondary" size="sm" icon-left="upload" hint-size="80px,29px">Subir</x-import></sc-if>
+</div>
+</sc-for>
+</div>
+<div style="font-size:11px;line-height:1.45;color:var(--text-muted)">Desde el teléfono se puede tomar foto del documento. PDFs y otros archivos deben pesar menos de 4 MB.</div>
+</sc-if>
+
+<sc-if value="{{ detPago }}" hint-placeholder-val="{{ false }}">
+<sc-if value="{{ det.blocked }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:12px"><div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--surface-row-alt);font-size:12.5px;line-height:1.5;color:var(--text-body)"><span style="display:flex;padding-top:2px;color:var(--text-muted)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="lock" size="{{ 15 }}" hint-size="15px,15px"></x-import></span><span style="flex:1">{{ det.blockedMsg }}</span></div><x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="secondary" size="lg" icon-left="folder-open" on-click="{{ goDocs }}" hint-size="100%,36px">Ir a Documentos</x-import></div>
+</sc-if>
+<sc-if value="{{ det.saldada }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--sn-status-approved-bg);font-size:12.5px;line-height:1.5;color:var(--text-body)"><span style="display:flex;padding-top:2px;color:var(--sn-status-approved-fg)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="circle-check" size="{{ 15 }}" hint-size="15px,15px"></x-import></span><span style="flex:1">Cuenta saldada. No hay saldo pendiente por registrar.</span></div></sc-if>
+<sc-if value="{{ det.canPay }}" hint-placeholder-val="{{ false }}">
+<sc-if value="{{ det.pago }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:rgba(254,123,1,.07);border:1px solid rgba(254,123,1,.35);font-size:12.5px;line-height:1.5;color:var(--text-body)"><span style="display:flex;padding-top:2px;color:var(--accent)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="layers" size="{{ 15 }}" hint-size="15px,15px"></x-import></span><span style="flex:1">{{ det.payNotice }}</span></div></sc-if>
+<div style="display:flex;flex-direction:column;gap:14px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.TextField" label="Monto" default-value="{{ det.montoDefault }}" hint="{{ det.montoHint }}" hint-size="100%,60px"></x-import>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+<div style="display:flex;flex-direction:column;gap:var(--space-sm)"><span class="sn-label">Tipo de pago</span><x-import component-from-global-scope="SerenataDesignSystem_993393.Select" default-value="Transferencia" options="{{ tiposPago }}" size="md" hint-size="100%,32px"></x-import></div>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.TextField" label="Fecha de pago" default-value="24 sep 2026" hint-size="100%,56px"></x-import>
+</div>
+<div style="display:flex;flex-direction:column;gap:var(--space-sm)"><span class="sn-label">Comprobante</span><label style="display:flex;align-items:center;justify-content:center;gap:10px;height:44px;padding:0 12px;border-radius:9px;border:1px dashed var(--border-subtle);background:var(--surface-input);font-size:13px;color:var(--text-muted);cursor:pointer"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="camera" size="{{ 16 }}" hint-size="16px,16px"></x-import>Tomar foto o adjuntar<input type="file" style="display:none"></label></div>
+<div style="display:flex;flex-direction:column;gap:var(--space-sm)"><span class="sn-label">Notas (opcional)</span><textarea placeholder="Notas sobre el pago" style="width:100%;box-sizing:border-box;height:64px;padding:10px 12px;border-radius:9px;border:1px solid var(--border-subtle);background:var(--surface-input);font-family:var(--font-ui);font-size:14px;color:var(--text-body);resize:none;outline:none"></textarea></div>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="primary" size="lg" icon-left="check" hint-size="100%,36px">Registrar pago</x-import>
+</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">HISTORIAL DE PAGOS</div>
+<div style="border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden">
+<sc-for list="{{ det.pagos }}" as="pg" hint-placeholder-count="1">
+<div style="display:flex;align-items:center;gap:12px;min-height:50px;padding:7px 14px;box-sizing:border-box;border-top:{{ pg.border }};font-size:12.5px"><div style="flex:1;min-width:0"><div style="color:var(--text-primary)">{{ pg.fecha }}</div><div style="font-size:11px;color:var(--text-muted);margin-top:1px">{{ pg.tipo }} · {{ pg.nota }}</div></div><span style="font-weight:600;color:var(--text-primary);white-space:nowrap">{{ pg.monto }}</span><a href="#" onClick="{{ prevent }}" style="font-size:12.5px">Ver</a></div>
+</sc-for>
+<sc-if value="{{ det.noPagos }}" hint-placeholder-val="{{ false }}"><div style="padding:14px;font-size:12.5px;color:var(--text-faint)">Sin pagos registrados</div></sc-if>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheetFiltros }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;z-index:25;background:rgba(0,0,0,.28)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;max-height:86%;z-index:26;background:var(--surface-card);border-radius:14px 14px 0 0;box-shadow:var(--shadow-overlay);display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:none;display:flex;justify-content:center;padding:7px 0 2px"><span style="width:36px;height:5px;border-radius:3px;background:var(--border-subtle)"></span></div>
+<div style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 16px 10px"><span style="font-size:17px;font-weight:600;color:var(--text-primary)">Filtros</span><a href="#" onClick="{{ clearAllLink }}" style="font-size:14px">Limpiar</a></div>
+<div style="flex:0 1 auto;min-height:0;overflow:auto;padding:4px 16px 16px;display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;align-content:start;gap:18px">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">ESTADO</div><div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ estadoOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="height:32px;padding:0 13px;border-radius:999px;border:1px solid {{ o.border }};background:{{ o.bg }};color:{{ o.fg }};font:inherit;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px">{{ o.label }}<sc-if value="{{ o.hasCount }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;opacity:.75">{{ o.count }}</span></sc-if></button></sc-for></div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">TIPO</div><div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ tipoOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="height:32px;padding:0 13px;border-radius:999px;border:1px solid {{ o.border }};background:{{ o.bg }};color:{{ o.fg }};font:inherit;font-size:13px;font-weight:500;cursor:pointer">{{ o.label }}</button></sc-for></div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">CLIENTE</div>
+<div style="border:1px solid {{ cliBorder }};border-radius:10px;overflow:hidden;background:var(--surface-card)">
+<button onClick="{{ toggleCli }}" style="width:100%;display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border:0;background:transparent;font:inherit;font-size:14px;color:var(--text-primary);cursor:pointer;text-align:left"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{{ cliW }}">{{ cliVal }}</span><span style="display:flex;color:var(--text-muted)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="{{ cliChev }}" size="{{ 16 }}" hint-size="16px,16px"></x-import></span></button>
+<sc-if value="{{ cliOpen }}" hint-placeholder-val="{{ false }}">
+<div style="border-top:1px solid var(--border-subtle);padding:8px">
+<label style="display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:9px;border:1px solid var(--border-subtle);background:var(--surface-input);color:var(--text-muted)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="search" size="{{ 14 }}" hint-size="14px,14px"></x-import><input value="{{ cliQ }}" onChange="{{ setCliQ }}" placeholder="Buscar" style="flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:14px;color:var(--text-primary)"></label>
+<div style="max-height:200px;overflow:auto;margin-top:6px">
+<sc-for list="{{ clienteList }}" as="o" hint-placeholder-count="4">
+<button onClick="{{ o.pick }}" style="width:100%;display:flex;align-items:center;gap:10px;min-height:40px;padding:0 8px;border:0;border-radius:8px;background:{{ o.rowBg }};font:inherit;font-size:14px;color:var(--text-body);cursor:pointer;text-align:left"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{{ o.w }};color:var(--text-primary)">{{ o.label }}</span><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><span style="display:flex;color:var(--accent)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="check" size="{{ 16 }}" hint-size="16px,16px"></x-import></span></sc-if></button>
+</sc-for>
+<sc-if value="{{ clienteListNone }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 8px;font-size:13px;color:var(--text-faint)">Sin coincidencias</div></sc-if>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">PROVEEDOR</div>
+<div style="border:1px solid {{ provBorder }};border-radius:10px;overflow:hidden;background:var(--surface-card)">
+<button onClick="{{ toggleProv }}" style="width:100%;display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border:0;background:transparent;font:inherit;font-size:14px;color:var(--text-primary);cursor:pointer;text-align:left"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{{ provW }}">{{ provVal }}</span><span style="display:flex;color:var(--text-muted)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="{{ provChev }}" size="{{ 16 }}" hint-size="16px,16px"></x-import></span></button>
+<sc-if value="{{ provOpen }}" hint-placeholder-val="{{ false }}">
+<div style="border-top:1px solid var(--border-subtle);padding:8px">
+<label style="display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:9px;border:1px solid var(--border-subtle);background:var(--surface-input);color:var(--text-muted)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="search" size="{{ 14 }}" hint-size="14px,14px"></x-import><input value="{{ provQ }}" onChange="{{ setProvQ }}" placeholder="Buscar" style="flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:14px;color:var(--text-primary)"></label>
+<div style="max-height:200px;overflow:auto;margin-top:6px">
+<sc-for list="{{ proveedorList }}" as="o" hint-placeholder-count="4">
+<button onClick="{{ o.pick }}" style="width:100%;display:flex;align-items:center;gap:10px;min-height:40px;padding:0 8px;border:0;border-radius:8px;background:{{ o.rowBg }};font:inherit;font-size:14px;color:var(--text-body);cursor:pointer;text-align:left"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{{ o.w }};color:var(--text-primary)">{{ o.label }}</span><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><span style="display:flex;color:var(--accent)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="check" size="{{ 16 }}" hint-size="16px,16px"></x-import></span></sc-if></button>
+</sc-for>
+<sc-if value="{{ proveedorListNone }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 8px;font-size:13px;color:var(--text-faint)">Sin coincidencias</div></sc-if>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+<div style="flex:none;padding:12px 16px 26px;border-top:1px solid var(--border-subtle)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="primary" size="lg" on-click="{{ closeSheet }}" hint-size="100%,36px">{{ verLabel }}</x-import></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheetMes }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;z-index:25;background:rgba(0,0,0,.28)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;max-height:86%;z-index:26;background:var(--surface-card);border-radius:14px 14px 0 0;box-shadow:var(--shadow-overlay);display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:none;display:flex;justify-content:center;padding:7px 0 2px"><span style="width:36px;height:5px;border-radius:3px;background:var(--border-subtle)"></span></div>
+<div style="flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 16px 12px"><span style="font-size:17px;font-weight:600;color:var(--text-primary)">Periodo</span><x-import component-from-global-scope="SerenataDesignSystem_993393.Select" value="{{ yearValue }}" on-change="{{ setYear }}" options="{{ years }}" size="md" hint-size="170px,32px"></x-import></div>
+<div style="flex:0 1 auto;min-height:0;overflow:auto;padding:0 16px 26px;display:flex;flex-direction:column;gap:10px">
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+<sc-for list="{{ mGrid }}" as="m" hint-placeholder-count="12">
+<button onClick="{{ m.onClick }}" style="height:46px;border-radius:10px;border:1px solid {{ m.border }};background:{{ m.bg }};color:{{ m.fg }};opacity:{{ m.opacity }};font:inherit;font-size:14px;font-weight:{{ m.weight }};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">{{ m.label }}<sc-if value="{{ m.hasPend }}" hint-placeholder-val="{{ false }}"><span style="min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:999px;background:{{ m.dotBg }};color:{{ m.dotFg }};font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">{{ m.pend }}</span></sc-if></button>
+</sc-for>
+</div>
+<button onClick="{{ pickAll }}" style="height:44px;border-radius:10px;border:1px solid {{ allBorder }};background:{{ allBg }};color:{{ allFg }};font:inherit;font-size:14px;font-weight:600;cursor:pointer">Todo el año</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheetSecciones }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;z-index:25;background:rgba(0,0,0,.28)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;max-height:86%;z-index:26;background:var(--surface-card);border-radius:14px 14px 0 0;box-shadow:var(--shadow-overlay);display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:none;display:flex;justify-content:center;padding:7px 0 2px"><span style="width:36px;height:5px;border-radius:3px;background:var(--border-subtle)"></span></div>
+<div style="flex:none;padding:6px 16px 10px;font-size:17px;font-weight:600;color:var(--text-primary)">Secciones</div>
+<div style="flex:0 1 auto;min-height:0;overflow:auto;padding:0 10px 26px">
+<sc-for list="{{ secciones }}" as="n" hint-placeholder-count="8">
+<button onClick="{{ closeSheet }}" style="width:100%;display:flex;align-items:center;gap:12px;height:46px;padding:0 8px;border:0;border-radius:9px;background:{{ n.bg }};font:inherit;font-size:14.5px;font-weight:{{ n.w }};color:var(--text-primary);cursor:pointer;text-align:left">
+<span style="width:28px;height:28px;border-radius:7px;background:{{ n.chipBg }};color:{{ n.chipFg }};display:flex;align-items:center;justify-content:center"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="{{ n.icon }}" size="{{ 15 }}" hint-size="15px,15px"></x-import></span>{{ n.label }}
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheetOrdFiltro }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;z-index:25;background:rgba(0,0,0,.28)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;max-height:86%;z-index:26;background:var(--surface-card);border-radius:14px 14px 0 0;box-shadow:var(--shadow-overlay);display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:none;display:flex;justify-content:center;padding:7px 0 2px"><span style="width:36px;height:5px;border-radius:3px;background:var(--border-subtle)"></span></div>
+<div style="flex:none;padding:6px 16px 10px;font-size:17px;font-weight:600;color:var(--text-primary)">Estado de la orden</div>
+<div style="flex:0 1 auto;min-height:0;overflow:auto;padding:0 10px 26px">
+<sc-for list="{{ ordChips }}" as="o" hint-placeholder-count="6">
+<button onClick="{{ o.pick }}" style="width:100%;display:flex;align-items:center;gap:10px;height:46px;padding:0 8px;border:0;border-radius:9px;background:{{ o.rowBg }};font:inherit;font-size:14.5px;color:var(--text-primary);cursor:pointer;text-align:left"><span style="flex:1;font-weight:{{ o.w }}">{{ o.label }}</span><span style="font-size:12px;color:var(--text-muted)">{{ o.count }}</span><span style="width:16px;display:flex;color:var(--accent)"><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="check" size="{{ 16 }}" hint-size="16px,16px"></x-import></sc-if></span></button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ sheetOrden }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeOP }}" style="position:absolute;inset:0;z-index:30;background:rgba(0,0,0,.28)"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:92%;z-index:31;background:var(--bg-app);border-radius:14px 14px 0 0;box-shadow:var(--shadow-overlay);display:flex;flex-direction:column;overflow:hidden">
+<div style="flex:none;display:flex;justify-content:center;padding:7px 0 2px"><span style="width:36px;height:5px;border-radius:3px;background:var(--border-subtle)"></span></div>
+<div style="flex:none;display:flex;align-items:flex-start;gap:10px;padding:6px 16px 12px">
+<div style="flex:1;min-width:0"><div style="font-size:10.5px;font-weight:600;letter-spacing:.06em;color:var(--accent)">ÓRDENES DE PAGO</div><div style="font-size:17px;font-weight:700;color:var(--text-primary);margin-top:3px">Generar orden de pago</div></div>
+<button onClick="{{ closeOP }}" style="width:30px;height:30px;border-radius:999px;border:0;background:var(--surface-card);color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="x" size="{{ 16 }}" hint-size="16px,16px"></x-import></button>
+</div>
+<sc-if value="{{ opForm }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;min-height:0;overflow:auto;padding:0 16px 20px;display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;align-content:start;gap:12px">
+<div style="font-size:12.5px;line-height:1.5;color:var(--text-muted)">Cuentas por pagar con factura del proveedor, de eventos ya realizados, agrupadas por responsable.</div>
+<sc-for list="{{ op.resps }}" as="r" hint-placeholder-count="2">
+<div style="border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden;background:var(--surface-card)">
+<div onClick="{{ r.expand }}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer">
+<span onClick="{{ r.toggle }}" style="width:20px;height:20px;flex:none;box-sizing:border-box;border-radius:6px;border:1.5px solid {{ r.boxBorder }};background:{{ r.boxBg }};color:#fff;display:flex;align-items:center;justify-content:center"><sc-if value="{{ r.on }}" hint-placeholder-val="{{ true }}"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="check" size="{{ 13 }}" hint-size="13px,13px"></x-import></sc-if></span>
+<div style="flex:1;min-width:0;opacity:{{ r.op }}"><div style="font-size:14.5px;font-weight:600;color:var(--text-primary)">{{ r.name }}</div><div style="font-size:11px;color:var(--text-muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.subM }}</div></div>
+<div style="font-size:14.5px;font-weight:700;color:var(--accent);white-space:nowrap;opacity:{{ r.op }}">{{ r.transferM }}</div>
+<span style="display:flex;color:var(--text-faint)"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="{{ r.chev }}" size="{{ 16 }}" hint-size="16px,16px"></x-import></span>
+</div>
+<sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}">
+<div style="opacity:{{ r.op }}">
+<div style="padding:4px 14px;background:var(--surface-row-alt);border-top:1px solid var(--border-subtle);font-size:12px">
+<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0"><span style="color:var(--text-muted)">Banco</span><span style="color:var(--text-primary)">{{ r.banco }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0"><span style="color:var(--text-muted)">CLABE</span><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11.5px;color:var(--text-primary)">{{ r.clabe }}</span></div>
+<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0"><span style="color:var(--text-muted)">Correo</span><span style="color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.correo }}</span></div>
+</div>
+<div style="padding:12px 14px;border-top:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ r.proyectos }}" as="p" hint-placeholder-count="1">
+<div style="display:flex;flex-direction:column">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;margin-bottom:8px">
+<div style="min-width:0"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">PROYECTO</div><div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.nombre }}</div></div>
+<div style="text-align:right"><div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">FECHA</div><div style="font-size:13px;color:var(--text-primary);margin-top:2px;white-space:nowrap">{{ p.fecha }}</div></div>
+</div>
+<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)"><span>CONCEPTO</span><span>MONTO</span></div>
+<sc-for list="{{ p.lines }}" as="l" hint-placeholder-count="1">
+<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--border-subtle);font-size:12.5px"><span style="color:var(--text-body);min-width:0">{{ l.name }} <span style="color:var(--text-faint)">{{ l.qty }}</span></span><span style="color:var(--text-primary);white-space:nowrap">{{ l.monto }}</span></div>
+</sc-for>
+</div>
+</sc-for>
+<div style="border-radius:10px;background:var(--surface-row-alt);padding:9px 12px;font-size:12px">
+<sc-for list="{{ r.cruce }}" as="cx" hint-placeholder-count="2"><div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;color:var(--text-muted)"><span>{{ cx.k }}</span><span style="color:var(--text-body);white-space:nowrap">{{ cx.v }}</span></div></sc-for>
+<div style="display:flex;justify-content:space-between;gap:10px;margin-top:5px;padding-top:7px;border-top:1px solid var(--border-subtle)"><span style="font-weight:600;color:var(--text-primary)">A transferir</span><span style="font-weight:700;color:var(--text-primary);white-space:nowrap">{{ r.transferM }}</span></div>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ op.hasSkipped }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+<div style="font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--text-muted)">NO INCLUIDAS</div>
+<div style="border:1px solid var(--border-subtle);border-radius:12px;overflow:hidden;background:var(--surface-card)">
+<sc-for list="{{ op.skipped }}" as="s" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:10px;min-height:48px;padding:7px 14px;box-sizing:border-box;border-top:{{ s.border }};font-size:12px">
+<div style="flex:1;min-width:0"><div style="color:var(--text-primary)"><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10.5px;color:var(--accent)">{{ s.folio }}</span> · {{ s.prov }}</div><div style="font-size:11px;color:var(--text-muted);margin-top:1px">{{ s.motivo }}</div></div>
+<span style="color:var(--text-faint);white-space:nowrap">{{ s.monto }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="flex:none;border-top:1px solid var(--border-subtle);padding:12px 16px 26px;display:flex;flex-direction:column;gap:10px;background:var(--surface-card)">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
+<div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--text-primary);white-space:nowrap">{{ opSummary }}</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px;white-space:nowrap">IVA {{ op.iva }} · Ret. {{ op.ret }}</div></div>
+<div style="text-align:right"><div style="font-size:10.5px;color:var(--text-muted)">Total a transferir</div><div style="font-size:19px;font-weight:700;color:var(--text-primary);white-space:nowrap">{{ op.transfer }}</div></div>
+</div>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="primary" size="lg" icon-left="file-text" on-click="{{ generarOP }}" disabled="{{ opNone }}" hint-size="100%,36px">Generar orden PDF</x-import>
+</div>
+</sc-if>
+<sc-if value="{{ opDone }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;padding:40px 22px 26px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+<span style="width:48px;height:48px;border-radius:999px;background:var(--sn-status-approved-bg);color:var(--sn-status-approved-fg);display:flex;align-items:center;justify-content:center"><x-import component-from-global-scope="SerenataDesignSystem_993393.Icon" name="check" size="{{ 24 }}" hint-size="24px,24px"></x-import></span>
+<div style="font-size:17px;font-weight:600;color:var(--text-primary)">Orden generada</div>
+<div style="font-size:13px;line-height:1.5;color:var(--text-muted)">{{ opGen.name }}.pdf<br>{{ opGen.cuentas }} · {{ opGen.monto }}<br>Las cuentas incluidas pasan a En orden de pago.</div>
+<div style="display:flex;flex-direction:column;gap:10px;width:100%;margin-top:8px">
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="primary" size="lg" icon-left="share" hint-size="100%,36px">Compartir PDF</x-import>
+<x-import component-from-global-scope="SerenataDesignSystem_993393.Button" variant="secondary" size="lg" on-click="{{ closeOP }}" hint-size="100%,36px">Cerrar</x-import>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;start&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;lista&quot;,&quot;proyecto&quot;,&quot;detalle&quot;,&quot;docs&quot;,&quot;pago&quot;,&quot;filtros&quot;,&quot;mes&quot;,&quot;avisos&quot;,&quot;ordenes&quot;,&quot;orden&quot;,&quot;secciones&quot;,&quot;cerrado&quot;,&quot;archivado&quot;,&quot;vacio&quot;,&quot;bloqueada&quot;,&quot;ordenHecha&quot;],&quot;default&quot;:&quot;home&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;height&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;100%&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;statusBar&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = window.CuentasData ? this.init() : null;
+  init() {
+    const s = this.props.start || 'home';
+    const base = { ...window.CuentasData.initialState(), view: 'proyecto', sel: null, sheet: null, det: null, page: null, searchOpen: false, opExcl: {}, opGen: null, ordExtra: [], ordEstado: 'todas', ordOpen: {} };
+    const m = {
+      lista: { view: 'lista' },
+      proyecto: { sel: 'SH061' },
+      detalle: { sel: 'SH061', det: { key: 'SH061-2', tab: 'info' } },
+      docs: { sel: 'SH061', det: { key: 'SH061-3', tab: 'docs' } },
+      pago: { sel: 'SH061', det: { key: 'SH061-0', tab: 'pago' } },
+      filtros: { sheet: 'filtros', tipo: 'pago' },
+      mes: { sheet: 'mes' },
+      avisos: { page: 'avisos' },
+      ordenes: { page: 'ordenes', ordOpen: { 'O.P 19-Sep SH058 SH061': true } },
+      orden: { page: 'ordenes', sheet: 'orden' },
+      secciones: { sheet: 'secciones' },
+      cerrado: { sel: 'SH062' },
+      archivado: { year: 2024, month: 'all' },
+      vacio: { searchOpen: true, q: 'zzz' },
+      bloqueada: { sel: 'SH061', det: { key: 'SH061-3', tab: 'pago' } },
+      ordenHecha: { page: 'ordenes', sheet: 'orden', autoGen: true },
+    }[s] || {};
+    return { ...base, ...m };
+  }
+  componentDidMount() {
+    if (!this.state) this._t = setInterval(() => { if (window.CuentasData) { clearInterval(this._t); this.setState(this.init()); } }, 50);
+  }
+  componentWillUnmount() { clearInterval(this._t); }
+  renderVals() {
+    const D = window.CuentasData, st = this.state;
+    const frameH = this.props.height ?? '100%', statusBar = !!this.props.statusBar;
+    if (!D || !st) return { frameH, statusBar };
+    const d = D.compute(st), ctl = D.controls(this), set = o => this.setState(o);
+    const pl = (n, a, b) => n + ' ' + (n === 1 ? a : b);
+    const bt = i => i ? '1px solid var(--border-subtle)' : '0';
+    const page = st.page;
+    const mets = p => p.closed ? { m1Label: 'Ingreso', m1Val: p.entra, m1Color: 'var(--text-primary)', m2Label: 'Egreso', m2Val: p.sale } : { m1Label: 'Por cobrar', m1Val: p.porCobrar, m1Color: 'var(--accent)', m2Label: 'Por pagar', m2Val: p.porPagar };
+    const openDet = r => () => set({ det: { key: r.key, tab: 'info' } });
+    const groups = d.groups.map(g => ({ ...g, projects: g.projects.map(p => ({ ...p, ...mets(p), open: () => set({ sel: p.folio }), folderColor: p.closed ? 'var(--text-faint)' : 'var(--accent)' })) }));
+    const allP = groups.flatMap(g => g.projects);
+    const selP = st.sel ? allP.find(p => p.folio === st.sel) : null;
+    const sel = selP ? { ...selP, cobros: selP.cobros.map(r => ({ ...r, open: openDet(r) })), pagos: selP.pagos.map(r => ({ ...r, open: openDet(r) })),
+      cierreRows: selP.cierreRows.map((c, i) => ({ ...c, border: bt(i) })), onReopen: ctl.reopen(selP.folio), onReclose: ctl.reclose(selP.folio) } : { status: {}, cobros: [], pagos: [], cierreRows: [] };
+    const sumT = l => 'Total ' + D.M(l.reduce((a, x) => a + x.raw.total, 0));
+
+    const sN = f => allP.reduce((a, p) => a + f(p), 0);
+    const ing = sN(p => p.cobT), egr = sN(p => p.pagT), iva = sN(p => p.ivaN), ret = sN(p => p.retN), isr = sN(p => p.isrN);
+    const totCards = [
+      { k: 'INGRESOS', v: D.M(ing), color: 'var(--text-primary)', sub: [{ k: 'Cobrado', v: D.M(sN(p => p.cobradoN)) }, { k: 'Por cobrar', v: D.M(sN(p => p.porCobrarN)) }] },
+      { k: 'EGRESOS', v: D.M(egr), color: 'var(--text-primary)', sub: [{ k: 'Pagado', v: D.M(egr - sN(p => p.porPagarN)) }, { k: 'Por pagar', v: D.M(sN(p => p.porPagarN)) }] },
+      { k: 'UTILIDAD BRUTA', v: D.M(ing - egr), color: 'var(--accent)', sub: [{ k: 'ISR estimado', v: D.M(-(ing - egr) * 0.3) }, { k: 'Neta estimada', v: D.M((ing - egr) * 0.7) }] },
+      { k: 'IMPUESTOS', v: D.M(iva + ret + isr), color: 'var(--text-primary)', sub: [{ k: 'IVA a enterar', v: D.M(iva) }, { k: 'Retenciones', v: D.M(ret) }, { k: 'ISR estimado', v: D.M(isr) }] },
+    ];
+
+    const C = (label, on, pick, count) => ({ label, pick, bg: on ? 'var(--accent)' : 'var(--surface-card)', fg: on ? '#fff' : 'var(--text-body)', border: on ? 'var(--accent)' : 'var(--border-subtle)', hasCount: count != null, count });
+    const estadoLbl = { todas: 'Todas', pendientes: 'Pendientes', cerradas: 'Cerradas' }, tipoLbl = { todo: 'Todo', cobro: 'Por cobrar', pago: 'Por pagar' };
+    const chips = [];
+    if (st.estado !== 'todas') chips.push({ k: 'Estado', v: estadoLbl[st.estado], remove: () => set({ estado: 'todas' }) });
+    if (st.tipo !== 'todo') chips.push({ k: 'Tipo', v: tipoLbl[st.tipo], remove: () => set({ tipo: 'todo' }) });
+    if (st.cliente) chips.push({ k: 'Cliente', v: st.cliente, remove: () => set({ cliente: '' }) });
+    if (st.proveedor) chips.push({ k: 'Proveedor', v: st.proveedor, remove: () => set({ proveedor: '' }) });
+
+    const MESL = D.MESL;
+    const mAct = st.month === 'all';
+    const mGrid = D.monthPills(this, d).map(m => ({ ...m, bg: m.active ? 'var(--accent)' : 'var(--surface-card)', onClick: () => set({ month: m.id, sheet: null }) }));
+
+    const nRows = d.listGroups.reduce((a, g) => a + g.rows.length, 0);
+    const listGroups = d.listGroups.map(g => ({ ...g, rows: g.rows.map((r, i) => ({ ...r, border: g.showHead || i ? '1px solid var(--border-subtle)' : '0', open: openDet(r) })) }));
+
+    const avisos = d.avisos.map(sx => ({ ...sx, items: sx.items.map(a => ({ ...a, go: () => set({ page: null, view: 'proyecto', estado: 'todas', tipo: 'todo', cliente: '', proveedor: '', q: '', searchOpen: false, year: a.year, month: a.month, sel: a.folio }) })) }));
+
+    const ORD = [...st.ordExtra, ...d.ordenes];
+    const EST = [['todas', 'Todas'], ['Generada', 'Generadas'], ['Parcial', 'Parciales'], ['Vencida', 'Vencidas'], ['Completada', 'Completadas'], ['Cancelada', 'Canceladas']];
+    const ordF = ORD.filter(o => st.ordEstado === 'todas' || o.estado === st.ordEstado);
+    const used = {}; st.ordExtra.forEach(o => o.items.forEach(it => { used[it.prov + '|' + it.folio] = true; }));
+    const OPv = D.ordenPreview(st.opExcl, used), allOP = D.ordenPreview({}, used);
+
+    const det = st.det ? D.conceptDetail(st.det.key) : null;
+    const dTab = st.det ? st.det.tab : 'info';
+    const detO = det ? { ...det, cruce: det.cruce || [], grupoItems: det.grupoItems || [], proveedores: det.proveedores || [], contacto: (det.contacto || []).map((c, i) => ({ ...c, border: bt(i) })), docs: (det.docs || []).map((x, i) => ({ ...x, border: bt(i) })), pagos: (det.pagos || []).map((x, i) => ({ ...x, border: bt(i) })) }
+      : { b: {}, fields: [], docs: [], pagos: [], cruce: [], contacto: [], grupoItems: [], proveedores: [] };
+
+    const tabA = [['inicio', 'Inicio', 'house'], ['proyectos', 'Proyectos', 'image'], ['cuentas', 'Cuentas', 'wallet'], ['cotizaciones', 'Cotizaciones', 'file-text'], ['mas', 'Más', 'ellipsis']]
+      .map(([id, label, icon]) => ({ label, icon, color: id === 'cuentas' ? 'var(--accent)' : 'var(--text-muted)', hasBadge: false, go: id === 'mas' ? () => set({ sheet: 'secciones' }) : id === 'cuentas' ? () => set({ page: null, sel: null }) : () => {} }));
+
+    if (st.autoGen && !st.opGen && OPv.nResp) {
+      const n = OPv.items.length;
+      setTimeout(() => this.setState({ autoGen: false, opGen: { name: `O.P 24-Sep ${OPv.folios.join(' ')}`, monto: OPv.neto, cuentas: pl(n, 'cuenta', 'cuentas') } }), 0);
+    }
+    const title = page === 'avisos' ? 'Avisos' : page === 'ordenes' ? 'Órdenes de pago' : 'Cuentas';
+    const shown = st.view === 'proyecto' ? allP.length : nRows;
+
+    return {
+      frameH, statusBar, ...ctl, ...d, title, prevent: e => e.preventDefault(), noop: () => {}, fullW: { width: '100%' },
+      showBack: !!page, goBack: () => set({ page: null }), headA: !page,
+      goAvisos: () => set({ page: 'avisos' }), goOrdenes: () => set({ page: 'ordenes' }),
+      showControls: !page, noSearch: !st.searchOpen, searchOpen: !!st.searchOpen,
+      openSearch: () => set({ searchOpen: true }), closeSearch: e => { e.preventDefault(); set({ searchOpen: false, q: '' }); },
+      monthLabel: mAct ? 'Todo ' + st.year : MESL[st.month] + ' ' + st.year, scopePend: d.counts.pendientes, hasScopePend: d.counts.pendientes > 0,
+      openMes: () => set({ sheet: 'mes' }), openFiltros: () => set({ sheet: 'filtros' }), closeSheet: () => set({ sheet: null }),
+      chips, hasActive: chips.length > 0, activeN: chips.length, fBorder: chips.length ? 'var(--accent-quiet)' : 'var(--border-subtle)',
+      showTotals: !page && st.view === 'proyecto' && !d.empty, totCards, totScope: d.kpis.scopeLabel + ' · ' + pl(allP.length, 'proyecto', 'proyectos'),
+      showSeg: !page, viewTabs: [{ id: 'proyecto', label: 'Por proyecto' }, { id: 'lista', label: 'Lista' }],
+      showEmpty: !page && (st.view === 'proyecto' ? d.empty : d.rowsEmpty),
+      showProjects: !page && st.view === 'proyecto' && !d.empty, groups,
+      showLista: !page && st.view === 'lista' && !d.rowsEmpty, listGroups, listFooter: `Mostrando ${pl(nRows, 'concepto', 'conceptos')} de ${pl(d.nProjects, 'proyecto', 'proyectos')}`,
+      pageAvisos: page === 'avisos', avisos, pageOrdenes: page === 'ordenes',
+      ordChips: EST.map(([k, l]) => { const on = st.ordEstado === k; return { label: l, on, pick: () => set({ ordEstado: k, sheet: null }), rowBg: on ? 'rgba(254,123,1,.08)' : 'transparent', w: on ? 600 : 400, count: k === 'todas' ? ORD.length : ORD.filter(o => o.estado === k).length }; }),
+      ordFLabel: (EST.find(x => x[0] === st.ordEstado) || EST[0])[1], ordFBorder: st.ordEstado !== 'todas' ? 'var(--accent-quiet)' : 'var(--border-subtle)',
+      openOrdFiltro: () => set({ sheet: 'ordFiltro' }), sheetOrdFiltro: st.sheet === 'ordFiltro',
+      ordRows: ordF.map((o, i) => ({ ...o, border: bt(i), open: !!st.ordOpen[o.name], chev: st.ordOpen[o.name] ? 'chevron-down' : 'chevron-right', toggle: () => set({ ordOpen: { ...st.ordOpen, [o.name]: !st.ordOpen[o.name] } }) })),
+      ordEmpty: !ordF.length,
+      tabs: tabA,
+      hasSel: !!selP, sel, closeSel: () => set({ sel: null }), cobrosSum: sumT(sel.cobros), pagosSum: sumT(sel.pagos), cobrosNone: !sel.cobros.length, pagosNone: !sel.pagos.length,
+      det: detO, detOpen: !!det, closeDet: () => set({ det: null }), detTab: dTab, setDetTab: v => set({ det: { ...st.det, tab: v } }), goDocs: () => set({ det: { ...st.det, tab: 'docs' } }),
+      detTabs: [{ id: 'info', label: 'Información' }, { id: 'docs', label: 'Documentos' }, { id: 'pago', label: 'Pago' }],
+      detInfoCobro: !!det && det.cobro && dTab === 'info', detInfoPago: !!det && det.pago && dTab === 'info', detDocs: !!det && dTab === 'docs', detPago: !!det && dTab === 'pago',
+      tiposPago: ['Transferencia', 'Efectivo', 'Cheque'].map(v => ({ value: v, label: v })),
+      sheetFiltros: st.sheet === 'filtros', sheetMes: st.sheet === 'mes', sheetSecciones: st.sheet === 'secciones', sheetOrden: st.sheet === 'orden',
+      estadoOpts: ['todas', 'pendientes', 'cerradas'].map(k => C(estadoLbl[k], st.estado === k, () => ctl.setEstado(k), d.counts[k])),
+      tipoOpts: ['todo', 'cobro', 'pago'].map(k => C(tipoLbl[k], st.tipo === k, () => ctl.setTipo(k))),
+      ...(() => {
+        const R = (label, on, pick) => ({ label, on, pick, rowBg: on ? 'rgba(254,123,1,.08)' : 'transparent', w: on ? 600 : 400 });
+        const fl = (arr, q) => arr.filter(x => !q || x.toLowerCase().includes(q.toLowerCase()));
+        const cl = [R('Todos los clientes', !st.cliente, () => set({ cliente: '', fOpen: null, cliQ: '' })), ...fl(d.clientes, st.cliQ).map(x => R(x, st.cliente === x, () => set({ cliente: x, fOpen: null, cliQ: '', tipo: st.tipo === 'pago' ? 'todo' : st.tipo })))];
+        const pv = [R('Todos los proveedores', !st.proveedor, () => set({ proveedor: '', fOpen: null, provQ: '' })), ...fl(d.proveedores, st.provQ).map(x => R(x, st.proveedor === x, () => set({ proveedor: x, fOpen: null, provQ: '', tipo: st.tipo === 'cobro' ? 'todo' : st.tipo })))];
+        const cO = st.fOpen === 'cli', pO = st.fOpen === 'prov';
+        return { clienteList: cl, clienteListNone: cl.length === 1 && !!st.cliQ, proveedorList: pv, proveedorListNone: pv.length === 1 && !!st.provQ,
+          cliOpen: cO, provOpen: pO, cliVal: st.cliente || 'Todos los clientes', provVal: st.proveedor || 'Todos los proveedores',
+          cliW: st.cliente ? 600 : 400, provW: st.proveedor ? 600 : 400, cliChev: cO ? 'chevron-up' : 'chevron-down', provChev: pO ? 'chevron-up' : 'chevron-down',
+          cliBorder: cO || st.cliente ? 'var(--accent-quiet)' : 'var(--border-subtle)', provBorder: pO || st.proveedor ? 'var(--accent-quiet)' : 'var(--border-subtle)',
+          toggleCli: () => set({ fOpen: cO ? null : 'cli' }), toggleProv: () => set({ fOpen: pO ? null : 'prov' }),
+          cliQ: st.cliQ || '', provQ: st.provQ || '', setCliQ: e => set({ cliQ: e.target.value }), setProvQ: e => set({ provQ: e.target.value }) };
+      })(),
+      ...(() => { const e = st.det ? allP.flatMap(p => p.all).find(x => x.key === st.det.key) : null; return { detHasVence: !!(e && e.hasVence), detVence: e ? e.vence : '', detVenceColor: e ? e.venceColor : '' }; })(),
+      clearAllLink: e => { e.preventDefault(); set({ estado: 'todas', tipo: 'todo', cliente: '', proveedor: '' }); },
+      verLabel: 'Ver ' + (st.view === 'proyecto' ? pl(shown, 'proyecto', 'proyectos') : pl(shown, 'concepto', 'conceptos')),
+      mGrid, pickAll: () => set({ month: 'all', sheet: null }),
+      allBg: mAct ? 'var(--accent)' : 'var(--surface-card)', allFg: mAct ? '#fff' : 'var(--text-body)', allBorder: mAct ? 'var(--accent)' : 'var(--border-subtle)',
+      secciones: ctl.nav.map(n => { const on = n.id === 'cuentas'; return { ...n, bg: on ? 'rgba(254,123,1,.08)' : 'transparent', w: on ? 600 : 400, chipBg: on ? 'var(--accent)' : 'var(--surface-row-alt)', chipFg: on ? '#fff' : 'var(--text-muted)' }; }),
+      openOP: () => set({ sheet: 'orden', opGen: null, opExcl: {} }), closeOP: () => set({ sheet: null, opGen: null }),
+      opForm: !st.opGen, opDone: !!st.opGen, opGen: st.opGen || {}, opEmpty: allOP.nResp === 0, opNone: OPv.nResp === 0,
+      opTraySum: allOP.nResp ? `${pl(allOP.nCuentas, 'cuenta', 'cuentas')} · ${pl(allOP.nResp, 'proveedor', 'proveedores')} · ${allOP.transfer} a transferir` : 'Sin cuentas elegibles por ahora',
+      opSummary: OPv.nResp ? `${pl(OPv.nCuentas, 'cuenta', 'cuentas')} · ${pl(OPv.nResp, 'responsable', 'responsables')}` : 'Ningún responsable seleccionado',
+      op: { ...OPv, skipped: OPv.skipped.map((s, i) => ({ ...s, border: bt(i) })),
+        resps: OPv.resps.map(r => ({ ...r, op: r.on ? 1 : 0.45, boxBg: r.on ? 'var(--accent)' : 'var(--surface-card)', boxBorder: r.on ? 'var(--accent)' : 'var(--border-strong, #C7C7CC)', toggle: e => { e.stopPropagation(); set({ opExcl: { ...st.opExcl, [r.name]: !st.opExcl[r.name] } }); },
+          open: !!(st.opOpen || {})[r.name], chev: (st.opOpen || {})[r.name] ? 'chevron-up' : 'chevron-down', subM: r.regimen.replace('Persona ', '').replace(/^./, c => c.toUpperCase()) + ' · ' + pl(r.nCuentas, 'cuenta', 'cuentas') + ' · ' + r.banco + ' ••' + String(r.clabe).slice(-4),
+          expand: () => set({ opOpen: { ...(st.opOpen || {}), [r.name]: !(st.opOpen || {})[r.name] } }) })) },
+      generarOP: () => {
+        if (!OPv.nResp) return;
+        const n = OPv.items.length;
+        const o = { name: `O.P 24-Sep ${OPv.folios.join(' ')}`, iso: '2026-09-24', mes: '2026-09', estado: 'Generada', tone: 'issued', b: D.badge('Generada', 'issued'), fecha: D.F('2026-09-24'), folios: OPv.folios,
+          proveedores: [...new Set(OPv.items.map(i => i.prov))], items: OPv.items, monto: OPv.neto, n, cuentas: pl(n, 'cuenta', 'cuentas') };
+        set({ opGen: o, ordExtra: [o, ...st.ordExtra] });
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>
