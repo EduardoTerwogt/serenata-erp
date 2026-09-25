@@ -4,39 +4,19 @@ import {
   CuentaPagarGrupo,
   DocumentoCuentaPagar,
   ItemCotizacion,
-  OrdenPago,
   Proyecto,
 } from '@/lib/types'
 import { getItemsByCotizacion } from '@/lib/server/repositories/quotations'
 import { DomainError } from '@/lib/server/errors/domain-error'
 
-export type CuentaPagarConJoins = CuentaPagar & {
-  cotizaciones?: { proyecto?: string; fecha_entrega?: string } | null
+type CuentaPagarConJoins = CuentaPagar & {
+  cotizaciones?: { proyecto?: string } | null
   proyectos?: { proyecto?: string } | null
 }
 
 type CuentaPagarGrupoConJoins = CuentaPagarGrupo & {
   proyectos?: { proyecto?: string } | null
   proveedores?: { nombre?: string } | null
-}
-
-export async function getCuentasPagar() {
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .select('*, cotizaciones(proyecto), proyectos(proyecto)')
-    .order('created_at', { ascending: false })
-    .limit(500)
-  if (error) throw error
-  return ((data || []) as CuentaPagarConJoins[]).map((row) => ({
-    ...row,
-    proyecto_nombre:
-      row.proyecto_nombre ||
-      row.cotizaciones?.proyecto ||
-      row.proyectos?.proyecto ||
-      undefined,
-    cotizaciones: undefined,
-    proyectos: undefined,
-  })) as CuentaPagar[]
 }
 
 export interface BuscarCuentasPagarResult {
@@ -69,8 +49,7 @@ export async function buscarCuentasPagarGrupos(search: string | null, page: numb
 }
 
 /**
- * Detalle por ID -- nunca a través de getCuentasPagar().find(), que con
- * más de 500 cuentas puede no traer la fila buscada aunque exista (1C-1).
+ * Detalle por ID (1C-1).
  * .maybeSingle() nunca .single(): "no encontrada" debe seguir siendo un
  * 404 explícito del caller, no un error de Postgres por 0 filas.
  */
@@ -340,44 +319,6 @@ export async function deleteDocumentoCuentaPagar(id: string) {
   if (error) throw error
 }
 
-export async function getOrdenPagoById(id: string) {
-  const { data, error } = await supabaseAdmin
-    .from('ordenes_pago')
-    .select('*')
-    .eq('id', id)
-    .single()
-  if (error) throw error
-  return data as OrdenPago
-}
-
-export async function getOrdenesPago() {
-  const { data, error } = await supabaseAdmin
-    .from('ordenes_pago')
-    .select('*')
-    .order('fecha_generacion', { ascending: false })
-  if (error) throw error
-  return data as OrdenPago[]
-}
-
-export interface BuscarOrdenesPagoResult {
-  rows: OrdenPago[]
-  totalRows: number
-}
-
-// EF-3 3B-11: getOrdenesPago() sin limite explicito -- unico consumidor
-// (ordenes-historial/route.ts) pasa a pedir paginado vía la RPC
-// buscar_ordenes_pago (db/migrations/20260914_buscar_ordenes_pago.sql).
-// getOrdenesPago() se conserva sin cambios -- ningun otro caller la usa
-// hoy, pero no hay razón para eliminarla si no estorba.
-export async function buscarOrdenesPago(page: number, pageSize: number): Promise<BuscarOrdenesPagoResult> {
-  const { data, error } = await supabaseAdmin.rpc('buscar_ordenes_pago', {
-    p_page: page,
-    p_page_size: pageSize,
-  })
-  if (error) throw error
-  return { rows: data.rows as OrdenPago[], totalRows: data.total_rows as number }
-}
-
 // ==================== Agrupación de Cuentas por Pagar (docs/PLAN.md) ====================
 
 export async function getCuentaPagarGrupoById(id: string): Promise<CuentaPagarGrupo | null> {
@@ -415,19 +356,6 @@ export async function getDocumentosCuentaPagarGrupo(grupoId: string) {
     .order('fecha_carga', { ascending: false })
   if (error) throw error
   return data as DocumentoCuentaPagar[]
-}
-
-/**
- * Fuente de generar-orden-pago desde el Bloque 3: grupos FACTURADO cuyas
- * cotizaciones (principal + cualquier complementaria) ya tienen evento
- * realizado -- ver db/migrations/20260917_orden_pago_grupos_facturados_eventos_realizados.sql.
- * Mismo shape que getCuentasPagarPendientesEventosRealizados(), así que
- * buildOrdenPagoPreview() sigue funcionando sin cambios.
- */
-export async function getCuentasPagarGruposFacturadosEventosRealizados() {
-  const { data, error } = await supabaseAdmin.rpc('cuentas_pagar_grupos_facturados_eventos_realizados')
-  if (error) throw error
-  return data as CuentaPagarConJoins[]
 }
 
 export interface OrdenPagoCandidato {

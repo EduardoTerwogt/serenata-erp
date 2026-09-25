@@ -10,7 +10,7 @@
  * - El monto que se revalida (`monto_esperado`) es el saldo neto, igual que
  *   en generar_orden_pago (S2).
  */
-import type { OrdenPagoPreviewResult } from '@/lib/server/ordenes-pago/build'
+import type { OrdenPagoPreviewResult } from '@/lib/server/ordenes-pago/preview-tipos'
 import { round2 } from '@/lib/shared/decimal'
 import { cruceSaldo, sumarCruces, totalesOrden } from '@/lib/shared/cuentas/orden-cruce'
 import type { MotivoNoIncluida, NoIncluida, PreviewOrden, ProyectoOrden, ResponsableOrden, SeleccionOrden } from '@/lib/shared/cuentas/ordenes-tipos'

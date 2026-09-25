@@ -4,9 +4,7 @@
  * (lectura cruda) y `periodo-sql.ts` (periodo derivado en SQL).
  */
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { calcularCierreProyecto } from '@/lib/shared/cierre-proyecto'
 import type { MesPeriodo, PeriodoRespuesta, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
-import type { ProyectoConCuentasRPC } from '@/lib/types'
 import type { CandidatoAviso } from './avisos'
 import type { ParametrosPeriodo } from './periodo'
 import { decodificarCuentasAnio, type CuentasAnioRaw } from './periodo-crudo'
@@ -41,14 +39,4 @@ export async function cargarCandidatosAvisos(hoy: string): Promise<CandidatoAvis
   const { data, error } = await supabaseAdmin.rpc('cuentas_avisos_items', { p_hoy: hoy })
   if (error) throw error
   return (data as CandidatoAviso[] | null) ?? []
-}
-
-/** Lógica de `/api/cuentas/por-proyecto` (vista actual, hasta B8): la RPC sin año más el cierre por proyecto. */
-export async function obtenerCuentasPorProyecto() {
-  const { data, error } = await supabaseAdmin.rpc('cuentas_por_proyecto')
-  if (error) throw error
-  return (data as ProyectoConCuentasRPC[]).map((p) => ({
-    ...p,
-    cierre: calcularCierreProyecto(p.cuentas_pagar, p.margen_total_proyecto, p.fee_agencia_proyecto, p.iva_total_proyecto),
-  }))
 }

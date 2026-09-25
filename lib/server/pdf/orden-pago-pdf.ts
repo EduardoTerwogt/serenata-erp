@@ -19,7 +19,7 @@
  */
 
 import { jsPDF } from 'jspdf'
-import { OrdenPagoPreviewResult, OrdenPagoPreviewResponsable } from '@/lib/server/ordenes-pago/build'
+import { OrdenPagoPreviewResult, OrdenPagoPreviewResponsable } from '@/lib/server/ordenes-pago/preview-tipos'
 import { getIsoLogoBase64, getSerenataLogoBase64, ISO_RATIO, SERENATA_RATIO } from '@/lib/server/pdf/cotizacion-pdf-helpers'
 import { formatDateDisplay } from '@/lib/format-date'
 import {

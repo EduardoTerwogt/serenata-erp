@@ -7,15 +7,6 @@ import {
   Cotizacion,
 } from '@/lib/types'
 
-export async function getCuentasCobrar() {
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_cobrar')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data as CuentaCobrar[]
-}
-
 export interface BuscarCuentasCobrarResult {
   rows: CuentaCobrar[]
   total_rows: number

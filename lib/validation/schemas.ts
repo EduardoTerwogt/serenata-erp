@@ -364,13 +364,6 @@ export const SubirComplementoSchema = z.object({
 
 // ==================== ÓRDENES DE PAGO ====================
 
-// POST /api/cuentas-pagar/generar-orden-pago. Cuerpo opcional (contrato
-// aditivo, docs/PLAN.md §7.0 regla 1): la UI actual hace POST sin cuerpo; la
-// nueva (B6) manda un UUID por apertura del modal (S9).
-export const GenerarOrdenPagoSchema = z.object({
-  idempotency_key: z.string().uuid().optional(),
-})
-
 // Rediseño de Cuentas B6: "Generar orden PDF" manda lo que el usuario dejó
 // marcado, con el saldo neto que vio (la RPC lo revalida, S2), y una llave
 // por apertura del modal (S9).

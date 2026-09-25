@@ -452,27 +452,6 @@ export interface DocumentoCuentaPagar {
   total_cfdi?: number | null
 }
 
-// Shape de la RPC cuentas_por_proyecto() (db/migrations/20260914_cuentas_por_proyecto.sql
-// y extensiones). Rediseño de Cuentas B1 (docs/PLAN.md, S6): vive aquí y no
-// en el hook de la UI, porque lo importan también las rutas.
-export interface ProyectoConCuentasRPC {
-  proyecto: {
-    id: string
-    folio: string
-    nombre: string
-    cliente: string
-    estado: string
-  }
-  cuentas_cobrar: CuentaCobrar[]
-  cuentas_pagar: CuentaPagar[]
-  total_cobrar: number
-  total_pagar: number
-  margen_total_proyecto: number
-  fee_agencia_proyecto: number
-  utilidad_total_proyecto: number
-  iva_total_proyecto: number
-}
-
 export interface OrdenPago {
   id: string
   fecha_generacion: string

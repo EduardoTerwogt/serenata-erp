@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/Icon'
 import { formatDateDisplay } from '@/lib/format-date'
-import { formatCuentasCurrency } from '@/app/components/cuentas/utils'
+import { fmtCurrency } from '@/lib/quotations/format'
 import type { useProyectoDocumentos } from '@/app/components/proyectos/hooks/useProyectoDocumentos'
 import type { MiembroEquipoProyecto, ProyectoDocumento } from '@/lib/types'
 
@@ -123,15 +123,15 @@ function ReporteCierreContenido({ proyectoId, documento, equipo, documentosApi }
       <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <div className="rounded-panel border border-hairline bg-card p-[18px]">
           <p className="text-eyebrow uppercase tracking-wide text-subtext">Cotizado (total)</p>
-          <p className="mt-1.5 text-h3 font-bold text-ink">${formatCuentasCurrency(contenido.financiero?.total_cotizado ?? 0)}</p>
+          <p className="mt-1.5 text-h3 font-bold text-ink">${fmtCurrency(contenido.financiero?.total_cotizado ?? 0)}</p>
         </div>
         <div className="rounded-panel border border-hairline bg-card p-[18px]">
           <p className="text-eyebrow uppercase tracking-wide text-subtext">Cobrado real</p>
-          <p className="mt-1.5 text-h3 font-bold text-accent">${formatCuentasCurrency(contenido.financiero?.total_cobrado ?? 0)}</p>
+          <p className="mt-1.5 text-h3 font-bold text-accent">${fmtCurrency(contenido.financiero?.total_cobrado ?? 0)}</p>
         </div>
         <div className="rounded-panel border border-hairline bg-card p-[18px]">
           <p className="text-eyebrow uppercase tracking-wide text-subtext">Pagado a proveedores</p>
-          <p className="mt-1.5 text-h3 font-bold text-ink">${formatCuentasCurrency(contenido.financiero?.total_pagado ?? 0)}</p>
+          <p className="mt-1.5 text-h3 font-bold text-ink">${fmtCurrency(contenido.financiero?.total_pagado ?? 0)}</p>
         </div>
       </div>
 

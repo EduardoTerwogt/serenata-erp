@@ -1,14 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Reemplaza cuentas-pagar-eventos-realizados.test.ts: la fuente de
-// generar-orden-pago pasó de cuentas_pagar_pendientes_eventos_realizados()
-// (ahora sin ningún caller -- docs/PLAN.md, Bloque 3) a
-// cuentas_pagar_grupos_facturados_eventos_realizados(), que además
-// preserva vía UNION ALL el criterio anterior para cuentas sin grupo_id
-// todavía (transición hasta que corra la migración retroactiva del
-// Bloque 5). Este test solo blinda que los wrappers llaman la RPC/tabla
-// correcta y propagan resultado/error sin transformar -- la lógica SQL en
-// sí se verificó en vivo contra serenata-erp-test.
+// Blinda que los wrappers del repositorio llaman la RPC correcta y propagan
+// resultado/error sin transformar; la lógica SQL se verifica en vivo contra
+// serenata-erp-test.
 const mocks = vi.hoisted(() => {
   const chain = () => {
     const obj: Record<string, unknown> = {}
@@ -28,32 +22,7 @@ vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: { rpc: mocks.rpcMock, from: mocks.fromMock },
 }))
 
-import { getCuentasPagarGruposFacturadosEventosRealizados, generarOrdenPago, validarFacturaProveedor } from '../cuentas-pagar'
-
-describe('getCuentasPagarGruposFacturadosEventosRealizados', () => {
-  beforeEach(() => {
-    mocks.rpcMock.mockReset()
-  })
-
-  it('llama la RPC cuentas_pagar_grupos_facturados_eventos_realizados sin parámetros', async () => {
-    mocks.rpcMock.mockResolvedValue({ data: [], error: null })
-    await getCuentasPagarGruposFacturadosEventosRealizados()
-    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_pagar_grupos_facturados_eventos_realizados')
-  })
-
-  it('devuelve el shape tal cual lo entrega la RPC, sin transformar', async () => {
-    const fila = { id: 'cp-1', grupo_id: 'grupo-1', cotizacion_id: 'SH003', cotizaciones: { proyecto: 'X', fecha_entrega: '2026-05-30' } }
-    mocks.rpcMock.mockResolvedValue({ data: [fila], error: null })
-    const result = await getCuentasPagarGruposFacturadosEventosRealizados()
-    expect(result).toEqual([fila])
-  })
-
-  it('propaga el error de Supabase sin transformarlo', async () => {
-    const dbError = new Error('conexión perdida')
-    mocks.rpcMock.mockResolvedValue({ data: null, error: dbError })
-    await expect(getCuentasPagarGruposFacturadosEventosRealizados()).rejects.toBe(dbError)
-  })
-})
+import { generarOrdenPago, validarFacturaProveedor } from '../cuentas-pagar'
 
 describe('generarOrdenPago', () => {
   beforeEach(() => {
