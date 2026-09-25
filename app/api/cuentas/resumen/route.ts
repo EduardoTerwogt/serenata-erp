@@ -5,6 +5,7 @@ import { construirProyectos, pendientesPorAnio } from '@/lib/server/cuentas/peri
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import type { ProyectoDetalle, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
+import { crearTiempos } from '@/lib/server/server-timing'
 
 const ROUTE = 'GET /api/cuentas/resumen'
 
@@ -14,13 +15,17 @@ const ROUTE = 'GET /api/cuentas/resumen'
  * todos los años. El cliente la pide una vez por carga.
  */
 export async function GET() {
+  const t = crearTiempos()
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
+  t.marcar('auth')
 
   try {
     const hoy = hoyCdmx()
     const anios = await cargarAniosCuentas()
-    const porAnio = await Promise.all(anios.map(async (anio) => ({ anio, proyectos: construirProyectos(await cargarCuentasAnio(anio), hoy) })))
+    const crudos = await Promise.all(anios.map(async (anio) => ({ anio, crudo: await cargarCuentasAnio(anio) })))
+    t.marcar('rpc')
+    const porAnio = crudos.map(({ anio, crudo }) => ({ anio, proyectos: construirProyectos(crudo, hoy) }))
 
     // "Sin fecha" y "Sin proyecto" llegan en cada año: se cuentan una sola vez.
     const vistos = new Set<string>()
@@ -38,7 +43,8 @@ export async function GET() {
       anios: porAnio.map(({ anio, proyectos }) => ({ anio, pendientes: pendientesPorAnio(proyectos, anio) })),
       avisos: derivarAvisos(todos, hoy).total,
     }
-    return Response.json(body)
+    t.marcar('derivar')
+    return t.responder(body)
   } catch (error) {
     return buildErrorResponse(error, ROUTE)
   }

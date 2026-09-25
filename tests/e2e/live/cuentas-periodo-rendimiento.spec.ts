@@ -39,15 +39,19 @@ test.describe('live: rendimiento de la lectura por periodo', () => {
       for (let i = 0; i < 2; i++) expect((await page.request.get(url)).ok()).toBe(true)
 
       const tiempos: number[] = []
+      const fases: string[] = []
       for (let i = 0; i < MUESTRAS; i++) {
         const inicio = Date.now()
         const res = await page.request.get(url)
         await res.body()
         tiempos.push(Date.now() - inicio)
+        fases.push(res.headers()['server-timing'] ?? '')
         expect(res.ok()).toBe(true)
       }
       const valor = p95(tiempos)
       console.log(`[O1b] ${nombre}: p95 ${valor} ms (muestras: ${tiempos.join(', ')})`)
+      // Desglose del servidor por muestra (auth / rpc / derivar / json).
+      console.log(`[O1b] ${nombre}: server-timing ${fases.map((f) => f.replace(/;dur=/g, ' ').replace(/, /g, ' ')).join(' | ')}`)
       expect(valor).toBeLessThan(PRESUPUESTO_MS)
     })
   }
