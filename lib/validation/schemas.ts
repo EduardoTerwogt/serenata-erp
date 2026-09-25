@@ -322,6 +322,22 @@ export const RegistrarPagoProveedorSchema = z.object({
   operation_id: z.string().uuid('operation_id requerido (uuid)'),
 })
 
+// GET /api/cuentas/periodo (Rediseño de Cuentas B3). Query string: todo
+// llega como texto; año y mes vacíos toman el año y mes actuales en la ruta.
+export const CuentasPeriodoQuerySchema = z.object({
+  anio: z.coerce.number().int().min(2000).max(2100).optional(),
+  mes: z.union([z.literal('todo'), z.coerce.number().int().min(1).max(12)]).optional(),
+  estado: z.enum(['todas', 'pendientes', 'cerradas']).default('todas'),
+  tipo: z.enum(['todo', 'cobro', 'pago']).default('todo'),
+  cliente: z.string().max(300).optional(),
+  proveedor: z.string().max(300).optional(),
+  q: z.string().max(200).optional(),
+  vista: z.enum(['proyectos', 'lista']).default('proyectos'),
+  proyecto: z.string().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(200).default(60),
+})
+
 // POST /api/cuentas-cobrar/[id]/subir-complemento (multipart). Los archivos
 // se validan aparte; pago_id es opcional hasta B8 (R2, S8).
 export const SubirComplementoSchema = z.object({

@@ -1282,7 +1282,7 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | B1b Blindaje previo | Hecho (sesión 20, PR #95) |
 | B1 Derivación y datos fiscales | Hecho (sesión 20, rama del PR #96; migración solo en test) |
 | B2 Pagos en total a transferir | Hecho (sesión 20, rama del PR #96; migraciones solo en test) |
-| B3 Lectura por periodo | Pendiente |
+| B3 Lectura por periodo | Hecho (sesión 20, rama del PR #96; migración solo en test; p95 lo mide `cuentas-periodo-rendimiento.spec.ts`) |
 | B4 Pantalla principal | Pendiente |
 | B5 Detalle | Pendiente |
 | B6 Avisos y órdenes | Pendiente |

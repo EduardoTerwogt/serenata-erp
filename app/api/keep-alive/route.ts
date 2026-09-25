@@ -78,6 +78,19 @@ export async function GET(request: Request) {
     console.error('Keep-alive: rate_limits cleanup failed:', error)
   }
 
+  // Rediseño de Cuentas B3 (O2, U4, R3): el estado guardado de los cobros
+  // vencidos se actualiza aquí, una vez al día y antes del sync de Sheets,
+  // en lugar de escribir en cada lectura. En pantalla "Vencido" se deriva al
+  // leer. Best-effort: un fallo aquí no afecta el resultado del keep-alive.
+  let cuentasCobrarSync: 'ok' | 'error' = 'ok'
+  try {
+    const { error: syncError } = await supabaseAdmin.rpc('sync_estados_cuentas_cobrar_vencidas')
+    if (syncError) throw syncError
+  } catch (error) {
+    cuentasCobrarSync = 'error'
+    console.error('Keep-alive: sync_estados_cuentas_cobrar_vencidas failed:', error)
+  }
+
   // EF-3 3C-4: safety-net diario de Sheets, bajo el mismo lock de 3C-3 que
   // ya usa la sincronización manual (app/api/integrations/sheets/sync-down).
   // Si no consigue el lock (sync manual en curso, o lease de otro cron
@@ -144,6 +157,7 @@ export async function GET(request: Request) {
       ...(drive.message ? { drive_message: drive.message } : {}),
       idempotency_keys_deleted: idempotencyKeysDeleted,
       rate_limits_deleted: rateLimitsDeleted,
+      cuentas_cobrar_sync: cuentasCobrarSync,
       sheets_sync: sheetsSync,
     },
     { status: ok ? 200 : 500 }

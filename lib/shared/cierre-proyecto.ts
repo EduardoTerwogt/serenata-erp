@@ -38,7 +38,15 @@ export interface CierreProyecto {
   utilidad_libre_estimada: number
 }
 
-type CuentaPagarConRegimen = CuentaPagar & { proveedor_regimen_fiscal?: RegimenFiscal | null }
+// Solo los campos que usa el cierre: así lo alimentan tanto CuentaPagar
+// completa (vista actual) como las filas compactas de la lectura por periodo
+// (B3, lib/server/cuentas/periodo.ts).
+export type CuentaPagarCierreInput = Pick<CuentaPagar, 'id' | 'grupo_id' | 'x_pagar' | 'responsable_id' | 'responsable_nombre'> &
+  Partial<Pick<CuentaPagar, 'grupo_monto_total' | 'grupo_total_a_transferir' | 'total_a_transferir'>> & {
+    proveedor_regimen_fiscal?: RegimenFiscal | null
+  }
+
+type CuentaPagarConRegimen = CuentaPagarCierreInput
 
 /**
  * Agrega el cierre fiscal de un proyecto: quién le corresponde a cada
