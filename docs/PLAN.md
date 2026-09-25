@@ -1,8 +1,10 @@
 # Plan de la iniciativa activa
 
 **Iniciativa:** Rediseño de la sección Cuentas (Claude Design → implementación)
-**Estado:** Listo para aprobar. Supuestos confirmados y auditoría final
-hecha (sesión 14); no quedan dudas de producto ni de negocio.
+**Estado:** Listo para aprobar. Supuestos confirmados (sesión 14) y
+auditoría profunda integrada con D25–D29 (sesión 17); no quedan dudas de
+producto ni de negocio. Queda una sola regla por confirmar, y se confirma al
+abrir B7 (§5.8, S12).
 - Sesión 10 (2026-09-25): diseño final recibido y auditado.
 - Sesión 11 (2026-09-25): auditoría end-to-end contra producción (BD, RPCs,
   rutas, UI). Sus hallazgos están en §5.1 y las decisiones D10–D17 que
@@ -21,6 +23,10 @@ hecha (sesión 14); no quedan dudas de producto ni de negocio.
   integrados. D24: el corte (B8) va antes de B7.
 - Sesión 16 (2026-09-25): revisión de reutilización contra el repo (§5.7):
   U1–U10 y dos huecos corregidos (A2 incompleto; totales del CFDI sin guardar).
+- Sesión 17 (2026-09-25): auditoría profunda por áreas (BD, backend,
+  frontend, UI contra el handoff y tests), verificada contra el código y
+  `pg_proc` de producción. Salieron S1–S21 (§5.8), 3 de ellos P0, y el
+  usuario decidió D25–D29.
 - Falta que el usuario apruebe el plan para pasarlo a "Aprobado".
 
 Para retomar, ver `docs/ACTIVE_WORK.md` → "Cómo retomar". El zip del diseño
@@ -144,6 +150,16 @@ abren sin servidor.
 |---|---|---|
 | D24 | Orden de corte | **B8 (corte a la UI nueva) va antes de B7 (reabrir y correcciones).** Así se acorta el tiempo con dos UIs en paralelo. La UI actual tampoco tiene reabrir ni anular pagos, así que no hay regresión. B7 se construye solo sobre la UI nueva. |
 
+**Decisiones de la sesión 17** (auditoría profunda, §5.8):
+
+| # | Tema | Decisión |
+|---|---|---|
+| D25 | Documento en `revision` | **No cuenta.** Solo cuenta un documento `validado`, sea automático o marcado a mano por PATCH. Es la misma regla para cobro, grupo y suelta, y aplica a la factura, al complemento y a la elegibilidad para orden. Mientras el documento esté en `revision`, el concepto muestra el estado **"En revisión"** (tono borrador) y el siguiente paso "Revisar factura" o "Revisar complemento". Hoy `subir-factura` de cobro pone `FACTURADO` aunque el XML quede en `revision`: el estado guardado puede seguir así, pero la derivación (§5) manda. |
+| D26 | Fechas SAT con varios cobros o pagos | **Una fila por mes.** El IVA a enterar, las retenciones y el ISR del cierre se parten por mes de cobro (IVA trasladado e ISR) o de pago al proveedor (IVA e ISR retenidos). Cada fila lleva su monto y su día 17 del mes siguiente. La parte sin cobro o sin pago va en una fila "Al cobrar" / "Al pagar". Refina D15. |
+| D27 | Complemento de pago | **XML y PDF, los dos requeridos**, como en el diseño. Un pago PPD queda con complemento cuando tiene los dos archivos vinculados a su `pago_id` y el XML está `validado` (D25). Se suben en peticiones separadas (supuesto 15). |
+| D28 | Cancelar una principal con complementarias aprobadas | **En cascada**, en la misma transacción, cancelando cada complementaria y después la principal. Se bloquea todo si **cualquiera** de esas cotizaciones tiene cobros, pagos a proveedor, cuentas en una orden o cuentas en un grupo que no esté `ABIERTO` (D22). El error nombra la cotización que bloquea. |
+| D29 | Etiqueta del neto en el cruce fiscal | **"Costo total · neto al proveedor"** en lugar del "X pagar · neto al proveedor" del diseño. Sigue el glosario de la decisión 006 (principio crítico 8). |
+
 ## 4. Supuestos (confirmados por el usuario en la sesión 14)
 
 1. **Correcciones sobre un proyecto reabierto:** solo admin, igual que reabrir.
@@ -163,8 +179,9 @@ abren sin servidor.
 7. ~~Móvil: responsive básico~~ → **sustituido:** el diseño final trae
    móvil completo y se implementa tal cual (D19).
 8. **El estado de la vista vive en la URL** (año, mes, vista, filtros,
-   búsqueda y proyecto seleccionado). Así se puede compartir y recargar sin
-   perderlo.
+   búsqueda y proyecto seleccionado; desde la sesión 17 también el concepto
+   abierto, la hoja y la pantalla empujada, S15). Así se puede compartir y
+   recargar sin perderlo, y "atrás" en móvil cierra la hoja.
 9. **Cuenta suelta (legacy) sin factura: no se paga**, igual que un grupo.
    Por D10 no hay datos reales que proteger. Las cuentas sueltas siguen
    naciendo cuando un renglón no tiene proveedor asignado (decisión 011).
@@ -249,6 +266,14 @@ existen. No se agregan estados nuevos a las tablas.
 | Pago | suelta `EN_PROCESO_PAGO` o en orden **sin** factura | Sin factura | Subir factura (tiene prioridad sobre "En orden") |
 | Pago | `PAGADO` sin comprobante de pago (D11) | Pagado | Subir comprobante |
 | Pago | `PAGADO` con factura y comprobante | Pagado | — |
+| Cobro o pago | Factura subida pero en `revision` (D25) | En revisión | Revisar factura |
+| Cobro | `PAGADO`, pero el complemento de algún pago PPD está en `revision` (D25) o le falta el XML o el PDF (D27) | Sin complemento | Revisar complemento / Subir complemento |
+
+"Tiene factura" significa lo mismo en los tres tipos: existe un documento
+XML de factura vigente con `estado_validacion = 'validado'` (D25). Para un
+grupo coincide con `FACTURADO`. Para una suelta y para un cobro se lee del
+documento, no del estado guardado. "En revisión" tiene prioridad sobre
+"Facturado", "En orden" y "Pagado".
 
 En un cobro PPD con pagos parciales, el complemento de cada pago ya
 registrado se pide desde ese momento: el aviso "Complementos faltantes" lo
@@ -332,6 +357,9 @@ con decisiones ya tomadas y **no se implementan así**:
 | "Un solo pago cierra los N conceptos del grupo" | Se permiten pagos parciales al grupo (la RPC vigente lo permite). El texto se ajusta a "El pago se reparte entre los N conceptos del grupo". | Decisión 011: el grupo se paga completo en renglones, no en un solo depósito. |
 | Evento realizado por fecha del proyecto | Por fecha de cada cotización | Decisión 011, D12, supuesto 13. |
 | Reabrir visible para todos | Solo admin lo ve y lo ejecuta | D6 |
+| Una sola fecha SAT por impuesto | Una fila por mes de cobro o pago | D26 |
+| "X pagar · neto al proveedor" | "Costo total · neto al proveedor" | D29, glosario de la decisión 006 |
+| Solo existe "Sin factura" / "Facturado" | Además, "En revisión" (tono borrador) cuando el XML no quedó validado | D25 |
 
 ### 5.3 Pendientes del README del handoff y cómo se resuelven
 
@@ -440,6 +468,45 @@ También se reutilizan sin cambios: `StatusBadge` (ya tiene los 4 tonos y
 de cliente de cotizaciones para sacar `SearchableSelect`: está acoplado a
 react-hook-form y a la lógica de proyectos. Sería ampliar el alcance.
 
+### 5.8 Auditoría profunda (sesión 17)
+
+Se revisó por áreas (BD, backend, frontend, UI contra el handoff y tests)
+contra el código, `pg_proc` y las restricciones de producción (solo lectura)
+y contra `cuentas-data.js`. **Criterio: que el plan no genere bugs ni deuda
+y que la UI solo difiera del diseño por negocio o producto.** Todos los
+hallazgos quedan integrados en los bloques.
+
+**P0 (producían bugs):**
+
+| # | Hallazgo | Evidencia | Decisión | Bloque |
+|---|---|---|---|---|
+| S1 | **El desglose de una orden no se guarda.** Hoy el desglose es el `orden_pago_id` de grupos y sueltas. Cancelar una orden lo quita y reingresar a otra orden lo sobrescribe, así que el historial (D20, filas por proveedor, filtros por proveedor o proyecto) pierde el desglose. R6 pedía comparar contra "el saldo que cubría al generarse", que no se guarda. | `buscar_ordenes_pago` solo lee `ordenes_pago`; `cancelar_orden_pago` (B6) quita el `orden_pago_id` | Tabla **`ordenes_pago_conceptos`** (snapshot inmutable): la escribe `generar_orden_pago` y nunca se borra, ni al cancelar. Historial, filtros y estado de la orden leen de ahí. | B1b, B2, B6 |
+| S2 | **Carrera en el monto de la orden.** La ruta calcula el total y arma el PDF antes de que la RPC bloquee las filas. Si entra un pago en medio, orden y PDF quedan con saldos viejos. | `generar-orden-pago/route.ts` | La RPC recibe el monto esperado por candidato, lo recalcula bajo `FOR UPDATE` y falla explícito (`candidatos_cambiaron`) si difiere. El total guardado es la suma de lo validado, nunca un número suelto que manda la ruta. | B1b |
+| S3 | **Cancelar una complementaria no se puede hacer con `reconcile_cuenta_pagar_grupo`:** esa RPC recibe una cuenta viva y, después del borrado, no queda ninguna que pasarle. Tampoco estaba definido cancelar la principal con complementarias aprobadas: la llave foránea de sus cuentas hacia `proyectos` falla. | Cuerpo de `reconcile_cuenta_pagar_grupo` | El recálculo de `monto_total` y el borrado del grupo `ABIERTO` vacío van **dentro** de `cancel_cotizacion`, con la misma sentencia que usa `reconcile`. La principal cancela en cascada (D28). | B1b |
+
+**P1 y P2:**
+
+| # | Hallazgo | Decisión | Bloque |
+|---|---|---|---|
+| S4 | Contradicción con O1: el select de año muestra pendientes de **cada** año y Avisos es **global**, así que las dos cosas derivan todos los años. El presupuesto solo medía `periodo`. | `GET /api/cuentas/resumen` devuelve los años con pendientes y el contador de avisos. Él y `GET /api/cuentas/avisos` entran al presupuesto de O1b, igual p95 < 800 ms, y comparten el mismo respaldo (SQL con test de paridad). El cliente los pide una vez por carga y no en cada cambio de periodo. | B3, B6 |
+| S5 | "Tiene factura" no era igual en los tres tipos: el cobro pasa a `FACTURADO` con el XML en `revision`, el grupo exige `validado` y la suelta solo mira que exista el documento. | D25. Además, el snapshot de A2 solo se toma cuando el documento queda `validado`. | B1, B2 |
+| S6 | **Capas del código.** `concepto.ts` (`lib/shared`) llamaría a `app/components/cuentas/selectors.ts` y a `calcularCrucePagoProveedor` (`app/components/cuentas/utils.ts`), que viven en la UI que retira B8. `por-proyecto/route.ts` importa un tipo desde el hook `useCuentasPorProyecto`. `status.ts` importa `lib/server/shared/decimal` y calcula "hoy" en UTC. | En B1 se mueven a `lib/shared/cuentas/`: `status.ts`, `selectors.ts` y `calcularCrucePagoProveedor`, dejando re-exports en la ruta vieja hasta B8. `round2` pasa a `lib/shared/decimal.ts`, también con re-export. Los tipos de la RPC pasan a `lib/types.ts`. `calcularEstadoCuentaCobrarDetallado` recibe `hoy` (fecha CDMX) como parámetro y ya no calcula la fecha por su cuenta. | B1 |
+| S7 | Las firmas de las RPCs de pago no son independientes: la versión de 3 parámetros **llama por dentro** a la de 2. Borrar la "vieja" sin más rompe la nueva. `registrar_pago_cuenta_cobrar` también tiene 2 firmas y B1 la toca (R4). | La regla 3 de §7.0 se precisa: **se fusionan** en una sola función, con la idempotencia de `pago_operations` al principio, y después se hace `DROP` de las dos firmas anteriores. En B1 aplica a `registrar_pago_cuenta_cobrar` y en B2 a las dos de proveedor. | B1, B2 |
+| S8 | `subir-complemento` exige XML y PDF juntos, lo que choca con el supuesto 15 y con R2. El plan decía que "la UI actual asigna el pago más reciente", pero la ruta no asigna ningún pago. | La ruta acepta XML, PDF o los dos (aditivo, R2). Ninguno es obligatorio por sí solo, pero al menos uno sí. `pago_id` es opcional hasta B8: si falta, se asigna al pago más reciente que todavía no tenga ese archivo. El complemento cuenta según D27. | B1 |
+| S9 | `withIdempotency` necesita una llave que mande el cliente y espera como máximo 4.5 s, menos de lo que tardan el PDF y Drive: un doble clic recibe "ya se está procesando" en lugar de la misma orden. | El cliente manda `idempotency_key` (UUID por apertura del modal). La UI trata "ya se está procesando" como estado de espera, no como error: vuelve a consultar el preview y muestra la orden si ya existe. | B1b, B6 |
+| S10 | `Modal` solo tiene `lg` (512 px) y `3xl` (768 px), sin pie fijo ni encabezado propio, y su fondo es `bg-black/60`. El diseño pide 780, 820 y 960 px, pie fijo en Generar orden, encabezado con chip y ProgressBar, y fondo `rgba(0,0,0,.28)` en hojas móviles. El panel lateral de 400 px no es un modal. | `Modal` se extiende de forma aditiva: `size` acepta `780`, `820` y `960`; se agregan los slots `header` y `footer` (fijo abajo); Escape cierra; `mobile="sheet"` con fondo `.28`. Nuevo primitivo **`Drawer`** (lateral derecho de 400 px en escritorio, pantalla empujada en móvil). Los modales existentes no cambian. | B4 |
+| S11 | `ResponsiveTableCard` no tiene encabezados de grupo (Lista con "Agrupar por mes") y en móvil pinta tarjetas sueltas; el diseño agrupa las filas en una tarjeta separadas por línea. | Props opcionales: `groups` (encabezado con etiqueta y subtítulo por grupo) y `mobileLayout="list"` (una tarjeta con filas separadas). Los usos actuales no cambian. | B4 |
+| S12 | B7, "reasignar el proveedor en una cuenta ya pagada" (D5), solo decía "se amplía la guarda". No definía qué pasa con los pagos, la factura, el snapshot ni la orden del proveedor anterior, que ya recibió el dinero. | **Propuesta, a confirmar al abrir B7:** una RPC de corrección atómica que exige anular antes los pagos del concepto (B7). Luego da de baja la factura del grupo, que vuelve a `ABIERTO` y pierde el snapshot, y reasigna con la RPC vigente. Si el concepto está en una orden, primero se cancela la orden. No bloquea B0–B8. | B7 |
+| S13 | Barra de pestañas: el diseño usa los iconos `house`, `image`, `wallet` y `ellipsis`. `AppShell` deja `pt-16` para el encabezado móvil que D23 oculta, y no reserva espacio para la barra. | La barra usa los **mismos iconos que el sidebar** (`dashboard`, `proyectos`, `cuentas` y `cotizaciones`, por U8) más `ellipsis`, que es nuevo. Así el mismo destino no tiene dos iconos distintos. `AppShell` recibe `mobileChrome="tabbar"`: en `/cuentas` quita el `pt-16` y deja abajo la altura de la barra más `env(safe-area-inset-bottom)`. | B4 |
+| S14 | En tableta (768–1279 px), el sidebar de 250 px más el maestro-detalle (1fr \| 300 px) con 5 columnas no cabe. | Por debajo de `xl`, el detalle del proyecto ocupa todo el ancho y la lista compacta de proyectos se oculta; se regresa con el chevron del encabezado del proyecto. Desde `xl`, maestro-detalle como en el diseño. Captura de validación a 1024 px. | B4 |
+| S15 | En móvil, "atrás" del navegador sacaba de la app en lugar de cerrar la hoja: el estado en la URL no incluía la hoja ni la pantalla empujada. | El supuesto 8 se amplía: la URL también lleva `det` (concepto abierto), `sheet` y `page` (avisos u órdenes). Abrir una hoja o una pantalla hace `push`; cambiar filtros o periodo hace `replace`. | B4 |
+| S16 | Faltaban dos reglas del prototipo: el mes inicial es el actual, y al cambiar de año el mes pasa al actual (si es el año en curso) o al último mes con datos. | Se adoptan tal cual (`controls.setYear` de `cuentas-data.js`), con "hoy" en CDMX. | B4 |
+| S17 | No estaba definido si "Sin fecha" cuenta en los totales y los contadores del año. | "Sin fecha" (incluido "Sin proyecto", supuesto 11) aparece como grupo en **todos** los años y en "Todo el año", pero **no** suma a las tarjetas de totales ni a los contadores de mes. Sí cuenta en Avisos y en Filtros. | B3, B4 |
+| S18 | Sin tolerancia, un último pago capturado con 0.01 de diferencia deja el grupo y la orden sin cerrar nunca. | La regla del último pago (H8) aplica cuando el transferido acumulado queda a **±0.01** del total a transferir; el monto guardado es el capturado. Nunca se permite pasarse por más de 0.01. | B2 |
+| S19 | "Cerrada automáticamente el …" mezcla timestamps sin zona (`documentos_*.fecha_carga`, `pagos_comprobantes.created_at`) con fechas `date`. | La fecha de cierre se calcula con fechas de negocio (`fecha_pago` capturada, la fecha de carga convertida a CDMX) y se muestra solo como fecha. Las tablas nuevas usan `timestamptz`. | B1, B2 |
+| S20 | `fmtCurrency` no pone el `$`. | Nuevo `fmtMoney` en `lib/quotations/format.ts`, que envuelve `fmtCurrency` y agrega el `$`. No se toca `fmtCurrency`. | B4 |
+| S21 | Playwright solo tiene el proyecto de escritorio. | Proyecto nuevo `mobile` (viewport de 390 × 844) para los specs de Cuentas, y `colorScheme: 'dark'` para las capturas de O10. | B4, B8 |
+
 ## 6. Infraestructura que se reutiliza
 
 - **RPCs de dinero** (no se recrean, se extienden):
@@ -473,10 +540,16 @@ react-hook-form y a la lógica de proyectos. Sería ampliar el alcance.
   - `CuentasTabBar` (barra móvil, solo en Cuentas, D19). `SidebarLayout` oculta
     su encabezado móvil en `/cuentas` (D23, R13); sin efecto en otras rutas;
   - `SearchableSelect` (Cliente y Proveedor con buscador);
+  - `Drawer` (panel lateral de 400 px "Avisos y órdenes"; en móvil,
+    pantalla empujada; S10);
+  - extensiones aditivas de `Modal` (tamaños 780/820/960, slots `header` y
+    `footer` fijo, Escape) y de `ResponsiveTableCard` (`groups`,
+    `mobileLayout="list"`) (S10, S11);
   - iconos nuevos en `Icon.tsx`: `bell`, `folder`, `layers`,
     `sliders-horizontal`, `file-down`, `circle-check`, `arrow-right-circle`,
-    `camera`, `paperclip`, `info`, `users`, `share`, `arrow-down-left` y
-    `arrow-up-right`. Los que ya existen con otro nombre (`warning`, `close`,
+    `camera`, `paperclip`, `info`, `users`, `share`, `arrow-down-left`,
+    `arrow-up-right` y `ellipsis`. La barra de pestañas usa los iconos del
+    sidebar, no `house`/`image`/`wallet` del prototipo (S13). Los que ya existen con otro nombre (`warning`, `close`,
     `dashboard`, `cuentas`, `calendar`, `lock`) se reutilizan.
 - **Subidas:** `lib/server/uploads/factura-validation.ts` y el flujo de
   Documentos actual (Drive).
@@ -502,9 +575,13 @@ react-hook-form y a la lógica de proyectos. Sería ampliar el alcance.
      explícito;
    - se aplican a test y a producción **en el mismo bloque**;
    - jobs `fresh-db` y `Migrations` en verde.
-3. **Una sola firma por RPC de dinero (R5).** Al cambiar parámetros se hace
-   `DROP FUNCTION` de las firmas viejas y se crea la nueva, en la misma
-   migración, con el wrapper de idempotencia (`pago_operations`) incluido.
+3. **Una sola firma por RPC de dinero (R5, S7).** Hoy la firma con
+   `p_operation_id` **llama por dentro** a la firma sin él. Al cambiar
+   parámetros se **fusionan** en una sola función (idempotencia de
+   `pago_operations` al principio y la lógica después) y en la misma
+   migración se hace `DROP FUNCTION` de las dos firmas anteriores. Aplica a
+   `registrar_pago_cuenta_cobrar` (B1) y a `registrar_pago_grupo_factura` /
+   `registrar_pago_cuenta_pagar` (B2).
 4. **"Hoy" siempre en CDMX:** `hoy_cdmx()` en SQL y un helper en TS.
 5. **Escritorio y móvil, claro y oscuro,** en cada bloque de UI (B4–B7),
    contra las capturas del handoff.
@@ -517,8 +594,8 @@ misma ruta detrás de `?v=2`, y se cambia al final.
 - `design_handoff_cuentas/` completo a `docs/design/cuentas/`: README,
   capturas, `abrir-directo/` y `codigo-fuente/`, unos 4 MB. No se generan
   capturas: el handoff ya las trae.
-- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D24, A1–A5,
-  O1–O10, el
+- Decisión nueva `docs/decisions/017-rediseno-cuentas.md` con D2–D29, A1–A5,
+  O1–O10, U1–U10, S1–S21, el
   modelo de la sección 5, §5.2 (reglas del prototipo que no se adoptan) y los
   supuestos aceptados.
 - Seed para `serenata-erp-test` con las formas de datos de producción (H11):
@@ -526,40 +603,62 @@ misma ruta detrás de `?v=2`, y se cambia al final.
   - grupo con pago parcial sin orden;
   - orden vieja sin pagar;
   - cobro PPD con dos pagos;
+  - factura en `revision` (D25) y complemento con solo XML (D27);
+  - principal con una complementaria aprobada (D28);
   - cuentas sin `proyecto_id`.
   El script es idempotente y vive en `scripts/`. Con él, este bloque ya no es
   solo documentación: va con PR.
 
 **B1b — Blindaje previo (bugs vigentes).** Va antes de todo lo demás porque
 son bugs de hoy, no del rediseño.
-- RPC `generar_orden_pago(p_candidatos, p_pdf_url, p_pdf_nombre, p_total,
-  p_usuario)`, atómica (H1, H2). `p_candidatos` es la **selección** (ids de
-  grupos y sueltas de los responsables incluidos, supuesto 13); no se toma
-  "todo lo elegible" en el servidor. La RPC:
+- Tabla **`ordenes_pago_conceptos`** (S1): `orden_pago_id`, `grupo_id` o
+  `cuenta_pagar_id` (CHECK exclusivo), `responsable_id`,
+  `responsable_nombre`, `proyecto_id`, `cotizacion_folio`, `neto_cubierto`
+  y `created_at` (`timestamptz`). Es un snapshot inmutable: nadie la
+  actualiza ni la borra, tampoco al cancelar la orden. RLS activo sin
+  políticas. En B2 se le agrega `transferir_cubierto`. Backfill de las 8
+  órdenes existentes desde los `orden_pago_id` actuales (D10: basta con que
+  el historial no quede vacío).
+- RPC `generar_orden_pago(p_candidatos jsonb, p_pdf_url, p_pdf_nombre,
+  p_usuario)`, atómica (H1, H2). `p_candidatos` es la **selección** (grupos
+  y sueltas de los responsables incluidos, supuesto 13), cada uno con su
+  **monto esperado**; no se toma "todo lo elegible" en el servidor. La RPC:
   - bloquea los candidatos con `FOR UPDATE`;
-  - revalida su estado;
-  - inserta la orden;
-  - marca grupos **y** sueltas.
-  Si otro proceso ya los tomó, falla explícito. El PDF se sube antes; si la
-  RPC falla, queda un archivo huérfano en Drive y se registra en el log. La
-  ruta la llama en lugar de las tres escrituras sueltas.
+  - revalida estado, factura validada (D25) y que no estén en otra orden;
+  - recalcula el saldo de cada candidato y lo compara con el esperado. Si
+    difiere, falla con `candidatos_cambiaron` (S2);
+  - inserta la orden con `total_monto` = Σ de lo validado y una fila de
+    `ordenes_pago_conceptos` por candidato;
+  - marca grupos **y** sueltas (y sus hijas).
+  Si otro proceso ya los tomó, falla explícito y la UI recarga el preview.
+  El PDF se sube antes con los mismos montos esperados; si la RPC falla,
+  queda un archivo huérfano en Drive y se registra en el log. La ruta la
+  llama en lugar de las tres escrituras sueltas.
   - Idempotente con `withIdempotency` en la ruta, que envuelve PDF + RPC (O4,
-    U3).
+    U3). La llave la manda el cliente (`idempotency_key`, un UUID por
+    apertura del modal). "Ya se está procesando" se trata como espera, no
+    como error (S9). La ruta vieja genera su propia llave por petición.
   - En B1b la ruta pasa todo lo elegible como selección. La selección por
     responsable llega en B6 sin cambiar la firma.
-  - El total lo calcula la ruta a partir de los candidatos. Nunca viene del
-    cliente.
+  - El monto esperado lo calcula la ruta a partir del preview; la RPC lo
+    valida. El total nunca viene del cliente sin pasar por esa validación.
 - **`cancel_cotizacion` corregida (R1, D22):**
   - bloquea si hay cobros o pagos a proveedor registrados, cuentas en una
     orden o cuentas en un grupo no `ABIERTO` (A4);
   - si procede, borra en orden de llaves foráneas: documentos, cuentas por
     pagar, grupos, cuentas por cobrar (sus pagos y documentos caen en
     cascada) y al final el proyecto;
-  - solo borra el proyecto si la cotización es la principal; una
-    complementaria solo borra sus propias cuentas y recalcula los grupos que
-    tocaba con `reconcile_cuenta_pagar_grupo`;
-  - test `live` de cancelar principal y complementaria, más el caso
-    bloqueado.
+  - solo borra el proyecto si la cotización es la principal. Una
+    complementaria solo borra sus propias cuentas y después, **dentro de la
+    misma RPC**, recalcula `monto_total` de cada grupo que tocaba y borra el
+    grupo `ABIERTO` que quede vacío. Usa la misma sentencia que
+    `reconcile_cuenta_pagar_grupo`, que no sirve aquí porque recibe una
+    cuenta viva (S3);
+  - la principal con complementarias aprobadas **cancela en cascada** (D28):
+    valida las guardas sobre todas, cancela cada complementaria y al final la
+    principal. Si una bloquea, no se toca nada y el error la nombra;
+  - test `live` de cancelar principal, complementaria y principal con
+    complementaria, más los casos bloqueados.
 - `registrar_pago_cuenta_pagar` conserva `EN_PROCESO_PAGO` si la cuenta está
   en una orden (H3). Se parte de la definición vigente en `pg_proc`
   (norma de la decisión 011).
@@ -576,15 +675,24 @@ son bugs de hoy, no del rediseño.
   - Entrada normalizada, sin saber en qué unidad vienen los montos (O3).
   - Tests unitarios con cada fila de la tabla de la sección 5.
 - `concepto.ts` llama a `status.ts`, `selectors.ts` y
-  `calcularCrucePagoProveedor` (U6); `status.ts` se mueve a
-  `lib/shared/cuentas/`.
+  `calcularCrucePagoProveedor` (U6). Los tres se mueven a
+  `lib/shared/cuentas/`, dejando re-exports en su ruta vieja hasta B8; `round2`
+  pasa a `lib/shared/decimal.ts`, también con re-export. Los tipos de
+  `cuentas_por_proyecto` pasan de `useCuentasPorProyecto` a `lib/types.ts`.
+  `calcularEstadoCuentaCobrarDetallado` recibe `hoy` en CDMX como parámetro
+  (S6).
+- "Tiene factura" y "tiene complemento" siguen D25 y D27: se derivan del
+  documento vigente `validado`, no del estado guardado. Tests de "En
+  revisión" en factura y complemento.
+- Fecha de "Cerradas automáticamente el …" con fechas de negocio en CDMX
+  (S19).
 - Migración:
   - `uuid_cfdi`, `total_cfdi` y `metodo_pago_cfdi` (`PUE`/`PPD`/null) en la
     fila del XML de `documentos_cuentas_cobrar`; `uuid_cfdi` y `total_cfdi`
     en la de `documentos_cuentas_pagar` (H6, U7);
   - `CHEQUE` en el CHECK de `pagos_comprobantes.tipo_pago`, **en la
     validación interna de `registrar_pago_cuenta_cobrar`**, en la ruta y en
-    Zod (R4);
+    Zod (R4). Sus dos firmas se fusionan en una (§7.0, regla 3; S7);
   - `documentos_cuentas_cobrar.pago_id` (FK a `pagos_comprobantes`): un
     complemento por pago (D16).
 - `factura-parser` lee `MetodoPago`. Todas las rutas que suben una factura
@@ -594,11 +702,16 @@ son bugs de hoy, no del rediseño.
   `IdDocumento`, `ImpPagado`, `FechaPago` y `MontoTotalPagos`.
 - `subir-complemento`:
   - Zod;
+  - acepta XML, PDF o los dos en la misma petición (aditivo, R2 y supuesto
+    15; S8). Ninguno es obligatorio por sí solo, pero al menos uno sí. El
+    complemento cuenta cuando el pago tiene los dos y el XML está
+    `validado` (D27);
   - recibe el `pago_id`;
   - toma el `DoctoRelacionado` cuyo `IdDocumento` sea el UUID de la factura y
     compara su `ImpPagado` con el pago (±0.01), no `MontoTotalPagos` (R11);
-  - `pago_id` es **opcional** en la ruta vigente (R2). Si falta, se asigna al
-    pago más reciente sin complemento, que es lo que ya hace la UI actual;
+  - `pago_id` es **opcional** hasta B8 (R2). Si falta, se asigna al pago
+    más reciente que todavía no tenga ese archivo (XML o PDF). Hoy la ruta no
+    vincula ningún pago; esto es nuevo;
   - si algo no cuadra, guarda con `estado_validacion = 'revision'`, igual que
     las facturas.
 - Sin script de backfill (O5): las facturas existentes quedan con
@@ -616,7 +729,10 @@ va solo.
     neto aplicado, tipo (`TRANSFERENCIA`/`EFECTIVO`/`CHEQUE`), fecha,
     comprobante, notas, `created_by`, `anulado_at/por/motivo`;
   - backfill simple (D10, supuesto 12): snapshot estimado para todos, y una
-    fila "histórica estimada" por cada pago existente.
+    fila "histórica estimada" por cada pago existente;
+  - `transferir_cubierto` en `ordenes_pago_conceptos` (S1). Las órdenes
+    anteriores a B2 lo dejan en null y se muestran como están (D10).
+  - Columnas de fecha nuevas en `timestamptz` (S19).
 - RPC nueva versión de `registrar_pago_grupo_factura` / `_cuenta_pagar`: recibe
   el monto transferido, tipo, fecha y notas; valida contra el total a
   transferir; guarda el pago y **convierte a neto proporcional** para
@@ -625,20 +741,29 @@ va solo.
     Sheets no cambian.
   - Idempotente vía `pago_operations`.
   - **Regla del último pago (H8):** cuando el transferido acumulado llega al
-    total a transferir, el neto aplicado es exactamente `monto_total − neto ya
-    pagado`, sin proporción. Así el grupo y la orden cierran al centavo.
+    total a transferir **(±0.01, S18)**, el neto aplicado es exactamente
+    `monto_total − neto ya pagado`, sin proporción. Así el grupo y la orden
+    cierran al centavo. Nunca se acepta pasarse del total por más de 0.01.
+  - El reparto del neto entre las hijas del grupo sigue siendo el prorrateo
+    vigente (residuo exacto en la última hija), no se reescribe.
   - Una suelta o un grupo sin factura no se paga (supuesto 9).
-  - Las firmas viejas se eliminan en la misma migración (§7.0, regla 3).
+  - Las firmas viejas se fusionan y se eliminan en la misma migración
+    (§7.0, regla 3; S7).
   - Recibe `p_comprobante_url` y lo guarda en el pago (A1).
   - `fecha_pago` de la cuenta = fecha capturada del pago que la salda, no
     `CURRENT_DATE` (R7).
   - `pagos_cuentas_pagar.orden_pago_id` guarda la orden vigente al momento
-    del pago. El estado de la orden se calcula con los pagos **de esa
-    orden** frente al saldo que cubría al generarse, no con
-    `bool_or(monto_pagado > 0)` (R6).
-- Snapshot de `total_a_transferir` desde `total_cfdi` del documento (U7), en
-  el mismo `UPDATE` que da la factura por buena, en los **cinco** puntos de
-  entrada (A2 corregido):
+    del pago. El estado de la orden se calcula con Σ `monto_transferido` de
+    los pagos no anulados **de esa orden** frente a Σ `transferir_cubierto`
+    de `ordenes_pago_conceptos` (±0.01): 0 → Generada, parcial → Parcial,
+    completo → Completada. Ya no se usa `bool_or(monto_pagado > 0)` (R6,
+    S1).
+- Snapshot de `total_a_transferir` desde `total_cfdi` del documento (U7),
+  **solo cuando el documento queda `validado`** (D25). En un grupo va en el
+  mismo `UPDATE` que lo pasa a `FACTURADO`. Una suelta no tiene ese
+  `UPDATE`: el snapshot se escribe en `cuentas_pagar` en la misma petición
+  que valida el documento. Aplica en los **cinco** puntos de entrada (A2
+  corregido):
   - grupo: `grupos/[id]/subir-factura`, `portal/cuentas/grupos/[id]/factura`
     y la validación manual `grupos/[id]/documentos/[docId]` (PATCH a
     `validado`, que hoy también llama a `marcarGrupoFacturado`);
@@ -663,12 +788,19 @@ va solo.
 - La lógica de `/api/cuentas/por-proyecto` pasa a
   `lib/server/cuentas/periodo.ts` y la comparten la ruta vieja y la nueva.
 - RPC `cuentas_anios()`: años con datos, para el select.
+- Ruta `GET /api/cuentas/resumen` (S4): años con su número de proyectos
+  pendientes (derivado con `concepto.ts` sobre todos los años) y el contador
+  de avisos. El cliente la pide una vez por carga, no en cada cambio de
+  periodo. Entra al mismo presupuesto de p95 que `periodo`.
+- "Sin fecha" y "Sin proyecto" (S17): aparecen como grupo en todos los años y
+  en "Todo el año", pero no suman a los totales ni a los contadores de mes.
 - La ruta deriva con `concepto.ts` y luego filtra, busca (folio, proyecto,
   cliente, contraparte y concepto), cuenta pendientes por mes, arma los
   totales con `calcularCierreProyecto` y pagina la Lista. Al cliente solo
   llega el periodo pedido.
-- Presupuesto p95 < 800 ms con el dataset de carga de test (O1b). Si no se
-  cumple, la derivación pasa a SQL con un test de paridad.
+- Presupuesto p95 < 800 ms con el dataset de carga de test (O1b) para
+  `periodo`, `resumen` y `avisos` (S4). Si alguna no lo cumple, la
+  derivación pasa a SQL con un test de paridad.
 - Índice por `proyectos.fecha_entrega` (D12).
 - Helper SQL `hoy_cdmx()` que usan las RPCs nuevas. Se corrigen las dos RPCs
   vigentes que usan UTC (H7), partiendo de su versión en `pg_proc`.
@@ -687,8 +819,20 @@ duplicadas.
 
 **B4 — Pantalla principal nueva (`?v=2`).**
 - Primitivos nuevos (§6): ProgressBar, Field, Checkbox, Switch, BottomSheet
-  (interno de `Modal mobile="sheet"`, U5), SearchableSelect, CuentasTabBar e
-  iconos. Cada uno con su test.
+  (interno de `Modal mobile="sheet"`, U5), Drawer, SearchableSelect,
+  CuentasTabBar e iconos. Cada uno con su test.
+- Extensiones aditivas, sin cambiar los usos actuales (S10, S11):
+  - `Modal`: tamaños `780`/`820`/`960`, slots `header` y `footer` (fijo
+    abajo), Escape para cerrar, y en `mobile="sheet"` fondo
+    `rgba(0,0,0,.28)`;
+  - `ResponsiveTableCard`: `groups` (encabezado por mes) y
+    `mobileLayout="list"` (filas dentro de una tarjeta).
+- `AppShell` con `mobileChrome="tabbar"` en `/cuentas`: sin `pt-16` y con
+  espacio abajo para la barra más `env(safe-area-inset-bottom)` (S13).
+- La barra de pestañas usa los iconos del sidebar (S13).
+- Moneda con `fmtMoney` (`$` + `fmtCurrency`, S20).
+- Proyecto `mobile` de Playwright (390 × 844) y capturas en oscuro con
+  `colorScheme: 'dark'` (S21).
 - Tablas con `ResponsiveTableCard` (U5); moneda con `fmtCurrency` (U9).
 - Items de navegación extraídos a `lib/navigation/items.ts` (U8).
 - **Escritorio** (capturas 01, 02, 07 y 08):
@@ -699,7 +843,9 @@ duplicadas.
     búsqueda expandible;
   - 4 tarjetas de totales;
   - tarjetas de proyecto y maestro-detalle (detalle a la izquierda, lista a la
-    derecha; tocar el proyecto seleccionado lo deselecciona);
+    derecha; tocar el proyecto seleccionado lo deselecciona). Por debajo de
+    `xl`, el detalle ocupa todo el ancho y la lista se oculta, con regreso
+    por el chevron (S14; captura a 1024 px);
   - tablas Entradas y Salidas con siguiente paso y vencimiento;
   - Lista agrupable por mes, con pie "Mostrando N conceptos de M proyectos".
 - **Móvil** (capturas 01–03, 09, 10, 12–14 y 17, 18, 20):
@@ -718,10 +864,17 @@ duplicadas.
     cobrar";
   - "Agrupar por mes" solo en "Todo el año";
   - métricas de la tarjeta: Por cobrar / Por pagar si está abierta, Ingreso /
-    Egreso si está cerrada.
+    Egreso si está cerrada;
+  - mes inicial = mes actual; al cambiar de año, el mes pasa al actual si es
+    el año en curso o, si no, al último mes con datos (S16).
 - Cierre del proyecto con el formato nuevo (§5.2) y el aviso de estimación
-  (Art. 14 LISR).
-- Estado en la URL (supuesto 8).
+  (Art. 14 LISR). IVA, retenciones e ISR van **una fila por mes** de cobro o
+  pago, con su día 17, más la fila "Al cobrar" / "Al pagar" para lo pendiente
+  (D26). La partición va en `lib/shared/cuentas/cierre-mensual.ts` y usa
+  `calcularCierreProyecto` sin cambiarlo; test de que la suma de las filas
+  es igual al total del cierre.
+- Estado en la URL (supuesto 8), incluidos `det`, `sheet` y `page`. Abrir
+  hace `push` y filtrar hace `replace` (S15).
 - Estados vacíos: sin resultados, año archivado (todo cerrado) y "Sin fecha".
 - Tokens `--sn-*`; moneda con 2 decimales (supuesto 18).
 
@@ -735,12 +888,16 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - Cobro: campos y notas.
   - Pago: select de responsable **solo en sueltos** (D21); en un grupo, el
     desglose lleva la reasignación por renglón. Además: grupo de
-    facturación, régimen, cruce fiscal, contacto, orden vinculada e historial
-    de reasignaciones.
+    facturación, régimen, cruce fiscal (el neto se rotula "Costo total ·
+    neto al proveedor", D29), contacto, orden vinculada e historial de
+    reasignaciones.
 - Documentos: checklist requerido/opcional según D11, "Válida" según
   `estado_validacion`, aviso de grupo.
-  - Complemento: **un renglón por pago** (D16), requerido solo si la factura
-    es PPD; si el método es desconocido, se pide elegir.
+  - Complemento: **un renglón por pago** (D16) con XML y PDF, los dos
+    requeridos (D27), solo si la factura es PPD; si el método es
+    desconocido, se pide elegir.
+  - "En revisión" cuando el XML no quedó validado, con acción para marcarlo
+    a mano (PATCH vigente) (D25).
   - Comprobante de pago del proveedor: requerido una vez pagado.
 - Registrar pago:
   - cobro y pago con tipo y fecha;
@@ -757,7 +914,10 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 **B6 — Avisos y órdenes.** Escritorio: capturas 09–13. Móvil: 04, 05, 11,
 16 y 21.
 - Ruta `GET /api/cuentas/avisos` con las 5 categorías (supuestos 2 y 3),
-  derivadas con `concepto.ts` (O1, O2).
+  derivadas con `concepto.ts` (O1, O2), sobre **todos los años**, con el
+  presupuesto de S4. "Complementos faltantes" incluye los que están en
+  revisión o les falta el XML o el PDF (D25, D27).
+- Panel "Avisos y órdenes" con el primitivo `Drawer` (S10).
   `/api/cuentas-cobrar/alertas` sigue viva para la UI actual hasta B8 (R2).
 - Escritorio: panel lateral de 400px "Avisos y órdenes". Móvil: pantallas
   empujadas "‹ Cuentas".
@@ -778,9 +938,12 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - Pie fijo con los totales recalculados.
   - El confirmar de D8 es el propio pie del modal (resumen + "Generar orden
     PDF"), no un segundo diálogo.
-  - `POST` recibe la selección, genera el PDF (supuesto 14), lo sube a Drive
-    y llama `generar_orden_pago` (B1b). Luego muestra "Orden generada" con
-    Descargar o Compartir el enlace de Drive (supuesto 16).
+  - `POST` recibe la selección con su monto esperado y la
+    `idempotency_key`, genera el PDF (supuesto 14), lo sube a Drive y llama
+    `generar_orden_pago` (B1b). Luego muestra "Orden generada" con Descargar
+    o Compartir el enlace de Drive (supuesto 16).
+  - Con `candidatos_cambiaron` recarga el preview y avisa. Con "ya se está
+    procesando" espera y vuelve a consultar (S2, S9).
   - `buildOrdenPagoPreview` pasa a usar el saldo en lugar de `x_pagar` y
     agrega el cruce fiscal.
 - Migración de órdenes:
@@ -790,11 +953,13 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
     (`pagos_cuentas_pagar.orden_pago_id`). Cada grupo o suelta vuelve al
     estado que corresponde a su saldo (`FACTURADO`/`PENDIENTE` sin pagos,
     `EN_PROCESO_PAGO` con pago previo), no a un estado fijo (R6). Quita el
-    `orden_pago_id`.
+    `orden_pago_id` de grupos, sueltas e hijas, pero **conserva** sus filas
+    de `ordenes_pago_conceptos` para el historial (S1).
 - `VENCIDA` derivada a 15 días desde `fecha_generacion` en hora CDMX (D7), sin
   columna. Aplica también a las órdenes existentes (D13).
 - `buscar_ordenes_pago` extendida: filtros estado/mes/proveedor/proyecto,
-  búsqueda por folio, desglose por orden y conteo de cuentas.
+  búsqueda por folio, desglose por orden y conteo de cuentas, todo leído de
+  `ordenes_pago_conceptos` (S1), también en órdenes canceladas.
 - Historial (modal de 960px / pantalla móvil): filas que se expanden por
   proveedor, monto en total a transferir (D20), descarga con el enlace de
   Drive (supuesto 16).
@@ -822,8 +987,12 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - reemplazar o quitar documentos: baja lógica, el anterior queda en el
     historial;
   - editar fechas y notas (PATCH con Zod);
-  - reasignar proveedor en cuenta pagada: se amplía la guarda de
-    `reasignar_responsable_cuenta_pagar`.
+  - reasignar proveedor en cuenta pagada: **mecánica propuesta, a confirmar
+    con el usuario al abrir B7 (S12)**. Una RPC de corrección atómica que
+    exige los pagos del concepto ya anulados y su orden cancelada. Da de
+    baja la factura del grupo, que vuelve a `ABIERTO` y pierde el snapshot,
+    y reasigna con `reasignar_responsable_cuenta_pagar` sin cambiar su
+    guarda. Queda registro en `cuentas_correcciones`.
 
 **B8 — Corte y limpieza.**
 - `/cuentas` usa la UI nueva y se quita `?v=2`.
@@ -869,6 +1038,9 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 - **Órdenes duplicadas (H1–H3, vigente hoy).** Una cuenta puede entrar a dos
   órdenes y pagarse dos veces.
   - Mitigación: B1b va primero, con test de concurrencia en `live`.
+- **Orden con montos viejos o sin desglose (S1, S2).**
+  - Mitigación: monto esperado validado bajo candado y snapshot inmutable en
+    `ordenes_pago_conceptos`.
 
 **P1**
 - **Escala.** `cuentas_por_proyecto` trae todo sin paginar. Con ~1,000
@@ -924,7 +1096,11 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - lectura de `MetodoPago` y UUID;
   - parser de complemento y su validación contra la factura;
   - vencida a 15 días en hora CDMX;
-  - fechas SAT por cobro o pago;
+  - fechas SAT por cobro o pago, una fila por mes, con la suma igual al
+    total del cierre (D26);
+  - "En revisión" en factura y complemento, y complemento incompleto sin
+    XML o sin PDF (D25, D27);
+  - tolerancia de ±0.01 en el último pago (S18);
   - cifras del periodo contra `calcularCierreProyecto`.
 - **Migraciones:** job `fresh-db` y `Migrations` en verde.
 - **Paridad:** pendientes y totales de B3 contra `cuentas_por_proyecto` y
@@ -940,12 +1116,15 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - barra de pestañas y hoja "Más" en móvil;
   - reabrir, anular pago y volver a cerrar.
 - **E2E live:** registrar y anular pago en concurrencia; dos generaciones de
-  orden simultáneas (B1b); generar y cancelar orden contra la base de test.
+  orden simultáneas (B1b); orden con un pago entre el preview y la
+  generación (`candidatos_cambiaron`, S2); generar y cancelar orden,
+  verificando que el desglose sigue en el historial (S1); cancelar principal
+  en cascada y los casos bloqueados (D28).
 - **Visual (O10):** capturas de Playwright de cada estado (escritorio y
   móvil, claro y oscuro) adjuntas al PR y revisadas lado a lado con el
   handoff. No es diff de píxeles.
-- **Rendimiento (O1b):** p95 de `GET /api/cuentas/periodo` < 800 ms con el
-  dataset de carga de test.
+- **Rendimiento (O1b, S4):** p95 < 800 ms de `GET /api/cuentas/periodo`,
+  `/resumen` y `/avisos` con el dataset de carga de test.
 - **Manual:** el usuario en el Preview de B8 con datos reales de test, en
   escritorio y en su teléfono.
 - **Regla de siempre:** tsc, lint, `npm test`, build, smoke, critical y `live`
@@ -963,7 +1142,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | Auditoría de regresiones R1–R13, D22–D23 | Hecho (sesión 13) |
 | Supuestos confirmados y auditoría final A1–A5 | Hecho (sesión 14) |
 | Auditoría de optimización O1–O10, D24 | Hecho (sesión 15) |
-| Revisión de reutilización U1–U10 y huecos A2/U7 | Hecho (sesión 16). Falta aprobar |
+| Revisión de reutilización U1–U10 y huecos A2/U7 | Hecho (sesión 16) |
+| Auditoría profunda S1–S21 y decisiones D25–D29 | Hecho (sesión 17). Falta aprobar |
 | B0 Referencia, reglas y seed | Pendiente |
 | B1b Blindaje previo | Pendiente |
 | B1 Derivación y datos fiscales | Pendiente |

@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 16: revisión de reutilización contra el repo)
+**Última actualización:** 2026-09-25 (sesión 17: auditoría profunda del plan y D25–D29)
 
 ## Estado
 
@@ -18,11 +18,21 @@ Cuentas".**
 - Auditoría de regresiones (sesión 13): R1–R13 en §5.4 y reglas
   transversales en §7.0. **R1 es un bug vigente:** cancelar una cotización
   aprobada falla en la BD (llave foránea); se corrige en B1b (D22).
-- 23 decisiones confirmadas (D1–D23).
+- 29 decisiones confirmadas (D1–D29).
 - **Supuestos de la §4 confirmados** (sesión 14). Auditoría final A1–A5:
   sin dudas de producto ni de negocio. Auditoría de optimización O1–O10
   (sesión 15) y D24: el corte (B8) va antes de B7. Revisión de reutilización
-  U1–U10 (sesión 16, §5.7). **Falta solo la aprobación del plan.**
+  U1–U10 (sesión 16, §5.7).
+- Auditoría profunda por áreas (sesión 17, §5.8): S1–S21, entre ellos 3 P0
+  que producían bugs (desglose de órdenes sin guardar, carrera en el monto
+  de la orden, cancelar complementaria). Decisiones D25–D29 del usuario:
+  - documento en revisión no cuenta;
+  - fechas SAT, una fila por mes;
+  - complemento con XML y PDF;
+  - cancelar la principal en cascada;
+  - etiqueta "Costo total · neto al proveedor".
+- **Falta solo la aprobación del plan.** La mecánica de reasignar una cuenta
+  pagada (S12) se confirma al abrir B7; no bloquea.
 - 10 bloques propuestos (B0, B1b y B1–B8). B1b es nuevo y corrige los bugs
   vigentes antes del rediseño.
 
@@ -48,7 +58,7 @@ ha empezado. Todo lo de estas sesiones está en `main` (solo docs).
 
 ## Decisiones nuevas
 
-Todas viven en `docs/PLAN.md` §3 (D1–D9). Pasan a
+Todas viven en `docs/PLAN.md` §3 (D1–D29). Pasan a
 `docs/decisions/017-rediseno-cuentas.md` en el bloque B0, cuando el plan se
 apruebe con los supuestos cerrados. No se crea la decisión antes, para no
 fijar supuestos que el usuario aún puede cambiar. Las de más peso:
