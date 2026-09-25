@@ -7,8 +7,9 @@ app/                          # Next.js App Router
 ├── api/                      # API routes (REST)
 │   ├── cotizaciones/         # CRUD + aprobar + cancelar + generar-pdf
 │   │   └── [id]/             # general, totales, notas, items/[itemId]  ← escrituras por sección
+│   ├── cuentas/              # periodo, resumen, avisos, órdenes (lectura derivada en SQL)
 │   ├── cuentas-cobrar/       # documentos, registrar-pago, complementos
-│   ├── cuentas-pagar/        # documentos, registrar-pago, órdenes de pago
+│   ├── cuentas-pagar/        # documentos, registrar-pago, grupos, comprobantes
 │   ├── proyectos/            # CRUD, tareas, cronograma, hoja de llamado, reporte de cierre
 │   ├── proveedores/          # CRUD, historial, resumen de documentos
 │   ├── portal/               # Portal de proveedores (sesión propia, no NextAuth)
@@ -22,7 +23,7 @@ app/                          # Next.js App Router
 │   └── auth/                 # NextAuth v5
 ├── cotizaciones/             # lista · nueva · [id] detalle (pantalla colaborativa)
 ├── proyectos/                # lista · [id] · tipos
-├── cuentas/                  # cobrar + pagar (tabs)
+├── cuentas/                  # UI por proyecto y mes: periodo, detalle, avisos y órdenes
 ├── proveedores/              # lista + modal de detalle
 ├── portal/                   # login · signup · confirmar-identidad · panel
 ├── planeacion/               # extracción + pendientes
@@ -50,7 +51,8 @@ lib/
     ├── supabase-admin.ts     # cliente service_role -- `import 'server-only'`, nunca al navegador
     ├── repositories/         # acceso a datos por dominio
     ├── quotations/           # approval, cancel, folio (con su propio caché), persistence
-    ├── cuentas/              # estados y transiciones
+    ├── cuentas/              # periodo (SQL + referencia TS), avisos, detalle, pagos
+    ├── ordenes-pago/         # preview, cruce y RPCs de la orden de pago
     ├── projects/             # tareas, autofill de documentos
     ├── errors/               # DomainError + safeMessage
     ├── observability/        # logger estructurado con requestId
@@ -278,8 +280,8 @@ UPDATE`). El recorrido completo, con los defectos que se encontraron en el camin
 
 ## Idempotencia de cliente (pagos y bulk-import de partidas)
 
-`lib/client/pagoIdempotency.ts` (`runIdempotentPagoSubmit`, compartido por
-`useCuentasPagar`/`useCuentasCobrar`) y `lib/client/bulkImportIdempotency.ts`
+`lib/client/pagoIdempotency.ts` (`runIdempotentPagoSubmit`, usado por el
+detalle de Cuentas, `app/cuentas/components/detalle/useDetalle.ts`) y `lib/client/bulkImportIdempotency.ts`
 (`runIdempotentBulkImportSubmit`, usado por `handleImportItems` en
 `app/cotizaciones/[id]/page.tsx`) orquestan reintentos seguros de doble clic,
 retry de red o pestaña caída a medio submit, contra `withIdempotency`
@@ -337,12 +339,11 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   `SUM(hijas.monto_pagado) = grupo.monto_pagado` siempre, incluso en pagos
   parciales sucesivos. Mismo mecanismo de idempotencia (`pago_operations`,
   `operation_id`) que `registrar_pago_cuenta_pagar`.
-- `generar-orden-pago` toma grupos `FACTURADO` como fuente, elegibles solo
-  si **todas** las cotizaciones que le aportan renglones (principal +
-  cualquier complementaria) tienen su evento ya realizado (en hora CDMX,
-  `hoy_cdmx()`) y su factura XML está `validado` — un `UNION ALL` agrega las
-  sueltas `PENDIENTE` sin orden, con proveedor, factura validada y saldo.
-  La orden se crea con **una sola RPC atómica**, `generar_orden_pago`
+- La orden de pago (`/api/cuentas/ordenes/*`, B6) toma sus candidatos de
+  `cuentas_orden_candidatos`: grupos y sueltas con proveedor, factura
+  validada, saldo y evento ya realizado en **todas** las cotizaciones que
+  les aportan renglones (hora CDMX, `hoy_cdmx()`), incluidos los grupos
+  `EN_PROCESO_PAGO`; lo que no entra sale con su motivo. La orden se crea con **una sola RPC atómica**, `generar_orden_pago`
   (B1b del rediseño de Cuentas): bloquea los candidatos, los revalida,
   compara su saldo con el que imprimió el PDF (`candidatos_cambiaron` si
   difiere), escribe la orden y su desglose inmutable
@@ -362,10 +363,36 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   representadas como grupos sintéticos de un solo renglón (visibles, nunca
   facturables por esa vía) — nunca desaparecen de la vista del proveedor
   mientras la migración retroactiva no las alcance.
-- La UI interna (`CuentaDetailModal`) muestra la tarjeta "Grupo de
-  facturación" con el desglose de renglones hermanos solo cuando
-  `cuenta.grupo_id` no es null; el cruce fiscal se calcula sobre
-  `grupo.monto_total`, nunca sobre el `x_pagar` del renglón individual.
+- El detalle de un concepto (`app/cuentas/components/detalle/`) muestra el
+  grupo de facturación con sus renglones cuando el pago es un grupo; el
+  cruce fiscal se calcula sobre `grupo.monto_total`, nunca sobre el
+  `x_pagar` del renglón individual.
+
+## Cuentas: lectura por periodo (rediseño, docs/decisions/017)
+
+`/cuentas` agrupa cobros y pagos por proyecto y mes del evento. Cada
+concepto (un cobro, un grupo de proveedor o una cuenta suelta) tiene un
+estado y un siguiente paso **derivados** de montos, documentos y fechas; el
+`estado` guardado no manda.
+
+- **La derivación vive en SQL** (`cuentas_conceptos`, `cuentas_periodo`,
+  `cuentas_resumen`, `cuentas_avisos_items`; migración `20261003`). Traer el
+  año crudo a Node costaba ~4 MB por petición y no cabía en p95 < 800 ms
+  (O1b). SQL devuelve estados y pasos como códigos;
+  `lib/server/cuentas/periodo-sql.ts` les pone etiqueta y texto con las
+  tablas de `lib/shared/cuentas/concepto.ts`.
+- **La derivación en TS sigue siendo la referencia** (`concepto.ts`,
+  `lib/server/cuentas/periodo.ts`, `avisos.ts`): arma el proyecto
+  seleccionado sobre la lectura cruda de ese solo proyecto
+  (`cuentas_por_proyecto(p_year, p_proyecto)`), alimenta los mocks e2e y
+  `tests/e2e/live/cuentas-paridad-sql.spec.ts` exige que SQL y TS den lo
+  mismo sobre la BD de test. **Un cambio de regla va en los dos lados.**
+- `cuentas_periodo` fija `plan_cache_mode = force_custom_plan`: con el plan
+  genérico de plpgsql (desde la 6.ª llamada por conexión) la misma petición
+  pasaba de ~0.4 s a ~4.6 s.
+- Avisos: por categoría viajan los 50 más urgentes y el total real.
+- Montos: cobros con IVA; pagos en **total a transferir** (snapshot del CFDI
+  o estimado por régimen). El neto solo aparece en el cruce fiscal.
 
 ## Reglas que se respetan
 
@@ -389,7 +416,8 @@ evidencia, no cuenta como terminado.
 | Cotizaciones (CRUD, folio atómico, PDF, emitir) | `tests/e2e/critical/cotizaciones-*.spec.ts`, live `basic.spec.ts`, `lib/server/pdf/__tests__/cotizacion-pdf.test.ts` (fuente embebida, paginación) |
 | Aprobar / cancelar cotización (RPC transaccional) | live: crear → emitir → aprobar → cuentas → cancelar y revertir |
 | Cuentas por cobrar (factura, complemento, pagos parciales) | crítico + live de concurrencia |
-| Cuentas por pagar (factura, pagos, órdenes de pago con PDF real; utilidad de proyecto y cierre fiscal estimado — chip "Utilidad" + tabla Quién/Cuánto/Cuándo en `CuentasPorProyecto.tsx`, cálculo puro en `lib/shared/cierre-proyecto.ts`) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia, `lib/shared/__tests__/cierre-proyecto.test.ts`, `tests/e2e/critical/cuentas-cierre-proyecto.spec.ts` |
+| Cuentas por pagar (factura, pagos, órdenes de pago con PDF real; cierre fiscal estimado del proyecto, cálculo puro en `lib/shared/cierre-proyecto.ts`) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia, `lib/shared/__tests__/cierre-proyecto.test.ts`, `tests/e2e/critical/cuentas-ordenes.spec.ts`, live `cuentas-b1b.spec.ts` |
+| Cuentas: pantalla por periodo, detalle, avisos (escritorio y 390 px) | `tests/e2e/critical/cuentas-{principal,detalle,ordenes}.spec.ts`, live `cuentas-paridad-sql.spec.ts` y `cuentas-periodo-rendimiento.spec.ts` (p95 < 800 ms) |
 | Registrar pago sin carreras (cobrar y pagar) | `tests/e2e/live/cuentas-*-concurrency.spec.ts` |
 | Idempotencia de cliente (pagos y bulk-import de partidas) | `lib/client/__tests__/pagoIdempotency.test.ts`, `bulkImportIdempotency.test.ts`, `lib/server/__tests__/idempotency.test.ts`, `tests/e2e/live/bulk-replace-items-rpc.spec.ts` |
 | Proyectos (detalle, tareas, cronograma, tipos, reporte de cierre) | smoke de proyectos |

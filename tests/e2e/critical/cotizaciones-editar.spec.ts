@@ -403,7 +403,7 @@ test('copiar partidas seleccionadas desde otra cotización las trae a la actual'
   // seleccionar. Un glob termina en el path exacto y no matchea si se le
   // agrega el querystring (?search=&page=&pageSize=) que ahora siempre
   // lleva la lista -- se usa un RegExp explícito, igual que en
-  // tests/e2e/utils/cuentas-mocks.ts (3B-2/3B-3).
+  // los mocks de Cuentas (3B-2/3B-3).
   await page.route(/\/api\/cotizaciones(\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') { await route.fallback(); return }
     await fulfillJson(route, {
