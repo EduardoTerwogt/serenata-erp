@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 15: auditoría de optimización)
+**Última actualización:** 2026-09-25 (sesión 16: revisión de reutilización contra el repo)
 
 ## Estado
 
@@ -21,8 +21,8 @@ Cuentas".**
 - 23 decisiones confirmadas (D1–D23).
 - **Supuestos de la §4 confirmados** (sesión 14). Auditoría final A1–A5:
   sin dudas de producto ni de negocio. Auditoría de optimización O1–O10
-  (sesión 15) y D24: el corte (B8) va antes de B7. **Falta solo la aprobación
-  del plan.**
+  (sesión 15) y D24: el corte (B8) va antes de B7. Revisión de reutilización
+  U1–U10 (sesión 16, §5.7). **Falta solo la aprobación del plan.**
 - 10 bloques propuestos (B0, B1b y B1–B8). B1b es nuevo y corrige los bugs
   vigentes antes del rediseño.
 
