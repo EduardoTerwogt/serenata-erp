@@ -164,12 +164,18 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     const facturaProvLink = page.getByRole('link', { name: 'Ver' }).first()
     await expect(facturaProvLink).toHaveAttribute('href', /drive\.google\.com/, { timeout: 15_000 })
 
-    // 7. Registrar pago real en Cuentas por Pagar
+    // 7. Registrar pago en Cuentas por Pagar. El renglón de esta cotización
+    // no tiene proveedor asignado (cuenta suelta "Sin asignar"): desde B2
+    // del rediseño de Cuentas (T2, D25) la RPC bloquea el pago y la UI
+    // muestra el motivo, sin registrar nada.
     await page.getByRole('button', { name: 'Registrar Pago', exact: true }).click()
     const pagarForm = page.locator('form')
     await pagarForm.locator('input[placeholder="0.00"]').fill(String(cuentaPagar!.x_pagar))
     await pagarForm.getByRole('button', { name: 'Registrar Pago' }).click()
-    await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText('Asigna un proveedor a esta cuenta antes de registrar el pago.')).toBeVisible({ timeout: 30_000 })
+    const pagada = await page.request.get(`/api/cuentas-pagar?search=${cotizacionId}`)
+    const { rows: trasPago } = await pagada.json() as { rows: Array<{ cotizacion_id: string; monto_pagado: number | null }> }
+    expect(Number(trasPago.find((c) => c.cotizacion_id === cotizacionId)?.monto_pagado ?? 0)).toBe(0)
   })
 
   test('cancela una cotización real y revierte cuentas/proyecto', async ({ page }) => {

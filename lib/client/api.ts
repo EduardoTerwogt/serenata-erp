@@ -50,6 +50,10 @@ export async function getApiErrorMessage(response: Response, fallbackMessage: st
 
   const data = await safeParseJson(response)
   const errorMessage = typeof data?.error === 'string' ? data.error : null
+  // Rediseño de Cuentas B2: los errores esperados de negocio responden un
+  // código ({ error: 'sin_proveedor', message: '…' }); al usuario se le
+  // muestra el mensaje, no el código.
+  if (errorMessage && /^[a-z0-9_]+$/.test(errorMessage) && typeof data?.message === 'string') return data.message
   return errorMessage || fallbackMessage
 }
 
