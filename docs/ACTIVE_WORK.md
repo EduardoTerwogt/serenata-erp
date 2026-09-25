@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 12: plan re-auditado contra el diseño final)
+**Última actualización:** 2026-09-25 (sesión 13: auditoría de regresiones del plan)
 
 ## Estado
 
@@ -15,8 +15,11 @@ Cuentas".**
   - §5.2: reglas del prototipo que no se adoptan;
   - §5.3: pendientes del README y cómo se resuelven;
   - B4–B7 entregan escritorio + móvil, en tema claro y oscuro.
-- 21 decisiones confirmadas (D1–D21).
-- **17 supuestos por confirmar** (§4; el 5 y el 7 ya se resolvieron).
+- Auditoría de regresiones (sesión 13): R1–R13 en §5.4 y reglas
+  transversales en §7.0. **R1 es un bug vigente:** cancelar una cotización
+  aprobada falla en la BD (llave foránea); se corrige en B1b (D22).
+- 23 decisiones confirmadas (D1–D23).
+- **19 supuestos por confirmar** (§4; el 5 y el 7 ya se resolvieron).
 - 10 bloques propuestos (B0, B1b y B1–B8). B1b es nuevo y corrige los bugs
   vigentes antes del rediseño.
 

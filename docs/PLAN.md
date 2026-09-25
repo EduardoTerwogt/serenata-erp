@@ -10,6 +10,9 @@
   (`design_handoff_cuentas/`, con escritorio, móvil, capturas y README).
   - Se re-auditó el plan contra ese diseño y salieron D18–D21.
   - La comparación del diseño con las reglas vigentes está en §5.2 y §5.3.
+- Sesión 13 (2026-09-25): auditoría de regresiones del plan completo contra
+  el código y la BD. Salieron R1–R13 (§5.4), D22–D23 y las reglas
+  transversales de §7.0.
 - Falta que el usuario confirme los supuestos de la §4 y apruebe los bloques.
 
 Para retomar, ver `docs/ACTIVE_WORK.md` → "Cómo retomar". El zip del diseño
@@ -120,6 +123,13 @@ abren sin servidor.
 | D20 | Base del monto de una orden | **Total a transferir**, en "Nueva orden", el modal, el PDF **y el historial**. El historial del diseño muestra neto; se corrige. Las órdenes viejas (neto) se rotulan por `base_monto` (H9). Confirma el supuesto 5. |
 | D21 | Reasignar responsable | **Solo en conceptos sueltos.** En un concepto agrupado, el select del encabezado se desactiva y se reasigna **renglón por renglón** desde el desglose del grupo, con `reasignar_responsable_cuenta_pagar` sin cambios (grupo `ABIERTO`, o proyecto reabierto por admin, D5). |
 
+**Decisiones de la sesión 13** (auditoría de regresiones):
+
+| # | Tema | Decisión |
+|---|---|---|
+| D22 | Cancelar una cotización aprobada (hoy falla, R1) | Solo se permite **sin dinero ni órdenes**: sin cobros, sin pagos a proveedor y sin cuentas dentro de una orden de pago. Si se permite, borra proyecto, cuentas, grupos y documentos en una sola transacción, en el orden correcto de llaves foráneas. |
+| D23 | Encabezado móvil en `/cuentas` | **Se oculta**: en Cuentas móvil solo queda la barra de pestañas (D19), como en el diseño. El resto de la app no cambia. |
+
 ## 4. Supuestos por confirmar (se aplican si no se objetan)
 
 1. **Correcciones sobre un proyecto reabierto:** solo admin, igual que reabrir.
@@ -187,6 +197,13 @@ abren sin servidor.
     convención vigente en `lib/quotations/format.ts` y en los PDF.
 19. **Corte a móvil en el breakpoint `md` (768px)** de la app, no en los 720px
     del prototipo, para no crear un segundo breakpoint.
+20. **`?v=2` solo para usuarios con la sección `admin`** mientras duran B4–B7.
+    La vista nueva escribe sobre datos reales de producción; así se prueba sin
+    exponer una UI a medias al resto del equipo. En B8 se abre a todos.
+21. **Las tablas nuevas no se reflejan en Google Sheets**: `pagos_cuentas_pagar`,
+    `cuentas_reaperturas` y `cuentas_correcciones`. Las columnas nuevas de
+    tablas que ya se reflejan tampoco se agregan. Sheets es espejo de
+    consulta (principio 1); si hace falta, se amplía en otra iniciativa.
 
 ## 5. Modelo de dominio (lo que el diseño asume y hoy no existe)
 
@@ -315,6 +332,36 @@ con decisiones ya tomadas y **no se implementan así**:
 | 8 | Estados de escritorio sin captura | Se toman de las capturas móviles; B4 agrega captura de escritorio de cada uno en la validación |
 | 9 | Formato de moneda | Supuesto 18 |
 
+### 5.4 Auditoría de regresiones (sesión 13)
+
+Se revisó cada bloque contra el código, las RPCs vivas en producción
+(`pg_proc`), las llaves foráneas y los consumidores. **Criterio: que ningún
+bloque rompa algo que hoy funciona, incluida la UI actual, que convive hasta
+B8.**
+
+| # | Hallazgo | Evidencia | Dónde se atiende |
+|---|---|---|---|
+| R1 | **Bug vigente: cancelar una cotización APROBADA falla.** `cancel_cotizacion` borra `proyectos` antes que `cuentas_pagar`/`cuentas_cobrar`, y las FK `*_proyecto_id_fkey` no tienen cascada. Además solo revisa cobros pagados: ignora pagos a proveedor, órdenes y `cuentas_pagar_grupos`, que quedarían huérfanos. | Reproducido en `serenata-erp-test` con SH175, dentro de una transacción revertida: `violates foreign key constraint "cuentas_pagar_proyecto_id_fkey"`. | B1b (D22) |
+| R2 | **La UI actual se rompería antes de B8.** B1 haría obligatorio `pago_id` en `subir-complemento` (lo usa `TabDocumentos`). B6 cambiaría la forma de `GET/POST generar-orden-pago` (la usa `OrdenPagoModal`) y "reemplazaría" `/api/cuentas-cobrar/alertas` (la usa `CuentasPage`). | `useCuentasCobrar.ts:124,143`, `useCuentasPagar.ts:164,218` | §7.0, regla 1 |
+| R3 | **"Vencido" dejaría de actualizarse después de B8.** `sync_estados_cuentas_cobrar_vencidas()` solo se llama desde `GET /api/cuentas-cobrar` y `GET /alertas`, y B8 retira las dos. Sheets y el Dashboard leen el `estado` guardado. | `app/api/cuentas-cobrar/route.ts:6`, `alertas/route.ts:15` | B3 y B6 |
+| R4 | **CHEQUE fallaría en cobros.** El tipo de pago se valida también **dentro** de `registrar_pago_cuenta_cobrar` (`IF p_tipo_pago NOT IN ('TRANSFERENCIA','EFECTIVO')`) y en la ruta, no solo en el CHECK de la tabla. | `pg_proc`; `registrar-pago/route.ts:32` | B1 |
+| R5 | **Sobrecargas de RPC.** Si se agregan parámetros a `registrar_pago_grupo_factura` / `_cuenta_pagar` creando otra firma, PostgREST puede no saber cuál llamar, y las firmas viejas dejan una vía para pagar en neto sin pasar por `pagos_cuentas_pagar`. Hoy ya hay 2 firmas de cada una. | `pg_proc` | B2 |
+| R6 | **Estado de orden incorrecto con saldo previo.** El estado se calcula con `bool_or(monto_pagado > 0)`: una orden que incluye un grupo con pago parcial previo (supuesto 13) nacería "Parcial". Y "cancelar regresa a `FACTURADO`" perdería ese pago previo. | `registrar_pago_grupo_factura` en `pg_proc` | B2 y B6 |
+| R7 | **Fecha de pago en UTC y sin dato del usuario.** Las RPCs de pago a proveedor fijan `fecha_pago = CURRENT_DATE`. `dashboard_egresos_por_bucket` agrupa por esa fecha. | `pg_proc` | B2 |
+| R8 | **Anular un cobro no bajaría el saldo.** `registrar_pago_cuenta_cobrar` suma `pagos_comprobantes` sin filtro. Un pago anulado seguiría contando. | `pg_proc` | B7 |
+| R9 | **Drive está apagado en Preview.** La prueba manual de B8 (subidas, complemento, órdenes) no se puede hacer ahí. | `docs/ACTIVE_WORK.md`, deuda técnica | B8 |
+| R10 | **RLS en tablas nuevas.** Todas las tablas de cuentas tienen RLS activo y 0 políticas: solo `service_role` las toca (principio 1). Una tabla nueva sin RLS quedaría expuesta a `anon`. | `pg_class.relrowsecurity` | §7.0, regla 2 |
+| R11 | **Complemento con varios documentos.** Un complemento puede traer varios `Pago` y varios `DoctoRelacionado`. Validar con `MontoTotalPagos` compararía contra otra cosa. | CFDI 4.0 / Pagos 2.0 | B1 |
+| R12 | **`?v=2` en producción.** La vista nueva escribe sobre datos reales y la ve quien conozca la URL. | — | Supuesto 20 |
+| R13 | **Encabezado móvil duplicado.** `SidebarLayout` pinta un encabezado fijo con menú en móvil (`md:hidden`); con la barra de pestañas habría dos navegaciones. | `SidebarLayout.tsx:69-83` | D23, B4 |
+
+Sin regresión confirmada en: Dashboard (sigue en neto, D14); Reporte de
+Cierre y `documentos-autofill` (suman `monto_pagado`, que sigue en neto);
+`approve_cotizacion` y `reconcile_cuenta_pagar_grupo` (no cambian); Portal
+(cambia a propósito, D14; la validación de su factura sigue contra
+`monto_total` neto); reconciliación de pagos del cliente (`reconcilePago.ts`
+depende de `operation_id`, no del monto).
+
 ## 6. Infraestructura que se reutiliza
 
 - **RPCs de dinero** (no se recrean, se extienden):
@@ -345,7 +392,8 @@ con decisiones ya tomadas y **no se implementan así**:
   - `Field` reutilizable (hoy vive local en `TabInformacion`);
   - `Checkbox` y `Switch` ("Agrupar por mes");
   - `BottomSheet` (hojas móviles con grabber, 88–92% de alto);
-  - `CuentasTabBar` (barra móvil, solo en Cuentas, D19);
+  - `CuentasTabBar` (barra móvil, solo en Cuentas, D19). `SidebarLayout` oculta
+    su encabezado móvil en `/cuentas` (D23, R13); sin efecto en otras rutas;
   - `SearchableSelect` (Cliente y Proveedor con buscador);
   - iconos nuevos en `Icon.tsx`: `bell`, `folder`, `layers`,
     `sliders-horizontal`, `file-down`, `circle-check`, `arrow-right-circle`,
@@ -358,6 +406,30 @@ con decisiones ya tomadas y **no se implementan así**:
   `tests/e2e/utils/cuentas-mocks.ts` y los tests de hooks de cuentas.
 
 ## 7. Bloques
+
+### 7.0 Reglas transversales (aplican a todos los bloques)
+
+1. **Contratos aditivos hasta B8 (R2).** Ningún bloque cambia la forma ni
+   vuelve obligatorio un campo de una ruta que usa la UI actual:
+   - lo nuevo va en rutas nuevas (`/api/cuentas/...`) o en campos opcionales;
+   - las rutas viejas siguen vivas y se retiran en B8 tras buscar
+     consumidores con grep;
+   - si un cambio de dinero exige tocar la UI actual (B2), se toca en el mismo
+     PR y con su E2E.
+2. **Migraciones (R10, decisión 011):**
+   - numeradas en `db/migrations/` y registradas en `_manifest.json`;
+   - toda tabla nueva con `ENABLE ROW LEVEL SECURITY` y sin políticas, como
+     las demás tablas de cuentas;
+   - `CREATE OR REPLACE` parte de la definición viva en `pg_proc`, con diff
+     explícito;
+   - se aplican a test y a producción **en el mismo bloque**;
+   - jobs `fresh-db` y `Migrations` en verde.
+3. **Una sola firma por RPC de dinero (R5).** Al cambiar parámetros se hace
+   `DROP FUNCTION` de las firmas viejas y se crea la nueva, en la misma
+   migración, con el wrapper de idempotencia (`pago_operations`) incluido.
+4. **"Hoy" siempre en CDMX:** `hoy_cdmx()` en SQL y un helper en TS.
+5. **Escritorio y móvil, claro y oscuro,** en cada bloque de UI (B4–B7),
+   contra las capturas del handoff.
 
 Cada bloque va en su propio PR hacia `main` y se mergea en verde. La UI actual
 sigue funcionando hasta el Bloque 8: la nueva se construye al lado, en la
@@ -396,6 +468,17 @@ son bugs de hoy, no del rediseño.
     responsable llega en B6 sin cambiar la firma.
   - El total lo calcula la ruta a partir de los candidatos. Nunca viene del
     cliente.
+- **`cancel_cotizacion` corregida (R1, D22):**
+  - bloquea si hay cobros o pagos a proveedor registrados, o cuentas en una
+    orden;
+  - si procede, borra en orden de llaves foráneas: documentos, cuentas por
+    pagar, grupos, cuentas por cobrar (sus pagos y documentos caen en
+    cascada) y al final el proyecto;
+  - solo borra el proyecto si la cotización es la principal; una
+    complementaria solo borra sus propias cuentas y recalcula los grupos que
+    tocaba con `reconcile_cuenta_pagar_grupo`;
+  - test `live` de cancelar principal y complementaria, más el caso
+    bloqueado.
 - `registrar_pago_cuenta_pagar` conserva `EN_PROCESO_PAGO` si la cuenta está
   en una orden (H3). Se parte de la definición vigente en `pg_proc`
   (norma de la decisión 011).
@@ -412,7 +495,9 @@ son bugs de hoy, no del rediseño.
 - Migración:
   - `cuentas_cobrar.metodo_pago_cfdi` (`PUE`/`PPD`/null) y
     `cuentas_cobrar.uuid_cfdi` (H6);
-  - `pagos_comprobantes.tipo_pago` acepta `CHEQUE`;
+  - `CHEQUE` en el CHECK de `pagos_comprobantes.tipo_pago`, **en la
+    validación interna de `registrar_pago_cuenta_cobrar`**, en la ruta y en
+    Zod (R4);
   - `documentos_cuentas_cobrar.pago_id` (FK a `pagos_comprobantes`): un
     complemento por pago (D16).
 - `factura-parser` lee `MetodoPago`; `subir-factura` de cobrar guarda el
@@ -422,8 +507,10 @@ son bugs de hoy, no del rediseño.
 - `subir-complemento`:
   - Zod;
   - recibe el `pago_id`;
-  - valida que `IdDocumento` sea el UUID de la factura y que `ImpPagado`
-    coincida con el pago (±0.01);
+  - toma el `DoctoRelacionado` cuyo `IdDocumento` sea el UUID de la factura y
+    compara su `ImpPagado` con el pago (±0.01), no `MontoTotalPagos` (R11);
+  - `pago_id` es **opcional** en la ruta vigente (R2). Si falta, se asigna al
+    pago más reciente sin complemento, que es lo que ya hace la UI actual;
   - si algo no cuadra, guarda con `estado_validacion = 'revision'`, igual que
     las facturas.
 - Script de backfill idempotente (supuesto 4, D10): lee los XML de Drive y
@@ -453,6 +540,13 @@ va solo.
     total a transferir, el neto aplicado es exactamente `monto_total − neto ya
     pagado`, sin proporción. Así el grupo y la orden cierran al centavo.
   - Una suelta o un grupo sin factura no se paga (supuesto 9).
+  - Las firmas viejas se eliminan en la misma migración (§7.0, regla 3).
+  - `fecha_pago` de la cuenta = fecha capturada del pago que la salda, no
+    `CURRENT_DATE` (R7).
+  - `pagos_cuentas_pagar.orden_pago_id` guarda la orden vigente al momento
+    del pago. El estado de la orden se calcula con los pagos **de esa
+    orden** frente al saldo que cubría al generarse, no con
+    `bool_or(monto_pagado > 0)` (R6).
 - `calcularCierreProyecto` usa el snapshot del CFDI cuando existe y el
   estimado solo si no hay factura (H10). Test de ambos casos.
 - Portal de proveedores en total a transferir (D14): `app/api/portal/cuentas`
@@ -474,6 +568,9 @@ va solo.
 - Índice por `proyectos.fecha_entrega` (D12).
 - Helper SQL `hoy_cdmx()` que usan las RPCs nuevas. Se corrigen las dos RPCs
   vigentes que usan UTC (H7), partiendo de su versión en `pg_proc`.
+- `GET /api/cuentas/periodo` llama a `sync_estados_cuentas_cobrar_vencidas()`
+  antes de leer, como hoy las rutas viejas (R3), para que "Vencido" siga
+  vigente en Sheets y en el Dashboard después de B8.
 - Rutas `GET /api/cuentas/periodo` y `GET /api/cuentas/conceptos`, con
   `requireSection('cuentas')` y Zod.
 - `cuentas_por_proyecto` sigue viva hasta B8.
@@ -549,7 +646,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 **B6 — Avisos y órdenes.** Escritorio: capturas 09–13. Móvil: 04, 05, 11,
 16 y 21.
 - Ruta `GET /api/cuentas/avisos` con las 5 categorías (supuestos 2 y 3).
-  Reemplaza a `/api/cuentas-cobrar/alertas`.
+  Llama a `sync_estados_cuentas_cobrar_vencidas()` (R3).
+  `/api/cuentas-cobrar/alertas` sigue viva para la UI actual hasta B8 (R2).
 - Escritorio: panel lateral de 400px "Avisos y órdenes". Móvil: pantallas
   empujadas "‹ Cuentas".
   - Tocar un aviso limpia filtros, fija año y mes del evento y abre el
@@ -557,8 +655,11 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - Órdenes: tarjeta "Nueva orden" y las últimas 5 con "Ver todo (N)". En
     móvil, filtro de estado en hoja con contadores.
 - **Generar orden** (modal de 820px / hoja al 92%):
-  - `GET /api/cuentas-pagar/generar-orden-pago` devuelve elegibles y "No
-    incluidas" con motivo (supuesto 13), agrupados por responsable y proyecto.
+  - **Ruta nueva** `GET/POST /api/cuentas/ordenes/preview` y `/generar`
+    (R2). `generar-orden-pago` conserva su contrato para `OrdenPagoModal`
+    hasta B8; por dentro también llama a `generar_orden_pago`. Devuelve
+    elegibles y "No incluidas" con motivo (supuesto 13), agrupados por
+    responsable y proyecto.
   - Cruce fiscal por grupo, sumado por responsable (§5.2), con
     `calcularEjemploFactura` o el snapshot del CFDI.
   - Tarjetas colapsadas: la casilla incluye o excluye, y tocar la fila la
@@ -576,8 +677,11 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
   - `base_monto` (`NETO` para las existentes, `TRANSFERIR` para las nuevas;
     H9). El historial la rotula;
   - RPC `cancelar_orden_pago`: atómica, simétrica a `generar_orden_pago`
-    (B1b), solo sin pagos registrados. Regresa sus grupos a `FACTURADO` y sus
-    sueltas a `PENDIENTE`, y quita el `orden_pago_id`.
+    (B1b), solo si **ningún pago está registrado contra esa orden**
+    (`pagos_cuentas_pagar.orden_pago_id`). Cada grupo o suelta vuelve al
+    estado que corresponde a su saldo (`FACTURADO`/`PENDIENTE` sin pagos,
+    `EN_PROCESO_PAGO` con pago previo), no a un estado fijo (R6). Quita el
+    `orden_pago_id`.
 - `VENCIDA` derivada a 15 días desde `fecha_generacion` en hora CDMX (D7), sin
   columna. Aplica también a las órdenes existentes (D13).
 - `buscar_ordenes_pago` extendida: filtros estado/mes/proveedor/proyecto,
@@ -590,7 +694,9 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 - Tabla `cuentas_reaperturas` (proyecto, abierta por/cuándo/motivo, cerrada
   por/cuándo) y bitácora `cuentas_correcciones`.
 - Migración (H12):
-  - `anulado_at/por/motivo` en `pagos_comprobantes`;
+  - `anulado_at/por/motivo` en `pagos_comprobantes`.
+    `registrar_pago_cuenta_cobrar` y toda suma de pagos filtran
+    `anulado_at IS NULL` (R8);
   - `eliminado_at/por/motivo` y `reemplazado_por` en
     `documentos_cuentas_cobrar` y `documentos_cuentas_pagar`;
   - el CHECK de `pago_operations.dominio` acepta las operaciones de anulación.
@@ -620,7 +726,12 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 - E2E de Cuentas reescritos al flujo nuevo, en escritorio y en viewport móvil
   (390px).
 - `ARCHITECTURE.md` actualizado.
-- Prueba manual del usuario en el Preview.
+- Prueba manual del usuario en el Preview. **Requisito (R9):** encender Drive
+  en Preview con una carpeta de pruebas (token de
+  `/api/integrations/drive/authorize` con una cuenta de pruebas, variables en
+  el entorno Preview de Vercel), o la prueba de subidas y órdenes no es
+  posible. Se prepara al inicio de B8, no al final.
+- `?v=2` se abre a todos los usuarios (supuesto 20).
 
 **Dependencias:** B0 → B1b → B1 → B2 y B3 (pueden ir en paralelo) → B4 → B5
 → B6 → B7 → B8. B6 depende también de B2 (montos de la orden) y de B1b
@@ -732,7 +843,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | Rediseño en Claude Design | Hecho (usuario) |
 | Auditoría del diseño y plan | Hecho (sesión 10) |
 | Auditoría end-to-end y decisiones D10–D17 | Hecho (sesión 11) |
-| Diseño final (handoff) y re-auditoría, D18–D21 | Hecho (sesión 12). Falta confirmar la §4 y aprobar |
+| Diseño final (handoff) y re-auditoría, D18–D21 | Hecho (sesión 12) |
+| Auditoría de regresiones R1–R13, D22–D23 | Hecho (sesión 13). Falta confirmar la §4 y aprobar |
 | B0 Referencia, reglas y seed | Pendiente |
 | B1b Blindaje previo | Pendiente |
 | B1 Derivación y datos fiscales | Pendiente |
