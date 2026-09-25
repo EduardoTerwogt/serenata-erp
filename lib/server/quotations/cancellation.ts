@@ -46,6 +46,17 @@ export async function cancelQuotation(id: string) {
   const { error } = await supabaseAdmin.rpc('cancel_cotizacion', { p_id: id })
 
   if (error) {
+    // Guardas de la RPC (B1b, D22/A4/D28): el mensaje lo arma la propia RPC
+    // con el folio que bloquea y el motivo, sin datos internos.
+    const message = error.message ?? ''
+    if (error.code === 'P1413' && message.startsWith('cancelacion_bloqueada:')) {
+      throw new DomainError({
+        code: 'cancelacion_bloqueada',
+        status: 409,
+        safeMessage: `No se puede cancelar: ${message.slice('cancelacion_bloqueada:'.length).trim()}.`,
+        cause: error,
+      })
+    }
     throw new DomainError({
       code: 'error_cancelando_cotizacion',
       status: 500,

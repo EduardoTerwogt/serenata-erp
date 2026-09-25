@@ -1270,8 +1270,8 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | Auditoría profunda S1–S21 y decisiones D25–D29 | Hecho (sesión 17) |
 | Segunda auditoría T1–T10 y decisiones D30–D32 | Hecho (sesión 18) |
 | Tercera auditoría V1–V4 | Hecho (sesión 19). **Plan aprobado** |
-| B0 Referencia, reglas y seed | Pendiente |
-| B1b Blindaje previo | Pendiente |
+| B0 Referencia, reglas y seed | Hecho (sesión 20, PR #94) |
+| B1b Blindaje previo | En curso (sesión 20): migraciones aplicadas en test y producción; PR abierto |
 | B1 Derivación y datos fiscales | Pendiente |
 | B2 Pagos en total a transferir | Pendiente |
 | B3 Lectura por periodo | Pendiente |

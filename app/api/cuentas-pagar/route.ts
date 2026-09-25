@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { buscarCuentasPagarGrupos, updateCuentaPagar } from '@/lib/db'
+import { buscarCuentasPagarGrupos } from '@/lib/db'
 
 // Bloque 6 (docs/PLAN.md): busqueda/paginacion/totales server-side via RPC
 // unica buscar_cuentas_pagar_grupos
@@ -22,37 +22,6 @@ export async function GET(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
-  const authResult = await requireSection('cuentas')
-  if (authResult.response) return authResult.response
-
-  try {
-    const body = await request.json()
-    const { id, ...updates } = body
-    if (!id) return Response.json({ error: 'ID requerido' }, { status: 400 })
-
-    // 1B-4: estado/fecha_pago/monto_pagado son transiciones financieras --
-    // van únicamente por registrar-pago (RPC atómica), nunca por este PUT
-    // genérico. Si el body los incluye, se rechaza el update completo en
-    // vez de aplicar en silencio solo los campos permitidos.
-    const forbiddenFinancialKeys = ['estado', 'fecha_pago', 'monto_pagado']
-    const forbiddenKeysPresent = forbiddenFinancialKeys.filter((key) => key in updates)
-    if (forbiddenKeysPresent.length > 0) {
-      return Response.json(
-        { error: `Campos no permitidos en este endpoint: ${forbiddenKeysPresent.join(', ')}. Usar /registrar-pago.` },
-        { status: 400 }
-      )
-    }
-
-    const allowedKeys = new Set(['notas', 'orden_pago_id'])
-    const sanitizedUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([key]) => allowedKeys.has(key))
-    )
-
-    const cuenta = await updateCuentaPagar(id, sanitizedUpdates)
-    return Response.json(cuenta)
-  } catch (error) {
-    console.error(error)
-    return Response.json({ error: 'Error actualizando cuenta por pagar' }, { status: 500 })
-  }
-}
+// PUT retirado en B1b (docs/PLAN.md, H4): aceptaba estado/montos u
+// orden_pago_id directos, sin Zod ni RPC, y la UI no lo usaba. Toda
+// transición financiera va por su endpoint explícito.

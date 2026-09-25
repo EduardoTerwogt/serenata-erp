@@ -193,4 +193,22 @@ describe('cancelQuotation', () => {
     expect(mocks.rpcMock).toHaveBeenCalledTimes(1)
     expect(mocks.rpcMock).toHaveBeenCalledWith('cancel_cotizacion', { p_id: quotationId })
   })
+
+  it('B1b: una guarda de la RPC (cancelacion_bloqueada, P1413) sale como 409 con el folio y el motivo', async () => {
+    const quotationId = 'SH008'
+    mocks.getCotizacionByIdMock.mockResolvedValue({ id: quotationId, estado: 'APROBADA' })
+    mockNoPayments()
+    mocks.rpcMock.mockResolvedValue({
+      data: null,
+      error: { code: 'P1413', message: 'cancelacion_bloqueada: la cotización SH008-A tiene cuentas en una orden de pago' },
+    })
+
+    await expect(cancelQuotation(quotationId)).rejects.toMatchObject({
+      name: 'DomainError',
+      code: 'cancelacion_bloqueada',
+      status: 409,
+      safeMessage: 'No se puede cancelar: la cotización SH008-A tiene cuentas en una orden de pago.',
+    })
+  })
 })
+

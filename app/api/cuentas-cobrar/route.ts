@@ -1,5 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { buscarCuentasCobrar, updateCuentaCobrar } from '@/lib/db'
+import { buscarCuentasCobrar } from '@/lib/db'
 
 // EF-3 3B-2: busqueda/paginacion/totales server-side via RPC unica
 // buscar_cuentas_cobrar (db/migrations/20260914_buscar_cuentas_cobrar.sql),
@@ -23,24 +23,6 @@ export async function GET(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
-  const authResult = await requireSection('cuentas')
-  if (authResult.response) return authResult.response
-
-  try {
-    const body = await request.json()
-    const { id, ...updates } = body
-    if (!id) return Response.json({ error: 'ID requerido' }, { status: 400 })
-
-    const allowedKeys = new Set(['estado', 'fecha_pago', 'fecha_factura', 'fecha_vencimiento', 'monto_pagado', 'notas'])
-    const sanitizedUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([key]) => allowedKeys.has(key))
-    )
-
-    const cuenta = await updateCuentaCobrar(id, sanitizedUpdates)
-    return Response.json(cuenta)
-  } catch (error) {
-    console.error(error)
-    return Response.json({ error: 'Error actualizando cuenta por cobrar' }, { status: 500 })
-  }
-}
+// PUT retirado en B1b (docs/PLAN.md, H4): aceptaba estado/montos u
+// orden_pago_id directos, sin Zod ni RPC, y la UI no lo usaba. Toda
+// transición financiera va por su endpoint explícito.

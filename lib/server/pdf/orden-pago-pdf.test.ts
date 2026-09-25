@@ -40,6 +40,7 @@ describe('pdf/orden-pago-pdf', () => {
         total_general: 7500,
       },
       cuentas_ids: ['cp-1'],
+      candidatos: [],
     })
 
     const bytes = Buffer.from(pdf)
@@ -85,6 +86,7 @@ describe('pdf/orden-pago-pdf', () => {
         total_general: responsables * itemsPorEvento * 1000,
       },
       cuentas_ids: [],
+      candidatos: [],
     }
   }
 

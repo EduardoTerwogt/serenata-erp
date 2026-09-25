@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(),
   buscarCuentasPagarGruposMock: vi.fn(),
-  updateCuentaPagarMock: vi.fn(),
 }))
 
 vi.mock('@/lib/api-auth', () => ({
@@ -12,17 +11,11 @@ vi.mock('@/lib/api-auth', () => ({
 
 vi.mock('@/lib/db', () => ({
   buscarCuentasPagarGrupos: mocks.buscarCuentasPagarGruposMock,
-  updateCuentaPagar: mocks.updateCuentaPagarMock,
 }))
 
-import { GET, PUT } from '../cuentas-pagar/route'
+import * as route from '../cuentas-pagar/route'
 
-function buildPutRequest(body: unknown) {
-  return new Request('http://localhost/api/cuentas-pagar', {
-    method: 'PUT',
-    body: JSON.stringify(body),
-  })
-}
+const { GET } = route
 
 beforeEach(() => {
   mocks.requireSectionMock.mockReset().mockResolvedValue({ response: null })
@@ -33,7 +26,6 @@ beforeEach(() => {
     total_monto_pagado: 0,
     pendientes_count: 1,
   })
-  mocks.updateCuentaPagarMock.mockReset().mockResolvedValue({ id: 'cuenta-1', notas: 'ok' })
 })
 
 // Bloque 6: GET delega busqueda/paginacion/totales a la RPC unica
@@ -69,36 +61,7 @@ describe('GET /api/cuentas-pagar', () => {
 })
 
 describe('PUT /api/cuentas-pagar', () => {
-  it.each(['estado', 'fecha_pago', 'monto_pagado'])(
-    '1B-4 -- rechaza (400) el update completo si el body incluye "%s", sin llamar a updateCuentaPagar',
-    async (forbiddenKey) => {
-      const response = await PUT(buildPutRequest({ id: 'cuenta-1', notas: 'nota válida', [forbiddenKey]: 'x' }))
-
-      expect(response.status).toBe(400)
-      expect(mocks.updateCuentaPagarMock).not.toHaveBeenCalled()
-    }
-  )
-
-  it('1B-4 -- rechaza el update completo si vienen mezclados campos permitidos y prohibidos', async () => {
-    const response = await PUT(
-      buildPutRequest({ id: 'cuenta-1', notas: 'nota válida', orden_pago_id: 'op-1', estado: 'PAGADO' })
-    )
-
-    expect(response.status).toBe(400)
-    expect(mocks.updateCuentaPagarMock).not.toHaveBeenCalled()
-  })
-
-  it('permite notas y orden_pago_id', async () => {
-    const response = await PUT(buildPutRequest({ id: 'cuenta-1', notas: 'nota válida', orden_pago_id: 'op-1' }))
-
-    expect(response.status).toBe(200)
-    expect(mocks.updateCuentaPagarMock).toHaveBeenCalledWith('cuenta-1', { notas: 'nota válida', orden_pago_id: 'op-1' })
-  })
-
-  it('descarta silenciosamente claves desconocidas que no son financieras prohibidas', async () => {
-    const response = await PUT(buildPutRequest({ id: 'cuenta-1', notas: 'nota válida', campo_inventado: 'x' }))
-
-    expect(response.status).toBe(200)
-    expect(mocks.updateCuentaPagarMock).toHaveBeenCalledWith('cuenta-1', { notas: 'nota válida' })
+  it('B1b (H4): ya no existe -- orden_pago_id/estado solo cambian por sus RPCs', () => {
+    expect('PUT' in route).toBe(false)
   })
 })
