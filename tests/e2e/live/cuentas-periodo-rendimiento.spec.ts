@@ -46,7 +46,14 @@ test.describe('live: rendimiento de la lectura por periodo', () => {
 
   for (const [nombre, url] of casos) {
     test(`${nombre}: p95 < ${PRESUPUESTO_MS} ms`, async ({ page }) => {
-      await login(page, '/cuentas')
+      // Frente 3 (docs/ROADMAP.md, deuda de latencia en paralelo de Cuentas):
+      // NO entrar por /cuentas. Esa página dispara periodo+resumen+opciones+
+      // avisos en paralelo al montar (comportamiento normal de la UI) y
+      // compite con el calentamiento/medición de este mismo test contra las
+      // mismas RPCs -- carga concurrente auto-infligida, no de producción
+      // real. Las llamadas medidas son page.request.get(url) directas a la
+      // API: no dependen de qué página esté montada.
+      await login(page, '/cotizaciones')
 
       // Calentamiento: las primeras peticiones compilan y abren conexiones del pool.
       for (let i = 0; i < CALENTAMIENTO; i++) expect((await page.request.get(url)).ok()).toBe(true)
