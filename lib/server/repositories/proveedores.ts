@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { Proveedor } from '@/lib/types'
+import { PROVEEDOR_PUBLIC_COLUMNS, proveedorPublico } from './proveedor-publico'
 
 // EF-3 3B-6: volumen real 10, objetivo de capacidad 1,000 (CLAUDE.md), justo
 // en el borde del cap real de PostgREST (max_rows=1000, verificado en
@@ -26,7 +27,8 @@ export async function getProveedores() {
     if (error) throw error
     if (!data || data.length === 0) break
 
-    all = all.concat(data as Proveedor[])
+    // La RPC devuelve la fila completa (SETOF proveedores): se recorta aquí.
+    all = all.concat((data as Proveedor[]).map(proveedorPublico))
     if (all.length > PROVEEDORES_HARD_CAP) {
       throw new Error(
         `getProveedores() superó el circuit breaker de ${PROVEEDORES_HARD_CAP} filas sin agotar la tabla -- ` +
@@ -47,7 +49,7 @@ export async function getProveedores() {
 export async function getProveedorById(id: string) {
   const { data, error } = await supabaseAdmin
     .from('proveedores')
-    .select('*, historial_responsable(*)')
+    .select(`${PROVEEDOR_PUBLIC_COLUMNS}, historial_responsable(*)`)
     .eq('id', id)
     .single()
   if (error) throw error
@@ -73,18 +75,19 @@ export async function createProveedor(proveedor: Partial<Proveedor>) {
   const { data, error } = await supabaseAdmin
     .from('proveedores')
     .insert(proveedor)
-    .select()
+    .select(PROVEEDOR_PUBLIC_COLUMNS)
     .single()
   if (error) throw error
   return data as Proveedor
 }
 
-export async function updateProveedor(id: string, updates: Partial<Proveedor>) {
+/** `password_hash` solo lo escribe el login del portal (rehash); nunca se devuelve. */
+export async function updateProveedor(id: string, updates: Partial<Proveedor> & { password_hash?: string }) {
   const { data, error } = await supabaseAdmin
     .from('proveedores')
     .update(updates)
     .eq('id', id)
-    .select()
+    .select(PROVEEDOR_PUBLIC_COLUMNS)
     .single()
   if (error) throw error
   return data as Proveedor
@@ -104,7 +107,7 @@ export async function findOrCreateProveedorByNombre(nombre: string): Promise<Pro
   const nombreLimpio = nombre.trim()
   const { data: existente, error: buscarError } = await supabaseAdmin
     .from('proveedores')
-    .select('*')
+    .select(PROVEEDOR_PUBLIC_COLUMNS)
     .ilike('nombre', nombreLimpio)
     .limit(1)
     .maybeSingle()
@@ -114,7 +117,7 @@ export async function findOrCreateProveedorByNombre(nombre: string): Promise<Pro
   const { data: creado, error: crearError } = await supabaseAdmin
     .from('proveedores')
     .insert({ nombre: nombreLimpio, activo: true })
-    .select()
+    .select(PROVEEDOR_PUBLIC_COLUMNS)
     .single()
   if (crearError) throw crearError
   return creado as Proveedor

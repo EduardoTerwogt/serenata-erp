@@ -40,10 +40,22 @@ export interface Proveedor {
   // null = no capturado aun -> se trata como 'moral' por default en los calculos.
   regimen_fiscal: RegimenFiscal | null
   // Portal de proveedores (Fase 5.5): la identidad del portal ES esta misma
-  // fila -- nunca una tabla de "usuarios de portal" separada.
-  password_hash: string | null
+  // fila -- nunca una tabla de "usuarios de portal" separada. Sus
+  // credenciales viven aparte, en ProveedorCredenciales.
   portal_estado: PortalEstado | null
   match_candidato_id: string | null
+}
+
+/**
+ * Credenciales del portal de la fila `proveedores`. Solo servidor: nunca van
+ * en una respuesta. `Proveedor` (lo que sí puede salir) no las incluye y el
+ * repositorio las excluye con una lista blanca de columnas
+ * (PROVEEDOR_PUBLIC_COLUMNS en lib/server/repositories/proveedores.ts).
+ */
+export interface ProveedorCredenciales {
+  id: string
+  portal_estado: PortalEstado | null
+  password_hash: string | null
   // Fase 2.5: se bumpea al cambiar credenciales -- invalida cualquier
   // cookie de sesión firmada con una versión vieja, sin esperar a que expire.
   session_version: number

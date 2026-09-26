@@ -3,11 +3,9 @@ import type { Proveedor } from '@/lib/types'
 /**
  * Proveedor sin credenciales del portal: lo que puede llegar al navegador del
  * staff. `password_hash` y `session_version` nunca salen del servidor.
+ * `Proveedor` ya no las incluye (viven en ProveedorCredenciales); el filtro
+ * es la lista blanca PROVEEDOR_PUBLIC_COLUMNS del repositorio.
  */
-export type ProveedorPublico = Omit<Proveedor, 'password_hash' | 'session_version'>
+export type ProveedorPublico = Proveedor
 
-export function proveedorPublico(p: Proveedor): ProveedorPublico {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { password_hash, session_version, ...resto } = p
-  return resto
-}
+export { proveedorPublico } from '@/lib/server/repositories/proveedor-publico'
