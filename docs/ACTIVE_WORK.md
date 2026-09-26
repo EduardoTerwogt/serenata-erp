@@ -23,7 +23,9 @@ reglas en `docs/decisions/017-rediseno-cuentas.md`.
 - **PR #97** (credenciales del portal fuera de las respuestas de
   `proveedores`): main integrado en su rama. El helper de B5
   `lib/server/proveedor-publico.ts` ahora delega en la lista blanca del
-  repositorio. CI en curso; se mergea al quedar en verde.
+  repositorio. **Mergeado** (`8dbbfa9`) con autorización del usuario pese a
+  un único test `live` en rojo que no es suyo (ver deuda: latencia en paralelo
+  de Cuentas).
 - En `serenata-erp-test` faltaban los REVOKE/GRANT de las funciones de B7
   (anon podía ejecutarlas). Se aplicaron. `cuentas_avisos_items` en test solo
   difiere del archivo en un comentario.
@@ -56,6 +58,15 @@ define en Chat (ver `docs/ROADMAP.md` → "Después").
 - Drive está apagado en Preview a propósito. Si hace falta, se saca un token
   con `/api/integrations/drive/authorize` usando una cuenta de pruebas.
 - El MCP de Vercel no tiene alcance de team para los logs de runtime (403).
+- **Latencia en paralelo de las RPCs de Cuentas (en investigación).** En
+  `serenata-erp-test` (dataset de carga), `cuentas_periodo` y
+  `cuentas_resumen` tardan ~500 ms solas. Si corren a la vez (la carga de
+  `/cuentas` más otra lectura), a veces pasan los 8 s y PostgREST las corta
+  (`57014`, `statement_timeout` de `authenticator`). En `pg_stat_statements`:
+  media 564 ms, máximo 7907 ms. Tumba de forma intermitente
+  `cuentas-periodo-rendimiento.spec.ts` › "periodo (mes)". Se falló en
+  `f01097d` y 3 veces en #97, incluso con la opción A (mejor de dos rondas,
+  `ea4cb85`). Producción hoy tiene pocos datos, pero crecerá.
 - `proyectos.fecha_entrega` sigue siendo texto: las RPCs de Cuentas validan
   `^\d{4}-\d{2}-\d{2}$` y mandan lo demás a "Sin fecha" (D9).
 - **Drive en Preview (ex R9) sigue apagado.** El rediseño se validó sin él
