@@ -1,14 +1,16 @@
 import { requireAnySection, requireSection } from '@/lib/api-auth'
 import { getProveedores, createProveedor } from '@/lib/db'
+import { proveedorPublico } from '@/lib/server/proveedor-publico'
 import { validate, ProveedorCreateSchema } from '@/lib/validation/schemas'
 
 export async function GET() {
-  const authResult = await requireAnySection(['responsables', 'cotizaciones'])
+  // 'cuentas': el select de responsable del detalle reasigna desde Cuentas (D21).
+  const authResult = await requireAnySection(['responsables', 'cotizaciones', 'cuentas'])
   if (authResult.response) return authResult.response
 
   try {
     const proveedores = await getProveedores()
-    return Response.json(proveedores)
+    return Response.json(proveedores.map(proveedorPublico))
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Error obteniendo proveedores' }, { status: 500 })

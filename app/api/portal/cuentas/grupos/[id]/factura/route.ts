@@ -1,5 +1,5 @@
 import { requirePortalSession } from '@/lib/portal-auth'
-import { getCuentaPagarGrupoById, createDocumentoCuentaPagar, getProyectoById, getProveedorById, marcarGrupoFacturado } from '@/lib/db'
+import { getCuentaPagarGrupoById, createDocumentoCuentaPagar, getProyectoById, getProveedorById, validarFacturaProveedor } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
@@ -17,7 +17,7 @@ const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
   PDF_REQUIRED: 'Se requiere el archivo PDF de tu factura',
   XML_INVALID_TYPE: 'El archivo XML debe ser de tipo text/xml o application/xml',
   PDF_INVALID_TYPE: 'El archivo PDF debe ser de tipo application/pdf',
-  FILE_TOO_LARGE: 'El archivo excede el límite de 10 MB',
+  FILE_TOO_LARGE: 'El archivo excede el límite de 4 MB',
 }
 
 /**
@@ -102,13 +102,19 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, uploadFolderId),
     ])
 
-    await Promise.all([
+    // V3 (Rediseño de Cuentas B2): el XML entra como 'pendiente'; SOLO
+    // validar_factura_proveedor lo pasa a 'validado' junto con el snapshot
+    // del total a transferir y el cambio del grupo a FACTURADO.
+    const [documentoXml] = await Promise.all([
       createDocumentoCuentaPagar({
         grupo_id: id,
         tipo: 'FACTURA_PROVEEDOR_XML',
         archivo_url: facturaXmlUrl,
         archivo_nombre: facturaXmlFile.name,
-        estado_validacion: 'validado',
+        estado_validacion: 'pendiente',
+        // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
+        uuid_cfdi: facturaData.uuid_timbrado ?? null,
+        total_cfdi: facturaData.monto_total ?? null,
       }),
       createDocumentoCuentaPagar({
         grupo_id: id,
@@ -118,7 +124,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       }),
     ])
 
-    await marcarGrupoFacturado(id)
+    await validarFacturaProveedor(documentoXml.id, `portal:${portalAuth.proveedorId}`)
 
     return Response.json({ success: true })
   } catch (error) {

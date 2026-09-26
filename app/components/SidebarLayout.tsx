@@ -9,31 +9,9 @@ import { Sidebar, type SidebarNavLink } from '@/components/navigation/Sidebar'
 import { Topbar } from '@/components/navigation/Topbar'
 import { ThemeToggle } from '@/components/navigation/ThemeToggle'
 import { Wordmark } from '@/components/ui/Wordmark'
-import { Icon, type IconName } from '@/components/ui/Icon'
-import type { NavChipTone } from '@/components/navigation/NavItem'
-
-// Orden, agrupación, ícono y tono siguen exactamente data.js > SN5.nav del
-// skill (Principal: Inicio/Cotizaciones/Proyectos -- Negocio: Cuentas --
-// Operación: Responsables/Planeación/Plantillas -- Sistema: Admin). "Portal"
-// del kit no tiene equivalente aquí a propósito: el Portal de Proveedores es
-// una experiencia standalone fuera de este shell (ver más abajo), no un
-// destino del sidebar de staff. "Proveedores" conserva su nombre (decisión
-// de negocio previa, ver CLAUDE.md) aunque el kit lo llame "Responsables".
-const NAV_LINKS: { href: string; label: string; section: string; icon: IconName; tone: NavChipTone; group: string }[] = [
-  { href: '/dashboard', label: 'Inicio', section: 'dashboard', icon: 'dashboard', tone: 'gray', group: 'Principal' },
-  { href: '/cotizaciones', label: 'Cotizaciones', section: 'cotizaciones', icon: 'cotizaciones', tone: 'gray', group: 'Principal' },
-  { href: '/proyectos', label: 'Proyectos', section: 'proyectos', icon: 'proyectos', tone: 'blue', group: 'Principal' },
-  { href: '/cuentas', label: 'Cuentas', section: 'cuentas', icon: 'cuentas', tone: 'green', group: 'Negocio' },
-  { href: '/proveedores', label: 'Proveedores', section: 'responsables', icon: 'proveedores', tone: 'indigo', group: 'Operación' },
-  // Bloque 5 (docs/PLAN.md): mismo section guard que GET /api/clientes.
-  { href: '/clientes', label: 'Clientes', section: 'cotizaciones', icon: 'clientes', tone: 'indigo', group: 'Operación' },
-  { href: '/planeacion', label: 'Planeación', section: 'planeacion', icon: 'planeacion', tone: 'red', group: 'Operación' },
-  { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion', icon: 'plantillas', tone: 'teal', group: 'Operación' },
-]
-
-const ADMIN_LINKS: { href: string; label: string; icon: IconName; tone: NavChipTone; group: string }[] = [
-  { href: '/admin', label: 'Admin', icon: 'admin', tone: 'gray', group: 'Sistema' },
-]
+import { Icon } from '@/components/ui/Icon'
+import { CuentasTabBar } from '@/components/navigation/CuentasTabBar'
+import { ADMIN_LINKS, NAV_LINKS, type NavLinkItem } from '@/lib/navigation/items'
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [showMobileNav, setShowMobileNav] = useState(false)
@@ -53,10 +31,14 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   // proveedores externos, sin el shell interno (sidebar/topbar de staff).
   if (pathname === '/login' || pathname.startsWith('/portal')) return <>{children}</>
 
-  const withActive = (links: { href: string; label: string; icon: IconName; tone: NavChipTone; group: string }[]): SidebarNavLink[] =>
+  const withActive = (links: NavLinkItem[]): SidebarNavLink[] =>
     links.map((link) => ({ ...link, active: pathname.startsWith(link.href) }))
 
   const handleSignOut = () => signOut({ callbackUrl: '/login' })
+
+  // Rediseño de Cuentas (D19, D23): en /cuentas móvil no va el encabezado
+  // con menú, solo la barra de pestañas propia de la sección.
+  const tabbar = pathname.startsWith('/cuentas')
 
   // Miga de pan en el topbar: nombre de la sección activa, como en App.jsx
   // del kit (crumbLabel a la izquierda del Topbar).
@@ -67,6 +49,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   return (
     <>
       {/* Header mobile -- el kit no cubre mobile, se restilizó a mano sobre los tokens nuevos */}
+      {!tabbar && (
       <header className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between border-b border-hairline bg-app/90 px-4 py-3 backdrop-blur-lg md:hidden">
         <Wordmark size={18} />
         <button
@@ -78,8 +61,9 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           <Icon name={showMobileNav ? 'close' : 'menu'} size={20} />
         </button>
       </header>
+      )}
 
-      {showMobileNav && (
+      {!tabbar && showMobileNav && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileNav(false)} />
           <div className="absolute right-0 top-0 h-full w-72 max-w-[calc(100vw-2rem)] overflow-y-auto border-l border-hairline bg-card pt-16 shadow-overlay">
@@ -133,7 +117,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
       )}
 
+      {tabbar && <CuentasTabBar sections={userSections} email={session?.user?.email} />}
+
       <AppShell
+        mobileChrome={tabbar ? 'tabbar' : 'header'}
         sidebar={<Sidebar items={[...withActive(visibleLinks), ...(isAdmin ? withActive(ADMIN_LINKS) : [])]} />}
         topbar={
           <Topbar

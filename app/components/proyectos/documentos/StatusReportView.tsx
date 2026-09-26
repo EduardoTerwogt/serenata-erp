@@ -1,5 +1,5 @@
 import { formatDateDisplay } from '@/lib/format-date'
-import { formatCuentasCurrency } from '@/app/components/cuentas/utils'
+import { fmtCurrency } from '@/lib/quotations/format'
 import type { StatusReportContenido } from './contenido-types'
 
 interface StatusReportViewProps {
@@ -54,9 +54,9 @@ export function StatusReportView({ contenido, onChange }: StatusReportViewProps)
 
       <div className="bg-row border border-hairline rounded-control p-3.5 space-y-2">
         <p className="text-content font-medium text-body">Financiero</p>
-        <div className="flex justify-between text-content"><span className="text-subtext">Cotizado</span><span className="text-body">${formatCuentasCurrency(contenido.financiero.total_cotizado)}</span></div>
-        <div className="flex justify-between text-content"><span className="text-subtext">Comprometido a pagar</span><span className="text-body">${formatCuentasCurrency(contenido.financiero.total_comprometido_pagar)}</span></div>
-        <div className="flex justify-between text-content pt-2 border-t border-hairline"><span className="text-subtext">Pagado</span><span className="text-ink font-bold">${formatCuentasCurrency(contenido.financiero.total_pagado)}</span></div>
+        <div className="flex justify-between text-content"><span className="text-subtext">Cotizado</span><span className="text-body">${fmtCurrency(contenido.financiero.total_cotizado)}</span></div>
+        <div className="flex justify-between text-content"><span className="text-subtext">Comprometido a pagar</span><span className="text-body">${fmtCurrency(contenido.financiero.total_comprometido_pagar)}</span></div>
+        <div className="flex justify-between text-content pt-2 border-t border-hairline"><span className="text-subtext">Pagado</span><span className="text-ink font-bold">${fmtCurrency(contenido.financiero.total_pagado)}</span></div>
       </div>
 
       <div className="space-y-2">

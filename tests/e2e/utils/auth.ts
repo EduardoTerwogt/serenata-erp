@@ -1,4 +1,5 @@
 import { expect, Page } from '@playwright/test'
+import { normalizeUserSections } from '@/lib/authz'
 
 const DEFAULT_EMAIL = 'e2e@serenata.test'
 const DEFAULT_PASSWORD = 'playwright123'
@@ -44,4 +45,23 @@ export async function login(
   await page.locator('input[type="password"]').fill(password)
   await page.getByRole('button', { name: 'Entrar' }).click()
   await expect(page).toHaveURL(new RegExp(escaped))
+}
+
+/**
+ * Con el bypass de E2E no hay JWT, así que `useSession()` del cliente no trae
+ * secciones. Las pruebas de acciones solo de admin (B7 de Cuentas) le dan al
+ * cliente una sesión admin; el servidor ya trata al bypass como admin.
+ */
+export async function mockSesionAdmin(page: Page) {
+  await page.route('**/api/auth/session', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        // Como la sesión real: auth.ts guarda las secciones ya normalizadas (admin implica todas).
+        user: { id: 'e2e-bypass-user', email: 'e2e@serenata.test', name: 'E2E User', sections: normalizeUserSections(['admin']) },
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    })
+  )
 }

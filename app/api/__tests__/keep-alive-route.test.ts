@@ -142,9 +142,35 @@ describe('GET /api/keep-alive', () => {
     const response = await GET(buildRequest('Bearer secreto-real'))
     const body = await response.json()
 
-    expect(mocks.rpcMock).not.toHaveBeenCalled()
+    // B3: la única RPC es el sync de cobros vencidos; el lock de Sheets no se toca.
+    expect(mocks.rpcMock).not.toHaveBeenCalledWith('acquire_sheets_sync_lock', expect.anything())
     expect(mocks.syncAllDownMock).not.toHaveBeenCalled()
     expect(body.sheets_sync).toEqual({ ran: false })
+  })
+
+  it('Rediseño de Cuentas B3 (O2, U4) -- actualiza los cobros vencidos antes del sync de Sheets', async () => {
+    mocks.getGoogleEnvMock.mockReturnValue({ sheetsSpreadsheetId: 'sheet-1' })
+    mocks.rpcMock.mockImplementation((fnName: string) => {
+      if (fnName === 'sync_estados_cuentas_cobrar_vencidas') return Promise.resolve({ data: null, error: null })
+      if (fnName === 'acquire_sheets_sync_lock') return Promise.resolve({ data: false, error: null })
+      throw new Error(`RPC inesperada: ${fnName}`)
+    })
+
+    const body = await (await GET(buildRequest('Bearer secreto-real'))).json()
+
+    const llamadas = mocks.rpcMock.mock.calls.map((c) => c[0])
+    expect(llamadas.indexOf('sync_estados_cuentas_cobrar_vencidas')).toBeLessThan(llamadas.indexOf('acquire_sheets_sync_lock'))
+    expect(body.cuentas_cobrar_sync).toBe('ok')
+  })
+
+  it('Rediseño de Cuentas B3 -- si el sync de vencidos falla, lo reporta sin tumbar el keep-alive', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'db down' } })
+
+    const response = await GET(buildRequest('Bearer secreto-real'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.cuentas_cobrar_sync).toBe('error')
   })
 
   it('EF-3 3C-4 -- el safety-net se salta en silencio si no adquiere el lock (sync manual en curso)', async () => {

@@ -1,6 +1,7 @@
 import { requireSection } from '@/lib/api-auth'
-import { getDocumentosCuentaPagar, updateDocumentoCuentaPagar } from '@/lib/db'
+import { getDocumentosCuentaPagar, updateDocumentoCuentaPagar, validarFacturaProveedor } from '@/lib/db'
 import { DocumentoEstadoValidacionSchema, validate } from '@/lib/validation/schemas'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 
 // Marca manualmente el estado_validacion de un documento (cualquier tipo:
 // FACTURA_PROVEEDOR, FACTURA_PROVEEDOR_XML, COMPROBANTE_PAGO, OTRO).
@@ -27,6 +28,15 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
     }
 
     const { estado_validacion, detalle_validacion } = validation.data
+
+    // V3 (Rediseño de Cuentas B2): una factura XML de proveedor SOLO pasa a
+    // 'validado' vía validar_factura_proveedor, que en la misma transacción
+    // guarda el snapshot del total a transferir.
+    if (documento.tipo === 'FACTURA_PROVEEDOR_XML' && estado_validacion === 'validado') {
+      await validarFacturaProveedor(docId, authResult.session?.user?.email ?? null)
+      return Response.json({ documento: { ...documento, estado_validacion: 'validado', detalle_validacion: null } })
+    }
+
     const actualizado = await updateDocumentoCuentaPagar(docId, {
       estado_validacion,
       detalle_validacion: estado_validacion === 'revision' ? (detalle_validacion ?? null) : null,
@@ -34,7 +44,6 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
 
     return Response.json({ documento: actualizado })
   } catch (error) {
-    console.error('[cuentas-pagar/documentos/:docId][PATCH]', error)
-    return Response.json({ error: 'Error actualizando estado de validación' }, { status: 500 })
+    return buildErrorResponse(error, 'PATCH /api/cuentas-pagar/documentos/:docId')
   }
 }

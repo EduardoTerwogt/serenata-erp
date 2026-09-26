@@ -8,7 +8,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireAnySection(['cotizaciones', 'proyectos'])
+  // 'cuentas': reasignar el responsable desde el detalle de Cuentas (D21).
+  const authResult = await requireAnySection(['cotizaciones', 'proyectos', 'cuentas'])
   if (authResult.response) return authResult.response
 
   try {

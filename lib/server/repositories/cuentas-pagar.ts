@@ -4,39 +4,19 @@ import {
   CuentaPagarGrupo,
   DocumentoCuentaPagar,
   ItemCotizacion,
-  OrdenPago,
   Proyecto,
 } from '@/lib/types'
 import { getItemsByCotizacion } from '@/lib/server/repositories/quotations'
 import { DomainError } from '@/lib/server/errors/domain-error'
 
-export type CuentaPagarConJoins = CuentaPagar & {
-  cotizaciones?: { proyecto?: string; fecha_entrega?: string } | null
+type CuentaPagarConJoins = CuentaPagar & {
+  cotizaciones?: { proyecto?: string } | null
   proyectos?: { proyecto?: string } | null
 }
 
 type CuentaPagarGrupoConJoins = CuentaPagarGrupo & {
   proyectos?: { proyecto?: string } | null
   proveedores?: { nombre?: string } | null
-}
-
-export async function getCuentasPagar() {
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .select('*, cotizaciones(proyecto), proyectos(proyecto)')
-    .order('created_at', { ascending: false })
-    .limit(500)
-  if (error) throw error
-  return ((data || []) as CuentaPagarConJoins[]).map((row) => ({
-    ...row,
-    proyecto_nombre:
-      row.proyecto_nombre ||
-      row.cotizaciones?.proyecto ||
-      row.proyectos?.proyecto ||
-      undefined,
-    cotizaciones: undefined,
-    proyectos: undefined,
-  })) as CuentaPagar[]
 }
 
 export interface BuscarCuentasPagarResult {
@@ -69,8 +49,7 @@ export async function buscarCuentasPagarGrupos(search: string | null, page: numb
 }
 
 /**
- * Detalle por ID -- nunca a través de getCuentasPagar().find(), que con
- * más de 500 cuentas puede no traer la fila buscada aunque exista (1C-1).
+ * Detalle por ID (1C-1).
  * .maybeSingle() nunca .single(): "no encontrada" debe seguir siendo un
  * 404 explícito del caller, no un error de Postgres por 0 filas.
  */
@@ -316,6 +295,8 @@ export async function getDocumentosCuentaPagar(cuentaId: string) {
     .from('documentos_cuentas_pagar')
     .select('*')
     .eq('cuentas_pagar_id', cuentaId)
+    // B7: un documento dado de baja nunca es vigente (T7).
+    .is('eliminado_at', null)
     .order('fecha_carga', { ascending: false })
   if (error) throw error
   return data as DocumentoCuentaPagar[]
@@ -330,52 +311,6 @@ export async function updateDocumentoCuentaPagar(id: string, updates: Partial<Do
     .single()
   if (error) throw error
   return data as DocumentoCuentaPagar
-}
-
-export async function deleteDocumentoCuentaPagar(id: string) {
-  const { error } = await supabaseAdmin
-    .from('documentos_cuentas_pagar')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
-}
-
-export async function getOrdenPagoById(id: string) {
-  const { data, error } = await supabaseAdmin
-    .from('ordenes_pago')
-    .select('*')
-    .eq('id', id)
-    .single()
-  if (error) throw error
-  return data as OrdenPago
-}
-
-export async function getOrdenesPago() {
-  const { data, error } = await supabaseAdmin
-    .from('ordenes_pago')
-    .select('*')
-    .order('fecha_generacion', { ascending: false })
-  if (error) throw error
-  return data as OrdenPago[]
-}
-
-export interface BuscarOrdenesPagoResult {
-  rows: OrdenPago[]
-  totalRows: number
-}
-
-// EF-3 3B-11: getOrdenesPago() sin limite explicito -- unico consumidor
-// (ordenes-historial/route.ts) pasa a pedir paginado vía la RPC
-// buscar_ordenes_pago (db/migrations/20260914_buscar_ordenes_pago.sql).
-// getOrdenesPago() se conserva sin cambios -- ningun otro caller la usa
-// hoy, pero no hay razón para eliminarla si no estorba.
-export async function buscarOrdenesPago(page: number, pageSize: number): Promise<BuscarOrdenesPagoResult> {
-  const { data, error } = await supabaseAdmin.rpc('buscar_ordenes_pago', {
-    p_page: page,
-    p_page_size: pageSize,
-  })
-  if (error) throw error
-  return { rows: data.rows as OrdenPago[], totalRows: data.total_rows as number }
 }
 
 // ==================== Agrupación de Cuentas por Pagar (docs/PLAN.md) ====================
@@ -407,45 +342,16 @@ export async function getCuentasPagarPorGrupo(grupoId: string): Promise<CuentaPa
   return data as CuentaPagar[]
 }
 
-/**
- * Transición ABIERTO -> FACTURADO. El guard `.eq('estado', 'ABIERTO')` vive
- * en el propio UPDATE -- atómico por construcción (una sola sentencia SQL),
- * sin necesitar una RPC dedicada. Si el grupo ya no estaba ABIERTO (carrera
- * con otra subida, o ya facturado), no actualiza nada y devuelve null --
- * el caller decide qué hacer con eso.
- */
-export async function marcarGrupoFacturado(id: string): Promise<CuentaPagarGrupo | null> {
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_pagar_grupos')
-    .update({ estado: 'FACTURADO', updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('estado', 'ABIERTO')
-    .select()
-  if (error) throw error
-  return data && data.length > 0 ? (data[0] as CuentaPagarGrupo) : null
-}
-
 export async function getDocumentosCuentaPagarGrupo(grupoId: string) {
   const { data, error } = await supabaseAdmin
     .from('documentos_cuentas_pagar')
     .select('*')
     .eq('grupo_id', grupoId)
+    // B7: un documento dado de baja nunca es vigente (T7).
+    .is('eliminado_at', null)
     .order('fecha_carga', { ascending: false })
   if (error) throw error
   return data as DocumentoCuentaPagar[]
-}
-
-/**
- * Fuente de generar-orden-pago desde el Bloque 3: grupos FACTURADO cuyas
- * cotizaciones (principal + cualquier complementaria) ya tienen evento
- * realizado -- ver db/migrations/20260917_orden_pago_grupos_facturados_eventos_realizados.sql.
- * Mismo shape que getCuentasPagarPendientesEventosRealizados(), así que
- * buildOrdenPagoPreview() sigue funcionando sin cambios.
- */
-export async function getCuentasPagarGruposFacturadosEventosRealizados() {
-  const { data, error } = await supabaseAdmin.rpc('cuentas_pagar_grupos_facturados_eventos_realizados')
-  if (error) throw error
-  return data as CuentaPagarConJoins[]
 }
 
 export interface OrdenPagoCandidato {
@@ -503,4 +409,41 @@ export async function generarOrdenPago(params: {
     throw error
   }
   return data as GenerarOrdenPagoResult
+}
+
+export interface ValidarFacturaProveedorResult {
+  documento_id: string
+  grupo_id: string | null
+  cuenta_pagar_id: string | null
+  total_a_transferir: number
+  estado: string
+}
+
+/**
+ * Rediseño de Cuentas B2 (docs/PLAN.md, T4, V3, A2): ÚNICA vía para dejar
+ * una factura XML de proveedor en 'validado'. En la misma transacción guarda
+ * el snapshot del total a transferir y, si es un grupo ABIERTO, lo pasa a
+ * FACTURADO -- db/migrations/20260927_cuentas_b2_pagos_total_a_transferir.sql.
+ * Reemplaza a marcarGrupoFacturado. Si falla, el documento se queda como
+ * estaba ('pendiente' = "En revisión"), nunca validado sin snapshot.
+ */
+export async function validarFacturaProveedor(documentoId: string, usuario: string | null): Promise<ValidarFacturaProveedorResult> {
+  const { data, error } = await supabaseAdmin.rpc('validar_factura_proveedor', {
+    p_documento_id: documentoId,
+    p_usuario: usuario,
+  })
+  if (error) {
+    if (error.code === 'P1415') {
+      throw new DomainError({
+        code: (error.message ?? '').startsWith('sin_total_cfdi') ? 'sin_total_cfdi' : 'factura_invalida',
+        status: 409,
+        safeMessage: (error.message ?? '').startsWith('sin_total_cfdi')
+          ? 'La factura no tiene el total del CFDI guardado; vuelve a subir el XML para validarla.'
+          : 'El documento no es una factura XML de proveedor.',
+        cause: error,
+      })
+    }
+    throw error
+  }
+  return data as ValidarFacturaProveedorResult
 }

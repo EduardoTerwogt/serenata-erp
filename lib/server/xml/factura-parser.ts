@@ -12,6 +12,9 @@ export interface FacturaData {
   rfc_emisor?: string
   rfc_receptor?: string
   uuid_timbrado?: string
+  // Rediseño de Cuentas B1 (D2): PUE/PPD del atributo MetodoPago. Undefined
+  // si el XML no lo trae o trae otro valor -- nunca se adivina (supuesto 4).
+  metodo_pago?: 'PUE' | 'PPD'
   // Desglose fiscal (Fase 5.3 Bloque 0, punto 3): suma de los nodos
   // cfdi:Traslado / cfdi:Retencion por tipo de impuesto (002 = IVA,
   // 001 = ISR). 0 cuando el CFDI no trae el nodo correspondiente --
@@ -119,6 +122,8 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
     const rfcEmisor: string | undefined = comprobante.Emisor?.Rfc
     const rfcReceptor: string | undefined = comprobante.Receptor?.Rfc
     const uuid: string | undefined = comprobante.Complemento?.TimbreFiscalDigital?.UUID
+    const metodoRaw = typeof comprobante.MetodoPago === 'string' ? comprobante.MetodoPago.trim().toUpperCase() : undefined
+    const metodoPago = metodoRaw === 'PUE' || metodoRaw === 'PPD' ? metodoRaw : undefined
 
     // Desglose fiscal -- Impuesto 002 = IVA, 001 = ISR (catálogo c_Impuesto
     // del SAT). Ambos nodos son opcionales en el CFDI: un proveedor persona
@@ -157,6 +162,7 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
       rfc_emisor: rfcEmisor,
       rfc_receptor: rfcReceptor,
       uuid_timbrado: uuid,
+      metodo_pago: metodoPago,
       iva_trasladado: ivaTrasladado,
       iva_retenido: ivaRetenido,
       isr_retenido: isrRetenido,

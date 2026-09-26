@@ -19,7 +19,7 @@
  */
 
 import { jsPDF } from 'jspdf'
-import { OrdenPagoPreviewResult, OrdenPagoPreviewResponsable } from '@/lib/server/ordenes-pago/build'
+import { OrdenPagoPreviewResult, OrdenPagoPreviewResponsable } from '@/lib/server/ordenes-pago/preview-tipos'
 import { getIsoLogoBase64, getSerenataLogoBase64, ISO_RATIO, SERENATA_RATIO } from '@/lib/server/pdf/cotizacion-pdf-helpers'
 import { formatDateDisplay } from '@/lib/format-date'
 import {
@@ -72,6 +72,9 @@ const GAP_EVENT_TOTAL = 4
 const H_PROVIDER_TOTAL = 8
 const GAP_PROVIDER_TOTAL = 6
 const H_GRAND = 13
+// Cruce fiscal del proveedor (supuesto 14): una línea por concepto.
+const CRUCE_LH = 4
+const cruceH = (n: number) => (n ? 1.5 + CRUCE_LH * n : 0)
 
 /** Moneda del diseño: "$7,000.00" (sin espacio tras el signo). */
 const money = (n: number) =>
@@ -94,7 +97,8 @@ type Block =
   | { kind: 'head'; h: number }
   | { kind: 'row'; descLines: string[]; qty: string; amount: string; h: number }
   | { kind: 'eventTotal'; amount: string; h: number }
-  | { kind: 'providerTotal'; amount: string; h: number }
+  | { kind: 'cruce'; lines: Array<[string, string]>; h: number }
+  | { kind: 'providerTotal'; amount: string; label: string; h: number }
   | { kind: 'grand'; amount: string; summary: string; h: number }
 
 export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuffer {
@@ -177,6 +181,15 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
     })
     const cont = contBlock(p)
     const putCont = () => put(cont, CONT_GAP)
+    const cruceLines: Array<[string, string]> = p.cruce
+      ? ([
+          ['Subtotal (neto al proveedor)', money(p.cruce.subtotal)],
+          ['IVA 16%', money(p.cruce.iva)],
+          ...(p.cruce.iva_retenido > 0 ? [['Retención de IVA', money(-p.cruce.iva_retenido)]] : []),
+          ...(p.cruce.isr_retenido > 0 ? [['Retención de ISR', money(-p.cruce.isr_retenido)]] : []),
+        ] as Array<[string, string]>)
+      : []
+    const H_CRUCE = cruceH(cruceLines.length)
 
     const prov = providerBlock(p)
     const firstEventRows = p.eventos[0] ? rowsOf(p.eventos[0]) : []
@@ -198,7 +211,7 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
           r.h +
           (last
             ? H_EVENT_TOTAL +
-              (lastEv ? GAP_EVENT_TOTAL + H_PROVIDER_TOTAL + (pi === nResp - 1 ? GAP_PROVIDER_TOTAL + H_GRAND : 0) : 0)
+              (lastEv ? GAP_EVENT_TOTAL + H_CRUCE + H_PROVIDER_TOTAL + (pi === nResp - 1 ? GAP_PROVIDER_TOTAL + H_GRAND : 0) : 0)
             : 0)
         if (!fits(need)) {
           newPage()
@@ -210,7 +223,13 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
       })
       put({ kind: 'eventTotal', amount: money(e.subtotal), h: H_EVENT_TOTAL }, GAP_EVENT_TOTAL)
     })
-    put({ kind: 'providerTotal', amount: money(p.total_responsable), h: H_PROVIDER_TOTAL }, GAP_PROVIDER_TOTAL)
+    if (H_CRUCE) put({ kind: 'cruce', lines: cruceLines, h: H_CRUCE })
+    put(
+      p.cruce
+        ? { kind: 'providerTotal', label: 'Total a transferir', amount: money(p.cruce.total), h: H_PROVIDER_TOTAL }
+        : { kind: 'providerTotal', label: 'Total del proveedor', amount: money(p.total_responsable), h: H_PROVIDER_TOTAL },
+      GAP_PROVIDER_TOTAL
+    )
   })
 
   const { resumen } = preview
@@ -219,8 +238,11 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
     plural(resumen.eventos, 'evento', 'eventos'),
     plural(resumen.items_totales, 'concepto', 'conceptos'),
   ].join(' · ')
+  // D20: con cruce, el total de la orden es el total a transferir.
+  const totalOrden = resumen.total_transferir ?? resumen.total_general
+  const etiquetaTotal = resumen.total_transferir == null ? 'TOTAL GENERAL' : 'TOTAL A TRANSFERIR'
   if (!fits(H_GRAND) && page().length) newPage()
-  put({ kind: 'grand', amount: money(resumen.total_general), summary, h: H_GRAND })
+  put({ kind: 'grand', amount: money(totalOrden), summary, h: H_GRAND })
 
   // ── Dibujo ──
   const label = (text: string, x: number, by: number, color: RGB, align: 'left' | 'right' = 'left') => {
@@ -262,9 +284,9 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
     stat('CONCEPTOS', String(resumen.items_totales), 95)
     f('bold', 11)
     doc.setTextColor(...C.ink)
-    const total = money(resumen.total_general)
+    const total = money(totalOrden)
     doc.text(total, TEXT_R, centerBaseline(cy, 11), { align: 'right' })
-    label('TOTAL GENERAL', TEXT_R - doc.getTextWidth(total) - 2, centerBaseline(cy, 6), C.secondary, 'right')
+    label(etiquetaTotal, TEXT_R - doc.getTextWidth(total) - 2, centerBaseline(cy, 6), C.secondary, 'right')
   }
 
   const drawCompactHeader = () => {
@@ -393,9 +415,20 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
     const cy = top + H_PROVIDER_TOTAL / 2
     doc.setTextColor(...C.ink)
     f('bold', 9)
-    doc.text('Total del proveedor', TEXT_L, centerBaseline(cy, 9))
+    doc.text(b.label, TEXT_L, centerBaseline(cy, 9))
     f('bold', 10.5)
     doc.text(b.amount, TEXT_R, centerBaseline(cy, 10.5), { align: 'right' })
+  }
+
+  const drawCruce = (b: Extract<Block, { kind: 'cruce' }>, top: number) => {
+    b.lines.forEach(([k, v], i) => {
+      const by = centerBaseline(top + 1.5 + i * CRUCE_LH + CRUCE_LH / 2, 8)
+      f('regular', 8)
+      doc.setTextColor(...C.secondary)
+      doc.text(k, 155, by, { align: 'right' })
+      doc.setTextColor(...C.ink)
+      doc.text(v, TEXT_R, by, { align: 'right' })
+    })
   }
 
   const drawGrand = (b: Extract<Block, { kind: 'grand' }>, top: number) => {
@@ -403,7 +436,7 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
     doc.roundedRect(MARGIN, top, BAND_W, H_GRAND, 3, 3, 'F')
     f('bold', 8)
     doc.setTextColor(...C.white)
-    trackedText(doc, 'TOTAL GENERAL', TEXT_L, centerBaseline(top + 4.6, 8), 0.48 * PT)
+    trackedText(doc, etiquetaTotal, TEXT_L, centerBaseline(top + 4.6, 8), 0.48 * PT)
     f('regular', 7)
     doc.setTextColor(...C.onDark)
     doc.text(b.summary, TEXT_L, centerBaseline(top + 8.6, 7))
@@ -447,6 +480,10 @@ export function generateOrdenPagoPdf(preview: OrdenPagoPreviewResult): ArrayBuff
         case 'eventTotal':
           drawEventTotal(b, top)
           top += b.h + GAP_EVENT_TOTAL
+          break
+        case 'cruce':
+          drawCruce(b, top)
+          top += b.h
           break
         case 'providerTotal':
           drawProviderTotal(b, top)

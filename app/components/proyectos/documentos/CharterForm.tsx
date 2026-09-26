@@ -1,5 +1,5 @@
 import { formatDateDisplay } from '@/lib/format-date'
-import { formatCuentasCurrency } from '@/app/components/cuentas/utils'
+import { fmtCurrency } from '@/lib/quotations/format'
 import type { CharterContenido } from './contenido-types'
 
 interface CharterFormProps {
@@ -14,7 +14,7 @@ export function CharterForm({ contenido, onChange }: CharterFormProps) {
         <div><p className="text-subtext text-eyebrow">Cliente</p><p className="text-body">{contenido.cliente}</p></div>
         <div><p className="text-subtext text-eyebrow">Proyecto</p><p className="text-body">{contenido.proyecto}</p></div>
         <div><p className="text-subtext text-eyebrow">Fecha de entrega</p><p className="text-body">{formatDateDisplay(contenido.fecha_entrega)}</p></div>
-        <div><p className="text-subtext text-eyebrow">Presupuesto cotizado</p><p className="text-ink font-bold">${formatCuentasCurrency(contenido.presupuesto_cotizado)}</p></div>
+        <div><p className="text-subtext text-eyebrow">Presupuesto cotizado</p><p className="text-ink font-bold">${fmtCurrency(contenido.presupuesto_cotizado)}</p></div>
       </div>
 
       <div className="space-y-2">

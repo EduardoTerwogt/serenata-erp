@@ -35,5 +35,16 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
       },
     },
+    // Rediseño de Cuentas (S21): los specs de Cuentas corren también en un
+    // viewport móvil de 390 × 844, el del handoff.
+    {
+      name: 'mobile',
+      testMatch: /critical\/cuentas-.*\.spec\.ts$/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+      },
+    },
   ],
 })

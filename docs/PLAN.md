@@ -3,9 +3,16 @@
 **Iniciativa:** Rediseño de la sección Cuentas (Claude Design → implementación)
 **Estado:** **Aprobado** por el usuario (sesión 19, 2026-09-25), después de
 tres rondas de auditoría (sesiones 17–19: S1–S21, T1–T10, V1–V4) y con
-D1–D32 confirmadas. No quedan dudas de producto ni de negocio. Queda una
-sola regla por confirmar, y se confirma al abrir B7 (§5.8, S12). Siguiente
-paso: B0.
+D1–D32 confirmadas. No quedan dudas de producto ni de negocio. S12 quedó
+confirmada en la sesión 20 (se acepta la propuesta). B0 y B1b están en
+`main` (#94, #95).
+- **Sesión 20 (2026-09-25), forma de ejecución de B1–B8 (decisión del
+  usuario):** todos los bloques van en la **misma rama**
+  (`claude/practical-brown-giy5p3`), con un solo PR en borrador para CI. Las
+  migraciones se aplican **solo a `serenata-erp-test`** (el Preview apunta
+  ahí); a producción van **todas juntas al final**, en el mismo momento del
+  merge, cuando el usuario apruebe tras probar el Preview. Drive en Preview
+  (R9): el usuario da el token al llegar a B8.
 - Sesión 10 (2026-09-25): diseño final recibido y auditado.
 - Sesión 11 (2026-09-25): auditoría end-to-end contra producción (BD, RPCs,
   rutas, UI). Sus hallazgos están en §5.1 y las decisiones D10–D17 que
@@ -173,6 +180,14 @@ abren sin servidor.
 | D30 | IVA negativo en un mes del cierre (D26) | Se sigue la práctica fiscal. En México el IVA se declara **por mes y por contribuyente** (art. 5-D LIVA), así que el IVA a favor que da un proyecto se compensa primero con el de los demás proyectos del mismo mes. Solo si al final la empresa queda con saldo a favor, este se acredita en los meses siguientes hasta agotarlo, o se pide su devolución (art. 6 LIVA). Por eso el cierre de un proyecto **no arrastra** su propio negativo: la fila de ese mes muestra **"IVA a favor"** con el monto, sin fecha límite y con la nota "se acredita en la declaración mensual de la empresa (art. 6 LIVA)". La suma de las filas sigue siendo igual al IVA neto del proyecto, y la tarjeta "Impuestos" del periodo suma las filas con su signo. |
 | D31 | Complementarias no aprobadas de una principal cancelada | **También se cancelan** en la misma transacción de D28: `EMITIDA` pasa a `CANCELADA` y `BORRADOR` se borra con sus items. No queda ninguna complementaria colgada de un proyecto que ya no existe. |
 | D32 | Pago de cliente antes de la factura (anticipo) | **Se permite.** El dinero ya entró y tiene que registrarse. La pestaña "Registrar pago" de un **cobro** no se bloquea: muestra el aviso "Aún no hay factura validada; las cuentas no cerrarán sin ella" y el concepto conserva su siguiente paso ("Emitir factura" o "Revisar factura"). La RPC tampoco bloquea. El bloqueo sin factura sigue igual para los **pagos a proveedor** (supuesto 9). Es una diferencia con el prototipo (`conceptDetail` bloquea el cobro sin factura). No cambia ninguna captura: la móvil 15 es de un pago a proveedor y se conserva tal cual. |
+
+**Decisiones de la sesión 20** (ejecución de B7):
+
+| # | Tema | Decisión |
+|---|---|---|
+| D33 | Cuándo se reabre | **Un admin reabre en cualquier momento**, con o sin pendientes, siempre con motivo. Sin esto, un pago mal capturado o una factura validada equivocada en un proyecto con pendientes no tenía corrección (a veces nunca cierra justo por ese error). El chip dice "N pendientes" y, sin pendientes, "Reabierta". La reapertura no se cierra sola: la termina el admin con "Volver a cerrar" (sin pendientes) o "Terminar correcciones" (con pendientes; las cuentas se cierran solas al resolverlos, D17). Cambia la regla del prototipo (`canReopen` = cerrada). |
+| D34 | Subir otra factura sobre una validada | **Es reemplazarla, y es una corrección:** solo admin, con las cuentas reabiertas y con motivo, igual en cobros, grupos y sueltas (antes las sueltas y los cobros la aceptaban de cualquiera y sin registro). La nueva se sube y valida con el flujo normal y la anterior (XML y PDF) queda dada de baja con `reemplazado_por` hacia la nueva. Dentro de una orden de pago nunca (el PDF ya se emitió con esa factura, D7). |
+| D35 | Cambiar de año (chip de meses, sesión 20) | **Se conserva el mes elegido** (o "Todo el año"), en escritorio y en móvil, como pide el handoff del chip de meses (`docs/design/cuentas/chip-meses/`). Sustituye esa parte de S16; S16 sigue decidiendo el mes solo cuando se entra a un año sin mes en la URL (mes actual en el año en curso, si no el último con datos). |
 
 ## 4. Supuestos (confirmados por el usuario en la sesión 14)
 
@@ -535,7 +550,7 @@ hallazgos quedan integrados en los bloques.
 | S9 | `withIdempotency` necesita una llave que mande el cliente y espera como máximo 4.5 s, menos de lo que tardan el PDF y Drive: un doble clic recibe "ya se está procesando" en lugar de la misma orden. | El cliente manda `idempotency_key` (UUID por apertura del modal). La UI trata "ya se está procesando" como estado de espera, no como error: vuelve a consultar el preview y muestra la orden si ya existe. | B1b, B6 |
 | S10 | `Modal` solo tiene `lg` (512 px) y `3xl` (768 px), sin pie fijo ni encabezado propio, y su fondo es `bg-black/60`. El diseño pide 780, 820 y 960 px, pie fijo en Generar orden, encabezado con chip y ProgressBar, y fondo `rgba(0,0,0,.28)` en hojas móviles. El panel lateral de 400 px no es un modal. | `Modal` se extiende de forma aditiva: `size` acepta `780`, `820` y `960`; se agregan los slots `header` y `footer` (fijo abajo); Escape cierra; `mobile="sheet"` con fondo `.28`. Nuevo primitivo **`Drawer`** (lateral derecho de 400 px en escritorio, pantalla empujada en móvil). Los modales existentes no cambian. | B4 |
 | S11 | `ResponsiveTableCard` no tiene encabezados de grupo (Lista con "Agrupar por mes") y en móvil pinta tarjetas sueltas; el diseño agrupa las filas en una tarjeta separadas por línea. | Props opcionales: `groups` (encabezado con etiqueta y subtítulo por grupo) y `mobileLayout="list"` (una tarjeta con filas separadas). Los usos actuales no cambian. | B4 |
-| S12 | B7, "reasignar el proveedor en una cuenta ya pagada" (D5), solo decía "se amplía la guarda". No definía qué pasa con los pagos, la factura, el snapshot ni la orden del proveedor anterior, que ya recibió el dinero. | **Propuesta, a confirmar al abrir B7:** una RPC de corrección atómica que exige anular antes los pagos del concepto (B7). Luego da de baja la factura del grupo, que vuelve a `ABIERTO` y pierde el snapshot, y reasigna con la RPC vigente. Si el concepto está en una orden, primero se cancela la orden. No bloquea B0–B8. | B7 |
+| S12 | B7, "reasignar el proveedor en una cuenta ya pagada" (D5), solo decía "se amplía la guarda". No definía qué pasa con los pagos, la factura, el snapshot ni la orden del proveedor anterior, que ya recibió el dinero. | **Confirmada por el usuario (sesión 20):** una RPC de corrección atómica que exige anular antes los pagos del concepto (B7). Luego da de baja la factura del grupo, que vuelve a `ABIERTO` y pierde el snapshot, y reasigna con la RPC vigente. Si el concepto está en una orden, primero se cancela la orden. | B7 |
 | S13 | Barra de pestañas: el diseño usa los iconos `house`, `image`, `wallet` y `ellipsis`. `AppShell` deja `pt-16` para el encabezado móvil que D23 oculta, y no reserva espacio para la barra. | La barra usa los **mismos iconos que el sidebar** (`dashboard`, `proyectos`, `cuentas` y `cotizaciones`, por U8) más `ellipsis`, que es nuevo. Así el mismo destino no tiene dos iconos distintos. `AppShell` recibe `mobileChrome="tabbar"`: en `/cuentas` quita el `pt-16` y deja abajo la altura de la barra más `env(safe-area-inset-bottom)`. | B4 |
 | S14 | En tableta (768–1279 px), el sidebar de 250 px más el maestro-detalle (1fr \| 300 px) con 5 columnas no cabe. | Por debajo de `xl`, el detalle del proyecto ocupa todo el ancho y la lista compacta de proyectos se oculta; se regresa con el chevron del encabezado del proyecto. Desde `xl`, maestro-detalle como en el diseño. Captura de validación a 1024 px. | B4 |
 | S15 | En móvil, "atrás" del navegador sacaba de la app en lugar de cerrar la hoja: el estado en la URL no incluía la hoja ni la pantalla empujada. | El supuesto 8 se amplía: la URL también lleva `det` (concepto abierto), `sheet` y `page` (avisos u órdenes). Abrir una hoja o una pantalla hace `push`; cambiar filtros o periodo hace `replace`. | B4 |
@@ -577,6 +592,22 @@ contra el cuerpo real de las RPCs en producción. **No salió ningún P0.**
 | V2 | P1 | `subir-factura` de cobro fija `estado = 'FACTURADO'`: con un anticipo previo, el estado guardado retrocede hasta que corre el cron, y el Dashboard y Sheets lo leen mal mientras tanto. | `app/api/cuentas-cobrar/[id]/subir-factura/route.ts` | La ruta calcula el estado con `calcularEstadoCuentaCobrarDetallado` (montos, factura y hoy en CDMX), no con un valor fijo. | B1 |
 | V3 | P1 | El arreglo de T4 quedaba incompleto: las rutas insertan el XML ya como `validado` y después llaman a la RPC. Si la RPC falla, reaparece el hueco de T4 (factura validada sin total a transferir). El portal también inserta directo como `validado`. | Las 5 rutas de factura de proveedor | Las rutas insertan el XML como `pendiente`; **solo** `validar_factura_proveedor` lo pasa a `validado`, en la misma transacción que el snapshot y el estado del grupo. | B2 |
 | V4 | P2 | Se pedía complemento incluso para pagos anteriores a la factura, un caso que no existe fiscalmente. | CFDI 4.0: el complemento ampara pagos posteriores a una factura PPD | Complemento solo para pagos posteriores a `fecha_factura`; los anteriores son "Anticipo · sin complemento" (§5). | B1, B5 |
+
+### 5.11 Decisiones de ejecución (sesión 20)
+
+Salieron al implementar B3–B8 y B7 contra el código y la BD de test. No
+cambian reglas de producto (esas son D33 y D34).
+
+| # | Hallazgo | Decisión | Bloque |
+|---|---|---|---|
+| E1 | O1b: con el dataset de carga (2,196 proyectos, ~13,000 conceptos) la derivación en TS no cumplía p95 < 800 ms. | Se activó la salida prevista en O1b: la derivación vive en SQL (`cuentas_conceptos`, `cuentas_periodo`, `cuentas_resumen`, `cuentas_avisos_items`, migración 20261003) y `concepto.ts` / `periodo.ts` / `avisos.ts` quedan como referencia, obligada por `tests/e2e/live/cuentas-paridad-sql.spec.ts`. `cuentas_periodo` usa `plan_cache_mode = force_custom_plan`: el plan genérico que plpgsql adopta tras 5 llamadas por conexión multiplicaba el tiempo. | B3, B8 |
+| E2 | Avisos devolvía todos los conceptos del año (5.5 MB con el dataset de carga). | Máximo 50 por categoría; cada categoría trae su `total` y el panel dice "y N avisos más". | B6 |
+| E3 | H12 pedía ampliar el CHECK de `pago_operations.dominio` para anular. | No hace falta: anular es idempotente por naturaleza (el pago ya anulado devuelve `ya_anulado`), así que no usa `pago_operations`. El CHECK queda igual. | B7 |
+| E4 | ¿Un pago anulado bloquea cancelar la cotización? | Sí, `cancel_cotizacion` no cambia: el pago anulado sigue siendo un registro con historia, y cancelar borraría las cuentas que lo explican. | B7 |
+| E5 | Un grupo ya pagado cuya factura se dio de baja no aceptaba la nueva (`subir-factura` exigía `ABIERTO`). | La guarda es "no hay factura vigente validada" (o D34), no el estado del grupo. `validar_factura_proveedor` conserva el snapshot si ya hay pagos. | B7 |
+| E6 | El p95 < 800 ms del periodo fallaba en CI ante picos de red (mediana ~500 ms): cada respuesta pesaba ~305 KB, y ~300 KB eran las opciones de los filtros (clientes y proveedores del año), en cada cambio de filtro, mes o página. | Las opciones salen del periodo: `cuentas_opciones(p_year)` (migración 20261006) y `GET /api/cuentas/opciones?anio=`, que la pantalla pide una vez por año. El periodo baja a ~5–50 KB y ~35 ms menos en la BD. La paridad SQL/TS cubre también las opciones. | B3, B8 |
+| E7 | El live de p95 fallaba de forma intermitente aunque el estado estable es 330–560 ms: la primera consulta pesada en una conexión nueva de Postgres cuesta ~300 ms más (catálogo en frío) y el test calentaba con 2 peticiones; además, con 12 muestras su "p95" era el máximo. | El usuario autorizó corregir la medición: 8 peticiones de calentamiento y 40 muestras (p95 real). El presupuesto de 800 ms no cambia. | B3 |
+| E8 | El handoff del chip de meses pide un cambio instantáneo con "reducir movimiento", y en esos equipos el despliegue se veía brusco. | Decisión del usuario: con "reducir movimiento", fundido de opacidad de 150 ms, sin desplazamiento ni cascada; el chip vuelve a los 150 ms. Sin esa preferencia, la cascada del handoff sin cambios. | B4 |
 
 ## 6. Infraestructura que se reutiliza
 
@@ -644,7 +675,8 @@ contra el cuerpo real de las RPCs en producción. **No salió ningún P0.**
      las demás tablas de cuentas;
    - `CREATE OR REPLACE` parte de la definición viva en `pg_proc`, con diff
      explícito;
-   - se aplican a test y a producción **en el mismo bloque**;
+   - se aplican a test y a producción **en el mismo bloque** (B0, B1b). Desde
+     la sesión 20, B1–B8 solo a test; producción al final, junto con el merge;
    - jobs `fresh-db` y `Migrations` en verde.
 3. **Una sola firma por RPC de dinero (R5, S7).** Hoy la firma con
    `p_operation_id` **llama por dentro** a la firma sin él. Al cambiar
@@ -1271,15 +1303,17 @@ y hoja al 88% en móvil (06–08, 15, 19), con la franja "Siguiente paso".
 | Segunda auditoría T1–T10 y decisiones D30–D32 | Hecho (sesión 18) |
 | Tercera auditoría V1–V4 | Hecho (sesión 19). **Plan aprobado** |
 | B0 Referencia, reglas y seed | Hecho (sesión 20, PR #94) |
-| B1b Blindaje previo | En curso (sesión 20): migraciones aplicadas en test y producción; PR abierto |
-| B1 Derivación y datos fiscales | Pendiente |
-| B2 Pagos en total a transferir | Pendiente |
-| B3 Lectura por periodo | Pendiente |
-| B4 Pantalla principal | Pendiente |
-| B5 Detalle | Pendiente |
-| B6 Avisos y órdenes | Pendiente |
-| B8 Corte y limpieza (antes de B7, D24) | Pendiente |
-| B7 Reabrir y correcciones | Pendiente |
+| B1b Blindaje previo | Hecho (sesión 20, PR #95) |
+| B1 Derivación y datos fiscales | Hecho (sesión 20, rama del PR #96; migración solo en test) |
+| B2 Pagos en total a transferir | Hecho (sesión 20, rama del PR #96; migraciones solo en test) |
+| B3 Lectura por periodo | Hecho (sesión 20, rama del PR #96; migración solo en test; p95 lo mide `cuentas-periodo-rendimiento.spec.ts`) |
+| B4 Pantalla principal | Hecho (sesión 20, rama del PR #96) |
+| B5 Detalle | Hecho (sesión 20, rama del PR #96) |
+| B6 Avisos y órdenes | Hecho (sesión 20, rama del PR #96; E2) |
+| B8 Corte y limpieza (antes de B7, D24) | Hecho en código (sesión 20; migraciones 20261004 y 20261006 solo en test; O1b en SQL, E1 y E6). Falta R9: Drive en Preview, lo configura el usuario |
+| B7 Reabrir y correcciones | Hecho (sesión 20, rama del PR #96; migración 20261005 solo en test; D33, D34, E3–E5) |
+| Validación visual O10 | Hecho (sesión 20): capturas lado a lado con el handoff, enlace en `docs/ACTIVE_WORK.md` |
+| Producción | Pendiente: migraciones 20260926–20261006 a `serenata-erp` al aprobar el merge |
 
 ## Ciclo de vida
 

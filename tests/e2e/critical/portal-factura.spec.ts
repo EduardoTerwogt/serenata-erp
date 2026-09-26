@@ -19,6 +19,9 @@ function grupoDePrueba(i: number) {
     monto_total: 1000,
     monto_pagado: 1000,
     saldo_pendiente: 0,
+    total_a_transferir: 1160,
+    monto_transferido: 1160,
+    saldo_por_transferir: 0,
     items: [{ id: `cuenta-${i}`, item_descripcion: 'Item', cantidad: 1, x_pagar: 1000, cotizacion_id: `SH0${i}` }],
   }
 }
@@ -131,6 +134,9 @@ test('simulador de factura: se autollena al elegir proyecto, sin subir archivos'
   await page.locator('select').selectOption('grupo-1')
 
   await expect(page.getByText('Así debe quedar tu factura para este proyecto:')).toBeVisible()
-  await expect(page.getByText('$1,160.00')).toBeVisible()
+  // B2 (D14): el select y la tabla también muestran el total a transferir;
+  // la aserción se acota al Total del simulador.
+  const simulador = page.locator('dl').filter({ hasText: 'Subtotal' })
+  await expect(simulador.getByText('$1,160.00')).toBeVisible()
   await expect(page.getByText('persona moral', { exact: false })).toBeVisible()
 })

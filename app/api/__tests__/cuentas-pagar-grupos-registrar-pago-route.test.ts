@@ -74,11 +74,11 @@ describe('POST /api/cuentas-pagar/grupos/[id]/registrar-pago', () => {
     expect(mocks.withIdempotencyMock).not.toHaveBeenCalled()
   })
 
-  it('excede el total del grupo -- 400, sin llamar la RPC', async () => {
-    mocks.getCuentaPagarGrupoByIdMock.mockResolvedValue({ id: 'grupo-1', monto_total: 200, monto_pagado: 0, proyecto_id: 'SH001' })
+  it('B2: excede el saldo por transferir del grupo -- la RPC lo rechaza, 400 con mensaje seguro', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'Monto excede el total a transferir del grupo. Total: 232.00' } })
     const res = await POST(buildRequest(), { params })
     expect(res.status).toBe(400)
-    expect(mocks.rpcMock).not.toHaveBeenCalled()
+    expect((await res.json()).error).toBe('El monto excede el saldo por transferir.')
   })
 
   it('P1411 (operation_id cruzado) -- 409', async () => {
@@ -90,7 +90,7 @@ describe('POST /api/cuentas-pagar/grupos/[id]/registrar-pago', () => {
   })
 
   it('P1413 (grupo no facturable) -- 409', async () => {
-    mocks.rpcMock.mockResolvedValue({ data: null, error: { code: 'P1413', message: 'el grupo está en estado ABIERTO' } })
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { code: 'P1413', message: 'grupo_no_facturable: el grupo g está en estado ABIERTO' } })
     const res = await POST(buildRequest(), { params })
     expect(res.status).toBe(409)
     const body = await res.json()

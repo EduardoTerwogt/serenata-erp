@@ -2,73 +2,53 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
-  getCuentaPagarByIdMock: vi.fn(),
-  getDocumentosCuentaPagarMock: vi.fn(),
-  getOrdenPagoByIdMock: vi.fn(),
-  getProveedorByIdMock: vi.fn(),
-  getCuentaPagarGrupoByIdMock: vi.fn(),
-  getCuentasPagarPorGrupoMock: vi.fn(),
-  getDocumentosCuentaPagarGrupoMock: vi.fn(),
+  cargarDetallePagoMock: vi.fn(),
+  cargarDetalleCobroMock: vi.fn(),
 }))
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
-vi.mock('@/lib/db', () => ({
-  getCuentaPagarById: mocks.getCuentaPagarByIdMock,
-  getDocumentosCuentaPagar: mocks.getDocumentosCuentaPagarMock,
-  getOrdenPagoById: mocks.getOrdenPagoByIdMock,
-  getProveedorById: mocks.getProveedorByIdMock,
-  getCuentaPagarGrupoById: mocks.getCuentaPagarGrupoByIdMock,
-  getCuentasPagarPorGrupo: mocks.getCuentasPagarPorGrupoMock,
-  getDocumentosCuentaPagarGrupo: mocks.getDocumentosCuentaPagarGrupoMock,
-}))
+vi.mock('@/lib/server/cuentas/subir-archivo', () => ({ subirArchivoCuenta: vi.fn() }))
+vi.mock('@/lib/server/cuentas/detalle', () => ({ cargarDetallePago: mocks.cargarDetallePagoMock, cargarDetalleCobro: mocks.cargarDetalleCobroMock }))
 
-import { GET } from '../cuentas-pagar/[id]/documentos/route'
+import { GET as getSuelta } from '../cuentas-pagar/[id]/documentos/route'
+import { GET as getGrupo } from '../cuentas-pagar/grupos/[id]/documentos/route'
+import { GET as getCobro } from '../cuentas-cobrar/[id]/documentos/route'
 
-const params = Promise.resolve({ id: 'cuenta-1' })
-const req = () => new Request('http://x/api/cuentas-pagar/cuenta-1/documentos')
+const req = () => new Request('http://x')
+const params = (id: string) => ({ params: Promise.resolve({ id }) })
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireSectionMock.mockResolvedValue({ response: null })
-  mocks.getOrdenPagoByIdMock.mockResolvedValue(null)
-  mocks.getProveedorByIdMock.mockResolvedValue({ regimen_fiscal: 'moral' })
 })
 
-describe('GET /api/cuentas-pagar/[id]/documentos', () => {
-  it('cuenta no encontrada -- 404', async () => {
-    mocks.getCuentaPagarByIdMock.mockResolvedValue(null)
-    const res = await GET(req(), { params })
-    expect(res.status).toBe(404)
+describe('GET de detalle (Rediseño de Cuentas B5, U2)', () => {
+  it('suelta: pide el detalle de la cuenta y responde { detalle }', async () => {
+    mocks.cargarDetallePagoMock.mockResolvedValue({ tipo: 'pago', objetivo: 'cuenta', id: 'cp-1' })
+    const res = await getSuelta(req(), params('cp-1'))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ detalle: { tipo: 'pago', objetivo: 'cuenta', id: 'cp-1' } })
+    expect(mocks.cargarDetallePagoMock).toHaveBeenCalledWith('cuenta', 'cp-1')
   })
 
-  it('cuenta sin grupo_id -- grupo: null, documentos/resumen a nivel item (comportamiento previo intacto)', async () => {
-    mocks.getCuentaPagarByIdMock.mockResolvedValue({ id: 'cuenta-1', grupo_id: null, x_pagar: 1000, monto_pagado: 200, responsable_id: 'prov-1' })
-    mocks.getDocumentosCuentaPagarMock.mockResolvedValue([{ id: 'doc-1' }])
-
-    const res = await GET(req(), { params })
-    const body = await res.json()
-
+  it('grupo: pide el detalle del grupo', async () => {
+    mocks.cargarDetallePagoMock.mockResolvedValue({ tipo: 'pago', objetivo: 'grupo', id: 'g-1' })
+    const res = await getGrupo(req(), params('g-1'))
     expect(res.status).toBe(200)
-    expect(body.grupo).toBeNull()
-    expect(body.documentos).toEqual([{ id: 'doc-1' }])
-    expect(body.resumen).toEqual({ monto_pagado: 200, saldo_pendiente: 800 })
-    expect(mocks.getCuentaPagarGrupoByIdMock).not.toHaveBeenCalled()
-    expect(mocks.getDocumentosCuentaPagarGrupoMock).not.toHaveBeenCalled()
+    expect(mocks.cargarDetallePagoMock).toHaveBeenCalledWith('grupo', 'g-1')
   })
 
-  it('cuenta con grupo_id -- documentos/resumen leídos del grupo, con desglose de items hermanos', async () => {
-    mocks.getCuentaPagarByIdMock.mockResolvedValue({ id: 'cuenta-1', grupo_id: 'grupo-1', x_pagar: 100, monto_pagado: 0, responsable_id: 'prov-1' })
-    mocks.getCuentaPagarGrupoByIdMock.mockResolvedValue({ id: 'grupo-1', monto_total: 300, monto_pagado: 50, estado: 'FACTURADO' })
-    mocks.getDocumentosCuentaPagarGrupoMock.mockResolvedValue([{ id: 'doc-grupo-1' }])
-    mocks.getCuentasPagarPorGrupoMock.mockResolvedValue([{ id: 'cuenta-1' }, { id: 'cuenta-2' }])
+  it('no encontrado → 404 en los tres', async () => {
+    mocks.cargarDetallePagoMock.mockResolvedValue(null)
+    mocks.cargarDetalleCobroMock.mockResolvedValue(null)
+    expect((await getSuelta(req(), params('x'))).status).toBe(404)
+    expect((await getGrupo(req(), params('x'))).status).toBe(404)
+    expect((await getCobro(req(), params('x'))).status).toBe(404)
+  })
 
-    const res = await GET(req(), { params })
-    const body = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(body.grupo).toEqual({ id: 'grupo-1', monto_total: 300, monto_pagado: 50, estado: 'FACTURADO', items: [{ id: 'cuenta-1' }, { id: 'cuenta-2' }] })
-    expect(body.documentos).toEqual([{ id: 'doc-grupo-1' }])
-    expect(body.resumen).toEqual({ monto_pagado: 50, saldo_pendiente: 250 })
-    expect(mocks.getDocumentosCuentaPagarMock).not.toHaveBeenCalled()
+  it('sin la sección cuentas no llega a la BD', async () => {
+    mocks.requireSectionMock.mockResolvedValue({ response: new Response(null, { status: 403 }) } as never)
+    expect((await getGrupo(req(), params('g-1'))).status).toBe(403)
+    expect(mocks.cargarDetallePagoMock).not.toHaveBeenCalled()
   })
 })

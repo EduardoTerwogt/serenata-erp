@@ -11,10 +11,8 @@ test.describe('live smoke', () => {
   test('logs in and opens cuentas on a live environment', async ({ page }) => {
     await login(page, '/cuentas')
     await expect(page.getByRole('heading', { name: 'Cuentas' })).toBeVisible()
-    // Anclado al inicio: la vista "Por proyecto" (default) también tiene un
-    // acordeón cuyo botón de header incluye el texto "Por cobrar $X", que
-    // un regex sin anclar también matchea.
-    await expect(page.getByRole('button', { name: /^Cobrar/i })).toBeVisible()
+    // Rediseño de Cuentas (B4): la pantalla abre en el periodo del mes con su selector.
+    await expect(page.getByRole('group', { name: 'Mes del evento' })).toBeVisible()
   })
 })
 
@@ -119,57 +117,48 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     const cuentaPagar = cuentasPagar.find((c) => c.cotizacion_id === cotizacionId)
     expect(cuentaPagar, 'debe existir una cuenta por pagar real para esta cotización').toBeTruthy()
 
-    // 4. Subir factura real a Drive desde Cuentas por Cobrar
-    await page.goto('/cuentas')
-    // Vista "Por proyecto" es la default (Fase 5.3 Bloque 3) -- este flujo
-    // usa la tabla plana de la vista "Lista".
-    await page.getByRole('button', { name: 'Lista' }).click()
-    await page.locator('tr').filter({ hasText: proyecto }).first().click()
-    await page.getByRole('button', { name: 'Documentos', exact: true }).click()
+    // 4. Subir factura real a Drive desde el detalle del cobro (B5). El
+    // concepto se abre por su URL (det = 'c:<id>', estado en la URL, S15);
+    // XML y PDF van en peticiones separadas (supuesto 15).
+    await page.goto(`/cuentas?det=c:${cuentaCobrar!.id}&tab=docs`)
+    const detCobro = page.getByRole('dialog', { name: cliente })
+    await expect(detCobro.getByText('Factura XML', { exact: true })).toBeVisible({ timeout: 30_000 })
 
     const facturaXml = `<cfdi:Comprobante Folio="E2E${suffix}" Fecha="2026-06-01T10:00:00" Total="1000.00"></cfdi:Comprobante>`
-    const fileInputs = page.locator('input[type="file"]')
-    await fileInputs.nth(0).setInputFiles({ name: 'factura.xml', mimeType: 'application/xml', buffer: Buffer.from(facturaXml, 'utf-8') })
-    await fileInputs.nth(1).setInputFiles({ name: 'factura.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8') })
-    await page.getByRole('button', { name: 'Subir Factura' }).click()
-    await expect(page.getByText('Factura subida correctamente')).toBeVisible({ timeout: 45_000 })
+    await detCobro.locator('input[type="file"][accept*="xml"]').first().setInputFiles({ name: 'factura.xml', mimeType: 'application/xml', buffer: Buffer.from(facturaXml, 'utf-8') })
+    await expect(detCobro.getByText('Factura XML subida')).toBeVisible({ timeout: 45_000 })
+    await detCobro.locator('input[type="file"][accept*="pdf"]').first().setInputFiles({ name: 'factura.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8') })
+    await expect(detCobro.getByText('Factura PDF subida')).toBeVisible({ timeout: 45_000 })
+    await expect(detCobro.getByRole('link', { name: 'Ver' }).first()).toHaveAttribute('href', /drive\.google\.com/, { timeout: 15_000 })
 
-    const facturaLink = page.getByRole('link', { name: 'Ver' }).first()
-    await expect(facturaLink).toHaveAttribute('href', /drive\.google\.com/, { timeout: 15_000 })
+    // 5. Registrar el cobro completo (el monto por defecto es el saldo).
+    await detCobro.getByRole('button', { name: 'Registrar pago' }).first().click()
+    await expect(detCobro.getByLabel('Monto')).toHaveValue(Number(cuentaCobrar!.monto_total).toFixed(2))
+    await detCobro.locator('form').getByRole('button', { name: 'Registrar pago' }).click()
+    await expect(detCobro.getByText('Cobro registrado')).toBeVisible({ timeout: 30_000 })
+    await expect(detCobro.getByText('Cuenta saldada. No hay saldo pendiente por registrar.')).toBeVisible({ timeout: 15_000 })
+    await detCobro.getByRole('button', { name: 'Cerrar' }).click()
 
-    // 5. Registrar pago real en Cuentas por Cobrar
-    await page.getByRole('button', { name: 'Registrar Pago', exact: true }).click()
-    const cobrarForm = page.locator('form')
-    await cobrarForm.locator('input[placeholder="0.00"]').fill(String(cuentaCobrar!.monto_total))
-    await cobrarForm.getByText('Fecha de Pago', { exact: true }).locator('xpath=following-sibling::*[1]').click()
-    await cobrarForm.locator('input[type="date"]').fill('2026-06-05')
-    await cobrarForm.getByRole('button', { name: 'Registrar Pago' }).click()
-    await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByText(/PAGADO/i).first()).toBeVisible()
-
-    await page.getByLabel('Cerrar').click()
-
-    // 6. Subir factura de proveedor real a Drive desde Cuentas por Pagar
-    await page.getByRole('button', { name: /^Pagar/i }).click()
-    await page.locator('tr').filter({ hasText: proyecto }).first().click()
-    await page.getByRole('button', { name: 'Documentos', exact: true }).click()
-
+    // 6. Subir factura de proveedor real a Drive desde el detalle del pago.
+    // El renglón no tiene proveedor asignado: es una cuenta suelta ('s:<id>').
+    await page.goto(`/cuentas?det=s:${cuentaPagar!.id}&tab=docs`)
+    const detPago = page.getByRole('dialog', { name: 'Sin asignar' })
+    await expect(detPago.getByText('Factura de proveedor XML')).toBeVisible({ timeout: 30_000 })
     const facturaProvXml = `<cfdi:Comprobante Fecha="2026-06-01T10:00:00"></cfdi:Comprobante>`
-    const pagarFileInputs = page.locator('input[type="file"]')
-    await pagarFileInputs.nth(0).setInputFiles({ name: 'factura_proveedor.xml', mimeType: 'application/xml', buffer: Buffer.from(facturaProvXml, 'utf-8') })
-    await pagarFileInputs.nth(1).setInputFiles({ name: 'factura_proveedor.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8') })
-    await page.getByRole('button', { name: 'Subir Factura Proveedor' }).click()
-    await expect(page.getByText('Factura proveedor subida correctamente')).toBeVisible({ timeout: 45_000 })
+    await detPago.locator('input[type="file"][accept*="xml"]').first().setInputFiles({ name: 'factura_proveedor.xml', mimeType: 'application/xml', buffer: Buffer.from(facturaProvXml, 'utf-8') })
+    await expect(detPago.getByText('Factura XML subida')).toBeVisible({ timeout: 45_000 })
+    await detPago.locator('input[type="file"][accept*="pdf"]').first().setInputFiles({ name: 'factura_proveedor.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8') })
+    await expect(detPago.getByText('Factura PDF subida')).toBeVisible({ timeout: 45_000 })
+    await expect(detPago.getByRole('link', { name: 'Ver' }).first()).toHaveAttribute('href', /drive\.google\.com/, { timeout: 15_000 })
 
-    const facturaProvLink = page.getByRole('link', { name: 'Ver' }).first()
-    await expect(facturaProvLink).toHaveAttribute('href', /drive\.google\.com/, { timeout: 15_000 })
-
-    // 7. Registrar pago real en Cuentas por Pagar
-    await page.getByRole('button', { name: 'Registrar Pago', exact: true }).click()
-    const pagarForm = page.locator('form')
-    await pagarForm.locator('input[placeholder="0.00"]').fill(String(cuentaPagar!.x_pagar))
-    await pagarForm.getByRole('button', { name: 'Registrar Pago' }).click()
-    await expect(page.getByText('Pago registrado correctamente').first()).toBeVisible({ timeout: 30_000 })
+    // 7. Sin proveedor asignado, el pago está bloqueado (T2): la pestaña lo
+    // dice y lleva a Información; no se registra nada.
+    await detPago.getByRole('button', { name: 'Registrar pago' }).first().click()
+    await expect(detPago.getByText('Asigna un proveedor en Información para poder registrar el pago.')).toBeVisible()
+    await expect(detPago.getByLabel('Monto')).toHaveCount(0)
+    const pagada = await page.request.get(`/api/cuentas-pagar?search=${cotizacionId}`)
+    const { rows: trasPago } = await pagada.json() as { rows: Array<{ cotizacion_id: string; monto_pagado: number | null }> }
+    expect(Number(trasPago.find((c) => c.cotizacion_id === cotizacionId)?.monto_pagado ?? 0)).toBe(0)
   })
 
   test('cancela una cotización real y revierte cuentas/proyecto', async ({ page }) => {
