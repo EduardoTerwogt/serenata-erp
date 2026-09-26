@@ -38,6 +38,8 @@ function useMedia(query: string) {
   return useSyncExternalStore(suscribir, () => window.matchMedia(query).matches, () => false)
 }
 
+/** El sistema pide reducir movimiento: las animaciones pasan a un fundido corto. */
+export const useReducirMovimiento = () => useMedia('(prefers-reduced-motion: reduce)')
 /** ≥ md (768px): escritorio; por debajo, el diseño móvil (supuesto 19). */
 export const useEsEscritorio = () => useMedia('(min-width: 768px)')
 /** ≥ xl (1280px): maestro-detalle lado a lado (S14). */

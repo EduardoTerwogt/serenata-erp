@@ -6,6 +6,7 @@ import { Icon } from '@/components/ui/Icon'
 import { Select } from '@/components/ui/Select'
 import type { MesPeriodo, MesResumen, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
 import { MESES_CORTOS, MESES_LARGOS, capitalizar, etiquetaPeriodo } from './formato'
+import { useReducirMovimiento } from './ui'
 
 interface PeriodoProps {
   anio: number
@@ -37,16 +38,19 @@ function Contador({ n, activo }: { n: number; activo: boolean }) {
 
 /** Duración de la cascada de cierre antes de volver a mostrar el chip (handoff chip-meses). */
 const CIERRE_MS = 300
+/** Con "reducir movimiento" el cierre es un fundido de 150 ms (globals.css). */
+const CIERRE_REDUCIDO_MS = 150
 
 /**
  * Escritorio: chip del periodo que se despliega en la misma fila en la tira de
  * 12 meses más "Todo el año" (handoff docs/design/cuentas/chip-meses). El
  * select de año no cambia y la tira nunca lo empuja a otra línea: si no
- * cabe, hace scroll horizontal.
+ * cabe, hace scroll horizontal. Con "reducir movimiento", fundido corto.
  */
 export function PeriodoEscritorio({ anio, mes, meses, resumen, hoy, onMes, onAnio }: PeriodoProps & { hoy: string }) {
   const [abierto, setAbierto] = useState(false)
   const [cerrando, setCerrando] = useState(false)
+  const reducir = useReducirMovimiento()
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const chipRef = useRef<HTMLButtonElement>(null)
   const tiraRef = useRef<HTMLDivElement>(null)
@@ -65,8 +69,8 @@ export function PeriodoEscritorio({ anio, mes, meses, resumen, hoy, onMes, onAni
     timer.current = setTimeout(() => {
       setAbierto(false)
       setCerrando(false)
-    }, CIERRE_MS)
-  }, [abierto, cerrando])
+    }, reducir ? CIERRE_REDUCIDO_MS : CIERRE_MS)
+  }, [abierto, cerrando, reducir])
 
   const abrirTira = () => {
     if (timer.current) clearTimeout(timer.current)

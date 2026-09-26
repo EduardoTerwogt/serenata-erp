@@ -137,6 +137,21 @@ test('escritorio: el chip de meses se despliega en la fila y se contrae al elegi
   await expect(page).toHaveURL(/mes=todo/)
 })
 
+test('escritorio: con "reducir movimiento" el chip se abre con un fundido corto, sin cascada', async ({ page }) => {
+  test.skip(esMovil(), 'La versión móvil no cambia: hoja Periodo')
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await abrir(page)
+  await page.getByRole('button', { name: 'Periodo: Septiembre. Ver todos los meses' }).click()
+  const pastilla = page.getByRole('option', { name: /^Dic/ })
+  const anim = await pastilla.evaluate((b) => {
+    const s = getComputedStyle(b)
+    return { nombre: s.animationName, duracion: s.animationDuration, retardo: s.animationDelay }
+  })
+  expect(anim).toEqual({ nombre: 'sn-fade-in', duracion: '0.15s', retardo: '0s' })
+  await pastilla.click()
+  await expect(page.getByRole('button', { name: 'Periodo: Diciembre. Ver todos los meses' })).toBeVisible()
+})
+
 test('búsqueda sin resultados muestra el estado vacío', async ({ page }) => {
   await abrir(page)
   if (esMovil()) {

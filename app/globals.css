@@ -487,6 +487,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .sn-chip-in { animation: sn-chip-in 220ms var(--ease-standard) both; }
 .sn-sin-scrollbar { scrollbar-width: none; }
 .sn-sin-scrollbar::-webkit-scrollbar { display: none; }
+/* Con "reducir movimiento" (decisión del usuario, sesión 20): en vez de un
+   cambio instantáneo, un fundido corto de opacidad sin desplazamiento ni
+   cascada. El retardo en línea de cada pastilla se anula con !important. */
+@keyframes sn-fade-in { from { opacity: 0; } to { opacity: var(--sn-mes-op, 1); } }
+@keyframes sn-fade-out { from { opacity: var(--sn-mes-op, 1); } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .sn-mes-in, .sn-mes-out, .sn-chip-in { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+  .sn-mes-in, .sn-chip-in { animation: sn-fade-in 150ms var(--ease-standard) both !important; animation-delay: 0ms !important; }
+  .sn-mes-out { animation: sn-fade-out 150ms var(--ease-standard) both !important; animation-delay: 0ms !important; }
 }

@@ -213,4 +213,4 @@ Base de 390 × 844. La barra de pestañas inferior es de vidrio y navega entre s
 
 ## Ajuste posterior: chip de meses (escritorio)
 
-`chip-meses/` trae el rediseño del selector de mes de escritorio (sesión 20): un chip con el periodo que se despliega en la misma fila en la tira de meses. Reemplaza la fila de 12 pastillas de este handoff; la versión móvil no cambia. Al cambiar de año se conserva el mes elegido (D35).
+`chip-meses/` trae el rediseño del selector de mes de escritorio (sesión 20): un chip con el periodo que se despliega en la misma fila en la tira de meses. Reemplaza la fila de 12 pastillas de este handoff; la versión móvil no cambia. Al cambiar de año se conserva el mes elegido (D35). Con "reducir movimiento" del sistema, la app usa un fundido de 150 ms en lugar del cambio instantáneo que pide el README del chip (E8).
