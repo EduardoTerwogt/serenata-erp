@@ -1,6 +1,6 @@
 import { requireAnySection, requireSection } from '@/lib/api-auth'
 import { getProveedores, createProveedor } from '@/lib/db'
-import { proveedorPublico } from '@/lib/server/proveedor-publico'
+import { proveedorPublico } from '@/lib/server/repositories/proveedor-publico'
 import { validate, ProveedorCreateSchema } from '@/lib/validation/schemas'
 
 export async function GET() {
