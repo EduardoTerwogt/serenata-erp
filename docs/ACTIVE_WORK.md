@@ -65,6 +65,15 @@ se cerró: su historia está en `docs/archive/rediseno-cuentas.md` y sus reglas 
   rendimiento.
 - CI de #97 en `ea4cb85`: `test`, `fresh-db` y `smoke-and-critical` verdes;
   `live` 77/78, con "periodo (mes)" en rojo (timeouts de 8 s).
+- **CI de PR #98 (frente 3), 2 corridas de `live` en verde (78/78 cada una):**
+  - 1.ª corrida: las 5 mediciones pasaron en ronda 1, con margen cómodo
+    (periodo mes 546 ms, todo el año 565, lista 572, resumen 404, avisos 474).
+  - 2.ª corrida (re-run manual): "periodo (mes)" ronda 1 dio **866 ms**
+    (sobre el presupuesto de 800) — pasó solo por el mecanismo "mejor de dos
+    rondas" (ronda 2: 578 ms). "resumen" 774 ms y "avisos" 708 ms, con margen
+    estrecho. El frente 3 eliminó el `statement_timeout` fatal (el fallo duro
+    de antes), pero **la variabilidad cerca del límite sigue ahí** bajo carga
+    real de la BD de test compartida.
 
 ## Pendiente del usuario
 
@@ -73,10 +82,14 @@ se cerró: su historia está en `docs/archive/rediseno-cuentas.md` y sus reglas 
 
 ## Siguiente paso
 
-Confirmar en CI real (2-3 corridas del job `live` sin fallo de
-`cuentas-periodo-rendimiento.spec.ts`) que el frente 3 alcanzó. Si vuelve a
-fallar, escalar al frente 2 (cachear/restructurar `cuentas_conceptos`) como
-iniciativa nueva en `docs/PLAN.md` — no agregar más tolerancia al test. Luego
+**Frente 3 confirmado con 2 corridas verdes** — suficiente para dejar de
+bloquear el merge (ver criterio de "Siguiente paso" anterior). Pero el
+segundo dato (866 ms en una ronda) muestra que el margen sigue siendo
+estrecho: no cerrar la deuda como "resuelta sin más" — el frente 2
+(cachear/restructurar `cuentas_conceptos` para no recalcularse desde cero en
+cada RPC) sigue siendo la mejora de fondo recomendada a mediano plazo, ahora
+como iniciativa propia en `docs/PLAN.md` cuando se priorice, no urgente
+mientras `live` no vuelva a fallar. Luego
 seguir con el resto de la lista de abajo. Abrir con `/serenata-iniciar-fase`.
 
 ## Deuda técnica
