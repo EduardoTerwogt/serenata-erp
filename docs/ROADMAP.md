@@ -117,6 +117,12 @@ viva en `docs/ACTIVE_WORK.md` → "Deuda técnica". La de más peso:
     - (3) Que `cuentas-periodo-rendimiento.spec.ts` no entre por
       `/cuentas`: la carga de la propia página compite con el calentamiento.
   - Ese test sigue intermitente aun con "mejor de dos rondas" (`ea4cb85`).
+  - **Sesión 22: frente 3 aplicado** (usuario decidió frente 3 ahora, frente
+    2 como contingencia si el 3 no alcanza, frente 1 fuera de alcance). El
+    test ahora entra por `/cotizaciones`. Pendiente confirmar en 2-3 corridas
+    reales de `live` — una sola corrida verde no alcanza dado el historial
+    (falló en `f01097d` y 3 veces en #97). Si vuelve a fallar, frente 2 pasa
+    a ser la siguiente iniciativa en `docs/PLAN.md`.
 
 ### Sueltos pendientes (2026-09-19, actualizado 2026-09-21)
 

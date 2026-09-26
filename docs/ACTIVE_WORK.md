@@ -1,12 +1,31 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-26 (sesión 21, cerrada: rediseño de Cuentas y #97 en producción)
+**Última actualización:** 2026-09-26 (sesión 22: deuda técnica — fuente Inter,
+duplicado de `proveedor-publico.ts` y frente 3 de la latencia de Cuentas)
 
 ## Estado
 
 **No hay iniciativa activa.** `docs/PLAN.md` está vacío. El rediseño de Cuentas
 se cerró: su historia está en `docs/archive/rediseno-cuentas.md` y sus reglas en
 `docs/decisions/017-rediseno-cuentas.md`.
+
+## Completado en la sesión 22
+
+- **Fuente Inter migrada de `next/font/google` a `next/font/local`**
+  (`app/fonts.ts`). Los 4 pesos (400/500/600/700, subset latin) viven ahora en
+  `app/fonts/*.woff2` + `app/fonts/Inter-OFL.txt`, generados desde
+  `@expo-google-fonts/inter@0.4.2` (misma fuente/licencia SIL OFL 1.1 ya
+  vendorizada en `lib/server/pdf/fonts/inter.ts`) subseteados con
+  `pyftsubset`. El build ya no depende de descargar Google Fonts.
+- **Borrado el duplicado `lib/server/proveedor-publico.ts`.** Su único
+  importador (`app/api/proveedores/route.ts`) ahora usa directamente
+  `lib/server/repositories/proveedor-publico.ts`.
+- **Frente 3 de la latencia en paralelo de Cuentas** (ver "Deuda técnica"
+  abajo): `tests/e2e/live/cuentas-periodo-rendimiento.spec.ts` ya no entra
+  por `/cuentas` para loguearse (esa página disparaba periodo+resumen+
+  opciones+avisos en paralelo, compitiendo con la propia medición del test)
+  — ahora usa `/cotizaciones`, igual que el resto de los specs `live`.
+  Pendiente confirmar en CI real (ver nota en "Deuda técnica").
 
 ## Completado en la sesión 21
 
@@ -54,9 +73,11 @@ se cerró: su historia está en `docs/archive/rediseno-cuentas.md` y sus reglas 
 
 ## Siguiente paso
 
-Sesión dedicada de deuda técnica (decisión del usuario). Empezar por la
-latencia en paralelo de Cuentas (`docs/ROADMAP.md` → "Deuda técnica") y
-seguir con la lista de abajo. Abrir con `/serenata-iniciar-fase`.
+Confirmar en CI real (2-3 corridas del job `live` sin fallo de
+`cuentas-periodo-rendimiento.spec.ts`) que el frente 3 alcanzó. Si vuelve a
+fallar, escalar al frente 2 (cachear/restructurar `cuentas_conceptos`) como
+iniciativa nueva en `docs/PLAN.md` — no agregar más tolerancia al test. Luego
+seguir con el resto de la lista de abajo. Abrir con `/serenata-iniciar-fase`.
 
 ## Deuda técnica
 
@@ -64,22 +85,27 @@ seguir con la lista de abajo. Abrir con `/serenata-iniciar-fase`.
   de Realtime con la opción `accessToken` de `createClient`
   (`lib/supabase-browser.ts`) y revisar los reintentos de postgrest. La guarda
   `lib/realtime/__tests__/realtime-js-guard.test.ts` falla si se sube sin eso.
-- **El build depende de descargar Inter de Google Fonts** (`app/fonts.ts`).
-  Falló de forma intermitente el 2026-09-24 y otra vez en #95 (2026-09-25,
-  `smoke-and-critical`; pasó al relanzarlo). Si se repite, migrar a
-  `next/font/local`.
 - **Job `live` inestable en `main` (visto tras #92).** Hay fallos
   intermitentes en el test causal de `bulk` y en el de escala. Vigilar si se
   repiten ahora que #93 está mergeado.
-- Las secuencias `seq_cc_2026` y `seq_cp_2026` quedaron sin uso tras #92; se
-  pueden borrar en una limpieza.
 - El MCP de Vercel no tiene alcance de team para los logs de runtime (403).
-- **Latencia en paralelo de las RPCs de Cuentas.** Hallazgos y frentes en
-  `docs/ROADMAP.md` → "Después" → "Deuda técnica". Tumba de forma
-  intermitente el test `live` `cuentas-periodo-rendimiento.spec.ts` ›
-  "periodo (mes)". Falló en `f01097d` y 3 veces en #97.
-- Borrar el duplicado local `lib/server/proveedor-publico.ts`. Solo reexporta
-  el helper del repositorio: #97 lo dejó así al integrar B5.
+- **Latencia en paralelo de las RPCs de Cuentas — frente 3 aplicado, por
+  confirmar.** Diagnóstico (sesión 21, `docs/ROADMAP.md` → "Después" →
+  "Deuda técnica"): cada RPC es rápida sola (`cuentas_periodo` ~527 ms,
+  `cuentas_resumen` ~346, `cuentas_avisos_items` ~316, `cuentas_opciones`
+  ~236 en `serenata-erp-test`), pero `/cuentas` las dispara en paralelo y
+  bajo carga concurrente algunas superan el `statement_timeout=8s` de
+  `authenticator` (`57014`). Sesión 22 confirmó una fuente extra de esa
+  concurrencia: el propio test `cuentas-periodo-rendimiento.spec.ts` entraba
+  por `login(page, '/cuentas')`, que monta la página real y dispara las
+  mismas RPCs en paralelo justo antes de medir — se cambió a
+  `login(page, '/cotizaciones')`. Falló en `f01097d` y 3 veces en #97
+  (incluso ya con "mejor de dos rondas", `ea4cb85`), así que **no cerrar con
+  una sola corrida verde**: observar 2-3 corridas reales de `live` antes de
+  dar el frente 3 por suficiente. Si vuelve a fallar, el frente 2
+  (cachear/restructurar `cuentas_conceptos` — cambio de arquitectura) queda
+  como la siguiente iniciativa; el frente 1 (tamaño de cómputo de
+  `serenata-erp-test`) es una decisión de costo, no se tocó.
 - `proyectos.fecha_entrega` sigue siendo texto: las RPCs de Cuentas validan
   `^\d{4}-\d{2}-\d{2}$` y mandan lo demás a "Sin fecha" (D9).
 - **Drive en Preview (ex R9) sigue apagado.** El rediseño se validó sin él
