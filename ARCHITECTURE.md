@@ -78,6 +78,15 @@ y secciones permitidas antes de llegar a página o API. Dentro de cada route,
 `cotizaciones`, `proyectos`, `cuentas`, `responsables`, `planeacion`. El portal
 de proveedores tiene sesión propia, independiente de NextAuth.
 
+**Credenciales del portal nunca salen del servidor (#97).** El tipo `Proveedor`
+(`lib/types.ts`) ya no tiene `password_hash` ni `session_version`; viven en
+`ProveedorCredenciales`, que solo lee `lib/server/repositories/portal.ts`
+(login y signup). Toda lectura de `proveedores` que alimenta una respuesta
+usa la lista blanca `PROVEEDOR_PUBLIC_COLUMNS`
+(`lib/server/repositories/proveedor-publico.ts`), nunca `*`, y las filas
+completas que devuelve una RPC `SETOF proveedores` pasan por
+`proveedorPublico()`. Una columna nueva sensible queda fuera por defecto.
+
 **Revocación de sesión de staff (`session_version`, EF-2 1B-2b).** Igual que el
 Portal (`db/migrations/20260909_portal_session_version.sql`), `usuarios` tiene
 una columna `session_version` que `admin_update_usuario()` (RPC) incrementa
@@ -504,6 +513,15 @@ llave anónima no lee nada. Es la razón de que la colaboración no use
 ## Gotchas del repo
 
 Trampas reales, no teóricas. Cada una costó un bug:
+
+- **El MCP de Supabase decodifica `\uXXXX` en el SQL que recibe.** Al
+  transcribir una migración con `execute_sql`/`apply_migration`, un literal
+  como `'[\u0300-\u036f]'` llega a la BD con los caracteres reales, no con
+  el escape. Funciona igual, pero el cuerpo de la función ya no coincide con
+  el archivo (md5 de `prosrc` distinto). Verificar con el md5 contra el
+  archivo y, si difiere, reescribir con `pg_get_functiondef` + `replace(...,
+  chr(768), chr(92) || 'u0300')` dentro de un `DO`. Pasó con
+  `cuentas_periodo` al aplicar `20261006` a producción (2026-09-26).
 
 - **`pg_trgm` está en el esquema `extensions`, no en `public`** (desde
   2026-09-24, migración `20260924_advisor_search_path_pg_trgm.sql`). Una

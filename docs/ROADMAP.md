@@ -89,6 +89,35 @@ Sin iniciativa definida. El rediseño de Cuentas se cerró el 2026-09-26 (ver
 sistema a la vista. Ninguno de los puntos de abajo está comprometido todavía
 ni tiene alcance de iniciativa definido.
 
+### Deuda técnica (2026-09-26)
+
+La resuelve una sesión dedicada (decisión del usuario, 2026-09-26). Lista
+viva en `docs/ACTIVE_WORK.md` → "Deuda técnica". La de más peso:
+
+- **Latencia en paralelo de las RPCs de Cuentas.** En `serenata-erp-test`
+  (dataset de carga: unos 2,200 proyectos y 13,000 conceptos al año), cada
+  RPC tarda poco sola, con cómputo chico: `shared_buffers` de 224 MB y un
+  CPU lento (3M filas de `generate_series` tardan 875 ms).
+  - Tiempos solos: `cuentas_periodo` (mes) 527 ms, `cuentas_resumen` 346,
+    `cuentas_avisos_items` 316, `cuentas_opciones` 236.
+  - Cuando coinciden, a veces pasan los 8 s y PostgREST las cancela
+    (`57014`, `statement_timeout=8s` de `authenticator`). Pasó a lo largo
+    del día en varias RPCs de Cuentas.
+  - Una carga de `/cuentas` dispara `periodo`, `resumen` y `opciones` en
+    paralelo, y cada una recalcula `cuentas_conceptos` (~200 ms) desde cero.
+  - Descartado: memoria (~15 MB por llamada, sin temp files) e I/O
+    (hit 100 %). Hipótesis principal: saturación o throttling de CPU.
+  - Hoy producción tiene pocos datos; con el volumen del dataset de carga
+    tendría el mismo riesgo.
+  - Tres frentes, a decidir juntos:
+    - (1) Ver el CPU de test en el dashboard de Supabase y el tamaño de
+      cómputo.
+    - (2) Derivar `cuentas_conceptos` una vez por petición o con caché
+      invalidada en escrituras (cambio de arquitectura: plan primero).
+    - (3) Que `cuentas-periodo-rendimiento.spec.ts` no entre por
+      `/cuentas`: la carga de la propia página compite con el calentamiento.
+  - Ese test sigue intermitente aun con "mejor de dos rondas" (`ea4cb85`).
+
 ### Sueltos pendientes (2026-09-19, actualizado 2026-09-21)
 
 - **Dashboard — estado de resultados y balance + export a Sheets.**

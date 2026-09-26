@@ -1,44 +1,62 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-26 (sesión 21: rediseño de Cuentas cerrado y en producción)
+**Última actualización:** 2026-09-26 (sesión 21, cerrada: rediseño de Cuentas y #97 en producción)
 
 ## Estado
 
-**No hay iniciativa activa.** `docs/PLAN.md` está vacío. El rediseño de
-Cuentas se cerró; su historia está en `docs/archive/rediseno-cuentas.md` y sus
-reglas en `docs/decisions/017-rediseno-cuentas.md`.
+**No hay iniciativa activa.** `docs/PLAN.md` está vacío. El rediseño de Cuentas
+se cerró: su historia está en `docs/archive/rediseno-cuentas.md` y sus reglas en
+`docs/decisions/017-rediseno-cuentas.md`.
 
 ## Completado en la sesión 21
 
 - **Migraciones `20260926`–`20261006` aplicadas a producción** (`serenata-erp`),
   en orden. Verificación:
-  - md5 del cuerpo de cada función igual al de los archivos;
+  - md5 del cuerpo de cada función igual al del archivo;
   - EXECUTE solo para `service_role`;
   - conteos y montos (34 CxC, 86 CxP, 30 grupos, 8 órdenes, pagos) iguales al
     snapshot previo;
-  - `cuentas_periodo`, `cuentas_resumen`, `cuentas_opciones`,
-    `cuentas_orden_candidatos`, `cuentas_por_proyecto` y
-    `cuentas_avisos_items` responden.
-- **PR #96 mergeado** (`f01097d`), deploy de producción en Vercel READY.
-- **PR #97** (credenciales del portal fuera de las respuestas de
-  `proveedores`): main integrado en su rama. El helper de B5
-  `lib/server/proveedor-publico.ts` ahora delega en la lista blanca del
-  repositorio. **Mergeado** (`8dbbfa9`) con autorización del usuario pese a
-  un único test `live` en rojo que no es suyo (ver deuda: latencia en paralelo
-  de Cuentas).
+  - las RPCs nuevas responden.
+- **PR #96 mergeado** (`f01097d`): rediseño de Cuentas B1–B8.
+- **PR #97 mergeado** (`8dbbfa9`): las credenciales del portal ya no salen en
+  las respuestas de `proveedores`.
+  - Se integró `main`: el helper de B5 `lib/server/proveedor-publico.ts`
+    delega en la lista blanca del repositorio.
+  - Se mergeó con autorización del usuario pese a un único test `live` en rojo
+    que no es suyo (ver deuda: latencia de Cuentas).
+- Producción desplegada en Vercel: READY en `20cc5fa`.
 - En `serenata-erp-test` faltaban los REVOKE/GRANT de las funciones de B7
-  (anon podía ejecutarlas). Se aplicaron. `cuentas_avisos_items` en test solo
-  difiere del archivo en un comentario.
+  (anon podía ejecutarlas). Se aplicaron.
+
+## Decisiones nuevas
+
+- **Opción A** en el test de rendimiento, autorizada por el usuario: si la
+  primera ronda de 40 muestras excede el presupuesto, se mide una segunda y
+  cuenta la mejor (`ea4cb85`).
+- La latencia en paralelo de Cuentas va a una sesión dedicada de deuda
+  técnica (`docs/ROADMAP.md`), no se ataca ahora.
+
+## Tests ejecutados
+
+- Local, sobre el merge de `main` en #97: `npx tsc --noEmit` y
+  `npm run lint` (0 errores; warnings previos) en verde, y `npm test` con
+  134 archivos y 1112 tests en verde.
+- CI de #96: todo verde.
+- CI de `main`: `66cc479`, todo verde; `f01097d`, `live` rojo por el test de
+  rendimiento.
+- CI de #97 en `ea4cb85`: `test`, `fresh-db` y `smoke-and-critical` verdes;
+  `live` 77/78, con "periodo (mes)" en rojo (timeouts de 8 s).
 
 ## Pendiente del usuario
 
 - Probar `/cuentas` en producción con datos reales.
 - Borrar ramas remotas ya mergeadas (GitHub → Branches → Merged).
 
-## Cómo retomar (sesión nueva)
+## Siguiente paso
 
-Abrir con `/serenata-iniciar-fase`. No hay plan en curso: lo siguiente se
-define en Chat (ver `docs/ROADMAP.md` → "Después").
+Sesión dedicada de deuda técnica (decisión del usuario). Empezar por la
+latencia en paralelo de Cuentas (`docs/ROADMAP.md` → "Deuda técnica") y
+seguir con la lista de abajo. Abrir con `/serenata-iniciar-fase`.
 
 ## Deuda técnica
 
@@ -55,18 +73,13 @@ define en Chat (ver `docs/ROADMAP.md` → "Después").
   repiten ahora que #93 está mergeado.
 - Las secuencias `seq_cc_2026` y `seq_cp_2026` quedaron sin uso tras #92; se
   pueden borrar en una limpieza.
-- Drive está apagado en Preview a propósito. Si hace falta, se saca un token
-  con `/api/integrations/drive/authorize` usando una cuenta de pruebas.
 - El MCP de Vercel no tiene alcance de team para los logs de runtime (403).
-- **Latencia en paralelo de las RPCs de Cuentas (en investigación).** En
-  `serenata-erp-test` (dataset de carga), `cuentas_periodo` y
-  `cuentas_resumen` tardan ~500 ms solas. Si corren a la vez (la carga de
-  `/cuentas` más otra lectura), a veces pasan los 8 s y PostgREST las corta
-  (`57014`, `statement_timeout` de `authenticator`). En `pg_stat_statements`:
-  media 564 ms, máximo 7907 ms. Tumba de forma intermitente
-  `cuentas-periodo-rendimiento.spec.ts` › "periodo (mes)". Se falló en
-  `f01097d` y 3 veces en #97, incluso con la opción A (mejor de dos rondas,
-  `ea4cb85`). Producción hoy tiene pocos datos, pero crecerá.
+- **Latencia en paralelo de las RPCs de Cuentas.** Hallazgos y frentes en
+  `docs/ROADMAP.md` → "Después" → "Deuda técnica". Tumba de forma
+  intermitente el test `live` `cuentas-periodo-rendimiento.spec.ts` ›
+  "periodo (mes)". Falló en `f01097d` y 3 veces en #97.
+- Borrar el duplicado local `lib/server/proveedor-publico.ts`. Solo reexporta
+  el helper del repositorio: #97 lo dejó así al integrar B5.
 - `proyectos.fecha_entrega` sigue siendo texto: las RPCs de Cuentas validan
   `^\d{4}-\d{2}-\d{2}$` y mandan lo demás a "Sin fecha" (D9).
 - **Drive en Preview (ex R9) sigue apagado.** El rediseño se validó sin él
