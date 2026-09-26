@@ -1,11 +1,14 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaCobrarById, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
+import { getCuentaCobrarById, getDocumentosCuentaCobrar, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
 import { parseFacturaXML, validarMontoFactura, validarFacturaClienteXML, calcularDeadline } from '@/lib/server/xml/factura-parser'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
+import { completarReemplazo, planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
+import { calcularEstadoCuentaCobrarDetallado } from '@/lib/shared/cuentas/status'
+import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 
 const ROUTE = 'POST /api/cuentas-cobrar/[id]/subir-factura'
 
@@ -14,7 +17,7 @@ const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
   PDF_REQUIRED: 'Se requiere archivo PDF de factura',
   XML_INVALID_TYPE: 'El archivo XML debe ser de tipo text/xml o application/xml',
   PDF_INVALID_TYPE: 'El archivo PDF debe ser de tipo application/pdf',
-  FILE_TOO_LARGE: 'El archivo excede el límite de 10 MB',
+  FILE_TOO_LARGE: 'El archivo excede el límite de 4 MB',
 }
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
@@ -44,6 +47,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         { status: 404 }
       )
     }
+
+    // B7: con una factura vigente validada, subir otra es reemplazarla:
+    // solo admin con las cuentas reabiertas (reemplazo-factura.ts).
+    const plan = await planearFactura('cobro', cuenta, await getDocumentosCuentaCobrar(id), authResult.session?.user, formData.get('motivo'))
+    if (!plan.ok) return Response.json(plan.body, { status: plan.status })
 
     // Obtener cotización para validar monto
     const cotizacion = await getCotizacionById(cuenta.cotizacion_id)
@@ -132,8 +140,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const validacionXml = validarFacturaClienteXML(facturaData, cotizacion.total)
 
     // Crear registros en BD
+    let xmlNuevoId: string | null = null
     for (const file of uploadedFiles) {
-      await createDocumentoCuentaCobrar({
+      const doc = await createDocumentoCuentaCobrar({
         cuentas_cobrar_id: id,
         tipo: file.type,
         archivo_url: file.url,
@@ -141,13 +150,30 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         ...(file.type === 'FACTURA_XML' ? {
           estado_validacion: validacionXml.estado_validacion,
           detalle_validacion: validacionXml.detalle_validacion,
+          // Rediseño de Cuentas B1 (U7, D2): datos del CFDI en la fila del XML.
+          uuid_cfdi: facturaData.uuid_timbrado ?? null,
+          total_cfdi: facturaData.monto_total ?? null,
+          metodo_pago_cfdi: facturaData.metodo_pago ?? null,
         } : {}),
       })
+      if (file.type === 'FACTURA_XML') xmlNuevoId = doc.id
     }
+    if (plan.reemplazo && xmlNuevoId) await completarReemplazo(plan.reemplazo, xmlNuevoId)
+
+    // V2 (Rediseño de Cuentas B1): el estado sale de montos, factura y "hoy"
+    // en CDMX, nunca fijo en FACTURADO -- con un anticipo previo, fijarlo
+    // hacía retroceder el estado guardado (que leen Dashboard y Sheets).
+    const estado = calcularEstadoCuentaCobrarDetallado({
+      montoPagado: Number(cuenta.monto_pagado || 0),
+      montoTotal: Number(cuenta.monto_total || 0),
+      fechaVencimiento: deadline,
+      isFacturada: true,
+      hoy: hoyCdmx(),
+    })
 
     // Actualizar cuenta
     const cuentaActualizada = await updateCuentaCobrar(id, {
-      estado: 'FACTURADO',
+      estado,
       fecha_factura: facturaData.fecha_emision,
       fecha_vencimiento: deadline,
     })

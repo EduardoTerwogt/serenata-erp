@@ -8,6 +8,8 @@ function round2(value: number): number {
 }
 
 export interface QuienCuantoCuando {
+  /** grupo_id del grupo de facturación, o id de la cuenta suelta: liga el cierre con sus pagos. */
+  clave: string
   proveedor_id: string | null
   proveedor_nombre: string
   regimen_fiscal: RegimenFiscal | null
@@ -16,6 +18,10 @@ export interface QuienCuantoCuando {
   iva_retenido: number
   isr_retenido: number
   total_a_transferir: number
+  // B2 (H10, supuesto 6): true cuando total_a_transferir es el snapshot del
+  // CFDI validado (o el histórico estimado del backfill), false cuando es el
+  // estimado en vivo con el régimen del proveedor.
+  total_es_snapshot: boolean
 }
 
 export interface CierreProyecto {
@@ -34,7 +40,15 @@ export interface CierreProyecto {
   utilidad_libre_estimada: number
 }
 
-type CuentaPagarConRegimen = CuentaPagar & { proveedor_regimen_fiscal?: RegimenFiscal | null }
+// Solo los campos que usa el cierre: así lo alimentan tanto CuentaPagar
+// completa (vista actual) como las filas compactas de la lectura por periodo
+// (B3, lib/server/cuentas/periodo.ts).
+export type CuentaPagarCierreInput = Pick<CuentaPagar, 'id' | 'grupo_id' | 'x_pagar' | 'responsable_id' | 'responsable_nombre'> &
+  Partial<Pick<CuentaPagar, 'grupo_monto_total' | 'grupo_total_a_transferir' | 'total_a_transferir'>> & {
+    proveedor_regimen_fiscal?: RegimenFiscal | null
+  }
+
+type CuentaPagarConRegimen = CuentaPagarCierreInput
 
 /**
  * Agrega el cierre fiscal de un proyecto: quién le corresponde a cada
@@ -54,22 +68,26 @@ export function calcularCierreProyecto(
   feeAgenciaProyecto: number,
   ivaTotalProyecto: number
 ): CierreProyecto {
-  // Mismo criterio de agrupación que agruparCuentasPagarPorGrupo
-  // (app/components/cuentas/selectors.ts): el cruce fiscal se calcula sobre
-  // el monto total del grupo, nunca sobre el renglón individual
-  // (docs/decisions/006).
+  // El cruce fiscal se calcula sobre el monto total del grupo, nunca sobre
+  // el renglón individual (docs/decisions/006).
   const porGrupo = new Map<string, CuentaPagarConRegimen[]>()
   for (const cuenta of cuentasPagar) {
     const key = cuenta.grupo_id ?? cuenta.id
     porGrupo.set(key, [...(porGrupo.get(key) ?? []), cuenta])
   }
 
-  const quien_cuanto_cuando: QuienCuantoCuando[] = Array.from(porGrupo.values()).map((items) => {
+  const quien_cuanto_cuando: QuienCuantoCuando[] = Array.from(porGrupo.entries()).map(([clave, items]) => {
     const representante = items[0]
     const monto = representante.grupo_monto_total ?? items.reduce((sum, item) => sum + (item.x_pagar || 0), 0)
     const regimenFiscal = representante.proveedor_regimen_fiscal ?? null
     const r = calcularEjemploFactura(monto, regimenFiscal)
+    // H10: con factura validada manda el Total del CFDI (el mismo que usa el
+    // saldo del pago); sin factura, el estimado. IVA y retenciones siguen
+    // estimados por régimen: el CFDI solo guarda su Total.
+    const snapshot = representante.grupo_id ? representante.grupo_total_a_transferir : representante.total_a_transferir
+    const tieneSnapshot = snapshot != null
     return {
+      clave,
       proveedor_id: representante.responsable_id,
       proveedor_nombre: representante.responsable_nombre,
       regimen_fiscal: regimenFiscal,
@@ -77,7 +95,8 @@ export function calcularCierreProyecto(
       iva_trasladado: r.iva_trasladado,
       iva_retenido: r.iva_retenido,
       isr_retenido: r.isr_retenido,
-      total_a_transferir: r.total,
+      total_a_transferir: tieneSnapshot ? round2(Number(snapshot)) : r.total,
+      total_es_snapshot: tieneSnapshot,
     }
   })
 

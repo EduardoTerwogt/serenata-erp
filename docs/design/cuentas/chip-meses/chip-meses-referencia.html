@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chip de meses · referencia</title>
+<style>
+  :root{
+    --accent:#FE7B01; --text-primary:#1D1D1F; --text-body:#3A3A3C; --text-muted:#6E6E73;
+    --bg-app:#F5F5F7; --surface-card:#FFFFFF; --border-subtle:#E3E3E8;
+    --ease:cubic-bezier(.2,.8,.2,1);
+  }
+  body{margin:0;background:var(--bg-app);font-family:-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:var(--text-body);padding:40px}
+  .row{display:flex;align-items:center;gap:12px;max-width:1043px}
+  .period{display:flex;align-items:center;min-width:0}
+  button{font-family:inherit}
+
+  /* Chip cerrado */
+  .chip{height:30px;padding:0 10px 0 14px;border-radius:999px;border:1px solid var(--border-subtle);background:var(--surface-card);color:var(--text-primary);font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;animation:trigIn .22s var(--ease) both}
+  .chip:hover{border-color:var(--accent)}
+  .chip:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(254,123,1,.18);border-color:var(--accent)}
+  .chip .chev{display:flex;margin-left:-2px;opacity:.85}
+  .chip.acento{background:var(--accent);border-color:var(--accent);color:#fff}
+  .chip.acento .badge{background:#fff;color:var(--accent)}
+
+  .badge{min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:999px;background:var(--accent);color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+
+  /* Tira expandida */
+  .strip{display:flex;align-items:center;gap:4px;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+  .strip::-webkit-scrollbar{display:none}
+  .pill{flex:none;height:28px;padding:0 9px;border-radius:999px;border:1px solid var(--border-subtle);background:var(--surface-card);color:var(--text-primary);font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap}
+  .pill:hover{border-color:var(--accent)}
+  .pill.empty{opacity:.55}
+  .pill.current{font-weight:600}
+  .pill.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;opacity:1}
+  .pill.active .badge{background:#fff;color:var(--accent)}
+  .pill.all{padding:0 11px;font-weight:600}
+  .collapse{flex:none;width:28px;height:28px;padding:0;border-radius:999px;border:1px solid var(--border-subtle);background:var(--surface-card);color:var(--text-body);display:flex;align-items:center;justify-content:center;cursor:pointer}
+
+  .in{animation:mesIn .26s var(--ease) both}
+  .out{animation:mesOut .26s var(--ease) both}
+  @keyframes mesIn{from{opacity:0;transform:translateX(-8px) scale(.94)}to{opacity:1;transform:none}}
+  @keyframes mesOut{from{opacity:1;transform:none}to{opacity:0;transform:translateX(-8px) scale(.94)}}
+  @keyframes trigIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.chip,.in,.out{animation-duration:1ms!important;animation-delay:0ms!important}}
+
+  .year{margin-left:auto;flex:none;white-space:nowrap;height:32px;padding:0 12px 0 14px;border-radius:9px;border:1px solid #DCDCE1;background:#E8E8ED;color:var(--text-body);font-size:12.5px;display:flex;align-items:center;gap:10px}
+  .note{margin-top:28px;font-size:12px;color:var(--text-muted)}
+  .toggle{margin-top:10px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="period" id="period"></div>
+  <div class="year">2026 · 6 pendientes
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+  </div>
+</div>
+<div class="note">Referencia interactiva. Clic en el chip para expandir; elegir un mes o “‹” lo contrae. Esc también cierra.</div>
+<label class="toggle"><input type="checkbox" id="acento"> Variante acento (alternativa)</label>
+
+<script>
+const MES  = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const MESL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+// Datos de ejemplo: pendientes por mes y meses sin movimientos
+const PEND  = [0,0,0,0,0,0,1,2,1,1,1,0];
+const EMPTY = [1,1,1,1,1,0,0,0,0,0,0,1];
+const TOTAL_PEND = 6;
+const CURRENT = new Date().getFullYear() === 2026 ? 8 : new Date().getMonth(); // mes en curso
+const CHEV_R = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
+const CHEV_L = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>';
+
+let state = { month: CURRENT, open: false, closing: false };
+let timer;
+const root = document.getElementById('period');
+const badge = n => n > 0 ? `<span class="badge">${n}</span>` : '';
+
+function render(){
+  const acento = document.getElementById('acento').checked;
+  if (!state.open){
+    const all = state.month === 'all';
+    const n = all ? TOTAL_PEND : PEND[state.month];
+    root.innerHTML = `<button class="chip ${acento?'acento':''}" aria-expanded="false" aria-label="Periodo: ${all?'Todo el año':MESL[state.month]}. Ver todos los meses">
+      <span>${all ? 'Todo el año' : MESL[state.month]}</span>${badge(n)}<span class="chev">${CHEV_R}</span></button>`;
+    root.firstChild.onclick = open;
+    return;
+  }
+  const c = state.closing, cls = c ? 'out' : 'in';
+  const d = i => c ? (13 - i) * 12 : i * 18; // ms
+  let h = `<div class="strip" role="listbox" aria-label="Meses">`;
+  MES.forEach((m, i) => {
+    const k = ['pill', cls, EMPTY[i] && 'empty', i === CURRENT && 'current', state.month === i && 'active'].filter(Boolean).join(' ');
+    h += `<button class="${k}" style="animation-delay:${d(i)}ms" data-m="${i}" role="option" aria-selected="${state.month===i}">${m}${badge(PEND[i])}</button>`;
+  });
+  h += `<button class="pill all ${cls} ${state.month==='all'?'active':''}" style="animation-delay:${c?12:220}ms" data-m="all">Todo el año</button>`;
+  h += `<button class="collapse ${cls}" style="animation-delay:${c?0:240}ms" aria-label="Contraer meses">${CHEV_L}</button></div>`;
+  root.innerHTML = h;
+  root.querySelectorAll('[data-m]').forEach(b => b.onclick = () => pick(b.dataset.m === 'all' ? 'all' : +b.dataset.m));
+  root.querySelector('.collapse').onclick = close;
+}
+function open(){ clearTimeout(timer); state = { ...state, open: true, closing: false }; render(); }
+function close(){
+  if (!state.open || state.closing) return;
+  state.closing = true; render();
+  timer = setTimeout(() => { state.open = false; state.closing = false; render(); }, 300);
+}
+function pick(m){ state.month = m; render(); close(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+document.getElementById('acento').onchange = render;
+render();
+</script>
+</body>
+</html>

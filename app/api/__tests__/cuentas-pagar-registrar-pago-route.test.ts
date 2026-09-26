@@ -100,12 +100,20 @@ describe('POST /api/cuentas-pagar/[id]/registrar-pago', () => {
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
-  it('monto excede el saldo -- 400, sin llamar a Drive ni a la RPC', async () => {
-    mocks.getCuentaPagarByIdMock.mockResolvedValue({ id: 'cuenta-1', x_pagar: 100, monto_pagado: 0, proyecto_id: 'SH001', cotizacion_id: 'SH001' })
+  it('B2: monto que excede el saldo por transferir -- la RPC lo rechaza y la ruta responde 400 con mensaje seguro', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'Monto excede el total a transferir. Total: 116.00, ya transferido: 0, nuevo pago: 300' } })
     const res = await POST(buildRequest(), { params })
     expect(res.status).toBe(400)
-    expect(mocks.uploadFileToDriveMock).not.toHaveBeenCalled()
-    expect(mocks.rpcMock).not.toHaveBeenCalled()
+    expect((await res.json()).error).toBe('El monto excede el saldo por transferir.')
+  })
+
+  it('B2: sin factura validada (P1413) -- 409 con el código y un mensaje para el usuario', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { code: 'P1413', message: 'sin_factura_validada: la cuenta cuenta-1 no tiene factura validada' } })
+    const res = await POST(buildRequest(), { params })
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error).toBe('sin_factura_validada')
+    expect(body.message).toContain('factura')
   })
 
   it('pasa payloadHash a withIdempotency y operation_id a la RPC', async () => {
@@ -117,21 +125,27 @@ describe('POST /api/cuentas-pagar/[id]/registrar-pago', () => {
       expect.any(Function),
       { payloadHash: 'fake-hash' }
     )
-    expect(mocks.rpcMock).toHaveBeenCalledWith('registrar_pago_cuenta_pagar', {
+    expect(mocks.rpcMock).toHaveBeenCalledWith('registrar_pago_cuenta_pagar', expect.objectContaining({
       p_cuenta_id: 'cuenta-1',
       p_monto: 300,
+      p_tipo_pago: 'TRANSFERENCIA',
+      p_fecha_pago: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       p_operation_id: OP_ID,
-    })
+    }))
   })
 
-  it('con comprobante: lo sube a Drive y crea el documento con operation_id', async () => {
+  it('B2 (A1): con comprobante lo sube a Drive y lo guarda en el propio pago, sin crear un documento aparte', async () => {
     const comprobante = new File(['x'], 'comprobante.jpg', { type: 'image/jpeg' })
-    await POST(buildRequest({ comprobante }), { params })
+    await POST(buildRequest({ comprobante, tipo_pago: 'CHEQUE', fecha_pago: '2026-09-20' }), { params })
 
     expect(mocks.uploadFileToDriveMock).toHaveBeenCalled()
-    expect(mocks.createDocumentoCuentaPagarMock).toHaveBeenCalledWith(
-      expect.objectContaining({ cuentas_pagar_id: 'cuenta-1', tipo: 'COMPROBANTE_PAGO', operation_id: OP_ID })
-    )
+    expect(mocks.createDocumentoCuentaPagarMock).not.toHaveBeenCalled()
+    expect(mocks.rpcMock).toHaveBeenCalledWith('registrar_pago_cuenta_pagar', expect.objectContaining({
+      p_comprobante_url: 'https://drive/comprobante.jpg',
+      p_archivo_nombre: 'comprobante.jpg',
+      p_tipo_pago: 'CHEQUE',
+      p_fecha_pago: '2026-09-20',
+    }))
   })
 
   it('éxito -- 200 con el resumen esperado', async () => {
@@ -139,7 +153,7 @@ describe('POST /api/cuentas-pagar/[id]/registrar-pago', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({
       success: true,
-      resumen: { monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'PENDIENTE', comprobante_url: null },
+      resumen: expect.objectContaining({ monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'PENDIENTE', comprobante_url: null }),
     })
   })
 

@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-25 (sesión 20: B0 mergeado, B1b en PR)
+**Última actualización:** 2026-09-25 (sesión 20: B1–B8 y B7 completos en la rama del PR #96, pendiente de revisión del usuario)
 
 ## Estado
 
@@ -46,17 +46,34 @@
 - **B0 hecho** (PR #94, mergeado): handoff en `docs/design/cuentas/`,
   decisión `docs/decisions/017-rediseno-cuentas.md` y seed
   `scripts/seed-cuentas-test.sql`, ya aplicado en `serenata-erp-test`.
-- **B1b en curso** (PR en borrador desde la rama
-  `claude/practical-brown-giy5p3`). Las 4 migraciones `20260925_*` **ya
-  están aplicadas en test y en producción**:
+- **B1b hecho** (PR #95, mergeado). Migraciones `20260925_*` aplicadas en
+  test y producción:
   - `ordenes_pago_conceptos`, con backfill de las 8 órdenes (47 conceptos);
   - `generar_orden_pago` atómica, candidatos filtrados (T2, D25) y `hoy_cdmx()`;
   - `cancel_cotizacion` en cascada, con sus guardas;
   - H3 en `registrar_pago_cuenta_pagar` y CHECK de `cuentas_pagar.estado`.
-  El código (ruta de órdenes con la RPC, retiro de los `PUT`, tests
-  unitarios y `live`) espera CI en el PR. Hasta que se mergee, producción
-  corre la ruta vieja de órdenes contra los candidatos nuevos: la ruta vieja
-  sigue funcionando, pero solo con candidatos válidos.
+  Se retiraron los `PUT` genéricos de cuentas (H4). Tests `live` en
+  `tests/e2e/live/cuentas-b1b.spec.ts`.
+- **B1–B6, B8 y B7 hechos en la rama `claude/practical-brown-giy5p3`
+  (PR #96, borrador).** Tracker en `docs/PLAN.md` §10.
+  - Migraciones `20260926`–`20261006` aplicadas **solo en
+    `serenata-erp-test`** (el Preview apunta ahí). A producción van todas
+    juntas al aprobar el merge, en orden, verificando cada una.
+  - O1b: la derivación del periodo pasó a SQL con test de paridad (E1).
+  - B7 con dos decisiones nuevas del usuario (D33: un admin reabre siempre;
+    D34: reemplazar una factura validada es corrección de admin) y E1–E5 en
+    §5.11 del plan y en la decisión 017.
+- **Falta para cerrar la iniciativa:**
+  1. CI verde en el PR #96 (incluido el job `live`: paridad SQL, p95 y
+     `cuentas-b7-correcciones.spec.ts`).
+  2. R9: Drive en Preview (lo configura el usuario, pasos abajo).
+  3. Prueba manual del usuario en el Preview y aprobación del merge.
+  4. Al aprobar: migraciones a producción, merge y mover el plan a
+     `docs/archive/`.
+- **O10 hecho:** capturas de cada estado (escritorio 1353 px, tablet 1024 px
+  y móvil 390 px; claro y oscuro) lado a lado con el handoff en
+  https://claude.ai/artifact/7mMFzzuwLHomBUiNb18sVw (privado del usuario). Las
+  diferencias intencionales (D3, D4, T8, D32, D33) están anotadas ahí.
 
 ## Completado en las sesiones 9 y 10
 
@@ -90,12 +107,32 @@ fijar supuestos que el usuario aún puede cambiar. Las de más peso:
 
 ## Tests ejecutados
 
-No aplica: no hubo cambios de código. La réplica se validó abriéndola sin
-servidor contra capturas de la app real, en tema claro y oscuro.
+Sesión 20 (último commit de B7), en local:
+- `npx tsc --noEmit`, `npm run lint` (0 errores; 6 warnings previos) y
+  `npm test`: 133 archivos, 1,104 tests en verde.
+- `npm run build` en verde.
+- e2e crítico de Cuentas (principal, detalle, órdenes, reabrir), escritorio y
+  móvil: 26/26.
+- Los specs `live` corren en CI (job `live` del PR #96). El escenario de
+  anulación de B7 se verificó además en `serenata-erp-test` dentro de un
+  bloque SQL revertido.
 
 ## Pendiente del usuario
 
-- Antes de B8: encender Drive en Preview (R9); los pasos se dan en su momento.
+- **R9, Drive en Preview** (para probar subidas y órdenes en el Preview del
+  PR #96):
+  1. Refresh token de la cuenta de Google de pruebas: el mismo valor del
+     secreto `GOOGLE_DRIVE_REFRESH_TOKEN_TEST` de GitHub, o uno nuevo desde
+     `https://serenata-erp.vercel.app/api/integrations/drive/authorize`
+     (sesión admin; elegir la cuenta con acceso a la carpeta de pruebas
+     `1cofExiUSPDRq9CeH6oU-WSBev1I56m-a`; la página muestra el token).
+  2. Vercel → proyecto → Settings → Environment Variables → Add:
+     `GOOGLE_DRIVE_REFRESH_TOKEN` con ese valor, **solo Preview**
+     (desmarcar Production y Development).
+  3. Confirmar que Preview ya tiene `GOOGLE_DRIVE_FOLDER_ID` y
+     `GOOGLE_DRIVE_FOLDER_ID_CUENTAS` hacia la carpeta de pruebas.
+  4. Deployments → último Preview del PR #96 → ⋯ → Redeploy.
+- Revisar el Preview del PR #96 y decidir el merge.
 - Borrar ramas remotas ya mergeadas (GitHub → Branches → Merged).
 
 ## Cómo retomar (sesión nueva)
@@ -105,16 +142,17 @@ servidor contra capturas de la app real, en tema claro y oscuro.
 2. El plan ya está aprobado (sesión 19): no hay que re-auditarlo completo.
    Cada bloque se abre auditando el código real de su alcance.
 3. B0 ya está hecho (PR #94) y el diseño vive en `docs/design/cuentas/`.
-   Si el PR de B1b sigue abierto, terminarlo primero (CI verde → merge).
-4. Seguir el grafo B1 → B2 → B3 → B4 → B5 → B6 → B8 → B7, un PR por
-   bloque, actualizando el tracker (§10).
+   B1b también (PR #95).
+4. B1–B8 y B7 ya están en la rama del PR #96 (una sola rama, decisión de
+   la sesión 20). Lo que falta está arriba, en "Falta para cerrar la
+   iniciativa".
 
 Prompt sugerido para la sesión nueva:
 
 ```
 /serenata-iniciar-fase
-Retomamos el rediseño de Cuentas (docs/PLAN.md, aprobado). Sigue el
-siguiente bloque del tracker.
+Retomamos el rediseño de Cuentas (docs/PLAN.md, aprobado). Revisa el
+estado del PR #96 y sigue con lo que falta para cerrar la iniciativa.
 ```
 
 Para ver el diseño en local, servir `docs/design/cuentas/` por HTTP: `python3 -m
@@ -130,7 +168,8 @@ sesión bloquea unpkg, bajar `react@18.3.1`, `react-dom@18.3.1`,
   (`lib/supabase-browser.ts`) y revisar los reintentos de postgrest. La guarda
   `lib/realtime/__tests__/realtime-js-guard.test.ts` falla si se sube sin eso.
 - **El build depende de descargar Inter de Google Fonts** (`app/fonts.ts`).
-  Ya falló una vez de forma intermitente (2026-09-24). Si se repite, migrar a
+  Falló de forma intermitente el 2026-09-24 y otra vez en #95 (2026-09-25,
+  `smoke-and-critical`; pasó al relanzarlo). Si se repite, migrar a
   `next/font/local`.
 - **Job `live` inestable en `main` (visto tras #92).** Hay fallos
   intermitentes en el test causal de `bulk` y en el de escala. Vigilar si se
@@ -147,6 +186,16 @@ sesión bloquea unpkg, bajar `react@18.3.1`, `react-dom@18.3.1`,
 
 ## Siguiente paso
 
-Cerrar **B1b**: CI verde en su PR (incluido `live`, con
-`tests/e2e/live/cuentas-b1b.spec.ts`), mergear y marcar el tracker. Después,
-**B1** (derivación y datos fiscales, incluido `metodo_pago_cfdi`).
+**Forma de ejecución (sesión 20, decisión del usuario):** B1–B8 en la misma
+rama `claude/practical-brown-giy5p3`, un solo PR en borrador para CI. Las
+migraciones van solo a `serenata-erp-test` (el Preview apunta ahí). A
+producción van todas juntas cuando el usuario apruebe tras probar el
+Preview. S12 confirmada. Al llegar a B8, el usuario da el token de Drive
+para el Preview (R9).
+
+**B1, B2 y B3 hechos** en la rama (migraciones `20260926`–`20260929`
+aplicadas solo en test). Pendiente aplicar a producción al aprobar: todas las
+de `20260926` en adelante, en orden.
+
+**B4** (pantalla principal `?v=2`). Se abre auditando el código real de su
+alcance.

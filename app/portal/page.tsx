@@ -74,6 +74,10 @@ interface GrupoPortal {
   monto_total: number
   monto_pagado: number
   saldo_pendiente: number
+  // B2 (D14): montos en total a transferir, lo que el proveedor recibe.
+  total_a_transferir: number
+  monto_transferido: number
+  saldo_por_transferir: number
   items: GrupoPortalItem[]
 }
 
@@ -507,7 +511,7 @@ function TabCuentas({
                 <option value="">Selecciona un proyecto...</option>
                 {gruposFacturables.map(g => (
                   <option key={g.id} value={g.id}>
-                    {(g.proyecto_nombre || 'Proyecto')} · {formatMoney(g.monto_total)}
+                    {(g.proyecto_nombre || 'Proyecto')} · {formatMoney(g.total_a_transferir)}
                   </option>
                 ))}
               </Select>
@@ -593,7 +597,7 @@ function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
               </colgroup>
               <thead>
                 <tr className="h-9">
-                  {['Proyecto', 'Conceptos', 'Saldo pendiente', 'Estado'].map(h => (
+                  {['Proyecto', 'Conceptos', 'Por recibir', 'Estado'].map(h => (
                     <th key={h} className="sn-table-head truncate px-[var(--row-pad-x)] text-left align-middle">{h}</th>
                   ))}
                 </tr>
@@ -605,7 +609,7 @@ function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
                       {grupo.proyecto_nombre || grupo.items[0]?.item_descripcion || 'Proyecto'}
                     </td>
                     <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{conceptosDe(grupo)}</td>
-                    <td className="truncate px-[var(--row-pad-x)] align-middle font-semibold text-ink">{formatMoney(grupo.saldo_pendiente)}</td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle font-semibold text-ink">{formatMoney(grupo.saldo_por_transferir)}</td>
                     <td className="px-[var(--row-pad-x)] align-middle">
                       <StatusBadge tone={toneForCuentaEstado(grupo.estado)}>{grupo.estado}</StatusBadge>
                     </td>
@@ -626,8 +630,8 @@ function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
                 </div>
                 <p className="mb-3 truncate text-content text-subtext">{conceptosDe(grupo)}</p>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-lg font-bold text-body">{formatMoney(grupo.saldo_pendiente)}</span>
-                  <span className="flex-shrink-0 text-xs text-faint">pendiente</span>
+                  <span className="text-lg font-bold text-body">{formatMoney(grupo.saldo_por_transferir)}</span>
+                  <span className="flex-shrink-0 text-xs text-faint">por recibir</span>
                 </div>
               </div>
             ))}

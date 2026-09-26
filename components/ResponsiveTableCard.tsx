@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 
 interface Column {
   key: string
@@ -10,6 +10,13 @@ interface Column {
   width?: string
 }
 
+export interface TableGroup<T> {
+  key: string
+  label: string
+  sub?: string
+  items: T[]
+}
+
 interface ResponsiveTableCardProps<T> {
   data: T[]
   columns: Column[]
@@ -17,6 +24,17 @@ interface ResponsiveTableCardProps<T> {
   renderMobileCard: (item: T, index: number) => ReactNode
   keyExtractor: (item: T, index: number) => string
   emptyMessage?: string
+  /** Rediseño de Cuentas (S11): filas agrupadas con un encabezado por grupo. Si viene, reemplaza a `data`. */
+  groups?: TableGroup<T>[]
+  /** 'list' (S11): en móvil, una tarjeta por grupo con las filas separadas por línea, no tarjetas sueltas. */
+  mobileLayout?: 'cards' | 'list'
+  onRowClick?: (item: T) => void
+  /** Ancho mínimo de la tabla antes de hacer scroll horizontal (ej. 560). */
+  minWidth?: number
+  /** Con `mobileLayout="list"`: false = sin tarjeta alrededor (ya va dentro de una). */
+  framed?: boolean
+  /** Encabezado de 32px y 12px de padding horizontal (tablas dentro de una tarjeta). */
+  dense?: boolean
 }
 
 const ALIGN_CLASS: Record<'left' | 'center' | 'right', string> = {
@@ -39,8 +57,17 @@ export function ResponsiveTableCard<T>({
   renderMobileCard,
   keyExtractor,
   emptyMessage = 'No hay datos',
+  groups,
+  mobileLayout = 'cards',
+  onRowClick,
+  minWidth,
+  framed = true,
+  dense = false,
 }: ResponsiveTableCardProps<T>) {
-  if (data.length === 0) {
+  const grupos: TableGroup<T>[] = groups ?? [{ key: '__todos', label: '', items: data }]
+  const total = grupos.reduce((s, g) => s + g.items.length, 0)
+
+  if (total === 0) {
     return (
       <div className="p-12 text-center text-faint">
         {emptyMessage}
@@ -49,45 +76,105 @@ export function ResponsiveTableCard<T>({
   }
 
   const allWidthsSet = columns.every((col) => col.width)
+  // Filas clicables también se abren con teclado (Enter / Espacio).
+  const interactiva = (item: T) =>
+    onRowClick
+      ? {
+          onClick: () => onRowClick(item),
+          tabIndex: 0,
+          onKeyDown: (e: KeyboardEvent) => {
+            if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return
+            e.preventDefault()
+            onRowClick(item)
+          },
+        }
+      : {}
+  const indices = new Map<T, number>()
+  grupos.forEach((g) => g.items.forEach((item) => indices.set(item, indices.size)))
 
   return (
     <>
       <div className="hidden md:block overflow-x-auto">
-        <table className={`w-full text-[length:var(--text-md)] ${allWidthsSet ? 'table-fixed' : ''}`}>
+        <table className={`w-full text-[length:var(--text-md)] ${allWidthsSet ? 'table-fixed' : ''}`} style={minWidth ? { minWidth } : undefined}>
           {allWidthsSet && (
             <colgroup>
               {columns.map((col) => <col key={col.key} style={{ width: col.width }} />)}
             </colgroup>
           )}
           <thead>
-            <tr className="h-9 border-b border-hairline">
+            <tr className={`${dense ? 'h-8' : 'h-9'} border-b border-hairline`}>
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`${ALIGN_CLASS[col.align ?? 'left']} sn-table-head truncate px-[var(--row-pad-x)] align-middle`}
+                  className={`${ALIGN_CLASS[col.align ?? 'left']} sn-table-head truncate ${dense ? 'px-3 first:pl-4 last:pr-4' : 'px-[var(--row-pad-x)]'} align-middle`}
                 >
                   {col.label}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
-            {data.map((item, index) => (
-              <tr key={keyExtractor(item, index)} className="h-[46px] border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt">
-                {renderDesktopRow(item, index)}
-              </tr>
-            ))}
-          </tbody>
+          {grupos.map((g) => (
+            <tbody key={g.key}>
+              {g.label && (
+                <tr className="border-b border-hairline bg-row-alt">
+                  <td colSpan={columns.length} className="px-[var(--row-pad-x)] py-2.5">
+                    <span className="text-[12.5px] font-semibold text-ink">{g.label}</span>
+                    {g.sub && <span className="ml-2.5 text-[11px] text-subtext">{g.sub}</span>}
+                  </td>
+                </tr>
+              )}
+              {g.items.map((item) => {
+                const i = indices.get(item) ?? 0
+                return (
+                  <tr
+                    key={keyExtractor(item, i)}
+                    {...interactiva(item)}
+                    className={`h-[46px] border-b border-hairline odd:bg-row transition-colors duration-[var(--dur-fast)] hover:bg-row-alt ${onRowClick ? 'cursor-pointer outline-none focus-visible:bg-row-alt focus-visible:shadow-[inset_2px_0_0_var(--sn-orange)]' : ''}`}
+                  >
+                    {renderDesktopRow(item, i)}
+                  </tr>
+                )
+              })}
+            </tbody>
+          ))}
         </table>
       </div>
 
-      <div className="md:hidden space-y-3 px-0">
-        {data.map((item, index) => (
-          <div key={keyExtractor(item, index)}>
-            {renderMobileCard(item, index)}
-          </div>
-        ))}
-      </div>
+      {mobileLayout === 'list' ? (
+        <div className="flex flex-col gap-3.5 md:hidden">
+          {grupos.map((g) => (
+            <div key={g.key} className={framed ? 'overflow-hidden rounded-panel border border-hairline bg-card shadow-card' : ''}>
+              {g.label && (
+                <div className="flex justify-between bg-row-alt px-3.5 py-2.5">
+                  <span className="text-[12.5px] font-semibold text-ink">{g.label}</span>
+                  {g.sub && <span className="text-[11px] text-subtext">{g.sub}</span>}
+                </div>
+              )}
+              {g.items.map((item, j) => {
+                const i = indices.get(item) ?? 0
+                return (
+                  <div
+                    key={keyExtractor(item, i)}
+                    {...interactiva(item)}
+                    {...(onRowClick ? { role: 'button' } : {})}
+                    className={`${j > 0 || Boolean(g.label) || !framed ? 'border-t border-hairline' : ''} ${onRowClick ? 'cursor-pointer outline-none focus-visible:bg-row-alt' : ''}`}
+                  >
+                    {renderMobileCard(item, i)}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="md:hidden space-y-3 px-0">
+          {grupos.flatMap((g) => g.items).map((item, index) => (
+            <div key={keyExtractor(item, index)}>
+              {renderMobileCard(item, index)}
+            </div>
+          ))}
+        </div>
+      )}
     </>
   )
 }

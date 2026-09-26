@@ -44,12 +44,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         return Response.json({ status: 'not_found' })
       }
 
-      const { data: documento } = await supabaseAdmin
-        .from('documentos_cuentas_pagar')
-        .select('archivo_url')
+      // Rediseño de Cuentas B2 (A1): el comprobante vive en el propio pago
+      // (pagos_cuentas_pagar). Los pagos anteriores lo tenían como documento.
+      const { data: pago } = await supabaseAdmin
+        .from('pagos_cuentas_pagar')
+        .select('comprobante_url')
         .eq('grupo_id', id)
         .eq('operation_id', operationId)
         .maybeSingle()
+      const { data: documento } = pago?.comprobante_url
+        ? { data: null }
+        : await supabaseAdmin
+            .from('documentos_cuentas_pagar')
+            .select('archivo_url')
+            .eq('grupo_id', id)
+            .eq('operation_id', operationId)
+            .maybeSingle()
 
       const rpcResult = pagoOp.result as { monto_pagado_total: number; saldo_pendiente: number; estado_nuevo: string }
       const result = {
@@ -58,7 +68,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           monto_pagado_total: rpcResult.monto_pagado_total,
           saldo_pendiente: rpcResult.saldo_pendiente,
           estado_nuevo: rpcResult.estado_nuevo,
-          comprobante_url: documento?.archivo_url ?? null,
+          comprobante_url: pago?.comprobante_url ?? documento?.archivo_url ?? null,
         },
       }
 

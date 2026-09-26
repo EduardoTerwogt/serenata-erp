@@ -100,4 +100,26 @@ describe('calcularCierreProyecto', () => {
     expect(cierre.isr_serenata_estimado).toBe(0)
     expect(cierre.utilidad_neta).toBe(-1000)
   })
+
+  it('B2 (H10): con factura validada usa el snapshot del CFDI, en grupo y en suelta', () => {
+    const cierre = calcularCierreProyecto([
+      cuenta({ id: 'g-1a', grupo_id: 'g-1', x_pagar: 600, grupo_monto_total: 1000, grupo_total_a_transferir: 1159.99, proveedor_regimen_fiscal: 'moral' }),
+      cuenta({ id: 'g-1b', grupo_id: 'g-1', x_pagar: 400, grupo_monto_total: 1000, grupo_total_a_transferir: 1159.99, proveedor_regimen_fiscal: 'moral' }),
+      cuenta({ id: 's-1', responsable_id: 'prov-2', x_pagar: 1000, total_a_transferir: 1060, proveedor_regimen_fiscal: 'fisica' }),
+    ], 0, 0, 0)
+    const [grupo, suelta] = cierre.quien_cuanto_cuando
+    expect(grupo.total_a_transferir).toBe(1159.99)
+    expect(grupo.total_es_snapshot).toBe(true)
+    expect(grupo.neto).toBe(1000) // el neto sigue siendo el costo total de los items (principio 8)
+    expect(suelta.total_a_transferir).toBe(1060)
+    expect(suelta.total_es_snapshot).toBe(true)
+  })
+
+  it('B2 (H10): sin factura (snapshot null) estima con el régimen', () => {
+    const cierre = calcularCierreProyecto([
+      cuenta({ id: 'g-2a', grupo_id: 'g-2', x_pagar: 1000, grupo_monto_total: 1000, grupo_total_a_transferir: null, proveedor_regimen_fiscal: 'moral' }),
+    ], 0, 0, 0)
+    expect(cierre.quien_cuanto_cuando[0].total_a_transferir).toBe(calcularEjemploFactura(1000, 'moral').total)
+    expect(cierre.quien_cuanto_cuando[0].total_es_snapshot).toBe(false)
+  })
 })

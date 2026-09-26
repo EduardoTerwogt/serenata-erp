@@ -6,9 +6,9 @@ import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { withIdempotency, computePayloadHash } from '@/lib/server/idempotency'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { logStructured, newRequestId } from '@/lib/server/observability/log'
+import { RegistrarPagoCobroSchema, validate } from '@/lib/validation/schemas'
 
 const ROUTE = 'POST /api/cuentas-cobrar/[id]/registrar-pago'
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -18,30 +18,20 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const { id } = await props.params
     const formData = await request.formData()
 
-    const monto = parseFloat(formData.get('monto') as string)
-    const tipoPago = formData.get('tipo_pago') as string
-    const fechaPago = formData.get('fecha_pago') as string
     const comprobante = formData.get('comprobante') as File | null
-    const notas = formData.get('notas') as string | null
-    const operationId = formData.get('operation_id') as string | null
-
-    if (!Number.isFinite(monto) || monto <= 0) {
-      return Response.json({ error: 'Monto debe ser mayor a 0' }, { status: 400 })
+    // Rediseño de Cuentas B1 (R4): Zod antes de tocar la base; acepta CHEQUE.
+    const validation = validate(RegistrarPagoCobroSchema, {
+      monto: formData.get('monto'),
+      tipo_pago: formData.get('tipo_pago'),
+      fecha_pago: formData.get('fecha_pago'),
+      notas: formData.get('notas'),
+      operation_id: formData.get('operation_id'),
+    })
+    if (!validation.ok) {
+      return Response.json({ error: validation.error }, { status: 400 })
     }
-
-    if (!tipoPago || !['TRANSFERENCIA', 'EFECTIVO'].includes(tipoPago)) {
-      return Response.json({ error: 'Tipo de pago inválido (TRANSFERENCIA o EFECTIVO)' }, { status: 400 })
-    }
-
-    if (!fechaPago) {
-      return Response.json({ error: 'Fecha de pago requerida' }, { status: 400 })
-    }
-
-    // Engineering Hardening EF-1, 1E-3c: validación sintáctica del
-    // operation_id ANTES de tocar la base.
-    if (!operationId || !UUID_RE.test(operationId)) {
-      return Response.json({ error: 'operation_id requerido (uuid)' }, { status: 400 })
-    }
+    const { monto, tipo_pago: tipoPago, fecha_pago: fechaPago, operation_id: operationId } = validation.data
+    const notas = validation.data.notas ?? null
 
     const payloadHash = computePayloadHash({ dominio: 'cuentas_cobrar', cuentaId: id, monto, tipoPago, fechaPago, notas: notas ?? null })
 

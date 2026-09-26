@@ -1,11 +1,12 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaPagarById, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById } from '@/lib/db'
+import { getCuentaPagarById, getDocumentosCuentaPagar, createDocumentoCuentaPagar, getProyectoById, updateCuentaPagar, getProveedorById, validarFacturaProveedor } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
 import { RegimenFiscal } from '@/lib/types'
+import { completarReemplazo, planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 
@@ -16,7 +17,7 @@ const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
   PDF_REQUIRED: 'Se requiere archivo PDF de factura proveedor',
   XML_INVALID_TYPE: 'El archivo XML debe ser de tipo text/xml o application/xml',
   PDF_INVALID_TYPE: 'El archivo PDF debe ser de tipo application/pdf',
-  FILE_TOO_LARGE: 'El archivo excede el límite de 10 MB',
+  FILE_TOO_LARGE: 'El archivo excede el límite de 4 MB',
 }
 
 function extractFacturaFechaFromXml(xmlContent: string): string | null {
@@ -38,17 +39,24 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const facturaXmlFileInput = formData.get('factura_proveedor_xml') as File | null
     const facturaPdfFileInput = formData.get('factura_proveedor_pdf') as File | null
 
-    const validation = validateFacturaFiles({ xml: facturaXmlFileInput, pdf: facturaPdfFileInput, pdfRequired: true })
+    const validation = validateFacturaFiles({ xml: facturaXmlFileInput, pdf: facturaPdfFileInput, pdfRequired: false })
     if (!validation.ok) {
       return Response.json({ error: VALIDATION_MESSAGES[validation.code] }, { status: 400 })
     }
     const facturaXmlFile = facturaXmlFileInput as File
-    const facturaPdfFile = facturaPdfFileInput as File
+    // Rediseño de Cuentas (supuesto 15): el PDF puede llegar después, en su
+    // propia petición (POST …/documentos), para no pasar el límite de Vercel.
+    const facturaPdfFile = facturaPdfFileInput
 
     const cuenta = await getCuentaPagarById(id)
     if (!cuenta) {
       return Response.json({ error: 'Cuenta por pagar no encontrada' }, { status: 404 })
     }
+    // B7: con una factura vigente validada, subir otra es reemplazarla:
+    // solo admin con las cuentas reabiertas; en una orden, nunca
+    // (reemplazo-factura.ts).
+    const plan = await planearFactura('proveedor', cuenta, await getDocumentosCuentaPagar(id), authResult.session?.user, formData.get('motivo'))
+    if (!plan.ok) return Response.json(plan.body, { status: plan.status })
 
     // Validar contenido XML antes de subir
     const facturaXmlContent = await facturaXmlFile.text()
@@ -68,7 +76,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const folderPath = `/Por Pagar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
     const uploadFolderId = resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined)
     const facturaXmlUrl = await uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, uploadFolderId)
-    const facturaPdfUrl = await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, uploadFolderId)
+    const facturaPdfUrl = facturaPdfFile ? await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, uploadFolderId) : null
 
     // Validación fiscal profunda (Fase 5.3 Bloque 0, punto 3): el desglose
     // de impuestos del XML (traslados/retenciones) debe coincidir con lo
@@ -88,21 +96,37 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       ? { estado_validacion: 'revision' as const, detalle_validacion: `No se pudo parsear el XML: ${facturaData.error}` }
       : validarFacturaFiscalProveedor(facturaData, Number(cuenta.x_pagar || 0), regimenFiscal)
 
+    // V3 (Rediseño de Cuentas B2): el XML entra como 'pendiente' aunque
+    // cuadre; SOLO validar_factura_proveedor lo pasa a 'validado', en la
+    // misma transacción que el snapshot del total a transferir.
+    const cuadra = validacionXml.estado_validacion === 'validado'
     const documentoXml = await createDocumentoCuentaPagar({
       cuentas_pagar_id: id,
       tipo: 'FACTURA_PROVEEDOR_XML',
       archivo_url: facturaXmlUrl,
       archivo_nombre: facturaXmlFile.name,
-      estado_validacion: validacionXml.estado_validacion,
+      estado_validacion: cuadra ? 'pendiente' : validacionXml.estado_validacion,
       detalle_validacion: validacionXml.detalle_validacion,
+      // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
+      uuid_cfdi: facturaData.uuid_timbrado ?? null,
+      total_cfdi: facturaData.error ? null : facturaData.monto_total ?? null,
     })
 
-    const documentoPdf = await createDocumentoCuentaPagar({
-      cuentas_pagar_id: id,
-      tipo: 'FACTURA_PROVEEDOR',
-      archivo_url: facturaPdfUrl,
-      archivo_nombre: facturaPdfFile.name,
-    })
+    const documentoPdf =
+      facturaPdfFile && facturaPdfUrl
+        ? await createDocumentoCuentaPagar({
+            cuentas_pagar_id: id,
+            tipo: 'FACTURA_PROVEEDOR',
+            archivo_url: facturaPdfUrl,
+            archivo_nombre: facturaPdfFile.name,
+          })
+        : null
+
+    if (cuadra) {
+      await validarFacturaProveedor(documentoXml.id, authResult.session?.user?.email ?? null)
+      documentoXml.estado_validacion = 'validado'
+    }
+    if (plan.reemplazo) await completarReemplazo(plan.reemplazo, documentoXml.id)
 
     const fechaFactura = extractFacturaFechaFromXml(facturaXmlContent)
 
@@ -114,7 +138,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     return Response.json({
       success: true,
-      documentos: [documentoXml, documentoPdf],
+      documentos: documentoPdf ? [documentoXml, documentoPdf] : [documentoXml],
       fecha_factura: fechaFactura,
       factura_data: facturaData,
       validacion_estructural: validacionXml,

@@ -84,7 +84,7 @@ describe('POST /api/cuentas-cobrar/[id]/registrar-pago', () => {
   })
 
   it('rechaza tipo_pago inválido antes de tocar operation_id/RPC', async () => {
-    const res = await POST(buildRequest({ tipo_pago: 'CHEQUE' }), { params })
+    const res = await POST(buildRequest({ tipo_pago: 'TARJETA' }), { params })
     expect(res.status).toBe(400)
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })

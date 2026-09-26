@@ -1,14 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Reemplaza cuentas-pagar-eventos-realizados.test.ts: la fuente de
-// generar-orden-pago pasó de cuentas_pagar_pendientes_eventos_realizados()
-// (ahora sin ningún caller -- docs/PLAN.md, Bloque 3) a
-// cuentas_pagar_grupos_facturados_eventos_realizados(), que además
-// preserva vía UNION ALL el criterio anterior para cuentas sin grupo_id
-// todavía (transición hasta que corra la migración retroactiva del
-// Bloque 5). Este test solo blinda que los wrappers llaman la RPC/tabla
-// correcta y propagan resultado/error sin transformar -- la lógica SQL en
-// sí se verificó en vivo contra serenata-erp-test.
+// Blinda que los wrappers del repositorio llaman la RPC correcta y propagan
+// resultado/error sin transformar; la lógica SQL se verifica en vivo contra
+// serenata-erp-test.
 const mocks = vi.hoisted(() => {
   const chain = () => {
     const obj: Record<string, unknown> = {}
@@ -28,32 +22,7 @@ vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: { rpc: mocks.rpcMock, from: mocks.fromMock },
 }))
 
-import { getCuentasPagarGruposFacturadosEventosRealizados, generarOrdenPago, marcarGrupoFacturado } from '../cuentas-pagar'
-
-describe('getCuentasPagarGruposFacturadosEventosRealizados', () => {
-  beforeEach(() => {
-    mocks.rpcMock.mockReset()
-  })
-
-  it('llama la RPC cuentas_pagar_grupos_facturados_eventos_realizados sin parámetros', async () => {
-    mocks.rpcMock.mockResolvedValue({ data: [], error: null })
-    await getCuentasPagarGruposFacturadosEventosRealizados()
-    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_pagar_grupos_facturados_eventos_realizados')
-  })
-
-  it('devuelve el shape tal cual lo entrega la RPC, sin transformar', async () => {
-    const fila = { id: 'cp-1', grupo_id: 'grupo-1', cotizacion_id: 'SH003', cotizaciones: { proyecto: 'X', fecha_entrega: '2026-05-30' } }
-    mocks.rpcMock.mockResolvedValue({ data: [fila], error: null })
-    const result = await getCuentasPagarGruposFacturadosEventosRealizados()
-    expect(result).toEqual([fila])
-  })
-
-  it('propaga el error de Supabase sin transformarlo', async () => {
-    const dbError = new Error('conexión perdida')
-    mocks.rpcMock.mockResolvedValue({ data: null, error: dbError })
-    await expect(getCuentasPagarGruposFacturadosEventosRealizados()).rejects.toBe(dbError)
-  })
-})
+import { generarOrdenPago, validarFacturaProveedor } from '../cuentas-pagar'
 
 describe('generarOrdenPago', () => {
   beforeEach(() => {
@@ -102,30 +71,20 @@ describe('generarOrdenPago', () => {
   })
 })
 
-describe('marcarGrupoFacturado', () => {
+describe('validarFacturaProveedor (B2, T4, V3)', () => {
   beforeEach(() => {
-    mocks.fromMock.mockReset()
+    mocks.rpcMock.mockReset()
   })
 
-  it('actualiza estado=FACTURADO con guard estado=ABIERTO, y devuelve la fila si aplicó', async () => {
-    const grupoChain = mocks.chain()
-    grupoChain.eq = vi.fn(() => grupoChain)
-    grupoChain.select = vi.fn().mockResolvedValue({ data: [{ id: 'grupo-1', estado: 'FACTURADO' }], error: null })
-    mocks.fromMock.mockReturnValue(grupoChain)
-
-    const result = await marcarGrupoFacturado('grupo-1')
-
-    expect(grupoChain.update).toHaveBeenCalledWith(expect.objectContaining({ estado: 'FACTURADO' }))
-    expect(result).toEqual({ id: 'grupo-1', estado: 'FACTURADO' })
+  it('llama la RPC validar_factura_proveedor con el documento y el usuario', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: { documento_id: 'd1', estado: 'FACTURADO', total_a_transferir: 1160 }, error: null })
+    const r = await validarFacturaProveedor('d1', 'staff@serenata.mx')
+    expect(mocks.rpcMock).toHaveBeenCalledWith('validar_factura_proveedor', { p_documento_id: 'd1', p_usuario: 'staff@serenata.mx' })
+    expect(r.estado).toBe('FACTURADO')
   })
 
-  it('devuelve null si el guard no encontró una fila ABIERTO (ya facturado o carrera)', async () => {
-    const grupoChain = mocks.chain()
-    grupoChain.eq = vi.fn(() => grupoChain)
-    grupoChain.select = vi.fn().mockResolvedValue({ data: [], error: null })
-    mocks.fromMock.mockReturnValue(grupoChain)
-
-    const result = await marcarGrupoFacturado('grupo-1')
-    expect(result).toBeNull()
+  it('sin_total_cfdi (P1415) sale como DomainError 409 con mensaje seguro', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { code: 'P1415', message: 'sin_total_cfdi: la factura d1 no tiene total guardado' } })
+    await expect(validarFacturaProveedor('d1', null)).rejects.toMatchObject({ status: 409, code: 'sin_total_cfdi' })
   })
 })

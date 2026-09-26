@@ -1,6 +1,7 @@
 import { requireSection } from '@/lib/api-auth'
-import { getDocumentosCuentaPagarGrupo, updateDocumentoCuentaPagar, marcarGrupoFacturado } from '@/lib/db'
+import { getDocumentosCuentaPagarGrupo, updateDocumentoCuentaPagar, validarFacturaProveedor } from '@/lib/db'
 import { DocumentoEstadoValidacionSchema, validate } from '@/lib/validation/schemas'
+import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 
 // Contraparte agrupada de app/api/cuentas-pagar/[id]/documentos/[docId]/route.ts
 // (mecanismo ya existente de resolución manual de un documento en
@@ -29,18 +30,22 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
     }
 
     const { estado_validacion, detalle_validacion } = validation.data
+
+    // V3 (Rediseño de Cuentas B2): una factura XML de proveedor SOLO pasa a
+    // 'validado' vía validar_factura_proveedor, que en la misma transacción
+    // guarda el snapshot del total a transferir y factura el grupo ABIERTO.
+    if (documento.tipo === 'FACTURA_PROVEEDOR_XML' && estado_validacion === 'validado') {
+      await validarFacturaProveedor(docId, authResult.session?.user?.email ?? null)
+      return Response.json({ documento: { ...documento, estado_validacion: 'validado', detalle_validacion: null } })
+    }
+
     const actualizado = await updateDocumentoCuentaPagar(docId, {
       estado_validacion,
       detalle_validacion: estado_validacion === 'revision' ? (detalle_validacion ?? null) : null,
     })
 
-    if (estado_validacion === 'validado') {
-      await marcarGrupoFacturado(id)
-    }
-
     return Response.json({ documento: actualizado })
   } catch (error) {
-    console.error('[cuentas-pagar/grupos/documentos/:docId][PATCH]', error)
-    return Response.json({ error: 'Error actualizando estado de validación' }, { status: 500 })
+    return buildErrorResponse(error, 'PATCH /api/cuentas-pagar/grupos/documentos/:docId')
   }
 }

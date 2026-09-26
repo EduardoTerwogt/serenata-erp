@@ -43,6 +43,21 @@ import {
   Loader2,
   Lock,
   Users,
+  Bell,
+  Folder,
+  Layers,
+  FileDown,
+  CircleCheck,
+  CircleDashed,
+  ArrowRightCircle,
+  Camera,
+  Paperclip,
+  Info,
+  Share,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Ellipsis,
+  RotateCcw,
 } from 'lucide-react'
 
 // Rediseño Apple-style: los íconos y tonos del nav siguen exactamente
@@ -100,6 +115,24 @@ const ICONS = {
   sparkles: Sparkles,
   loader: Loader2,
   lock: Lock,
+  // Rediseño de Cuentas (docs/PLAN.md §6): los que el handoff pide y no existían.
+  bell: Bell,
+  folder: Folder,
+  layers: Layers,
+  'sliders-horizontal': SlidersHorizontal,
+  'file-down': FileDown,
+  'circle-check': CircleCheck,
+  'circle-dashed': CircleDashed,
+  'arrow-right-circle': ArrowRightCircle,
+  camera: Camera,
+  paperclip: Paperclip,
+  info: Info,
+  users: Users,
+  share: Share,
+  'arrow-down-left': ArrowDownLeft,
+  'arrow-up-right': ArrowUpRight,
+  ellipsis: Ellipsis,
+  'rotate-ccw': RotateCcw,
 } as const
 
 export type IconName = keyof typeof ICONS

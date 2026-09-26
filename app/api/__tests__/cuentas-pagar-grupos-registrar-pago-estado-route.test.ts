@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   idempotencyMaybeSingleMock: vi.fn(),
   pagoOpMaybeSingleMock: vi.fn(),
   documentoMaybeSingleMock: vi.fn(),
+  pagoMaybeSingleMock: vi.fn(),
   updateEqEqMock: vi.fn(async () => ({ error: null })),
 }))
 
@@ -20,6 +21,9 @@ vi.mock('@/lib/server/supabase-admin', () => ({
       }
       if (table === 'pago_operations') {
         return { select: () => ({ eq: () => ({ maybeSingle: mocks.pagoOpMaybeSingleMock }) }) }
+      }
+      if (table === 'pagos_cuentas_pagar') {
+        return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: mocks.pagoMaybeSingleMock }) }) }) }
       }
       if (table === 'documentos_cuentas_pagar') {
         return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: mocks.documentoMaybeSingleMock }) }) }) }
@@ -42,6 +46,7 @@ beforeEach(() => {
   mocks.idempotencyMaybeSingleMock.mockResolvedValue({ data: null })
   mocks.pagoOpMaybeSingleMock.mockResolvedValue({ data: null })
   mocks.documentoMaybeSingleMock.mockResolvedValue({ data: null })
+  mocks.pagoMaybeSingleMock.mockResolvedValue({ data: null })
 })
 
 describe('GET /api/cuentas-pagar/grupos/[id]/registrar-pago/estado', () => {
@@ -108,4 +113,16 @@ describe('GET /api/cuentas-pagar/grupos/[id]/registrar-pago/estado', () => {
     const body = await res.json()
     expect(body.result.resumen.comprobante_url).toBeNull()
   })
+
+  it('B2 (A1): el comprobante se toma del propio pago (pagos_cuentas_pagar) antes que de un documento', async () => {
+    mocks.pagoOpMaybeSingleMock.mockResolvedValue({
+      data: { dominio: 'cuentas_pagar_grupos', cuenta_id: 'grupo-1', result: { monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'EN_PROCESO_PAGO' } },
+    })
+    mocks.pagoMaybeSingleMock.mockResolvedValue({ data: { comprobante_url: 'https://drive/pago.pdf' } })
+    const res = await GET(req(OP_ID), { params })
+    const body = await res.json()
+    expect(body.result.resumen.comprobante_url).toBe('https://drive/pago.pdf')
+    expect(mocks.documentoMaybeSingleMock).not.toHaveBeenCalled()
+  })
 })
+

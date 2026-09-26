@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCuentaPagarByIdMock: vi.fn(),
+  getDocumentosCuentaPagarMock: vi.fn(async () => []),
   createDocumentoCuentaPagarMock: vi.fn(),
   getProyectoByIdMock: vi.fn(),
   updateCuentaPagarMock: vi.fn(),
@@ -23,11 +24,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({
   getCuentaPagarById: mocks.getCuentaPagarByIdMock,
+  getDocumentosCuentaPagar: mocks.getDocumentosCuentaPagarMock,
   createDocumentoCuentaPagar: mocks.createDocumentoCuentaPagarMock,
   getProyectoById: mocks.getProyectoByIdMock,
   updateCuentaPagar: mocks.updateCuentaPagarMock,
   getProveedorById: mocks.getProveedorByIdMock,
 }))
+vi.mock('@/lib/server/cuentas/reemplazo-factura', () => ({ planearFactura: vi.fn(async () => ({ ok: true, reemplazo: null })), completarReemplazo: vi.fn() }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
 vi.mock('@/lib/server/xml/factura-parser', () => ({ parseFacturaXML: mocks.parseFacturaXMLMock }))
@@ -78,10 +81,10 @@ describe('POST /api/cuentas-pagar/[id]/subir-factura', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Se requiere archivo XML de factura proveedor' })
   })
 
-  it('EF-3 3D-12: PDF_REQUIRED -- "Se requiere archivo PDF de factura proveedor"', async () => {
+  it('Rediseño de Cuentas (supuesto 15): sin PDF ya no emite PDF_REQUIRED -- el PDF llega en su propia petición', async () => {
+    mocks.getCuentaPagarByIdMock.mockRejectedValueOnce(new Error('sondeo: pasó la validación de archivos'))
     const response = await POST(buildRequest({ pdf: null }), { params })
-    expect(response.status).toBe(400)
-    await expect(response.json()).resolves.toEqual({ error: 'Se requiere archivo PDF de factura proveedor' })
+    await expect(response.json()).resolves.not.toEqual({ error: 'Se requiere archivo PDF de factura proveedor' })
   })
 
   it('EF-3 3D-12: XML_INVALID_TYPE -- "El archivo XML debe ser de tipo text/xml o application/xml"', async () => {
@@ -96,9 +99,9 @@ describe('POST /api/cuentas-pagar/[id]/subir-factura', () => {
     await expect(response.json()).resolves.toEqual({ error: 'El archivo PDF debe ser de tipo application/pdf' })
   })
 
-  it('EF-3 3D-12: FILE_TOO_LARGE -- "El archivo excede el límite de 10 MB"', async () => {
-    const response = await POST(buildRequest({ xml: new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'f.xml', { type: 'text/xml' }) }), { params })
+  it('EF-3 3D-12: FILE_TOO_LARGE -- "El archivo excede el límite de 4 MB" (supuesto 15)', async () => {
+    const response = await POST(buildRequest({ xml: new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'f.xml', { type: 'text/xml' }) }), { params })
     expect(response.status).toBe(400)
-    await expect(response.json()).resolves.toEqual({ error: 'El archivo excede el límite de 10 MB' })
+    await expect(response.json()).resolves.toEqual({ error: 'El archivo excede el límite de 4 MB' })
   })
 })

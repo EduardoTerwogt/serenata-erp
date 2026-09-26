@@ -7,15 +7,6 @@ import {
   Cotizacion,
 } from '@/lib/types'
 
-export async function getCuentasCobrar() {
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_cobrar')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data as CuentaCobrar[]
-}
-
 export interface BuscarCuentasCobrarResult {
   rows: CuentaCobrar[]
   total_rows: number
@@ -116,6 +107,8 @@ export async function getDocumentosCuentaCobrar(cuentaId: string) {
     .from('documentos_cuentas_cobrar')
     .select('*')
     .eq('cuentas_cobrar_id', cuentaId)
+    // B7: un documento dado de baja nunca es vigente (T7); vive solo en el historial del detalle.
+    .is('eliminado_at', null)
     .order('fecha_carga', { ascending: false })
   if (error) throw error
   return data as DocumentoCuentaCobrar[]
@@ -132,19 +125,13 @@ export async function updateDocumentoCuentaCobrar(id: string, updates: Partial<D
   return data as DocumentoCuentaCobrar
 }
 
-export async function deleteDocumentoCuentaCobrar(id: string) {
-  const { error } = await supabaseAdmin
-    .from('documentos_cuentas_cobrar')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
-}
-
 export async function getPagosComprobantesByCuenta(cuentaId: string) {
   const { data, error } = await supabaseAdmin
     .from('pagos_comprobantes')
     .select('*')
     .eq('cuentas_cobrar_id', cuentaId)
+    // B7 (R8): un pago anulado no cuenta.
+    .is('anulado_at', null)
     .order('fecha_pago', { ascending: false })
   if (error) throw error
   return data as PagoComprobante[]
@@ -161,16 +148,10 @@ export async function getPagosComprobantesEnRango(desde: string, hasta: string) 
     .select('*')
     .gte('fecha_pago', desde)
     .lt('fecha_pago', hasta)
+    // B7 (R8): un pago anulado no es ingreso.
+    .is('anulado_at', null)
   if (error) throw error
   return data as PagoComprobante[]
-}
-
-export async function deletePagoComprobante(id: string) {
-  const { error } = await supabaseAdmin
-    .from('pagos_comprobantes')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
 }
 
 export function calcularEstadoCuentaCobrar(montoPagado: number, montoTotal: number): EstadoCuentaCobrar {

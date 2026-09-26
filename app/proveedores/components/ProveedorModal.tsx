@@ -13,8 +13,7 @@ import { Button } from '@/components/ui/Button'
 import { StatusBadge, toneForValidacionEstado } from '@/components/ui/StatusBadge'
 
 // Mismas etiquetas que app/portal/page.tsx (TIPO_LABEL) -- se duplica en vez
-// de compartir un módulo nuevo, mismo criterio que TIPO_DOC_LABEL en
-// app/components/cuentas/tabs/TabDocumentos.tsx (cada pantalla trae la suya).
+// de compartir un módulo nuevo (cada pantalla trae la suya).
 const TIPO_LABEL: Record<TipoDocumentoProveedor, string> = {
   CONSTANCIA_SITUACION_FISCAL: 'Constancia de situación fiscal',
   INE: 'INE',

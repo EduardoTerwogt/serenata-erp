@@ -1,8 +1,10 @@
 import { requirePortalSession } from '@/lib/portal-auth'
-import { getCuentasPagarPorProveedor, getCuentasPagarGruposPorProveedor } from '@/lib/db'
+import { getCuentasPagarPorProveedor, getCuentasPagarGruposPorProveedor, getProveedorById } from '@/lib/db'
 import { calcularSaldoPendiente } from '@/lib/server/cuentas/status'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
-import { CuentaPagar } from '@/lib/types'
+import { round2 } from '@/lib/shared/decimal'
+import { calcularEjemploFactura } from '@/lib/shared/factura-fiscal'
+import { CuentaPagar, RegimenFiscal } from '@/lib/types'
 
 const ROUTE = 'GET /api/portal/cuentas'
 
@@ -14,6 +16,15 @@ function itemDeCuenta(c: CuentaPagar) {
     x_pagar: c.x_pagar,
     cotizacion_id: c.cotizacion_id,
   }
+}
+
+// Rediseño de Cuentas B2 (D14, supuesto 6): el proveedor ve sus montos en
+// TOTAL A TRANSFERIR -- el snapshot del CFDI si ya hay factura validada, si
+// no el estimado con su régimen. monto_total/saldo_pendiente siguen en neto.
+function enTransferir(neto: number, snapshot: number | null | undefined, transferido: number | null | undefined, regimen: RegimenFiscal | null) {
+  const total = snapshot != null ? round2(Number(snapshot)) : calcularEjemploFactura(neto, regimen).total
+  const pagado = round2(Number(transferido ?? 0))
+  return { total_a_transferir: total, monto_transferido: pagado, saldo_por_transferir: Math.max(0, round2(total - pagado)) }
 }
 
 /**
@@ -35,10 +46,12 @@ export async function GET() {
   if (portalAuth.response) return portalAuth.response
 
   try {
-    const [cuentas, grupos] = await Promise.all([
+    const [cuentas, grupos, proveedor] = await Promise.all([
       getCuentasPagarPorProveedor(portalAuth.proveedorId),
       getCuentasPagarGruposPorProveedor(portalAuth.proveedorId),
+      getProveedorById(portalAuth.proveedorId),
     ])
+    const regimen = (proveedor?.regimen_fiscal ?? null) as RegimenFiscal | null
 
     const gruposConItems = grupos.map((grupo) => {
       const items = cuentas.filter((c) => c.grupo_id === grupo.id)
@@ -52,6 +65,7 @@ export async function GET() {
         monto_total: grupo.monto_total,
         monto_pagado: grupo.monto_pagado,
         saldo_pendiente: calcularSaldoPendiente(grupo.monto_total, grupo.monto_pagado || 0),
+        ...enTransferir(grupo.monto_total, grupo.total_a_transferir, grupo.monto_transferido, regimen),
         items: items.map(itemDeCuenta),
       }
     })
@@ -68,6 +82,7 @@ export async function GET() {
         monto_total: c.x_pagar,
         monto_pagado: c.monto_pagado || 0,
         saldo_pendiente: calcularSaldoPendiente(c.x_pagar, c.monto_pagado || 0),
+        ...enTransferir(c.x_pagar, c.total_a_transferir, c.monto_transferido, regimen),
         items: [itemDeCuenta(c)],
       }))
 

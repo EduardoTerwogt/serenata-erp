@@ -134,6 +134,14 @@ sesión 19 (plan aprobado). Las referencias "§n" y "Bn" apuntan a ese plan.
 | D31 | Complementarias no aprobadas de una principal cancelada | **También se cancelan** en la misma transacción de D28: `EMITIDA` pasa a `CANCELADA` y `BORRADOR` se borra con sus items. No queda ninguna complementaria colgada de un proyecto que ya no existe. |
 | D32 | Pago de cliente antes de la factura (anticipo) | **Se permite.** El dinero ya entró y tiene que registrarse. La pestaña "Registrar pago" de un **cobro** no se bloquea: muestra el aviso "Aún no hay factura validada; las cuentas no cerrarán sin ella" y el concepto conserva su siguiente paso ("Emitir factura" o "Revisar factura"). La RPC tampoco bloquea. El bloqueo sin factura sigue igual para los **pagos a proveedor** (supuesto 9). Es una diferencia con el prototipo (`conceptDetail` bloquea el cobro sin factura). No cambia ninguna captura: la móvil 15 es de un pago a proveedor y se conserva tal cual. |
 
+**Decisiones de la sesión 20** (ejecución de B7):
+
+| # | Tema | Decisión |
+|---|---|---|
+| D33 | Cuándo se reabre | **Un admin reabre en cualquier momento**, con o sin pendientes, siempre con motivo. Sin esto, un pago mal capturado o una factura validada equivocada en un proyecto con pendientes no tenía corrección (a veces nunca cierra justo por ese error). El chip dice "N pendientes" y, sin pendientes, "Reabierta". La reapertura no se cierra sola: la termina el admin con "Volver a cerrar" (sin pendientes) o "Terminar correcciones" (con pendientes; las cuentas se cierran solas al resolverlos, D17). Cambia la regla del prototipo (`canReopen` = cerrada). |
+| D34 | Subir otra factura sobre una validada | **Es reemplazarla, y es una corrección:** solo admin, con las cuentas reabiertas y con motivo, igual en cobros, grupos y sueltas (antes las sueltas y los cobros la aceptaban de cualquiera y sin registro). La nueva se sube y valida con el flujo normal y la anterior (XML y PDF) queda dada de baja con `reemplazado_por` hacia la nueva. Dentro de una orden de pago nunca (el PDF ya se emitió con esa factura, D7). |
+| D35 | Cambiar de año (chip de meses, sesión 20) | **Se conserva el mes elegido** (o "Todo el año"), en escritorio y en móvil, como pide el handoff del chip de meses (`docs/design/cuentas/chip-meses/`). Sustituye esa parte de S16; S16 sigue decidiendo el mes solo cuando se entra a un año sin mes en la URL (mes actual en el año en curso, si no el último con datos). |
+
 ## 4. Supuestos (confirmados por el usuario en la sesión 14)
 
 1. **Correcciones sobre un proyecto reabierto:** solo admin, igual que reabrir.
@@ -538,3 +546,18 @@ contra el cuerpo real de las RPCs en producción. **No salió ningún P0.**
 | V3 | P1 | El arreglo de T4 quedaba incompleto: las rutas insertan el XML ya como `validado` y después llaman a la RPC. Si la RPC falla, reaparece el hueco de T4 (factura validada sin total a transferir). El portal también inserta directo como `validado`. | Las 5 rutas de factura de proveedor | Las rutas insertan el XML como `pendiente`; **solo** `validar_factura_proveedor` lo pasa a `validado`, en la misma transacción que el snapshot y el estado del grupo. | B2 |
 | V4 | P2 | Se pedía complemento incluso para pagos anteriores a la factura, un caso que no existe fiscalmente. | CFDI 4.0: el complemento ampara pagos posteriores a una factura PPD | Complemento solo para pagos posteriores a `fecha_factura`; los anteriores son "Anticipo · sin complemento" (§5). | B1, B5 |
 
+### 5.11 Decisiones de ejecución (sesión 20)
+
+Salieron al implementar B3–B8 y B7 contra el código y la BD de test. No
+cambian reglas de producto (esas son D33 y D34).
+
+| # | Hallazgo | Decisión | Bloque |
+|---|---|---|---|
+| E1 | O1b: con el dataset de carga (2,196 proyectos, ~13,000 conceptos) la derivación en TS no cumplía p95 < 800 ms. | Se activó la salida prevista en O1b: la derivación vive en SQL (`cuentas_conceptos`, `cuentas_periodo`, `cuentas_resumen`, `cuentas_avisos_items`, migración 20261003) y `concepto.ts` / `periodo.ts` / `avisos.ts` quedan como referencia, obligada por `tests/e2e/live/cuentas-paridad-sql.spec.ts`. `cuentas_periodo` usa `plan_cache_mode = force_custom_plan`: el plan genérico que plpgsql adopta tras 5 llamadas por conexión multiplicaba el tiempo. | B3, B8 |
+| E2 | Avisos devolvía todos los conceptos del año (5.5 MB con el dataset de carga). | Máximo 50 por categoría; cada categoría trae su `total` y el panel dice "y N avisos más". | B6 |
+| E3 | H12 pedía ampliar el CHECK de `pago_operations.dominio` para anular. | No hace falta: anular es idempotente por naturaleza (el pago ya anulado devuelve `ya_anulado`), así que no usa `pago_operations`. El CHECK queda igual. | B7 |
+| E4 | ¿Un pago anulado bloquea cancelar la cotización? | Sí, `cancel_cotizacion` no cambia: el pago anulado sigue siendo un registro con historia, y cancelar borraría las cuentas que lo explican. | B7 |
+| E5 | Un grupo ya pagado cuya factura se dio de baja no aceptaba la nueva (`subir-factura` exigía `ABIERTO`). | La guarda es "no hay factura vigente validada" (o D34), no el estado del grupo. `validar_factura_proveedor` conserva el snapshot si ya hay pagos. | B7 |
+| E6 | El p95 < 800 ms del periodo fallaba en CI ante picos de red (mediana ~500 ms): cada respuesta pesaba ~305 KB, y ~300 KB eran las opciones de los filtros (clientes y proveedores del año), en cada cambio de filtro, mes o página. | Las opciones salen del periodo: `cuentas_opciones(p_year)` (migración 20261006) y `GET /api/cuentas/opciones?anio=`, que la pantalla pide una vez por año. El periodo baja a ~5–50 KB y ~35 ms menos en la BD. La paridad SQL/TS cubre también las opciones. | B3, B8 |
+| E7 | El live de p95 fallaba de forma intermitente aunque el estado estable es 330–560 ms: la primera consulta pesada en una conexión nueva de Postgres cuesta ~300 ms más (catálogo en frío) y el test calentaba con 2 peticiones; además, con 12 muestras su "p95" era el máximo. | El usuario autorizó corregir la medición: 8 peticiones de calentamiento y 40 muestras (p95 real). El presupuesto de 800 ms no cambia. | B3 |
+| E8 | El handoff del chip de meses pide un cambio instantáneo con "reducir movimiento", y en esos equipos el despliegue se veía brusco. | Decisión del usuario: con "reducir movimiento", fundido de opacidad de 150 ms, sin desplazamiento ni cascada; el chip vuelve a los 150 ms. Sin esa preferencia, la cascada del handoff sin cambios. | B4 |

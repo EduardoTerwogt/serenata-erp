@@ -1,6 +1,10 @@
 const ALLOWED_XML_TYPES = ['text/xml', 'application/xml']
 const ALLOWED_PDF_TYPES = ['application/pdf']
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+// Rediseño de Cuentas (supuesto 15): 4 MB por archivo. Una función de Vercel
+// no acepta cuerpos de más de ~4.5 MB, así que XML y PDF viajan en
+// peticiones separadas y cada uno cabe con margen.
+export const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4 MB
+export const MENSAJE_LIMITE = 'El archivo excede el límite de 4 MB'
 
 export type FacturaValidationErrorCode =
   | 'XML_REQUIRED' | 'XML_INVALID_TYPE'

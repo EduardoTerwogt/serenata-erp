@@ -127,3 +127,17 @@ describe('lib/client/api.ts -- manejo compartido de 401', () => {
     expect(mocks.signOutMock).toHaveBeenCalledWith({ redirect: false })
   })
 })
+
+describe('lib/client/api.ts -- getApiErrorMessage', () => {
+  const res = (body: unknown) => ({ status: 409, json: async () => body }) as unknown as Response
+
+  it('Rediseño de Cuentas B2: con un código de negocio muestra el mensaje para el usuario', async () => {
+    const { getApiErrorMessage } = await import('../api')
+    expect(await getApiErrorMessage(res({ error: 'sin_proveedor', message: 'Asigna un proveedor.' }), 'x')).toBe('Asigna un proveedor.')
+  })
+
+  it('un error legible se muestra tal cual, aunque venga con message', async () => {
+    const { getApiErrorMessage } = await import('../api')
+    expect(await getApiErrorMessage(res({ error: 'El monto excede el saldo.', message: 'otro' }), 'x')).toBe('El monto excede el saldo.')
+  })
+})
