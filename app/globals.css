@@ -482,17 +482,21 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 @keyframes sn-mes-in { from { opacity: 0; transform: translateX(-8px) scale(.94); } to { opacity: var(--sn-mes-op, 1); transform: none; } }
 @keyframes sn-mes-out { from { opacity: var(--sn-mes-op, 1); transform: none; } to { opacity: 0; transform: translateX(-8px) scale(.94); } }
 @keyframes sn-chip-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
-.sn-mes-in { animation: sn-mes-in var(--dur-slow) var(--ease-standard) both; }
-.sn-mes-out { animation: sn-mes-out var(--dur-slow) var(--ease-standard) both; }
-.sn-chip-in { animation: sn-chip-in 220ms var(--ease-standard) both; }
-.sn-sin-scrollbar { scrollbar-width: none; }
-.sn-sin-scrollbar::-webkit-scrollbar { display: none; }
 /* Con "reducir movimiento" (decisión del usuario, sesión 20): en vez de un
    cambio instantáneo, un fundido corto de opacidad sin desplazamiento ni
    cascada. El retardo en línea de cada pastilla se anula con !important. */
 @keyframes sn-fade-in { from { opacity: 0; } to { opacity: var(--sn-mes-op, 1); } }
 @keyframes sn-fade-out { from { opacity: var(--sn-mes-op, 1); } to { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .sn-mes-in, .sn-chip-in { animation: sn-fade-in 150ms var(--ease-standard) both !important; animation-delay: 0ms !important; }
-  .sn-mes-out { animation: sn-fade-out 150ms var(--ease-standard) both !important; animation-delay: 0ms !important; }
+/* Dentro de @layer (check-css-layers): una clase custom fuera de capa le
+   ganaría a cualquier utilidad de Tailwind en el mismo elemento. */
+@layer components {
+  .sn-mes-in { animation: sn-mes-in var(--dur-slow) var(--ease-standard) both; }
+  .sn-mes-out { animation: sn-mes-out var(--dur-slow) var(--ease-standard) both; }
+  .sn-chip-in { animation: sn-chip-in 220ms var(--ease-standard) both; }
+  .sn-sin-scrollbar { scrollbar-width: none; }
+  .sn-sin-scrollbar::-webkit-scrollbar { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .sn-mes-in, .sn-chip-in { animation: sn-fade-in 150ms var(--ease-standard) both !important; animation-delay: 0ms !important; }
+    .sn-mes-out { animation: sn-fade-out 150ms var(--ease-standard) both !important; animation-delay: 0ms !important; }
+  }
 }
