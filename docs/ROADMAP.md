@@ -1,6 +1,6 @@
 # Roadmap
 
-**Última actualización:** 2026-09-24 (nueva iniciativa en "Siguiente": rediseño de Cuentas)
+**Última actualización:** 2026-09-26 (rediseño de Cuentas cerrado y en producción)
 
 Dirección general del producto. Responde **¿hacia dónde vamos?** — no es el prompt de
 una sesión de trabajo. Para lo que se está construyendo ahora,
@@ -78,13 +78,8 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Rediseño de la sección Cuentas (UX/UI en Claude Design → implementación).**
-  Abierto el 2026-09-24. Primero el diseño en Claude Design sobre una réplica
-  exacta del estado actual. Después, con el HTML final del rediseño, se
-  redefine la arquitectura, el backend y la UI necesarios. Incluye el pendiente
-  "Cuentas — filtro de estado en la vista principal" (ver "Después"), que se
-  resuelve dentro del rediseño. Plan: `docs/PLAN.md`. Diseño final auditado
-  el 2026-09-25 (bloques B0–B8); falta aprobación.
+Sin iniciativa definida. El rediseño de Cuentas se cerró el 2026-09-26 (ver
+"Cerrado"); lo siguiente se prioriza en Chat.
 
 ---
 
@@ -96,23 +91,6 @@ ni tiene alcance de iniciativa definido.
 
 ### Sueltos pendientes (2026-09-19, actualizado 2026-09-21)
 
-- **Cuentas — filtro de estado en la vista principal** (acceso a cuentas
-  cerradas, no solo pendientes). **Absorbido por "Rediseño de la sección
-  Cuentas" (ver "Siguiente", 2026-09-24).** Diferido el 2026-09-21 desde la iniciativa
-  "Sueltos post-PR #76" para liberar el slot de `docs/PLAN.md` a "Editor de
-  PDFs" — no por falta de prioridad. Único bloque de esa iniciativa sin
-  diseño cerrado: falta decidir (a) cómo agrupar los ~8 estados reales en
-  tabs manejables (2 propuestas ya exploradas en mockup: A: 4 grupos
-  [preferida en principio], B: un tab por estado) y (b) cómo integrar ese
-  filtro **dentro** de las vistas que ya existen (Por proyecto en acordeón,
-  Lista paginada, tarjetas de métricas) en vez de reemplazarlas por una
-  lista plana. Patrón a reutilizar: `app/cotizaciones/page.tsx` ya resuelve
-  esto con `FilterTabs` + badge de conteo + RPC server-side
-  (`buscar_cotizaciones`); las RPCs de Cuentas (`buscar_cuentas_cobrar`,
-  `buscar_cuentas_pagar_grupos`) hoy solo tienen `pendientes_count` binario,
-  sin filtro ni conteo por estado — habría que extenderlas igual que
-  `buscar_cotizaciones`. Historia completa:
-  [`docs/archive/sueltos-portal-utilidad-cliente-id-fk.md`](archive/sueltos-portal-utilidad-cliente-id-fk.md).
 - **Dashboard — estado de resultados y balance + export a Sheets.**
   Pendiente definir alcance contable exacto (devengado vs. flujo de caja,
   categorías de gasto, balance con activos/pasivos o solo P&L) antes de
@@ -170,6 +148,25 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Rediseño de la sección Cuentas (2026-09-26).** `/cuentas` rediseñada en
+  Claude Design e implementada en 10 bloques (B0, B1b, B1–B8), después de
+  siete rondas de auditoría contra código y datos reales (D1–D34).
+  - Lectura por periodo (año → mes → proyecto), con la derivación en SQL
+    (`cuentas_conceptos`, `cuentas_periodo`, `cuentas_opciones`) y test de
+    paridad contra TS.
+  - Pagos a proveedor en total a transferir (snapshot del CFDI).
+  - Complementos por pago (PPD), detalle del concepto, avisos y órdenes de
+    pago atómicas con desglose inmutable.
+  - Reabrir y correcciones solo para admin: anular pagos, dar de baja
+    documentos, corregir datos.
+  - Incluye el filtro de estado (pendientes/cerradas) que estaba diferido
+    desde 2026-09-21.
+  - PRs [#94](https://github.com/EduardoTerwogt/serenata-erp/pull/94),
+    [#95](https://github.com/EduardoTerwogt/serenata-erp/pull/95) y
+    [#96](https://github.com/EduardoTerwogt/serenata-erp/pull/96) (`f01097d`).
+  - Migraciones `20260925_*` a `20261006_*` en producción.
+  - Reglas: [`docs/decisions/017`](decisions/017-rediseno-cuentas.md).
+    Historia: [`docs/archive/rediseno-cuentas.md`](archive/rediseno-cuentas.md).
 - **Colaboración en vivo — aviso "X está editando" pegado (2026-09-24).** Dos
   causas raíz: (1) bug de `@supabase/realtime-js` 2.100.0 que no aplicaba las
   bajas de Presence, y (2) el servidor cerraba el canal por exceder 5 eventos de
