@@ -78,10 +78,14 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Frente 2 de latencia de Cuentas** (2026-09-30): derivar
-  `cuentas_conceptos` sin recalcularlo en cada RPC. Priorizado porque `live`
-  falló 3 veces seguidas en el PR #100 (issue #99), que queda bloqueado hasta
-  resolverlo. Aprobada la opción A (tabla materializada con triggers); plan y tracker en `docs/PLAN.md`.
+- **Frente 2 de latencia de Cuentas** (2026-09-30): los conceptos de Cuentas
+  se guardan derivados en `cuentas_conceptos_base` y se mantienen con triggers
+  (`docs/decisions/019-cuentas-conceptos-materializada.md`). Implementado en el
+  PR #100 (issue #99), que sigue en borrador hasta cerrar la validación bajo
+  demanda (3 corridas de `live`, escenario k6 de escrituras) y aplicar las
+  migraciones en producción. Plan y tracker en `docs/PLAN.md`.
+  - Escala de referencia: el ambiente de test con miles de datos es el objetivo
+    que producción debe aguantar antes de pasar a uso real.
 
 ---
 
@@ -92,6 +96,21 @@ sistema a la vista. Ninguno de los puntos de abajo está comprometido todavía
 ni tiene alcance de iniciativa definido.
 
 ### Deuda técnica (2026-09-26)
+
+- **Derivación duplicada en SQL y TS** (2026-09-30): las reglas de negocio de
+  los conceptos (estados, pasos, netos) viven en `cuentas_conceptos_derivar` y
+  en `concepto.ts`/`periodo.ts`; la ruta del proyecto seleccionado
+  (`app/api/cuentas/periodo/route.ts`) todavía deriva en TS. Se mantienen
+  iguales con los tests de paridad. Mejor a futuro: que SQL devuelva también los
+  conceptos del proyecto seleccionado.
+- **Carga de escrituras de Cuentas** (2026-09-30): el k6 existente crea y emite
+  cotizaciones y lee listados; nada ejercita bajo concurrencia las escrituras
+  que disparan los triggers de `cuentas_conceptos_base` (aprobar, registrar
+  pagos). Escenario de aprobar en el plan (H4); el de pagos concurrentes queda
+  pendiente porque la limpieza con pagos está bloqueada por R1/D22.
+- **Siguiente escalón de escala** (2026-09-30): las lecturas de la tabla siguen
+  siendo lineales en los conceptos del año. Si el p95 de periodo/resumen/avisos
+  supera 500 ms de mediana en `live`, agregados precalculados por mes y proyecto.
 
 La resuelve una sesión dedicada (decisión del usuario, 2026-09-26). Lista
 viva en `docs/ACTIVE_WORK.md` → "Deuda técnica". La de más peso:

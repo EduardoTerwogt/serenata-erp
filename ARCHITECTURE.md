@@ -396,6 +396,17 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
   (`cuentas_por_proyecto(p_year, p_proyecto)`), alimenta los mocks e2e y
   `tests/e2e/live/cuentas-paridad-sql.spec.ts` exige que SQL y TS den lo
   mismo sobre la BD de test. **Un cambio de regla va en los dos lados.**
+- **Los conceptos viven derivados en `cuentas_conceptos_base`** (migración
+  `20261009`, decisión 019): las cuatro RPCs de lectura pasan por
+  `cuentas_conceptos`, que lee la tabla y calcula `venc_dias`, el estado
+  `vencido`, `paso_urgente` y el orden al leer. Cada escritura en las 11 tablas
+  fuente refresca los proyectos afectados **en su misma transacción**
+  (`cuentas_conceptos_pendientes` + constraint trigger diferido), así que la
+  tabla nunca está desactualizada. `cuentas_conceptos_derivar` es la derivación
+  de referencia, `cuentas_conceptos_diferencias` el detector (paridad en CI) y
+  `cuentas_conceptos_reconciliar` la red de seguridad diaria (`/api/keep-alive`).
+  Un cambio de columna o tabla en la derivación exige actualizar triggers y
+  tests (`.claude/rules/migraciones.md`).
 - `cuentas_periodo` fija `plan_cache_mode = force_custom_plan`: con el plan
   genérico de plpgsql (desde la 6.ª llamada por conexión) la misma petición
   pasaba de ~0.4 s a ~4.6 s.

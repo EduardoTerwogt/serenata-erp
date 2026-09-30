@@ -6,8 +6,13 @@ de Cuentas, y región de Vercel)
 
 ## Estado
 
-**Iniciativa aprobada: Frente 2 de latencia de Cuentas, opción A** → `docs/PLAN.md`
-(siguiente bloque: A1).
+**Frente 2 de latencia de Cuentas → implementado en el PR #100, en validación**
+(`docs/PLAN.md`, `docs/decisions/019-cuentas-conceptos-materializada.md`).
+A1–A3 y el endurecimiento H1–H3 están hechos; faltan H4 (3 corridas de `live`,
+escenario k6 de escrituras, corrida de `load-test.yml`), H5 (paridad de
+entornos) y A4 (producción y merge). Decisión del usuario (2026-09-30): el
+ambiente de test con miles de datos es lo que producción debe aguantar antes de
+pasar a uso real.
 
 **En curso: issue #99 (desglose antes/después de IVA) — PR #100 en borrador,
 rama `claude/wonderful-hamilton-260e2w`.** Implementado y validado (unit,

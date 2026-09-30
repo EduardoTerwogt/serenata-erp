@@ -76,7 +76,7 @@ calculadas.
   borra y recalcula los conceptos de esos proyectos **reutilizando la
   derivación actual** (misma consulta, filtrada por proyecto; principio 7,
   sin segundo motor).
-- **Triggers AFTER … FOR EACH STATEMENT** (con tablas de transición, sin
+- **Triggers** (el plan decía `AFTER … FOR EACH STATEMENT` con tablas de transición; se implementó por fila con cola, ver decisión 019) (sin
   duplicar proyectos) en las tablas fuente: `cotizaciones`, `proyectos`,
   `cuentas_cobrar`, `cuentas_pagar`, `cuentas_pagar_grupos`,
   `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`,
@@ -108,6 +108,17 @@ calculadas.
 |---|---|
 | F2-0 Medición | Hecho (2026-09-30) |
 | A1 Tabla y refresco | Hecho (2026-09-30): `20261009` en test y en el PR #100. Paridad leer↔derivar = 0 (2026, todos, 2025, fecha futura); leer 51–69 ms vs derivar 224–283 ms; refrescar 2 proyectos 35 ms. La derivación pasó a plpgsql + `force_custom_plan` (el plan genérico tardaba ~7.5 s). El test live de paridad pasa a A2: sin triggers la tabla se desactualiza con los specs que escriben. |
-| A2 Triggers | Hecho (2026-09-30): `20261010` en test y en el PR #100. Cola `cuentas_conceptos_pendientes` + constraint trigger diferido (un refresco por transacción, advisory lock por proyecto). Paridad 0 tras escribir en las 11 tablas fuente; con la cola apagada detecta el desfase. Test live nuevo en `cuentas-b1b`. Cargas masivas: `SET LOCAL serenata.sin_refresco = 'on'` + `cuentas_conceptos_reconstruir()`. |
-| A3 Lecturas | Pendiente |
-| A4 Cierre | Pendiente |
+| A2 Triggers | Hecho (2026-09-30). Triggers en las 11 tablas fuente, cola `cuentas_conceptos_pendientes` y constraint trigger diferido (un refresco por transacción, advisory lock por proyecto). Se probó también un refresco al leer (`0572ff3`) y se descartó en CI por razones de diseño; ver `docs/decisions/019-cuentas-conceptos-materializada.md`. |
+| A3 Lecturas | Hecho (2026-09-30): las 4 RPCs leen de la tabla; `cuentas_periodo` (mes) 311 → 140 ms, `cuentas_resumen` 261 → 84 ms; los 5 tests de rendimiento pasaron con p95 < 800 ms. |
+| H1 Consolidar migraciones | Hecho: `20261009` única (antes `20261009`–`20261015`); 21 de 21 funciones idénticas a la base de test. |
+| H1b/H1c Endurecer | Hecho: tipo `cuentas_concepto_t`; los `UPDATE` de solo `estado` ya no refrescan (500 cobros: 498 proyectos y 882 ms → 0). |
+| H2 Red de seguridad | Hecho: `cuentas_conceptos_reconciliar()` + `/api/keep-alive`. |
+| H3 Documentación | ADR 019, ARCHITECTURE, ROADMAP, regla de migraciones. |
+| H4 Validación bajo demanda | Pendiente: `live` 3 corridas seguidas, escenario k6 de escrituras (aprobar) y corrida de `load-test.yml`. |
+| H5 Paridad de entornos | Pendiente (checklist: regiones, versiones, cómputo). |
+| A4 Cierre | Pendiente: aplicar `20261007`, `20261008` y `20261009` en producción y mergear el PR #100. |
+
+**Corrección de diagnóstico (2026-09-30):** el timeout de los B7 en `c7b2fad`
+no se demostró causado por el refresco; el entorno completo estuvo +20 % más
+lento entre dos corridas con el mismo código. Y la escala de referencia es la
+de test, no la de producción de hoy (28 proyectos): ver la decisión 019.

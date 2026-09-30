@@ -29,3 +29,10 @@ paths:
   (incluido un borrado sin reemplazo) salvo regla de negocio no clara. Fuera de un
   plan, sigue la regla de 005. Ver `CLAUDE.md` → "Autonomía de ejecución" /
   "Supabase" y `docs/decisions/012-autonomia-supabase-en-plan-aprobado.md`.
+- **Derivación de Cuentas (`cuentas_conceptos_derivar`, decisión 019):** si una
+  migración hace que lea una tabla nueva, agrega su trigger; si lee otra columna
+  de `cuentas_cobrar`, `cuentas_pagar` o `cuentas_pagar_grupos`, agrégala al `WHEN`
+  de su `trigger_cuentas_conceptos_upd`. Cubrir el caso en
+  `tests/e2e/live/cuentas-b1b.spec.ts` o en la paridad, y probar triggers y RPCs
+  también bajo las restricciones de PostgREST (`pg_safeupdate` rechaza `DELETE`
+  sin `WHERE`; `statement_timeout` y `lock_timeout` de 8 s).
