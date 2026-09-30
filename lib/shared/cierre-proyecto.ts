@@ -57,7 +57,7 @@ type CuentaPagarConRegimen = CuentaPagarCierreInput
  * proveedor SIEMPRE pasa por calcularEjemploFactura -- nunca una tasa plana
  * a nivel proyecto (docs/PLAN.md, riesgo P1 de Bloque 2).
  *
- * utilidad_bruta deriva solo de margenTotalProyecto/feeAgenciaProyecto
+ * utilidad_bruta deriva solo de margen, fee y descuento de las cotizaciones
  * (columnas de cotizaciones, nunca tocadas por retenciones de proveedores)
  * -- "Utilidad antes de impuestos" = "Utilidad después de retenciones" se
  * cumple por construcción, no por coincidencia numérica.
@@ -66,7 +66,9 @@ export function calcularCierreProyecto(
   cuentasPagar: CuentaPagarConRegimen[],
   margenTotalProyecto: number,
   feeAgenciaProyecto: number,
-  ivaTotalProyecto: number
+  ivaTotalProyecto: number,
+  /** #99: descuento de las cotizaciones (utilidad_total = margen + fee − descuento). */
+  descuentoProyecto = 0
 ): CierreProyecto {
   // El cruce fiscal se calcula sobre el monto total del grupo, nunca sobre
   // el renglón individual (docs/decisions/006).
@@ -105,7 +107,7 @@ export function calcularCierreProyecto(
   const iva_pagado = round2(quien_cuanto_cuando.reduce((sum, q) => sum + q.iva_trasladado, 0))
   const iva_neto_a_enterar = round2(ivaTotalProyecto - iva_pagado)
 
-  const utilidad_bruta = round2(margenTotalProyecto + feeAgenciaProyecto)
+  const utilidad_bruta = round2(margenTotalProyecto + feeAgenciaProyecto - descuentoProyecto)
   const isr_serenata_estimado = round2(Math.max(0, utilidad_bruta) * TASA_ISR_SERENATA)
   const utilidad_neta = round2(utilidad_bruta - isr_serenata_estimado)
 

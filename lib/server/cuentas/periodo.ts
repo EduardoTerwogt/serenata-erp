@@ -50,6 +50,30 @@ function sumar<T>(items: T[], f: (x: T) => number): number {
   return round2(items.reduce((s, x) => s + f(x), 0))
 }
 
+const centavos = (v: number) => BigInt(Math.round(v * 100))
+
+/** a × b ÷ c en centavos, redondeado como ROUND(numeric, 2) (mitad lejos de cero). */
+function proporcion(a: number, b: number, c: number): number {
+  const n = centavos(a) * centavos(b)
+  const d = centavos(c)
+  const neg = n < BigInt(0) !== d < BigInt(0)
+  const an = n < BigInt(0) ? -n : n
+  const ad = d < BigInt(0) ? -d : d
+  const q = (BigInt(2) * an + ad) / (BigInt(2) * ad)
+  return Number(neg ? -q : q) / 100
+}
+
+/**
+ * #99: parte sin IVA de un cobro. Espejo de `v_neto` en cuentas_conceptos
+ * (db/migrations/20261007): proporción sin IVA de su cotización; sin
+ * cotización, se asume IVA del 16% incluido.
+ */
+export function netoCobro(monto: number, cotizacionTotal: number | null, cotizacionIva: number | null): number {
+  if (cotizacionTotal === null) return proporcion(monto, 100, 116)
+  if (cotizacionTotal <= 0) return round2(monto)
+  return proporcion(monto, round2(cotizacionTotal - (cotizacionIva ?? 0)), cotizacionTotal)
+}
+
 function vista(base: Omit<ConceptoVista, keyof ConceptoDerivado>, derivado: ConceptoDerivado): ConceptoVista {
   return { ...derivado, ...base }
 }
@@ -82,6 +106,7 @@ function conceptoGrupo(grupo: GrupoAnioRaw): ConceptoVista {
       concepto: grupo.n_items === 1 ? (grupo.descripcion ?? 'Concepto') : `${grupo.n_items} conceptos`,
       items: grupo.n_items,
       total,
+      neto: round2(grupo.monto_total),
       pagado,
       total_estimado: estimado,
       regimen_fiscal: grupo.regimen_fiscal,
@@ -120,6 +145,7 @@ function conceptoSuelta(cuenta: PagoAnioRaw): ConceptoVista {
       concepto: cuenta.item_descripcion ?? 'Concepto',
       items: 1,
       total,
+      neto: round2(cuenta.x_pagar),
       pagado,
       total_estimado: estimado,
       regimen_fiscal: cuenta.regimen_fiscal,
@@ -140,6 +166,8 @@ function totalesDe(conceptos: ConceptoVista[]): TotalesProyecto {
     pagos_total: sumar(pagos, (c) => c.total),
     pagado: sumar(pagos, (c) => Math.min(c.pagado, c.total)),
     por_pagar: sumar(pagos, (c) => c.saldo),
+    cobros_sin_iva: sumar(cobros, (c) => c.neto),
+    pagos_neto: sumar(pagos, (c) => c.neto),
   }
 }
 
@@ -169,12 +197,13 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
     fecha_entrega: p.fecha_entrega && FECHA_VALIDA.test(p.fecha_entrega) ? p.fecha_entrega : null,
     margen: p.margen_total_proyecto,
     fee: p.fee_agencia_proyecto,
+    utilidad: p.utilidad_total_proyecto,
     iva: p.iva_total_proyecto,
     sin_proyecto: false,
     reabierta: p.reabierta,
   }))
   if (cobros.has(SIN_PROYECTO_ID) || pagos.has(SIN_PROYECTO_ID) || grupos.has(SIN_PROYECTO_ID)) {
-    bases.push({ id: SIN_PROYECTO_ID, nombre: 'Sin proyecto', cliente: null, fecha_entrega: null, margen: 0, fee: 0, iva: 0, sin_proyecto: true, reabierta: false })
+    bases.push({ id: SIN_PROYECTO_ID, nombre: 'Sin proyecto', cliente: null, fecha_entrega: null, margen: 0, fee: 0, utilidad: 0, iva: 0, sin_proyecto: true, reabierta: false })
   }
 
   return bases.map((b) => {
@@ -199,6 +228,7 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
             concepto: nombreCobro(cc.cotizacion_id, cc.proyecto_id),
             items: 1,
             total: round2(cc.monto_total),
+            neto: netoCobro(cc.monto_total, cc.cotizacion_total, cc.cotizacion_iva),
             pagado: round2(cc.monto_pagado),
             total_estimado: false,
             regimen_fiscal: null,
@@ -250,7 +280,8 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
       })),
     ]
 
-    const cierre = calcularCierreProyecto(cierreInput, b.margen, b.fee, b.iva)
+    // #99: la utilidad bruta lleva el descuento de las cotizaciones (utilidad_total).
+    const cierre = calcularCierreProyecto(cierreInput, b.margen, b.fee, b.iva, round2(b.margen + b.fee - b.utilidad))
     const pagosProveedor: Record<string, { fecha: string; monto: number }[]> = {}
     for (const g of gruposP) pagosProveedor[g.id] = g.pagos_realizados
     for (const cp of pagosP) pagosProveedor[cp.id] = cp.pagos_realizados
@@ -320,12 +351,14 @@ function totalesPeriodo(proyectos: { p: ProyectoDetalle; conceptos: ConceptoVist
   const retenciones = sumar(cierres, (c) => c.iva_retenido_total + c.isr_retenido_total)
   const isr = sumar(cierres, (c) => c.isr_serenata_estimado)
   return {
-    ingresos: { total: t.cobros_total, cobrado: t.cobrado, por_cobrar: t.por_cobrar },
-    egresos: { total: t.pagos_total, pagado: t.pagado, por_pagar: t.por_pagar },
+    ingresos: { total: t.cobros_total, cobrado: t.cobrado, por_cobrar: t.por_cobrar, sin_iva: t.cobros_sin_iva },
+    egresos: { total: t.pagos_total, pagado: t.pagado, por_pagar: t.por_pagar, neto: t.pagos_neto },
     utilidad: {
       bruta: sumar(cierres, (c) => c.utilidad_bruta),
       isr_estimado: isr,
       neta: sumar(cierres, (c) => c.utilidad_neta),
+      // Sin filtros de concepto: los mismos proyectos que la utilidad.
+      flujo: sumar(proyectos, (x) => x.p.totales.cobros_total - x.p.totales.pagos_total),
     },
     impuestos: { iva_a_enterar: iva, retenciones, isr_estimado: isr, total: round2(iva + retenciones + isr) },
   }

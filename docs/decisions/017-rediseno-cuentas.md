@@ -310,6 +310,13 @@ cumpla el formato va a "Sin fecha".
   `calcularCierreProyecto` sumado por proyecto.
 - Por eso **Ingresos − Egresos ≠ Utilidad bruta** (el IVA es de terceros). La
   UI no las presenta como una resta.
+- **Desglose antes/después de IVA (issue #99).** Cada concepto trae su `neto`
+  (cobro: parte sin IVA de su cotización; pago: neto del grupo o suelta). La
+  UI muestra Ingreso/Egreso sin y con IVA y concilia la utilidad:
+  `Flujo con IVA (cobros − pagos) − IVA neto a enterar − retenciones = Utilidad bruta`.
+  Lo que no cuadre (Total de un CFDI distinto del estimado, datos desfasados
+  como un `monto_total` de grupo que no suma sus renglones) va en una línea
+  **"Ajuste"**, nunca se esconde. Migración `20261007`.
 - **Dónde se calcula:** la RPC trae los datos por proyecto y la **ruta**
   aplica `calcularCierreProyecto` y suma, como ya hace
   `/api/cuentas/por-proyecto`. No se porta la lógica fiscal a SQL: sería un

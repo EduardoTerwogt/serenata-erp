@@ -63,8 +63,9 @@ guarda el Costo Total de cada renglón desde que se aprueba la cotización.
 
 **Utilidad de proyecto (Bloque 2, PR #79)** (`lib/shared/cierre-proyecto.ts`,
 usado por `cuentas_por_proyecto()` y `CuentasPorProyecto.tsx`):
-- **Utilidad Bruta** = suma de la Utilidad Total (Margen Total + Fee Agencia) de
-  todas las cotizaciones `APROBADA` del proyecto (principal + complementarias).
+- **Utilidad Bruta** = suma de la Utilidad Total (Margen Total + Fee Agencia −
+  Descuento) de todas las cotizaciones `APROBADA` del proyecto (principal +
+  complementarias). Hasta el issue #99 Cuentas omitía el descuento.
 - Retenciones e IVA de proveedores **no restan** la Utilidad de Serenata — son
   dinero de terceros (SAT / proveedor); se muestran aparte, informativas.
 - **Utilidad Neta** = Utilidad Bruta − ISR estimado (30% sobre Utilidad Bruta,
