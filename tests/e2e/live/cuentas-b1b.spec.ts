@@ -354,6 +354,44 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
     }
   })
 
+  test('cuentas_conceptos_base se refresca sola en cada escritura (frente 2, 20261010)', async () => {
+    test.setTimeout(120_000)
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    const hoy = new Date().toISOString().slice(0, 10)
+    const diferencias = async () =>
+      Number(must(await supabase.rpc('cuentas_conceptos_diferencias', { p_year: null, p_hoy: hoy })))
+    try {
+      const principal = `${fx.prefix}-P`
+      const grupoId = randomUUID()
+      const base = async () =>
+        must(await supabase.from('cuentas_conceptos_base')
+          .select('key, tipo, anio, cierre_iva_retenido, contraparte')
+          .eq('proyecto_key', principal)
+          .order('key'))
+
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId, xPagar: 1000 })
+      expect((await base()).map((r) => r.tipo).sort()).toEqual(['cobro', 'pago'])
+
+      ok(await supabase.from('proyectos').update({ fecha_entrega: '2027-02-01' }).eq('id', principal))
+      expect((await base()).every((r) => r.anio === 2027)).toBe(true)
+
+      ok(await supabase.from('proveedores').update({ regimen_fiscal: 'fisica', nombre: `${fx.prefix} Renombrado` }).eq('id', fx.proveedorId))
+      const pago = (await base()).find((r) => r.tipo === 'pago')
+      expect(Number(pago?.cierre_iva_retenido)).toBe(106.67)
+      expect(pago?.contraparte).toBe(`${fx.prefix} Renombrado`)
+
+      expect(await diferencias()).toBe(0)
+
+      must(await supabase.rpc('cancel_cotizacion', { p_id: principal }))
+      expect(await base()).toHaveLength(0)
+      expect(await diferencias()).toBe(0)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
   test('cancelar una principal cancela en cascada sus complementarias (APROBADA, EMITIDA y BORRADOR) (D28, D31)', async () => {
     const supabase = getLiveSupabaseAdmin()
     const fx = await nuevoFixture(supabase)
