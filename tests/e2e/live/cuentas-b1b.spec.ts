@@ -328,9 +328,13 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
       const principal = `${fx.prefix}-P`
       const grupoA = randomUUID()
       const grupoB = randomUUID()
+      // Un cobro por cotización (cuentas_cobrar_cotizacion_unique): el segundo
+      // renglón del grupo viene de una complementaria.
+      const complementaria = `${principal}-A`
       await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCotizacion(supabase, fx, { id: complementaria, estado: 'APROBADA', complementariaDe: principal })
       await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId: grupoA, xPagar: 500 })
-      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId: grupoA, xPagar: 300 })
+      await crearCuentas(supabase, fx, { cotizacionId: complementaria, proyectoId: principal, grupoId: grupoA, xPagar: 300 })
       const montoDe = async (id: string) =>
         Number(must(await supabase.from('cuentas_pagar_grupos').select('monto_total').eq('id', id).single()).monto_total)
 
