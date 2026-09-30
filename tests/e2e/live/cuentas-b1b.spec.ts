@@ -363,16 +363,22 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
     const supabase = getLiveSupabaseAdmin()
     const fx = await nuevoFixture(supabase)
     const hoy = new Date().toISOString().slice(0, 10)
-    const diferencias = async () =>
-      Number(must(await supabase.rpc('cuentas_conceptos_diferencias', { p_year: null, p_hoy: hoy })))
+    // Escribir solo marca el proyecto (20261014); las lecturas de la app sincronizan primero.
+    const sincronizar = async () => must(await supabase.rpc('cuentas_conceptos_sincronizar'))
+    const diferencias = async () => {
+      await sincronizar()
+      return Number(must(await supabase.rpc('cuentas_conceptos_diferencias', { p_year: null, p_hoy: hoy })))
+    }
     try {
       const principal = `${fx.prefix}-P`
       const grupoId = randomUUID()
-      const base = async () =>
-        must(await supabase.from('cuentas_conceptos_base')
+      const base = async () => {
+        await sincronizar()
+        return must(await supabase.from('cuentas_conceptos_base')
           .select('key, tipo, anio, cierre_iva_retenido, contraparte')
           .eq('proyecto_key', principal)
           .order('key'))
+      }
 
       await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
       await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId, xPagar: 1000 })
@@ -391,6 +397,38 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
       must(await supabase.rpc('cancel_cotizacion', { p_id: principal }))
       expect(await base()).toHaveLength(0)
       expect(await diferencias()).toBe(0)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
+  test('lectores simultáneos tras escribir: una sola sincronización, sin duplicar ni perder filas (20261014)', async () => {
+    test.setTimeout(120_000)
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    const hoy = new Date().toISOString().slice(0, 10)
+    try {
+      const principal = `${fx.prefix}-P`
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId: randomUUID(), xPagar: 1000 })
+
+      // Varios lectores a la vez sobre el mismo proyecto pendiente.
+      const resultados = await Promise.all([1, 2, 3, 4].map(() => supabase.rpc('cuentas_conceptos_sincronizar')))
+      for (const r of resultados) expect(r.error).toBeNull()
+      const refrescados = resultados.map((r) => Number(r.data)).reduce((a, b) => a + b, 0)
+      expect(refrescados).toBeGreaterThanOrEqual(1)
+      const filas = must(await supabase.from('cuentas_conceptos_base').select('key').eq('proyecto_key', principal))
+      expect(filas).toHaveLength(2)
+      expect(must(await supabase.from('cuentas_conceptos_pendientes').select('proyecto_key').eq('proyecto_key', principal))).toHaveLength(0)
+      expect(Number(must(await supabase.rpc('cuentas_conceptos_diferencias', { p_year: null, p_hoy: hoy })))).toBe(0)
+
+      // Una escritura justo después de sincronizar vuelve a quedar marcada y se refleja.
+      ok(await supabase.from('cuentas_cobrar').update({ monto_total: 2500 }).eq('cotizacion_id', principal))
+      expect(must(await supabase.from('cuentas_conceptos_pendientes').select('proyecto_key').eq('proyecto_key', principal)).length).toBeGreaterThanOrEqual(1)
+      must(await supabase.rpc('cuentas_conceptos_sincronizar'))
+      const cobro = must(await supabase.from('cuentas_conceptos_base').select('total').eq('proyecto_key', principal).eq('tipo', 'cobro').single())
+      expect(Number(cobro.total)).toBe(2500)
+      expect(Number(must(await supabase.rpc('cuentas_conceptos_diferencias', { p_year: null, p_hoy: hoy })))).toBe(0)
     } finally {
       await limpiar(supabase, fx)
     }

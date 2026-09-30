@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-30T21:46:30.933Z",
-  "count": 126,
+  "generated_at": "2026-09-30T22:34:30.006Z",
+  "count": 127,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -127,6 +127,7 @@
     "20261009_cuentas_conceptos_base.sql",
     "20261010_cuentas_conceptos_triggers.sql",
     "20261012_cuentas_conceptos_procesar_where.sql",
-    "20261013_cuentas_conceptos_lee_tabla.sql"
+    "20261013_cuentas_conceptos_lee_tabla.sql",
+    "20261014_cuentas_conceptos_refresco_perezoso.sql"
   ]
 }
