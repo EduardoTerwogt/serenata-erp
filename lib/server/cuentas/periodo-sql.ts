@@ -34,6 +34,7 @@ export interface ConceptoSql {
   concepto: string
   items: number
   total: number
+  neto: number
   pagado: number
   total_estimado: boolean
   regimen_fiscal: RegimenFiscal | null

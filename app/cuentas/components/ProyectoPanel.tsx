@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { Icon } from '@/components/ui/Icon'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { fmtMoney } from '@/lib/quotations/format'
+import { round2 } from '@/lib/shared/decimal'
 import type { ConceptoVista, ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
 import { TablaConceptos } from './Conceptos'
 import { fechaCorta, plural } from './formato'
@@ -16,23 +17,131 @@ interface ProyectoPanelProps {
   acciones?: ReactNode
 }
 
-function Metricas({ p, compacto }: { p: ProyectoDetalle; compacto?: boolean }) {
-  const cerradas = p.cuentas.cerradas
-  const items = [
-    cerradas ? { k: 'Ingreso', v: p.totales.cobros_total, acento: false } : { k: 'Por cobrar', v: p.totales.por_cobrar, acento: true },
-    cerradas ? { k: 'Egreso', v: p.totales.pagos_total, acento: false } : { k: 'Por pagar', v: p.totales.por_pagar, acento: false },
-    { k: 'Utilidad bruta', v: p.cierre.utilidad_bruta, acento: false },
-  ]
+function Linea({ k, v, fuerte, saldo }: { k: string; v: number; fuerte?: boolean; saldo?: boolean }) {
   return (
-    <div className={compacto ? 'grid grid-cols-3 gap-2' : 'grid gap-3'} style={compacto ? undefined : { gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-      {items.map((m) => (
-        <div key={m.k} className={`min-w-0 rounded-[10px] bg-row-alt ${compacto ? 'p-2.5' : 'px-3.5 py-3'}`}>
-          <div className={`text-subtext ${compacto ? 'text-[10.5px]' : 'text-[11px]'}`}>{m.k}</div>
-          <div className={`truncate whitespace-nowrap font-bold ${compacto ? 'mt-0.5 text-[13.5px]' : 'mt-[3px] text-[17px]'} ${m.acento ? 'text-accent' : 'text-ink'}`}>
-            {fmtMoney(m.v)}
+    <div className={`flex justify-between gap-2.5 text-[11.5px] leading-[1.4] ${saldo ? 'mt-1 border-t border-dashed border-hairline pt-1.5' : ''}`}>
+      <span className={fuerte ? 'font-semibold text-ink' : 'text-subtext'}>{k}</span>
+      <span className={`whitespace-nowrap ${fuerte ? 'font-semibold text-ink' : saldo ? 'font-semibold text-accent' : 'text-body'}`}>{fmtMoney(v)}</span>
+    </div>
+  )
+}
+
+/**
+ * #99: cómo sale la utilidad bruta del flujo con IVA. El IVA y las
+ * retenciones son de terceros, así que se restan del flujo; lo que no cuadre
+ * (p. ej. el Total de un CFDI distinto del estimado) va en "Ajuste", nunca se esconde.
+ */
+function conciliacionUtilidad(p: ProyectoDetalle) {
+  const c = p.cierre
+  const flujo = round2(p.totales.cobros_total - p.totales.pagos_total)
+  const retenciones = round2(c.iva_retenido_total + c.isr_retenido_total)
+  const ajuste = round2(flujo - c.iva_neto_a_enterar - retenciones - c.utilidad_bruta)
+  return { flujo, iva: c.iva_neto_a_enterar, retenciones, ajuste, bruta: c.utilidad_bruta }
+}
+
+function LineasConciliacion({ p }: { p: ProyectoDetalle }) {
+  const u = conciliacionUtilidad(p)
+  return (
+    <>
+      <Linea k="Flujo con IVA (cobro − pago)" v={u.flujo} />
+      <Linea k="IVA neto a enterar" v={-u.iva} />
+      <Linea k="Retenciones a enterar" v={-u.retenciones} />
+      {u.ajuste !== 0 && <Linea k="Ajuste (factura real u otros)" v={-u.ajuste} />}
+      <div className="mt-0.5 border-t border-hairline pt-1">
+        <Linea k="Utilidad bruta" v={u.bruta} fuerte />
+      </div>
+    </>
+  )
+}
+
+/** Ingreso y egreso antes y después de IVA, y la utilidad bruta conciliada con el flujo (#99). */
+function Metricas({ p, compacto }: { p: ProyectoDetalle; compacto?: boolean }) {
+  const t = p.totales
+  const c = p.cierre
+  const cerradas = p.cuentas.cerradas
+  const retenciones = round2(c.iva_retenido_total + c.isr_retenido_total)
+
+  if (compacto) {
+    const items = [
+      { k: 'Ingreso', v: t.cobros_sin_iva, s: `c/IVA ${fmtMoney(t.cobros_total)}`, acento: false },
+      { k: 'Egreso', v: t.pagos_neto, s: `c/IVA ${fmtMoney(t.pagos_total)}`, acento: false },
+      { k: 'Utilidad', v: c.utilidad_bruta, s: 'antes de ISR', acento: true },
+    ]
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-3 gap-2">
+          {items.map((m) => (
+            <div key={m.k} className="min-w-0 rounded-[10px] bg-row-alt p-2.5">
+              <div className="text-[10.5px] text-subtext">{m.k}</div>
+              <div className={`mt-0.5 truncate whitespace-nowrap text-[13.5px] font-bold ${m.acento ? 'text-accent' : 'text-ink'}`}>{fmtMoney(m.v)}</div>
+              <div className="truncate text-[10px] text-subtext">{m.s}</div>
+            </div>
+          ))}
+        </div>
+        <details className="rounded-[10px] bg-row-alt px-2.5 py-2">
+          <summary className="cursor-pointer text-[11.5px] font-semibold text-ink">Cómo sale la utilidad</summary>
+          <div className="mt-1.5 flex flex-col gap-px border-t border-hairline pt-1.5">
+            <LineasConciliacion p={p} />
           </div>
+        </details>
+        {!cerradas && (
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div className="flex justify-between gap-2 rounded-[10px] bg-row-alt px-2.5 py-1.5">
+              <span className="text-subtext">Por cobrar</span>
+              <span className="whitespace-nowrap font-semibold text-accent">{fmtMoney(t.por_cobrar)}</span>
+            </div>
+            <div className="flex justify-between gap-2 rounded-[10px] bg-row-alt px-2.5 py-1.5">
+              <span className="text-subtext">Por pagar</span>
+              <span className="whitespace-nowrap font-semibold text-ink">{fmtMoney(t.por_pagar)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const par = (izq: { k: string; v: number }, der: { k: string; v: number }) => (
+    <div className="mt-1.5 grid grid-cols-2 gap-2.5">
+      {[izq, der].map((x, i) => (
+        <div key={x.k} className="min-w-0">
+          <div className="text-[10.5px] text-subtext">{x.k}</div>
+          <div className={`mt-px truncate whitespace-nowrap text-[16px] ${i === 0 ? 'font-bold text-ink' : 'font-semibold text-body'}`}>{fmtMoney(x.v)}</div>
         </div>
       ))}
+    </div>
+  )
+
+  return (
+    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))' }}>
+      <div className="flex min-w-0 flex-col rounded-[10px] bg-row-alt px-3.5 py-3">
+        <div className="text-[11px] text-subtext">Ingreso · cobro al cliente</div>
+        {par({ k: 'Antes de IVA', v: t.cobros_sin_iva }, { k: 'Con IVA', v: t.cobros_total })}
+        <div className="mt-2 flex flex-col gap-px border-t border-hairline pt-1.5">
+          <Linea k="IVA 16 % cobrado" v={round2(t.cobros_total - t.cobros_sin_iva)} />
+          {!cerradas && <Linea k="Por cobrar (saldo)" v={t.por_cobrar} saldo />}
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-col rounded-[10px] bg-row-alt px-3.5 py-3">
+        <div className="text-[11px] text-subtext">Egreso · pago a proveedores</div>
+        {par({ k: 'Antes de IVA (neto)', v: t.pagos_neto }, { k: 'A transferir', v: t.pagos_total })}
+        <div className="mt-2 flex flex-col gap-px border-t border-hairline pt-1.5">
+          <Linea k="IVA 16 % de proveedores" v={c.iva_pagado} />
+          {retenciones !== 0 && <Linea k="Retenciones (IVA + ISR)" v={-retenciones} />}
+          {!cerradas && <Linea k="Por pagar (saldo)" v={t.por_pagar} saldo />}
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-col rounded-[10px] bg-row-alt px-3.5 py-3">
+        <div className="text-[11px] text-subtext">Utilidad bruta (antes de ISR)</div>
+        <div className="mt-[3px] truncate whitespace-nowrap text-[22px] font-bold text-accent">{fmtMoney(c.utilidad_bruta)}</div>
+        {round2(t.cobros_sin_iva - t.pagos_neto) === c.utilidad_bruta && (
+          <div className="truncate text-[10.5px] text-faint">
+            {fmtMoney(t.cobros_sin_iva)} − {fmtMoney(t.pagos_neto)} antes de IVA
+          </div>
+        )}
+        <div className="mt-2 flex flex-col gap-px border-t border-hairline pt-1.5">
+          <LineasConciliacion p={p} />
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { fmtMoney } from '@/lib/quotations/format'
+import { round2 } from '@/lib/shared/decimal'
 import type { TotalesPeriodo } from '@/lib/shared/cuentas/periodo-tipos'
 
 interface Tarjeta {
@@ -9,20 +10,42 @@ interface Tarjeta {
   sub: { k: string; v: number }[]
 }
 
+/**
+ * #99: la utilidad se concilia con el flujo con IVA de los mismos proyectos:
+ * flujo − IVA y retenciones a enterar = utilidad bruta. Si no cuadra (p. ej.
+ * el Total de un CFDI distinto del estimado), la diferencia va en "Ajuste".
+ */
+function utilidadSub(t: TotalesPeriodo): Tarjeta['sub'] {
+  const terceros = round2(t.impuestos.iva_a_enterar + t.impuestos.retenciones)
+  const ajuste = round2(t.utilidad.flujo - terceros - t.utilidad.bruta)
+  return [
+    { k: 'Flujo con IVA', v: t.utilidad.flujo },
+    { k: 'IVA y retenciones', v: -terceros },
+    ...(ajuste !== 0 ? [{ k: 'Ajuste', v: -ajuste }] : []),
+    { k: 'ISR estimado', v: -t.utilidad.isr_estimado },
+    { k: 'Neta estimada', v: t.utilidad.neta },
+  ]
+}
+
 function tarjetas(t: TotalesPeriodo): Tarjeta[] {
   return [
-    { k: 'Ingresos', v: t.ingresos.total, sub: [{ k: 'Cobrado', v: t.ingresos.cobrado }, { k: 'Por cobrar', v: t.ingresos.por_cobrar }] },
+    {
+      k: 'Ingresos',
+      v: t.ingresos.total,
+      nota: 'IVA incluido',
+      sub: [{ k: 'Antes de IVA', v: t.ingresos.sin_iva }, { k: 'Cobrado', v: t.ingresos.cobrado }, { k: 'Por cobrar', v: t.ingresos.por_cobrar }],
+    },
     {
       k: 'Egresos',
       v: t.egresos.total,
       nota: 'IVA incluido, menos retenciones',
-      sub: [{ k: 'Pagado', v: t.egresos.pagado }, { k: 'Por pagar', v: t.egresos.por_pagar }],
+      sub: [{ k: 'Antes de IVA (neto)', v: t.egresos.neto }, { k: 'Pagado', v: t.egresos.pagado }, { k: 'Por pagar', v: t.egresos.por_pagar }],
     },
     {
       k: 'Utilidad bruta',
       v: t.utilidad.bruta,
       acento: true,
-      sub: [{ k: 'ISR estimado', v: -t.utilidad.isr_estimado }, { k: 'Neta estimada', v: t.utilidad.neta }],
+      sub: utilidadSub(t),
     },
     {
       k: 'Impuestos',
@@ -52,7 +75,8 @@ function Desglose({ sub, nota }: { sub: Tarjeta['sub']; nota?: string }) {
 
 /**
  * Las 4 tarjetas del periodo (D4). Ingresos y Egresos llevan IVA de terceros,
- * así que Utilidad bruta no es su resta: sale del cierre (decisión 006).
+ * así que Utilidad bruta no es su resta: sale del cierre (decisión 006) y se
+ * muestra conciliada con el flujo con IVA (#99).
  */
 export function Totales({ totales, alcance }: { totales: TotalesPeriodo; alcance: string }) {
   const lista = tarjetas(totales)
