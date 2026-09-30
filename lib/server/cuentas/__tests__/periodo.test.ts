@@ -146,7 +146,9 @@ describe('construirPeriodo', () => {
     expect(r.totales.ingresos).toEqual({ total: 465160, cobrado: 238960, por_cobrar: 226200, sin_iva: 401000 })
     expect(r.totales.egresos).toEqual({ total: 93844, pagado: 21460, por_pagar: 72384, neto: 80900 })
     expect(r.totales.utilidad.bruta).toBe(26000)
-    expect(r.totales.impuestos.total).toBe(round(r.totales.impuestos.iva_a_enterar + r.totales.impuestos.retenciones + r.totales.impuestos.isr_estimado))
+    // El ISR estimado va aparte: no suma al total a declarar del periodo.
+    expect(r.totales.impuestos.total).toBe(round(r.totales.impuestos.iva_a_enterar + r.totales.impuestos.retenciones))
+    expect(r.totales.impuestos.isr_estimado).toBeGreaterThan(0)
   })
 
   it('"Todo el año" trae "Sin fecha" y "Sin proyecto" aparte, sin sumarlos a totales ni meses', () => {

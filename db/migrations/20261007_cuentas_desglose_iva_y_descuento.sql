@@ -11,6 +11,8 @@
 --    - pago: el neto del grupo o de la suelta (el subtotal del cruce fiscal).
 --    Con eso las tarjetas muestran Ingresos/Egresos sin y con IVA, y el flujo
 --    con IVA que se concilia con la utilidad bruta.
+-- 4. Impuestos del periodo: `total` = IVA a enterar + retenciones, lo que se
+--    declara al SAT. El ISR estimado viaja aparte (isr_estimado) y ya no suma.
 -- 3. cuentas_por_proyecto: cada cobro trae total e IVA de su cotización
 --    (columnas 13 y 14), para la misma derivación en TS (periodo.ts).
 --
@@ -730,7 +732,7 @@ BEGIN
         'egresos', jsonb_build_object('total', c.pagos_total, 'pagado', c.pagado, 'por_pagar', c.por_pagar, 'neto', c.pagos_neto),
         'utilidad', jsonb_build_object('bruta', t.bruta, 'isr_estimado', t.isr, 'neta', t.neta, 'flujo', t.flujo),
         'impuestos', jsonb_build_object('iva_a_enterar', t.iva, 'retenciones', t.retenciones, 'isr_estimado', t.isr,
-                                        'total', round(t.iva + t.retenciones + t.isr, 2))
+                                        'total', round(t.iva + t.retenciones, 2))
       )
       FROM tot_c c, tot_p t
     ),

@@ -317,6 +317,10 @@ cumpla el formato va a "Sin fecha".
   Lo que no cuadre (Total de un CFDI distinto del estimado, datos desfasados
   como un `monto_total` de grupo que no suma sus renglones) va en una línea
   **"Ajuste"**, nunca se esconde. Migración `20261007`.
+- **Impuestos del periodo:** el total es IVA a enterar + retenciones (lo que
+  se declara al SAT en el mes). El ISR estimado se muestra aparte, como
+  referencia, y no suma: el pago provisional real usa el coeficiente de
+  utilidad (Art. 14 LISR), no el 30 % plano.
 - **Dónde se calcula:** la RPC trae los datos por proyecto y la **ruta**
   aplica `calcularCierreProyecto` y suma, como ya hace
   `/api/cuentas/por-proyecto`. No se porta la lógica fiscal a SQL: sería un
