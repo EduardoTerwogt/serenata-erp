@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-30T21:29:49.185Z",
-  "count": 124,
+  "generated_at": "2026-09-30T21:36:09.664Z",
+  "count": 125,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -125,6 +125,7 @@
     "20261007_cuentas_desglose_iva_y_descuento.sql",
     "20261008_cuentas_pagar_grupos_invariante.sql",
     "20261009_cuentas_conceptos_base.sql",
-    "20261010_cuentas_conceptos_triggers.sql"
+    "20261010_cuentas_conceptos_triggers.sql",
+    "20261011_cuentas_conceptos_lee_tabla.sql"
   ]
 }
