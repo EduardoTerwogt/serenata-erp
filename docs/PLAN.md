@@ -107,7 +107,7 @@ calculadas.
 | Bloque | Estado |
 |---|---|
 | F2-0 Medición | Hecho (2026-09-30) |
-| A1 Tabla y refresco | Pendiente |
+| A1 Tabla y refresco | Hecho (2026-09-30): `20261009` en test y en el PR #100. Paridad leer↔derivar = 0 (2026, todos, 2025, fecha futura); leer 51–69 ms vs derivar 224–283 ms; refrescar 2 proyectos 35 ms. La derivación pasó a plpgsql + `force_custom_plan` (el plan genérico tardaba ~7.5 s). El test live de paridad pasa a A2: sin triggers la tabla se desactualiza con los specs que escriben. |
 | A2 Triggers | Pendiente |
 | A3 Lecturas | Pendiente |
 | A4 Cierre | Pendiente |
