@@ -6,8 +6,8 @@ de Cuentas, y región de Vercel)
 
 ## Estado
 
-**Iniciativa en borrador: Frente 2 de latencia de Cuentas** → `docs/PLAN.md`
-(opciones A/B/C, pendiente de aprobación).
+**Iniciativa aprobada: Frente 2 de latencia de Cuentas, opción A** → `docs/PLAN.md`
+(siguiente bloque: A1).
 
 **En curso: issue #99 (desglose antes/después de IVA) — PR #100 en borrador,
 rama `claude/wonderful-hamilton-260e2w`.** Implementado y validado (unit,

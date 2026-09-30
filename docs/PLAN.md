@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Borrador — "Frente 2: derivar `cuentas_conceptos` sin recalcularlo en cada RPC" (2026-09-30). Pendiente de aprobación del usuario.
+**Estado:** Aprobado, listo para ejecutar — "Frente 2: derivar `cuentas_conceptos` sin recalcularlo en cada RPC", **opción A** (2026-09-30).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -57,27 +57,57 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 | **B** | `MATERIALIZED VIEW` de la parte que no depende de "hoy", con `REFRESH ... CONCURRENTLY` al final de cada RPC de escritura (o por cron). | Poco código; la función actual casi se reutiliza. | Refresh completo en cada escritura (costoso con volumen); ventana de datos viejos si es por cron. |
 | **C** | Una sola RPC `cuentas_carga(p)` que deriva `cuentas_conceptos` **una vez** y devuelve periodo + resumen + opciones (+ avisos) en una respuesta. | Cambio acotado, sin estado nuevo en BD; quita 3 de 4 recálculos por carga; la paridad TS se conserva. | No acelera un endpoint aislado (cambiar de página del periodo sigue recalculando); cambia el contrato de la ruta/UI. |
 
-**Recomendación inicial:** C primero (rápido, sin estado derivado nuevo,
-ataca la causa de la contención) y medir; A solo si C no deja margen estable
-bajo el presupuesto de 800 ms.
+**Decisión (2026-09-30): opción A.** Se había recomendado C, pero la
+medición F2-0 la descartó: `cuentas-periodo-rendimiento.spec.ts` mide **cada
+endpoint por separado y en serie** (40 llamadas seguidas), así que juntar las
+RPCs no baja el tiempo que falla. De los ~400–450 ms por llamada, ~330 ms son
+`cuentas_conceptos` recalculando ~13,000 conceptos; con esa base, cualquier
+contención de la BD de test rebasa 800 ms. A deja cada lectura en filas ya
+calculadas.
 
-## Bloques propuestos (para C)
+### Diseño de A
 
-1. **F2-0 Medición base:** p95 por endpoint y por carga completa en test,
-   aislado y en paralelo, con `EXPLAIN (ANALYZE, BUFFERS)` de `cuentas_conceptos`.
-2. **F2-1 RPC combinada** `cuentas_carga(p jsonb)` + migración; la ruta y la UI
-   piden una vez por carga; `periodo` sigue existiendo para cambios de
-   página/filtro.
-3. **F2-2 Paridad y rendimiento:** extender `cuentas-paridad-sql.spec.ts` y
-   `cuentas-periodo-rendimiento.spec.ts` al contrato nuevo.
-4. **F2-3 Verificación:** 3 corridas de `live` en verde seguidas; luego
-   desbloquear el PR #100.
+- **Tabla `cuentas_conceptos_base`**: una fila por concepto con todo lo que
+  **no** depende de "hoy" (lo mismo que devuelve `cuentas_conceptos` salvo
+  `venc_dias`, el estado `vencido` y `paso_urgente`, que se derivan al leer
+  desde `fecha_vencimiento`). Llave: `key` ('c:…', 'g:…', 's:…'); índices por
+  `proyecto_key` y por `anio, mes`.
+- **Refresco por proyecto**: `cuentas_conceptos_refrescar(p_proyectos text[])`
+  borra y recalcula los conceptos de esos proyectos **reutilizando la
+  derivación actual** (misma consulta, filtrada por proyecto; principio 7,
+  sin segundo motor).
+- **Triggers AFTER … FOR EACH STATEMENT** (con tablas de transición, sin
+  duplicar proyectos) en las tablas fuente: `cotizaciones`, `proyectos`,
+  `cuentas_cobrar`, `cuentas_pagar`, `cuentas_pagar_grupos`,
+  `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`,
+  `pagos_comprobantes`, `pagos_cuentas_pagar`, `cuentas_reaperturas` y
+  `proveedores` (nombre/régimen → todos sus proyectos). Refresco síncrono en
+  la misma transacción: nunca hay datos viejos.
+- **Lecturas**: `cuentas_periodo`, `cuentas_resumen`, `cuentas_avisos_items`
+  y `cuentas_opciones` leen de la tabla y calculan lo de "hoy" al vuelo.
+- **Red de seguridad**: test live de paridad tabla ↔ función de derivación
+  (la función se conserva como referencia) y reconciliación completa en el
+  cron diario (`/api/keep-alive`) que reporta y corrige diferencias.
+
+### Bloques
+
+1. **A1 — Tabla y refresco**: migración con la tabla,
+   `cuentas_conceptos_refrescar` y el backfill completo; test de paridad
+   tabla ↔ `cuentas_conceptos`.
+2. **A2 — Triggers**: triggers en todas las tablas fuente; tests live de que
+   cada RPC de escritura (aprobar, cancelar, pagos, documentos, reasignar,
+   reabrir) deja la tabla igual a la derivación.
+3. **A3 — Lecturas**: las 4 RPCs leen de la tabla; paridad SQL↔TS y
+   rendimiento (`cuentas-periodo-rendimiento`) en verde.
+4. **A4 — Cierre**: 3 corridas de `live` seguidas en verde; aplicar en
+   producción junto con 20261007/20261008 y mergear el PR #100.
 
 ## Tracker
 
 | Bloque | Estado |
 |---|---|
-| F2-0 | Pendiente |
-| F2-1 | Pendiente |
-| F2-2 | Pendiente |
-| F2-3 | Pendiente |
+| F2-0 Medición | Hecho (2026-09-30) |
+| A1 Tabla y refresco | Pendiente |
+| A2 Triggers | Pendiente |
+| A3 Lecturas | Pendiente |
+| A4 Cierre | Pendiente |

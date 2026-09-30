@@ -81,7 +81,7 @@ ejecutados de punta a punta, quedan en
 - **Frente 2 de latencia de Cuentas** (2026-09-30): derivar
   `cuentas_conceptos` sin recalcularlo en cada RPC. Priorizado porque `live`
   falló 3 veces seguidas en el PR #100 (issue #99), que queda bloqueado hasta
-  resolverlo. Borrador y opciones en `docs/PLAN.md`.
+  resolverlo. Aprobada la opción A (tabla materializada con triggers); plan y tracker en `docs/PLAN.md`.
 
 ---
 
