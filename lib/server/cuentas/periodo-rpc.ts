@@ -10,16 +10,6 @@ import type { ParametrosPeriodo } from './periodo'
 import { decodificarCuentasAnio, type CuentasAnioRaw } from './periodo-crudo'
 import { decodificarPeriodoSql } from './periodo-sql'
 
-/**
- * Las escrituras de Cuentas solo marcan sus proyectos (20261014); antes de leer
- * de `cuentas_conceptos_base` se refrescan los marcados. Sin marcas es un
- * SELECT vacío. `cuentas_por_proyecto` lee las tablas directo y no lo necesita.
- */
-async function sincronizarConceptos(): Promise<void> {
-  const { error } = await supabaseAdmin.rpc('cuentas_conceptos_sincronizar')
-  if (error) throw error
-}
-
 /** Conceptos crudos del año; con `proyecto`, solo los de ese proyecto (el seleccionado). */
 export async function cargarCuentasAnio(anio: number, proyecto?: string): Promise<CuentasAnioRaw> {
   const { data, error } = await supabaseAdmin.rpc('cuentas_por_proyecto', proyecto ? { p_year: anio, p_proyecto: proyecto } : { p_year: anio })
@@ -32,7 +22,6 @@ export async function cargarPeriodo(
   params: Omit<ParametrosPeriodo, 'mes' | 'proyecto'> & { mes?: MesPeriodo },
   hoy: string
 ): Promise<Omit<PeriodoRespuesta, 'seleccionado'>> {
-  await sincronizarConceptos()
   const { data, error } = await supabaseAdmin.rpc('cuentas_periodo', { p: { ...params, hoy } })
   if (error) throw error
   return decodificarPeriodoSql(data)
@@ -40,7 +29,6 @@ export async function cargarPeriodo(
 
 /** Opciones de los filtros del año (E6): se piden una vez por año, no con cada periodo. */
 export async function cargarOpciones(anio: number): Promise<OpcionesFiltros> {
-  await sincronizarConceptos()
   const { data, error } = await supabaseAdmin.rpc('cuentas_opciones', { p_year: anio })
   if (error) throw error
   return data as OpcionesFiltros
@@ -48,7 +36,6 @@ export async function cargarOpciones(anio: number): Promise<OpcionesFiltros> {
 
 /** Años con pendientes y contador de avisos (S4), sobre todos los años. */
 export async function cargarResumen(hoy: string): Promise<ResumenRespuesta> {
-  await sincronizarConceptos()
   const { data, error } = await supabaseAdmin.rpc('cuentas_resumen', { p_hoy: hoy })
   if (error) throw error
   return data as ResumenRespuesta
@@ -61,7 +48,6 @@ export async function cargarResumen(hoy: string): Promise<ResumenRespuesta> {
 export async function cargarCandidatosAvisos(
   hoy: string
 ): Promise<{ items: CandidatoAviso[]; totales: Partial<Record<CategoriaAviso, number>> }> {
-  await sincronizarConceptos()
   const { data, error } = await supabaseAdmin.rpc('cuentas_avisos_items', { p_hoy: hoy, p_limite: AVISOS_POR_CATEGORIA })
   if (error) throw error
   const r = (data ?? {}) as { items?: CandidatoAviso[]; totales?: Partial<Record<CategoriaAviso, number>> }

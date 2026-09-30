@@ -63,7 +63,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireSectionMock.mockResolvedValue({ response: null })
   mocks.rpcMock.mockImplementation(async (fn: string) => {
-    if (fn === 'cuentas_conceptos_sincronizar') return { data: 0, error: null }
     if (fn === 'cuentas_periodo') return { data: periodoSql, error: null }
     if (fn === 'cuentas_por_proyecto') return { data: crudoSH061, error: null }
     if (fn === 'cuentas_resumen') return { data: { hoy: '2026-09-24', anios: [{ anio: 2026, pendientes: 1 }], avisos: 2 }, error: null }
@@ -89,7 +88,7 @@ describe('GET /api/cuentas/periodo', () => {
   it('sin año ni mes pide el año actual (CDMX) a cuentas_periodo y deja el mes a la BD (S16)', async () => {
     const res = await getPeriodo(new Request('http://x/api/cuentas/periodo?cliente=&q='))
     expect(res.status).toBe(200)
-    expect(mocks.rpcMock).toHaveBeenCalledTimes(2)
+    expect(mocks.rpcMock).toHaveBeenCalledTimes(1)
     expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_periodo', {
       p: { anio: 2026, estado: 'todas', tipo: 'todo', vista: 'proyectos', page: 1, page_size: 60, hoy: '2026-09-24' },
     })
@@ -115,21 +114,6 @@ describe('GET /api/cuentas/periodo', () => {
     expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_periodo', { p: expect.not.objectContaining({ proyecto: expect.anything() }) })
     expect(body.seleccionado).toMatchObject({ id: 'SH061', conceptos: [{ key: 'c:cc-1', estado: 'vencido' }] })
     expect(body.seleccionado.cierre).toBeDefined()
-  })
-
-  it('sincroniza la tabla de conceptos ANTES de leer el periodo (20261014)', async () => {
-    await getPeriodo(new Request('http://x/api/cuentas/periodo'))
-    const orden = mocks.rpcMock.mock.calls.map((c) => c[0])
-    expect(orden.indexOf('cuentas_conceptos_sincronizar')).toBeGreaterThanOrEqual(0)
-    expect(orden.indexOf('cuentas_conceptos_sincronizar')).toBeLessThan(orden.indexOf('cuentas_periodo'))
-  })
-
-  it('si la sincronización falla -- 500 y no sirve datos posiblemente viejos', async () => {
-    mocks.rpcMock.mockImplementation(async (fn: string) =>
-      fn === 'cuentas_conceptos_sincronizar' ? { data: null, error: { message: 'lock timeout' } } : { data: periodoSql, error: null })
-    const res = await getPeriodo(new Request('http://x/api/cuentas/periodo'))
-    expect(res.status).toBe(500)
-    expect(mocks.rpcMock).not.toHaveBeenCalledWith('cuentas_periodo', expect.anything())
   })
 
   it('error de la RPC -- 500 sin exponer el mensaje', async () => {
@@ -167,8 +151,7 @@ describe('GET /api/cuentas/avisos', () => {
 describe('GET /api/cuentas/opciones (E6)', () => {
   it('clientes y proveedores del año, de cuentas_opciones', async () => {
     const opciones = { anio: 2025, clientes: ['Modelo'], proveedores: ['Luz'] }
-    mocks.rpcMock.mockImplementation(async (fn: string) =>
-      fn === 'cuentas_opciones' ? { data: opciones, error: null } : { data: 0, error: null })
+    mocks.rpcMock.mockResolvedValueOnce({ data: opciones, error: null })
     const res = await getOpciones(new Request('http://x/api/cuentas/opciones?anio=2025'))
     expect(res.status).toBe(200)
     expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_opciones', { p_year: 2025 })
