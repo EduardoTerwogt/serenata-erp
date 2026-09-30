@@ -360,7 +360,8 @@ function totalesPeriodo(proyectos: { p: ProyectoDetalle; conceptos: ConceptoVist
       // Sin filtros de concepto: los mismos proyectos que la utilidad.
       flujo: sumar(proyectos, (x) => x.p.totales.cobros_total - x.p.totales.pagos_total),
     },
-    impuestos: { iva_a_enterar: iva, retenciones, isr_estimado: isr, total: round2(iva + retenciones + isr) },
+    // `total` = lo que se declara al SAT en el periodo; el ISR estimado va aparte y no suma.
+    impuestos: { iva_a_enterar: iva, retenciones, isr_estimado: isr, total: round2(iva + retenciones) },
   }
 }
 

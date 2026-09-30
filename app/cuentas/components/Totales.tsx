@@ -8,6 +8,8 @@ interface Tarjeta {
   acento?: boolean
   nota?: string
   sub: { k: string; v: number }[]
+  /** Renglón informativo, separado del desglose: no suma al valor de la tarjeta. */
+  aparte?: { k: string; v: number; nota: string }
 }
 
 /**
@@ -48,18 +50,20 @@ function tarjetas(t: TotalesPeriodo): Tarjeta[] {
       sub: utilidadSub(t),
     },
     {
-      k: 'Impuestos',
+      // Total = lo que se declara al SAT en el periodo. El ISR estimado no se
+      // paga en el mes (pago provisional con coeficiente, Art. 14 LISR): va aparte.
+      k: 'Impuestos a declarar',
       v: t.impuestos.total,
       sub: [
         { k: 'IVA a enterar', v: t.impuestos.iva_a_enterar },
         { k: 'Retenciones', v: t.impuestos.retenciones },
-        { k: 'ISR estimado', v: t.impuestos.isr_estimado },
       ],
+      aparte: { k: 'ISR estimado', v: t.impuestos.isr_estimado, nota: 'Referencia, no suma al total del mes' },
     },
   ]
 }
 
-function Desglose({ sub, nota }: { sub: Tarjeta['sub']; nota?: string }) {
+function Desglose({ sub, nota, aparte }: Pick<Tarjeta, 'sub' | 'nota' | 'aparte'>) {
   return (
     <div className="mt-1.5 flex flex-col gap-px border-t border-hairline pt-1.5">
       {sub.map((l) => (
@@ -69,6 +73,15 @@ function Desglose({ sub, nota }: { sub: Tarjeta['sub']; nota?: string }) {
         </div>
       ))}
       {nota && <div className="text-[10.5px] leading-[1.35] text-faint">{nota}</div>}
+      {aparte && (
+        <div className="mt-1 border-t border-dashed border-hairline pt-1.5">
+          <div className="flex justify-between gap-2.5 text-[11px] leading-[1.35]">
+            <span className="text-subtext">{aparte.k}</span>
+            <span className="whitespace-nowrap text-subtext">{fmtMoney(aparte.v)}</span>
+          </div>
+          <div className="text-[10.5px] leading-[1.35] text-faint">{aparte.nota}</div>
+        </div>
+      )}
     </div>
   )
 }
@@ -88,7 +101,7 @@ export function Totales({ totales, alcance }: { totales: TotalesPeriodo; alcance
           <div key={t.k} className="min-w-0 rounded-panel border border-hairline bg-card px-3.5 py-2.5 shadow-card">
             <div className="sn-caption">{t.k}</div>
             <div className={`mt-0.5 whitespace-nowrap text-[17px] font-bold ${t.acento ? 'text-accent' : 'text-ink'}`}>{fmtMoney(t.v)}</div>
-            <Desglose sub={t.sub} nota={t.nota} />
+            <Desglose sub={t.sub} nota={t.nota} aparte={t.aparte} />
           </div>
         ))}
       </div>
@@ -99,7 +112,7 @@ export function Totales({ totales, alcance }: { totales: TotalesPeriodo; alcance
               <span className="sn-caption">{t.k}</span>
               <span className={`whitespace-nowrap text-[17px] font-bold ${t.acento ? 'text-accent' : 'text-ink'}`}>{fmtMoney(t.v)}</span>
             </div>
-            <Desglose sub={t.sub} nota={t.nota} />
+            <Desglose sub={t.sub} nota={t.nota} aparte={t.aparte} />
           </div>
         ))}
       </div>

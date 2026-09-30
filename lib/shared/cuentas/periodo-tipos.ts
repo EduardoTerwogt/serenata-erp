@@ -96,6 +96,7 @@ export interface TotalesPeriodo {
   egresos: { total: number; pagado: number; por_pagar: number; neto: number }
   /** `flujo`: cobros − pagos con IVA de los mismos proyectos que la utilidad (#99). */
   utilidad: { bruta: number; isr_estimado: number; neta: number; flujo: number }
+  /** `total` = IVA a enterar + retenciones (a declarar al SAT); `isr_estimado` va aparte, no suma. */
   impuestos: { iva_a_enterar: number; retenciones: number; isr_estimado: number; total: number }
 }
 
