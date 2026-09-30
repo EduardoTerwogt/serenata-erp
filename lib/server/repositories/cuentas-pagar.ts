@@ -3,7 +3,6 @@ import {
   CuentaPagar,
   CuentaPagarGrupo,
   DocumentoCuentaPagar,
-  ItemCotizacion,
   Proyecto,
 } from '@/lib/types'
 import { getItemsByCotizacion } from '@/lib/server/repositories/quotations'
@@ -97,72 +96,6 @@ export async function updateCuentaPagar(id: string, updates: Partial<CuentaPagar
     .single()
   if (error) throw error
   return data as CuentaPagar
-}
-
-export async function deleteCuentasPagarByCotizacion(cotizacionId: string) {
-  const { error } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .delete()
-    .eq('cotizacion_id', cotizacionId)
-  if (error) throw error
-}
-
-export async function createCuentasPagarDesdeCotizacion(cotizacionId: string) {
-  const items = await getItemsByCotizacion(cotizacionId)
-
-  const cuentas = items
-    .filter(item => item.x_pagar > 0)
-    .map(item => ({
-      cotizacion_id: cotizacionId,
-      proyecto_id: cotizacionId,
-      item_id: item.id,
-      responsable_nombre: item.responsable_nombre || 'Sin asignar',
-      responsable_id: item.responsable_id,
-      item_descripcion: item.descripcion,
-      cantidad: item.cantidad,
-      x_pagar: item.x_pagar,
-      margen: item.margen,
-      estado: 'PENDIENTE',
-    }))
-
-  if (cuentas.length === 0) return []
-
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .insert(cuentas)
-    .select()
-  if (error) throw error
-  return data as CuentaPagar[]
-}
-
-export async function createCuentasPagarConProyecto(
-  cotizacionId: string,
-  proyectoId: string,
-  items: ItemCotizacion[]
-) {
-  const cuentas = items
-    .filter(item => item.x_pagar > 0)
-    .map(item => ({
-      cotizacion_id: cotizacionId,
-      proyecto_id: proyectoId,
-      item_id: item.id,
-      responsable_nombre: item.responsable_nombre || 'Sin asignar',
-      responsable_id: item.responsable_id,
-      item_descripcion: item.descripcion,
-      cantidad: item.cantidad,
-      x_pagar: item.x_pagar,
-      margen: item.margen,
-      estado: 'PENDIENTE',
-    }))
-
-  if (cuentas.length === 0) return []
-
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .insert(cuentas)
-    .select()
-  if (error) throw error
-  return data as CuentaPagar[]
 }
 
 export async function generarHistorialProyecto(proyectoId: string, proyecto: Proyecto) {

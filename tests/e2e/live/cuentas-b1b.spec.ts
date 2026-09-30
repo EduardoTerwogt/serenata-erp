@@ -321,6 +321,39 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
     }
   })
 
+  test('invariante del grupo: monto_total = Σ x_pagar ante cualquier escritura directa (20261008)', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    try {
+      const principal = `${fx.prefix}-P`
+      const grupoA = randomUUID()
+      const grupoB = randomUUID()
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId: grupoA, xPagar: 500 })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId: grupoA, xPagar: 300 })
+      const montoDe = async (id: string) =>
+        Number(must(await supabase.from('cuentas_pagar_grupos').select('monto_total').eq('id', id).single()).monto_total)
+
+      // Sin recalcular a mano: lo hace el trigger.
+      ok(await supabase.from('cuentas_pagar_grupos').insert({
+        id: grupoB, proyecto_id: principal, responsable_id: fx.proveedorId, estado: 'FACTURADO',
+      }))
+      const renglones = must(await supabase.from('cuentas_pagar').select('id, x_pagar').eq('grupo_id', grupoA).order('x_pagar'))
+
+      ok(await supabase.from('cuentas_pagar').update({ x_pagar: 450 }).eq('id', renglones[1].id))
+      expect(await montoDe(grupoA)).toBe(750)
+
+      ok(await supabase.from('cuentas_pagar').update({ grupo_id: grupoB }).eq('id', renglones[0].id))
+      expect(await montoDe(grupoA)).toBe(450)
+      expect(await montoDe(grupoB)).toBe(300)
+
+      ok(await supabase.from('cuentas_pagar').delete().eq('id', renglones[1].id))
+      expect(await montoDe(grupoA)).toBe(0)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
   test('cancelar una principal cancela en cascada sus complementarias (APROBADA, EMITIDA y BORRADOR) (D28, D31)', async () => {
     const supabase = getLiveSupabaseAdmin()
     const fx = await nuevoFixture(supabase)
