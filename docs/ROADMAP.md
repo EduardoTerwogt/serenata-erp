@@ -78,8 +78,10 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-Sin iniciativa definida. El rediseño de Cuentas se cerró el 2026-09-26 (ver
-"Cerrado"); lo siguiente se prioriza en Chat.
+- **Frente 2 de latencia de Cuentas** (2026-09-30): derivar
+  `cuentas_conceptos` sin recalcularlo en cada RPC. Priorizado porque `live`
+  falló 3 veces seguidas en el PR #100 (issue #99), que queda bloqueado hasta
+  resolverlo. Borrador y opciones en `docs/PLAN.md`.
 
 ---
 

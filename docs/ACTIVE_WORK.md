@@ -6,9 +6,18 @@ de Cuentas, y región de Vercel)
 
 ## Estado
 
-**No hay iniciativa activa.** `docs/PLAN.md` está vacío. El rediseño de
-Cuentas se cerró: su historia está en `docs/archive/rediseno-cuentas.md` y
-sus reglas en `docs/decisions/017-rediseno-cuentas.md`.
+**Iniciativa en borrador: Frente 2 de latencia de Cuentas** → `docs/PLAN.md`
+(opciones A/B/C, pendiente de aprobación).
+
+**En curso: issue #99 (desglose antes/después de IVA) — PR #100 en borrador,
+rama `claude/wonderful-hamilton-260e2w`.** Implementado y validado (unit,
+smoke, critical, paridad SQL/TS). Bloqueado por `live` (rendimiento de
+Cuentas, frente 2). Incluye también: utilidad con descuento, ISR fuera del
+total de impuestos, seed SEEDCU corregido y trigger del invariante de grupos
+(migración 20261008). **Migraciones 20261007 y 20261008 aplicadas solo en
+test**; aplicarlas en producción justo antes del merge (20261008 repara 2
+grupos de SH072: recalcula "Eduardo Terwogt" 5,900→3,100 y borra el grupo
+vacío "Serenata").
 
 ## Completado en la sesión 22
 
