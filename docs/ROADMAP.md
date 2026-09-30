@@ -117,14 +117,20 @@ viva en `docs/ACTIVE_WORK.md` → "Deuda técnica". La de más peso:
     - (3) Que `cuentas-periodo-rendimiento.spec.ts` no entre por
       `/cuentas`: la carga de la propia página compite con el calentamiento.
   - Ese test sigue intermitente aun con "mejor de dos rondas" (`ea4cb85`).
-  - **Sesión 22: frente 3 aplicado y confirmado con 2 corridas de `live` en
-    verde** (PR #98). El test ahora entra por `/cotizaciones` en vez de
-    `/cuentas`. Eliminó el `statement_timeout` fatal que bloqueaba el merge,
-    pero la 2.ª corrida mostró "periodo (mes)" en 866 ms en una ronda (sobre
-    presupuesto, salvado por "mejor de dos rondas") — el margen sigue
-    estrecho bajo carga real. **No se cierra esta entrada:** el frente 2
-    (cachear/restructurar `cuentas_conceptos`) queda como la mejora de fondo
-    pendiente de priorizar, sin urgencia mientras `live` no vuelva a fallar.
+  - **Sesión 22: frente 3 aplicado, 4 corridas de `live` en `main`/PR #98
+    tras el cambio.** El test ahora entra por `/cotizaciones` en vez de
+    `/cuentas`. Eliminó el `statement_timeout` fatal que bloqueaba el merge.
+    Resultado: 3 de 4 corridas en verde (una con margen cómodo, otra
+    necesitó "mejor de dos rondas"), 1 de 4 en rojo con 3 mediciones sobre
+    presupuesto (`avisos` en 1797 ms) — el margen sigue estrecho de forma
+    intermitente bajo carga real de la BD de test compartida. **No se
+    cierra esta entrada:** el frente 2 (cachear/restructurar
+    `cuentas_conceptos`) queda como la mejora de fondo, sin urgencia
+    mientras `live` no vuelva a fallar de forma consistente (no un flake
+    puntual).
+  - **Sesión 22, también:** región de Vercel movida a `sfo1` (cerca de
+    Supabase `us-west-2`), motivado por una queja de lentitud general de la
+    app, no solo Cuentas — ver `docs/decisions/018-region-vercel-sfo1.md`.
 
 ### Sueltos pendientes (2026-09-19, actualizado 2026-09-21)
 
