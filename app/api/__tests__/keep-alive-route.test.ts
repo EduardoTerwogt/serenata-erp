@@ -152,6 +152,7 @@ describe('GET /api/keep-alive', () => {
     mocks.getGoogleEnvMock.mockReturnValue({ sheetsSpreadsheetId: 'sheet-1' })
     mocks.rpcMock.mockImplementation((fnName: string) => {
       if (fnName === 'sync_estados_cuentas_cobrar_vencidas') return Promise.resolve({ data: null, error: null })
+      if (fnName === 'cuentas_conceptos_reconciliar') return Promise.resolve({ data: [], error: null })
       if (fnName === 'acquire_sheets_sync_lock') return Promise.resolve({ data: false, error: null })
       throw new Error(`RPC inesperada: ${fnName}`)
     })
@@ -171,6 +172,51 @@ describe('GET /api/keep-alive', () => {
 
     expect(response.status).toBe(200)
     expect(body.cuentas_cobrar_sync).toBe('error')
+  })
+
+  it('Frente 2 de Cuentas -- sin desfase en cuentas_conceptos_base: reporta ok y no loguea error', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.rpcMock.mockImplementation((fnName: string) => {
+      if (fnName === 'cuentas_conceptos_reconciliar') return Promise.resolve({ data: [], error: null })
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    const body = await (await GET(buildRequest('Bearer secreto-real'))).json()
+
+    expect(body.cuentas_conceptos_reconciliacion).toEqual({ estado: 'ok' })
+    expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining('cuentas_conceptos_base'), expect.anything())
+    errorSpy.mockRestore()
+  })
+
+  it('Frente 2 de Cuentas -- si la reconciliación corrige proyectos, los reporta y lo loguea sin tumbar el keep-alive', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.rpcMock.mockImplementation((fnName: string) => {
+      if (fnName === 'cuentas_conceptos_reconciliar') return Promise.resolve({ data: ['SH001', 'SH002'], error: null })
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    const response = await GET(buildRequest('Bearer secreto-real'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.cuentas_conceptos_reconciliacion).toEqual({ estado: 'corregido', proyectos: 2 })
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('se corrigieron 2 proyecto(s)'), ['SH001', 'SH002'])
+    errorSpy.mockRestore()
+  })
+
+  it('Frente 2 de Cuentas -- si la reconciliación falla, lo reporta sin tumbar el keep-alive', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.rpcMock.mockImplementation((fnName: string) => {
+      if (fnName === 'cuentas_conceptos_reconciliar') return Promise.resolve({ data: null, error: { message: 'db down' } })
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    const response = await GET(buildRequest('Bearer secreto-real'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.cuentas_conceptos_reconciliacion).toEqual({ estado: 'error' })
+    errorSpy.mockRestore()
   })
 
   it('EF-3 3C-4 -- el safety-net se salta en silencio si no adquiere el lock (sync manual en curso)', async () => {

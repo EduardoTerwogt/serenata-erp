@@ -432,6 +432,37 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
     }
   })
 
+  test('reconciliar: detecta y corrige una tabla corrompida a mano, y una segunda pasada ya no encuentra nada (ADR 019)', async () => {
+    test.setTimeout(120_000)
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    const hoy = new Date().toISOString().slice(0, 10)
+    try {
+      const principal = `${fx.prefix}-P`
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId: randomUUID(), xPagar: 1000 })
+      const diferencias = async () => Number(must(await supabase.rpc('cuentas_conceptos_diferencias', { p_year: null, p_hoy: hoy })))
+      expect(await diferencias()).toBe(0)
+
+      // Lo que ningún trigger ve: edición directa de la tabla derivada y una fila perdida.
+      ok(await supabase.from('cuentas_conceptos_base').update({ total: 999999 }).eq('proyecto_key', principal).eq('tipo', 'cobro'))
+      ok(await supabase.from('cuentas_conceptos_base').delete().eq('proyecto_key', principal).eq('tipo', 'pago'))
+      expect(await diferencias()).toBeGreaterThan(0)
+
+      const corregidos = must(await supabase.rpc('cuentas_conceptos_reconciliar')) as string[]
+      expect(corregidos).toContain(principal)
+      expect(await diferencias()).toBe(0)
+      const cobro = must(await supabase.from('cuentas_conceptos_base').select('total').eq('proyecto_key', principal).eq('tipo', 'cobro').single())
+      expect(Number(cobro.total)).toBe(2000)
+      expect(must(await supabase.from('cuentas_conceptos_base').select('key').eq('proyecto_key', principal).eq('tipo', 'pago'))).toHaveLength(1)
+
+      const segunda = must(await supabase.rpc('cuentas_conceptos_reconciliar')) as string[]
+      expect(segunda).not.toContain(principal)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
   test('cancelar una principal cancela en cascada sus complementarias (APROBADA, EMITIDA y BORRADOR) (D28, D31)', async () => {
     const supabase = getLiveSupabaseAdmin()
     const fx = await nuevoFixture(supabase)

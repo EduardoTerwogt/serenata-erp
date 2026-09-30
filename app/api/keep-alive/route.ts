@@ -91,6 +91,28 @@ export async function GET(request: Request) {
     console.error('Keep-alive: sync_estados_cuentas_cobrar_vencidas failed:', error)
   }
 
+  // Frente 2 de Cuentas (ADR 019): red de seguridad de cuentas_conceptos_base.
+  // Cada escritura la actualiza en su misma transacción, así que un desfase
+  // solo viene de TRUNCATE, triggers apagados o ediciones directas. Compara
+  // contra la derivación completa, corrige los proyectos que no coinciden y
+  // los reporta. Best-effort: un fallo aquí no afecta el resultado del keep-alive.
+  let cuentasConceptos: { estado: 'ok' | 'corregido' | 'error'; proyectos?: number } = { estado: 'ok' }
+  try {
+    const { data, error: reconciliarError } = await supabaseAdmin.rpc('cuentas_conceptos_reconciliar')
+    if (reconciliarError) throw reconciliarError
+    const corregidos = Array.isArray(data) ? (data as string[]) : []
+    if (corregidos.length > 0) {
+      cuentasConceptos = { estado: 'corregido', proyectos: corregidos.length }
+      console.error(
+        `Keep-alive: cuentas_conceptos_base estaba desactualizada, se corrigieron ${corregidos.length} proyecto(s):`,
+        corregidos.slice(0, 20)
+      )
+    }
+  } catch (error) {
+    cuentasConceptos = { estado: 'error' }
+    console.error('Keep-alive: cuentas_conceptos_reconciliar failed:', error)
+  }
+
   // EF-3 3C-4: safety-net diario de Sheets, bajo el mismo lock de 3C-3 que
   // ya usa la sincronización manual (app/api/integrations/sheets/sync-down).
   // Si no consigue el lock (sync manual en curso, o lease de otro cron
@@ -158,6 +180,7 @@ export async function GET(request: Request) {
       idempotency_keys_deleted: idempotencyKeysDeleted,
       rate_limits_deleted: rateLimitsDeleted,
       cuentas_cobrar_sync: cuentasCobrarSync,
+      cuentas_conceptos_reconciliacion: cuentasConceptos,
       sheets_sync: sheetsSync,
     },
     { status: ok ? 200 : 500 }

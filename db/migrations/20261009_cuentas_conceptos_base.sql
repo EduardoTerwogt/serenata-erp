@@ -1,32 +1,53 @@
--- Frente 2 de latencia de Cuentas, bloque A1 (docs/PLAN.md, opción A).
+-- Frente 2 de latencia de Cuentas (docs/PLAN.md, opción A; ADR 019).
 --
--- Cada RPC de Cuentas recalculaba cuentas_conceptos desde cero (~330 ms
--- sobre el dataset de carga de test); con esa base, cualquier contención de
--- la BD rebasaba el presupuesto de 800 ms del job live. La opción A guarda
--- los conceptos ya derivados en una tabla y cada lectura parte de ahí.
+-- Cada RPC de Cuentas recalculaba cuentas_conceptos desde cero (~330 ms sobre
+-- el dataset de carga de test, 13,000 conceptos); con esa base cualquier
+-- contención rebasaba el presupuesto p95 < 800 ms del job live. Ahora los
+-- conceptos ya derivados viven en una tabla que se mantiene al día con
+-- triggers, y cada lectura parte de ahí.
 --
--- Este bloque (A1) solo agrega piezas, sin cambiar ninguna lectura:
--- 1. cuentas_conceptos_derivar(p_year, p_proyectos, p_hoy): la derivación de
---    siempre (idéntica a cuentas_conceptos de 20261007), con un filtro
---    opcional por proyecto. Es plpgsql con plan_cache_mode = force_custom_plan:
---    como función SQL el plan genérico tardaba ~7.5 s sobre el año completo.
---    cuentas_conceptos(p_year, p_hoy) pasa a llamarla con p_proyectos NULL.
--- 2. Tabla cuentas_conceptos_base: una fila por concepto con todo lo que NO
---    depende de "hoy". Se deriva con p_hoy = 1900-01-01 (nada vencido); al
---    leer se recalculan venc_dias, el estado 'vencido', paso_urgente y el
---    orden de proyectos.
--- 3. cuentas_conceptos_refrescar(p_proyectos): borra y vuelve a derivar esos
---    proyectos ('sin-proyecto' incluido). Los triggers que lo llaman llegan
---    en A2; mientras tanto la tabla solo se llena con el backfill.
--- 4. cuentas_conceptos_leer(p_year, p_hoy): misma forma que cuentas_conceptos,
---    desde la tabla. Las RPCs la usan a partir de A3.
--- 5. cuentas_conceptos_diferencias(p_year, p_hoy): filas que no coinciden
---    entre leer y la derivación (test de paridad; debe dar 0).
+-- Esta migración es el estado final consolidado de lo que se construyó en
+-- varias entregas (A1 tabla y refresco, A2 triggers, A3 lecturas, más dos
+-- correcciones). Nunca corrió en producción, por eso se consolidó: la regla
+-- append-only (decisión 005) protege lo ya aplicado ahí.
+--
+-- Piezas:
+--  1. cuentas_conceptos_derivar(p_year, p_proyectos, p_hoy): la derivación de
+--     siempre (la de 20261007) con un filtro opcional por proyecto. plpgsql con
+--     plan_cache_mode = force_custom_plan: como función SQL el plan genérico
+--     tardaba ~7.5 s sobre el año completo.
+--  2. Tabla cuentas_conceptos_base: una fila por concepto con todo lo que NO
+--     depende de "hoy" (modo tabla: derivar con p_hoy NULL). Al leer se recalculan
+--     venc_dias, el estado 'vencido', paso_urgente y el orden de proyectos.
+--  3. cuentas_conceptos_leer y cuentas_conceptos(p_year, p_hoy): las cuatro
+--     RPCs de lectura (periodo, resumen, avisos, opciones) pasan por
+--     cuentas_conceptos, que ahora lee la tabla.
+--  4. Refresco por proyecto al confirmar cada escritura: los triggers de las 11
+--     tablas fuente marcan sus proyectos en cuentas_conceptos_pendientes (OLD y
+--     NEW); un constraint trigger diferido vacía la cola una vez por
+--     transacción, con un advisory lock por proyecto en orden fijo, y llama a
+--     cuentas_conceptos_refrescar. Así la tabla nunca está desactualizada.
+--     Medido en test: ~141 ms de media por commit (máx. 2.9 s).
+--  5. cuentas_conceptos_diferencias: filas que no coinciden entre la tabla y la
+--     derivación (test de paridad; debe dar 0).
+--  6. cuentas_conceptos_reconciliar(): red de seguridad diaria (keep-alive).
+--  7. Tipo cuentas_concepto_t: la forma de un concepto se define una vez.
+--     Con p_hoy NULL la derivación corre en "modo tabla": sin venc_dias ni orden
+--     (eso se calcula al leer).
+--
+-- Notas de operación:
+--  * pg_safeupdate (precargado por Supabase en las conexiones de PostgREST)
+--    rechaza DELETE sin WHERE: la cola se vacía con WHERE proyecto_key IS NOT NULL.
+--  * La cola vive y muere dentro de la misma transacción; el dedupe por xmin de
+--    cuentas_conceptos_encolar es por transacción.
+--  * Cargas masivas: SET LOCAL serenata.sin_refresco = 'on' apaga el marcado en
+--    esa transacción; al terminar, cuentas_conceptos_reconstruir().
 
 BEGIN;
 
-CREATE OR REPLACE FUNCTION public.cuentas_conceptos_derivar(p_year integer, p_proyectos text[], p_hoy date)
-RETURNS TABLE (
+-- Forma de un concepto: una sola definición para la derivación, la lectura y
+-- la entrada de las RPCs (antes se repetía en cada firma).
+CREATE TYPE public.cuentas_concepto_t AS (
   proyecto_key text, proyecto_orden bigint, proyecto_nombre text, proyecto_cliente text,
   fecha_entrega text, anio integer, mes integer, sin_fecha boolean, sin_proyecto boolean,
   margen numeric, fee numeric, iva_proyecto numeric, proyecto_reabierta boolean,
@@ -37,7 +58,10 @@ RETURNS TABLE (
   venc_dias integer, resuelto boolean, fecha_resuelto date, metodo_desconocido boolean,
   complementos jsonb, cierre_iva numeric, cierre_iva_retenido numeric, cierre_isr_retenido numeric,
   utilidad_proyecto numeric, neto numeric
-)
+);
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_derivar(p_year integer, p_proyectos text[], p_hoy date)
+RETURNS SETOF public.cuentas_concepto_t
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
@@ -309,7 +333,7 @@ BEGIN
   )
 
   -- RETURN QUERY exige tipos exactos (varchar ≠ text): casts explícitos.
-  SELECT c.pkey::text, c.p_orden::bigint, c.p_nombre::text, c.p_cliente::text, c.p_fecha::text,
+  SELECT c.pkey::text, (CASE WHEN p_hoy IS NULL THEN NULL ELSE c.p_orden END)::bigint, c.p_nombre::text, c.p_cliente::text, c.p_fecha::text,
          CASE WHEN c.p_fecha IS NOT NULL THEN substr(c.p_fecha, 1, 4)::int END,
          CASE WHEN c.p_fecha IS NOT NULL THEN substr(c.p_fecha, 6, 2)::int END,
          c.p_fecha IS NULL, c.p_sin, c.p_margen::numeric, c.p_fee::numeric, c.p_iva::numeric, c.p_reabierta,
@@ -330,7 +354,7 @@ BEGIN
          c.p_utilidad::numeric, c.v_neto::numeric
   FROM cobro_e c
   UNION ALL
-  SELECT p.pkey::text, p.p_orden::bigint, p.p_nombre::text, p.p_cliente::text, p.p_fecha::text,
+  SELECT p.pkey::text, (CASE WHEN p_hoy IS NULL THEN NULL ELSE p.p_orden END)::bigint, p.p_nombre::text, p.p_cliente::text, p.p_fecha::text,
          CASE WHEN p.p_fecha IS NOT NULL THEN substr(p.p_fecha, 1, 4)::int END,
          CASE WHEN p.p_fecha IS NOT NULL THEN substr(p.p_fecha, 6, 2)::int END,
          p.p_fecha IS NULL, p.p_sin, p.p_margen::numeric, p.p_fee::numeric, p.p_iva::numeric, p.p_reabierta,
@@ -355,36 +379,10 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.cuentas_conceptos(p_year integer, p_hoy date)
-RETURNS TABLE (
-  proyecto_key text, proyecto_orden bigint, proyecto_nombre text, proyecto_cliente text,
-  fecha_entrega text, anio integer, mes integer, sin_fecha boolean, sin_proyecto boolean,
-  margen numeric, fee numeric, iva_proyecto numeric, proyecto_reabierta boolean,
-  concepto_creado timestamptz, key text, tipo text, objetivo text, id text, proyecto_id text,
-  cotizacion_id text, folio text, contraparte text, contraparte_id text, concepto text, items integer,
-  total numeric, pagado numeric, total_estimado boolean, regimen_fiscal text, orden_pago_id text,
-  fecha_vencimiento text, estado text, paso text, paso_urgente boolean, saldo numeric,
-  venc_dias integer, resuelto boolean, fecha_resuelto date, metodo_desconocido boolean,
-  complementos jsonb, cierre_iva numeric, cierre_iva_retenido numeric, cierre_isr_retenido numeric,
-  utilidad_proyecto numeric, neto numeric
-)
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public, pg_temp
-SET work_mem = '16MB'
-AS $$
-  SELECT * FROM cuentas_conceptos_derivar(p_year, NULL, p_hoy);
-$$;
-
-CREATE TABLE IF NOT EXISTS public.cuentas_conceptos_base AS
-  SELECT proyecto_key, proyecto_nombre, proyecto_cliente, fecha_entrega, anio, mes, sin_fecha, sin_proyecto,
-  margen, fee, iva_proyecto, proyecto_reabierta, concepto_creado, key, tipo, objetivo, id, proyecto_id,
-  cotizacion_id, folio, contraparte, contraparte_id, concepto, items, total, pagado, total_estimado,
-  regimen_fiscal, orden_pago_id, fecha_vencimiento, estado, paso, saldo, resuelto, fecha_resuelto,
-  metodo_desconocido, complementos, cierre_iva, cierre_iva_retenido, cierre_isr_retenido,
-  utilidad_proyecto, neto
-  FROM cuentas_conceptos_derivar(NULL, NULL, DATE '1900-01-01')
+-- Mismas columnas que la derivación (incluye proyecto_orden, paso_urgente y
+-- venc_dias, que en modo tabla van vacíos: se calculan al leer).
+CREATE TABLE public.cuentas_conceptos_base AS
+  SELECT * FROM cuentas_conceptos_derivar(NULL, NULL, NULL)
   WITH NO DATA;
 
 ALTER TABLE public.cuentas_conceptos_base DROP CONSTRAINT IF EXISTS cuentas_conceptos_base_pkey;
@@ -394,47 +392,8 @@ CREATE INDEX IF NOT EXISTS cuentas_conceptos_base_anio_idx ON public.cuentas_con
 ALTER TABLE public.cuentas_conceptos_base ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.cuentas_conceptos_base FROM PUBLIC, anon, authenticated;
 
-CREATE OR REPLACE FUNCTION public.cuentas_conceptos_refrescar(p_proyectos text[])
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-SET work_mem = '16MB'
-AS $$
-BEGIN
-  IF p_proyectos IS NULL OR cardinality(p_proyectos) = 0 THEN
-    RETURN;
-  END IF;
-  DELETE FROM cuentas_conceptos_base WHERE proyecto_key = ANY(p_proyectos);
-  INSERT INTO cuentas_conceptos_base (proyecto_key, proyecto_nombre, proyecto_cliente, fecha_entrega, anio, mes, sin_fecha, sin_proyecto,
-  margen, fee, iva_proyecto, proyecto_reabierta, concepto_creado, key, tipo, objetivo, id, proyecto_id,
-  cotizacion_id, folio, contraparte, contraparte_id, concepto, items, total, pagado, total_estimado,
-  regimen_fiscal, orden_pago_id, fecha_vencimiento, estado, paso, saldo, resuelto, fecha_resuelto,
-  metodo_desconocido, complementos, cierre_iva, cierre_iva_retenido, cierre_isr_retenido,
-  utilidad_proyecto, neto)
-  SELECT proyecto_key, proyecto_nombre, proyecto_cliente, fecha_entrega, anio, mes, sin_fecha, sin_proyecto,
-  margen, fee, iva_proyecto, proyecto_reabierta, concepto_creado, key, tipo, objetivo, id, proyecto_id,
-  cotizacion_id, folio, contraparte, contraparte_id, concepto, items, total, pagado, total_estimado,
-  regimen_fiscal, orden_pago_id, fecha_vencimiento, estado, paso, saldo, resuelto, fecha_resuelto,
-  metodo_desconocido, complementos, cierre_iva, cierre_iva_retenido, cierre_isr_retenido,
-  utilidad_proyecto, neto
-  FROM cuentas_conceptos_derivar(NULL, p_proyectos, DATE '1900-01-01');
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION public.cuentas_conceptos_leer(p_year integer, p_hoy date)
-RETURNS TABLE (
-  proyecto_key text, proyecto_orden bigint, proyecto_nombre text, proyecto_cliente text,
-  fecha_entrega text, anio integer, mes integer, sin_fecha boolean, sin_proyecto boolean,
-  margen numeric, fee numeric, iva_proyecto numeric, proyecto_reabierta boolean,
-  concepto_creado timestamptz, key text, tipo text, objetivo text, id text, proyecto_id text,
-  cotizacion_id text, folio text, contraparte text, contraparte_id text, concepto text, items integer,
-  total numeric, pagado numeric, total_estimado boolean, regimen_fiscal text, orden_pago_id text,
-  fecha_vencimiento text, estado text, paso text, paso_urgente boolean, saldo numeric,
-  venc_dias integer, resuelto boolean, fecha_resuelto date, metodo_desconocido boolean,
-  complementos jsonb, cierre_iva numeric, cierre_iva_retenido numeric, cierre_isr_retenido numeric,
-  utilidad_proyecto numeric, neto numeric
-)
+RETURNS SETOF public.cuentas_concepto_t
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
@@ -471,6 +430,35 @@ AS $$
   LEFT JOIN ord ON ord.id = d.proyecto_key;
 $$;
 
+-- Entrada de las cuatro RPCs de lectura: lee la tabla. La versión de 20261007
+-- devolvía RETURNS TABLE; ahora devuelve el tipo compuesto.
+DROP FUNCTION IF EXISTS public.cuentas_conceptos(integer, date);
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos(p_year integer, p_hoy date)
+RETURNS SETOF public.cuentas_concepto_t
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT * FROM cuentas_conceptos_leer(p_year, p_hoy);
+$$;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_refrescar(p_proyectos text[])
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+SET work_mem = '16MB'
+AS $$
+BEGIN
+  IF p_proyectos IS NULL OR cardinality(p_proyectos) = 0 THEN
+    RETURN;
+  END IF;
+  DELETE FROM cuentas_conceptos_base WHERE proyecto_key = ANY(p_proyectos);
+  INSERT INTO cuentas_conceptos_base SELECT * FROM cuentas_conceptos_derivar(NULL, p_proyectos, NULL);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.cuentas_conceptos_diferencias(p_year integer, p_hoy date)
 RETURNS integer
 LANGUAGE sql
@@ -485,6 +473,413 @@ AS $$
         + (SELECT count(*) FROM (SELECT * FROM r EXCEPT ALL SELECT * FROM l) y))::int;
 $$;
 
+-- Red de seguridad (la corre /api/keep-alive cada día): compara la tabla con la
+-- derivación completa, refresca los proyectos que no coinciden y devuelve sus
+-- claves. Como cada escritura actualiza la tabla en su misma transacción, un
+-- desfase real solo viene de TRUNCATE, de triggers apagados o de ediciones
+-- directas: no hay falsos positivos por escrituras en curso.
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_reconciliar()
+RETURNS text[]
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+SET work_mem = '16MB'
+AS $$
+DECLARE
+  v_keys text[];
+  v_h integer;
+BEGIN
+  SELECT array_agg(DISTINCT x.proyecto_key) INTO v_keys
+  FROM (
+    (SELECT * FROM cuentas_conceptos_base EXCEPT ALL SELECT * FROM cuentas_conceptos_derivar(NULL, NULL, NULL))
+    UNION ALL
+    (SELECT * FROM cuentas_conceptos_derivar(NULL, NULL, NULL) EXCEPT ALL SELECT * FROM cuentas_conceptos_base)
+  ) x;
+  IF v_keys IS NULL THEN
+    RETURN ARRAY[]::text[];
+  END IF;
+  FOR v_h IN SELECT DISTINCT hashtext(k) FROM unnest(v_keys) AS k ORDER BY 1 LOOP
+    PERFORM pg_advisory_xact_lock(20261010, v_h);
+  END LOOP;
+  PERFORM cuentas_conceptos_refrescar(v_keys);
+  RETURN v_keys;
+END;
+$$;
+
+-- Cola de proyectos por refrescar (vive dentro de la transacción de escritura).
+CREATE TABLE IF NOT EXISTS public.cuentas_conceptos_pendientes (
+  proyecto_key text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS cuentas_conceptos_pendientes_key_idx ON public.cuentas_conceptos_pendientes (proyecto_key);
+ALTER TABLE public.cuentas_conceptos_pendientes ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.cuentas_conceptos_pendientes FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_encolar(p_keys text[])
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF current_setting('serenata.sin_refresco', true) = 'on' THEN
+    RETURN;
+  END IF;
+  INSERT INTO cuentas_conceptos_pendientes (proyecto_key)
+  SELECT DISTINCT k FROM unnest(p_keys) AS k
+  WHERE k IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM cuentas_conceptos_pendientes p
+      WHERE p.proyecto_key = k AND p.xmin::text = (txid_current() % 4294967296)::text
+    );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_procesar()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_keys text[];
+  v_h integer;
+BEGIN
+  WITH d AS (DELETE FROM cuentas_conceptos_pendientes WHERE proyecto_key IS NOT NULL RETURNING proyecto_key)
+  SELECT array_agg(DISTINCT proyecto_key) INTO v_keys FROM d;
+  IF v_keys IS NULL THEN
+    RETURN NULL;
+  END IF;
+  -- Orden fijo de adquisición: sin deadlocks entre transacciones.
+  FOR v_h IN SELECT DISTINCT hashtext(k) FROM unnest(v_keys) AS k ORDER BY 1 LOOP
+    PERFORM pg_advisory_xact_lock(20261010, v_h);
+  END LOOP;
+  PERFORM cuentas_conceptos_refrescar(v_keys);
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos_procesar ON public.cuentas_conceptos_pendientes;
+CREATE CONSTRAINT TRIGGER trigger_cuentas_conceptos_procesar
+AFTER INSERT ON public.cuentas_conceptos_pendientes
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_procesar();
+
+-- Reconstrucción completa (tras una carga masiva con sin_refresco).
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_reconstruir()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(20261010, 0);
+  PERFORM cuentas_conceptos_refrescar(
+    ARRAY(SELECT proyecto_key FROM cuentas_conceptos_base
+          UNION SELECT id FROM proyectos
+          UNION SELECT 'sin-proyecto')
+  );
+END;
+$$;
+
+-- Keys de proyecto a partir de ids de cuentas / grupos.
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_keys_cobrar(p_ids uuid[])
+RETURNS text[]
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT ARRAY(SELECT COALESCE(c.proyecto_id, 'sin-proyecto') FROM cuentas_cobrar c WHERE c.id = ANY(p_ids));
+$$;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_keys_pagar(p_ids uuid[])
+RETURNS text[]
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT ARRAY(SELECT COALESCE(c.proyecto_id, 'sin-proyecto') FROM cuentas_pagar c WHERE c.id = ANY(p_ids));
+$$;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_keys_grupos(p_ids uuid[])
+RETURNS text[]
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT ARRAY(
+    SELECT COALESCE(g.proyecto_id, 'sin-proyecto') FROM cuentas_pagar_grupos g WHERE g.id = ANY(p_ids)
+    UNION
+    SELECT COALESCE(c.proyecto_id, 'sin-proyecto') FROM cuentas_pagar c WHERE c.grupo_id = ANY(p_ids)
+  );
+$$;
+
+-- Tablas con proyecto_id propio: cuentas_cobrar, cuentas_pagar, cuentas_reaperturas.
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_trg_proyecto_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  PERFORM cuentas_conceptos_encolar(ARRAY[
+    CASE WHEN TG_OP <> 'INSERT' THEN COALESCE(OLD.proyecto_id, 'sin-proyecto') END,
+    CASE WHEN TG_OP <> 'DELETE' THEN COALESCE(NEW.proyecto_id, 'sin-proyecto') END
+  ]);
+  RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_trg_grupos()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  PERFORM cuentas_conceptos_encolar(
+    ARRAY[
+      CASE WHEN TG_OP <> 'INSERT' THEN COALESCE(OLD.proyecto_id, 'sin-proyecto') END,
+      CASE WHEN TG_OP <> 'DELETE' THEN COALESCE(NEW.proyecto_id, 'sin-proyecto') END
+    ]
+    || cuentas_conceptos_keys_grupos(ARRAY[
+      CASE WHEN TG_OP <> 'INSERT' THEN OLD.id END,
+      CASE WHEN TG_OP <> 'DELETE' THEN NEW.id END
+    ])
+  );
+  RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_trg_docs_cobrar()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_cc uuid[] := ARRAY[
+    CASE WHEN TG_OP <> 'INSERT' THEN OLD.cuentas_cobrar_id END,
+    CASE WHEN TG_OP <> 'DELETE' THEN NEW.cuentas_cobrar_id END
+  ];
+  v_pagos uuid[] := ARRAY[
+    CASE WHEN TG_OP <> 'INSERT' THEN OLD.pago_id END,
+    CASE WHEN TG_OP <> 'DELETE' THEN NEW.pago_id END
+  ];
+BEGIN
+  PERFORM cuentas_conceptos_encolar(
+    cuentas_conceptos_keys_cobrar(v_cc || ARRAY(SELECT pc.cuentas_cobrar_id FROM pagos_comprobantes pc WHERE pc.id = ANY(v_pagos)))
+  );
+  RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_trg_pagos_comprobantes()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  PERFORM cuentas_conceptos_encolar(cuentas_conceptos_keys_cobrar(ARRAY[
+    CASE WHEN TG_OP <> 'INSERT' THEN OLD.cuentas_cobrar_id END,
+    CASE WHEN TG_OP <> 'DELETE' THEN NEW.cuentas_cobrar_id END
+  ]));
+  RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_trg_docs_pagar()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  PERFORM cuentas_conceptos_encolar(
+    cuentas_conceptos_keys_pagar(ARRAY[
+      CASE WHEN TG_OP <> 'INSERT' THEN OLD.cuentas_pagar_id END,
+      CASE WHEN TG_OP <> 'DELETE' THEN NEW.cuentas_pagar_id END
+    ])
+    || cuentas_conceptos_keys_grupos(ARRAY[
+      CASE WHEN TG_OP <> 'INSERT' THEN OLD.grupo_id END,
+      CASE WHEN TG_OP <> 'DELETE' THEN NEW.grupo_id END
+    ])
+  );
+  RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_trg_pagos_pagar()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  PERFORM cuentas_conceptos_encolar(
+    cuentas_conceptos_keys_pagar(ARRAY[
+      CASE WHEN TG_OP <> 'INSERT' THEN OLD.cuenta_pagar_id END,
+      CASE WHEN TG_OP <> 'DELETE' THEN NEW.cuenta_pagar_id END
+    ])
+    || cuentas_conceptos_keys_grupos(ARRAY[
+      CASE WHEN TG_OP <> 'INSERT' THEN OLD.grupo_id END,
+      CASE WHEN TG_OP <> 'DELETE' THEN NEW.grupo_id END
+    ])
+  );
+  RETURN NULL;
+END;
+$$;
+
+-- proyectos: nombre, cliente y fecha de entrega viven en la tabla (el orden se
+-- calcula al leer). Las cuentas nuevas o borradas encolan por su cuenta.
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_trg_proyectos()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND OLD.id IS NOT DISTINCT FROM NEW.id
+     AND OLD.proyecto IS NOT DISTINCT FROM NEW.proyecto
+     AND OLD.cliente IS NOT DISTINCT FROM NEW.cliente
+     AND OLD.fecha_entrega IS NOT DISTINCT FROM NEW.fecha_entrega THEN
+    RETURN NULL;
+  END IF;
+  PERFORM cuentas_conceptos_encolar(ARRAY[
+    CASE WHEN TG_OP <> 'INSERT' THEN OLD.id END,
+    CASE WHEN TG_OP <> 'DELETE' THEN NEW.id END
+  ]);
+  RETURN NULL;
+END;
+$$;
+
+-- cotizaciones: margen/fee/iva/utilidad de las APROBADAS del proyecto y
+-- total/iva de la cotización de cada cobro (neto sin IVA). Los borradores
+-- sin cobro no encolan.
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_trg_cotizaciones()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_keys text[] := '{}';
+BEGIN
+  IF TG_OP = 'UPDATE'
+     AND OLD.id IS NOT DISTINCT FROM NEW.id
+     AND OLD.estado IS NOT DISTINCT FROM NEW.estado
+     AND OLD.es_complementaria_de IS NOT DISTINCT FROM NEW.es_complementaria_de
+     AND OLD.margen_total IS NOT DISTINCT FROM NEW.margen_total
+     AND OLD.fee_agencia IS NOT DISTINCT FROM NEW.fee_agencia
+     AND OLD.iva IS NOT DISTINCT FROM NEW.iva
+     AND OLD.utilidad_total IS NOT DISTINCT FROM NEW.utilidad_total
+     AND OLD.total IS NOT DISTINCT FROM NEW.total THEN
+    RETURN NULL;
+  END IF;
+  IF TG_OP <> 'INSERT' AND OLD.estado = 'APROBADA' THEN
+    v_keys := v_keys || COALESCE(OLD.es_complementaria_de, OLD.id);
+  END IF;
+  IF TG_OP <> 'DELETE' AND NEW.estado = 'APROBADA' THEN
+    v_keys := v_keys || COALESCE(NEW.es_complementaria_de, NEW.id);
+  END IF;
+  v_keys := v_keys || ARRAY(
+    SELECT COALESCE(c.proyecto_id, 'sin-proyecto') FROM cuentas_cobrar c
+    WHERE c.cotizacion_id IN (
+      CASE WHEN TG_OP <> 'INSERT' THEN OLD.id END,
+      CASE WHEN TG_OP <> 'DELETE' THEN NEW.id END
+    )
+  );
+  PERFORM cuentas_conceptos_encolar(v_keys);
+  RETURN NULL;
+END;
+$$;
+
+-- proveedores: nombre y régimen (retenciones) de grupos y cuentas sueltas.
+CREATE OR REPLACE FUNCTION public.cuentas_conceptos_trg_proveedores()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  PERFORM cuentas_conceptos_encolar(ARRAY(
+    SELECT COALESCE(c.proyecto_id, 'sin-proyecto') FROM cuentas_pagar c WHERE c.responsable_id = NEW.id
+    UNION
+    SELECT COALESCE(g.proyecto_id, 'sin-proyecto') FROM cuentas_pagar_grupos g WHERE g.responsable_id = NEW.id
+  ));
+  RETURN NULL;
+END;
+$$;
+
+-- cuentas_cobrar, cuentas_pagar y cuentas_pagar_grupos cambian a menudo solo de
+-- `estado` (p. ej. el cron diario sync_estados_cuentas_cobrar_vencidas) y la
+-- derivación no lo lee: INSERT y DELETE siempre marcan el proyecto, pero el
+-- UPDATE solo si cambia una columna que la derivación sí lee. Medido en test:
+-- un UPDATE de solo estado sobre 500 cobros marcaba 498 proyectos y su commit
+-- tardaba 882 ms de refresco inútil. Si la derivación pasa a leer otra columna
+-- de estas tablas, hay que agregarla aquí (ver .claude/rules/migraciones.md).
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.cuentas_cobrar;
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos_upd ON public.cuentas_cobrar;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR DELETE ON public.cuentas_cobrar
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_proyecto_id();
+CREATE TRIGGER trigger_cuentas_conceptos_upd AFTER UPDATE ON public.cuentas_cobrar
+FOR EACH ROW WHEN (ROW(OLD.id, OLD.proyecto_id, OLD.cotizacion_id, OLD.folio, OLD.cliente, OLD.cliente_id, OLD.monto_total, OLD.monto_pagado, OLD.fecha_vencimiento, OLD.fecha_factura, OLD.created_at) IS DISTINCT FROM ROW(NEW.id, NEW.proyecto_id, NEW.cotizacion_id, NEW.folio, NEW.cliente, NEW.cliente_id, NEW.monto_total, NEW.monto_pagado, NEW.fecha_vencimiento, NEW.fecha_factura, NEW.created_at))
+EXECUTE FUNCTION public.cuentas_conceptos_trg_proyecto_id();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.cuentas_pagar;
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos_upd ON public.cuentas_pagar;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR DELETE ON public.cuentas_pagar
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_proyecto_id();
+CREATE TRIGGER trigger_cuentas_conceptos_upd AFTER UPDATE ON public.cuentas_pagar
+FOR EACH ROW WHEN (ROW(OLD.id, OLD.proyecto_id, OLD.grupo_id, OLD.cotizacion_id, OLD.responsable_id, OLD.responsable_nombre, OLD.item_descripcion, OLD.x_pagar, OLD.total_a_transferir, OLD.monto_transferido, OLD.orden_pago_id, OLD.created_at) IS DISTINCT FROM ROW(NEW.id, NEW.proyecto_id, NEW.grupo_id, NEW.cotizacion_id, NEW.responsable_id, NEW.responsable_nombre, NEW.item_descripcion, NEW.x_pagar, NEW.total_a_transferir, NEW.monto_transferido, NEW.orden_pago_id, NEW.created_at))
+EXECUTE FUNCTION public.cuentas_conceptos_trg_proyecto_id();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.cuentas_reaperturas;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR UPDATE OR DELETE ON public.cuentas_reaperturas
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_proyecto_id();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.cuentas_pagar_grupos;
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos_upd ON public.cuentas_pagar_grupos;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR DELETE ON public.cuentas_pagar_grupos
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_grupos();
+CREATE TRIGGER trigger_cuentas_conceptos_upd AFTER UPDATE ON public.cuentas_pagar_grupos
+FOR EACH ROW WHEN (ROW(OLD.id, OLD.proyecto_id, OLD.responsable_id, OLD.monto_total, OLD.total_a_transferir, OLD.monto_transferido, OLD.orden_pago_id, OLD.created_at) IS DISTINCT FROM ROW(NEW.id, NEW.proyecto_id, NEW.responsable_id, NEW.monto_total, NEW.total_a_transferir, NEW.monto_transferido, NEW.orden_pago_id, NEW.created_at))
+EXECUTE FUNCTION public.cuentas_conceptos_trg_grupos();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.documentos_cuentas_cobrar;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR UPDATE OR DELETE ON public.documentos_cuentas_cobrar
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_docs_cobrar();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.pagos_comprobantes;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR UPDATE OR DELETE ON public.pagos_comprobantes
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_pagos_comprobantes();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.documentos_cuentas_pagar;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR UPDATE OR DELETE ON public.documentos_cuentas_pagar
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_docs_pagar();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.pagos_cuentas_pagar;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR UPDATE OR DELETE ON public.pagos_cuentas_pagar
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_pagos_pagar();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.proyectos;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR UPDATE OR DELETE ON public.proyectos
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_proyectos();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.cotizaciones;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER INSERT OR UPDATE OR DELETE ON public.cotizaciones
+FOR EACH ROW EXECUTE FUNCTION public.cuentas_conceptos_trg_cotizaciones();
+
+DROP TRIGGER IF EXISTS trigger_cuentas_conceptos ON public.proveedores;
+CREATE TRIGGER trigger_cuentas_conceptos AFTER UPDATE OF nombre, regimen_fiscal ON public.proveedores
+FOR EACH ROW WHEN (OLD.nombre IS DISTINCT FROM NEW.nombre OR OLD.regimen_fiscal IS DISTINCT FROM NEW.regimen_fiscal)
+EXECUTE FUNCTION public.cuentas_conceptos_trg_proveedores();
+
+
 REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_derivar(integer, text[], date) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.cuentas_conceptos_derivar(integer, text[], date) TO service_role;
 REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos(integer, date) FROM PUBLIC, anon, authenticated;
@@ -495,21 +890,29 @@ REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_leer(integer, date) FROM PUB
 GRANT EXECUTE ON FUNCTION public.cuentas_conceptos_leer(integer, date) TO service_role;
 REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_diferencias(integer, date) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.cuentas_conceptos_diferencias(integer, date) TO service_role;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_reconciliar() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.cuentas_conceptos_reconciliar() TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_encolar(text[]) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_procesar() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_reconstruir() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.cuentas_conceptos_reconstruir() TO service_role;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_keys_cobrar(uuid[]) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_keys_pagar(uuid[]) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_keys_grupos(uuid[]) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_trg_proyecto_id() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_trg_grupos() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_trg_docs_cobrar() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_trg_pagos_comprobantes() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_trg_docs_pagar() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_trg_pagos_pagar() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_trg_proyectos() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_trg_cotizaciones() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.cuentas_conceptos_trg_proveedores() FROM PUBLIC, anon, authenticated;
+
 
 -- Backfill: todos los proyectos con conceptos, más "Sin proyecto".
 TRUNCATE public.cuentas_conceptos_base;
-INSERT INTO public.cuentas_conceptos_base (proyecto_key, proyecto_nombre, proyecto_cliente, fecha_entrega, anio, mes, sin_fecha, sin_proyecto,
-  margen, fee, iva_proyecto, proyecto_reabierta, concepto_creado, key, tipo, objetivo, id, proyecto_id,
-  cotizacion_id, folio, contraparte, contraparte_id, concepto, items, total, pagado, total_estimado,
-  regimen_fiscal, orden_pago_id, fecha_vencimiento, estado, paso, saldo, resuelto, fecha_resuelto,
-  metodo_desconocido, complementos, cierre_iva, cierre_iva_retenido, cierre_isr_retenido,
-  utilidad_proyecto, neto)
-SELECT proyecto_key, proyecto_nombre, proyecto_cliente, fecha_entrega, anio, mes, sin_fecha, sin_proyecto,
-  margen, fee, iva_proyecto, proyecto_reabierta, concepto_creado, key, tipo, objetivo, id, proyecto_id,
-  cotizacion_id, folio, contraparte, contraparte_id, concepto, items, total, pagado, total_estimado,
-  regimen_fiscal, orden_pago_id, fecha_vencimiento, estado, paso, saldo, resuelto, fecha_resuelto,
-  metodo_desconocido, complementos, cierre_iva, cierre_iva_retenido, cierre_isr_retenido,
-  utilidad_proyecto, neto
-FROM cuentas_conceptos_derivar(NULL, NULL, DATE '1900-01-01');
+INSERT INTO public.cuentas_conceptos_base SELECT * FROM cuentas_conceptos_derivar(NULL, NULL, NULL);
 
 COMMIT;
