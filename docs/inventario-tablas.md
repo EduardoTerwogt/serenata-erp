@@ -250,7 +250,7 @@ Riesgo = qué pasa si sale mal: P0 dinero/impuestos, P1 función visible, P2 int
 | `usuarios` | Mantener | Distinto dominio de auth que el portal de proveedores. | — |
 | `rate_limits`, `sheets_sync_status` | Mantener | Infraestructura. | — |
 
-**Saldo (plan v2):** 40 → 38 tablas y ~20 columnas copiadas o derivadas menos. El número de tablas baja
+**Saldo (plan v3):** 40 → 37 tablas (Sheets se retira) y ~20 columnas copiadas o derivadas menos. El número de tablas baja
 poco a propósito: **la complejidad real no está en cuántas tablas hay sino en
 el estado duplicado** (H3, H4, H6, H9) y en los dos caminos de
 `cuentas_pagar`. Ahí está la ganancia.

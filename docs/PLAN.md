@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Plan v2 (auditado) — "Simplificación del modelo de datos" (2026-10-01; espera 4 respuestas y aprobación).
+**Estado:** Plan v3 (dos auditorías) — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -53,7 +53,7 @@ están conectados a la BD, nada debe romperse ni quedar suelto.**
   (Propuesta). Recomendada: **B** — un dueño por dato + el grupo como única
   obligación de pago.
 - Conclusión central: **el problema es estado duplicado, no número de
-  tablas.** 40 → 38 tablas (ver auditoría A7/A8),
+  tablas.** 40 → 37 tablas (plan v3),
   ~20 columnas copiadas o derivadas menos, y desaparece la rama "suelta" de
   `cuentas_pagar` en ~10 RPCs.
 - Evidencia de que el diseño actual ya deja divergir datos: contacto de
@@ -77,35 +77,36 @@ ni el portal de proveedores.
 - Unificar cobrar y pagar en tablas únicas (ADR 020, alternativa C).
 - Rediseñar pantallas. Solo cambia lo que la UI lee por debajo.
 - Tareas, cronograma y documentos de proyecto (D4): se conservan intactos.
+- Doble modelo de estado de `proyectos` (F14): se resuelve al diseñar Proyectos.
 
 ## Decisiones del usuario (2026-10-01)
 
 | # | Pregunta | Decisión |
 |---|---|---|
-| D1 | Alternativa | **B** (ADR 020): un dueño por dato + el grupo como única obligación de pago. |
-| D2 | Sheets → Supabase | No se usa. **Sheets queda solo de lectura**: se retira `sync-up`; `sync-down` (espejo) se mantiene. |
-| D3 | Datos de prueba en producción | **Se pueden borrar** si simplifica el trabajo. |
-| D4 | Tareas y documentos de proyecto | **Se conservan.** El módulo de Proyectos aún se está diseñando y lo que ya funciona (tablero de tareas, cronograma, 9 documentos PM) se reutilizará. Fuera de alcance: esta iniciativa no los borra ni los cambia, salvo ajustes de FK/tipos. |
-| D5 | Proyecto vs cotización | La **cotización conserva lo emitido en el PDF**; después de aprobar, el dueño de cliente/nombre/fecha/locación operativos es `proyectos`. |
-| D6 | Frente 2 | **En pausa hasta cerrar esta iniciativa**; se re-evalúa en el bloque de cierre. |
+| D1 | Alternativa | **B** (ADR 020). |
+| D2 | Sheets | No se usa: **se retira por completo** (sync-up, sync-down, setup, status, `sheets_sync_status`). |
+| D3 | Datos de prueba | **Se limpian por completo** (SH072/SH080 ya verificados, #99). |
+| D4 | Tareas y documentos de proyecto | **Se conservan**; el módulo de Proyectos sigue en diseño. |
+| D5 | Proyecto vs cotización | La cotización conserva lo emitido en el PDF; lo operativo vive en `proyectos`. |
+| D6 | Frente 2 | En pausa hasta cerrar esta iniciativa. |
+| D7 | Cómputo de Supabase | **No se sube** si genera costo extra. Test y prod siguen en Micro. |
 
 ## Fases
 
 | Fase | Qué | Salida | Estado |
 |---|---|---|---|
-| 1. Inventario | Tablas, columnas, quién las toca | `docs/inventario-tablas.md` | Hecha (2026-10-01) |
-| 2. Uso real y riesgo | Evidencia en datos, lectores, matriz por tabla | `docs/inventario-tablas.md` → "Fase 2" | Hecha (2026-10-01) |
-| 3. Propuestas | 3 alternativas con costo y riesgo | ADR 020 | Hecha (2026-10-01) |
-| 4. Decisión y plan | Decisiones D1–D6, auditoría y plan v2 | Este archivo | **Plan v2 — espera aprobación** |
-| 5. Ejecución | Bloques B0–B7 (v2) | Un PR por bloque | Pendiente |
+| 1. Inventario | Tablas, columnas, quién las toca | `docs/inventario-tablas.md` | Hecha |
+| 2. Uso real y riesgo | Evidencia y matriz | `docs/inventario-tablas.md` → "Fase 2" | Hecha |
+| 3. Propuestas | 3 alternativas | ADR 020 | Hecha |
+| 4. Decisión y plan | D1–D7, dos auditorías, plan v3 | Este archivo | **Listo para aprobar** (2 confirmaciones abajo) |
+| 5. Ejecución | B0–B6 | Un PR por bloque | Pendiente |
 
 ## Auditoría del plan v1 (2026-10-01)
 
 Revisión tipo equipo senior del plan v1 contra el código, `pg_get_functiondef`
 de producción, la BD de test y las decisiones vigentes. **Veredicto: el v1 no
 estaba listo** — tenía un error de hecho en el bloque de dinero y validaba en
-una BD de test que no es igual a producción. Las correcciones ya están
-aplicadas en el plan v2 de abajo.
+una BD de test que no es igual a producción. Corregido en v2 y conservado en v3.
 
 | # | Sev. | Hallazgo | Evidencia | Corrección en v2 |
 |---|---|---|---|---|
@@ -125,184 +126,202 @@ aplicadas en el plan v2 de abajo.
 | A14 | P2 | Cuentas mezcla de dónde saca los nombres (cotización, proyecto y texto de cobro). | `cuentas_conceptos`, `cuentas_por_proyecto`. | B5 aplica D5: proyecto y cliente operativos desde `proyectos`/`clientes`; la cotización solo para el rótulo de su folio. |
 | A15 | P2 | La latencia de Cuentas ya está al límite (`live` p95 < 800 ms, frente 3). Cambiar copias por joins agrega costo. | Deuda "job live inestable". | B5 mide `cuentas_periodo` antes/después sobre 2,203 proyectos; si pasa de +10 %, se revisan índices antes de seguir. |
 
-## Resultado esperado (v2)
+## Auditoría final (v2 → v3, 2026-10-01)
 
-- **40 → 38 tablas** (`cliente_id_backfill_clasificacion` y
-  `historial_responsable`, que pasa a vista). 37 si se retira Sheets por
-  completo (pregunta P2 abajo). El número baja poco a propósito: la ganancia es
-  **estado duplicado y reglas duplicadas**, no tablas.
-- **Un solo motor de reglas de Cuentas** (SQL) en vez de dos con paridad.
-- **Un solo camino para pagar a un proveedor** (el grupo).
-- **~17 columnas copiadas menos**, cada dato con un dueño:
+Segunda revisión, como equipo de desarrollo y de datos, con las respuestas
+D2, D3 y D7. **Veredicto: el v2 era implementable, pero con las nuevas
+decisiones quedaba trabajo innecesario y faltaban mejoras baratas con impacto
+real.** v3 las incorpora.
 
-| Dato | Dueño único | Hoy también vive en |
+| # | Tipo | Hallazgo | Evidencia | En v3 |
+|---|---|---|---|---|
+| F1 | Simplifica | Con el reinicio total (D3), producción no tiene formas legadas: desaparecen la limpieza quirúrgica, la migración de sueltas, la fila sin `item_id` y los márgenes viejos. | Ninguna ruta actual crea sueltas con proveedor (`approve_cotizacion` y `reasignar_*` reconcilian; `generar_orden_pago` y `registrar_pago_cuenta_pagar` ya rechazan conceptos sin proveedor). | B2 = script de reinicio. |
+| F2 | Riesgo | **Si se reinicia al inicio y se sigue probando en prod, la basura vuelve.** | Tus pruebas manuales hoy son en prod. | El reinicio es un script idempotente (`scripts/db/reset-transaccional.sql`): corre en B2 y **otra vez justo antes de salir a uso real**. Desde B2, las pruebas manuales van al Preview (BD de test). |
+| F3 | Simplifica | Producción sin usuarios reales: una ventana de 2–3 min entre migración y deploy no afecta a nadie. Mantener expandir/contraer en 2 PRs para Cuentas obligaba a código de transición ("dejar de escribir lo que se borrará"). | — | B5 y B6 de v2 se juntan en **un PR** (migración en prod justo antes del merge). La regla vuelve a ser obligatoria tras salir a uso real. |
+| F4 | Mejora real | **`fecha_entrega` es texto (D9) pero el 100 % de los valores ya es `AAAA-MM-DD`** (2,201/2,203 en test, el resto nulos) y la UI usa `DateField`. Cuentas valida con regex y manda lo demás a "Sin fecha". | Consulta en test y prod; `app/proyectos/[id]/page.tsx`. | `proyectos.fecha_entrega` y `cotizaciones.fecha_entrega` → `date` dentro de B5 (las funciones de Cuentas se reescriben ahí de todos modos). PostgREST devuelve `date` como `AAAA-MM-DD`: el TS no cambia de forma. Cierra la deuda D9. |
+| F5 | Mejora real | **13 columnas `timestamp` sin zona** (documentos, pagos de cobro, órdenes…). JS interpreta un timestamp sin zona como hora **local**: en CDMX (UTC−6) puede mostrar el día equivocado cerca de medianoche. Con prod vacía, convertir es trivial. | `information_schema.columns`. | Vuelve al plan (B3), revisando cada consumidor de esas columnas. Revierte A13. |
+| F6 | Integridad | `cotizaciones.estado`/`tipo` no tienen `CHECK` (las tablas de Cuentas sí); `clientes.nombre` no es único y el autosave crea clientes por nombre exacto (ya hubo "Proeba " con espacio). | `pg_constraint`; `quotations/persistence.ts`. | B3: `CHECK` de estados y tipo; índice único sobre `lower(trim(nombre))` en `clientes` y autosave que lo respeta. |
+| F7 | Rendimiento | Índice **duplicado** `idx_cotizaciones_id` = PK (cada escritura paga dos). Dos índices GIN de trigramas (`productos`, `clientes`, 3 MB) sin un solo uso desde 2026-08-25 pese a `live`. | `pg_stat_user_indexes` en test. | B3: borrar el duplicado; los GIN solo si el mapa confirma que ninguna búsqueda los usa. |
+| F8 | Operación | **Tablas que crecen sin límite:** `cotizacion_folio_reservations` (2,316 vencidas en test, nunca se purgan), `pago_operations`, `bulk_import_operations`. `idempotency_keys` y `rate_limits` sí se purgan en `/api/keep-alive`. | Consultas en test; `app/api/keep-alive/route.ts`. | B3: el cron diario existente purga reservas vencidas y operaciones de > 30 días. |
+| F9 | Mejora real | Las guardas de consistencia solo correrían durante la iniciativa; después, un desfase de dinero pasaría en silencio (principio 4). | — | B6: función `auditar_consistencia()` que corre el cron diario; si algo da ≠ 0 lo registra y lo muestra en Admin. |
+| F10 | Test | El dataset de carga de test (2,203 proyectos) tiene 7 sueltas, 2 márgenes viejos y 2 cobros con total ≠ cotización. Si se parchea a mano, deja de representar lo que produce el código nuevo. | Consultas en test. | Tras B5, **re-sembrar** test con el generador actualizado (`seed-volumen`), no parchearlo. |
+| F11 | Infra (D7) | Sin subir cómputo, `live` sigue expuesto a #107. Palancas gratuitas: quitar los 15 triggers del frente 2 de test (multiplican escrituras en 11 tablas), `VACUUM ANALYZE` tras cada migración grande, y la regla de CI vigente (un solo re-run, solo si los logs muestran la latencia de BD subiendo en todos los endpoints a la vez). Los jobs ya van en serie (`concurrency: serenata-erp-test-shared`, 1 worker). | #107; `.github/workflows/e2e.yml`. | B0 aplica las tres. La corrección del dinero no depende de `live`: la juzgan las guardas y la paridad, que son deterministas. |
+| F12 | Alcance | Retirar Sheets toca más que la ruta: `AdminSheets.tsx`, 3 RPCs de lock, `sheets_sync_status`, el paso de `load-test.yml`, `critical/admin-usuarios.spec.ts`, `docs/ENV.md`, `ARCHITECTURE.md` y el principio 1 de `CLAUDE.md`. Las credenciales de Google se quedan (Drive y Calendar). | `grep`. | B1 con esa lista completa. |
+| F13 | Externo | Los archivos de prueba viven en **Google Drive** (39 PDFs de cotización, facturas, comprobantes, 8 PDFs de órdenes), no en Supabase Storage. Borrar filas no los borra. | `archivo_url` → `drive.google.com`; `storage.objects` vacío. | B2: paso a paso para que muevas a la papelera las carpetas de prueba de `GOOGLE_DRIVE_FOLDER_ID` y `GOOGLE_DRIVE_FOLDER_ID_CUENTAS`. |
+| F14 | Alcance | `proyectos` tiene dos modelos de estado (`estado` legado y `etapa_id`): otra dispersión real. | `StatusBadge.tsx`, `projects/service.ts`. | **No se toca** (D4); queda anotado para el diseño del módulo de Proyectos. |
+| F15 | Mantener | `cuentas_cobrar.monto_total` copia `cotizaciones.total` (snapshot al aprobar). Quitarlo toca muchas funciones por poca ganancia. | 2 diferencias en test (dataset). | Se queda; pasa a ser una guarda. |
+
+**Lo que se revisó y está bien como está:** cobrar y pagar separados; dos
+capas de idempotencia (008); `ordenes_pago_conceptos` como snapshot;
+`historial_cambios_responsable_item` como bitácora; `x_pagar` sin renombrar;
+RLS sin políticas (solo `service_role`); FKs con `text` (folios de negocio).
+
+## Resultado esperado (v3)
+
+- **40 → 37 tablas**: salen `cliente_id_backfill_clasificacion`,
+  `historial_responsable` (pasa a vista) y `sheets_sync_status`.
+- **Un solo motor de reglas de Cuentas** (SQL), **una sola vía de pago** (el
+  grupo), **cada dato con un dueño**:
+
+| Dato | Dueño único | Deja de vivir en |
 |---|---|---|
-| Contacto y banco del proveedor | `proveedores` | `cuentas_pagar` (4 columnas) |
+| Contacto y banco del proveedor | `proveedores` | `cuentas_pagar` |
 | Descripción, cantidad, margen y proveedor del renglón | `items_cotizacion` | `cuentas_pagar` |
-| Estado de pago de la obligación | `cuentas_pagar_grupos` (+ desglose por renglón, A1) | columnas de la rama suelta en `cuentas_pagar` |
+| Estado de pago | `cuentas_pagar_grupos` (+ desglose por renglón, A1) | columnas de la rama suelta |
 | Cliente y nombre operativos | `proyectos` / `clientes` | texto en `cuentas_cobrar`, `historial_responsable`, `clientes.proyectos` |
-| Lo emitido en el PDF | `cotizaciones` (snapshot, D5) | — |
+| Lo emitido en el PDF | `cotizaciones` (D5) | — |
 | Reglas de dinero de Cuentas | funciones SQL | `lib/shared/cuentas/concepto.ts` |
+| Copia de consulta en Sheets | — | se retira (D2) |
 
-- Sin cambios: reglas de negocio (006), cobrar y pagar separados, idempotencia
-  en dos capas (008), órdenes y su desglose inmutable, bitácoras, catálogos,
-  Planeación, Portal, tareas y documentos de proyecto (D4), UI.
+- Además: fechas como `date` y `timestamptz` (sin errores de día por zona
+  horaria), estados con `CHECK`, clientes sin duplicados, índices limpios,
+  tablas de operación que ya no crecen sin límite y un chequeo diario de
+  consistencia del dinero.
+- Sin cambios: reglas de negocio (006), UI, Planeación, Portal, tareas y
+  documentos de proyecto, cobrar/pagar separados, idempotencia en dos capas.
 
 ## Cómo se garantiza que nada se rompa
 
-1. **Expandir → migrar lectores → verificar → contraer.** La contracción va en
-   un PR posterior que **solo** borra lo que el código ya desplegado en `main`
-   no lee; así se puede aplicar a producción antes del merge sin ventana rota.
-2. **Mapa de dependencias en cero** por nombre de columna (A10): todo el repo
-   (incluidos `select('*')`, embeds, tipos, Zod, seeds, loadtest, fixtures,
-   Sheets) + `pg_get_functiondef` + triggers + vistas + políticas + `pg_depend`.
-3. **Guardas de consistencia en 0** en test y prod antes y después de cada
-   migración: `Σ pagos vigentes = monto_pagado` (cobros, grupos y Σ hijas =
-   grupo), `grupo.monto_total = Σ x_pagar`, `cp.x_pagar = item.x_pagar ×
-   item.cantidad`, total de orden = Σ desglose, margen e importe por fórmula,
-   renglón aprobado ⇔ cuenta por pagar, cuenta con proveedor ⇒ grupo.
-4. **Funciones reescritas desde `pg_get_functiondef` de producción** (lección
-   011), una sola vez cada una (A4).
-5. **Test = prod** antes de empezar (A2) y un solo PR con BD a la vez (A3).
-6. Por bloque: test (2,203 proyectos) → PR con `test`, `fresh-db`,
-   `smoke-and-critical`, `live` verdes → prod el mismo día → guardas en 0.
-   Migraciones de datos son no-op en BD vacía (`fresh-db`).
-7. **Recorrido manual** al cerrar B5 y B6: Cotizaciones (crear, emitir,
-   aprobar, cancelar), Proyectos (editar, cerrar), Cuentas (cobro, factura de
-   proveedor, orden, pago, anulación, reapertura, reasignar suelto), Portal,
-   Proveedores (historial), Dashboard.
+1. **Mapa de dependencias en cero** por nombre de columna antes de borrar
+   cualquier cosa (A10): todo el repo + `pg_get_functiondef` + triggers +
+   vistas + políticas + `pg_depend`.
+2. **Guardas de consistencia en 0** en test y prod antes y después de cada
+   migración (lista en B0).
+3. **Funciones reescritas desde `pg_get_functiondef` de producción**, una vez
+   cada una (A4).
+4. **Test = prod** en esquema (B0) y un solo PR con cambios de BD a la vez (A3).
+5. Por bloque: test → PR con `test`, `fresh-db`, `smoke-and-critical`, `live`
+   verdes → prod el mismo día → guardas en 0. Migraciones de datos son no-op en
+   BD vacía.
+6. **Recorrido manual en el Preview** al cerrar B5: Cotizaciones (crear,
+   emitir, aprobar, cancelar), Proyectos (editar, cerrar), Cuentas (cobro,
+   factura de proveedor, orden, pago, anulación, reapertura, reasignar
+   suelto), Portal, Proveedores (historial), Dashboard.
+7. **Después de salir a uso real**, vuelve a ser obligatorio expandir y
+   contraer en PRs separados (F3).
 
-## Plan de ejecución (v2)
+## Plan de ejecución (v3)
 
-Un PR por bloque. Estimación: 5–6 sesiones.
+Un PR por bloque. Estimación: 5 sesiones.
 
-### B0 — Red de seguridad y test = prod (sin cambios en prod)
+### B0 — Red de seguridad y test = prod
 
-- `scripts/db/guardas-modelo.sql` (punto 3) y
-  `scripts/db/mapa-dependencias.mjs <tabla.columna>` (punto 2).
-- Retirar de test los objetos del frente 2 (A2) con migración de reversa
-  marcada "solo test"; anotar en `docs/archive/frente2-cuentas-conceptos-pausado.md`.
-- Comparar esquema test vs prod (tablas, columnas, funciones, triggers): igual.
-- Línea base de guardas en ambos y de latencia de `cuentas_periodo` en test.
-- Respaldo de prod antes de B2 (PITR o `pg_dump` de `public` fuera del repo).
-- **Prerrequisito del usuario:** #107 resuelto (cómputo de test).
+- `scripts/db/guardas-modelo.sql`: Σ pagos vigentes = `monto_pagado` (cobros,
+  grupos, Σ hijas = grupo); `grupo.monto_total = Σ x_pagar`;
+  `cp.x_pagar = item.x_pagar × item.cantidad`; total de orden = Σ desglose;
+  importe y margen por fórmula; `cuentas_cobrar.monto_total = cotización.total`;
+  renglón aprobado ⇔ cuenta por pagar; cuenta con proveedor ⇒ grupo.
+- `scripts/db/mapa-dependencias.mjs <tabla.columna>`.
+- Test: retirar objetos del frente 2 (migración de reversa "solo test",
+  anotada en `docs/archive/frente2-cuentas-conceptos-pausado.md`), comparar
+  esquema con prod, `VACUUM ANALYZE` (F11).
+- Línea base: guardas en ambos y latencia de `cuentas_periodo` en test.
+- Respaldo de prod con `pg_dump` (gratis) antes de B2.
 
-### B1 — Sheets (D2)
+### B1 — Retirar Sheets (D2)
 
-- Solo lectura: retirar `sync-up` (ruta, `lib`, botón de Admin, tests) y el
-  campo `readonly` de `schema.ts`. Si P2 = retiro total: también `sync-down`,
-  `setup`, `status`, `sheets_sync_status`, el paso de loadtest y la mención en
-  el principio 1 de `CLAUDE.md`.
+Lista completa de F12. Migración: borrar `sheets_sync_status` y sus 3 RPCs.
 
-### B2 — Datos de prueba (D3)
+### B2 — Reinicio de datos (D3)
 
-Según P1: **quirúrgico** (por defecto) o **reinicio** antes de salir a uso real.
-Quirúrgico, con los ids listados en el PR:
-- `TEST-EF1-*` y `TEST EF1 - BORRAR` con todo lo que cuelga.
-- Sueltas con proveedor: borrar sus pagos, documentos y órdenes de prueba
-  (incluida la de H14) **y sus archivos**, dejarlas `PENDIENTE` y agruparlas
-  con `reconcile_cuenta_pagar_grupo`.
-- La cuenta legada sin `item_id` y el cobro sin `proyecto_id`.
-- Recalcular márgenes viejos y `margen_total`.
-- Borrar `cliente_id_backfill_clasificacion` (CSV en `docs/archive/`).
-- SH072/SH080 no se tocan hasta tu verificación de #99 (A12).
+- `scripts/db/reset-transaccional.sql`, idempotente. Se niega a correr si no
+  recibe el ref del proyecto como confirmación explícita, y **se borra del
+  repo el día de la salida a uso real** (protege contra correrlo por error
+  con datos reales).
+- Vacía: cotizaciones, renglones, reservas de folio, proyectos (y sus
+  tareas/documentos, hoy en 0), todas las de Cuentas, órdenes, historiales,
+  reaperturas, correcciones, Planeación, `extraction_logs`, idempotencia,
+  rate limits; reinicia `folio_contadores`.
+- Conserva: `usuarios` y configuración (`tipos_proyecto`,
+  `tipo_proyecto_etapas`, `tipo_proyecto_tarea_default`, `service_templates`,
+  `gastos_fijos`). **Catálogos según confirmación 1.**
+- Borra `cliente_id_backfill_clasificacion` (CSV a `docs/archive/`).
+- Drive: paso a paso para ti (F13). Desde aquí, pruebas manuales en el Preview
+  (F2).
 
-### B3 — Integridad (sin cambiar escritores)
+### B3 — Integridad, tipos y operación
 
-- `cuentas_pagar.item_id` → `uuid` + FK; quitar la búsqueda por descripción de
-  `app/api/items/[id]/route.ts`.
-- FKs faltantes (`extraction_logs.proyecto_id`).
-- `CHECK` de `importe` y `margen` con tolerancia de centavo (A6).
+- `cuentas_pagar.item_id` → `uuid` + FK; quitar la búsqueda por descripción
+  de `app/api/items/[id]/route.ts`; FK en `extraction_logs.proyecto_id`.
+- `CHECK` de `importe`/`margen` con tolerancia de centavo (A6); `CHECK` de
+  `cotizaciones.estado` y `.tipo` (F6).
+- `clientes`: único por `lower(trim(nombre))` y autosave que lo respeta (F6).
+- 13 columnas → `timestamptz`, revisando cada consumidor (F5).
 - `planeacion_pendientes`: una sola fecha (`fecha_iso`).
-- `COMMENT ON COLUMN` en `cuentas_pagar.x_pagar` e `items_cotizacion.x_pagar` (A7).
+- Índices: borrar `idx_cotizaciones_id`; GIN sin uso solo si el mapa da 0 (F7).
+- `/api/keep-alive`: purga de reservas vencidas y operaciones > 30 días (F8).
+- `COMMENT ON COLUMN` en ambos `x_pagar` (A7).
 
 ### B4 — Un solo motor de Cuentas (#108)
 
-- La derivación del proyecto seleccionado (`/api/cuentas/periodo`) y del
-  detalle (`detalle-armar.ts`) pasan a SQL, como ya están periodo, resumen,
-  opciones y avisos.
-- Antes de retirar el TS, el test de paridad vigente confirma resultados
-  idénticos sobre el dataset de carga; después, `concepto.ts` queda solo con
-  tipos y presentación.
+Derivación del proyecto seleccionado y del detalle a SQL; el test de paridad
+vigente confirma resultados idénticos sobre el dataset de carga antes de
+retirar el TS. `concepto.ts` queda con tipos y presentación.
 
-### B5 — Cuentas: expandir (P0)
+### B5 — Cuentas en un PR (P0)
 
-Una reescritura por función, desde prod:
-- Pagos, facturas y órdenes solo por grupo: fuera la rama suelta de
-  `registrar_pago_cuenta_pagar`, `anular_pago_proveedor`, `baja_documento_pago`,
-  `generar_orden_pago` (`UNION ALL`), `cancelar_orden_pago`,
-  `recalcular_estado_orden_pago`, `validar_factura_proveedor`, `corregir_*`,
-  `cuentas_orden_candidatos`; el suelto "por asignar" se queda (A9).
-- Restricción `responsable_id IS NOT NULL ⇒ grupo_id IS NOT NULL`.
-- Lectores a dueños únicos: contacto desde `proveedores`; descripción,
-  cantidad, margen y proveedor desde `items_cotizacion`; proyecto y cliente
-  desde `proyectos`/`clientes` (D5, A14) en `cuentas_conceptos`,
-  `cuentas_por_proyecto`, `buscar_*`, dashboards, portal y TS.
-- `historial_responsable` → vista (A11) + lectores; `clientes.proyectos` →
-  consulta; `cancel_cotizacion` y `projects/equipo.ts`/`service.ts` dejan de
-  escribirla.
-- Dejar de escribir lo que B6 borrará (las columnas siguen existiendo).
-- Medir latencia (A15). Recorrido manual.
+Una reescritura por función, desde prod, y en la misma migración:
+- Pagos, facturas y órdenes solo por grupo (fuera la rama suelta de las RPCs
+  de A1/v2); el suelto "por asignar" y su UI se quedan (A9). Restricción
+  `responsable_id IS NOT NULL ⇒ grupo_id IS NOT NULL`.
+- Lectores a dueños únicos (contacto, renglón, proyecto/cliente según D5).
+- `fecha_entrega` → `date` en proyectos y cotizaciones; las funciones de
+  Cuentas dejan la regex (F4).
+- `historial_responsable` → vista con `security_invoker` (A11);
+  `clientes.proyectos` → consulta.
+- Borrar las columnas de la tabla "Deja de vivir en" (lista de v2: contacto,
+  copias del renglón, `responsable_nombre`, `orden_pago_id`,
+  `total_a_transferir`, `monto_transferido`, `metodo_pago`;
+  `cuenta_pagar_id` de pagos y documentos; texto de `cuentas_cobrar`;
+  `clientes.proyectos`; tabla `historial_responsable`), con el mapa en 0.
+- Seeds, generador de loadtest y tipos al día; **re-sembrar test** (F10).
+- Medir latencia antes/después (A15); recorrido manual en el Preview.
 
-### B6 — Cuentas: contraer (solo migración, mapa en 0)
+### B6 — Cierre
 
-- `cuentas_pagar`: `telefono`, `correo`, `clabe`, `banco`, `item_descripcion`,
-  `cantidad`, `margen`, `responsable_nombre`, `orden_pago_id`,
-  `total_a_transferir`, `monto_transferido`, `metodo_pago`.
-- `pagos_cuentas_pagar.cuenta_pagar_id` y `documentos_cuentas_pagar.cuentas_pagar_id`
-  (`grupo_id` pasa a `NOT NULL`).
-- `cuentas_cobrar.cliente`/`.proyecto`, `clientes.proyectos`, tabla
-  `historial_responsable`.
-- Seeds y loadtest al día; parámetros sobrantes de RPCs
-  (`p_telefono`…) fuera.
+- `auditar_consistencia()` en el cron diario, visible en Admin (F9).
+- `ARCHITECTURE.md`, `CLAUDE.md` (principio 1 sin Sheets), decisiones 006,
+  008, 011, 017; ADR 020 con el resultado real; nota de F14 para el diseño de
+  Proyectos.
+- Re-evaluar el frente 2 (D6).
+- Dejar escrito el checklist de salida a uso real: correr el reinicio por
+  última vez, guardas en 0, borrar el script de reinicio.
+- Cerrar #105, #106, #107 (con lo aprendido), #108, #109; archivar este plan.
 
-### B7 — Cierre
+## Confirmaciones pendientes (no bloquean B0 ni B1)
 
-- `ARCHITECTURE.md`; decisiones 006 (glosario `x_pagar`), 008 (dos capas),
-  011, 017 (D21 y sueltas); ADR 020 con el resultado real.
-- Re-evaluar el frente 2 (D6) sobre el modelo nuevo.
-- `timestamptz` a deuda técnica (A13). Cerrar #105, #106, #108, #109; archivar
-  este plan.
-
-## Preguntas abiertas (v2)
-
-1. **Datos de prueba:** ¿limpieza quirúrgica (B2 por defecto) o **reiniciar
-   los datos transaccionales de producción** (cotizaciones, proyectos, cuentas,
-   órdenes; se conservan clientes, proveedores, productos, plantillas y
-   usuarios) justo antes de salir a uso real? El reinicio es más simple y deja
-   cero formas legadas, pero borra tus casos de prueba manual.
-2. **Sheets:** ¿solo lectura (D2) o retirarlo por completo, ya que no se usa?
-   Retirarlo evita mantener el espejo en cada bloque y quita una tabla.
-3. **#107:** decidir el cómputo de la BD de test (Dashboard → Reports →
-   Database) — sin eso `live` no es juez confiable.
-4. **#99:** confirmar SH072 y SH080 en la app para poder limpiar sin miedo.
+1. **Catálogos en el reinicio (B2):** recomendación: conservar `usuarios`
+   y configuración, y **borrar también** clientes, proveedores y productos,
+   que hoy son de prueba ("Prueba", "FORMATO PDF", "TEST EF1 - BORRAR",
+   productos autoguardados). Si ya cargaste proveedores o clientes reales,
+   dime cuáles se quedan.
+2. **Folios:** tras el reinicio la siguiente cotización vuelve a **SH001**
+   y los contadores CC/CP a 1. ¿Correcto?
 
 ## Riesgos
 
-- **P0:** B5 cambia el flujo de pago a proveedores. Mitigación: B2 deja una
-  sola forma de datos; B4 deja un solo motor; guardas en 0 (incluida Σ hijas =
-  grupo, A1); `live` sobre 2,203 proyectos; respaldo de B0.
-- **P1:** borrar algo que aún se lee. Mitigación: mapa por nombre de columna
-  (A10) y contracción separada (B6).
-- **P1:** test distinto de prod o compartido. Mitigación: B0 y regla de A3.
-- **P1:** latencia de Cuentas. Mitigación: medición en B5 (A15).
-- **P2:** módulo de Proyectos en diseño (D4): solo FKs y lectores, nunca
-  columnas del tablero ni de los documentos PM.
+- **P0:** B5 cambia el flujo de pago a proveedores. Mitigación: datos
+  reiniciados (una sola forma), un solo motor (B4), guardas deterministas,
+  `live` sobre 2,203 proyectos re-sembrados, respaldo de B0.
+- **P1:** `live` intermitente por cómputo Micro (#107, D7). Mitigación: F11; la
+  corrección del dinero la deciden guardas y paridad, no la latencia.
+- **P1:** borrar algo que aún se lee. Mitigación: mapa por nombre de columna.
+- **P1:** correr el reinicio con datos reales. Mitigación: guarda del script
+  (B2) y respaldo.
+- **P2:** módulo de Proyectos en diseño (D4, F14): solo FKs, tipos y lectores.
 
 ## Tracker
 
 | Bloque | Estado |
 |---|---|
-| Entrada de iniciativa y pausa del frente 2 | Hecho (2026-10-01) |
 | Fases 1–3 (#105, #106) | Hecho (2026-10-01) |
-| Fase 4 — Decisiones D1–D6 | Hecho (2026-10-01) |
-| Auditoría del plan v1 → v2 | Hecho (2026-10-01) |
-| Fase 4 — Preguntas v2 y aprobación | **Pendiente del usuario** |
+| Decisiones D1–D7 | Hecho (2026-10-01) |
+| Auditoría v1 → v2 y final v2 → v3 | Hecho (2026-10-01) |
+| Aprobación del plan v3 | **Pendiente del usuario** |
 | B0 Red de seguridad y test = prod | Pendiente |
-| B1 Sheets | Pendiente |
-| B2 Datos de prueba | Pendiente |
-| B3 Integridad | Pendiente |
+| B1 Retirar Sheets | Pendiente |
+| B2 Reinicio de datos | Pendiente (confirmaciones 1 y 2) |
+| B3 Integridad, tipos y operación | Pendiente |
 | B4 Un solo motor de Cuentas (#108) | Pendiente |
-| B5 Cuentas: expandir | Pendiente |
-| B6 Cuentas: contraer | Pendiente |
-| B7 Cierre | Pendiente |
+| B5 Cuentas en un PR | Pendiente |
+| B6 Cierre | Pendiente |

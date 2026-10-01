@@ -1,9 +1,9 @@
 # 020 — Simplificación del modelo de datos: un dueño por dato
 
-**Estado: Aceptada — alternativa B** (2026-10-01, #106). Decisiones D1–D6 y
-plan por bloques en `docs/PLAN.md`. Sheets queda solo de lectura (D2); los
-datos de prueba de producción se pueden borrar (D3); tareas y documentos de
-proyecto se conservan (D4).
+**Estado: Aceptada — alternativa B** (2026-10-01, #106). Decisiones D1–D7 y
+plan v3 (dos auditorías) en `docs/PLAN.md`. Sheets se retira (D2); los datos
+de prueba de producción se reinician (D3); tareas y documentos de proyecto se
+conservan (D4); el cómputo no se sube (D7).
 
 ## Contexto
 
@@ -102,7 +102,7 @@ Una tabla `cuentas` con dirección (cobro/pago), una de `pagos`, una de
 
 ## Consecuencias
 
-- Sheets deja de ser vía de escritura: se retira `sync-up` (D2).
+- Se retira la integración con Google Sheets (D2).
 - El frente 2 (decisión 019) espera a B4: su diseño depende de cuántas tablas
   alimenten los conceptos.
 - Los documentos que describen el esquema (`ARCHITECTURE.md`,
