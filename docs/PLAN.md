@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Plan v5 — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar, sin preguntas abiertas).
+**Estado:** Plan v6 — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar, sin preguntas abiertas).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -53,7 +53,7 @@ están conectados a la BD, nada debe romperse ni quedar suelto.**
   (Propuesta). Recomendada: **B** — un dueño por dato + el grupo como única
   obligación de pago.
 - Conclusión central: **el problema es estado duplicado, no número de
-  tablas.** 40 → 33 tablas (plan v5),
+  tablas.** 40 → 33 tablas (plan v6),
   ~20 columnas copiadas o derivadas menos, y desaparece la rama "suelta" de
   `cuentas_pagar` en ~10 RPCs.
 - Evidencia de que el diseño actual ya deja divergir datos: contacto de
@@ -213,7 +213,23 @@ operativos.** v5 los corrige.
 | G9 | Limpieza | `buscar_cuentas_pagar` ya no la llama nadie (la reemplazó `buscar_cuentas_pagar_grupos`). | Ninguna referencia en código ni en otras funciones. | Se borra en B5b. |
 | G10 | Índices | 37 índices sin uso según el advisor de prod (prod casi no tiene tráfico: no es evidencia). | Advisor `unused_index`. | Solo se borran los que tampoco se usan en **test** con carga real (`pg_stat_user_indexes`), más el duplicado `idx_cotizaciones_id` (F7). |
 
-## Resultado esperado (v5)
+## Auditoría final 3 (v5 → v6, 2026-10-01): "sin perder funciones"
+
+Cuarta revisión, enfocada en que **ninguna función existente se pierda** y en
+simplificar la ejecución. **Veredicto: v5 estaba listo salvo tres cosas que
+podían costar funciones o datos.** v6 las corrige. No quedan simplificaciones
+de tablas con ganancia real: el barrido de columnas restantes (todas las de las
+33 tablas) encontró lectores para cada una.
+
+| # | Tipo | Hallazgo | Evidencia | En v6 |
+|---|---|---|---|---|
+| H1 | **Protección de funciones** | Faltaba un **oráculo de "antes = después"**. Las guardas prueban que el dinero cuadra, no que cada pantalla muestre lo mismo. | — | B0 guarda una **foto dorada** de las salidas de todas las RPCs de lectura (`cuentas_periodo`/`resumen`/`avisos_items`/`opciones`/`orden_candidatos`, `buscar_*`, `dashboard_*`, `proveedor_documentos_resumen`) sobre el dataset de test, por cada año. Tras cada bloque se compara: **diferencia 0**, salvo cambios intencionales listados en el PR (formato de `timestamptz`). El re-sembrado de test se hace **después** de la última comparación de B5b. |
+| H2 | **Orden** | B4 (un solo motor) **destruía el mejor oráculo antes del cambio más riesgoso**: el test de paridad SQL vs TS (`cuentas-paridad-sql.spec.ts`) detecta cualquier error al reescribir `cuentas_conceptos` en B5b. Además, el ahorro que v2 le atribuía era menor: el motor TS consume la salida de `cuentas_por_proyecto`, cuyo contrato B5b conserva. | `periodo-crudo.ts`, `periodo-rpc.ts`. | B4 pasa **después de B5b** (ahora B6) y queda como mejora independiente: si se detiene ahí, la iniciativa ya cumplió su meta. |
+| H3 | **Riesgo de datos** | **Drive busca carpetas por nombre** (`ensureFolderPath`: `name='…' and '<padre>' in parents`). Al reiniciar folios, la cotización real SH001 y los complementos de `/Por Cobrar/CC-2026-001` caerían **en las carpetas de prueba** con el mismo nombre. | `lib/integrations/google/drive.ts:259`; rutas `subir-factura`, `subir-complemento`, `registrar-pago`. | Limpiar Drive de prod es **condición obligatoria antes de correr el reinicio** (B2), no un pendiente opcional, y se repite en el checklist de salida a uso real. |
+| H4 | Simplificación | B1 (retiros) y B3 (integridad) son de bajo riesgo, no tocan funciones de Cuentas y no dependen entre sí. | — | Se juntan en un PR. El script de reinicio viaja en el PR de B0 y se ejecuta entre B0 y ese PR. **6 PRs en vez de 7.** |
+| H5 | Verificación | Funciones que el plan quita o cambia de forma, revisadas una por una contra lo que hoy usa la app. | Barrido de columnas y RPCs. | Sin pérdida: Sheets y Planeación (retiros aprobados, D2/D8); plantillas siguen accesibles (E2); folios CC/CP se quedan (E3); Calendar se conserva (D4); historial de proveedores da los mismos números (vista, A11); el Dashboard y los KPIs conservan el desglose por renglón (A1); el portal sigue mostrando descripción y montos (join, A10); "Sin asignar" sigue reasignable (A9). |
+
+## Resultado esperado (v6)
 
 - **40 → 33 tablas** (−18 %): salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
@@ -262,11 +278,12 @@ operativos.** v5 los corrige.
 7. **Después de salir a uso real**, vuelve a ser obligatorio expandir y
    contraer en PRs separados (F3).
 
-## Plan de ejecución (v5)
+## Plan de ejecución (v6)
 
-Un PR por bloque (B5 son dos). Estimación: 5–6 sesiones.
+6 PRs: B0 · B1+B3 · B5a · B5b · B6 (motor único) · B7 (cierre); B2 es la
+ejecución del script de reinicio. Estimación: 5 sesiones.
 
-### B0 — Red de seguridad, test = prod e índices
+### B0 — Red de seguridad, test = prod, índices y foto dorada
 
 - `scripts/db/guardas-modelo.sql`: Σ pagos vigentes = `monto_pagado` (cobros,
   grupos, Σ hijas = grupo); `grupo.monto_total = Σ x_pagar`;
@@ -285,19 +302,13 @@ Un PR por bloque (B5 son dos). Estimación: 5–6 sesiones.
   justificado con `EXPLAIN` de las consultas más caras de `pg_stat_statements`.
   Medir `live` 3 veces antes y después (#107).
 - Línea base: guardas en ambos y latencia de `cuentas_periodo` en test.
+- **Foto dorada (H1):** `scripts/db/foto-dorada.mjs` guarda en JSON la salida
+  de las RPCs de lectura por año sobre el dataset de test, y compara contra
+  una foto nueva (diferencias campo por campo).
+- Script de reinicio (B2) incluido en este PR.
 - **Respaldo (G7):** `supabase db dump` de prod (paso a paso para ti) antes de
   B2 y antes de B5a.
 - **Drive en Preview (G8):** pasos para que lo actives con la cuenta de pruebas.
-
-### B1 — Retirar Sheets y Planeación (D2, D8)
-
-- Sheets: lista completa de F12; migración borra `sheets_sync_status` y sus 3 RPCs.
-- Planeación: código, rutas, UI, navegación, proxy, permisos y tests de E1;
-  plantillas pasan a la sección `cotizaciones` (E2) **en el mismo PR**, antes
-  de quitar `planeacion` de `AppSection`. Las 3 tablas se borran en B5b, junto
-  con la reescritura de `cancel_cotizacion` (G4).
-- `docs/ROADMAP.md`, `ARCHITECTURE.md`, `CLAUDE.md` (encabezado: "extracción
-  AI de eventos") al día.
 
 ### B2 — Reinicio de datos (D3)
 
@@ -320,10 +331,23 @@ Un PR por bloque (B5 son dos). Estimación: 5–6 sesiones.
 - **Solo producción.** La BD de test conserva su dataset de carga (2,203
   proyectos); en B5 se re-siembra con el mismo volumen (F10).
 - Borra `cliente_id_backfill_clasificacion` (CSV a `docs/archive/`).
-- Drive: paso a paso para ti (F13). Desde aquí, pruebas manuales en el Preview
-  (F2).
+- **Antes de ejecutar (H3):** carpetas de prueba de Drive de prod en la
+  papelera (paso a paso para ti, F13); sin eso no se corre. Desde aquí, pruebas
+  manuales en el Preview (F2).
 
-### B3 — Integridad y operación (sin tocar funciones de Cuentas)
+### B1 + B3 (un PR) — Retiros e integridad
+
+**Retiros (D2, D8):**
+
+- Sheets: lista completa de F12; migración borra `sheets_sync_status` y sus 3 RPCs.
+- Planeación: código, rutas, UI, navegación, proxy, permisos y tests de E1;
+  plantillas pasan a la sección `cotizaciones` (E2) **en el mismo PR**, antes
+  de quitar `planeacion` de `AppSection`. Las 3 tablas se borran en B5b, junto
+  con la reescritura de `cancel_cotizacion` (G4).
+- `docs/ROADMAP.md`, `ARCHITECTURE.md`, `CLAUDE.md` (encabezado: "extracción
+  AI de eventos") al día.
+
+**Integridad y operación** (sin tocar funciones de Cuentas):
 
 - `CHECK` de `importe`/`margen` con tolerancia de centavo (A6); `CHECK` de
   `cotizaciones.estado` y `.tipo` (F6); `CHECK` de formato de
@@ -338,15 +362,6 @@ Un PR por bloque (B5 son dos). Estimación: 5–6 sesiones.
 - Índices: borrar `idx_cotizaciones_id`; los sin uso solo con evidencia de test (G10).
 - `/api/keep-alive`: purga de reservas de folio vencidas (F8).
 - `COMMENT ON COLUMN` en ambos `x_pagar` (A7).
-
-### B4 — Un solo motor de Cuentas (#108)
-
-Si pasarlo a SQL exige cambiar `cuentas_conceptos`, ese cambio se hace en B5b
-(G4) y B4 solo agrega la función de detalle.
-
-Derivación del proyecto seleccionado y del detalle a SQL; el test de paridad
-vigente confirma resultados idénticos sobre el dataset de carga antes de
-retirar el TS. `concepto.ts` queda con tipos y presentación.
 
 ### B5a — Escrituras de dinero solo por grupo (P0)
 
@@ -385,10 +400,19 @@ Funciones disjuntas de B5a: `approve_cotizacion`, `reasignar_responsable_cuenta_
   documentos; texto de `cuentas_cobrar`; `clientes.proyectos`), tablas
   `historial_responsable` y de Planeación (E1), función `buscar_cuentas_pagar`
   (G9). Mapa en 0.
+- Foto dorada sin diferencias (H1) **antes** de re-sembrar.
 - Seeds, generador de loadtest y tipos al día; **re-sembrar test** (F10).
 - Medir latencia antes/después (A15); recorrido manual completo en el Preview.
 
-### B6 — Cierre
+### B6 — Un solo motor de Cuentas (#108), después de B5b (H2)
+
+Independiente: la iniciativa ya cumplió su meta si se detiene antes.
+
+Derivación del proyecto seleccionado y del detalle a SQL; el test de paridad
+vigente confirma resultados idénticos sobre el dataset de carga antes de
+retirar el TS. `concepto.ts` queda con tipos y presentación.
+
+### B7 — Cierre
 
 - `auditar_consistencia()` en el cron diario, visible en Admin (F9).
 - `ARCHITECTURE.md`, `CLAUDE.md` (principio 1 sin Sheets), decisiones 006,
@@ -396,7 +420,8 @@ Funciones disjuntas de B5a: `approve_cotizacion`, `reasignar_responsable_cuenta_
   Proyectos.
 - Re-evaluar el frente 2 (D6) — con los índices de B0 puede que ya no haga falta.
 - Checklist de salida a uso real: correr el reinicio por última vez, guardas
-  en 0, borrar el script de reinicio y **decidir la estrategia de respaldo**
+  en 0, carpetas de prueba de Drive fuera (H3), borrar el script de reinicio y
+  **decidir la estrategia de respaldo**
   (plan Free sin respaldos, G7).
 - Cerrar #105, #106, #107 (con lo aprendido), #108, #109; archivar este plan.
 
@@ -411,7 +436,8 @@ Funciones disjuntas de B5a: `approve_cotizacion`, `reasignar_responsable_cuenta_
 ## Riesgos
 
 - **P0:** B5 cambia el flujo de pago a proveedores. Mitigación: datos
-  reiniciados (una sola forma), un solo motor (B4), guardas deterministas,
+  reiniciados (una sola forma), paridad SQL/TS como oráculo (H2), foto dorada
+  (H1), guardas deterministas,
   `live` sobre 2,203 proyectos re-sembrados, respaldo de B0.
 - **P0 (fuera de alcance, antes de uso real):** plan Free sin respaldos (G7).
 - **P1:** `live` intermitente por cómputo (#107, D7). Mitigación: índices de B0 (G1), F11; la
@@ -429,13 +455,10 @@ Funciones disjuntas de B5a: `approve_cotizacion`, `reasignar_responsable_cuenta_
 | Decisiones D1–D7 | Hecho (2026-10-01) |
 | Auditoría v1 → v2 y final v2 → v3 | Hecho (2026-10-01) |
 | Aprobación del plan v3 | **Pendiente del usuario** |
-| B0 Red de seguridad, test = prod e índices | Pendiente |
-| Exploración adicional (v4) | Hecho (2026-10-01) |
-| Auditoría final 2 (v5) | Hecho (2026-10-01) |
-| B1 Retirar Sheets y Planeación | Pendiente |
-| B2 Reinicio de datos | Pendiente |
-| B3 Integridad, tipos y operación | Pendiente |
-| B4 Un solo motor de Cuentas (#108) | Pendiente |
+| B0 Red de seguridad, test = prod, índices y foto dorada | Pendiente |
+| B2 Reinicio de datos (script; tras limpiar Drive) | Pendiente |
+| B1 + B3 Retiros e integridad | Pendiente |
 | B5a Escrituras de dinero solo por grupo | Pendiente |
 | B5b Lecturas, copias y borrado | Pendiente |
-| B6 Cierre | Pendiente |
+| B6 Un solo motor de Cuentas (#108) | Pendiente |
+| B7 Cierre | Pendiente |
