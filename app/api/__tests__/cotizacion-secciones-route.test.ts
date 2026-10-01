@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCotizacionByIdMock: vi.fn(),
-  runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
+  resolverClienteIdMock: vi.fn(async () => 'cli-1'),
   rpcMock: vi.fn(),
   // EF-2 1D-1: general/route.ts y totales/route.ts ahora importan `after`
   // de next/server para agendar el broadcast -- sin este mock, el `after()`
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({ getCotizacionById: mocks.getCotizacionByIdMock }))
 vi.mock('@/lib/server/quotations/persistence', () => ({
-  runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
+  resolverClienteId: mocks.resolverClienteIdMock,
 }))
 vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 vi.mock('next/server', () => ({ after: mocks.afterMock }))
@@ -63,6 +63,21 @@ describe('PATCH /api/cotizaciones/[id]/general', () => {
     expect(fn).toBe('patch_cotizacion_general')
     expect(args).toEqual({ p_cotizacion_id: 'SH001', p_patch: { proyecto: 'Nuevo nombre' }, p_base: null })
     expect(JSON.stringify(args)).not.toContain('items')
+  })
+
+  it('resuelve el cliente por nombre ANTES de guardar y manda su id en el mismo patch', async () => {
+    await PATCH_GENERAL(req('general', { cliente: 'Nuevo Cliente', cliente_id: null }), { params })
+
+    expect(mocks.resolverClienteIdMock).toHaveBeenCalledWith('Nuevo Cliente')
+    expect(mocks.rpcMock.mock.calls[0][1].p_patch).toEqual({ cliente: 'Nuevo Cliente', cliente_id: 'cli-1' })
+  })
+
+  it('no pisa un cliente_id explícito (selector) ni resuelve si solo cambia el proyecto', async () => {
+    await PATCH_GENERAL(req('general', { cliente: 'ACME', cliente_id: 'cli-9' }), { params })
+    expect(mocks.rpcMock.mock.calls[0][1].p_patch).toEqual({ cliente: 'ACME', cliente_id: 'cli-9' })
+
+    await PATCH_GENERAL(req('general', { proyecto: 'Otro' }), { params })
+    expect(mocks.resolverClienteIdMock).not.toHaveBeenCalled()
   })
 
   it('agenda (after()) y emite general_confirmed tras el commit', async () => {

@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import {
   deleteCotizacion,
@@ -9,7 +10,8 @@ import { formatSupabaseError } from '@/lib/quotations/rpc-utils'
 import {
   buildUpdateCotizacionPayload,
   createOrReplaceCotizacion,
-  runQuotationNonCriticalAutosaves,
+  autosaveProductosCatalogo,
+  resolverClienteId,
   saveNotas,
 } from '@/lib/server/quotations/persistence'
 import { CotizacionUpdateSchema, validate } from '@/lib/validation/schemas'
@@ -53,10 +55,16 @@ export async function PUT(
     const { items, porcentaje_fee, iva_activo, descuento_tipo, descuento_valor, ...cotizacionData } = parsed
     const inputItems = Array.isArray(items) ? (items as Partial<ItemCotizacion>[]) : null
 
+    // Cliente resuelto antes de guardar (id dentro del payload de save_cotizacion).
+    const clienteId =
+      cotizacionData.cliente_id ||
+      (cotizacionData.cliente === previousCotizacion.cliente ? previousCotizacion.cliente_id : null) ||
+      (await resolverClienteId(cotizacionData.cliente))
+
     const payload = await buildUpdateCotizacionPayload(
       id,
       previousCotizacion,
-      cotizacionData as Record<string, unknown>,
+      { ...cotizacionData, cliente_id: clienteId ?? undefined } as Record<string, unknown>,
       inputItems,
       { porcentaje_fee, iva_activo, descuento_tipo, descuento_valor }
     )
@@ -65,7 +73,7 @@ export async function PUT(
     if (parsed.notas_internas !== undefined || parsed.notas_pdf !== undefined) {
       await saveNotas(id, { notas_internas: parsed.notas_internas, notas_pdf: parsed.notas_pdf })
     }
-    await runQuotationNonCriticalAutosaves(payload.cliente, payload.proyecto, inputItems ?? [], 'PUT /api/cotizaciones/:id', id)
+    after(async () => { await autosaveProductosCatalogo(inputItems ?? [], 'PUT /api/cotizaciones/:id') })
 
     return Response.json(await getCotizacionById(id))
   } catch (error) {

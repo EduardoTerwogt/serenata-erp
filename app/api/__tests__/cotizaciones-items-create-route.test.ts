@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   // sobreescriben esto a `[]` para simular el rechazo del WHERE del ON CONFLICT.
   upsertItemsMock: vi.fn(async (rows: Record<string, unknown>[]) => rows),
   recalculateQuotationHeaderMock: vi.fn(),
-  runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
+  autosaveProductosCatalogoMock: vi.fn(async () => undefined),
   afterMock: vi.fn(),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
 }))
@@ -28,7 +28,7 @@ vi.mock('@/lib/db', async () => {
 })
 vi.mock('@/lib/server/quotations/persistence', () => ({
   recalculateQuotationHeader: mocks.recalculateQuotationHeaderMock,
-  runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
+  autosaveProductosCatalogo: mocks.autosaveProductosCatalogoMock,
 }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 // La ruta en sí no llama a supabaseAdmin (todo pasa por @/lib/db, mockeado

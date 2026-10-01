@@ -1,19 +1,18 @@
 // Google environment configuration — OAuth 2.0 (user-delegated access).
 //
-// Required env vars (Drive + Sheets comparten el mismo refresh token):
+// Required env vars:
 //   GOOGLE_CLIENT_ID            — OAuth 2.0 client ID (Google Cloud Console)
 //   GOOGLE_CLIENT_SECRET        — OAuth 2.0 client secret
-//   GOOGLE_DRIVE_REFRESH_TOKEN  — refresh token con scopes: drive.file + spreadsheets
+//   GOOGLE_DRIVE_REFRESH_TOKEN  — refresh token con el scope drive.file
 //   GOOGLE_DRIVE_FOLDER_ID      — ID de la carpeta en Drive donde se guardan los PDFs
 //
 // Optional:
-//   GOOGLE_SHEETS_SPREADSHEET_ID — ID del Google Sheet de sincronización
-//   GOOGLE_CALENDAR_ID           — reservado para integración futura de Calendar
+//   GOOGLE_DRIVE_FOLDER_ID_CUENTAS — carpeta aparte para los documentos de Cuentas
 //
 // Para obtener / renovar el refresh token:
 //   1. Asegúrate de tener GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Vercel
 //   2. Visita https://serenata-erp.vercel.app/api/integrations/drive/authorize
-//   3. Autoriza los accesos (Drive + Sheets aparecerán en el mismo consent)
+//   3. Autoriza el acceso a Drive
 //   4. Copia el refresh token que aparece en pantalla
 //   5. Actualiza GOOGLE_DRIVE_REFRESH_TOKEN en Vercel con el nuevo token
 
@@ -23,8 +22,6 @@ export interface GoogleEnv {
   driveRefreshToken: string
   driveFolderId: string
   driveFolderIdCuentas: string | null
-  sheetsSpreadsheetId: string | null
-  calendarId: string | null
 }
 
 export function getGoogleEnv(): GoogleEnv | null {
@@ -41,16 +38,9 @@ export function getGoogleEnv(): GoogleEnv | null {
     driveRefreshToken: refreshToken,
     driveFolderId: folderId,
     driveFolderIdCuentas: process.env.GOOGLE_DRIVE_FOLDER_ID_CUENTAS ?? null,
-    sheetsSpreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID ?? null,
-    calendarId: process.env.GOOGLE_CALENDAR_ID ?? null,
   }
 }
 
 export function isGoogleConfigured(): boolean {
   return getGoogleEnv() !== null
-}
-
-export function isSheetsConfigured(): boolean {
-  const env = getGoogleEnv()
-  return env !== null && env.sheetsSpreadsheetId !== null
 }

@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   recalculateQuotationHeaderMock: vi.fn(),
-  runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
+  autosaveProductosCatalogoMock: vi.fn(async () => undefined),
   afterMock: vi.fn(),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
   rpcMock: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock('next/server', () => ({ after: mocks.afterMock }))
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/server/quotations/persistence', () => ({
   recalculateQuotationHeader: mocks.recalculateQuotationHeaderMock,
-  runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
+  autosaveProductosCatalogo: mocks.autosaveProductosCatalogoMock,
 }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('@/lib/server/idempotency', () => ({
@@ -208,7 +208,7 @@ describe('POST /api/cotizaciones/[id]/items/bulk', () => {
     // EF-2 1D-1: el broadcast se sumó como un segundo after() -- antes
     // solo estaban los autosaves de catálogo.
     expect(mocks.afterMock).toHaveBeenCalledTimes(2)
-    expect(mocks.runQuotationNonCriticalAutosavesMock).not.toHaveBeenCalled()
+    expect(mocks.autosaveProductosCatalogoMock).not.toHaveBeenCalled()
     expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
   })
 

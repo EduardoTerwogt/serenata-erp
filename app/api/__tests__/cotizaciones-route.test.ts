@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   buscarCotizacionesMock: vi.fn(),
   buildCreateCotizacionPayloadMock: vi.fn(),
   createOrReplaceCotizacionMock: vi.fn(),
-  runQuotationNonCriticalAutosavesMock: vi.fn(),
+  autosaveProductosCatalogoMock: vi.fn(),
+  resolverClienteIdMock: vi.fn(),
+  afterMock: vi.fn((fn: () => unknown) => { void fn() }),
   validateMock: vi.fn(),
   reserveNextQuotationFolioMock: vi.fn(),
   consumeReservedQuotationFolioMock: vi.fn(),
@@ -24,8 +26,11 @@ vi.mock('@/lib/db', () => ({
 vi.mock('@/lib/server/quotations/persistence', () => ({
   buildCreateCotizacionPayload: mocks.buildCreateCotizacionPayloadMock,
   createOrReplaceCotizacion: mocks.createOrReplaceCotizacionMock,
-  runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
+  autosaveProductosCatalogo: mocks.autosaveProductosCatalogoMock,
+  resolverClienteId: mocks.resolverClienteIdMock,
 }))
+
+vi.mock('next/server', () => ({ after: mocks.afterMock }))
 
 vi.mock('@/lib/validation/schemas', () => ({
   CotizacionCreateSchema: {},
@@ -85,7 +90,9 @@ describe('POST /api/cotizaciones', () => {
     mocks.getCotizacionByIdMock.mockReset()
     mocks.buildCreateCotizacionPayloadMock.mockReset()
     mocks.createOrReplaceCotizacionMock.mockReset()
-    mocks.runQuotationNonCriticalAutosavesMock.mockReset()
+    mocks.autosaveProductosCatalogoMock.mockReset()
+    mocks.resolverClienteIdMock.mockReset()
+    mocks.resolverClienteIdMock.mockResolvedValue('cli-1')
     mocks.validateMock.mockReset()
     mocks.reserveNextQuotationFolioMock.mockReset()
     mocks.consumeReservedQuotationFolioMock.mockReset()
@@ -131,18 +138,16 @@ describe('POST /api/cotizaciones', () => {
 
     expect(mocks.reserveNextQuotationFolioMock).toHaveBeenCalledWith(undefined)
     expect(mocks.buildCreateCotizacionPayloadMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'SH007', cliente: 'ACME' }),
+      expect.objectContaining({ id: 'SH007', cliente: 'ACME', cliente_id: 'cli-1' }),
       [{ descripcion: 'Audio', precio_unitario: 1000, x_pagar: 800 }],
       expect.objectContaining({ forcedFolio: 'SH007', preventOverwrite: true }),
     )
     expect(mocks.createOrReplaceCotizacionMock).toHaveBeenCalledWith({ id: 'SH007', cliente: 'ACME' })
     expect(mocks.consumeReservedQuotationFolioMock).toHaveBeenCalledWith('SH007', 'token-007')
-    expect(mocks.runQuotationNonCriticalAutosavesMock).toHaveBeenCalledWith(
-      'ACME',
-      'Evento de marca',
+    expect(mocks.resolverClienteIdMock).toHaveBeenCalledWith('ACME')
+    expect(mocks.autosaveProductosCatalogoMock).toHaveBeenCalledWith(
       [{ descripcion: 'Audio', precio_unitario: 1000, x_pagar: 800 }],
       'POST /api/cotizaciones',
-      'SH007',
     )
     expect(response.status).toBe(201)
     await expect(response.json()).resolves.toEqual({ id: 'SH007', estado: 'BORRADOR' })

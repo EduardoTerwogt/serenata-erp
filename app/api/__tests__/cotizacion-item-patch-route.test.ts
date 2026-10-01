@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   findOrCreateProveedorByNombreMock: vi.fn(),
   deleteItemCotizacionMock: vi.fn(async () => undefined),
   recalculateQuotationHeaderMock: vi.fn(),
-  runQuotationNonCriticalAutosavesMock: vi.fn(async () => undefined),
+  autosaveProductosCatalogoMock: vi.fn(async () => undefined),
   rpcMock: vi.fn(),
   afterMock: vi.fn(),
   sendRealtimeBroadcastMock: vi.fn(async () => undefined),
@@ -28,7 +28,7 @@ vi.mock('@/lib/db', async () => {
 })
 vi.mock('@/lib/server/quotations/persistence', () => ({
   recalculateQuotationHeader: mocks.recalculateQuotationHeaderMock,
-  runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
+  autosaveProductosCatalogo: mocks.autosaveProductosCatalogoMock,
 }))
 vi.mock('@/lib/server/realtime/broadcast', () => ({ sendRealtimeBroadcast: mocks.sendRealtimeBroadcastMock }))
 vi.mock('@/lib/server/idempotency', () => ({ withIdempotency: mocks.withIdempotencyMock }))

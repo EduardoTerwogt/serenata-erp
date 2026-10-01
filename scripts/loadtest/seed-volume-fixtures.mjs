@@ -1,7 +1,6 @@
 /**
  * EF-3A 3A-3: siembra volumen real para ejercer F1 (CxP>500), F2/F5/F7
- * (CxC/Cotizaciones/Proveedores>1,000), F9 (Sheets>5,000 -- vía
- * items_cotizacion, la tabla que Sheets espeja). `serenata-erp-test` trae
+ * (CxC/Cotizaciones/Proveedores>1,000), F9 (items_cotizacion>5,000). `serenata-erp-test` trae
  * hoy solo decenas de filas -- insuficiente para medir nada realista.
  *
  * Por qué pasa por la API real y no por INSERT directo en

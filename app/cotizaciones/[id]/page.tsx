@@ -124,14 +124,14 @@ export default function CotizacionDetallePage({ params }: { params: Promise<{ id
   } = quotationForm
 
   const esEditable = cotizacion?.estado === 'BORRADOR' || cotizacion?.estado === 'EMITIDA'
-  // Bloque 2 sub-tarea 7: el botón "Crear plantilla" de Partidas se muestra
-  // solo a quien ya tiene sección `planeacion` -- sin ampliar el guard de
-  // `POST /api/service-templates` (supuesto 4 de docs/PLAN.md).
+  // El botón "Crear plantilla" de Partidas se muestra a quien tiene la sección
+  // `cotizaciones`, igual que el guard de `POST /api/service-templates`
+  // (PLAN.md, E2: las plantillas pasaron de `planeacion` a `cotizaciones`).
   const userSections = useMemo(
     () => (session?.user as { sections?: string[] })?.sections ?? [],
     [session?.user]
   )
-  const canCreateTemplate = userSections.includes('planeacion')
+  const canCreateTemplate = userSections.includes('cotizaciones')
   const [showNotasModal, setShowNotasModal] = useState(false)
   const {
     onlineUsers,

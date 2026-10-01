@@ -162,7 +162,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     // V2 (Rediseño de Cuentas B1): el estado sale de montos, factura y "hoy"
     // en CDMX, nunca fijo en FACTURADO -- con un anticipo previo, fijarlo
-    // hacía retroceder el estado guardado (que leen Dashboard y Sheets).
+    // hacía retroceder el estado guardado (que lee el Dashboard).
     const estado = calcularEstadoCuentaCobrarDetallado({
       montoPagado: Number(cuenta.monto_pagado || 0),
       montoTotal: Number(cuenta.monto_total || 0),
@@ -177,8 +177,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       fecha_factura: facturaData.fecha_emision,
       fecha_vencimiento: deadline,
     })
-
-    // Trigger sincronización con Sheets
 
     return Response.json({
       success: true,

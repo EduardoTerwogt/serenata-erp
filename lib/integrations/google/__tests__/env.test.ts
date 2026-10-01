@@ -16,7 +16,7 @@ const REQUIRED = {
 }
 
 function clearEnv() {
-  for (const key of [...REQUIRED_VARS, 'GOOGLE_CALENDAR_ID']) {
+  for (const key of REQUIRED_VARS) {
     delete process.env[key]
   }
 }
@@ -44,14 +44,6 @@ describe('getGoogleEnv', () => {
     expect(env?.clientSecret).toBe(REQUIRED.GOOGLE_CLIENT_SECRET)
     expect(env?.driveRefreshToken).toBe(REQUIRED.GOOGLE_DRIVE_REFRESH_TOKEN)
     expect(env?.driveFolderId).toBe(REQUIRED.GOOGLE_DRIVE_FOLDER_ID)
-    expect(env?.calendarId).toBeNull()
-  })
-
-  it('includes calendarId when GOOGLE_CALENDAR_ID is set', () => {
-    Object.assign(process.env, REQUIRED)
-    process.env.GOOGLE_CALENDAR_ID = 'primary'
-    const env = getGoogleEnv()
-    expect(env?.calendarId).toBe('primary')
   })
 })
 

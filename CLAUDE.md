@@ -47,8 +47,8 @@ El detalle completo de cada uno está en `.claude/rules/`.
 
 ## Principios críticos (no romper)
 
-1. **PostgreSQL es la única fuente de verdad persistente.** Google Sheets es espejo
-   de consulta, nunca origen. `service_role` nunca llega al navegador.
+1. **PostgreSQL es la única fuente de verdad persistente.** No hay espejo en Google
+   Sheets (retirado, `docs/decisions/020`). `service_role` nunca llega al navegador.
 2. **Las operaciones multi-write críticas son atómicas por RPC.** Aprobar y cancelar
    cotización, reservar folio y registrar pago tienen efectos laterales
    transaccionales — **nunca recrear esa lógica manualmente**, llamar la RPC existente.

@@ -2,7 +2,7 @@ import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById, upsertItems, EstadoCotizacionInvalidoError } from '@/lib/db'
 import { normalizeQuotationItem } from '@/lib/quotations/calculations'
-import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
+import { autosaveProductosCatalogo, recalculateQuotationHeader } from '@/lib/server/quotations/persistence'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -80,7 +80,7 @@ export async function POST(
     const updatedQuotation = await recalculateQuotationHeader(id)
     const createdItem = (updatedQuotation.items || []).find((item) => item.id === itemId)
     // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
-    after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items', id) })
+    after(async () => { await autosaveProductosCatalogo(createdItem ? [createdItem] : [], 'POST /api/cotizaciones/:id/items') })
     // Evento confirmado por servidor tras el commit -- payload chico (ids +
     // revision + timestamp, nunca la partida completa). EF-2 1D-1: en
     // after(), igual que el autosave de arriba -- serverless puede cortar

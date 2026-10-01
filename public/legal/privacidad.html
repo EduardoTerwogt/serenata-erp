@@ -48,14 +48,13 @@
     <li>Registros de cuentas por cobrar y por pagar.</li>
   </ul>
 
-  <h2>4. Uso de Google Drive y Google Sheets</h2>
+  <h2>4. Uso de Google Drive</h2>
   <p>
     Serenata ERP usa la API de Google Drive únicamente para almacenar los
     documentos que el propio sistema genera (cotizaciones, facturas, órdenes de
     pago), dentro de carpetas creadas y controladas por la aplicación
     (alcance <code>drive.file</code> — nunca accede a archivos del usuario fuera
-    de esas carpetas). Google Sheets se usa como espejo de solo consulta de
-    información operativa; la base de datos PostgreSQL es siempre la fuente de
+    de esas carpetas). La base de datos PostgreSQL es siempre la fuente de
     verdad.
   </p>
 

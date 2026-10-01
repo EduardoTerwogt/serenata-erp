@@ -27,8 +27,7 @@ export const NAV_LINKS: SectionNavLink[] = [
   { href: '/proveedores', label: 'Proveedores', section: 'responsables', icon: 'proveedores', tone: 'indigo', group: 'Operación' },
   // Mismo section guard que GET /api/clientes.
   { href: '/clientes', label: 'Clientes', section: 'cotizaciones', icon: 'clientes', tone: 'indigo', group: 'Operación' },
-  { href: '/planeacion', label: 'Planeación', section: 'planeacion', icon: 'planeacion', tone: 'red', group: 'Operación' },
-  { href: '/plantillas-servicios', label: 'Plantillas', section: 'planeacion', icon: 'plantillas', tone: 'teal', group: 'Operación' },
+  { href: '/plantillas-servicios', label: 'Plantillas', section: 'cotizaciones', icon: 'plantillas', tone: 'teal', group: 'Operación' },
 ]
 
 export const ADMIN_LINKS: NavLinkItem[] = [{ href: '/admin', label: 'Admin', icon: 'admin', tone: 'gray', group: 'Sistema' }]

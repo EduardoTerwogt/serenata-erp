@@ -1,10 +1,6 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { checkDriveAuth } from '@/lib/integrations/google/drive'
-import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { syncAllDown, SheetsSyncLeaseLostError, SyncHeartbeat } from '@/lib/integrations/sheets/sync-down'
 
-// EF-3 3C-4: el safety-net de Sheets de abajo puede correr syncAllDown()
-// completo -- mismo techo que generar-orden-pago/generar-pdf.
 export const maxDuration = 60
 
 export async function GET(request: Request) {
@@ -78,8 +74,27 @@ export async function GET(request: Request) {
     console.error('Keep-alive: rate_limits cleanup failed:', error)
   }
 
+  // PLAN.md B3 (K2): retención de las tablas de operaciones idempotentes. Un
+  // operation_id solo sirve para reintentar una petición reciente: pasados 30
+  // días la fila es historia y la tabla solo crece. NO se purgan reservas de
+  // folio. Best-effort, igual que arriba.
+  const operationsDeleted: Record<string, number | null> = { pago_operations: null, bulk_import_operations: null }
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  for (const table of ['pago_operations', 'bulk_import_operations'] as const) {
+    try {
+      const { error: cleanupError, count } = await supabaseAdmin
+        .from(table)
+        .delete({ count: 'exact' })
+        .lt('created_at', thirtyDaysAgo)
+      if (cleanupError) throw cleanupError
+      operationsDeleted[table] = count ?? 0
+    } catch (error) {
+      console.error(`Keep-alive: ${table} cleanup failed:`, error)
+    }
+  }
+
   // Rediseño de Cuentas B3 (O2, U4, R3): el estado guardado de los cobros
-  // vencidos se actualiza aquí, una vez al día y antes del sync de Sheets,
+  // vencidos se actualiza aquí, una vez al día,
   // en lugar de escribir en cada lectura. En pantalla "Vencido" se deriva al
   // leer. Best-effort: un fallo aquí no afecta el resultado del keep-alive.
   let cuentasCobrarSync: 'ok' | 'error' = 'ok'
@@ -89,60 +104,6 @@ export async function GET(request: Request) {
   } catch (error) {
     cuentasCobrarSync = 'error'
     console.error('Keep-alive: sync_estados_cuentas_cobrar_vencidas failed:', error)
-  }
-
-  // EF-3 3C-4: safety-net diario de Sheets, bajo el mismo lock de 3C-3 que
-  // ya usa la sincronización manual (app/api/integrations/sheets/sync-down).
-  // Si no consigue el lock (sync manual en curso, o lease de otro cron
-  // vivo) se salta esta corrida por completo, en silencio -- best-effort,
-  // Sheets nunca es parte del `ok` boolean de este endpoint.
-  let sheetsSync: { ran: boolean; rows?: number; errors?: number } = { ran: false }
-  const googleEnv = getGoogleEnv()
-  if (googleEnv?.sheetsSpreadsheetId) {
-    const spreadsheetId = googleEnv.sheetsSpreadsheetId
-    const runId = crypto.randomUUID()
-    const LEASE_SECONDS = 600
-    try {
-      const { data: acquired, error: acquireError } = await supabaseAdmin.rpc('acquire_sheets_sync_lock', {
-        p_run_id: runId,
-        p_triggered_by: 'cron:keep-alive',
-        p_lease_seconds: LEASE_SECONDS,
-      })
-      if (acquireError) throw acquireError
-
-      if (acquired) {
-        const heartbeat: SyncHeartbeat = async () => {
-          const { data, error } = await supabaseAdmin.rpc('renew_sheets_sync_lease', {
-            p_run_id: runId,
-            p_lease_seconds: LEASE_SECONDS,
-          })
-          if (error) throw error
-          return data === true
-        }
-
-        const summary = await syncAllDown(spreadsheetId, heartbeat)
-        const tablesFailed = summary.errors
-        const { error: releaseError } = await supabaseAdmin.rpc('release_sheets_sync_lock', {
-          p_run_id: runId,
-          p_state: tablesFailed > 0 ? 'error' : 'idle',
-          p_rows_synced: summary.totalRows,
-          p_tables_failed: tablesFailed,
-          p_error_message: tablesFailed > 0
-            ? `${tablesFailed} de ${summary.results.length} tablas fallaron: ${summary.results.filter((r) => !r.ok).map((r) => r.tab).join(', ')}`
-            : null,
-        })
-        if (releaseError) throw releaseError
-        sheetsSync = { ran: true, rows: summary.totalRows, errors: tablesFailed }
-      }
-      // acquired === false: otro proceso ya tiene el lock -- se salta sin loggear, es el caso esperado, no un fallo.
-    } catch (error) {
-      // Lease perdido a medio camino: otro proceso ya reclamó el lock, esta
-      // corrida ya no es su dueña -- nunca llama release (mismo criterio
-      // que app/api/integrations/sheets/sync-down/route.ts), no es un fallo real.
-      if (!(error instanceof SheetsSyncLeaseLostError)) {
-        console.error('Keep-alive: Sheets safety-net failed:', error)
-      }
-    }
   }
 
   const ok = supabaseOk && drive.status !== 'invalid_grant' && drive.status !== 'error'
@@ -157,8 +118,9 @@ export async function GET(request: Request) {
       ...(drive.message ? { drive_message: drive.message } : {}),
       idempotency_keys_deleted: idempotencyKeysDeleted,
       rate_limits_deleted: rateLimitsDeleted,
+      pago_operations_deleted: operationsDeleted.pago_operations,
+      bulk_import_operations_deleted: operationsDeleted.bulk_import_operations,
       cuentas_cobrar_sync: cuentasCobrarSync,
-      sheets_sync: sheetsSync,
     },
     { status: ok ? 200 : 500 }
   )

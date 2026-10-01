@@ -1,6 +1,6 @@
 import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
-import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
+import { autosaveProductosCatalogo, recalculateQuotationHeader } from '@/lib/server/quotations/persistence'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { withIdempotency, computePayloadHash, type IdempotentResult } from '@/lib/server/idempotency'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
@@ -154,13 +154,7 @@ export async function POST(
         const insertedIds = new Set(inputItems.map((item) => item.id))
         const createdItems = (updatedQuotation.items || []).filter((item) => insertedIds.has(item.id))
         after(async () => {
-          await runQuotationNonCriticalAutosaves(
-            updatedQuotation.cliente,
-            updatedQuotation.proyecto,
-            createdItems as Partial<ItemCotizacion>[],
-            'POST /api/cotizaciones/:id/items',
-            id
-          )
+          await autosaveProductosCatalogo(createdItems as Partial<ItemCotizacion>[], 'POST /api/cotizaciones/:id/items/bulk')
         })
 
         return { status: 200, body: { cotizacion: updatedQuotation } }

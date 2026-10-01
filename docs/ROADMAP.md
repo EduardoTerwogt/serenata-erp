@@ -169,8 +169,10 @@ viva en `docs/ACTIVE_WORK.md` → "Deuda técnica". La de más peso:
   `getResumenDashboard()` (cash-basis, no resta `gastos_fijos`) y un export
   a Sheets tabla-por-tabla (no de reporte calculado) como punto de partida
   cuando se retome.
-- **Fuera de alcance, sin cambios:** Planeación (evaluar quitar la sección,
-  ligado a RAG/chatbot); RAG/chatbot; migrar administración de Sheets
+- **Retirados en la simplificación (B1+B3):** Google Sheets (D2), Planeación
+  (D8) y Google Calendar (D14). Calendar se reconstruye cuando se diseñe
+  Proyectos (`cotizaciones.calendar_event_id` se borra; nunca se escribió).
+- **Fuera de alcance, sin cambios:** RAG/chatbot; migrar administración de Sheets
   externo a la app; refinar módulo de Proyectos; limpieza de datos de
   prueba (app + BD).
 - **`cliente_id_backfill_clasificacion` — decidir si se borra** cuando se

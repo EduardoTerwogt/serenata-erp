@@ -29,13 +29,11 @@ const PAGE_SECTION_RULES: SectionRule[] = [
   { prefix: '/proyectos', sections: ['proyectos'] },
   { prefix: '/cuentas', sections: ['cuentas'] },
   { prefix: '/proveedores', sections: ['responsables'] },
-  { prefix: '/planeacion', sections: ['planeacion'] },
-  { prefix: '/plantillas-servicios', sections: ['planeacion'] },
+  { prefix: '/plantillas-servicios', sections: ['cotizaciones'] },
 ]
 
 const API_SECTION_RULES: SectionRule[] = [
   { prefix: '/api/admin/usuarios', sections: ['admin'] },
-  { prefix: '/api/integrations/sheets', sections: ['admin'] },
   { prefix: '/api/cotizaciones', sections: ['cotizaciones'] },
   { prefix: '/api/clientes', sections: ['cotizaciones'] },
   { prefix: '/api/productos', sections: ['cotizaciones'] },
@@ -43,8 +41,7 @@ const API_SECTION_RULES: SectionRule[] = [
   { prefix: '/api/items', sections: ['cotizaciones', 'proyectos'] },
   { prefix: '/api/cuentas', sections: ['cuentas'] },
   { prefix: '/api/proveedores', sections: ['responsables'] },
-  { prefix: '/api/service-templates', sections: ['planeacion'] },
-  { prefix: '/api/planeacion', sections: ['planeacion'] },
+  { prefix: '/api/service-templates', sections: ['cotizaciones'] },
 ]
 
 const E2E_BYPASS_COOKIE = 'e2e-bypass'

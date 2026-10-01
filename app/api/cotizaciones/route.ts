@@ -1,10 +1,12 @@
+import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { buscarCotizaciones, getCotizacionById } from '@/lib/db'
 import { formatSupabaseError } from '@/lib/quotations/rpc-utils'
 import {
   buildCreateCotizacionPayload,
   createOrReplaceCotizacion,
-  runQuotationNonCriticalAutosaves,
+  autosaveProductosCatalogo,
+  resolverClienteId,
   saveNotas,
 } from '@/lib/server/quotations/persistence'
 import { CotizacionCreateSchema, validate } from '@/lib/validation/schemas'
@@ -62,8 +64,11 @@ export async function POST(request: Request) {
       reservationToken = reservation.reservationToken || ''
     }
 
+    // Cliente resuelto antes de guardar: su id viaja en el payload de save_cotizacion.
+    const clienteId = cotizacionData.cliente_id || (await resolverClienteId(cotizacionData.cliente))
+
     const { folio, payload } = await buildCreateCotizacionPayload(
-      { ...cotizacionData, id: reservedFolio } as Record<string, unknown>,
+      { ...cotizacionData, cliente_id: clienteId, id: reservedFolio } as Record<string, unknown>,
       inputItems,
       {
         porcentaje_fee,
@@ -80,7 +85,7 @@ export async function POST(request: Request) {
       await saveNotas(folio, { notas_internas: parsed.notas_internas, notas_pdf: parsed.notas_pdf })
     }
     await consumeReservedQuotationFolio(folio, reservationToken || null)
-    await runQuotationNonCriticalAutosaves(cotizacionData.cliente, cotizacionData.proyecto, inputItems, 'POST /api/cotizaciones', folio)
+    after(async () => { await autosaveProductosCatalogo(inputItems, 'POST /api/cotizaciones') })
 
     return Response.json(await getCotizacionById(folio), { status: 201 })
   } catch (error) {

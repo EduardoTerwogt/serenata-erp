@@ -8,7 +8,6 @@ import { formatDateDisplay } from '@/lib/format-date'
 interface ClienteOption {
   id: string
   nombre: string
-  proyectos: string[]
 }
 
 interface ClienteSeleccionado {

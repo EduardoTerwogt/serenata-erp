@@ -6,8 +6,8 @@ import { RegimenFiscal } from '@/lib/types'
 // del Portal para extraer el nombre legal (y, de la constancia, el régimen
 // fiscal si es legible) y así poder cruzarlos contra los proveedores que
 // staff ya cargó (ver match_proveedor_por_nombre). Mismo SDK/modelo que ya
-// usa app/api/planeacion/extract-ai/route.ts para estructurar texto libre
-// -- aquí el documento va como bloque de imagen/PDF en vez de texto plano.
+// usó la extracción de Planeación (retirada, PLAN.md D8) para estructurar texto
+// libre -- aquí el documento va como bloque de imagen/PDF en vez de texto plano.
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const DatosIdentidadSchema = z.object({

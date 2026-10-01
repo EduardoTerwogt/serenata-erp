@@ -13,12 +13,11 @@ app/                          # Next.js App Router
 │   ├── proyectos/            # CRUD, tareas, cronograma, hoja de llamado, reporte de cierre
 │   ├── proveedores/          # CRUD, historial, resumen de documentos
 │   ├── portal/               # Portal de proveedores (sesión propia, no NextAuth)
-│   ├── planeacion/           # extract-ai, pendientes, match, notas
 │   ├── service-templates/    # Plantillas de servicios
 │   ├── clientes/ productos/ tipos-proyecto/  # Catálogos
 │   ├── dashboard/            # Métricas y gastos fijos
-│   ├── admin/                # Usuarios y sync a Sheets
-│   ├── integrations/         # Google Drive y Sheets activos; Calendar parcial
+│   ├── admin/                # Usuarios
+│   ├── integrations/         # Google Drive
 │   ├── keep-alive/ folio/    # Cron y reserva de folio
 │   └── auth/                 # NextAuth v5
 ├── cotizaciones/             # lista · nueva · [id] detalle (pantalla colaborativa)
@@ -26,9 +25,8 @@ app/                          # Next.js App Router
 ├── cuentas/                  # UI por proyecto y mes: periodo, detalle, avisos y órdenes
 ├── proveedores/              # lista + modal de detalle
 ├── portal/                   # login · signup · confirmar-identidad · panel
-├── planeacion/               # extracción + pendientes
 ├── plantillas-servicios/     # lista · nueva · [id]/editar
-├── admin/                    # usuarios · sheets
+├── admin/                    # usuarios
 ├── dashboard/ login/         # métricas y acceso
 └── components/               # componentes atados a una pantalla
 
@@ -45,7 +43,7 @@ lib/
 ├── client/api.ts             # getJson/postJson/putJson/FormData/binario + 401 compartido
 ├── quotations/               # cálculos, formato, mappers
 ├── parsers/                  # eventInfoParser (fallback regex)
-├── integrations/google/      # drive, sheets, calendar (parcial)
+├── integrations/google/      # drive
 ├── api/cache.ts               # CacheManager en memoria (ver gotcha de serverless)
 └── server/                   # server-only
     ├── supabase-admin.ts     # cliente service_role -- `import 'server-only'`, nunca al navegador
@@ -75,7 +73,7 @@ arrastrar `NextAuth({...})` (que Vitest no resuelve bajo Next 16). Valida sesió
 y secciones permitidas antes de llegar a página o API. Dentro de cada route,
 `requireSection('cotizaciones')` repite la comprobación -- también vía
 `getNodeSessionToken()`, no `auth()`. Secciones: `admin`, `dashboard`,
-`cotizaciones`, `proyectos`, `cuentas`, `responsables`, `planeacion`. El portal
+`cotizaciones`, `proyectos`, `cuentas`, `responsables`. El portal
 de proveedores tiene sesión propia, independiente de NextAuth.
 
 **Credenciales del portal nunca salen del servidor (#97).** El tipo `Proveedor`
@@ -468,10 +466,8 @@ evidencia, no cuenta como terminado.
 | Proveedores (lista + modal, historial, régimen fiscal (moral / física / RESICO), revisión de documentos del Portal: validar/marcar en revisión con motivo) | `tests/e2e/critical/proveedores.spec.ts`, `app/api/__tests__/proveedores-documentos-route.test.ts`, `proveedores-documentos-id-route.test.ts` |
 | Portal de proveedores (signup, login, confirmar identidad; subir factura + simulador de factura; alias; documentos con auto-clasificación híbrida, borrado y reemplazo automático del mismo tipo al subir uno nuevo; matching de identidad solo por INE; "Tus cuentas con Serenata" como tabla paginada al fondo de "Cuentas y facturas", ya no un tab propio) | `smoke/portal-signup.spec.ts`, `smoke/portal-documentos.spec.ts`, `smoke/portal-mis-datos.spec.ts`, `critical/portal-factura.spec.ts` |
 | Clientes (catálogo editable: lista + modal, mismo patrón `PUT`+soft-delete `activo` que Proveedores; `cliente_id` como FK real en `cotizaciones`/`proyectos`/`cuentas_cobrar`/`historial_responsable`, dual-write con clasificación de 3 cubetas para el backfill) | `app/api/__tests__/clientes-route.test.ts` (sin e2e dedicado todavía), `lib/validation/__tests__/schemas.test.ts` (casos `cliente_id`), `docs/decisions/014-cliente-id-fk-clasificacion.md` |
-| Planeación (extracción AI, pendientes, soft delete) | `critical/planeacion.spec.ts` |
 | Plantillas de servicios (cotizaciones nuevas) | `critical/plantillas-servicios.spec.ts` |
-| Admin de usuarios y sync a Google Sheets | `critical/admin-usuarios.spec.ts` |
-| Sync manual Supabase→Sheets con lock/lease (huérfanos, sin error crudo expuesto) | `lib/integrations/sheets/__tests__/sync-down.test.ts`, `app/api/__tests__/sheets-sync-down-route.test.ts`, `app/api/__tests__/sheets-status-route.test.ts` |
+| Admin de usuarios | `critical/admin-usuarios.spec.ts` |
 | Dashboard (incluye gastos fijos) | `lib/server/repositories/dashboard.ts` + sus tests |
 | Revocación de sesión de staff (`session_version`) | `__tests__/proxy.test.ts`, `__tests__/auth-callbacks.test.ts`, `lib/__tests__/api-auth.test.ts`, `tests/e2e/live/staff-session-revocation.spec.ts` |
 | Resiliencia de Realtime (backoff, convergencia en remount, refresco de token) | `lib/realtime/__tests__/useRealtimeChannel.test.ts`, `tests/e2e/live/realtime-channel-reconnection.spec.ts` |
@@ -513,9 +509,8 @@ autoritativa, no una tabla en un documento. Agrupadas por dominio:
 | Proyectos | `proyectos`, `tipos_proyecto`, `tipo_proyecto_etapas`, `tipo_proyecto_tarea_default`, `proyecto_tareas`, `proyecto_tarea_checklist`, `proyecto_documentos` |
 | Cuentas | `cuentas_cobrar`, `cuentas_pagar` (folio `CC-/CP-AAAA-NNNNN` por trigger → `siguiente_folio()`, consecutivo que reinicia cada año, año en hora CDMX), `folio_contadores`, `cuentas_pagar_grupos`, `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`, `pagos_comprobantes`, `ordenes_pago` |
 | Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable`, `historial_cambios_responsable_item` |
-| Planeación | `planeacion_pendientes`, `planeacion_event_notas` (soft delete en `eliminada`), `extraction_logs` |
 | Dashboard | `gastos_fijos` |
-| Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys`, `sheets_sync_status`, `loadtest_runs` (**solo en `serenata-erp-test`**, nunca en producción: control de las corridas de carga) |
+| Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys`, `loadtest_runs` (**solo en `serenata-erp-test`**, nunca en producción: control de las corridas de carga) |
 
 **RLS** está habilitado en las tablas pero **sin políticas de lectura**, así que la
 llave anónima no lee nada. Es la razón de que la colaboración no use
@@ -542,22 +537,14 @@ Trampas reales, no teóricas. Cada una costó un bug:
   `ILIKE` no se ven afectados.
 - **Cotizaciones COMPLEMENTARIA afectan al Proyecto de la PRINCIPAL.** Al aprobarse
   suman al proyecto y las cuentas del padre. No tratarlas como independientes.
-- **Escribir en cotizaciones / proyectos / cuentas YA NO dispara sync a Google
-  Sheets automáticamente** (EF-3 3C-1, `triggerSheetsSync()` eliminado — 31
-  call-sites). El sync Supabase→Sheets es **manual** hoy, vía
-  `POST /api/integrations/sheets/sync-down` (botón en `/admin`,
-  `AdminSheets.tsx`), protegido por un lock con lease en `sheets_sync_status`
-  (3C-3: `acquire_sheets_sync_lock`/`renew_sheets_sync_lease`/
-  `release_sheets_sync_lock`, keyset pagination en `sync-down.ts`). Un
-  safety-net diario vía el cron de `keep-alive` (`app/api/keep-alive/route.ts`,
-  EF-3 3C-4) llama `syncAllDown()` bajo el mismo lock, best-effort
-  (try/catch, nunca hace fallar `keep-alive`), más retención de
-  `rate_limits` (`window_start<24h`). La validación empírica de cuánto
-  tarda `syncAllDown()` contra Sheets real quedó fuera de alcance de
-  Engineering Hardening por decisión explícita del usuario (2026-09-16) —
-  el spreadsheet aislado de loadtest resultó inaccesible y reconfigurarlo,
-  o decidir el futuro de la integración de Sheets, es una decisión de
-  producto aparte. Detalle: `docs/archive/ef-3-engineering-hardening.md`.
+- **No hay espejo en Google Sheets** (retirado en B1 de la iniciativa
+  "Simplificación del modelo de datos", D2): Postgres es la única fuente de
+  verdad. Se borraron las rutas `/api/integrations/sheets/*`, la pestaña de
+  `/admin`, `lib/integrations/sheets/`, el safety-net de `keep-alive`, el
+  scope `spreadsheets` de Google y `sheets_sync_status` con sus 3 RPCs de lock.
+  El `keep-alive` conserva la retención de `rate_limits`, `idempotency_keys`,
+  `pago_operations` y `bulk_import_operations` y el sync diario de cobros
+  vencidos. Historia: `docs/archive/ef-3-engineering-hardening.md`.
 - **Reservar folio es atómico vía RPC** (`reserve_next_cotizacion_folio()`
   al confirmar; `preview_next_cotizacion_folio_principal()` para el
   preview de la rama principal, EF-3 3B-7 — la rama de complementarias

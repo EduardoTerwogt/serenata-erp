@@ -10,7 +10,7 @@ paths:
   if (authResult.response) return authResult.response
   ```
   Secciones: `admin`, `dashboard`, `cotizaciones`, `proyectos`, `cuentas`,
-  `responsables`, `planeacion`. Algunas rutas usan `requireAnySection()`.
+  `responsables`. Algunas rutas usan `requireAnySection()`.
 - Validar el payload con Zod antes de usarlo:
   ```ts
   const validation = validate(CotizacionCreateSchema, body)
