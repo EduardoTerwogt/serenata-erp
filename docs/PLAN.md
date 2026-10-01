@@ -386,6 +386,18 @@ excepto `corregir_proveedor_cuenta_pagar` (J3).
 
 ### B5b — Cuentas: lecturas, copias y borrado (P0)
 
+> **Etapas (2026-10-01).** B5b se ejecuta en etapas, cada una con su PR; las
+> columnas y funciones retiradas se acumulan en un **script manual de cierre**
+> (el MCP de Supabase no ejecuta DROP ni DELETE). **Etapa 1 — estado del cobro
+> derivado (D15):** `20261021` (columna generada; la vieja queda como
+> `estado_anterior`; 5 RPCs reescritas, entre ellas `approve_cotizacion`) y
+> `20261022` (`sync_estados_cuentas_cobrar_vencidas` inerte). Retirados: listas
+> `GET /api/cuentas-cobrar` y `/api/cuentas-pagar`, el sync del cron y
+> `calcularEstadoCuentaCobrar*`. Aplicadas en test y producción; foto dorada
+> idéntica; `plpgsql_check` 0 errores. **Para el cierre manual:** `estado_anterior`,
+> `cuentas_cobrar_estado_calculado`, `sync_estados_cuentas_cobrar_vencidas`,
+> `buscar_cuentas_cobrar`, `buscar_cuentas_pagar`, `buscar_cuentas_pagar_grupos`.
+
 Funciones (disjuntas de B5a): `approve_cotizacion`,
 `reasignar_responsable_cuenta_pagar`, `corregir_proveedor_cuenta_pagar`,
 **`reconcile_cuenta_pagar_grupo` y el trigger `cuentas_pagar_recalcular_grupo`
