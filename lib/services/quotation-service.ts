@@ -143,19 +143,21 @@ export async function updateQuotation(
     }
   })
 
-  await sendJson(`/api/cotizaciones/${id}`, {
+  const saved = await sendJson<Cotizacion>(`/api/cotizaciones/${id}`, {
     ...basePayload,
     items,
     ...(options.notas_internas !== undefined ? { notas_internas: options.notas_internas } : {}),
     ...(options.notas_pdf !== undefined ? { notas_pdf: options.notas_pdf } : {}),
   }, 'Error al actualizar cotización', { method: 'PUT' })
 
-  return fetchQuotationDetail(id)
+  // L7: el PUT ya responde la cotización completa; la relectura solo es red de seguridad.
+  return saved?.id === id && Array.isArray(saved.items) ? saved : fetchQuotationDetail(id)
 }
 
 export async function approveQuotation(id: string): Promise<Cotizacion> {
-  await getJson(`/api/cotizaciones/${id}/aprobar`, 'Error aprobando cotización', { method: 'POST' })
-  return fetchQuotationDetail(id)
+  const result = await getJson<{ cotizacion?: Cotizacion }>(`/api/cotizaciones/${id}/aprobar`, 'Error aprobando cotización', { method: 'POST' })
+  // L7: la ruta ya devuelve la cotización aprobada; sin ella, se relee.
+  return result?.cotizacion?.id === id && Array.isArray(result.cotizacion.items) ? result.cotizacion : fetchQuotationDetail(id)
 }
 
 /**
@@ -165,8 +167,8 @@ export async function approveQuotation(id: string): Promise<Cotizacion> {
  * docs/archive/fases-colaboracion-0-8.md.
  */
 export async function emitirCotizacion(id: string): Promise<Cotizacion> {
-  await getJson(`/api/cotizaciones/${id}/emitir`, 'Error emitiendo cotización', { method: 'POST' })
-  return fetchQuotationDetail(id)
+  const emitida = await getJson<Cotizacion>(`/api/cotizaciones/${id}/emitir`, 'Error emitiendo cotización', { method: 'POST' })
+  return emitida?.id === id && Array.isArray(emitida.items) ? emitida : fetchQuotationDetail(id)
 }
 
 export interface GeneratePdfResult {
