@@ -186,11 +186,6 @@ export interface PagoFilas {
     cantidad: number | null
     x_pagar: number
     monto_pagado: number | null
-    responsable_nombre: string | null
-    correo: string | null
-    telefono: string | null
-    banco: string | null
-    clabe: string | null
   }[]
   proveedor: { id: string; nombre: string; regimen_fiscal: RegimenFiscal | null; correo: string | null; telefono: string | null; banco: string | null; clabe: string | null } | null
   proyecto: ProyectoDetalleCorto | null
@@ -234,12 +229,12 @@ export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyec
     cotizacion_id: primera?.cotizacion_id ?? null,
     responsable: {
       id: destino.responsable_id,
-      nombre: destino.responsable_id ? (proveedor?.nombre ?? primera?.responsable_nombre ?? 'Proveedor') : 'Sin asignar',
+      nombre: destino.responsable_id ? (proveedor?.nombre ?? 'Proveedor') : 'Sin asignar',
       regimen_fiscal: regimen,
-      correo: proveedor?.correo ?? primera?.correo ?? null,
-      telefono: proveedor?.telefono ?? primera?.telefono ?? null,
-      banco: proveedor?.banco ?? primera?.banco ?? null,
-      clabe: proveedor?.clabe ?? primera?.clabe ?? null,
+      correo: proveedor?.correo ?? null,
+      telefono: proveedor?.telefono ?? null,
+      banco: proveedor?.banco ?? null,
+      clabe: proveedor?.clabe ?? null,
     },
     items: cuentas.map((c) => ({
       cuenta_id: c.id,

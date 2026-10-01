@@ -73,13 +73,22 @@ export async function confirmarMatch(nuevoId: string): Promise<Proveedor & Prove
 }
 
 export async function getCuentasPagarPorProveedor(proveedorId: string): Promise<CuentaPagar[]> {
+  // Descripción y cantidad salen del renglón (dueño); la FK simple desambigua
+  // el embed frente a la compuesta (item_id, cotizacion_id).
   const { data, error } = await supabaseAdmin
     .from('cuentas_pagar')
-    .select('*')
+    .select('*, items_cotizacion!cuentas_pagar_item_id_fkey(descripcion, cantidad)')
     .eq('responsable_id', proveedorId)
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data as CuentaPagar[]
+  type Fila = CuentaPagar & {
+    items_cotizacion?: { descripcion: string | null; cantidad: number | null } | null
+  }
+  return (data as unknown as Fila[]).map(({ items_cotizacion, ...c }) => ({
+    ...c,
+    item_descripcion: items_cotizacion?.descripcion ?? null,
+    cantidad: items_cotizacion?.cantidad ?? null,
+  }))
 }
 
 // Bloque 4 de la agrupación de Cuentas por Pagar (docs/PLAN.md): el Portal

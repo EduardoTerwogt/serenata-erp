@@ -321,43 +321,33 @@ export interface CuentaPagar {
   cotizacion_id: string
   proyecto_id: string
   proyecto_nombre?: string
-  item_id: string | null
+  item_id: string
   responsable_id: string | null
-  responsable_nombre: string
-  item_descripcion: string | null
-  cantidad: number
   x_pagar: number
-  margen: number
-  telefono: string | null
-  correo: string | null
-  clabe: string | null
-  banco: string | null
   estado: EstadoCuentaPagar | EstadoCuentaPagarGrupo
   folio?: string
   fecha_factura?: string | null
   fecha_vencimiento?: string | null
   monto_pagado?: number
   fecha_pago: string | null
-  metodo_pago: string | null
-  orden_pago_id?: string | null
   notas: string | null
   updated_at?: string
   created_at?: string
   grupo_id?: string | null
-  // Bloque 6 (docs/PLAN.md): poblados por buscar_cuentas_pagar_grupos()
-  // cuando la fila representa un grupo real en vez de un item suelto.
-  es_grupo?: boolean
-  items_count?: number
-  // Bloque 6: poblados por cuentas_por_proyecto() (LEFT JOIN a
-  // cuentas_pagar_grupos), null cuando el item no tiene grupo_id todavía.
+  // Nombre, descripción, cantidad y contacto ya no se copian a la cuenta (J3,
+  // B5b): salen del dueño (proveedores, items_cotizacion). Solo viajan en las
+  // lecturas que los resuelven por llave.
+  responsable_nombre?: string
+  item_descripcion?: string | null
+  cantidad?: number | null
+  // Poblados por cuentas_por_proyecto() (LEFT JOIN a cuentas_pagar_grupos),
+  // null cuando la cuenta no tiene grupo_id.
   grupo_estado?: EstadoCuentaPagarGrupo | null
   grupo_monto_total?: number | null
   grupo_monto_pagado?: number | null
   // Rediseño de Cuentas B2 (D3, supuesto 6): snapshot del Total del CFDI y lo
-  // transferido. En la suelta viven en la propia cuenta; en un grupo, en
-  // cuentas_pagar_grupos (grupo_*). null = sin factura validada (se estima).
-  total_a_transferir?: number | null
-  monto_transferido?: number | null
+  // transferido; viven en cuentas_pagar_grupos (grupo_*). null = sin factura
+  // validada (se estima).
   grupo_total_a_transferir?: number | null
   grupo_monto_transferido?: number | null
   // Bloque 2 (docs/PLAN.md): poblado por cuentas_por_proyecto() (LEFT JOIN a

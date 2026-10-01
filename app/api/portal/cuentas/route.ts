@@ -82,7 +82,8 @@ export async function GET() {
         monto_total: c.x_pagar,
         monto_pagado: c.monto_pagado || 0,
         saldo_pendiente: calcularSaldoPendiente(c.x_pagar, c.monto_pagado || 0),
-        ...enTransferir(c.x_pagar, c.total_a_transferir, c.monto_transferido, regimen),
+        // B5a: una cuenta suelta no tiene factura ni transferencias propias.
+        ...enTransferir(c.x_pagar, null, 0, regimen),
         items: [itemDeCuenta(c)],
       }))
 

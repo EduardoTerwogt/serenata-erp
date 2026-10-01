@@ -397,6 +397,21 @@ excepto `corregir_proveedor_cuenta_pagar` (J3).
 > idéntica; `plpgsql_check` 0 errores. **Para el cierre manual:** `estado_anterior`,
 > `cuentas_cobrar_estado_calculado`, `sync_estados_cuentas_cobrar_vencidas`,
 > `buscar_cuentas_cobrar`, `buscar_cuentas_pagar`, `buscar_cuentas_pagar_grupos`.
+> **Etapa 2 — `cuentas_pagar` sin copias, llaves e invariantes:** `20261023` (una
+> transacción, manual por contener DROP): corrige restos de datos (cuentas sueltas con
+> proveedor → `reconcile_cuenta_pagar_grupo`; cuentas sin `item_id` → se borran, y
+> **falla explícito** si tienen pagos o documentos), `item_id` uuid NOT NULL UNIQUE con FK
+> RESTRICT y FKs compuestas diferibles, constraint trigger de K1 y de "proveedor de la
+> cuenta = proveedor del renglón"; reescribe `approve_cotizacion`, `cancel_cotizacion`,
+> `cuentas_conceptos`, `cuentas_por_proyecto`, `cuentas_orden_candidatos`,
+> `generar_orden_pago`, `cancelar_orden_pago` (la orden ya no se copia a las hijas) y las
+> RPCs de reasignación (`reasignar_responsable_cuenta_pagar(cuenta, proveedor)`,
+> `corregir_proveedor_cuenta_pagar(cuenta, proveedor, motivo, usuario)`); borra las
+> columnas copia, `estado_anterior` y las funciones inertes de la etapa 1 y de B5a. El
+> contrato posicional de `cuentas_por_proyecto` no cambia (las sueltas viajan con
+> nombre/descripción resueltos del dueño y total/transferido/orden nulos). **Queda para
+> etapas siguientes:** `historial_responsable` → vista, `fecha_entrega` → date,
+> `timestamptz`, D12/D16 (cliente), `costo_total`/`x_pagar` (M1).
 
 Funciones (disjuntas de B5a): `approve_cotizacion`,
 `reasignar_responsable_cuenta_pagar`, `corregir_proveedor_cuenta_pagar`,

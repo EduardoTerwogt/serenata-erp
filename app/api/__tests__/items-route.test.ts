@@ -5,9 +5,7 @@ const mocks = vi.hoisted(() => ({
   findOrCreateProveedorByNombreMock: vi.fn(),
   createHistorialCambioResponsableItemMock: vi.fn(async () => undefined),
   itemSingleMock: vi.fn(),
-  proveedorSingleMock: vi.fn(),
   cuentaPrimariaMaybeSingleMock: vi.fn(),
-  cuentaLegacyMaybeSingleMock: vi.fn(),
   itemsUpdateEqMock: vi.fn(async () => ({ error: null })),
   rpcMock: vi.fn(),
 }))
@@ -26,17 +24,9 @@ vi.mock('@/lib/server/supabase-admin', () => ({
           update: () => ({ eq: mocks.itemsUpdateEqMock }),
         }
       }
-      if (table === 'proveedores') {
-        return { select: () => ({ eq: () => ({ single: mocks.proveedorSingleMock }) }) }
-      }
       if (table === 'cuentas_pagar') {
         return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({ maybeSingle: mocks.cuentaPrimariaMaybeSingleMock }),
-              is: () => ({ eq: () => ({ maybeSingle: mocks.cuentaLegacyMaybeSingleMock }) }),
-            }),
-          }),
+          select: () => ({ eq: () => ({ maybeSingle: mocks.cuentaPrimariaMaybeSingleMock }) }),
         }
       }
       throw new Error(`tabla inesperada: ${table}`)
@@ -68,9 +58,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireAnySectionMock.mockResolvedValue({ response: null, session: { user: { email: 'staff@serenata.mx' } } })
   mocks.itemSingleMock.mockResolvedValue({ data: itemDelServidor, error: null })
-  mocks.proveedorSingleMock.mockResolvedValue({ data: { telefono: null, correo: null, clabe: null, banco: null } })
   mocks.cuentaPrimariaMaybeSingleMock.mockResolvedValue({ data: null })
-  mocks.cuentaLegacyMaybeSingleMock.mockResolvedValue({ data: null })
   mocks.itemsUpdateEqMock.mockResolvedValue({ error: null })
   mocks.rpcMock.mockResolvedValue({ data: { grupo_id: 'grupo-1' }, error: null })
 })
@@ -99,7 +87,6 @@ describe('PATCH /api/items/[id]', () => {
     expect(mocks.rpcMock).toHaveBeenCalledWith('reasignar_responsable_cuenta_pagar', expect.objectContaining({
       p_cuenta_pagar_id: CUENTA_PRIMARIA_ID,
       p_responsable_id: RESPONSABLE_B,
-      p_responsable_nombre: 'Proveedor B',
     }))
     // items_cotizacion.responsable_* lo actualiza la RPC, no un .update() directo de esta ruta
     expect(mocks.itemsUpdateEqMock).not.toHaveBeenCalled()

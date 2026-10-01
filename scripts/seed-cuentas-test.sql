@@ -4,9 +4,8 @@
 -- reproducía las formas de datos de producción que el rediseño tiene que
 -- manejar. Este script las crea con el esquema vigente:
 --
---   SEEDCU01  sueltas en una orden vieja sin pagar y sin factura; suelta
---             sin proveedor dentro y fuera de la orden (T2); cobro con
---             anticipo sin factura (D32).
+--   SEEDCU01  grupo en una orden vieja sin pagar y sin factura; suelta
+--             sin proveedor (T2); cobro con anticipo sin factura (D32).
 --   SEEDCU02  grupo con pago parcial sin orden; cobro con factura XML y
 --             PDF en `pendiente` (T1).
 --   SEEDCU03  cobro pagado en dos pagos (el caso PPD de D16) con
@@ -15,7 +14,7 @@
 --   SEEDCU04  cobro con la factura XML en `revision` (D25).
 --   SEEDCU05  principal con una complementaria APROBADA (-A) y otra
 --             EMITIDA (-B) (D28, D31).
---   (sin proyecto)  una cuenta por cobrar y una por pagar sin
+--   (sin proyecto)  una cuenta por cobrar y una por pagar (sin proveedor) sin
 --             `proyecto_id` ni `cotizacion_id`.
 --
 -- Desde B1 la fila del XML guarda uuid_cfdi, total_cfdi y metodo_pago_cfdi,
@@ -25,7 +24,9 @@
 --
 -- Las filas se insertan directo, sin RPCs, a propósito: varias de estas
 -- formas son justo las que las RPCs corregidas ya no producirían (H2, H3,
--- T2), y hay que poder reproducirlas.
+-- T2), y hay que poder reproducirlas. Desde B5b toda cuenta nace de un
+-- renglón (`item_id` NOT NULL con FK) y toda cuenta con proveedor vive en un
+-- grupo (K1): no hay sueltas con proveedor.
 --
 -- Idempotente: borra todo lo marcado con el prefijo SEEDCU (ids, folios y
 -- nombres) y lo vuelve a crear con los mismos ids. No toca nada más.
@@ -41,6 +42,9 @@ DECLARE
   c_prov_a    constant uuid := '5eedc000-0000-4000-8000-00000000a001';
   c_prov_b    constant uuid := '5eedc000-0000-4000-8000-00000000a002';
   c_orden     constant uuid := '5eedc000-0000-4000-8000-00000000f001';
+  c_grp_01    constant uuid := '5eedc000-0000-4000-8000-00000000b001';
+  c_grp_04    constant uuid := '5eedc000-0000-4000-8000-00000000b004';
+  c_grp_05    constant uuid := '5eedc000-0000-4000-8000-00000000b005';
   c_grp_02    constant uuid := '5eedc000-0000-4000-8000-00000000b002';
   c_grp_03    constant uuid := '5eedc000-0000-4000-8000-00000000b003';
   c_grp_05a   constant uuid := '5eedc000-0000-4000-8000-00000000b05a';
@@ -64,6 +68,8 @@ BEGIN
   DELETE FROM cuentas_pagar
    WHERE folio LIKE 'SEEDCU-%' OR cotizacion_id = ANY(v_ids) OR proyecto_id = ANY(v_ids);
   DELETE FROM cuentas_pagar_grupos WHERE proyecto_id = ANY(v_ids);
+  -- Renglón de la cuenta sin proyecto: no cuelga de ninguna cotización.
+  DELETE FROM items_cotizacion WHERE id = '5eedc000-0000-4000-8000-000000001099';
   -- Desglose de la orden (B1b): su llave hacia ordenes_pago no tiene cascada.
   IF to_regclass('public.ordenes_pago_conceptos') IS NOT NULL THEN
     DELETE FROM ordenes_pago_conceptos
@@ -115,7 +121,9 @@ BEGIN
     ('5eedc000-0000-4000-8000-000000001041', 'SEEDCU04',   'Equipo',     'Audio',                      1, 10000, 10000, 'SEEDCU Proveedor Moral', c_prov_b, 6000, 4000, 1),
     ('5eedc000-0000-4000-8000-000000001051', 'SEEDCU05',   'Producción', 'Producción general',         1, 20000, 20000, 'SEEDCU Proveedor Persona Física', c_prov_a, 13000, 7000, 1),
     ('5eedc000-0000-4000-8000-00000000105a', 'SEEDCU05-A', 'Equipo',     'Equipo adicional',           1,  5000,  5000, 'SEEDCU Proveedor Moral', c_prov_b, 3000, 2000, 1),
-    ('5eedc000-0000-4000-8000-00000000105b', 'SEEDCU05-B', 'Equipo',     'Segundo día de equipo',      1,  4000,  4000, 'SEEDCU Proveedor Moral', c_prov_b, 2500, 1500, 1);
+    ('5eedc000-0000-4000-8000-00000000105b', 'SEEDCU05-B', 'Equipo',     'Segundo día de equipo',      1,  4000,  4000, 'SEEDCU Proveedor Moral', c_prov_b, 2500, 1500, 1),
+    -- Renglón de la cuenta sin proyecto ni cotización (forma legacy).
+    ('5eedc000-0000-4000-8000-000000001099', NULL,         'Otros',      'Gasto sin proyecto',         1,  1500,  1500, NULL, NULL, 1500, 0, 1);
 
   INSERT INTO proyectos (id, cliente, cliente_id, proyecto, fecha_entrega, locacion, estado)
   VALUES
@@ -127,44 +135,46 @@ BEGIN
 
   -- ── Orden de pago vieja, sin pagar (GENERADA hace >15 días) ──────────
   INSERT INTO ordenes_pago (id, fecha_generacion, pdf_url, pdf_nombre, estado, total_monto, created_by, created_at)
-  VALUES (c_orden, '2026-06-20', NULL, 'SEEDCU O.P 20-Jun SEEDCU01.pdf', 'GENERADA', 17000, 'seed-cuentas-test', '2026-06-20 12:00');
+  VALUES (c_orden, '2026-06-20', NULL, 'SEEDCU O.P 20-Jun SEEDCU01.pdf', 'GENERADA', 15000, 'seed-cuentas-test', '2026-06-20 12:00');
 
   -- ── Grupos de proveedor ───────────────────────────────────────────────
   INSERT INTO cuentas_pagar_grupos (id, proyecto_id, responsable_id, estado, monto_total, monto_pagado, orden_pago_id)
   VALUES
+    (c_grp_01,  'SEEDCU01', c_prov_a, 'EN_PROCESO_PAGO', 15000,     0, c_orden),  -- orden vieja sin pagar y sin factura (H2, H3)
+    (c_grp_04,  'SEEDCU04', c_prov_b, 'ABIERTO',          6000,     0, NULL),
+    (c_grp_05,  'SEEDCU05', c_prov_a, 'ABIERTO',         13000,     0, NULL),
     (c_grp_02,  'SEEDCU02', c_prov_b, 'EN_PROCESO_PAGO', 20000,  8000, NULL),  -- pago parcial sin orden
     (c_grp_03,  'SEEDCU03', c_prov_a, 'PAGADO',          12000, 12000, NULL),
     (c_grp_05a, 'SEEDCU05', c_prov_b, 'ABIERTO',          3000,     0, NULL);  -- de la complementaria -A
 
   -- ── Cuentas por pagar ─────────────────────────────────────────────────
   -- x_pagar = Costo Total (Costo Unitario × Cantidad, decisión 006).
-  INSERT INTO cuentas_pagar (id, folio, cotizacion_id, proyecto_id, item_id, responsable_id, responsable_nombre, item_descripcion, cantidad, x_pagar, margen, estado, monto_pagado, orden_pago_id, grupo_id, banco, clabe, fecha_pago)
+  INSERT INTO cuentas_pagar (id, folio, cotizacion_id, proyecto_id, item_id, responsable_id, x_pagar, estado, monto_pagado, grupo_id, fecha_pago)
   VALUES
-    -- SEEDCU01: sueltas dentro de la orden vieja, sin factura (H2, H3).
-    ('5eedc000-0000-4000-8000-00000000d011', 'SEEDCU-CP-011', 'SEEDCU01', 'SEEDCU01', '5eedc000-0000-4000-8000-000000001011', c_prov_a, 'SEEDCU Proveedor Persona Física', 'Coordinación de producción', 1, 8000, 4000, 'EN_PROCESO_PAGO', 0, c_orden, NULL, 'BBVA', '012180001234567891', NULL),
-    ('5eedc000-0000-4000-8000-00000000d012', 'SEEDCU-CP-012', 'SEEDCU01', 'SEEDCU01', '5eedc000-0000-4000-8000-000000001012', c_prov_a, 'SEEDCU Proveedor Persona Física', 'Asistente de producción',    2, 7000, 3000, 'EN_PROCESO_PAGO', 0, c_orden, NULL, 'BBVA', '012180001234567891', NULL),
-    -- SEEDCU01: sin proveedor, dentro de la orden (T2).
-    ('5eedc000-0000-4000-8000-00000000d013', 'SEEDCU-CP-013', 'SEEDCU01', 'SEEDCU01', '5eedc000-0000-4000-8000-000000001013', NULL, 'Sin asignar', 'Transporte (sin proveedor)', 1, 2000, 2000, 'EN_PROCESO_PAGO', 0, c_orden, NULL, NULL, NULL, NULL),
-    -- SEEDCU01: sin proveedor, fuera de orden (T2).
-    ('5eedc000-0000-4000-8000-00000000d014', 'SEEDCU-CP-014', 'SEEDCU01', 'SEEDCU01', '5eedc000-0000-4000-8000-000000001014', NULL, 'Sin asignar', 'Catering (sin proveedor)',   1, 3000, 1000, 'PENDIENTE',       0, NULL,    NULL, NULL, NULL, NULL),
+    -- SEEDCU01: renglones del grupo de la orden vieja, sin factura (H2, H3).
+    ('5eedc000-0000-4000-8000-00000000d011', 'SEEDCU-CP-011', 'SEEDCU01', 'SEEDCU01', '5eedc000-0000-4000-8000-000000001011', c_prov_a, 8000, 'EN_PROCESO_PAGO', 0, c_grp_01, NULL),
+    ('5eedc000-0000-4000-8000-00000000d012', 'SEEDCU-CP-012', 'SEEDCU01', 'SEEDCU01', '5eedc000-0000-4000-8000-000000001012', c_prov_a, 7000, 'EN_PROCESO_PAGO', 0, c_grp_01, NULL),
+    -- SEEDCU01: sin proveedor (T2), no se agrupan.
+    ('5eedc000-0000-4000-8000-00000000d013', 'SEEDCU-CP-013', 'SEEDCU01', 'SEEDCU01', '5eedc000-0000-4000-8000-000000001013', NULL, 2000, 'PENDIENTE', 0, NULL, NULL),
+    ('5eedc000-0000-4000-8000-00000000d014', 'SEEDCU-CP-014', 'SEEDCU01', 'SEEDCU01', '5eedc000-0000-4000-8000-000000001014', NULL, 3000, 'PENDIENTE', 0, NULL, NULL),
     -- SEEDCU02: hijas del grupo con pago parcial, prorrateado como lo hace registrar_pago_grupo_factura.
-    ('5eedc000-0000-4000-8000-00000000d021', 'SEEDCU-CP-021', 'SEEDCU02', 'SEEDCU02', '5eedc000-0000-4000-8000-000000001021', c_prov_b, 'SEEDCU Proveedor Moral', 'Renta de cámara', 2, 12000, 6000, 'EN_PROCESO_PAGO', 4800, NULL, c_grp_02, 'Santander', '014180009876543210', NULL),
-    ('5eedc000-0000-4000-8000-00000000d022', 'SEEDCU-CP-022', 'SEEDCU02', 'SEEDCU02', '5eedc000-0000-4000-8000-000000001022', c_prov_b, 'SEEDCU Proveedor Moral', 'Iluminación',     1,  8000, 4000, 'EN_PROCESO_PAGO', 3200, NULL, c_grp_02, 'Santander', '014180009876543210', NULL),
+    ('5eedc000-0000-4000-8000-00000000d021', 'SEEDCU-CP-021', 'SEEDCU02', 'SEEDCU02', '5eedc000-0000-4000-8000-000000001021', c_prov_b, 12000, 'EN_PROCESO_PAGO', 4800, c_grp_02, NULL),
+    ('5eedc000-0000-4000-8000-00000000d022', 'SEEDCU-CP-022', 'SEEDCU02', 'SEEDCU02', '5eedc000-0000-4000-8000-000000001022', c_prov_b,  8000, 'EN_PROCESO_PAGO', 3200, c_grp_02, NULL),
     -- SEEDCU03: grupo pagado.
-    ('5eedc000-0000-4000-8000-00000000d031', 'SEEDCU-CP-031', 'SEEDCU03', 'SEEDCU03', '5eedc000-0000-4000-8000-000000001031', c_prov_a, 'SEEDCU Proveedor Persona Física', 'Dirección de fotografía', 1, 12000, 8000, 'PAGADO', 12000, NULL, c_grp_03, 'BBVA', '012180001234567891', '2026-07-20'),
-    -- SEEDCU04: suelta pendiente.
-    ('5eedc000-0000-4000-8000-00000000d041', 'SEEDCU-CP-041', 'SEEDCU04', 'SEEDCU04', '5eedc000-0000-4000-8000-000000001041', c_prov_b, 'SEEDCU Proveedor Moral', 'Audio', 1, 6000, 4000, 'PENDIENTE', 0, NULL, NULL, 'Santander', '014180009876543210', NULL),
-    -- SEEDCU05: principal (suelta) y complementaria -A (en grupo ABIERTO, proyecto_id = la principal).
-    ('5eedc000-0000-4000-8000-00000000d051', 'SEEDCU-CP-051', 'SEEDCU05',   'SEEDCU05', '5eedc000-0000-4000-8000-000000001051', c_prov_a, 'SEEDCU Proveedor Persona Física', 'Producción general', 1, 13000, 7000, 'PENDIENTE', 0, NULL, NULL,      'BBVA',      '012180001234567891', NULL),
-    ('5eedc000-0000-4000-8000-00000000d05a', 'SEEDCU-CP-05A', 'SEEDCU05-A', 'SEEDCU05', '5eedc000-0000-4000-8000-00000000105a', c_prov_b, 'SEEDCU Proveedor Moral',          'Equipo adicional',   1,  3000, 2000, 'PENDIENTE', 0, NULL, c_grp_05a, 'Santander', '014180009876543210', NULL),
-    -- Sin proyecto ni cotización (forma legacy).
-    ('5eedc000-0000-4000-8000-00000000d099', 'SEEDCU-CP-099', NULL, NULL, NULL, c_prov_a, 'SEEDCU Proveedor Persona Física', 'Gasto sin proyecto', 1, 1500, 0, 'PENDIENTE', 0, NULL, NULL, 'BBVA', '012180001234567891', NULL);
+    ('5eedc000-0000-4000-8000-00000000d031', 'SEEDCU-CP-031', 'SEEDCU03', 'SEEDCU03', '5eedc000-0000-4000-8000-000000001031', c_prov_a, 12000, 'PAGADO', 12000, c_grp_03, '2026-07-20'),
+    -- SEEDCU04: grupo abierto pendiente.
+    ('5eedc000-0000-4000-8000-00000000d041', 'SEEDCU-CP-041', 'SEEDCU04', 'SEEDCU04', '5eedc000-0000-4000-8000-000000001041', c_prov_b, 6000, 'PENDIENTE', 0, c_grp_04, NULL),
+    -- SEEDCU05: principal (grupo abierto) y complementaria -A (grupo ABIERTO de otro proveedor, proyecto_id = la principal).
+    ('5eedc000-0000-4000-8000-00000000d051', 'SEEDCU-CP-051', 'SEEDCU05',   'SEEDCU05', '5eedc000-0000-4000-8000-000000001051', c_prov_a, 13000, 'PENDIENTE', 0, c_grp_05,  NULL),
+    ('5eedc000-0000-4000-8000-00000000d05a', 'SEEDCU-CP-05A', 'SEEDCU05-A', 'SEEDCU05', '5eedc000-0000-4000-8000-00000000105a', c_prov_b,  3000, 'PENDIENTE', 0, c_grp_05a, NULL),
+    -- Sin proyecto ni cotización (forma legacy), sin proveedor.
+    ('5eedc000-0000-4000-8000-00000000d099', 'SEEDCU-CP-099', NULL, NULL, '5eedc000-0000-4000-8000-000000001099', NULL, 1500, 'PENDIENTE', 0, NULL, NULL);
 
   -- Desglose de la orden vieja, como lo dejó el backfill de B1b.
   IF to_regclass('public.ordenes_pago_conceptos') IS NOT NULL THEN
-    INSERT INTO ordenes_pago_conceptos (orden_pago_id, cuenta_pagar_id, responsable_id, responsable_nombre, proyecto_id, cotizacion_folio, neto_cubierto, created_at)
-    SELECT c_orden, cp.id, cp.responsable_id, cp.responsable_nombre, cp.proyecto_id, cp.cotizacion_id, cp.x_pagar, '2026-06-20 12:00'
-    FROM cuentas_pagar cp WHERE cp.orden_pago_id = c_orden;
+    INSERT INTO ordenes_pago_conceptos (orden_pago_id, grupo_id, responsable_id, responsable_nombre, proyecto_id, cotizacion_folio, neto_cubierto, created_at)
+    SELECT c_orden, g.id, g.responsable_id, p.nombre, g.proyecto_id, g.proyecto_id, g.monto_total, '2026-06-20 12:00'
+    FROM cuentas_pagar_grupos g JOIN proveedores p ON p.id = g.responsable_id WHERE g.orden_pago_id = c_orden;
   END IF;
 
   -- ── Documentos de proveedor ───────────────────────────────────────────
@@ -204,6 +214,6 @@ BEGIN
     (c_cc_03, 'COMPLEMENTO_PAGO', 'https://example.com/seedcu/SEEDCU03_rep1.xml', 'SEEDCU03_Complemento_pago1.xml', 'validado',  '2026-07-22 09:00', NULL, NULL, NULL, '5eedc000-0000-4000-8000-0000000e0031'),
     (c_cc_04, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU04.xml',      'SEEDCU04_Factura.xml',           'revision',  '2026-09-15 09:00', 'SEEDCU04-0000-4000-8000-00000000F004', 13340, 'PUE', NULL);
 
-  RAISE NOTICE 'seed-cuentas-test: listo (5 proyectos, 1 orden, 3 grupos, 11 cuentas por pagar, 7 por cobrar).';
+  RAISE NOTICE 'seed-cuentas-test: listo (5 proyectos, 1 orden, 6 grupos, 11 cuentas por pagar, 7 por cobrar).';
 END
 $seed$;

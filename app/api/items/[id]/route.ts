@@ -54,33 +54,12 @@ export async function PATCH(
       return Response.json({ ok: true })
     }
 
-    let responsableData: { telefono?: string | null; correo?: string | null; clabe?: string | null; banco?: string | null } | null = null
-    if (responsable_id) {
-      const { data } = await supabaseAdmin
-        .from('proveedores')
-        .select('telefono, correo, clabe, banco')
-        .eq('id', responsable_id)
-        .single()
-      responsableData = data
-    }
-
-    // Cuentas por pagar ya generadas para este item (cotización ya
-    // aprobada). item_id es la relación moderna (1:1, índice único); la
-    // fila "legacy" sin item_id (matcheada por descripción) es un residuo
-    // de datos previos a esa relación -- se mantiene por compatibilidad.
+    // Cuenta por pagar ya generada para este item (cotización aprobada):
+    // item_id es la llave 1:1 (UNIQUE, NOT NULL, B5b).
     const { data: cuentaPrimaria } = await supabaseAdmin
       .from('cuentas_pagar')
       .select('id')
-      .eq('cotizacion_id', item.cotizacion_id)
       .eq('item_id', id)
-      .maybeSingle()
-
-    const { data: cuentaLegacy } = await supabaseAdmin
-      .from('cuentas_pagar')
-      .select('id')
-      .eq('cotizacion_id', item.cotizacion_id)
-      .is('item_id', null)
-      .eq('item_descripcion', item.descripcion)
       .maybeSingle()
 
     // reasignar_responsable_cuenta_pagar hace, en una sola transacción,
@@ -88,14 +67,6 @@ export async function PATCH(
     // reconciliación de cuentas_pagar_grupos -- si el grupo viejo de la
     // cuenta ya no está ABIERTO (P1412), revierte todo y esta ruta responde
     // 409 en vez de aplicar parcialmente.
-    const rpcPayload = {
-      p_responsable_id: responsable_id || null,
-      p_responsable_nombre: responsable_nombre ?? null,
-      p_telefono: responsableData?.telefono ?? null,
-      p_correo: responsableData?.correo ?? null,
-      p_clabe: responsableData?.clabe ?? null,
-      p_banco: responsableData?.banco ?? null,
-    }
     const grupoNoAbiertoResponse = Response.json(
       { error: 'grupo_no_abierto', message: 'Esta cuenta ya forma parte de un grupo facturado o pagado; no se puede reasignar el proveedor sin una corrección contable.' },
       { status: 409 }
@@ -104,16 +75,15 @@ export async function PATCH(
     if (cuentaPrimaria) {
       const { error: rpcError } = await supabaseAdmin.rpc('reasignar_responsable_cuenta_pagar', {
         p_cuenta_pagar_id: cuentaPrimaria.id,
-        ...rpcPayload,
+        p_responsable_id: responsable_id || null,
       })
       if (rpcError) {
         if (rpcError.code === 'P1412') return grupoNoAbiertoResponse
         throw rpcError
       }
     } else {
-      // Sin fila primaria (cotización aún no aprobada, o solo existe la
-      // fila legacy sin item_id) -- nada que reconcilia items_cotizacion
-      // por RPC, se actualiza directo.
+      // Sin cuenta (cotización aún no aprobada): no hay nada que reconciliar,
+      // se actualiza el renglón directo.
       const updateFields: Record<string, unknown> = {}
       if ('responsable_id' in parsed) updateFields.responsable_id = responsable_id || null
       if ('responsable_nombre' in parsed) updateFields.responsable_nombre = responsable_nombre || null
@@ -122,17 +92,6 @@ export async function PATCH(
         .update(updateFields)
         .eq('id', id)
       if (updateError) throw updateError
-    }
-
-    if (cuentaLegacy) {
-      const { error: rpcLegacyError } = await supabaseAdmin.rpc('reasignar_responsable_cuenta_pagar', {
-        p_cuenta_pagar_id: cuentaLegacy.id,
-        ...rpcPayload,
-      })
-      if (rpcLegacyError) {
-        if (rpcLegacyError.code === 'P1412') return grupoNoAbiertoResponse
-        throw rpcLegacyError
-      }
     }
 
     if ('notas' in parsed) {

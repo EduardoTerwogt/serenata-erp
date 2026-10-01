@@ -22,6 +22,7 @@ const MENSAJES: Record<string, { status: number; mensaje: string }> = {
   pagos_activos: { status: 409, mensaje: 'Anula primero los pagos del concepto.' },
   proyecto_no_encontrado: { status: 404, mensaje: 'El proyecto no existe.' },
   grupo_abierto_existente: { status: 409, mensaje: 'El proveedor ya tiene otro grupo abierto en este proyecto; no se puede reabrir este.' },
+  proveedor_no_encontrado: { status: 404, mensaje: 'El proveedor no existe.' },
   grupo_no_abierto: { status: 409, mensaje: 'El grupo ya está facturado o pagado; no se puede reasignar.' },
 }
 
@@ -96,22 +97,9 @@ export async function aplicarCorreccion(c: CorreccionCuentas, usuario: string): 
         p_usuario: usuario,
       })
     case 'proveedor': {
-      // Mismos datos de contacto que copia la reasignación normal (items/[id]).
-      const { data: prov, error } = await supabaseAdmin
-        .from('proveedores')
-        .select('id, nombre, telefono, correo, clabe, banco')
-        .eq('id', c.responsable_id)
-        .maybeSingle()
-      if (error) throw error
-      if (!prov) throw new DomainError({ code: 'proveedor_no_encontrado', status: 404, safeMessage: 'El proveedor no existe.' })
       return llamar('corregir_proveedor_cuenta_pagar', {
         p_cuenta_pagar_id: c.cuenta_pagar_id,
-        p_responsable_id: prov.id,
-        p_responsable_nombre: prov.nombre,
-        p_telefono: prov.telefono,
-        p_correo: prov.correo,
-        p_clabe: prov.clabe,
-        p_banco: prov.banco,
+        p_responsable_id: c.responsable_id,
         p_motivo: c.motivo,
         p_usuario: usuario,
       })

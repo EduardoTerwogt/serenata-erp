@@ -34,6 +34,17 @@ en CI, 8 índices, foto dorada, esquema test = prod verificado (única excepció
 declarada: `loadtest_runs`), línea base de test (`cuentas_periodo` 579/498 ms,
 `cuentas_resumen` 286 ms). La prueba de escala salió del gate de PR (`escala.yml`, D18).
 
+**B5a y B5b etapa 1 → mergeados** (PRs #113 y #114; `live` verde). Pagos, facturas y
+órdenes solo por grupo; el estado del cobro es una columna generada (D15).
+**B5b etapa 2 → en PR** (rama `claude/intelligent-babbage-1cbzl3`): `cuentas_pagar` sin copias
+(proveedor, descripción, cantidad, margen, orden y transferencias salen del dueño), `item_id`
+uuid NOT NULL con FK, constraint "proveedor ⇒ grupo" al COMMIT, retiro de `buscar_*`,
+`estado_anterior` y `registrar_pago_cuenta_pagar`. Migración `20261023` (contiene DROP:
+**la corre el usuario a mano en test y luego producción**; producción está vacía salvo
+usuarios y tipos de proyecto). Faltan de B5b: `historial_responsable` → vista,
+`proyectos.fecha_entrega` → date, `timestamptz` en Cuentas, D12/D16 (cliente), `costo_total`
+(DROP EXPRESSION) y quitar `x_pagar` de la cuenta (M1).
+
 **B1+B3 mergeado — PR #112 (2026-10-01), `live` verde.** Sheets, Calendar y Planeación retirados del
 código; clientes por `nombre_clave` + `resolver_cliente`; autosave de productos en
 bloque; L7; CHECK/timestamptz/RLS. `20261017` y `20261018` aplicadas en test y prod.

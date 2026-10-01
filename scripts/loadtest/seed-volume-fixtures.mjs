@@ -104,8 +104,7 @@ async function insertarProveedoresDeVolumen(supabaseAdmin, runId, count) {
 
 async function crearCotizacionAprobada(targetUrl, cookie, runId, i, proveedores) {
   const items = Array.from({ length: ITEMS_PER_COTIZACION }, (_, j) => {
-    // approve_cotizacion copia responsable_nombre del renglón a cuentas_pagar: sin
-    // el nombre quedaba 'Sin asignar' aunque hubiera responsable_id (copia ≠ dueño).
+    // El renglón guarda responsable_id y todavía responsable_nombre (sale en B5c).
     const proveedor = proveedores[(i * ITEMS_PER_COTIZACION + j) % proveedores.length]
     return {
       descripcion: `LOADTEST-${runId}-Item-${i}-${j + 1}`,
@@ -159,6 +158,16 @@ async function contarFilas(supabaseAdmin, table, column, runId) {
   return count ?? 0
 }
 
+// B5b: la cuenta ya no copia la descripción; se cuenta por el renglón (dueño).
+async function contarCuentasPagar(supabaseAdmin, runId) {
+  const { count, error } = await supabaseAdmin
+    .from('cuentas_pagar')
+    .select('id, items_cotizacion!cuentas_pagar_item_id_fkey!inner(descripcion)', { count: 'exact', head: true })
+    .ilike('items_cotizacion.descripcion', `LOADTEST-${runId}-%`)
+  if (error) throw new Error(`seed-volume-fixtures: fallo contando cuentas_pagar: ${error.message}`)
+  return count ?? 0
+}
+
 async function main() {
   const { targetUrl, runId } = parseArgs()
   const adminEmail = requireEnv('PLAYWRIGHT_TEST_EMAIL')
@@ -186,7 +195,7 @@ async function main() {
     cotizaciones: await contarFilas(supabaseAdmin, 'cotizaciones', 'cliente', runId),
     cuentas_cobrar: await contarFilas(supabaseAdmin, 'cuentas_cobrar', 'cliente', runId),
     items_cotizacion: await contarFilas(supabaseAdmin, 'items_cotizacion', 'descripcion', runId),
-    cuentas_pagar: await contarFilas(supabaseAdmin, 'cuentas_pagar', 'item_descripcion', runId),
+    cuentas_pagar: await contarCuentasPagar(supabaseAdmin, runId),
   }
 
   const faltantes = Object.entries(TARGETS).filter(([table, target]) => conteos[table] < target)

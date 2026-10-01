@@ -3,9 +3,7 @@ import { getCuentaPagarById, getHistorialCambiosResponsableByItem } from '@/lib/
 
 // Historial de reasignaciones de responsable para la partida detrás de esta
 // cuenta por pagar (historial_cambios_responsable_item, log append-only,
-// Bloque 1). Las cuentas creadas antes de que existiera item_id (legado, ver
-// fallback en items/[id]/route.ts) no tienen partida ligada -- devuelven
-// historial vacío, no es un error.
+// Bloque 1). Toda cuenta nace de una partida (item_id NOT NULL, B5b).
 export async function GET(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
@@ -15,10 +13,6 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
     const cuenta = await getCuentaPagarById(id)
     if (!cuenta) {
       return Response.json({ error: 'Cuenta por pagar no encontrada' }, { status: 404 })
-    }
-
-    if (!cuenta.item_id) {
-      return Response.json({ historial: [] })
     }
 
     const historial = await getHistorialCambiosResponsableByItem(cuenta.item_id)
