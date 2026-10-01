@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-01T19:43:21.331Z",
-  "count": 132,
+  "generated_at": "2026-10-01T20:59:31.863Z",
+  "count": 133,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -133,6 +133,7 @@
     "20261017_clientes_nombre_clave_resolver.sql",
     "20261018_integridad_b3.sql",
     "20261019_b5a_pagos_solo_por_grupo.sql",
-    "20261020_b5a_retiro_pago_suelto.sql"
+    "20261020_b5a_retiro_pago_suelto.sql",
+    "20261021_b5b_estado_cobro_generado.sql"
   ]
 }

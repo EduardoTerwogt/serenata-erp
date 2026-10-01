@@ -124,26 +124,11 @@ describe('GET /api/keep-alive', () => {
     expect(response.status).toBe(200)
   })
 
-  it('Rediseño de Cuentas B3 (O2, U4) -- actualiza los cobros vencidos con la RPC diaria', async () => {
-    mocks.rpcMock.mockImplementation((fnName: string) => {
-      if (fnName === 'sync_estados_cuentas_cobrar_vencidas') return Promise.resolve({ data: null, error: null })
-      throw new Error(`RPC inesperada: ${fnName}`)
-    })
-
+  it('D15 -- ya no llama la RPC de estados vencidos (el estado del cobro es derivado)', async () => {
     const body = await (await GET(buildRequest('Bearer secreto-real'))).json()
 
-    expect(mocks.rpcMock).toHaveBeenCalledWith('sync_estados_cuentas_cobrar_vencidas')
-    expect(body.cuentas_cobrar_sync).toBe('ok')
-  })
-
-  it('Rediseño de Cuentas B3 -- si el sync de vencidos falla, lo reporta sin tumbar el keep-alive', async () => {
-    mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'db down' } })
-
-    const response = await GET(buildRequest('Bearer secreto-real'))
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body.cuentas_cobrar_sync).toBe('error')
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+    expect(body).not.toHaveProperty('cuentas_cobrar_sync')
   })
 
   it('PLAN B3 (K2) -- borra pago_operations y bulk_import_operations de más de 30 días', async () => {

@@ -93,19 +93,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Rediseño de Cuentas B3 (O2, U4, R3): el estado guardado de los cobros
-  // vencidos se actualiza aquí, una vez al día,
-  // en lugar de escribir en cada lectura. En pantalla "Vencido" se deriva al
-  // leer. Best-effort: un fallo aquí no afecta el resultado del keep-alive.
-  let cuentasCobrarSync: 'ok' | 'error' = 'ok'
-  try {
-    const { error: syncError } = await supabaseAdmin.rpc('sync_estados_cuentas_cobrar_vencidas')
-    if (syncError) throw syncError
-  } catch (error) {
-    cuentasCobrarSync = 'error'
-    console.error('Keep-alive: sync_estados_cuentas_cobrar_vencidas failed:', error)
-  }
-
   const ok = supabaseOk && drive.status !== 'invalid_grant' && drive.status !== 'error'
 
   return Response.json(
@@ -120,7 +107,6 @@ export async function GET(request: Request) {
       rate_limits_deleted: rateLimitsDeleted,
       pago_operations_deleted: operationsDeleted.pago_operations,
       bulk_import_operations_deleted: operationsDeleted.bulk_import_operations,
-      cuentas_cobrar_sync: cuentasCobrarSync,
     },
     { status: ok ? 200 : 500 }
   )
