@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-01T16:23:26.900Z",
-  "count": 123,
+  "generated_at": "2026-10-01T16:50:38.611Z",
+  "count": 124,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -124,6 +124,7 @@
     "20261006_cuentas_opciones_filtros.sql",
     "20261007_cuentas_desglose_iva_y_descuento.sql",
     "20261008_cuentas_pagar_grupos_invariante.sql",
-    "20261011_plpgsql_check.sql"
+    "20261011_plpgsql_check.sql",
+    "20261012_indices_faltantes.sql"
   ]
 }
