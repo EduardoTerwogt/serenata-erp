@@ -9,6 +9,13 @@
 
 ## Dónde quedó (2026-10-01)
 
+- **Tickets:** epic #110; cómputo de la BD de test #107; PR #100 (retitulado
+  "[En pausa]", sin "Closes #99"). #99 salió a su propio PR: **#104**
+  (rama `claude/issue-99-ajuste-cuentas-utilidad`, parte de `main`, incluye el
+  invariante de grupos con el bloqueo corregido). Al mergear #104 hay que
+  traer `main` a la rama de #100 (merge, sin rebase); `20261008` chocará
+  (add/add): conservar la versión de `main`.
+
 - **Código:** PR #100 en borrador, rama `claude/wonderful-hamilton-260e2w`
   (HEAD `0c0f5c3`): #99 (desglose IVA, utilidad con descuento), invariante de
   grupos (`20261008`), frente 2 (`20261009`) y la corrección `20261010`

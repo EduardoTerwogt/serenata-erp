@@ -5,20 +5,23 @@
 
 ## Estado
 
-**Nueva iniciativa (borrador, 2026-10-01): "Simplificación del modelo de
-datos"** (`docs/PLAN.md`, `docs/inventario-tablas.md`). La fase 1 (inventario
-de las 40 tablas) está hecha; la fase 2 espera las respuestas del usuario a las
-preguntas abiertas del plan.
+**#99 (desglose antes/después de IVA y utilidad con descuento) → PR #104**, en
+borrador, rama `claude/issue-99-ajuste-cuentas-utilidad` (sale de `main`; lleva
+`20261007`, `20261008` con el bloqueo de grupo y su test). Autorizado por el
+usuario (2026-10-01): con CI verde, mostrar las 3 filas de SH072, aplicar
+`20261007` y `20261008` en producción, verificar y mergear. Si `live` falla por
+la BD de test: confirmar con logs de Supabase, reintentar una vez y avisar;
+sin tocar timeouts ni tests (#107).
 
-**Frente 2 de latencia de Cuentas → en pausa** (PR #100 en borrador, rama
-`claude/wonderful-hamilton-260e2w`, HEAD `0c0f5c3`). Estado exacto, causa del
-último fallo de `live` (degradación de la BD de test, cómputo Micro) y cómo
-retomarlo: `docs/archive/frente2-cuentas-conceptos-pausado.md`. Decisión
-pendiente del usuario: subir el cómputo de test (y luego producción).
-**Migraciones 20261007 y 20261008 aplicadas solo en test** (y `20261009`,
-`20261010` del frente 2); aplicarlas en producción justo antes del merge
-(20261008 repara 2 grupos de SH072: recalcula "Eduardo Terwogt" 5,900→3,100 y
-borra el grupo vacío "Serenata").
+**Iniciativa nueva (borrador): "Simplificación del modelo de datos"** — epic
+#109 (`docs/PLAN.md`, `docs/inventario-tablas.md`). Fase 1 hecha; fase 2 (#105)
+espera las respuestas del usuario a las preguntas abiertas del plan.
+
+**Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
+(retitulado "[En pausa]", ya sin "Closes #99"). Estado y cómo retomarlo:
+`docs/archive/frente2-cuentas-conceptos-pausado.md`. Pendiente del usuario:
+decidir el cómputo de test y producción (#107; Dashboard → Reports → Database).
+`20261009` y `20261010` aplicadas solo en test.
 
 ## Completado en la sesión 22
 

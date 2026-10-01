@@ -28,12 +28,14 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 — historia en `docs/archive/rediseno-cuentas.md`.
 
 **Iniciativa en pausa:** "Frente 2 — `cuentas_conceptos` sin recálculo por
-RPC" (PR #100, rama `claude/wonderful-hamilton-260e2w`) — estado exacto y
+RPC" (epic #110, PR #100, rama `claude/wonderful-hamilton-260e2w`) — estado exacto y
 cómo retomarla en `docs/archive/frente2-cuentas-conceptos-pausado.md`.
 
 ---
 
 # Simplificación del modelo de datos
+
+**Epic en GitHub:** #109. Fase 2: #105 · Fase 3: #106 · deuda relacionada: #108.
 
 ## Origen
 
@@ -113,4 +115,5 @@ menos duplicación de estado**.
 |---|---|
 | Entrada de iniciativa y pausa del frente 2 | Hecho (2026-10-01) |
 | Fase 1 — Inventario | Hecho (2026-10-01) |
-| Fase 2 — Uso real y riesgo | Pendiente (espera respuestas a las preguntas abiertas) |
+| Fase 2 — Uso real y riesgo (#105) | Pendiente (espera respuestas a las preguntas abiertas) |
+| Tickets en GitHub | Hecho (2026-10-01): epic #109, #105, #106, #108 |

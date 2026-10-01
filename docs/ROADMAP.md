@@ -81,13 +81,14 @@ ejecutados de punta a punta, quedan en
 - **Simplificación del modelo de datos** (2026-10-01, borrador): reducir la
   dispersión y la duplicación de estado entre las 40 tablas, empezando por las
   11 que alimentan Cuentas. Inventario en `docs/inventario-tablas.md`; plan en
-  `docs/PLAN.md`. Sin migraciones hasta aprobar el plan.
+  `docs/PLAN.md`. Sin migraciones hasta aprobar el plan. Epic #109 (fases #105, #106; deuda #108).
 - **Frente 2 de latencia de Cuentas** (2026-09-30, **en pausa**): los
   conceptos de Cuentas se guardan derivados en `cuentas_conceptos_base` y se
   mantienen con triggers (`docs/decisions/019-cuentas-conceptos-materializada.md`).
   Implementado en el PR #100 (issue #99), en borrador. Falta validar bajo
   demanda y resolver el cómputo de la BD de test; estado y pasos para
-  retomarlo en `docs/archive/frente2-cuentas-conceptos-pausado.md`.
+  retomarlo en `docs/archive/frente2-cuentas-conceptos-pausado.md`. Epic #110;
+  cómputo de test #107; #99 salió al PR #104.
   - Escala de referencia: el ambiente de test con miles de datos es el objetivo
     que producción debe aguantar antes de pasar a uso real.
 
