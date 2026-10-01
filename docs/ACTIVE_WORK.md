@@ -25,8 +25,8 @@ reservas de folio, foto dorada sin tocar prod; decisiones D12 dueño único de
 verdad, D13 renombrar `x_pagar` a Costo Unitario/Costo Total, D14 retirar
 Calendar). 7 PRs (nuevo B5c: renglones, editor y nomenclatura), 40 → 34 tablas.
 Historia de auditorías en `docs/archive/simplificacion-modelo-auditorias.md`.
-**Siguiente sesión: B0** (abrir con `serenata-iniciar-fase`). Pendientes del
-usuario que B0 pedirá: respaldo `supabase db dump` (plan Free sin respaldos),
+**Siguiente: B6** (abrir con `serenata-iniciar-fase`). Pendientes del
+usuario: respaldo `supabase db dump` (plan Free sin respaldos),
 Drive en Preview y limpiar carpetas de prueba de Drive antes del reinicio (B2).
 
 **B0 → hecho** (PR #111 mergeado, 2026-10-01; `live` verde ×3). Guardas, `plpgsql_check`
@@ -36,19 +36,18 @@ declarada: `loadtest_runs`), línea base de test (`cuentas_periodo` 579/498 ms,
 
 **B5a y B5b etapa 1 → mergeados** (PRs #113 y #114; `live` verde). Pagos, facturas y
 órdenes solo por grupo; el estado del cobro es una columna generada (D15).
-**B5b etapa 3 → en PR** (`20261024`, también con DROP: la corre el usuario a mano en test y
-producción): `costo_total` sustituye a `x_pagar` en `cuentas_pagar`, `historial_responsable` es una
-vista, `fecha_entrega` es `date`, `timestamptz` en Cuentas y un solo `cliente_id` (se resuelve por
-la cotización). Con ella B5b queda completo salvo el recorrido manual en el Preview.
-**B5c → listo en rama local** (a la espera del merge del #116): `20261025`, también con DROP y a
-mano. **B5b etapa 2 → mergeado** (PR #115) (rama `claude/intelligent-babbage-1cbzl3`): `cuentas_pagar` sin copias
-(proveedor, descripción, cantidad, margen, orden y transferencias salen del dueño), `item_id`
-uuid NOT NULL con FK, constraint "proveedor ⇒ grupo" al COMMIT, retiro de `buscar_*`,
-`estado_anterior` y `registrar_pago_cuenta_pagar`. Migración `20261023` (contiene DROP:
-**la corre el usuario a mano en test y luego producción**; producción está vacía salvo
-usuarios y tipos de proyecto). Faltan de B5b: `historial_responsable` → vista,
-`proyectos.fecha_entrega` → date, `timestamptz` en Cuentas, D12/D16 (cliente), `costo_total`
-(DROP EXPRESSION) y quitar `x_pagar` de la cuenta (M1).
+**B5 → cerrado en código y en BD** (2026-10-01). B5b etapa 2 (#115), etapa 3 (#116) y B5c (#117)
+mergeados con `live` verde. `20261023`, `20261024` y `20261025` (todas con DROP, corridas a mano)
+aplicadas en test y producción; en ambas `plpgsql_check` da 0 errores y las guardas dan 0.
+Resultado: `cuentas_pagar` sin copias (dueño único), `item_id` uuid con FK, `costo_total` /
+`costo_unitario` como nombres finales, un solo `cliente_id`, `historial_responsable` como vista,
+`fecha_entrega` `date`, `timestamptz` en Cuentas, CHECKs de renglones, cotización aprobada
+congelada por trigger (P1419) y estado de cotización solo por RPC (L1). El job `live` ya no corre en
+PRs cuyo diff es solo `.md` (job `changes` de `e2e.yml`).
+**Pendiente: recorrido manual en el Preview de B5b y B5c** (no se puede omitir) y luego **B6**
+(motor único de Cuentas, D17) y **B7** (curva de escala 500/2,200/5,000 proyectos, decisión del
+frente 2, poda de índices sin uso). Lección: producción llevaba migraciones sin aplicar
+(`20261020`/`20261023`); verificar el estado real antes de correr la siguiente.
 
 **B1+B3 mergeado — PR #112 (2026-10-01), `live` verde.** Sheets, Calendar y Planeación retirados del
 código; clientes por `nombre_clave` + `resolver_cliente`; autosave de productos en
