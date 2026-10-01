@@ -40,8 +40,8 @@ describe('GET /api/portal/cuentas', () => {
       { id: 'grupo-1', proyecto_id: 'SH001', proyecto_nombre: 'Spot Verano', estado: 'ABIERTO', monto_total: 1500, monto_pagado: 0 },
     ])
     mocks.getCuentasPagarPorProveedorMock.mockResolvedValue([
-      { id: 'c1', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Renta cámara', cantidad: 1, x_pagar: 1000, cotizacion_id: 'SH001' },
-      { id: 'c2', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Grip', cantidad: 1, x_pagar: 500, cotizacion_id: 'SH001' },
+      { id: 'c1', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Renta cámara', cantidad: 1, costo_total: 1000, cotizacion_id: 'SH001' },
+      { id: 'c2', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Grip', cantidad: 1, costo_total: 500, cotizacion_id: 'SH001' },
     ])
 
     const response = await GET()
@@ -75,7 +75,7 @@ describe('GET /api/portal/cuentas', () => {
       { id: 'grupo-1', proyecto_id: 'SH001', proyecto_nombre: 'Spot Verano', estado: 'FACTURADO', monto_total: 1000, monto_pagado: 0 },
     ])
     mocks.getCuentasPagarPorProveedorMock.mockResolvedValue([
-      { id: 'c1', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Renta cámara', cantidad: 1, x_pagar: 1000, cotizacion_id: 'SH001' },
+      { id: 'c1', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Renta cámara', cantidad: 1, costo_total: 1000, cotizacion_id: 'SH001' },
     ])
 
     const response = await GET()
@@ -86,7 +86,7 @@ describe('GET /api/portal/cuentas', () => {
   it('una cuenta legacy sin grupo_id se muestra como un grupo de un solo item, nunca facturable', async () => {
     mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([])
     mocks.getCuentasPagarPorProveedorMock.mockResolvedValue([
-      { id: 'c3', grupo_id: null, proyecto_id: 'SH002', proyecto_nombre: 'Documental', item_descripcion: 'Edición', cantidad: 1, x_pagar: 500, monto_pagado: 200, estado: 'EN_PROCESO_PAGO', cotizacion_id: 'SH002' },
+      { id: 'c3', grupo_id: null, proyecto_id: 'SH002', proyecto_nombre: 'Documental', item_descripcion: 'Edición', cantidad: 1, costo_total: 500, monto_pagado: 200, estado: 'EN_PROCESO_PAGO', cotizacion_id: 'SH002' },
     ])
 
     const response = await GET()
@@ -125,7 +125,7 @@ describe('GET /api/portal/cuentas', () => {
       { id: 'grupo-1', proyecto_id: 'SH001', estado: 'EN_PROCESO_PAGO', monto_total: 1000, monto_pagado: 500, total_a_transferir: 1159.99, monto_transferido: 580 },
     ])
     mocks.getCuentasPagarPorProveedorMock.mockResolvedValue([
-      { id: 'c1', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Renta', cantidad: 1, x_pagar: 1000, cotizacion_id: 'SH001' },
+      { id: 'c1', grupo_id: 'grupo-1', proyecto_id: 'SH001', item_descripcion: 'Renta', cantidad: 1, costo_total: 1000, cotizacion_id: 'SH001' },
     ])
     const body = await (await GET()).json()
     expect(body.grupos[0]).toMatchObject({ total_a_transferir: 1159.99, monto_transferido: 580, saldo_por_transferir: 579.99, saldo_pendiente: 500 })

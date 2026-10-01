@@ -85,6 +85,19 @@ describe('approveQuotationAndFetchResult', () => {
     })
   })
 
+  it('mapea P1418 a 400 con el motivo: sin cliente del catálogo o fecha de entrega inválida (D12, F4)', async () => {
+    mocks.getCotizacionByIdMock.mockResolvedValue({ id: 'SH001', estado: 'EMITIDA' })
+    mocks.rpcMock.mockResolvedValueOnce({ data: null, error: { code: 'P1418', message: 'cliente_requerido: la cotización SH001 no tiene un cliente del catálogo' } })
+    let result = await approveQuotationAndFetchResult('SH001')
+    expect(result).toMatchObject({ ok: false, status: 400 })
+    expect((result.body as { error: string }).error).toMatch(/cliente del catálogo/)
+
+    mocks.rpcMock.mockResolvedValueOnce({ data: null, error: { code: 'P1418', message: 'fecha_entrega_invalida: la cotización SH001 tiene la fecha de entrega "x"' } })
+    result = await approveQuotationAndFetchResult('SH001')
+    expect(result).toMatchObject({ ok: false, status: 400 })
+    expect((result.body as { error: string }).error).toMatch(/fecha de entrega/)
+  })
+
   it('retorna 400 cuando la RPC rechaza por estado inválido dentro de su propia transacción (defensa en profundidad, sin haber pasado por el chequeo previo en JS)', async () => {
     // El chequeo previo en JS ya obligó estado === 'EMITIDA' para llegar aquí;
     // este caso simula que la RPC igual encontró otro estado bajo su propio

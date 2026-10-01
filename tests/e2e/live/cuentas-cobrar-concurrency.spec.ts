@@ -20,7 +20,7 @@ const liveEnabled = Boolean(
 async function crearCuentaCobrarDePrueba(supabase: ReturnType<typeof getLiveSupabaseAdmin>, montoTotal: number) {
   const { data, error } = await supabase
     .from('cuentas_cobrar')
-    .insert({ cliente: 'E2E-CONCURRENCY-TEST', proyecto: 'Test concurrencia pagos', monto_total: montoTotal })
+    .insert({ monto_total: montoTotal })
     .select()
     .single()
   if (error) throw error

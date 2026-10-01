@@ -44,12 +44,6 @@ export async function updateProyectoWithRollback(
   const notasPrevias = new Map(
     (detalleAnterior.items || []).map((item: ItemCotizacion) => [item.id, item.notas || ''])
   )
-  const { data: historialPrevio, error: historialPrevioError } = await supabaseAdmin
-    .from('historial_responsable')
-    .select('*')
-    .eq('proyecto_id', id)
-
-  if (historialPrevioError) throw historialPrevioError
 
   const proyecto = await updateProyecto(id, proyectoUpdates)
 
@@ -68,7 +62,7 @@ export async function updateProyectoWithRollback(
     }
 
     // Bloque 4: mismo cierre automático que cambiarEtapaProyecto (Reporte de
-    // Cierre + historial de responsables) -- este camino legado (estado
+    // Cierre; el historial de responsables es una vista, A11) -- este camino legado (estado
     // 'FINALIZADO' vía la tab "Información") solo aplica a Grabación, pero
     // el resultado debe ser el mismo sin importar qué endpoint cerró el
     // proyecto.
@@ -78,7 +72,6 @@ export async function updateProyectoWithRollback(
   } catch (error) {
     try {
       await updateProyecto(id, {
-        cliente: proyectoAnterior.cliente,
         proyecto: proyectoAnterior.proyecto,
         fecha_entrega: proyectoAnterior.fecha_entrega,
         locacion: proyectoAnterior.locacion,
@@ -94,19 +87,6 @@ export async function updateProyectoWithRollback(
           .update({ notas: notas || null })
           .eq('id', itemId)
         if (notasError) throw notasError
-      }
-
-      const { error: deleteHistorialError } = await supabaseAdmin
-        .from('historial_responsable')
-        .delete()
-        .eq('proyecto_id', id)
-      if (deleteHistorialError) throw deleteHistorialError
-
-      if ((historialPrevio || []).length > 0) {
-        const { error: restoreHistorialError } = await supabaseAdmin
-          .from('historial_responsable')
-          .insert(historialPrevio)
-        if (restoreHistorialError) throw restoreHistorialError
       }
     } catch (rollbackError) {
       console.error(`[PUT /api/proyectos/${id}] Error haciendo rollback:`, rollbackError)

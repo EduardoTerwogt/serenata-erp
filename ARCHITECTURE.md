@@ -340,6 +340,12 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   Las lecturas por llave en TS usan el embed
   `items_cotizacion!cuentas_pagar_item_id_fkey(...)` (la FK simple desambigua
   frente a la compuesta).
+- **Modelo final de Cuentas (B5b etapa 3, migración `20261024`).** `cuentas_pagar.costo_total`
+  es el Costo Total del renglón (Costo Unitario × Cantidad). El cliente de un proyecto o de un
+  cobro no se guarda: se lee por `cotizaciones.cliente_id` → `clientes` (embed
+  `cotizaciones!proyectos_id_fkey(...)` en TS, `LEFT JOIN` en SQL); `approve_cotizacion` exige
+  `cliente_id`. `proyectos.fecha_entrega` es `date`. `historial_responsable` es una vista
+  calculada de los renglones de proyectos cerrados, no una tabla.
 - Un índice único parcial (`cuentas_pagar_grupos_abierto_unique` sobre
   `(proyecto_id, responsable_id) WHERE estado = 'ABIERTO'`) es lo que hace
   segura la creación de grupos bajo concurrencia — dos aprobaciones casi

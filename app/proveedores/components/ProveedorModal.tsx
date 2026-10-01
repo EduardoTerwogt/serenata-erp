@@ -129,7 +129,7 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
     }
   }
 
-  const totalGanado = historial.reduce((s, h) => s + (h.x_pagar || 0), 0)
+  const totalGanado = historial.reduce((s, h) => s + (h.costo_total || 0), 0)
 
   return (
     <Modal
@@ -282,7 +282,7 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
                     </td>
                     <td className="truncate px-[var(--row-pad-x)] align-middle text-subtext">{formatDateDisplay(h.fecha_evento)}</td>
                     <td className="truncate px-[var(--row-pad-x)] align-middle text-ink">{h.rol_en_proyecto || '—'}</td>
-                    <td className="truncate px-[var(--row-pad-x)] align-middle text-right font-semibold text-approved-fg">${fmt(h.x_pagar)}</td>
+                    <td className="truncate px-[var(--row-pad-x)] align-middle text-right font-semibold text-approved-fg">${fmt(h.costo_total)}</td>
                   </>
                 )}
                 renderMobileCard={(h) => (
@@ -307,7 +307,7 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
                     </div>
                     <div className="flex justify-between items-center pt-3 border-t border-hairline mt-3">
                       <span className="text-subtext">Monto:</span>
-                      <span className="text-approved-fg font-medium">${fmt(h.x_pagar)}</span>
+                      <span className="text-approved-fg font-medium">${fmt(h.costo_total)}</span>
                     </div>
                   </div>
                 )}

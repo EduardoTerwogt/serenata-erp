@@ -43,7 +43,7 @@ export interface CierreProyecto {
 // Solo los campos que usa el cierre: así lo alimentan tanto CuentaPagar
 // completa (vista actual) como las filas compactas de la lectura por periodo
 // (B3, lib/server/cuentas/periodo.ts).
-export type CuentaPagarCierreInput = Pick<CuentaPagar, 'id' | 'grupo_id' | 'x_pagar' | 'responsable_id'> &
+export type CuentaPagarCierreInput = Pick<CuentaPagar, 'id' | 'grupo_id' | 'costo_total' | 'responsable_id'> &
   Partial<Pick<CuentaPagar, 'responsable_nombre' | 'grupo_monto_total' | 'grupo_total_a_transferir'>> & {
     proveedor_regimen_fiscal?: RegimenFiscal | null
   }
@@ -80,7 +80,7 @@ export function calcularCierreProyecto(
 
   const quien_cuanto_cuando: QuienCuantoCuando[] = Array.from(porGrupo.entries()).map(([clave, items]) => {
     const representante = items[0]
-    const monto = representante.grupo_monto_total ?? items.reduce((sum, item) => sum + (item.x_pagar || 0), 0)
+    const monto = representante.grupo_monto_total ?? items.reduce((sum, item) => sum + (item.costo_total || 0), 0)
     const regimenFiscal = representante.proveedor_regimen_fiscal ?? null
     const r = calcularEjemploFactura(monto, regimenFiscal)
     // H10: con factura validada manda el Total del CFDI (el mismo que usa el

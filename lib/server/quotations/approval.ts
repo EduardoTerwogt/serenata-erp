@@ -26,6 +26,14 @@ export async function approveQuotationAndFetchResult(id: string) {
   const { data, error } = await supabaseAdmin.rpc('approve_cotizacion', { p_id: id })
 
   if (error) {
+    // P1418 (D12, F4): datos de la cotización que la aprobación exige (cliente del
+    // catálogo, fecha de entrega válida). Falla explícito, con el motivo.
+    if (error.code === 'P1418') {
+      const motivo = (error.message ?? '').startsWith('cliente_requerido')
+        ? 'La cotización no tiene un cliente del catálogo: selecciónalo antes de aprobar.'
+        : 'La fecha de entrega de la cotización no es válida: corrígela antes de aprobar.'
+      return { ok: false as const, status: 400, body: { error: motivo } }
+    }
     const msg = error.message || 'Error aprobando cotización'
     const status = msg.includes('no encontrada') || msg.includes('P0002') ? 404 : 500
     return { ok: false as const, status, body: { error: msg } }

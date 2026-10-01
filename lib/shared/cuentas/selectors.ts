@@ -1,10 +1,10 @@
 import { CuentaCobrar, CuentaPagar } from '@/lib/types'
 
 type MonetaryCuenta = Pick<CuentaCobrar, 'monto_total' | 'monto_pagado'>
-type MonetaryCuentaPagar = Pick<CuentaPagar, 'x_pagar' | 'monto_pagado'>
+type MonetaryCuentaPagar = Pick<CuentaPagar, 'costo_total' | 'monto_pagado'>
 
 function getMontoPendiente(cuenta: MonetaryCuenta | MonetaryCuentaPagar) {
-  const total = 'monto_total' in cuenta ? cuenta.monto_total : cuenta.x_pagar
+  const total = 'monto_total' in cuenta ? cuenta.monto_total : cuenta.costo_total
   return Math.max(0, total - Number(cuenta.monto_pagado || 0))
 }
 
@@ -43,7 +43,7 @@ export function agruparCuentasPagarPorGrupo(cuentas: CuentaPagar[]): CuentaPagar
     return {
       ...representante,
       estado: representante.grupo_estado ?? representante.estado,
-      x_pagar: representante.grupo_monto_total ?? items.reduce((sum, item) => sum + (item.x_pagar || 0), 0),
+      costo_total: representante.grupo_monto_total ?? items.reduce((sum, item) => sum + (item.costo_total || 0), 0),
       monto_pagado: representante.grupo_monto_pagado ?? items.reduce((sum, item) => sum + (item.monto_pagado || 0), 0),
       items_count: items.length,
     }

@@ -33,7 +33,7 @@ function tareaFixture(id: string, fechaLimite: string | null): Record<string, un
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     proveedores: null,
-    proyectos: { proyecto: 'Proyecto X', cliente: 'Cliente X', estado: 'RODAJE' },
+    proyectos: { proyecto: 'Proyecto X', estado: 'RODAJE', cotizaciones: { cliente: 'Cliente X', clientes: { nombre: 'Cliente X' } } },
   }
 }
 

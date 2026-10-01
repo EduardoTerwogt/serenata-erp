@@ -36,7 +36,11 @@ declarada: `loadtest_runs`), línea base de test (`cuentas_periodo` 579/498 ms,
 
 **B5a y B5b etapa 1 → mergeados** (PRs #113 y #114; `live` verde). Pagos, facturas y
 órdenes solo por grupo; el estado del cobro es una columna generada (D15).
-**B5b etapa 2 → en PR** (rama `claude/intelligent-babbage-1cbzl3`): `cuentas_pagar` sin copias
+**B5b etapa 3 → en PR** (`20261024`, también con DROP: la corre el usuario a mano en test y
+producción): `costo_total` sustituye a `x_pagar` en `cuentas_pagar`, `historial_responsable` es una
+vista, `fecha_entrega` es `date`, `timestamptz` en Cuentas y un solo `cliente_id` (se resuelve por
+la cotización). Con ella B5b queda completo salvo el recorrido manual en el Preview.
+**B5b etapa 2 → mergeado** (PR #115) (rama `claude/intelligent-babbage-1cbzl3`): `cuentas_pagar` sin copias
 (proveedor, descripción, cantidad, margen, orden y transferencias salen del dueño), `item_id`
 uuid NOT NULL con FK, constraint "proveedor ⇒ grupo" al COMMIT, retiro de `buscar_*`,
 `estado_anterior` y `registrar_pago_cuenta_pagar`. Migración `20261023` (contiene DROP:

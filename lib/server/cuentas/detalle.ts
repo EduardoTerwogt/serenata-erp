@@ -23,7 +23,7 @@ async function proyectoCorto(id: string | null): Promise<ProyectoDetalleCorto | 
 export async function cargarDetalleCobro(id: string): Promise<DetalleCobro | null> {
   const { data: cuenta, error } = await supabaseAdmin
     .from('cuentas_cobrar')
-    .select('id, folio, cotizacion_id, cliente, monto_total, monto_pagado, fecha_factura, fecha_vencimiento, notas, proyecto_id')
+    .select('id, folio, cotizacion_id, monto_total, monto_pagado, fecha_factura, fecha_vencimiento, notas, proyecto_id, cotizaciones(cliente, clientes(nombre))')
     .eq('id', id)
     .maybeSingle()
   if (error) throw error
@@ -41,8 +41,14 @@ export async function cargarDetalleCobro(id: string): Promise<DetalleCobro | nul
   if (docs.error) throw docs.error
   if (pagos.error) throw pagos.error
 
+  // D12: el cliente sale de la cotización del cobro (clientes.nombre; lo emitido como respaldo).
+  const { cotizaciones, ...cuentaBase } = cuenta as typeof cuenta & {
+    cotizaciones: { cliente: string | null; clientes: { nombre: string | null } | null } | null
+  }
+  const cliente = cotizaciones?.clientes?.nombre ?? cotizaciones?.cliente ?? null
+
   return armarDetalleCobro(
-    { cuenta, proyecto, documentos: (docs.data ?? []) as DocumentoFila[], pagos: pagos.data ?? [], reabierta: abierta },
+    { cuenta: { ...cuentaBase, cliente }, proyecto, documentos: (docs.data ?? []) as DocumentoFila[], pagos: pagos.data ?? [], reabierta: abierta },
     hoyCdmx()
   )
 }
@@ -50,13 +56,13 @@ export async function cargarDetalleCobro(id: string): Promise<DetalleCobro | nul
 // Descripción y cantidad salen del renglón (dueño) por su llave; la FK simple
 // desambigua el embed frente a la compuesta (item_id, cotizacion_id).
 const COLS_CUENTA_PAGAR =
-  'id, item_id, cotizacion_id, x_pagar, monto_pagado, responsable_id, proyecto_id, estado, grupo_id, items_cotizacion!cuentas_pagar_item_id_fkey(descripcion, cantidad)'
+  'id, item_id, cotizacion_id, costo_total, monto_pagado, responsable_id, proyecto_id, estado, grupo_id, items_cotizacion!cuentas_pagar_item_id_fkey(descripcion, cantidad)'
 
 type FilaCuentaPagar = {
   id: string
   item_id: string
   cotizacion_id: string | null
-  x_pagar: number
+  costo_total: number
   monto_pagado: number | null
   items_cotizacion: { descripcion: string | null; cantidad: number | null } | null
 }
@@ -68,7 +74,7 @@ function aFilaCuenta(c: FilaCuentaPagar): PagoFilas['cuentas'][number] {
     cotizacion_id: c.cotizacion_id,
     item_descripcion: c.items_cotizacion?.descripcion ?? null,
     cantidad: c.items_cotizacion?.cantidad ?? null,
-    x_pagar: c.x_pagar,
+    x_pagar: c.costo_total,
     monto_pagado: c.monto_pagado,
   }
 }
@@ -101,7 +107,7 @@ export async function cargarDetallePago(objetivo: 'grupo' | 'cuenta', id: string
       proyecto_id: c.proyecto_id,
       responsable_id: c.responsable_id,
       estado: c.estado,
-      neto: Number(c.x_pagar),
+      neto: Number(c.costo_total),
       // B5a: una cuenta suelta no tiene factura, pago ni orden propios.
       total_a_transferir: null,
       monto_transferido: 0,

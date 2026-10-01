@@ -108,7 +108,7 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     const cuentaCobrar = cobros?.[0]
     expect(cuentaCobrar, 'debe existir una cuenta por cobrar real para esta cotización').toBeTruthy()
 
-    const { data: pagos } = await supabase.from('cuentas_pagar').select('id, cotizacion_id, x_pagar').eq('cotizacion_id', cotizacionId)
+    const { data: pagos } = await supabase.from('cuentas_pagar').select('id, cotizacion_id, costo_total').eq('cotizacion_id', cotizacionId)
     const cuentaPagar = pagos?.[0]
     expect(cuentaPagar, 'debe existir una cuenta por pagar real para esta cotización').toBeTruthy()
 

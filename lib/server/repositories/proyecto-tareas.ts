@@ -185,7 +185,7 @@ export async function getTareasAgregadas(): Promise<TareaAgregada[]> {
   while (true) {
     let query = supabaseAdmin
       .from('proyecto_tareas')
-      .select('*, proveedores(nombre), proyectos!inner(proyecto, cliente, estado)')
+      .select('*, proveedores(nombre), proyectos!inner(proyecto, estado, cotizaciones!proyectos_id_fkey(cliente, clientes(nombre)))')
       .neq('estado', 'COMPLETADA')
       .neq('proyectos.estado', 'FINALIZADO')
       .order('fecha_limite', { ascending: true, nullsFirst: false })
@@ -230,13 +230,13 @@ export async function getTareasAgregadas(): Promise<TareaAgregada[]> {
   }
 
   return all.map((row) => {
-    const proyecto = row.proyectos as { proyecto: string; cliente: string }
+    const proyecto = row.proyectos as { proyecto: string; cotizaciones: { cliente: string | null; clientes: { nombre: string | null } | null } | null }
     const { proyectos: _proyectos, ...rest } = row
     void _proyectos
     return {
       ...conNombreAsignado(rest),
       proyecto_nombre: proyecto.proyecto,
-      proyecto_cliente: proyecto.cliente,
+      proyecto_cliente: proyecto.cotizaciones?.clientes?.nombre ?? proyecto.cotizaciones?.cliente ?? '',
     }
   })
 }

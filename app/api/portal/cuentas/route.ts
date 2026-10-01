@@ -13,7 +13,7 @@ function itemDeCuenta(c: CuentaPagar) {
     id: c.id,
     item_descripcion: c.item_descripcion,
     cantidad: c.cantidad,
-    x_pagar: c.x_pagar,
+    x_pagar: c.costo_total,
     cotizacion_id: c.cotizacion_id,
   }
 }
@@ -79,11 +79,11 @@ export async function GET() {
         proyecto_id: c.proyecto_id,
         proyecto_nombre: c.proyecto_nombre ?? null,
         estado: c.estado,
-        monto_total: c.x_pagar,
+        monto_total: c.costo_total,
         monto_pagado: c.monto_pagado || 0,
-        saldo_pendiente: calcularSaldoPendiente(c.x_pagar, c.monto_pagado || 0),
+        saldo_pendiente: calcularSaldoPendiente(c.costo_total, c.monto_pagado || 0),
         // B5a: una cuenta suelta no tiene factura ni transferencias propias.
-        ...enTransferir(c.x_pagar, null, 0, regimen),
+        ...enTransferir(c.costo_total, null, 0, regimen),
         items: [itemDeCuenta(c)],
       }))
 
