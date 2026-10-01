@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Plan v4 — "Simplificación del modelo de datos" (2026-10-01; v4 tras exploración adicional; 1 confirmación para E3).
+**Estado:** Plan v4 — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar, sin preguntas abiertas).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -53,7 +53,7 @@ están conectados a la BD, nada debe romperse ni quedar suelto.**
   (Propuesta). Recomendada: **B** — un dueño por dato + el grupo como única
   obligación de pago.
 - Conclusión central: **el problema es estado duplicado, no número de
-  tablas.** 40 → 32 tablas (plan v4),
+  tablas.** 40 → 33 tablas (plan v4),
   ~20 columnas copiadas o derivadas menos, y desaparece la rama "suelta" de
   `cuentas_pagar` en ~10 RPCs.
 - Evidencia de que el diseño actual ya deja divergir datos: contacto de
@@ -168,7 +168,7 @@ con el mismo ciclo de vida, la misma forma o una relación 1:1 sin motivo?
 |---|---|---|---|---|
 | E1 | **Retirar Planeación (D8):** `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs`, su trigger y función, la referencia en `cancel_cotizacion`, `app/planeacion/`, `app/api/planeacion/` (8 rutas), navegación, proxy, la sección `planeacion` en `AppSection`/`authz`/`api-auth`/Admin, `tests/e2e/critical/planeacion.spec.ts` y sus mocks. | Ninguna otra parte lee esas tablas; los 2 usuarios son `admin`. | −3 | B1 |
 | E2 | **Plantillas de servicios cambian de permiso.** Hoy `/plantillas-servicios`, `POST /api/service-templates` y el botón "Guardar como plantilla" exigen la sección `planeacion`; al retirarla quedarían inaccesibles. Pasan a la sección `cotizaciones`, que es donde se usan. | `lib/proxy-handler.ts:33,46`, `lib/navigation/items.ts:31`, `cotizaciones/*/page.tsx`, `QuotationItemsSection.tsx`. | — | B1 |
-| E3 | **Folios CC/CP fuera** (`cuentas_cobrar.folio`, `cuentas_pagar.folio`, `folio_contadores`, `generate_folio_cc/cp`, `siguiente_folio`, 2 triggers). La columna "Folio" de Cuentas y el Dashboard muestran el **folio del proyecto/cotización** (SH…), no el CC/CP; el detalle titula con el id del proyecto. Solo los usan la búsqueda `ILIKE` de `buscar_cuentas_*` y un respaldo en la ruta de carpeta de Drive de complementos (`cuenta.folio \|\| cotizacion_id`). | `Conceptos.tsx:133`, `DetalleConcepto.tsx:38`, `dashboard/page.tsx`, `subir-complemento/route.ts:88`. | −1 | B5 (**requiere confirmación 4**) |
+| E3 | ~~Folios CC/CP fuera~~ **(descartado)** (`cuentas_cobrar.folio`, `cuentas_pagar.folio`, `folio_contadores`, `generate_folio_cc/cp`, `siguiente_folio`, 2 triggers). La columna "Folio" de Cuentas y el Dashboard muestran el **folio del proyecto/cotización** (SH…), no el CC/CP; el detalle titula con el id del proyecto. Solo los usan la búsqueda `ILIKE` de `buscar_cuentas_*` y un respaldo en la ruta de carpeta de Drive de complementos (`cuenta.folio \|\| cotizacion_id`). | `Conceptos.tsx:133`, `DetalleConcepto.tsx:38`, `dashboard/page.tsx`, `subir-complemento/route.ts:88`. | — | **Descartado** (2026-10-01): los folios CC/CP se usan fuera de la app (contador, facturas, proveedores). |
 | E4 | **Unificar `bulk_import_operations` y `pago_operations`** en una tabla `operaciones` (`operation_id`, `dominio`, `entidad_id`, `result`). Matiz a A8: la capa HTTP (`idempotency_keys`) sigue aparte, pero estas dos son **la misma capa** (resultado guardado dentro de la transacción) con la misma forma; hoy son dos tablas por historia, no por diseño. | Definiciones en `20260909_idempotency_keys.sql`/`20260912_*`. | −1 | B3 |
 
 ### Se evaluaron y se descartan (con motivo)
@@ -193,11 +193,11 @@ filas) se queda sin uso activo. Se **conserva** para el diseño de Proyectos
 
 ## Resultado esperado (v4)
 
-- **40 → 32 tablas** (−20 %): salen `cliente_id_backfill_clasificacion`,
+- **40 → 33 tablas** (−18 %): salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
-  `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs`,
-  `folio_contadores` (E3, si se confirma; si no, 33) y `bulk_import_operations`
-  (absorbida en `operaciones`).
+  `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs` y
+  `bulk_import_operations` (absorbida en `operaciones`). Los folios CC/CP y
+  `folio_contadores` se quedan (identificadores externos).
 - **Un solo motor de reglas de Cuentas** (SQL), **una sola vía de pago** (el
   grupo), **cada dato con un dueño**:
 
@@ -248,7 +248,7 @@ Un PR por bloque. Estimación: 5 sesiones.
   grupos, Σ hijas = grupo); `grupo.monto_total = Σ x_pagar`;
   `cp.x_pagar = item.x_pagar × item.cantidad`; total de orden = Σ desglose;
   importe y margen por fórmula; `cuentas_cobrar.monto_total = cotización.total`;
-  renglón aprobado ⇔ cuenta por pagar; cuenta con proveedor ⇒ grupo.
+  renglón aprobado ⇔ cuenta por pagar; cuenta con proveedor ⇒ grupo; folios CC/CP únicos y no nulos.
 - `scripts/db/mapa-dependencias.mjs <tabla.columna>`.
 - Test: retirar objetos del frente 2 (migración de reversa "solo test",
   anotada en `docs/archive/frente2-cuentas-conceptos-pausado.md`), comparar
@@ -275,7 +275,7 @@ Un PR por bloque. Estimación: 5 sesiones.
 - Vacía: cotizaciones, renglones, reservas de folio, proyectos (y sus
   tareas/documentos, hoy en 0), todas las de Cuentas, órdenes, historiales,
   reaperturas, correcciones, idempotencia, rate limits; reinicia
-  `folio_contadores` (si E3 no se aprueba).
+  `folio_contadores`.
 - Conserva **solo `usuarios`** (confirmado 2026-10-01) más la configuración
   de sistema que siembra la migración `20260906_post_rename_fase52_proyectos_pm_schema.sql`
   (`tipos_proyecto` Grabación/Concierto/Diseño de Show, `tipo_proyecto_etapas`,
@@ -325,9 +325,6 @@ Una reescritura por función, desde prod, y en la misma migración:
   `total_a_transferir`, `monto_transferido`, `metodo_pago`;
   `cuenta_pagar_id` de pagos y documentos; texto de `cuentas_cobrar`;
   `clientes.proyectos`; tabla `historial_responsable`), con el mapa en 0.
-- Si se confirma E3: folios CC/CP, `folio_contadores`, sus funciones y
-  triggers; búsqueda por folio de proyecto/cotización; ruta de Drive de
-  complementos por `cotizacion_id`.
 - Seeds, generador de loadtest y tipos al día; **re-sembrar test** (F10).
 - Medir latencia antes/después (A15); recorrido manual en el Preview.
 
@@ -348,7 +345,7 @@ Una reescritura por función, desde prod, y en la misma migración:
    configuración de tipos de proyecto que siembra una migración).
 2. Folios: **SH001 y CC/CP desde 1** tras el reinicio.
 3. El reinicio **no toca la BD de test**.
-4. **Pendiente:** ¿los folios CC-/CP- (p. ej. `CC-2026-043`) se usan fuera de la app (contador, facturas, comunicación con proveedores)? Si no, se eliminan (E3).
+4. Folios CC-/CP-: **se usan fuera de la app** → se conservan (E3 descartado). Se agrega una guarda: folios únicos y sin huecos de `NULL`.
 
 ## Riesgos
 

@@ -16,9 +16,8 @@ grupos desfasados, 0 grupos ABIERTO vacíos, "Eduardo Terwogt" de SH072 en 3,100
 verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
 **Iniciativa "Simplificación del modelo de datos"** — epic #109. Fases 1–3,
-decisiones D1–D7 y dos auditorías hechas (2026-10-01). Plan v4 (B0–B6, 40 → 32
-tablas, Planeación se retira) en `docs/PLAN.md`; falta confirmar si los folios
-CC/CP se usan fuera de la app (E3) y aprobar. Al aprobarse, la siguiente sesión arranca con B0.
+decisiones D1–D7 y dos auditorías hechas (2026-10-01). Plan v4 (B0–B6, 40 → 33
+tablas, Planeación se retira) en `docs/PLAN.md`, **listo para aprobar**. Al aprobarse, la siguiente sesión arranca con B0.
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer
