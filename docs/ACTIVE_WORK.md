@@ -34,13 +34,12 @@ en CI, 8 índices, foto dorada, esquema test = prod verificado (única excepció
 declarada: `loadtest_runs`), línea base de test (`cuentas_periodo` 579/498 ms,
 `cuentas_resumen` 286 ms). La prueba de escala salió del gate de PR (`escala.yml`, D18).
 
-**B1+B3 en curso — PR #112 (borrador).** Sheets, Calendar y Planeación retirados del
+**B1+B3 mergeado — PR #112 (2026-10-01), `live` verde.** Sheets, Calendar y Planeación retirados del
 código; clientes por `nombre_clave` + `resolver_cliente`; autosave de productos en
-bloque; L7; CHECK/timestamptz/RLS. `20261017` y `20261018` aplicadas en test. **Antes
-del merge:** aplicar `20261017` y `20261018` en producción. **Después del deploy
-(manual):** correr `20261016` (DROP) en test y luego prod; quitar de Vercel
-`GOOGLE_SHEETS_SPREADSHEET_ID` y `GOOGLE_CALENDAR_ID`; verificar Drive en Preview.
-Pendiente de B0 para B2: respaldo `supabase db dump` y limpieza de carpetas de prueba
+bloque; L7; CHECK/timestamptz/RLS. `20261017` y `20261018` aplicadas en test y prod.
+**Manual pendiente del usuario (no bloquea B5a):** correr `20261016` (DROP) en test y
+luego prod; quitar de Vercel `GOOGLE_SHEETS_SPREADSHEET_ID` y `GOOGLE_CALENDAR_ID`;
+verificar Drive en Preview. Pendiente de B0 para B2: respaldo `supabase db dump` y limpieza de carpetas de prueba
 de Drive.
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador

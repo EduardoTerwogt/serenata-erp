@@ -94,7 +94,9 @@ function renglones(c: CandidatoCrudo): ProyectoOrden['items'] {
 
 export function armarPreviewOrden(crudo: CandidatosCrudos): PreviewOrden {
   const porResponsable = new Map<string, ResponsableOrden>()
-  for (const c of crudo.elegibles) {
+  // Las órdenes son por grupo (PLAN.md, B5a): una suelta elegible (solo residuo de
+  // datos anteriores) no se ofrece; cuentas_orden_candidatos la deja de devolver en B5b.
+  for (const c of crudo.elegibles.filter((e) => e.tipo === 'grupo')) {
     // La RPC solo marca elegible lo que tiene proveedor asignado (T2).
     const clave = c.responsable.id ?? `sin:${c.id}`
     let r = porResponsable.get(clave)
@@ -114,7 +116,7 @@ export function armarPreviewOrden(crudo: CandidatosCrudos): PreviewOrden {
     }
     const saldo = round2(Number(c.saldo))
     r.proyectos.push({
-      tipo: c.tipo,
+      tipo: 'grupo',
       id: c.id,
       proyecto_id: c.proyecto_id,
       proyecto_nombre: c.proyecto_nombre ?? 'Sin proyecto',

@@ -288,7 +288,7 @@ export async function getDocumentosCuentaPagarGrupo(grupoId: string) {
 }
 
 export interface OrdenPagoCandidato {
-  tipo: 'grupo' | 'cuenta'
+  tipo: 'grupo'
   id: string
   /** Saldo neto que la ruta imprimió en el PDF; la RPC lo revalida. */
   monto_esperado: number
@@ -298,13 +298,12 @@ export interface GenerarOrdenPagoResult {
   orden_pago_id: string
   total_monto: number
   grupos: number
-  cuentas: number
 }
 
 /**
  * Rediseño de Cuentas B1b (docs/PLAN.md, H1, H2, S1, S2): crea la orden, su
- * desglose inmutable (`ordenes_pago_conceptos`) y marca grupos, hijas y
- * sueltas en una sola transacción, con los candidatos bloqueados y
+ * desglose inmutable (`ordenes_pago_conceptos`) y marca grupos y sus hijas
+ * en una sola transacción, con los candidatos bloqueados y
  * revalidados -- db/migrations/20260925_ordenes_pago_generar_atomico.sql.
  * Los errores esperados de la RPC (ERRCODE P1414) salen como DomainError
  * con un mensaje seguro; cualquier otro se propaga tal cual.

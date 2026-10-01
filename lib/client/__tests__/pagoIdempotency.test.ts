@@ -41,7 +41,7 @@ describe('runIdempotentPagoSubmit', () => {
     await expect(
       runIdempotentPagoSubmit({
         scope: 'scope-1',
-        dominio: 'cuentas-pagar',
+        dominio: 'cuentas-pagar-grupos',
         cuentaId: 'c1',
         fields: { monto: 100 },
         normalize: async (f) => f,
@@ -67,7 +67,7 @@ describe('runIdempotentPagoSubmit', () => {
 
     const result = await runIdempotentPagoSubmit({
       scope: 'scope-1',
-      dominio: 'cuentas-pagar',
+      dominio: 'cuentas-pagar-grupos',
       cuentaId: 'c1',
       fields: { monto: 100 },
       normalize: async (f) => f,
@@ -88,7 +88,7 @@ describe('runIdempotentPagoSubmit', () => {
     await expect(
       runIdempotentPagoSubmit({
         scope: 'scope-1',
-        dominio: 'cuentas-pagar',
+        dominio: 'cuentas-pagar-grupos',
         cuentaId: 'c1',
         fields: { monto: 100 },
         normalize: async (f) => f,
@@ -108,7 +108,7 @@ describe('runIdempotentPagoSubmit', () => {
 
     await runIdempotentPagoSubmit({
       scope: 'scope-1',
-      dominio: 'cuentas-pagar',
+      dominio: 'cuentas-pagar-grupos',
       cuentaId: 'c1',
       fields: { monto: 100 },
       normalize: async (f) => f,
@@ -131,7 +131,7 @@ describe('runIdempotentPagoSubmit', () => {
     await expect(
       runIdempotentPagoSubmit({
         scope: 'scope-1',
-        dominio: 'cuentas-pagar',
+        dominio: 'cuentas-pagar-grupos',
         cuentaId: 'c1',
         fields: { monto: 100 },
         normalize: async (f) => f,
@@ -154,7 +154,7 @@ describe('runIdempotentPagoSubmit', () => {
     await expect(
       runIdempotentPagoSubmit({
         scope: 'scope-1',
-        dominio: 'cuentas-pagar',
+        dominio: 'cuentas-pagar-grupos',
         cuentaId: 'c1',
         fields: { monto: 100 },
         normalize: async (f) => f,
@@ -177,7 +177,7 @@ describe('runIdempotentPagoSubmit', () => {
 
     const result = await runIdempotentPagoSubmit({
       scope: 'scope-1',
-      dominio: 'cuentas-pagar',
+      dominio: 'cuentas-pagar-grupos',
       cuentaId: 'c1',
       fields: { monto: 100 },
       normalize: async (f) => f,
@@ -202,14 +202,14 @@ describe('runIdempotentPagoSubmit', () => {
 
     const result = await runIdempotentPagoSubmit({
       scope: 'scope-1',
-      dominio: 'cuentas-pagar',
+      dominio: 'cuentas-pagar-grupos',
       cuentaId: 'c1',
       fields: { monto: 100 },
       normalize: async (f) => f,
       submit,
     })
 
-    expect(mocks.reconcilePagoEstadoMock).toHaveBeenCalledWith('cuentas-pagar', 'c1', 'op-existente')
+    expect(mocks.reconcilePagoEstadoMock).toHaveBeenCalledWith('cuentas-pagar-grupos', 'c1', 'op-existente')
     expect(result).toEqual({ ok: true, resumen: 'confirmado-antes' })
     expect(submit).not.toHaveBeenCalled()
     expect(mocks.clearPendingOperationMock).toHaveBeenCalledWith('scope-1')
@@ -225,7 +225,7 @@ describe('runIdempotentPagoSubmit', () => {
 
     const result = await runIdempotentPagoSubmit({
       scope: 'scope-1',
-      dominio: 'cuentas-pagar',
+      dominio: 'cuentas-pagar-grupos',
       cuentaId: 'c1',
       fields: { monto: 100 },
       normalize: async (f) => f,
@@ -249,7 +249,7 @@ describe('runIdempotentPagoSubmit', () => {
 
     const result = await runIdempotentPagoSubmit({
       scope: 'scope-1',
-      dominio: 'cuentas-pagar',
+      dominio: 'cuentas-pagar-grupos',
       cuentaId: 'c1',
       fields: { monto: 100 },
       normalize: async (f) => f,
@@ -278,7 +278,7 @@ describe('runIdempotentPagoSubmit', () => {
     await expect(
       runIdempotentPagoSubmit({
         scope: 'scope-1',
-        dominio: 'cuentas-pagar',
+        dominio: 'cuentas-pagar-grupos',
         cuentaId: 'c1',
         fields: { monto: 100 },
         comprobante: new File(['x'], 'foto.jpg', { type: 'image/jpeg' }),
@@ -303,7 +303,7 @@ describe('runIdempotentPagoSubmit', () => {
 
     await runIdempotentPagoSubmit({
       scope: 'scope-1',
-      dominio: 'cuentas-pagar',
+      dominio: 'cuentas-pagar-grupos',
       cuentaId: 'c1',
       fields: { monto: 100 },
       comprobante: new File(['x'], 'foto.jpg', { type: 'image/jpeg' }),
@@ -327,7 +327,7 @@ describe('runIdempotentPagoSubmit', () => {
     await expect(
       runIdempotentPagoSubmit({
         scope: 'scope-1',
-        dominio: 'cuentas-pagar',
+        dominio: 'cuentas-pagar-grupos',
         cuentaId: 'c1',
         fields: { monto: 100 },
         comprobante: new File(['x'], 'foto.jpg', { type: 'image/jpeg' }),
@@ -349,7 +349,7 @@ describe('runIdempotentPagoSubmit', () => {
     await expect(
       runIdempotentPagoSubmit({
         scope: 'scope-1',
-        dominio: 'cuentas-pagar',
+        dominio: 'cuentas-pagar-grupos',
         cuentaId: 'c1',
         fields: { monto: 100 },
         normalize: async (f) => f,
@@ -372,7 +372,7 @@ describe('runIdempotentPagoSubmit', () => {
     await expect(
       runIdempotentPagoSubmit({
         scope: 'scope-1',
-        dominio: 'cuentas-pagar',
+        dominio: 'cuentas-pagar-grupos',
         cuentaId: 'c1',
         fields: { monto: 100 },
         normalize: async (f) => f,
@@ -391,7 +391,7 @@ describe('runIdempotentPagoSubmit', () => {
 
     await runIdempotentPagoSubmit({
       scope: 'scope-1',
-      dominio: 'cuentas-pagar',
+      dominio: 'cuentas-pagar-grupos',
       cuentaId: 'c1',
       fields: { monto: 100 },
       comprobante: originalFile,

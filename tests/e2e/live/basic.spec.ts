@@ -139,22 +139,16 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await expect(detCobro.getByText('Cuenta saldada. No hay saldo pendiente por registrar.')).toBeVisible({ timeout: 15_000 })
     await detCobro.getByRole('button', { name: 'Cerrar' }).click()
 
-    // 6. Subir factura de proveedor real a Drive desde el detalle del pago.
-    // El renglón no tiene proveedor asignado: es una cuenta suelta ('s:<id>').
+    // 6. El renglón no tiene proveedor asignado: es una cuenta suelta ('s:<id>').
+    // B5a: las facturas y los pagos a proveedor son por grupo, así que la suelta
+    // solo se consulta; el detalle dice que primero hay que asignar proveedor y
+    // no ofrece subir ni pagar nada.
     await page.goto(`/cuentas?det=s:${cuentaPagar!.id}&tab=docs`)
     const detPago = page.getByRole('dialog', { name: 'Sin asignar' })
-    await expect(detPago.getByText('Factura de proveedor XML')).toBeVisible({ timeout: 30_000 })
-    const facturaProvXml = `<cfdi:Comprobante Fecha="2026-06-01T10:00:00"></cfdi:Comprobante>`
-    await detPago.locator('input[type="file"][accept*="xml"]').first().setInputFiles({ name: 'factura_proveedor.xml', mimeType: 'application/xml', buffer: Buffer.from(facturaProvXml, 'utf-8') })
-    await expect(detPago.getByText('Factura XML subida')).toBeVisible({ timeout: 45_000 })
-    await detPago.locator('input[type="file"][accept*="pdf"]').first().setInputFiles({ name: 'factura_proveedor.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8') })
-    await expect(detPago.getByText('Factura PDF subida')).toBeVisible({ timeout: 45_000 })
-    await expect(detPago.getByRole('link', { name: 'Ver' }).first()).toHaveAttribute('href', /drive\.google\.com/, { timeout: 15_000 })
-
-    // 7. Sin proveedor asignado, el pago está bloqueado (T2): la pestaña lo
-    // dice y lleva a Información; no se registra nada.
+    await expect(detPago.getByText('Esta cuenta aún no tiene proveedor.')).toBeVisible({ timeout: 30_000 })
+    await expect(detPago.locator('input[type="file"]')).toHaveCount(0)
     await detPago.getByRole('button', { name: 'Registrar pago' }).first().click()
-    await expect(detPago.getByText('Asigna un proveedor en Información para poder registrar el pago.')).toBeVisible()
+    await expect(detPago.getByText('Esta cuenta aún no tiene proveedor.')).toBeVisible()
     await expect(detPago.getByLabel('Monto')).toHaveCount(0)
     const pagada = await page.request.get(`/api/cuentas-pagar?search=${cotizacionId}`)
     const { rows: trasPago } = await pagada.json() as { rows: Array<{ cotizacion_id: string; monto_pagado: number | null }> }

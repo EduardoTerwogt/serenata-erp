@@ -49,7 +49,7 @@ export interface OrdenPagoPreviewResult {
   }
   cuentas_ids: string[]
   /**
-   * Lo que se manda a `generar_orden_pago`: un grupo o una suelta por
+   * Lo que se manda a `generar_orden_pago`: un grupo por
    * candidato, con el saldo que este mismo preview imprime en el PDF.
    */
   candidatos: OrdenPagoCandidato[]

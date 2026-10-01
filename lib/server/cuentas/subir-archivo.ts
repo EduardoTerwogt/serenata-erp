@@ -8,7 +8,6 @@ import {
   createDocumentoCuentaCobrar,
   createDocumentoCuentaPagar,
   getCuentaCobrarById,
-  getCuentaPagarById,
   getCuentaPagarGrupoById,
   getProyectoById,
 } from '@/lib/db'
@@ -18,9 +17,9 @@ import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-overri
 import { MAX_FILE_SIZE, MENSAJE_LIMITE } from '@/lib/server/uploads/factura-validation'
 import { SubirArchivoCuentaSchema, validate } from '@/lib/validation/schemas'
 
-export type DestinoArchivo = 'cobro' | 'grupo' | 'cuenta'
+export type DestinoArchivo = 'cobro' | 'grupo'
 
-const TIPO_POR_DESTINO = { cobro: 'FACTURA_PDF', grupo: 'FACTURA_PROVEEDOR', cuenta: 'FACTURA_PROVEEDOR' } as const
+const TIPO_POR_DESTINO = { cobro: 'FACTURA_PDF', grupo: 'FACTURA_PROVEEDOR' } as const
 
 export async function subirArchivoCuenta(params: { destino: DestinoArchivo; id: string; formData: FormData; request: Request }): Promise<{ status: number; body: unknown }> {
   const { destino, id, formData, request } = params
@@ -40,17 +39,11 @@ export async function subirArchivoCuenta(params: { destino: DestinoArchivo; id: 
     if (!cuenta) return { status: 404, body: { error: 'Cuenta por cobrar no encontrada' } }
     carpeta = `/Por Cobrar/${cuenta.cotizacion_id}`
     proyectoId = cuenta.proyecto_id ?? null
-  } else if (destino === 'grupo') {
+  } else {
     const grupo = await getCuentaPagarGrupoById(id)
     if (!grupo) return { status: 404, body: { error: 'Grupo de cuentas por pagar no encontrado' } }
     carpeta = `/Por Pagar/${grupo.proyecto_id}`
     proyectoId = grupo.proyecto_id
-  } else {
-    const cuenta = await getCuentaPagarById(id)
-    if (!cuenta) return { status: 404, body: { error: 'Cuenta por pagar no encontrada' } }
-    if (cuenta.grupo_id) return { status: 409, body: { error: 'cuenta_en_grupo', message: 'Esta cuenta pertenece a un grupo de facturación: sube el archivo al grupo.' } }
-    carpeta = `/Por Pagar/${cuenta.cotizacion_id}`
-    proyectoId = cuenta.proyecto_id
   }
 
   const googleEnv = getGoogleEnv()
@@ -63,7 +56,7 @@ export async function subirArchivoCuenta(params: { destino: DestinoArchivo; id: 
     destino === 'cobro'
       ? await createDocumentoCuentaCobrar({ cuentas_cobrar_id: id, tipo: 'FACTURA_PDF', archivo_url: url, archivo_nombre: archivo.name })
       : await createDocumentoCuentaPagar({
-          ...(destino === 'grupo' ? { grupo_id: id } : { cuentas_pagar_id: id }),
+          grupo_id: id,
           tipo: 'FACTURA_PROVEEDOR',
           archivo_url: url,
           archivo_nombre: archivo.name,

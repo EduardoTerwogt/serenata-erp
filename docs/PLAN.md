@@ -343,6 +343,20 @@ del script de reinicio. Estimación: 7 sesiones.
 
 ### B5a — Escrituras de dinero solo por grupo (P0)
 
+> **Estado (2026-10-01): implementado en test, en PR.** Migraciones `20261019`
+> (puente `costo_total` + 9 RPCs por grupo; aplicada en test) y `20261020`
+> (DROP de `registrar_pago_cuenta_pagar`, manual tras el deploy). Desviaciones
+> acordadas con el plan: (1) `cuentas_pagar.orden_pago_id` de las **hijas** se
+> sigue escribiendo hasta B5b, porque `cancel_cotizacion` y
+> `cuentas_por_proyecto` todavía lo leen; las columnas `total_a_transferir`,
+> `monto_transferido` y `metodo_pago` de `cuentas_pagar` ya no las escribe nadie;
+> (2) `corregir_datos_cobro` va en B5b con las RPCs de cobro;
+> (3) `adjuntar_comprobante_pago_proveedor` y las demás ya no mencionan
+> `cuenta_pagar_id`/`cuentas_pagar_id` (esas columnas salen en B5b);
+> (4) `recalcular_estado_orden_pago` ya no tiene la regla de órdenes sin
+> desglose: conserva su estado. **A producción solo después de B2** (reinicio de
+> datos): una suelta con pagos previos ya no se podría anular ni corregir.
+
 Una reescritura por función, desde prod: `registrar_pago_cuenta_pagar`,
 `registrar_pago_grupo_factura`, `anular_pago_proveedor`,
 `baja_documento_pago`, `adjuntar_comprobante_pago_proveedor`,
@@ -543,7 +557,7 @@ presentación.
 | Aprobación del plan v12 | Hecho (2026-10-01) |
 | B0 Red de seguridad, test = prod, índices y foto dorada | **Hecho** — PR #111 mergeado (2026-10-01), `live` verde ×3 (corridas 918, 920, 921). Detalle previo: Hecho: guardas (19), `mapa-dependencias.mjs`, `plpgsql_check` (`20261011`, paso de CI, 0 errores en test, prod y fresh-db), retiro de `sync-up`, 8 índices (`20261012`, test y prod, con `EXPLAIN`), foto dorada (`foto-dorada.{sql,mjs}`), frente 2 retirado de test, **esquema de test = prod verificado** (`esquema-huella-resumen.sql`; excepción `loadtest_runs`), BD reconstruida desde `db/migrations/` = prod salvo el texto de `cuentas_periodo` (corregido en `20261015`, por confirmar en CI), y datos de test alineados (márgenes, copias de proveedor, restos `live`). Hallazgos: el orden alfabético de `db/migrations/` ≠ el orden de aplicación (`preview_next_cotizacion_folio_principal`, `20261013`); `cuentas_pagar.estado` nullable en prod (`20261014`). Línea base test: `cuentas_periodo` 579/498 ms, `cuentas_resumen` 286 ms. **Pendiente:** `live` ×3, `reset-transaccional.sql` (B2), y 5 sueltas + 1 cuenta sin `item_id` de la semilla (B5b). |
 | B2 Reinicio de datos (script; tras limpiar Drive) | Pendiente |
-| B1 + B3 Retiros, catálogos rápidos e integridad | **En curso** — PR #112 (borrador). Hecho: Sheets, Calendar y Planeación fuera del código (plantillas a `cotizaciones`); `20261016` (DROP, manual: `sheets_sync_status` + 3 RPCs, `calendar_event_id`, `idx_cotizaciones_id`, 3 tablas de Planeación **adelantadas desde B5b** —`cancel_cotizacion` solo las nombra en un comentario—, `clientes.proyectos`, `planeacion` en `usuarios.sections`); `20261017` (`clientes.nombre_clave` UNIQUE + `resolver_cliente`, aplicada en test); `20261018` (CHECK estado/tipo, `timestamptz`, RLS `(select …)`, aplicada en test); autosave de cliente resuelto antes de guardar (`cliente_id` dentro del payload, sin UPDATE posterior), productos en un upsert en `after()`, sugerencias de proyecto por cliente (`/api/clientes/:id/proyectos`), L7 (sin relecturas). **Diferido:** D13 de `productos.x_pagar_sugerido` pasa a B5c (una sola pasada de nomenclatura, para no mezclar nombres); índices sin uso solo se podan con la curva de B7 (los de prod no son evidencia). **Pendiente:** aplicar `20261017`/`20261018` en prod antes del merge; `20261016` a mano tras el deploy; CI verde. |
+| B1 + B3 Retiros, catálogos rápidos e integridad | **Código mergeado** — PR #112 (2026-10-01; `test`, `fresh-db`, `smoke-and-critical` y `live` en verde). Falta solo lo manual: `20261016` (DROP) en test y prod, variables de Vercel y Drive en Preview. Hecho: Sheets, Calendar y Planeación fuera del código (plantillas a `cotizaciones`); `20261016` (DROP, manual: `sheets_sync_status` + 3 RPCs, `calendar_event_id`, `idx_cotizaciones_id`, 3 tablas de Planeación **adelantadas desde B5b** —`cancel_cotizacion` solo las nombra en un comentario—, `clientes.proyectos`, `planeacion` en `usuarios.sections`); `20261017` (`clientes.nombre_clave` UNIQUE + `resolver_cliente`); `20261018` (CHECK estado/tipo, `timestamptz`, RLS `(select …)`); autosave de cliente resuelto antes de guardar (`cliente_id` dentro del payload, sin UPDATE posterior), productos en un upsert en `after()`, sugerencias de proyecto por cliente (`/api/clientes/:id/proyectos`), L7 (sin relecturas). **Diferido:** D13 de `productos.x_pagar_sugerido` pasa a B5c (una sola pasada de nomenclatura, para no mezclar nombres); índices sin uso solo se podan con la curva de B7 (los de prod no son evidencia). `20261017`/`20261018` ya aplicadas en test y prod. |
 | B5a Escrituras de dinero solo por grupo | Pendiente |
 | B5b Cuentas: lecturas, copias y borrado | Pendiente |
 | B5c Renglones, editor y nomenclatura final | Pendiente |

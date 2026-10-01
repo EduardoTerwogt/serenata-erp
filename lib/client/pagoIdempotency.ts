@@ -51,7 +51,7 @@ import { reconcilePagoEstado, type PagoReconciliationResult } from '@/lib/client
  */
 export interface RunIdempotentPagoSubmitParams<TFields> {
   scope: string
-  dominio: 'cuentas-pagar' | 'cuentas-cobrar' | 'cuentas-pagar-grupos'
+  dominio: 'cuentas-cobrar' | 'cuentas-pagar-grupos'
   cuentaId: string
   fields: TFields
   comprobante?: File
@@ -59,7 +59,7 @@ export interface RunIdempotentPagoSubmitParams<TFields> {
   submit: (args: { operationId: string; comprobante?: File }) => Promise<unknown>
   /** Inyectable solo para pruebas -- por default consulta el endpoint real. */
   reconcile?: (
-    dominio: 'cuentas-pagar' | 'cuentas-cobrar' | 'cuentas-pagar-grupos',
+    dominio: 'cuentas-cobrar' | 'cuentas-pagar-grupos',
     cuentaId: string,
     operationId: string
   ) => Promise<PagoReconciliationResult>

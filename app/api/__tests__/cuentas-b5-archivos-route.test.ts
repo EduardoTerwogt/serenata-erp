@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => {
     requireSection: vi.fn(async () => ({ response: null, session: { user: { email: 'staff@serenata.test' } } })),
     upload: vi.fn(async () => 'https://drive.test/archivo'),
     getCuentaCobrarById: vi.fn(),
-    getCuentaPagarById: vi.fn(),
     getCuentaPagarGrupoById: vi.fn(),
     getProyectoById: vi.fn(async () => ({ id: 'SH061', proyecto: 'Aurora' })),
     createDocumentoCuentaCobrar: vi.fn(async (d: unknown) => ({ id: 'doc-1', ...(d as object) })),
@@ -28,7 +27,6 @@ vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: () => ({ driveFo
 vi.mock('@/lib/db', () => ({
   getProyectoById: mocks.getProyectoById,
   getCuentaCobrarById: mocks.getCuentaCobrarById,
-  getCuentaPagarById: mocks.getCuentaPagarById,
   getCuentaPagarGrupoById: mocks.getCuentaPagarGrupoById,
   createDocumentoCuentaCobrar: mocks.createDocumentoCuentaCobrar,
   createDocumentoCuentaPagar: mocks.createDocumentoCuentaPagar,
@@ -91,16 +89,10 @@ describe('subirArchivoCuenta (supuesto 15)', () => {
     expect(mocks.createDocumentoCuentaPagar).toHaveBeenCalledWith(expect.objectContaining({ grupo_id: 'g-1', tipo: 'FACTURA_PROVEEDOR' }))
   })
 
-  it('rechaza un tipo que no corresponde al destino y una suelta que está en un grupo', async () => {
+  it('rechaza un tipo que no corresponde al destino', async () => {
     const fd = new FormData()
     fd.append('tipo', 'FACTURA_PDF')
     fd.append('archivo', pdf())
     expect((await subirArchivoCuenta({ destino: 'grupo', id: 'g-1', formData: fd, request: new Request('http://x') })).status).toBe(400)
-
-    mocks.getCuentaPagarById.mockResolvedValue({ id: 'cp-1', grupo_id: 'g-1' })
-    const fd2 = new FormData()
-    fd2.append('tipo', 'FACTURA_PROVEEDOR')
-    fd2.append('archivo', pdf())
-    expect((await subirArchivoCuenta({ destino: 'cuenta', id: 'cp-1', formData: fd2, request: new Request('http://x') })).status).toBe(409)
   })
 })

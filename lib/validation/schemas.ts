@@ -376,7 +376,7 @@ export const GenerarOrdenCuentasSchema = z.object({
   seleccion: z
     .array(
       z.object({
-        tipo: z.enum(['grupo', 'cuenta']),
+        tipo: z.literal('grupo'),
         id: z.string().uuid(),
         monto_esperado: z.number().positive(),
       })

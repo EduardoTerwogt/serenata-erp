@@ -7,13 +7,13 @@ import { fmtMoney } from '@/lib/quotations/format'
 import type { DetalleCobro, DetalleConcepto, DetallePago, DocumentoDetalle, PagoCobroDetalle } from '@/lib/shared/cuentas/detalle-tipos'
 import { fechaCorta } from '../formato'
 import { HistorialCorrecciones, QuitarDocumento, ReemplazarFactura } from './Correcciones'
-import { accionesDetalle, type ObjetivoDetalle } from './useDetalle'
+import { accionesDetalle, type ObjetivoPagable } from './useDetalle'
 
 export type Ejecutar = (accion: () => Promise<unknown>, exito: string) => Promise<void>
 
 interface Props {
   d: DetalleConcepto
-  objetivo: ObjetivoDetalle
+  objetivo: ObjetivoPagable
   ejecutar: Ejecutar
   /** Error del lado del cliente (archivo rechazado antes de subir). */
   avisarError: (mensaje: string) => void
@@ -147,7 +147,7 @@ export function TabDocumentos({ d, objetivo, ejecutar, avisarError: rechazo, cor
 
 interface DocsProps<T> {
   d: T
-  objetivo: ObjetivoDetalle
+  objetivo: ObjetivoPagable
   ejecutar: Ejecutar
   rechazo: (m: string) => void
   corrige: boolean
@@ -161,7 +161,7 @@ interface DocsProps<T> {
 function AccionesFactura({ doc, dominio, objetivo, ejecutar, rechazo, corrige, onSubir, onValidar }: {
   doc: DocumentoDetalle | null
   dominio: 'cobro' | 'proveedor'
-  objetivo: ObjetivoDetalle
+  objetivo: ObjetivoPagable
   ejecutar: Ejecutar
   rechazo: (m: string) => void
   corrige: boolean

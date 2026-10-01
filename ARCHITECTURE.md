@@ -9,7 +9,7 @@ app/                          # Next.js App Router
 │   │   └── [id]/             # general, totales, notas, items/[itemId]  ← escrituras por sección
 │   ├── cuentas/              # periodo, resumen, avisos, órdenes (lectura derivada en SQL)
 │   ├── cuentas-cobrar/       # documentos, registrar-pago, complementos
-│   ├── cuentas-pagar/        # documentos, registrar-pago, grupos, comprobantes
+│   ├── cuentas-pagar/        # grupos (facturas, registrar-pago), comprobantes
 │   ├── proyectos/            # CRUD, tareas, cronograma, hoja de llamado, reporte de cierre
 │   ├── proveedores/          # CRUD, historial, resumen de documentos
 │   ├── portal/               # Portal de proveedores (sesión propia, no NextAuth)
@@ -344,18 +344,20 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   sobre su **saldo pendiente** (no su `x_pagar` original), con la última
   hija (orden estable por `id`) recibiendo el residuo exacto — garantiza
   `SUM(hijas.monto_pagado) = grupo.monto_pagado` siempre, incluso en pagos
-  parciales sucesivos. Mismo mecanismo de idempotencia (`pago_operations`,
-  `operation_id`) que `registrar_pago_cuenta_pagar`.
+  parciales sucesivos. Idempotencia por `pago_operations` + `operation_id`. Los
+  pagos, facturas y órdenes a proveedor son **solo por grupo** (B5a): el pago a
+  una cuenta suelta (`registrar_pago_cuenta_pagar`) se retiró; la suelta "por
+  asignar" (sin proveedor) solo se consulta hasta que se le asigna uno.
 - La orden de pago (`/api/cuentas/ordenes/*`, B6) toma sus candidatos de
-  `cuentas_orden_candidatos`: grupos y sueltas con proveedor, factura
+  `cuentas_orden_candidatos`: grupos con proveedor, factura
   validada, saldo y evento ya realizado en **todas** las cotizaciones que
   les aportan renglones (hora CDMX, `hoy_cdmx()`), incluidos los grupos
   `EN_PROCESO_PAGO`; lo que no entra sale con su motivo. La orden se crea con **una sola RPC atómica**, `generar_orden_pago`
   (B1b del rediseño de Cuentas): bloquea los candidatos, los revalida,
   compara su saldo con el que imprimió el PDF (`candidatos_cambiaron` si
   difiere), escribe la orden y su desglose inmutable
-  (`ordenes_pago_conceptos`, que nadie actualiza ni borra) y marca grupos,
-  hijas y sueltas. La ruta la envuelve en `withIdempotency`. La orden
+  (`ordenes_pago_conceptos`, que nadie actualiza ni borra) y marca grupos
+  y sus hijas. La ruta la envuelve en `withIdempotency`. La orden
   cubre el **saldo** de cada candidato, no su total.
 - `cancel_cotizacion` cancela en cascada: una principal arrastra sus
   complementarias (APROBADA con sus cuentas, EMITIDA → CANCELADA, BORRADOR

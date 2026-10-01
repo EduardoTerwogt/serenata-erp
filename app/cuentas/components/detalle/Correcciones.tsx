@@ -9,7 +9,7 @@ import { fechaCorta } from '../formato'
 import { TextFieldMotivo } from '../Reapertura'
 import { ACCEPT_XML, BotonArchivo, type Ejecutar } from './TabDocumentos'
 import { Seccion } from './TabInformacion'
-import { accionesDetalle, type ObjetivoDetalle } from './useDetalle'
+import { accionesDetalle, type ObjetivoPagable } from './useDetalle'
 
 /**
  * Rediseño de Cuentas B7 (D5, T7, R8): correcciones del detalle. Solo se
@@ -96,7 +96,7 @@ export function QuitarDocumento({ dominio, doc, nombre, ejecutar }: { dominio: D
  * Reemplazar la factura XML validada: la nueva se sube y valida con el flujo
  * normal y la anterior queda dada de baja apuntando a ella (reemplazo-factura.ts).
  */
-export function ReemplazarFactura({ objetivo, ejecutar, rechazo }: { objetivo: ObjetivoDetalle; ejecutar: Ejecutar; rechazo: (m: string) => void }) {
+export function ReemplazarFactura({ objetivo, ejecutar, rechazo }: { objetivo: ObjetivoPagable; ejecutar: Ejecutar; rechazo: (m: string) => void }) {
   const [archivo, setArchivo] = useState<File | null>(null)
   return (
     <>
