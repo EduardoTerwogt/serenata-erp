@@ -8,112 +8,45 @@ async function saveCotizacionAtomic(payload: Record<string, unknown>) {
   if (error) throw error
 }
 
-// Bloque 3 (docs/PLAN.md): además de resolver/crear el cliente, retorna su
-// id para que runQuotationNonCriticalAutosaves haga dual-write de
-// cotizaciones.cliente_id -- el selector de UI (cuando manda cliente_id
-// explícito) ya lo fija de antemano, así que ese caso queda intacto (ver
-// guard `cliente_id IS NULL` abajo).
-async function autosaveClienteYProyecto(clienteValue: unknown, proyectoValue: unknown): Promise<string | null> {
-  const cliente = String(clienteValue || '').trim()
-  const proyecto = String(proyectoValue || '').trim()
-
-  if (!cliente) return null
-
-  const { data: clienteExistente, error: clienteFetchError } = await supabaseAdmin
-    .from('clientes')
-    .select('id, proyectos')
-    .eq('nombre', cliente)
-    .maybeSingle()
-
-  if (clienteFetchError) throw clienteFetchError
-
-  if (clienteExistente) {
-    const proyectosActuales = Array.isArray(clienteExistente.proyectos) ? clienteExistente.proyectos : []
-    const proyectos = proyecto && !proyectosActuales.includes(proyecto)
-      ? [...proyectosActuales, proyecto]
-      : proyectosActuales
-
-    const { error: updateError } = await supabaseAdmin
-      .from('clientes')
-      .update({ proyectos, activo: true })
-      .eq('id', clienteExistente.id)
-
-    if (updateError) throw updateError
-    return clienteExistente.id
-  }
-
-  const { data: clienteCreado, error: insertError } = await supabaseAdmin
-    .from('clientes')
-    .insert({
-      nombre: cliente,
-      proyectos: proyecto ? [proyecto] : [],
-      activo: true,
-    })
-    .select('id')
-    .single()
-
-  if (insertError) throw insertError
-  return clienteCreado.id
+/**
+ * Resuelve (o crea) el cliente por nombre en UN viaje (`resolver_cliente`:
+ * upsert por `nombre_clave`, sin carrera y sin renombrar al existente).
+ * Se llama ANTES de guardar la cotización para que el `cliente_id` viaje dentro
+ * del payload de la RPC de guardado y no haga falta un UPDATE posterior fuera
+ * del modelo de conflictos (PLAN.md, K5).
+ */
+export async function resolverClienteId(clienteValue: unknown): Promise<string | null> {
+  const nombre = String(clienteValue ?? '').trim()
+  if (!nombre) return null
+  const { data, error } = await supabaseAdmin.rpc('resolver_cliente', { p_nombre: nombre })
+  if (error) throw error
+  return (data as string | null) ?? null
 }
 
-async function autosaveProductos(items: Partial<ItemCotizacion>[]) {
+/**
+ * Autosave del catálogo de productos: un solo upsert en bloque, deduplicado por
+ * descripción (la última partida gana). Los errores se registran, no se lanzan
+ * (el guardado de la cotización ya ocurrió); se llama dentro de `after()`.
+ */
+export async function autosaveProductosCatalogo(items: Partial<ItemCotizacion>[], source: string) {
+  const porDescripcion = new Map<string, Record<string, unknown>>()
   for (const item of items) {
     const descripcion = String(item.descripcion || '').trim()
     if (!descripcion) continue
-
-    const { error } = await supabaseAdmin
-      .from('productos')
-      .upsert({
-        descripcion,
-        categoria: String(item.categoria || '').trim() || null,
-        precio_unitario: item.precio_unitario ?? 0,
-        x_pagar_sugerido: item.x_pagar ?? 0,
-        activo: true,
-      }, { onConflict: 'descripcion' })
-
-    if (error) throw error
+    porDescripcion.set(descripcion, {
+      descripcion,
+      categoria: String(item.categoria || '').trim() || null,
+      precio_unitario: item.precio_unitario ?? 0,
+      x_pagar_sugerido: item.x_pagar ?? 0,
+      activo: true,
+    })
   }
-}
+  if (porDescripcion.size === 0) return
 
-export async function runQuotationNonCriticalAutosaves(
-  clienteValue: unknown,
-  proyectoValue: unknown,
-  items: Partial<ItemCotizacion>[],
-  source:
-    | 'POST /api/cotizaciones'
-    | 'PUT /api/cotizaciones/:id'
-    | 'PATCH /api/cotizaciones/:id/general'
-    | 'PATCH /api/cotizaciones/:id/totales'
-    | 'POST /api/cotizaciones/:id/items'
-    | 'PATCH /api/cotizaciones/:id/items/:itemId',
-  cotizacionId: string
-) {
-  // Bloque 3: `IS NULL` evita pisar un cliente_id ya fijado por el selector
-  // de UI (Datos generales) con el resuelto/creado aquí por texto libre.
-  const tasks: Promise<unknown>[] = [
-    autosaveClienteYProyecto(clienteValue, proyectoValue).then(async (clienteId) => {
-      if (!clienteId) return
-      const { error } = await supabaseAdmin
-        .from('cotizaciones')
-        .update({ cliente_id: clienteId })
-        .eq('id', cotizacionId)
-        .is('cliente_id', null)
-      if (error) throw error
-    }),
-  ]
-
-  if (items.length > 0) {
-    tasks.push(autosaveProductos(items))
-  }
-
-  const results = await Promise.allSettled(tasks)
-
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      const label = index === 0 ? 'cliente/proyecto' : 'productos'
-      console.warn(`[${source}] Autosave no crítico falló (${label}):`, result.reason)
-    }
-  })
+  const { error } = await supabaseAdmin
+    .from('productos')
+    .upsert(Array.from(porDescripcion.values()), { onConflict: 'descripcion' })
+  if (error) console.warn(`[${source}] Autosave de productos falló:`, error)
 }
 
 export async function createOrReplaceCotizacion(payload: Record<string, unknown>) {

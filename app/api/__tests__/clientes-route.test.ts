@@ -35,7 +35,7 @@ describe('GET /api/clientes', () => {
   })
 
   it('dos GETs sucesivos consultan Postgres las dos veces (sin caché)', async () => {
-    mocks.fromMock.mockReturnValue(chainableSelect([{ id: '1', nombre: 'ACME', proyectos: [] }]))
+    mocks.fromMock.mockReturnValue(chainableSelect([{ id: '1', nombre: 'ACME' }]))
 
     const r1 = await GET(new Request('http://localhost/api/clientes'))
     const r2 = await GET(new Request('http://localhost/api/clientes'))
@@ -47,8 +47,8 @@ describe('GET /api/clientes', () => {
 
   it('admin=1 (Bloque 5) devuelve el catálogo completo, no el recorte de autocomplete', async () => {
     mocks.fromMock.mockReturnValue(chainableSelect([
-      { id: '1', nombre: 'ACME', activo: true, proyectos: [] },
-      { id: '2', nombre: 'Inactivo SA', activo: false, proyectos: [] },
+      { id: '1', nombre: 'ACME', activo: true },
+      { id: '2', nombre: 'Inactivo SA', activo: false },
     ]))
 
     const response = await GET(new Request('http://localhost/api/clientes?admin=1'))
@@ -59,15 +59,15 @@ describe('GET /api/clientes', () => {
   })
 
   it('un POST no deja ningún estado que sirva una respuesta vieja al siguiente GET', async () => {
-    mocks.fromMock.mockReturnValue(chainableSelect([{ id: '1', nombre: 'ACME', proyectos: [] }]))
+    mocks.fromMock.mockReturnValue(chainableSelect([{ id: '1', nombre: 'ACME' }]))
     await GET(new Request('http://localhost/api/clientes'))
 
     mocks.fromMock.mockClear()
-    mocks.fromMock.mockReturnValue(chainableSelect({ id: 'new-1', nombre: 'Nuevo', proyectos: [] }))
+    mocks.fromMock.mockReturnValue(chainableSelect({ id: 'new-1', nombre: 'Nuevo' }))
     await POST(new Request('http://localhost/api/clientes', { method: 'POST', body: JSON.stringify({ nombre: 'Nuevo' }) }))
 
     mocks.fromMock.mockClear()
-    mocks.fromMock.mockReturnValue(chainableSelect([{ id: '1', nombre: 'ACME', proyectos: [] }, { id: 'new-1', nombre: 'Nuevo', proyectos: [] }]))
+    mocks.fromMock.mockReturnValue(chainableSelect([{ id: '1', nombre: 'ACME' }, { id: 'new-1', nombre: 'Nuevo' }]))
     const response = await GET(new Request('http://localhost/api/clientes'))
 
     expect(mocks.fromMock).toHaveBeenCalled()
@@ -81,7 +81,7 @@ describe('POST /api/clientes', () => {
   })
 
   it('inserta con `insert`, nunca con `upsert`/`onConflict` sin UNIQUE real sobre `nombre`', async () => {
-    const chain = chainableSelect({ id: 'new-1', nombre: 'Nuevo', proyectos: [] })
+    const chain = chainableSelect({ id: 'new-1', nombre: 'Nuevo' })
     mocks.fromMock.mockReturnValue(chain)
 
     const response = await POST(new Request('http://localhost/api/clientes', {

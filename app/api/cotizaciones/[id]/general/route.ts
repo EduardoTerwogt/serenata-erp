@@ -1,10 +1,9 @@
 import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { getCotizacionById } from '@/lib/db'
-import { runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
+import { resolverClienteId } from '@/lib/server/quotations/persistence'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { Cotizacion } from '@/lib/types'
 
 /**
  * Guarda SOLO los datos generales.
@@ -36,6 +35,12 @@ export async function PATCH(
       ...(typeof body?.fecha_entrega === 'string' || body?.fecha_entrega === null ? { fecha_entrega: body.fecha_entrega ?? '' } : {}),
       ...(typeof body?.locacion === 'string' || body?.locacion === null ? { locacion: body.locacion ?? '' } : {}),
     }
+    // El cliente se resuelve ANTES de guardar: un nombre escrito a mano sin
+    // `cliente_id` explícito (selector) se da de alta/recupera por nombre_clave
+    // y su id viaja en el mismo patch (PLAN.md, K5). Un id explícito no se pisa.
+    if (typeof patch.cliente === 'string' && patch.cliente.trim() && !patch.cliente_id) {
+      patch.cliente_id = (await resolverClienteId(patch.cliente)) ?? ''
+    }
     // Igual que en items: sin "base" no hay comparación posible y la RPC
     // sobreescribe como siempre (retrocompatible).
     const base: Record<string, unknown> | undefined = body?.base && typeof body.base === 'object' ? body.base : undefined
@@ -51,8 +56,6 @@ export async function PATCH(
       return Response.json({ error: 'conflict', entity: 'cotizacion_general', id, fields: (data as { conflict: unknown }).conflict }, { status: 409 })
     }
 
-    const actualizada = data as Cotizacion
-    await runQuotationNonCriticalAutosaves(actualizada.cliente, actualizada.proyecto, [], 'PATCH /api/cotizaciones/:id/general', id)
     // EF-2 1D-1: en after() -- fire-and-forget puede perderse si la
     // función serverless termina antes de que la promesa resuelva.
     after(async () => {

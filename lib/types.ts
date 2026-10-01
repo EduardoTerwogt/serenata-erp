@@ -166,7 +166,6 @@ export interface Cliente {
   correo?: string | null
   telefono?: string | null
   notas?: string | null
-  proyectos: string[]
   activo: boolean
   created_at: string
 }

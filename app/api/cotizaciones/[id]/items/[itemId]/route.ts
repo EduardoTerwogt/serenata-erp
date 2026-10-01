@@ -1,7 +1,7 @@
 import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { findOrCreateProveedorByNombre, deleteItemCotizacion, EstadoCotizacionInvalidoError } from '@/lib/db'
-import { recalculateQuotationHeader, runQuotationNonCriticalAutosaves } from '@/lib/server/quotations/persistence'
+import { autosaveProductosCatalogo, recalculateQuotationHeader } from '@/lib/server/quotations/persistence'
 import { sendRealtimeBroadcast } from '@/lib/server/realtime/broadcast'
 import { withIdempotency, type IdempotentResult } from '@/lib/server/idempotency'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
@@ -102,7 +102,7 @@ export async function PATCH(
       const updatedQuotation = await recalculateQuotationHeader(id)
       updatedItem = (updatedQuotation.items || []).find((item) => item.id === itemId) ?? itemPatcheado
       // No crítico: se difiere para no retrasar la respuesta que espera el usuario.
-      after(async () => { await runQuotationNonCriticalAutosaves(updatedQuotation.cliente, updatedQuotation.proyecto, [updatedItem], 'PATCH /api/cotizaciones/:id/items/:itemId', id) })
+      after(async () => { await autosaveProductosCatalogo([updatedItem], 'PATCH /api/cotizaciones/:id/items/:itemId') })
     } catch (recalcError) {
       console.error('[PATCH /api/cotizaciones/:id/items/:itemId] El patch se guardó pero falló el recálculo del encabezado:', recalcError)
     }

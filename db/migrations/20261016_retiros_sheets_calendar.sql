@@ -10,6 +10,8 @@
 --     `extraction_logs` y su función de updated_at. `cancel_cotizacion` solo los
 --     menciona en un comentario (verificado en test: sin otras dependencias).
 --     La sección `planeacion` se quita de `usuarios.sections`.
+--   - K5: sale `clientes.proyectos` (arreglo duplicado; las sugerencias de proyecto
+--     salen de `cotizaciones` por cliente_id vía /api/clientes/:id/proyectos).
 --   - G10: `idx_cotizaciones_id` duplica `cotizaciones_pkey`.
 --
 -- ORDEN DE APLICACIÓN: primero se despliega el código de B1 (el keep-alive
@@ -32,6 +34,8 @@ DROP TABLE IF EXISTS public.sheets_sync_status;
 ALTER TABLE public.cotizaciones DROP COLUMN IF EXISTS calendar_event_id;
 
 DROP INDEX IF EXISTS public.idx_cotizaciones_id;
+
+ALTER TABLE public.clientes DROP COLUMN IF EXISTS proyectos;
 
 DROP TABLE IF EXISTS public.planeacion_event_notas;
 DROP TABLE IF EXISTS public.planeacion_pendientes;

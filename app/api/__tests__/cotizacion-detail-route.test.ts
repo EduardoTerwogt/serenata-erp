@@ -5,7 +5,9 @@ const mocks = vi.hoisted(() => ({
   getCotizacionByIdMock: vi.fn(),
   buildUpdateCotizacionPayloadMock: vi.fn(),
   createOrReplaceCotizacionMock: vi.fn(),
-  runQuotationNonCriticalAutosavesMock: vi.fn(),
+  autosaveProductosCatalogoMock: vi.fn(),
+  resolverClienteIdMock: vi.fn(),
+  afterMock: vi.fn((fn: () => unknown) => { void fn() }),
   validateMock: vi.fn(),
 }))
 
@@ -22,8 +24,11 @@ vi.mock('@/lib/db', () => ({
 vi.mock('@/lib/server/quotations/persistence', () => ({
   buildUpdateCotizacionPayload: mocks.buildUpdateCotizacionPayloadMock,
   createOrReplaceCotizacion: mocks.createOrReplaceCotizacionMock,
-  runQuotationNonCriticalAutosaves: mocks.runQuotationNonCriticalAutosavesMock,
+  autosaveProductosCatalogo: mocks.autosaveProductosCatalogoMock,
+  resolverClienteId: mocks.resolverClienteIdMock,
 }))
+
+vi.mock('next/server', () => ({ after: mocks.afterMock }))
 
 vi.mock('@/lib/validation/schemas', () => ({
   CotizacionUpdateSchema: {},
@@ -38,7 +43,9 @@ describe('PUT /api/cotizaciones/[id]', () => {
     mocks.getCotizacionByIdMock.mockReset()
     mocks.buildUpdateCotizacionPayloadMock.mockReset()
     mocks.createOrReplaceCotizacionMock.mockReset()
-    mocks.runQuotationNonCriticalAutosavesMock.mockReset()
+    mocks.autosaveProductosCatalogoMock.mockReset()
+    mocks.resolverClienteIdMock.mockReset()
+    mocks.resolverClienteIdMock.mockResolvedValue('cli-1')
     mocks.validateMock.mockReset()
 
     mocks.requireSectionMock.mockResolvedValue({ response: null })
@@ -96,7 +103,7 @@ describe('PUT /api/cotizaciones/[id]', () => {
     expect(mocks.buildUpdateCotizacionPayloadMock).toHaveBeenCalledWith(
       'SH001',
       previousCotizacion,
-      { proyecto: 'Evento nuevo' },
+      { proyecto: 'Evento nuevo', cliente_id: 'cli-1' },
       [{ descripcion: 'Audio', precio_unitario: 1000 }],
       {
         porcentaje_fee: 0.15,
@@ -111,12 +118,9 @@ describe('PUT /api/cotizaciones/[id]', () => {
       proyecto: 'Evento nuevo',
       items: [{ descripcion: 'Audio', precio_unitario: 1000 }],
     })
-    expect(mocks.runQuotationNonCriticalAutosavesMock).toHaveBeenCalledWith(
-      'ACME',
-      'Evento nuevo',
+    expect(mocks.autosaveProductosCatalogoMock).toHaveBeenCalledWith(
       [{ descripcion: 'Audio', precio_unitario: 1000 }],
       'PUT /api/cotizaciones/:id',
-      'SH001',
     )
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual(updatedCotizacion)

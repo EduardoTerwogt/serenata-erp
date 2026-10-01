@@ -9,18 +9,19 @@ import { QuotationFormItem, QuotationFormValues } from '@/lib/quotations/types'
 
 // Fase 1: Caché de catálogos a nivel de módulo — evita refetch en navegación y remounts
 interface CatalogosCache {
-  clientes: { id: string; nombre: string; proyectos: string[] }[]
+  clientes: { id: string; nombre: string }[]
   productos: Producto[]
   ts: number
 }
 let _catalogosCache: CatalogosCache | null = null
+const _proyectosPorCliente = new Map<string, string[]>()
 const CATALOGOS_TTL_MS = 30 * 60 * 1000 // 30 minutos
 
 export function useQuotationForm(
   setValue: UseFormSetValue<QuotationFormValues>,
   watchedItems: QuotationFormItem[]
 ) {
-  const [listaClientes, setListaClientes] = useState<{ id: string; nombre: string; proyectos: string[] }[]>([])
+  const [listaClientes, setListaClientes] = useState<{ id: string; nombre: string }[]>([])
   const [listaProductos, setListaProductos] = useState<Producto[]>([])
   const [clienteInput, setClienteInput] = useState('')
   const [mostrarClienteDropdown, setMostrarClienteDropdown] = useState(false)
@@ -41,7 +42,7 @@ export function useQuotationForm(
 
     try {
       const [clientes, productos] = await Promise.all([
-        getJson<{ id: string; nombre: string; proyectos: string[] }[]>('/api/clientes?q=', 'Error clientes'),
+        getJson<{ id: string; nombre: string }[]>('/api/clientes?q=', 'Error clientes'),
         getJson<Producto[]>('/api/productos?q=', 'Error productos'),
       ])
       const newClientes = clientes || []
@@ -89,13 +90,35 @@ export function useQuotationForm(
       .map((cliente) => ({ id: cliente.id, nombre: cliente.nombre }))
   }, [clienteInput, listaClientes])
 
-  const proyectosDelCliente = useMemo(() => {
-    const clienteSeleccionado = listaClientes.find(
-      (cliente) => cliente.nombre.toLowerCase() === clienteInput.trim().toLowerCase()
-    )
+  // Sugerencias de proyecto del cliente: se piden por cliente (consulta agregada
+  // sobre cotizaciones) y se cachean por id; el catálogo ya no trae arreglos.
+  const clienteSeleccionadoId = useMemo(
+    () => listaClientes.find((cliente) => cliente.nombre.toLowerCase() === clienteInput.trim().toLowerCase())?.id ?? null,
+    [clienteInput, listaClientes]
+  )
+  const [proyectosPorCliente, setProyectosPorCliente] = useState<Record<string, string[]>>({})
+  const proyectosDelCliente = useMemo(
+    () => (clienteSeleccionadoId ? proyectosPorCliente[clienteSeleccionadoId] ?? [] : []),
+    [clienteSeleccionadoId, proyectosPorCliente]
+  )
 
-    return clienteSeleccionado?.proyectos || []
-  }, [clienteInput, listaClientes])
+  useEffect(() => {
+    if (!clienteSeleccionadoId) return
+    const id = clienteSeleccionadoId
+    const cacheado = _proyectosPorCliente.get(id)
+    if (cacheado) {
+      void Promise.resolve().then(() => setProyectosPorCliente((prev) => (prev[id] ? prev : { ...prev, [id]: cacheado })))
+      return
+    }
+    getJson<string[]>(`/api/clientes/${id}/proyectos`, 'Error proyectos del cliente')
+      .then((proyectos) => {
+        _proyectosPorCliente.set(id, proyectos || [])
+        setProyectosPorCliente((prev) => ({ ...prev, [id]: proyectos || [] }))
+      })
+      .catch(() => {
+        // sugerencias opcionales: no bloquear la UI
+      })
+  }, [clienteSeleccionadoId])
 
   const calcItem = useCallback((item: QuotationFormItem) => calculateQuotationItem(item), [])
 
