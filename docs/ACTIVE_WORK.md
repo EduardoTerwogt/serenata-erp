@@ -1,28 +1,24 @@
 # Trabajo activo
 
-**Última actualización:** 2026-09-30 (sesión 22 cerrada: deuda técnica —
-fuente Inter, duplicado de `proveedor-publico.ts`, frente 3 de la latencia
-de Cuentas, y región de Vercel)
+**Última actualización:** 2026-10-01 (frente 2 en pausa; abierta la iniciativa
+"Simplificación del modelo de datos"). Debajo, el cierre de la sesión 22.
 
 ## Estado
 
-**Frente 2 de latencia de Cuentas → implementado en el PR #100, en validación**
-(`docs/PLAN.md`, `docs/decisions/019-cuentas-conceptos-materializada.md`).
-A1–A3 y el endurecimiento H1–H3 están hechos; faltan H4 (3 corridas de `live`,
-escenario k6 de escrituras, corrida de `load-test.yml`), H5 (paridad de
-entornos) y A4 (producción y merge). Decisión del usuario (2026-09-30): el
-ambiente de test con miles de datos es lo que producción debe aguantar antes de
-pasar a uso real.
+**Nueva iniciativa (borrador, 2026-10-01): "Simplificación del modelo de
+datos"** (`docs/PLAN.md`, `docs/inventario-tablas.md`). La fase 1 (inventario
+de las 40 tablas) está hecha; la fase 2 espera las respuestas del usuario a las
+preguntas abiertas del plan.
 
-**En curso: issue #99 (desglose antes/después de IVA) — PR #100 en borrador,
-rama `claude/wonderful-hamilton-260e2w`.** Implementado y validado (unit,
-smoke, critical, paridad SQL/TS). Bloqueado por `live` (rendimiento de
-Cuentas, frente 2). Incluye también: utilidad con descuento, ISR fuera del
-total de impuestos, seed SEEDCU corregido y trigger del invariante de grupos
-(migración 20261008). **Migraciones 20261007 y 20261008 aplicadas solo en
-test**; aplicarlas en producción justo antes del merge (20261008 repara 2
-grupos de SH072: recalcula "Eduardo Terwogt" 5,900→3,100 y borra el grupo
-vacío "Serenata").
+**Frente 2 de latencia de Cuentas → en pausa** (PR #100 en borrador, rama
+`claude/wonderful-hamilton-260e2w`, HEAD `0c0f5c3`). Estado exacto, causa del
+último fallo de `live` (degradación de la BD de test, cómputo Micro) y cómo
+retomarlo: `docs/archive/frente2-cuentas-conceptos-pausado.md`. Decisión
+pendiente del usuario: subir el cómputo de test (y luego producción).
+**Migraciones 20261007 y 20261008 aplicadas solo en test** (y `20261009`,
+`20261010` del frente 2); aplicarlas en producción justo antes del merge
+(20261008 repara 2 grupos de SH072: recalcula "Eduardo Terwogt" 5,900→3,100 y
+borra el grupo vacío "Serenata").
 
 ## Completado en la sesión 22
 

@@ -78,12 +78,16 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Frente 2 de latencia de Cuentas** (2026-09-30): los conceptos de Cuentas
-  se guardan derivados en `cuentas_conceptos_base` y se mantienen con triggers
-  (`docs/decisions/019-cuentas-conceptos-materializada.md`). Implementado en el
-  PR #100 (issue #99), que sigue en borrador hasta cerrar la validación bajo
-  demanda (3 corridas de `live`, escenario k6 de escrituras) y aplicar las
-  migraciones en producción. Plan y tracker en `docs/PLAN.md`.
+- **Simplificación del modelo de datos** (2026-10-01, borrador): reducir la
+  dispersión y la duplicación de estado entre las 40 tablas, empezando por las
+  11 que alimentan Cuentas. Inventario en `docs/inventario-tablas.md`; plan en
+  `docs/PLAN.md`. Sin migraciones hasta aprobar el plan.
+- **Frente 2 de latencia de Cuentas** (2026-09-30, **en pausa**): los
+  conceptos de Cuentas se guardan derivados en `cuentas_conceptos_base` y se
+  mantienen con triggers (`docs/decisions/019-cuentas-conceptos-materializada.md`).
+  Implementado en el PR #100 (issue #99), en borrador. Falta validar bajo
+  demanda y resolver el cómputo de la BD de test; estado y pasos para
+  retomarlo en `docs/archive/frente2-cuentas-conceptos-pausado.md`.
   - Escala de referencia: el ambiente de test con miles de datos es el objetivo
     que producción debe aguantar antes de pasar a uso real.
 

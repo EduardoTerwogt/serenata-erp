@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado, listo para ejecutar — "Frente 2: derivar `cuentas_conceptos` sin recalcularlo en cada RPC", **opción A** (2026-09-30).
+**Estado:** Borrador — "Simplificación del modelo de datos" (2026-10-01).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -13,8 +13,8 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 
 ## Ciclo de vida
 
-1. **Vacío** (este estado) — no hay iniciativa multi-sesión en curso ni en definición.
-2. **Borrador** — una idea se confirma con alcance de iniciativa.
+1. **Vacío** — no hay iniciativa multi-sesión en curso ni en definición.
+2. **Borrador** (este estado) — una idea se confirma con alcance de iniciativa.
 3. **En refinamiento** — el loop crear → revisar → mejorar ocurre editando
    este archivo directamente.
 4. **Aprobado** — cualquier sesión o cuenta puede tomarlo desde aquí y
@@ -27,98 +27,90 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 Última iniciativa cerrada: "Rediseño de la sección Cuentas" (2026-09-26)
 — historia en `docs/archive/rediseno-cuentas.md`.
 
+**Iniciativa en pausa:** "Frente 2 — `cuentas_conceptos` sin recálculo por
+RPC" (PR #100, rama `claude/wonderful-hamilton-260e2w`) — estado exacto y
+cómo retomarla en `docs/archive/frente2-cuentas-conceptos-pausado.md`.
+
 ---
 
-# Frente 2 — `cuentas_conceptos` sin recálculo por RPC
+# Simplificación del modelo de datos
 
-## Contexto
+## Origen
 
-- Cada carga de `/cuentas` dispara `cuentas_periodo`, `cuentas_resumen`,
-  `cuentas_opciones` y `cuentas_avisos_items` en paralelo, y **cada una
-  recalcula `cuentas_conceptos` desde cero** (~200–400 ms en caliente sobre
-  el dataset de carga de test: ~2,200 proyectos, ~13,000 conceptos/año).
-- El job `live` mide p95 < 800 ms por endpoint (O1b) y falla de forma
-  intermitente desde #92. En el PR #100 (issue #99) falló **3 veces seguidas**,
-  cada vez en un endpoint distinto (mes, resumen, lista) y una vez con
-  `statement_timeout` en la paridad. Medido: el cambio de #99 cuesta ~2 ms en
-  caliente; la varianza viene de la BD de test (misma consulta de 400 ms a
-  1.2–4.7 s bajo contención; lecturas frías de 98 ms donde en caliente son 2 ms).
-- Decisión del usuario (2026-09-30): **atacar este frente antes de mergear
-  el PR #100**. El PR queda en borrador; sus migraciones 20261007/20261008 no
-  se aplican en producción hasta entonces.
-- Deuda de referencia: `docs/ROADMAP.md` → "Latencia en paralelo de las RPCs
-  de Cuentas"; decisión 017 §O1/O1b (paridad SQL↔TS obligatoria).
+El 2026-10-01 el usuario revisó el Schema Visualizer de Supabase y percibió
+**demasiadas tablas**, con la información repartida en muchos lugares. Pidió
+abrir una iniciativa para explorarlo antes de seguir con el frente 2.
 
-## Opciones (a decidir)
+## Qué se sabe hoy
 
-| | Qué | A favor | En contra |
-|---|---|---|---|
-| **A** | Tabla `cuentas_conceptos_mat` mantenida por triggers en las tablas fuente (cotizaciones, cuentas_cobrar/pagar, grupos, documentos, pagos, reaperturas). Las RPCs leen de ahí. | Lecturas O(filtro); consistencia inmediata; escala a producción futura. | Muchos triggers; lo que depende de "hoy" (vencido, `venc_dias`) no se materializa y se calcula al leer; riesgo de desincronía si falta un trigger (mitigado con test de paridad contra la función actual). |
-| **B** | `MATERIALIZED VIEW` de la parte que no depende de "hoy", con `REFRESH ... CONCURRENTLY` al final de cada RPC de escritura (o por cron). | Poco código; la función actual casi se reutiliza. | Refresh completo en cada escritura (costoso con volumen); ventana de datos viejos si es por cron. |
-| **C** | Una sola RPC `cuentas_carga(p)` que deriva `cuentas_conceptos` **una vez** y devuelve periodo + resumen + opciones (+ avisos) en una respuesta. | Cambio acotado, sin estado nuevo en BD; quita 3 de 4 recálculos por carga; la paridad TS se conserva. | No acelera un endpoint aislado (cambiar de página del periodo sigue recalculando); cambia el contrato de la ruta/UI. |
+Detalle en `docs/inventario-tablas.md` (producción, 2026-10-01):
 
-**Decisión (2026-09-30): opción A.** Se había recomendado C, pero la
-medición F2-0 la descartó: `cuentas-periodo-rendimiento.spec.ts` mide **cada
-endpoint por separado y en serie** (40 llamadas seguidas), así que juntar las
-RPCs no baja el tiempo que falla. De los ~400–450 ms por llamada, ~330 ms son
-`cuentas_conceptos` recalculando ~13,000 conceptos; con esa base, cualquier
-contención de la BD de test rebasa 800 ms. A deja cada lectura en filas ya
-calculadas.
-
-### Diseño de A
-
-- **Tabla `cuentas_conceptos_base`**: una fila por concepto con todo lo que
-  **no** depende de "hoy" (lo mismo que devuelve `cuentas_conceptos` salvo
-  `venc_dias`, el estado `vencido` y `paso_urgente`, que se derivan al leer
-  desde `fecha_vencimiento`). Llave: `key` ('c:…', 'g:…', 's:…'); índices por
-  `proyecto_key` y por `anio, mes`.
-- **Refresco por proyecto**: `cuentas_conceptos_refrescar(p_proyectos text[])`
-  borra y recalcula los conceptos de esos proyectos **reutilizando la
-  derivación actual** (misma consulta, filtrada por proyecto; principio 7,
-  sin segundo motor).
-- **Triggers** (el plan decía `AFTER … FOR EACH STATEMENT` con tablas de transición; se implementó por fila con cola, ver decisión 019) (sin
-  duplicar proyectos) en las tablas fuente: `cotizaciones`, `proyectos`,
+- 40 tablas en `public`; **11** alimentan los conceptos de Cuentas
+  (`cuentas_conceptos`): `cotizaciones`, `proyectos`, `proveedores`,
   `cuentas_cobrar`, `cuentas_pagar`, `cuentas_pagar_grupos`,
-  `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`,
-  `pagos_comprobantes`, `pagos_cuentas_pagar`, `cuentas_reaperturas` y
-  `proveedores` (nombre/régimen → todos sus proyectos). Refresco síncrono en
-  la misma transacción: nunca hay datos viejos.
-- **Lecturas**: `cuentas_periodo`, `cuentas_resumen`, `cuentas_avisos_items`
-  y `cuentas_opciones` leen de la tabla y calculan lo de "hoy" al vuelo.
-- **Red de seguridad**: test live de paridad tabla ↔ función de derivación
-  (la función se conserva como referencia) y reconciliación completa en el
-  cron diario (`/api/keep-alive`) que reporta y corrige diferencias.
+  `pagos_comprobantes`, `pagos_cuentas_pagar`, `documentos_cuentas_cobrar`,
+  `documentos_cuentas_pagar` y `cuentas_reaperturas`.
+- La dispersión ya tuvo costo medible: la tabla `cuentas_conceptos_base` y sus
+  triggers (frente 2) existen para no juntar esas 11 tablas en cada lectura, y
+  la invariante de grupos necesitó un trigger propio (`20261008`).
+- Hipótesis a validar (no son decisiones): cobrar y pagar son modelos
+  paralelos (pagos y documentos casi idénticos); `cuentas_pagar` y
+  `cuentas_pagar_grupos` duplican estado; hay datos de terceros copiados en
+  varias tablas; dos mecanismos de idempotencia; un posible residuo de
+  migración. Ver "Observaciones" en el inventario.
+- **No** todo se puede fusionar: varias separaciones existen por reglas de
+  negocio (R1, D22, D28; `docs/decisions/006` y `011`) y la BD protege hoy
+  esas invariantes.
 
-### Bloques
+## Objetivo (a confirmar con el usuario)
 
-1. **A1 — Tabla y refresco**: migración con la tabla,
-   `cuentas_conceptos_refrescar` y el backfill completo; test de paridad
-   tabla ↔ `cuentas_conceptos`.
-2. **A2 — Triggers**: triggers en todas las tablas fuente; tests live de que
-   cada RPC de escritura (aprobar, cancelar, pagos, documentos, reasignar,
-   reabrir) deja la tabla igual a la derivación.
-3. **A3 — Lecturas**: las 4 RPCs leen de la tabla; paridad SQL↔TS y
-   rendimiento (`cuentas-periodo-rendimiento`) en verde.
-4. **A4 — Cierre**: 3 corridas de `live` seguidas en verde; aplicar en
-   producción junto con 20261007/20261008 y mergear el PR #100.
+Reducir los lugares donde hay que buscar o mantener el mismo dato, **sin
+perder** las invariantes de dinero e impuestos y sin romper lo que funciona.
+"Menos tablas" es un medio, no la meta: el criterio es **menos dispersión y
+menos duplicación de estado**.
+
+## Fuera de alcance (por ahora)
+
+- Cambiar reglas de negocio (`docs/decisions/006`).
+- Tocar producción: esta iniciativa no aplica ninguna migración hasta
+  aprobarse con plan.
+- Decidir fusiones antes de la fase 2.
+
+## Fases
+
+| Fase | Qué | Salida | Estado |
+|---|---|---|---|
+| 1. Inventario | Tablas, columnas, quién las toca (código, RPCs, triggers, FKs) | `docs/inventario-tablas.md` | **Hecha (2026-10-01)** — falta que el usuario la revise |
+| 2. Uso real y riesgo | Por tabla/columna: pantalla o ruta que la usa, columnas sin uso, invariantes que protege la BD, costo de migrar (RPCs, triggers, tests live, derivación SQL y TS) | Matriz "fusionar / mantener / derivar" con riesgo P0/P1/P2 | Pendiente |
+| 3. Propuestas | 2–3 alternativas de modelo objetivo para Cuentas (la parte más dispersa) y para el resto, con costo y migración de datos | ADR en `docs/decisions/` (candidato 020) | Pendiente |
+| 4. Decisión y plan | El usuario elige; se escribe el plan por bloques con migraciones numeradas | Este archivo pasa a "Aprobado" | Pendiente |
+| 5. Ejecución | Por bloques, en rama + PR, validado en test con el dataset de miles de registros antes de producción | PRs | Pendiente |
+
+## Preguntas abiertas para el usuario
+
+1. ¿La meta incluye **también** simplificar lo que ve el usuario (pantallas) o
+   solo el modelo de datos?
+2. ¿Hay tablas que ya sabes que no se usan o que quieres conservar a toda
+   costa?
+3. ¿Se pausa el frente 2 hasta terminar la fase 3, o se cierra antes con lo ya
+   hecho (el PR #100 sigue en borrador y depende de una decisión sobre el
+   cómputo de test)?
+4. ¿Cuánto cambio de esquema tolera producción antes de pasar a uso real? Hoy
+   no hay usuarios finales, así que es el mejor momento para migrar.
+
+## Riesgos
+
+- **P1:** fusionar tablas de Cuentas cambia la derivación SQL y la de TS
+  (paridad obligatoria, decisión 017), los triggers del frente 2 y los tests
+  live. Se mitiga con la fase 2 antes de proponer nada.
+- **P1:** una fusión puede quitar una invariante que hoy la BD hace cumplir.
+- **P2:** el inventario usa coincidencia de texto sobre el cuerpo de las
+  funciones; puede sobrecontar. Se afina en la fase 2.
 
 ## Tracker
 
 | Bloque | Estado |
 |---|---|
-| F2-0 Medición | Hecho (2026-09-30) |
-| A1 Tabla y refresco | Hecho (2026-09-30): `20261009` en test y en el PR #100. Paridad leer↔derivar = 0 (2026, todos, 2025, fecha futura); leer 51–69 ms vs derivar 224–283 ms; refrescar 2 proyectos 35 ms. La derivación pasó a plpgsql + `force_custom_plan` (el plan genérico tardaba ~7.5 s). El test live de paridad pasa a A2: sin triggers la tabla se desactualiza con los specs que escriben. |
-| A2 Triggers | Hecho (2026-09-30). Triggers en las 11 tablas fuente, cola `cuentas_conceptos_pendientes` y constraint trigger diferido (un refresco por transacción, advisory lock por proyecto). Se probó también un refresco al leer (`0572ff3`) y se descartó en CI por razones de diseño; ver `docs/decisions/019-cuentas-conceptos-materializada.md`. |
-| A3 Lecturas | Hecho (2026-09-30): las 4 RPCs leen de la tabla; `cuentas_periodo` (mes) 311 → 140 ms, `cuentas_resumen` 261 → 84 ms; los 5 tests de rendimiento pasaron con p95 < 800 ms. |
-| H1 Consolidar migraciones | Hecho: `20261009` única (antes `20261009`–`20261015`); 21 de 21 funciones idénticas a la base de test. |
-| H1b/H1c Endurecer | Hecho: tipo `cuentas_concepto_t`; los `UPDATE` de solo `estado` ya no refrescan (500 cobros: 498 proyectos y 882 ms → 0). |
-| H2 Red de seguridad | Hecho: `cuentas_conceptos_reconciliar()` + `/api/keep-alive`. |
-| H3 Documentación | ADR 019, ARCHITECTURE, ROADMAP, regla de migraciones. |
-| H4 Validación bajo demanda | Pendiente: `live` 3 corridas seguidas, escenario k6 de escrituras (aprobar) y corrida de `load-test.yml`. |
-| H5 Paridad de entornos | Pendiente (checklist: regiones, versiones, cómputo). |
-| A4 Cierre | Pendiente: aplicar `20261007`, `20261008` y `20261009` en producción y mergear el PR #100. |
-
-**Corrección de diagnóstico (2026-09-30):** el timeout de los B7 en `c7b2fad`
-no se demostró causado por el refresco; el entorno completo estuvo +20 % más
-lento entre dos corridas con el mismo código. Y la escala de referencia es la
-de test, no la de producción de hoy (28 proyectos): ver la decisión 019.
+| Entrada de iniciativa y pausa del frente 2 | Hecho (2026-10-01) |
+| Fase 1 — Inventario | Hecho (2026-10-01) |
+| Fase 2 — Uso real y riesgo | Pendiente (espera respuestas a las preguntas abiertas) |
