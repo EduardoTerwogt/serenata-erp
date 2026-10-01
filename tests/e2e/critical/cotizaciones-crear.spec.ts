@@ -36,7 +36,9 @@ test('crea una cotización nueva en BORRADOR', async ({ page }) => {
   // Sin botón de guardar: el borrador se crea solo (proyecto + partida con
   // descripción) y la pantalla se queda en /nueva con el folio ya reservado.
   await expect.poll(() => draftPosts.length, { timeout: 10_000 }).toBeGreaterThan(0)
-  expect(draftPosts[0].estado).toBe('BORRADOR')
+  // L1: el estado ya no viaja en el guardado; una cotización nueva nace BORRADOR en la base
+  // y solo cambia por RPC (emitir/aprobar/cancelar).
+  expect(draftPosts[0].estado).toBeUndefined()
   expect(draftPosts[0].proyecto).toBe('Show Monterrey')
 
   await expect(page.getByText('Borrador guardado')).toBeVisible()

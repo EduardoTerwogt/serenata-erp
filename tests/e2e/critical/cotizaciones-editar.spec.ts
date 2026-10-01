@@ -142,7 +142,7 @@ test('seleccionar una sugerencia de producto autocompleta categoría, precio y c
   // Fase 6C: el autofill manda "base" para los 4 campos que toca -- si alguien más
   // ya editó alguno (p. ej. Precio) desde el último valor confirmado, el servidor
   // rechaza la operación completa en vez de pisarlo en silencio.
-  expect(Object.keys(patch.base || {}).sort()).toEqual(['categoria', 'descripcion', 'precio_unitario', 'costo_unitario'])
+  expect(Object.keys(patch.base || {}).sort()).toEqual(['categoria', 'costo_unitario', 'descripcion', 'precio_unitario'])
   expect(typeof patch.mutation_id).toBe('string')
 
   await expect(descripcion).toHaveValue('Renta de grúa Technocrane')
