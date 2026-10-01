@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Plan v4 — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar, sin preguntas abiertas).
+**Estado:** Plan v5 — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar, sin preguntas abiertas).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -53,7 +53,7 @@ están conectados a la BD, nada debe romperse ni quedar suelto.**
   (Propuesta). Recomendada: **B** — un dueño por dato + el grupo como única
   obligación de pago.
 - Conclusión central: **el problema es estado duplicado, no número de
-  tablas.** 40 → 33 tablas (plan v4),
+  tablas.** 40 → 33 tablas (plan v5),
   ~20 columnas copiadas o derivadas menos, y desaparece la rama "suelta" de
   `cuentas_pagar` en ~10 RPCs.
 - Evidencia de que el diseño actual ya deja divergir datos: contacto de
@@ -191,7 +191,29 @@ con el mismo ciclo de vida, la misma forma o una relación 1:1 sin motivo?
 filas) se queda sin uso activo. Se **conserva** para el diseño de Proyectos
 (ROADMAP: "Google Calendar desde Proyectos"); se decide ahí.
 
-## Resultado esperado (v4)
+## Auditoría final 2 (v4 → v5, 2026-10-01)
+
+Tercera revisión (desarrollo + datos), ahora con estadísticas reales de uso
+(`pg_stat_statements` y `pg_stat_user_tables` de test desde 2026-08-25,
+advisors de Supabase) y el plan de la organización. **Veredicto: el v4 era
+implementable, pero dejaba fuera la mejora de mayor impacto (índices), tenía
+tres choques con la regla "una reescritura por función" y dos huecos
+operativos.** v5 los corrige.
+
+| # | Tipo | Hallazgo | Evidencia | En v5 |
+|---|---|---|---|---|
+| G1 | **Rendimiento (mayor impacto)** | **`items_cotizacion` solo tiene el índice de la PK.** Cada lectura o guardado de una cotización recorre la tabla completa. Igual con `cuentas_pagar` por `cotizacion_id` (el único índice es parcial `WHERE item_id IS NOT NULL`) y `responsable_id`, `items_cotizacion.responsable_id`, y `cotizaciones.es_complementaria_de` (7 funciones lo filtran, sin índice). | Test: `items_cotizacion` 412,578 lecturas completas / 2,681 M filas leídas; `cotizaciones` 6.5 M / 13,963 M; `cuentas_pagar` 847 K / 8,594 M. Advisor `unindexed_foreign_keys` (10). | **B0**: índices faltantes, validados con `EXPLAIN` de las 10 consultas más caras. Aditivo, sin riesgo. Es la palanca gratuita más fuerte contra #107 (D7): menos CPU por petición en Micro. |
+| G2 | Rendimiento | El autosave de clientes busca por `nombre` exacto sin índice: 27,360 llamadas, 24.6 ms cada una, en cada guardado de cotización. | `pg_stat_statements`. | B3: índice único `lower(trim(nombre))` (F6) **y** la consulta del autosave usa esa misma expresión. |
+| G3 | Rendimiento | Políticas RLS que re-evalúan `auth.*()`/`current_setting()` por fila: `usuarios` y las 2 de presencia en `realtime.messages` (colaboración en cotizaciones). | Advisor `auth_rls_initplan`. | B3: envolver en `(select …)`; validar con los specs de colaboración. |
+| G4 | Orden | v4 reescribía funciones dos veces: `item_id` → `uuid` en B3 rompe `approve_cotizacion` y `reasignar_responsable_cuenta_pagar` (comparan `uuid = text`), que B5 vuelve a reescribir; `operaciones` (E4) en B3 tocaba las RPCs de pago que B5 reescribe; borrar las tablas de Planeación en B1 obliga a reescribir `cancel_cotizacion`, que B5 reescribe. | `pg_get_functiondef`. | `item_id`, E4 y el borrado de tablas de Planeación se mueven al bloque que ya reescribe esas funciones. B1 solo quita código, UI y permisos. |
+| G5 | Riesgo | `cotizaciones.fecha_entrega` → `date` toca `save_cotizacion` y `patch_cotizacion_general`, el modelo de conflictos por campo (002) con sus arreglos de nulo vs vacío; un `''` desde la UI fallaría el cast. | 10 funciones mencionan `fecha_entrega`. | Solo `proyectos.fecha_entrega` → `date` (lo operativo; Cuentas lo usa, D12). La cotización (snapshot del PDF, D5) sigue `text` con `CHECK` de formato `AAAA-MM-DD` o nulo, y `save_cotizacion` normaliza `''` → `NULL`. Mismo beneficio, sin tocar el modelo de conflictos. |
+| G6 | Revisión | B5 (v4) era un PR P0 enorme: ~20 funciones, cambios de tipo, vista, borrados. Difícil de revisar y sin punto de control intermedio en prod. | — | Se parte en **B5a (escrituras de dinero)** y **B5b (lecturas, copias y borrado)**, con conjuntos de funciones **disjuntos**: cada función se sigue reescribiendo una sola vez. |
+| G7 | **Operación** | **La organización de Supabase está en plan Free:** no hay respaldos diarios restaurables ni PITR, y un proyecto inactivo se pausa (por eso existe `/api/keep-alive`). El "respaldo" de B0 en v4 suponía algo que no existe. | `get_organization` → `plan: free`. | B0 y antes de B2/B5: `supabase db dump` manual (paso a paso para ti). B6: decidir la estrategia de respaldo **antes de salir a uso real** (con dinero real, Free sin respaldos es un riesgo P0 fuera de esta iniciativa). |
+| G8 | Operación | F2 manda las pruebas manuales al Preview, pero **Drive está apagado en Preview**: no se pueden probar facturas, comprobantes ni complementos ahí. | `docs/ACTIVE_WORK.md` → deuda "Drive en Preview". | B0: activar Drive en Preview con la cuenta de pruebas (gratis; pasos para ti en Vercel). |
+| G9 | Limpieza | `buscar_cuentas_pagar` ya no la llama nadie (la reemplazó `buscar_cuentas_pagar_grupos`). | Ninguna referencia en código ni en otras funciones. | Se borra en B5b. |
+| G10 | Índices | 37 índices sin uso según el advisor de prod (prod casi no tiene tráfico: no es evidencia). | Advisor `unused_index`. | Solo se borran los que tampoco se usan en **test** con carga real (`pg_stat_user_indexes`), más el duplicado `idx_cotizaciones_id` (F7). |
+
+## Resultado esperado (v5)
 
 - **40 → 33 tablas** (−18 %): salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
@@ -211,6 +233,8 @@ filas) se queda sin uso activo. Se **conserva** para el diseño de Proyectos
 | Reglas de dinero de Cuentas | funciones SQL | `lib/shared/cuentas/concepto.ts` |
 | Copia de consulta en Sheets | — | se retira (D2) |
 
+- **Consultas más rápidas** por los índices faltantes (G1–G3), que hoy obligan a
+  leer tablas completas en cada cotización y en Cuentas.
 - Además: fechas como `date` y `timestamptz` (sin errores de día por zona
   horaria), estados con `CHECK`, clientes sin duplicados, índices limpios,
   tablas de operación que ya no crecen sin límite y un chequeo diario de
@@ -238,31 +262,40 @@ filas) se queda sin uso activo. Se **conserva** para el diseño de Proyectos
 7. **Después de salir a uso real**, vuelve a ser obligatorio expandir y
    contraer en PRs separados (F3).
 
-## Plan de ejecución (v4)
+## Plan de ejecución (v5)
 
-Un PR por bloque. Estimación: 5 sesiones.
+Un PR por bloque (B5 son dos). Estimación: 5–6 sesiones.
 
-### B0 — Red de seguridad y test = prod
+### B0 — Red de seguridad, test = prod e índices
 
 - `scripts/db/guardas-modelo.sql`: Σ pagos vigentes = `monto_pagado` (cobros,
   grupos, Σ hijas = grupo); `grupo.monto_total = Σ x_pagar`;
   `cp.x_pagar = item.x_pagar × item.cantidad`; total de orden = Σ desglose;
   importe y margen por fórmula; `cuentas_cobrar.monto_total = cotización.total`;
-  renglón aprobado ⇔ cuenta por pagar; cuenta con proveedor ⇒ grupo; folios CC/CP únicos y no nulos.
+  renglón aprobado ⇔ cuenta por pagar; cuenta con proveedor ⇒ grupo; folios
+  CC/CP únicos y no nulos.
 - `scripts/db/mapa-dependencias.mjs <tabla.columna>`.
 - Test: retirar objetos del frente 2 (migración de reversa "solo test",
   anotada en `docs/archive/frente2-cuentas-conceptos-pausado.md`), comparar
   esquema con prod, `VACUUM ANALYZE` (F11).
+- **Índices faltantes (G1)** en test y prod: `items_cotizacion(cotizacion_id,
+  orden)`, `items_cotizacion(responsable_id)`, `cuentas_pagar(cotizacion_id)`,
+  `cuentas_pagar(responsable_id)`, `cotizaciones(es_complementaria_de)`
+  parcial, y los FKs del advisor que sigan vivos tras el plan; cada uno
+  justificado con `EXPLAIN` de las consultas más caras de `pg_stat_statements`.
+  Medir `live` 3 veces antes y después (#107).
 - Línea base: guardas en ambos y latencia de `cuentas_periodo` en test.
-- Respaldo de prod con `pg_dump` (gratis) antes de B2.
+- **Respaldo (G7):** `supabase db dump` de prod (paso a paso para ti) antes de
+  B2 y antes de B5a.
+- **Drive en Preview (G8):** pasos para que lo actives con la cuenta de pruebas.
 
 ### B1 — Retirar Sheets y Planeación (D2, D8)
 
 - Sheets: lista completa de F12; migración borra `sheets_sync_status` y sus 3 RPCs.
-- Planeación: lista completa de E1; plantillas pasan a la sección
-  `cotizaciones` (E2) **en el mismo PR**, antes de quitar `planeacion` de
-  `AppSection`; migración borra las 3 tablas, el trigger y su función, y
-  reescribe `cancel_cotizacion` (desde prod) sin la referencia.
+- Planeación: código, rutas, UI, navegación, proxy, permisos y tests de E1;
+  plantillas pasan a la sección `cotizaciones` (E2) **en el mismo PR**, antes
+  de quitar `planeacion` de `AppSection`. Las 3 tablas se borran en B5b, junto
+  con la reescritura de `cancel_cotizacion` (G4).
 - `docs/ROADMAP.md`, `ARCHITECTURE.md`, `CLAUDE.md` (encabezado: "extracción
   AI de eventos") al día.
 
@@ -290,43 +323,70 @@ Un PR por bloque. Estimación: 5 sesiones.
 - Drive: paso a paso para ti (F13). Desde aquí, pruebas manuales en el Preview
   (F2).
 
-### B3 — Integridad, tipos y operación
+### B3 — Integridad y operación (sin tocar funciones de Cuentas)
 
-- `cuentas_pagar.item_id` → `uuid` + FK; quitar la búsqueda por descripción
-  de `app/api/items/[id]/route.ts`; 
 - `CHECK` de `importe`/`margen` con tolerancia de centavo (A6); `CHECK` de
-  `cotizaciones.estado` y `.tipo` (F6).
-- `clientes`: único por `lower(trim(nombre))` y autosave que lo respeta (F6).
-- 13 columnas → `timestamptz`, revisando cada consumidor (F5).
-- `bulk_import_operations` + `pago_operations` → `operaciones` (E4): las 3 RPCs de pago, `bulk_replace_items_cotizacion` y las 4 rutas `…/estado`.
-- Índices: borrar `idx_cotizaciones_id`; GIN sin uso solo si el mapa da 0 (F7).
-- `/api/keep-alive`: purga de reservas vencidas y operaciones > 30 días (F8).
+  `cotizaciones.estado` y `.tipo` (F6); `CHECK` de formato de
+  `cotizaciones.fecha_entrega` (`AAAA-MM-DD` o nulo) y `save_cotizacion`
+  normaliza `''` → `NULL` (G5).
+- `clientes`: único por `lower(trim(nombre))` y autosave que consulta por esa
+  expresión (F6, G2).
+- `timestamptz` en las columnas que **no** leen funciones de Cuentas
+  (`service_templates`, `gastos_fijos`, `proveedor_documentos`); las de Cuentas
+  van en B5b (F5).
+- RLS `(select auth…)` en `usuarios` y `realtime.messages` (G3).
+- Índices: borrar `idx_cotizaciones_id`; los sin uso solo con evidencia de test (G10).
+- `/api/keep-alive`: purga de reservas de folio vencidas (F8).
 - `COMMENT ON COLUMN` en ambos `x_pagar` (A7).
 
 ### B4 — Un solo motor de Cuentas (#108)
+
+Si pasarlo a SQL exige cambiar `cuentas_conceptos`, ese cambio se hace en B5b
+(G4) y B4 solo agrega la función de detalle.
 
 Derivación del proyecto seleccionado y del detalle a SQL; el test de paridad
 vigente confirma resultados idénticos sobre el dataset de carga antes de
 retirar el TS. `concepto.ts` queda con tipos y presentación.
 
-### B5 — Cuentas en un PR (P0)
+### B5a — Escrituras de dinero solo por grupo (P0)
 
-Una reescritura por función, desde prod, y en la misma migración:
-- Pagos, facturas y órdenes solo por grupo (fuera la rama suelta de las RPCs
-  de A1/v2); el suelto "por asignar" y su UI se quedan (A9). Restricción
-  `responsable_id IS NOT NULL ⇒ grupo_id IS NOT NULL`.
+Una reescritura por función, desde prod: `registrar_pago_cuenta_pagar`,
+`registrar_pago_grupo_factura`, `registrar_pago_cuenta_cobrar` (solo por E4),
+`anular_pago_proveedor`, `baja_documento_pago`, `adjuntar_comprobante_pago_proveedor`,
+`generar_orden_pago` (sin `UNION ALL`), `cancelar_orden_pago`,
+`recalcular_estado_orden_pago`, `validar_factura_proveedor`, `corregir_*`,
+`bulk_replace_items_cotizacion` (solo por E4).
+- Pagos, facturas y órdenes solo por grupo; el suelto "por asignar" sigue (A9).
+- Dejan de escribir `orden_pago_id`, `total_a_transferir`, `monto_transferido`
+  y `metodo_pago` de `cuentas_pagar` (se borran en B5b).
+- `operaciones` reemplaza a `pago_operations` y `bulk_import_operations`
+  (E4; `entidad_id text` porque el folio de cotización es texto; RLS sin
+  políticas); rutas `…/estado` al día.
+- Restricción `responsable_id IS NOT NULL ⇒ grupo_id IS NOT NULL`.
+- Guardas en 0 y paridad; recorrido manual de pagos en el Preview.
+
+### B5b — Lecturas, copias y borrado (P0)
+
+Funciones disjuntas de B5a: `approve_cotizacion`, `reasignar_responsable_cuenta_pagar`,
+`cancel_cotizacion`, `cuentas_conceptos`, `cuentas_por_proyecto`,
+`cuentas_orden_candidatos`, `cuentas_periodo`/`resumen`/`avisos_items`/`anios`,
+`buscar_cuentas_cobrar`, `buscar_cuentas_pagar_grupos`, `buscar_ordenes_pago`,
+`dashboard_*`; portal y TS.
 - Lectores a dueños únicos (contacto, renglón, proyecto/cliente según D5).
-- `fecha_entrega` → `date` en proyectos y cotizaciones; las funciones de
-  Cuentas dejan la regex (F4).
+- `cuentas_pagar.item_id` → `uuid` + FK; fuera la búsqueda por descripción de
+  `app/api/items/[id]/route.ts` (G4).
+- `proyectos.fecha_entrega` → `date`; las funciones dejan la regex (F4, G5).
+- `timestamptz` en las columnas de Cuentas y órdenes (F5).
 - `historial_responsable` → vista con `security_invoker` (A11);
   `clientes.proyectos` → consulta.
-- Borrar las columnas de la tabla "Deja de vivir en" (lista de v2: contacto,
-  copias del renglón, `responsable_nombre`, `orden_pago_id`,
-  `total_a_transferir`, `monto_transferido`, `metodo_pago`;
-  `cuenta_pagar_id` de pagos y documentos; texto de `cuentas_cobrar`;
-  `clientes.proyectos`; tabla `historial_responsable`), con el mapa en 0.
+- Borrar: columnas de la tabla "Deja de vivir en" (contacto, copias del
+  renglón, `responsable_nombre`, `orden_pago_id`, `total_a_transferir`,
+  `monto_transferido`, `metodo_pago`; `cuenta_pagar_id` de pagos y
+  documentos; texto de `cuentas_cobrar`; `clientes.proyectos`), tablas
+  `historial_responsable` y de Planeación (E1), función `buscar_cuentas_pagar`
+  (G9). Mapa en 0.
 - Seeds, generador de loadtest y tipos al día; **re-sembrar test** (F10).
-- Medir latencia antes/después (A15); recorrido manual en el Preview.
+- Medir latencia antes/después (A15); recorrido manual completo en el Preview.
 
 ### B6 — Cierre
 
@@ -334,9 +394,10 @@ Una reescritura por función, desde prod, y en la misma migración:
 - `ARCHITECTURE.md`, `CLAUDE.md` (principio 1 sin Sheets), decisiones 006,
   008, 011, 017; ADR 020 con el resultado real; nota de F14 para el diseño de
   Proyectos.
-- Re-evaluar el frente 2 (D6).
-- Dejar escrito el checklist de salida a uso real: correr el reinicio por
-  última vez, guardas en 0, borrar el script de reinicio.
+- Re-evaluar el frente 2 (D6) — con los índices de B0 puede que ya no haga falta.
+- Checklist de salida a uso real: correr el reinicio por última vez, guardas
+  en 0, borrar el script de reinicio y **decidir la estrategia de respaldo**
+  (plan Free sin respaldos, G7).
 - Cerrar #105, #106, #107 (con lo aprendido), #108, #109; archivar este plan.
 
 ## Confirmaciones (2026-10-01)
@@ -352,7 +413,8 @@ Una reescritura por función, desde prod, y en la misma migración:
 - **P0:** B5 cambia el flujo de pago a proveedores. Mitigación: datos
   reiniciados (una sola forma), un solo motor (B4), guardas deterministas,
   `live` sobre 2,203 proyectos re-sembrados, respaldo de B0.
-- **P1:** `live` intermitente por cómputo Micro (#107, D7). Mitigación: F11; la
+- **P0 (fuera de alcance, antes de uso real):** plan Free sin respaldos (G7).
+- **P1:** `live` intermitente por cómputo (#107, D7). Mitigación: índices de B0 (G1), F11; la
   corrección del dinero la deciden guardas y paridad, no la latencia.
 - **P1:** borrar algo que aún se lee. Mitigación: mapa por nombre de columna.
 - **P1:** correr el reinicio con datos reales. Mitigación: guarda del script
@@ -367,11 +429,13 @@ Una reescritura por función, desde prod, y en la misma migración:
 | Decisiones D1–D7 | Hecho (2026-10-01) |
 | Auditoría v1 → v2 y final v2 → v3 | Hecho (2026-10-01) |
 | Aprobación del plan v3 | **Pendiente del usuario** |
-| B0 Red de seguridad y test = prod | Pendiente |
+| B0 Red de seguridad, test = prod e índices | Pendiente |
 | Exploración adicional (v4) | Hecho (2026-10-01) |
+| Auditoría final 2 (v5) | Hecho (2026-10-01) |
 | B1 Retirar Sheets y Planeación | Pendiente |
 | B2 Reinicio de datos | Pendiente |
 | B3 Integridad, tipos y operación | Pendiente |
 | B4 Un solo motor de Cuentas (#108) | Pendiente |
-| B5 Cuentas en un PR | Pendiente |
+| B5a Escrituras de dinero solo por grupo | Pendiente |
+| B5b Lecturas, copias y borrado | Pendiente |
 | B6 Cierre | Pendiente |
