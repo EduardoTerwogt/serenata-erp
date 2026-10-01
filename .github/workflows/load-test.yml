@@ -24,18 +24,8 @@ on:
         required: false
         type: boolean
         default: false
-      measure_sync_down:
-        description: 'Si es true, el job serverless además mide la duración real de syncAllDown() (POST /api/integrations/sheets/sync-down) contra el entorno serverless -- gate de 3C-4. Sobreescribe TODAS las pestañas de Sheets de serenata-erp-test, así que default false para no hacerlo en cada dispatch normal'
-        required: false
-        type: boolean
-        default: false
       test_item_cell_conflict:
         description: 'Si es true, corre la prueba manual obligatoria de 3D-5 (causa F: PATCH en vuelo sobre la misma celda, sin 409 contra uno mismo) contra el entorno serverless real -- reutiliza tests/e2e/live/cotizaciones-colaboracion.spec.ts, ya cubierto en el job `live` de e2e.yml pero ahí contra un next start local, no el deploy real'
-        required: false
-        type: boolean
-        default: false
-      reset_sheets_integration:
-        description: 'Si es true, en vez de medir la duración de syncAllDown(), llama POST /api/integrations/sheets/setup contra el entorno serverless para crear un spreadsheet NUEVO con las credenciales reales de ese entorno -- diagnóstico/corrección de F15c (measure_sync_down reportó "Requested entity was not found" en las 9 tablas: el TEST_SHEETS_SPREADSHEET_ID actual no es accesible). El log imprime el ID nuevo; guardarlo a mano en el secreto de GitHub y en Vercel (el job no puede escribirlos)'
         required: false
         type: boolean
         default: false
@@ -113,7 +103,6 @@ jobs:
       GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN_TEST }}
       GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
       GOOGLE_DRIVE_FOLDER_ID_CUENTAS: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
-      GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
       LOADTEST_MODE: 'true'
       LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
       # Variables que solo usan los scripts, nunca las lee `next start`:
@@ -123,7 +112,6 @@ jobs:
       TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
       DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
-      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -248,7 +236,6 @@ jobs:
       TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
       DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
-      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -263,24 +250,6 @@ jobs:
 
       - name: env-check -- confirmar que el deployment serverless apunta a serenata-erp-test
         run: node scripts/loadtest/env-check.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
-
-      # EF-3 3C-4: gate obligatorio -- duración real de syncAllDown() contra
-      # el volumen objetivo ya sembrado (Bloque 4), en el entorno
-      # serverless real. Opt-in (measure_sync_down) porque sobreescribe TODAS
-      # las pestañas de la hoja de test -- no se quiere ese efecto lateral en
-      # cada dispatch normal de load-test.yml.
-      - name: EF-3 3C-4 -- medir duración real de syncAllDown() contra el entorno serverless
-        if: ${{ inputs.measure_sync_down }}
-        run: node scripts/loadtest/measure-sync-down-duration.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
-
-      # F15c: measure_sync_down reveló que las 9 tablas fallan con "Requested
-      # entity was not found" contra el TEST_SHEETS_SPREADSHEET_ID actual --
-      # opt-in aparte porque crea un spreadsheet nuevo (efecto lateral que
-      # no se quiere en cada dispatch normal) y porque requiere una acción
-      # manual posterior (guardar el ID nuevo en el secreto/Vercel).
-      - name: EF-3 3C-4 (F15c) -- crear spreadsheet nuevo con las credenciales reales del entorno serverless
-        if: ${{ inputs.reset_sheets_integration }}
-        run: node scripts/loadtest/reset-sheets-integration.mjs --target-url "${{ secrets.LOADTEST_SERVERLESS_URL }}"
 
       # Los 8 escenarios de k6 contra el entorno serverless real los agrega 3A-6.
 
@@ -319,7 +288,6 @@ jobs:
       GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN_TEST }}
       GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
       GOOGLE_DRIVE_FOLDER_ID_CUENTAS: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
-      GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
       LOADTEST_MODE: 'true'
       LOADTEST_ENV_SECRET: ${{ secrets.LOADTEST_ENV_SECRET }}
       # Variables que solo usan los scripts (env-check.mjs,
@@ -330,7 +298,6 @@ jobs:
       TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
       DRIVE_TEST_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
-      TEST_SHEETS_SPREADSHEET_ID: ${{ secrets.TEST_SHEETS_SPREADSHEET_ID }}
     steps:
       - uses: actions/checkout@v4
 

@@ -12,7 +12,7 @@
  *
  * Requiere en el entorno: LOADTEST_ENV_SECRET, TEST_SUPABASE_ANON_KEY,
  * TEST_SUPABASE_SERVICE_ROLE_KEY, DRIVE_TEST_FOLDER_ID,
- * TEST_SHEETS_SPREADSHEET_ID, PLAYWRIGHT_TEST_EMAIL, PLAYWRIGHT_TEST_PASSWORD.
+ * PLAYWRIGHT_TEST_EMAIL, PLAYWRIGHT_TEST_PASSWORD.
  */
 import { createHash } from 'crypto'
 
@@ -68,7 +68,6 @@ async function main() {
   const testAnonKey = requireEnv('TEST_SUPABASE_ANON_KEY')
   const testServiceRoleKey = requireEnv('TEST_SUPABASE_SERVICE_ROLE_KEY')
   const driveTestFolderId = requireEnv('DRIVE_TEST_FOLDER_ID')
-  const testSheetsSpreadsheetId = requireEnv('TEST_SHEETS_SPREADSHEET_ID')
   const playwrightEmail = requireEnv('PLAYWRIGHT_TEST_EMAIL')
   const playwrightPassword = requireEnv('PLAYWRIGHT_TEST_PASSWORD')
 
@@ -96,7 +95,6 @@ async function main() {
     supabaseServiceRoleKeyFingerprint: fingerprint(testServiceRoleKey),
     driveFolderId: driveTestFolderId,
     driveFolderIdCuentas: driveTestFolderId,
-    sheetsSpreadsheetId: testSheetsSpreadsheetId,
     authSecretConfigured: true,
   }
 

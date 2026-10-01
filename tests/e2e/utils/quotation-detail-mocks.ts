@@ -106,7 +106,6 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     descuento_tipo: 'monto' as const,
     descuento_valor: 0,
     drive_file_id: null as string | null,
-    calendar_event_id: null as string | null,
     notas_internas: null as string | null,
     items: options.items ?? ([
       {

@@ -35,7 +35,6 @@ const PAGE_SECTION_RULES: SectionRule[] = [
 
 const API_SECTION_RULES: SectionRule[] = [
   { prefix: '/api/admin/usuarios', sections: ['admin'] },
-  { prefix: '/api/integrations/sheets', sections: ['admin'] },
   { prefix: '/api/cotizaciones', sections: ['cotizaciones'] },
   { prefix: '/api/clientes', sections: ['cotizaciones'] },
   { prefix: '/api/productos', sections: ['cotizaciones'] },

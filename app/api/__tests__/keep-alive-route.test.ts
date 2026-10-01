@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => ({
   rateLimitsDeleteMock: vi.fn(),
   rateLimitsLtMock: vi.fn(),
   rpcMock: vi.fn(),
-  getGoogleEnvMock: vi.fn(),
-  syncAllDownMock: vi.fn(),
+  operationsLtMock: vi.fn(),
+  operationsDeleteMock: vi.fn(),
 }))
 
 vi.mock('@/lib/server/supabase-admin', () => ({
@@ -21,6 +21,9 @@ vi.mock('@/lib/server/supabase-admin', () => ({
       }
       if (table === 'rate_limits') {
         return { delete: mocks.rateLimitsDeleteMock }
+      }
+      if (table === 'pago_operations' || table === 'bulk_import_operations') {
+        return { delete: (...args: unknown[]) => mocks.operationsDeleteMock(table, ...args) }
       }
       return {
         select: () => ({
@@ -36,21 +39,7 @@ vi.mock('@/lib/integrations/google/drive', () => ({
   checkDriveAuth: mocks.checkDriveAuthMock,
 }))
 
-vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
-
-// Reexporta la clase real SheetsSyncLeaseLostError (no un mock) -- así el
-// `instanceof` de la ruta funciona exactamente igual que en producción,
-// mismo patrón que app/api/__tests__/sheets-sync-down-route.test.ts.
-vi.mock('@/lib/integrations/sheets/sync-down', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/integrations/sheets/sync-down')>('@/lib/integrations/sheets/sync-down')
-  return {
-    syncAllDown: mocks.syncAllDownMock,
-    SheetsSyncLeaseLostError: actual.SheetsSyncLeaseLostError,
-  }
-})
-
 import { GET } from '../keep-alive/route'
-import { SheetsSyncLeaseLostError } from '@/lib/integrations/sheets/sync-down'
 
 function buildRequest(authHeader: string | null) {
   const headers = new Headers()
@@ -70,9 +59,8 @@ describe('GET /api/keep-alive', () => {
     mocks.rateLimitsLtMock.mockReset().mockResolvedValue({ error: null, count: 0 })
     mocks.rateLimitsDeleteMock.mockReset().mockReturnValue({ lt: mocks.rateLimitsLtMock })
     mocks.rpcMock.mockReset()
-    // Google/Sheets no configurado por default -- el safety-net se salta sin tocar el RPC.
-    mocks.getGoogleEnvMock.mockReset().mockReturnValue(null)
-    mocks.syncAllDownMock.mockReset()
+    mocks.operationsLtMock.mockReset().mockResolvedValue({ error: null, count: 0 })
+    mocks.operationsDeleteMock.mockReset().mockReturnValue({ lt: mocks.operationsLtMock })
     process.env.CRON_SECRET = 'secreto-real'
   })
 
@@ -136,30 +124,15 @@ describe('GET /api/keep-alive', () => {
     expect(response.status).toBe(200)
   })
 
-  it('EF-3 3C-4 -- el safety-net de Sheets se salta si Google/Sheets no está configurado', async () => {
-    mocks.getGoogleEnvMock.mockReturnValue(null)
-
-    const response = await GET(buildRequest('Bearer secreto-real'))
-    const body = await response.json()
-
-    // B3: la única RPC es el sync de cobros vencidos; el lock de Sheets no se toca.
-    expect(mocks.rpcMock).not.toHaveBeenCalledWith('acquire_sheets_sync_lock', expect.anything())
-    expect(mocks.syncAllDownMock).not.toHaveBeenCalled()
-    expect(body.sheets_sync).toEqual({ ran: false })
-  })
-
-  it('Rediseño de Cuentas B3 (O2, U4) -- actualiza los cobros vencidos antes del sync de Sheets', async () => {
-    mocks.getGoogleEnvMock.mockReturnValue({ sheetsSpreadsheetId: 'sheet-1' })
+  it('Rediseño de Cuentas B3 (O2, U4) -- actualiza los cobros vencidos con la RPC diaria', async () => {
     mocks.rpcMock.mockImplementation((fnName: string) => {
       if (fnName === 'sync_estados_cuentas_cobrar_vencidas') return Promise.resolve({ data: null, error: null })
-      if (fnName === 'acquire_sheets_sync_lock') return Promise.resolve({ data: false, error: null })
       throw new Error(`RPC inesperada: ${fnName}`)
     })
 
     const body = await (await GET(buildRequest('Bearer secreto-real'))).json()
 
-    const llamadas = mocks.rpcMock.mock.calls.map((c) => c[0])
-    expect(llamadas.indexOf('sync_estados_cuentas_cobrar_vencidas')).toBeLessThan(llamadas.indexOf('acquire_sheets_sync_lock'))
+    expect(mocks.rpcMock).toHaveBeenCalledWith('sync_estados_cuentas_cobrar_vencidas')
     expect(body.cuentas_cobrar_sync).toBe('ok')
   })
 
@@ -173,102 +146,32 @@ describe('GET /api/keep-alive', () => {
     expect(body.cuentas_cobrar_sync).toBe('error')
   })
 
-  it('EF-3 3C-4 -- el safety-net se salta en silencio si no adquiere el lock (sync manual en curso)', async () => {
-    mocks.getGoogleEnvMock.mockReturnValue({ sheetsSpreadsheetId: 'sheet-1' })
-    mocks.rpcMock.mockImplementation((fnName: string) => {
-      if (fnName === 'acquire_sheets_sync_lock') return Promise.resolve({ data: false, error: null })
-      throw new Error(`RPC inesperada: ${fnName}`)
-    })
+  it('PLAN B3 (K2) -- borra pago_operations y bulk_import_operations de más de 30 días', async () => {
+    mocks.operationsLtMock.mockResolvedValue({ error: null, count: 4 })
+
+    const body = await (await GET(buildRequest('Bearer secreto-real'))).json()
+
+    expect(mocks.operationsDeleteMock).toHaveBeenCalledWith('pago_operations', { count: 'exact' })
+    expect(mocks.operationsDeleteMock).toHaveBeenCalledWith('bulk_import_operations', { count: 'exact' })
+    const [columna, corte] = mocks.operationsLtMock.mock.calls[0]
+    expect(columna).toBe('created_at')
+    const dias = (Date.now() - new Date(corte as string).getTime()) / (24 * 60 * 60 * 1000)
+    expect(dias).toBeGreaterThan(29.9)
+    expect(dias).toBeLessThan(30.1)
+    expect(body.pago_operations_deleted).toBe(4)
+    expect(body.bulk_import_operations_deleted).toBe(4)
+  })
+
+  it('PLAN B3 (K2) -- un fallo al purgar operaciones no tumba el keep-alive ni la otra tabla', async () => {
+    mocks.operationsLtMock
+      .mockResolvedValueOnce({ error: { message: 'boom' }, count: null })
+      .mockResolvedValueOnce({ error: null, count: 2 })
 
     const response = await GET(buildRequest('Bearer secreto-real'))
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(mocks.syncAllDownMock).not.toHaveBeenCalled()
-    expect(body.sheets_sync).toEqual({ ran: false })
-  })
-
-  it('EF-3 3C-4 -- adquiere el lock, corre syncAllDown y libera con éxito', async () => {
-    mocks.getGoogleEnvMock.mockReturnValue({ sheetsSpreadsheetId: 'sheet-1' })
-    mocks.rpcMock.mockImplementation((fnName: string, params: Record<string, unknown>) => {
-      if (fnName === 'acquire_sheets_sync_lock') {
-        expect(params.p_triggered_by).toBe('cron:keep-alive')
-        return Promise.resolve({ data: true, error: null })
-      }
-      if (fnName === 'release_sheets_sync_lock') {
-        expect(params.p_state).toBe('idle')
-        expect(params.p_rows_synced).toBe(42)
-        expect(params.p_tables_failed).toBe(0)
-        return Promise.resolve({ data: true, error: null })
-      }
-      throw new Error(`RPC inesperada: ${fnName}`)
-    })
-    mocks.syncAllDownMock.mockResolvedValue({
-      spreadsheetId: 'sheet-1',
-      results: [{ tab: 'cotizaciones', table: 'cotizaciones', rows: 42, ok: true }],
-      totalRows: 42,
-      errors: 0,
-    })
-
-    const response = await GET(buildRequest('Bearer secreto-real'))
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(mocks.syncAllDownMock).toHaveBeenCalledWith('sheet-1', expect.any(Function))
-    expect(body.sheets_sync).toEqual({ ran: true, rows: 42, errors: 0 })
-  })
-
-  it('EF-3 3C-4 -- libera con estado error si alguna tabla falla, sin tumbar el keep-alive', async () => {
-    mocks.getGoogleEnvMock.mockReturnValue({ sheetsSpreadsheetId: 'sheet-1' })
-    mocks.rpcMock.mockImplementation((fnName: string, params: Record<string, unknown>) => {
-      if (fnName === 'acquire_sheets_sync_lock') return Promise.resolve({ data: true, error: null })
-      if (fnName === 'release_sheets_sync_lock') {
-        expect(params.p_state).toBe('error')
-        expect(params.p_tables_failed).toBe(1)
-        return Promise.resolve({ data: true, error: null })
-      }
-      throw new Error(`RPC inesperada: ${fnName}`)
-    })
-    mocks.syncAllDownMock.mockResolvedValue({
-      spreadsheetId: 'sheet-1',
-      results: [{ tab: 'cotizaciones', table: 'cotizaciones', rows: 0, ok: false, error: 'boom' }],
-      totalRows: 0,
-      errors: 1,
-    })
-
-    const response = await GET(buildRequest('Bearer secreto-real'))
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body.sheets_sync).toEqual({ ran: true, rows: 0, errors: 1 })
-  })
-
-  it('EF-3 3C-4 -- lease perdido a medio camino no llama release y no tumba el keep-alive', async () => {
-    mocks.getGoogleEnvMock.mockReturnValue({ sheetsSpreadsheetId: 'sheet-1' })
-    mocks.rpcMock.mockImplementation((fnName: string) => {
-      if (fnName === 'acquire_sheets_sync_lock') return Promise.resolve({ data: true, error: null })
-      if (fnName === 'release_sheets_sync_lock') throw new Error('release_sheets_sync_lock no debe llamarse tras un lease perdido')
-      throw new Error(`RPC inesperada: ${fnName}`)
-    })
-    mocks.syncAllDownMock.mockRejectedValue(new SheetsSyncLeaseLostError('perdido'))
-
-    const response = await GET(buildRequest('Bearer secreto-real'))
-    const body = await response.json()
-
-    expect(response.status).toBe(200)
-    expect(body.sheets_sync).toEqual({ ran: false })
-  })
-
-  it('EF-3 3C-4 -- un fallo real del safety-net (no lease perdido) se loguea pero no tumba el keep-alive', async () => {
-    mocks.getGoogleEnvMock.mockReturnValue({ sheetsSpreadsheetId: 'sheet-1' })
-    mocks.rpcMock.mockImplementation((fnName: string) => {
-      if (fnName === 'acquire_sheets_sync_lock') return Promise.resolve({ data: true, error: null })
-      throw new Error(`RPC inesperada: ${fnName}`)
-    })
-    mocks.syncAllDownMock.mockRejectedValue(new Error('Sheets API caída'))
-
-    const response = await GET(buildRequest('Bearer secreto-real'))
-
-    expect(response.status).toBe(200)
+    expect(body.pago_operations_deleted).toBeNull()
+    expect(body.bulk_import_operations_deleted).toBe(2)
   })
 })

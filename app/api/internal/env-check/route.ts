@@ -58,7 +58,6 @@ export async function GET(request: Request) {
     supabaseServiceRoleKeyFingerprint: fingerprint(process.env.SUPABASE_SERVICE_ROLE_KEY),
     driveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID ?? null,
     driveFolderIdCuentas: process.env.GOOGLE_DRIVE_FOLDER_ID_CUENTAS ?? null,
-    sheetsSpreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID ?? null,
     authSecretConfigured: Boolean(process.env.AUTH_SECRET),
     isProductionProject: supabaseProjectRef === PRODUCTION_SUPABASE_REF,
   })

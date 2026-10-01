@@ -63,7 +63,6 @@ describe('GET /api/internal/env-check', () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key-value'
     process.env.GOOGLE_DRIVE_FOLDER_ID = 'folder-id'
     process.env.GOOGLE_DRIVE_FOLDER_ID_CUENTAS = 'folder-id'
-    process.env.GOOGLE_SHEETS_SPREADSHEET_ID = 'sheet-id'
     process.env.AUTH_SECRET = 'some-secret'
 
     const response = await GET(makeRequest('correct-secret'))
@@ -74,7 +73,6 @@ describe('GET /api/internal/env-check', () => {
     expect(body.isProductionProject).toBe(false)
     expect(body.authSecretConfigured).toBe(true)
     expect(body.driveFolderId).toBe('folder-id')
-    expect(body.sheetsSpreadsheetId).toBe('sheet-id')
     expect(JSON.stringify(body)).not.toContain('anon-key-value')
     expect(JSON.stringify(body)).not.toContain('service-role-key-value')
   })

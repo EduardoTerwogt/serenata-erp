@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-01T18:01:06.529Z",
-  "count": 127,
+  "generated_at": "2026-10-01T18:31:23.566Z",
+  "count": 128,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -128,6 +128,7 @@
     "20261012_indices_faltantes.sql",
     "20261013_preview_next_folio_version_vigente.sql",
     "20261014_alinear_esquema_test_prod.sql",
-    "20261015_cuentas_periodo_texto_vigente.sql"
+    "20261015_cuentas_periodo_texto_vigente.sql",
+    "20261016_retiros_sheets_calendar.sql"
   ]
 }

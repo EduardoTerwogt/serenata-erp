@@ -18,11 +18,10 @@ const REDIRECT_URI =
   process.env.GOOGLE_REDIRECT_URI ||
   'https://serenata-erp.vercel.app/api/integrations/drive/callback'
 
-// Drive scope: only files created or opened by this app.
-// Sheets scope: full access to create/read/write spreadsheets.
+// Drive scope: only files created or opened by this app. (El scope de Sheets
+// se retiró con la integración: PLAN.md, D2.)
 const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/spreadsheets',
 ]
 
 /**
