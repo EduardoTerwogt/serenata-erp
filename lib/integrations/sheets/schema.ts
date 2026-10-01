@@ -5,7 +5,7 @@
 //   - table:   nombre de la tabla en Supabase
 //   - pk:      nombre de la columna PK (para upsert)
 //   - columns: columnas que se sincronizan (en orden → define el orden en Sheets)
-//   - readonly: columnas que NO se modifican al hacer sync-up (calculadas/auto)
+//   - readonly: columnas calculadas/auto (el espejo es solo de salida: Supabase → Sheets)
 
 export interface TableSchema {
   tab: string
@@ -114,11 +114,6 @@ export const TABLE_SCHEMAS: TableSchema[] = [
   },
 ]
 
-/** Busca el schema de una tabla por nombre de pestaña o nombre de tabla. */
-export function findSchema(nameOrTab: string): TableSchema | undefined {
-  return TABLE_SCHEMAS.find(s => s.tab === nameOrTab || s.table === nameOrTab)
-}
-
 /** Convierte un valor de Supabase al string/number que irá en Sheets. */
 export function toSheetValue(value: unknown): string | number | boolean | null {
   if (value === null || value === undefined) return null
@@ -127,38 +122,4 @@ export function toSheetValue(value: unknown): string | number | boolean | null {
   if (typeof value === 'object') return JSON.stringify(value)
   if (typeof value === 'number') return value
   return String(value)
-}
-
-/** Convierte un valor del Sheet al tipo esperado por Supabase. */
-export function fromSheetValue(rawValue: string, column: string): unknown {
-  const v = rawValue?.trim() ?? ''
-
-  // Boolean columns
-  const boolCols = ['iva_activo', 'activo']
-  if (boolCols.includes(column)) {
-    if (v === 'SI' || v === 'true' || v === '1') return true
-    if (v === 'NO' || v === 'false' || v === '0') return false
-    return null
-  }
-
-  // Array columns
-  const arrayCols = ['roles', 'proyectos']
-  if (arrayCols.includes(column)) {
-    if (!v) return []
-    try { return JSON.parse(v) } catch { return [v] }
-  }
-
-  // Number columns
-  const numCols = [
-    'subtotal', 'fee_agencia', 'general', 'iva', 'total',
-    'margen_total', 'utilidad_total', 'porcentaje_fee', 'descuento_valor',
-    'cantidad', 'precio_unitario', 'importe', 'x_pagar', 'margen',
-    'orden', 'x_pagar_sugerido', 'monto_total',
-  ]
-  if (numCols.includes(column)) {
-    const n = parseFloat(v)
-    return isNaN(n) ? null : n
-  }
-
-  return v || null
 }
