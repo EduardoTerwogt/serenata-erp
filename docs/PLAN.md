@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** En refinamiento — "Simplificación del modelo de datos" (fases 2 y 3 hechas 2026-10-01; espera decisiones del usuario).
+**Estado:** Plan propuesto — "Simplificación del modelo de datos" (decisiones D1–D6 tomadas 2026-10-01; espera aprobación del plan).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -53,7 +53,7 @@ están conectados a la BD, nada debe romperse ni quedar suelto.**
   (Propuesta). Recomendada: **B** — un dueño por dato + el grupo como única
   obligación de pago.
 - Conclusión central: **el problema es estado duplicado, no número de
-  tablas.** 40 → 36 tablas (32 si se retiran tareas/documentos de proyecto),
+  tablas.** 40 → 36 tablas,
   ~20 columnas copiadas o derivadas menos, y desaparece la rama "suelta" de
   `cuentas_pagar` en ~10 RPCs.
 - Evidencia de que el diseño actual ya deja divergir datos: contacto de
@@ -76,82 +76,223 @@ ni el portal de proveedores.
 - Cambiar reglas de negocio (`docs/decisions/006`).
 - Unificar cobrar y pagar en tablas únicas (ADR 020, alternativa C).
 - Rediseñar pantallas. Solo cambia lo que la UI lee por debajo.
+- Tareas, cronograma y documentos de proyecto (D4): se conservan intactos.
+
+## Decisiones del usuario (2026-10-01)
+
+| # | Pregunta | Decisión |
+|---|---|---|
+| D1 | Alternativa | **B** (ADR 020): un dueño por dato + el grupo como única obligación de pago. |
+| D2 | Sheets → Supabase | No se usa. **Sheets queda solo de lectura**: se retira `sync-up`; `sync-down` (espejo) se mantiene. |
+| D3 | Datos de prueba en producción | **Se pueden borrar** si simplifica el trabajo. |
+| D4 | Tareas y documentos de proyecto | **Se conservan.** El módulo de Proyectos aún se está diseñando y lo que ya funciona (tablero de tareas, cronograma, 9 documentos PM) se reutilizará. Fuera de alcance: esta iniciativa no los borra ni los cambia, salvo ajustes de FK/tipos. |
+| D5 | Proyecto vs cotización | La **cotización conserva lo emitido en el PDF**; después de aprobar, el dueño de cliente/nombre/fecha/locación operativos es `proyectos`. |
+| D6 | Frente 2 | **En pausa hasta cerrar esta iniciativa**; se re-evalúa en el bloque de cierre. |
 
 ## Fases
 
 | Fase | Qué | Salida | Estado |
 |---|---|---|---|
 | 1. Inventario | Tablas, columnas, quién las toca | `docs/inventario-tablas.md` | Hecha (2026-10-01) |
-| 2. Uso real y riesgo | Evidencia en datos, lectores, matriz por tabla | `docs/inventario-tablas.md` → "Fase 2" | **Hecha (2026-10-01)** |
-| 3. Propuestas | 3 alternativas con costo y riesgo | ADR 020 (Propuesta) | **Hecha (2026-10-01)** |
-| 4. Decisión y plan | El usuario responde las preguntas de abajo | Este archivo → "Aprobado" | **Pendiente del usuario** |
-| 5. Ejecución | Bloques B0–B7, rama + PR por bloque | PRs | Pendiente |
+| 2. Uso real y riesgo | Evidencia en datos, lectores, matriz por tabla | `docs/inventario-tablas.md` → "Fase 2" | Hecha (2026-10-01) |
+| 3. Propuestas | 3 alternativas con costo y riesgo | ADR 020 | Hecha (2026-10-01) |
+| 4. Decisión y plan | Decisiones D1–D6 y plan por bloques | Este archivo | **Plan propuesto — espera aprobación** |
+| 5. Ejecución | Bloques B0–B8 | Un PR por bloque | Pendiente |
 
-## Decisiones pendientes del usuario
+## Resultado esperado
 
-1. **Alternativa:** ¿B (recomendada), A (solo limpieza, sin tocar flujos de
-   pago) o C?
-2. **Sheets → Supabase (H11):** recomendación: Sheets queda **solo de lectura**
-   (se quita `sync-up` o se limita a catálogos: `clientes`, `proveedores`,
-   `productos`). ¿Alguien usa hoy el botón "Sheets → Supabase"?
-3. **Datos de producción:** son de prueba. ¿Se migran tal cual (más seguro y
-   más caro) o se permite borrar los registros de prueba legados (sueltas,
-   `TEST EF1 - BORRAR`, márgenes viejos) antes de migrar?
-4. **Tareas y documentos de proyecto** (`proyecto_tareas`,
-   `proyecto_tarea_checklist`, `proyecto_documentos`,
-   `tipo_proyecto_tarea_default`, 0 filas): ¿se usan o se van a usar? Si no,
-   se retiran completas (tabla + rutas + UI) en un bloque propio.
-5. **Proyecto vs cotización (H1):** propuesta: después de aprobar, el dueño de
-   cliente/nombre/fecha/locación es `proyectos`; la cotización conserva lo que
-   se emitió en el PDF. ¿Correcto, o un cambio en el proyecto debe reflejarse
-   en la cotización?
-6. **Frente 2:** recomendación: sigue en pausa hasta terminar B4 (su diseño
-   depende de cuántas tablas alimenten Cuentas).
+- **40 → 36 tablas:** se van `cliente_id_backfill_clasificacion`,
+  `historial_responsable` (pasa a vista), `pago_operations` y
+  `bulk_import_operations` (se absorben en `idempotency_keys`).
+- **~20 columnas copiadas o derivadas menos**, y cada dato con un solo dueño:
 
-## Plan de ejecución (borrador, alternativa B)
+| Dato | Dueño único | Hoy también vive en |
+|---|---|---|
+| Contacto y banco del proveedor | `proveedores` | `cuentas_pagar` (4 columnas) |
+| Descripción, cantidad y margen del renglón | `items_cotizacion` | `cuentas_pagar` |
+| Importe y margen | columnas generadas en `items_cotizacion` | escritos a mano por 7 funciones y TS |
+| Estado y dinero de la obligación con el proveedor | `cuentas_pagar_grupos` | `cuentas_pagar` (5 columnas, rama "suelta") |
+| Cliente y nombre operativos del proyecto | `proyectos` (+ `clientes` por `cliente_id`) | `cuentas_cobrar` texto, `historial_responsable`, `clientes.proyectos` |
+| Lo emitido en el PDF | `cotizaciones` (snapshot, D5) | — (se queda así a propósito) |
+| Resultado de una operación idempotente | `idempotency_keys` | `pago_operations`, `bulk_import_operations` |
 
-Cada bloque sigue las reglas de ADR 020: **expandir → migrar lectores →
-verificar → contraer**, mapa de dependencias en cero antes de borrar, guardas
-de consistencia en 0 antes y después, test con el dataset de carga → PR con
-las 4 suites verdes → prod. Funciones SQL se reescriben desde
-`pg_get_functiondef` de producción.
+- Sin cambios: reglas de negocio (`006`), cobrar y pagar siguen separados,
+  órdenes y su desglose inmutable, bitácoras, catálogos, Planeación, Portal,
+  tareas y documentos de proyecto (D4).
 
-| Bloque | Qué | Hallazgos | Riesgo | Depende de |
-|---|---|---|---|---|
-| **B0 — Red de seguridad** | Script versionado de guardas de consistencia (consultas de la fase 2) + script de mapa de dependencias por columna (código, Sheets, `pg_proc`, triggers, vistas, políticas). Respaldo de prod antes de B4. Resolver H14 y el cobro sin `proyecto_id`. | H14 | P2 | — |
-| **B1 — Sheets solo lectura** | Quitar o limitar `sync-up` según decisión 2; ajustar `schema.ts` y Admin. | H11 | P1 | Decisión 2 |
-| **B2 — Residuos, FKs y tipos** | Borrar `cliente_id_backfill_clasificacion` (CSV archivado). `cuentas_pagar.item_id` → uuid + FK. FKs faltantes. `timestamp` → `timestamptz`. `planeacion_pendientes.fecha`/`fecha_iso` en una. | H12, H13 | P2 | B0 |
-| **B3 — Derivados generados** | `items_cotizacion.importe` y `.margen` como columnas generadas; recalcular `margen_total` de cotizaciones; quitar escrituras de esos campos en RPCs y TS. | H6 | P1 | B0 |
-| **B4 — Grupo como única obligación** | Expandir: sueltas con proveedor → grupos de un renglón; pagos/documentos apuntan al grupo. Migrar RPCs y derivación TS sin rama suelta. Contraer: quitar `estado`, `monto_pagado`, `orden_pago_id`, `total_a_transferir`, `monto_transferido` de `cuentas_pagar` y `cuenta_pagar_id` de pagos/documentos. Renombrar `x_pagar` → `costo_total`. | H5, H9 | **P0** | B0–B2, decisión 3 |
-| **B5 — Copias de terceros** | `cuentas_pagar` sin contacto ni copias del renglón (join a `proveedores` e `items_cotizacion`); `cuentas_cobrar` sin `cliente`/`proyecto` texto; `clientes.proyectos` → consulta; `historial_responsable` → vista o RPC sobre proyectos finalizados (mismo resultado que hoy). | H2, H3, H4, H7, H8 | P1 | B1, B2, B4 |
-| **B6 — Idempotencia única** | `pago_operations` y `bulk_import_operations` → `idempotency_keys` (scope por RPC), conservando la atomicidad dentro de la transacción. | H10 | P1 | B4 |
-| **B7 — Cierre** | Tareas/documentos de proyecto según decisión 4. Re-evaluar frente 2 con el modelo nuevo. Actualizar `ARCHITECTURE.md`, decisiones 011/017, ADR 020 → Aceptada. | — | P1 | B1–B6 |
+## Cómo se garantiza que nada se rompa
 
-Si se elige **A**: se ejecutan B0, B1, B2, B3, B5 (sin la parte de B4) y B7.
+Aplica a **todos** los bloques; ningún bloque se cierra sin esto:
+
+1. **Expandir → migrar lectores → verificar → contraer.** Ninguna columna o
+   tabla se borra en el mismo PR que crea su reemplazo. La contracción va en un
+   PR posterior, cuando producción ya corre el código que no la usa.
+2. **Mapa de dependencias en cero** antes de cada contracción (script de B0):
+   `app/`, `lib/`, `components/`, `scripts/` (seeds y loadtest), tests,
+   `lib/integrations/sheets/schema.ts`, `lib/types.ts` y, en la BD,
+   `pg_get_functiondef` de todas las funciones + triggers + vistas + políticas
+   + `pg_depend`.
+3. **Guardas de consistencia en 0** (script de B0) en test y producción, antes
+   y después de cada migración: `Σ pagos vigentes = monto_pagado` (cobros y
+   grupos), `grupo.monto_total = Σ costo de sus renglones`, total de orden =
+   Σ desglose, margen = importe − costo total, renglón aprobado ⇔ cuenta por
+   pagar, toda cuenta con proveedor tiene grupo (desde B5).
+4. **Funciones SQL reescritas desde `pg_get_functiondef` de producción**, nunca
+   de una migración vieja (lección de la decisión 011), y **paridad SQL/TS**
+   (decisión 017) con sus tests.
+5. **Orden por bloque:** migración en test (dataset de carga, 2,203 proyectos)
+   → PR con `test`, `fresh-db`, `smoke-and-critical` y `live` verdes →
+   migración en producción → guardas en 0 → merge. La migración va a
+   producción en el mismo bloque (lección 011), nunca se difiere.
+6. **Recorrido manual de pantallas** al cerrar B5 y B6: Cotizaciones (crear,
+   emitir, aprobar, cancelar), Proyectos (editar, cerrar), Cuentas (cobro,
+   factura proveedor, orden de pago, pago, anulación, reapertura), Portal de
+   proveedores, Proveedores (historial), Dashboard.
+
+## Plan de ejecución
+
+Un PR por bloque (B5 son dos). Estimación: 6–8 sesiones.
+
+### B0 — Red de seguridad (P2, sin cambios de esquema)
+
+- `scripts/db/guardas-modelo.sql`: las guardas del punto 3, una fila por
+  guarda con su conteo; se corre en test y prod.
+- `scripts/db/mapa-dependencias.mjs <tabla.columna>`: imprime toda referencia
+  en código y en la BD (punto 2).
+- Línea base: correr ambos en test y prod y anotar resultados en este archivo.
+- Respaldo lógico de producción antes de B2 (cómo: confirmar el plan de
+  Supabase; si no hay PITR, `pg_dump` de `public` guardado fuera del repo).
+
+### B1 — Sheets solo lectura (P1, D2)
+
+- Retirar `app/api/integrations/sheets/sync-up/`, `lib/integrations/sheets/sync-up.ts`,
+  su botón en `AdminSheets.tsx` y sus tests.
+- `schema.ts` queda solo para `sync-down`; quitar el campo `readonly`.
+- Desde aquí, cada contracción actualiza `schema.ts` en el mismo PR.
+
+### B2 — Limpieza de datos de prueba (P1, D3; migración de datos, no-op en BD vacía)
+
+Solo filas de prueba, inventariadas con su id en el PR antes de borrar:
+
+- Cotizaciones `TEST-EF1-*` y el proveedor/cliente `TEST EF1 - BORRAR`, con
+  todo lo que cuelga de ellas (en orden de FK, como `cancel_cotizacion`).
+- **Cuentas "sueltas" con proveedor** (47 en prod, 5 en test): borrar sus
+  pagos, documentos y órdenes de prueba (incluida la orden de H14), dejarlas
+  `PENDIENTE` y agruparlas con `reconcile_cuenta_pagar_grupo` (la RPC
+  existente, no lógica nueva). Las 7 sin proveedor quedan como renglones "por
+  asignar".
+- Cobro sin `proyecto_id`: asignarlo o borrarlo.
+- Recalcular los 13 márgenes viejos (prod) y 2 (test) y `margen_total` de sus
+  cotizaciones.
+- Borrar `cliente_id_backfill_clasificacion` (CSV archivado en
+  `docs/archive/`).
+- Guardas en 0 al final; "toda cuenta con proveedor tiene grupo" ya debe dar 0.
+
+### B3 — Integridad y tipos (P2)
+
+- `cuentas_pagar.item_id` → `uuid` con FK a `items_cotizacion`.
+- FKs faltantes: `historial_responsable.proyecto_id` (hasta B6),
+  `extraction_logs.proyecto_id`.
+- 13 columnas `timestamp` → `timestamptz`.
+- `planeacion_pendientes`: una sola fecha (`fecha_iso`), expandir/contraer.
+- Fuera de alcance: `fecha_entrega` como texto (D9) — se anota como deuda.
+
+### B4 — Derivados generados (P1)
+
+- `items_cotizacion.importe` y `.margen` → `GENERATED ALWAYS AS … STORED`.
+- Quitar las escrituras de esos campos en `save_cotizacion`,
+  `upsert_items_cotizacion`, `bulk_replace_items_cotizacion`,
+  `patch_item_cotizacion`, `approve_cotizacion` y en
+  `lib/quotations/mappers.ts` (el cálculo TS sigue para la vista previa).
+- `recalcular_totales_cotizacion` se queda: los totales de `cotizaciones` son
+  el snapshot del PDF (D5).
+
+### B5 — El grupo como única obligación de pago (P0)
+
+**B5a (expandir + lectores):**
+- Restricción: cuenta con proveedor ⇒ `grupo_id` no nulo (posible tras B2).
+- Reescribir sin la rama "suelta": `registrar_pago_cuenta_pagar`,
+  `anular_pago_proveedor`, `baja_documento_pago`, `generar_orden_pago`
+  (quitar el `UNION ALL`), `cancelar_orden_pago`, `recalcular_estado_orden_pago`,
+  `validar_factura_proveedor`, `corregir_*`, `cuentas_orden_candidatos`,
+  `buscar_cuentas_pagar*`, `cuentas_conceptos`, `cuentas_por_proyecto`,
+  `cancel_cotizacion`; portal (sin grupos sintéticos); `periodo.ts`,
+  `concepto.ts`, `avisos.ts` con su paridad.
+- `costo_total` nueva en `cuentas_pagar`, sincronizada con `x_pagar` por
+  trigger temporal; lectores y trigger `20261008` pasan a `costo_total`.
+
+**B5b (contraer, PR posterior):**
+- Quitar de `cuentas_pagar`: `x_pagar`, `estado`, `monto_pagado`,
+  `orden_pago_id`, `total_a_transferir`, `monto_transferido`, `fecha_pago`,
+  `metodo_pago` (si el mapa da 0).
+- Quitar `cuenta_pagar_id` de `pagos_cuentas_pagar` y `documentos_cuentas_pagar`
+  (`grupo_id` pasa a `NOT NULL`).
+- Actualizar `scripts/seed-cuentas-test.sql` y el dataset de loadtest.
+
+### B6 — Copias de terceros y cachés (P1, D5)
+
+- `cuentas_pagar` sin `telefono`, `correo`, `clabe`, `banco`,
+  `item_descripcion`, `cantidad`, `margen`, `responsable_nombre` (join a
+  `proveedores` / `items_cotizacion`; "Sin asignar" se muestra cuando no hay
+  proveedor).
+- `cuentas_cobrar` sin `cliente`/`proyecto` texto (join a `proyectos` y
+  `clientes`).
+- Auditar lectores que toman cliente/nombre/fecha/locación **de la cotización
+  en contexto operativo** (Proyectos, Cuentas, Portal, Planeación) y pasarlos
+  a `proyectos` (D5). El PDF y la vista de cotización siguen leyendo la
+  cotización.
+- `clientes.proyectos` → consulta `distinct proyecto` de cotizaciones del
+  cliente (autocompletado igual).
+- `historial_responsable` → vista con el mismo resultado (proyectos en etapa
+  final, costo total por proveedor y rol); se quita la regeneración de
+  `projects/equipo.ts` y el rollback de `projects/service.ts`. Comparar
+  vista vs tabla fila por fila antes de borrar la tabla.
+
+### B7 — Idempotencia única (P1)
+
+- `registrar_pago_*` y `bulk_replace_items_cotizacion` guardan su resultado en
+  `idempotency_keys` (scope por RPC), dentro de la misma transacción
+  (decisión 008 se actualiza).
+- Contraer: borrar `pago_operations` y `bulk_import_operations`.
+
+### B8 — Cierre
+
+- `ARCHITECTURE.md`, decisiones 011, 017 y 008 al día; ADR 020 → Aceptada con
+  el resultado real.
+- Re-evaluar el frente 2 (D6) con el modelo nuevo: medir `cuentas_periodo`
+  sobre el dataset de carga y decidir si `cuentas_conceptos_base` sigue
+  haciendo falta.
+- Cerrar #105, #106, #109; archivar este plan.
 
 ## Riesgos
 
-- **P0:** B4 cambia cómo se registra y se lee el dinero a proveedores. Mitigación:
-  paridad SQL/TS, guardas de consistencia (`Σ pagos = monto_pagado`,
-  `grupo.monto_total = Σ costo_total`, órdenes = Σ desglose) en 0, `live` con el
-  dataset de carga, respaldo antes de prod.
-- **P1:** borrar una columna que algo todavía lee (Sheets, portal, un test, una
-  función). Mitigación: mapa de dependencias automatizado en cero antes de cada
-  contracción, y la contracción siempre en un deploy posterior a la migración
-  de lectores.
-- **P1:** re-escribir una función sobre una versión vieja (pasó en la decisión
-  011). Mitigación: partir siempre de `pg_get_functiondef` de producción.
-- **P2:** el conteo de funciones por coincidencia de texto sobrecuenta;
-  el mapa de B0 lo reemplaza por dependencias verificadas.
+- **P0:** B5 cambia cómo se registra y se lee el dinero a proveedores.
+  Mitigación: B2 deja los datos en una sola forma antes de tocar funciones;
+  guardas en 0; paridad SQL/TS; `live` con 2,203 proyectos; respaldo de B0.
+- **P1:** borrar algo que todavía se lee (Sheets, portal, seed, test, función).
+  Mitigación: mapa de dependencias en 0 y contracción en PR posterior.
+- **P1:** reescribir una función sobre una versión vieja. Mitigación: partir
+  siempre de `pg_get_functiondef` de producción.
+- **P1:** los datos de test difieren de prod (5 sueltas vs 47). Mitigación: B2
+  corre en ambos y las guardas se comparan en ambos.
+- **P2:** módulo de Proyectos en diseño (D4): B3 y B6 tocan `proyectos`;
+  solo FKs, tipos y lectores, nunca columnas que use el tablero o los
+  documentos PM.
 
 ## Tracker
 
 | Bloque | Estado |
 |---|---|
 | Entrada de iniciativa y pausa del frente 2 | Hecho (2026-10-01) |
-| Fase 1 — Inventario | Hecho (2026-10-01) |
-| Fase 2 — Uso real y riesgo (#105) | Hecho (2026-10-01) |
-| Fase 3 — Propuestas, ADR 020 (#106) | Hecho (2026-10-01), estado Propuesta |
-| Fase 4 — Decisiones del usuario | **Pendiente** (6 preguntas arriba) |
-| B0–B7 | Pendiente |
-| Tickets en GitHub | Hecho (2026-10-01): epic #109, #105, #106, #108 |
+| Fases 1–3 (#105, #106) | Hecho (2026-10-01) |
+| Fase 4 — Decisiones D1–D6 | Hecho (2026-10-01) |
+| Fase 4 — Aprobación del plan | **Pendiente del usuario** |
+| B0 Red de seguridad | Pendiente |
+| B1 Sheets solo lectura | Pendiente |
+| B2 Limpieza de datos de prueba | Pendiente |
+| B3 Integridad y tipos | Pendiente |
+| B4 Derivados generados | Pendiente |
+| B5a / B5b Grupo única obligación | Pendiente |
+| B6 Copias de terceros y cachés | Pendiente |
+| B7 Idempotencia única | Pendiente |
+| B8 Cierre | Pendiente |

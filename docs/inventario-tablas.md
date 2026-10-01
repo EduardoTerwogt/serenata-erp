@@ -244,15 +244,14 @@ Riesgo = qué pasa si sale mal: P0 dinero/impuestos, P1 función visible, P2 int
 | `cliente_id_backfill_clasificacion` | **Borrar** (archivar CSV antes) (H12). | P2 |
 | `cotizacion_folio_reservations`, `folio_contadores` | Mantener | Distintos a propósito: reservas con expiración vs contadores por serie/año. | — |
 | `productos`, `service_templates` | Mantener | Catálogos con UI activa. | — |
-| `proyecto_tareas`, `proyecto_tarea_checklist`, `proyecto_documentos`, `tipo_proyecto_tarea_default` | **Decisión del usuario** | 0 filas, pero con rutas y UI. Mantener o retirar la funcionalidad completa (P1). | P1 |
+| `proyecto_tareas`, `proyecto_tarea_checklist`, `proyecto_documentos`, `tipo_proyecto_tarea_default` | Mantener (D4) | 0 filas, pero con UI que funciona (tablero, cronograma, 9 documentos PM) y el módulo de Proyectos aún en diseño. | — |
 | `tipos_proyecto`, `tipo_proyecto_etapas` | Mantener | Las usa Proyectos. | — |
 | `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs` | Mantener | Unificar `fecha`/`fecha_iso` (H13). | P2 |
 | `gastos_fijos` | Mantener | Dashboard. | — |
 | `usuarios` | Mantener | Distinto dominio de auth que el portal de proveedores. | — |
 | `rate_limits`, `sheets_sync_status` | Mantener | Infraestructura. | — |
 
-**Saldo:** 40 → 36 tablas (32 si además se retiran tareas/documentos de
-proyecto) y ~20 columnas copiadas o derivadas menos. El número de tablas baja
+**Saldo:** 40 → 36 tablas y ~20 columnas copiadas o derivadas menos. El número de tablas baja
 poco a propósito: **la complejidad real no está en cuántas tablas hay sino en
 el estado duplicado** (H3, H4, H6, H9) y en los dos caminos de
 `cuentas_pagar`. Ahí está la ganancia.
