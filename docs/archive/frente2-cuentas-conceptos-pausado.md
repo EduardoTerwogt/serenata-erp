@@ -7,6 +7,17 @@
 > retomarlo, moverlo de vuelta a `docs/PLAN.md` cuando la iniciativa activa lo
 > permita (una sola iniciativa a la vez).
 
+## Retiro de los objetos del frente 2 en test (B0, 2026-10-01)
+
+`20261009` y `20261010` solo existían en la BD de test, así que test ≠ prod.
+El plan de simplificación (B0) los retira con `scripts/db/test-retirar-frente2.sql`
+(solo test; una transacción: borra triggers, cola, tabla base, tipo y 19
+funciones, y restaura las 7 funciones que el frente 2 reescribió con la
+definición de producción). **Para retomar el frente 2:** reaplicar `20261009`
+y `20261010` desde la rama del PR #100 (`claude/wonderful-hamilton-260e2w`);
+no se pierde nada porque la tabla `cuentas_conceptos_base` se reconstruye con
+`cuentas_conceptos_reconstruir()`.
+
 ## Dónde quedó (2026-10-01)
 
 - **Tickets:** epic #110; cómputo de la BD de test #107; PR #100 (retitulado
