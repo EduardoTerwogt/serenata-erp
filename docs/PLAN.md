@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado (2026-10-01) — plan v7 de "Simplificación del modelo de datos". Siguiente: B0.
+**Estado:** Aprobado (2026-10-01) — plan v8 de "Simplificación del modelo de datos". Siguiente: B0.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -53,7 +53,7 @@ están conectados a la BD, nada debe romperse ni quedar suelto.**
   (Propuesta). Recomendada: **B** — un dueño por dato + el grupo como única
   obligación de pago.
 - Conclusión central: **el problema es estado duplicado, no número de
-  tablas.** 40 → 33 tablas (plan v7),
+  tablas.** 40 → 34 tablas (plan v8),
   ~20 columnas copiadas o derivadas menos, y desaparece la rama "suelta" de
   `cuentas_pagar` en ~10 RPCs.
 - Evidencia de que el diseño actual ya deja divergir datos: contacto de
@@ -91,6 +91,9 @@ ni el portal de proveedores.
 | D6 | Frente 2 | En pausa hasta cerrar esta iniciativa. |
 | D7 | Cómputo de Supabase | **No se sube** si genera costo extra. Test y prod siguen en Micro. |
 | D8 | Planeación | **El módulo se retira completo** (2026-10-01): tablas, rutas, UI, permisos y tests. |
+| D9 | Listados sin UI (J5) | **Se retiran** `buscar_cuentas_cobrar`, `buscar_cuentas_pagar_grupos` y sus `GET` de lista; nada externo los usa. |
+| D10 | `VENCIDO` guardado (J6) | **Deja de guardarse**; se deriva al leer. |
+| D11 | Unificar tablas de operaciones (E4, J9) | **Se descarta.** 34 tablas. |
 
 ## Fases
 
@@ -99,7 +102,7 @@ ni el portal de proveedores.
 | 1. Inventario | Tablas, columnas, quién las toca | `docs/inventario-tablas.md` | Hecha |
 | 2. Uso real y riesgo | Evidencia y matriz | `docs/inventario-tablas.md` → "Fase 2" | Hecha |
 | 3. Propuestas | 3 alternativas | ADR 020 | Hecha |
-| 4. Decisión y plan | D1–D8, cinco auditorías, plan v7 | Este archivo | **Aprobado (2026-10-01)** |
+| 4. Decisión y plan | D1–D11, seis auditorías, plan v8 | Este archivo | **Aprobado (2026-10-01)** |
 | 5. Ejecución | B0–B6 | Un PR por bloque | Pendiente |
 
 ## Auditoría del plan v1 (2026-10-01)
@@ -169,7 +172,7 @@ con el mismo ciclo de vida, la misma forma o una relación 1:1 sin motivo?
 | E1 | **Retirar Planeación (D8):** `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs`, su trigger y función, la referencia en `cancel_cotizacion`, `app/planeacion/`, `app/api/planeacion/` (8 rutas), navegación, proxy, la sección `planeacion` en `AppSection`/`authz`/`api-auth`/Admin, `tests/e2e/critical/planeacion.spec.ts` y sus mocks. | Ninguna otra parte lee esas tablas; los 2 usuarios son `admin`. | −3 | B1 |
 | E2 | **Plantillas de servicios cambian de permiso.** Hoy `/plantillas-servicios`, `POST /api/service-templates` y el botón "Guardar como plantilla" exigen la sección `planeacion`; al retirarla quedarían inaccesibles. Pasan a la sección `cotizaciones`, que es donde se usan. | `lib/proxy-handler.ts:33,46`, `lib/navigation/items.ts:31`, `cotizaciones/*/page.tsx`, `QuotationItemsSection.tsx`. | — | B1 |
 | E3 | ~~Folios CC/CP fuera~~ **(descartado)** (`cuentas_cobrar.folio`, `cuentas_pagar.folio`, `folio_contadores`, `generate_folio_cc/cp`, `siguiente_folio`, 2 triggers). La columna "Folio" de Cuentas y el Dashboard muestran el **folio del proyecto/cotización** (SH…), no el CC/CP; el detalle titula con el id del proyecto. Solo los usan la búsqueda `ILIKE` de `buscar_cuentas_*` y un respaldo en la ruta de carpeta de Drive de complementos (`cuenta.folio \|\| cotizacion_id`). | `Conceptos.tsx:133`, `DetalleConcepto.tsx:38`, `dashboard/page.tsx`, `subir-complemento/route.ts:88`. | — | **Descartado** (2026-10-01): los folios CC/CP se usan fuera de la app (contador, facturas, proveedores). |
-| E4 | **Unificar `bulk_import_operations` y `pago_operations`** en una tabla `operaciones` (`operation_id`, `dominio`, `entidad_id`, `result`). Matiz a A8: la capa HTTP (`idempotency_keys`) sigue aparte, pero estas dos son **la misma capa** (resultado guardado dentro de la transacción) con la misma forma; hoy son dos tablas por historia, no por diseño. | Definiciones en `20260909_idempotency_keys.sql`/`20260912_*`. | −1 | B3 |
+| E4 | ~~Unificar `bulk_import_operations` y `pago_operations`~~ **(descartado en v8, J9)** en una tabla `operaciones` (`operation_id`, `dominio`, `entidad_id`, `result`). Matiz a A8: la capa HTTP (`idempotency_keys`) sigue aparte, pero estas dos son **la misma capa** (resultado guardado dentro de la transacción) con la misma forma; hoy son dos tablas por historia, no por diseño. | Definiciones en `20260909_idempotency_keys.sql`/`20260912_*`. | — | **Descartado** (2026-10-01): obligaba a reescribir `bulk_replace_items_cotizacion` (autosave colaborativo) y `registrar_pago_cuenta_cobrar` solo para ahorrar una tabla con 8 y 0 filas en prod. |
 
 ### Se evaluaron y se descartan (con motivo)
 
@@ -243,18 +246,48 @@ que dejaron los parches anteriores en este documento. Corregidos en v7.
 | I4 | El reinicio (B2) corre **antes** de que se borren Planeación y Sheets, pero su lista no las incluía. | Quedarían datos de prueba de Planeación en prod hasta B5b. | B2 también vacía `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs` y `sheets_sync_status`. |
 | I5 | Contradicciones del propio plan: "Sin cambios: … UI, Planeación"; "fechas como `date`" (solo cambia la del proyecto, G5); "un solo motor" como resultado garantizado (B6 es opcional). | Un plan aprobado que se contradice genera dudas en la sesión que lo ejecuta. | Texto corregido en "Resultado esperado". |
 
-**Conclusión del equipo:** las auditorías ya dan rendimientos decrecientes;
+## Auditoría final 5 (v7 → v8, 2026-10-01): oráculo, orden y simplificación
+
+Sexta revisión (desarrollo + datos), contra `pg_get_functiondef` de prod, las
+BD de test y prod y el código. **Veredicto: el modelo de v7 era correcto, pero
+la ejecución tenía cuatro fallas que habrían cegado el oráculo "antes =
+después" o roto funciones en silencio.** v8 las corrige y aplica tres
+simplificaciones aprobadas por el usuario (J5, J6, J9).
+
+| # | Sev. | Hallazgo | Evidencia | En v8 |
+|---|---|---|---|---|
+| J1 | **P0** | **En test las copias no coinciden con sus dueños.** De 10,990 `cuentas_pagar` con proveedor, 10,975 tienen `responsable_nombre` y 10,988 contacto distinto a `proveedores`; 10,979 `items_cotizacion.responsable_nombre` igual. Prod: 0. Al cambiar el lector en B5b, la foto dorada marcaría ~11 K diferencias "esperadas" y taparía las reales. | Consultas en test y prod. | B0 (I1) alinea las copias con `proveedores` **antes** de la foto dorada, y busca la causa (generador de `seed-volumen` o specs que renombran proveedores) para que no se repita. |
+| J2 | **P0** | **La foto dorada no era determinista.** `cuentas_periodo` no recibe `p_hoy` (recibe `jsonb`); 10 funciones usan `hoy_cdmx()` sin parámetro (`cuentas_periodo`, `cuentas_opciones`, `cuentas_orden_candidatos`, `buscar_ordenes_pago`, `cuentas_anios`…), y `buscar_cuentas_cobrar` **escribe** al leer (`sync_estados_cuentas_cobrar_vencidas`). | `pg_get_functiondef`. | `hoy_cdmx()` respeta `current_setting('app.hoy', true)` (sin efecto si no está puesto). La foto se toma como SQL en una transacción con `set_config('app.hoy', …, true)`; ninguna firma cambia. Corrige I2. |
+| J3 | P1 | **Quedaban funciones con doble reescritura.** `corregir_proveedor_cuenta_pagar` (B5a) llama a `reasignar_responsable_cuenta_pagar` (B5b) con contacto y nombre; `generar_orden_pago` (B5a) copia `cp.responsable_nombre` al snapshot de la orden. | `pg_get_functiondef`. | `corregir_proveedor_cuenta_pagar` pasa a B5b. Regla: toda función reescrita en B5a ya lee nombre/contacto/descripción del dueño, nunca de la copia. |
+| J4 | P1 | **`DROP COLUMN` no valida cuerpos plpgsql**: una función que aún lee la columna falla recién en runtime. El mapa por texto puede perder SQL dinámico. | Comportamiento de Postgres. | `plpgsql_check` (disponible en Supabase, gratis) en test y en `fresh-db`: 0 errores sobre todas las funciones de `public` tras cada migración. `index_advisor` respalda los índices de B0 junto a `EXPLAIN`. |
+| J5 | Simplifica | `GET /api/cuentas-cobrar` y `GET /api/cuentas-pagar` (`buscar_cuentas_cobrar`, `buscar_cuentas_pagar_grupos`) no tienen consumidor en la UI desde el rediseño de Cuentas; solo `tests/e2e/live/basic.spec.ts`. Uso externo descartado por el usuario. | `grep` en `app/`, `components/`, `hooks/`. | B5b los **retira** en vez de reescribirlos; `basic.spec.ts` pasa a `cuentas_periodo`/detalle. |
+| J6 | Mejora real | **`VENCIDO` guardado es estado derivado duplicado.** Lo escriben el cron y una lectura; Cuentas lo deriva por fecha (`cuentas_conceptos`) y el Dashboard solo distingue `PAGADO`. Además pisa `PARCIALMENTE_PAGADO`/`FACTURADO`. | `dashboard_kpis_cuentas`, `lib/shared/cuentas/status.ts`. | `cuentas_cobrar.estado` guarda solo hechos; "vencido" se deriva al leer. Sale `sync_estados_cuentas_cobrar_vencidas` (cron y lectura); `cuentas_cobrar_estado_calculado` y `subir-factura` dejan de producir `VENCIDO`; `CHECK` sin `VENCIDO`. Bloque B5b. |
+| J7 | P1 | **Sheets puede reimportar datos de prueba tras el reinicio.** El botón "Sheets → Supabase" (`sync-up`, sin RPC, H11) sigue vivo entre B2 y B1+B3. | `AdminSheets.tsx`, `app/api/integrations/sheets/sync-up/route.ts`. | B0 retira `sync-up` (ruta y botón); el resto de Sheets sigue en B1+B3. |
+| J8 | P1 | **I1 incompleto y FK débil.** Test tiene además 3 `cuentas_pagar` sin `item_id` (perderían su descripción) y 1 con `x_pagar ≠ item.x_pagar × cantidad`. | Consultas en test. | I1 cubre 13 filas. `cuentas_pagar.item_id` → `uuid NOT NULL` + FK (toda cuenta nace de un renglón, incluidas las sueltas). |
+| J9 | Simplifica | E4 reescribía `bulk_replace_items_cotizacion` (autosave colaborativo) y `registrar_pago_cuenta_cobrar` solo por una tabla menos. | Prod: 8 y 0 filas. | **E4 fuera** (aprobado). 40 → 34 tablas. |
+| J10 | P2 | `items_cotizacion.responsable_nombre` sigue siendo copia de `proveedores.nombre` (hoja de llamado, autosave). | `hoja-llamado-pdf.ts`. | Se documenta como parte de lo emitido en la cotización (D5); guarda solo informativa. |
+| J11 | P2 | Código muerto (`createCuentaCobrar`, `getCuentasPagarPorGrupo`); `ANTHROPIC_API_KEY` la usa también el Portal (`document-parser.ts`); `check-schema-parity.mjs` solo compara nombres de migración. | `grep`. | Muertos fuera en B5b; la llave se conserva al retirar Planeación; "test = prod" extiende `check-schema-parity.mjs` (columnas, índices, `md5(pg_get_functiondef)`), no un script nuevo. |
+
+**Verificado sin pérdida:** renglones inmutables tras aprobar (las RPCs de
+items devuelven `estado_invalido`), así que leer descripción/cantidad del
+renglón es seguro; los PDFs de órdenes viven en Drive y no se regeneran, y el
+detalle ya prefiere el contacto de `proveedores`; la publicación de Realtime
+está vacía (colaboración por Broadcast); el folio SH sale de `max()`, así que
+el reinicio da SH001; ningún usuario tiene la sección `planeacion`; test sin
+clientes duplicados, sin fechas mal formadas y sin cotización ≠ proyecto.
+
+**Conclusión del equipo (v7):** las auditorías ya dan rendimientos decrecientes;
 v7 no cambia el modelo respecto a v6. Lo que falte se verá con más precisión
 **al abrir cada bloque** (la skill `serenata-iniciar-fase` audita el código real
 antes de tocarlo), no con otra revisión en papel.
 
-## Resultado esperado (v7)
+## Resultado esperado (v8)
 
-- **40 → 33 tablas** (−18 %): salen `cliente_id_backfill_clasificacion`,
+- **40 → 34 tablas** (−15 %): salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
-  `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs` y
-  `bulk_import_operations` (absorbida en `operaciones`). Los folios CC/CP y
-  `folio_contadores` se quedan (identificadores externos).
+  `planeacion_pendientes`, `planeacion_event_notas` y `extraction_logs`.
+  `bulk_import_operations` y `pago_operations` se quedan (E4 descartado, J9).
+  Los folios CC/CP y `folio_contadores` se quedan (identificadores externos).
 - **Una sola vía de pago** (el grupo) y **cada dato con un dueño**; con B6
   (opcional), además **un solo motor de reglas de Cuentas** (SQL):
 
@@ -267,6 +300,7 @@ antes de tocarlo), no con otra revisión en papel.
 | Lo emitido en el PDF | `cotizaciones` (D5) | — |
 | Reglas de dinero de Cuentas (B6, opcional) | funciones SQL | `lib/shared/cuentas/concepto.ts` |
 | Copia de consulta en Sheets | — | se retira (D2) |
+| "Vencido" de un cobro | derivado al leer (fecha + saldo, J6) | `cuentas_cobrar.estado = 'VENCIDO'` y su cron |
 
 - **Consultas más rápidas** por los índices faltantes (G1–G3), que hoy obligan a
   leer tablas completas en cada cotización y en Cuentas.
@@ -283,7 +317,8 @@ antes de tocarlo), no con otra revisión en papel.
 
 1. **Mapa de dependencias en cero** por nombre de columna antes de borrar
    cualquier cosa (A10): todo el repo + `pg_get_functiondef` + triggers +
-   vistas + políticas + `pg_depend`.
+   vistas + políticas + `pg_depend`; y **`plpgsql_check` en 0 errores** sobre
+   todas las funciones tras cada migración, en test y en `fresh-db` (J4).
 2. **Guardas de consistencia en 0** en test y prod antes y después de cada
    migración (lista en B0).
 3. **Funciones reescritas desde `pg_get_functiondef` de producción**, una vez
@@ -299,10 +334,10 @@ antes de tocarlo), no con otra revisión en papel.
 7. **Después de salir a uso real**, vuelve a ser obligatorio expandir y
    contraer en PRs separados (F3).
 
-## Plan de ejecución (v7)
+## Plan de ejecución (v8)
 
 6 PRs: B0 · B1+B3 · B5a · B5b · B6 (motor único) · B7 (cierre); B2 es la
-ejecución del script de reinicio. Estimación: 5 sesiones.
+ejecución del script de reinicio. Estimación: 5 sesiones. Plan v8.
 
 ### B0 — Red de seguridad, test = prod, índices y foto dorada
 
@@ -313,24 +348,40 @@ ejecución del script de reinicio. Estimación: 5 sesiones.
   renglón aprobado ⇔ cuenta por pagar; cuenta con proveedor ⇒ grupo; folios
   CC/CP únicos y no nulos.
 - `scripts/db/mapa-dependencias.mjs <tabla.columna>`.
+- **`plpgsql_check` (J4):** extensión en test y en `fresh-db` (migración
+  aditiva); paso de CI que exige 0 errores en todas las funciones de `public`.
+- **Retirar `sync-up` de Sheets (J7):** ruta
+  `app/api/integrations/sheets/sync-up/` y su botón en `AdminSheets.tsx`, para
+  que nada reimporte datos de prueba tras el reinicio. El resto de Sheets sigue
+  en B1+B3.
+- **`hoy_cdmx()` con fecha fija opcional (J2):** respeta
+  `current_setting('app.hoy', true)`; sin el ajuste se comporta igual que hoy.
 - Test: retirar objetos del frente 2 con un script SQL aplicado solo a test
   (no es migración: `20261009`/`20261010` no están en `main`; I3), anotado en
   `docs/archive/frente2-cuentas-conceptos-pausado.md`; comparar esquema con
-  prod; `VACUUM ANALYZE` (F11).
-- **Datos de test al día (I1):** agrupar las 5 sueltas con proveedor
-  (`reconcile_cuenta_pagar_grupo`), recalcular los 2 márgenes viejos y revisar
-  los 2 cobros con total distinto. Sin borrar nada.
+  prod extendiendo `scripts/check-schema-parity.mjs` (columnas, índices,
+  `md5(pg_get_functiondef)`; J11); `VACUUM ANALYZE` (F11).
+- **Datos de test al día (I1, J1, J8):** agrupar las 5 sueltas con proveedor
+  (`reconcile_cuenta_pagar_grupo`), recalcular los 2 márgenes viejos, revisar
+  los 2 cobros con total distinto, ligar o corregir las 3 cuentas sin
+  `item_id` y la 1 con `x_pagar` desfasado (13 filas); **alinear nombre y
+  contacto copiados** (`cuentas_pagar`, `items_cotizacion.responsable_nombre`)
+  con `proveedores` y corregir la causa en el generador o los specs. Una guarda
+  vigila "copia = dueño" hasta B5b.
 - **Índices faltantes (G1)** en test y prod: `items_cotizacion(cotizacion_id,
   orden)`, `items_cotizacion(responsable_id)`, `cuentas_pagar(cotizacion_id)`,
   `cuentas_pagar(responsable_id)`, `cotizaciones(es_complementaria_de)`
   parcial, y los FKs del advisor que sigan vivos tras el plan; cada uno
-  justificado con `EXPLAIN` de las consultas más caras de `pg_stat_statements`.
+  justificado con `EXPLAIN` e `index_advisor` sobre las consultas más caras de
+  `pg_stat_statements`.
   Medir `live` 3 veces antes y después (#107).
 - Línea base: guardas en ambos y latencia de `cuentas_periodo` en test.
-- **Foto dorada (H1, I2):** `scripts/db/foto-dorada.mjs` guarda en JSON la
-  salida de las RPCs de lectura por año, **solo sobre los proyectos del dataset
-  de carga** y con `p_hoy` fijo, y compara contra una foto nueva (diferencias
-  campo por campo). Se toma después de I1.
+- **Foto dorada (H1, I2, J2):** la salida de las RPCs de lectura por año se
+  toma **como SQL en una sola transacción** con
+  `set_config('app.hoy', '<fecha fija>', true)`, **solo sobre los proyectos del
+  dataset de carga**; `scripts/db/foto-dorada.mjs` la guarda en JSON y compara
+  contra una foto nueva (diferencias campo por campo). Se toma después de I1.
+  Excluye `buscar_cuentas_cobrar`/`buscar_cuentas_pagar_grupos` (se retiran, J5).
 - Script de reinicio (B2) incluido en este PR.
 - **Respaldo (G7):** `supabase db dump` de prod (paso a paso para ti) antes de
   B2 y antes de B5a.
@@ -393,29 +444,39 @@ ejecución del script de reinicio. Estimación: 5 sesiones.
 ### B5a — Escrituras de dinero solo por grupo (P0)
 
 Una reescritura por función, desde prod: `registrar_pago_cuenta_pagar`,
-`registrar_pago_grupo_factura`, `registrar_pago_cuenta_cobrar` (solo por E4),
+`registrar_pago_grupo_factura`,
 `anular_pago_proveedor`, `baja_documento_pago`, `adjuntar_comprobante_pago_proveedor`,
 `generar_orden_pago` (sin `UNION ALL`), `cancelar_orden_pago`,
-`recalcular_estado_orden_pago`, `validar_factura_proveedor`, `corregir_*`,
-`bulk_replace_items_cotizacion` (solo por E4).
+`recalcular_estado_orden_pago`, `validar_factura_proveedor`, `corregir_*`
+**excepto `corregir_proveedor_cuenta_pagar`** (va con `reasignar_*` en B5b, J3).
+- **Regla J3:** toda función reescrita aquí ya lee nombre, contacto y
+  descripción de su dueño (`proveedores`, `items_cotizacion`), nunca de la
+  copia en `cuentas_pagar`; p. ej. `generar_orden_pago` toma
+  `proveedores.nombre` para el snapshot de `ordenes_pago_conceptos`.
 - Pagos, facturas y órdenes solo por grupo; el suelto "por asignar" sigue (A9).
 - Dejan de escribir `orden_pago_id`, `total_a_transferir`, `monto_transferido`
   y `metodo_pago` de `cuentas_pagar` (se borran en B5b).
-- `operaciones` reemplaza a `pago_operations` y `bulk_import_operations`
-  (E4; `entidad_id text` porque el folio de cotización es texto; RLS sin
-  políticas); rutas `…/estado` al día.
 - Restricción `responsable_id IS NOT NULL ⇒ grupo_id IS NOT NULL`.
 - Guardas en 0 y paridad; recorrido manual de pagos en el Preview.
 
 ### B5b — Lecturas, copias y borrado (P0)
 
 Funciones disjuntas de B5a: `approve_cotizacion`, `reasignar_responsable_cuenta_pagar`,
-`cancel_cotizacion`, `cuentas_conceptos`, `cuentas_por_proyecto`,
-`cuentas_orden_candidatos`, `cuentas_periodo`/`resumen`/`avisos_items`/`anios`,
-`buscar_cuentas_cobrar`, `buscar_cuentas_pagar_grupos`, `buscar_ordenes_pago`,
-`dashboard_*`; portal y TS.
+`corregir_proveedor_cuenta_pagar` (J3), `cancel_cotizacion`, `cuentas_conceptos`,
+`cuentas_por_proyecto`, `cuentas_orden_candidatos`,
+`cuentas_periodo`/`resumen`/`avisos_items`/`anios`, `buscar_ordenes_pago`,
+`cuentas_cobrar_estado_calculado` (J6), `dashboard_*`; portal y TS.
+- **Retiros sin reemplazo (J5):** `buscar_cuentas_cobrar`,
+  `buscar_cuentas_pagar_grupos` y los `GET` de lista de `/api/cuentas-cobrar` y
+  `/api/cuentas-pagar` (sin consumidor en la UI); `tests/e2e/live/basic.spec.ts`
+  pasa a `cuentas_periodo`/detalle.
+- **`VENCIDO` deja de guardarse (J6):** sale
+  `sync_estados_cuentas_cobrar_vencidas` (y su llamada en `/api/keep-alive`);
+  `cuentas_cobrar_estado_calculado` y `subir-factura` ya no producen `VENCIDO`;
+  las filas en `VENCIDO` pasan a su estado real; `CHECK` sin `VENCIDO`. La UI
+  sigue mostrando "Vencido" (derivado por fecha y saldo en `cuentas_conceptos`).
 - Lectores a dueños únicos (contacto, renglón, proyecto/cliente según D5).
-- `cuentas_pagar.item_id` → `uuid` + FK; fuera la búsqueda por descripción de
+- `cuentas_pagar.item_id` → `uuid NOT NULL` + FK (J8); fuera la búsqueda por descripción de
   `app/api/items/[id]/route.ts` (G4).
 - `proyectos.fecha_entrega` → `date`; las funciones dejan la regex (F4, G5).
 - `timestamptz` en las columnas de Cuentas y órdenes (F5).
@@ -426,7 +487,8 @@ Funciones disjuntas de B5a: `approve_cotizacion`, `reasignar_responsable_cuenta_
   `monto_transferido`, `metodo_pago`; `cuenta_pagar_id` de pagos y
   documentos; texto de `cuentas_cobrar`; `clientes.proyectos`), tablas
   `historial_responsable` y de Planeación (E1), función `buscar_cuentas_pagar`
-  (G9). Mapa en 0.
+  (G9); código muerto `createCuentaCobrar` y `getCuentasPagarPorGrupo` (J11).
+  Mapa en 0 y `plpgsql_check` en 0.
 - Foto dorada sin diferencias (H1) **antes** de re-sembrar.
 - Seeds, generador de loadtest y tipos al día; **re-sembrar test** (F10) y
   tomar una foto dorada nueva para B6 (I2).
@@ -483,6 +545,7 @@ retirar el TS. `concepto.ts` queda con tipos y presentación.
 | Decisiones D1–D7 | Hecho (2026-10-01) |
 | Auditoría v1 → v2 y final v2 → v3 | Hecho (2026-10-01) |
 | Aprobación del plan v7 | Hecho (2026-10-01) |
+| Auditoría final 5 (v7 → v8) y decisiones J5, J6, J9 | Hecho (2026-10-01) |
 | B0 Red de seguridad, test = prod, índices y foto dorada | Pendiente |
 | B2 Reinicio de datos (script; tras limpiar Drive) | Pendiente |
 | B1 + B3 Retiros e integridad | Pendiente |

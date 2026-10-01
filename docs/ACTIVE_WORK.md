@@ -1,7 +1,7 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-01 (plan de "Simplificación del modelo de datos"
-propuesto; frente 2 en pausa). Debajo, el cierre de la sesión 22.
+**Última actualización:** 2026-10-01 (plan v8 de "Simplificación del modelo de
+datos" aprobado; frente 2 en pausa). Debajo, el cierre de la sesión 22.
 
 ## Estado
 
@@ -15,8 +15,10 @@ grupos desfasados, 0 grupos ABIERTO vacíos, "Eduardo Terwogt" de SH072 en 3,100
 `cuentas_periodo` ~65 ms, advisors sin hallazgos nuevos. Pendiente de
 verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
-**Iniciativa "Simplificación del modelo de datos"** — epic #109. **Plan v7
-aprobado (2026-10-01)** en `docs/PLAN.md`: 6 PRs, 40 → 33 tablas, Sheets y
+**Iniciativa "Simplificación del modelo de datos"** — epic #109. **Plan v8
+aprobado (2026-10-01)** en `docs/PLAN.md` (auditoría 5: oráculo determinista,
+`plpgsql_check`, E4 fuera, listados sin UI y `VENCIDO` guardado se retiran):
+6 PRs, 40 → 34 tablas, Sheets y
 Planeación se retiran, índices faltantes y foto dorada primero. **Siguiente
 sesión: B0** (abrir con `serenata-iniciar-fase`). Pendientes del usuario que
 B0 pedirá: respaldo `supabase db dump` (plan Free sin respaldos), Drive en
