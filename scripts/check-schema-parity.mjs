@@ -46,6 +46,15 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const MANIFEST_PATH = join(__dirname, '..', 'db', 'migrations', '_manifest.json')
 
+// Infraestructura que existe SOLO en serenata-erp-test a propósito (PLAN.md, B0):
+// `loadtest_runs` (db/migrations/20260915_loadtest_runs.sql) controla las
+// corridas de carga, que nunca corren contra producción. No es "faltante en
+// prod": se excluye de ambas comparaciones. Además `reset-transaccional.sql` y
+// `seed-cuentas-test.sql` usan su ausencia/presencia para distinguir prod de test.
+const SOLO_TEST_TABLAS = ['loadtest_runs']
+const SOLO_TEST_MIGRACIONES = new Set(['loadtest_runs'])
+const esSoloTest = (clave) => SOLO_TEST_TABLAS.some((t) => new RegExp(`\\b${t}`).test(clave))
+
 function normalizeArchivo(nombreArchivo) {
   return nombreArchivo.replace(/^\d{8}_/, '').replace(/\.sql$/, '')
 }
@@ -85,9 +94,9 @@ async function compararEsquema(refA, refB, accessToken) {
   const a = mapa(filasA)
   const b = mapa(filasB)
 
-  const soloA = [...a.keys()].filter((k) => !b.has(k))
-  const soloB = [...b.keys()].filter((k) => !a.has(k))
-  const distintos = [...a.keys()].filter((k) => b.has(k) && a.get(k) !== b.get(k))
+  const soloA = [...a.keys()].filter((k) => !b.has(k) && !esSoloTest(k))
+  const soloB = [...b.keys()].filter((k) => !a.has(k) && !esSoloTest(k))
+  const distintos = [...a.keys()].filter((k) => b.has(k) && a.get(k) !== b.get(k) && !esSoloTest(k))
 
   console.log(`Objetos: ${refA} ${a.size}, ${refB} ${b.size}.\n`)
   const bloque = (titulo, claves) => {
@@ -136,7 +145,7 @@ async function main() {
   const remotas = await listarMigracionesRemotas(projectRef, accessToken)
   const nombresRemotos = new Set(remotas.map((m) => m.name))
 
-  const faltantesEnRemoto = [...nombresManifest].filter((n) => !nombresRemotos.has(n))
+  const faltantesEnRemoto = [...nombresManifest].filter((n) => !nombresRemotos.has(n) && !SOLO_TEST_MIGRACIONES.has(n))
   const noCommiteadasEnRepo = [...nombresRemotos].filter((n) => !nombresManifest.has(n))
 
   console.log(`Manifest: ${nombresManifest.size} migraciones. Proyecto ${projectRef}: ${nombresRemotos.size} aplicadas.\n`)

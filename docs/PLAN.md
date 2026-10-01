@@ -130,6 +130,7 @@ no cae en ninguna, se borra.
 
 ## Resultado esperado (v12)
 
+- **Tablas por entorno (verificado 2026-10-01):** producción 40, test 43 = las 40 más `cuentas_conceptos_base` y `cuentas_conceptos_pendientes` (frente 2; las retira `scripts/db/test-retirar-frente2.sql`) y `loadtest_runs`. **`loadtest_runs` existe solo en test a propósito** (control de las corridas de carga, `db/migrations/20260915_loadtest_runs.sql`, nunca aplicada en prod): es la única excepción de "test = prod", declarada en `check-schema-parity.mjs`, y `reset-transaccional.sql` la usa para negarse a correr en test. Al cerrar el plan: prod 34, test 35.
 - **40 → 34 tablas:** salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
   `planeacion_pendientes`, `planeacion_event_notas` y `extraction_logs`.

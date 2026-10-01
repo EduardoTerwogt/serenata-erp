@@ -515,7 +515,7 @@ autoritativa, no una tabla en un documento. Agrupadas por dominio:
 | Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable`, `historial_cambios_responsable_item` |
 | Planeación | `planeacion_pendientes`, `planeacion_event_notas` (soft delete en `eliminada`), `extraction_logs` |
 | Dashboard | `gastos_fijos` |
-| Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys`, `sheets_sync_status`, `loadtest_runs` |
+| Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys`, `sheets_sync_status`, `loadtest_runs` (**solo en `serenata-erp-test`**, nunca en producción: control de las corridas de carga) |
 
 **RLS** está habilitado en las tablas pero **sin políticas de lectura**, así que la
 llave anónima no lee nada. Es la razón de que la colaboración no use
