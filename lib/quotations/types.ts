@@ -12,7 +12,7 @@ export interface QuotationFormItem {
   precio_unitario: number | ''
   responsable_id: string
   responsable_nombre: string
-  x_pagar: number | ''
+  costo_unitario: number | ''
   importe?: number
   margen?: number
 }
@@ -34,14 +34,14 @@ export interface QuotationTotalsInput {
   descuento_valor: number
 }
 
-export interface QuotationComputedItem extends Omit<QuotationFormItem, 'precio_unitario' | 'x_pagar'> {
+export interface QuotationComputedItem extends Omit<QuotationFormItem, 'precio_unitario' | 'costo_unitario'> {
   precio_unitario: number
-  x_pagar: number
+  costo_unitario: number
   importe: number
-  // Bloque 3 (docs/PLAN.md): `x_pagar` es el Costo Unitario (neto al
-  // responsable); `costo_total = x_pagar * cantidad` es la fuente de verdad
+  // Bloque 3 (docs/PLAN.md): `costo_unitario` es el Costo Unitario (neto al
+  // responsable); `costo_total = costo_unitario * cantidad` es la fuente de verdad
   // centralizada para cualquier fórmula derivada (IVA pagado, margen) --
-  // nunca recalcular `x_pagar * cantidad` suelto en otro lugar.
+  // nunca recalcular `costo_unitario * cantidad` suelto en otro lugar.
   costo_total: number
   margen: number
 }
@@ -58,7 +58,7 @@ export interface QuotationTotals {
 }
 
 // Fase 5.1: panel "Impuestos (estimado)". IVA pagado es siempre 16% del Costo Total
-// (x_pagar * cantidad, Bloque 3) de cada partida, sin importar el regimen fiscal del
+// (costo_unitario * cantidad, Bloque 3) de cada partida, sin importar el regimen fiscal del
 // responsable -- la retencion no reduce lo acreditable para Serenata, solo cambia el
 // neto que recibe el proveedor (documento maestro seccion 3; decision confirmada 2026-09-06).
 export interface EstimatedTaxes {

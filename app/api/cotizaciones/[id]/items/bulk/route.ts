@@ -13,7 +13,7 @@ interface BulkItemInput {
   cantidad?: number | null
   precio_unitario?: number | null
   importe?: number | null
-  x_pagar?: number | null
+  costo_unitario?: number | null
   margen?: number | null
   responsable_id?: string | null
   responsable_nombre?: string | null

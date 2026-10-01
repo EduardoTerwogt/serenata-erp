@@ -18,7 +18,7 @@ export interface BulkImportPayload {
     importe: number
     responsable_id: string | null
     responsable_nombre: string | null
-    x_pagar: number
+    costo_unitario: number
     margen: number
     orden: number
     notas: string | null

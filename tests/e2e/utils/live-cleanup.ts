@@ -12,9 +12,11 @@ export function getLiveSupabaseAdmin() {
 /**
  * Siembra una cuenta por pagar con su renglón (B5b: `item_id` es NOT NULL con
  * FK, toda cuenta nace de un renglón de `items_cotizacion`; nombre y
- * descripción ya no se copian a la cuenta). La cotización debe existir. El
- * renglón lleva el mismo proveedor que la cuenta (invariante validada al
- * COMMIT) y un costo unitario = `xPagar` con cantidad 1.
+ * descripción ya no se copian a la cuenta). La cotización debe existir y NO estar
+ * aprobada todavía (B5c: los renglones de una aprobada no se insertan): el
+ * fixture la crea EMITIDA y la aprueba después con `aprobarFixture`. El renglón
+ * lleva el mismo proveedor que la cuenta (invariante validada al COMMIT) y un
+ * costo unitario = `xPagar` con cantidad 1 (importe y margen coherentes: CHECK).
  */
 export async function insertarCuentaPagarConRenglon(
   supabase: ReturnType<typeof getLiveSupabaseAdmin>,
@@ -33,7 +35,10 @@ export async function insertarCuentaPagarConRenglon(
       cotizacion_id: c.cotizacionId,
       descripcion: c.descripcion,
       cantidad: 1,
-      x_pagar: c.xPagar,
+      precio_unitario: c.xPagar,
+      importe: c.xPagar,
+      costo_unitario: c.xPagar,
+      margen: 0,
       responsable_id: c.responsableId,
     })
     .select('id')
@@ -53,6 +58,12 @@ export async function insertarCuentaPagarConRenglon(
     .single()
   if (error) throw error
   return { id: cuenta.id as string, itemId: item.id as string }
+}
+
+/** Aprueba un fixture de cuentas después de sembrar sus renglones (EMITIDA → APROBADA). */
+export async function aprobarFixture(supabase: ReturnType<typeof getLiveSupabaseAdmin>, cotizacionId: string) {
+  const { error } = await supabase.from('cotizaciones').update({ estado: 'APROBADA' }).eq('id', cotizacionId).eq('estado', 'EMITIDA')
+  if (error) throw error
 }
 
 /**
@@ -220,7 +231,7 @@ export async function cleanupLiveOrdenesPagoHuerfanas() {
 /**
  * Siembra un producto real en `productos` para probar el autofill de la
  * sugerencia de descripción contra Supabase real (Fase 8: el conflicto entre
- * seleccionar un producto -que autocompleta categoría/precio/x_pagar- y que
+ * seleccionar un producto -que autocompleta categoría/precio/costo_unitario- y que
  * otro colaborador edite precio a mano en la misma partida). `descripcion`
  * es `unique`, así que esto es idempotente: un reintento con la misma
  * descripción actualiza la fila existente en vez de fallar.
@@ -229,7 +240,7 @@ export async function ensureLiveProducto(producto: {
   descripcion: string
   categoria: string
   precio_unitario: number
-  x_pagar_sugerido: number
+  costo_unitario_sugerido: number
 }) {
   const supabase = getLiveSupabaseAdmin()
   const { data, error } = await supabase

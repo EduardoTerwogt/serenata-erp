@@ -22,7 +22,7 @@ function grupoDePrueba(i: number) {
     total_a_transferir: 1160,
     monto_transferido: 1160,
     saldo_por_transferir: 0,
-    items: [{ id: `cuenta-${i}`, item_descripcion: 'Item', cantidad: 1, x_pagar: 1000, cotizacion_id: `SH0${i}` }],
+    items: [{ id: `cuenta-${i}`, item_descripcion: 'Item', cantidad: 1, costo_total: 1000, cotizacion_id: `SH0${i}` }],
   }
 }
 

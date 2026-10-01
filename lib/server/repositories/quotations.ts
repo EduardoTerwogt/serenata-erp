@@ -37,10 +37,19 @@ export async function buscarCotizaciones(search: string | null, estado: string |
   return data as BuscarCotizacionesResult
 }
 
+// D12 (B5c): el renglón ya no guarda el nombre del responsable; se lee del
+// proveedor por `responsable_id` y la API conserva el campo `responsable_nombre`.
+type ItemFila = Omit<ItemCotizacion, 'responsable_nombre'> & { proveedores?: { nombre: string | null } | null }
+
+function conNombreResponsable(fila: ItemFila): ItemCotizacion {
+  const { proveedores, ...resto } = fila
+  return { ...resto, responsable_nombre: proveedores?.nombre ?? null } as ItemCotizacion
+}
+
 export async function getCotizacionById(id: string) {
   const { data, error } = await supabaseAdmin
     .from('cotizaciones')
-    .select('*, items_cotizacion(*)')
+    .select('*, items_cotizacion(*, proveedores(nombre))')
     // Sin ORDER BY, Postgres devuelve las partidas en orden arbitrario -- y ese orden
     // CAMBIA cuando una fila se actualiza (se mueve de posición física). La columna
     // `orden` existe justo para esto, pero la consulta no la usaba: cada relectura
@@ -51,7 +60,8 @@ export async function getCotizacionById(id: string) {
     .single()
   if (error) throw error
   const d = data as Record<string, unknown>
-  return { ...d, items: d.items_cotizacion } as Cotizacion
+  const items = ((d.items_cotizacion as ItemFila[] | null) ?? []).map(conNombreResponsable)
+  return { ...d, items_cotizacion: undefined, items } as unknown as Cotizacion
 }
 
 export async function folioExists(folio: string) {
@@ -129,11 +139,11 @@ export async function getNextFolioComplementaria(baseFolio: string) {
 export async function getItemsByCotizacion(cotizacionId: string) {
   const { data, error } = await supabaseAdmin
     .from('items_cotizacion')
-    .select('*')
+    .select('*, proveedores(nombre)')
     .eq('cotizacion_id', cotizacionId)
     .order('orden')
   if (error) throw error
-  return data as ItemCotizacion[]
+  return (data as unknown as ItemFila[]).map(conNombreResponsable)
 }
 
 // Fase 8.7.1: `upsert_items_cotizacion` ahora también rechaza la escritura si

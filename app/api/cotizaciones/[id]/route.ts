@@ -4,6 +4,7 @@ import {
   deleteCotizacion,
   deleteItemsByCotizacion,
   getCotizacionById,
+  EstadoCotizacionInvalidoError,
 } from '@/lib/db'
 import { ItemCotizacion } from '@/lib/types'
 import { formatSupabaseError } from '@/lib/quotations/rpc-utils'
@@ -77,6 +78,9 @@ export async function PUT(
 
     return Response.json(await getCotizacionById(id))
   } catch (error) {
+    if (error instanceof EstadoCotizacionInvalidoError) {
+      return Response.json({ error: 'estado_invalido', estado_actual: error.estadoActual, message: error.message }, { status: 409 })
+    }
     console.error('[PUT /api/cotizaciones/:id] Error actualizando cotización:', formatSupabaseError(error))
     return Response.json({ error: 'Error actualizando cotización' }, { status: 500 })
   }

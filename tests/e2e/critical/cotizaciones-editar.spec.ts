@@ -95,18 +95,18 @@ test('autoguarda cada celda de una partida sin pisar lo que se sigue escribiendo
   const xPagar = firstRow.locator('td').nth(6).locator('input')
   await xPagar.fill('7500')
   const [pagarRequest] = await Promise.all([
-    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH' && 'x_pagar' in (req.postDataJSON() || {})),
+    page.waitForRequest((req) => /\/items\/[^/]+$/.test(req.url()) && req.method() === 'PATCH' && 'costo_unitario' in (req.postDataJSON() || {})),
     xPagar.blur(),
   ])
-  expect(pagarRequest.postDataJSON().x_pagar).toBe(7500)
+  expect(pagarRequest.postDataJSON().costo_unitario).toBe(7500)
 })
 
-test('seleccionar una sugerencia de producto autocompleta categoría, precio y x_pagar', async ({ page }) => {
+test('seleccionar una sugerencia de producto autocompleta categoría, precio y costo_unitario', async ({ page }) => {
   await mockCotizacionDetailApis(page, {
     id: 'SH-E2E-PRODUCTO',
     estado: 'BORRADOR',
     productos: [
-      { id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' },
+      { id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, costo_unitario_sugerido: 12000, activo: true, created_at: '2026-01-01' },
     ],
   })
   await login(page, '/cotizaciones/SH-E2E-PRODUCTO')
@@ -138,11 +138,11 @@ test('seleccionar una sugerencia de producto autocompleta categoría, precio y x
   expect(patch.descripcion).toBe('Renta de grúa Technocrane')
   expect(patch.categoria).toBe('Grip')
   expect(patch.precio_unitario).toBe(25000)
-  expect(patch.x_pagar).toBe(12000)
+  expect(patch.costo_unitario).toBe(12000)
   // Fase 6C: el autofill manda "base" para los 4 campos que toca -- si alguien más
   // ya editó alguno (p. ej. Precio) desde el último valor confirmado, el servidor
   // rechaza la operación completa en vez de pisarlo en silencio.
-  expect(Object.keys(patch.base || {}).sort()).toEqual(['categoria', 'descripcion', 'precio_unitario', 'x_pagar'])
+  expect(Object.keys(patch.base || {}).sort()).toEqual(['categoria', 'costo_unitario', 'descripcion', 'precio_unitario'])
   expect(typeof patch.mutation_id).toBe('string')
 
   await expect(descripcion).toHaveValue('Renta de grúa Technocrane')
@@ -244,7 +244,7 @@ test('conflicto solo en responsable_nombre (el id no chocó) muestra el banner y
 
 // Fase 8.7.2 (bloqueador de la 2da ronda de auditoría externa): la misma
 // atomicidad aplica al autofill de producto -- descripcion/categoria/
-// precio_unitario/x_pagar viajan en un solo PATCH, y si CUALQUIERA choca la
+// precio_unitario/costo_unitario viajan en un solo PATCH, y si CUALQUIERA choca la
 // RPC rechaza los 4. Antes de este fix, "Usar" solo revertía el campo que la
 // RPC marcó en conflicto (precio_unitario aquí) y dejaba los otros 3
 // mostrando el autofill nunca guardado -- formulario y servidor divergían.
@@ -252,11 +252,11 @@ test('conflicto de autofill (solo un campo choca) revierte los 4 campos del grup
   await mockCotizacionDetailApis(page, {
     id: 'SH-E2E-AUTOFILL-CONFLICT',
     estado: 'BORRADOR',
-    productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
+    productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, costo_unitario_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
   })
   // El item por defecto de mockCotizacionDetailApis (item-detail-1) es
   // { categoria: 'Producción', descripcion: 'Renta de cámara',
-  //   precio_unitario: 15000, x_pagar: 6000 } -- ese es el `base` real que
+  //   precio_unitario: 15000, costo_unitario: 6000 } -- ese es el `base` real que
   // buildItemFieldsBase captura antes del autofill, y lo que "el servidor"
   // (el mock, aquí) realmente tiene.
   let patchRecibido: Record<string, unknown> | null = null
@@ -269,7 +269,7 @@ test('conflicto de autofill (solo un campo choca) revierte los 4 campos del grup
       id: 'item-detail-1',
       // Solo `precio_unitario` choca -- otro colaborador ya lo cambió a
       // 18000 antes de este PATCH (base real: 15000, el precio original del
-      // item). descripcion/categoria/x_pagar NO aparecen en `fields`: su
+      // item). descripcion/categoria/costo_unitario NO aparecen en `fields`: su
       // base coincide con el current real, así que la RPC no los marcó --
       // pero como la operación es atómica, NINGUNO de los 4 se guardó, ni
       // siquiera esos 3.
@@ -296,7 +296,7 @@ test('conflicto de autofill (solo un campo choca) revierte los 4 campos del grup
   // intento fue el autofill completo, con `base` correcto -- lo que la RPC
   // rechazó atómicamente.
   await expect.poll(() => patchRecibido).not.toBeNull()
-  expect(patchRecibido).toMatchObject({ descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar: 12000, base: { descripcion: 'Renta de cámara', categoria: 'Producción', precio_unitario: 15000, x_pagar: 6000 } })
+  expect(patchRecibido).toMatchObject({ descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, costo_unitario: 12000, base: { descripcion: 'Renta de cámara', categoria: 'Producción', precio_unitario: 15000, costo_unitario: 6000 } })
 
   const banner = firstRow.getByText(/Alguien más lo cambió a/).first()
   await expect(banner).toBeVisible()
@@ -307,7 +307,7 @@ test('conflicto de autofill (solo un campo choca) revierte los 4 campos del grup
   // El PATCH atómico se rechazó completo -- los 4 campos deben quedar en el
   // valor real que "el servidor" (el mock) tiene, nunca en el autofill que
   // nunca se guardó. precio_unitario usa el `current` del conflicto (18000,
-  // lo que el otro colaborador puso); descripcion/categoria/x_pagar vuelven
+  // lo que el otro colaborador puso); descripcion/categoria/costo_unitario vuelven
   // a su propio valor real (su base coincidía con el current, la RPC no los
   // marcó), que es exactamente lo que el mock sirvió al cargar la página.
   await expect(descripcion).toHaveValue('Renta de cámara')
@@ -327,7 +327,7 @@ test('conflicto de autofill: "Mantener" reintenta el PATCH completo con los 4 ca
   await mockCotizacionDetailApis(page, {
     id: 'SH-E2E-AUTOFILL-MANTENER',
     estado: 'BORRADOR',
-    productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
+    productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, costo_unitario_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
   })
   const patchesRecibidos: Record<string, unknown>[] = []
   await page.route('**/api/cotizaciones/SH-E2E-AUTOFILL-MANTENER/items/*', async (route) => {
@@ -353,7 +353,7 @@ test('conflicto de autofill: "Mantener" reintenta el PATCH completo con los 4 ca
         categoria: body.categoria, descripcion: body.descripcion, cantidad: 1,
         precio_unitario: body.precio_unitario, importe: body.precio_unitario,
         responsable_nombre: 'Sofía Ramírez', responsable_id: 'resp-1',
-        x_pagar: body.x_pagar, margen: body.precio_unitario - body.x_pagar,
+        costo_unitario: body.costo_unitario, margen: body.precio_unitario - body.costo_unitario,
         orden: 1, notas: null,
       },
     })
@@ -385,7 +385,7 @@ test('conflicto de autofill: "Mantener" reintenta el PATCH completo con los 4 ca
   // original (15000), que volvería a chocar contra el mismo conflicto.
   await expect.poll(() => patchesRecibidos.length).toBe(2)
   const segundoPatch = patchesRecibidos[1]
-  expect(segundoPatch).toMatchObject({ descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar: 12000 })
+  expect(segundoPatch).toMatchObject({ descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, costo_unitario: 12000 })
   expect((segundoPatch.base as Record<string, unknown>).precio_unitario).toBe(18000)
 
   // Tras el éxito del reintento, ningún conflicto debe quedar visible.
@@ -423,7 +423,7 @@ test('copiar partidas seleccionadas desde otra cotización las trae a la actual'
       estado: 'EMITIDA',
       total: 5000,
       items: [
-        { id: 'otra-item-1', cotizacion_id: 'SH-OTRA', categoria: 'Audio', descripcion: 'Boom más micrófono', cantidad: 1, precio_unitario: 5000, importe: 5000, responsable_nombre: null, responsable_id: null, x_pagar: 2000, margen: 3000, orden: 1, notas: null },
+        { id: 'otra-item-1', cotizacion_id: 'SH-OTRA', categoria: 'Audio', descripcion: 'Boom más micrófono', cantidad: 1, precio_unitario: 5000, importe: 5000, responsable_nombre: null, responsable_id: null, costo_unitario: 2000, margen: 3000, orden: 1, notas: null },
       ],
     })
   })
@@ -488,7 +488,7 @@ test('aplicar una plantilla persiste las partidas y reusa la fila en blanco', as
         importe: 0,
         responsable_nombre: null,
         responsable_id: null,
-        x_pagar: 0,
+        costo_unitario: 0,
         margen: 0,
         orden: 1,
         notas: null,
@@ -501,8 +501,8 @@ test('aplicar una plantilla persiste las partidas y reusa la fila en blanco', as
         descripcion: null,
         activo: true,
         items: [
-          { categoria: 'Producción', descripcion: 'Cámara', cantidad: 1, precio_unitario: 10000, x_pagar: 4000 },
-          { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 1, precio_unitario: 5000, x_pagar: 2000 },
+          { categoria: 'Producción', descripcion: 'Cámara', cantidad: 1, precio_unitario: 10000, costo_unitario: 4000 },
+          { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 1, precio_unitario: 5000, costo_unitario: 2000 },
         ],
       },
     ],
@@ -591,8 +591,8 @@ test('el flujo completo reportado deja la tabla consistente y sin filas vacías'
     templates: [{
       id: 'tpl-1', nombre: 'Paquete básico', descripcion: null, activo: true,
       items: [
-        { categoria: 'Producción', descripcion: 'Cámara ARRI', cantidad: 1, precio_unitario: 12000, x_pagar: 5000 },
-        { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 2, precio_unitario: 4000, x_pagar: 1500 },
+        { categoria: 'Producción', descripcion: 'Cámara ARRI', cantidad: 1, precio_unitario: 12000, costo_unitario: 5000 },
+        { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 2, precio_unitario: 4000, costo_unitario: 1500 },
       ],
     }],
   })
@@ -654,9 +654,9 @@ test('importar una plantilla deja el subtotal correcto sin recargar y en una sol
     templates: [{
       id: 'tpl-1', nombre: 'Paquete completo', descripcion: null, activo: true,
       items: [
-        { categoria: 'Producción', descripcion: 'Cámara ARRI', cantidad: 1, precio_unitario: 12000, x_pagar: 5000 },
-        { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 2, precio_unitario: 4000, x_pagar: 1500 },
-        { categoria: 'Arte', descripcion: 'Utilería', cantidad: 3, precio_unitario: 1500, x_pagar: 600 },
+        { categoria: 'Producción', descripcion: 'Cámara ARRI', cantidad: 1, precio_unitario: 12000, costo_unitario: 5000 },
+        { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 2, precio_unitario: 4000, costo_unitario: 1500 },
+        { categoria: 'Arte', descripcion: 'Utilería', cantidad: 3, precio_unitario: 1500, costo_unitario: 600 },
       ],
     }],
   })
@@ -767,7 +767,7 @@ test('la fila que agrega otro aparece sin quitarme el foco de donde escribo', as
   cotizacion.items = [...cotizacion.items, {
     id: 'item-remota-1', cotizacion_id: 'SH-E2E-FOCO', categoria: 'Arte', descripcion: 'Partida del otro',
     cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
-    x_pagar: 1000, margen: 2000, orden: 2, notas: null,
+    costo_unitario: 1000, margen: 2000, orden: 2, notas: null,
   }]
   await realtime.emit('item_confirmed', {
     cotizacion_id: 'SH-E2E-FOCO', item_id: 'item-remota-1', revision: 0, mutation_id: null, operation: 'create',
@@ -799,8 +799,8 @@ test('un import masivo de otro colaborador (bulk, item_id null) reconcilia sin e
   // El otro colaborador importó 2 partidas -- el mock simula el estado que un GET
   // vería después de ese bulk import real.
   cotizacion.items = [...cotizacion.items,
-    { id: 'item-bulk-1', cotizacion_id: 'SH-E2E-BULK-OTRO', categoria: 'Grip', descripcion: 'Grúa importada por otro', cantidad: 1, precio_unitario: 4000, importe: 4000, responsable_nombre: null, responsable_id: null, x_pagar: 1500, margen: 2500, orden: antes, notas: null },
-    { id: 'item-bulk-2', cotizacion_id: 'SH-E2E-BULK-OTRO', categoria: 'Grip', descripcion: 'Dolly importado por otro', cantidad: 1, precio_unitario: 2500, importe: 2500, responsable_nombre: null, responsable_id: null, x_pagar: 900, margen: 1600, orden: antes + 1, notas: null },
+    { id: 'item-bulk-1', cotizacion_id: 'SH-E2E-BULK-OTRO', categoria: 'Grip', descripcion: 'Grúa importada por otro', cantidad: 1, precio_unitario: 4000, importe: 4000, responsable_nombre: null, responsable_id: null, costo_unitario: 1500, margen: 2500, orden: antes, notas: null },
+    { id: 'item-bulk-2', cotizacion_id: 'SH-E2E-BULK-OTRO', categoria: 'Grip', descripcion: 'Dolly importado por otro', cantidad: 1, precio_unitario: 2500, importe: 2500, responsable_nombre: null, responsable_id: null, costo_unitario: 900, margen: 1600, orden: antes + 1, notas: null },
   ]
   await realtime.emit('item_confirmed', {
     cotizacion_id: 'SH-E2E-BULK-OTRO', item_id: null, revision: null, mutation_id: null, operation: 'bulk',
@@ -872,7 +872,7 @@ test('la fila que llega por reconciliación no me quita el cursor', async ({ pag
     importe: 3000,
     responsable_nombre: null,
     responsable_id: null,
-    x_pagar: 1000,
+    costo_unitario: 1000,
     margen: 2000,
     orden: 2,
     notas: null,
@@ -903,7 +903,7 @@ test('volver a la pestaña converge sin esperar el heartbeat', async ({ page }) 
   cotizacion.items = [...cotizacion.items, {
     id: 'item-tras-volver', cotizacion_id: 'SH-E2E-VISIBLE', categoria: 'Arte', descripcion: 'Partida al volver',
     cantidad: 1, precio_unitario: 3000, importe: 3000, responsable_nombre: null, responsable_id: null,
-    x_pagar: 1000, margen: 2000, orden: 2, notas: null,
+    costo_unitario: 1000, margen: 2000, orden: 2, notas: null,
   }]
 
   await page.evaluate(() => {
@@ -937,12 +937,12 @@ test('la fila que borra el otro desaparece por reconciliación', async ({ page }
       {
         id: 'item-que-se-queda', cotizacion_id: 'SH-E2E-RECON-DEL', categoria: 'Producción',
         descripcion: 'Renta de cámara', cantidad: 1, precio_unitario: 15000, importe: 15000,
-        responsable_nombre: null, responsable_id: null, x_pagar: 6000, margen: 9000, orden: 0, notas: null,
+        responsable_nombre: null, responsable_id: null, costo_unitario: 6000, margen: 9000, orden: 0, notas: null,
       },
       {
         id: 'item-que-borra-el-otro', cotizacion_id: 'SH-E2E-RECON-DEL', categoria: 'Arte',
         descripcion: 'Partida del otro', cantidad: 1, precio_unitario: 3000, importe: 3000,
-        responsable_nombre: null, responsable_id: null, x_pagar: 1000, margen: 2000, orden: 1, notas: null,
+        responsable_nombre: null, responsable_id: null, costo_unitario: 1000, margen: 2000, orden: 1, notas: null,
       },
     ],
   })

@@ -48,9 +48,15 @@ monto_total_grupo = Σ Costo Total de los renglones del proveedor dentro del pro
 
 El cruce fiscal (persona moral / persona física con honorarios, fórmulas de
 abajo) se calcula sobre `monto_total_grupo`, nunca sobre el Costo Unitario de un
-renglón individual, cuando el renglón pertenece a un grupo. `cuentas_pagar.x_pagar`
-(la columna materializada, distinta de "Costo Unitario" de la cotización) ya
-guarda el Costo Total de cada renglón desde que se aprueba la cotización.
+renglón individual, cuando el renglón pertenece a un grupo. `cuentas_pagar.costo_total`
+(la columna materializada; el Costo Unitario vive en `items_cotizacion.costo_unitario`)
+ya guarda el Costo Total de cada renglón desde que se aprueba la cotización.
+
+**Glosario de columnas (nomenclatura final, B5b/B5c, D13):** `items_cotizacion.costo_unitario`
+(antes `x_pagar`), `productos.costo_unitario_sugerido` (antes `x_pagar_sugerido`),
+`cuentas_pagar.costo_total` (antes `x_pagar`) y, en las plantillas de servicios, la llave
+JSON `costo_unitario`. El nombre del responsable de un renglón ya no se guarda: se lee del
+proveedor por `responsable_id`.
 
 **Modelo fiscal de proveedores** (`lib/server/validation/factura-fiscal.ts`, según
 `regimen_fiscal`; `null`/`undefined` se trata como **moral**):

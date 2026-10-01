@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { randomUUID } from 'crypto'
-import { cleanupLiveCuentasByPrefix, cleanupLiveOrdenesPagoHuerfanas, getLiveSupabaseAdmin, insertarCuentaPagarConRenglon } from '../utils/live-cleanup'
+import { cleanupLiveCuentasByPrefix, cleanupLiveOrdenesPagoHuerfanas, getLiveSupabaseAdmin, insertarCuentaPagarConRenglon, aprobarFixture } from '../utils/live-cleanup'
 
 /**
  * Rediseño de Cuentas, B1b (docs/PLAN.md): pruebas reales contra
@@ -64,7 +64,8 @@ async function crearCotizacion(
     fecha_entrega: '2026-01-10',
     tipo: opts.complementariaDe ? 'COMPLEMENTARIA' : 'PRINCIPAL',
     es_complementaria_de: opts.complementariaDe ?? null,
-    estado: opts.estado,
+    // B5c: una aprobada no admite renglones nuevos; se crea EMITIDA y `crearCuentas` la aprueba.
+    estado: opts.estado === 'APROBADA' ? 'EMITIDA' : opts.estado,
   }))
   fx.cotizaciones.push(opts.id)
   if (opts.conProyecto) {
@@ -100,6 +101,7 @@ async function crearCuentas(
     xPagar: opts.xPagar,
     descripcion: `Renglón ${opts.cotizacionId}`,
   })
+  await aprobarFixture(supabase, opts.cotizacionId)
   const { data: hijas } = await supabase.from('cuentas_pagar').select('costo_total').eq('grupo_id', opts.grupoId)
   const total = (hijas ?? []).reduce((sum, h) => sum + Number(h.costo_total), 0)
   ok(await supabase.from('cuentas_pagar_grupos').update({ monto_total: total }).eq('id', opts.grupoId))

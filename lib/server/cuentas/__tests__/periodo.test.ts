@@ -30,7 +30,7 @@ function rpc(): unknown {
       ['cc-6', 'SHX', null, 'CC-6', 'Suelto', null, 'X', 50, 0, null, null, null, null],
     ],
     pagos: [
-      // id, cotizacion_id, proyecto_id, grupo_id, responsable_id, responsable_nombre, item_descripcion, x_pagar, monto_pagado, total_a_transferir, monto_transferido, orden_pago_id, regimen, facturas, comprobantes, pagos_realizados
+      // id, cotizacion_id, proyecto_id, grupo_id, responsable_id, responsable_nombre, item_descripcion, costo_total, monto_pagado, total_a_transferir, monto_transferido, orden_pago_id, regimen, facturas, comprobantes, pagos_realizados
       ['cp-3', 'SH061', 'SH061', null, null, 'Sin asignar', 'Van', 15600, 0, null, 0, null, null, null, null, null],
     ],
     grupos: [

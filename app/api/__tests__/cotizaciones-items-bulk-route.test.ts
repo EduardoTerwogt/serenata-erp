@@ -61,7 +61,7 @@ const item = (over: Record<string, unknown> = {}) => ({
   cantidad: 1,
   precio_unitario: 10000,
   importe: 10000,
-  x_pagar: 4000,
+  costo_unitario: 4000,
   margen: 6000,
   responsable_id: null,
   responsable_nombre: null,

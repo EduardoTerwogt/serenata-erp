@@ -92,7 +92,6 @@ export async function saveNewQuotation(
 ): Promise<Cotizacion> {
   const body: Record<string, unknown> = {
     ...buildQuotationMutationPayload(data, {
-      estado: options.estado,
       porcentaje_fee: options.porcentaje_fee,
       iva_activo: options.iva_activo,
       descuento_tipo: options.descuento_tipo,
@@ -108,11 +107,16 @@ export async function saveNewQuotation(
   const expectedItemsCount = data.items.length
   const savedQuotation = await sendJson<Cotizacion>('/api/cotizaciones', body, 'Error al guardar')
 
-  if ((savedQuotation?.items?.length ?? 0) === expectedItemsCount) return savedQuotation
+  // L1: el estado cambia solo por RPC. Guardar crea siempre un BORRADOR; emitirla
+  // es un paso aparte.
+  const emitirSiCorresponde = async (cotizacion: Cotizacion) =>
+    options.estado === 'EMITIDA' ? emitirCotizacion(cotizacion.id) : cotizacion
+
+  if ((savedQuotation?.items?.length ?? 0) === expectedItemsCount) return emitirSiCorresponde(savedQuotation)
 
   if (savedQuotation?.id) {
     const fullQuotation = await fetchQuotationDetail(savedQuotation.id)
-    if ((fullQuotation?.items?.length ?? 0) === expectedItemsCount) return fullQuotation
+    if ((fullQuotation?.items?.length ?? 0) === expectedItemsCount) return emitirSiCorresponde(fullQuotation)
   }
 
   throw new Error('La cotización no quedó persistida correctamente. Revisa las partidas e inténtalo de nuevo.')
@@ -128,7 +132,6 @@ export async function updateQuotation(
     iva_activo: options.iva_activo,
     descuento_tipo: options.descuento_tipo,
     descuento_valor: options.descuento_valor,
-    ...(options.estado ? { estado: options.estado } : {}),
   })
 
   const items = basePayload.items.map((formItem, index) => {
@@ -149,6 +152,9 @@ export async function updateQuotation(
     ...(options.notas_internas !== undefined ? { notas_internas: options.notas_internas } : {}),
     ...(options.notas_pdf !== undefined ? { notas_pdf: options.notas_pdf } : {}),
   }, 'Error al actualizar cotización', { method: 'PUT' })
+
+  // L1: el PUT no cambia el estado; emitir es un paso aparte (BORRADOR -> EMITIDA).
+  if (options.estado === 'EMITIDA') return emitirCotizacion(id)
 
   // L7: el PUT ya responde la cotización completa; la relectura solo es red de seguridad.
   return saved?.id === id && Array.isArray(saved.items) ? saved : fetchQuotationDetail(id)

@@ -13,7 +13,7 @@ const EMPTY_ITEM: ServiceTemplateItem = {
   descripcion: '',
   cantidad: 1,
   precio_unitario: 0,
-  x_pagar: 0,
+  costo_unitario: 0,
   responsable_nombre: null,
   responsable_id: null,
   producto_id: null,

@@ -426,6 +426,15 @@ excepto `corregir_proveedor_cuenta_pagar` (J3).
 > `approve_cotizacion` exige `cliente_id` (`cliente_requerido`, P1418). Sale `POST
 > /api/proyectos` (sin llamadores ni validación). Lecturas de `cuentas_*`: mismas salidas
 > (foto dorada y comparación local idénticas) y mismo contrato posicional.
+>
+> **B5c (`20261025`, manual por DROP):** `items_cotizacion.x_pagar` → `costo_unitario`,
+> `productos.x_pagar_sugerido` → `costo_unitario_sugerido`, llave JSON de plantillas; sale
+> `items_cotizacion.responsable_nombre` (las RPCs devuelven el nombre resuelto y la importación
+> masiva sigue aceptándolo como entrada); `CHECK` de importe/margen (A6) y de
+> `cotizaciones.fecha_entrega` (G5); triggers que congelan renglones y totales de una cotización
+> APROBADA (P1419); estado solo por RPC (L1: `save`/`patch_general` → `estado_invalido`, el
+> cliente emite con `emitirCotizacion`; `estado` sale de los schemas). Los fixtures `live` y el
+> seed crean las cotizaciones EMITIDAS y las aprueban después de sembrar los renglones.
 
 Funciones (disjuntas de B5a): `approve_cotizacion`,
 `reasignar_responsable_cuenta_pagar`, `corregir_proveedor_cuenta_pagar`,

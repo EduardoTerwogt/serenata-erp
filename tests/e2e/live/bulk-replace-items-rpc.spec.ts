@@ -62,7 +62,7 @@ test.describe('live: bulk_replace_items_cotizacion -- P1410 por fila borrada con
         cliente: `${PREFIJO}${suffix}`,
         proyecto: `Bulk RPC ${suffix}`,
         estado: 'BORRADOR',
-        items: [{ categoria: 'Equipo', descripcion: 'Item original', cantidad: 1, precio_unitario: 100, x_pagar: 0, orden: 0 }],
+        items: [{ categoria: 'Equipo', descripcion: 'Item original', cantidad: 1, precio_unitario: 100, costo_unitario: 0, orden: 0 }],
       },
     })
     expect(createResponse.status(), `no se pudo crear la cotización de prueba: ${await createResponse.text()}`).toBe(201)
@@ -90,7 +90,7 @@ test.describe('live: bulk_replace_items_cotizacion -- P1410 por fila borrada con
       p_cotizacion_id: cotizacionId,
       p_items: [{
         id: itemId, categoria: 'Equipo', descripcion: 'Item recreado por error', cantidad: 1,
-        precio_unitario: 100, importe: 100, x_pagar: 0, margen: 100, orden: 0,
+        precio_unitario: 100, importe: 100, costo_unitario: 0, margen: 100, orden: 0,
       }],
       p_reemplazar_ids: [{ id: itemId, revision: snapshotRevision }],
     })

@@ -6,22 +6,22 @@ export function toNumberOrZero(value: number | '' | null | undefined): number {
 
 export function normalizeQuotationItem(item: QuotationFormItem): QuotationComputedItem {
   const precio_unitario = toNumberOrZero(item.precio_unitario)
-  const x_pagar = toNumberOrZero(item.x_pagar)
+  const costo_unitario = toNumberOrZero(item.costo_unitario)
   const cantidad = item.cantidad || 0
   const importe = cantidad * precio_unitario
-  // Bloque 3 (docs/PLAN.md): x_pagar es el Costo Unitario -- el costo real
-  // del renglón es costo_total = x_pagar * cantidad. Único lugar del
+  // Bloque 3 (docs/PLAN.md): costo_unitario es el Costo Unitario -- el costo real
+  // del renglón es costo_total = costo_unitario * cantidad. Único lugar del
   // frontend que calcula esta fórmula; todo consumidor derivado
   // (calculateEstimatedTaxes, la columna "Costo Total" en Partidas) parte
-  // de este campo, nunca de x_pagar suelto.
-  const costo_total = x_pagar * cantidad
+  // de este campo, nunca de costo_unitario suelto.
+  const costo_total = costo_unitario * cantidad
   const margen = importe - costo_total
 
   return {
     ...item,
     cantidad,
     precio_unitario,
-    x_pagar,
+    costo_unitario,
     importe,
     costo_total,
     margen,

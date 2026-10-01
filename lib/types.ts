@@ -123,7 +123,7 @@ export interface ItemCotizacion {
   importe: number
   responsable_nombre: string | null
   responsable_id: string | null
-  x_pagar: number
+  costo_unitario: number
   margen: number
   orden: number
   notas?: string | null
@@ -135,7 +135,7 @@ export interface Producto {
   descripcion: string
   categoria: string | null
   precio_unitario: number
-  x_pagar_sugerido: number
+  costo_unitario_sugerido: number
   activo: boolean
   created_at: string
 }
@@ -145,7 +145,7 @@ export interface ServiceTemplateItem {
   descripcion: string
   cantidad: number
   precio_unitario: number
-  x_pagar: number
+  costo_unitario: number
   responsable_nombre?: string | null
   responsable_id?: string | null
   producto_id?: string | null

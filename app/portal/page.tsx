@@ -60,7 +60,7 @@ interface GrupoPortalItem {
   id: string
   item_descripcion: string | null
   cantidad: number
-  x_pagar: number
+  costo_total: number
   cotizacion_id: string
 }
 

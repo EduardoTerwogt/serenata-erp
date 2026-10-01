@@ -7,7 +7,7 @@ export const ServiceTemplateItemSchema = z.object({
   descripcion: z.string().min(1, 'La descripción es requerida'),
   cantidad: z.coerce.number().min(0.01, 'La cantidad debe ser mayor a 0').default(1),
   precio_unitario: z.union([z.coerce.number().min(0), z.literal('')]).transform(v => v === '' ? 0 : Number(v)).default(0),
-  x_pagar: z.union([z.coerce.number().min(0), z.literal('')]).transform(v => v === '' ? 0 : Number(v)).default(0),
+  costo_unitario: z.union([z.coerce.number().min(0), z.literal('')]).transform(v => v === '' ? 0 : Number(v)).default(0),
   responsable_nombre: z.string().nullable().optional(),
   responsable_id: z.string().nullable().optional(),
   producto_id: z.string().nullable().optional(),
@@ -29,7 +29,7 @@ export const ItemCotizacionSchema = z.object({
   descripcion: z.string().min(1, 'La descripción del item es requerida'),
   cantidad: z.coerce.number().min(0).default(0),
   precio_unitario: z.union([z.coerce.number().min(0), z.literal('')]).default(0),
-  x_pagar: z.union([z.coerce.number().min(0), z.literal('')]).default(0),
+  costo_unitario: z.union([z.coerce.number().min(0), z.literal('')]).default(0),
   responsable_id: z.string().nullable().optional().transform(v => v ?? ''),
   responsable_nombre: z.string().nullable().optional().transform(v => v ?? ''),
   notas: z.string().nullable().optional(),
@@ -42,9 +42,9 @@ const CotizacionBaseSchema = z.object({
   cliente: z.string().min(1, 'El cliente es requerido'),
   cliente_id: z.string().uuid().nullable().optional(),
   proyecto: z.string().min(1, 'El proyecto es requerido'),
-  fecha_entrega: z.string().nullable().optional(),
+  // G5: AAAA-MM-DD o vacío (el servidor normaliza '' a NULL).
+  fecha_entrega: z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'La fecha de entrega debe ser AAAA-MM-DD').nullable().optional(),
   locacion: z.string().nullable().optional(),
-  estado: z.enum(['BORRADOR', 'EMITIDA', 'APROBADA', 'CANCELADA']).optional(),
   tipo: z.enum(['PRINCIPAL', 'COMPLEMENTARIA']).optional(),
   es_complementaria_de: z.string().nullable().optional(),
   porcentaje_fee: z.coerce.number().min(0).max(1).optional().default(0.15),
@@ -118,7 +118,7 @@ export const ClienteUpdateSchema = z.object({
 // ==================== PROYECTOS ====================
 
 export const ProyectoUpdateSchema = z.object({
-  fecha_entrega: z.string().nullable().optional(),
+  fecha_entrega: z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'La fecha de entrega debe ser AAAA-MM-DD').nullable().optional(),
   locacion: z.string().nullable().optional(),
   horarios: z.string().nullable().optional(),
   punto_encuentro: z.string().nullable().optional(),

@@ -59,13 +59,21 @@ describe('CotizacionCreateSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('rechaza estado no válido', () => {
+  it('L1: el estado no viaja en el guardado (se ignora; cambia solo por RPC)', () => {
     const result = CotizacionCreateSchema.safeParse({
       cliente: 'Coca Cola',
       proyecto: 'Spot TV',
-      estado: 'INVALIDO',
+      estado: 'APROBADA',
     })
-    expect(result.success).toBe(false)
+    expect(result.success).toBe(true)
+    expect(result.success && 'estado' in result.data).toBe(false)
+  })
+
+  it('G5: la fecha de entrega es AAAA-MM-DD o vacía', () => {
+    const base = { cliente: 'Coca Cola', proyecto: 'Spot TV' }
+    expect(CotizacionCreateSchema.safeParse({ ...base, fecha_entrega: '2026-10-05' }).success).toBe(true)
+    expect(CotizacionCreateSchema.safeParse({ ...base, fecha_entrega: '' }).success).toBe(true)
+    expect(CotizacionCreateSchema.safeParse({ ...base, fecha_entrega: '05/10/2026' }).success).toBe(false)
   })
 
   it('acepta tipo COMPLEMENTARIA', () => {
@@ -95,7 +103,7 @@ describe('CotizacionCreateSchema', () => {
     const result = CotizacionCreateSchema.safeParse({
       cliente: 'Test',
       proyecto: 'Test',
-      items: [{ descripcion: 'Camera', cantidad: 1, precio_unitario: 1000, x_pagar: 500 }],
+      items: [{ descripcion: 'Camera', cantidad: 1, precio_unitario: 1000, costo_unitario: 500 }],
     })
     expect(result.success).toBe(true)
   })
@@ -150,9 +158,9 @@ describe('CotizacionUpdateSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('rechaza estado no válido', () => {
-    const result = CotizacionUpdateSchema.safeParse({ estado: 'ELIMINADA' })
-    expect(result.success).toBe(false)
+  it('L1: ignora el estado (no se puede cambiar por el PUT)', () => {
+    const result = CotizacionUpdateSchema.safeParse({ estado: 'APROBADA' })
+    expect(result.success && 'estado' in result.data).toBe(false)
   })
 })
 

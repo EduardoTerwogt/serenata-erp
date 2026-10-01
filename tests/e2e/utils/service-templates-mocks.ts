@@ -8,7 +8,7 @@ interface ServiceTemplateItemMock {
   descripcion: string
   cantidad: number
   precio_unitario: number
-  x_pagar: number
+  costo_unitario: number
   responsable_nombre: string | null
   responsable_id: string | null
   producto_id: string | null
@@ -30,7 +30,7 @@ export async function mockServiceTemplatesApis(page: Page) {
     nombre: 'Low Clika',
     descripcion: 'Paquete básico',
     items: [
-      { categoria: 'Producción', descripcion: 'Backline', cantidad: 1, precio_unitario: 3000, x_pagar: 1500, responsable_nombre: null, responsable_id: null, producto_id: null },
+      { categoria: 'Producción', descripcion: 'Backline', cantidad: 1, precio_unitario: 3000, costo_unitario: 1500, responsable_nombre: null, responsable_id: null, producto_id: null },
     ],
     activo: true,
     created_at: '2026-01-01T00:00:00Z',

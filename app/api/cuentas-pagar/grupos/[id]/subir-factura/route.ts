@@ -32,7 +32,7 @@ function extractFacturaFechaFromXml(xmlContent: string): string | null {
 // (que se deja intacta para las cuentas legacy sin grupo -- docs/PLAN.md,
 // Bloque 3). Misma validación fiscal (validarFacturaFiscalProveedor,
 // agnóstica del origen del monto), pero contra grupo.monto_total en vez de
-// cuenta.x_pagar, y el documento cuelga de grupo_id.
+// cuenta.costo_total, y el documento cuelga de grupo_id.
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response

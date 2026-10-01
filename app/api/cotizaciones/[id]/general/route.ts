@@ -27,6 +27,10 @@ export async function PATCH(
     const { id } = await params
     const body = await request.json().catch(() => ({}))
 
+    if (typeof body?.fecha_entrega === 'string' && !/^(\d{4}-\d{2}-\d{2})?$/.test(body.fecha_entrega.trim())) {
+      return Response.json({ error: 'La fecha de entrega debe ser AAAA-MM-DD' }, { status: 400 })
+    }
+
     // Solo viajan las claves que llegaron: la RPC conserva el resto de la fila.
     const patch: Record<string, unknown> = {
       ...(typeof body?.cliente === 'string' ? { cliente: body.cliente } : {}),
@@ -52,6 +56,9 @@ export async function PATCH(
     })
     if (error) throw error
     if (!data) return Response.json({ error: 'Cotización no encontrada' }, { status: 404 })
+    if (typeof data === 'object' && data !== null && 'estado_invalido' in data) {
+      return Response.json({ error: 'estado_invalido', estado_actual: (data as { estado_actual?: string | null }).estado_actual ?? null }, { status: 409 })
+    }
     if (typeof data === 'object' && data !== null && 'conflict' in data) {
       return Response.json({ error: 'conflict', entity: 'cotizacion_general', id, fields: (data as { conflict: unknown }).conflict }, { status: 409 })
     }

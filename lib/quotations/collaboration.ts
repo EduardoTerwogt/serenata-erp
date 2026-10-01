@@ -95,7 +95,7 @@ export function buildItemFieldBase(server: ItemCotizacion | undefined, field: Qu
     case 'descripcion': return { descripcion: server.descripcion ?? '' }
     case 'cantidad': return { cantidad: server.cantidad ?? 0 }
     case 'precio_unitario': return { precio_unitario: server.precio_unitario ?? 0 }
-    case 'x_pagar': return { x_pagar: server.x_pagar ?? 0 }
+    case 'costo_unitario': return { costo_unitario: server.costo_unitario ?? 0 }
     case 'responsable_id': return { responsable_id: server.responsable_id ?? '', responsable_nombre: server.responsable_nombre ?? '' }
   }
 }
@@ -153,7 +153,7 @@ export function normalizeItemFieldValue(field: QuotationItemCellField, value: un
     case 'cantidad':
       return Number(value) || 0
     case 'precio_unitario':
-    case 'x_pagar':
+    case 'costo_unitario':
       return value === '' || value === null || value === undefined ? 0 : Number(value) || 0
   }
 }
@@ -188,6 +188,6 @@ export function mapItemToFormItem(item: ItemCotizacion): QuotationFormValues['it
     precio_unitario: item.precio_unitario || 0,
     responsable_id: item.responsable_id || '',
     responsable_nombre: item.responsable_nombre || '',
-    x_pagar: item.x_pagar || 0,
+    costo_unitario: item.costo_unitario || 0,
   }
 }

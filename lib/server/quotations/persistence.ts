@@ -1,11 +1,15 @@
-import { getCotizacionById } from '@/lib/db'
+import { getCotizacionById, EstadoCotizacionInvalidoError } from '@/lib/db'
 import { buildPersistedQuotationItems, buildQuotationPersistenceData } from '@/lib/quotations/mappers'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { ItemCotizacion } from '@/lib/types'
 
 async function saveCotizacionAtomic(payload: Record<string, unknown>) {
-  const { error } = await supabaseAdmin.rpc('save_cotizacion', { p_data: payload })
+  const { data, error } = await supabaseAdmin.rpc('save_cotizacion', { p_data: payload })
   if (error) throw error
+  // L1: guardar solo aplica a BORRADOR/EMITIDA; el estado cambia solo por RPC.
+  if (data && typeof data === 'object' && 'estado_invalido' in data) {
+    throw new EstadoCotizacionInvalidoError((data as { estado_actual?: string | null }).estado_actual ?? null)
+  }
 }
 
 /**
@@ -37,7 +41,7 @@ export async function autosaveProductosCatalogo(items: Partial<ItemCotizacion>[]
       descripcion,
       categoria: String(item.categoria || '').trim() || null,
       precio_unitario: item.precio_unitario ?? 0,
-      x_pagar_sugerido: item.x_pagar ?? 0,
+      costo_unitario_sugerido: item.costo_unitario ?? 0,
       activo: true,
     })
   }
@@ -148,7 +152,6 @@ export async function buildCreateCotizacionPayload(
     fecha_cotizacion: fechaCotizacion,
     tipo: cotizacionData.tipo ?? cotizacionActual?.tipo ?? 'PRINCIPAL',
     es_complementaria_de: cotizacionData.es_complementaria_de ?? cotizacionActual?.es_complementaria_de ?? null,
-    estado: cotizacionData.estado ?? cotizacionActual?.estado ?? 'BORRADOR',
     ...persistenceData,
     items: itemsPayload,
   }
@@ -171,7 +174,6 @@ export async function buildUpdateCotizacionPayload(
     fecha_cotizacion: string | null
     tipo?: string | null
     es_complementaria_de?: string | null
-    estado?: string | null
     porcentaje_fee?: number | null
     iva_activo?: boolean | null
     descuento_tipo?: 'monto' | 'porcentaje' | null
@@ -225,7 +227,6 @@ export async function buildUpdateCotizacionPayload(
     fecha_cotizacion: previousCotizacion.fecha_cotizacion,
     tipo: cotizacionData.tipo ?? previousCotizacion.tipo ?? 'PRINCIPAL',
     es_complementaria_de: cotizacionData.es_complementaria_de ?? previousCotizacion.es_complementaria_de ?? null,
-    estado: cotizacionData.estado ?? previousCotizacion.estado ?? 'BORRADOR',
     ...persistenceData,
     items: itemsPayload,
   }

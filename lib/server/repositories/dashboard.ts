@@ -172,7 +172,7 @@ type CotizacionReciente = Pick<Cotizacion, 'id' | 'proyecto' | 'cliente' | 'tota
  * EF-3 3B-10 (F13): agregados que antes traían la tabla completa a Node
  * (cuentas_cobrar/cuentas_pagar/cotizaciones/proyectos) ahora se calculan
  * en SQL (db/migrations/20260916_dashboard_agregados_sql.sql). Egresos por
- * bucket = suma de x_pagar de cuentas_pagar totalmente liquidadas (estado
+ * bucket = suma de costo_total de cuentas_pagar totalmente liquidadas (estado
  * PAGADO) cuya fecha_pago cae en el rango -- misma limitación conocida y
  * documentada (ver 20260905_atomic_registrar_pago_cuenta_pagar.sql): sin
  * ledger de abonos, un abono parcial suelto no cuenta aquí hasta que la

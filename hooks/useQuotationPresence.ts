@@ -5,7 +5,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useRealtimeChannel } from '@/lib/realtime/useRealtimeChannel'
 
 export type QuotationPresenceSection = 'notas' | 'general' | 'partidas' | 'totales'
-export type QuotationItemCellField = 'categoria' | 'descripcion' | 'cantidad' | 'precio_unitario' | 'responsable_id' | 'x_pagar'
+export type QuotationItemCellField = 'categoria' | 'descripcion' | 'cantidad' | 'precio_unitario' | 'responsable_id' | 'costo_unitario'
 
 interface CurrentUser {
   id?: string | null

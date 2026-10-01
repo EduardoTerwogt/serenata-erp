@@ -36,7 +36,7 @@ const PRODUCTO_AUTOFILL = {
   descripcion: 'Grúa E2E Fase8 Autofill',
   categoria: 'Grip',
   precio_unitario: 55555,
-  x_pagar_sugerido: 20000,
+  costo_unitario_sugerido: 20000,
 }
 
 // Mismo valor que RECONCILIACION_MS en app/cotizaciones/[id]/page.tsx: el poll de
@@ -123,7 +123,7 @@ async function crearCotizacion(page: Page, cliente: string, proyecto: string, de
         descripcion: item.descripcion,
         cantidad: 1,
         precio_unitario: item.precio,
-        x_pagar: 0,
+        costo_unitario: 0,
         orden: index,
       })),
     },
@@ -286,7 +286,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
 
     await expect.poll(async () => {
       const cotizacion = await leerCotizacionDelServidor(cotizacionId)
-      return { xPagar: cotizacion.items[1].x_pagar, cantidad: cotizacion.items[2].cantidad }
+      return { xPagar: cotizacion.items[1].costo_unitario, cantidad: cotizacion.items[2].cantidad }
     }, { timeout: 30_000 }).toEqual({ xPagar: 9000, cantidad: 4 })
 
     await expect(xPagarA).toHaveValue('9000', { timeout: 30_000 })
@@ -748,11 +748,11 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     const { proyecto, cuentasPagar, cuentaCobrar } = await leerProyectoYCuentasDelServidor(cotizacionId)
     expect(proyecto).toBeTruthy()
     expect(cuentaCobrar).toBeTruthy()
-    // Invariante real, no un conteo fijo: el estado acumulado de x_pagar por item
+    // Invariante real, no un conteo fijo: el estado acumulado de costo_unitario por item
     // varía según los tests anteriores de este describe.serial -- lo que importa es
-    // que cada partida con x_pagar > 0 tenga su fila en cuentas_pagar, ni de más ni
+    // que cada partida con costo_unitario > 0 tenga su fila en cuentas_pagar, ni de más ni
     // de menos.
-    const itemsConXPagar = cotizacion.items.filter((item) => item.x_pagar > 0).length
+    const itemsConXPagar = cotizacion.items.filter((item) => item.costo_unitario > 0).length
     expect(cuentasPagar).toHaveLength(itemsConXPagar)
   })
 
@@ -808,10 +808,10 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     try {
       const inicial = await leerCotizacionDelServidor(raceId)
       const itemId = inicial.items[0].id
-      // x_pagar > 0 para que approve_cotizacion también cree una cuenta por
+      // costo_unitario > 0 para que approve_cotizacion también cree una cuenta por
       // pagar -- si no, la invariante de abajo (cuentasPagar.length ===
       // itemsConXPagar) sería trivialmente 0 = 0 y no probaría nada.
-      const setXPagar = await pageA.request.patch(`/api/cotizaciones/${raceId}/items/${itemId}`, { data: { x_pagar: 3000 } })
+      const setXPagar = await pageA.request.patch(`/api/cotizaciones/${raceId}/items/${itemId}`, { data: { costo_unitario: 3000 } })
       expect(setXPagar.ok(), await setXPagar.text()).toBeTruthy()
 
       const emitirResponse = await pageA.request.post(`/api/cotizaciones/${raceId}/emitir`)
@@ -848,7 +848,7 @@ test.describe('live: colaboración real entre dos usuarios', () => {
       // Invariante real sea cual sea el ganador: cuentas_pagar corresponde
       // exactamente al snapshot de items_cotizacion que quedó vigente --
       // nunca calculado de una versión distinta a la que terminó aprobada.
-      const itemsConXPagar = final.items.filter((item) => item.x_pagar > 0).length
+      const itemsConXPagar = final.items.filter((item) => item.costo_unitario > 0).length
       expect(cuentasPagar).toHaveLength(itemsConXPagar)
     } finally {
       await cleanupLiveCotizacion(raceId).catch((e) => console.error('[live colab] cleanup race:', e))

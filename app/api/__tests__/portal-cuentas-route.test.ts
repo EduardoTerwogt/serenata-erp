@@ -63,8 +63,8 @@ describe('GET /api/portal/cuentas', () => {
         monto_transferido: 0,
         saldo_por_transferir: 1740,
         items: [
-          { id: 'c1', item_descripcion: 'Renta cámara', cantidad: 1, x_pagar: 1000, cotizacion_id: 'SH001' },
-          { id: 'c2', item_descripcion: 'Grip', cantidad: 1, x_pagar: 500, cotizacion_id: 'SH001' },
+          { id: 'c1', item_descripcion: 'Renta cámara', cantidad: 1, costo_total: 1000, cotizacion_id: 'SH001' },
+          { id: 'c2', item_descripcion: 'Grip', cantidad: 1, costo_total: 500, cotizacion_id: 'SH001' },
         ],
       },
     ])
@@ -106,7 +106,7 @@ describe('GET /api/portal/cuentas', () => {
         total_a_transferir: 580,
         monto_transferido: 0,
         saldo_por_transferir: 580,
-        items: [{ id: 'c3', item_descripcion: 'Edición', cantidad: 1, x_pagar: 500, cotizacion_id: 'SH002' }],
+        items: [{ id: 'c3', item_descripcion: 'Edición', cantidad: 1, costo_total: 500, cotizacion_id: 'SH002' }],
       },
     ])
   })

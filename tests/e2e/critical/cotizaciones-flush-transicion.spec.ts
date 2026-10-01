@@ -263,7 +263,7 @@ test.describe('flush previo a Generar/Aprobar -- las 5 vías que faltaban', () =
     const id = 'SH-E2E-FLUSH-PRODUCTO-GENERAR'
     const cotizacion = await mockCotizacionDetailApis(page, {
       id, estado: 'BORRADOR', itemLatencyMs: 300,
-      productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
+      productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, costo_unitario_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
     })
     await mockEmitir(page, id, cotizacion)
     await login(page, `/cotizaciones/${id}`)
@@ -292,7 +292,7 @@ test.describe('flush previo a Generar/Aprobar -- las 5 vías que faltaban', () =
     const id = 'SH-E2E-FLUSH-PRODUCTO-APROBAR'
     await mockCotizacionDetailApis(page, {
       id, estado: 'EMITIDA', itemLatencyMs: 300,
-      productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
+      productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, costo_unitario_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
     })
     await login(page, `/cotizaciones/${id}`)
     await expect(page.getByRole('heading', { name: id })).toBeVisible()
@@ -368,8 +368,8 @@ test.describe('flush previo a Generar/Aprobar -- las 5 vías que faltaban', () =
     await mockCotizacionDetailApis(page, {
       id, estado: 'EMITIDA', itemLatencyMs: 300,
       items: [
-        { id: 'item-detail-1', cotizacion_id: id, categoria: 'Producción', descripcion: 'Renta de cámara', cantidad: 1, precio_unitario: 15000, importe: 15000, responsable_nombre: 'Sofía Ramírez', responsable_id: 'resp-1', x_pagar: 6000, margen: 9000, orden: 1, notas: null },
-        { id: 'item-detail-2', cotizacion_id: id, categoria: 'Audio', descripcion: 'Boom más micrófono', cantidad: 1, precio_unitario: 5000, importe: 5000, responsable_nombre: null, responsable_id: null, x_pagar: 2000, margen: 3000, orden: 2, notas: null },
+        { id: 'item-detail-1', cotizacion_id: id, categoria: 'Producción', descripcion: 'Renta de cámara', cantidad: 1, precio_unitario: 15000, importe: 15000, responsable_nombre: 'Sofía Ramírez', responsable_id: 'resp-1', costo_unitario: 6000, margen: 9000, orden: 1, notas: null },
+        { id: 'item-detail-2', cotizacion_id: id, categoria: 'Audio', descripcion: 'Boom más micrófono', cantidad: 1, precio_unitario: 5000, importe: 5000, responsable_nombre: null, responsable_id: null, costo_unitario: 2000, margen: 3000, orden: 2, notas: null },
       ],
     })
     await login(page, `/cotizaciones/${id}`)
@@ -397,7 +397,7 @@ test.describe('flush previo a Generar/Aprobar -- las 5 vías que faltaban', () =
       id, estado: 'EMITIDA', itemLatencyMs: 300,
       templates: [{
         id: 'tpl-1', nombre: 'Paquete básico', descripcion: null, activo: true,
-        items: [{ categoria: 'Producción', descripcion: 'Cámara', cantidad: 1, precio_unitario: 10000, x_pagar: 4000 }],
+        items: [{ categoria: 'Producción', descripcion: 'Cámara', cantidad: 1, precio_unitario: 10000, costo_unitario: 4000 }],
       }],
     })
     await login(page, `/cotizaciones/${id}`)
@@ -456,7 +456,7 @@ test.describe('flush previo a Generar/Aprobar -- las 5 vías que faltaban', () =
     const id = 'SH-E2E-FLUSH-PRODUCTO-DOBLE-CLICK'
     await mockCotizacionDetailApis(page, {
       id, estado: 'EMITIDA', itemLatencyMs: 300,
-      productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, x_pagar_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
+      productos: [{ id: 'prod-1', descripcion: 'Renta de grúa Technocrane', categoria: 'Grip', precio_unitario: 25000, costo_unitario_sugerido: 12000, activo: true, created_at: '2026-01-01' }],
     })
     let aprobarCallCount = 0
     await page.route(`**/api/cotizaciones/${id}/aprobar`, async (route) => {

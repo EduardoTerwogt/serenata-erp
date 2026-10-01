@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-01T22:48:51.158Z",
-  "count": 136,
+  "generated_at": "2026-10-01T22:55:46.023Z",
+  "count": 137,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -137,6 +137,7 @@
     "20261021_b5b_estado_cobro_generado.sql",
     "20261022_b5b_sync_vencidas_inerte.sql",
     "20261023_b5b_cuentas_pagar_al_dueno.sql",
-    "20261024_b5b_modelo_final_cuentas.sql"
+    "20261024_b5b_modelo_final_cuentas.sql",
+    "20261025_b5c_renglones_nomenclatura.sql"
   ]
 }

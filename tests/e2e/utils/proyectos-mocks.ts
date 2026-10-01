@@ -29,7 +29,7 @@ export async function mockProyectosApis(page: Page) {
         importe: 15000,
         responsable_nombre: 'Sofía Ramírez',
         responsable_id: 'resp-1',
-        x_pagar: 6000,
+        costo_unitario: 6000,
         margen: 9000,
         orden: 1,
         notas: null,

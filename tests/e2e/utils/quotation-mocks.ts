@@ -47,7 +47,7 @@ export async function mockNuevaCotizacionApis(page: Page) {
         descripcion: 'Backline',
         categoria: 'Producción',
         precio_unitario: 1000,
-        x_pagar_sugerido: 700,
+        costo_unitario_sugerido: 700,
       },
     ])
   })

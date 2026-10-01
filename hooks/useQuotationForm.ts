@@ -157,7 +157,7 @@ export function useQuotationForm(
   const handleDescripcionChange = useCallback((rowId: string, valor: string) => {
     const index = indexOfRow(rowId)
     if (index < 0) return
-    // Solo se actualiza la descripción: el precio y el x_pagar únicamente cambian
+    // Solo se actualiza la descripción: el precio y el costo_unitario únicamente cambian
     // cuando el usuario elige explícitamente una sugerencia (seleccionarProducto).
     // Limpiarlos aquí borraba precios ya capturados al corregir una descripción.
     setValue(`items.${index}.descripcion`, valor)
@@ -183,8 +183,8 @@ export function useQuotationForm(
     if (producto.precio_unitario > 0) {
       setValue(`items.${index}.precio_unitario`, producto.precio_unitario)
     }
-    if ((producto.x_pagar_sugerido || 0) > 0) {
-      setValue(`items.${index}.x_pagar`, producto.x_pagar_sugerido || 0)
+    if ((producto.costo_unitario_sugerido || 0) > 0) {
+      setValue(`items.${index}.costo_unitario`, producto.costo_unitario_sugerido || 0)
     }
     setProductoSugerencias((prev) => ({ ...prev, [rowId]: [] }))
     setMostrarProductoDropdown((prev) => ({ ...prev, [rowId]: false }))

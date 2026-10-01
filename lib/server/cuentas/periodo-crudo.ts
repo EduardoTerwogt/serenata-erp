@@ -61,7 +61,7 @@ export interface PagoAnioRaw {
   responsable_id: string | null
   responsable_nombre: string | null
   item_descripcion: string | null
-  x_pagar: number
+  costo_total: number
   monto_pagado: number
   total_a_transferir: number | null
   monto_transferido: number
@@ -148,7 +148,7 @@ export function decodificarCuentasAnio(data: unknown): CuentasAnioRaw {
       responsable_id: str(f[4]),
       responsable_nombre: str(f[5]),
       item_descripcion: str(f[6]),
-      x_pagar: num(f[7]),
+      costo_total: num(f[7]),
       monto_pagado: num(f[8]),
       total_a_transferir: numOrNull(f[9]),
       monto_transferido: num(f[10]),

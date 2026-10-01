@@ -86,7 +86,7 @@ function grupoFilas(id: string) {
     cotizacion_id: p.id,
     item_descripcion: n > 1 ? `${concepto} · parte ${i + 1}` : concepto,
     cantidad: 1,
-    x_pagar: r2(neto / n),
+    costo_total: r2(neto / n),
     monto_pagado: pagado ? r2(neto / n) : 0,
     responsable_nombre: prov,
     correo: null,

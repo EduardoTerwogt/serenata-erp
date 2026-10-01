@@ -218,7 +218,7 @@ recibirlos del nuevo hook.
 - **Conflictos por campo con `409`.** No es last-write-wins ciego: se compara contra
   la base del campo y un conflicto real devuelve `409` al caller. Un PATCH
   multi-campo (autofill de producto: `descripcion`/`categoria`/`precio_unitario`/
-  `x_pagar`; responsable: `responsable_id`/`responsable_nombre`) es atómico en la
+  `costo_unitario`; responsable: `responsable_id`) es atómico en la
   RPC — si CUALQUIER campo choca, se rechaza completo, nada se aplica a medias
   (Fase 8.7.2). La resolución respeta esa atomicidad: "Usar" revierte TODOS los
   campos del grupo al valor real del servidor, "Mantener" reintenta el PATCH
@@ -318,7 +318,7 @@ retry de red o pestaña caída a medio submit, contra `withIdempotency`
 ## Cuentas por Pagar agrupadas por proveedor+proyecto
 
 `cuentas_pagar` sigue siendo el ledger detallado por renglón (1:1 con
-`items_cotizacion`, `x_pagar > 0`) — `cuentas_pagar_grupos` es una capa de
+`items_cotizacion`, `costo_unitario > 0`) — `cuentas_pagar_grupos` es una capa de
 agrupación encima, no un reemplazo. Un proveedor con varios renglones
 dentro del mismo proyecto factura y cobra el **total acumulado del grupo**,
 no renglón por renglón. Por qué se diseñó así, alternativas descartadas y
@@ -346,6 +346,16 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   `cotizaciones!proyectos_id_fkey(...)` en TS, `LEFT JOIN` en SQL); `approve_cotizacion` exige
   `cliente_id`. `proyectos.fecha_entrega` es `date`. `historial_responsable` es una vista
   calculada de los renglones de proyectos cerrados, no una tabla.
+- **Renglones y cotización aprobada (B5c, migración `20261025`).** `items_cotizacion` guarda
+  `costo_unitario` (no `x_pagar`) y ya no guarda el nombre del responsable: las RPCs y los
+  repositorios lo devuelven resuelto desde `proveedores` (`item_cotizacion_json`, embed
+  `proveedores(nombre)`). `CHECK`s de importe y margen (tolerancia de un centavo) y de formato de
+  `cotizaciones.fecha_entrega`. Dos triggers (`P1419`) impiden cambiar dinero, descripción,
+  totales o `cliente_id` de una cotización APROBADA y sacarla de APROBADA salvo a CANCELADA
+  (`notas` y la reasignación de proveedor siguen permitidas). El estado cambia solo por RPC
+  (`emitir`, `aprobar`, `cancelar`): `save_cotizacion` y `patch_cotizacion_general` rechazan
+  cotizaciones fuera de BORRADOR/EMITIDA (`estado_invalido`, 409) y el cliente emite con
+  `emitirCotizacion` tras guardar.
 - Un índice único parcial (`cuentas_pagar_grupos_abierto_unique` sobre
   `(proyecto_id, responsable_id) WHERE estado = 'ABIERTO'`) es lo que hace
   segura la creación de grupos bajo concurrencia — dos aprobaciones casi
@@ -358,7 +368,7 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   dentro de la misma transacción; solo una excepción real hace que Postgres
   revierta también esas escrituras previas, no solo la reconciliación.
 - `registrar_pago_grupo_factura` prorratea el pago hacia las cuentas hija
-  sobre su **saldo pendiente** (no su `x_pagar` original), con la última
+  sobre su **saldo pendiente** (no su `costo_total` original), con la última
   hija (orden estable por `id`) recibiendo el residuo exacto — garantiza
   `SUM(hijas.monto_pagado) = grupo.monto_pagado` siempre, incluso en pagos
   parciales sucesivos. Idempotencia por `pago_operations` + `operation_id`. Los
@@ -392,7 +402,7 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
 - El detalle de un concepto (`app/cuentas/components/detalle/`) muestra el
   grupo de facturación con sus renglones cuando el pago es un grupo; el
   cruce fiscal se calcula sobre `grupo.monto_total`, nunca sobre el
-  `x_pagar` del renglón individual.
+  `costo_unitario` del renglón individual.
 
 ## Cuentas: lectura por periodo (rediseño, docs/decisions/017)
 

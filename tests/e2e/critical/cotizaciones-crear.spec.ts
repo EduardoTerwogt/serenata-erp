@@ -19,7 +19,7 @@ test('crea una cotización nueva en BORRADOR', async ({ page }) => {
       proyecto: 'Show Monterrey',
       estado: 'BORRADOR',
       items: [
-        { id: 'item-1', cotizacion_id: 'SH-E2E-CREAR', categoria: 'Producción', descripcion: 'Backline', cantidad: 1, precio_unitario: 1000, importe: 1000, responsable_nombre: null, responsable_id: null, x_pagar: 0, margen: 1000, orden: 1, notas: null },
+        { id: 'item-1', cotizacion_id: 'SH-E2E-CREAR', categoria: 'Producción', descripcion: 'Backline', cantidad: 1, precio_unitario: 1000, importe: 1000, responsable_nombre: null, responsable_id: null, costo_unitario: 0, margen: 1000, orden: 1, notas: null },
       ],
     })
   })
@@ -36,7 +36,9 @@ test('crea una cotización nueva en BORRADOR', async ({ page }) => {
   // Sin botón de guardar: el borrador se crea solo (proyecto + partida con
   // descripción) y la pantalla se queda en /nueva con el folio ya reservado.
   await expect.poll(() => draftPosts.length, { timeout: 10_000 }).toBeGreaterThan(0)
-  expect(draftPosts[0].estado).toBe('BORRADOR')
+  // L1: el estado ya no viaja en el guardado; una cotización nueva nace BORRADOR en la base
+  // y solo cambia por RPC (emitir/aprobar/cancelar).
+  expect(draftPosts[0].estado).toBeUndefined()
   expect(draftPosts[0].proyecto).toBe('Show Monterrey')
 
   await expect(page.getByText('Borrador guardado')).toBeVisible()

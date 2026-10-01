@@ -4,9 +4,9 @@ import { mockNuevaCotizacionApis, assertPayloadValido } from '../utils/quotation
 import { fulfillJson } from '../utils/http'
 
 const TPL = [
-  { categoria: 'Producción', descripcion: 'Cámara ARRI', cantidad: 1, precio_unitario: 12000, x_pagar: 5000 },
-  { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 2, precio_unitario: 4000, x_pagar: 1500 },
-  { categoria: 'Arte', descripcion: 'Utilería', cantidad: 3, precio_unitario: 1500, x_pagar: 600 },
+  { categoria: 'Producción', descripcion: 'Cámara ARRI', cantidad: 1, precio_unitario: 12000, costo_unitario: 5000 },
+  { categoria: 'Producción', descripcion: 'Iluminación', cantidad: 2, precio_unitario: 4000, costo_unitario: 1500 },
+  { categoria: 'Arte', descripcion: 'Utilería', cantidad: 3, precio_unitario: 1500, costo_unitario: 600 },
 ]
 
 async function abrirNueva(page: Parameters<typeof login>[0]) {

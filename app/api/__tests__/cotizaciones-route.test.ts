@@ -107,7 +107,7 @@ describe('POST /api/cotizaciones', () => {
         proyecto: 'Evento de marca',
         fecha_entrega: '2026-04-10',
         locacion: 'CDMX',
-        items: [{ descripcion: 'Audio', precio_unitario: 1000, x_pagar: 800 }],
+        items: [{ descripcion: 'Audio', precio_unitario: 1000, costo_unitario: 800 }],
         porcentaje_fee: 0.15,
         iva_activo: true,
         descuento_tipo: 'monto',
@@ -139,14 +139,14 @@ describe('POST /api/cotizaciones', () => {
     expect(mocks.reserveNextQuotationFolioMock).toHaveBeenCalledWith(undefined)
     expect(mocks.buildCreateCotizacionPayloadMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'SH007', cliente: 'ACME', cliente_id: 'cli-1' }),
-      [{ descripcion: 'Audio', precio_unitario: 1000, x_pagar: 800 }],
+      [{ descripcion: 'Audio', precio_unitario: 1000, costo_unitario: 800 }],
       expect.objectContaining({ forcedFolio: 'SH007', preventOverwrite: true }),
     )
     expect(mocks.createOrReplaceCotizacionMock).toHaveBeenCalledWith({ id: 'SH007', cliente: 'ACME' })
     expect(mocks.consumeReservedQuotationFolioMock).toHaveBeenCalledWith('SH007', 'token-007')
     expect(mocks.resolverClienteIdMock).toHaveBeenCalledWith('ACME')
     expect(mocks.autosaveProductosCatalogoMock).toHaveBeenCalledWith(
-      [{ descripcion: 'Audio', precio_unitario: 1000, x_pagar: 800 }],
+      [{ descripcion: 'Audio', precio_unitario: 1000, costo_unitario: 800 }],
       'POST /api/cotizaciones',
     )
     expect(response.status).toBe(201)

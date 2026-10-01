@@ -19,7 +19,7 @@ describe('buildPersistedQuotationItems', () => {
     descripcion: 'Canon R5',
     cantidad: 2,
     precio_unitario: 1000,
-    x_pagar: 800,
+    costo_unitario: 800,
     responsable_id: null,
     responsable_nombre: null,
     ...overrides,
@@ -49,7 +49,7 @@ describe('buildPersistedQuotationItems', () => {
         cantidad: 2,
         precio_unitario: 1000,
         importe: 2000,
-        x_pagar: 800,
+        costo_unitario: 800,
         margen: 1200,
         orden: 0,
         responsable_id: 'resp-123',
@@ -78,7 +78,7 @@ describe('buildPersistedQuotationItems', () => {
         cantidad: 2,
         precio_unitario: 1000,
         importe: 2000,
-        x_pagar: 800,
+        costo_unitario: 800,
         margen: 1200,
         orden: 0,
         responsable_id: 'resp-123',
@@ -107,7 +107,7 @@ describe('buildPersistedQuotationItems', () => {
 describe('buildQuotationPersistenceData', () => {
   it('retorna todos los campos de totales', () => {
     const result = buildQuotationPersistenceData(
-      [{ descripcion: 'Test', cantidad: 1, precio_unitario: 1000, x_pagar: 500 }],
+      [{ descripcion: 'Test', cantidad: 1, precio_unitario: 1000, costo_unitario: 500 }],
       0.15,
       true,
       'monto',
@@ -130,8 +130,8 @@ describe('buildQuotationPersistenceData', () => {
   it('subtotal = suma de importes de items', () => {
     const result = buildQuotationPersistenceData(
       [
-        { descripcion: 'A', cantidad: 2, precio_unitario: 500, x_pagar: 0 },
-        { descripcion: 'B', cantidad: 1, precio_unitario: 300, x_pagar: 0 },
+        { descripcion: 'A', cantidad: 2, precio_unitario: 500, costo_unitario: 0 },
+        { descripcion: 'B', cantidad: 1, precio_unitario: 300, costo_unitario: 0 },
       ],
       0,
       false,
@@ -215,7 +215,7 @@ describe('isBlankQuotationItem', () => {
       precio_unitario: 0,
       responsable_id: '',
       responsable_nombre: '',
-      x_pagar: 0,
+      costo_unitario: 0,
     })).toBe(true)
   })
 
@@ -231,8 +231,8 @@ describe('isBlankQuotationItem', () => {
     expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, precio_unitario: 1500 })).toBe(false)
   })
 
-  it('no considera en blanco una fila con solo x_pagar o responsable', () => {
-    expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, x_pagar: 800 })).toBe(false)
+  it('no considera en blanco una fila con solo costo_unitario o responsable', () => {
+    expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, costo_unitario: 800 })).toBe(false)
     expect(isBlankQuotationItem({ ...EMPTY_QUOTATION_ITEM, responsable_nombre: 'Ana' })).toBe(false)
   })
 
@@ -305,7 +305,7 @@ describe('draftItemsForSave', () => {
 
 describe('reconcileServerItems', () => {
   const fila = (id: string, over: Partial<typeof EMPTY_QUOTATION_ITEM> = {}) => ({
-    ...EMPTY_QUOTATION_ITEM, id, descripcion: `desc-${id}`, precio_unitario: 100, x_pagar: 40, ...over,
+    ...EMPTY_QUOTATION_ITEM, id, descripcion: `desc-${id}`, precio_unitario: 100, costo_unitario: 40, ...over,
   })
 
   it('toma los valores del servidor cuando no hay nada en edición', () => {
@@ -324,7 +324,7 @@ describe('reconcileServerItems', () => {
     expect(out[0].descripcion).toBe('lo que estoy escribiendo')
     expect(out[0].precio_unitario).toBe(9000)
     // Lo que no está ocupado sí se actualiza.
-    expect(out[0].x_pagar).toBe(40)
+    expect(out[0].costo_unitario).toBe(40)
   })
 
   it('inserta filas nuevas del servidor', () => {

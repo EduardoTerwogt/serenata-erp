@@ -6,7 +6,7 @@ let n = 0
 const nuevoId = () => `local:test-${++n}`
 const blanca = (id?: string) => ({ ...EMPTY_QUOTATION_ITEM, id: id ?? nuevoId() })
 const llena = (descripcion: string) => ({ ...EMPTY_QUOTATION_ITEM, id: nuevoId(), descripcion, precio_unitario: 100 })
-const importado = (descripcion: string) => ({ descripcion, categoria: 'Cat', cantidad: 2, precio_unitario: 500, x_pagar: 200 })
+const importado = (descripcion: string) => ({ descripcion, categoria: 'Cat', cantidad: 2, precio_unitario: 500, costo_unitario: 200 })
 
 describe('mergeImportedIntoBlanks', () => {
   it('sin filas en blanco, agrega todo al final', () => {
@@ -42,6 +42,6 @@ describe('mergeImportedIntoBlanks', () => {
 
   it('copia todos los campos del ítem importado', () => {
     const out = mergeImportedIntoBlanks([blanca()], [importado('Uno')])
-    expect(out[0]).toMatchObject({ categoria: 'Cat', cantidad: 2, precio_unitario: 500, x_pagar: 200 })
+    expect(out[0]).toMatchObject({ categoria: 'Cat', cantidad: 2, precio_unitario: 500, costo_unitario: 200 })
   })
 })
