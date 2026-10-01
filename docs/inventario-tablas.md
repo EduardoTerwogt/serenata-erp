@@ -239,7 +239,8 @@ Riesgo = qué pasa si sale mal: P0 dinero/impuestos, P1 función visible, P2 int
 | `cuentas_reaperturas`, `cuentas_correcciones` | Mantener | Bitácora; 0 filas por falta de uso, no por sobrar. | — |
 | `historial_responsable` | **Derivar** | Vista/RPC sobre renglones + proyectos finalizados (H7). | P1 |
 | `historial_cambios_responsable_item` | Mantener | Bitácora real de reasignaciones (no es caché). | — |
-| `idempotency_keys`, `pago_operations`, `bulk_import_operations` | Mantener | Dos capas a propósito (auditoría A8). | — |
+| `idempotency_keys` | Mantener | Capa HTTP (A8). | — |
+| `pago_operations`, `bulk_import_operations` | **Fusionar** en `operaciones` | Misma capa y forma (E4, plan v4). | P1 |
 | `cliente_id_backfill_clasificacion` | **Borrar** (archivar CSV antes) (H12). | P2 |
 | `cotizacion_folio_reservations`, `folio_contadores` | Mantener | Distintos a propósito: reservas con expiración vs contadores por serie/año. | — |
 | `productos`, `service_templates` | Mantener | Catálogos con UI activa. | — |
