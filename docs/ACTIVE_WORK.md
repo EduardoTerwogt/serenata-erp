@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-01 (plan v8 de "Simplificación del modelo de
+**Última actualización:** 2026-10-01 (plan v9 de "Simplificación del modelo de
 datos" aprobado; frente 2 en pausa). Debajo, el cierre de la sesión 22.
 
 ## Estado
@@ -15,14 +15,16 @@ grupos desfasados, 0 grupos ABIERTO vacíos, "Eduardo Terwogt" de SH072 en 3,100
 `cuentas_periodo` ~65 ms, advisors sin hallazgos nuevos. Pendiente de
 verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
-**Iniciativa "Simplificación del modelo de datos"** — epic #109. **Plan v8
-aprobado (2026-10-01)** en `docs/PLAN.md` (auditoría 5: oráculo determinista,
-`plpgsql_check`, E4 fuera, listados sin UI y `VENCIDO` guardado se retiran):
-6 PRs, 40 → 34 tablas, Sheets y
-Planeación se retiran, índices faltantes y foto dorada primero. **Siguiente
-sesión: B0** (abrir con `serenata-iniciar-fase`). Pendientes del usuario que
-B0 pedirá: respaldo `supabase db dump` (plan Free sin respaldos), Drive en
-Preview y limpiar carpetas de prueba de Drive antes del reinicio (B2).
+**Iniciativa "Simplificación del modelo de datos"** — epic #109. **Plan v9
+aprobado (2026-10-01)** en `docs/PLAN.md` (auditoría 6: P0 de la restricción
+"proveedor ⇒ grupo" movida a B5b como constraint diferido, sin purga de
+reservas de folio, foto dorada sin tocar prod; decisiones D12 dueño único de
+verdad, D13 renombrar `x_pagar` a Costo Unitario/Costo Total, D14 retirar
+Calendar). 7 PRs (nuevo B5c: renglones, editor y nomenclatura), 40 → 34 tablas.
+Historia de auditorías en `docs/archive/simplificacion-modelo-auditorias.md`.
+**Siguiente sesión: B0** (abrir con `serenata-iniciar-fase`). Pendientes del
+usuario que B0 pedirá: respaldo `supabase db dump` (plan Free sin respaldos),
+Drive en Preview y limpiar carpetas de prueba de Drive antes del reinicio (B2).
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer
