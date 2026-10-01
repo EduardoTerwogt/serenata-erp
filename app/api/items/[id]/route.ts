@@ -4,6 +4,11 @@ import { ItemPatchSchema, validate } from '@/lib/validation/schemas'
 import { createHistorialCambioResponsableItem } from '@/lib/server/repositories/historial-cambios-responsable'
 import { findOrCreateProveedorByNombre } from '@/lib/server/repositories/proveedores'
 
+async function nombreDeProveedor(id: string): Promise<string | null> {
+  const { data } = await supabaseAdmin.from('proveedores').select('nombre').eq('id', id).maybeSingle()
+  return data?.nombre ?? null
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -36,7 +41,7 @@ export async function PATCH(
 
     const { data: item, error: itemError } = await supabaseAdmin
       .from('items_cotizacion')
-      .select('*')
+      .select('*, proveedores(nombre)')
       .eq('id', id)
       .single()
 
@@ -86,7 +91,6 @@ export async function PATCH(
       // se actualiza el renglón directo.
       const updateFields: Record<string, unknown> = {}
       if ('responsable_id' in parsed) updateFields.responsable_id = responsable_id || null
-      if ('responsable_nombre' in parsed) updateFields.responsable_nombre = responsable_nombre || null
       const { error: updateError } = await supabaseAdmin
         .from('items_cotizacion')
         .update(updateFields)
@@ -105,14 +109,15 @@ export async function PATCH(
     if ('responsable_id' in parsed) {
       const nuevoResponsableId = responsable_id || null
       if (nuevoResponsableId !== item.responsable_id) {
-        const nuevoResponsableNombre = 'responsable_nombre' in parsed
-          ? (responsable_nombre || null)
-          : (item.responsable_nombre ?? null)
+        // D12: el nombre sale del proveedor (el renglón ya no lo guarda).
+        const nuevoResponsableNombre = nuevoResponsableId
+          ? (responsable_nombre || (await nombreDeProveedor(nuevoResponsableId)))
+          : null
         await createHistorialCambioResponsableItem({
           item_id: id,
           cotizacion_id: item.cotizacion_id,
           responsable_anterior_id: item.responsable_id ?? null,
-          responsable_anterior_nombre: item.responsable_nombre ?? null,
+          responsable_anterior_nombre: (item as { proveedores?: { nombre: string | null } | null }).proveedores?.nombre ?? null,
           responsable_nuevo_id: nuevoResponsableId,
           responsable_nuevo_nombre: nuevoResponsableNombre,
           changed_by: authResult.session?.user?.email ?? null,

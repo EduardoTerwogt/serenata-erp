@@ -49,7 +49,7 @@ export async function POST(
       precio_unitario: 0,
       responsable_id: '',
       responsable_nombre: '',
-      x_pagar: 0,
+      costo_unitario: 0,
     })
 
     const upserted = await upsertItems([{
@@ -62,7 +62,7 @@ export async function POST(
       importe: normalized.importe,
       responsable_id: null,
       responsable_nombre: null,
-      x_pagar: normalized.x_pagar,
+      costo_unitario: normalized.costo_unitario,
       margen: normalized.margen,
       orden: nextOrder,
       notas: null,

@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
   let query = supabaseAdmin
     .from('productos')
-    .select('id, descripcion, categoria, precio_unitario, x_pagar_sugerido')
+    .select('id, descripcion, categoria, precio_unitario, costo_unitario_sugerido')
     .eq('activo', true)
     .order('descripcion')
 
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   if (authResult.response) return authResult.response
 
   try {
-    const { descripcion, categoria, precio_unitario, x_pagar_sugerido } = await request.json()
+    const { descripcion, categoria, precio_unitario, costo_unitario_sugerido } = await request.json()
     const normalizedDescripcion = String(descripcion || '').trim()
 
     if (!normalizedDescripcion) {
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         descripcion: normalizedDescripcion,
         categoria: categoria || null,
         precio_unitario: precio_unitario || 0,
-        x_pagar_sugerido: x_pagar_sugerido || 0,
+        costo_unitario_sugerido: costo_unitario_sugerido || 0,
         activo: true,
       }, { onConflict: 'descripcion' })
       .select()

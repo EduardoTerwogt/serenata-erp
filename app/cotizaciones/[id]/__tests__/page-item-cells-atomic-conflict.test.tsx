@@ -6,7 +6,7 @@ import type { Cotizacion, ItemCotizacion, Producto } from '@/lib/types'
 
 /**
  * EF-3 3D-5: caso automatizado del conflicto atómico multi-campo del
- * autofill de producto (descripcion/categoria/precio_unitario/x_pagar,
+ * autofill de producto (descripcion/categoria/precio_unitario/costo_unitario,
  * `handleSelectProduct`/`resolveItemCellConflict` en
  * hooks/useQuotationItemCellsAutosave.ts) -- movido desde 3D-3 según la
  * spec del bloque, nunca antes cubierto por un test automatizado (T8 de
@@ -72,7 +72,7 @@ function buildItem(overrides: Partial<ItemCotizacion> = {}): ItemCotizacion {
     importe: 1000,
     responsable_nombre: null,
     responsable_id: null,
-    x_pagar: 800,
+    costo_unitario: 800,
     margen: 200,
     orden: 0,
     revision: 1,
@@ -155,7 +155,7 @@ const PRODUCTO: Producto = {
   descripcion: 'Producto Nuevo',
   categoria: 'Video',
   precio_unitario: 500,
-  x_pagar_sugerido: 400,
+  costo_unitario_sugerido: 400,
   activo: true,
   created_at: '2026-01-01T00:00:00Z',
 }
@@ -248,8 +248,8 @@ describe('page.tsx -- conflicto atómico multi-campo del autofill de producto (3
       descripcion: 'Producto Nuevo',
       categoria: 'Video',
       precio_unitario: 500,
-      x_pagar: 400,
-      base: { descripcion: 'Cámara principal', categoria: 'Cámara', precio_unitario: 1000, x_pagar: 800 },
+      costo_unitario: 400,
+      base: { descripcion: 'Cámara principal', categoria: 'Cámara', precio_unitario: 1000, costo_unitario: 800 },
     })
 
     // Los 4 banners aparecen, no solo el de precio_unitario -- confirma que
@@ -266,7 +266,7 @@ describe('page.tsx -- conflicto atómico multi-campo del autofill de producto (3
 
     const categoriaInput = container.querySelector('input[name="items.0.categoria"]') as HTMLInputElement
     const precioInput = container.querySelector('input[name="items.0.precio_unitario"]') as HTMLInputElement
-    const xPagarInput = container.querySelector('input[name="items.0.x_pagar"]') as HTMLInputElement
+    const xPagarInput = container.querySelector('input[name="items.0.costo_unitario"]') as HTMLInputElement
 
     expect(descInput.value).toBe('Cámara principal')
     expect(categoriaInput.value).toBe('Cámara')
@@ -285,7 +285,7 @@ describe('page.tsx -- conflicto atómico multi-campo del autofill de producto (3
     const routeUrl = `/api/cotizaciones/${cot.id}/items/${ITEM_ID}`
 
     setRoute(`PATCH ${routeUrl}`, () => jsonResponse(
-      { error: 'conflict', fields: { x_pagar: { base: 800, current: 900, attempted: 400 } } },
+      { error: 'conflict', fields: { costo_unitario: { base: 800, current: 900, attempted: 400 } } },
       409
     ))
 
@@ -302,9 +302,9 @@ describe('page.tsx -- conflicto atómico multi-campo del autofill de producto (3
 
     // Segunda ronda: el reintento debe traer los 4 campos otra vez, con
     // `base` ya refrescada a los valores reales del servidor (incluido
-    // x_pagar=900, el único que de verdad chocó).
+    // costo_unitario=900, el único que de verdad chocó).
     setRoute(`PATCH ${routeUrl}`, () => jsonResponse({
-      item: buildItem({ descripcion: 'Producto Nuevo', categoria: 'Video', precio_unitario: 500, x_pagar: 400 }),
+      item: buildItem({ descripcion: 'Producto Nuevo', categoria: 'Video', precio_unitario: 500, costo_unitario: 400 }),
     }))
 
     await act(async () => { fireEvent.click(screen.getByText('Mantener "400"')) })
@@ -317,8 +317,8 @@ describe('page.tsx -- conflicto atómico multi-campo del autofill de producto (3
       descripcion: 'Producto Nuevo',
       categoria: 'Video',
       precio_unitario: 500,
-      x_pagar: 400,
-      base: { descripcion: 'Cámara principal', categoria: 'Cámara', precio_unitario: 1000, x_pagar: 900 },
+      costo_unitario: 400,
+      base: { descripcion: 'Cámara principal', categoria: 'Cámara', precio_unitario: 1000, costo_unitario: 900 },
     })
 
     expect(screen.queryByText('Mantener "400"')).toBeNull()

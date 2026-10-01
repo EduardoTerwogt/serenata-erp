@@ -18,6 +18,9 @@ vi.mock('@/lib/server/repositories/historial-cambios-responsable', () => ({
 vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: {
     from: (table: string) => {
+      if (table === 'proveedores') {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { nombre: 'Proveedor B' } }) }) }) }
+      }
       if (table === 'items_cotizacion') {
         return {
           select: () => ({ eq: () => ({ single: mocks.itemSingleMock }) }),

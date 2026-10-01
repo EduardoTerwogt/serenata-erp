@@ -10,7 +10,7 @@
  * (`buildCreateCotizacionPayload`) y lo persiste (`createOrReplaceCotizacion`,
  * `lib/server/quotations/persistence.ts`); aprobar corre la RPC real
  * `approve_cotizacion`, que genera 1 fila en `cuentas_pagar` por cada ítem
- * con `x_pagar>0` y 1 fila en `cuentas_cobrar` por cotización (confirmado
+ * con `costo_unitario>0` y 1 fila en `cuentas_cobrar` por cotización (confirmado
  * en `db/migrations/20260911_approve_cotizacion_restore_proyecto_id.sql`).
  * Reimplementar esa orquestación en JS plano (sin poder importar los `.ts`
  * reales, sin alias `@/` resoluble fuera de Next.js) arriesgaría exactamente
@@ -20,7 +20,7 @@
  * POST .../emitir, POST .../aprobar.
  *
  * Diseño uniforme: 1,200 cotizaciones × 5 items cada una (todos con
- * x_pagar>0) cubre los 4 objetivos de una sola pasada --
+ * costo_unitario>0) cubre los 4 objetivos de una sola pasada --
  * cotizaciones/cuentas_cobrar=1,200 (≥1,200), items_cotizacion=6,000
  * (≥5,500), cuentas_pagar=6,000 (≥600, 1 por item). Los 1,200 proveedores
  * de volumen se insertan directo en Postgres (no hay endpoint de bulk-create
@@ -50,7 +50,7 @@ const TARGETS = {
   cotizaciones: COTIZACIONES_TARGET,
   cuentas_cobrar: COTIZACIONES_TARGET,
   items_cotizacion: COTIZACIONES_TARGET * ITEMS_PER_COTIZACION, // 6,000 >= 5,500
-  cuentas_pagar: COTIZACIONES_TARGET * ITEMS_PER_COTIZACION, // 6,000 >= 600 (1 por item, todos con x_pagar>0)
+  cuentas_pagar: COTIZACIONES_TARGET * ITEMS_PER_COTIZACION, // 6,000 >= 600 (1 por item, todos con costo_unitario>0)
 }
 
 function parseArgs() {
@@ -111,7 +111,7 @@ async function crearCotizacionAprobada(targetUrl, cookie, runId, i, proveedores)
       categoria: 'Producción',
       cantidad: 1,
       precio_unitario: 1000,
-      x_pagar: 700,
+      costo_unitario: 700,
       responsable_id: proveedor.id,
       responsable_nombre: proveedor.nombre,
     }

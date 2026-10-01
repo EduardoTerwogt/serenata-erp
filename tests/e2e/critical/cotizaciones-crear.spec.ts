@@ -19,7 +19,7 @@ test('crea una cotización nueva en BORRADOR', async ({ page }) => {
       proyecto: 'Show Monterrey',
       estado: 'BORRADOR',
       items: [
-        { id: 'item-1', cotizacion_id: 'SH-E2E-CREAR', categoria: 'Producción', descripcion: 'Backline', cantidad: 1, precio_unitario: 1000, importe: 1000, responsable_nombre: null, responsable_id: null, x_pagar: 0, margen: 1000, orden: 1, notas: null },
+        { id: 'item-1', cotizacion_id: 'SH-E2E-CREAR', categoria: 'Producción', descripcion: 'Backline', cantidad: 1, precio_unitario: 1000, importe: 1000, responsable_nombre: null, responsable_id: null, costo_unitario: 0, margen: 1000, orden: 1, notas: null },
       ],
     })
   })

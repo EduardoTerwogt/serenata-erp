@@ -69,7 +69,7 @@ interface UseQuotationItemCellsAutosaveOptions {
  * grande y de mayor riesgo de los 5 clústeres de sección (autofill de
  * producto ya causó bugs reales dos veces, Fase 8.7.1/8.7.2). Sin cambios de
  * comportamiento: drenado real por celda, conflicto atómico "todo o nada" en
- * `descripcion`/`categoria`/`precio_unitario`/`x_pagar`, y la asimetría entre
+ * `descripcion`/`categoria`/`precio_unitario`/`costo_unitario`, y la asimetría entre
  * handlers se preserva tal cual.
  */
 export function useQuotationItemCellsAutosave({
@@ -260,7 +260,7 @@ export function useQuotationItemCellsAutosave({
       if (!isCellBusy('descripcion')) setValue(`items.${index}.descripcion`, formItem.descripcion)
       if (!isCellBusy('cantidad')) setValue(`items.${index}.cantidad`, formItem.cantidad)
       if (!isCellBusy('precio_unitario')) setValue(`items.${index}.precio_unitario`, formItem.precio_unitario)
-      if (!isCellBusy('x_pagar')) setValue(`items.${index}.x_pagar`, formItem.x_pagar)
+      if (!isCellBusy('costo_unitario')) setValue(`items.${index}.costo_unitario`, formItem.costo_unitario)
       if (!isCellBusy('responsable_id')) {
         setValue(`items.${index}.responsable_id`, formItem.responsable_id)
         setValue(`items.${index}.responsable_nombre`, formItem.responsable_nombre)
@@ -328,7 +328,7 @@ export function useQuotationItemCellsAutosave({
       : field === 'descripcion' ? { descripcion: item.descripcion || '' }
       : field === 'cantidad' ? { cantidad: Number(item.cantidad) || 0 }
       : field === 'precio_unitario' ? { precio_unitario: item.precio_unitario === '' ? 0 : Number(item.precio_unitario) || 0 }
-      : field === 'x_pagar' ? { x_pagar: item.x_pagar === '' ? 0 : Number(item.x_pagar) || 0 }
+      : field === 'costo_unitario' ? { costo_unitario: item.costo_unitario === '' ? 0 : Number(item.costo_unitario) || 0 }
       : { responsable_id: item.responsable_id || '', responsable_nombre: item.responsable_nombre || '' }
     const mutationId = crypto.randomUUID()
     rememberOwnItemMutationId(mutationId)
@@ -514,7 +514,7 @@ export function useQuotationItemCellsAutosave({
     // de este archivo): sin `shouldFocus: false`, RHF autofoca la fila nueva y ese
     // foco dispara `setActiveSection('partidas')`/`cellFocus` para una celda que nadie
     // enfocó a propósito.
-    append({ ...EMPTY_QUOTATION_ITEM, id: rowId, precio_unitario: 0, x_pagar: 0 }, { shouldFocus: false })
+    append({ ...EMPTY_QUOTATION_ITEM, id: rowId, precio_unitario: 0, costo_unitario: 0 }, { shouldFocus: false })
 
     // Fase 8.7.1: `trackMutation` envuelve la misma promesa que ya guarda
     // `pendingRowCreationsRef` -- así `flushPendingSaves` también la espera
@@ -597,7 +597,7 @@ export function useQuotationItemCellsAutosave({
               precio_unitario: Number(sourceItem.precio_unitario) || 0,
               responsable_id: sourceItem.responsable_id || '',
               responsable_nombre: sourceItem.responsable_nombre || '',
-              x_pagar: Number(sourceItem.x_pagar) || 0,
+              costo_unitario: Number(sourceItem.costo_unitario) || 0,
             })
 
             return {
@@ -609,7 +609,7 @@ export function useQuotationItemCellsAutosave({
               importe: normalized.importe,
               responsable_id: normalized.responsable_id || null,
               responsable_nombre: normalized.responsable_nombre || null,
-              x_pagar: normalized.x_pagar,
+              costo_unitario: normalized.costo_unitario,
               margen: normalized.margen,
               orden: existing ? (existing.orden ?? nextOrder++) : nextOrder++,
               notas: existing?.notas ?? null,
@@ -693,10 +693,10 @@ export function useQuotationItemCellsAutosave({
   // cualquiera de ellos cambió en el servidor desde el último valor confirmado que
   // este cliente conoce -- p. ej. si alguien más ya editó Precio mientras se elegía
   // el producto, el autofill NUNCA lo pisa en silencio.
-  const handleSelectProduct = useCallback(async (rowId: string, producto: { descripcion: string; categoria: string | null; precio_unitario: number; x_pagar_sugerido: number }) => {
+  const handleSelectProduct = useCallback(async (rowId: string, producto: { descripcion: string; categoria: string | null; precio_unitario: number; costo_unitario_sugerido: number }) => {
     const index = getItemIndexByRowId(rowId)
     if (index < 0) return
-    const fields: QuotationItemCellField[] = ['descripcion', 'categoria', 'precio_unitario', 'x_pagar']
+    const fields: QuotationItemCellField[] = ['descripcion', 'categoria', 'precio_unitario', 'costo_unitario']
     const base = buildItemFieldsBase(itemsServerRef.current[rowId], fields)
     for (const field of fields) {
       const key = getItemCellKey(rowId, field)
@@ -717,7 +717,7 @@ export function useQuotationItemCellsAutosave({
       // Fase 8.7.1: trackeada -- antes este autofill era invisible para
       // flushPendingSaves, así que Generar/Aprobar podían disparar la
       // transición mientras este PATCH atómico seguía en vuelo.
-      const updatedItem = await trackMutation(enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }, { base: base ?? undefined, mutationId })))
+      const updatedItem = await trackMutation(enqueueRowMutation(rowId, () => patchQuotationItem(rowId, { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, costo_unitario: producto.costo_unitario_sugerido || 0 }, { base: base ?? undefined, mutationId })))
       if (updatedItem) {
         upsertLocalItemState(updatedItem, { preserveLocalEdits: true })
         for (const field of fields) {
@@ -740,7 +740,7 @@ export function useQuotationItemCellsAutosave({
         // no solo los que la RPC marcó, y se guarda el MISMO registro bajo las
         // 4 claves para que cualquiera de los 4 banners resuelva el grupo entero
         // (ver resolveItemCellConflict).
-        const patchAttempted = { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, x_pagar: producto.x_pagar_sugerido || 0 }
+        const patchAttempted = { descripcion: producto.descripcion, categoria: producto.categoria || '', precio_unitario: producto.precio_unitario || 0, costo_unitario: producto.costo_unitario_sugerido || 0 }
         const record = buildAtomicConflictRecord(fields, base, patchAttempted, saveError)
         // El PATCH atómico se rechazó completo -- ninguno de los 4 campos se
         // guardó, así que NO se marcan como "dirty" en itemDirtyCellsRef: ese
@@ -832,7 +832,7 @@ export function useQuotationItemCellsAutosave({
     for (const field of groupFields) {
       patch[field] = field === 'cantidad' ? Number(item.cantidad) || 0
         : field === 'precio_unitario' ? (item.precio_unitario === '' ? 0 : Number(item.precio_unitario) || 0)
-        : field === 'x_pagar' ? (item.x_pagar === '' ? 0 : Number(item.x_pagar) || 0)
+        : field === 'costo_unitario' ? (item.costo_unitario === '' ? 0 : Number(item.costo_unitario) || 0)
         : (item as unknown as Record<string, unknown>)[field] || ''
     }
     const base = buildItemFieldsBase(itemsServerRef.current[rowId], groupFields)
@@ -958,7 +958,7 @@ export function useQuotationItemCellsAutosave({
     }
 
     // Grupo atómico multi-campo (autofill de producto: descripcion/categoria/
-    // precio_unitario/x_pagar viajan juntos en un solo PATCH -- si CUALQUIERA
+    // precio_unitario/costo_unitario viajan juntos en un solo PATCH -- si CUALQUIERA
     // chocó, la RPC rechazó TODO). `record` ya trae el registro completo de
     // los 4 campos (buildAtomicConflictRecord sintetiza los que no aparecían
     // en `saveError.fields`), así que se resuelven TODOS juntos aquí, sin

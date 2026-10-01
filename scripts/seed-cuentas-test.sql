@@ -99,30 +99,33 @@ BEGIN
   -- (lib/quotations/calculations.ts). Cuentas usa utilidad_total desde el issue #99.
   INSERT INTO cotizaciones (id, cliente, cliente_id, proyecto, fecha_entrega, locacion, fecha_cotizacion, tipo, es_complementaria_de, estado, subtotal, fee_agencia, general, iva, total, margen_total, utilidad_total)
   VALUES
-    ('SEEDCU01',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Orden vieja y sueltas', '2026-06-10', 'CDMX', '2026-05-20', 'PRINCIPAL',     NULL,       'APROBADA', 30000, 4500, 34500, 5520, 40020, 10000, 14500),
-    ('SEEDCU02',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Grupo con pago parcial', '2026-08-14', 'CDMX', '2026-07-30', 'PRINCIPAL',     NULL,       'APROBADA', 30000, 4500, 34500, 5520, 40020, 10000, 14500),
-    ('SEEDCU03',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Cobro PPD en dos pagos', '2026-07-05', 'Guadalajara', '2026-06-18', 'PRINCIPAL', NULL,     'APROBADA', 20000, 3000, 23000, 3680, 26680, 8000, 11000),
-    ('SEEDCU04',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Factura en revisión', '2026-09-12', 'CDMX', '2026-08-28', 'PRINCIPAL',        NULL,       'APROBADA', 10000, 1500, 11500, 1840, 13340, 4000, 5500),
-    ('SEEDCU05',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-01', 'PRINCIPAL', NULL, 'APROBADA', 20000, 3000, 23000, 3680, 26680, 7000, 10000),
-    ('SEEDCU05-A', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-08', 'COMPLEMENTARIA', 'SEEDCU05', 'APROBADA', 5000, 750, 5750, 920, 6670, 2000, 2750),
+    ('SEEDCU01',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Orden vieja y sueltas', '2026-06-10', 'CDMX', '2026-05-20', 'PRINCIPAL',     NULL,       'EMITIDA', 30000, 4500, 34500, 5520, 40020, 10000, 14500),
+    ('SEEDCU02',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Grupo con pago parcial', '2026-08-14', 'CDMX', '2026-07-30', 'PRINCIPAL',     NULL,       'EMITIDA', 30000, 4500, 34500, 5520, 40020, 10000, 14500),
+    ('SEEDCU03',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Cobro PPD en dos pagos', '2026-07-05', 'Guadalajara', '2026-06-18', 'PRINCIPAL', NULL,     'EMITIDA', 20000, 3000, 23000, 3680, 26680, 8000, 11000),
+    ('SEEDCU04',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Factura en revisión', '2026-09-12', 'CDMX', '2026-08-28', 'PRINCIPAL',        NULL,       'EMITIDA', 10000, 1500, 11500, 1840, 13340, 4000, 5500),
+    ('SEEDCU05',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-01', 'PRINCIPAL', NULL, 'EMITIDA', 20000, 3000, 23000, 3680, 26680, 7000, 10000),
+    ('SEEDCU05-A', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-08', 'COMPLEMENTARIA', 'SEEDCU05', 'EMITIDA', 5000, 750, 5750, 920, 6670, 2000, 2750),
     ('SEEDCU05-B', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-15', 'COMPLEMENTARIA', 'SEEDCU05', 'EMITIDA',  4000, 600, 4600, 736, 5336, 1500, 2100);
+  -- B5c: los renglones de una cotización aprobada no se insertan: nacen EMITIDAS y se aprueban después.
 
   -- items: id = 5eedc000-...-<cot><n>; cuentas_pagar.item_id apunta aquí.
-  INSERT INTO items_cotizacion (id, cotizacion_id, categoria, descripcion, cantidad, precio_unitario, importe, responsable_nombre, responsable_id, x_pagar, margen, orden)
+  INSERT INTO items_cotizacion (id, cotizacion_id, categoria, descripcion, cantidad, precio_unitario, importe, responsable_id, costo_unitario, margen, orden)
   VALUES
-    ('5eedc000-0000-4000-8000-000000001011', 'SEEDCU01',   'Producción', 'Coordinación de producción', 1, 12000, 12000, 'SEEDCU Proveedor Persona Física', c_prov_a, 8000, 4000, 1),
-    ('5eedc000-0000-4000-8000-000000001012', 'SEEDCU01',   'Producción', 'Asistente de producción',    2,  5000, 10000, 'SEEDCU Proveedor Persona Física', c_prov_a, 3500, 3000, 2),
-    ('5eedc000-0000-4000-8000-000000001013', 'SEEDCU01',   'Logística',  'Transporte (sin proveedor)', 1,  4000,  4000, NULL, NULL, 2000, 2000, 3),
-    ('5eedc000-0000-4000-8000-000000001014', 'SEEDCU01',   'Logística',  'Catering (sin proveedor)',   1,  4000,  4000, NULL, NULL, 3000, 1000, 4),
-    ('5eedc000-0000-4000-8000-000000001021', 'SEEDCU02',   'Equipo',     'Renta de cámara',            2,  9000, 18000, 'SEEDCU Proveedor Moral', c_prov_b, 6000, 6000, 1),
-    ('5eedc000-0000-4000-8000-000000001022', 'SEEDCU02',   'Equipo',     'Iluminación',                1, 12000, 12000, 'SEEDCU Proveedor Moral', c_prov_b, 8000, 4000, 2),
-    ('5eedc000-0000-4000-8000-000000001031', 'SEEDCU03',   'Producción', 'Dirección de fotografía',    1, 20000, 20000, 'SEEDCU Proveedor Persona Física', c_prov_a, 12000, 8000, 1),
-    ('5eedc000-0000-4000-8000-000000001041', 'SEEDCU04',   'Equipo',     'Audio',                      1, 10000, 10000, 'SEEDCU Proveedor Moral', c_prov_b, 6000, 4000, 1),
-    ('5eedc000-0000-4000-8000-000000001051', 'SEEDCU05',   'Producción', 'Producción general',         1, 20000, 20000, 'SEEDCU Proveedor Persona Física', c_prov_a, 13000, 7000, 1),
-    ('5eedc000-0000-4000-8000-00000000105a', 'SEEDCU05-A', 'Equipo',     'Equipo adicional',           1,  5000,  5000, 'SEEDCU Proveedor Moral', c_prov_b, 3000, 2000, 1),
-    ('5eedc000-0000-4000-8000-00000000105b', 'SEEDCU05-B', 'Equipo',     'Segundo día de equipo',      1,  4000,  4000, 'SEEDCU Proveedor Moral', c_prov_b, 2500, 1500, 1),
+    ('5eedc000-0000-4000-8000-000000001011', 'SEEDCU01',   'Producción', 'Coordinación de producción', 1, 12000, 12000, c_prov_a, 8000, 4000, 1),
+    ('5eedc000-0000-4000-8000-000000001012', 'SEEDCU01',   'Producción', 'Asistente de producción',    2,  5000, 10000, c_prov_a, 3500, 3000, 2),
+    ('5eedc000-0000-4000-8000-000000001013', 'SEEDCU01',   'Logística',  'Transporte (sin proveedor)', 1,  4000,  4000, NULL, 2000, 2000, 3),
+    ('5eedc000-0000-4000-8000-000000001014', 'SEEDCU01',   'Logística',  'Catering (sin proveedor)',   1,  4000,  4000, NULL, 3000, 1000, 4),
+    ('5eedc000-0000-4000-8000-000000001021', 'SEEDCU02',   'Equipo',     'Renta de cámara',            2,  9000, 18000, c_prov_b, 6000, 6000, 1),
+    ('5eedc000-0000-4000-8000-000000001022', 'SEEDCU02',   'Equipo',     'Iluminación',                1, 12000, 12000, c_prov_b, 8000, 4000, 2),
+    ('5eedc000-0000-4000-8000-000000001031', 'SEEDCU03',   'Producción', 'Dirección de fotografía',    1, 20000, 20000, c_prov_a, 12000, 8000, 1),
+    ('5eedc000-0000-4000-8000-000000001041', 'SEEDCU04',   'Equipo',     'Audio',                      1, 10000, 10000, c_prov_b, 6000, 4000, 1),
+    ('5eedc000-0000-4000-8000-000000001051', 'SEEDCU05',   'Producción', 'Producción general',         1, 20000, 20000, c_prov_a, 13000, 7000, 1),
+    ('5eedc000-0000-4000-8000-00000000105a', 'SEEDCU05-A', 'Equipo',     'Equipo adicional',           1,  5000,  5000, c_prov_b, 3000, 2000, 1),
+    ('5eedc000-0000-4000-8000-00000000105b', 'SEEDCU05-B', 'Equipo',     'Segundo día de equipo',      1,  4000,  4000, c_prov_b, 2500, 1500, 1),
     -- Renglón de la cuenta sin proyecto ni cotización (forma legacy).
-    ('5eedc000-0000-4000-8000-000000001099', NULL,         'Otros',      'Gasto sin proyecto',         1,  1500,  1500, NULL, NULL, 1500, 0, 1);
+    ('5eedc000-0000-4000-8000-000000001099', NULL,         'Otros',      'Gasto sin proyecto',         1,  1500,  1500, NULL, 1500, 0, 1);
+
+  UPDATE cotizaciones SET estado = 'APROBADA' WHERE id = ANY(v_ids) AND id <> 'SEEDCU05-B';
 
   INSERT INTO proyectos (id, proyecto, fecha_entrega, locacion, estado)
   VALUES
@@ -147,7 +150,7 @@ BEGIN
     (c_grp_05a, 'SEEDCU05', c_prov_b, 'ABIERTO',          3000,     0, NULL);  -- de la complementaria -A
 
   -- ── Cuentas por pagar ─────────────────────────────────────────────────
-  -- x_pagar = Costo Total (Costo Unitario × Cantidad, decisión 006).
+  -- costo_total = Costo Total (Costo Unitario × Cantidad, decisión 006).
   INSERT INTO cuentas_pagar (id, folio, cotizacion_id, proyecto_id, item_id, responsable_id, costo_total, estado, monto_pagado, grupo_id, fecha_pago)
   VALUES
     -- SEEDCU01: renglones del grupo de la orden vieja, sin factura (H2, H3).

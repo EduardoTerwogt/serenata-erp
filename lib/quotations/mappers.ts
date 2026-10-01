@@ -15,7 +15,7 @@ export const EMPTY_QUOTATION_ITEM: QuotationFormItem = {
   precio_unitario: '',
   responsable_id: '',
   responsable_nombre: '',
-  x_pagar: '',
+  costo_unitario: '',
 }
 
 // Una fila "en blanco" es la que se crea vacía al abrir el formulario o al pulsar
@@ -30,7 +30,7 @@ export function isBlankQuotationItem(item: Partial<QuotationFormItem> | undefine
     !String(item.responsable_id || '').trim() &&
     !String(item.responsable_nombre || '').trim() &&
     isEmptyNumber(item.precio_unitario) &&
-    isEmptyNumber(item.x_pagar)
+    isEmptyNumber(item.costo_unitario)
   )
 }
 
@@ -90,7 +90,7 @@ export function reconcileServerItems(
   const porId = new Map(locales.filter((item) => item.id).map((item) => [item.id as string, item]))
   const idsServidor = new Set(servidor.map((item) => item.id).filter(Boolean) as string[])
 
-  const CAMPOS = ['categoria', 'descripcion', 'cantidad', 'precio_unitario', 'x_pagar', 'responsable_id'] as const
+  const CAMPOS = ['categoria', 'descripcion', 'cantidad', 'precio_unitario', 'costo_unitario', 'responsable_id'] as const
 
   const fusionadas = servidor.map((remoto) => {
     const rowId = remoto.id as string
@@ -124,7 +124,6 @@ export function mapQuotationItemsForSave(items: QuotationFormItem[]) {
 }
 
 interface BuildQuotationMutationPayloadOptions {
-  estado?: 'BORRADOR' | 'EMITIDA' | 'APROBADA' | 'CANCELADA'
   porcentaje_fee: number
   iva_activo: boolean
   descuento_tipo: 'monto' | 'porcentaje'
@@ -142,7 +141,6 @@ export function buildQuotationMutationPayload(
     iva_activo: options.iva_activo,
     descuento_tipo: options.descuento_tipo,
     descuento_valor: options.descuento_valor,
-    ...(options.estado ? { estado: options.estado } : {}),
   }
 }
 
@@ -203,7 +201,7 @@ export function buildPersistedQuotationItems(
       precio_unitario: item.precio_unitario ?? 0,
       responsable_id: item.responsable_id || '',
       responsable_nombre: item.responsable_nombre || '',
-      x_pagar: item.x_pagar ?? 0,
+      costo_unitario: item.costo_unitario ?? 0,
     })
 
     return {
@@ -223,7 +221,7 @@ export function buildPersistedQuotationItems(
       responsable_nombre: options.preservePreviousResponsables
         ? item.responsable_nombre || previousItem?.responsable_nombre || null
         : item.responsable_nombre || null,
-      x_pagar: normalizedItem.x_pagar,
+      costo_unitario: normalizedItem.costo_unitario,
       importe: normalizedItem.importe,
       margen: normalizedItem.margen,
       orden: item.orden ?? index,
@@ -249,7 +247,7 @@ export function buildQuotationPersistenceData(
       precio_unitario: item.precio_unitario ?? 0,
       responsable_id: String(item.responsable_id || ''),
       responsable_nombre: String(item.responsable_nombre || ''),
-      x_pagar: item.x_pagar ?? 0,
+      costo_unitario: item.costo_unitario ?? 0,
     })),
     porcentaje_fee,
     iva_activo,

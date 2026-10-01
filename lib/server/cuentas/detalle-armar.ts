@@ -167,7 +167,7 @@ export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: 
 
 export interface PagoFilas {
   objetivo: 'grupo' | 'cuenta'
-  /** Grupo (monto_total neto) o cuenta suelta (x_pagar neto). */
+  /** Grupo (monto_total neto) o cuenta suelta (costo_total neto). */
   destino: {
     id: string
     proyecto_id: string | null
@@ -184,7 +184,7 @@ export interface PagoFilas {
     cotizacion_id: string | null
     item_descripcion: string | null
     cantidad: number | null
-    x_pagar: number
+    costo_total: number
     monto_pagado: number | null
   }[]
   proveedor: { id: string; nombre: string; regimen_fiscal: RegimenFiscal | null; correo: string | null; telefono: string | null; banco: string | null; clabe: string | null } | null
@@ -241,7 +241,7 @@ export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyec
       item_id: c.item_id,
       descripcion: c.item_descripcion ?? 'Concepto',
       cantidad: c.cantidad,
-      neto: round2(Number(c.x_pagar)),
+      neto: round2(Number(c.costo_total)),
       pagado: round2(Number(c.monto_pagado ?? 0)),
     })),
     neto,

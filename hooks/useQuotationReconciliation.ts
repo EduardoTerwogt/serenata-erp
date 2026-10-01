@@ -151,7 +151,7 @@ export function useQuotationReconciliation({
           if (item.descripcion !== local.descripcion) setValue(`items.${index}.descripcion`, item.descripcion)
           if (item.cantidad !== local.cantidad) setValue(`items.${index}.cantidad`, item.cantidad)
           if (item.precio_unitario !== local.precio_unitario) setValue(`items.${index}.precio_unitario`, item.precio_unitario)
-          if (item.x_pagar !== local.x_pagar) setValue(`items.${index}.x_pagar`, item.x_pagar)
+          if (item.costo_unitario !== local.costo_unitario) setValue(`items.${index}.costo_unitario`, item.costo_unitario)
           if (item.responsable_id !== local.responsable_id) {
             setValue(`items.${index}.responsable_id`, item.responsable_id)
             setValue(`items.${index}.responsable_nombre`, item.responsable_nombre)

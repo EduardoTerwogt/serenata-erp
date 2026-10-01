@@ -164,7 +164,7 @@ export function useNuevaCotizacionPage() {
     iva_activo,
     descuento_tipo,
     descuento_valor,
-    items: (watchedItems || []).map((item) => [item.categoria, item.descripcion, item.cantidad, item.precio_unitario, item.responsable_id, item.x_pagar]),
+    items: (watchedItems || []).map((item) => [item.categoria, item.descripcion, item.cantidad, item.precio_unitario, item.responsable_id, item.costo_unitario]),
   }), [descuento_tipo, descuento_valor, iva_activo, notasInternas, notasPdf, porcentaje_fee, watchedItems, watchedValues])
 
   const complementariaFields = useMemo(

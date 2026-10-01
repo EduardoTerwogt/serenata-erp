@@ -50,7 +50,7 @@ const CLIENT_ID = '11111111-1111-4111-8111-111111111111'
 
 const itemVacioDelServidor = {
   id: 'nueva-fila-id',
-  categoria: '', descripcion: '', cantidad: 1, precio_unitario: 0, x_pagar: 0, revision: 0,
+  categoria: '', descripcion: '', cantidad: 1, precio_unitario: 0, costo_unitario: 0, revision: 0,
 }
 
 /**
@@ -145,14 +145,14 @@ describe('POST /api/cotizaciones/[id]/items', () => {
     it('reintentar con el mismo id no crea una fila duplicada ni re-emite el evento', async () => {
       mocks.getCotizacionByIdMock.mockResolvedValue({
         id: 'SH001', cliente: 'ACME', proyecto: 'Spot',
-        items: [{ id: CLIENT_ID, categoria: '', descripcion: 'ya creada', cantidad: 1, precio_unitario: 0, x_pagar: 0, orden: 0 }],
+        items: [{ id: CLIENT_ID, categoria: '', descripcion: 'ya creada', cantidad: 1, precio_unitario: 0, costo_unitario: 0, orden: 0 }],
       })
 
       const res = await POST(req({ id: CLIENT_ID }), { params })
 
       expect(res.status).toBe(200)
       const body = await res.json()
-      expect(body.item).toEqual({ id: CLIENT_ID, categoria: '', descripcion: 'ya creada', cantidad: 1, precio_unitario: 0, x_pagar: 0, orden: 0 })
+      expect(body.item).toEqual({ id: CLIENT_ID, categoria: '', descripcion: 'ya creada', cantidad: 1, precio_unitario: 0, costo_unitario: 0, orden: 0 })
       expect(mocks.upsertItemsMock).not.toHaveBeenCalled()
       expect(mocks.sendRealtimeBroadcastMock).not.toHaveBeenCalled()
     })

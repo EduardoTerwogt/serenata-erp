@@ -119,7 +119,7 @@ function conceptoGrupo(grupo: GrupoAnioRaw): ConceptoVista {
 
 function conceptoSuelta(cuenta: PagoAnioRaw): ConceptoVista {
   const estimado = cuenta.total_a_transferir == null
-  const total = estimado ? calcularEjemploFactura(cuenta.x_pagar, cuenta.regimen_fiscal).total : round2(cuenta.total_a_transferir!)
+  const total = estimado ? calcularEjemploFactura(cuenta.costo_total, cuenta.regimen_fiscal).total : round2(cuenta.total_a_transferir!)
   const pagado = round2(cuenta.monto_transferido)
   const derivado = derivarPago({
     tipo: 'pago',
@@ -145,7 +145,7 @@ function conceptoSuelta(cuenta: PagoAnioRaw): ConceptoVista {
       concepto: cuenta.item_descripcion ?? 'Concepto',
       items: 1,
       total,
-      neto: round2(cuenta.x_pagar),
+      neto: round2(cuenta.costo_total),
       pagado,
       total_estimado: estimado,
       regimen_fiscal: cuenta.regimen_fiscal,
@@ -269,7 +269,7 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
       ...pagosP.map((cp) => ({
         id: cp.id,
         grupo_id: null,
-        costo_total: cp.x_pagar,
+        costo_total: cp.costo_total,
         responsable_id: cp.responsable_id,
         responsable_nombre: cp.responsable_nombre ?? 'Proveedor',
         grupo_monto_total: null,

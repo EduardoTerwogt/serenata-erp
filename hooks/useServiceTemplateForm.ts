@@ -48,7 +48,7 @@ export function useServiceTemplateForm(
       descripcion: producto.descripcion,
       categoria: producto.categoria || '',
       precio_unitario: producto.precio_unitario > 0 ? producto.precio_unitario : 0,
-      x_pagar: (producto.x_pagar_sugerido || 0) > 0 ? producto.x_pagar_sugerido : 0,
+      costo_unitario: (producto.costo_unitario_sugerido || 0) > 0 ? producto.costo_unitario_sugerido : 0,
       // NOTE: Intentionally NOT copying producto_id
       // This keeps edits isolated to the template
     }

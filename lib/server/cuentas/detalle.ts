@@ -74,7 +74,7 @@ function aFilaCuenta(c: FilaCuentaPagar): PagoFilas['cuentas'][number] {
     cotizacion_id: c.cotizacion_id,
     item_descripcion: c.items_cotizacion?.descripcion ?? null,
     cantidad: c.items_cotizacion?.cantidad ?? null,
-    x_pagar: c.costo_total,
+    costo_total: c.costo_total,
     monto_pagado: c.monto_pagado,
   }
 }

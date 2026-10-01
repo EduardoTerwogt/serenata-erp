@@ -21,7 +21,7 @@ const EMPTY_ITEM: ServiceTemplateItem = {
   descripcion: '',
   cantidad: 1,
   precio_unitario: 0,
-  x_pagar: 0,
+  costo_unitario: 0,
   responsable_nombre: null,
   responsable_id: null,
   producto_id: null,
@@ -183,8 +183,8 @@ export function TemplateItemsSection({
           type="number"
           min="0"
           step="0.01"
-          value={item.x_pagar === 0 ? '' : item.x_pagar}
-          onChange={e => updateItem(index, 'x_pagar', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
+          value={item.costo_unitario === 0 ? '' : item.costo_unitario}
+          onChange={e => updateItem(index, 'costo_unitario', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
           className="w-28 bg-input border border-hairline rounded-control px-2 py-1.5 text-body focus:outline-none focus:border-accent text-sm"
         />
       </td>
@@ -228,7 +228,7 @@ export function TemplateItemsSection({
       <div className="grid grid-cols-2 gap-2 text-[13px]">
         <span className="text-faint">Cant. {item.cantidad}</span>
         <span className="text-faint text-right">P. Unit. ${item.precio_unitario.toLocaleString()}</span>
-        <span className="text-subtext">X pagar ${item.x_pagar.toLocaleString()}</span>
+        <span className="text-subtext">X pagar ${item.costo_unitario.toLocaleString()}</span>
         <span className="text-faint text-right">{item.responsable_nombre || 'Sin responsable'}</span>
       </div>
     </div>
@@ -343,8 +343,8 @@ export function TemplateItemsSection({
                 type="number"
                 min="0"
                 step="0.01"
-                value={item.x_pagar === 0 ? '' : item.x_pagar}
-                onChange={e => updateItem(editingIndex, 'x_pagar', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
+                value={item.costo_unitario === 0 ? '' : item.costo_unitario}
+                onChange={e => updateItem(editingIndex, 'costo_unitario', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
                 className="w-full bg-input border border-hairline rounded-control px-4 py-3.5 text-base text-body focus:outline-none focus:border-accent"
               />
             </div>

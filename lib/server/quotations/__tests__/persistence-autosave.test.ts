@@ -42,9 +42,9 @@ describe('autosaveProductosCatalogo', () => {
   it('hace un solo upsert en bloque, deduplicado por descripción (la última gana)', async () => {
     await autosaveProductosCatalogo(
       [
-        { descripcion: 'Audio', categoria: 'Sonido', precio_unitario: 100, x_pagar: 60 },
+        { descripcion: 'Audio', categoria: 'Sonido', precio_unitario: 100, costo_unitario: 60 },
         { descripcion: ' ' },
-        { descripcion: 'Audio', categoria: 'Sonido', precio_unitario: 120, x_pagar: 70 },
+        { descripcion: 'Audio', categoria: 'Sonido', precio_unitario: 120, costo_unitario: 70 },
         { descripcion: 'Luces', precio_unitario: 50 },
       ],
       'test'
@@ -54,8 +54,8 @@ describe('autosaveProductosCatalogo', () => {
     const [filas, opciones] = mocks.upsertMock.mock.calls[0]
     expect(opciones).toEqual({ onConflict: 'descripcion' })
     expect(filas).toEqual([
-      { descripcion: 'Audio', categoria: 'Sonido', precio_unitario: 120, x_pagar_sugerido: 70, activo: true },
-      { descripcion: 'Luces', categoria: null, precio_unitario: 50, x_pagar_sugerido: 0, activo: true },
+      { descripcion: 'Audio', categoria: 'Sonido', precio_unitario: 120, costo_unitario_sugerido: 70, activo: true },
+      { descripcion: 'Luces', categoria: null, precio_unitario: 50, costo_unitario_sugerido: 0, activo: true },
     ])
   })
 

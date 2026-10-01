@@ -89,7 +89,7 @@ interface ItemServidor {
   descripcion: string
   cantidad: number
   precio_unitario: number
-  x_pagar: number
+  costo_unitario: number
   importe: number
   orden: number | null
 }
@@ -116,7 +116,7 @@ export async function leerCotizacionDelServidor(cotizacionId: string): Promise<C
   const supabase = getLiveSupabaseAdmin()
   const { data, error } = await supabase
     .from('cotizaciones')
-    .select('id, cliente, proyecto, estado, locacion, notas_internas, subtotal, porcentaje_fee, iva_activo, items_cotizacion(id, descripcion, cantidad, precio_unitario, x_pagar, importe, orden)')
+    .select('id, cliente, proyecto, estado, locacion, notas_internas, subtotal, porcentaje_fee, iva_activo, items_cotizacion(id, descripcion, cantidad, precio_unitario, costo_unitario, importe, orden)')
     .eq('id', cotizacionId)
     .single()
   if (error) throw error
@@ -150,7 +150,7 @@ interface CuentaCobrarServidor {
 /**
  * Lee lo que `approve_cotizacion` debería haber dejado escrito: el proyecto
  * (upsert con `id = cotizacion_id`), las cuentas por pagar (una por partida con
- * `x_pagar > 0`) y la cuenta por cobrar (siempre se crea). Mismo motivo que
+ * `costo_unitario > 0`) y la cuenta por cobrar (siempre se crea). Mismo motivo que
  * `leerCotizacionDelServidor` -- verificar contra el servidor real, no contra lo
  * que la pantalla dice que pasó.
  */

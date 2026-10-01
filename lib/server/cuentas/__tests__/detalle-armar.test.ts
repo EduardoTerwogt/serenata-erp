@@ -68,8 +68,8 @@ describe('armarDetallePago', () => {
     objetivo: 'grupo',
     destino: { id: 'g-1', proyecto_id: 'SH061', responsable_id: 'prov-1', estado: 'FACTURADO', neto: 10000, total_a_transferir: null, monto_transferido: 0, orden_pago_id: null },
     cuentas: [
-      { id: 'cp-1', item_id: 'i-1', cotizacion_id: 'SH061', item_descripcion: 'Paquete ARRI', cantidad: 2, x_pagar: 6000, monto_pagado: 0 },
-      { id: 'cp-2', item_id: 'i-2', cotizacion_id: 'SH061', item_descripcion: 'Generador', cantidad: 1, x_pagar: 4000, monto_pagado: 0 },
+      { id: 'cp-1', item_id: 'i-1', cotizacion_id: 'SH061', item_descripcion: 'Paquete ARRI', cantidad: 2, costo_total: 6000, monto_pagado: 0 },
+      { id: 'cp-2', item_id: 'i-2', cotizacion_id: 'SH061', item_descripcion: 'Generador', cantidad: 1, costo_total: 4000, monto_pagado: 0 },
     ],
     proveedor: { id: 'prov-1', nombre: 'Mario Hernández', regimen_fiscal: 'fisica', correo: 'mario@x.mx', telefono: '55', banco: 'BBVA', clabe: '012180015554443332' },
     proyecto: null,

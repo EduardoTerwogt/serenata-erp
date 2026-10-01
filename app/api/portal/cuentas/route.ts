@@ -13,7 +13,7 @@ function itemDeCuenta(c: CuentaPagar) {
     id: c.id,
     item_descripcion: c.item_descripcion,
     cantidad: c.cantidad,
-    x_pagar: c.costo_total,
+    costo_total: c.costo_total,
     cotizacion_id: c.cotizacion_id,
   }
 }

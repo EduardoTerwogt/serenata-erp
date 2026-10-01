@@ -51,7 +51,7 @@ export async function PATCH(
       ...(body?.descripcion !== undefined ? { descripcion: String(body.descripcion || '') } : {}),
       ...(body?.cantidad !== undefined ? { cantidad: Number(body.cantidad) || 0 } : {}),
       ...(body?.precio_unitario !== undefined ? { precio_unitario: Number(body.precio_unitario) || 0 } : {}),
-      ...(body?.x_pagar !== undefined ? { x_pagar: Number(body.x_pagar) || 0 } : {}),
+      ...(body?.costo_unitario !== undefined ? { costo_unitario: Number(body.costo_unitario) || 0 } : {}),
       ...(responsableId !== undefined ? { responsable_id: responsableId } : {}),
       ...(responsableNombre !== undefined ? { responsable_nombre: responsableNombre } : {}),
     }

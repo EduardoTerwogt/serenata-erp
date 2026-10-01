@@ -87,7 +87,7 @@ function buildItem(overrides: Partial<ItemCotizacion> = {}): ItemCotizacion {
     importe: 1000,
     responsable_nombre: null,
     responsable_id: null,
-    x_pagar: 800,
+    costo_unitario: 800,
     margen: 200,
     orden: 0,
     revision: 1,

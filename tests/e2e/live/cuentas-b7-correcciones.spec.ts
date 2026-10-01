@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { randomUUID } from 'crypto'
-import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin, insertarCuentaPagarConRenglon } from '../utils/live-cleanup'
+import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin, insertarCuentaPagarConRenglon, aprobarFixture } from '../utils/live-cleanup'
 
 /**
  * Rediseño de Cuentas B7 (D5, R8): pruebas reales contra serenata-erp-test de
@@ -46,7 +46,7 @@ async function crearFixture(supabase: Supabase): Promise<Fixture> {
   const proveedorId = randomUUID()
   const grupoId = randomUUID()
   ok(await supabase.from('proveedores').insert({ id: proveedorId, nombre: `${id} Proveedor`, activo: true }))
-  ok(await supabase.from('cotizaciones').insert({ id, cliente: `${id} Cliente`, proyecto: `${id} Proyecto`, fecha_entrega: '2026-09-10', tipo: 'PRINCIPAL', estado: 'APROBADA' }))
+  ok(await supabase.from('cotizaciones').insert({ id, cliente: `${id} Cliente`, proyecto: `${id} Proyecto`, fecha_entrega: '2026-09-10', tipo: 'PRINCIPAL', estado: 'EMITIDA' }))
   ok(await supabase.from('proyectos').insert({ id, proyecto: `${id} Proyecto` }))
   const cobro = must(
     await supabase
@@ -66,6 +66,7 @@ async function crearFixture(supabase: Supabase): Promise<Fixture> {
       descripcion: `Renglón ${x}`,
     })
   }
+  await aprobarFixture(supabase, id)
   ok(await supabase.from('documentos_cuentas_pagar').insert({
     grupo_id: grupoId,
     tipo: 'FACTURA_PROVEEDOR_XML',

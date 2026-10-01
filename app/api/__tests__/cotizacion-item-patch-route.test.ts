@@ -60,7 +60,7 @@ const itemDelServidor = {
   descripcion: 'Cámara escrita por A',
   cantidad: 1,
   precio_unitario: 7777,
-  x_pagar: 0,
+  costo_unitario: 0,
   importe: 7777,
   margen: 7777,
 }
@@ -99,8 +99,8 @@ describe('PATCH /api/cotizaciones/[id]/items/[itemId]', () => {
   })
 
   it('normaliza los numéricos y respeta el cero', async () => {
-    await PATCH(req({ x_pagar: 0 }), { params })
-    expect(mocks.rpcMock.mock.calls[0][1].p_patch).toEqual({ x_pagar: 0 })
+    await PATCH(req({ costo_unitario: 0 }), { params })
+    expect(mocks.rpcMock.mock.calls[0][1].p_patch).toEqual({ costo_unitario: 0 })
 
     mocks.rpcMock.mockClear()
     await PATCH(req({ precio_unitario: '1500' }), { params })

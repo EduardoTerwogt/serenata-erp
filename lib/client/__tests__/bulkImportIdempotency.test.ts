@@ -30,7 +30,7 @@ function fakeCotizacion(id: string): Cotizacion {
 
 function payload(overrides?: Partial<BulkImportPayload>): BulkImportPayload {
   return {
-    items: [{ id: 'item-1', categoria: 'Equipo', descripcion: 'Item', cantidad: 1, precio_unitario: 100, importe: 100, responsable_id: null, responsable_nombre: null, x_pagar: 0, margen: 100, orden: 0, notas: null }],
+    items: [{ id: 'item-1', categoria: 'Equipo', descripcion: 'Item', cantidad: 1, precio_unitario: 100, importe: 100, responsable_id: null, responsable_nombre: null, costo_unitario: 0, margen: 100, orden: 0, notas: null }],
     reemplazar_ids: [],
     cotizacionId: 'cot-1',
     ...overrides,

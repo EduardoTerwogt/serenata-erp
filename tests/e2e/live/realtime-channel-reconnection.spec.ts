@@ -57,7 +57,7 @@ async function crearCotizacion(page: Page, cliente: string, proyecto: string) {
       cliente,
       proyecto,
       estado: 'BORRADOR',
-      items: [{ categoria: 'Equipo', descripcion: 'Item de prueba', cantidad: 1, precio_unitario: 100, x_pagar: 0, orden: 0 }],
+      items: [{ categoria: 'Equipo', descripcion: 'Item de prueba', cantidad: 1, precio_unitario: 100, costo_unitario: 0, orden: 0 }],
     },
   })
   expect(response.status(), `no se pudo crear la cotización de prueba: ${await response.text()}`).toBe(201)

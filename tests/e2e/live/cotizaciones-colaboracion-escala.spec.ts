@@ -53,7 +53,7 @@ async function crearCotizacionConNItems(page: Page, n: number, sufijo: string) {
         descripcion: `Item inicial ${i}`,
         cantidad: 1,
         precio_unitario: 100 * (i + 1),
-        x_pagar: 0,
+        costo_unitario: 0,
         orden: i,
       })),
     },

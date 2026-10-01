@@ -26,7 +26,7 @@ export interface ImportableItem {
   descripcion?: string | null
   cantidad?: number | null
   precio_unitario?: number | null
-  x_pagar?: number | null
+  costo_unitario?: number | null
   responsable_id?: string | null
   responsable_nombre?: string | null
 }
@@ -66,7 +66,7 @@ export function toFormItem(source: ImportableItem, id: string): QuotationFormIte
     precio_unitario: source.precio_unitario || 0,
     responsable_id: source.responsable_id || '',
     responsable_nombre: source.responsable_nombre || '',
-    x_pagar: source.x_pagar || 0,
+    costo_unitario: source.costo_unitario || 0,
   }
 }
 

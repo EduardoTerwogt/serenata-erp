@@ -27,7 +27,7 @@ interface ProductoMock {
   descripcion: string
   categoria: string | null
   precio_unitario: number
-  x_pagar_sugerido: number
+  costo_unitario_sugerido: number
   activo: boolean
   created_at: string
 }
@@ -55,7 +55,7 @@ interface CotizacionMockItem {
   importe: number
   responsable_nombre: string | null
   responsable_id: string | null
-  x_pagar: number
+  costo_unitario: number
   margen: number
   orden: number
   notas: string | null
@@ -71,7 +71,7 @@ interface ServiceTemplateMock {
     descripcion: string
     cantidad: number
     precio_unitario: number
-    x_pagar: number
+    costo_unitario: number
     responsable_nombre?: string | null
     responsable_id?: string | null
   }>
@@ -118,7 +118,7 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
         importe: 15000,
         responsable_nombre: 'Sofía Ramírez',
         responsable_id: 'resp-1',
-        x_pagar: 6000,
+        costo_unitario: 6000,
         margen: 9000,
         orden: 1,
         notas: null,
@@ -182,7 +182,7 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
       general,
       iva,
       total: round2(general + iva),
-      margen_total: round2(cotizacion.items.reduce((sum, item) => sum + (item.cantidad * item.precio_unitario - item.x_pagar), 0)),
+      margen_total: round2(cotizacion.items.reduce((sum, item) => sum + (item.cantidad * item.precio_unitario - item.costo_unitario), 0)),
     })
   }
 
@@ -209,7 +209,7 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
       importe: 0,
       responsable_nombre: null,
       responsable_id: null,
-      x_pagar: 0,
+      costo_unitario: 0,
       margen: 0,
       orden: cotizacion.items.length + 1,
       notas: null,
@@ -237,13 +237,13 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     ;(body.items || []).forEach((source, index) => {
       const cantidad = Number(source.cantidad) || 1
       const precio = Number(source.precio_unitario) || 0
-      const xPagar = Number(source.x_pagar) || 0
+      const xPagar = Number(source.costo_unitario) || 0
       const campos = {
         categoria: String(source.categoria || ''),
         descripcion: String(source.descripcion || ''),
         cantidad,
         precio_unitario: precio,
-        x_pagar: xPagar,
+        costo_unitario: xPagar,
         importe: cantidad * precio,
         margen: cantidad * precio - xPagar,
       }
@@ -298,7 +298,7 @@ export async function mockCotizacionDetailApis(page: Page, options: CotizacionDe
     if (index >= 0) {
       const merged = { ...cotizacion.items[index], ...body }
       merged.importe = Number(merged.cantidad || 0) * Number(merged.precio_unitario || 0)
-      merged.margen = merged.importe - Number(merged.x_pagar || 0)
+      merged.margen = merged.importe - Number(merged.costo_unitario || 0)
       cotizacion.items[index] = merged
       await fulfillJson(route, { item: merged })
       return
