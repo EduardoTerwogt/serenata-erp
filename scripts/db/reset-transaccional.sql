@@ -2,7 +2,7 @@
 --
 -- Vacía todos los datos de negocio de PRODUCCIÓN (cotizaciones, proyectos,
 -- Cuentas, clientes, proveedores, productos…) y reinicia los folios: SH001,
--- CC-AAAA-001 y CP-AAAA-001. Conserva SOLO `usuarios` y la configuración de
+-- CC-AAAA-00001 y CP-AAAA-00001. Conserva SOLO `usuarios` y la configuración de
 -- tipos de proyecto (`tipos_proyecto`, `tipo_proyecto_etapas`,
 -- `tipo_proyecto_tarea_default`).
 --
@@ -36,9 +36,8 @@ DECLARE
     -- catálogos
     'clientes', 'proveedores', 'proveedor_documentos', 'productos', 'service_templates', 'gastos_fijos',
     -- operación e infraestructura de estado
-    'idempotency_keys', 'rate_limits', 'bulk_import_operations', 'extraction_logs',
-    -- Planeación y Sheets (se retiran en el plan)
-    'planeacion_event_notas', 'planeacion_pendientes', 'sheets_sync_status',
+    'idempotency_keys', 'rate_limits', 'bulk_import_operations',
+    -- (Planeación y Sheets ya se retiraron en B1+B3: sus tablas no existen)
     -- migración de clientes (el CSV va a docs/archive/ antes de borrar la tabla)
     'cliente_id_backfill_clasificacion'
   ];
@@ -60,7 +59,7 @@ BEGIN
   EXECUTE 'TRUNCATE TABLE ' || (SELECT string_agg(format('public.%I', t), ', ') FROM unnest(v_tablas) t)
     || ' RESTART IDENTITY';
 
-  -- Folios CC/CP por año: sin filas, el siguiente es 001.
+  -- Folios CC/CP por año: sin filas, el siguiente es 00001.
   DELETE FROM public.folio_contadores;
 
   -- ── Verificación final (M2): cualquier falla revierte TODO ─────────────────
@@ -86,11 +85,11 @@ BEGIN
   -- Folios CC/CP: con folio_contadores vacío, la siguiente reserva es 1 (siguiente_folio hace
   -- upsert del contador). Se prueba dentro de la transacción: este bloque se revierte si falla,
   -- y el contador de la prueba se vuelve a borrar.
-  IF public.siguiente_folio('CC', now()) NOT LIKE '%-001' OR public.siguiente_folio('CP', now()) NOT LIKE '%-001' THEN
-    RAISE EXCEPTION 'Verificación: los folios CC/CP no empiezan en 001';
+  IF public.siguiente_folio('CC', now()) NOT LIKE '%-00001' OR public.siguiente_folio('CP', now()) NOT LIKE '%-00001' THEN
+    RAISE EXCEPTION 'Verificación: los folios CC/CP no empiezan en 00001';
   END IF;
   DELETE FROM public.folio_contadores;
 
-  RAISE NOTICE 'Reinicio completo. Siguiente folio: SH001, CC-AAAA-001, CP-AAAA-001.';
+  RAISE NOTICE 'Reinicio completo. Siguiente folio: SH001, CC-AAAA-00001, CP-AAAA-00001.';
 END
 $reset$;
