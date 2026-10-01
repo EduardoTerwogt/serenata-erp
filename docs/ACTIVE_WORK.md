@@ -29,20 +29,24 @@ Historia de auditorías en `docs/archive/simplificacion-modelo-auditorias.md`.
 usuario que B0 pedirá: respaldo `supabase db dump` (plan Free sin respaldos),
 Drive en Preview y limpiar carpetas de prueba de Drive antes del reinicio (B2).
 
-**B0 en curso — PR #111 (borrador).** Bloques 1–3 y buena parte de 4–5
-hechos y en la rama (ver el tracker de `docs/PLAN.md`). Lo que **solo puede
-hacer una persona** (el MCP de Supabase retiene todo `DROP`/`DELETE`/`TRUNCATE`
-esperando una confirmación que una sesión remota no puede dar):
-1. Correr `scripts/db/test-retirar-frente2.sql` en el SQL Editor de
-   `serenata-erp-test` (una transacción; retira los objetos del frente 2 y
-   restaura 7 funciones con la definición de producción). Después se verifica
-   con `check-schema-parity.mjs --esquema` o por `md5(pg_get_functiondef)`.
-2. Opcional: `SUPABASE_ACCESS_TOKEN` en el entorno de la sesión para correr
-   `check-schema-parity.mjs --esquema` y `foto-dorada.mjs` sin pasar por el MCP.
-3. p50 HTTP de `POST /api/cotizaciones` y `PUT /api/cotizaciones/:id` en prod
-   (K6): no se puede medir desde aquí (logs de Vercel en 403/402); mirar el
-   dashboard de Vercel → Functions, o usar la base del lado BD de
-   `pg_stat_statements`.
+**B0 en curso — PR #111 (borrador), casi cerrado.** Hecho: guardas,
+`plpgsql_check` (CI), retiro de `sync-up`, 8 índices, foto dorada, y **test = prod
+en esquema verificado** (columnas, índices, restricciones, triggers, políticas y
+76 funciones idénticos; única excepción declarada: `loadtest_runs`, solo test).
+El usuario corrió `scripts/db/test-retirar-frente2.sql` en test (2026-10-01).
+Hallazgos corregidos por el camino: `preview_next_cotizacion_folio_principal`
+reconstruida desde cero quedaba con la versión vieja (el orden alfabético de los
+archivos de `db/migrations/` ≠ el orden en que se aplicaron; migración `20261013`),
+`cuentas_pagar.estado` era nullable en prod (`20261014`) y el texto de
+`cuentas_periodo` (`20261015`). **Línea base** (test, DB-side, 2026-10-01):
+`cuentas_periodo` proyectos/todo 579 ms, lista 498 ms, `cuentas_resumen` 286 ms;
+`pg_stat_statements` reiniciado a las 18:00 UTC. **Pendiente de B0:** `live` ×3 en
+verde, `reset-transaccional.sql` (borrador con un error conocido: folio `-001` vs
+`-00001`; su edición quedó pendiente de permiso del usuario), y las guardas que
+quedan en test por la semilla (5 cuentas sueltas con proveedor, 1 cuenta sin
+`item_id`: B5b/seed). Manual del usuario que sigue (no bloquea B1+B3): decidir el
+cómputo de test (#107); respaldo `supabase db dump` y limpieza de Drive antes de
+B2.
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer
