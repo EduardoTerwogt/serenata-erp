@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { randomUUID } from 'crypto'
-import { getLiveSupabaseAdmin } from '../utils/live-cleanup'
+import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin } from '../utils/live-cleanup'
 
 /**
  * Rediseño de Cuentas, B1b (docs/PLAN.md): pruebas reales contra
@@ -135,6 +135,11 @@ async function limpiar(supabase: Supabase, fx: Fixture) {
 
 test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascada', () => {
   test.skip(!liveEnabled, 'Live integration tests are disabled until PLAYWRIGHT_BASE_URL and live credentials are configured')
+
+  // Restos de corridas anteriores (timeout, proceso matado): rompen las guardas de consistencia.
+  test.beforeAll(async () => {
+    await cleanupLiveCuentasByPrefix('LB1B')
+  })
 
   test('dos generar_orden_pago simultáneos con el mismo grupo: una sola orden, con desglose', async () => {
     const supabase = getLiveSupabaseAdmin()

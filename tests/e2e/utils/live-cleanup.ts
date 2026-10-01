@@ -83,6 +83,73 @@ export async function cleanupLiveCotizacionesByPrefix(clientePrefix: string) {
 }
 
 /**
+ * Barre los fixtures de Cuentas que un test dejó a medias (timeout, proceso
+ * matado, `limpiar` que falló): cotizaciones, proyectos y proveedores cuyo id
+ * o nombre empieza con `prefijo`, y todo lo que cuelga de ellos. Los specs de
+ * Cuentas (`LB7…`, `LB1B…`) lo corren en beforeAll: sin esto esos restos
+ * (grupos en proceso de pago sin pagos, cobros con otro total, cuentas sin
+ * renglón) se acumulan en la BD de test y rompen las guardas de consistencia
+ * (`scripts/db/guardas-modelo.sql`). Un fallo aquí no tumba la corrida, pero
+ * se registra: las guardas lo mostrarán.
+ */
+export async function cleanupLiveCuentasByPrefix(prefijo: string) {
+  const supabase = getLiveSupabaseAdmin()
+  const paso = async (nombre: string, op: PromiseLike<{ error: { message: string } | null }>) => {
+    const { error } = await op
+    if (error) console.warn(`[cleanupLiveCuentasByPrefix] ${nombre}: ${error.message}`)
+  }
+  const ids = async (tabla: string, columna: string, filtro: string): Promise<string[]> => {
+    const { data } = await supabase.from(tabla).select(columna).ilike(columna, `${filtro}%`)
+    return ((data ?? []) as unknown as Record<string, string>[]).map((r) => r[columna])
+  }
+
+  const proyectoIds = Array.from(new Set([...(await ids('proyectos', 'id', prefijo)), ...(await ids('cotizaciones', 'id', prefijo))]))
+  const { data: proveedores } = await supabase.from('proveedores').select('id').ilike('nombre', `${prefijo}%`)
+  const proveedorIds = (proveedores ?? []).map((p) => p.id as string)
+  if (proyectoIds.length === 0 && proveedorIds.length === 0) return
+
+  const { data: grupos } = await supabase
+    .from('cuentas_pagar_grupos').select('id, orden_pago_id')
+    .or(`proyecto_id.in.(${proyectoIds.join(',')}),responsable_id.in.(${proveedorIds.join(',')})`)
+  const { data: cuentas } = await supabase
+    .from('cuentas_pagar').select('id, orden_pago_id')
+    .or(`proyecto_id.in.(${proyectoIds.join(',')}),cotizacion_id.in.(${proyectoIds.join(',')}),responsable_id.in.(${proveedorIds.join(',')})`)
+  const grupoIds = (grupos ?? []).map((g) => g.id as string)
+  const cuentaIds = (cuentas ?? []).map((c) => c.id as string)
+  const ordenIds = Array.from(new Set([...(grupos ?? []), ...(cuentas ?? [])].map((r) => r.orden_pago_id as string | null).filter((o): o is string => !!o)))
+  const { data: cobros } = await supabase.from('cuentas_cobrar').select('id').in('cotizacion_id', proyectoIds)
+  const cobroIds = (cobros ?? []).map((c) => c.id as string)
+
+  if (proyectoIds.length) {
+    await paso('reaperturas', supabase.from('cuentas_reaperturas').delete().in('proyecto_id', proyectoIds))
+    await paso('correcciones', supabase.from('cuentas_correcciones').delete().in('proyecto_id', proyectoIds))
+  }
+  if (ordenIds.length) await paso('conceptos de orden', supabase.from('ordenes_pago_conceptos').delete().in('orden_pago_id', ordenIds))
+  if (grupoIds.length) {
+    await paso('pagos de grupo', supabase.from('pagos_cuentas_pagar').delete().in('grupo_id', grupoIds))
+    await paso('documentos de grupo', supabase.from('documentos_cuentas_pagar').delete().in('grupo_id', grupoIds))
+  }
+  if (cuentaIds.length) {
+    await paso('pagos de cuenta', supabase.from('pagos_cuentas_pagar').delete().in('cuenta_pagar_id', cuentaIds))
+    await paso('documentos de cuenta', supabase.from('documentos_cuentas_pagar').delete().in('cuentas_pagar_id', cuentaIds))
+    await paso('cuentas por pagar', supabase.from('cuentas_pagar').delete().in('id', cuentaIds))
+  }
+  if (grupoIds.length) await paso('grupos', supabase.from('cuentas_pagar_grupos').delete().in('id', grupoIds))
+  if (ordenIds.length) await paso('órdenes', supabase.from('ordenes_pago').delete().in('id', ordenIds))
+  if (cobroIds.length) {
+    await paso('documentos de cobro', supabase.from('documentos_cuentas_cobrar').delete().in('cuentas_cobrar_id', cobroIds))
+    await paso('pagos de cobro', supabase.from('pagos_comprobantes').delete().in('cuentas_cobrar_id', cobroIds))
+    await paso('cuentas por cobrar', supabase.from('cuentas_cobrar').delete().in('id', cobroIds))
+  }
+  if (proyectoIds.length) {
+    await paso('proyectos', supabase.from('proyectos').delete().in('id', proyectoIds))
+    await paso('cotizaciones', supabase.from('cotizaciones').delete().in('id', proyectoIds))
+    await paso('folios reservados', supabase.from('cotizacion_folio_reservations').delete().in('folio', proyectoIds))
+  }
+  if (proveedorIds.length) await paso('proveedores', supabase.from('proveedores').delete().in('id', proveedorIds))
+}
+
+/**
  * Siembra un producto real en `productos` para probar el autofill de la
  * sugerencia de descripción contra Supabase real (Fase 8: el conflicto entre
  * seleccionar un producto -que autocompleta categoría/precio/x_pagar- y que
