@@ -123,15 +123,13 @@ describe('POST /api/cuentas-cobrar/[id]/subir-factura', () => {
       mocks.updateCuentaCobrarMock.mockClear()
     }
 
-    it.each([
-      [0, 'FACTURADO'],
-      [400, 'PARCIALMENTE_PAGADO'],
-      [1000, 'PAGADO'],
-    ])('con %s ya pagado (anticipo) el estado guardado es %s, nunca FACTURADO fijo', async (pagado, esperado) => {
+    it.each([0, 400, 1000])('con %s ya pagado solo escribe las fechas: el estado es derivado (D15), nunca se manda', async (pagado) => {
       exito(pagado)
       const response = await POST(buildRequest(), { params })
       expect(response.status).toBe(200)
-      expect(mocks.updateCuentaCobrarMock.mock.calls[0][1]).toMatchObject({ estado: esperado })
+      const update = mocks.updateCuentaCobrarMock.mock.calls[0][1]
+      expect(update).toEqual({ fecha_factura: '2026-09-20', fecha_vencimiento: '2099-10-20' })
+      expect(update).not.toHaveProperty('estado')
     })
 
     it('guarda UUID, total y método del CFDI en la fila del XML', async () => {

@@ -7,8 +7,6 @@ import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-overri
 import { completarReemplazo, planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
-import { calcularEstadoCuentaCobrarDetallado } from '@/lib/shared/cuentas/status'
-import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 
 const ROUTE = 'POST /api/cuentas-cobrar/[id]/subir-factura'
 
@@ -160,20 +158,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
     if (plan.reemplazo && xmlNuevoId) await completarReemplazo(plan.reemplazo, xmlNuevoId)
 
-    // V2 (Rediseño de Cuentas B1): el estado sale de montos, factura y "hoy"
-    // en CDMX, nunca fijo en FACTURADO -- con un anticipo previo, fijarlo
-    // hacía retroceder el estado guardado (que lee el Dashboard).
-    const estado = calcularEstadoCuentaCobrarDetallado({
-      montoPagado: Number(cuenta.monto_pagado || 0),
-      montoTotal: Number(cuenta.monto_total || 0),
-      fechaVencimiento: deadline,
-      isFacturada: true,
-      hoy: hoyCdmx(),
-    })
-
-    // Actualizar cuenta
+    // D15: el estado del cobro es una columna generada (sale de montos y
+    // fecha_factura); aquí solo se escriben las fechas.
     const cuentaActualizada = await updateCuentaCobrar(id, {
-      estado,
       fecha_factura: facturaData.fecha_emision,
       fecha_vencimiento: deadline,
     })

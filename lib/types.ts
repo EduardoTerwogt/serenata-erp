@@ -2,7 +2,8 @@ export type EstadoCotizacion = 'BORRADOR' | 'EMITIDA' | 'APROBADA' | 'CANCELADA'
 export type EstadoProyecto = 'PREPRODUCCION' | 'RODAJE' | 'POSTPRODUCCION' | 'FINALIZADO'
 export type EstadoPago = 'PENDIENTE' | 'PAGADO' | 'PARCIAL'
 
-export type EstadoCuentaCobrar = 'FACTURA_PENDIENTE' | 'FACTURADO' | 'PARCIALMENTE_PAGADO' | 'PAGADO' | 'VENCIDO'
+// Derivado en la BD (columna generada, PLAN.md D15). "Vencido" no se guarda: se deriva al leer.
+export type EstadoCuentaCobrar = 'FACTURA_PENDIENTE' | 'FACTURADO' | 'PARCIALMENTE_PAGADO' | 'PAGADO'
 export type EstadoCuentaPagar = 'PENDIENTE' | 'EN_PROCESO_PAGO' | 'PAGADO'
 export type EstadoCuentaPagarGrupo = 'ABIERTO' | 'FACTURADO' | 'EN_PROCESO_PAGO' | 'PAGADO'
 export type TipoPago = 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE'
@@ -405,6 +406,9 @@ export interface CuentaCobrar {
   created_at?: string
   updated_at?: string
 }
+
+/** Columnas de `cuentas_cobrar` que el TS puede escribir directo (el resto: RPCs o derivadas). */
+export type CuentaCobrarUpdate = Partial<Pick<CuentaCobrar, 'fecha_factura' | 'fecha_vencimiento' | 'notas'>>
 
 export interface PagoComprobante {
   id: string

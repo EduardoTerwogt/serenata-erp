@@ -176,15 +176,16 @@ BEGIN
     (NULL, c_grp_03, 'COMPROBANTE_PAGO',      'https://example.com/seedcu/SEEDCU03_pago.pdf', 'SEEDCU03_Comprobante.pdf',  'pendiente', '2026-07-20 10:00');
 
   -- ── Cuentas por cobrar ────────────────────────────────────────────────
-  INSERT INTO cuentas_cobrar (id, folio, cotizacion_id, proyecto_id, cliente, cliente_id, proyecto, monto_total, monto_pagado, estado, fecha_factura, fecha_vencimiento, fecha_pago)
+  -- `estado` es una columna generada (D15): se deriva de montos y fecha_factura.
+  INSERT INTO cuentas_cobrar (id, folio, cotizacion_id, proyecto_id, cliente, cliente_id, proyecto, monto_total, monto_pagado, fecha_factura, fecha_vencimiento, fecha_pago)
   VALUES
-    (c_cc_01,  'SEEDCU-CC-01',  'SEEDCU01',   'SEEDCU01', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Orden vieja y sueltas',        40020,  5000, 'FACTURA_PENDIENTE', NULL, NULL, NULL),  -- anticipo sin factura (D32)
-    (c_cc_02,  'SEEDCU-CC-02',  'SEEDCU02',   'SEEDCU02', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Grupo con pago parcial',       40020,     0, 'FACTURADO',         '2026-08-18', '2026-09-17', NULL),  -- XML pendiente (T1), ya vencida
-    (c_cc_03,  'SEEDCU-CC-03',  'SEEDCU03',   'SEEDCU03', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Cobro PPD en dos pagos',       26680, 26680, 'PAGADO',            '2026-07-06', '2026-08-05', '2026-08-01'),
-    (c_cc_04,  'SEEDCU-CC-04',  'SEEDCU04',   'SEEDCU04', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Factura en revisión',          13340,     0, 'FACTURADO',         '2026-09-15', '2026-10-15', NULL),  -- XML en revision (D25)
-    (c_cc_05,  'SEEDCU-CC-05',  'SEEDCU05',   'SEEDCU05', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', 26680,    0, 'FACTURA_PENDIENTE', NULL, NULL, NULL),
-    (c_cc_05a, 'SEEDCU-CC-05A', 'SEEDCU05-A', 'SEEDCU05', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias',  6670,    0, 'FACTURA_PENDIENTE', NULL, NULL, NULL),
-    (c_cc_sp,  'SEEDCU-CC-99',  NULL,         NULL,       'SEEDCU Cliente Demo', c_cliente, 'Seed · Cobro sin proyecto',             5000,    0, 'FACTURA_PENDIENTE', NULL, NULL, NULL);
+    (c_cc_01,  'SEEDCU-CC-01',  'SEEDCU01',   'SEEDCU01', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Orden vieja y sueltas',        40020,  5000, NULL, NULL, NULL),  -- anticipo sin factura (D32)
+    (c_cc_02,  'SEEDCU-CC-02',  'SEEDCU02',   'SEEDCU02', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Grupo con pago parcial',       40020,     0, '2026-08-18', '2026-09-17', NULL),  -- XML pendiente (T1), ya vencida
+    (c_cc_03,  'SEEDCU-CC-03',  'SEEDCU03',   'SEEDCU03', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Cobro PPD en dos pagos',       26680, 26680, '2026-07-06', '2026-08-05', '2026-08-01'),
+    (c_cc_04,  'SEEDCU-CC-04',  'SEEDCU04',   'SEEDCU04', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Factura en revisión',          13340,     0, '2026-09-15', '2026-10-15', NULL),  -- XML en revision (D25)
+    (c_cc_05,  'SEEDCU-CC-05',  'SEEDCU05',   'SEEDCU05', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', 26680,    0, NULL, NULL, NULL),
+    (c_cc_05a, 'SEEDCU-CC-05A', 'SEEDCU05-A', 'SEEDCU05', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias',  6670,    0, NULL, NULL, NULL),
+    (c_cc_sp,  'SEEDCU-CC-99',  NULL,         NULL,       'SEEDCU Cliente Demo', c_cliente, 'Seed · Cobro sin proyecto',             5000,    0, NULL, NULL, NULL);
 
   INSERT INTO pagos_comprobantes (id, cuentas_cobrar_id, monto, tipo_pago, fecha_pago, comprobante_url, archivo_nombre, notas)
   VALUES

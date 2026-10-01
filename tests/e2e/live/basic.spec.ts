@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { login } from '../utils/auth'
 import { clickGenerarCotizacionOrThrow, liveEnabled } from '../utils/live-helpers'
-import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations, cleanupOrphanedTestProductos } from '../utils/live-cleanup'
+import { cleanupLiveCotizacion, cleanupLiveCotizacionesByPrefix, cleanupOrphanedFolioReservations, cleanupOrphanedTestProductos, getLiveSupabaseAdmin } from '../utils/live-cleanup'
 
 const LIVE_TEST_CLIENTE_PREFIX = 'E2E-LIVE-'
 
@@ -100,21 +100,16 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await expect(page.getByText('¡Cotización aprobada! Proyecto y cuentas creados.')).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText('APROBADA', { exact: true })).toBeVisible()
 
-    // 3. Confirmar por API real que se generaron cuenta por cobrar y por pagar
-    // EF-3 3B-2: GET /api/cuentas-cobrar responde {rows, total_rows, ...} de
-    // la RPC buscar_cuentas_cobrar -- ya no un arreglo plano. Se busca por
-    // el folio real (cotizacionId) para no depender de que la cuenta caiga
-    // en la página 1 por default (orden created_at desc, page_size 50).
-    const cobrarRes = await page.request.get(`/api/cuentas-cobrar?search=${cotizacionId}`)
-    const { rows: cuentasCobrar } = await cobrarRes.json() as { rows: Array<{ id: string; cotizacion_id: string; monto_total: number }> }
-    const cuentaCobrar = cuentasCobrar.find((c) => c.cotizacion_id === cotizacionId)
+    // 3. Confirmar en la BD real que se generaron cuenta por cobrar y por pagar.
+    // (Las listas GET /api/cuentas-cobrar y /api/cuentas-pagar se retiraron: la
+    // pantalla de Cuentas lee del periodo.)
+    const supabase = getLiveSupabaseAdmin()
+    const { data: cobros } = await supabase.from('cuentas_cobrar').select('id, cotizacion_id, monto_total').eq('cotizacion_id', cotizacionId)
+    const cuentaCobrar = cobros?.[0]
     expect(cuentaCobrar, 'debe existir una cuenta por cobrar real para esta cotización').toBeTruthy()
 
-    // EF-3 3B-3: GET /api/cuentas-pagar responde {rows, total_rows, ...} de
-    // la RPC buscar_cuentas_pagar -- ya no un arreglo plano.
-    const pagarRes = await page.request.get(`/api/cuentas-pagar?search=${cotizacionId}`)
-    const { rows: cuentasPagar } = await pagarRes.json() as { rows: Array<{ id: string; cotizacion_id: string; x_pagar: number }> }
-    const cuentaPagar = cuentasPagar.find((c) => c.cotizacion_id === cotizacionId)
+    const { data: pagos } = await supabase.from('cuentas_pagar').select('id, cotizacion_id, x_pagar').eq('cotizacion_id', cotizacionId)
+    const cuentaPagar = pagos?.[0]
     expect(cuentaPagar, 'debe existir una cuenta por pagar real para esta cotización').toBeTruthy()
 
     // 4. Subir factura real a Drive desde el detalle del cobro (B5). El
@@ -150,9 +145,8 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await detPago.getByRole('button', { name: 'Registrar pago' }).first().click()
     await expect(detPago.getByText('Esta cuenta aún no tiene proveedor.')).toBeVisible()
     await expect(detPago.getByLabel('Monto')).toHaveCount(0)
-    const pagada = await page.request.get(`/api/cuentas-pagar?search=${cotizacionId}`)
-    const { rows: trasPago } = await pagada.json() as { rows: Array<{ cotizacion_id: string; monto_pagado: number | null }> }
-    expect(Number(trasPago.find((c) => c.cotizacion_id === cotizacionId)?.monto_pagado ?? 0)).toBe(0)
+    const { data: trasPago } = await supabase.from('cuentas_pagar').select('monto_pagado').eq('cotizacion_id', cotizacionId)
+    expect(Number(trasPago?.[0]?.monto_pagado ?? 0)).toBe(0)
   })
 
   test('cancela una cotización real y revierte cuentas/proyecto', async ({ page }) => {
@@ -185,16 +179,11 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     await expect(page.getByText('Cotización cancelada. Proyecto y cuentas eliminados.')).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText('CANCELADA', { exact: true })).toBeVisible()
 
-    // Confirmar por API real que no quedó ninguna cuenta generada
-    // EF-3 3B-2: {rows, total_rows, ...} en vez de un arreglo plano -- se
-    // busca por el folio real para no depender de la página 1 por default.
-    const cobrarRes = await page.request.get(`/api/cuentas-cobrar?search=${cotizacionId}`)
-    const { rows: cuentasCobrar } = await cobrarRes.json() as { rows: Array<{ cotizacion_id: string }> }
-    expect(cuentasCobrar.some((c) => c.cotizacion_id === cotizacionId)).toBe(false)
-
-    // EF-3 3B-3: {rows, total_rows, ...} en vez de un arreglo plano.
-    const pagarRes = await page.request.get(`/api/cuentas-pagar?search=${cotizacionId}`)
-    const { rows: cuentasPagar } = await pagarRes.json() as { rows: Array<{ cotizacion_id: string }> }
-    expect(cuentasPagar.some((c) => c.cotizacion_id === cotizacionId)).toBe(false)
+    // Confirmar en la BD real que no quedó ninguna cuenta generada
+    const supabase = getLiveSupabaseAdmin()
+    const { data: cobros } = await supabase.from('cuentas_cobrar').select('id').eq('cotizacion_id', cotizacionId)
+    expect(cobros ?? []).toHaveLength(0)
+    const { data: pagos } = await supabase.from('cuentas_pagar').select('id').eq('cotizacion_id', cotizacionId)
+    expect(pagos ?? []).toHaveLength(0)
   })
 })
