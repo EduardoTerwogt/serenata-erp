@@ -48,6 +48,21 @@ jobs:
           psql "$DB_URL" -v ON_ERROR_STOP=1 -c "select 1 from pg_proc where proname = 'approve_cotizacion'" | grep -q "1 row"
           echo "OK -- el schema se reconstruyó desde cero correctamente."
 
+      # J4 (docs/PLAN.md): plpgsql_check sobre todas las funciones de `public`.
+      # Un RENAME/DROP COLUMN no avisa si una función aún lee la columna vieja;
+      # este paso falla con la lista de errores si hay alguno.
+      - name: plpgsql_check — 0 errores en las funciones de public
+        run: |
+          DB_URL=$(supabase status --workdir . -o env | grep '^DB_URL=' | cut -d'=' -f2- | tr -d '"')
+          set -e
+          ERRORES=$(psql "$DB_URL" -v ON_ERROR_STOP=1 -At -F ' | ' -f scripts/db/plpgsql-check.sql)
+          if [ -n "$ERRORES" ]; then
+            echo "plpgsql_check encontró errores:"
+            echo "$ERRORES"
+            exit 1
+          fi
+          echo "OK -- plpgsql_check: 0 errores."
+
       - name: Detener Supabase local
         if: always()
         run: supabase stop --workdir . || true
