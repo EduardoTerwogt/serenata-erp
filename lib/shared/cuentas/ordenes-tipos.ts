@@ -26,9 +26,9 @@ export interface ItemOrden {
   saldo: number
 }
 
-/** Un grupo (proyecto + proveedor) o una cuenta suelta dentro de la orden. */
+/** Un grupo (proyecto + proveedor) dentro de la orden: las órdenes son por grupo (PLAN.md, B5a). */
 export interface ProyectoOrden {
-  tipo: 'grupo' | 'cuenta'
+  tipo: 'grupo'
   id: string
   proyecto_id: string | null
   proyecto_nombre: string
@@ -75,7 +75,7 @@ export interface PreviewOrden {
 }
 
 export interface SeleccionOrden {
-  tipo: 'grupo' | 'cuenta'
+  tipo: 'grupo'
   id: string
   monto_esperado: number
 }

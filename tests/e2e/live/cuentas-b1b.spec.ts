@@ -9,7 +9,7 @@ import { cleanupLiveCuentasByPrefix, cleanupLiveOrdenesPagoHuerfanas, getLiveSup
  *
  * - generar_orden_pago: dos generaciones simultáneas con el mismo grupo
  *   dejan una sola orden (H1) con su desglose (S1).
- * - registrar_pago_cuenta_pagar: un pago parcial de una suelta dentro de
+ * - registrar_pago_grupo_factura: un pago parcial de un grupo dentro de
  *   una orden conserva EN_PROCESO_PAGO (H3).
  * - cancel_cotizacion: principal, complementaria y principal con
  *   complementarias (APROBADA, EMITIDA, BORRADOR), más los casos
@@ -241,39 +241,43 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
     }
   })
 
-  test('pago parcial de una suelta dentro de una orden conserva EN_PROCESO_PAGO (H3)', async () => {
+  test('pago parcial de un grupo dentro de una orden conserva EN_PROCESO_PAGO (H3)', async () => {
     const supabase = getLiveSupabaseAdmin()
     const fx = await nuevoFixture(supabase)
     try {
-      const orden = must(await supabase.from('ordenes_pago')
-        .insert({ fecha_generacion: '2026-01-15', estado: 'GENERADA', total_monto: 1000 })
-        .select('id').single())
-      fx.ordenes.push(orden.id)
-      const cuenta = must(await supabase.from('cuentas_pagar').insert({
-        responsable_id: fx.proveedorId,
-        responsable_nombre: `${fx.prefix} Proveedor`,
-        x_pagar: 1000,
-        total_a_transferir: 1160,
-        orden_pago_id: orden.id,
-        estado: 'EN_PROCESO_PAGO',
-      }).select('id').single())
-      // B2 (D25): sin factura validada no se paga.
+      const principal = `${fx.prefix}-P`
+      const grupoId = randomUUID()
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId, xPagar: 1000, grupoEstado: 'FACTURADO' })
+      // B2 (D25): sin factura validada no se paga; T4: snapshot del total a transferir.
+      ok(await supabase.from('cuentas_pagar_grupos').update({ total_a_transferir: 1160 }).eq('id', grupoId))
       ok(await supabase.from('documentos_cuentas_pagar').insert({
-        cuentas_pagar_id: cuenta.id,
+        grupo_id: grupoId,
         tipo: 'FACTURA_PROVEEDOR_XML',
         archivo_url: 'https://example.com/live.xml',
         archivo_nombre: 'live.xml',
         estado_validacion: 'validado',
         total_cfdi: 1160,
       }))
+      const generada = must(await supabase.rpc('generar_orden_pago', {
+        p_candidatos: [{ tipo: 'grupo', id: grupoId, monto_esperado: 1000 }],
+        p_pdf_url: null,
+        p_pdf_nombre: `${fx.prefix} H3.pdf`,
+        p_usuario: 'live',
+      })) as { orden_pago_id: string }
+      fx.ordenes.push(generada.orden_pago_id)
 
       // B2 (D3): se captura el transferido; el neto aplicado es proporcional.
-      const res = must(await supabase.rpc('registrar_pago_cuenta_pagar', { p_cuenta_id: cuenta.id, p_monto: 400 }))
+      const res = must(await supabase.rpc('registrar_pago_grupo_factura', { p_grupo_id: grupoId, p_monto: 400 }))
       expect((res as { estado_nuevo: string }).estado_nuevo).toBe('EN_PROCESO_PAGO')
-      const fila = must(await supabase.from('cuentas_pagar').select('estado, monto_pagado, monto_transferido').eq('id', cuenta.id).single())
+      const fila = must(await supabase.from('cuentas_pagar_grupos').select('estado, monto_pagado, monto_transferido').eq('id', grupoId).single())
       expect(fila.estado).toBe('EN_PROCESO_PAGO')
       expect(Number(fila.monto_transferido)).toBe(400)
       expect(Number(fila.monto_pagado)).toBe(344.83) // 400 × 1000 / 1160
+      const hija = must(await supabase.from('cuentas_pagar').select('estado, monto_pagado').eq('grupo_id', grupoId).single())
+      expect(hija.estado).toBe('EN_PROCESO_PAGO')
+      expect(Number(hija.monto_pagado)).toBe(344.83)
+      expect((must(await supabase.from('ordenes_pago').select('estado').eq('id', generada.orden_pago_id).single())).estado).toBe('PARCIALMENTE_PAGADA')
     } finally {
       await limpiar(supabase, fx)
     }

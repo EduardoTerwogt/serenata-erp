@@ -1,8 +1,8 @@
 /**
  * Rediseño de Cuentas B2 (docs/PLAN.md, D3, D18, A1, R5, R7, T2, T4):
- * registro de un pago a proveedor, compartido por
- * POST /api/cuentas-pagar/[id]/registrar-pago (suelta) y
- * POST /api/cuentas-pagar/grupos/[id]/registrar-pago (grupo).
+ * registro de un pago a proveedor:
+ * POST /api/cuentas-pagar/grupos/[id]/registrar-pago. Los pagos a proveedor son
+ * solo por grupo (PLAN.md, B5a); el pago a una cuenta suelta se retiró.
  *
  * - El monto capturado es el TOTAL A TRANSFERIR (IVA incluido, menos
  *   retenciones). La RPC lo convierte a neto proporcional para los items.
@@ -12,7 +12,7 @@
  * - Factura validada, proveedor asignado y snapshot los valida la RPC, no
  *   solo esta capa.
  */
-import { getCuentaPagarById, getCuentaPagarGrupoById, getProyectoById } from '@/lib/db'
+import { getCuentaPagarGrupoById, getProyectoById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { computePayloadHash, withIdempotency } from '@/lib/server/idempotency'
@@ -21,21 +21,11 @@ import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 import { RegistrarPagoProveedorSchema, validate } from '@/lib/validation/schemas'
 
-export type ObjetivoPagoProveedor = 'grupo' | 'cuenta'
-
 const CONFIG = {
-  grupo: {
-    scope: (id: string) => `cuentas-pagar-grupos:${id}:registrar-pago`,
-    dominio: 'cuentas_pagar_grupos',
-    rpc: 'registrar_pago_grupo_factura',
-    idParam: 'p_grupo_id',
-  },
-  cuenta: {
-    scope: (id: string) => `cuentas-pagar:${id}:registrar-pago`,
-    dominio: 'cuentas_pagar',
-    rpc: 'registrar_pago_cuenta_pagar',
-    idParam: 'p_cuenta_id',
-  },
+  scope: (id: string) => `cuentas-pagar-grupos:${id}:registrar-pago`,
+  dominio: 'cuentas_pagar_grupos',
+  rpc: 'registrar_pago_grupo_factura',
+  idParam: 'p_grupo_id',
 } as const
 
 // Errores esperados de la RPC (ERRCODE P1413): el prefijo del mensaje decide
@@ -43,9 +33,7 @@ const CONFIG = {
 const MENSAJES_P1413: Record<string, string> = {
   grupo_no_facturable: 'El grupo aún no está facturado; sube y valida la factura del proveedor antes de registrar el pago.',
   sin_factura_validada: 'Sube y valida la factura del proveedor antes de registrar el pago.',
-  sin_proveedor: 'Asigna un proveedor a esta cuenta antes de registrar el pago.',
   sin_total_a_transferir: 'La factura no tiene total a transferir guardado; vuelve a validarla.',
-  cuenta_en_grupo: 'Esta cuenta pertenece a un grupo de facturación: registra el pago sobre el grupo.',
 }
 
 interface ResultadoRpc {
@@ -58,14 +46,13 @@ interface ResultadoRpc {
 }
 
 export async function registrarPagoProveedor(params: {
-  objetivo: ObjetivoPagoProveedor
   id: string
   formData: FormData
   usuario: string | null
   route: string
 }): Promise<{ status: number; body: unknown }> {
-  const { objetivo, id, formData, usuario, route } = params
-  const config = CONFIG[objetivo]
+  const { id, formData, usuario, route } = params
+  const config = CONFIG
 
   const comprobante = formData.get('comprobante') as File | null
   const validation = validate(RegistrarPagoProveedorSchema, {
@@ -84,7 +71,7 @@ export async function registrarPagoProveedor(params: {
 
   const payloadHash = computePayloadHash({
     dominio: config.dominio,
-    ...(objetivo === 'grupo' ? { grupoId: id } : { cuentaId: id }),
+    grupoId: id,
     monto,
     tipoPago,
     fechaPago,
@@ -95,12 +82,9 @@ export async function registrarPagoProveedor(params: {
     config.scope(id),
     operationId,
     async () => {
-      const destino = objetivo === 'grupo' ? await getCuentaPagarGrupoById(id) : await getCuentaPagarById(id)
+      const destino = await getCuentaPagarGrupoById(id)
       if (!destino) {
-        return {
-          status: 404,
-          body: { error: objetivo === 'grupo' ? 'Grupo de cuentas por pagar no encontrado' : 'Cuenta por pagar no encontrada' },
-        }
+        return { status: 404, body: { error: 'Grupo de cuentas por pagar no encontrado' } }
       }
 
       let comprobanteUrl: string | null = null
@@ -108,8 +92,7 @@ export async function registrarPagoProveedor(params: {
         const googleEnv = getGoogleEnv()
         if (!googleEnv) return { status: 500, body: { error: 'Google Drive no configurado' } }
         const proyecto = await getProyectoById(destino.proyecto_id)
-        const carpeta = objetivo === 'grupo' ? destino.proyecto_id : (destino as { cotizacion_id: string }).cotizacion_id
-        const folderPath = `/Por Pagar/${carpeta}-${proyecto?.proyecto ?? destino.proyecto_id}`
+        const folderPath = `/Por Pagar/${destino.proyecto_id}-${proyecto?.proyecto ?? destino.proyecto_id}`
         comprobanteUrl = await uploadFileToDrive(comprobante, folderPath, comprobante.name, googleEnv.driveFolderIdCuentas || undefined)
       }
 

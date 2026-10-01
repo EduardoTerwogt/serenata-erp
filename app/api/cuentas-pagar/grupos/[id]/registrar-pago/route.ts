@@ -16,7 +16,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const { id } = await props.params
     const formData = await request.formData()
     const { status, body } = await registrarPagoProveedor({
-      objetivo: 'grupo',
       id,
       formData,
       usuario: authResult.session?.user?.email ?? null,

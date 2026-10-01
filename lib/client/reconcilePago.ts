@@ -22,7 +22,7 @@ export interface PagoReconciliationResult {
  * nada.
  */
 export async function reconcilePagoEstado(
-  dominio: 'cuentas-pagar' | 'cuentas-cobrar' | 'cuentas-pagar-grupos',
+  dominio: 'cuentas-cobrar' | 'cuentas-pagar-grupos',
   cuentaId: string,
   operationId: string
 ): Promise<PagoReconciliationResult> {

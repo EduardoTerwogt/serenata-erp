@@ -13,10 +13,10 @@ describe('reconcilePagoEstado', () => {
     vi.unstubAllGlobals()
   })
 
-  it('cuentas-pagar/cuentas-cobrar: construye la URL bajo /api/<dominio>/<id>/registrar-pago/estado', async () => {
+  it('cuentas-cobrar: construye la URL bajo /api/<dominio>/<id>/registrar-pago/estado', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ status: 'not_found' }) })
-    await reconcilePagoEstado('cuentas-pagar', 'cuenta-1', 'op-1')
-    expect(fetchMock).toHaveBeenCalledWith('/api/cuentas-pagar/cuenta-1/registrar-pago/estado?operation_id=op-1')
+    await reconcilePagoEstado('cuentas-cobrar', 'cuenta-1', 'op-1')
+    expect(fetchMock).toHaveBeenCalledWith('/api/cuentas-cobrar/cuenta-1/registrar-pago/estado?operation_id=op-1')
   })
 
   it('cuentas-pagar-grupos: construye la URL bajo el sub-recurso /api/cuentas-pagar/grupos/<id>/registrar-pago/estado', async () => {

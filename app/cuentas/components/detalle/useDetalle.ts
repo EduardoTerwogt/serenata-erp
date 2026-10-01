@@ -7,7 +7,15 @@ import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
 import type { DetalleConcepto } from '@/lib/shared/cuentas/detalle-tipos'
 import type { CorreccionCuentas } from '@/lib/validation/schemas'
 
-export type ObjetivoDetalle = { tipo: 'cobro' | 'grupo' | 'cuenta'; id: string }
+export type ObjetivoDetalle = { tipo: 'cobro' | 'grupo'; id: string } | { tipo: 'cuenta'; id: string }
+
+/**
+ * Objetivos sobre los que se factura y se paga: un cobro o un grupo de
+ * proveedor. Una cuenta suelta ("por asignar") solo se consulta: las facturas
+ * y los pagos a proveedor son por grupo (PLAN.md, B5a).
+ */
+export type ObjetivoPagable = Exclude<ObjetivoDetalle, { tipo: 'cuenta' }>
+export const esPagable = (o: ObjetivoDetalle): o is ObjetivoPagable => o.tipo !== 'cuenta'
 
 /** 'c:<cuenta_cobrar>', 'g:<grupo>' o 's:<cuenta_pagar suelta>' (ConceptoVista.key). */
 export function objetivoDeKey(key: string): ObjetivoDetalle | null {
@@ -58,7 +66,7 @@ export const accionesDetalle = {
    * XML de la factura (se valida en el servidor). Con `motivo` reemplaza la
    * vigente validada (B7: admin con las cuentas reabiertas).
    */
-  async subirFacturaXml(o: ObjetivoDetalle, xml: File, motivo?: string) {
+  async subirFacturaXml(o: ObjetivoPagable, xml: File, motivo?: string) {
     const fd = new FormData()
     fd.append(o.tipo === 'cobro' ? 'factura_xml' : 'factura_proveedor_xml', xml)
     if (motivo) fd.append('motivo', motivo)
@@ -66,7 +74,7 @@ export const accionesDetalle = {
   },
 
   /** PDF de la factura, en su propia petición (supuesto 15). */
-  async subirFacturaPdf(o: ObjetivoDetalle, pdf: File) {
+  async subirFacturaPdf(o: ObjetivoPagable, pdf: File) {
     const fd = new FormData()
     fd.append('tipo', o.tipo === 'cobro' ? 'FACTURA_PDF' : 'FACTURA_PROVEEDOR')
     fd.append('archivo', pdf)
@@ -92,8 +100,8 @@ export const accionesDetalle = {
   },
 
   /** Registra un pago con la idempotencia vigente (1E-3b): mismo flujo que la UI anterior. */
-  async registrarPago(o: ObjetivoDetalle, datos: { monto: number; tipo_pago: string; fecha_pago: string; notas: string; comprobante?: File }) {
-    const dominio = o.tipo === 'cobro' ? 'cuentas-cobrar' : o.tipo === 'grupo' ? 'cuentas-pagar-grupos' : 'cuentas-pagar'
+  async registrarPago(o: ObjetivoPagable, datos: { monto: number; tipo_pago: string; fecha_pago: string; notas: string; comprobante?: File }) {
+    const dominio = o.tipo === 'cobro' ? 'cuentas-cobrar' : 'cuentas-pagar-grupos'
     return runIdempotentPagoSubmit({
       scope: `registrar-pago:${dominio}:${o.id}`,
       dominio,

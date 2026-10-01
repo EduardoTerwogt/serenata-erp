@@ -15,7 +15,7 @@ import { TONO, useEsAdmin } from '../ui'
 import { TabDocumentos } from './TabDocumentos'
 import { TabInformacion } from './TabInformacion'
 import { TabPago } from './TabPago'
-import { accionesDetalle, useDetalle } from './useDetalle'
+import { accionesDetalle, esPagable, useDetalle } from './useDetalle'
 
 export type PestanaDetalle = 'info' | 'docs' | 'pago'
 
@@ -143,8 +143,13 @@ export function DetalleConcepto({ conceptoKey, tab, onTab, onClose, onCambio, ho
       {d && objetivo && tab === 'info' && (
         <TabInformacion d={d} ejecutar={tras} corrige={corrige} onReasignar={(itemId, id, nombre) => tras(() => accionesDetalle.reasignar(itemId, id, nombre), 'Proveedor reasignado')} />
       )}
-      {d && objetivo && tab === 'docs' && <TabDocumentos d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} corrige={corrige} />}
-      {d && objetivo && tab === 'pago' && <TabPago d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} irA={onTab} hoy={hoy} corrige={corrige} />}
+      {d && objetivo && (tab === 'docs' || tab === 'pago') && !esPagable(objetivo) && (
+        <StatusBanner tone="info" className="text-[12.5px]">
+          Esta cuenta aún no tiene proveedor. Asígnalo en Información: la factura y el pago se registran sobre el grupo del proveedor.
+        </StatusBanner>
+      )}
+      {d && objetivo && esPagable(objetivo) && tab === 'docs' && <TabDocumentos d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} corrige={corrige} />}
+      {d && objetivo && esPagable(objetivo) && tab === 'pago' && <TabPago d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} irA={onTab} hoy={hoy} corrige={corrige} />}
     </Modal>
   )
 }

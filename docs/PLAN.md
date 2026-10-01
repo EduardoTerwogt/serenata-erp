@@ -343,6 +343,20 @@ del script de reinicio. Estimación: 7 sesiones.
 
 ### B5a — Escrituras de dinero solo por grupo (P0)
 
+> **Estado (2026-10-01): implementado en test, en PR.** Migraciones `20261019`
+> (puente `costo_total` + 9 RPCs por grupo; aplicada en test) y `20261020`
+> (DROP de `registrar_pago_cuenta_pagar`, manual tras el deploy). Desviaciones
+> acordadas con el plan: (1) `cuentas_pagar.orden_pago_id` de las **hijas** se
+> sigue escribiendo hasta B5b, porque `cancel_cotizacion` y
+> `cuentas_por_proyecto` todavía lo leen; las columnas `total_a_transferir`,
+> `monto_transferido` y `metodo_pago` de `cuentas_pagar` ya no las escribe nadie;
+> (2) `corregir_datos_cobro` va en B5b con las RPCs de cobro;
+> (3) `adjuntar_comprobante_pago_proveedor` y las demás ya no mencionan
+> `cuenta_pagar_id`/`cuentas_pagar_id` (esas columnas salen en B5b);
+> (4) `recalcular_estado_orden_pago` ya no tiene la regla de órdenes sin
+> desglose: conserva su estado. **A producción solo después de B2** (reinicio de
+> datos): una suelta con pagos previos ya no se podría anular ni corregir.
+
 Una reescritura por función, desde prod: `registrar_pago_cuenta_pagar`,
 `registrar_pago_grupo_factura`, `anular_pago_proveedor`,
 `baja_documento_pago`, `adjuntar_comprobante_pago_proveedor`,

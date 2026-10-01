@@ -12,7 +12,7 @@ import { fechaCorta } from '../formato'
 import { CorregirPago, HistorialCorrecciones } from './Correcciones'
 import { ACCEPT_COMPROBANTE, BotonArchivo, type Ejecutar } from './TabDocumentos'
 import { Seccion } from './TabInformacion'
-import { accionesDetalle, type ObjetivoDetalle } from './useDetalle'
+import { accionesDetalle, type ObjetivoPagable } from './useDetalle'
 import type { PestanaDetalle } from './DetalleConcepto'
 
 const TIPOS = [
@@ -24,7 +24,7 @@ const etiquetaTipo = (t: string) => TIPOS.find((x) => x.value === t)?.label ?? t
 
 interface Props {
   d: DetalleConcepto
-  objetivo: ObjetivoDetalle
+  objetivo: ObjetivoPagable
   ejecutar: Ejecutar
   avisarError: (mensaje: string) => void
   irA: (t: PestanaDetalle) => void
@@ -94,7 +94,7 @@ export function TabPago({ d, objetivo, ejecutar, avisarError, irA, hoy, corrige 
   )
 }
 
-function Formulario({ d, objetivo, saldo, ejecutar, avisarError, hoy }: { d: DetalleConcepto; objetivo: ObjetivoDetalle; saldo: number; ejecutar: Ejecutar; avisarError: (m: string) => void; hoy: string }) {
+function Formulario({ d, objetivo, saldo, ejecutar, avisarError, hoy }: { d: DetalleConcepto; objetivo: ObjetivoPagable; saldo: number; ejecutar: Ejecutar; avisarError: (m: string) => void; hoy: string }) {
   const [monto, setMonto] = useState(saldo.toFixed(2))
   const [tipo, setTipo] = useState<string>('TRANSFERENCIA')
   const [fecha, setFecha] = useState(hoy)
