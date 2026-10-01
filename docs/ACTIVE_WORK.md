@@ -17,8 +17,7 @@ verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
 **Iniciativa "Simplificación del modelo de datos"** — epic #109. Fases 1–3,
 decisiones D1–D7 y dos auditorías hechas (2026-10-01). Plan v3 (B0–B6) en
-`docs/PLAN.md`, **listo para aprobar**; B2 espera 2 confirmaciones (catálogos y
-folios). Al aprobarse, la siguiente sesión arranca con B0.
+`docs/PLAN.md`, **listo para aprobar**, sin preguntas abiertas. Al aprobarse, la siguiente sesión arranca con B0.
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer

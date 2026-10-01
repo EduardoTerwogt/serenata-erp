@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Plan v3 (dos auditorías) — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar).
+**Estado:** Plan v3 (dos auditorías) — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar, sin preguntas abiertas).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -98,7 +98,7 @@ ni el portal de proveedores.
 | 1. Inventario | Tablas, columnas, quién las toca | `docs/inventario-tablas.md` | Hecha |
 | 2. Uso real y riesgo | Evidencia y matriz | `docs/inventario-tablas.md` → "Fase 2" | Hecha |
 | 3. Propuestas | 3 alternativas | ADR 020 | Hecha |
-| 4. Decisión y plan | D1–D7, dos auditorías, plan v3 | Este archivo | **Listo para aprobar** (2 confirmaciones abajo) |
+| 4. Decisión y plan | D1–D7, dos auditorías, plan v3 | Este archivo | **Listo para aprobar** |
 | 5. Ejecución | B0–B6 | Un PR por bloque | Pendiente |
 
 ## Auditoría del plan v1 (2026-10-01)
@@ -232,9 +232,16 @@ Lista completa de F12. Migración: borrar `sheets_sync_status` y sus 3 RPCs.
   tareas/documentos, hoy en 0), todas las de Cuentas, órdenes, historiales,
   reaperturas, correcciones, Planeación, `extraction_logs`, idempotencia,
   rate limits; reinicia `folio_contadores`.
-- Conserva: `usuarios` y configuración (`tipos_proyecto`,
-  `tipo_proyecto_etapas`, `tipo_proyecto_tarea_default`, `service_templates`,
-  `gastos_fijos`). **Catálogos según confirmación 1.**
+- Conserva **solo `usuarios`** (confirmado 2026-10-01) más la configuración
+  de sistema que siembra la migración `20260906_post_rename_fase52_proyectos_pm_schema.sql`
+  (`tipos_proyecto` Grabación/Concierto/Diseño de Show, `tipo_proyecto_etapas`,
+  `tipo_proyecto_tarea_default`): no son datos de prueba y sin ellas
+  Proyectos no funciona. Se borran clientes, proveedores, productos,
+  plantillas de servicios y gastos fijos.
+- Folios: `folio_contadores` a 0 y reservas vacías → la siguiente cotización es
+  SH001 y CC/CP empiezan en 1 (confirmado).
+- **Solo producción.** La BD de test conserva su dataset de carga (2,203
+  proyectos); en B5 se re-siembra con el mismo volumen (F10).
 - Borra `cliente_id_backfill_clasificacion` (CSV a `docs/archive/`).
 - Drive: paso a paso para ti (F13). Desde aquí, pruebas manuales en el Preview
   (F2).
@@ -288,15 +295,12 @@ Una reescritura por función, desde prod, y en la misma migración:
   última vez, guardas en 0, borrar el script de reinicio.
 - Cerrar #105, #106, #107 (con lo aprendido), #108, #109; archivar este plan.
 
-## Confirmaciones pendientes (no bloquean B0 ni B1)
+## Confirmaciones (2026-10-01)
 
-1. **Catálogos en el reinicio (B2):** recomendación: conservar `usuarios`
-   y configuración, y **borrar también** clientes, proveedores y productos,
-   que hoy son de prueba ("Prueba", "FORMATO PDF", "TEST EF1 - BORRAR",
-   productos autoguardados). Si ya cargaste proveedores o clientes reales,
-   dime cuáles se quedan.
-2. **Folios:** tras el reinicio la siguiente cotización vuelve a **SH001**
-   y los contadores CC/CP a 1. ¿Correcto?
+1. Catálogos en el reinicio: **se conservan solo `usuarios`** (más la
+   configuración de tipos de proyecto que siembra una migración).
+2. Folios: **SH001 y CC/CP desde 1** tras el reinicio.
+3. El reinicio **no toca la BD de test**.
 
 ## Riesgos
 
@@ -320,7 +324,7 @@ Una reescritura por función, desde prod, y en la misma migración:
 | Aprobación del plan v3 | **Pendiente del usuario** |
 | B0 Red de seguridad y test = prod | Pendiente |
 | B1 Retirar Sheets | Pendiente |
-| B2 Reinicio de datos | Pendiente (confirmaciones 1 y 2) |
+| B2 Reinicio de datos | Pendiente |
 | B3 Integridad, tipos y operación | Pendiente |
 | B4 Un solo motor de Cuentas (#108) | Pendiente |
 | B5 Cuentas en un PR | Pendiente |
