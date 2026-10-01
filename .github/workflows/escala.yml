@@ -1,0 +1,112 @@
+name: Escala
+
+# Prueba de escala de Cuentas (PLAN.md, decisión D18): mide la latencia de las
+# lecturas por periodo contra el dataset de carga de serenata-erp-test (miles de
+# proyectos) para saber si la app aguanta crecer de cientos a miles de
+# cotizaciones. Va APARTE del gate de cada PR (e2e.yml, job `live`): mide
+# latencia en una BD compartida de cómputo gratuito, y un pico de CPU ajeno no
+# debe tumbar un PR, pero sí importa verlo en la tendencia.
+#
+# Manual (workflow_dispatch) y una vez por semana. Mismo grupo de concurrencia
+# que e2e.yml y load-test.yml: los tres mutan o cargan serenata-erp-test.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 9 * * 0'
+
+concurrency:
+  group: serenata-erp-test-shared
+  cancel-in-progress: false
+
+jobs:
+  escala:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AUTH_SECRET: live-e2e-secret
+      AUTH_TRUST_HOST: 'true'
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      # EF-2 1A-2: expone lib/supabase-browser.ts como window.__e2eSupabaseBrowser
+      # SOLO en este build -- necesario para que
+      # realtime-channel-reconnection.spec.ts pueda contar canales activos y
+      # detectar huérfanos tras una reconexión. Nunca se fija fuera de este job
+      # (ni en smoke-and-critical, ni en Vercel).
+      NEXT_PUBLIC_E2E_TEST_HOOKS: 'true'
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      # JWT Secret legacy de serenata-erp-test (Supabase Dashboard -> Settings
+      # -> API) -- firma los tokens cortos de app/api/realtime/token, que las
+      # políticas RLS de realtime.messages verifican contra el mismo secreto.
+      SUPABASE_JWT_SECRET: ${{ secrets.TEST_SUPABASE_JWT_SECRET }}
+      TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+      TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+      TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN_TEST }}
+      GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      GOOGLE_DRIVE_FOLDER_ID_CUENTAS: ${{ secrets.DRIVE_TEST_FOLDER_ID }}
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+      PLAYWRIGHT_TEST_EMAIL: ${{ secrets.PLAYWRIGHT_TEST_EMAIL }}
+      PLAYWRIGHT_TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+      # Sin esto, si faltara una credencial Playwright marcaria los tests como
+      # "skipped" y el job quedaria VERDE sin haber probado nada. Con la variable
+      # puesta, el guard de tests/e2e/live/cotizaciones-colaboracion.spec.ts falla
+      # y nombra lo que falta.
+      PLAYWRIGHT_LIVE_REQUIRED: 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Quitar el repo apt de Google Chrome preinstalado en el runner
+        # Causa raíz de que "Install Playwright browsers" fallara: el runner
+        # de GitHub trae preconfigurado /etc/apt/sources.list.d/google-chrome.list,
+        # y `playwright install --with-deps` corre `apt-get update` contra
+        # TODOS los repos configurados -- no solo los que necesita. Ese repo
+        # de Google (que no usamos: solo instalamos `chromium`, no
+        # `google-chrome-stable`) viene sirviendo un Packages.gz con hash
+        # mismatch desde el mirror de Azure. Quitarlo antes del apt-get
+        # update elimina la causa, no solo reintenta contra el mismo repo roto.
+        run: sudo rm -f /etc/apt/sources.list.d/google-chrome*.list
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build app against the test environment
+        run: npm run build
+
+      - name: Start app in background
+        run: nohup npx next start > next-start.log 2>&1 &
+
+      - name: Wait for app to be ready
+        run: npx wait-on http://127.0.0.1:3000 --timeout 60000
+
+      - name: Run scale tests
+        run: npm run test:e2e:escala
+
+      - name: Dump Next.js server log on failure
+        if: failure()
+        run: |
+          echo "── next-start.log ──"
+          cat next-start.log || echo "(next-start.log no existe)"
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-escala-artifacts
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore

@@ -35,12 +35,11 @@ interface SyncSummary {
 }
 
 type Step = 'idle' | 'loading' | 'done' | 'error'
-type Action = 'setup' | 'sync-down' | 'sync-up'
+type Action = 'setup' | 'sync-down'
 
-const ACCIONES: { id: Action; label: string; nota: string; icon: 'google-sheets' | 'upload' | 'download'; variant: 'secondary' | 'primary' }[] = [
+const ACCIONES: { id: Action; label: string; nota: string; icon: 'google-sheets' | 'upload'; variant: 'secondary' | 'primary' }[] = [
   { id: 'setup', label: 'Crear Sheet', nota: 'Inicializa el spreadsheet.', icon: 'google-sheets', variant: 'secondary' },
   { id: 'sync-down', label: 'Supabase → Sheets', nota: 'Exporta la base de datos al Sheet.', icon: 'upload', variant: 'primary' },
-  { id: 'sync-up', label: 'Sheets → Supabase', nota: 'Importa al sistema los cambios hechos en el Sheet.', icon: 'download', variant: 'primary' },
 ]
 
 // 10 · Admin · Google Sheets (AdminScreen.jsx del kit, función Sincronizacion):

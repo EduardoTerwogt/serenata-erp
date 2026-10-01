@@ -119,6 +119,7 @@ no cae en ninguna, se borra.
 | D15 | Estado del cobro (L2) | **Fórmula única:** `PAGADO` si pagado ≥ total (> 0); si no, `PARCIALMENTE_PAGADO` si hay pago; si no, `FACTURADO` si hay `fecha_factura`; si no, `FACTURA_PENDIENTE`. "Vencido" se deriva al leer. Quitar la factura limpia `fecha_factura`. |
 | D16 | `cliente_id` repetido (L3) | **Un solo `cliente_id`, en `cotizaciones`** (congelado al aprobar). Salen `proyectos.cliente_id` y `cuentas_cobrar.cliente_id`; se leen por `cotizaciones` (`proyectos.id = cotizaciones.id`). |
 | D17 | B6 "un solo motor" (L8) | **Obligatorio.** No quedan dos motores de Cuentas al cerrar. |
+| D18 | Escala y cómputo (2026-10-01) | **El dataset de carga (≈2,200 proyectos) se conserva**: el objetivo es demostrar que la app aguanta pasar de cientos a miles de cotizaciones sin subir de plan de Supabase. La prueba de latencia sale del gate de cada PR (`tests/e2e/escala/`, workflow `escala.yml`, manual y semanal) para que el cómputo compartido no tumbe PRs. El frente 2 sigue pausado (D6) y se decide en B7 con la curva medida a 500, 2,200 y 5,000 proyectos. D13 y B6 (D17) pasan a opcionales para este objetivo (pendiente de confirmar). |
 
 ## Confirmaciones (2026-10-01)
 
@@ -130,6 +131,7 @@ no cae en ninguna, se borra.
 
 ## Resultado esperado (v12)
 
+- **Tablas por entorno (verificado 2026-10-01):** producción 40, test 43 = las 40 más `cuentas_conceptos_base` y `cuentas_conceptos_pendientes` (frente 2; las retira `scripts/db/test-retirar-frente2.sql`) y `loadtest_runs`. **`loadtest_runs` existe solo en test a propósito** (control de las corridas de carga, `db/migrations/20260915_loadtest_runs.sql`, nunca aplicada en prod): es la única excepción de "test = prod", declarada en `check-schema-parity.mjs`, y `reset-transaccional.sql` la usa para negarse a correr en test. Al cerrar el plan: prod 34, test 35.
 - **40 → 34 tablas:** salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
   `planeacion_pendientes`, `planeacion_event_notas` y `extraction_logs`.
@@ -506,7 +508,7 @@ presentación.
 - `ARCHITECTURE.md`, `CLAUDE.md` (principio 1 sin Sheets; principio 8 con los
   nombres de columna), decisiones 006, 008, 011, 017; ADR 020 con el
   resultado real y la regla de dueño único; nota de F14 para Proyectos.
-- Re-evaluar el frente 2 (D6) — con los índices de B0 puede que ya no haga falta.
+- Re-evaluar el frente 2 (D6) — con los índices de B0 puede que ya no haga falta. Se decide con la **curva de escala** (D18): latencia de `cuentas_periodo`/`resumen` a 500, 2,200 y 5,000 proyectos (`escala.yml`); si a 5,000 pasan de 800 ms, se aplica sobre el diseño ya simplificado.
 - Medir otra vez p50 de guardado de cotizaciones (K6) y `live`.
 - Checklist de salida a uso real: reinicio por última vez, guardas en 0,
   carpetas de prueba de Drive fuera (H3), borrar el script de reinicio y
@@ -539,7 +541,7 @@ presentación.
 | Fases 1–3 (#105, #106) | Hecho (2026-10-01) |
 | Decisiones D1–D17 y 10 auditorías (historia en archive) | Hecho (2026-10-01) |
 | Aprobación del plan v12 | Hecho (2026-10-01) |
-| B0 Red de seguridad, test = prod, índices y foto dorada | Pendiente |
+| B0 Red de seguridad, test = prod, índices y foto dorada | **Casi cerrado** — PR #111 (2026-10-01). Hecho: guardas (19), `mapa-dependencias.mjs`, `plpgsql_check` (`20261011`, paso de CI, 0 errores en test, prod y fresh-db), retiro de `sync-up`, 8 índices (`20261012`, test y prod, con `EXPLAIN`), foto dorada (`foto-dorada.{sql,mjs}`), frente 2 retirado de test, **esquema de test = prod verificado** (`esquema-huella-resumen.sql`; excepción `loadtest_runs`), BD reconstruida desde `db/migrations/` = prod salvo el texto de `cuentas_periodo` (corregido en `20261015`, por confirmar en CI), y datos de test alineados (márgenes, copias de proveedor, restos `live`). Hallazgos: el orden alfabético de `db/migrations/` ≠ el orden de aplicación (`preview_next_cotizacion_folio_principal`, `20261013`); `cuentas_pagar.estado` nullable en prod (`20261014`). Línea base test: `cuentas_periodo` 579/498 ms, `cuentas_resumen` 286 ms. **Pendiente:** `live` ×3, `reset-transaccional.sql` (B2), y 5 sueltas + 1 cuenta sin `item_id` de la semilla (B5b). |
 | B2 Reinicio de datos (script; tras limpiar Drive) | Pendiente |
 | B1 + B3 Retiros, catálogos rápidos e integridad | Pendiente |
 | B5a Escrituras de dinero solo por grupo | Pendiente |

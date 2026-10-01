@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { randomUUID } from 'crypto'
-import { getLiveSupabaseAdmin } from '../utils/live-cleanup'
+import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin } from '../utils/live-cleanup'
 
 /**
  * Rediseño de Cuentas B7 (D5, R8): pruebas reales contra serenata-erp-test de
@@ -99,6 +99,11 @@ const pagarGrupo = (supabase: Supabase, fx: Fixture, monto: number) =>
 
 test.describe('live: B7 reabrir y anular pagos', () => {
   test.skip(!liveEnabled, 'Live integration tests are disabled until PLAYWRIGHT_BASE_URL and live credentials are configured')
+
+  // Restos de corridas anteriores (timeout, proceso matado): rompen las guardas de consistencia.
+  test.beforeAll(async () => {
+    await cleanupLiveCuentasByPrefix('LB7')
+  })
 
   test('sin reapertura no se anula; reabrir es idempotente', async () => {
     const supabase = getLiveSupabaseAdmin()

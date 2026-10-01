@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-01T01:08:29.876Z",
-  "count": 122,
+  "generated_at": "2026-10-01T18:01:06.529Z",
+  "count": 127,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -123,6 +123,11 @@
     "20261005_cuentas_b7_reabrir_correcciones.sql",
     "20261006_cuentas_opciones_filtros.sql",
     "20261007_cuentas_desglose_iva_y_descuento.sql",
-    "20261008_cuentas_pagar_grupos_invariante.sql"
+    "20261008_cuentas_pagar_grupos_invariante.sql",
+    "20261011_plpgsql_check.sql",
+    "20261012_indices_faltantes.sql",
+    "20261013_preview_next_folio_version_vigente.sql",
+    "20261014_alinear_esquema_test_prod.sql",
+    "20261015_cuentas_periodo_texto_vigente.sql"
   ]
 }

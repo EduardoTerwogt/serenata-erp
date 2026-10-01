@@ -14,6 +14,7 @@ lo justifica — nunca para que deje de fallar.
 | E2E smoke | `npm run test:e2e:smoke` | Navegación y carga de pantallas, con las APIs **mockeadas**. | Local y CI |
 | E2E critical | `npm run test:e2e:critical` | Flujos de negocio completos, con las APIs **mockeadas**. | Local y CI |
 | E2E live | `npm run test:e2e:live` | Servidor Next real contra **Supabase y Drive de prueba reales**. | **Solo CI** |
+| E2E escala | `npm run test:e2e:escala` | Latencia de las lecturas de Cuentas contra el dataset de carga (miles de proyectos). Aparte del gate de PR (D18). | **Solo CI**, manual y semanal (`escala.yml`) |
 | Migrations | workflow `Migrations` | Que `db/migrations/*.sql` reconstruye el schema completo desde un Postgres vacío (Fase 4.5) — via Supabase CLI, sin tocar ningún proyecto real. | **Solo CI** |
 
 Además: `npx tsc --noEmit` y `npm run lint` antes de cualquier commit que toque

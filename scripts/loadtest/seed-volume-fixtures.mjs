@@ -84,7 +84,7 @@ function fechaEntregaEn15Dias() {
 }
 
 async function insertarProveedoresDeVolumen(supabaseAdmin, runId, count) {
-  const ids = []
+  const proveedores = []
   for (let start = 0; start < count; start += PROVEEDOR_INSERT_BATCH) {
     const batchSize = Math.min(PROVEEDOR_INSERT_BATCH, count - start)
     const rows = Array.from({ length: batchSize }, (_, idx) => {
@@ -95,23 +95,29 @@ async function insertarProveedoresDeVolumen(supabaseAdmin, runId, count) {
         activo: true,
       }
     })
-    const { data, error } = await supabaseAdmin.from('proveedores').insert(rows).select('id')
+    const { data, error } = await supabaseAdmin.from('proveedores').insert(rows).select('id, nombre')
     if (error) throw new Error(`seed-volume-fixtures: fallo insertando proveedores: ${error.message}`)
-    ids.push(...data.map((r) => r.id))
-    console.log(`seed-volume-fixtures: proveedores ${ids.length}/${count} insertados`)
+    proveedores.push(...data)
+    console.log(`seed-volume-fixtures: proveedores ${proveedores.length}/${count} insertados`)
   }
-  return ids
+  return proveedores
 }
 
-async function crearCotizacionAprobada(targetUrl, cookie, runId, i, proveedorIds) {
-  const items = Array.from({ length: ITEMS_PER_COTIZACION }, (_, j) => ({
-    descripcion: `LOADTEST-${runId}-Item-${i}-${j + 1}`,
-    categoria: 'Producción',
-    cantidad: 1,
-    precio_unitario: 1000,
-    x_pagar: 700,
-    responsable_id: proveedorIds[(i * ITEMS_PER_COTIZACION + j) % proveedorIds.length],
-  }))
+async function crearCotizacionAprobada(targetUrl, cookie, runId, i, proveedores) {
+  const items = Array.from({ length: ITEMS_PER_COTIZACION }, (_, j) => {
+    // approve_cotizacion copia responsable_nombre del renglón a cuentas_pagar: sin
+    // el nombre quedaba 'Sin asignar' aunque hubiera responsable_id (copia ≠ dueño).
+    const proveedor = proveedores[(i * ITEMS_PER_COTIZACION + j) % proveedores.length]
+    return {
+      descripcion: `LOADTEST-${runId}-Item-${i}-${j + 1}`,
+      categoria: 'Producción',
+      cantidad: 1,
+      precio_unitario: 1000,
+      x_pagar: 700,
+      responsable_id: proveedor.id,
+      responsable_nombre: proveedor.nombre,
+    }
+  })
 
   const createRes = await fetch(`${targetUrl}/api/cotizaciones`, {
     method: 'POST',
@@ -163,13 +169,13 @@ async function main() {
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
 
   console.log(`seed-volume-fixtures: insertando ${PROVEEDORES_TARGET} proveedores de volumen`)
-  const proveedorIds = await insertarProveedoresDeVolumen(supabaseAdmin, runId, PROVEEDORES_TARGET)
+  const proveedores = await insertarProveedoresDeVolumen(supabaseAdmin, runId, PROVEEDORES_TARGET)
 
   console.log(`seed-volume-fixtures: login admin (${adminEmail}) contra ${targetUrl}`)
   const cookie = await loginRest(targetUrl, adminEmail, adminPassword)
 
   for (let i = 1; i <= COTIZACIONES_TARGET; i++) {
-    await crearCotizacionAprobada(targetUrl, cookie, runId, i, proveedorIds)
+    await crearCotizacionAprobada(targetUrl, cookie, runId, i, proveedores)
     if (i % 50 === 0 || i === COTIZACIONES_TARGET) {
       console.log(`seed-volume-fixtures: cotizaciones ${i}/${COTIZACIONES_TARGET} creadas+emitidas+aprobadas`)
     }
