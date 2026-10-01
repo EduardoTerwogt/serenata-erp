@@ -539,7 +539,7 @@ presentación.
 | Fases 1–3 (#105, #106) | Hecho (2026-10-01) |
 | Decisiones D1–D17 y 10 auditorías (historia en archive) | Hecho (2026-10-01) |
 | Aprobación del plan v12 | Hecho (2026-10-01) |
-| B0 Red de seguridad, test = prod, índices y foto dorada | Pendiente |
+| B0 Red de seguridad, test = prod, índices y foto dorada | **En curso** — PR #111 (2026-10-01). Hecho: guardas (`guardas-modelo.sql`, 19), `mapa-dependencias.mjs`, `plpgsql_check` (migración `20261011`, paso de CI, 0 errores en test, prod y fresh-db), retiro de `sync-up`, paridad de esquema (`--esquema` + `esquema-huella.sql`), 8 índices (`20261012`, test y prod, con `EXPLAIN`), foto dorada (`foto-dorada.{sql,mjs}`), alineación de márgenes y copias de proveedor en test, generador de carga y barrido de fixtures `live`. `pg_stat_statements_snapshot` y `plpgsql_check` aplicadas también en prod. **Pendiente (manual, ver ACTIVE_WORK):** correr `scripts/db/test-retirar-frente2.sql` en test (el MCP no ejecuta `DROP`/`DELETE`), `VACUUM ANALYZE`, línea base (`pg_stat_statements_reset`, `live` ×3), foto dorada autoritativa, y el script de reinicio de B2. Pendiente de B5b/seed: las 5 cuentas sueltas con proveedor y la cuenta sin `item_id` que siembra `scripts/seed-cuentas-test.sql`. |
 | B2 Reinicio de datos (script; tras limpiar Drive) | Pendiente |
 | B1 + B3 Retiros, catálogos rápidos e integridad | Pendiente |
 | B5a Escrituras de dinero solo por grupo | Pendiente |

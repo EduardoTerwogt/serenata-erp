@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { randomUUID } from 'crypto'
-import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin } from '../utils/live-cleanup'
+import { cleanupLiveCuentasByPrefix, cleanupLiveOrdenesPagoHuerfanas, getLiveSupabaseAdmin } from '../utils/live-cleanup'
 
 /**
  * Rediseño de Cuentas, B1b (docs/PLAN.md): pruebas reales contra
@@ -139,6 +139,7 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
   // Restos de corridas anteriores (timeout, proceso matado): rompen las guardas de consistencia.
   test.beforeAll(async () => {
     await cleanupLiveCuentasByPrefix('LB1B')
+    await cleanupLiveOrdenesPagoHuerfanas()
   })
 
   test('dos generar_orden_pago simultáneos con el mismo grupo: una sola orden, con desglose', async () => {

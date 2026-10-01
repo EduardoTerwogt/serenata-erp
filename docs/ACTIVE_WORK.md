@@ -29,6 +29,21 @@ Historia de auditorías en `docs/archive/simplificacion-modelo-auditorias.md`.
 usuario que B0 pedirá: respaldo `supabase db dump` (plan Free sin respaldos),
 Drive en Preview y limpiar carpetas de prueba de Drive antes del reinicio (B2).
 
+**B0 en curso — PR #111 (borrador).** Bloques 1–3 y buena parte de 4–5
+hechos y en la rama (ver el tracker de `docs/PLAN.md`). Lo que **solo puede
+hacer una persona** (el MCP de Supabase retiene todo `DROP`/`DELETE`/`TRUNCATE`
+esperando una confirmación que una sesión remota no puede dar):
+1. Correr `scripts/db/test-retirar-frente2.sql` en el SQL Editor de
+   `serenata-erp-test` (una transacción; retira los objetos del frente 2 y
+   restaura 7 funciones con la definición de producción). Después se verifica
+   con `check-schema-parity.mjs --esquema` o por `md5(pg_get_functiondef)`.
+2. Opcional: `SUPABASE_ACCESS_TOKEN` en el entorno de la sesión para correr
+   `check-schema-parity.mjs --esquema` y `foto-dorada.mjs` sin pasar por el MCP.
+3. p50 HTTP de `POST /api/cotizaciones` y `PUT /api/cotizaciones/:id` en prod
+   (K6): no se puede medir desde aquí (logs de Vercel en 403/402); mirar el
+   dashboard de Vercel → Functions, o usar la base del lado BD de
+   `pg_stat_statements`.
+
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer
 `main` a su rama (conflicto add/add esperado en `20261008`: conservar la de

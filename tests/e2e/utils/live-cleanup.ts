@@ -150,6 +150,29 @@ export async function cleanupLiveCuentasByPrefix(prefijo: string) {
 }
 
 /**
+ * Borra las órdenes de pago que un test `live` dejó sin nada colgando: creadas
+ * por el usuario 'live', sin conceptos, sin cuentas ni grupos que las
+ * referencien. Una orden cancelada conserva sus conceptos para el historial,
+ * así que una sin conceptos solo puede ser el resto de una limpieza a medias
+ * (rompe la guarda "total de la orden = Σ desglose").
+ */
+export async function cleanupLiveOrdenesPagoHuerfanas() {
+  const supabase = getLiveSupabaseAdmin()
+  const { data: ordenes } = await supabase.from('ordenes_pago').select('id').eq('created_by', 'live')
+  for (const { id } of ordenes ?? []) {
+    const [conceptos, cuentas, grupos] = await Promise.all([
+      supabase.from('ordenes_pago_conceptos').select('id', { count: 'exact', head: true }).eq('orden_pago_id', id),
+      supabase.from('cuentas_pagar').select('id', { count: 'exact', head: true }).eq('orden_pago_id', id),
+      supabase.from('cuentas_pagar_grupos').select('id', { count: 'exact', head: true }).eq('orden_pago_id', id),
+    ])
+    if ((conceptos.count ?? 1) + (cuentas.count ?? 1) + (grupos.count ?? 1) === 0) {
+      const { error } = await supabase.from('ordenes_pago').delete().eq('id', id)
+      if (error) console.warn(`[cleanupLiveOrdenesPagoHuerfanas] ${id}: ${error.message}`)
+    }
+  }
+}
+
+/**
  * Siembra un producto real en `productos` para probar el autofill de la
  * sugerencia de descripción contra Supabase real (Fase 8: el conflicto entre
  * seleccionar un producto -que autocompleta categoría/precio/x_pagar- y que
