@@ -68,7 +68,6 @@ import {
 // entrada ahí); se deja Table por ser la más descriptiva.
 const ICONS = {
   dashboard: Home,
-  planeacion: Calendar,
   calendar: Calendar,
   cotizaciones: FileText,
   proyectos: FolderKanban,

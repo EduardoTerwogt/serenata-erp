@@ -3,7 +3,7 @@ import { ServiceTemplateRepository } from '@/lib/server/repositories/service-tem
 import { ServiceTemplateUpdateSchema, validate } from '@/lib/validation/schemas'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const authResult = await requireSection('planeacion')
+  const authResult = await requireSection('cotizaciones')
   if (authResult.response) return authResult.response
 
   try {
@@ -28,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const authResult = await requireSection('planeacion')
+  const authResult = await requireSection('cotizaciones')
   if (authResult.response) return authResult.response
 
   try {
@@ -65,7 +65,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const authResult = await requireSection('planeacion')
+  const authResult = await requireSection('cotizaciones')
   if (authResult.response) return authResult.response
 
   try {

@@ -1,11 +1,11 @@
-import { requireAnySection, requireSection } from '@/lib/api-auth'
+import { requireSection } from '@/lib/api-auth'
 import { ServiceTemplateRepository } from '@/lib/server/repositories/service-templates'
 import { ServiceTemplateCreateSchema, validate } from '@/lib/validation/schemas'
 
 export async function GET() {
-  // Fase 5.8: cotizaciones también consulta plantillas (aplicar plantilla de
-  // servicios en Partidas), no solo planeación.
-  const authResult = await requireAnySection(['planeacion', 'cotizaciones'])
+  // Las plantillas de servicios pertenecen a la sección cotizaciones (PLAN.md,
+  // E2): se aplican en Partidas y se administran en /plantillas-servicios.
+  const authResult = await requireSection('cotizaciones')
   if (authResult.response) return authResult.response
 
   try {
@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const authResult = await requireSection('planeacion')
+  const authResult = await requireSection('cotizaciones')
   if (authResult.response) return authResult.response
 
   try {

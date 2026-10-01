@@ -7,13 +7,12 @@ import type { AppSection } from '@/auth'
  * módulo funcione completo, sin depender de parches endpoint por endpoint.
  */
 const SECTION_DEPENDENCIES: Record<AppSection, AppSection[]> = {
-  admin: ['dashboard', 'cotizaciones', 'proyectos', 'cuentas', 'responsables', 'planeacion'],
+  admin: ['dashboard', 'cotizaciones', 'proyectos', 'cuentas', 'responsables'],
   dashboard: [],
   cotizaciones: ['responsables'],
   proyectos: [],
   cuentas: [],
   responsables: [],
-  planeacion: [],
 }
 
 function isKnownSection(value: string): value is AppSection {

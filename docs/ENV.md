@@ -34,7 +34,7 @@ NEXTAUTH_URL=
 # lib/auth-utils.ts.
 AUTH_USERS='[{"id":"...","email":"...","passwordHash":"...","name":"...","sections":["..."]}]'
 
-# AI (Planeación)
+# AI (portal: estructurar documentos de proveedores)
 ANTHROPIC_API_KEY=
 
 # Google — OAuth base

@@ -87,13 +87,13 @@ function NuevaCotizacionContent() {
   const [showNotasModal, setShowNotasModal] = useState(false)
 
   // Mismo criterio que app/cotizaciones/[id]/page.tsx: el botón "Crear
-  // plantilla" se muestra solo a quien ya tiene sección `planeacion`, sin
-  // tocar el guard del backend (supuesto 4 de docs/PLAN.md).
+  // plantilla" se muestra a quien tiene la sección `cotizaciones`, igual que el
+  // guard de `POST /api/service-templates` (PLAN.md, E2).
   const userSections = useMemo(
     () => (session?.user as { sections?: string[] })?.sections ?? [],
     [session?.user]
   )
-  const canCreateTemplate = userSections.includes('planeacion')
+  const canCreateTemplate = userSections.includes('cotizaciones')
 
   // Mismo contrato que usa la pantalla de edición; aquí las partidas viven en memoria
   // porque la cotización todavía no existe en la base.

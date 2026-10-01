@@ -18,7 +18,6 @@ const ALL_SECTIONS = [
   { id: 'proyectos', label: 'Proyectos' },
   { id: 'cuentas', label: 'Cuentas' },
   { id: 'responsables', label: 'Proveedores' },
-  { id: 'planeacion', label: 'Planeación' },
 ]
 
 interface Usuario {

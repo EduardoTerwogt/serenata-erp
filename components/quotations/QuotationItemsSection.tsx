@@ -51,7 +51,7 @@ interface Props {
   responsables: Proveedor[]
   readOnlyItems?: ReadOnlyItem[]
   onCopyClick?: () => void
-  /** Bloque 2 sub-tarea 7: solo quien ya tiene sección `planeacion` ve el botón — sin tocar el guard del backend (`POST /api/service-templates` sigue exigiendo `requireSection('planeacion')`). */
+  /** Solo quien tiene la sección `cotizaciones` ve el botón (`POST /api/service-templates` exige `requireSection('cotizaciones')`). */
   canCreateTemplate?: boolean
   /**
    * Único punto de contacto con la lógica de partidas. La tabla se comporta igual en
