@@ -16,10 +16,10 @@ grupos desfasados, 0 grupos ABIERTO vacíos, "Eduardo Terwogt" de SH072 en 3,100
 verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
 **Iniciativa "Simplificación del modelo de datos"** — epic #109. Fases 1–3
-hechas y decisiones D1–D6 tomadas (2026-10-01): alternativa B, Sheets solo
-lectura, datos de prueba borrables, tareas/documentos de proyecto se
-conservan, frente 2 en pausa hasta cerrar. Plan B0–B8 en `docs/PLAN.md`
-**espera aprobación**; al aprobarse, la siguiente sesión arranca con B0.
+hechas, decisiones D1–D6 tomadas y plan auditado (2026-10-01): el v1 tenía un
+error en el bloque de dinero (A1) y validaba en una BD de test distinta a prod
+(A2); plan v2 (B0–B7) en `docs/PLAN.md` **espera 4 respuestas y aprobación**.
+Al aprobarse, la siguiente sesión arranca con B0.
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer

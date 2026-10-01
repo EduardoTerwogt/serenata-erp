@@ -204,8 +204,8 @@ sigue siendo **datos de prueba**: los desfases de abajo prueban que el diseño
 | H6 | `items_cotizacion.margen` y `cotizaciones.margen_total` son derivados guardados. | **13 renglones** guardan la fórmula vieja (`importe − x_pagar`), incluidos aprobados (SH004, SH071, SH072) → su utilidad en Cuentas sale de un margen viejo. `20260918` decidió no rehacerlos por ser prueba. | `recalcular_totales_cotizacion`, `save/upsert/bulk_replace`, `approve`, Cuentas (`cot.margen`). |
 | H7 | `historial_responsable` es **caché**: se borra y regenera desde `items_cotizacion` + `proyectos` al cerrar el proyecto (`projects/equipo.ts`), con `proyecto_nombre`, `cliente` y `fecha_evento` copiados como texto. Sin FK en `proyecto_id`. | 18 filas; 100 % derivable. | Modal de proveedor (join), `/api/proveedores/[id]/historial`, `cuentas-pagar.ts`, rollback de `projects/service.ts`, `cancel_cotizacion`, Sheets. |
 | H8 | `clientes.proyectos` (array de texto) es lista derivada de cotizaciones. | 29/29 clientes con array; solo lo escribe `quotations/persistence.ts` y lo lee el autocompletado de Cotizaciones. | Se obtiene con `distinct proyecto from cotizaciones where cliente_id = …`. |
-| H9 | `cuentas_pagar` tiene **dos caminos**: renglón en grupo y renglón "suelto" (legado). En renglones con grupo, el estado vive en el grupo y las columnas de la hija quedan muertas. | Con grupo: 42 filas, 0 desfases de orden/llave, `total_a_transferir` siempre null, `monto_pagado` siempre 0. **Sueltas: 47** (41 en orden sin factura, 3 sin proveedor, 1 pagada, …). Todas datos de prueba. | ~10 RPCs con rama `grupo_id IS NULL`, `UNION ALL` en órdenes, portal (grupos sintéticos), derivación TS. Es la mayor fuente de complejidad de Cuentas. |
-| H10 | Tres mecanismos de idempotencia con la misma forma (`operation_id` + resultado jsonb). | `idempotency_keys` (HTTP), `pago_operations` (3 RPCs de pago), `bulk_import_operations` (1 RPC). | Decisión 008. |
+| H9 | `cuentas_pagar` tiene **dos caminos**: renglón en grupo y renglón "suelto" (legado). En renglones con grupo, `total_a_transferir`, `monto_transferido` y `orden_pago_id` repiten o no usan el dato del grupo; `monto_pagado`/`estado`/`fecha_pago` **sí** se usan: el pago del grupo se prorratea a cada renglón (corregido en la auditoría del plan, A1). | Con grupo: 42 filas, 0 desfases de orden/llave, `total_a_transferir` siempre null. **Sueltas: 47** (41 en orden sin factura, 3 sin proveedor, 1 pagada, …). Todas datos de prueba. | ~10 RPCs con rama `grupo_id IS NULL`, `UNION ALL` en órdenes, portal (grupos sintéticos), derivación TS. Es la mayor fuente de complejidad de Cuentas. |
+| H10 | Tres tablas de idempotencia con forma parecida. **Auditoría A8:** no son duplicado; son dos capas a propósito (HTTP vs resultado dentro de la transacción del dinero, decisión 008). | `idempotency_keys` (HTTP), `pago_operations` (3 RPCs de pago), `bulk_import_operations` (1 RPC). | Decisión 008. |
 | H11 | **Sheets → Supabase (`sync-up`) escribe directo** sobre `cotizaciones`, `items_cotizacion`, `proyectos`, `cuentas_cobrar`, `cuentas_pagar`, etc., sin RPC ni guardas. Está en Admin ("Importa al sistema los cambios hechos en el Sheet"). | `lib/integrations/sheets/sync-up.ts`, `schema.ts` (`readonly: []` en las dos de cuentas). | Contradice los principios 1 y 2 de `CLAUDE.md`, y **cualquier columna que se borre rompe el espejo**. Prerrequisito de toda la iniciativa. |
 | H12 | Residuo: `cliente_id_backfill_clasificacion`. | 168 filas, 0 lectores en código y funciones. | Ninguno. |
 | H13 | Tipos e integridad. | 13 columnas `timestamp` sin zona; `fecha_entrega` como texto en cotizaciones y proyectos (D9); `planeacion_pendientes.fecha` + `fecha_iso`; sin FK: `cuentas_pagar.item_id`, `historial_responsable.proyecto_id`, `extraction_logs.proyecto_id`. | — |
@@ -232,15 +232,14 @@ Riesgo = qué pasa si sale mal: P0 dinero/impuestos, P1 función visible, P2 int
 | `proveedores` | Mantener | Fuente única de contacto y banco (H3). | — |
 | `cuentas_cobrar` | Adelgazar | Quitar `cliente`/`proyecto` texto (H2). | P1 |
 | `pagos_comprobantes`, `documentos_cuentas_cobrar` | Mantener | No se fusionan con los de pagar (ver ADR 020, alternativa C). | — |
-| `cuentas_pagar` | Adelgazar | Quitar contacto copiado (H3) y copias del renglón (H4); FK real a `items_cotizacion`; `x_pagar` → `costo_total` (H5); sin estado propio cuando hay grupo (H9). | **P0** |
+| `cuentas_pagar` | Adelgazar | Quitar contacto copiado (H3), copias del renglón (H4) y columnas de la rama suelta (H9); FK real a `items_cotizacion`. Conserva el desglose de pago por renglón y el nombre `x_pagar` documentado (auditoría A1, A7). | **P0** |
 | `cuentas_pagar_grupos` | Mantener (se vuelve la única obligación) | Toda cuenta con proveedor tiene grupo; las sueltas se migran a grupos de un renglón (H9). | **P0** |
 | `pagos_cuentas_pagar`, `documentos_cuentas_pagar` | Adelgazar | Cuelgan solo del grupo (desaparece `cuenta_pagar_id` tras H9). | **P0** |
 | `ordenes_pago`, `ordenes_pago_conceptos` | Mantener | Snapshot inmutable por decisión (S1). Arreglar H14. | P1 |
 | `cuentas_reaperturas`, `cuentas_correcciones` | Mantener | Bitácora; 0 filas por falta de uso, no por sobrar. | — |
 | `historial_responsable` | **Derivar** | Vista/RPC sobre renglones + proyectos finalizados (H7). | P1 |
 | `historial_cambios_responsable_item` | Mantener | Bitácora real de reasignaciones (no es caché). | — |
-| `idempotency_keys` | Mantener (absorbe a las otras dos) | — | P1 |
-| `pago_operations`, `bulk_import_operations` | **Fusionar** en `idempotency_keys` (H10). | P1 |
+| `idempotency_keys`, `pago_operations`, `bulk_import_operations` | Mantener | Dos capas a propósito (auditoría A8). | — |
 | `cliente_id_backfill_clasificacion` | **Borrar** (archivar CSV antes) (H12). | P2 |
 | `cotizacion_folio_reservations`, `folio_contadores` | Mantener | Distintos a propósito: reservas con expiración vs contadores por serie/año. | — |
 | `productos`, `service_templates` | Mantener | Catálogos con UI activa. | — |
@@ -251,7 +250,7 @@ Riesgo = qué pasa si sale mal: P0 dinero/impuestos, P1 función visible, P2 int
 | `usuarios` | Mantener | Distinto dominio de auth que el portal de proveedores. | — |
 | `rate_limits`, `sheets_sync_status` | Mantener | Infraestructura. | — |
 
-**Saldo:** 40 → 36 tablas y ~20 columnas copiadas o derivadas menos. El número de tablas baja
+**Saldo (plan v2):** 40 → 38 tablas y ~20 columnas copiadas o derivadas menos. El número de tablas baja
 poco a propósito: **la complejidad real no está en cuántas tablas hay sino en
 el estado duplicado** (H3, H4, H6, H9) y en los dos caminos de
 `cuentas_pagar`. Ahí está la ganancia.

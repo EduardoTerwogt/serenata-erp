@@ -45,32 +45,26 @@ Quitar copias y derivados (H2, H3, H4, H6, H7, H8), residuo (H12), FKs y tipos
 - **Costo:** medio. ~12 funciones SQL, ~10 archivos TS, Sheets, tests.
 - **Riesgo:** P1. No cambia reglas de dinero.
 
-### B — A + el grupo como única obligación de pago (**recomendada**)
+### B — A + el grupo como única vía de pago + un solo motor de Cuentas (**elegida**)
 
 Todo lo de A, más:
 
-- **Toda cuenta por pagar con proveedor pertenece a un grupo.** Las 47 sueltas
-  se migran a grupos de un renglón (el portal ya las muestra así como "grupos
-  sintéticos", decisión 011). Las cuentas sin proveedor ("Sin asignar") quedan
-  como renglones sin grupo y **no pagables** hasta asignarse, igual que hoy en
-  la práctica.
-- `cuentas_pagar` deja de guardar estado de pago: `estado`, `monto_pagado`,
-  `orden_pago_id`, `total_a_transferir`, `monto_transferido` viven solo en el
-  grupo. Pagos y documentos cuelgan solo del grupo.
-- `cuentas_pagar.x_pagar` se renombra a `costo_total` (H5).
-- `pago_operations` y `bulk_import_operations` se absorben en
-  `idempotency_keys` (H10).
+- **Toda cuenta por pagar con proveedor pertenece a un grupo**; pagos,
+  facturas y órdenes solo por grupo. El renglón conserva su desglose de pago
+  prorrateado (decisión 011) y el "suelto por asignar" (sin proveedor) sigue
+  existiendo en la UI.
+- Salen de `cuentas_pagar` las columnas que solo usaba la rama suelta
+  (`orden_pago_id`, `total_a_transferir`, `monto_transferido`, `metodo_pago`)
+  y las copias de proveedor y renglón.
+- Las reglas de Cuentas quedan solo en SQL (#108); el TS presenta.
 
-- **Gana:** desaparece la rama "suelta" de ~10 RPCs, del `UNION ALL` de
-  órdenes, del portal y de la derivación TS. `cuentas_conceptos` pierde una
-  fuente efectiva de estado, y el frente 2 (`cuentas_conceptos_base`) se
-  re-evalúa con menos triggers o se vuelve innecesario.
-- **Costo:** alto. Toca RPCs de pago (`registrar_pago_*`, `anular_pago_*`,
-  `generar_orden_pago`, `cancelar_orden_pago`, `validar_factura_proveedor`,
-  `corregir_*`, `cancel_cotizacion`, `approve_cotizacion`) con paridad SQL/TS
-  obligatoria (decisión 017).
-- **Riesgo:** P0 (dinero). Se mitiga con expandir → migrar lectores → verificar
-  → contraer, guardas de consistencia en cero y el dataset de carga de test.
+- **Gana:** desaparece la rama "suelta pagable" de ~10 RPCs y del `UNION ALL`
+  de órdenes; termina la paridad SQL/TS; el frente 2 se re-evalúa con menos
+  fuentes.
+- **Costo:** alto, concentrado en una expansión y una contracción de Cuentas.
+- **Riesgo:** P0 (dinero). Mitigaciones en `docs/PLAN.md` (plan v2).
+- **Descartado tras auditoría:** renombrar `x_pagar` (A7) y unificar la
+  idempotencia (A8).
 
 ### C — B + unificar cobrar y pagar en tablas únicas
 
@@ -87,8 +81,7 @@ Una tabla `cuentas` con dirección (cobro/pago), una de `pagos`, una de
 
 ## Recomendación
 
-**B**, ejecutada por bloques en el orden de `docs/PLAN.md`, con A como primer
-tramo (ya entrega valor si B se detiene). C no.
+**B**, ejecutada por bloques según el plan v2 de `docs/PLAN.md` (auditado). C no.
 
 ## Reglas para no romper nada (aplican a todos los bloques)
 
