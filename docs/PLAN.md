@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Plan v6 — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar, sin preguntas abiertas).
+**Estado:** Plan v7 — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar, sin preguntas abiertas).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -53,7 +53,7 @@ están conectados a la BD, nada debe romperse ni quedar suelto.**
   (Propuesta). Recomendada: **B** — un dueño por dato + el grupo como única
   obligación de pago.
 - Conclusión central: **el problema es estado duplicado, no número de
-  tablas.** 40 → 33 tablas (plan v6),
+  tablas.** 40 → 33 tablas (plan v7),
   ~20 columnas copiadas o derivadas menos, y desaparece la rama "suelta" de
   `cuentas_pagar` en ~10 RPCs.
 - Evidencia de que el diseño actual ya deja divergir datos: contacto de
@@ -229,15 +229,34 @@ de tablas con ganancia real: el barrido de columnas restantes (todas las de las
 | H4 | Simplificación | B1 (retiros) y B3 (integridad) son de bajo riesgo, no tocan funciones de Cuentas y no dependen entre sí. | — | Se juntan en un PR. El script de reinicio viaja en el PR de B0 y se ejecuta entre B0 y ese PR. **6 PRs en vez de 7.** |
 | H5 | Verificación | Funciones que el plan quita o cambia de forma, revisadas una por una contra lo que hoy usa la app. | Barrido de columnas y RPCs. | Sin pérdida: Sheets y Planeación (retiros aprobados, D2/D8); plantillas siguen accesibles (E2); folios CC/CP se quedan (E3); Calendar se conserva (D4); historial de proveedores da los mismos números (vista, A11); el Dashboard y los KPIs conservan el desglose por renglón (A1); el portal sigue mostrando descripción y montos (join, A10); "Sin asignar" sigue reasignable (A9). |
 
-## Resultado esperado (v6)
+## Auditoría final 4 (v6 → v7, 2026-10-01): coherencia y ejecutabilidad
+
+Quinta revisión. Ya no aparecen cambios de modelo: los hallazgos son de
+**ejecución**, cosas que habrían frenado un bloque a la mitad, y contradicciones
+que dejaron los parches anteriores en este documento. Corregidos en v7.
+
+| # | Hallazgo | Por qué importa | En v7 |
+|---|---|---|---|
+| I1 | **La BD de test no cumple las restricciones nuevas.** Tiene 5 sueltas con proveedor, 2 márgenes viejos y 2 cobros con total ≠ cotización; y no se reinicia. | El `CHECK` de margen (B1+B3) y la restricción "proveedor ⇒ grupo" (B5a) fallarían al aplicarse en test. | B0 corrige esas 9 filas en test con las RPCs existentes (`reconcile_cuenta_pagar_grupo`, recálculo de margen) **antes** de la foto dorada y de la línea base de guardas. No se borra nada. |
+| I2 | **La foto dorada no era estable.** `live` escribe y limpia datos en test en cada corrida, y el estado `VENCIDO` cambia con la fecha. | Dos fotos del mismo código saldrían distintas: falsos positivos. | La foto se limita a los proyectos del dataset de carga (excluye lo que crean los tests) y fija `p_hoy` en las RPCs que lo aceptan (`cuentas_resumen`, `cuentas_avisos_items`, `cuentas_periodo`); las fechas relativas se comparan contra esa fecha fija. Tras re-sembrar (B5b) se toma una foto nueva para B6. |
+| I3 | "Migración de reversa solo test" para el frente 2 contradice la regla de migraciones numeradas: `20261009`/`20261010` **no están en `main`** (solo en la rama del PR #100). | Una migración numerada en `main` correría en `fresh-db` y en prod sobre objetos que no existen. | Script SQL aplicado solo a test y documentado en `docs/archive/frente2-cuentas-conceptos-pausado.md`; no es migración. |
+| I4 | El reinicio (B2) corre **antes** de que se borren Planeación y Sheets, pero su lista no las incluía. | Quedarían datos de prueba de Planeación en prod hasta B5b. | B2 también vacía `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs` y `sheets_sync_status`. |
+| I5 | Contradicciones del propio plan: "Sin cambios: … UI, Planeación"; "fechas como `date`" (solo cambia la del proyecto, G5); "un solo motor" como resultado garantizado (B6 es opcional). | Un plan aprobado que se contradice genera dudas en la sesión que lo ejecuta. | Texto corregido en "Resultado esperado". |
+
+**Conclusión del equipo:** las auditorías ya dan rendimientos decrecientes;
+v7 no cambia el modelo respecto a v6. Lo que falte se verá con más precisión
+**al abrir cada bloque** (la skill `serenata-iniciar-fase` audita el código real
+antes de tocarlo), no con otra revisión en papel.
+
+## Resultado esperado (v7)
 
 - **40 → 33 tablas** (−18 %): salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
   `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs` y
   `bulk_import_operations` (absorbida en `operaciones`). Los folios CC/CP y
   `folio_contadores` se quedan (identificadores externos).
-- **Un solo motor de reglas de Cuentas** (SQL), **una sola vía de pago** (el
-  grupo), **cada dato con un dueño**:
+- **Una sola vía de pago** (el grupo) y **cada dato con un dueño**; con B6
+  (opcional), además **un solo motor de reglas de Cuentas** (SQL):
 
 | Dato | Dueño único | Deja de vivir en |
 |---|---|---|
@@ -246,17 +265,19 @@ de tablas con ganancia real: el barrido de columnas restantes (todas las de las
 | Estado de pago | `cuentas_pagar_grupos` (+ desglose por renglón, A1) | columnas de la rama suelta |
 | Cliente y nombre operativos | `proyectos` / `clientes` | texto en `cuentas_cobrar`, `historial_responsable`, `clientes.proyectos` |
 | Lo emitido en el PDF | `cotizaciones` (D5) | — |
-| Reglas de dinero de Cuentas | funciones SQL | `lib/shared/cuentas/concepto.ts` |
+| Reglas de dinero de Cuentas (B6, opcional) | funciones SQL | `lib/shared/cuentas/concepto.ts` |
 | Copia de consulta en Sheets | — | se retira (D2) |
 
 - **Consultas más rápidas** por los índices faltantes (G1–G3), que hoy obligan a
   leer tablas completas en cada cotización y en Cuentas.
-- Además: fechas como `date` y `timestamptz` (sin errores de día por zona
-  horaria), estados con `CHECK`, clientes sin duplicados, índices limpios,
+- Además: `proyectos.fecha_entrega` como `date`, formato de fecha garantizado en
+  cotizaciones, `timestamptz` (sin errores de día por zona horaria), estados con `CHECK`, clientes sin duplicados, índices limpios,
   tablas de operación que ya no crecen sin límite y un chequeo diario de
   consistencia del dinero.
-- Sin cambios: reglas de negocio (006), UI, Planeación, Portal, tareas y
-  documentos de proyecto, cobrar/pagar separados, idempotencia en dos capas.
+- Se retiran (aprobado): Sheets y Planeación con su UI.
+- Sin cambios: reglas de negocio (006), el resto de la UI, Portal, tareas y
+  documentos de proyecto, Calendar, folios CC/CP, cobrar/pagar separados,
+  idempotencia HTTP.
 
 ## Cómo se garantiza que nada se rompa
 
@@ -278,7 +299,7 @@ de tablas con ganancia real: el barrido de columnas restantes (todas las de las
 7. **Después de salir a uso real**, vuelve a ser obligatorio expandir y
    contraer en PRs separados (F3).
 
-## Plan de ejecución (v6)
+## Plan de ejecución (v7)
 
 6 PRs: B0 · B1+B3 · B5a · B5b · B6 (motor único) · B7 (cierre); B2 es la
 ejecución del script de reinicio. Estimación: 5 sesiones.
@@ -292,9 +313,13 @@ ejecución del script de reinicio. Estimación: 5 sesiones.
   renglón aprobado ⇔ cuenta por pagar; cuenta con proveedor ⇒ grupo; folios
   CC/CP únicos y no nulos.
 - `scripts/db/mapa-dependencias.mjs <tabla.columna>`.
-- Test: retirar objetos del frente 2 (migración de reversa "solo test",
-  anotada en `docs/archive/frente2-cuentas-conceptos-pausado.md`), comparar
-  esquema con prod, `VACUUM ANALYZE` (F11).
+- Test: retirar objetos del frente 2 con un script SQL aplicado solo a test
+  (no es migración: `20261009`/`20261010` no están en `main`; I3), anotado en
+  `docs/archive/frente2-cuentas-conceptos-pausado.md`; comparar esquema con
+  prod; `VACUUM ANALYZE` (F11).
+- **Datos de test al día (I1):** agrupar las 5 sueltas con proveedor
+  (`reconcile_cuenta_pagar_grupo`), recalcular los 2 márgenes viejos y revisar
+  los 2 cobros con total distinto. Sin borrar nada.
 - **Índices faltantes (G1)** en test y prod: `items_cotizacion(cotizacion_id,
   orden)`, `items_cotizacion(responsable_id)`, `cuentas_pagar(cotizacion_id)`,
   `cuentas_pagar(responsable_id)`, `cotizaciones(es_complementaria_de)`
@@ -302,9 +327,10 @@ ejecución del script de reinicio. Estimación: 5 sesiones.
   justificado con `EXPLAIN` de las consultas más caras de `pg_stat_statements`.
   Medir `live` 3 veces antes y después (#107).
 - Línea base: guardas en ambos y latencia de `cuentas_periodo` en test.
-- **Foto dorada (H1):** `scripts/db/foto-dorada.mjs` guarda en JSON la salida
-  de las RPCs de lectura por año sobre el dataset de test, y compara contra
-  una foto nueva (diferencias campo por campo).
+- **Foto dorada (H1, I2):** `scripts/db/foto-dorada.mjs` guarda en JSON la
+  salida de las RPCs de lectura por año, **solo sobre los proyectos del dataset
+  de carga** y con `p_hoy` fijo, y compara contra una foto nueva (diferencias
+  campo por campo). Se toma después de I1.
 - Script de reinicio (B2) incluido en este PR.
 - **Respaldo (G7):** `supabase db dump` de prod (paso a paso para ti) antes de
   B2 y antes de B5a.
@@ -318,8 +344,9 @@ ejecución del script de reinicio. Estimación: 5 sesiones.
   con datos reales).
 - Vacía: cotizaciones, renglones, reservas de folio, proyectos (y sus
   tareas/documentos, hoy en 0), todas las de Cuentas, órdenes, historiales,
-  reaperturas, correcciones, idempotencia, rate limits; reinicia
-  `folio_contadores`.
+  reaperturas, correcciones, idempotencia, rate limits, Planeación
+  (`planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs`) y
+  `sheets_sync_status` (I4); reinicia `folio_contadores`.
 - Conserva **solo `usuarios`** (confirmado 2026-10-01) más la configuración
   de sistema que siembra la migración `20260906_post_rename_fase52_proyectos_pm_schema.sql`
   (`tipos_proyecto` Grabación/Concierto/Diseño de Show, `tipo_proyecto_etapas`,
@@ -401,7 +428,8 @@ Funciones disjuntas de B5a: `approve_cotizacion`, `reasignar_responsable_cuenta_
   `historial_responsable` y de Planeación (E1), función `buscar_cuentas_pagar`
   (G9). Mapa en 0.
 - Foto dorada sin diferencias (H1) **antes** de re-sembrar.
-- Seeds, generador de loadtest y tipos al día; **re-sembrar test** (F10).
+- Seeds, generador de loadtest y tipos al día; **re-sembrar test** (F10) y
+  tomar una foto dorada nueva para B6 (I2).
 - Medir latencia antes/después (A15); recorrido manual completo en el Preview.
 
 ### B6 — Un solo motor de Cuentas (#108), después de B5b (H2)
