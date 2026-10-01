@@ -246,3 +246,14 @@ en `items_cotizacion`/`cuentas_pagar` sin lista de columnas ni con
 `fecha_factura`); nadie cambia `responsable_id`/`proyecto_id` de un grupo
 (FK compuesta viable); prod sin cotizaciones sin `cliente_id` ni
 complementarias con cliente distinto a su principal.
+
+## Auditoría externa (v10 → v11, 2026-10-01): ejecución de migraciones y reinicio
+
+Revisión externa traída por el usuario. **Veredicto: sin cambios de modelo;
+tres precisiones de ejecución** aceptadas (con ajustes).
+
+| # | Sev. | Hallazgo | En v11 |
+|---|---|---|---|
+| M1 | P1 (propuesto P0) | Una columna `GENERATED` no admite escritura; el plan no fijaba el orden `DROP EXPRESSION` → escritores con nombre nuevo → borrar la vieja dentro de la migración que la convierte. No llegaba a prod (una transacción por bloque, `plpgsql_check` y `fresh-db` lo detectan), pero el texto debe ser inequívoco. | Regla de la puente en "Cómo se garantiza" §3, con el bloque exacto en que cada puente deja de ser generada. Se omite "verificar nueva = vieja": mientras es generada son iguales por definición. |
+| M2 | P1 | El reinicio no verificaba su estado final; corre dos veces (B2 y salida a uso real). | Verificación dentro de la misma transacción con `RAISE EXCEPTION`: conteos, folios siguientes (SH001, `CC-AAAA-001`, `CP-AAAA-001`; el formato real no es `CC001`) y guardas en 0. |
+| M3 | P2 | Locks de `ALTER TABLE` y migraciones sin límite de espera (ninguna usa `lock_timeout` hoy); test es compartida con `live`. | `SET LOCAL lock_timeout`/`statement_timeout` por migración. **Rechazado:** partir cada bloque en varias transacciones — dejaría estados intermedios rotos; con cientos de filas el tamaño no importa. |

@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado (2026-10-01) — plan v10 de "Simplificación del modelo de datos". Siguiente: B0.
+**Estado:** Aprobado (2026-10-01) — plan v11 de "Simplificación del modelo de datos". Siguiente: B0.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -37,7 +37,7 @@ cómo retomarla en `docs/archive/frente2-cuentas-conceptos-pausado.md`.
 
 **Epic en GitHub:** #109. Fase 2: #105 · Fase 3: #106 · deuda relacionada: #108.
 
-**Historia de las 8 auditorías (A1…L8):** `docs/archive/simplificacion-modelo-auditorias.md`.
+**Historia de las 9 auditorías (A1…M3):** `docs/archive/simplificacion-modelo-auditorias.md`.
 Este plan cita esos identificadores; si algo de ese archivo contradice este,
 manda este.
 
@@ -128,7 +128,7 @@ no cae en ninguna, se borra.
 3. El reinicio **no toca la BD de test**.
 4. Folios CC-/CP- **se usan fuera de la app** → se conservan (E3 descartado).
 
-## Resultado esperado (v10)
+## Resultado esperado (v11)
 
 - **40 → 34 tablas:** salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
@@ -185,6 +185,20 @@ no cae en ninguna, se borra.
    `ALTER COLUMN … DROP EXPRESSION` y se borra la vieja. Sin código de
    transición ni reescrituras dobles. Si todos los usuarios están en un solo
    bloque, `RENAME COLUMN` directo (conserva índices y `CHECK`).
+   **Regla de la puente (M1):** mientras conserve la expresión, solo se lee;
+   ningún `INSERT`/`UPDATE`/upsert la escribe (Postgres lo rechaza). Orden
+   obligatorio dentro de la migración del bloque que la convierte: (1)
+   `ALTER COLUMN … DROP EXPRESSION`; (2) `CREATE OR REPLACE` de los
+   escritores con el nombre nuevo; (3) `DROP COLUMN` de la vieja; (4) mapa de
+   dependencias en 0 sobre el nombre viejo y `plpgsql_check` en 0. Momento
+   exacto: `cuentas_pagar.costo_total` nace en B5a y se convierte en B5b;
+   `items_cotizacion.costo_unitario` nace en B5a (si alguna función de B5a lee
+   el renglón) o en B5b, y se convierte en B5c.
+9. **Migraciones con límites (M3):** cada migración de la iniciativa empieza
+   con `SET LOCAL lock_timeout = '5s'` y `SET LOCAL statement_timeout =
+   '60s'`: si no obtiene el lock (p. ej. `live` corriendo en test), falla
+   rápido en vez de bloquear. Cada bloque sigue siendo **una** transacción a
+   propósito (partirla dejaría funciones leyendo columnas ya borradas).
 4. **Foto dorada "antes = después"** de todas las RPCs de lectura (H1), con
    fecha fija (K3). Diferencias permitidas solo las listadas en el PR (nombres
    de campo renombrados, formato `timestamptz`).
@@ -199,7 +213,7 @@ no cae en ninguna, se borra.
 8. **Después de salir a uso real** vuelve a ser obligatorio expandir y contraer
    en PRs separados (F3).
 
-## Plan de ejecución (v10)
+## Plan de ejecución (v11)
 
 7 PRs: B0 · B1+B3 · B5a · B5b · B5c · B6 · B7; B2 es la ejecución
 del script de reinicio. Estimación: 7 sesiones.
@@ -256,6 +270,13 @@ del script de reinicio. Estimación: 7 sesiones.
 - Conserva **solo `usuarios`** más `tipos_proyecto`, `tipo_proyecto_etapas` y
   `tipo_proyecto_tarea_default` (sembradas por
   `20260906_post_rename_fase52_proyectos_pm_schema.sql`).
+- **Verificación final obligatoria (M2), dentro de la misma transacción;**
+  cualquier falla hace `RAISE EXCEPTION` y revierte todo el reinicio:
+  `usuarios` > 0 y `tipos_proyecto` > 0; 0 filas en cada tabla vaciada (lista
+  de arriba, incluidas Planeación y `sheets_sync_status`); contadores de folio
+  en cero; siguiente folio = SH001 (`preview_next_cotizacion_folio_principal`),
+  `CC-AAAA-001` y `CP-AAAA-001`; guardas de `guardas-modelo.sql` en 0. Sin
+  esta verificación el script no se ejecuta (igual que sin H3).
 - **Solo producción**; test conserva su dataset (se re-siembra en B5c).
 - Borra `cliente_id_backfill_clasificacion` (CSV a `docs/archive/`).
 - **Antes de ejecutar (H3):** carpetas de prueba de Drive de prod en la
@@ -401,7 +422,8 @@ que escriben `cuentas_cobrar.estado` (`registrar_pago_cuenta_cobrar`,
   la tabla.
 - `proyectos.fecha_entrega` → `date` (F4); `timestamptz` en Cuentas y órdenes (F5).
 - **Nomenclatura (D13):** `cuentas_pagar.costo_total` deja de ser generada
-  (`DROP EXPRESSION`) y sale `cuentas_pagar.x_pagar`; `approve_cotizacion` lee
+  (`DROP EXPRESSION`) y sale `cuentas_pagar.x_pagar`, en el orden de la regla
+  M1 (antes del `CREATE OR REPLACE` de `approve_cotizacion`); `approve_cotizacion` lee
   `items_cotizacion.costo_unitario` (puente, si no nació en B5a) y escribe
   `costo_total`.
 - Borrar: columnas de "Deja de vivir en" de `cuentas_pagar` (contacto,
@@ -429,7 +451,8 @@ masiva.
   y por llave (servidor); la API conserva el campo de lectura. El conflicto
   por campo (002) sigue sobre `responsable_id`.
 - **Nomenclatura (D13):** `costo_unitario` deja de ser generada (o
-  `RENAME COLUMN` si no hizo falta puente) y sale `x_pagar`; Zod, tipos, API,
+  `RENAME COLUMN` si no hizo falta puente) y sale `x_pagar`, en el orden de
+  la regla M1 (antes de reescribir `save`/`upsert`/`bulk_replace`/`patch`); Zod, tipos, API,
   idempotencia de importación (`lib/client/bulkImportIdempotency.ts`) y
   mocks con los nombres finales. Glosario de la 006 al día.
 - **Integridad del renglón:** `CHECK` de `importe`/`margen` con tolerancia de
@@ -504,8 +527,8 @@ presentación.
 | Bloque | Estado |
 |---|---|
 | Fases 1–3 (#105, #106) | Hecho (2026-10-01) |
-| Decisiones D1–D17 y 8 auditorías (historia en archive) | Hecho (2026-10-01) |
-| Aprobación del plan v10 | Hecho (2026-10-01) |
+| Decisiones D1–D17 y 9 auditorías (historia en archive) | Hecho (2026-10-01) |
+| Aprobación del plan v11 | Hecho (2026-10-01) |
 | B0 Red de seguridad, test = prod, índices y foto dorada | Pendiente |
 | B2 Reinicio de datos (script; tras limpiar Drive) | Pendiente |
 | B1 + B3 Retiros, catálogos rápidos e integridad | Pendiente |
