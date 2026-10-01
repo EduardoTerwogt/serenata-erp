@@ -321,6 +321,71 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
     }
   })
 
+  test('invariante del grupo: monto_total = Σ x_pagar ante cualquier escritura directa (20261008)', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    try {
+      const principal = `${fx.prefix}-P`
+      const grupoA = randomUUID()
+      const grupoB = randomUUID()
+      // Un cobro por cotización (cuentas_cobrar_cotizacion_unique): el segundo
+      // renglón del grupo viene de una complementaria.
+      const complementaria = `${principal}-A`
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCotizacion(supabase, fx, { id: complementaria, estado: 'APROBADA', complementariaDe: principal })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId: grupoA, xPagar: 500 })
+      await crearCuentas(supabase, fx, { cotizacionId: complementaria, proyectoId: principal, grupoId: grupoA, xPagar: 300 })
+      const montoDe = async (id: string) =>
+        Number(must(await supabase.from('cuentas_pagar_grupos').select('monto_total').eq('id', id).single()).monto_total)
+
+      // Sin recalcular a mano: lo hace el trigger.
+      ok(await supabase.from('cuentas_pagar_grupos').insert({
+        id: grupoB, proyecto_id: principal, responsable_id: fx.proveedorId, estado: 'FACTURADO',
+      }))
+      const renglones = must(await supabase.from('cuentas_pagar').select('id, x_pagar').eq('grupo_id', grupoA).order('x_pagar'))
+
+      ok(await supabase.from('cuentas_pagar').update({ x_pagar: 450 }).eq('id', renglones[1].id))
+      expect(await montoDe(grupoA)).toBe(750)
+
+      ok(await supabase.from('cuentas_pagar').update({ grupo_id: grupoB }).eq('id', renglones[0].id))
+      expect(await montoDe(grupoA)).toBe(450)
+      expect(await montoDe(grupoB)).toBe(300)
+
+      ok(await supabase.from('cuentas_pagar').delete().eq('id', renglones[1].id))
+      expect(await montoDe(grupoA)).toBe(0)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
+  test('invariante del grupo bajo concurrencia: dos renglones editados a la vez suman bien (20261008)', async () => {
+    test.setTimeout(120_000)
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    try {
+      const principal = `${fx.prefix}-P`
+      const complementaria = `${principal}-A`
+      const grupoId = randomUUID()
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCotizacion(supabase, fx, { id: complementaria, estado: 'APROBADA', complementariaDe: principal })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId, xPagar: 1000 })
+      await crearCuentas(supabase, fx, { cotizacionId: complementaria, proyectoId: principal, grupoId, xPagar: 400 })
+      const [p1, p2] = must(await supabase.from('cuentas_pagar').select('id').eq('grupo_id', grupoId).order('x_pagar', { ascending: false }))
+
+      // Sin el bloqueo del grupo, cada transacción suma con su propia foto y la última pisa a la otra.
+      const resultados = await Promise.all([
+        supabase.from('cuentas_pagar').update({ x_pagar: 1200 }).eq('id', p1.id),
+        supabase.from('cuentas_pagar').update({ x_pagar: 500 }).eq('id', p2.id),
+      ])
+      for (const r of resultados) expect(r.error).toBeNull()
+
+      const grupo = must(await supabase.from('cuentas_pagar_grupos').select('monto_total').eq('id', grupoId).single())
+      expect(Number(grupo.monto_total)).toBe(1700)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
   test('cancelar una principal cancela en cascada sus complementarias (APROBADA, EMITIDA y BORRADOR) (D28, D31)', async () => {
     const supabase = getLiveSupabaseAdmin()
     const fx = await nuevoFixture(supabase)

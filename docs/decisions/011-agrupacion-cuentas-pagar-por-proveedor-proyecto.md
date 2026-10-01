@@ -127,6 +127,14 @@ trazabilidad, márgenes y reportes históricos intactos).**
   no de memoria ni de una copia local desactualizada), y diffear
   explícitamente contra esa versión antes de asumir que "el resto queda
   igual".
+- **Invariante `monto_total` = Σ `x_pagar` garantizado por la BD (2026-09-30).**
+  La `cancel_cotizacion` anterior a `20260925` borraba cuentas sin recalcular
+  el grupo; en producción quedaron 3 grupos de SH072 desfasados (uno vacío),
+  visibles como "Ajuste" en Cuentas tras el issue #99. Desde
+  `20261008_cuentas_pagar_grupos_invariante.sql` un trigger sobre
+  `cuentas_pagar` (INSERT, DELETE, cambio de `x_pagar` o `grupo_id`)
+  recalcula el grupo viejo y el nuevo; la misma migración reparó los datos.
+  Ya no depende de que cada RPC recuerde recalcular.
 
 ## Glosario
 
