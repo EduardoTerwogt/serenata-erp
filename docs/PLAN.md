@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado (2026-10-01) — plan v9 de "Simplificación del modelo de datos". Siguiente: B0.
+**Estado:** Aprobado (2026-10-01) — plan v10 de "Simplificación del modelo de datos". Siguiente: B0.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -37,7 +37,7 @@ cómo retomarla en `docs/archive/frente2-cuentas-conceptos-pausado.md`.
 
 **Epic en GitHub:** #109. Fase 2: #105 · Fase 3: #106 · deuda relacionada: #108.
 
-**Historia de las 7 auditorías (A1…K14):** `docs/archive/simplificacion-modelo-auditorias.md`.
+**Historia de las 8 auditorías (A1…L8):** `docs/archive/simplificacion-modelo-auditorias.md`.
 Este plan cita esos identificadores; si algo de ese archivo contradice este,
 manda este.
 
@@ -81,10 +81,10 @@ no cae en ninguna, se borra.
 | Clase | Regla | Ejemplos |
 |---|---|---|
 | **1. Dato descriptivo** | Vive solo en su dueño; todo lo demás lo lee por llave. | Nombre de cliente → `clientes`; nombre, contacto y banco del proveedor → `proveedores`; descripción y cantidad del renglón → `items_cotizacion`; nombre operativo del proyecto → `proyectos`. |
-| **2. Monto de obligación** | Se congela al aprobar: es el libro contable, no una copia. La BD impide que su origen cambie después (trigger de inmutabilidad + FK). | `cuentas_pagar.costo_total`, `cuentas_cobrar.monto_total`. |
+| **2. Monto de obligación** | Se congela al aprobar: es el libro contable, no una copia. La BD impide que su origen cambie después (trigger de inmutabilidad + FK). | `cuentas_pagar.costo_total`, `cuentas_cobrar.monto_total`; en la cotización aprobada, renglones, totales y `cliente_id` (L1, L3). |
 | **3. Agregado de dinero** | Solo lo escriben una RPC o un trigger en la misma transacción que el movimiento; guarda diaria. | `monto_pagado` (cobros, grupos, renglones A1), `cuentas_pagar_grupos.monto_total`. |
-| **4. Estado derivable** | Se deriva: al leer si depende de la fecha; columna generada si no. | "Vencido" (J6); `cuentas_cobrar.estado`. |
-| **5. Llave repetida para índices** | Se permite solo si una FK (compuesta si hace falta) impide que diverja. | `cuentas_pagar.cotizacion_id/proyecto_id/responsable_id`, `cuentas_cobrar.cliente_id`. |
+| **4. Estado derivable** | Se deriva: al leer si depende de la fecha; columna generada si no. | "Vencido" (J6); `cuentas_cobrar.estado` (fórmula D15). |
+| **5. Llave repetida para índices** | Se permite solo si una FK (compuesta si hace falta) impide que diverja. | `cuentas_pagar.cotizacion_id/proyecto_id/responsable_id`. (`cliente_id` ya no se repite: D16.) |
 | **6. Documento emitido** | Registro de lo que se emitió; ninguna lectura operativa lo usa. | `cotizaciones.cliente/proyecto/fecha_entrega` (el PDF, D5), `ordenes_pago_conceptos`. |
 
 ## Fuera de alcance
@@ -116,6 +116,9 @@ no cae en ninguna, se borra.
 | D12 | Datos repetidos (K7) | **Una sola fuente de verdad** para todo: regla de dueño único de arriba. Sale `proyectos.cliente` y también `items_cotizacion.responsable_nombre` (revierte J10). |
 | D13 | Nomenclatura `x_pagar` (K8) | **Se renombra todo** a la regla de negocio final: Costo Unitario y Costo Total, en BD, API y UI. |
 | D14 | Google Calendar (K9) | **Se retira** (código muerto). |
+| D15 | Estado del cobro (L2) | **Fórmula única:** `PAGADO` si pagado ≥ total (> 0); si no, `PARCIALMENTE_PAGADO` si hay pago; si no, `FACTURADO` si hay `fecha_factura`; si no, `FACTURA_PENDIENTE`. "Vencido" se deriva al leer. Quitar la factura limpia `fecha_factura`. |
+| D16 | `cliente_id` repetido (L3) | **Un solo `cliente_id`, en `cotizaciones`** (congelado al aprobar). Salen `proyectos.cliente_id` y `cuentas_cobrar.cliente_id`; se leen por `cotizaciones` (`proyectos.id = cotizaciones.id`). |
+| D17 | B6 "un solo motor" (L8) | **Obligatorio.** No quedan dos motores de Cuentas al cerrar. |
 
 ## Confirmaciones (2026-10-01)
 
@@ -125,7 +128,7 @@ no cae en ninguna, se borra.
 3. El reinicio **no toca la BD de test**.
 4. Folios CC-/CP- **se usan fuera de la app** → se conservan (E3 descartado).
 
-## Resultado esperado (v9)
+## Resultado esperado (v10)
 
 - **40 → 34 tablas:** salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
@@ -134,14 +137,15 @@ no cae en ninguna, se borra.
 
 | Dato | Dueño único | Deja de vivir en |
 |---|---|---|
-| Nombre del cliente | `clientes` (por `cliente_id`, `NOT NULL` + FK) | `proyectos.cliente`, `cuentas_cobrar.cliente`, `historial_responsable.cliente`; lista `clientes.proyectos` |
+| Nombre del cliente | `clientes`, por el único `cotizaciones.cliente_id` (`NOT NULL` al aprobar + FK, D16) | `proyectos.cliente` y `.cliente_id`, `cuentas_cobrar.cliente` y `.cliente_id`, `historial_responsable.cliente`; lista `clientes.proyectos` |
 | Nombre operativo del proyecto | `proyectos` | `cuentas_cobrar.proyecto`, `historial_responsable.proyecto_nombre` |
 | Nombre, contacto y banco del proveedor | `proveedores` | `cuentas_pagar` (nombre, teléfono, correo, CLABE, banco), `items_cotizacion.responsable_nombre` |
 | Descripción, cantidad y margen del renglón | `items_cotizacion` | `cuentas_pagar` |
 | Estado de pago a proveedor | `cuentas_pagar_grupos` (+ desglose por renglón, A1) | columnas de la rama suelta |
-| Estado del cobro | derivado de montos y factura (columna generada); "vencido" al leer | escritura en RPCs, `subir-factura` y el cron |
+| Estado del cobro | columna generada con la fórmula D15; "vencido" al leer | escritura en RPCs, `subir-factura` y el cron (hoy con dos reglas distintas, L2) |
 | Lo emitido en el PDF | `cotizaciones` (clase 6) | — |
-| Reglas de dinero de Cuentas (B6, opcional) | funciones SQL | `lib/shared/cuentas/concepto.ts` |
+| Cambios de estado de la cotización | RPCs `emitir`/`aprobar`/`cancelar` (L1) | `PUT /api/cotizaciones/:id` y `save_cotizacion` |
+| Reglas de dinero de Cuentas (B6, D17) | funciones SQL | `lib/shared/cuentas/concepto.ts` |
 
 - **Nomenclatura única (D13):** `items_cotizacion.x_pagar` → `costo_unitario`,
   `productos.x_pagar_sugerido` → `costo_unitario_sugerido`,
@@ -149,8 +153,11 @@ no cae en ninguna, se borra.
   `costo_total`, plantillas de servicios (llave JSON y etiqueta "X pagar") →
   Costo Unitario; mismos nombres en Zod, tipos y API.
 - **Más rápido:** índices faltantes (G1–G3); guardar una cotización deja de
-  hacer un viaje a la BD por renglón (K6); catálogo de clientes sin arreglos.
+  hacer un viaje a la BD por renglón (K6) y el navegador deja de releerla tras
+  guardar o aprobar (L7); catálogo de clientes sin arreglos.
 - **Más simple:** sin Sheets, Planeación ni Calendar; una sola vía de pago;
+  una sola vía para cambiar el estado de una cotización (L1); un solo motor de
+  Cuentas (D17);
   sin rollback manual del historial (K11); integridad garantizada por la BD
   (FKs compuestas, `CHECK`, inmutabilidad) en vez de por convención.
 - Además: `proyectos.fecha_entrega` como `date`, formato garantizado en
@@ -192,10 +199,10 @@ no cae en ninguna, se borra.
 8. **Después de salir a uso real** vuelve a ser obligatorio expandir y contraer
    en PRs separados (F3).
 
-## Plan de ejecución (v9)
+## Plan de ejecución (v10)
 
-7 PRs: B0 · B1+B3 · B5a · B5b · B5c · B6 (opcional) · B7; B2 es la ejecución
-del script de reinicio. Estimación: 6 sesiones.
+7 PRs: B0 · B1+B3 · B5a · B5b · B5c · B6 · B7; B2 es la ejecución
+del script de reinicio. Estimación: 7 sesiones.
 
 ### B0 — Red de seguridad, test = prod, índices y foto dorada
 
@@ -278,15 +285,24 @@ del script de reinicio. Estimación: 6 sesiones.
 
 **Catálogos y autosave (K5, K6):**
 
-- `clientes`: único por `lower(trim(nombre))` (F6); autosave de cliente en un
-  solo `INSERT … ON CONFLICT` (sin carrera ni 3 viajes).
+- `clientes`: columna generada `nombre_clave = lower(btrim(nombre))` con
+  `UNIQUE` (F6; el upsert de supabase-js no acepta un índice de expresión,
+  L4). Autosave de cliente en un solo upsert por `nombre_clave` (sin carrera
+  ni 3 viajes), resuelto **antes** del guardado: el `cliente_id` viaja dentro
+  del payload de `save_cotizacion`/`patch_cotizacion_general` y desaparece el
+  `UPDATE cotizaciones SET cliente_id` posterior (fuera del modelo de
+  conflictos, sin `revision`).
 - `clientes.proyectos` sale: las sugerencias de proyecto por cliente del
   formulario salen de una consulta agregada sobre `cotizaciones` por
   `cliente_id` (mismas sugerencias, incluidas las de borradores); el
   catálogo `/api/clientes?q=` ya no carga arreglos.
 - `autosaveProductos`: un solo upsert en bloque (deduplicado por
   descripción) y en `after()` en `POST /api/cotizaciones` y
-  `PUT /api/cotizaciones/:id`, como ya hacen las rutas de items.
+  `PUT /api/cotizaciones/:id`, como ya hacen las rutas de items (un error
+  se registra con `console.error`, igual que hoy).
+- **Sin lecturas dobles (L7):** `updateQuotation` usa la respuesta del `PUT`
+  (ya devuelve la cotización) y `aprobar` devuelve la cotización en vez de que
+  el navegador haga otro `GET`. Medir p50 también desde el navegador.
 - `productos.x_pagar_sugerido` → `costo_unitario_sugerido` (`RENAME COLUMN`:
   ninguna función SQL lo lee) y plantillas de servicios a Costo Unitario
   (llave JSON y etiqueta) (D13).
@@ -321,6 +337,13 @@ excepto `corregir_proveedor_cuenta_pagar` (J3).
 - Pagos, facturas y órdenes solo por grupo; el suelto "por asignar" sigue (A9).
 - Dejan de escribir `orden_pago_id`, `total_a_transferir`, `monto_transferido`
   y `metodo_pago` de `cuentas_pagar`.
+- **Código TS de pago suelto que sale en este mismo PR (L5):**
+  `app/api/cuentas-pagar/[id]/subir-factura`, `[id]/registrar-pago`,
+  `[id]/registrar-pago/estado`, la rama suelta de pago/factura de
+  `app/cuentas/components/detalle/useDetalle.ts` y
+  `lib/server/cuentas/registrar-pago-proveedor.ts` (lo que solo use la
+  suelta), con sus tests y mocks. Se quedan reasignar e
+  `[id]/historial-responsable` (A9). Mapa en 0 sobre las rutas retiradas.
 - **Sin** la restricción "proveedor ⇒ grupo": va en B5b (K1).
 - Guardas en 0, foto dorada y paridad; recorrido manual de pagos en el Preview.
 
@@ -342,27 +365,38 @@ que escriben `cuentas_cobrar.estado` (`registrar_pago_cuenta_cobrar`,
   `UNIQUE(item_id)`, FK `ON DELETE RESTRICT` (J8, K14; salen el único parcial
   y `idx_cuentas_pagar_item_id`); FKs compuestas diferibles
   `(item_id, cotizacion_id)` → `items_cotizacion(id, cotizacion_id)`,
-  `(grupo_id, proyecto_id, responsable_id)` → `cuentas_pagar_grupos`,
-  `(cotizacion_id, cliente_id)` de `cuentas_cobrar` → `cotizaciones`.
+  `(grupo_id, proyecto_id, responsable_id)` → `cuentas_pagar_grupos`.
   Guarda: responsable de la cuenta = responsable del renglón.
-- **Cliente y proyecto (D12):** `proyectos.cliente` sale y `cliente_id` pasa a
-  `NOT NULL` + FK; `cuentas_cobrar.cliente/proyecto` salen. Repositorios y
+- **Cliente y proyecto (D12, D16):** salen `proyectos.cliente` y
+  `proyectos.cliente_id`, y `cuentas_cobrar.cliente`, `.proyecto` y
+  `.cliente_id`; el cliente se lee por `cotizaciones.cliente_id`
+  (`proyectos.id = cotizaciones.id`; el cobro, por su `cotizacion_id`).
+  `approve_cotizacion` exige `cliente_id` (falla explícito si falta). Repositorios y
   RPCs resuelven el nombre por llave y **la API conserva el campo `cliente`**:
   listados, tarjetas, búsqueda, PDFs (hoja de llamado, reporte de cierre) y
   autollenado de documentos no cambian. Lo emitido sigue en `cotizaciones`.
-- **Estado del cobro (J6 + clase 4):** "vencido" se deriva al leer; sale
-  `sync_estados_cuentas_cobrar_vencidas` (y su llamada en `/api/keep-alive`);
-  `cuentas_cobrar.estado` pasa a columna generada desde montos y
-  `fecha_factura`, y nadie la escribe. **Al abrir el bloque** se confirman
-  todos los valores y escritores (`pg_constraint`, `prosrc`, TS); si alguno no
-  es derivable, se queda como columna normal con `CHECK` sin `VENCIDO` y guarda.
+- **Estado del cobro (J6 + clase 4, D15):** "vencido" se deriva al leer; sale
+  `sync_estados_cuentas_cobrar_vencidas` (y su llamada en `/api/keep-alive`).
+  `cuentas_cobrar.estado` pasa a columna generada `GENERATED ALWAYS AS (CASE
+  WHEN monto_total > 0 AND round(monto_total − monto_pagado, 2) <= 0 THEN
+  'PAGADO' WHEN monto_pagado > 0 THEN 'PARCIALMENTE_PAGADO' WHEN fecha_factura
+  IS NOT NULL THEN 'FACTURADO' ELSE 'FACTURA_PENDIENTE' END) STORED` y nadie la
+  escribe. Hoy hay dos reglas (L2): `registrar_pago_cuenta_cobrar` da
+  `PARCIALMENTE_PAGADO` sin factura y `cuentas_cobrar_estado_calculado`
+  (autorreferente) da `FACTURA_PENDIENTE`; ambas se retiran.
+  `baja_documento_cobro` limpia `fecha_factura` si quita la última factura
+  vigente. Diferencia permitida en la foto dorada: cobros cuyo estado cambia
+  por la fórmula única (listados en el PR).
 - **Retiros sin reemplazo (J5):** `buscar_cuentas_cobrar`,
   `buscar_cuentas_pagar_grupos`, `buscar_cuentas_pagar` (G9) y los `GET` de
   lista; `tests/e2e/live/basic.spec.ts` pasa a `cuentas_periodo`/detalle.
 - **`historial_responsable` → vista** con `security_invoker` (A11): renglones
-  de proyectos con `fecha_cierre_real IS NOT NULL` agrupados por proveedor y
-  rol, `costo_total` = Σ costo unitario × cantidad; sin resolución por nombre
-  (K11). Sale `generarHistorialProyecto` y el rollback manual de
+  de la cotización principal y sus complementarias **en `APROBADA`** (L6) de
+  proyectos con `fecha_cierre_real IS NOT NULL`, agrupados por proveedor y rol
+  (`lower(btrim(descripcion o categoria))`, como hoy), `costo_total` = Σ
+  costo unitario × cantidad; sin resolución por nombre (K11). Diferencia
+  permitida: deja de ser snapshot (una complementaria aprobada después del
+  cierre ahora aparece). Sale `generarHistorialProyecto` y el rollback manual de
   `lib/server/projects/service.ts`. Comparación fila por fila antes de borrar
   la tabla.
 - `proyectos.fecha_entrega` → `date` (F4); `timestamptz` en Cuentas y órdenes (F5).
@@ -373,8 +407,8 @@ que escriben `cuentas_cobrar.estado` (`registrar_pago_cuenta_cobrar`,
 - Borrar: columnas de "Deja de vivir en" de `cuentas_pagar` (contacto,
   `responsable_nombre`, `item_descripcion`, `cantidad`, `margen`,
   `orden_pago_id`, `total_a_transferir`, `monto_transferido`, `metodo_pago`),
-  `cuenta_pagar_id` de pagos y documentos, texto de `cuentas_cobrar`,
-  `proyectos.cliente`; tablas `historial_responsable` y de Planeación (E1);
+  `cuenta_pagar_id` de pagos y documentos, texto y `cliente_id` de
+  `cuentas_cobrar`, `proyectos.cliente` y `proyectos.cliente_id`; tablas `historial_responsable` y de Planeación (E1);
   `app/api/items/[id]/route.ts` deja la búsqueda por descripción; código
   muerto `createCuentaCobrar` y `getCuentasPagarPorGrupo` (J11).
   Mapa en 0, `plpgsql_check` en 0, diff de `pg_constraint` revisado.
@@ -400,9 +434,16 @@ masiva.
   mocks con los nombres finales. Glosario de la 006 al día.
 - **Integridad del renglón:** `CHECK` de `importe`/`margen` con tolerancia de
   centavo (A6), creado ya sobre `costo_unitario`; trigger que rechaza cambios
-  de dinero o descripción en renglones y totales de una cotización
-  `APROBADA` (clase 2: lo que el libro congeló no puede cambiar en su origen;
-  `notas` y la reasignación de proveedor siguen permitidas).
+  de dinero o descripción en renglones, totales y `cliente_id` de una
+  cotización `APROBADA` (clase 2: lo que el libro congeló no puede cambiar en
+  su origen; `notas` y la reasignación de proveedor siguen permitidas).
+- **Estado solo por RPC (L1):** hoy `PUT /api/cotizaciones/:id` acepta
+  `estado` (incluso `APROBADA`, sin crear cuentas) y `save_cotizacion` borra
+  o reescribe renglones de una aprobada. `save_cotizacion` y
+  `patch_cotizacion_general` rechazan cotizaciones fuera de
+  `BORRADOR`/`EMITIDA` (`estado_invalido`) y nunca cambian `estado` (alta
+  siempre en `BORRADOR`); `estado` sale de `CotizacionUpdateSchema`. La
+  pantalla Nueva emite con `emitir_cotizacion` tras guardar, como el editor.
 - **Fecha de la cotización (G5):** `CHECK` `AAAA-MM-DD` o nulo y
   `save_cotizacion` normaliza `''` → `NULL`.
 - Guarda "copia = dueño" se retira (ya no hay copias).
@@ -412,9 +453,11 @@ masiva.
 - Recorrido manual completo en el Preview, con edición colaborativa en dos
   navegadores.
 
-### B6 — Un solo motor de Cuentas (#108), opcional
+### B6 — Un solo motor de Cuentas (#108) (D17)
 
-Independiente: la iniciativa ya cumplió su meta si se detiene antes. Derivación
+Obligatorio. Para no reescribir dos veces, en B5b y B5c el TS de Cuentas
+(`concepto.ts`, `periodo.ts`, `detalle-armar.ts`) solo recibe los cambios
+mecánicos de nombre y lectura que exige compilar; B6 lo retira. Derivación
 del proyecto seleccionado y del detalle a SQL; la paridad vigente confirma
 resultados idénticos antes de retirar el TS. `concepto.ts` queda con tipos y
 presentación.
@@ -439,7 +482,7 @@ presentación.
 
 ## Riesgos
 
-- **P0:** B5a–B5c cambian el flujo de pago y el editor. Mitigación: datos
+- **P0:** B5a–B5c cambian el flujo de pago, el editor y la cobranza (D15). Mitigación: datos
   reiniciados, columnas puente (una reescritura por función), foto dorada con
   fecha fija, paridad SQL/TS, guardas deterministas, `plpgsql_check`, `live`
   sobre 2,203 proyectos re-sembrados, respaldo de B0.
@@ -461,13 +504,13 @@ presentación.
 | Bloque | Estado |
 |---|---|
 | Fases 1–3 (#105, #106) | Hecho (2026-10-01) |
-| Decisiones D1–D14 y 7 auditorías (historia en archive) | Hecho (2026-10-01) |
-| Aprobación del plan v9 | Hecho (2026-10-01) |
+| Decisiones D1–D17 y 8 auditorías (historia en archive) | Hecho (2026-10-01) |
+| Aprobación del plan v10 | Hecho (2026-10-01) |
 | B0 Red de seguridad, test = prod, índices y foto dorada | Pendiente |
 | B2 Reinicio de datos (script; tras limpiar Drive) | Pendiente |
 | B1 + B3 Retiros, catálogos rápidos e integridad | Pendiente |
 | B5a Escrituras de dinero solo por grupo | Pendiente |
 | B5b Cuentas: lecturas, copias y borrado | Pendiente |
 | B5c Renglones, editor y nomenclatura final | Pendiente |
-| B6 Un solo motor de Cuentas (#108), opcional | Pendiente |
+| B6 Un solo motor de Cuentas (#108) | Pendiente |
 | B7 Cierre | Pendiente |

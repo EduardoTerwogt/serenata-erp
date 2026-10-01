@@ -15,8 +15,9 @@ grupos desfasados, 0 grupos ABIERTO vacíos, "Eduardo Terwogt" de SH072 en 3,100
 `cuentas_periodo` ~65 ms, advisors sin hallazgos nuevos. Pendiente de
 verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
-**Iniciativa "Simplificación del modelo de datos"** — epic #109. **Plan v9
-aprobado (2026-10-01)** en `docs/PLAN.md` (auditoría 6: P0 de la restricción
+**Iniciativa "Simplificación del modelo de datos"** — epic #109. **Plan v10
+aprobado (2026-10-01)** (auditoría 7: estado de cotización solo por RPC,
+fórmula única del cobro D15, un solo `cliente_id` D16, B6 obligatorio D17). Antes, v9 en `docs/PLAN.md` (auditoría 6: P0 de la restricción
 "proveedor ⇒ grupo" movida a B5b como constraint diferido, sin purga de
 reservas de folio, foto dorada sin tocar prod; decisiones D12 dueño único de
 verdad, D13 renombrar `x_pagar` a Costo Unitario/Costo Total, D14 retirar

@@ -220,3 +220,29 @@ divergir.
 **Revisado y se queda:** folio SH por `max()` (recorre la tabla, pero con el
 volumen real del negocio no se nota); `buscar_cotizaciones` volátil (solo se
 corrige si un bloque la toca).
+
+## Auditoría final 7 (v9 → v10, 2026-10-01): estado por RPC, cobro y un solo `cliente_id`
+
+Octava revisión (desarrollo + datos) contra `main` (`e1a90d5`),
+`pg_get_functiondef` de prod y el código. **Veredicto: el modelo de v9 era
+correcto; quedaban dos huecos de integridad existentes que el plan no cerraba,
+dos detalles que habrían frenado un bloque y tres simplificaciones.** Con las
+decisiones D15–D17 del usuario se corrige en v10.
+
+| # | Sev. | Hallazgo | Evidencia | En v10 |
+|---|---|---|---|---|
+| L1 | **P1** | `PUT /api/cotizaciones/:id` acepta `estado` (incluso `APROBADA`, sin crear cuentas) y `save_cotizacion` no revisa el estado: borra o reescribe renglones de una aprobada. La UI lo oculta, el servidor no. Dos vías para emitir (PUT con `EMITIDA` y `emitir_cotizacion`). | `schemas.ts` (`CotizacionBaseSchema.estado`), `useNuevaCotizacionPage.ts`, `save_cotizacion` de prod. | B5c: `save_cotizacion`/`patch_cotizacion_general` rechazan fuera de `BORRADOR`/`EMITIDA` y no escriben `estado`; `estado` sale del schema; emitir solo por RPC. |
+| L2 | **P1** | Dos reglas del estado del cobro: `registrar_pago_cuenta_cobrar` da `PARCIALMENTE_PAGADO` sin factura; `cuentas_cobrar_estado_calculado` (anular, corregir) da `FACTURA_PENDIENTE` y lee su propio `estado` (no derivable como columna generada). `baja_documento_cobro` no limpia `fecha_factura`. | `pg_get_functiondef` de prod. | **D15:** fórmula única como columna generada; quitar la factura limpia `fecha_factura`. |
+| L3 | P1 | Tres copias de `cliente_id` (`cotizaciones`, `proyectos`, `cuentas_cobrar`), iguales hoy; el plan añadía FK compuesta + índice único solo para sostener la copia. | Prod: 0 desfases; solo `cuentas_por_proyecto` lee `cuentas_cobrar.cliente_id` (más `buscar_cuentas_cobrar`, que sale). | **D16:** uno solo en `cotizaciones`, congelado al aprobar. |
+| L4 | P1 | El upsert de supabase-js no acepta un índice de expresión (`lower(trim(nombre))`); el `cliente_id` se escribe en un `UPDATE` aparte tras `save_cotizacion`, sin `revision`. | `persistence.ts`. | Columna generada `nombre_clave` con `UNIQUE`; `cliente_id` resuelto antes y dentro del guardado. |
+| L5 | P1 | B5a no listaba las rutas y UI de pago suelto (`/api/cuentas-pagar/[id]/subir-factura`, `registrar-pago`, `registrar-pago/estado`, rama suelta de `useDetalle.ts`). | `app/api/cuentas-pagar/`. | Se retiran en B5a con sus tests. |
+| L6 | P1 | La vista de historial sin filtro sumaría complementarias en borrador o canceladas. | `generarHistorialProyecto`. | Solo `APROBADA`, misma normalización de rol; snapshot → vivo como diferencia permitida. |
+| L7 | Velocidad | El navegador relee la cotización con `GET` tras el `PUT` (que ya la devuelve) y tras aprobar. | `quotation-service.ts`. | B1+B3: usar la respuesta; medir p50 desde el navegador. |
+| L8 | Deuda | B6 "opcional" dejaba dos motores y obligaba a hacer D13 en ambos. | — | **D17:** B6 obligatorio; B5b/B5c solo cambios mecánicos en el TS de Cuentas. |
+
+**Verificado sin problema:** columnas puente seguras (ninguna función inserta
+en `items_cotizacion`/`cuentas_pagar` sin lista de columnas ni con
+`populate_record`; el TS solo escribe `notas`, `responsable_*`,
+`fecha_factura`); nadie cambia `responsable_id`/`proyecto_id` de un grupo
+(FK compuesta viable); prod sin cotizaciones sin `cliente_id` ni
+complementarias con cliente distinto a su principal.
