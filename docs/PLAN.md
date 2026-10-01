@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Aprobado (2026-10-01) — plan v11 de "Simplificación del modelo de datos". Siguiente: B0.
+**Estado:** Aprobado (2026-10-01) — plan v12 de "Simplificación del modelo de datos". Siguiente: B0.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -37,7 +37,7 @@ cómo retomarla en `docs/archive/frente2-cuentas-conceptos-pausado.md`.
 
 **Epic en GitHub:** #109. Fase 2: #105 · Fase 3: #106 · deuda relacionada: #108.
 
-**Historia de las 9 auditorías (A1…M3):** `docs/archive/simplificacion-modelo-auditorias.md`.
+**Historia de las 10 auditorías (A1…N2):** `docs/archive/simplificacion-modelo-auditorias.md`.
 Este plan cita esos identificadores; si algo de ese archivo contradice este,
 manda este.
 
@@ -128,7 +128,7 @@ no cae en ninguna, se borra.
 3. El reinicio **no toca la BD de test**.
 4. Folios CC-/CP- **se usan fuera de la app** → se conservan (E3 descartado).
 
-## Resultado esperado (v11)
+## Resultado esperado (v12)
 
 - **40 → 34 tablas:** salen `cliente_id_backfill_clasificacion`,
   `historial_responsable` (pasa a vista), `sheets_sync_status`,
@@ -213,7 +213,7 @@ no cae en ninguna, se borra.
    rápido en vez de bloquear. Cada bloque sigue siendo **una** transacción a
    propósito (partirla dejaría funciones leyendo columnas ya borradas).
 
-## Plan de ejecución (v11)
+## Plan de ejecución (v12)
 
 7 PRs: B0 · B1+B3 · B5a · B5b · B5c · B6 · B7; B2 es la ejecución
 del script de reinicio. Estimación: 7 sesiones.
@@ -408,6 +408,16 @@ que escriben `cuentas_cobrar.estado` (`registrar_pago_cuenta_cobrar`,
   `baja_documento_cobro` limpia `fecha_factura` si quita la última factura
   vigente. Diferencia permitida en la foto dorada: cobros cuyo estado cambia
   por la fórmula única (listados en el PR).
+- **Escritores TS de columnas derivadas (N2):** `app/api/cuentas-cobrar/[id]/subir-factura`
+  deja de calcular y escribir `estado` (solo `fecha_factura`,
+  `fecha_vencimiento` y el documento). Los repositorios aceptan un tipo de
+  actualización con solo columnas escribibles (`CuentaCobrarUpdate`,
+  `CuentaPagarUpdate`) en vez de `Partial<CuentaCobrar>`/`Partial<CuentaPagar>`:
+  TypeScript impide escribir una columna generada o derivada. Salen
+  `calcularEstadoCuentaCobrarDetallado`/`Legacy` (`lib/shared/cuentas/status.ts`)
+  y `calcularEstadoCuentaCobrar` (repositorio de cobros); quien necesite
+  "vencido" lo deriva al leer desde `estado` + `fecha_vencimiento` (D15), sin
+  regla propia. Mapa en 0 de escrituras a `cuentas_cobrar.estado` (SQL y TS).
 - **Retiros sin reemplazo (J5):** `buscar_cuentas_cobrar`,
   `buscar_cuentas_pagar_grupos`, `buscar_cuentas_pagar` (G9) y los `GET` de
   lista; `tests/e2e/live/basic.spec.ts` pasa a `cuentas_periodo`/detalle.
@@ -527,8 +537,8 @@ presentación.
 | Bloque | Estado |
 |---|---|
 | Fases 1–3 (#105, #106) | Hecho (2026-10-01) |
-| Decisiones D1–D17 y 9 auditorías (historia en archive) | Hecho (2026-10-01) |
-| Aprobación del plan v11 | Hecho (2026-10-01) |
+| Decisiones D1–D17 y 10 auditorías (historia en archive) | Hecho (2026-10-01) |
+| Aprobación del plan v12 | Hecho (2026-10-01) |
 | B0 Red de seguridad, test = prod, índices y foto dorada | Pendiente |
 | B2 Reinicio de datos (script; tras limpiar Drive) | Pendiente |
 | B1 + B3 Retiros, catálogos rápidos e integridad | Pendiente |
