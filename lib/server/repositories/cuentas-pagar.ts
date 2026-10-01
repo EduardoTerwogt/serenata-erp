@@ -18,35 +18,6 @@ type CuentaPagarGrupoConJoins = CuentaPagarGrupo & {
   proveedores?: { nombre?: string } | null
 }
 
-export interface BuscarCuentasPagarResult {
-  rows: CuentaPagar[]
-  total_rows: number
-  total_monto_pendiente: number
-  total_monto_pagado: number
-  pendientes_count: number
-}
-
-/**
- * Bloque 6 (docs/PLAN.md, agrupación de Cuentas por Pagar): fuente de la
- * vista "Lista" via RPC unica buscar_cuentas_pagar_grupos
- * (db/migrations/20260918_buscar_cuentas_pagar_grupos.sql) -- reemplaza a
- * buscar_cuentas_pagar (db/migrations/20260914_buscar_cuentas_pagar.sql,
- * se deja desplegada sin caller, mismo patrón de limpieza que
- * getCuentasPagarPendientesEventosRealizados del Bloque 3). Cada fila es un
- * grupo real (cuentas_pagar_grupos, con estado/x_pagar/monto_pagado del
- * grupo) o una cuenta_pagar legacy sin grupo_id -- nunca items sueltos de un
- * grupo ya existente.
- */
-export async function buscarCuentasPagarGrupos(search: string | null, page: number, pageSize: number) {
-  const { data, error } = await supabaseAdmin.rpc('buscar_cuentas_pagar_grupos', {
-    p_search: search,
-    p_page: page,
-    p_page_size: pageSize,
-  })
-  if (error) throw error
-  return data as BuscarCuentasPagarResult
-}
-
 /**
  * Detalle por ID (1C-1).
  * .maybeSingle() nunca .single(): "no encontrada" debe seguir siendo un
@@ -85,17 +56,6 @@ export async function getCuentasPagarByProyecto(proyectoId: string): Promise<Cue
     .eq('proyecto_id', proyectoId)
   if (error) throw error
   return data as CuentaPagar[]
-}
-
-export async function updateCuentaPagar(id: string, updates: Partial<CuentaPagar>) {
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
-  if (error) throw error
-  return data as CuentaPagar
 }
 
 export async function generarHistorialProyecto(proyectoId: string, proyecto: Proyecto) {
@@ -264,15 +224,6 @@ export async function getCuentaPagarGrupoById(id: string): Promise<CuentaPagarGr
     proyectos: undefined,
     proveedores: undefined,
   } as CuentaPagarGrupo
-}
-
-export async function getCuentasPagarPorGrupo(grupoId: string): Promise<CuentaPagar[]> {
-  const { data, error } = await supabaseAdmin
-    .from('cuentas_pagar')
-    .select('*')
-    .eq('grupo_id', grupoId)
-  if (error) throw error
-  return data as CuentaPagar[]
 }
 
 export async function getDocumentosCuentaPagarGrupo(grupoId: string) {

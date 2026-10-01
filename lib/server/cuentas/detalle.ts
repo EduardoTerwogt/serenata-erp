@@ -47,8 +47,31 @@ export async function cargarDetalleCobro(id: string): Promise<DetalleCobro | nul
   )
 }
 
+// Descripción y cantidad salen del renglón (dueño) por su llave; la FK simple
+// desambigua el embed frente a la compuesta (item_id, cotizacion_id).
 const COLS_CUENTA_PAGAR =
-  'id, item_id, cotizacion_id, item_descripcion, cantidad, x_pagar, monto_pagado, responsable_id, responsable_nombre, correo, telefono, banco, clabe, proyecto_id, estado, grupo_id, total_a_transferir, monto_transferido, orden_pago_id'
+  'id, item_id, cotizacion_id, x_pagar, monto_pagado, responsable_id, proyecto_id, estado, grupo_id, items_cotizacion!cuentas_pagar_item_id_fkey(descripcion, cantidad)'
+
+type FilaCuentaPagar = {
+  id: string
+  item_id: string
+  cotizacion_id: string | null
+  x_pagar: number
+  monto_pagado: number | null
+  items_cotizacion: { descripcion: string | null; cantidad: number | null } | null
+}
+
+function aFilaCuenta(c: FilaCuentaPagar): PagoFilas['cuentas'][number] {
+  return {
+    id: c.id,
+    item_id: c.item_id,
+    cotizacion_id: c.cotizacion_id,
+    item_descripcion: c.items_cotizacion?.descripcion ?? null,
+    cantidad: c.items_cotizacion?.cantidad ?? null,
+    x_pagar: c.x_pagar,
+    monto_pagado: c.monto_pagado,
+  }
+}
 
 /** Detalle de un grupo de facturación o de una cuenta suelta. */
 export async function cargarDetallePago(objetivo: 'grupo' | 'cuenta', id: string): Promise<DetallePago | null> {
@@ -66,7 +89,7 @@ export async function cargarDetallePago(objetivo: 'grupo' | 'cuenta', id: string
     const hijas = await supabaseAdmin.from('cuentas_pagar').select(COLS_CUENTA_PAGAR).eq('grupo_id', id).order('created_at').order('id')
     if (hijas.error) throw hijas.error
     destino = { ...g, neto: Number(g.monto_total) }
-    cuentas = hijas.data ?? []
+    cuentas = ((hijas.data ?? []) as unknown as FilaCuentaPagar[]).map(aFilaCuenta)
   } else {
     const { data: c, error } = await supabaseAdmin.from('cuentas_pagar').select(COLS_CUENTA_PAGAR).eq('id', id).maybeSingle()
     if (error) throw error
@@ -79,11 +102,12 @@ export async function cargarDetallePago(objetivo: 'grupo' | 'cuenta', id: string
       responsable_id: c.responsable_id,
       estado: c.estado,
       neto: Number(c.x_pagar),
-      total_a_transferir: c.total_a_transferir,
-      monto_transferido: c.monto_transferido,
-      orden_pago_id: c.orden_pago_id,
+      // B5a: una cuenta suelta no tiene factura, pago ni orden propios.
+      total_a_transferir: null,
+      monto_transferido: 0,
+      orden_pago_id: null,
     }
-    cuentas = [c]
+    cuentas = [aFilaCuenta(c as unknown as FilaCuentaPagar)]
   }
 
   const filtroDocs = objetivo === 'grupo' ? { col: 'grupo_id', val: id } : { col: 'cuentas_pagar_id', val: id }

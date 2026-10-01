@@ -10,20 +10,12 @@ function cuenta(overrides: Partial<CuentaPagarFixture>): CuentaPagarFixture {
     id: 'cp-1',
     cotizacion_id: 'SH001',
     proyecto_id: 'SH001',
-    item_id: null,
+    item_id: 'i-1',
     responsable_id: 'prov-1',
     responsable_nombre: 'Proveedor',
-    item_descripcion: null,
-    cantidad: 1,
     x_pagar: 1000,
-    margen: 0,
-    telefono: null,
-    correo: null,
-    clabe: null,
-    banco: null,
     estado: 'PENDIENTE',
     fecha_pago: null,
-    metodo_pago: null,
     notas: null,
     grupo_id: null,
     proveedor_regimen_fiscal: null,
@@ -101,18 +93,18 @@ describe('calcularCierreProyecto', () => {
     expect(cierre.utilidad_neta).toBe(-1000)
   })
 
-  it('B2 (H10): con factura validada usa el snapshot del CFDI, en grupo y en suelta', () => {
+  it('B2 (H10): con factura validada usa el snapshot del CFDI del grupo; una suelta se estima', () => {
     const cierre = calcularCierreProyecto([
       cuenta({ id: 'g-1a', grupo_id: 'g-1', x_pagar: 600, grupo_monto_total: 1000, grupo_total_a_transferir: 1159.99, proveedor_regimen_fiscal: 'moral' }),
       cuenta({ id: 'g-1b', grupo_id: 'g-1', x_pagar: 400, grupo_monto_total: 1000, grupo_total_a_transferir: 1159.99, proveedor_regimen_fiscal: 'moral' }),
-      cuenta({ id: 's-1', responsable_id: 'prov-2', x_pagar: 1000, total_a_transferir: 1060, proveedor_regimen_fiscal: 'fisica' }),
+      cuenta({ id: 's-1', responsable_id: 'prov-2', x_pagar: 1000, proveedor_regimen_fiscal: 'fisica' }),
     ], 0, 0, 0)
     const [grupo, suelta] = cierre.quien_cuanto_cuando
     expect(grupo.total_a_transferir).toBe(1159.99)
     expect(grupo.total_es_snapshot).toBe(true)
     expect(grupo.neto).toBe(1000) // el neto sigue siendo el costo total de los items (principio 8)
-    expect(suelta.total_a_transferir).toBe(1060)
-    expect(suelta.total_es_snapshot).toBe(true)
+    expect(suelta.total_a_transferir).toBe(calcularEjemploFactura(1000, 'fisica').total)
+    expect(suelta.total_es_snapshot).toBe(false)
   })
 
   it('B2 (H10): sin factura (snapshot null) estima con el régimen', () => {

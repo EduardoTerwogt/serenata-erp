@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { randomUUID } from 'crypto'
-import { cleanupLiveCuentasByPrefix, cleanupLiveOrdenesPagoHuerfanas, getLiveSupabaseAdmin } from '../utils/live-cleanup'
+import { cleanupLiveCuentasByPrefix, cleanupLiveOrdenesPagoHuerfanas, getLiveSupabaseAdmin, insertarCuentaPagarConRenglon } from '../utils/live-cleanup'
 
 /**
  * Rediseño de Cuentas, B1b (docs/PLAN.md): pruebas reales contra
@@ -94,15 +94,14 @@ async function crearCuentas(
       estado: opts.grupoEstado ?? 'ABIERTO',
     }))
   }
-  ok(await supabase.from('cuentas_pagar').insert({
-    cotizacion_id: opts.cotizacionId,
-    proyecto_id: opts.proyectoId,
-    responsable_id: fx.proveedorId,
-    responsable_nombre: `${fx.prefix} Proveedor`,
-    item_descripcion: `Renglón ${opts.cotizacionId}`,
-    x_pagar: opts.xPagar,
-    grupo_id: opts.grupoId,
-  }))
+  await insertarCuentaPagarConRenglon(supabase, {
+    cotizacionId: opts.cotizacionId,
+    proyectoId: opts.proyectoId,
+    responsableId: fx.proveedorId,
+    grupoId: opts.grupoId,
+    xPagar: opts.xPagar,
+    descripcion: `Renglón ${opts.cotizacionId}`,
+  })
   const { data: hijas } = await supabase.from('cuentas_pagar').select('x_pagar').eq('grupo_id', opts.grupoId)
   const total = (hijas ?? []).reduce((sum, h) => sum + Number(h.x_pagar), 0)
   ok(await supabase.from('cuentas_pagar_grupos').update({ monto_total: total }).eq('id', opts.grupoId))
@@ -112,8 +111,8 @@ async function limpiar(supabase: Supabase, fx: Fixture) {
   const ids = fx.cotizaciones
   const { data: grupos } = await supabase.from('cuentas_pagar_grupos').select('id').eq('responsable_id', fx.proveedorId)
   const grupoIds = (grupos ?? []).map((g) => g.id)
-  const { data: cuentas } = await supabase.from('cuentas_pagar').select('id, orden_pago_id').eq('responsable_id', fx.proveedorId)
-  const ordenIds = Array.from(new Set([...(fx.ordenes), ...(cuentas ?? []).map((c) => c.orden_pago_id).filter(Boolean)]))
+  const { data: cuentas } = await supabase.from('cuentas_pagar').select('id').eq('responsable_id', fx.proveedorId)
+  const ordenIds = Array.from(new Set(fx.ordenes))
 
   const cuentaIds = (cuentas ?? []).map((c) => c.id)
   if (ordenIds.length) await supabase.from('ordenes_pago_conceptos').delete().in('orden_pago_id', ordenIds)
@@ -174,8 +173,9 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
       const ordenId = fx.ordenes[0]
       const grupo = must(await supabase.from('cuentas_pagar_grupos').select('estado, orden_pago_id').eq('id', grupoId).single())
       expect(grupo).toEqual({ estado: 'EN_PROCESO_PAGO', orden_pago_id: ordenId })
-      const hijas = must(await supabase.from('cuentas_pagar').select('estado, orden_pago_id').eq('grupo_id', grupoId))
-      expect(hijas).toEqual([{ estado: 'EN_PROCESO_PAGO', orden_pago_id: ordenId }])
+      // B5b: la orden vive solo en el grupo; las hijas solo cambian de estado.
+      const hijas = must(await supabase.from('cuentas_pagar').select('estado').eq('grupo_id', grupoId))
+      expect(hijas).toEqual([{ estado: 'EN_PROCESO_PAGO' }])
       const conceptos = must(await supabase.from('ordenes_pago_conceptos').select('grupo_id, neto_cubierto').eq('orden_pago_id', ordenId))
       expect(conceptos).toEqual([{ grupo_id: grupoId, neto_cubierto: 1000 }])
       const orden = must(await supabase.from('ordenes_pago').select('total_monto, estado').eq('id', ordenId).single())
@@ -221,8 +221,8 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
       ok(await supabase.rpc('cancelar_orden_pago', { p_orden_id: generada.orden_pago_id, p_motivo: 'prueba live', p_usuario: 'live' }))
       const grupo = must(await supabase.from('cuentas_pagar_grupos').select('estado, orden_pago_id').eq('id', grupoId).single())
       expect(grupo).toEqual({ estado: 'FACTURADO', orden_pago_id: null })
-      const hijas = must(await supabase.from('cuentas_pagar').select('estado, orden_pago_id').eq('grupo_id', grupoId))
-      expect(hijas).toEqual([{ estado: 'PENDIENTE', orden_pago_id: null }])
+      const hijas = must(await supabase.from('cuentas_pagar').select('estado').eq('grupo_id', grupoId))
+      expect(hijas).toEqual([{ estado: 'PENDIENTE' }])
       const orden = must(await supabase.from('ordenes_pago').select('estado, cancelada_motivo').eq('id', generada.orden_pago_id).single())
       expect(orden).toEqual({ estado: 'CANCELADA', cancelada_motivo: 'prueba live' })
       const conceptos = must(await supabase.from('ordenes_pago_conceptos').select('grupo_id').eq('orden_pago_id', generada.orden_pago_id))
@@ -464,7 +464,8 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
         await crearCotizacion(supabase, fx, { id, estado: 'APROBADA', conProyecto: true })
       }
       await crearCuentas(supabase, fx, { cotizacionId: conCobro, proyectoId: conCobro, grupoId: randomUUID(), xPagar: 100 })
-      await crearCuentas(supabase, fx, { cotizacionId: enOrden, proyectoId: enOrden, grupoId: randomUUID(), xPagar: 100 })
+      const grupoEnOrden = randomUUID()
+      await crearCuentas(supabase, fx, { cotizacionId: enOrden, proyectoId: enOrden, grupoId: grupoEnOrden, xPagar: 100 })
       await crearCuentas(supabase, fx, { cotizacionId: facturado, proyectoId: facturado, grupoId: randomUUID(), xPagar: 100, grupoEstado: 'FACTURADO' })
 
       ok(await supabase.from('cuentas_cobrar').update({ monto_pagado: 50 }).eq('cotizacion_id', conCobro))
@@ -472,7 +473,8 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
         .insert({ fecha_generacion: '2026-01-15', estado: 'GENERADA', total_monto: 100 })
         .select('id').single())
       fx.ordenes.push(orden.id)
-      ok(await supabase.from('cuentas_pagar').update({ orden_pago_id: orden.id }).eq('cotizacion_id', enOrden))
+      // B5b: la orden vive solo en el grupo.
+      ok(await supabase.from('cuentas_pagar_grupos').update({ orden_pago_id: orden.id }).eq('id', grupoEnOrden))
 
       const casos: Array<[string, string]> = [
         [conCobro, 'ya tiene cobros registrados'],

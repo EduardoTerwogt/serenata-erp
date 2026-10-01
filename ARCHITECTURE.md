@@ -329,6 +329,17 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   (cuentas nuevas, principal y complementaria), `reasignar_responsable_cuenta_pagar`
   (reasignación de proveedor) y la migración retroactiva de datos. Nunca se
   reimplementa la lógica de agrupación en un cuarto lugar.
+- **`cuentas_pagar` no guarda copias (B5b etapa 2, migración `20261023`).**
+  Nombre y contacto del proveedor salen de `proveedores` (por `responsable_id`);
+  descripción, cantidad y margen, de `items_cotizacion` (por `item_id`); orden,
+  total a transferir y lo transferido, del grupo. `item_id` es `uuid NOT NULL
+  UNIQUE` con FK `RESTRICT` (toda cuenta nace de un renglón), con FKs compuestas
+  diferibles al renglón y al grupo. Dos invariantes se validan al `COMMIT`
+  (constraint trigger `trigger_cuentas_pagar_invariantes`): toda cuenta con
+  proveedor vive en un grupo (K1) y el proveedor de la cuenta es el del renglón.
+  Las lecturas por llave en TS usan el embed
+  `items_cotizacion!cuentas_pagar_item_id_fkey(...)` (la FK simple desambigua
+  frente a la compuesta).
 - Un índice único parcial (`cuentas_pagar_grupos_abierto_unique` sobre
   `(proyecto_id, responsable_id) WHERE estado = 'ABIERTO'`) es lo que hace
   segura la creación de grupos bajo concurrencia — dos aprobaciones casi
@@ -336,7 +347,7 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   `ABIERTO`.
 - Reasignar el proveedor de una cuenta cuyo grupo ya no está `ABIERTO` se
   rechaza con `RAISE EXCEPTION` (código `P1412`), nunca con un jsonb de
-  error — `reasignar_responsable_cuenta_pagar` escribe
+  error — `reasignar_responsable_cuenta_pagar(cuenta, proveedor)` escribe
   `items_cotizacion`/`cuentas_pagar` ANTES de llamar a la reconciliación,
   dentro de la misma transacción; solo una excepción real hace que Postgres
   revierta también esas escrituras previas, no solo la reconciliación.

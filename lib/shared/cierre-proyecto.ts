@@ -43,8 +43,8 @@ export interface CierreProyecto {
 // Solo los campos que usa el cierre: así lo alimentan tanto CuentaPagar
 // completa (vista actual) como las filas compactas de la lectura por periodo
 // (B3, lib/server/cuentas/periodo.ts).
-export type CuentaPagarCierreInput = Pick<CuentaPagar, 'id' | 'grupo_id' | 'x_pagar' | 'responsable_id' | 'responsable_nombre'> &
-  Partial<Pick<CuentaPagar, 'grupo_monto_total' | 'grupo_total_a_transferir' | 'total_a_transferir'>> & {
+export type CuentaPagarCierreInput = Pick<CuentaPagar, 'id' | 'grupo_id' | 'x_pagar' | 'responsable_id'> &
+  Partial<Pick<CuentaPagar, 'responsable_nombre' | 'grupo_monto_total' | 'grupo_total_a_transferir'>> & {
     proveedor_regimen_fiscal?: RegimenFiscal | null
   }
 
@@ -86,12 +86,13 @@ export function calcularCierreProyecto(
     // H10: con factura validada manda el Total del CFDI (el mismo que usa el
     // saldo del pago); sin factura, el estimado. IVA y retenciones siguen
     // estimados por régimen: el CFDI solo guarda su Total.
-    const snapshot = representante.grupo_id ? representante.grupo_total_a_transferir : representante.total_a_transferir
+    // El snapshot vive en el grupo (B5a): una cuenta suelta siempre se estima.
+    const snapshot = representante.grupo_total_a_transferir
     const tieneSnapshot = snapshot != null
     return {
       clave,
       proveedor_id: representante.responsable_id,
-      proveedor_nombre: representante.responsable_nombre,
+      proveedor_nombre: representante.responsable_nombre ?? 'Sin asignar',
       regimen_fiscal: regimenFiscal,
       neto: r.subtotal,
       iva_trasladado: r.iva_trasladado,

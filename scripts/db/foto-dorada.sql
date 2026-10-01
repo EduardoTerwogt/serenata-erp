@@ -11,8 +11,8 @@
 --   - scripts/db/foto-dorada.mjs: reemplaza `v_hash;` por `v_full;` con
 --     --completo para guardar el JSON de cada llamada y comparar campo por campo.
 --
--- Excluye las RPCs que el plan retira (J5): buscar_cuentas_cobrar y
--- buscar_cuentas_pagar_grupos. Tomarla después de alinear los datos de test.
+-- Excluye las RPCs que el plan retira (J5): buscar_cuentas_cobrar,
+-- buscar_cuentas_pagar_grupos y buscar_cuentas_pagar (retiradas en 20261023). Tomarla después de alinear los datos de test.
 
 DO $foto$
 DECLARE
@@ -53,7 +53,6 @@ BEGIN
       jsonb_build_object('inicio', c_hoy - 30, 'fin', c_hoy), jsonb_build_object('inicio', c_hoy - 60, 'fin', c_hoy - 31))),
     'buscar_cotizaciones/todas', buscar_cotizaciones(NULL, NULL, 1, 50),
     'buscar_cotizaciones/aprobadas', buscar_cotizaciones(NULL, 'APROBADA', 2, 50),
-    'buscar_cuentas_pagar', buscar_cuentas_pagar(NULL, 1, 50),
     'buscar_ordenes_pago', buscar_ordenes_pago('{}'::jsonb, 1, 50),
     'proveedor_documentos_resumen', proveedor_documentos_resumen()
   );

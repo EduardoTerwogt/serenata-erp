@@ -10,6 +10,52 @@ export function getLiveSupabaseAdmin() {
 }
 
 /**
+ * Siembra una cuenta por pagar con su renglón (B5b: `item_id` es NOT NULL con
+ * FK, toda cuenta nace de un renglón de `items_cotizacion`; nombre y
+ * descripción ya no se copian a la cuenta). La cotización debe existir. El
+ * renglón lleva el mismo proveedor que la cuenta (invariante validada al
+ * COMMIT) y un costo unitario = `xPagar` con cantidad 1.
+ */
+export async function insertarCuentaPagarConRenglon(
+  supabase: ReturnType<typeof getLiveSupabaseAdmin>,
+  c: {
+    cotizacionId: string
+    proyectoId: string | null
+    responsableId: string | null
+    grupoId: string | null
+    xPagar: number
+    descripcion: string
+  }
+): Promise<{ id: string; itemId: string }> {
+  const { data: item, error: itemError } = await supabase
+    .from('items_cotizacion')
+    .insert({
+      cotizacion_id: c.cotizacionId,
+      descripcion: c.descripcion,
+      cantidad: 1,
+      x_pagar: c.xPagar,
+      responsable_id: c.responsableId,
+    })
+    .select('id')
+    .single()
+  if (itemError) throw itemError
+  const { data: cuenta, error } = await supabase
+    .from('cuentas_pagar')
+    .insert({
+      cotizacion_id: c.cotizacionId,
+      proyecto_id: c.proyectoId,
+      item_id: item.id,
+      responsable_id: c.responsableId,
+      x_pagar: c.xPagar,
+      grupo_id: c.grupoId,
+    })
+    .select('id')
+    .single()
+  if (error) throw error
+  return { id: cuenta.id as string, itemId: item.id as string }
+}
+
+/**
  * Borra en orden seguro (respetando FKs) todo lo generado por una cotización
  * de prueba real: cuentas_pagar -> cuentas_cobrar (documentos/pagos van en
  * cascada) -> proyectos -> cotizaciones (items van en cascada) ->
@@ -112,11 +158,11 @@ export async function cleanupLiveCuentasByPrefix(prefijo: string) {
     .from('cuentas_pagar_grupos').select('id, orden_pago_id')
     .or(`proyecto_id.in.(${proyectoIds.join(',')}),responsable_id.in.(${proveedorIds.join(',')})`)
   const { data: cuentas } = await supabase
-    .from('cuentas_pagar').select('id, orden_pago_id')
+    .from('cuentas_pagar').select('id')
     .or(`proyecto_id.in.(${proyectoIds.join(',')}),cotizacion_id.in.(${proyectoIds.join(',')}),responsable_id.in.(${proveedorIds.join(',')})`)
   const grupoIds = (grupos ?? []).map((g) => g.id as string)
   const cuentaIds = (cuentas ?? []).map((c) => c.id as string)
-  const ordenIds = Array.from(new Set([...(grupos ?? []), ...(cuentas ?? [])].map((r) => r.orden_pago_id as string | null).filter((o): o is string => !!o)))
+  const ordenIds = Array.from(new Set((grupos ?? []).map((r) => r.orden_pago_id as string | null).filter((o): o is string => !!o)))
   const { data: cobros } = await supabase.from('cuentas_cobrar').select('id').in('cotizacion_id', proyectoIds)
   const cobroIds = (cobros ?? []).map((c) => c.id as string)
 
@@ -151,7 +197,7 @@ export async function cleanupLiveCuentasByPrefix(prefijo: string) {
 
 /**
  * Borra las órdenes de pago que un test `live` dejó sin nada colgando: creadas
- * por el usuario 'live', sin conceptos, sin cuentas ni grupos que las
+ * por el usuario 'live', sin conceptos ni grupos que las
  * referencien. Una orden cancelada conserva sus conceptos para el historial,
  * así que una sin conceptos solo puede ser el resto de una limpieza a medias
  * (rompe la guarda "total de la orden = Σ desglose").
@@ -160,12 +206,11 @@ export async function cleanupLiveOrdenesPagoHuerfanas() {
   const supabase = getLiveSupabaseAdmin()
   const { data: ordenes } = await supabase.from('ordenes_pago').select('id').eq('created_by', 'live')
   for (const { id } of ordenes ?? []) {
-    const [conceptos, cuentas, grupos] = await Promise.all([
+    const [conceptos, grupos] = await Promise.all([
       supabase.from('ordenes_pago_conceptos').select('id', { count: 'exact', head: true }).eq('orden_pago_id', id),
-      supabase.from('cuentas_pagar').select('id', { count: 'exact', head: true }).eq('orden_pago_id', id),
       supabase.from('cuentas_pagar_grupos').select('id', { count: 'exact', head: true }).eq('orden_pago_id', id),
     ])
-    if ((conceptos.count ?? 1) + (cuentas.count ?? 1) + (grupos.count ?? 1) === 0) {
+    if ((conceptos.count ?? 1) + (grupos.count ?? 1) === 0) {
       const { error } = await supabase.from('ordenes_pago').delete().eq('id', id)
       if (error) console.warn(`[cleanupLiveOrdenesPagoHuerfanas] ${id}: ${error.message}`)
     }

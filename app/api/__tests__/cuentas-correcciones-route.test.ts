@@ -109,10 +109,10 @@ describe('POST /api/cuentas/correcciones', () => {
     })
   })
 
-  it('reasignar un concepto pagado copia los datos del proveedor nuevo', async () => {
+  it('reasignar un concepto pagado pasa solo el proveedor nuevo (nombre y contacto salen del dueño)', async () => {
     await postCorreccion(req({ accion: 'proveedor', cuenta_pagar_id: PAGO, responsable_id: mocks.proveedor.id, motivo: 'era otro proveedor' }))
     expect(mocks.rpcMock).toHaveBeenCalledWith('corregir_proveedor_cuenta_pagar', expect.objectContaining({
-      p_cuenta_pagar_id: PAGO, p_responsable_id: mocks.proveedor.id, p_responsable_nombre: 'Luz y Sonido', p_motivo: 'era otro proveedor',
+      p_cuenta_pagar_id: PAGO, p_responsable_id: mocks.proveedor.id, p_motivo: 'era otro proveedor',
     }))
   })
 

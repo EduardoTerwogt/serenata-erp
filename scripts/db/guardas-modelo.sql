@@ -64,7 +64,7 @@ g_grupo_vacio AS (
 g_cp_costo_total AS (
   SELECT cp.id
   FROM cuentas_pagar cp
-  JOIN items_cotizacion i ON i.id::text = cp.item_id
+  JOIN items_cotizacion i ON i.id = cp.item_id
   WHERE abs(cp.x_pagar - round(i.x_pagar * i.cantidad, 2)) > 0.01
 ),
 -- 4. total de la orden = Σ desglose
@@ -99,21 +99,21 @@ g_k4_sin_cuenta AS (
   FROM items_cotizacion i
   JOIN cotizaciones c ON c.id = i.cotizacion_id AND c.estado = 'APROBADA'
   WHERE i.x_pagar > 0
-    AND NOT EXISTS (SELECT 1 FROM cuentas_pagar cp WHERE cp.item_id = i.id::text)
+    AND NOT EXISTS (SELECT 1 FROM cuentas_pagar cp WHERE cp.item_id = i.id)
 ),
 g_k4_cuenta_sin_item AS (
   SELECT cp.id
   FROM cuentas_pagar cp
   WHERE cp.item_id IS NULL
-     OR NOT EXISTS (SELECT 1 FROM items_cotizacion i WHERE i.id::text = cp.item_id)
+     OR NOT EXISTS (SELECT 1 FROM items_cotizacion i WHERE i.id = cp.item_id)
 ),
 g_k4_item_cero AS (
   SELECT cp.id
   FROM cuentas_pagar cp
-  JOIN items_cotizacion i ON i.id::text = cp.item_id
+  JOIN items_cotizacion i ON i.id = cp.item_id
   WHERE i.x_pagar <= 0
 ),
--- 8. cuenta con proveedor => grupo
+-- 8. cuenta con proveedor => grupo (desde B5b también la valida un constraint trigger al COMMIT)
 g_cp_sin_grupo AS (
   SELECT cp.id
   FROM cuentas_pagar cp
@@ -130,15 +130,8 @@ g_folio_cp AS (
   WHERE cp.folio IS NULL
      OR cp.folio IN (SELECT folio FROM cuentas_pagar GROUP BY folio HAVING count(*) > 1)
 ),
--- 10. copia = dueño (temporal hasta B5c): datos del proveedor y del cliente
-g_copia_proveedor AS (
-  SELECT cp.id
-  FROM cuentas_pagar cp
-  JOIN proveedores p ON p.id = cp.responsable_id
-  WHERE cp.responsable_nombre IS DISTINCT FROM p.nombre
-     OR cp.telefono IS DISTINCT FROM p.telefono
-     OR cp.correo IS DISTINCT FROM p.correo
-),
+-- 10. copia = dueño (temporal hasta B5c): el cliente de cuentas_cobrar. La copia del
+-- proveedor en cuentas_pagar salió en B5b (J3).
 g_copia_cliente AS (
   SELECT cc.id
   FROM cuentas_cobrar cc
@@ -163,7 +156,6 @@ SELECT guarda, violaciones FROM (
   UNION ALL SELECT 15, 'cuenta por pagar con proveedor y sin grupo', count(*) FROM g_cp_sin_grupo
   UNION ALL SELECT 16, 'folio CC nulo o duplicado', count(*) FROM g_folio_cc
   UNION ALL SELECT 17, 'folio CP nulo o duplicado', count(*) FROM g_folio_cp
-  UNION ALL SELECT 18, 'temporal: copia de proveedor en cuentas_pagar ≠ proveedores', count(*) FROM g_copia_proveedor
-  UNION ALL SELECT 19, 'temporal: copia de cliente en cuentas_cobrar ≠ clientes', count(*) FROM g_copia_cliente
+  UNION ALL SELECT 18, 'temporal: copia de cliente en cuentas_cobrar ≠ clientes', count(*) FROM g_copia_cliente
 ) t
 ORDER BY n;

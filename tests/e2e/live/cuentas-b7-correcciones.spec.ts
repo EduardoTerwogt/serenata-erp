@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { randomUUID } from 'crypto'
-import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin } from '../utils/live-cleanup'
+import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin, insertarCuentaPagarConRenglon } from '../utils/live-cleanup'
 
 /**
  * Rediseño de Cuentas B7 (D5, R8): pruebas reales contra serenata-erp-test de
@@ -57,15 +57,14 @@ async function crearFixture(supabase: Supabase): Promise<Fixture> {
   )
   ok(await supabase.from('cuentas_pagar_grupos').insert({ id: grupoId, proyecto_id: id, responsable_id: proveedorId, estado: 'FACTURADO', monto_total: 1000, total_a_transferir: 1160 }))
   for (const x of [600, 400]) {
-    ok(await supabase.from('cuentas_pagar').insert({
-      cotizacion_id: id,
-      proyecto_id: id,
-      responsable_id: proveedorId,
-      responsable_nombre: `${id} Proveedor`,
-      item_descripcion: `Renglón ${x}`,
-      x_pagar: x,
-      grupo_id: grupoId,
-    }))
+    await insertarCuentaPagarConRenglon(supabase, {
+      cotizacionId: id,
+      proyectoId: id,
+      responsableId: proveedorId,
+      grupoId,
+      xPagar: x,
+      descripcion: `Renglón ${x}`,
+    })
   }
   ok(await supabase.from('documentos_cuentas_pagar').insert({
     grupo_id: grupoId,

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { randomUUID } from 'crypto'
-import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin } from '../utils/live-cleanup'
+import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin, insertarCuentaPagarConRenglon } from '../utils/live-cleanup'
 
 /**
  * Prueba de concurrencia real contra serenata-erp-test para el RPC
@@ -58,15 +58,14 @@ async function crearGrupoDePrueba(supabase: Supabase, prefix: string, proveedorI
     responsable_id: proveedorId,
     estado: 'FACTURADO',
   }))
-  ok(await supabase.from('cuentas_pagar').insert({
-    cotizacion_id: proyectoId,
-    proyecto_id: proyectoId,
-    responsable_id: proveedorId,
-    responsable_nombre: `${prefix} Proveedor`,
-    item_descripcion: `Renglón ${proyectoId}`,
-    x_pagar: xPagar,
-    grupo_id: grupoId,
-  }))
+  await insertarCuentaPagarConRenglon(supabase, {
+    cotizacionId: proyectoId,
+    proyectoId,
+    responsableId: proveedorId,
+    grupoId,
+    xPagar,
+    descripcion: `Renglón ${proyectoId}`,
+  })
   ok(await supabase.from('cuentas_pagar_grupos').update({ monto_total: xPagar, total_a_transferir: totalATransferir }).eq('id', grupoId))
   ok(await supabase.from('documentos_cuentas_pagar').insert({
     grupo_id: grupoId,
