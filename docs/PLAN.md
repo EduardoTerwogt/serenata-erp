@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Borrador — "Simplificación del modelo de datos" (2026-10-01).
+**Estado:** En refinamiento — "Simplificación del modelo de datos" (fases 2 y 3 hechas 2026-10-01; espera decisiones del usuario).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -40,74 +40,109 @@ cómo retomarla en `docs/archive/frente2-cuentas-conceptos-pausado.md`.
 ## Origen
 
 El 2026-10-01 el usuario revisó el Schema Visualizer de Supabase y percibió
-**demasiadas tablas**, con la información repartida en muchos lugares. Pidió
-abrir una iniciativa para explorarlo antes de seguir con el frente 2.
+**demasiadas tablas**, datos repetidos e información dispersa que podría vivir
+junta. Pidió analizarlo como iniciativa (análisis y plan en una sesión,
+implementación en otra) con una condición dura: **hoy muchos puntos de la app
+están conectados a la BD, nada debe romperse ni quedar suelto.**
 
 ## Qué se sabe hoy
 
-Detalle en `docs/inventario-tablas.md` (producción, 2026-10-01):
+- Inventario (fase 1) y matriz con evidencia (fase 2):
+  `docs/inventario-tablas.md`.
+- Alternativas y recomendación (fase 3): `docs/decisions/020-simplificacion-modelo-datos.md`
+  (Propuesta). Recomendada: **B** — un dueño por dato + el grupo como única
+  obligación de pago.
+- Conclusión central: **el problema es estado duplicado, no número de
+  tablas.** 40 → 36 tablas (32 si se retiran tareas/documentos de proyecto),
+  ~20 columnas copiadas o derivadas menos, y desaparece la rama "suelta" de
+  `cuentas_pagar` en ~10 RPCs.
+- Evidencia de que el diseño actual ya deja divergir datos: contacto de
+  proveedor distinto en 10 de 82 cuentas por pagar; 13 renglones con margen de
+  la fórmula vieja (incluidos 3 aprobados que alimentan Cuentas); 2 proyectos
+  con datos distintos a su cotización; `cuentas_pagar.item_id` sin FK.
+- **Hallazgo bloqueante (H11):** Sheets → Supabase (`sync-up`, botón en Admin)
+  escribe directo sobre cotizaciones, proyectos y cuentas sin RPC. Rompe con
+  cualquier cambio de columnas y hoy ya puede saltarse invariantes.
 
-- 40 tablas en `public`; **11** alimentan los conceptos de Cuentas
-  (`cuentas_conceptos`): `cotizaciones`, `proyectos`, `proveedores`,
-  `cuentas_cobrar`, `cuentas_pagar`, `cuentas_pagar_grupos`,
-  `pagos_comprobantes`, `pagos_cuentas_pagar`, `documentos_cuentas_cobrar`,
-  `documentos_cuentas_pagar` y `cuentas_reaperturas`.
-- La dispersión ya tuvo costo medible: la tabla `cuentas_conceptos_base` y sus
-  triggers (frente 2) existen para no juntar esas 11 tablas en cada lectura, y
-  la invariante de grupos necesitó un trigger propio (`20261008`).
-- Hipótesis a validar (no son decisiones): cobrar y pagar son modelos
-  paralelos (pagos y documentos casi idénticos); `cuentas_pagar` y
-  `cuentas_pagar_grupos` duplican estado; hay datos de terceros copiados en
-  varias tablas; dos mecanismos de idempotencia; un posible residuo de
-  migración. Ver "Observaciones" en el inventario.
-- **No** todo se puede fusionar: varias separaciones existen por reglas de
-  negocio (R1, D22, D28; `docs/decisions/006` y `011`) y la BD protege hoy
-  esas invariantes.
+## Objetivo
 
-## Objetivo (a confirmar con el usuario)
+Que cada dato tenga **un solo dueño** (los demás lo leen por llave o lo
+congelan a propósito como snapshot documentado), sin perder invariantes de
+dinero e impuestos y sin romper ninguna pantalla, RPC, test, espejo de Sheets
+ni el portal de proveedores.
 
-Reducir los lugares donde hay que buscar o mantener el mismo dato, **sin
-perder** las invariantes de dinero e impuestos y sin romper lo que funciona.
-"Menos tablas" es un medio, no la meta: el criterio es **menos dispersión y
-menos duplicación de estado**.
-
-## Fuera de alcance (por ahora)
+## Fuera de alcance
 
 - Cambiar reglas de negocio (`docs/decisions/006`).
-- Tocar producción: esta iniciativa no aplica ninguna migración hasta
-  aprobarse con plan.
-- Decidir fusiones antes de la fase 2.
+- Unificar cobrar y pagar en tablas únicas (ADR 020, alternativa C).
+- Rediseñar pantallas. Solo cambia lo que la UI lee por debajo.
 
 ## Fases
 
 | Fase | Qué | Salida | Estado |
 |---|---|---|---|
-| 1. Inventario | Tablas, columnas, quién las toca (código, RPCs, triggers, FKs) | `docs/inventario-tablas.md` | **Hecha (2026-10-01)** — falta que el usuario la revise |
-| 2. Uso real y riesgo | Por tabla/columna: pantalla o ruta que la usa, columnas sin uso, invariantes que protege la BD, costo de migrar (RPCs, triggers, tests live, derivación SQL y TS) | Matriz "fusionar / mantener / derivar" con riesgo P0/P1/P2 | Pendiente |
-| 3. Propuestas | 2–3 alternativas de modelo objetivo para Cuentas (la parte más dispersa) y para el resto, con costo y migración de datos | ADR en `docs/decisions/` (candidato 020) | Pendiente |
-| 4. Decisión y plan | El usuario elige; se escribe el plan por bloques con migraciones numeradas | Este archivo pasa a "Aprobado" | Pendiente |
-| 5. Ejecución | Por bloques, en rama + PR, validado en test con el dataset de miles de registros antes de producción | PRs | Pendiente |
+| 1. Inventario | Tablas, columnas, quién las toca | `docs/inventario-tablas.md` | Hecha (2026-10-01) |
+| 2. Uso real y riesgo | Evidencia en datos, lectores, matriz por tabla | `docs/inventario-tablas.md` → "Fase 2" | **Hecha (2026-10-01)** |
+| 3. Propuestas | 3 alternativas con costo y riesgo | ADR 020 (Propuesta) | **Hecha (2026-10-01)** |
+| 4. Decisión y plan | El usuario responde las preguntas de abajo | Este archivo → "Aprobado" | **Pendiente del usuario** |
+| 5. Ejecución | Bloques B0–B7, rama + PR por bloque | PRs | Pendiente |
 
-## Preguntas abiertas para el usuario
+## Decisiones pendientes del usuario
 
-1. ¿La meta incluye **también** simplificar lo que ve el usuario (pantallas) o
-   solo el modelo de datos?
-2. ¿Hay tablas que ya sabes que no se usan o que quieres conservar a toda
-   costa?
-3. ¿Se pausa el frente 2 hasta terminar la fase 3, o se cierra antes con lo ya
-   hecho (el PR #100 sigue en borrador y depende de una decisión sobre el
-   cómputo de test)?
-4. ¿Cuánto cambio de esquema tolera producción antes de pasar a uso real? Hoy
-   no hay usuarios finales, así que es el mejor momento para migrar.
+1. **Alternativa:** ¿B (recomendada), A (solo limpieza, sin tocar flujos de
+   pago) o C?
+2. **Sheets → Supabase (H11):** recomendación: Sheets queda **solo de lectura**
+   (se quita `sync-up` o se limita a catálogos: `clientes`, `proveedores`,
+   `productos`). ¿Alguien usa hoy el botón "Sheets → Supabase"?
+3. **Datos de producción:** son de prueba. ¿Se migran tal cual (más seguro y
+   más caro) o se permite borrar los registros de prueba legados (sueltas,
+   `TEST EF1 - BORRAR`, márgenes viejos) antes de migrar?
+4. **Tareas y documentos de proyecto** (`proyecto_tareas`,
+   `proyecto_tarea_checklist`, `proyecto_documentos`,
+   `tipo_proyecto_tarea_default`, 0 filas): ¿se usan o se van a usar? Si no,
+   se retiran completas (tabla + rutas + UI) en un bloque propio.
+5. **Proyecto vs cotización (H1):** propuesta: después de aprobar, el dueño de
+   cliente/nombre/fecha/locación es `proyectos`; la cotización conserva lo que
+   se emitió en el PDF. ¿Correcto, o un cambio en el proyecto debe reflejarse
+   en la cotización?
+6. **Frente 2:** recomendación: sigue en pausa hasta terminar B4 (su diseño
+   depende de cuántas tablas alimenten Cuentas).
+
+## Plan de ejecución (borrador, alternativa B)
+
+Cada bloque sigue las reglas de ADR 020: **expandir → migrar lectores →
+verificar → contraer**, mapa de dependencias en cero antes de borrar, guardas
+de consistencia en 0 antes y después, test con el dataset de carga → PR con
+las 4 suites verdes → prod. Funciones SQL se reescriben desde
+`pg_get_functiondef` de producción.
+
+| Bloque | Qué | Hallazgos | Riesgo | Depende de |
+|---|---|---|---|---|
+| **B0 — Red de seguridad** | Script versionado de guardas de consistencia (consultas de la fase 2) + script de mapa de dependencias por columna (código, Sheets, `pg_proc`, triggers, vistas, políticas). Respaldo de prod antes de B4. Resolver H14 y el cobro sin `proyecto_id`. | H14 | P2 | — |
+| **B1 — Sheets solo lectura** | Quitar o limitar `sync-up` según decisión 2; ajustar `schema.ts` y Admin. | H11 | P1 | Decisión 2 |
+| **B2 — Residuos, FKs y tipos** | Borrar `cliente_id_backfill_clasificacion` (CSV archivado). `cuentas_pagar.item_id` → uuid + FK. FKs faltantes. `timestamp` → `timestamptz`. `planeacion_pendientes.fecha`/`fecha_iso` en una. | H12, H13 | P2 | B0 |
+| **B3 — Derivados generados** | `items_cotizacion.importe` y `.margen` como columnas generadas; recalcular `margen_total` de cotizaciones; quitar escrituras de esos campos en RPCs y TS. | H6 | P1 | B0 |
+| **B4 — Grupo como única obligación** | Expandir: sueltas con proveedor → grupos de un renglón; pagos/documentos apuntan al grupo. Migrar RPCs y derivación TS sin rama suelta. Contraer: quitar `estado`, `monto_pagado`, `orden_pago_id`, `total_a_transferir`, `monto_transferido` de `cuentas_pagar` y `cuenta_pagar_id` de pagos/documentos. Renombrar `x_pagar` → `costo_total`. | H5, H9 | **P0** | B0–B2, decisión 3 |
+| **B5 — Copias de terceros** | `cuentas_pagar` sin contacto ni copias del renglón (join a `proveedores` e `items_cotizacion`); `cuentas_cobrar` sin `cliente`/`proyecto` texto; `clientes.proyectos` → consulta; `historial_responsable` → vista o RPC sobre proyectos finalizados (mismo resultado que hoy). | H2, H3, H4, H7, H8 | P1 | B1, B2, B4 |
+| **B6 — Idempotencia única** | `pago_operations` y `bulk_import_operations` → `idempotency_keys` (scope por RPC), conservando la atomicidad dentro de la transacción. | H10 | P1 | B4 |
+| **B7 — Cierre** | Tareas/documentos de proyecto según decisión 4. Re-evaluar frente 2 con el modelo nuevo. Actualizar `ARCHITECTURE.md`, decisiones 011/017, ADR 020 → Aceptada. | — | P1 | B1–B6 |
+
+Si se elige **A**: se ejecutan B0, B1, B2, B3, B5 (sin la parte de B4) y B7.
 
 ## Riesgos
 
-- **P1:** fusionar tablas de Cuentas cambia la derivación SQL y la de TS
-  (paridad obligatoria, decisión 017), los triggers del frente 2 y los tests
-  live. Se mitiga con la fase 2 antes de proponer nada.
-- **P1:** una fusión puede quitar una invariante que hoy la BD hace cumplir.
-- **P2:** el inventario usa coincidencia de texto sobre el cuerpo de las
-  funciones; puede sobrecontar. Se afina en la fase 2.
+- **P0:** B4 cambia cómo se registra y se lee el dinero a proveedores. Mitigación:
+  paridad SQL/TS, guardas de consistencia (`Σ pagos = monto_pagado`,
+  `grupo.monto_total = Σ costo_total`, órdenes = Σ desglose) en 0, `live` con el
+  dataset de carga, respaldo antes de prod.
+- **P1:** borrar una columna que algo todavía lee (Sheets, portal, un test, una
+  función). Mitigación: mapa de dependencias automatizado en cero antes de cada
+  contracción, y la contracción siempre en un deploy posterior a la migración
+  de lectores.
+- **P1:** re-escribir una función sobre una versión vieja (pasó en la decisión
+  011). Mitigación: partir siempre de `pg_get_functiondef` de producción.
+- **P2:** el conteo de funciones por coincidencia de texto sobrecuenta;
+  el mapa de B0 lo reemplaza por dependencias verificadas.
 
 ## Tracker
 
@@ -115,5 +150,8 @@ menos duplicación de estado**.
 |---|---|
 | Entrada de iniciativa y pausa del frente 2 | Hecho (2026-10-01) |
 | Fase 1 — Inventario | Hecho (2026-10-01) |
-| Fase 2 — Uso real y riesgo (#105) | Pendiente (espera respuestas a las preguntas abiertas) |
+| Fase 2 — Uso real y riesgo (#105) | Hecho (2026-10-01) |
+| Fase 3 — Propuestas, ADR 020 (#106) | Hecho (2026-10-01), estado Propuesta |
+| Fase 4 — Decisiones del usuario | **Pendiente** (6 preguntas arriba) |
+| B0–B7 | Pendiente |
 | Tickets en GitHub | Hecho (2026-10-01): epic #109, #105, #106, #108 |

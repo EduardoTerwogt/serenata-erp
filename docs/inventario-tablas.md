@@ -183,3 +183,76 @@ Cada una indica **dónde mirar**; ninguna dice qué hacer.
 - Costo real de migrar (RPCs, triggers, tests live, derivación TS y SQL).
 
 Esas cuatro preguntas son el alcance de la fase 2 del plan.
+
+---
+
+# Fase 2 — Uso real, evidencia y matriz (2026-10-01, #105)
+
+Producción (`fwmyoqokcjtldiofuxdg`), consultas de solo lectura. Producción
+sigue siendo **datos de prueba**: los desfases de abajo prueban que el diseño
+*permite* que el dato diverja, no que haya pérdida real.
+
+## Hallazgos con evidencia
+
+| # | Hallazgo | Evidencia (prod) | Quién lo toca |
+|---|---|---|---|
+| H1 | `proyectos` repite `cliente`, `proyecto`, `fecha_entrega`, `locacion`, `cliente_id` de su cotización principal (relación 1:1, `proyectos.id = cotizaciones.id`). | 28/28 proyectos con id = cotización; **2 ya difieren** (SH007, SH080: fecha/locación editadas en Proyectos). | Proyectos edita los 5 campos (`updateProyectoWithRollback`); Cuentas lee `proyectos.fecha_entrega`. |
+| H2 | `cuentas_cobrar.cliente` y `.proyecto` son texto copiado además de `cliente_id`/`proyecto_id`. | 0 desfases hoy; 1 cobro **sin `proyecto_id`**. Renombrar un proyecto los desincroniza. | 2 funciones (`buscar_cuentas_cobrar`, `cuentas_por_proyecto`), Sheets, TS. |
+| H3 | `cuentas_pagar` copia `telefono`, `correo`, `clabe`, `banco` del proveedor. | **10/82** filas con proveedor ya difieren de `proveedores`. Todos los lectores hacen `COALESCE(proveedor_vivo, copia)`: la copia solo es respaldo. | `cuentas_orden_candidatos`, `reasignar_responsable_cuenta_pagar`, `corregir_proveedor_cuenta_pagar` (parámetros), `detalle.ts`/`detalle-armar.ts`, `correcciones.ts`, Sheets. |
+| H4 | `cuentas_pagar` copia `item_descripcion`, `cantidad`, `margen` del renglón, y **`item_id` es `text` sin FK** hacia `items_cotizacion.id` (uuid). | Renglones aprobados están congelados (guard `20260911`), así que solo 1 difiere; 0 huérfanos hoy, pero nada lo impide. | 6 funciones leen `item_descripcion`; Sheets. |
+| H5 | **Mismo nombre, distinto significado:** `items_cotizacion.x_pagar` es **unitario**; `cuentas_pagar.x_pagar` es **total** (`x_pagar × cantidad`, migración `20260918`). | Confirmado en `approve_cotizacion` y en el trigger `20261008` (`monto_total = Σ cp.x_pagar`). | 22 funciones nombran `cuentas_pagar`. Riesgo de lectura equivocada en cualquier cambio futuro. |
+| H6 | `items_cotizacion.margen` y `cotizaciones.margen_total` son derivados guardados. | **13 renglones** guardan la fórmula vieja (`importe − x_pagar`), incluidos aprobados (SH004, SH071, SH072) → su utilidad en Cuentas sale de un margen viejo. `20260918` decidió no rehacerlos por ser prueba. | `recalcular_totales_cotizacion`, `save/upsert/bulk_replace`, `approve`, Cuentas (`cot.margen`). |
+| H7 | `historial_responsable` es **caché**: se borra y regenera desde `items_cotizacion` + `proyectos` al cerrar el proyecto (`projects/equipo.ts`), con `proyecto_nombre`, `cliente` y `fecha_evento` copiados como texto. Sin FK en `proyecto_id`. | 18 filas; 100 % derivable. | Modal de proveedor (join), `/api/proveedores/[id]/historial`, `cuentas-pagar.ts`, rollback de `projects/service.ts`, `cancel_cotizacion`, Sheets. |
+| H8 | `clientes.proyectos` (array de texto) es lista derivada de cotizaciones. | 29/29 clientes con array; solo lo escribe `quotations/persistence.ts` y lo lee el autocompletado de Cotizaciones. | Se obtiene con `distinct proyecto from cotizaciones where cliente_id = …`. |
+| H9 | `cuentas_pagar` tiene **dos caminos**: renglón en grupo y renglón "suelto" (legado). En renglones con grupo, el estado vive en el grupo y las columnas de la hija quedan muertas. | Con grupo: 42 filas, 0 desfases de orden/llave, `total_a_transferir` siempre null, `monto_pagado` siempre 0. **Sueltas: 47** (41 en orden sin factura, 3 sin proveedor, 1 pagada, …). Todas datos de prueba. | ~10 RPCs con rama `grupo_id IS NULL`, `UNION ALL` en órdenes, portal (grupos sintéticos), derivación TS. Es la mayor fuente de complejidad de Cuentas. |
+| H10 | Tres mecanismos de idempotencia con la misma forma (`operation_id` + resultado jsonb). | `idempotency_keys` (HTTP), `pago_operations` (3 RPCs de pago), `bulk_import_operations` (1 RPC). | Decisión 008. |
+| H11 | **Sheets → Supabase (`sync-up`) escribe directo** sobre `cotizaciones`, `items_cotizacion`, `proyectos`, `cuentas_cobrar`, `cuentas_pagar`, etc., sin RPC ni guardas. Está en Admin ("Importa al sistema los cambios hechos en el Sheet"). | `lib/integrations/sheets/sync-up.ts`, `schema.ts` (`readonly: []` en las dos de cuentas). | Contradice los principios 1 y 2 de `CLAUDE.md`, y **cualquier columna que se borre rompe el espejo**. Prerrequisito de toda la iniciativa. |
+| H12 | Residuo: `cliente_id_backfill_clasificacion`. | 168 filas, 0 lectores en código y funciones. | Ninguno. |
+| H13 | Tipos e integridad. | 13 columnas `timestamp` sin zona; `fecha_entrega` como texto en cotizaciones y proyectos (D9); `planeacion_pendientes.fecha` + `fecha_iso`; sin FK: `cuentas_pagar.item_id`, `historial_responsable.proyecto_id`, `extraction_logs.proyecto_id`. | — |
+| H14 | Una orden con total distinto a la suma de su desglose. | 1 de 8 (`ordenes_pago.total_monto ≠ Σ ordenes_pago_conceptos.neto_cubierto`); probable orden anterior a `ordenes_pago_conceptos`. | Revisar antes de B4. |
+
+Consistencias que **sí** se cumplen hoy (sirven de guardas para la ejecución):
+`cuentas_cobrar.monto_pagado = Σ pagos vigentes` (0 desfases),
+`grupo.monto_pagado = Σ pagos vigentes` (0), sueltas igual (0),
+`grupo.monto_total = Σ cp.x_pagar` (0), `cotizaciones.margen_total = Σ items.margen` (0),
+`items.importe = cantidad × precio_unitario` (0), 0 renglones aprobados sin cuenta por pagar.
+
+## Matriz por tabla
+
+Leyenda: **Mantener** · **Adelgazar** (quitar columnas copiadas/derivadas) ·
+**Derivar** (vista o consulta en vez de tabla) · **Fusionar** · **Borrar**.
+Riesgo = qué pasa si sale mal: P0 dinero/impuestos, P1 función visible, P2 interno.
+
+| Tabla | Veredicto | Qué cambia | Riesgo |
+|---|---|---|---|
+| `cotizaciones` | Mantener | Es el documento emitido. Totales guardados se quedan (snapshot del PDF), pero se recalculan desde renglones generados (H6). | P1 |
+| `items_cotizacion` | Adelgazar | `importe` y `margen` pasan a columnas generadas (H6). | P1 |
+| `proyectos` | Mantener | Dueño de los datos operativos después de aprobar (H1). Se documenta la regla; no se fusiona con cotizaciones (tiene ciclo propio y lo comparten las complementarias). | P2 |
+| `clientes` | Adelgazar | Quitar `proyectos[]` (H8). | P2 |
+| `proveedores` | Mantener | Fuente única de contacto y banco (H3). | — |
+| `cuentas_cobrar` | Adelgazar | Quitar `cliente`/`proyecto` texto (H2). | P1 |
+| `pagos_comprobantes`, `documentos_cuentas_cobrar` | Mantener | No se fusionan con los de pagar (ver ADR 020, alternativa C). | — |
+| `cuentas_pagar` | Adelgazar | Quitar contacto copiado (H3) y copias del renglón (H4); FK real a `items_cotizacion`; `x_pagar` → `costo_total` (H5); sin estado propio cuando hay grupo (H9). | **P0** |
+| `cuentas_pagar_grupos` | Mantener (se vuelve la única obligación) | Toda cuenta con proveedor tiene grupo; las sueltas se migran a grupos de un renglón (H9). | **P0** |
+| `pagos_cuentas_pagar`, `documentos_cuentas_pagar` | Adelgazar | Cuelgan solo del grupo (desaparece `cuenta_pagar_id` tras H9). | **P0** |
+| `ordenes_pago`, `ordenes_pago_conceptos` | Mantener | Snapshot inmutable por decisión (S1). Arreglar H14. | P1 |
+| `cuentas_reaperturas`, `cuentas_correcciones` | Mantener | Bitácora; 0 filas por falta de uso, no por sobrar. | — |
+| `historial_responsable` | **Derivar** | Vista/RPC sobre renglones + proyectos finalizados (H7). | P1 |
+| `historial_cambios_responsable_item` | Mantener | Bitácora real de reasignaciones (no es caché). | — |
+| `idempotency_keys` | Mantener (absorbe a las otras dos) | — | P1 |
+| `pago_operations`, `bulk_import_operations` | **Fusionar** en `idempotency_keys` (H10). | P1 |
+| `cliente_id_backfill_clasificacion` | **Borrar** (archivar CSV antes) (H12). | P2 |
+| `cotizacion_folio_reservations`, `folio_contadores` | Mantener | Distintos a propósito: reservas con expiración vs contadores por serie/año. | — |
+| `productos`, `service_templates` | Mantener | Catálogos con UI activa. | — |
+| `proyecto_tareas`, `proyecto_tarea_checklist`, `proyecto_documentos`, `tipo_proyecto_tarea_default` | **Decisión del usuario** | 0 filas, pero con rutas y UI. Mantener o retirar la funcionalidad completa (P1). | P1 |
+| `tipos_proyecto`, `tipo_proyecto_etapas` | Mantener | Las usa Proyectos. | — |
+| `planeacion_pendientes`, `planeacion_event_notas`, `extraction_logs` | Mantener | Unificar `fecha`/`fecha_iso` (H13). | P2 |
+| `gastos_fijos` | Mantener | Dashboard. | — |
+| `usuarios` | Mantener | Distinto dominio de auth que el portal de proveedores. | — |
+| `rate_limits`, `sheets_sync_status` | Mantener | Infraestructura. | — |
+
+**Saldo:** 40 → 36 tablas (32 si además se retiran tareas/documentos de
+proyecto) y ~20 columnas copiadas o derivadas menos. El número de tablas baja
+poco a propósito: **la complejidad real no está en cuántas tablas hay sino en
+el estado duplicado** (H3, H4, H6, H9) y en los dos caminos de
+`cuentas_pagar`. Ahí está la ganancia.

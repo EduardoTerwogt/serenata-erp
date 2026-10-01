@@ -1,7 +1,7 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-01 (frente 2 en pausa; abierta la iniciativa
-"Simplificación del modelo de datos"). Debajo, el cierre de la sesión 22.
+**Última actualización:** 2026-10-01 (fases 2 y 3 de "Simplificación del modelo
+de datos" hechas; frente 2 en pausa). Debajo, el cierre de la sesión 22.
 
 ## Estado
 
@@ -15,9 +15,13 @@ grupos desfasados, 0 grupos ABIERTO vacíos, "Eduardo Terwogt" de SH072 en 3,100
 `cuentas_periodo` ~65 ms, advisors sin hallazgos nuevos. Pendiente de
 verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
-**Iniciativa nueva (borrador): "Simplificación del modelo de datos"** — epic
-#109 (`docs/PLAN.md`, `docs/inventario-tablas.md`). Fase 1 hecha; fase 2 (#105)
-espera las respuestas del usuario a las preguntas abiertas del plan.
+**Iniciativa "Simplificación del modelo de datos"** — epic #109. Fases 1–3
+hechas (2026-10-01): matriz con evidencia en `docs/inventario-tablas.md` →
+"Fase 2", alternativas en `docs/decisions/020-simplificacion-modelo-datos.md`
+(Propuesta, recomendada B), plan B0–B7 en `docs/PLAN.md`. **Siguiente:** el
+usuario responde las 6 decisiones de `docs/PLAN.md`; luego se aprueba y se
+ejecuta B0 en otra sesión. Hallazgo bloqueante: Sheets → Supabase escribe
+directo sobre tablas de dinero (H11).
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer
