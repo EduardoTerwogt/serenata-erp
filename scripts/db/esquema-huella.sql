@@ -4,9 +4,10 @@
 -- y se puede pegar a mano en el SQL Editor / mcp__Supabase__execute_sql.
 --
 -- Qué cubre: columnas (tipo, nulabilidad, default), índices, restricciones
--- (CHECK, FK, UNIQUE, PK), triggers, políticas RLS y funciones (md5 de
--- pg_get_functiondef: detecta cualquier diferencia en el cuerpo).
--- Qué no cubre: datos, permisos (GRANT) ni extensiones.
+-- (CHECK, FK, UNIQUE, PK), triggers, políticas RLS y funciones (cuerpo
+-- normalizado, atributos y permisos).
+-- Qué no cubre: datos, permisos de tablas ni extensiones. La tabla
+-- `loadtest_runs` (solo en test, a propósito) la excluye el script que la usa.
 
 SELECT 'columna' AS tipo,
        c.table_name || '.' || c.column_name AS objeto,
@@ -30,6 +31,12 @@ UNION ALL
 SELECT 'politica', tablename || '.' || policyname, COALESCE(qual, '') || ' | ' || COALESCE(with_check, '')
 FROM pg_policies WHERE schemaname = 'public'
 UNION ALL
-SELECT 'funcion', p.oid::regprocedure::text, md5(pg_get_functiondef(p.oid))
+-- Funciones: cuerpo normalizado (sin comentarios `--` ni diferencias de espacio:
+-- un comentario retocado después de aplicar no es una divergencia) + firma,
+-- volatilidad, SECURITY DEFINER, configuración (search_path, work_mem…) y permisos.
+SELECT 'funcion', p.oid::regprocedure::text,
+       md5(regexp_replace(regexp_replace(p.prosrc, '--[^\n]*', '', 'g'), '\s+', ' ', 'g')) || '/' ||
+       md5(concat_ws('|', pg_get_function_arguments(p.oid), pg_get_function_result(p.oid), p.provolatile,
+                     p.prosecdef, p.proconfig::text, p.proacl::text))
 FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prokind IN ('f', 'p')
 ORDER BY 1, 2;
