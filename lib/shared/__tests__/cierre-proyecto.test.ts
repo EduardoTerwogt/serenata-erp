@@ -13,7 +13,7 @@ function cuenta(overrides: Partial<CuentaPagarFixture>): CuentaPagarFixture {
     item_id: 'i-1',
     responsable_id: 'prov-1',
     responsable_nombre: 'Proveedor',
-    x_pagar: 1000,
+    costo_total: 1000,
     estado: 'PENDIENTE',
     fecha_pago: null,
     notas: null,
@@ -26,9 +26,9 @@ function cuenta(overrides: Partial<CuentaPagarFixture>): CuentaPagarFixture {
 describe('calcularCierreProyecto', () => {
   it('agrega Quién/Cuánto/Cuándo por grupo, coincidiendo al centavo con calcularEjemploFactura llamado a mano', () => {
     const cuentasPagar: CuentaPagarFixture[] = [
-      cuenta({ id: 'cp-moral', responsable_id: 'p-moral', responsable_nombre: 'Renta de Equipo MX', x_pagar: 5000, proveedor_regimen_fiscal: 'moral' }),
-      cuenta({ id: 'cp-fisica', responsable_id: 'p-fisica', responsable_nombre: 'Juan Pérez', x_pagar: 3000, proveedor_regimen_fiscal: 'fisica' }),
-      cuenta({ id: 'cp-resico', responsable_id: 'p-resico', responsable_nombre: 'Maria López', x_pagar: 2000, proveedor_regimen_fiscal: 'resico' }),
+      cuenta({ id: 'cp-moral', responsable_id: 'p-moral', responsable_nombre: 'Renta de Equipo MX', costo_total: 5000, proveedor_regimen_fiscal: 'moral' }),
+      cuenta({ id: 'cp-fisica', responsable_id: 'p-fisica', responsable_nombre: 'Juan Pérez', costo_total: 3000, proveedor_regimen_fiscal: 'fisica' }),
+      cuenta({ id: 'cp-resico', responsable_id: 'p-resico', responsable_nombre: 'Maria López', costo_total: 2000, proveedor_regimen_fiscal: 'resico' }),
     ]
 
     const cierre = calcularCierreProyecto(cuentasPagar, 4000, 1500, 1600)
@@ -49,8 +49,8 @@ describe('calcularCierreProyecto', () => {
 
   it('agrupa varios items del mismo grupo_id en un solo renglón (monto del grupo, no suma doble)', () => {
     const cuentasPagar: CuentaPagarFixture[] = [
-      cuenta({ id: 'cp-1', grupo_id: 'g-1', responsable_id: 'p-1', x_pagar: 1000, grupo_monto_total: 2500, proveedor_regimen_fiscal: 'fisica' }),
-      cuenta({ id: 'cp-2', grupo_id: 'g-1', responsable_id: 'p-1', x_pagar: 1500, grupo_monto_total: 2500, proveedor_regimen_fiscal: 'fisica' }),
+      cuenta({ id: 'cp-1', grupo_id: 'g-1', responsable_id: 'p-1', costo_total: 1000, grupo_monto_total: 2500, proveedor_regimen_fiscal: 'fisica' }),
+      cuenta({ id: 'cp-2', grupo_id: 'g-1', responsable_id: 'p-1', costo_total: 1500, grupo_monto_total: 2500, proveedor_regimen_fiscal: 'fisica' }),
     ]
 
     const cierre = calcularCierreProyecto(cuentasPagar, 1000, 300, 400)
@@ -61,7 +61,7 @@ describe('calcularCierreProyecto', () => {
 
   it('una cuenta legacy sin grupo_id se trata como su propio grupo', () => {
     const cuentasPagar: CuentaPagarFixture[] = [
-      cuenta({ id: 'cp-legacy', grupo_id: null, x_pagar: 800, proveedor_regimen_fiscal: 'moral' }),
+      cuenta({ id: 'cp-legacy', grupo_id: null, costo_total: 800, proveedor_regimen_fiscal: 'moral' }),
     ]
 
     const cierre = calcularCierreProyecto(cuentasPagar, 500, 100, 128)
@@ -71,7 +71,7 @@ describe('calcularCierreProyecto', () => {
   })
 
   it('utilidad_bruta = utilidad_neta + isr_serenata_estimado, invariante al régimen fiscal de los proveedores', () => {
-    const base = (regimen: RegimenFiscal) => [cuenta({ id: 'cp-1', x_pagar: 5000, proveedor_regimen_fiscal: regimen })]
+    const base = (regimen: RegimenFiscal) => [cuenta({ id: 'cp-1', costo_total: 5000, proveedor_regimen_fiscal: regimen })]
 
     const cierreMoral = calcularCierreProyecto(base('moral'), 4000, 1500, 1600)
     const cierreFisica = calcularCierreProyecto(base('fisica'), 4000, 1500, 1600)
@@ -95,9 +95,9 @@ describe('calcularCierreProyecto', () => {
 
   it('B2 (H10): con factura validada usa el snapshot del CFDI del grupo; una suelta se estima', () => {
     const cierre = calcularCierreProyecto([
-      cuenta({ id: 'g-1a', grupo_id: 'g-1', x_pagar: 600, grupo_monto_total: 1000, grupo_total_a_transferir: 1159.99, proveedor_regimen_fiscal: 'moral' }),
-      cuenta({ id: 'g-1b', grupo_id: 'g-1', x_pagar: 400, grupo_monto_total: 1000, grupo_total_a_transferir: 1159.99, proveedor_regimen_fiscal: 'moral' }),
-      cuenta({ id: 's-1', responsable_id: 'prov-2', x_pagar: 1000, proveedor_regimen_fiscal: 'fisica' }),
+      cuenta({ id: 'g-1a', grupo_id: 'g-1', costo_total: 600, grupo_monto_total: 1000, grupo_total_a_transferir: 1159.99, proveedor_regimen_fiscal: 'moral' }),
+      cuenta({ id: 'g-1b', grupo_id: 'g-1', costo_total: 400, grupo_monto_total: 1000, grupo_total_a_transferir: 1159.99, proveedor_regimen_fiscal: 'moral' }),
+      cuenta({ id: 's-1', responsable_id: 'prov-2', costo_total: 1000, proveedor_regimen_fiscal: 'fisica' }),
     ], 0, 0, 0)
     const [grupo, suelta] = cierre.quien_cuanto_cuando
     expect(grupo.total_a_transferir).toBe(1159.99)
@@ -109,7 +109,7 @@ describe('calcularCierreProyecto', () => {
 
   it('B2 (H10): sin factura (snapshot null) estima con el régimen', () => {
     const cierre = calcularCierreProyecto([
-      cuenta({ id: 'g-2a', grupo_id: 'g-2', x_pagar: 1000, grupo_monto_total: 1000, grupo_total_a_transferir: null, proveedor_regimen_fiscal: 'moral' }),
+      cuenta({ id: 'g-2a', grupo_id: 'g-2', costo_total: 1000, grupo_monto_total: 1000, grupo_total_a_transferir: null, proveedor_regimen_fiscal: 'moral' }),
     ], 0, 0, 0)
     expect(cierre.quien_cuanto_cuando[0].total_a_transferir).toBe(calcularEjemploFactura(1000, 'moral').total)
     expect(cierre.quien_cuanto_cuando[0].total_es_snapshot).toBe(false)

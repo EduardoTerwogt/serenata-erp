@@ -98,7 +98,7 @@ export async function calcularResumenFinanciero(
   ])
 
   const total_cotizado = cotizaciones.reduce((sum, c) => sum + (c?.total || 0), 0)
-  const total_comprometido_pagar = cuentasPagar.reduce((sum, c) => sum + (c.x_pagar || 0), 0)
+  const total_comprometido_pagar = cuentasPagar.reduce((sum, c) => sum + (c.costo_total || 0), 0)
   const total_pagado = cuentasPagar.reduce((sum, c) => sum + (c.monto_pagado || 0), 0)
 
   return { total_cotizado, total_comprometido_pagar, total_pagado }

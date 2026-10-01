@@ -32,7 +32,7 @@ DECLARE
     'pagos_comprobantes', 'documentos_cuentas_pagar', 'documentos_cuentas_cobrar',
     'cuentas_pagar', 'cuentas_pagar_grupos', 'cuentas_cobrar', 'ordenes_pago', 'pago_operations',
     -- historiales
-    'historial_cambios_responsable_item', 'historial_responsable',
+    'historial_cambios_responsable_item',
     -- catálogos
     'clientes', 'proveedores', 'proveedor_documentos', 'productos', 'service_templates', 'gastos_fijos',
     -- operación e infraestructura de estado

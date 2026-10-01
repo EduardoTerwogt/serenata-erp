@@ -128,7 +128,6 @@ export async function leerCotizacionDelServidor(cotizacionId: string): Promise<C
 
 interface ProyectoServidor {
   id: string
-  cliente: string
   proyecto: string
   estado: string
 }
@@ -137,7 +136,7 @@ interface CuentaPagarServidor {
   id: string
   cotizacion_id: string
   item_id: string
-  x_pagar: number
+  costo_total: number
   estado: string
 }
 
@@ -164,14 +163,14 @@ export async function leerProyectoYCuentasDelServidor(cotizacionId: string): Pro
 
   const { data: proyecto, error: proyectoError } = await supabase
     .from('proyectos')
-    .select('id, cliente, proyecto, estado')
+    .select('id, proyecto, estado')
     .eq('id', cotizacionId)
     .maybeSingle()
   if (proyectoError) throw proyectoError
 
   const { data: cuentasPagar, error: cuentasPagarError } = await supabase
     .from('cuentas_pagar')
-    .select('id, cotizacion_id, item_id, x_pagar, estado')
+    .select('id, cotizacion_id, item_id, costo_total, estado')
     .eq('cotizacion_id', cotizacionId)
   if (cuentasPagarError) throw cuentasPagarError
 

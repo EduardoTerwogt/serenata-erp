@@ -103,9 +103,6 @@ export async function bulkCleanupLoadTestRun(supabaseAdmin, runId) {
     await deleteByIdsInChunks(supabaseAdmin, 'items_cotizacion', itemIds)
     counts.items_cotizacion = itemIds.length
 
-    const historialIds = await discoverIdsWhereIn(supabaseAdmin, 'historial_responsable', 'cotizacion_id', cotizacionIds)
-    await deleteByIdsInChunks(supabaseAdmin, 'historial_responsable', historialIds)
-    counts.historial_responsable = historialIds.length
 
     const cpIds = await discoverIdsWhereIn(supabaseAdmin, 'cuentas_pagar', 'cotizacion_id', cotizacionIds)
     await deleteByIdsInChunks(supabaseAdmin, 'cuentas_pagar', cpIds)

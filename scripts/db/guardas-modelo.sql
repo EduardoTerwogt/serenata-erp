@@ -46,12 +46,12 @@ g_hijas_grupo AS (
     SELECT SUM(cp.monto_pagado) FROM cuentas_pagar cp
     WHERE cp.grupo_id = g.id), 0)) > 0.01
 ),
--- 2. grupo.monto_total = Σ x_pagar de sus renglones (trigger 20261008)
+-- 2. grupo.monto_total = Σ costo_total de sus renglones (trigger 20261008)
 g_grupo_total AS (
   SELECT g.id
   FROM cuentas_pagar_grupos g
   WHERE abs(g.monto_total - COALESCE((
-    SELECT SUM(cp.x_pagar) FROM cuentas_pagar cp
+    SELECT SUM(cp.costo_total) FROM cuentas_pagar cp
     WHERE cp.grupo_id = g.id), 0)) > 0.01
 ),
 -- 2b. grupo ABIERTO sin renglones
@@ -60,12 +60,12 @@ g_grupo_vacio AS (
   FROM cuentas_pagar_grupos g
   WHERE NOT EXISTS (SELECT 1 FROM cuentas_pagar cp WHERE cp.grupo_id = g.id)
 ),
--- 3. cp.x_pagar = item.x_pagar × item.cantidad (Costo Total, ADR 006)
+-- 3. cp.costo_total = item.x_pagar × item.cantidad (Costo Total, ADR 006)
 g_cp_costo_total AS (
   SELECT cp.id
   FROM cuentas_pagar cp
   JOIN items_cotizacion i ON i.id = cp.item_id
-  WHERE abs(cp.x_pagar - round(i.x_pagar * i.cantidad, 2)) > 0.01
+  WHERE abs(cp.costo_total - round(i.x_pagar * i.cantidad, 2)) > 0.01
 ),
 -- 4. total de la orden = Σ desglose
 g_orden_total AS (
@@ -129,23 +129,15 @@ g_folio_cp AS (
   SELECT cp.id FROM cuentas_pagar cp
   WHERE cp.folio IS NULL
      OR cp.folio IN (SELECT folio FROM cuentas_pagar GROUP BY folio HAVING count(*) > 1)
-),
--- 10. copia = dueño (temporal hasta B5c): el cliente de cuentas_cobrar. La copia del
--- proveedor en cuentas_pagar salió en B5b (J3).
-g_copia_cliente AS (
-  SELECT cc.id
-  FROM cuentas_cobrar cc
-  JOIN clientes cl ON cl.id = cc.cliente_id
-  WHERE cc.cliente IS DISTINCT FROM cl.nombre
 )
 SELECT guarda, violaciones FROM (
   SELECT 1 AS n, 'cobro: monto_pagado = Σ pagos vigentes' AS guarda, count(*) AS violaciones FROM g_cobro_pagado
   UNION ALL SELECT 2, 'grupo: monto_pagado = Σ pagos vigentes (neto)', count(*) FROM g_grupo_pagado
   UNION ALL SELECT 3, 'grupo: monto_transferido = Σ pagos vigentes (transferido)', count(*) FROM g_grupo_transferido
   UNION ALL SELECT 4, 'grupo: monto_pagado = Σ monto_pagado de renglones', count(*) FROM g_hijas_grupo
-  UNION ALL SELECT 5, 'grupo: monto_total = Σ x_pagar de renglones', count(*) FROM g_grupo_total
+  UNION ALL SELECT 5, 'grupo: monto_total = Σ costo_total de renglones', count(*) FROM g_grupo_total
   UNION ALL SELECT 6, 'grupo sin renglones', count(*) FROM g_grupo_vacio
-  UNION ALL SELECT 7, 'cuenta por pagar: x_pagar = item.x_pagar × cantidad', count(*) FROM g_cp_costo_total
+  UNION ALL SELECT 7, 'cuenta por pagar: costo_total = item.x_pagar × cantidad', count(*) FROM g_cp_costo_total
   UNION ALL SELECT 8, 'orden: total_monto = Σ desglose', count(*) FROM g_orden_total
   UNION ALL SELECT 9, 'renglón: importe = cantidad × precio', count(*) FROM g_item_importe
   UNION ALL SELECT 10, 'renglón: margen = importe − costo total', count(*) FROM g_item_margen
@@ -156,6 +148,5 @@ SELECT guarda, violaciones FROM (
   UNION ALL SELECT 15, 'cuenta por pagar con proveedor y sin grupo', count(*) FROM g_cp_sin_grupo
   UNION ALL SELECT 16, 'folio CC nulo o duplicado', count(*) FROM g_folio_cc
   UNION ALL SELECT 17, 'folio CP nulo o duplicado', count(*) FROM g_folio_cp
-  UNION ALL SELECT 18, 'temporal: copia de cliente en cuentas_cobrar ≠ clientes', count(*) FROM g_copia_cliente
 ) t
 ORDER BY n;

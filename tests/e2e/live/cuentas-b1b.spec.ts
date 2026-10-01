@@ -68,7 +68,7 @@ async function crearCotizacion(
   }))
   fx.cotizaciones.push(opts.id)
   if (opts.conProyecto) {
-    ok(await supabase.from('proyectos').insert({ id: opts.id, cliente: `${fx.prefix} Cliente`, proyecto: `${fx.prefix} Proyecto` }))
+    ok(await supabase.from('proyectos').insert({ id: opts.id, proyecto: `${fx.prefix} Proyecto` }))
   }
 }
 
@@ -81,8 +81,6 @@ async function crearCuentas(
   ok(await supabase.from('cuentas_cobrar').insert({
     cotizacion_id: opts.cotizacionId,
     proyecto_id: opts.proyectoId,
-    cliente: `${fx.prefix} Cliente`,
-    proyecto: `${fx.prefix} Proyecto`,
     monto_total: opts.xPagar * 2,
   }))
   const { data: grupo } = await supabase.from('cuentas_pagar_grupos').select('id').eq('id', opts.grupoId).maybeSingle()
@@ -102,8 +100,8 @@ async function crearCuentas(
     xPagar: opts.xPagar,
     descripcion: `Renglón ${opts.cotizacionId}`,
   })
-  const { data: hijas } = await supabase.from('cuentas_pagar').select('x_pagar').eq('grupo_id', opts.grupoId)
-  const total = (hijas ?? []).reduce((sum, h) => sum + Number(h.x_pagar), 0)
+  const { data: hijas } = await supabase.from('cuentas_pagar').select('costo_total').eq('grupo_id', opts.grupoId)
+  const total = (hijas ?? []).reduce((sum, h) => sum + Number(h.costo_total), 0)
   ok(await supabase.from('cuentas_pagar_grupos').update({ monto_total: total }).eq('id', opts.grupoId))
 }
 
@@ -331,7 +329,7 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
     }
   })
 
-  test('invariante del grupo: monto_total = Σ x_pagar ante cualquier escritura directa (20261008)', async () => {
+  test('invariante del grupo: monto_total = Σ costo_total ante cualquier escritura directa (20261008)', async () => {
     const supabase = getLiveSupabaseAdmin()
     const fx = await nuevoFixture(supabase)
     try {
@@ -352,9 +350,9 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
       ok(await supabase.from('cuentas_pagar_grupos').insert({
         id: grupoB, proyecto_id: principal, responsable_id: fx.proveedorId, estado: 'FACTURADO',
       }))
-      const renglones = must(await supabase.from('cuentas_pagar').select('id, x_pagar').eq('grupo_id', grupoA).order('x_pagar'))
+      const renglones = must(await supabase.from('cuentas_pagar').select('id, costo_total').eq('grupo_id', grupoA).order('costo_total'))
 
-      ok(await supabase.from('cuentas_pagar').update({ x_pagar: 450 }).eq('id', renglones[1].id))
+      ok(await supabase.from('cuentas_pagar').update({ costo_total: 450 }).eq('id', renglones[1].id))
       expect(await montoDe(grupoA)).toBe(750)
 
       ok(await supabase.from('cuentas_pagar').update({ grupo_id: grupoB }).eq('id', renglones[0].id))
@@ -380,12 +378,12 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
       await crearCotizacion(supabase, fx, { id: complementaria, estado: 'APROBADA', complementariaDe: principal })
       await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId, xPagar: 1000 })
       await crearCuentas(supabase, fx, { cotizacionId: complementaria, proyectoId: principal, grupoId, xPagar: 400 })
-      const [p1, p2] = must(await supabase.from('cuentas_pagar').select('id').eq('grupo_id', grupoId).order('x_pagar', { ascending: false }))
+      const [p1, p2] = must(await supabase.from('cuentas_pagar').select('id').eq('grupo_id', grupoId).order('costo_total', { ascending: false }))
 
       // Sin el bloqueo del grupo, cada transacción suma con su propia foto y la última pisa a la otra.
       const resultados = await Promise.all([
-        supabase.from('cuentas_pagar').update({ x_pagar: 1200 }).eq('id', p1.id),
-        supabase.from('cuentas_pagar').update({ x_pagar: 500 }).eq('id', p2.id),
+        supabase.from('cuentas_pagar').update({ costo_total: 1200 }).eq('id', p1.id),
+        supabase.from('cuentas_pagar').update({ costo_total: 500 }).eq('id', p2.id),
       ])
       for (const r of resultados) expect(r.error).toBeNull()
 

@@ -47,11 +47,11 @@ async function crearFixture(supabase: Supabase): Promise<Fixture> {
   const grupoId = randomUUID()
   ok(await supabase.from('proveedores').insert({ id: proveedorId, nombre: `${id} Proveedor`, activo: true }))
   ok(await supabase.from('cotizaciones').insert({ id, cliente: `${id} Cliente`, proyecto: `${id} Proyecto`, fecha_entrega: '2026-09-10', tipo: 'PRINCIPAL', estado: 'APROBADA' }))
-  ok(await supabase.from('proyectos').insert({ id, cliente: `${id} Cliente`, proyecto: `${id} Proyecto` }))
+  ok(await supabase.from('proyectos').insert({ id, proyecto: `${id} Proyecto` }))
   const cobro = must(
     await supabase
       .from('cuentas_cobrar')
-      .insert({ cotizacion_id: id, proyecto_id: id, cliente: `${id} Cliente`, proyecto: `${id} Proyecto`, monto_total: 1000 })
+      .insert({ cotizacion_id: id, proyecto_id: id, monto_total: 1000 })
       .select('id')
       .single()
   )
@@ -180,10 +180,10 @@ test.describe('live: B7 reabrir y anular pagos', () => {
       expect(parcial.estado).toBe('EN_PROCESO_PAGO')
       expect(Number(parcial.monto_transferido)).toBe(580)
       expect(Number(parcial.monto_pagado)).toBe(500)
-      const renglones = must(await supabase.from('cuentas_pagar').select('x_pagar, monto_pagado, estado').eq('grupo_id', fx.grupoId))
+      const renglones = must(await supabase.from('cuentas_pagar').select('costo_total, monto_pagado, estado').eq('grupo_id', fx.grupoId))
       expect(renglones.reduce((s, r) => s + Number(r.monto_pagado), 0)).toBeCloseTo(500, 2)
       for (const r of renglones) {
-        expect(Number(r.monto_pagado)).toBeCloseTo(Number(r.x_pagar) / 2, 2)
+        expect(Number(r.monto_pagado)).toBeCloseTo(Number(r.costo_total) / 2, 2)
         expect(r.estado).toBe('EN_PROCESO_PAGO')
       }
 

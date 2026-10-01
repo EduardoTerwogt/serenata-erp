@@ -412,6 +412,20 @@ excepto `corregir_proveedor_cuenta_pagar` (J3).
 > nombre/descripción resueltos del dueño y total/transferido/orden nulos). **Queda para
 > etapas siguientes:** `historial_responsable` → vista, `fecha_entrega` → date,
 > `timestamptz`, D12/D16 (cliente), `costo_total`/`x_pagar` (M1).
+>
+> **Etapa 3 — modelo final de Cuentas (`20261024`, una transacción, manual por DROP):**
+> `timestamptz` en Cuentas y órdenes (F5); `proyectos.fecha_entrega` → `date` (F4; la
+> aprobación falla explícito con `fecha_entrega_invalida` si la cotización trae una fecha
+> inválida); `cuentas_pagar.costo_total` sustituye a `x_pagar` (se borra la columna puente
+> generada y se renombra, M1) en las 9 funciones que la leen; `historial_responsable` pasa a
+> vista `security_invoker` (rol = `lower(btrim(descripcion o categoría))`, costo_total =
+> Σ costo unitario × cantidad; salen `generarHistorialProyecto` y el rollback manual);
+> un solo `cliente_id` (D12/D16): salen `proyectos.cliente`/`cliente_id` y
+> `cuentas_cobrar.cliente`/`proyecto`/`cliente_id`, el cliente se lee por
+> `cotizaciones.cliente_id` → `clientes` y la API conserva el campo `cliente`;
+> `approve_cotizacion` exige `cliente_id` (`cliente_requerido`, P1418). Sale `POST
+> /api/proyectos` (sin llamadores ni validación). Lecturas de `cuentas_*`: mismas salidas
+> (foto dorada y comparación local idénticas) y mismo contrato posicional.
 
 Funciones (disjuntas de B5a): `approve_cotizacion`,
 `reasignar_responsable_cuenta_pagar`, `corregir_proveedor_cuenta_pagar`,

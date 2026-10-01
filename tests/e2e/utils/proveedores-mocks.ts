@@ -41,7 +41,7 @@ export async function mockProveedoresApis(page: Page) {
       cliente: 'Estudio Manantial',
       fecha_evento: '2026-04-10',
       rol_en_proyecto: 'Productor',
-      x_pagar: 8000,
+      costo_total: 8000,
       created_at: '2026-04-01T00:00:00Z',
       proyecto_id: 'SH010',
     },

@@ -3,9 +3,7 @@ import {
   CuentaPagar,
   CuentaPagarGrupo,
   DocumentoCuentaPagar,
-  Proyecto,
 } from '@/lib/types'
-import { getItemsByCotizacion } from '@/lib/server/repositories/quotations'
 import { DomainError } from '@/lib/server/errors/domain-error'
 
 type CuentaPagarConJoins = CuentaPagar & {
@@ -56,121 +54,6 @@ export async function getCuentasPagarByProyecto(proyectoId: string): Promise<Cue
     .eq('proyecto_id', proyectoId)
   if (error) throw error
   return data as CuentaPagar[]
-}
-
-export async function generarHistorialProyecto(proyectoId: string, proyecto: Proyecto) {
-  const cotizacionIds: string[] = [proyectoId]
-
-  const { data: complementarias } = await supabaseAdmin
-    .from('cotizaciones')
-    .select('id')
-    .eq('es_complementaria_de', proyectoId)
-    .eq('estado', 'APROBADA')
-
-  if (complementarias) {
-    cotizacionIds.push(...complementarias.map((c: { id: string }) => c.id))
-  }
-
-  const allItemArrays = await Promise.all(cotizacionIds.map(cid => getItemsByCotizacion(cid)))
-  const allItems = allItemArrays.flat()
-
-  const normalizeResponsableName = (value: string | null | undefined) =>
-    String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-
-  const normalizeRole = (value: string | null | undefined) =>
-    String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-
-  const itemsConAlgunaReferencia = allItems.filter(item => !!item.responsable_id || !!item.responsable_nombre)
-
-  let responsableIdPorNombre = new Map<string, string>()
-  const hayItemsSinId = itemsConAlgunaReferencia.some(item => !item.responsable_id && item.responsable_nombre)
-
-  if (hayItemsSinId) {
-    const { data: proveedores, error: proveedoresError } = await supabaseAdmin
-      .from('proveedores')
-      .select('id, nombre')
-
-    if (proveedoresError) throw proveedoresError
-
-    responsableIdPorNombre = new Map(
-      (proveedores || [])
-        .filter((responsable: { id: string | null; nombre: string | null }) => !!responsable.id && !!responsable.nombre)
-        .map((responsable: { id: string; nombre: string }) => [normalizeResponsableName(responsable.nombre), responsable.id])
-    )
-  }
-
-  const { error: delError } = await supabaseAdmin
-    .from('historial_responsable')
-    .delete()
-    .eq('proyecto_id', proyectoId)
-
-  if (delError) throw delError
-
-  const rowsMap = new Map<string, {
-    responsable_id: string
-    cotizacion_id: string
-    proyecto_id: string
-    proyecto_nombre: string
-    cliente: string
-    fecha_evento: string | null
-    rol_en_proyecto: string | null
-    x_pagar: number
-  }>()
-
-  for (const item of itemsConAlgunaReferencia) {
-    const resolvedResponsableId =
-      item.responsable_id ||
-      responsableIdPorNombre.get(normalizeResponsableName(item.responsable_nombre)) ||
-      null
-
-    if (!resolvedResponsableId) continue
-
-    const role = item.descripcion || item.categoria || null
-    const key = `${resolvedResponsableId}__${normalizeRole(role)}`
-    const existing = rowsMap.get(key)
-
-    // Bloque 3 (docs/PLAN.md): x_pagar es el Costo Unitario -- el monto real
-    // pagado al responsable por esta partida es x_pagar * cantidad (Costo
-    // Total), no el unitario suelto. Hallazgo propio de la auditoría
-    // semántica de cierre del bloque: generarHistorialProyecto alimenta
-    // "Total acumulado" en el historial de Proveedores (ProveedorModal.tsx)
-    // y tenía este mismo bug, sin estar en la lista original del plan.
-    const costoTotalItem = (item.x_pagar || 0) * (item.cantidad || 0)
-
-    if (existing) {
-      existing.x_pagar += costoTotalItem
-      continue
-    }
-
-    rowsMap.set(key, {
-      responsable_id: resolvedResponsableId,
-      cotizacion_id: item.cotizacion_id,
-      proyecto_id: proyectoId,
-      proyecto_nombre: proyecto.proyecto,
-      cliente: proyecto.cliente,
-      fecha_evento: proyecto.fecha_entrega || null,
-      rol_en_proyecto: role,
-      x_pagar: costoTotalItem,
-    })
-  }
-
-  const rows = Array.from(rowsMap.values())
-
-  if (rows.length === 0) return 0
-
-  const { error: insError } = await supabaseAdmin
-    .from('historial_responsable')
-    .insert(rows)
-
-  if (insError) throw insError
-
-  return rows.length
 }
 
 export async function createDocumentoCuentaPagar(documento: Partial<DocumentoCuentaPagar>) {

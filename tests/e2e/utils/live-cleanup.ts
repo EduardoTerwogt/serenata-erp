@@ -46,7 +46,7 @@ export async function insertarCuentaPagarConRenglon(
       proyecto_id: c.proyectoId,
       item_id: item.id,
       responsable_id: c.responsableId,
-      x_pagar: c.xPagar,
+      costo_total: c.xPagar,
       grupo_id: c.grupoId,
     })
     .select('id')

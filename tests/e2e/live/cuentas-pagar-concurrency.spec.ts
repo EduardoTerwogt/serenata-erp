@@ -50,7 +50,7 @@ async function crearGrupoDePrueba(supabase: Supabase, prefix: string, proveedorI
     tipo: 'PRINCIPAL',
     estado: 'APROBADA',
   }))
-  ok(await supabase.from('proyectos').insert({ id: proyectoId, cliente: `${prefix} Cliente`, proyecto: `${prefix} Proyecto` }))
+  ok(await supabase.from('proyectos').insert({ id: proyectoId, proyecto: `${prefix} Proyecto` }))
   const grupoId = randomUUID()
   ok(await supabase.from('cuentas_pagar_grupos').insert({
     id: grupoId,

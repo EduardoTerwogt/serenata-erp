@@ -83,6 +83,8 @@ export interface CandidatoMatchProveedor {
   score: number
 }
 
+// Vista `historial_responsable` (A11): calculada desde los renglones de los
+// proyectos cerrados, nunca un snapshot.
 export interface HistorialResponsable {
   id: string
   responsable_id: string
@@ -92,13 +94,13 @@ export interface HistorialResponsable {
   cliente: string
   fecha_evento: string | null
   rol_en_proyecto: string | null
-  x_pagar: number
+  costo_total: number
   created_at: string
 }
 
 // Log append-only de reasignaciones de responsable en items_cotizacion.
-// No confundir con HistorialResponsable (snapshot de historial de proyectos
-// por responsable, tabla distinta).
+// No confundir con HistorialResponsable (vista de proyectos cerrados por
+// responsable).
 export interface HistorialCambioResponsableItem {
   id: string
   item_id: string
@@ -203,7 +205,9 @@ export interface Cotizacion {
 
 export interface Proyecto {
   id: string
+  /** Se resuelve por llave (cotización → clientes); no es columna de `proyectos` (D12). */
   cliente: string
+  cliente_id?: string | null
   proyecto: string
   fecha_entrega: string | null
   locacion: string | null
@@ -323,7 +327,8 @@ export interface CuentaPagar {
   proyecto_nombre?: string
   item_id: string
   responsable_id: string | null
-  x_pagar: number
+  /** Costo Total de la cuenta (Costo Unitario × Cantidad del renglón, D13). */
+  costo_total: number
   estado: EstadoCuentaPagar | EstadoCuentaPagarGrupo
   folio?: string
   fecha_factura?: string | null
@@ -383,8 +388,6 @@ export interface CuentaCobrar {
   id: string
   cotizacion_id: string
   proyecto_id: string | null
-  cliente: string
-  proyecto: string
   monto_total: number
   estado: EstadoCuentaCobrar
   folio?: string

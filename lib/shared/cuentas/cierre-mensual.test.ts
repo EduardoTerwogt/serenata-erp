@@ -9,8 +9,8 @@ function cierreBase() {
   // Un proveedor persona física (retiene IVA e ISR) y uno moral.
   return calcularCierreProyecto(
     [
-      { id: 'cp-1', grupo_id: 'g-fis', x_pagar: 10000, responsable_id: 'p1', responsable_nombre: 'Mario', grupo_monto_total: 10000, proveedor_regimen_fiscal: 'fisica' },
-      { id: 'cp-2', grupo_id: null, x_pagar: 5000, responsable_id: 'p2', responsable_nombre: 'Foros', proveedor_regimen_fiscal: 'moral' },
+      { id: 'cp-1', grupo_id: 'g-fis', costo_total: 10000, responsable_id: 'p1', responsable_nombre: 'Mario', grupo_monto_total: 10000, proveedor_regimen_fiscal: 'fisica' },
+      { id: 'cp-2', grupo_id: null, costo_total: 5000, responsable_id: 'p2', responsable_nombre: 'Foros', proveedor_regimen_fiscal: 'moral' },
     ],
     20000,
     3000,

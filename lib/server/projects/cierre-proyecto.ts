@@ -1,4 +1,4 @@
-import { generarHistorialProyecto, getCuentasCobrarByProyecto, getCuentasPagarByProyecto, getProyectoById, updateProyecto } from '@/lib/db'
+import { getCuentasCobrarByProyecto, getCuentasPagarByProyecto, getProyectoById, updateProyecto } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { getCotizacionById } from '@/lib/server/repositories/quotations'
 import { getTareasByProyecto } from '@/lib/server/repositories/proyecto-tareas'
@@ -9,7 +9,7 @@ import { ordenarRutaCritica } from '@/lib/server/projects/pm-helpers'
 // propósito -- ese módulo necesita importar cerrarProyectoSiEsFinal de
 // aquí (updateProyectoWithRollback), y hacerlo al revés crearía un ciclo.
 // Misma consulta de cotizaciones complementarias aprobadas que ya se
-// repite en service.ts y en generarHistorialProyecto (cuentas-pagar.ts).
+// repite en service.ts.
 async function getCotizacionIdsDelProyecto(proyectoId: string): Promise<string[]> {
   const { data: complementarias, error } = await supabaseAdmin
     .from('cotizaciones')
@@ -79,8 +79,7 @@ export async function buildReporteCierreContenido(
  * updateProyectoWithRollback (estado === 'FINALIZADO' legado, solo
  * Grabación) -- para que el resultado no dependa de cuál se usó.
  *
- * Idempotente: generarHistorialProyecto borra e inserta de nuevo, y el
- * Reporte de Cierre se regenera con `force` (preservando `incidencias`
+ * Idempotente: el Reporte de Cierre se regenera con `force` (preservando `incidencias`
  * manualmente antes de sobrescribir) -- llamarlo varias veces (ej. el
  * proyecto sale y vuelve a entrar a la etapa final) no duplica nada ni
  * pierde lo que el usuario ya escribió.
@@ -98,10 +97,7 @@ export async function cerrarProyectoSiEsFinal(proyectoId: string, esFinal: boole
   const documentoExistente = await getDocumentoSingleton(proyectoId, 'REPORTE_CIERRE')
   const incidenciasPrevias = (documentoExistente?.contenido as { incidencias?: string } | undefined)?.incidencias ?? ''
 
-  const [contenido] = await Promise.all([
-    buildReporteCierreContenido(proyectoId, fechaCierre, incidenciasPrevias),
-    generarHistorialProyecto(proyectoId, proyecto),
-  ])
+  const contenido = await buildReporteCierreContenido(proyectoId, fechaCierre, incidenciasPrevias)
 
   await upsertDocumentoAutoGenerado(proyectoId, 'REPORTE_CIERRE', { ...contenido }, true)
 }

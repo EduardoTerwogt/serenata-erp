@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { Proveedor } from '@/lib/types'
+import { HistorialResponsable, Proveedor } from '@/lib/types'
 import { PROVEEDOR_PUBLIC_COLUMNS, proveedorPublico } from './proveedor-publico'
 
 // EF-3 3B-6: volumen real 10, objetivo de capacidad 1,000 (CLAUDE.md), justo
@@ -49,16 +49,22 @@ export async function getProveedores() {
 export async function getProveedorById(id: string) {
   const { data, error } = await supabaseAdmin
     .from('proveedores')
-    .select(`${PROVEEDOR_PUBLIC_COLUMNS}, historial_responsable(*)`)
+    .select(PROVEEDOR_PUBLIC_COLUMNS)
     .eq('id', id)
     .single()
   if (error) throw error
-  return data
+  // historial_responsable es una vista agregada (A11): no es embebible por FK.
+  const { data: historial, error: historialError } = await supabaseAdmin
+    .from('historial_responsable')
+    .select('*')
+    .eq('responsable_id', id)
+  if (historialError) throw historialError
+  return { ...(data as unknown as Record<string, unknown>), historial_responsable: historial ?? [] } as typeof data & { historial_responsable: HistorialResponsable[] }
 }
 
 /**
  * Query específica para validar la sesión del portal (Fase 2.5) en cada
- * request -- no trae `*` ni el join de historial_responsable, que
+ * request -- no trae `*` ni el historial_responsable, que
  * getProveedorById sí trae y aquí no hace falta.
  */
 export async function getProveedorSessionState(id: string): Promise<{ activo: boolean; session_version: number } | null> {
