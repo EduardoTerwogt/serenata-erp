@@ -461,7 +461,7 @@ evidencia, no cuenta como terminado.
 | Cuentas por cobrar (factura, complemento, pagos parciales) | crítico + live de concurrencia |
 | Cuentas por pagar (factura, pagos, órdenes de pago con PDF real; cierre fiscal estimado del proyecto, cálculo puro en `lib/shared/cierre-proyecto.ts`) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia, `lib/shared/__tests__/cierre-proyecto.test.ts`, `tests/e2e/critical/cuentas-ordenes.spec.ts`, live `cuentas-b1b.spec.ts` |
 | Cuentas: reabrir y correcciones (B7) | `app/api/__tests__/cuentas-correcciones-route.test.ts`, `lib/server/cuentas/__tests__/reemplazo-factura.test.ts`, `tests/e2e/critical/cuentas-reabrir.spec.ts`, live `cuentas-b7-correcciones.spec.ts` (anulación concurrente) |
-| Cuentas: pantalla por periodo, detalle, avisos (escritorio y 390 px) | `tests/e2e/critical/cuentas-{principal,detalle,ordenes}.spec.ts`, live `cuentas-paridad-sql.spec.ts` y `cuentas-periodo-rendimiento.spec.ts` (p95 < 800 ms) |
+| Cuentas: pantalla por periodo, detalle, avisos (escritorio y 390 px) | `tests/e2e/critical/cuentas-{principal,detalle,ordenes}.spec.ts`, live `cuentas-paridad-sql.spec.ts`; escala `tests/e2e/escala/cuentas-periodo-rendimiento.spec.ts` (p95 < 800 ms, workflow `escala.yml`, aparte del gate de PR) |
 | Registrar pago sin carreras (cobrar y pagar) | `tests/e2e/live/cuentas-*-concurrency.spec.ts` |
 | Idempotencia de cliente (pagos y bulk-import de partidas) | `lib/client/__tests__/pagoIdempotency.test.ts`, `bulkImportIdempotency.test.ts`, `lib/server/__tests__/idempotency.test.ts`, `tests/e2e/live/bulk-replace-items-rpc.spec.ts` |
 | Proyectos (detalle, tareas, cronograma, tipos, reporte de cierre) | smoke de proyectos |

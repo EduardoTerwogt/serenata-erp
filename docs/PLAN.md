@@ -119,6 +119,7 @@ no cae en ninguna, se borra.
 | D15 | Estado del cobro (L2) | **Fórmula única:** `PAGADO` si pagado ≥ total (> 0); si no, `PARCIALMENTE_PAGADO` si hay pago; si no, `FACTURADO` si hay `fecha_factura`; si no, `FACTURA_PENDIENTE`. "Vencido" se deriva al leer. Quitar la factura limpia `fecha_factura`. |
 | D16 | `cliente_id` repetido (L3) | **Un solo `cliente_id`, en `cotizaciones`** (congelado al aprobar). Salen `proyectos.cliente_id` y `cuentas_cobrar.cliente_id`; se leen por `cotizaciones` (`proyectos.id = cotizaciones.id`). |
 | D17 | B6 "un solo motor" (L8) | **Obligatorio.** No quedan dos motores de Cuentas al cerrar. |
+| D18 | Escala y cómputo (2026-10-01) | **El dataset de carga (≈2,200 proyectos) se conserva**: el objetivo es demostrar que la app aguanta pasar de cientos a miles de cotizaciones sin subir de plan de Supabase. La prueba de latencia sale del gate de cada PR (`tests/e2e/escala/`, workflow `escala.yml`, manual y semanal) para que el cómputo compartido no tumbe PRs. El frente 2 sigue pausado (D6) y se decide en B7 con la curva medida a 500, 2,200 y 5,000 proyectos. D13 y B6 (D17) pasan a opcionales para este objetivo (pendiente de confirmar). |
 
 ## Confirmaciones (2026-10-01)
 
@@ -507,7 +508,7 @@ presentación.
 - `ARCHITECTURE.md`, `CLAUDE.md` (principio 1 sin Sheets; principio 8 con los
   nombres de columna), decisiones 006, 008, 011, 017; ADR 020 con el
   resultado real y la regla de dueño único; nota de F14 para Proyectos.
-- Re-evaluar el frente 2 (D6) — con los índices de B0 puede que ya no haga falta.
+- Re-evaluar el frente 2 (D6) — con los índices de B0 puede que ya no haga falta. Se decide con la **curva de escala** (D18): latencia de `cuentas_periodo`/`resumen` a 500, 2,200 y 5,000 proyectos (`escala.yml`); si a 5,000 pasan de 800 ms, se aplica sobre el diseño ya simplificado.
 - Medir otra vez p50 de guardado de cotizaciones (K6) y `live`.
 - Checklist de salida a uso real: reinicio por última vez, guardas en 0,
   carpetas de prueba de Drive fuera (H3), borrar el script de reinicio y
