@@ -194,11 +194,6 @@ no cae en ninguna, se borra.
    exacto: `cuentas_pagar.costo_total` nace en B5a y se convierte en B5b;
    `items_cotizacion.costo_unitario` nace en B5a (si alguna función de B5a lee
    el renglón) o en B5b, y se convierte en B5c.
-9. **Migraciones con límites (M3):** cada migración de la iniciativa empieza
-   con `SET LOCAL lock_timeout = '5s'` y `SET LOCAL statement_timeout =
-   '60s'`: si no obtiene el lock (p. ej. `live` corriendo en test), falla
-   rápido en vez de bloquear. Cada bloque sigue siendo **una** transacción a
-   propósito (partirla dejaría funciones leyendo columnas ya borradas).
 4. **Foto dorada "antes = después"** de todas las RPCs de lectura (H1), con
    fecha fija (K3). Diferencias permitidas solo las listadas en el PR (nombres
    de campo renombrados, formato `timestamptz`).
@@ -212,6 +207,11 @@ no cae en ninguna, se borra.
    Clientes (renombrar y ver el cambio en Proyectos y Cuentas), Dashboard.
 8. **Después de salir a uso real** vuelve a ser obligatorio expandir y contraer
    en PRs separados (F3).
+9. **Migraciones con límites (M3):** cada migración de la iniciativa empieza
+   con `SET LOCAL lock_timeout = '5s'` y `SET LOCAL statement_timeout =
+   '60s'`: si no obtiene el lock (p. ej. `live` corriendo en test), falla
+   rápido en vez de bloquear. Cada bloque sigue siendo **una** transacción a
+   propósito (partirla dejaría funciones leyendo columnas ya borradas).
 
 ## Plan de ejecución (v11)
 
