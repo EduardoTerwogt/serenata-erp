@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Plan v7 — "Simplificación del modelo de datos" (2026-10-01; listo para aprobar, sin preguntas abiertas).
+**Estado:** Aprobado (2026-10-01) — plan v7 de "Simplificación del modelo de datos". Siguiente: B0.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -99,7 +99,7 @@ ni el portal de proveedores.
 | 1. Inventario | Tablas, columnas, quién las toca | `docs/inventario-tablas.md` | Hecha |
 | 2. Uso real y riesgo | Evidencia y matriz | `docs/inventario-tablas.md` → "Fase 2" | Hecha |
 | 3. Propuestas | 3 alternativas | ADR 020 | Hecha |
-| 4. Decisión y plan | D1–D7, dos auditorías, plan v3 | Este archivo | **Listo para aprobar** |
+| 4. Decisión y plan | D1–D8, cinco auditorías, plan v7 | Este archivo | **Aprobado (2026-10-01)** |
 | 5. Ejecución | B0–B6 | Un PR por bloque | Pendiente |
 
 ## Auditoría del plan v1 (2026-10-01)
@@ -482,7 +482,7 @@ retirar el TS. `concepto.ts` queda con tipos y presentación.
 | Fases 1–3 (#105, #106) | Hecho (2026-10-01) |
 | Decisiones D1–D7 | Hecho (2026-10-01) |
 | Auditoría v1 → v2 y final v2 → v3 | Hecho (2026-10-01) |
-| Aprobación del plan v3 | **Pendiente del usuario** |
+| Aprobación del plan v7 | Hecho (2026-10-01) |
 | B0 Red de seguridad, test = prod, índices y foto dorada | Pendiente |
 | B2 Reinicio de datos (script; tras limpiar Drive) | Pendiente |
 | B1 + B3 Retiros e integridad | Pendiente |

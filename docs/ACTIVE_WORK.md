@@ -15,10 +15,12 @@ grupos desfasados, 0 grupos ABIERTO vacíos, "Eduardo Terwogt" de SH072 en 3,100
 `cuentas_periodo` ~65 ms, advisors sin hallazgos nuevos. Pendiente de
 verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
-**Iniciativa "Simplificación del modelo de datos"** — epic #109. Fases 1–3,
-decisiones D1–D7 y dos auditorías hechas (2026-10-01). Plan v7 (6 PRs, 40 → 33
-tablas, Planeación se retira, índices y foto dorada primero) en `docs/PLAN.md`,
-**listo para aprobar**. Al aprobarse, la siguiente sesión arranca con B0.
+**Iniciativa "Simplificación del modelo de datos"** — epic #109. **Plan v7
+aprobado (2026-10-01)** en `docs/PLAN.md`: 6 PRs, 40 → 33 tablas, Sheets y
+Planeación se retiran, índices faltantes y foto dorada primero. **Siguiente
+sesión: B0** (abrir con `serenata-iniciar-fase`). Pendientes del usuario que
+B0 pedirá: respaldo `supabase db dump` (plan Free sin respaldos), Drive en
+Preview y limpiar carpetas de prueba de Drive antes del reinicio (B2).
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer
