@@ -15,6 +15,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Decide si el PR toca algo que no sea documentacion. `live` pega contra la
+  # base de PRUEBA compartida (consume ingestion/egress de Supabase), asi que se
+  # omite cuando el diff completo del PR son solo archivos `.md`. Se resuelve con
+  # un job (no con `paths-ignore`) para que `live` aparezca como "skipped" y no
+  # como check ausente. push a main y workflow_dispatch siempre corren `live`.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      codigo: ${{ steps.diff.outputs.codigo }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: ¿El PR toca algo que no sea .md?
+        id: diff
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENTO" != "pull_request" ]; then
+            echo "codigo=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          archivos=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          echo "$archivos"
+          # Fallar explicito: un diff vacio o ilegible no debe contar como "solo docs".
+          if [ -z "$archivos" ]; then
+            echo "codigo=true" >> "$GITHUB_OUTPUT"
+          elif echo "$archivos" | grep -qv '\.md$'; then
+            echo "codigo=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "PR solo de documentacion: se omite el job live."
+            echo "codigo=false" >> "$GITHUB_OUTPUT"
+          fi
+
   smoke-and-critical:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -89,7 +128,11 @@ jobs:
     # unico que puede delatar un bug de colaboracion o de persistencia. Con
     # continue-on-error el workflow salia verde aunque encontrara uno. El deploy
     # a Vercel no se bloquea: se dispara por el push, no por este workflow.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'pull_request'
+    #
+    # No corre en PRs cuyo diff es solo `.md` (ver job `changes`): ahorra carga a la
+    # base de prueba compartida sin perder cobertura, porque no hay codigo que probar.
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.codigo == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
