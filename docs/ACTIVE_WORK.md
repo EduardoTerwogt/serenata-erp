@@ -5,23 +5,28 @@
 
 ## Estado
 
-**#99 (desglose antes/después de IVA y utilidad con descuento) → PR #104**, en
-borrador, rama `claude/issue-99-ajuste-cuentas-utilidad` (sale de `main`; lleva
-`20261007`, `20261008` con el bloqueo de grupo y su test). Autorizado por el
-usuario (2026-10-01): con CI verde, mostrar las 3 filas de SH072, aplicar
-`20261007` y `20261008` en producción, verificar y mergear. Si `live` falla por
-la BD de test: confirmar con logs de Supabase, reintentar una vez y avisar;
-sin tocar timeouts ni tests (#107).
+**#99 (desglose antes/después de IVA y utilidad con descuento) → hecho y en producción**
+(2026-10-01). PR #104 mergeado (`e9940ea`) con `test`, `fresh-db`,
+`smoke-and-critical` y `live` en verde; issue #99 cerrado. `20261007` y
+`20261008` aplicadas en producción antes del merge. Verificado después: 0
+grupos desfasados, 0 grupos ABIERTO vacíos, "Eduardo Terwogt" de SH072 en 3,100
+(antes 5,900), grupo vacío "Serenata" borrado, trigger presente,
+`cuentas_conceptos(2026)` con 114 conceptos y `utilidad_proyecto`,
+`cuentas_periodo` ~65 ms, advisors sin hallazgos nuevos. Pendiente de
+verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
 **Iniciativa nueva (borrador): "Simplificación del modelo de datos"** — epic
 #109 (`docs/PLAN.md`, `docs/inventario-tablas.md`). Fase 1 hecha; fase 2 (#105)
 espera las respuestas del usuario a las preguntas abiertas del plan.
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
-(retitulado "[En pausa]", ya sin "Closes #99"). Estado y cómo retomarlo:
+(retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer
+`main` a su rama (conflicto add/add esperado en `20261008`: conservar la de
+`main`). Estado y cómo retomarlo:
 `docs/archive/frente2-cuentas-conceptos-pausado.md`. Pendiente del usuario:
 decidir el cómputo de test y producción (#107; Dashboard → Reports → Database).
-`20261009` y `20261010` aplicadas solo en test.
+`20261009` y `20261010` aplicadas solo en test. El E2E de `main` tras los
+commits de docs falló (`1b650cd`) por la degradación de la BD de test (#107).
 
 ## Completado en la sesión 22
 
