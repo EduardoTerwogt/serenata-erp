@@ -29,24 +29,19 @@ Historia de auditorías en `docs/archive/simplificacion-modelo-auditorias.md`.
 usuario que B0 pedirá: respaldo `supabase db dump` (plan Free sin respaldos),
 Drive en Preview y limpiar carpetas de prueba de Drive antes del reinicio (B2).
 
-**B0 en curso — PR #111 (borrador), casi cerrado.** Hecho: guardas,
-`plpgsql_check` (CI), retiro de `sync-up`, 8 índices, foto dorada, y **test = prod
-en esquema verificado** (columnas, índices, restricciones, triggers, políticas y
-76 funciones idénticos; única excepción declarada: `loadtest_runs`, solo test).
-El usuario corrió `scripts/db/test-retirar-frente2.sql` en test (2026-10-01).
-Hallazgos corregidos por el camino: `preview_next_cotizacion_folio_principal`
-reconstruida desde cero quedaba con la versión vieja (el orden alfabético de los
-archivos de `db/migrations/` ≠ el orden en que se aplicaron; migración `20261013`),
-`cuentas_pagar.estado` era nullable en prod (`20261014`) y el texto de
-`cuentas_periodo` (`20261015`). **Línea base** (test, DB-side, 2026-10-01):
-`cuentas_periodo` proyectos/todo 579 ms, lista 498 ms, `cuentas_resumen` 286 ms;
-`pg_stat_statements` reiniciado a las 18:00 UTC. **Pendiente de B0:** `live` ×3 en
-verde, `reset-transaccional.sql` (borrador con un error conocido: folio `-001` vs
-`-00001`; su edición quedó pendiente de permiso del usuario), y las guardas que
-quedan en test por la semilla (5 cuentas sueltas con proveedor, 1 cuenta sin
-`item_id`: B5b/seed). Manual del usuario que sigue (no bloquea B1+B3): decidir el
-cómputo de test (#107); respaldo `supabase db dump` y limpieza de Drive antes de
-B2.
+**B0 → hecho** (PR #111 mergeado, 2026-10-01; `live` verde ×3). Guardas, `plpgsql_check`
+en CI, 8 índices, foto dorada, esquema test = prod verificado (única excepción
+declarada: `loadtest_runs`), línea base de test (`cuentas_periodo` 579/498 ms,
+`cuentas_resumen` 286 ms). La prueba de escala salió del gate de PR (`escala.yml`, D18).
+
+**B1+B3 en curso — PR #112 (borrador).** Sheets, Calendar y Planeación retirados del
+código; clientes por `nombre_clave` + `resolver_cliente`; autosave de productos en
+bloque; L7; CHECK/timestamptz/RLS. `20261017` y `20261018` aplicadas en test. **Antes
+del merge:** aplicar `20261017` y `20261018` en producción. **Después del deploy
+(manual):** correr `20261016` (DROP) en test y luego prod; quitar de Vercel
+`GOOGLE_SHEETS_SPREADSHEET_ID` y `GOOGLE_CALENDAR_ID`; verificar Drive en Preview.
+Pendiente de B0 para B2: respaldo `supabase db dump` y limpieza de carpetas de prueba
+de Drive.
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer
