@@ -37,6 +37,16 @@ BEGIN
     v_ids := ARRAY[OLD.grupo_id, NEW.grupo_id];
   END IF;
 
+  -- Serializa el recálculo por grupo (orden por id, sin interbloqueos). Sin este
+  -- bloqueo, dos transacciones sobre renglones distintos del mismo grupo suman
+  -- con su propia foto de datos y la última en confirmar pisa a la otra
+  -- (live: 1,500 en vez de 1,700). Tras esperar el bloqueo, el UPDATE siguiente
+  -- ya ve lo que confirmó la otra transacción.
+  PERFORM 1 FROM cuentas_pagar_grupos g
+  WHERE g.id = ANY(v_ids)
+  ORDER BY g.id
+  FOR UPDATE;
+
   UPDATE cuentas_pagar_grupos g SET
     monto_total = s.suma,
     updated_at = now()
