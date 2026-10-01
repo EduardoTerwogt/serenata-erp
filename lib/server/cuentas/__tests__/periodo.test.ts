@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 
 import { AVISOS_POR_CATEGORIA, agruparAvisos, derivarAvisos } from '../avisos'
-import { construirOpciones, construirPeriodo, construirProyectos, normalizarBusqueda, pendientesPorAnio, ultimoMesConDatos, type ParametrosPeriodo } from '../periodo'
+import { construirOpciones, construirPeriodo, construirProyectos, netoCobro, normalizarBusqueda, pendientesPorAnio, ultimoMesConDatos, type ParametrosPeriodo } from '../periodo'
 import { decodificarCuentasAnio, type CuentasAnioRaw } from '../periodo-crudo'
 import { SIN_PROYECTO_ID } from '@/lib/shared/cuentas/periodo-tipos'
 
@@ -21,6 +21,7 @@ function rpc(): unknown {
     ],
     cobros: [
       // id, cotizacion_id, proyecto_id, folio, cliente, cliente_id, proyecto, monto_total, monto_pagado, fecha_vencimiento, fecha_factura, facturas_xml, pagos
+      // (sin cotizacion_total ni cotizacion_iva: el sin IVA sale de monto_total / 1.16)
       ['cc-1', 'SH061', 'SH061', 'CC-1', 'Grupo Modelo', null, 'Aurora', 348000, 174000, '2026-10-02', '2026-09-01', [validado()], [{ id: 'p1', monto: 174000, fecha_pago: '2026-09-05' }]],
       ['cc-2', 'SH061-C1', 'SH061', 'CC-2', 'Grupo Modelo', null, 'Aurora', 52200, 0, '2026-09-10', null, null, null],
       ['cc-3', 'SH062', 'SH062', 'CC-3', 'Zara', null, 'Otoño', 64960, 64960, null, '2026-09-01', [validado()], [{ id: 'p2', monto: 64960, fecha_pago: '2026-09-20' }]],
@@ -88,7 +89,10 @@ describe('construirProyectos', () => {
   it('proyecto resuelto: cuentas cerradas con la fecha del último evento (D17, S19)', () => {
     const sh062 = proyectos().find((p) => p.id === 'SH062')!
     expect(sh062.cuentas).toMatchObject({ cerradas: true, pendientes: 0, fecha_cierre: '2026-09-21' })
-    expect(sh062.totales).toEqual({ cobros_total: 64960, cobrado: 64960, por_cobrar: 0, pagos_total: 21460, pagado: 21460, por_pagar: 0 })
+    expect(sh062.totales).toEqual({
+      cobros_total: 64960, cobrado: 64960, por_cobrar: 0, pagos_total: 21460, pagado: 21460, por_pagar: 0,
+      cobros_sin_iva: 56000, pagos_neto: 18500,
+    })
   })
 
   it('el cierre usa el grupo con su snapshot (H10), no cada renglón', () => {
@@ -139,10 +143,12 @@ describe('construirPeriodo', () => {
 
   it('totales del periodo (D4): cobros con IVA, pagos en total a transferir, utilidad del cierre', () => {
     const r = construirPeriodo(proyectos(), params(), HOY)
-    expect(r.totales.ingresos).toEqual({ total: 465160, cobrado: 238960, por_cobrar: 226200 })
-    expect(r.totales.egresos).toEqual({ total: 93844, pagado: 21460, por_pagar: 72384 })
+    expect(r.totales.ingresos).toEqual({ total: 465160, cobrado: 238960, por_cobrar: 226200, sin_iva: 401000 })
+    expect(r.totales.egresos).toEqual({ total: 93844, pagado: 21460, por_pagar: 72384, neto: 80900 })
     expect(r.totales.utilidad.bruta).toBe(26000)
-    expect(r.totales.impuestos.total).toBe(round(r.totales.impuestos.iva_a_enterar + r.totales.impuestos.retenciones + r.totales.impuestos.isr_estimado))
+    // El ISR estimado va aparte: no suma al total a declarar del periodo.
+    expect(r.totales.impuestos.total).toBe(round(r.totales.impuestos.iva_a_enterar + r.totales.impuestos.retenciones))
+    expect(r.totales.impuestos.isr_estimado).toBeGreaterThan(0)
   })
 
   it('"Todo el año" trae "Sin fecha" y "Sin proyecto" aparte, sin sumarlos a totales ni meses', () => {
@@ -189,6 +195,63 @@ describe('construirPeriodo', () => {
 
   it('pendientes por año no cuenta "Sin fecha"', () => {
     expect(pendientesPorAnio(proyectos(), 2026)).toBe(2)
+  })
+})
+
+describe('desglose antes/después de IVA y utilidad con descuento (#99)', () => {
+  const grupo = (id: string, proyecto: string, regimen: string, neto: number) =>
+    [id, proyecto, `prov-${id}`, `Proveedor ${id}`, regimen, neto, 0, null, 0, null, null, null, null, 1, 'Servicio']
+
+  /** SH080 tal como está en producción: una cotización sin descuento y tres proveedores moral. */
+  function sh080(grupos: unknown[][]) {
+    return {
+      proyectos: [['SH080', 'Bloqu 2', 'Proeba', null, '2026-09-20', 5050, 2032.5, 7082.5, 2493.2]],
+      cobros: [['cc-80', 'SH080', 'SH080', 'CC-80', 'Proeba', null, 'Bloqu 2', 18075.7, 0, null, null, null, null, 18075.7, 2493.2]],
+      pagos: [],
+      grupos,
+    }
+  }
+
+  it('SH080: sin y con IVA, y el flujo con IVA se concilia con la utilidad bruta', () => {
+    const data = sh080([grupo('a', 'SH080', 'moral', 4000), grupo('b', 'SH080', 'moral', 2500), grupo('c', 'SH080', 'moral', 2000)])
+    const p = proyectos(data)[0]
+    expect(p.totales).toMatchObject({ cobros_sin_iva: 15582.5, cobros_total: 18075.7, pagos_neto: 8500, pagos_total: 9860 })
+    expect(p.cierre).toMatchObject({ iva_neto_a_enterar: 1133.2, iva_retenido_total: 0, isr_retenido_total: 0, utilidad_bruta: 7082.5 })
+    const r = construirPeriodo(proyectos(data), params(), HOY)
+    expect(r.totales.utilidad).toMatchObject({ flujo: 8215.7, bruta: 7082.5 })
+    expect(round(8215.7 - p.cierre.iva_neto_a_enterar)).toBe(p.cierre.utilidad_bruta)
+  })
+
+  it('con persona física, las retenciones completan la conciliación', () => {
+    const p = proyectos(sh080([grupo('a', 'SH080', 'moral', 4000), grupo('b', 'SH080', 'fisica', 4500)]))[0]
+    expect(p.totales).toMatchObject({ pagos_neto: 8500, pagos_total: 8930 })
+    const retenciones = p.cierre.iva_retenido_total + p.cierre.isr_retenido_total
+    expect(retenciones).toBe(930)
+    const flujo = round(p.totales.cobros_total - p.totales.pagos_total)
+    expect(flujo).toBe(9145.7)
+    expect(round(flujo - p.cierre.iva_neto_a_enterar - retenciones)).toBe(p.cierre.utilidad_bruta)
+  })
+
+  it('la utilidad bruta resta el descuento de la cotización (SH002: 10 %)', () => {
+    const data = {
+      proyectos: [['SH002', 'Con descuento', 'Cliente', null, '2026-09-05', 3200, 2250, 3725, 2484]],
+      cobros: [['cc-2', 'SH002', 'SH002', 'CC-2', 'Cliente', null, 'X', 18009, 0, null, null, null, null, 18009, 2484]],
+      pagos: [],
+      grupos: [grupo('a', 'SH002', 'moral', 11800)],
+    }
+    const p = proyectos(data)[0]
+    expect(p.cierre.utilidad_bruta).toBe(3725)
+    expect(p.cierre.utilidad_neta).toBe(2607.5)
+    expect(p.totales.cobros_sin_iva).toBe(15525)
+    expect(round(p.totales.cobros_sin_iva - p.totales.pagos_neto)).toBe(p.cierre.utilidad_bruta)
+  })
+
+  it('netoCobro redondea como ROUND(numeric, 2): proporción de la cotización o IVA del 16 % sin cotización', () => {
+    expect(netoCobro(18075.7, 18075.7, 2493.2)).toBe(15582.5)
+    expect(netoCobro(9037.85, 18075.7, 2493.2)).toBe(7791.25)
+    expect(netoCobro(100.01, null, null)).toBe(86.22)
+    expect(netoCobro(0.29, null, null)).toBe(0.25)
+    expect(netoCobro(500, 0, 0)).toBe(500)
   })
 })
 

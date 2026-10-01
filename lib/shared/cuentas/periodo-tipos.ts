@@ -2,8 +2,8 @@
  * Rediseño de Cuentas B3 (docs/PLAN.md): contrato de `GET /api/cuentas/periodo`
  * y `GET /api/cuentas/resumen`, compartido por la ruta y la UI nueva (B4).
  *
- * Montos: cobros con IVA; pagos en TOTAL A TRANSFERIR (D3, D18). El neto solo
- * aparece en el cruce fiscal (`cierre`).
+ * Montos: cobros con IVA; pagos en TOTAL A TRANSFERIR (D3, D18). `neto` y los
+ * totales `*_sin_iva` / `*_neto` son los mismos montos antes de IVA (#99).
  */
 import type { CierreProyecto } from '@/lib/shared/cierre-proyecto'
 import type { FilaCierre } from '@/lib/shared/cuentas/cierre-mensual'
@@ -34,6 +34,8 @@ export interface ConceptoVista extends ConceptoDerivado {
   /** Renglones del grupo (1 en cobros y sueltas). */
   items: number
   total: number
+  /** Antes de IVA (#99): parte sin IVA del cobro o neto del pago al proveedor. */
+  neto: number
   pagado: number
   /** Pago sin snapshot del CFDI: el total es el estimado por régimen (supuesto 6). */
   total_estimado: boolean
@@ -49,6 +51,9 @@ export interface TotalesProyecto {
   pagos_total: number
   pagado: number
   por_pagar: number
+  /** #99: los mismos totales antes de IVA. */
+  cobros_sin_iva: number
+  pagos_neto: number
 }
 
 export interface TarjetaProyecto {
@@ -86,10 +91,12 @@ export interface MesResumen {
 }
 
 export interface TotalesPeriodo {
-  ingresos: { total: number; cobrado: number; por_cobrar: number }
-  /** Total a transferir: IVA incluido, menos retenciones. */
-  egresos: { total: number; pagado: number; por_pagar: number }
-  utilidad: { bruta: number; isr_estimado: number; neta: number }
+  ingresos: { total: number; cobrado: number; por_cobrar: number; sin_iva: number }
+  /** Total a transferir: IVA incluido, menos retenciones. `neto`: antes de IVA. */
+  egresos: { total: number; pagado: number; por_pagar: number; neto: number }
+  /** `flujo`: cobros − pagos con IVA de los mismos proyectos que la utilidad (#99). */
+  utilidad: { bruta: number; isr_estimado: number; neta: number; flujo: number }
+  /** `total` = IVA a enterar + retenciones (a declarar al SAT); `isr_estimado` va aparte, no suma. */
   impuestos: { iva_a_enterar: number; retenciones: number; isr_estimado: number; total: number }
 }
 

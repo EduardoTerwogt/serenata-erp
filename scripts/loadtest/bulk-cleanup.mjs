@@ -111,6 +111,13 @@ export async function bulkCleanupLoadTestRun(supabaseAdmin, runId) {
     await deleteByIdsInChunks(supabaseAdmin, 'cuentas_pagar', cpIds)
     counts.cuentas_pagar = cpIds.length
 
+    // Aprobar una cotización (cuentas-escrituras.js) crea grupos de pago por
+    // proveedor; cuentas_pagar_grupos.proyecto_id referencia a proyectos, así
+    // que sin borrarlos antes el DELETE de proyectos falla por FK.
+    const grupoIds = await discoverIdsWhereIn(supabaseAdmin, 'cuentas_pagar_grupos', 'proyecto_id', cotizacionIds)
+    await deleteByIdsInChunks(supabaseAdmin, 'cuentas_pagar_grupos', grupoIds)
+    counts.cuentas_pagar_grupos = grupoIds.length
+
     const ccIds = await discoverIdsWhereIn(supabaseAdmin, 'cuentas_cobrar', 'cotizacion_id', cotizacionIds)
     await deleteByIdsInChunks(supabaseAdmin, 'cuentas_cobrar', ccIds)
     counts.cuentas_cobrar = ccIds.length

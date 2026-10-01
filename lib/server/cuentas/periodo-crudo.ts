@@ -41,6 +41,9 @@ export interface CobroAnioRaw {
   fecha_factura: string | null
   facturas_xml: DocumentoXmlInput[]
   pagos: (PagoCobroInput & { tipo_pago?: string })[]
+  /** #99: total e IVA de la cotización del cobro; null sin cotización. */
+  cotizacion_total: number | null
+  cotizacion_iva: number | null
 }
 
 /** Pago a proveedor no anulado: fecha capturada y monto en total a transferir. */
@@ -134,6 +137,8 @@ export function decodificarCuentasAnio(data: unknown): CuentasAnioRaw {
       fecha_factura: str(f[10]),
       facturas_xml: lista(f[11]),
       pagos: lista<PagoCobroInput & { tipo_pago?: string }>(f[12]).map((p) => ({ ...p, monto: num(p.monto) })),
+      cotizacion_total: numOrNull(f[13]),
+      cotizacion_iva: numOrNull(f[14]),
     })),
     pagos: (raw.pagos ?? []).map((f) => ({
       id: String(f[0]),

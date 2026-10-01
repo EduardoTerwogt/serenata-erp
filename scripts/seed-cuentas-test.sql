@@ -90,15 +90,17 @@ BEGIN
     (c_prov_b, 'SEEDCU Proveedor Moral', '5550000002', 'seed-prov-b@example.com', 'Santander', '014180009876543210', ARRAY['Equipo'], 'moral', true);
 
   -- ── Cotizaciones, items y proyectos ──────────────────────────────────
+  -- margen_total = Σ margen de sus items; utilidad_total = margen + fee − descuento
+  -- (lib/quotations/calculations.ts). Cuentas usa utilidad_total desde el issue #99.
   INSERT INTO cotizaciones (id, cliente, cliente_id, proyecto, fecha_entrega, locacion, fecha_cotizacion, tipo, es_complementaria_de, estado, subtotal, fee_agencia, general, iva, total, margen_total, utilidad_total)
   VALUES
-    ('SEEDCU01',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Orden vieja y sueltas', '2026-06-10', 'CDMX', '2026-05-20', 'PRINCIPAL',     NULL,       'APROBADA', 30000, 4500, 34500, 5520, 40020, 9500, 9500),
-    ('SEEDCU02',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Grupo con pago parcial', '2026-08-14', 'CDMX', '2026-07-30', 'PRINCIPAL',     NULL,       'APROBADA', 30000, 4500, 34500, 5520, 40020, 10000, 10000),
-    ('SEEDCU03',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Cobro PPD en dos pagos', '2026-07-05', 'Guadalajara', '2026-06-18', 'PRINCIPAL', NULL,     'APROBADA', 20000, 3000, 23000, 3680, 26680, 8000, 8000),
-    ('SEEDCU04',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Factura en revisión', '2026-09-12', 'CDMX', '2026-08-28', 'PRINCIPAL',        NULL,       'APROBADA', 10000, 1500, 11500, 1840, 13340, 4000, 4000),
-    ('SEEDCU05',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-01', 'PRINCIPAL', NULL, 'APROBADA', 20000, 3000, 23000, 3680, 26680, 7000, 7000),
-    ('SEEDCU05-A', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-08', 'COMPLEMENTARIA', 'SEEDCU05', 'APROBADA', 5000, 750, 5750, 920, 6670, 2000, 2000),
-    ('SEEDCU05-B', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-15', 'COMPLEMENTARIA', 'SEEDCU05', 'EMITIDA',  4000, 600, 4600, 736, 5336, 1500, 1500);
+    ('SEEDCU01',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Orden vieja y sueltas', '2026-06-10', 'CDMX', '2026-05-20', 'PRINCIPAL',     NULL,       'APROBADA', 30000, 4500, 34500, 5520, 40020, 10000, 14500),
+    ('SEEDCU02',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Grupo con pago parcial', '2026-08-14', 'CDMX', '2026-07-30', 'PRINCIPAL',     NULL,       'APROBADA', 30000, 4500, 34500, 5520, 40020, 10000, 14500),
+    ('SEEDCU03',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Cobro PPD en dos pagos', '2026-07-05', 'Guadalajara', '2026-06-18', 'PRINCIPAL', NULL,     'APROBADA', 20000, 3000, 23000, 3680, 26680, 8000, 11000),
+    ('SEEDCU04',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Factura en revisión', '2026-09-12', 'CDMX', '2026-08-28', 'PRINCIPAL',        NULL,       'APROBADA', 10000, 1500, 11500, 1840, 13340, 4000, 5500),
+    ('SEEDCU05',   'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-01', 'PRINCIPAL', NULL, 'APROBADA', 20000, 3000, 23000, 3680, 26680, 7000, 10000),
+    ('SEEDCU05-A', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-08', 'COMPLEMENTARIA', 'SEEDCU05', 'APROBADA', 5000, 750, 5750, 920, 6670, 2000, 2750),
+    ('SEEDCU05-B', 'SEEDCU Cliente Demo', c_cliente, 'Seed · Principal con complementarias', '2026-09-20', 'Monterrey', '2026-09-15', 'COMPLEMENTARIA', 'SEEDCU05', 'EMITIDA',  4000, 600, 4600, 736, 5336, 1500, 2100);
 
   -- items: id = 5eedc000-...-<cot><n>; cuentas_pagar.item_id apunta aquí.
   INSERT INTO items_cotizacion (id, cotizacion_id, categoria, descripcion, cantidad, precio_unitario, importe, responsable_nombre, responsable_id, x_pagar, margen, orden)

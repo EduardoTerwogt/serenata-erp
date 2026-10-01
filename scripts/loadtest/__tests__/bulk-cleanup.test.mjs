@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { discoverIdsByPrefix, discoverIdsWhereIn } from '../bulk-cleanup.mjs'
+import { bulkCleanupLoadTestRun, discoverIdsByPrefix, discoverIdsWhereIn } from '../bulk-cleanup.mjs'
 
 // EF-3A 3A-4: .range() sin .order() no garantiza un orden estable entre
 // páginas en Postgres -- este bloque usa keyset por `id` en su lugar. Estas
@@ -71,5 +71,56 @@ describe('discoverIdsWhereIn', () => {
 
     expect(ids).toHaveLength(200)
     expect(new Set(ids).size).toBe(200)
+  })
+})
+
+// Frente 2 de Cuentas (cuentas-escrituras.js): aprobar una cotización crea
+// grupos de pago, y cuentas_pagar_grupos.proyecto_id referencia a proyectos.
+describe('bulkCleanupLoadTestRun -- cotizaciones aprobadas', () => {
+  function makeFakeSupabase(dataByTable) {
+    const borrados = []
+    const from = (table) => {
+      let esDelete = false
+      const builder = {
+        select: () => builder,
+        ilike: () => builder,
+        in: () => builder,
+        order: () => builder,
+        limit: () => builder,
+        gt: () => builder,
+        delete: () => {
+          esDelete = true
+          return builder
+        },
+        then: (resolve) => {
+          if (esDelete) {
+            borrados.push(table)
+            resolve({ error: null })
+          } else {
+            resolve({ data: dataByTable[table] ?? [], error: null })
+          }
+        },
+      }
+      return builder
+    }
+    return { from, borrados }
+  }
+
+  it('borra los grupos de pago después de las cuentas por pagar y antes que el proyecto', async () => {
+    const supabaseAdmin = makeFakeSupabase({
+      cotizaciones: [{ id: 'SH900' }],
+      cuentas_pagar: [{ id: 'cp-1' }],
+      cuentas_pagar_grupos: [{ id: 'g-1' }, { id: 'g-2' }],
+      cuentas_cobrar: [{ id: 'cc-1' }],
+    })
+
+    const counts = await bulkCleanupLoadTestRun(supabaseAdmin, 'run-1')
+
+    const orden = supabaseAdmin.borrados
+    expect(counts.cuentas_pagar_grupos).toBe(2)
+    expect(orden.indexOf('cuentas_pagar')).toBeGreaterThanOrEqual(0)
+    expect(orden.indexOf('cuentas_pagar_grupos')).toBeGreaterThan(orden.indexOf('cuentas_pagar'))
+    expect(orden.indexOf('proyectos')).toBeGreaterThan(orden.indexOf('cuentas_pagar_grupos'))
+    expect(orden.indexOf('cotizaciones')).toBeGreaterThan(orden.indexOf('proyectos'))
   })
 })

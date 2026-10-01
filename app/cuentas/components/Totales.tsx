@@ -1,4 +1,5 @@
 import { fmtMoney } from '@/lib/quotations/format'
+import { round2 } from '@/lib/shared/decimal'
 import type { TotalesPeriodo } from '@/lib/shared/cuentas/periodo-tipos'
 
 interface Tarjeta {
@@ -7,36 +8,62 @@ interface Tarjeta {
   acento?: boolean
   nota?: string
   sub: { k: string; v: number }[]
+  /** Renglón informativo, separado del desglose: no suma al valor de la tarjeta. */
+  aparte?: { k: string; v: number; nota: string }
+}
+
+/**
+ * #99: la utilidad se concilia con el flujo con IVA de los mismos proyectos:
+ * flujo − IVA y retenciones a enterar = utilidad bruta. Si no cuadra (p. ej.
+ * el Total de un CFDI distinto del estimado), la diferencia va en "Ajuste".
+ */
+function utilidadSub(t: TotalesPeriodo): Tarjeta['sub'] {
+  const terceros = round2(t.impuestos.iva_a_enterar + t.impuestos.retenciones)
+  const ajuste = round2(t.utilidad.flujo - terceros - t.utilidad.bruta)
+  return [
+    { k: 'Flujo con IVA', v: t.utilidad.flujo },
+    { k: 'IVA y retenciones', v: -terceros },
+    ...(ajuste !== 0 ? [{ k: 'Ajuste', v: -ajuste }] : []),
+    { k: 'ISR estimado', v: -t.utilidad.isr_estimado },
+    { k: 'Neta estimada', v: t.utilidad.neta },
+  ]
 }
 
 function tarjetas(t: TotalesPeriodo): Tarjeta[] {
   return [
-    { k: 'Ingresos', v: t.ingresos.total, sub: [{ k: 'Cobrado', v: t.ingresos.cobrado }, { k: 'Por cobrar', v: t.ingresos.por_cobrar }] },
+    {
+      k: 'Ingresos',
+      v: t.ingresos.total,
+      nota: 'IVA incluido',
+      sub: [{ k: 'Antes de IVA', v: t.ingresos.sin_iva }, { k: 'Cobrado', v: t.ingresos.cobrado }, { k: 'Por cobrar', v: t.ingresos.por_cobrar }],
+    },
     {
       k: 'Egresos',
       v: t.egresos.total,
       nota: 'IVA incluido, menos retenciones',
-      sub: [{ k: 'Pagado', v: t.egresos.pagado }, { k: 'Por pagar', v: t.egresos.por_pagar }],
+      sub: [{ k: 'Antes de IVA (neto)', v: t.egresos.neto }, { k: 'Pagado', v: t.egresos.pagado }, { k: 'Por pagar', v: t.egresos.por_pagar }],
     },
     {
       k: 'Utilidad bruta',
       v: t.utilidad.bruta,
       acento: true,
-      sub: [{ k: 'ISR estimado', v: -t.utilidad.isr_estimado }, { k: 'Neta estimada', v: t.utilidad.neta }],
+      sub: utilidadSub(t),
     },
     {
-      k: 'Impuestos',
+      // Total = lo que se declara al SAT en el periodo. El ISR estimado no se
+      // paga en el mes (pago provisional con coeficiente, Art. 14 LISR): va aparte.
+      k: 'Impuestos a declarar',
       v: t.impuestos.total,
       sub: [
         { k: 'IVA a enterar', v: t.impuestos.iva_a_enterar },
         { k: 'Retenciones', v: t.impuestos.retenciones },
-        { k: 'ISR estimado', v: t.impuestos.isr_estimado },
       ],
+      aparte: { k: 'ISR estimado', v: t.impuestos.isr_estimado, nota: 'Referencia, no suma al total del mes' },
     },
   ]
 }
 
-function Desglose({ sub, nota }: { sub: Tarjeta['sub']; nota?: string }) {
+function Desglose({ sub, nota, aparte }: Pick<Tarjeta, 'sub' | 'nota' | 'aparte'>) {
   return (
     <div className="mt-1.5 flex flex-col gap-px border-t border-hairline pt-1.5">
       {sub.map((l) => (
@@ -46,13 +73,23 @@ function Desglose({ sub, nota }: { sub: Tarjeta['sub']; nota?: string }) {
         </div>
       ))}
       {nota && <div className="text-[10.5px] leading-[1.35] text-faint">{nota}</div>}
+      {aparte && (
+        <div className="mt-1 border-t border-dashed border-hairline pt-1.5">
+          <div className="flex justify-between gap-2.5 text-[11px] leading-[1.35]">
+            <span className="text-subtext">{aparte.k}</span>
+            <span className="whitespace-nowrap text-subtext">{fmtMoney(aparte.v)}</span>
+          </div>
+          <div className="text-[10.5px] leading-[1.35] text-faint">{aparte.nota}</div>
+        </div>
+      )}
     </div>
   )
 }
 
 /**
  * Las 4 tarjetas del periodo (D4). Ingresos y Egresos llevan IVA de terceros,
- * así que Utilidad bruta no es su resta: sale del cierre (decisión 006).
+ * así que Utilidad bruta no es su resta: sale del cierre (decisión 006) y se
+ * muestra conciliada con el flujo con IVA (#99).
  */
 export function Totales({ totales, alcance }: { totales: TotalesPeriodo; alcance: string }) {
   const lista = tarjetas(totales)
@@ -64,7 +101,7 @@ export function Totales({ totales, alcance }: { totales: TotalesPeriodo; alcance
           <div key={t.k} className="min-w-0 rounded-panel border border-hairline bg-card px-3.5 py-2.5 shadow-card">
             <div className="sn-caption">{t.k}</div>
             <div className={`mt-0.5 whitespace-nowrap text-[17px] font-bold ${t.acento ? 'text-accent' : 'text-ink'}`}>{fmtMoney(t.v)}</div>
-            <Desglose sub={t.sub} nota={t.nota} />
+            <Desglose sub={t.sub} nota={t.nota} aparte={t.aparte} />
           </div>
         ))}
       </div>
@@ -75,7 +112,7 @@ export function Totales({ totales, alcance }: { totales: TotalesPeriodo; alcance
               <span className="sn-caption">{t.k}</span>
               <span className={`whitespace-nowrap text-[17px] font-bold ${t.acento ? 'text-accent' : 'text-ink'}`}>{fmtMoney(t.v)}</span>
             </div>
-            <Desglose sub={t.sub} nota={t.nota} />
+            <Desglose sub={t.sub} nota={t.nota} aparte={t.aparte} />
           </div>
         ))}
       </div>

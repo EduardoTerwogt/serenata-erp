@@ -24,6 +24,11 @@ on:
         required: false
         type: boolean
         default: false
+      cuentas_escrituras_full:
+        description: 'Si es true, el job local además corre a escala completa (20 VUs, ~12 min) el escenario cuentas-escrituras.js: crear, emitir y aprobar cotizaciones a la vez sobre el volumen de serenata-erp-test, que dispara los triggers de cuentas_conceptos_base (docs/decisions/019). Sin esto solo corre su SMOKE (1 iteración).'
+        required: false
+        type: boolean
+        default: false
       measure_sync_down:
         description: 'Si es true, el job serverless además mide la duración real de syncAllDown() (POST /api/integrations/sheets/sync-down) contra el entorno serverless -- gate de 3C-4. Sobreescribe TODAS las pestañas de Sheets de serenata-erp-test, así que default false para no hacerlo en cada dispatch normal'
         required: false
@@ -210,6 +215,17 @@ jobs:
 
       - name: SMOKE uploads.js
         run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env RUN_ID="$SMOKE_RUN_ID" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" --env LOADTEST_DRIVE_FOLDER_ID="$LOADTEST_DRIVE_FOLDER_ID" --env LOADTEST_ENV_SECRET="$LOADTEST_ENV_SECRET" scripts/loadtest/k6/uploads.js
+
+      - name: SMOKE cuentas-escrituras.js
+        run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env RUN_ID="$SMOKE_RUN_ID" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/cuentas-escrituras.js
+
+      # Frente 2 de Cuentas (docs/decisions/019): carga real de escrituras,
+      # opt-in porque dura ~12 min. Mismos datos etiquetados con SMOKE_RUN_ID:
+      # los limpia el bulk-cleanup.mjs del final, que también borra los grupos
+      # de pago que crea aprobar.
+      - name: k6 cuentas-escrituras.js a escala completa (opt-in)
+        if: ${{ inputs.cuentas_escrituras_full }}
+        run: k6 run --env TARGET_URL=http://127.0.0.1:3000 --env RUN_ID="$SMOKE_RUN_ID" --env PLAYWRIGHT_TEST_EMAIL="$PLAYWRIGHT_TEST_EMAIL" --env PLAYWRIGHT_TEST_PASSWORD="$PLAYWRIGHT_TEST_PASSWORD" scripts/loadtest/k6/cuentas-escrituras.js
 
       - name: SMOKE portal.js
         run: SMOKE=1 k6 run --env TARGET_URL=http://127.0.0.1:3000 --env PORTAL_FIXTURES_FILE="$GITHUB_WORKSPACE/portal-fixtures-smoke.json" scripts/loadtest/k6/portal.js

@@ -321,6 +321,148 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
     }
   })
 
+  test('invariante del grupo: monto_total = Σ x_pagar ante cualquier escritura directa (20261008)', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    try {
+      const principal = `${fx.prefix}-P`
+      const grupoA = randomUUID()
+      const grupoB = randomUUID()
+      // Un cobro por cotización (cuentas_cobrar_cotizacion_unique): el segundo
+      // renglón del grupo viene de una complementaria.
+      const complementaria = `${principal}-A`
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCotizacion(supabase, fx, { id: complementaria, estado: 'APROBADA', complementariaDe: principal })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId: grupoA, xPagar: 500 })
+      await crearCuentas(supabase, fx, { cotizacionId: complementaria, proyectoId: principal, grupoId: grupoA, xPagar: 300 })
+      const montoDe = async (id: string) =>
+        Number(must(await supabase.from('cuentas_pagar_grupos').select('monto_total').eq('id', id).single()).monto_total)
+
+      // Sin recalcular a mano: lo hace el trigger.
+      ok(await supabase.from('cuentas_pagar_grupos').insert({
+        id: grupoB, proyecto_id: principal, responsable_id: fx.proveedorId, estado: 'FACTURADO',
+      }))
+      const renglones = must(await supabase.from('cuentas_pagar').select('id, x_pagar').eq('grupo_id', grupoA).order('x_pagar'))
+
+      ok(await supabase.from('cuentas_pagar').update({ x_pagar: 450 }).eq('id', renglones[1].id))
+      expect(await montoDe(grupoA)).toBe(750)
+
+      ok(await supabase.from('cuentas_pagar').update({ grupo_id: grupoB }).eq('id', renglones[0].id))
+      expect(await montoDe(grupoA)).toBe(450)
+      expect(await montoDe(grupoB)).toBe(300)
+
+      ok(await supabase.from('cuentas_pagar').delete().eq('id', renglones[1].id))
+      expect(await montoDe(grupoA)).toBe(0)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
+  test('cuentas_conceptos_base se refresca sola en cada escritura (frente 2, 20261015)', async () => {
+    test.setTimeout(120_000)
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    const hoy = new Date().toISOString().slice(0, 10)
+    // La tabla se refresca al confirmar cada escritura (20261015): se lee sin sincronizar.
+    const diferencias = async () =>
+      Number(must(await supabase.rpc('cuentas_conceptos_diferencias', { p_year: null, p_hoy: hoy })))
+    try {
+      const principal = `${fx.prefix}-P`
+      const grupoId = randomUUID()
+      const base = async () =>
+        must(await supabase.from('cuentas_conceptos_base')
+          .select('key, tipo, anio, cierre_iva_retenido, contraparte')
+          .eq('proyecto_key', principal)
+          .order('key'))
+
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId, xPagar: 1000 })
+      expect((await base()).map((r) => r.tipo).sort()).toEqual(['cobro', 'pago'])
+
+      ok(await supabase.from('proyectos').update({ fecha_entrega: '2027-02-01' }).eq('id', principal))
+      expect((await base()).every((r) => r.anio === 2027)).toBe(true)
+
+      ok(await supabase.from('proveedores').update({ regimen_fiscal: 'fisica', nombre: `${fx.prefix} Renombrado` }).eq('id', fx.proveedorId))
+      const pago = (await base()).find((r) => r.tipo === 'pago')
+      expect(Number(pago?.cierre_iva_retenido)).toBe(106.67)
+      expect(pago?.contraparte).toBe(`${fx.prefix} Renombrado`)
+
+      expect(await diferencias()).toBe(0)
+
+      must(await supabase.rpc('cancel_cotizacion', { p_id: principal }))
+      expect(await base()).toHaveLength(0)
+      expect(await diferencias()).toBe(0)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
+  test('escrituras simultáneas en el mismo proyecto: ambas confirman y la tabla queda igual a la derivación (20261015)', async () => {
+    test.setTimeout(120_000)
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    const hoy = new Date().toISOString().slice(0, 10)
+    try {
+      const principal = `${fx.prefix}-P`
+      const complementaria = `${principal}-A`
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCotizacion(supabase, fx, { id: complementaria, estado: 'APROBADA', complementariaDe: principal })
+      // Un solo grupo ABIERTO por proyecto y proveedor (cuentas_pagar_grupos_abierto_unique).
+      const grupoId = randomUUID()
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId, xPagar: 1000 })
+      await crearCuentas(supabase, fx, { cotizacionId: complementaria, proyectoId: principal, grupoId, xPagar: 400 })
+      const [p1, p2] = must(await supabase.from('cuentas_pagar').select('id, cotizacion_id').eq('responsable_id', fx.proveedorId).order('x_pagar', { ascending: false }))
+
+      // Dos transacciones sobre el mismo proyecto a la vez: el refresco de cada commit se serializa.
+      const resultados = await Promise.all([
+        supabase.from('cuentas_pagar').update({ x_pagar: 1200 }).eq('id', p1.id),
+        supabase.from('cuentas_pagar').update({ x_pagar: 500 }).eq('id', p2.id),
+        supabase.from('cuentas_cobrar').update({ monto_total: 3300 }).eq('cotizacion_id', principal),
+      ])
+      for (const r of resultados) expect(r.error).toBeNull()
+
+      const pagos = must(await supabase.from('cuentas_conceptos_base').select('neto').eq('proyecto_key', principal).eq('tipo', 'pago'))
+      expect(pagos.map((r) => Number(r.neto))).toEqual([1700]) // el grupo suma 1200 + 500
+      const cobro = must(await supabase.from('cuentas_conceptos_base').select('total').eq('proyecto_key', principal).eq('tipo', 'cobro').eq('proyecto_id', principal).eq('cotizacion_id', principal).single())
+      expect(Number(cobro.total)).toBe(3300)
+      expect(must(await supabase.from('cuentas_conceptos_pendientes').select('proyecto_key').eq('proyecto_key', principal))).toHaveLength(0)
+      expect(Number(must(await supabase.rpc('cuentas_conceptos_diferencias', { p_year: null, p_hoy: hoy })))).toBe(0)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
+  test('reconciliar: detecta y corrige una tabla corrompida a mano, y una segunda pasada ya no encuentra nada (ADR 019)', async () => {
+    test.setTimeout(120_000)
+    const supabase = getLiveSupabaseAdmin()
+    const fx = await nuevoFixture(supabase)
+    const hoy = new Date().toISOString().slice(0, 10)
+    try {
+      const principal = `${fx.prefix}-P`
+      await crearCotizacion(supabase, fx, { id: principal, estado: 'APROBADA', conProyecto: true })
+      await crearCuentas(supabase, fx, { cotizacionId: principal, proyectoId: principal, grupoId: randomUUID(), xPagar: 1000 })
+      const diferencias = async () => Number(must(await supabase.rpc('cuentas_conceptos_diferencias', { p_year: null, p_hoy: hoy })))
+      expect(await diferencias()).toBe(0)
+
+      // Lo que ningún trigger ve: edición directa de la tabla derivada y una fila perdida.
+      ok(await supabase.from('cuentas_conceptos_base').update({ total: 999999 }).eq('proyecto_key', principal).eq('tipo', 'cobro'))
+      ok(await supabase.from('cuentas_conceptos_base').delete().eq('proyecto_key', principal).eq('tipo', 'pago'))
+      expect(await diferencias()).toBeGreaterThan(0)
+
+      const corregidos = must(await supabase.rpc('cuentas_conceptos_reconciliar')) as string[]
+      expect(corregidos).toContain(principal)
+      expect(await diferencias()).toBe(0)
+      const cobro = must(await supabase.from('cuentas_conceptos_base').select('total').eq('proyecto_key', principal).eq('tipo', 'cobro').single())
+      expect(Number(cobro.total)).toBe(2000)
+      expect(must(await supabase.from('cuentas_conceptos_base').select('key').eq('proyecto_key', principal).eq('tipo', 'pago'))).toHaveLength(1)
+
+      const segunda = must(await supabase.rpc('cuentas_conceptos_reconciliar')) as string[]
+      expect(segunda).not.toContain(principal)
+    } finally {
+      await limpiar(supabase, fx)
+    }
+  })
+
   test('cancelar una principal cancela en cascada sus complementarias (APROBADA, EMITIDA y BORRADOR) (D28, D31)', async () => {
     const supabase = getLiveSupabaseAdmin()
     const fx = await nuevoFixture(supabase)
