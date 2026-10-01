@@ -50,21 +50,7 @@ DO $datos$
 DECLARE
   v_n int;
 BEGIN
-  -- K1: toda cuenta con proveedor vive en un grupo. Las que no (legado) se agrupan
-  -- con la misma función de siempre.
-  SELECT count(*) INTO v_n
-  FROM cuentas_pagar cp
-  WHERE cp.responsable_id IS NOT NULL AND cp.grupo_id IS NULL
-    AND (EXISTS (SELECT 1 FROM pagos_cuentas_pagar p WHERE p.cuenta_pagar_id = cp.id)
-         OR EXISTS (SELECT 1 FROM documentos_cuentas_pagar d WHERE d.cuentas_pagar_id = cp.id));
-  IF v_n > 0 THEN
-    RAISE EXCEPTION 'datos_con_dinero: % cuentas sueltas con proveedor tienen pagos o documentos; resolverlas a mano antes de migrar', v_n;
-  END IF;
-  PERFORM reconcile_cuenta_pagar_grupo(cp.id)
-  FROM cuentas_pagar cp
-  WHERE cp.responsable_id IS NOT NULL AND cp.grupo_id IS NULL;
-
-  -- J8/K14: toda cuenta nace de un renglón. Una sin item_id es un resto sin dueño.
+  -- J8/K14 (primero, para que un resto sin renglón y sin proyecto no estorbe a K1): toda cuenta nace de un renglón. Una sin item_id es un resto sin dueño.
   SELECT count(*) INTO v_n
   FROM cuentas_pagar cp
   WHERE cp.item_id IS NULL
@@ -75,6 +61,27 @@ BEGIN
     RAISE EXCEPTION 'datos_con_dinero: % cuentas sin item_id tienen pagos o documentos; resolverlas a mano antes de migrar', v_n;
   END IF;
   DELETE FROM cuentas_pagar WHERE item_id IS NULL;
+
+  -- K1: toda cuenta con proveedor vive en un grupo. Las que no (legado) se agrupan
+  -- con la misma función de siempre.
+  SELECT count(*) INTO v_n
+  FROM cuentas_pagar cp
+  WHERE cp.responsable_id IS NOT NULL AND cp.grupo_id IS NULL
+    AND (EXISTS (SELECT 1 FROM pagos_cuentas_pagar p WHERE p.cuenta_pagar_id = cp.id)
+         OR EXISTS (SELECT 1 FROM documentos_cuentas_pagar d WHERE d.cuentas_pagar_id = cp.id));
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'datos_con_dinero: % cuentas sueltas con proveedor tienen pagos o documentos; resolverlas a mano antes de migrar', v_n;
+  END IF;
+  SELECT count(*) INTO v_n
+  FROM cuentas_pagar cp
+  WHERE cp.responsable_id IS NOT NULL AND cp.grupo_id IS NULL AND cp.proyecto_id IS NULL;
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'datos_sin_proyecto: % cuentas con proveedor no tienen proyecto y no se pueden agrupar; resolverlas a mano antes de migrar', v_n;
+  END IF;
+  PERFORM reconcile_cuenta_pagar_grupo(cp.id)
+  FROM cuentas_pagar cp
+  WHERE cp.responsable_id IS NOT NULL AND cp.grupo_id IS NULL;
+
 END
 $datos$;
 
