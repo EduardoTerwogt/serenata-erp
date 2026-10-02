@@ -322,11 +322,17 @@ repo.
 
 - [ ] **(usuario)** Supabase → New project → lista de regiones: existe
       `us-east-2` y no hay México.
-- [ ] **(usuario)** Vercel → Project Settings → Functions → Function Region:
+- [x] **(usuario)** Vercel → Project Settings → Functions → Function Region:
       `cle1` disponible en tu plan. **Si no: STOP, no se toca Supabase** (X6).
+      Confirmado el 2026-10-02: `cle1` aparece y el plan de Vercel es **Hobby**.
+      En Hobby, Instant Rollback solo vuelve al deploy de producción
+      inmediatamente anterior, que es justo el que necesita la ventana A: no se
+      hace ningún otro deploy de producción entre el *Redeploy* del corte y
+      `GO_LIVE`.
 - [ ] **(usuario)** Reautenticar el conector de Vercel de Claude con acceso al
-      team `eduardoterwogts-projects`. Claude confirma que ya puede leer las
-      variables de producción, sin descifrarlas.
+      team `eduardoterwogts-projects`. Hecho por el usuario el 2026-10-02;
+      **falta** que Claude confirme en la sesión nueva que ya no da 403 (lee
+      las variables de producción sin descifrarlas).
 - [ ] Claude: confirmar en la documentación de Supabase que un proyecto pausado
       no cuenta para el límite de 2 activos y cuánto tarda en reactivarse.
 - [ ] **(usuario)** Capturas de la vieja:
