@@ -78,9 +78,10 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Frente 2 v2 (2026-10-02, en definición):** re-ajuste del frente 2 sobre el
-  modelo simplificado, dentro del plan Free de Supabase. Borrador en
-  `docs/PLAN.md`. Lo de abajo es el antecedente.
+- **Orden acordado (2026-10-02):** #124 (paridad de entornos: test a
+  `us-west-2`) → #123 (nueva lógica de cuentas: facturas y pagos N:M) → #110
+  (frente 2 v2, plan auditado guardado en el issue). Lo de abajo es el
+  antecedente del frente 2.
 - **Frente 2 de latencia de Cuentas** (2026-09-30, **en pausa**): los
   conceptos de Cuentas se guardan derivados en `cuentas_conceptos_base` y se
   mantienen con triggers (`docs/decisions/019-cuentas-conceptos-materializada.md`).

@@ -51,9 +51,9 @@ modelo de datos", está archivada en `docs/archive/simplificacion-modelo-datos.m
 
 ## Siguiente paso
 
-**En refinamiento: "Frente 2 v2" (`docs/PLAN.md`, auditado 2026-10-02).** Orden propuesto: #124 (test a
-`us-west-2`) → #123 (facturas y pagos N:M, decisión de producto) → frente 2 desde V0. Esperando aprobación del
-usuario; al aprobar, cerrar el PR #100 como reemplazado. #119 sigue pendiente de decisión.
+Orden acordado (2026-10-02): **#124** (test a `us-west-2`) → **#123** (facturas y pagos N:M) → **#110** (frente 2 v2;
+plan auditado guardado en el issue). Cada uno con su propio plan en `docs/PLAN.md`, que quedó vacío para recibir el de
+#124. El PR #100 queda reemplazado por el plan de #110 (cerrarlo al arrancar #110). #119 sigue pendiente de decisión.
 
 ## Deuda técnica
 
