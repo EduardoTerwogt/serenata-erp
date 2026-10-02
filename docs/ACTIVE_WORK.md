@@ -44,9 +44,13 @@ Resultado: `cuentas_pagar` sin copias (dueño único), `item_id` uuid con FK, `c
 `fecha_entrega` `date`, `timestamptz` en Cuentas, CHECKs de renglones, cotización aprobada
 congelada por trigger (P1419) y estado de cotización solo por RPC (L1). El job `live` ya no corre en
 PRs cuyo diff es solo `.md` (job `changes` de `e2e.yml`).
-**Pendiente: recorrido manual en el Preview de B5b y B5c** (no se puede omitir) y luego **B6**
-(motor único de Cuentas, D17) y **B7** (curva de escala 500/2,200/5,000 proyectos, decisión del
-frente 2, poda de índices sin uso). Lección: producción llevaba migraciones sin aplicar
+**Curva de escala (B7, 2026-10-02) → medida** (detalle y tabla en `docs/PLAN.md`, sección B7):
+`periodo` y `opciones` dependen de los proyectos del año consultado; `resumen`, `avisos` y
+`candidatos de orden` crecen lineal con el historial total y son los primeros que cruzarían
+800 ms (~5,500 proyectos en total). Frente 2 sigue en pausa con disparador definido. **B6 se
+difiere** (decisión del usuario, opción C): la curva no lo exige; D17 pasa a opcional.
+**Pendiente: recorrido manual en el Preview de B5b y B5c** (no se puede omitir) y luego el resto de **B7** (poda de índices sin uso, `auditar_consistencia()`, cierre y
+respaldo). Lección: producción llevaba migraciones sin aplicar
 (`20261020`/`20261023`); verificar el estado real antes de correr la siguiente.
 
 **B1+B3 mergeado — PR #112 (2026-10-01), `live` verde.** Sheets, Calendar y Planeación retirados del
