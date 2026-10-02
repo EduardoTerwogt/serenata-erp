@@ -6,7 +6,10 @@
 -- Qué cubre: columnas (tipo, nulabilidad, default), índices, restricciones
 -- (CHECK, FK, UNIQUE, PK), triggers, políticas RLS y funciones (cuerpo
 -- normalizado, atributos y permisos).
--- Qué no cubre: datos, permisos de tablas ni extensiones. La tabla
+-- También (#124, X3): GRANTs de tablas por rol, extensiones (nombre y esquema;
+-- la versión se ignora a propósito), políticas de `realtime.messages` y RLS por
+-- tabla. Qué no cubre: datos, ajustes de roles (`pg_db_role_setting`) ni la
+-- versión de Postgres — esas dos se comparan aparte. La tabla
 -- `loadtest_runs` (solo en test, a propósito) la excluye el script que la usa.
 
 SELECT 'columna' AS tipo,
@@ -39,4 +42,18 @@ SELECT 'funcion', p.oid::regprocedure::text,
        md5(concat_ws('|', pg_get_function_arguments(p.oid), pg_get_function_result(p.oid), p.provolatile,
                      p.prosecdef, p.proconfig::text, p.proacl::text))
 FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prokind IN ('f', 'p')
+UNION ALL
+-- GRANTs de tablas de `public`: una fila por tabla y rol con sus privilegios.
+SELECT 'grant', table_name || '.' || grantee, string_agg(privilege_type, ',' ORDER BY privilege_type)
+FROM information_schema.role_table_grants WHERE table_schema = 'public'
+GROUP BY table_name, grantee
+UNION ALL
+SELECT 'extension', e.extname, n.nspname
+FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
+UNION ALL
+SELECT 'politica_realtime', policyname, cmd || ' | ' || roles::text || ' | ' || COALESCE(qual, '') || ' | ' || COALESCE(with_check, '')
+FROM pg_policies WHERE schemaname = 'realtime' AND tablename = 'messages'
+UNION ALL
+SELECT 'rls', relname, 'enabled=' || relrowsecurity::text || ' forced=' || relforcerowsecurity::text
+FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'
 ORDER BY 1, 2;

@@ -85,10 +85,13 @@ jobs:
             RANK=$(awk -v n="$SAMPLES" 'BEGIN{r=n*0.95; ri=int(r); if (r>ri) ri++; if (ri<1) ri=1; print ri}')
             P95=$(printf '%s\n' "${MEASURED[@]}" | sort -n | sed -n "${RANK}p")
             P95_MS=$(awk -v t="$P95" 'BEGIN{printf "%.0f", t*1000}')
+            SORTED=$(printf '%s\n' "${MEASURED[@]}" | sort -n)
+            MED=$(echo "$SORTED" | awk '{a[NR]=$1} END{m=(NR%2)?a[(NR+1)/2]:(a[NR/2]+a[NR/2+1])/2; printf "%.0f", m*1000}')
+            MAX=$(echo "$SORTED" | tail -n 1 | awk '{printf "%.0f", $1*1000}')
             if [ "$P95_MS" -le "$GATE_MS" ]; then
-              echo "RESULT /api/$ROUTE p95=${P95_MS}ms PASS"
+              echo "RESULT /api/$ROUTE p95=${P95_MS}ms mediana=${MED}ms max=${MAX}ms PASS"
             else
-              echo "RESULT /api/$ROUTE p95=${P95_MS}ms FAIL gate=${GATE_MS}ms"
+              echo "RESULT /api/$ROUTE p95=${P95_MS}ms mediana=${MED}ms max=${MAX}ms FAIL gate=${GATE_MS}ms"
               FAILED=1
             fi
           done

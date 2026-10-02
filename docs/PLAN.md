@@ -329,19 +329,23 @@ repo.
       inmediatamente anterior, que es justo el que necesita la ventana A: no se
       hace ningún otro deploy de producción entre el *Redeploy* del corte y
       `GO_LIVE`.
-- [ ] **(usuario)** Reautenticar el conector de Vercel de Claude con acceso al
-      team `eduardoterwogts-projects`. Hecho por el usuario el 2026-10-02;
-      **falta** que Claude confirme en la sesión nueva que ya no da 403 (lee
-      las variables de producción sin descifrarlas).
-- [ ] Claude: confirmar en la documentación de Supabase que un proyecto pausado
+- [x] **(usuario)** Reautenticar el conector de Vercel de Claude con acceso al
+      team `eduardoterwogts-projects`. Confirmado por Claude el 2026-10-02: el
+      conector ve el team y los 2 proyectos, y lista las variables de
+      producción sin descifrarlas (sin 403).
+- [x] Claude: confirmar en la documentación de Supabase que un proyecto pausado
       no cuenta para el límite de 2 activos y cuánto tarda en reactivarse.
+      Hecho 2026-10-02: Free permite pausados sin límite y se restauran hasta 90
+      días después (un clic); el tiempo depende del tamaño y llega correo al
+      terminar (ambos proyectos son chicos).
 - [ ] **(usuario)** Capturas de la vieja:
       - Settings → API / Data API: esquemas expuestos, *max rows*, *extra search
         path* y exposición automática de tablas nuevas.
       - Settings → JWT: expiración.
       - Realtime → Settings.
       - Database → Settings: SSL y restricciones de red.
-- [ ] Claude, huella completa de la vieja en el scratchpad:
+- [x] Claude, huella completa de la vieja en el scratchpad (hecho 2026-10-02;
+      valores en "Línea base de la vieja" abajo):
       - `esquema-huella.sql`;
       - GRANTs por tabla y rol;
       - extensiones con esquema y versión;
@@ -353,8 +357,11 @@ repo.
       actual (`sfo1` → test).
 - [ ] **(usuario, opcional)** 5 cargas de `/cuentas` en producción con
       DevTools → Network, anotando la mediana.
-- [ ] Claude: confirmar en la documentación de Supabase si reactivar un
-      proyecto pausado cambia su imagen de Postgres (C6).
+- [x] Claude: confirmar en la documentación de Supabase si reactivar un
+      proyecto pausado cambia su imagen de Postgres (C6). Sí puede: la
+      documentación dice que pausar y restaurar deja el proyecto con las
+      funciones más recientes. Test ya está en `17.6.1.166`; al reactivarlo en
+      R3 se vuelve a comparar versión.
 - [x] **(usuario)** Máquina para el CLI (D1): **no hay**. Se usa R2b.
 - [ ] **(usuario)** Agendar la ventana de R1–R3 (D2): 2–3 h, con tu presencia,
       fuera de las 08:00 UTC y del domingo 09:17 UTC.
@@ -509,6 +516,30 @@ sesiones abiertas siguen válidas: mismos ids y `session_version`),
 `CRON_SECRET`, el cron de Vercel, los secretos de GitHub Actions (todos de test),
 la CSP (`*.supabase.co`), el entorno Preview de Vercel y la base de test.
 
+## Línea base de la vieja (R0, 2026-10-02)
+
+Huella con `esquema-huella-resumen.sql` en `fwmyoqokcjtldiofuxdg`: columnas 341
+`7a1f983e`, funciones 81 `d1e50d05`, índices 111 `4b266a11`, políticas 1
+`c501722e`, restricciones 134 `18f33b6c`, triggers 10 `0b9c949c`.
+
+Categorías extendidas (X3), idénticas en test y en la vieja: GRANTs 136 filas
+(tabla × rol) `a7f8d1ba` (`service_role` 245 privilegios), extensiones 7
+`d953a615`, políticas de `realtime.messages` 2 `73905557`, RLS 34 tablas
+`e8b8ddf6`. Filas por tabla: `usuarios` 2, `tipos_proyecto` 3,
+`tipo_proyecto_etapas` 12, el resto 0. Postgres `17.6.1.084` (aarch64).
+
+Ajustes de roles: `anon` 3 s, `authenticated` 8 s, `authenticator` con
+`statement_timeout=8s`, `lock_timeout=8s` y `session_preload_libraries`
+**`safeupdate`** (en test: `supautils, safeupdate`). El proyecto nuevo
+probablemente traiga `supautils, safeupdate`: para el GO/NO-GO cuenta como PASS
+(imagen más nueva, igual que test); falta `safeupdate` = NO-GO.
+Llave `anon` legacy de la vieja: `HS256`, activa, junto a la publishable.
+
+**Cuidado con la ventana A:** en Vercel, todo push a `main` (incluso solo `.md`)
+crea un deploy de producción. Entre el *Redeploy* del corte y `GO_LIVE` **no se
+hace ningún push a `main`**; el Instant Rollback de Hobby solo vuelve al deploy
+inmediatamente anterior.
+
 ## Riesgos
 
 | Riesgo | Cómo queda cubierto |
@@ -528,8 +559,8 @@ la CSP (`*.supabase.co`), el entorno Preview de Vercel y la base de test.
 
 | Bloque | Estado |
 |---|---|
-| R0 Verificaciones, capturas y línea base | Pendiente |
-| R2 PR de código | Pendiente |
+| R0 Verificaciones, capturas y línea base | En curso (Claude: hecho salvo latencia; usuario: capturas, región `us-east-2`, ventana) |
+| R2 PR de código | En curso (PR en borrador, esperando CI) |
 | R2b Workflow de un solo uso (`db push`) | Pendiente |
 | R1 Producción nueva | Pendiente |
 | R3 Corte y verificación | Pendiente |
