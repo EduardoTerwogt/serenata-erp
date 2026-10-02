@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { calcularCierreProyecto } from '@/lib/shared/cierre-proyecto'
-import { calcularCierreMensual, fechaLimiteSat, type FilaCierre } from './cierre-mensual'
+import { calcularCierreProyecto } from './cierre-proyecto'
+import { calcularCierreMensual, fechaLimiteSat, } from './cierre-mensual'
+import type { FilaCierre } from '@/lib/shared/cuentas/periodo-tipos'
 
 const suma = (filas: FilaCierre[], c: FilaCierre['concepto']) =>
   Math.round(filas.filter((f) => f.concepto === c).reduce((s, f) => s + f.monto, 0) * 100) / 100

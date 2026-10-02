@@ -7,7 +7,7 @@ import {
   type ConceptoCobroInput,
   type ConceptoPagoInput,
   type DocumentoXmlInput,
-} from '@/lib/shared/cuentas/concepto'
+} from './concepto'
 
 // Una prueba por cada renglón de la tabla de docs/PLAN.md §5 (B1).
 const HOY = '2026-09-25'

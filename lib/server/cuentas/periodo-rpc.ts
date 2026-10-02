@@ -1,27 +1,20 @@
 /**
- * Rediseño de Cuentas B3/O1b: acceso a la BD de la lectura por periodo. Las
- * formas y su decodificación viven en módulos puros: `periodo-crudo.ts`
- * (lectura cruda) y `periodo-sql.ts` (periodo derivado en SQL).
+ * Rediseño de Cuentas B3/O1b/B6: acceso a la BD de la lectura por periodo. Todo se deriva
+ * en SQL; la decodificación vive en el módulo puro `periodo-sql.ts`.
  */
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import type { CategoriaAviso, MesPeriodo, OpcionesFiltros, PeriodoRespuesta, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
+import type { CategoriaAviso, MesPeriodo, OpcionesFiltros, ParametrosPeriodo, PeriodoRespuesta, ResumenRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
 import { AVISOS_POR_CATEGORIA, type CandidatoAviso } from './avisos'
-import type { ParametrosPeriodo } from './periodo'
-import { decodificarCuentasAnio, type CuentasAnioRaw } from './periodo-crudo'
 import { decodificarPeriodoSql } from './periodo-sql'
 
-/** Conceptos crudos del año; con `proyecto`, solo los de ese proyecto (el seleccionado). */
-export async function cargarCuentasAnio(anio: number, proyecto?: string): Promise<CuentasAnioRaw> {
-  const { data, error } = await supabaseAdmin.rpc('cuentas_por_proyecto', proyecto ? { p_year: anio, p_proyecto: proyecto } : { p_year: anio })
-  if (error) throw error
-  return decodificarCuentasAnio(data)
-}
-
-/** Periodo ya derivado, filtrado y paginado en SQL (O1b). Sin `mes`, la BD aplica S16. */
+/**
+ * Periodo ya derivado, filtrado y paginado en SQL (O1b), con el proyecto abierto en el panel
+ * (`proyecto`) incluido (B6). Sin `mes`, la BD aplica S16.
+ */
 export async function cargarPeriodo(
-  params: Omit<ParametrosPeriodo, 'mes' | 'proyecto'> & { mes?: MesPeriodo },
+  params: Omit<ParametrosPeriodo, 'mes'> & { mes?: MesPeriodo },
   hoy: string
-): Promise<Omit<PeriodoRespuesta, 'seleccionado'>> {
+): Promise<PeriodoRespuesta> {
   const { data, error } = await supabaseAdmin.rpc('cuentas_periodo', { p: { ...params, hoy } })
   if (error) throw error
   return decodificarPeriodoSql(data)

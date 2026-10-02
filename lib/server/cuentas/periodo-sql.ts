@@ -5,8 +5,8 @@
  * etiqueta, tono y texto con las MISMAS tablas de concepto.ts, así que la UI
  * recibe exactamente el contrato de `PeriodoRespuesta`.
  *
- * `construirPeriodo` (periodo.ts) sigue siendo la referencia: el e2e live
- * `cuentas-paridad-sql.spec.ts` compara ambas sobre la BD de test.
+ * SQL es la única fuente de las reglas (B6). El doble TS de tests/support/cuentas-motor
+ * lo compara el e2e live `cuentas-paridad-sql.spec.ts` sobre la BD de test.
  */
 import {
   ETIQUETA_ESTADO,
@@ -14,10 +14,11 @@ import {
   TONO_ESTADO,
   textoVencimiento,
   type ComplementoPagoDerivado,
+  type ConceptoDerivado,
   type EstadoConcepto,
   type PasoConcepto,
 } from '@/lib/shared/cuentas/concepto'
-import type { ConceptoLista, PeriodoRespuesta } from '@/lib/shared/cuentas/periodo-tipos'
+import type { ConceptoLista, ConceptoVista, PeriodoRespuesta, ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
 import type { RegimenFiscal } from '@/lib/types'
 
 /** Concepto de la lista tal como lo devuelve `cuentas_periodo`. */
@@ -53,11 +54,15 @@ export interface ConceptoSql {
   proyecto: ConceptoLista['proyecto']
 }
 
+/** Proyecto abierto en el panel tal como lo devuelve `cuentas_periodo` (B6): sus conceptos no llevan `proyecto`. */
+export type ProyectoSql = Omit<ProyectoDetalle, 'conceptos'> & { conceptos: Omit<ConceptoSql, 'proyecto'>[] }
+
 export type PeriodoSql = Omit<PeriodoRespuesta, 'lista' | 'seleccionado'> & {
   lista: Omit<PeriodoRespuesta['lista'], 'items'> & { items: ConceptoSql[] }
+  seleccionado: ProyectoSql | null
 }
 
-export function conceptoDesdeSql(c: ConceptoSql): ConceptoLista {
+export function conceptoVistaDesdeSql(c: Omit<ConceptoSql, 'proyecto'>): ConceptoVista {
   const { venc_dias, ...resto } = c
   return {
     ...resto,
@@ -71,8 +76,45 @@ export function conceptoDesdeSql(c: ConceptoSql): ConceptoLista {
   }
 }
 
-/** Respuesta de `cuentas_periodo` → contrato de la ruta (sin `seleccionado`, que arma la ruta). */
-export function decodificarPeriodoSql(data: unknown): Omit<PeriodoRespuesta, 'seleccionado'> {
+/** Fila de `cuentas_conceptos` (un concepto concreto, B6): el concepto más el cruce fiscal del neto. */
+export type FilaConceptoSql = Omit<ConceptoSql, 'proyecto'> & {
+  cierre_iva: number | null
+  cierre_iva_retenido: number | null
+  cierre_isr_retenido: number | null
+}
+
+/** Estado, paso, saldo, vencimiento y complementos del detalle: lo mismo que la lista, de la misma fila. */
+export function conceptoDerivadoDesdeSql(fila: FilaConceptoSql): ConceptoDerivado {
+  const v = conceptoVistaDesdeSql(fila)
+  return {
+    estado: v.estado,
+    etiqueta: v.etiqueta,
+    tono: v.tono,
+    paso: v.paso,
+    paso_etiqueta: v.paso_etiqueta,
+    paso_urgente: v.paso_urgente,
+    saldo: v.saldo,
+    vencimiento: v.vencimiento,
+    resuelto: v.resuelto,
+    fecha_resuelto: v.fecha_resuelto,
+    metodo_desconocido: v.metodo_desconocido,
+    complementos: v.complementos,
+  }
+}
+
+export function conceptoDesdeSql(c: ConceptoSql): ConceptoLista {
+  const { proyecto, ...resto } = c
+  return { ...conceptoVistaDesdeSql(resto), proyecto }
+}
+
+/** Respuesta de `cuentas_periodo` → contrato de la ruta, con el proyecto seleccionado ya derivado en SQL. */
+export function decodificarPeriodoSql(data: unknown): PeriodoRespuesta {
   const periodo = data as PeriodoSql
-  return { ...periodo, lista: { ...periodo.lista, items: periodo.lista.items.map(conceptoDesdeSql) } }
+  return {
+    ...periodo,
+    lista: { ...periodo.lista, items: periodo.lista.items.map(conceptoDesdeSql) },
+    seleccionado: periodo.seleccionado
+      ? { ...periodo.seleccionado, conceptos: periodo.seleccionado.conceptos.map(conceptoVistaDesdeSql) }
+      : null,
+  }
 }

@@ -12,10 +12,7 @@
  *   próximos 30 días.
  */
 import { textoVencimiento } from '@/lib/shared/cuentas/concepto'
-import type { AvisoItem, AvisosRespuesta, CategoriaAviso, ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
-
-const DIAS_POR_VENCER = 10
-const DIAS_POR_EMITIR = 30
+import type { AvisoItem, AvisosRespuesta, CategoriaAviso } from '@/lib/shared/cuentas/periodo-tipos'
 
 const ETIQUETAS: Record<CategoriaAviso, string> = {
   vencidos: 'Cobros vencidos',
@@ -29,12 +26,6 @@ const comparar = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 const ORDEN: CategoriaAviso[] = ['vencidos', 'por_vencer', 'facturas_proveedor', 'complementos', 'por_emitir']
 
-function sumarDias(fecha: string, dias: number): string {
-  const d = new Date(`${fecha}T12:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + dias)
-  return d.toISOString().slice(0, 10)
-}
-
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 function fechaCorta(iso: string): string {
   return `${iso.slice(8, 10)} ${MESES[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`
@@ -42,8 +33,8 @@ function fechaCorta(iso: string): string {
 
 /**
  * Un concepto que entra a una categoría, con lo necesario para su texto. Lo
- * producen derivarAvisos (TS) y cuentas_avisos_items (SQL, O1b) con el mismo
- * criterio; el texto, el orden y el agrupado viven solo aquí.
+ * produce `cuentas_avisos_items` (SQL, O1b); el texto, el orden y el agrupado viven
+ * solo aquí.
  */
 export interface CandidatoAviso {
   categoria: CategoriaAviso
@@ -111,40 +102,4 @@ export function agruparAvisos(
   }).filter((c) => c.total > 0)
 
   return { hoy, categorias, total: categorias.reduce((s, c) => s + c.total, 0) }
-}
-
-export function derivarAvisos(proyectos: ProyectoDetalle[], hoy: string): AvisosRespuesta {
-  const limiteEmitir = sumarDias(hoy, DIAS_POR_EMITIR)
-  const candidatos: CandidatoAviso[] = []
-
-  for (const p of proyectos) {
-    const base = { proyecto_id: p.id, proyecto_nombre: p.nombre, anio: p.anio, mes: p.mes, fecha_entrega: p.fecha_entrega }
-    for (const c of p.conceptos) {
-      const agregar = (categoria: CategoriaAviso, monto: number) =>
-        candidatos.push({
-          categoria,
-          key: c.key,
-          ...base,
-          contraparte: c.contraparte,
-          concepto: c.concepto,
-          monto,
-          venc_dias: c.vencimiento?.dias ?? null,
-          fecha_vencimiento: c.vencimiento?.fecha ?? null,
-        })
-
-      if (c.tipo === 'cobro') {
-        const v = c.vencimiento
-        if (v?.vencido) agregar('vencidos', c.saldo)
-        else if (v && v.dias <= DIAS_POR_VENCER) agregar('por_vencer', c.saldo)
-
-        if (c.complementos.some((cp) => cp.requiere && cp.estado !== 'completo')) agregar('complementos', c.total)
-
-        if (c.paso === 'emitir_factura' && p.fecha_entrega && p.fecha_entrega <= limiteEmitir) agregar('por_emitir', c.total)
-      } else if (c.paso === 'subir_factura') {
-        agregar('facturas_proveedor', c.saldo > 0 ? c.saldo : c.total)
-      }
-    }
-  }
-
-  return agruparAvisos(candidatos, hoy)
 }

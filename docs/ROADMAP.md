@@ -98,17 +98,11 @@ ni tiene alcance de iniciativa definido.
 
 ### Deuda técnica (2026-09-26)
 
-- **B6: un solo motor de Cuentas** (#108, diferido 2026-10-02): mover a SQL la
-  derivación del proyecto seleccionado y del detalle (`concepto.ts`, `periodo.ts`,
-  `detalle-armar.ts`) y dejar el TS solo con tipos y presentación. Decisión actual:
-  mantener el TS con la paridad `live` (`cuentas-paridad-sql.spec.ts`), porque la
-  latencia la llevan las RPC de SQL. Retomar si el TS duplicado cuesta más que mantener
-  la paridad. Antes de eso, la palanca barata para la escala es acotar `resumen`,
-  `avisos` y candidatos de orden a lo no resuelto (ver ADR 020).
+- **`cuentas_por_proyecto(p_year, p_proyecto)`:** el parámetro `p_proyecto` ya no lo usa ninguna ruta
+  (B6); solo el doble de pruebas llama la función con `p_year`. Quitarlo es un DROP + CREATE manual
+  (cosmético, sin riesgo), pendiente de la próxima migración que toque esa función.
 - **Alta mínima de cotizaciones** (#119): `/cotizaciones/nueva` y `/cotizaciones/[id]` son dos
   motores de edición; propuesta pendiente de decisión de producto.
-- **K6:** re-medir el p50 de guardado de cotizaciones con `load-test.yml` tras la
-  simplificación (sin medir).
 
 - **Carga de escrituras de Cuentas** (2026-09-30): el k6 existente crea y emite
   cotizaciones y lee listados; nada ejercita bajo concurrencia las escrituras
@@ -230,8 +224,10 @@ Si aparece otro feature a medias, documentarlo aquí.
   producción reiniciados (34 tablas y 1 vista). Curva de escala medida a 500, 2,200 y
   5,000 proyectos. Epic #109 (fases #105, #106). Resultado y lecciones:
   [`docs/decisions/020`](decisions/020-simplificacion-modelo-datos.md); plan completo en
-  `docs/archive/simplificacion-modelo-datos.md`. Quedan: B6 diferido (deuda de abajo), K6
-  sin medir y #119.
+  `docs/archive/simplificacion-modelo-datos.md`. Cerrados después, sin deuda: B6 (un solo
+  motor de Cuentas, en SQL; el TS quedó como doble de pruebas con paridad `live`) y K6
+  (guardado de cotizaciones: POST p50 621 ms / p95 662 ms, PUT p50 342 ms / p95 360 ms,
+  5 renglones, `escala.yml` 2026-10-02). Queda #119.
 
 - **Rediseño de la sección Cuentas (2026-09-26).** `/cuentas` rediseñada en
   Claude Design e implementada en 10 bloques (B0, B1b, B1–B8), después de

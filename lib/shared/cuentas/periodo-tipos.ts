@@ -6,7 +6,6 @@
  * totales `*_sin_iva` / `*_neto` son los mismos montos antes de IVA (#99).
  */
 import type { CierreProyecto } from '@/lib/shared/cierre-proyecto'
-import type { FilaCierre } from '@/lib/shared/cuentas/cierre-mensual'
 import type { ConceptoDerivado, CuentasProyectoDerivadas } from '@/lib/shared/cuentas/concepto'
 import type { RegimenFiscal } from '@/lib/types'
 
@@ -164,4 +163,33 @@ export interface AvisosRespuesta {
    */
   categorias: { categoria: CategoriaAviso; etiqueta: string; total: number; items: AvisoItem[] }[]
   total: number
+}
+
+export type ConceptoCierre = 'proveedores' | 'iva' | 'retenciones' | 'isr'
+
+export interface FilaCierre {
+  concepto: ConceptoCierre
+  quien: string
+  sub: string
+  monto: number
+  /** YYYY-MM del cobro o pago; null = pendiente ("Al cobrar" / "Al pagar") o agregado. */
+  mes: string | null
+  /** Día 17 del mes siguiente (YYYY-MM-DD); null sin fecha (pendiente o IVA a favor). */
+  fecha_limite: string | null
+  a_favor: boolean
+}
+
+/** Parámetros de la lectura por periodo (`cuentas_periodo`). */
+export interface ParametrosPeriodo {
+  anio: number
+  mes: MesPeriodo
+  estado: FiltroEstado
+  tipo: FiltroTipo
+  cliente?: string | null
+  proveedor?: string | null
+  q?: string | null
+  vista: VistaCuentas
+  proyecto?: string | null
+  page: number
+  page_size: number
 }

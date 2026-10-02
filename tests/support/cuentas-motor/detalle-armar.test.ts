@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { armarDetalleCobro, armarDetallePago, type PagoFilas } from '../detalle-armar'
+import { armarDetalleCobro, armarDetallePago, type CobroFilas, type PagoFilas } from '@/lib/server/cuentas/detalle-armar'
+import { derivarDetalleCobro, derivarDetallePago } from './detalle-derivar'
 import { calcularEjemploFactura } from '@/lib/shared/factura-fiscal'
 
 const HOY = '2026-09-24'
+
+// El armado recibe lo derivado por SQL; aquí lo da el doble TS (tests/support/cuentas-motor).
+const cobro = (f: CobroFilas) => armarDetalleCobro(f, derivarDetalleCobro(f, HOY))
+const pago = (f: PagoFilas) => armarDetallePago(f, derivarDetallePago(f))
 const doc = (id: string, tipo: string, extra: Record<string, unknown> = {}) => ({
   id,
   tipo,
@@ -28,7 +33,7 @@ describe('armarDetalleCobro', () => {
   }
 
   it('PPD: un complemento por pago (D16); el anticipo previo a la factura no lo pide (V4)', () => {
-    const d = armarDetalleCobro(
+    const d = cobro(
       {
         cuenta,
         proyecto: { id: 'SH061', nombre: 'Aurora', fecha_entrega: '2026-09-18' },
@@ -41,8 +46,7 @@ describe('armarDetalleCobro', () => {
           { id: 'p1', monto: 174000, tipo_pago: 'TRANSFERENCIA', fecha_pago: '2026-08-20', comprobante_url: null, notas: 'Anticipo' },
           { id: 'p2', monto: 174000, tipo_pago: 'TRANSFERENCIA', fecha_pago: '2026-09-10', comprobante_url: null, notas: null },
         ],
-      },
-      HOY
+      }
     )
     expect(d.metodo).toBe('PPD')
     expect(d.pagos.map((p) => [p.id, p.complemento.requiere, p.complemento.estado])).toEqual([
@@ -54,9 +58,8 @@ describe('armarDetalleCobro', () => {
   })
 
   it('sin factura: "Emitir factura" aunque tenga anticipo (V1, D32)', () => {
-    const d = armarDetalleCobro(
-      { cuenta: { ...cuenta, monto_pagado: 100000, fecha_factura: null }, proyecto: null, documentos: [], pagos: [{ id: 'p1', monto: 100000, tipo_pago: 'EFECTIVO', fecha_pago: '2026-09-01', comprobante_url: null, notas: null }] },
-      HOY
+    const d = cobro(
+      { cuenta: { ...cuenta, monto_pagado: 100000, fecha_factura: null }, proyecto: null, documentos: [], pagos: [{ id: 'p1', monto: 100000, tipo_pago: 'EFECTIVO', fecha_pago: '2026-09-01', comprobante_url: null, notas: null }] }
     )
     expect(d.concepto).toMatchObject({ estado: 'sin_factura', paso: 'emitir_factura' })
     expect(d.pagos[0].complemento.estado).toBe('no_aplica')
@@ -80,7 +83,7 @@ describe('armarDetallePago', () => {
   })
 
   it('sin snapshot, el total a transferir es el estimado por régimen; el cruce rotula el neto (D29)', () => {
-    const d = armarDetallePago(base())
+    const d = pago(base())
     const est = calcularEjemploFactura(10000, 'fisica')
     expect(d).toMatchObject({ neto: 10000, total: est.total, total_estimado: true, pagado: 0 })
     expect(d.cruce).toEqual({ neto: 10000, iva: est.iva_trasladado, iva_retenido: est.iva_retenido, isr_retenido: est.isr_retenido, total: est.total })
@@ -90,7 +93,7 @@ describe('armarDetallePago', () => {
   })
 
   it('saldado con comprobante en el pago: resuelto (A1, D11)', () => {
-    const d = armarDetallePago(
+    const d = pago(
       base({
         destino: { ...base().destino, total_a_transferir: 11600, monto_transferido: 11600, estado: 'PAGADO' },
         pagos: [{ id: 'p1', fecha_pago: '2026-09-20', tipo_pago: 'CHEQUE', monto_transferido: 11600, comprobante_url: 'https://drive/c', notas: null, estimado: false, created_at: '2026-09-20T18:00:00Z' }],
@@ -101,7 +104,7 @@ describe('armarDetallePago', () => {
   })
 
   it('suelta sin proveedor: "Asignar proveedor" y nombre "Sin asignar" (T2)', () => {
-    const d = armarDetallePago(base({ objetivo: 'cuenta', destino: { ...base().destino, responsable_id: null }, proveedor: null }))
+    const d = pago(base({ objetivo: 'cuenta', destino: { ...base().destino, responsable_id: null }, proveedor: null }))
     expect(d.responsable.nombre).toBe('Sin asignar')
     expect(d.concepto).toMatchObject({ estado: 'sin_proveedor', paso: 'asignar_proveedor' })
   })

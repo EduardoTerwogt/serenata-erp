@@ -15,14 +15,6 @@ import { GET as getOpciones } from '../cuentas/opciones/route'
 import { GET as getPeriodo } from '../cuentas/periodo/route'
 import { GET as getResumen } from '../cuentas/resumen/route'
 
-// Crudo de un solo proyecto (seleccionado), como cuentas_por_proyecto(p_year, p_proyecto).
-const crudoSH061 = {
-  proyectos: [['SH061', 'Aurora', 'Modelo', null, '2026-09-18', 0, 0, 0, 0]],
-  cobros: [['cc-1', 'SH061', 'SH061', 'CC-1', 'Modelo', null, 'Aurora', 1000, 0, '2026-09-10', null, null, null]],
-  pagos: [],
-  grupos: [],
-}
-
 const tarjeta = {
   id: 'SH061', nombre: 'Aurora', cliente: 'Modelo', fecha_entrega: '2026-09-18', anio: 2026, mes: 9, sin_fecha: false, sin_proyecto: false,
   cuentas: { cerradas: false, reabiertas: false, pendientes: 1, hay_vencidos: true, fecha_cierre: null },
@@ -64,7 +56,6 @@ beforeEach(() => {
   mocks.requireSectionMock.mockResolvedValue({ response: null })
   mocks.rpcMock.mockImplementation(async (fn: string) => {
     if (fn === 'cuentas_periodo') return { data: periodoSql, error: null }
-    if (fn === 'cuentas_por_proyecto') return { data: crudoSH061, error: null }
     if (fn === 'cuentas_resumen') return { data: { hoy: '2026-09-24', anios: [{ anio: 2026, pendientes: 1 }], avisos: 2 }, error: null }
     if (fn === 'cuentas_avisos_items') return { data: { items: candidatosAvisos, totales: { vencidos: 1, por_emitir: 75 } }, error: null }
     throw new Error(`RPC inesperada: ${fn}`)
@@ -108,12 +99,18 @@ describe('GET /api/cuentas/periodo', () => {
     expect(fila).not.toHaveProperty('venc_dias')
   })
 
-  it('con proyecto lee crudo solo ese proyecto y arma el seleccionado', async () => {
+  it('con proyecto pide el seleccionado a cuentas_periodo y pone etiqueta a sus conceptos (B6)', async () => {
+    const { proyecto: _p, ...fila } = periodoSql.lista.items[0]
+    void _p
+    const cierre = { quien_cuanto_cuando: [], iva_retenido_total: 0, isr_retenido_total: 0, iva_cobrado: 0, iva_pagado: 0, iva_neto_a_enterar: 0, utilidad_bruta: 0, isr_serenata_estimado: 0, utilidad_neta: 0, utilidad_libre_estimada: 0 }
+    mocks.rpcMock.mockImplementation(async () => ({
+      data: { ...periodoSql, seleccionado: { ...tarjeta, conceptos: [fila], cierre, cierre_mensual: [] } },
+      error: null,
+    }))
     const body = await (await getPeriodo(new Request('http://x/api/cuentas/periodo?proyecto=SH061'))).json()
-    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_por_proyecto', { p_year: 2026, p_proyecto: 'SH061' })
-    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_periodo', { p: expect.not.objectContaining({ proyecto: expect.anything() }) })
-    expect(body.seleccionado).toMatchObject({ id: 'SH061', conceptos: [{ key: 'c:cc-1', estado: 'vencido' }] })
-    expect(body.seleccionado.cierre).toBeDefined()
+    expect(mocks.rpcMock).toHaveBeenCalledTimes(1)
+    expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_periodo', { p: expect.objectContaining({ proyecto: 'SH061' }) })
+    expect(body.seleccionado).toMatchObject({ id: 'SH061', conceptos: [{ key: 'c:cc-1', estado: 'vencido', etiqueta: 'Vencido' }], cierre, cierre_mensual: [] })
   })
 
   it('error de la RPC -- 500 sin exponer el mensaje', async () => {

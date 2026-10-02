@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test'
 import { fulfillJson } from './http'
-import { derivarAvisos } from '@/lib/server/cuentas/avisos'
-import { construirOpciones, construirPeriodo, construirProyectos, pendientesPorAnio, ultimoMesConDatos } from '@/lib/server/cuentas/periodo'
-import { decodificarCuentasAnio } from '@/lib/server/cuentas/periodo-crudo'
+import { derivarAvisos } from '../../support/cuentas-motor/avisos-derivar'
+import { construirOpciones, construirPeriodo, construirProyectos, pendientesPorAnio, ultimoMesConDatos } from '../../support/cuentas-motor/periodo'
+import { decodificarCuentasAnio } from '../../support/cuentas-motor/periodo-crudo'
 import type { FiltroEstado, FiltroTipo, MesPeriodo, ProyectoDetalle, VistaCuentas } from '@/lib/shared/cuentas/periodo-tipos'
 
 /**

@@ -1,12 +1,14 @@
 import type { Page, Route } from '@playwright/test'
 import { fulfillJson } from './http'
-import { armarDetalleCobro, armarDetallePago, type DocumentoFila } from '@/lib/server/cuentas/detalle-armar'
+import { armarDetalleCobro, armarDetallePago, type CobroFilas, type DocumentoFila, type PagoFilas } from '@/lib/server/cuentas/detalle-armar'
+import { derivarDetalleCobro, derivarDetallePago } from '../../support/cuentas-motor/detalle-derivar'
 import { HOY_E2E, PROYECTOS, REGIMEN, registroMock, transferir, type PagoMock } from './cuentas-periodo-mocks'
 
 /**
  * Rediseño de Cuentas B5: mocks del detalle de un concepto sobre el mismo
  * fixture que la lectura por periodo. El detalle sale del armado REAL del
- * servidor (detalle-armar.ts). Registrar un pago lo guarda en `registroMock`,
+ * servidor (detalle-armar.ts); lo que en producción deriva SQL lo da el doble TS
+ * (tests/support/cuentas-motor). Registrar un pago lo guarda en `registroMock`,
  * así el detalle y la lista que se vuelven a pedir ya lo traen.
  */
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -43,8 +45,7 @@ function cobroFilas(id: string) {
         },
       ]
     : []
-  return armarDetalleCobro(
-    {
+  const filas: CobroFilas = {
       cuenta: {
         id,
         folio: `CC-2026-${String(k + 1).padStart(5, '0')}`,
@@ -63,9 +64,8 @@ function cobroFilas(id: string) {
         ...(pagado > 0 ? [{ id: `${p.id}-pc${k}`, monto: pagado, tipo_pago: 'TRANSFERENCIA', fecha_pago: fechaFactura, comprobante_url: null, notas: null }] : []),
         ...extra.map((x) => ({ id: x.id, monto: x.monto, tipo_pago: x.tipo_pago, fecha_pago: x.fecha_pago, comprobante_url: x.comprobante_url, notas: x.notas })),
       ],
-    },
-    HOY_E2E
-  )
+  }
+  return armarDetalleCobro(filas, derivarDetalleCobro(filas, HOY_E2E))
 }
 
 function grupoFilas(id: string) {
@@ -111,7 +111,7 @@ function grupoFilas(id: string) {
     ...(pagado ? [{ id: `${id}-pp`, monto: total, fecha_pago: fechaFactura, tipo_pago: 'TRANSFERENCIA', notas: null, comprobante_url: 'https://drive.test/comprobante.pdf', estimado: false }] : []),
     ...extra.map((x) => ({ ...x, estimado: false })),
   ]
-  return armarDetallePago({
+  const filas: PagoFilas = {
     objetivo: 'grupo',
     destino: {
       id,
@@ -130,7 +130,8 @@ function grupoFilas(id: string) {
     pagos: pagos.map((x) => ({ id: x.id, fecha_pago: x.fecha_pago, tipo_pago: x.tipo_pago, monto_transferido: x.monto, comprobante_url: x.comprobante_url, notas: x.notas, estimado: x.estimado })),
     orden: estado === 'en_orden' ? { id: 'orden-1', pdf_nombre: `OP-${p.id}.pdf`, pdf_url: 'https://drive.test/orden.pdf', estado: 'GENERADA', fecha_generacion: '2026-09-20T12:00:00Z' } : null,
     reabierta: registroMock.reabiertos.has(p.id),
-  })
+  }
+  return armarDetallePago(filas, derivarDetallePago(filas))
 }
 
 async function camposDe(route: Route) {

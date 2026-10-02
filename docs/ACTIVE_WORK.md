@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-02 (simplificación del modelo de datos cerrada; producción reiniciada).
+**Última actualización:** 2026-10-02 (simplificación cerrada; B6 y K6 resueltos).
 
 ## Estado
 
@@ -18,8 +18,8 @@ verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 `docs/decisions/020`; plan archivado en `docs/archive/simplificacion-modelo-datos.md`; resumen
 en `docs/ROADMAP.md` → "Cerrado". Producción reiniciada (Drive vaciado por el usuario; usuarios
 2 y tipos de proyecto 3; resto en 0; siguiente folio `SH001`; `auditar_consistencia()` en 0) y
-el script de reinicio borrado. Falta correr `20261027` (retira `cliente_id_backfill_clasificacion`; tiene DROP) en test y luego producción: los deja en 34 y 35 tablas (+ vista). B6 diferido, frente 2 en pausa con disparador, K6 sin medir y
-#119 (alta mínima de cotizaciones) están como deuda en `docs/ROADMAP.md`.
+el script de reinicio borrado. `20261027` (retira `cliente_id_backfill_clasificacion`) corrida por el usuario en test y producción: 35 y 34 tablas (+ vista).
+**B6 y K6 cerrados** (2026-10-02): proyecto seleccionado y detalle de Cuentas derivan solo en SQL (`20261028`, `20261029`; el TS quedó como doble de pruebas en `tests/support/cuentas-motor/`); K6 medido en `escala.yml` (POST p50 621 / p95 662 ms; PUT p50 342 / p95 360 ms). El periodo "todo el año" midió p95 672 ms en test (13,193 conceptos), por encima del disparador de 650 ms del frente 2: revisar al volver a medir. Queda #119 (alta mínima de cotizaciones, decisión de producto).
 **Manual pendiente del usuario:** token de Drive para el entorno Preview y verificar Drive
 ahí (las variables `GOOGLE_SHEETS_SPREADSHEET_ID` y `GOOGLE_CALENDAR_ID` ya se quitaron de Vercel).
 

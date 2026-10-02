@@ -417,12 +417,22 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
   (O1b). SQL devuelve estados y pasos como códigos;
   `lib/server/cuentas/periodo-sql.ts` les pone etiqueta y texto con las
   tablas de `lib/shared/cuentas/concepto.ts`.
-- **La derivación en TS sigue siendo la referencia** (`concepto.ts`,
-  `lib/server/cuentas/periodo.ts`, `avisos.ts`): arma el proyecto
-  seleccionado sobre la lectura cruda de ese solo proyecto
-  (`cuentas_por_proyecto(p_year, p_proyecto)`), alimenta los mocks e2e y
-  `tests/e2e/live/cuentas-paridad-sql.spec.ts` exige que SQL y TS den lo
-  mismo sobre la BD de test. **Un cambio de regla va en los dos lados.**
+- **SQL es la única fuente de las reglas de dinero (B6, decisión 020).** El
+  proyecto abierto en el panel (conceptos, cierre fiscal y cierre mensual con
+  su fecha límite SAT) sale de `cuentas_periodo` (clave `seleccionado`) y el
+  detalle de un concepto, de `cuentas_conceptos(p_year, p_hoy, p_objetivo, p_id)`
+  con ese solo concepto (migraciones `20261028` y `20261029`).
+  `lib/server/cuentas/detalle-armar.ts` ya no deriva nada: solo separa lo
+  vigente de lo corregido y elige qué archivo mostrar. En producción no queda
+  TypeScript que calcule estado, paso, saldo, vencimiento, complementos, cruce
+  fiscal ni cierre.
+- **Doble de pruebas:** `tests/support/cuentas-motor/` conserva la derivación en
+  TS (`concepto.ts`, `periodo.ts`, `cierre-*.ts`, `detalle-derivar.ts`) solo para
+  que los mocks e2e (smoke y critical, sin base de datos) respondan con datos
+  coherentes. Producción no lo importa y
+  `tests/e2e/live/cuentas-paridad-sql.spec.ts` exige que dé lo mismo que SQL sobre
+  la BD de test. **Un cambio de regla va en SQL; si la paridad se pone roja, se
+  ajusta el doble.**
 - **Los conceptos viven derivados en `cuentas_conceptos_base`** (migración
   `20261009`, decisión 019): las cuatro RPCs de lectura pasan por
   `cuentas_conceptos`, que lee la tabla y calcula `venc_dias`, el estado

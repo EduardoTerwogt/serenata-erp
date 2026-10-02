@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 
-import { AVISOS_POR_CATEGORIA, agruparAvisos, derivarAvisos } from '../avisos'
-import { construirOpciones, construirPeriodo, construirProyectos, netoCobro, normalizarBusqueda, pendientesPorAnio, ultimoMesConDatos, type ParametrosPeriodo } from '../periodo'
-import { decodificarCuentasAnio, type CuentasAnioRaw } from '../periodo-crudo'
+import { AVISOS_POR_CATEGORIA, agruparAvisos } from '@/lib/server/cuentas/avisos'
+import { derivarAvisos } from './avisos-derivar'
+import { construirOpciones, construirPeriodo, construirProyectos, netoCobro, normalizarBusqueda, pendientesPorAnio, ultimoMesConDatos } from './periodo'
+import type { ParametrosPeriodo } from '@/lib/shared/cuentas/periodo-tipos'
+import { decodificarCuentasAnio, type CuentasAnioRaw } from './periodo-crudo'
 import { SIN_PROYECTO_ID } from '@/lib/shared/cuentas/periodo-tipos'
 
 const HOY = '2026-09-24'

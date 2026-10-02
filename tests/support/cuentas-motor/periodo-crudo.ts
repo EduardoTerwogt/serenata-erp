@@ -8,7 +8,7 @@
  * db/migrations/20260929_cuentas_b3_lectura_por_periodo.sql; este módulo es el
  * único que lo conoce y lo convierte a objetos tipados.
  */
-import type { ArchivoInput, DocumentoXmlInput, PagoCobroInput } from '@/lib/shared/cuentas/concepto'
+import type { ArchivoInput, DocumentoXmlInput, PagoCobroInput } from './concepto'
 import type { RegimenFiscal } from '@/lib/types'
 
 export interface ProyectoAnioRaw {
