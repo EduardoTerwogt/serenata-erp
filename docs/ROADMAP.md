@@ -78,10 +78,6 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Simplificación del modelo de datos** (2026-10-01, borrador): reducir la
-  dispersión y la duplicación de estado entre las 40 tablas, empezando por las
-  11 que alimentan Cuentas. Inventario en `docs/inventario-tablas.md`; plan en
-  `docs/PLAN.md`. Sin migraciones hasta aprobar el plan. Epic #109 (fases #105, #106; deuda #108).
 - **Frente 2 de latencia de Cuentas** (2026-09-30, **en pausa**): los
   conceptos de Cuentas se guardan derivados en `cuentas_conceptos_base` y se
   mantienen con triggers (`docs/decisions/019-cuentas-conceptos-materializada.md`).
@@ -102,12 +98,18 @@ ni tiene alcance de iniciativa definido.
 
 ### Deuda técnica (2026-09-26)
 
-- **Derivación duplicada en SQL y TS** (2026-09-30): las reglas de negocio de
-  los conceptos (estados, pasos, netos) viven en `cuentas_conceptos_derivar` y
-  en `concepto.ts`/`periodo.ts`; la ruta del proyecto seleccionado
-  (`app/api/cuentas/periodo/route.ts`) todavía deriva en TS. Se mantienen
-  iguales con los tests de paridad. Mejor a futuro: que SQL devuelva también los
-  conceptos del proyecto seleccionado.
+- **B6: un solo motor de Cuentas** (#108, diferido 2026-10-02): mover a SQL la
+  derivación del proyecto seleccionado y del detalle (`concepto.ts`, `periodo.ts`,
+  `detalle-armar.ts`) y dejar el TS solo con tipos y presentación. Decisión actual:
+  mantener el TS con la paridad `live` (`cuentas-paridad-sql.spec.ts`), porque la
+  latencia la llevan las RPC de SQL. Retomar si el TS duplicado cuesta más que mantener
+  la paridad. Antes de eso, la palanca barata para la escala es acotar `resumen`,
+  `avisos` y candidatos de orden a lo no resuelto (ver ADR 020).
+- **Alta mínima de cotizaciones** (#119): `/cotizaciones/nueva` y `/cotizaciones/[id]` son dos
+  motores de edición; propuesta pendiente de decisión de producto.
+- **K6:** re-medir el p50 de guardado de cotizaciones con `load-test.yml` tras la
+  simplificación (sin medir).
+
 - **Carga de escrituras de Cuentas** (2026-09-30): el k6 existente crea y emite
   cotizaciones y lee listados; nada ejercita bajo concurrencia las escrituras
   que disparan los triggers de `cuentas_conceptos_base` (aprobar, registrar
@@ -218,6 +220,18 @@ Si aparece otro feature a medias, documentarlo aquí.
 ---
 
 ## Cerrado
+
+- **Simplificación del modelo de datos (2026-10-02).** Un dueño por dato:
+  `cuentas_pagar` sin copias, `item_id` con FK, un solo `cliente_id`, nombres finales
+  `costo_unitario`/`costo_total`, pagos solo por grupo, estado del cobro derivado,
+  cotización aprobada congelada, estado de la cotización solo por RPC, CHECK y
+  restricciones diferidas en la base, `auditar_consistencia()` (17 guardas, cron diario y
+  Admin) y `plpgsql_check` en CI. Sheets, Calendar y Planeación retirados; datos de
+  producción reiniciados (34 tablas y 1 vista). Curva de escala medida a 500, 2,200 y
+  5,000 proyectos. Epic #109 (fases #105, #106). Resultado y lecciones:
+  [`docs/decisions/020`](decisions/020-simplificacion-modelo-datos.md); plan completo en
+  `docs/archive/simplificacion-modelo-datos.md`. Quedan: B6 diferido (deuda de abajo), K6
+  sin medir y #119.
 
 - **Rediseño de la sección Cuentas (2026-09-26).** `/cuentas` rediseñada en
   Claude Design e implementada en 10 bloques (B0, B1b, B1–B8), después de

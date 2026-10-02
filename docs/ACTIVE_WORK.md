@@ -1,7 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-01 (plan v9 de "Simplificación del modelo de
-datos" aprobado; frente 2 en pausa). Debajo, el cierre de la sesión 22.
+**Última actualización:** 2026-10-02 (simplificación del modelo de datos cerrada; producción reiniciada).
 
 ## Estado
 
@@ -15,61 +14,14 @@ grupos desfasados, 0 grupos ABIERTO vacíos, "Eduardo Terwogt" de SH072 en 3,100
 `cuentas_periodo` ~65 ms, advisors sin hallazgos nuevos. Pendiente de
 verificar por el usuario en la app: SH072 sin "Ajuste" y SH080 con el desglose.
 
-**Iniciativa "Simplificación del modelo de datos"** — epic #109. **Plan v12
-aprobado (2026-10-01)** (auditoría externa 2: escritores TS de
-`cuentas_cobrar.estado` y tipos de actualización acotados; auditoría externa: orden de la columna puente,
-verificación final del reinicio, `lock_timeout`; auditoría 7: estado de cotización solo por RPC,
-fórmula única del cobro D15, un solo `cliente_id` D16, B6 obligatorio D17). Antes, v9 en `docs/PLAN.md` (auditoría 6: P0 de la restricción
-"proveedor ⇒ grupo" movida a B5b como constraint diferido, sin purga de
-reservas de folio, foto dorada sin tocar prod; decisiones D12 dueño único de
-verdad, D13 renombrar `x_pagar` a Costo Unitario/Costo Total, D14 retirar
-Calendar). 7 PRs (nuevo B5c: renglones, editor y nomenclatura), 40 → 34 tablas.
-Historia de auditorías en `docs/archive/simplificacion-modelo-auditorias.md`.
-**Siguiente: B6** (abrir con `serenata-iniciar-fase`). Pendientes del
-usuario: respaldo `supabase db dump` (plan Free sin respaldos),
-Drive en Preview y limpiar carpetas de prueba de Drive antes del reinicio (B2).
-
-**B0 → hecho** (PR #111 mergeado, 2026-10-01; `live` verde ×3). Guardas, `plpgsql_check`
-en CI, 8 índices, foto dorada, esquema test = prod verificado (única excepción
-declarada: `loadtest_runs`), línea base de test (`cuentas_periodo` 579/498 ms,
-`cuentas_resumen` 286 ms). La prueba de escala salió del gate de PR (`escala.yml`, D18).
-
-**B5a y B5b etapa 1 → mergeados** (PRs #113 y #114; `live` verde). Pagos, facturas y
-órdenes solo por grupo; el estado del cobro es una columna generada (D15).
-**B5 → cerrado en código y en BD** (2026-10-01). B5b etapa 2 (#115), etapa 3 (#116) y B5c (#117)
-mergeados con `live` verde. `20261023`, `20261024` y `20261025` (todas con DROP, corridas a mano)
-aplicadas en test y producción; en ambas `plpgsql_check` da 0 errores y las guardas dan 0.
-Resultado: `cuentas_pagar` sin copias (dueño único), `item_id` uuid con FK, `costo_total` /
-`costo_unitario` como nombres finales, un solo `cliente_id`, `historial_responsable` como vista,
-`fecha_entrega` `date`, `timestamptz` en Cuentas, CHECKs de renglones, cotización aprobada
-congelada por trigger (P1419) y estado de cotización solo por RPC (L1). El job `live` ya no corre en
-PRs cuyo diff es solo `.md` (job `changes` de `e2e.yml`).
-**B7 (2026-10-02) → casi cerrado.** Curva de escala medida (PR #118; detalle en `docs/PLAN.md`):
-`periodo` y `opciones` dependen de los proyectos del año consultado; `resumen`, `avisos` y
-`candidatos de orden` crecen lineal con el historial y cruzarían 800 ms hacia ~5,500 proyectos
-en total. Frente 2 en pausa con disparador definido; **B6 diferido** (D17 opcional).
-`auditar_consistencia()` (17 guardas, `20261026`, aplicada en test y producción) corre en el
-cron diario y se ve en Admin → "Consistencia de datos". Herramientas viejas retiradas
-(`foto-dorada`, `mapa-dependencias`, `guardas-modelo.sql`); poda de índices evaluada (ninguna:
-`scripts/db/indices-sin-uso.sql`); ADR 020 con el resultado real. Recorrido manual de
-colaboración en el Preview **hecho**: funciona; hallazgo de producto en `/cotizaciones/nueva`
-(dos motores de edición) → issue #119, para decidir después.
-**Falta de B7 / plan:** re-medir el p50 de guardado de cotizaciones (K6) con `load-test.yml`;
-**B2** (reinicio de datos de producción con `scripts/db/reset-transaccional.sql`: sin respaldo,
-sus datos son de prueba; falta limpiar las carpetas de prueba de Drive); checklist de salida
-(guardas en 0, borrar el script de reinicio) y cierre de los issues #105–#109. Lección:
-producción llevaba migraciones sin aplicar (`20261020`/`20261023`); verificar el estado real
-antes de correr la siguiente.
+**Simplificación del modelo de datos → CERRADA (2026-10-02).** Resultado y lecciones en
+`docs/decisions/020`; plan archivado en `docs/archive/simplificacion-modelo-datos.md`; resumen
+en `docs/ROADMAP.md` → "Cerrado". Producción reiniciada (Drive vaciado por el usuario; usuarios
+2 y tipos de proyecto 3; resto en 0; siguiente folio `SH001`; `auditar_consistencia()` en 0) y
+el script de reinicio borrado. Falta correr `20261027` (retira `cliente_id_backfill_clasificacion`; tiene DROP) en test y luego producción: los deja en 34 y 35 tablas (+ vista). B6 diferido, frente 2 en pausa con disparador, K6 sin medir y
+#119 (alta mínima de cotizaciones) están como deuda en `docs/ROADMAP.md`.
 **Manual pendiente del usuario:** token de Drive para el entorno Preview y verificar Drive
 ahí (las variables `GOOGLE_SHEETS_SPREADSHEET_ID` y `GOOGLE_CALENDAR_ID` ya se quitaron de Vercel).
-
-**B1+B3 mergeado — PR #112 (2026-10-01), `live` verde.** Sheets, Calendar y Planeación retirados del
-código; clientes por `nombre_clave` + `resolver_cliente`; autosave de productos en
-bloque; L7; CHECK/timestamptz/RLS. `20261017` y `20261018` aplicadas en test y prod.
-**Manual pendiente del usuario (no bloquea B5a):** correr `20261016` (DROP) en test y
-luego prod; quitar de Vercel `GOOGLE_SHEETS_SPREADSHEET_ID` y `GOOGLE_CALENDAR_ID`;
-verificar Drive en Preview. Pendiente de B0 para B2: respaldo `supabase db dump` y limpieza de carpetas de prueba
-de Drive.
 
 **Frente 2 de latencia de Cuentas → en pausa** — epic #110, PR #100 en borrador
 (retitulado "[En pausa]", ya sin "Closes #99"); al retomarlo hay que traer

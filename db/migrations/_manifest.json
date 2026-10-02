@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-02T00:30:25.886Z",
-  "count": 138,
+  "generated_at": "2026-10-02T06:14:25.140Z",
+  "count": 139,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -139,6 +139,7 @@
     "20261023_b5b_cuentas_pagar_al_dueno.sql",
     "20261024_b5b_modelo_final_cuentas.sql",
     "20261025_b5c_renglones_nomenclatura.sql",
-    "20261026_b7_auditar_consistencia.sql"
+    "20261026_b7_auditar_consistencia.sql",
+    "20261027_retirar_cliente_id_backfill_clasificacion.sql"
   ]
 }
