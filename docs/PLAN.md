@@ -118,7 +118,7 @@ no cae en ninguna, se borra.
 | D14 | Google Calendar (K9) | **Se retira** (código muerto). |
 | D15 | Estado del cobro (L2) | **Fórmula única:** `PAGADO` si pagado ≥ total (> 0); si no, `PARCIALMENTE_PAGADO` si hay pago; si no, `FACTURADO` si hay `fecha_factura`; si no, `FACTURA_PENDIENTE`. "Vencido" se deriva al leer. Quitar la factura limpia `fecha_factura`. |
 | D16 | `cliente_id` repetido (L3) | **Un solo `cliente_id`, en `cotizaciones`** (congelado al aprobar). Salen `proyectos.cliente_id` y `cuentas_cobrar.cliente_id`; se leen por `cotizaciones` (`proyectos.id = cotizaciones.id`). |
-| D17 | B6 "un solo motor" (L8) | **Obligatorio.** No quedan dos motores de Cuentas al cerrar. |
+| D17 | B6 "un solo motor" (L8) | ~~Obligatorio~~ **Opcional (2026-10-02, decisión del usuario tras la curva de escala):** la latencia la llevan las RPC de SQL y B6 no mueve esa meta; se hace cuando haya una razón concreta (el TS duplicado cuesta cada cambio de Cuentas, y la paridad `live` vigila la divergencia). |
 | D18 | Escala y cómputo (2026-10-01) | **El dataset de carga (≈2,200 proyectos) se conserva**: el objetivo es demostrar que la app aguanta pasar de cientos a miles de cotizaciones sin subir de plan de Supabase. La prueba de latencia sale del gate de cada PR (`tests/e2e/escala/`, workflow `escala.yml`, manual y semanal) para que el cómputo compartido no tumbe PRs. El frente 2 sigue pausado (D6) y se decide en B7 con la curva medida a 500, 2,200 y 5,000 proyectos. D13 y B6 (D17) pasan a opcionales para este objetivo (pendiente de confirmar). |
 
 ## Confirmaciones (2026-10-01)
@@ -573,6 +573,34 @@ presentación.
   nombres de columna), decisiones 006, 008, 011, 017; ADR 020 con el
   resultado real y la regla de dueño único; nota de F14 para Proyectos.
 - Re-evaluar el frente 2 (D6) — con los índices de B0 puede que ya no haga falta. Se decide con la **curva de escala** (D18): latencia de `cuentas_periodo`/`resumen` a 500, 2,200 y 5,000 proyectos (`escala.yml`); si a 5,000 pasan de 800 ms, se aplica sobre el diseño ya simplificado.
+- **Curva de escala medida (2026-10-02, D18).** Generador set-based
+  (`scripts/db/escala-generador.sql`, limpieza `escala-limpiar.sql`, medición
+  `escala-medir.sql`), BD local con el esquema vigente y guardas en 0 sobre los datos
+  generados; calibrada contra test a 2,200 proyectos (server-side, factor 1.2–1.4 sobre local).
+  p50 en ms, local, solo SQL:
+
+  | Proyectos | Dónde | periodo (año) | resumen | avisos | opciones | candidatos de orden | proyecto seleccionado |
+  |---|---|---|---|---|---|---|---|
+  | 500 | un año | 78 | 61 | 67 | 59 | 25 | 2 |
+  | 2,200 | un año | 301 | 216 | 258 | 212 | 118 | 9 |
+  | 5,000 | un año | 628 | 443 | 531 | 439 | 278 | 20 |
+  | 5,000 | 500 por año (10 años) | **105** | 459 | 529 | **83** | 273 | 3 |
+
+  Lectura: `periodo` y `opciones` dependen de los proyectos **del año consultado**
+  (500 por año → ~105 ms aunque haya 5,000 en total); `resumen`, `avisos` y
+  `candidatos de orden` derivan `cuentas_conceptos(NULL, hoy)` sobre **todo el
+  historial** y crecen lineal con el total (~0.09, ~0.11 y ~0.06 ms por proyecto,
+  local). En test a 2,200 el servidor mide `periodo` 380–555 ms, `resumen` 262,
+  `avisos` 312, `opciones` 260, `candidatos` 230. Extrapolación lineal a test con
+  el presupuesto de 800 ms (p95 de extremo a extremo): `avisos` lo cruza hacia
+  ~5,500 proyectos en total, `resumen` hacia ~6,500 y `periodo` hacia ~3,000
+  proyectos **en un mismo año** (el dataset de test, que mete todo en un año, es el
+  peor caso). **Decisión provisional sobre el frente 2:** sigue en pausa; no hace
+  falta con ≈2,200 proyectos y menos de ~3,000 por año. Disparador para
+  retomarlo: ~4,000 proyectos en total o ~2,500 en un año, o que el p95 de
+  `escala.yml` pase de 650 ms. Palanca barata antes del frente 2: que `avisos`,
+  `resumen` y `candidatos` sólo recorran lo no resuelto (índices parciales o
+  derivación acotada), porque hoy derivan todo el historial.
 - Medir otra vez p50 de guardado de cotizaciones (K6) y `live`.
 - Checklist de salida a uso real: reinicio por última vez, guardas en 0,
   carpetas de prueba de Drive fuera (H3), borrar el script de reinicio y
@@ -611,5 +639,5 @@ presentación.
 | B5a Escrituras de dinero solo por grupo | Pendiente |
 | B5b Cuentas: lecturas, copias y borrado | Pendiente |
 | B5c Renglones, editor y nomenclatura final | Pendiente |
-| B6 Un solo motor de Cuentas (#108) | Pendiente |
-| B7 Cierre | Pendiente |
+| B6 Un solo motor de Cuentas (#108) | **Diferido** (D17 opcional, 2026-10-02) |
+| B7 Cierre | En curso — curva de escala **medida** (2026-10-02); faltan poda de índices, `auditar_consistencia()`, herramientas, docs y checklist de salida |
