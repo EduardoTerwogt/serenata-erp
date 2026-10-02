@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** En refinamiento (2026-10-02, cuatro auditorías + externa; lista para aprobar) — "#124: Producción y Vercel a Ohio (`us-east-2`, `cle1`)". Pendiente de aprobación del usuario.
+**Estado:** **Aprobado, listo para ejecutar** (2026-10-02, por el usuario). Se ejecuta en una sesión nueva desde R0. — "#124: Producción y Vercel a Ohio (`us-east-2`, `cle1`)". Pendiente de aprobación del usuario.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -202,6 +202,10 @@ aprobar con estos ajustes, ya aplicados en el checklist.
 | D6 | P1 | No había **vigilancia después de `GO_LIVE`**: sin Observability Plus, un error esporádico (Realtime, timeouts) solo se vería si un usuario lo reporta. | Claude revisa los logs de la base nueva por MCP (`query_logs`: API, Postgres y Realtime) al pasar a `GO_LIVE`, a las 24 h y antes de borrar la vieja. El usuario revisa la pestaña Functions de Vercel (gratis) en los mismos tres puntos. |
 | D7 | P2 | El issue #124 y el comentario de #125 todavía describen el orden anterior (#125 primero). | Actualizados: #124 sin dependencia de #125; #125 con nota del orden final. |
 
+**Resolución de D1 (2026-10-02):** el usuario **no tiene repo ni Node** en su
+máquina. Se usa la alternativa: workflow de un solo uso (ver **R2b** en el
+checklist).
+
 **Veredicto:**
 - **Diseño:** el más seguro y eficiente disponible en el plan Free para llegar a
   Ohio. Cuatro auditorías internas y una externa lo confirman, y cada riesgo
@@ -267,7 +271,9 @@ proyectos se resuelve pausando por MCP.
 2. Confirmar `cle1` en el panel de Vercel.
 3. Una captura de Settings → API / Data API (y Realtime → Settings) de la vieja.
 4. Crear el proyecto en el panel (`us-east-2`), con las mismas opciones de Data API.
-5. Correr **un comando** del CLI que Claude deja listo (aplica las 141 migraciones).
+5. Crear en GitHub el secreto temporal `PROD_NUEVA_DB_URL`. Claude dispara el
+   workflow de un solo uso que aplica las 141 migraciones (R2b) y, al final,
+   borras el secreto.
 6. Copiar los 2 usuarios con dos pegados en el SQL Editor (X7) y pegar 2
    secretos en Vercel (Production y Development).
 7. Verificación funcional con dos navegadores (~15 min) y borrar de Drive los
@@ -279,8 +285,9 @@ proyectos se resuelve pausando por MCP.
 
 1. **R0** verificar, capturar y medir la latencia base, con todo activo.
 2. **R2** PR (`vercel.json` → `cle1`, decisión 021, docs) con test activo; CI
-   verde; el Preview prueba `cle1` contra test. No se mergea.
-3. **R1** pausar test → el usuario crea el proyecto → `db push` → comparación en
+   verde; el Preview prueba `cle1` contra test. No se mergea. **R2b**: PR del
+   workflow de un solo uso, que **sí** se mergea antes de R1.
+3. **R1** pausar test → el usuario crea el proyecto → `db push` por el workflow → comparación en
    vivo contra la vieja → reinicio → copiar 2 usuarios → conteos iguales.
 4. **R3** variables en Vercel → *Redeploy* (sin merge) → `READY` → **pausar la
    vieja y reactivar test** (C1) → verificación funcional (Realtime primero) →
@@ -338,8 +345,7 @@ repo.
       DevTools → Network, anotando la mediana.
 - [ ] Claude: confirmar en la documentación de Supabase si reactivar un
       proyecto pausado cambia su imagen de Postgres (C6).
-- [ ] **(usuario)** Máquina para el CLI (D1): repo clonado y al día, y
-      `node -v` ≥ 20. Si no hay, se prepara antes el workflow de un solo uso.
+- [x] **(usuario)** Máquina para el CLI (D1): **no hay**. Se usa R2b.
 - [ ] **(usuario)** Agendar la ventana de R1–R3 (D2): 2–3 h, con tu presencia,
       fuera de las 08:00 UTC y del domingo 09:17 UTC.
 
@@ -360,6 +366,27 @@ repo.
 - [ ] Claude: `preview-latency.yml` sobre el Preview del PR (`cle1` → test):
       login OK, rutas OK y p95 comparado contra la línea base (C5).
 
+### R2b — Workflow de un solo uso para `db push` (D1)
+
+- [ ] Claude: PR chico con `.github/workflows/db-push-una-vez.yml`, que hace:
+      - checkout del SHA de `main`;
+      - `node scripts/build-supabase-migrations.mjs`;
+      - `supabase db push --db-url "$URL"`;
+      - escribe en el log el SHA y el conteo de migraciones aplicadas.
+
+      Detalles:
+      - Solo `workflow_dispatch`, sin otros disparadores.
+      - Lee la URL del secreto `PROD_NUEVA_DB_URL`. Si el secreto no existe o
+        apunta al ref de producción vieja (`fwmyoqokcjtldiofuxdg`) o de test
+        (`ozrtsludmcguvgqdjicn`), se niega a correr.
+      - Un `workflow_dispatch` solo aparece si el archivo ya está en `main`: por
+        eso se mergea **antes** de R1, con CI en verde. No toca nada hasta que
+        alguien lo dispara.
+- [ ] En R1, **(usuario)** crea el secreto `PROD_NUEVA_DB_URL` (GitHub → Settings
+      → Secrets and variables → Actions) con la URL del *session pooler* del
+      proyecto nuevo. Claude dispara el workflow y lee su salida.
+- [ ] En R4: Claude borra el workflow (PR) y **(usuario)** borra el secreto.
+
 ### R1 — Producción nueva
 
 - [ ] **`FREEZE_START`** (X2): fuera de las 08:00 UTC y de la ventana de
@@ -374,11 +401,10 @@ repo.
       legacy es `HS256` (C2). Si algo falla, **se detiene**.
 - [ ] Claude: versión de Postgres, arquitectura y extensiones disponibles,
       comparadas con test (A6).
-- [ ] **(usuario)** Correr en tu máquina el bloque que Claude deja listo:
-      `node scripts/build-supabase-migrations.mjs` + `npx supabase db push`
-      con la URL del *session pooler* del proyecto nuevo (Connect → Session
-      pooler). La contraseña se pide con `read -s` y no queda en el historial
-      (C4). Pega aquí solo la salida, nunca la URL.
+- [ ] **(usuario)** Crear el secreto `PROD_NUEVA_DB_URL` con la URL del
+      *session pooler* del proyecto nuevo (Connect → Session pooler, con la
+      contraseña). Claude dispara `db-push-una-vez.yml` y revisa su salida (R2b).
+      La URL nunca pasa por el chat.
 - [ ] Claude: el historial tiene exactamente los 141 nombres de `_manifest.json`
       del SHA usado (X5).
 - [ ] Claude, comparación **en vivo** vieja ↔ nueva, primero un md5 por
@@ -487,6 +513,7 @@ la CSP (`*.supabase.co`), el entorno Preview de Vercel y la base de test.
 |---|---|
 | R0 Verificaciones, capturas y línea base | Pendiente |
 | R2 PR de código | Pendiente |
+| R2b Workflow de un solo uso (`db push`) | Pendiente |
 | R1 Producción nueva | Pendiente |
 | R3 Corte y verificación | Pendiente |
 | R4 Cierre | Pendiente |
