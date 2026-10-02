@@ -114,6 +114,42 @@ el repo reproduce producción, que es valiosa por sí misma. Las correcciones de
 arriba eliminan el bloqueo de CI (A1), la falla silenciosa por permisos (A2) y el
 riesgo de alargar la caída si la reproducción falla (A3).
 
+## Automatización y trabajo manual (2026-10-02)
+
+**Plan Pro temporal: descartado.** Su única herramienta útil, "Restore to a new
+project", crea la copia **en la misma región** que el origen (documentación de
+Supabase), así que no sirve para cambiar de región. Lo único que aportaría es
+quitar el límite de 2 proyectos activos, y pausar y reactivar proyectos ya lo
+hace Claude con el MCP (`pause_project` / `restore_project`).
+
+**Lo hace Claude (MCP de Supabase):** crear el proyecto en `us-east-2`
+(`create_project`), pausar y reactivar test y la vieja, aplicar migraciones,
+todas las comparaciones, copiar datos, el reinicio y leer la llave `anon`
+(`get_publishable_keys`).
+
+**Vercel:** el conector de Vercel de Claude hoy da **403** sobre el team
+`eduardoterwogts-projects` (no puede leer ni editar variables). Si el usuario lo
+reautentica con acceso a ese team, Claude cambia las variables no secretas,
+lanza el *Redeploy* y verifica los deploys. Los dos secretos
+(`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`) los pega el usuario: el
+MCP de Supabase no los entrega y no deben pasar por el chat.
+
+**Descartado:** la integración Supabase ↔ Vercel del Marketplace. Sincroniza
+las mismas variables a **todos** los entornos y pisaría las de Preview (test):
+es el incidente que separó los entornos el 2026-09-24.
+
+**Manual del usuario (mínimo):**
+1. Aprobar el plan.
+2. Reautenticar el conector de Vercel con acceso al team (una vez).
+3. Confirmar la región `cle1` en el panel de Vercel y aprobar la creación del
+   proyecto.
+4. Una captura de Settings → API / Data API de la vieja y comparar la misma
+   pantalla en la nueva.
+5. Pegar 2 secretos en Vercel (Production y Development).
+6. La verificación funcional con dos navegadores (~15 min) y borrar de Drive
+   los PDFs de la prueba.
+7. A los 7 días, borrar la producción vieja desde el panel.
+
 ## Estrategia de corte (corregida)
 
 1. **R0** verificar y capturar con todo activo.
