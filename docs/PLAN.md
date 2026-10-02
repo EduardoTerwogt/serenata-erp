@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** En refinamiento (2026-10-02, dos auditorías) — "#124: Producción y Vercel a Ohio (`us-east-2`, `cle1`)". Pendiente de aprobación del usuario.
+**Estado:** En refinamiento (2026-10-02, tres auditorías) — "#124: Producción y Vercel a Ohio (`us-east-2`, `cle1`)". Pendiente de aprobación del usuario.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -133,6 +133,26 @@ plan Free:
 - La vieja sirve tráfico hasta el corte.
 - El rollback es cambiar 4 variables y volver a desplegar.
 
+## Auditoría 3 (Dev Sr + Data Sr, 2026-10-02)
+
+No quedan fallas graves. Son mejoras que reducen riesgo residual y trabajo
+manual; ya están en el checklist.
+
+| # | Severidad | Hallazgo (verificado) | Corrección |
+|---|---|---|---|
+| C1 | P1 | **Escrituras silenciosas a la base vieja:** después del corte, una pestaña con el JavaScript viejo seguiría guardando en la vieja hasta R4. Esos datos se perderían sin aviso. | Pausar la vieja **en cuanto el deploy nuevo está `READY`**, antes de la verificación: una pestaña vieja falla a la vista (principio 4) en vez de escribir donde nadie mira. Eso libera el lugar para reactivar test de inmediato. El rollback sigue igual: reactivar la vieja (minutos) y restaurar las variables. |
+| C2 | P1 | Lo de las llaves legacy dependía solo de mirar el panel. | Comprobación objetiva: el header de la llave `anon` legacy (`get_publishable_keys`) debe decir `alg: HS256`, firmada con el JWT secret legacy. Si dice ES256 o RS256, el proyecto firma con llaves asimétricas y **se detiene**. En la verificación funcional, Realtime va primero para fallar rápido. |
+| C3 | P2 | El CLI registra cada migración con versión `000001…000141` y nombre `20260101_…` (conserva la fecha). `check-schema-parity.mjs` quita la fecha solo del lado local, así que contra la producción nueva reportaría las 141 como faltantes. | En el PR de R2, normalizar también el nombre remoto (quitar `^\d{8}_`). |
+| C4 | P2 | El comando del CLI con la contraseña dentro de la URL queda en el historial de la terminal. | El comando pide la contraseña con `read -s` y arma la URL en una variable que no queda en el historial. |
+| C5 | P1 | El checklist decía que Claude verificaría el Preview, pero desde esta sesión no hay salida de red a `*.vercel.app`. | Claude dispara `preview-latency.yml` (GitHub Actions, ya existe: hace login con las credenciales de test y mide p95 por ruta) contra un Preview actual (`sfo1`) y contra el Preview del PR (`cle1`). Es la **misma base de test** en los dos, así que la diferencia mide solo la región: comparación A/B automática y objetiva. La medición en producción con DevTools queda como confirmación opcional, más el header `x-vercel-id` (muestra la región que respondió). |
+| C6 | P2 | Falta confirmar si reactivar un proyecto pausado lo pasa a una imagen de Postgres más nueva (afecta la paridad de test, A6). | Se agrega a la consulta de documentación de R0. |
+
+**Conclusión:** el método es el correcto. Cada riesgo tiene una comprobación
+antes del punto de no retorno, y el único paso irreversible (borrar la vieja)
+ocurre 7 días después del corte. Una cuarta ronda tendría rendimientos
+marginales: lo que falta por descubrir solo aparece ejecutando, y para eso están
+los puntos de parada (llaves, migraciones, comparación, verificación).
+
 ## Automatización y trabajo manual
 
 **Plan Pro temporal: descartado.** "Restore to a new project" copia **en la
@@ -157,8 +177,9 @@ proyectos se resuelve pausando por MCP.
 4. Crear el proyecto en el panel (`us-east-2`), con las mismas opciones de Data API.
 5. Correr **un comando** del CLI que Claude deja listo (aplica las 141 migraciones).
 6. Pegar 2 secretos en Vercel (Production y Development).
-7. Medición de latencia antes y después (B5) y verificación funcional con dos
-   navegadores (~15 min); borrar de Drive los PDFs de prueba.
+7. Verificación funcional con dos navegadores (~15 min) y borrar de Drive los
+   PDFs de prueba. La latencia la mide Claude (C5); la de producción con
+   DevTools es opcional.
 8. A los 7 días, borrar la vieja desde el panel.
 
 ## Estrategia de corte
@@ -168,13 +189,14 @@ proyectos se resuelve pausando por MCP.
    verde; el Preview prueba `cle1` contra test. No se mergea.
 3. **R1** pausar test → el usuario crea el proyecto → `db push` → comparación en
    vivo contra la vieja → reinicio → copiar 2 usuarios → conteos iguales.
-4. **R3** variables en Vercel → *Redeploy* (sin merge) → verificación funcional →
-   reinicio → medición después.
-5. **R4** pausar la vieja → reactivar test → commit con el ref nuevo en
-   `env-check` → CI verde → merge (`cle1`) → 7 días → borrar la vieja.
+4. **R3** variables en Vercel → *Redeploy* (sin merge) → `READY` → **pausar la
+   vieja y reactivar test** (C1) → verificación funcional (Realtime primero) →
+   reinicio.
+5. **R4** commit con el ref nuevo en `env-check` → CI verde → merge (`cle1`) →
+   7 días → borrar la vieja.
 
-**Rollback** hasta R4: restaurar las 4 variables viejas y *Redeploy*. La vieja
-sigue activa hasta R4 y pausada 7 días después.
+**Rollback** hasta borrar la vieja: reactivarla (minutos), restaurar las 4
+variables viejas y *Redeploy*.
 
 ## Bloques
 
@@ -217,9 +239,12 @@ repo.
       - RLS por tabla;
       - `pg_db_role_setting`;
       - conteo de filas por tabla.
-- [ ] **(usuario)** Línea base de latencia (B5): 5 cargas de `/cuentas` y 5 de
-      una cotización, con los tiempos de DevTools → Network. Claude te dice qué
-      columnas anotar.
+- [ ] Claude: línea base (B5, C5) con `preview-latency.yml` sobre un Preview
+      actual (`sfo1` → test).
+- [ ] **(usuario, opcional)** 5 cargas de `/cuentas` en producción con
+      DevTools → Network, anotando la mediana.
+- [ ] Claude: confirmar en la documentación de Supabase si reactivar un
+      proyecto pausado cambia su imagen de Postgres (C6).
 
 ### R2 — PR de código (test activo)
 
@@ -227,9 +252,11 @@ repo.
 - [ ] `docs/decisions/021-region-ohio.md` (con la medición de B5 al cerrar) y la
       018 marcada como reemplazada.
 - [ ] `ARCHITECTURE.md` (región), `docs/ENV.md` y `CLAUDE.md` si menciona la región.
+- [ ] `scripts/check-schema-parity.mjs`: normalizar también el nombre remoto
+      (C3).
 - [ ] CI en verde (`test`, `fresh-db`, `smoke-and-critical`, `live`).
-- [ ] Claude: el Preview del PR quedó en `cle1` y responde login y `/cuentas`
-      contra test.
+- [ ] Claude: `preview-latency.yml` sobre el Preview del PR (`cle1` → test):
+      login OK, rutas OK y p95 comparado contra la línea base (C5).
 
 ### R1 — Producción nueva
 
@@ -238,13 +265,15 @@ repo.
       organización "App develop", plan Free, Data API y exposición automática
       **igual que en la vieja**. Guardar la contraseña de la base en tu gestor.
 - [ ] **(usuario)** Settings → API: existen las llaves legacy `anon` y
-      `service_role` y el JWT Secret legacy. Si no, **se detiene**.
+      `service_role` y el JWT Secret legacy. Claude confirma que la `anon`
+      legacy es `HS256` (C2). Si algo falla, **se detiene**.
 - [ ] Claude: versión de Postgres, arquitectura y extensiones disponibles,
       comparadas con test (A6).
-- [ ] **(usuario)** Correr en tu máquina el comando que Claude deja listo:
+- [ ] **(usuario)** Correr en tu máquina el bloque que Claude deja listo:
       `node scripts/build-supabase-migrations.mjs` + `npx supabase db push`
       con la URL del *session pooler* del proyecto nuevo (Connect → Session
-      pooler). Pega aquí solo la salida, nunca la URL con la contraseña.
+      pooler). La contraseña se pide con `read -s` y no queda en el historial
+      (C4). Pega aquí solo la salida, nunca la URL.
 - [ ] Claude: el historial tiene las 141 migraciones.
 - [ ] Claude, comparación **en vivo** vieja ↔ nueva, todo en 0 diferencias o
       explicado:
@@ -276,11 +305,14 @@ repo.
       y Development. **Preview no se toca.**
 - [ ] Claude (o usuario): *Redeploy* de producción **sin caché de build**;
       Claude confirma `READY`.
-- [ ] Verificación funcional en producción:
+- [ ] Claude pausa la vieja y reactiva test (C1).
+- [ ] Verificación funcional en producción (Realtime primero, C2):
+  - [ ] Colaboración en vivo con dos sesiones: aparece "X está editando".
+  - [ ] Header `x-vercel-id` de una respuesta: la base es la nueva; región
+        `sfo1` hasta el merge de R4, `cle1` después.
   - [ ] Login y logout de los 2 usuarios de staff.
   - [ ] Crear una cotización: folio `SH001`; partidas guardadas; Claude
         confirma las filas en **la base nueva**.
-  - [ ] Colaboración en vivo con dos sesiones: aparece "X está editando".
   - [ ] PDF generado y subido a Drive (carpeta de producción).
   - [ ] Proveedor con acceso al Portal: login en el Portal y extracción con AI.
   - [ ] Aprobar la cotización: aparecen sus cuentas en `/cuentas` (periodo,
@@ -290,13 +322,12 @@ repo.
 - [ ] Claude: reinicio otra vez → `SH001`, conteos = los de R1,
       `auditar_consistencia()` = 0.
 - [ ] **(usuario)** Borrar de Drive los PDFs de la verificación.
-- [ ] **(usuario)** Medición después: la misma de R0 (B5).
+- [ ] **(usuario, opcional)** Medición en producción con DevTools, como en R0.
 - [ ] **(usuario)** Avisar a los usuarios que recarguen la app. Recomendado:
       que los 2 cambien su contraseña.
 
 ### R4 — Cierre
 
-- [ ] Claude pausa la vieja (`fwmyoqokcjtldiofuxdg`) y reactiva test (MCP).
 - [ ] Claude: commit con el ref nuevo en `app/api/internal/env-check/route.ts`
       (los dos refs mientras exista la vieja) y su test; CI en verde; merge.
       Claude confirma el deploy de producción en `cle1`.
