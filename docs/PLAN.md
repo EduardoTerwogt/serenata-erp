@@ -205,8 +205,8 @@ variables viejas y *Redeploy*.
 | **R0 Verificaciones, capturas y línea base** | Regiones, límites del plan Free, capturas, huella completa de la vieja, latencia antes. | Usuario + Claude |
 | **R2 PR de código** | `vercel.json` → `cle1`, decisión 021 que reemplaza 018, docs. CI verde y Preview probado. | Claude |
 | **R1 Producción nueva** | Pausar test, crear, `db push`, comparar, reiniciar, copiar 2 usuarios. | Usuario crea y corre el CLI; Claude todo lo demás |
-| **R3 Corte** | Variables, *Redeploy*, verificación funcional, reinicio, latencia después. | Usuario (secretos y prueba) + Claude |
-| **R4 Cierre** | Pausar la vieja, reactivar test, `env-check`, merge, alinear versión de test, borrar la vieja, conectores y docs. | Usuario + Claude |
+| **R3 Corte** | Variables, *Redeploy*, pausar la vieja y reactivar test (C1), verificación funcional, reinicio. | Usuario (secretos y prueba) + Claude |
+| **R4 Cierre** | `env-check`, merge (`cle1`), alinear versión de test, borrar la vieja a los 7 días, conectores y docs. | Usuario + Claude |
 
 ## Checklist completo
 
