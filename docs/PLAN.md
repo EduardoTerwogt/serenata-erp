@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** En refinamiento (2026-10-02, auditado) — "#124: Producción y Vercel a Ohio (`us-east-2`, `cle1`)". Pendiente de aprobación del usuario.
+**Estado:** En refinamiento (2026-10-02, dos auditorías) — "#124: Producción y Vercel a Ohio (`us-east-2`, `cle1`)". Pendiente de aprobación del usuario.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -114,217 +114,230 @@ el repo reproduce producción, que es valiosa por sí misma. Las correcciones de
 arriba eliminan el bloqueo de CI (A1), la falla silenciosa por permisos (A2) y el
 riesgo de alargar la caída si la reproducción falla (A3).
 
-## Automatización y trabajo manual (2026-10-02)
+## Auditoría 2 (Dev Sr + Data Sr, 2026-10-02, antes de aprobar)
 
-**Plan Pro temporal: descartado.** Su única herramienta útil, "Restore to a new
-project", crea la copia **en la misma región** que el origen (documentación de
-Supabase), así que no sirve para cambiar de región. Lo único que aportaría es
-quitar el límite de 2 proyectos activos, y pausar y reactivar proyectos ya lo
-hace Claude con el MCP (`pause_project` / `restore_project`).
+Segunda revisión del plan ya corregido. Cuatro hallazgos cambian la ejecución.
 
-**Lo hace Claude (MCP de Supabase):** crear el proyecto en `us-east-2`
-(`create_project`), pausar y reactivar test y la vieja, aplicar migraciones,
-todas las comparaciones, copiar datos, el reinicio y leer la llave `anon`
-(`get_publishable_keys`).
+| # | Severidad | Hallazgo (verificado) | Corrección |
+|---|---|---|---|
+| B1 | **P0** | **La copia de datos habría fallado.** La migración `20260906_post_rename_fase52_proyectos_pm_schema.sql` **siembra** los 3 tipos de proyecto y sus 12 etapas con UUID nuevos. Copiar las filas de la vieja con sus ids choca con la restricción única de `nombre`. Además `20260924_folios_cc_cp_por_anio.sql` siembra `folio_contadores`, que en la vieja está vacío. Comparé contenido: tipos y etapas de la vieja son **idénticos** al sembrado (nombres, orden, etapa final), y ningún código ni tabla con datos referencia sus ids. | Solo se copian los **2 usuarios**. Tipos y etapas se quedan como los siembran las migraciones (se verifica que el contenido sea igual). El reinicio corre **después** de migrar y deja `folio_contadores` vacío. Al final, conteo de filas por tabla nueva = vieja. |
+| B2 | **P0** | **Aplicar 141 migraciones (1.3 MB) por MCP significa que Claude reescribe cada archivo como texto:** no es copia byte a byte, y son horas de generación. CI nunca usa ese camino: `migrations.yml` aplica con el Supabase CLI (`supabase start` sobre `supabase/migrations/`, que arma `build-supabase-migrations.mjs`). | Aplicar con **el mismo motor que CI**: el usuario corre **un comando** del Supabase CLI (`db push`) en su máquina, con la URL del *session pooler* (IPv4). Es determinista, tarda minutos y deja el historial registrado. El MCP queda solo como respaldo. La comparación de esquema contra la vieja sigue siendo la prueba final. |
+| B3 | P1 | Crear el proyecto por MCP (`create_project`) no deja elegir la contraseña de la base ni las opciones de Data API/exposición automática (riesgo A2). | El usuario crea el proyecto desde el panel (2 minutos): elige la contraseña (la necesita el CLI) y ve esas opciones. |
+| B4 | P1 | **Otro orden imposible:** R2 iba a fijar en `env-check` el ref nuevo, que no existe hasta R1. | `env-check` se actualiza en R4, antes del merge y con test activo. La ruta está muerta en producción y solo protege las pruebas de carga, que no corren durante la ventana. El script de reinicio no se commitea: es DML de una sola vez; Claude lo corre por MCP desde el scratchpad, con el ref nuevo en la confirmación. |
+| B5 | P2 | La decisión 018 no pudo demostrar su mejora porque no hubo medición antes y después. | Línea base de latencia **antes** del corte y la misma medición después: 5 cargas de `/cuentas` y de una cotización, tiempos de la pestaña Network de DevTools o `preview-latency.yml` sobre producción si sus rutas lo permiten. Se registra en la decisión 021. |
 
-**Vercel:** el conector de Vercel de Claude hoy da **403** sobre el team
-`eduardoterwogts-projects` (no puede leer ni editar variables). Si el usuario lo
-reautentica con acceso a ese team, Claude cambia las variables no secretas,
-lanza el *Redeploy* y verifica los deploys. Los dos secretos
-(`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`) los pega el usuario: el
-MCP de Supabase no los entrega y no deben pasar por el chat.
+**Conclusión:** con B1–B4 el plan es el más seguro y eficiente disponible en el
+plan Free:
+- El esquema se aplica con el motor que CI ya prueba en cada PR.
+- La única copia de datos son 2 filas.
+- La vieja sirve tráfico hasta el corte.
+- El rollback es cambiar 4 variables y volver a desplegar.
 
-**Descartado:** la integración Supabase ↔ Vercel del Marketplace. Sincroniza
-las mismas variables a **todos** los entornos y pisaría las de Preview (test):
-es el incidente que separó los entornos el 2026-09-24.
+## Automatización y trabajo manual
 
-**Manual del usuario (mínimo):**
-1. Aprobar el plan.
-2. Reautenticar el conector de Vercel con acceso al team (una vez).
-3. Confirmar la región `cle1` en el panel de Vercel y aprobar la creación del
-   proyecto.
-4. Una captura de Settings → API / Data API de la vieja y comparar la misma
-   pantalla en la nueva.
-5. Pegar 2 secretos en Vercel (Production y Development).
-6. La verificación funcional con dos navegadores (~15 min) y borrar de Drive
-   los PDFs de la prueba.
-7. A los 7 días, borrar la producción vieja desde el panel.
+**Plan Pro temporal: descartado.** "Restore to a new project" copia **en la
+misma región** que el origen (documentación de Supabase) y el límite de 2
+proyectos se resuelve pausando por MCP.
 
-## Estrategia de corte (corregida)
+**Lo hace Claude:**
+- Con el MCP de Supabase: pausar y reactivar proyectos, huellas y comparaciones,
+  reinicio, copia de los 2 usuarios, guardas y advisors.
+- Con el MCP de Vercel (si se reautentica con acceso al team
+  `eduardoterwogts-projects`; hoy da 403): variables no secretas, *Redeploy* y
+  verificar región y estado de los deploys.
+- El PR de código y la documentación.
 
-1. **R0** verificar y capturar con todo activo.
-2. **R2** PR de código con test activo; CI en verde; el Preview prueba `cle1`.
-   No se mergea.
-3. **Pausar test** (límite de 2 activos). Producción vieja sigue sirviendo.
-4. **R1** crear la producción nueva, migrar, comparar **en vivo** contra la vieja,
-   copiar datos y probar el script de reinicio.
-5. **R3 corte:** variables de Production y Development en Vercel → *Redeploy*
-   de producción (sin merge) → verificación funcional → reinicio.
-6. **R4:** pausar la vieja, reactivar test, mergear el PR (`cle1` + `env-check`)
-   con CI en verde, 7 días de rollback, borrar la vieja.
+**Descartado:** la integración Supabase ↔ Vercel del Marketplace. Sincroniza a
+**todos** los entornos y pisaría Preview (el incidente del 2026-09-24).
 
-**Rollback** (en cualquier punto hasta R4): restaurar las 4 variables viejas en
-Vercel y *Redeploy*. La vieja sigue activa hasta R4 y pausada 7 días después.
+**Manual del usuario:**
+1. Aprobar el plan y reautenticar el conector de Vercel con acceso al team.
+2. Confirmar `cle1` en el panel de Vercel.
+3. Una captura de Settings → API / Data API (y Realtime → Settings) de la vieja.
+4. Crear el proyecto en el panel (`us-east-2`), con las mismas opciones de Data API.
+5. Correr **un comando** del CLI que Claude deja listo (aplica las 141 migraciones).
+6. Pegar 2 secretos en Vercel (Production y Development).
+7. Medición de latencia antes y después (B5) y verificación funcional con dos
+   navegadores (~15 min); borrar de Drive los PDFs de prueba.
+8. A los 7 días, borrar la vieja desde el panel.
+
+## Estrategia de corte
+
+1. **R0** verificar, capturar y medir la latencia base, con todo activo.
+2. **R2** PR (`vercel.json` → `cle1`, decisión 021, docs) con test activo; CI
+   verde; el Preview prueba `cle1` contra test. No se mergea.
+3. **R1** pausar test → el usuario crea el proyecto → `db push` → comparación en
+   vivo contra la vieja → reinicio → copiar 2 usuarios → conteos iguales.
+4. **R3** variables en Vercel → *Redeploy* (sin merge) → verificación funcional →
+   reinicio → medición después.
+5. **R4** pausar la vieja → reactivar test → commit con el ref nuevo en
+   `env-check` → CI verde → merge (`cle1`) → 7 días → borrar la vieja.
+
+**Rollback** hasta R4: restaurar las 4 variables viejas y *Redeploy*. La vieja
+sigue activa hasta R4 y pausada 7 días después.
 
 ## Bloques
 
 | Bloque | Qué | Quién |
 |---|---|---|
-| **R0 Verificaciones y capturas** | Regiones disponibles, límites del plan Free, capturas de paneles, huella completa de la vieja (A2). | Usuario + Claude |
-| **R2 PR de código** | `vercel.json` → `cle1`, `env-check` con los dos refs (A4), script de reinicio recuperado (A5), decisión 021 que reemplaza 018, docs. CI verde y Preview probado. | Claude |
-| **R1 Producción nueva** | Pausar test; crear el proyecto; migrar; comparar todo contra la vieja (A2, A6); copiar datos (A7); ensayo del reinicio. | Usuario crea; Claude aplica y verifica |
-| **R3 Corte** | Variables, *Redeploy*, verificación funcional, reinicio, aviso de recarga (A8). | Usuario (Vercel) + Claude |
-| **R4 Cierre** | Pausar la vieja, reactivar test, mergear el PR, alinear la versión de test (A6), 7 días, borrar la vieja, conectores y docs. | Usuario + Claude |
+| **R0 Verificaciones, capturas y línea base** | Regiones, límites del plan Free, capturas, huella completa de la vieja, latencia antes. | Usuario + Claude |
+| **R2 PR de código** | `vercel.json` → `cle1`, decisión 021 que reemplaza 018, docs. CI verde y Preview probado. | Claude |
+| **R1 Producción nueva** | Pausar test, crear, `db push`, comparar, reiniciar, copiar 2 usuarios. | Usuario crea y corre el CLI; Claude todo lo demás |
+| **R3 Corte** | Variables, *Redeploy*, verificación funcional, reinicio, latencia después. | Usuario (secretos y prueba) + Claude |
+| **R4 Cierre** | Pausar la vieja, reactivar test, `env-check`, merge, alinear versión de test, borrar la vieja, conectores y docs. | Usuario + Claude |
 
 ## Checklist completo
 
-Lo que dice **(usuario)** solo se hace desde un panel con tu cuenta; Claude da el
+Lo que dice **(usuario)** solo se hace desde un panel o tu máquina; Claude da el
 paso a paso exacto en ese momento. Ningún secreto se pega en el chat ni en el
-repo: las llaves van directo de Supabase a Vercel.
+repo.
 
 ### R0 — Antes de empezar (todo activo, sin cambios)
 
-- [ ] **(usuario)** Supabase → New project → lista de regiones: confirmar que no
-      hay México y que existe `us-east-2`.
+- [ ] **(usuario)** Supabase → New project → lista de regiones: existe
+      `us-east-2` y no hay México.
 - [ ] **(usuario)** Vercel → Project Settings → Functions → Function Region:
-      confirmar que `cle1` está disponible en tu plan.
-- [ ] Confirmar en la documentación de Supabase que un proyecto pausado no
-      cuenta para el límite de 2 activos y cuánto tarda en reactivarse.
-- [ ] **(usuario)** Capturas de la producción vieja:
+      `cle1` disponible en tu plan.
+- [ ] **(usuario)** Reautenticar el conector de Vercel de Claude con acceso al
+      team `eduardoterwogts-projects`. Claude confirma que ya puede leer las
+      variables de producción, sin descifrarlas.
+- [ ] Claude: confirmar en la documentación de Supabase que un proyecto pausado
+      no cuenta para el límite de 2 activos y cuánto tarda en reactivarse.
+- [ ] **(usuario)** Capturas de la vieja:
       - Settings → API / Data API: esquemas expuestos, *max rows*, *extra search
         path* y exposición automática de tablas nuevas.
       - Settings → JWT: expiración.
       - Realtime → Settings.
       - Database → Settings: SSL y restricciones de red.
-      - Authentication → Settings, solo como referencia (la app no usa Supabase Auth).
-- [ ] Claude, huella completa de la vieja guardada en el scratchpad (no en el repo):
+- [ ] Claude, huella completa de la vieja en el scratchpad:
       - `esquema-huella.sql`;
-      - GRANTs de tablas por rol;
-      - extensiones con su esquema y versión;
+      - GRANTs por tabla y rol;
+      - extensiones con esquema y versión;
       - políticas de `realtime.messages`;
       - RLS por tabla;
-      - `pg_db_role_setting`.
+      - `pg_db_role_setting`;
+      - conteo de filas por tabla.
+- [ ] **(usuario)** Línea base de latencia (B5): 5 cargas de `/cuentas` y 5 de
+      una cotización, con los tiempos de DevTools → Network. Claude te dice qué
+      columnas anotar.
 
 ### R2 — PR de código (test activo)
 
 - [ ] `vercel.json`: `"regions": ["cle1"]`.
-- [ ] `app/api/internal/env-check/route.ts`: proteger el ref nuevo **y** el
-      viejo, y su test.
-- [ ] `scripts/db/reset-transaccional.sql` recuperado de `624d91d^`, adaptado:
-      lista de tablas que se conservan, confirmación con el ref nuevo y
-      verificación en la misma transacción. Se borra del repo en R4.
-- [ ] `docs/decisions/021-region-ohio.md`, y la 018 marcada como reemplazada.
-- [ ] `ARCHITECTURE.md` (región), `docs/ENV.md`, `.claude/rules/migraciones.md`
-      y `docs/inventario-tablas.md`.
+- [ ] `docs/decisions/021-region-ohio.md` (con la medición de B5 al cerrar) y la
+      018 marcada como reemplazada.
+- [ ] `ARCHITECTURE.md` (región), `docs/ENV.md` y `CLAUDE.md` si menciona la región.
 - [ ] CI en verde (`test`, `fresh-db`, `smoke-and-critical`, `live`).
-- [ ] Claude: el Preview del PR quedó en `cle1` (API de Vercel) y responde login
-      y `/cuentas` contra test.
+- [ ] Claude: el Preview del PR quedó en `cle1` y responde login y `/cuentas`
+      contra test.
 
 ### R1 — Producción nueva
 
-- [ ] **(usuario)** Pausar `serenata-erp-test`. No correr CI hasta R4.
-- [ ] **(usuario)** Crear `serenata-erp` en **`us-east-2`**, organización "App
-      develop", plan Free, con la Data API y la exposición automática **igual
-      que en la vieja** (A2). Guardar la contraseña de la base en tu gestor.
-- [ ] **(usuario)** Settings → API: confirmar que existen las llaves legacy
-      `anon` y `service_role` y el JWT Secret legacy. Si no, **se detiene**: el
-      token de Realtime depende de él.
+- [ ] Claude pausa `serenata-erp-test` (MCP). No correr CI hasta R4.
+- [ ] **(usuario)** Crear `serenata-erp` en el panel: región **`us-east-2`**,
+      organización "App develop", plan Free, Data API y exposición automática
+      **igual que en la vieja**. Guardar la contraseña de la base en tu gestor.
+- [ ] **(usuario)** Settings → API: existen las llaves legacy `anon` y
+      `service_role` y el JWT Secret legacy. Si no, **se detiene**.
 - [ ] Claude: versión de Postgres, arquitectura y extensiones disponibles,
       comparadas con test (A6).
-- [ ] Claude: aplicar las 141 migraciones en el orden de `_manifest.json`, una
-      por una, registradas en el historial. Si alguna falla, se corrige en el
-      repo antes de seguir (la vieja sigue sirviendo).
+- [ ] **(usuario)** Correr en tu máquina el comando que Claude deja listo:
+      `node scripts/build-supabase-migrations.mjs` + `npx supabase db push`
+      con la URL del *session pooler* del proyecto nuevo (Connect → Session
+      pooler). Pega aquí solo la salida, nunca la URL con la contraseña.
+- [ ] Claude: el historial tiene las 141 migraciones.
 - [ ] Claude, comparación **en vivo** vieja ↔ nueva, todo en 0 diferencias o
       explicado:
-      - `check-schema-parity --esquema`;
-      - GRANTs por tabla y rol (`service_role` 245);
+      - huella;
+      - GRANTs (`service_role` 245);
       - extensiones;
       - políticas de `realtime.messages`;
       - RLS;
-      - ajustes de roles (`authenticator`: `safeupdate`, 8 s, 8 s).
-- [ ] Claude: `plpgsql-check.sql` = 0 errores; advisors con solo los INFO
-      esperados.
-- [ ] **(usuario)** Replicar los ajustes capturados en R0; Claude los compara
-      campo por campo.
-- [ ] Claude: copiar las 17 filas con sus ids. Los hashes no se escriben en
-      ningún archivo (A7).
-- [ ] Claude: ensayo del reinicio en el proyecto nuevo; debe terminar sin
-      cambios. Después: `auditar_consistencia()` = 0 y `preview_next_folio` =
-      `SH001`.
-- [ ] Congelamiento: nadie usa producción desde la copia hasta el corte.
+      - ajustes de roles.
+- [ ] Claude: `plpgsql-check.sql` = 0 errores; advisors con solo los INFO esperados.
+- [ ] **(usuario)** Replicar los ajustes capturados en R0; Claude compara.
+- [ ] Claude: reinicio (vacía todo salvo `usuarios`, `tipos_proyecto`,
+      `tipo_proyecto_etapas` y `tipo_proyecto_tarea_default`, y deja
+      `folio_contadores` vacío). Corre en una transacción que se verifica sola.
+- [ ] Claude: tipos y etapas con el mismo contenido que la vieja (B1).
+- [ ] Claude: copiar los 2 usuarios con sus ids. Los hashes no se escriben en
+      ningún archivo.
+- [ ] Claude: conteo de filas por tabla nueva = vieja;
+      `auditar_consistencia()` = 0; `preview_next_folio` = `SH001`.
+- [ ] Congelamiento: nadie usa producción desde aquí hasta el corte.
 
-### R3 — Corte (Vercel)
+### R3 — Corte
 
-- [ ] **(usuario)** Environment Variables → **Production**: reemplazar
-      `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-      `SUPABASE_SERVICE_ROLE_KEY` y `SUPABASE_JWT_SECRET`. Anotar en tu gestor
-      los valores viejos (rollback).
-- [ ] **(usuario)** Lo mismo en **Development**. **Preview no se toca.**
-- [ ] **(usuario)** Deployments → el deploy de producción actual → *Redeploy*,
-      sin caché de build (las `NEXT_PUBLIC_*` se incrustan al compilar).
-- [ ] Claude: el deploy nuevo quedó `READY` (API de Vercel).
+- [ ] **(usuario)** Vercel → Environment Variables → **Production** y
+      **Development**: pegar `SUPABASE_SERVICE_ROLE_KEY` y
+      `SUPABASE_JWT_SECRET` del proyecto nuevo. Anotar los viejos en tu gestor.
+- [ ] Claude (o usuario si el conector sigue sin acceso):
+      `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` en Production
+      y Development. **Preview no se toca.**
+- [ ] Claude (o usuario): *Redeploy* de producción **sin caché de build**;
+      Claude confirma `READY`.
 - [ ] Verificación funcional en producción:
   - [ ] Login y logout de los 2 usuarios de staff.
-  - [ ] Crear una cotización: folio `SH001`; guardar partidas; Claude confirma
-        las filas **en la base nueva**.
-  - [ ] Colaboración en vivo con dos sesiones: el aviso "X está editando"
-        aparece (Realtime firmado con el JWT secret nuevo).
-  - [ ] Generar el PDF y verificar que sube a Drive (carpeta de producción).
-  - [ ] Crear un proveedor con acceso al Portal; login en el Portal y extracción
-        con AI.
+  - [ ] Crear una cotización: folio `SH001`; partidas guardadas; Claude
+        confirma las filas en **la base nueva**.
+  - [ ] Colaboración en vivo con dos sesiones: aparece "X está editando".
+  - [ ] PDF generado y subido a Drive (carpeta de producción).
+  - [ ] Proveedor con acceso al Portal: login en el Portal y extracción con AI.
   - [ ] Aprobar la cotización: aparecen sus cuentas en `/cuentas` (periodo,
         resumen, opciones y avisos).
   - [ ] Admin → `auditar_consistencia()` = 0.
-  - [ ] Cron `/api/keep-alive` con `CRON_SECRET`: responde OK.
-- [ ] Claude: correr el reinicio; debe quedar `SH001`, 0 filas fuera de la lista
-      de conservadas y `auditar_consistencia()` = 0.
+  - [ ] Cron `/api/keep-alive` con `CRON_SECRET` responde OK.
+- [ ] Claude: reinicio otra vez → `SH001`, conteos = los de R1,
+      `auditar_consistencia()` = 0.
 - [ ] **(usuario)** Borrar de Drive los PDFs de la verificación.
-- [ ] **(usuario)** Avisar a los usuarios que recarguen la app (A8). Recomendado:
-      que los 2 usuarios cambien su contraseña (A7).
+- [ ] **(usuario)** Medición después: la misma de R0 (B5).
+- [ ] **(usuario)** Avisar a los usuarios que recarguen la app. Recomendado:
+      que los 2 cambien su contraseña.
 
 ### R4 — Cierre
 
-- [ ] **(usuario)** Pausar la producción vieja (`fwmyoqokcjtldiofuxdg`).
-- [ ] **(usuario)** Reactivar `serenata-erp-test`.
-- [ ] Mergear el PR de R2 con CI en verde; Claude confirma el deploy de
-      producción en `cle1`.
-- [ ] Si producción quedó con una versión de Postgres más nueva que test:
-      **(usuario)** actualizar test desde su panel (A6).
+- [ ] Claude pausa la vieja (`fwmyoqokcjtldiofuxdg`) y reactiva test (MCP).
+- [ ] Claude: commit con el ref nuevo en `app/api/internal/env-check/route.ts`
+      (los dos refs mientras exista la vieja) y su test; CI en verde; merge.
+      Claude confirma el deploy de producción en `cle1`.
+- [ ] Si producción quedó con un Postgres más nuevo que test: **(usuario)**
+      actualizar test desde su panel.
 - [ ] `escala.yml` una vez, como línea base nueva.
+- [ ] Decisión 021 con la medición antes y después.
 - [ ] A los 7 días: **(usuario)** borrar la vieja; Claude quita su ref de
-      `env-check` y borra `reset-transaccional.sql` (PR chico).
-- [ ] **(usuario)** Conector `supabase-prod` en claude.ai: si tiene ref fijo,
-      apuntarlo al nuevo. Claude ajusta `CLAUDE.md` si hace falta (A10).
-- [ ] **(usuario)** `.env.local` de tu máquina, si apunta a producción.
-- [ ] Proyecto Vercel aislado de carga (`loadtest-target`): toma `cle1` la
-      próxima vez que se fije a un SHA de `main`; apunta a test, sin cambios.
+      `env-check` (PR chico).
+- [ ] **(usuario)** Conector `supabase-prod` en claude.ai, si tiene ref fijo, y
+      `.env.local` de tu máquina si apunta a producción. Claude ajusta
+      `CLAUDE.md`, `.claude/rules/migraciones.md` y `docs/inventario-tablas.md`.
+- [ ] El proyecto Vercel aislado de carga toma `cle1` la próxima vez que se fije
+      `loadtest-target`; apunta a test, sin cambios.
 - [ ] `docs/ACTIVE_WORK.md`, `docs/ROADMAP.md`, cerrar #124, archivar este plan.
 
 ### Lo que no cambia (verificado)
 
 Google OAuth y Drive (mismo dominio), `ANTHROPIC_API_KEY`, `AUTH_SECRET` (las
-sesiones abiertas siguen válidas: mismos ids y `session_version` copiados),
+sesiones abiertas siguen válidas: mismos ids y `session_version`),
 `CRON_SECRET`, el cron de Vercel, los secretos de GitHub Actions (todos de test),
 la CSP (`*.supabase.co`), el entorno Preview de Vercel y la base de test.
 
 ## Riesgos
 
-Ninguno queda abierto sin una acción en el checklist:
-
 | Riesgo | Cómo queda cubierto |
 |---|---|
-| Sin llaves legacy | Se detecta en R1, antes de copiar datos o tocar Vercel. |
+| Sin llaves legacy | Se detecta en R1, antes de tocar datos o Vercel. |
 | Permisos o ajustes distintos | Comparación en vivo y capturas (A2). |
-| Migración que falla en Supabase real | La vieja sigue sirviendo (A3). |
+| Migración que falla en Supabase real | Mismo motor que CI (B2); la vieja sigue sirviendo (A3). |
+| Copia de datos con conflicto | Solo 2 usuarios; el resto lo siembran las migraciones (B1). |
 | Corte fallido | Rollback por variables más *Redeploy*, en minutos. |
-| Datos de prueba que quedan en producción | Reinicio transaccional probado antes del corte (A5). |
-| CI bloqueado | Orden corregido (A1). |
+| Datos de prueba que quedan en producción | Reinicio transaccional antes y después de la verificación. |
+| CI bloqueado o pasos en orden imposible | Orden corregido (A1, B4). |
+| No saber si mejoró | Medición antes y después (B5). |
 
 ## Tracker
 
 | Bloque | Estado |
 |---|---|
-| R0 Verificaciones y capturas | Pendiente |
+| R0 Verificaciones, capturas y línea base | Pendiente |
 | R2 PR de código | Pendiente |
 | R1 Producción nueva | Pendiente |
 | R3 Corte y verificación | Pendiente |
