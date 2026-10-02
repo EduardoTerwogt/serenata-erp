@@ -494,7 +494,7 @@ evidencia, no cuenta como terminado.
 | Proyectos (detalle, tareas, cronograma, tipos, reporte de cierre) | smoke de proyectos |
 | Proveedores (lista + modal, historial, régimen fiscal (moral / física / RESICO), revisión de documentos del Portal: validar/marcar en revisión con motivo) | `tests/e2e/critical/proveedores.spec.ts`, `app/api/__tests__/proveedores-documentos-route.test.ts`, `proveedores-documentos-id-route.test.ts` |
 | Portal de proveedores (signup, login, confirmar identidad; subir factura + simulador de factura; alias; documentos con auto-clasificación híbrida, borrado y reemplazo automático del mismo tipo al subir uno nuevo; matching de identidad solo por INE; "Tus cuentas con Serenata" como tabla paginada al fondo de "Cuentas y facturas", ya no un tab propio) | `smoke/portal-signup.spec.ts`, `smoke/portal-documentos.spec.ts`, `smoke/portal-mis-datos.spec.ts`, `critical/portal-factura.spec.ts` |
-| Clientes (catálogo editable: lista + modal, mismo patrón `PUT`+soft-delete `activo` que Proveedores; `cliente_id` como FK real en `cotizaciones`/`proyectos`/`cuentas_cobrar`/`historial_responsable`, dual-write con clasificación de 3 cubetas para el backfill) | `app/api/__tests__/clientes-route.test.ts` (sin e2e dedicado todavía), `lib/validation/__tests__/schemas.test.ts` (casos `cliente_id`), `docs/decisions/014-cliente-id-fk-clasificacion.md` |
+| Clientes (catálogo editable: lista + modal, mismo patrón `PUT`+soft-delete `activo` que Proveedores; `cliente_id` como FK real solo en `cotizaciones` (único dueño desde B5b; proyectos y cuentas lo leen por ahí); el dual-write y la clasificación de 3 cubetas del backfill fueron transitorios) | `app/api/__tests__/clientes-route.test.ts` (sin e2e dedicado todavía), `lib/validation/__tests__/schemas.test.ts` (casos `cliente_id`), `docs/decisions/014-cliente-id-fk-clasificacion.md` |
 | Plantillas de servicios (cotizaciones nuevas) | `critical/plantillas-servicios.spec.ts` |
 | Admin de usuarios | `critical/admin-usuarios.spec.ts` |
 | Dashboard (incluye gastos fijos) | `lib/server/repositories/dashboard.ts` + sus tests |
@@ -537,7 +537,7 @@ autoritativa, no una tabla en un documento. Agrupadas por dominio:
 | Catálogos | `clientes`, `productos`, `service_templates` |
 | Proyectos | `proyectos`, `tipos_proyecto`, `tipo_proyecto_etapas`, `tipo_proyecto_tarea_default`, `proyecto_tareas`, `proyecto_tarea_checklist`, `proyecto_documentos` |
 | Cuentas | `cuentas_cobrar`, `cuentas_pagar` (folio `CC-/CP-AAAA-NNNNN` por trigger → `siguiente_folio()`, consecutivo que reinicia cada año, año en hora CDMX), `folio_contadores`, `cuentas_pagar_grupos`, `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`, `pagos_comprobantes`, `ordenes_pago` |
-| Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable`, `historial_cambios_responsable_item` |
+| Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable` (vista `security_invoker` derivada de `items_cotizacion`), `historial_cambios_responsable_item` |
 | Dashboard | `gastos_fijos` |
 | Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys`, `loadtest_runs` (**solo en `serenata-erp-test`**, nunca en producción: control de las corridas de carga) |
 

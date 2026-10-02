@@ -41,6 +41,12 @@ vi.mock('@/lib/integrations/google/drive', () => ({
 
 import { GET } from '../keep-alive/route'
 
+const AUDITORIA_OK = {
+  ejecutado_en: '2026-10-02T08:00:00Z',
+  total_violaciones: 0,
+  guardas: [{ clave: 'folio_cp', descripcion: 'folio de cuenta por pagar nulo o duplicado', violaciones: 0, ejemplos: [] }],
+}
+
 function buildRequest(authHeader: string | null) {
   const headers = new Headers()
   if (authHeader !== null) headers.set('authorization', authHeader)
@@ -58,7 +64,7 @@ describe('GET /api/keep-alive', () => {
     mocks.deleteMock.mockReset().mockReturnValue({ not: mocks.notMock })
     mocks.rateLimitsLtMock.mockReset().mockResolvedValue({ error: null, count: 0 })
     mocks.rateLimitsDeleteMock.mockReset().mockReturnValue({ lt: mocks.rateLimitsLtMock })
-    mocks.rpcMock.mockReset()
+    mocks.rpcMock.mockReset().mockResolvedValue({ data: AUDITORIA_OK, error: null })
     mocks.operationsLtMock.mockReset().mockResolvedValue({ error: null, count: 0 })
     mocks.operationsDeleteMock.mockReset().mockReturnValue({ lt: mocks.operationsLtMock })
     process.env.CRON_SECRET = 'secreto-real'
@@ -127,8 +133,42 @@ describe('GET /api/keep-alive', () => {
   it('D15 -- ya no llama la RPC de estados vencidos (el estado del cobro es derivado)', async () => {
     const body = await (await GET(buildRequest('Bearer secreto-real'))).json()
 
-    expect(mocks.rpcMock).not.toHaveBeenCalled()
+    expect(mocks.rpcMock).not.toHaveBeenCalledWith('sync_estados_cuentas_cobrar_vencidas')
     expect(body).not.toHaveProperty('cuentas_cobrar_sync')
+  })
+
+  it('B7 -- corre auditar_consistencia y la deja en la respuesta', async () => {
+    const response = await GET(buildRequest('Bearer secreto-real'))
+
+    expect(mocks.rpcMock).toHaveBeenCalledWith('auditar_consistencia')
+    expect(response.status).toBe(200)
+    expect((await response.json()).auditoria).toEqual({ ok: true, total_violaciones: 0 })
+  })
+
+  it('B7 -- una violación se registra y se reporta, pero no marca el keep-alive como fallido', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.rpcMock.mockResolvedValue({
+      data: { ...AUDITORIA_OK, total_violaciones: 2, guardas: [{ clave: 'cp_sin_grupo', descripcion: 'x', violaciones: 2, ejemplos: ['a'] }] },
+      error: null,
+    })
+
+    const response = await GET(buildRequest('Bearer secreto-real'))
+
+    expect(response.status).toBe(200)
+    expect((await response.json()).auditoria).toEqual({ ok: false, total_violaciones: 2 })
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('cp_sin_grupo=2'))
+    errorSpy.mockRestore()
+  })
+
+  it('B7 -- si la auditoría falla, el keep-alive sigue y lo dice sin fingir que todo está en orden', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'boom' } })
+
+    const response = await GET(buildRequest('Bearer secreto-real'))
+
+    expect(response.status).toBe(200)
+    expect((await response.json()).auditoria).toEqual({ ok: false, total_violaciones: null })
+    errorSpy.mockRestore()
   })
 
   it('PLAN B3 (K2) -- borra pago_operations y bulk_import_operations de más de 30 días', async () => {

@@ -59,9 +59,17 @@ El detalle completo de cada uno está en `.claude/rules/`.
 7. **Buscar antes de crear.** Si ya existe infraestructura parecida, se extiende; no
    se construye un segundo motor en paralelo.
 8. **"Costo Unitario" (antes "X Pagar") siempre es el monto neto al proveedor por
-   unidad; "Costo Total" = Costo Unitario × Cantidad.** Todo cálculo de utilidad,
-   margen o impuestos parte de ahí. Fórmulas completas, modelo fiscal y glosario en
+   unidad; "Costo Total" = Costo Unitario × Cantidad.** En la base:
+   `items_cotizacion.costo_unitario` y `cuentas_pagar.costo_total` (ya no existe
+   `x_pagar`). Todo cálculo de utilidad, margen o impuestos parte de ahí. Fórmulas
+   completas, modelo fiscal y glosario en
    `docs/decisions/006-reglas-de-negocio-invariables.md`.
+9. **Cada dato tiene un solo dueño.** Lo que ya vive en otra tabla se lee de ella, no
+   se copia (proveedor, descripción y cantidad del renglón viven en `proveedores` e
+   `items_cotizacion`; el cliente, en `cotizaciones.cliente_id`). El estado de una
+   cotización cambia solo por RPC (emitir, aprobar, cancelar) y una aprobada no se
+   edita. Las guardas permanentes son `auditar_consistencia()` (visible en Admin, cron
+   diario) y `plpgsql_check` en CI. Detalle: `docs/decisions/020`.
 
 ---
 

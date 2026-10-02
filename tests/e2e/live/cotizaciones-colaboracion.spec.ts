@@ -716,7 +716,16 @@ test.describe('live: colaboración real entre dos usuarios', () => {
     // El punto central de la Fase 8: el cambio de B NO se revirtió. Antes de este
     // fix, "Generar Cotización" mandaba un PUT completo con el snapshot que A
     // tenía en memoria, y podía pisar justo esta edición.
-    expect(cotizacion.items[2].descripcion).toBe(nuevaDescripcion)
+    //
+    // El PATCH de B sale al soltar el foco y compite con "Generar" de A: si A termina
+    // primero (visto en CI con la BD cargada), la lectura de arriba aún no lo trae. Eso
+    // no es un revertido, así que se espera a que aterrice -- y, ya aterrizado, que
+    // siga ahí tras dejar pasar cualquier guardado tardío de A.
+    await expect
+      .poll(async () => (await leerCotizacionDelServidor(cotizacionId)).items[2].descripcion, { timeout: 15_000 })
+      .toBe(nuevaDescripcion)
+    await pageA.waitForTimeout(2_000)
+    expect((await leerCotizacionDelServidor(cotizacionId)).items[2].descripcion).toBe(nuevaDescripcion)
   })
 
   test('aprobar mientras otro colaborador edita una partida no revierte su cambio ni deja proyecto/cuentas a medias', async () => {

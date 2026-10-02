@@ -146,8 +146,8 @@ export async function cleanupLiveCotizacionesByPrefix(clientePrefix: string) {
  * Cuentas (`LB7…`, `LB1B…`) lo corren en beforeAll: sin esto esos restos
  * (grupos en proceso de pago sin pagos, cobros con otro total, cuentas sin
  * renglón) se acumulan en la BD de test y rompen las guardas de consistencia
- * (`scripts/db/guardas-modelo.sql`). Un fallo aquí no tumba la corrida, pero
- * se registra: las guardas lo mostrarán.
+ * (`auditar_consistencia()`, visible en Admin). Un fallo aquí no tumba la corrida,
+ * pero se registra: la auditoría lo mostrará.
  */
 export async function cleanupLiveCuentasByPrefix(prefijo: string) {
   const supabase = getLiveSupabaseAdmin()
