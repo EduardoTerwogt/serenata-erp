@@ -143,7 +143,9 @@ async function main() {
   const nombresManifest = new Set(manifest.order.map(normalizeArchivo))
 
   const remotas = await listarMigracionesRemotas(projectRef, accessToken)
-  const nombresRemotos = new Set(remotas.map((m) => m.name))
+  // El CLI (`supabase db push`) registra `000001` + `20260101_nombre`: se quita la fecha
+  // del nombre remoto igual que del local (#124, C3).
+  const nombresRemotos = new Set(remotas.map((m) => String(m.name).replace(/^\d{8}_/, '')))
 
   const faltantesEnRemoto = [...nombresManifest].filter((n) => !nombresRemotos.has(n) && !SOLO_TEST_MIGRACIONES.has(n))
   const noCommiteadasEnRepo = [...nombresRemotos].filter((n) => !nombresManifest.has(n))

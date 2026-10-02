@@ -774,13 +774,11 @@ Trampas reales, no teóricas. Cada una costó un bug:
   (`lib/integrations/google/drive.ts`) que lo deriva del patrón
   `.../file/d/{fileId}/...` que la URL siempre tiene. Detalle completo:
   `docs/decisions/013-portal-documentos-verdad-unica.md`.
-- **Las funciones de Vercel deben correr cerca de la región de Supabase.**
-  `vercel.json` fija `regions: ["sfo1"]` (San Francisco) porque Supabase
-  producción está en `us-west-2` (Oregon); antes corría en el default
-  `iad1` (Virginia), un salto transcontinental en cada llamada a Supabase
-  -- incluida la revocación de sesión (`getUsuarioSessionState`), que se
-  consulta en **cada** request autenticado, no solo en Cuentas. Si se crea
-  un proyecto de Vercel nuevo o se agrega un `functions.regions` por ruta,
-  mantener la región cerca de `us-west-2` (Supabase no permite cambiar de
-  región sin migrar todo el proyecto). Detalle y motivo de no migrar
-  Supabase en su lugar: `docs/decisions/018-region-vercel-sfo1.md`.
+- **Las funciones de Vercel deben correr en la misma región que Supabase.**
+  `vercel.json` fija `regions: ["cle1"]` (Cleveland) y Supabase producción y
+  test están en `us-east-2` (Ohio). Cada request autenticado consulta Supabase
+  (revocación de sesión, `getUsuarioSessionState`), así que la distancia entre
+  ambos se paga varias veces por petición. Si se crea un proyecto de Vercel
+  nuevo o se agrega un `functions.regions` por ruta, mantener `cle1`; Supabase
+  no cambia de región sin recrear el proyecto. Decisión y medición:
+  `docs/decisions/021-region-ohio.md` (reemplaza a la 018, `sfo1`).
