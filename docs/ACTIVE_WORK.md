@@ -51,9 +51,9 @@ modelo de datos", está archivada en `docs/archive/simplificacion-modelo-datos.m
 
 ## Siguiente paso
 
-**En definición: "Frente 2 v2" (borrador en `docs/PLAN.md`, 2026-10-02).** El usuario decidió retomar el frente 2
-re-ajustado sobre el modelo simplificado y sin salir del plan Free. Esperando aprobación del plan; primer bloque V0
-(dataset realista). #119 sigue pendiente de decisión.
+**En refinamiento: "Frente 2 v2" (`docs/PLAN.md`, auditado 2026-10-02).** Orden propuesto: #124 (test a
+`us-west-2`) → #123 (facturas y pagos N:M, decisión de producto) → frente 2 desde V0. Esperando aprobación del
+usuario; al aprobar, cerrar el PR #100 como reemplazado. #119 sigue pendiente de decisión.
 
 ## Deuda técnica
 

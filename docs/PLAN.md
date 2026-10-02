@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** Borrador (2026-10-02) — "Frente 2 v2: Cuentas sin recálculo, sobre el
+**Estado:** En refinamiento (2026-10-02) — "Frente 2 v2: Cuentas sin recálculo, sobre el
 modelo simplificado y dentro del plan Free". Pendiente de aprobación del usuario.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
@@ -41,121 +41,141 @@ Antecedente: el frente 2 original (epic #110, PR #100, rama
 ## Objetivo
 
 Que leer Cuentas cueste en proporción a **lo que se muestra** (el mes, el
-proyecto, lo pendiente) y no al historial completo, con el cómputo actual del
-plan Free de Supabase (sin subir cómputo). Meta: aguantar ~2,500 proyectos por
-año y ~10 años de historial con `live` en verde de forma estable.
+proyecto, lo pendiente) y no al historial completo, con el cómputo del plan Free
+de Supabase. Meta: ~2,500 proyectos por año y ~10 años de historial, con las
+lecturas y las escrituras dentro de presupuesto y sin que la tabla precalculada
+pueda mostrar dinero distinto al de la derivación.
 
-## Diagnóstico (2026-10-02, código de `main` y BD de test)
+## Dependencias y orden (auditoría, 2026-10-02)
+
+1. **#124 — Paridad de entornos** (test a `us-west-2`, misma versión de Postgres
+   que producción). Chico, independiente; va primero para sembrar y medir una sola
+   vez en el entorno final.
+2. **#123 — Nueva lógica de cuentas** (una factura para varias cotizaciones, un
+   comprobante para varias facturas). **Cambia el modelo que el frente 2 precalcula**:
+   un documento deja de pertenecer a un solo cobro y puede cruzar proyectos. Si el
+   frente 2 se construye antes, se rehace (es lo que pasó con el PR #100 frente a
+   la simplificación). Se decide y construye antes de V1; la reescritura de la
+   derivación que pide #123 se hace una sola vez, ya con el diseño de V1.
+3. **Frente 2 v2** (este plan), sobre el modelo final.
+
+Mientras tanto no hay urgencia: producción tiene datos mínimos y la curva de
+escala no cruza el presupuesto con el volumen actual.
+
+## Diagnóstico (código de `main` `c92b860` y BD de test)
 
 Test: 2,203 proyectos (todos en 2026), 2,206 cobros, 10,992 cuentas por pagar,
-10,985 grupos, 13,193 conceptos; **8 documentos de cobro, 4 de pago, 4 + 2
-pagos**. `shared_buffers` 224 MB, `max_connections` 60.
+10,985 grupos, 13,193 conceptos; 12 documentos y 6 pagos en total.
 
 1. **Una carga de `/cuentas` deriva todo 4 veces.** `cuentas_periodo` y
    `cuentas_opciones` derivan el año; `cuentas_resumen` y `cuentas_avisos_items`
-   llaman `cuentas_conceptos(NULL, hoy)`: **todo el historial**. La curva de
-   escala (archivo de la simplificación, B7) ya lo muestra: con 10 años de
-   500 proyectos, `periodo` cuesta 105 ms pero `resumen`/`avisos` ~460–530 ms.
-   Esas dos crecen sin límite con el tiempo aunque el negocio no crezca.
-2. **Derivar un solo concepto cuesta casi lo mismo que derivar miles.**
-   `cuentas_conceptos(NULL, hoy, 'cobro', id)` (el detalle, `detalle.ts`):
-   37 ms y 3,701 buffers para **1 fila**, contra 548 ms y 161,979 buffers el
-   año completo. Causa: función `LANGUAGE sql` con filtros
-   `p_objetivo IS NULL OR …` y `CASE` en el `WHERE`, que impiden usar índices,
-   y CTEs de documentos (`cc_factura`, `cc_comp`, `p_factura`, `p_comp`,
-   `p_fechas`) con `DISTINCT ON`/`GROUP BY` sobre **toda** la tabla, sin filtrar
-   por proyecto. Esto explica el refresco de 141 ms de media (máx. 2.9 s) que
-   midió el PR #100: cada refresco de un proyecto escaneaba todo.
-3. **El dataset de test no mide lo que crecerá.** Casi no tiene documentos ni
-   pagos (12 y 6), todo está pendiente y hay 1 grupo por cuenta. En uso real
-   cada concepto acumula 2–5 documentos y pagos, la mayoría queda resuelta y un
-   grupo junta varias cuentas. Los puntos 1 y 2 empeoran con eso y hoy no se ven.
-4. **Lo que depende de "hoy" es poco y se puede guardar como fecha.**
-   `venc_dias`, `vencido`, `paso_urgente`, `hay_vencidos` y los avisos por
-   vencer salen de `fecha_vencimiento` y `hoy`: se guardan las fechas y se
-   compara al leer.
-5. **Paridad de entornos:** test está en `us-east-2`, producción en
-   `us-west-2` y Vercel en `sfo1`. Parte del p95 de `live` es red, no SQL.
-6. `cuentas_orden_candidatos` no usa la derivación (filtra por estado
-   directo); queda fuera.
+   llaman `cuentas_conceptos(NULL, hoy)`: todo el historial. Con 10 años de 500
+   proyectos, `periodo` cuesta 105 ms pero `resumen`/`avisos` ~460–530 ms (curva
+   de B7). Esas dos crecen con el tiempo aunque el negocio no crezca.
+2. **Derivar un concepto cuesta casi lo mismo que derivar miles.** El detalle
+   (`cuentas_conceptos(NULL, hoy, 'cobro', id)`): 37 ms y 3,701 buffers para una
+   fila; el año completo, 548 ms y 161,979 buffers. La función es `LANGUAGE sql`
+   con filtros `p_objetivo IS NULL OR …` y `CASE` en el `WHERE` que impiden usar
+   índices, y los CTE de documentos y pagos (`cc_factura`, `cc_comp`, `p_factura`,
+   `p_comp`, `p_fechas`) agregan **toda** la tabla sin filtrar por proyecto. Explica
+   los 141 ms de media del refresco que midió el PR #100.
+3. **El dataset de test no mide lo que crecerá:** casi sin documentos ni pagos,
+   todo pendiente, un grupo por cuenta.
+4. **Lo que depende de "hoy":** `venc_dias`, `vencido`, `paso_urgente` y el
+   **estado** del cobro (`vencido`) salen de `fecha_vencimiento − hoy`. `paso` y
+   `resuelto` **no** dependen de hoy (verificado en el código): `resuelto` sirve
+   como llave de un índice parcial. Todo aviso y todo "pendiente" del resumen es
+   un concepto no resuelto (verificado categoría por categoría).
+5. **Paridad de entornos:** test `us-east-2` / 17.6.1.166, producción
+   `us-west-2` / 17.6.1.084, Vercel `sfo1` → #124. Además `live` y `escala.yml`
+   corren en runners de GitHub de región no fija: el p95 de extremo a extremo
+   mezcla red.
+6. `cuentas_orden_candidatos` no usa la derivación; fuera de alcance.
 
-## Opciones
+## Auditoría del borrador (Dev Sr, Data Engineer Sr, Data Analyst Sr)
 
-| | Qué | A favor | En contra |
+Cada hallazgo cambia el diseño; ninguno queda como "mitigación".
+
+| # | Rol | Hallazgo | Resolución en el diseño |
 |---|---|---|---|
-| **A** | Retomar el PR #100 tal cual (tabla por concepto + 11 triggers + cola). | Ya diseñado y medido. | Escrito sobre el esquema anterior a la simplificación (B5 cambió pagos, grupos y estado del cobro); el refresco hereda el punto 2 (141 ms por escritura); `resumen`/`avisos` siguen recorriendo todo el historial de la tabla. |
-| **B** | Solo la "palanca barata": derivación barata por proyecto, sin estado nuevo. | Sin triggers ni tabla; arregla el detalle y baja todo. | `resumen`/`avisos` siguen sin saber qué está pendiente sin derivar todo; ayuda, no resuelve el crecimiento con el historial. |
-| **C** | **A v2:** primero B (derivación por proyecto con índices), y encima la tabla por concepto mantenida en la misma transacción, con índice parcial de pendientes y lecturas acotadas a mes/proyecto/pendiente. | Cada lectura cuesta lo que muestra; el refresco por escritura pasa de ~141 ms a pocos ms; `resumen`/`avisos` dejan de crecer con el historial; reusa el mecanismo probado del PR #100 (cola + constraint trigger diferido + reconciliación). | Es la opción con más piezas; requiere dataset realista para demostrarlo. |
-| D | Tabla refrescada por `pg_cron` cada minuto (consistencia eventual). | Las escrituras no pagan nada. | Tras subir una factura la UI mostraría el estado viejo hasta un minuto; rompe "leer lo que acabas de escribir". Descartada. |
-| E | Subir cómputo de Supabase. | Cero código. | Fuera del plan Free (requisito del usuario). Descartada. |
+| H1 | DE | #123 cambia el grano (documento ↔ varios cobros, pago ↔ varias facturas). Precalcular antes es retrabajo seguro. | Orden de arriba: #123 antes de V1. El refresco se marca por **conjunto de proyectos afectados** resuelto por las tablas de vínculo, no por "el proyecto de la fila". |
+| H2 | DE | El diseño del PR #100 no tenía trigger en `clientes` (el nombre es la contraparte del cobro) ni en `items_cotizacion` (la descripción es el concepto). Renombrar un cliente dejaba la tabla vieja hasta la reconciliación. | **Cobertura mecánica:** la derivación pasa a plpgsql y un chequeo de CI compara `plpgsql_show_dependency_tb` (plpgsql_check 2.8, ya instalado) con las tablas que tienen el trigger. Si la derivación lee una tabla sin trigger, CI falla. Desaparece la clase de error "se olvidó un trigger". |
+| H3 | Dev | El `WHEN` por columnas de los triggers de `UPDATE` es una trampa de mantenimiento (columna nueva sin agregar = dato viejo). Su motivo, el cron que reescribía `estado` en 500 cobros, ya no existe: `estado` es columna generada y `sync_estados_cuentas_cobrar_vencidas` quedó inerte (`20261022`). | Sin listas de columnas: `WHEN (OLD IS DISTINCT FROM NEW)`. Tras V1 el refresco cuesta milisegundos. |
+| H4 | Dev/DE | Separar "lo guardado" de "lo de hoy" crea dos lugares con reglas del estado: un segundo motor (principio 7). | **Derivación en dos etapas por construcción:** etapa 1 `cuentas_conceptos_base(p_proyectos)` (sin hoy) y etapa 2 `cuentas_concepto_al_dia(fila, hoy)` (pura, `IMMUTABLE`). La derivación en vivo es etapa2(etapa1); la tabla guarda etapa1; las lecturas aplican la misma etapa2. Una sola regla, dos usos. La paridad se reduce a "tabla = etapa1". |
+| H5 | DE | Proyecto repetido en cada concepto (nombre, cliente, fecha, margen, fee, IVA, utilidad, reapertura): copia de datos y escrituras de más. | **Dos granos:** `cuentas_proyecto_base` (una fila por proyecto, con sus agregados: totales, pendientes, vencimiento más próximo pendiente, última fecha resuelta) y `cuentas_concepto_base` (una fila por concepto, sin columnas del proyecto). Tarjetas, contadores por mes y resumen leen el grano proyecto (~180 filas por mes). El orden de proyectos (`row_number`) se calcula al leer: depende del conjunto consultado. |
+| H6 | DE | Refresco con `DELETE` + `INSERT` por proyecto: escribe todas las filas aunque cambie una (WAL, bloat y autovacuum en un cómputo chico). | `MERGE … WHEN MATCHED AND fila IS DISTINCT FROM … THEN UPDATE … WHEN NOT MATCHED BY SOURCE THEN DELETE` (Postgres 17): solo se escribe lo que cambió. |
+| H7 | Dev | Concurrencia: dos escrituras del mismo proyecto podían refrescar con una foto vieja si el lock y la lectura comparten snapshot o si la transacción no es `READ COMMITTED`. | El constraint trigger diferido toma el advisory lock por proyecto (orden fijo) en una sentencia y deriva en otra: snapshot nuevo, ve lo ya confirmado. La función **falla si `transaction_isolation` ≠ `read committed`** (explícito, principio 4). Sin ciclo de deadlock: al llegar al commit la transacción ya no espera locks de fila. Test `live` nuevo: N escritores concurrentes sobre el mismo proyecto, al final tabla = derivación. |
+| H8 | Dev | "Si la derivación falla, la escritura de negocio falla": riesgo P0 del borrador. | Se elimina como clase de fallo **por datos**: sin casts sobre datos (`item_id` ya es `uuid`; año y mes con `extract`, no `substr::int`), divisiones protegidas, `plpgsql_check` y paridad en CI. Las fallas por tiempo: refresco de milisegundos por llave e índice, `lock_timeout` explícito menor que el de PostgREST y k6 de escrituras como puerta. Un bug de lógica queda al nivel de cualquier RPC de hoy (`approve_cotizacion`) y lo detienen las mismas puertas antes del merge. Se descarta "atrapar el error y marcar sucio": crearía un segundo camino de lectura. |
+| H9 | DE | Reconciliación en el cron que "corrige": puede ocultar un bug. | La reconciliación **solo reporta**: guarda nueva en `auditar_consistencia()` (tabla = etapa1, ambos granos), visible en Admin y en el cron diario. Corregir es una acción manual (`cuentas_conceptos_reconstruir()`) después de encontrar la causa (principio 6). Además, en CI cada spec `live` que escribe Cuentas termina comparando tabla y derivación. |
+| H10 | DA | Medir en milisegundos sobre cómputo compartido da ruido (la misma consulta de 37 a 445 ms en esta sesión). | **Métrica primaria determinista: buffers por llamada** (`EXPLAIN (ANALYZE, BUFFERS)`), estable entre corridas. Puerta de CI por buffers; el tiempo de servidor (p50/p95 de 30 corridas calientes) es secundario y va en `escala.yml`. |
+| H11 | DA | El dataset de test no es representativo y el generador inventaría distribuciones. | V0 calibra el generador con parámetros que da el negocio: proyectos por año y su estacionalidad, cotizaciones complementarias, renglones y proveedores por proyecto (tamaño de grupo), % PPD/PUE, documentos y pagos por concepto, % resuelto por antigüedad, sin fecha y reaperturas, más los vínculos N:M de #123. Se documentan en el generador. |
+| H12 | DA | Un pendiente que nunca se resuelve (p. ej. "subir comprobante") hace crecer el índice parcial. | Métrica visible: tamaño y antigüedad del backlog de pendientes en Admin. Es higiene operativa, no rendimiento: con ~13k pendientes el índice parcial sigue siendo el peor caso actual. |
+| H13 | Dev | Salida a producción "big bang" (V5 aplicaba todo junto y mergeaba). | **Lanzamiento en sombra:** V2 sale a producción manteniendo las tablas sin lectores; la guarda diaria tiene que dar 0 durante una ventana acordada antes de V3. V3 cambia lectores con una migración de reversa ya escrita y probada en test (`CREATE OR REPLACE` de las versiones actuales). |
+| H14 | Dev | El PR #100 sigue abierto con migraciones (`20261009`/`20261010`) escritas sobre el esquema viejo; `20261007`/`20261008` ya están en `main`. | Cerrar el PR #100 como reemplazado **al aprobar este plan**, no al final; se porta el mecanismo (cola + constraint trigger diferido + advisory lock), no los archivos. |
+| H15 | Dev | Cargas masivas (generador, reinicios) disparan miles de refrescos. | Se conserva `SET LOCAL serenata.sin_refresco = 'on'` + `cuentas_conceptos_reconstruir()`, y la guarda diaria detecta si alguien lo olvidó. |
+| H16 | DE | Plan Free. | Cabe: ~10 MB por año en ambos granos (límite 500 MB); sin extensiones nuevas; el cron sigue en `/api/keep-alive` (no hace falta `pg_cron`). Fuera de alcance y ya registrado: sin respaldos en Free (P0 previo a uso real). |
 
-## Recomendación: C
+### Riesgos que quedan
 
-Es mejor que el plan original en tres puntos: (1) el refresco por escritura se
-abarata 1–2 órdenes de magnitud porque la derivación por proyecto deja de
-escanear tablas completas; (2) `resumen` y `avisos` leen solo lo pendiente
-(índice parcial), así que su costo depende del trabajo abierto y no de los años
-acumulados; (3) `periodo` lee el mes pedido por índice `(anio, mes)` y solo
-calcula el año completo para los contadores por mes. B va primero porque vale
-solo (detalle y refresco) y es requisito de C.
+Ninguno abierto por diseño. Los que el borrador listaba se resolvieron así:
+desfase de dinero → H2, H3, H4, H9; escritura bloqueada → H8; concurrencia → H7;
+medición engañosa → H10, H11; regiones → #124; mantenimiento → H2, H3; cargas
+masivas → H15. Lo único que no depende de este plan es #123, que lo antecede.
 
-Todo cabe en el plan Free: la tabla pesa ~10 MB por año de 2,500 proyectos
-(límite 500 MB), `pg_cron` está disponible y no se agrega cómputo.
+## Diseño
 
-## Bloques propuestos
+- **Etapa 1** `cuentas_conceptos_base(p_proyectos text[])`, plpgsql, una sola
+  consulta parametrizada por conjunto de proyectos (no ramas por modo).
+  Documentos y pagos por llave con `LATERAL … ORDER BY fecha_carga DESC LIMIT 1`
+  e índices parciales nuevos por llave (p. ej.
+  `documentos_cuentas_cobrar (cuentas_cobrar_id, fecha_carga DESC) WHERE tipo = 'FACTURA_XML' AND eliminado_at IS NULL`).
+  "Año" y "un concepto" son conjuntos de proyectos que resuelve el que llama.
+- **Etapa 2** `cuentas_concepto_al_dia(cuentas_concepto_base, date)`, `IMMUTABLE`:
+  `venc_dias`, `vencido`, estado del cobro y `paso_urgente`.
+- **Tablas** `cuentas_proyecto_base` y `cuentas_concepto_base`, mantenidas por
+  `cuentas_refrescar(p_proyectos)` (un `MERGE` por grano).
+- **Triggers** en cada tabla que lee la etapa 1 (lista verificada por CI), por fila
+  con `WHEN (OLD IS DISTINCT FROM NEW)`; marcan proyectos afectados (OLD y NEW, vía
+  vínculos) en una cola; un constraint trigger diferido refresca una vez por
+  transacción.
+- **Lecturas:** `cuentas_periodo` (mes por índice `(anio, mes)`; contadores del año
+  desde el grano proyecto), `cuentas_opciones` (distinct sobre el grano concepto
+  del año), `cuentas_resumen` y `cuentas_avisos_items` (índice parcial
+  `WHERE NOT resuelto`), detalle (una fila por llave). Todas aplican la etapa 2.
+- **Guardas:** `auditar_consistencia()` + chequeo de dependencias en CI + paridad
+  SQL↔TS vigente + comparación al final de cada spec `live` de Cuentas.
 
-| Bloque | Qué | Sale a producción solo |
+## Bloques
+
+| Bloque | Qué | Producción |
 |---|---|---|
-| **V0 Medición fiel** | Extender `scripts/db/escala-generador.sql` con documentos, pagos, grupos de varias cuentas y ~80 % de conceptos resueltos en meses pasados; línea base de la curva (500 / 2,200 / 5,000 y 10 años) incluyendo detalle y derivación de un proyecto. | No aplica (scripts). |
-| **V1 Derivación por proyecto** | `cuentas_conceptos` a plpgsql con ramas por modo (todos / año / proyectos / un concepto), documentos y pagos buscados por llave (`LATERAL … ORDER BY fecha_carga DESC LIMIT 1`) e índices parciales nuevos (p. ej. `documentos_cuentas_cobrar (cuentas_cobrar_id, fecha_carga DESC) WHERE tipo = 'FACTURA_XML' AND eliminado_at IS NULL`). Sin cambio de resultado: paridad = 0. | Sí. Mejora el detalle y todas las lecturas actuales. |
-| **V2 Tabla y refresco** | `cuentas_conceptos_base` + cola + constraint trigger diferido + advisory lock por proyecto, portado del PR #100 **sobre el esquema vigente** (re-auditar las tablas fuente tras B5). Guarda fechas en vez de lo que depende de "hoy". Backfill y `cuentas_conceptos_reconstruir()`. | Sí, sin lectores todavía (solo se mantiene). |
-| **V3 Lecturas** | `cuentas_periodo` (mes por índice; contadores del año), `cuentas_opciones` (distinct sobre la tabla), `cuentas_resumen` y `cuentas_avisos_items` (índice parcial `WHERE NOT resuelto`), detalle (una fila por llave). | Sí. |
-| **V4 Red de seguridad** | Reconciliación diaria en el cron existente y guarda nueva en `auditar_consistencia()` (tabla = derivación); ADR 019 reescrito; regla de migraciones actualizada. | Sí. |
-| **V5 Cierre** | k6 de escrituras concurrentes (aprobar, pagar, subir documento) con presupuesto de latencia; `live` 3 corridas seguidas; aplicar en producción; cerrar el PR #100 como reemplazado. | — |
+| **V0 Medición fiel** | Generador calibrado (H11) con el modelo de #123; línea base por buffers y tiempo (500 / 2,200 / 5,000 y 10 años), incluidos detalle y derivación de un proyecto. | — |
+| **V1 Derivación en dos etapas** | Etapa 1 y etapa 2; `cuentas_conceptos` queda como envoltura de las dos; índices por llave; chequeo de dependencias en CI. Resultado idéntico: paridad = 0. | Sí; acelera lo actual sin estado nuevo. |
+| **V2 Tablas en sombra** | Dos granos, `MERGE`, triggers, cola, constraint trigger, guardas H7/H9, test de concurrencia. Sin lectores. | Sí; ventana de guarda en 0. |
+| **V3 Lecturas** | Las 4 RPCs y el detalle leen las tablas; migración de reversa probada. | Sí, tras la ventana. |
+| **V4 Cierre** | k6 de escrituras (aprobar, pagar, subir documento, cancelar, reabrir); `live` 3 corridas seguidas; ADR 019 reescrito; reglas de migraciones actualizadas. | — |
 
-Puerta tras V1: medir otra vez. Si V1 solo ya deja todo bajo meta con el
-dataset realista, decidir con el usuario si V2–V3 se hacen ya o quedan con
-disparador.
+Puerta tras V1: medir con el dataset de V0. Si V1 deja todo dentro de las metas
+con 10 años de historial, decidir con el usuario si V2–V3 van ya o con disparador.
 
-## Riesgos
+## Validación (metas provisionales, se fijan con la línea base de V0)
 
-- **P0 — Dinero mal mostrado por desfase tabla↔derivación.** Mitigación:
-  refresco en la misma transacción, paridad en CI y `live`, reconciliación
-  diaria y guarda en `auditar_consistencia()`.
-- **P0 — Una falla de la derivación bloquea escrituras de negocio** (aprobar,
-  pagar). Mitigación: V1 abarata y simplifica el refresco; probar bajo
-  restricciones de PostgREST (`pg_safeupdate`, `statement_timeout`/
-  `lock_timeout` de 8 s), no solo con `postgres`.
-- **P1 — Contención entre escrituras concurrentes del mismo proyecto.**
-  Advisory lock en orden fijo; k6 de escrituras en V5.
-- **P1 — Medir con un dataset que no se parece al real.** V0 antes de todo.
-- **P1 — Paridad de regiones** (test `us-east-2` vs producción `us-west-2`):
-  el p95 de `live` mezcla red y SQL. Medir server-side (`EXPLAIN ANALYZE`) como
-  métrica primaria; mover test de región es decisión del usuario (implica
-  recrear el proyecto Free).
-- **P2 — Mantenimiento:** columna o tabla nueva leída por la derivación sin
-  trigger. Regla vigente en `.claude/rules/migraciones.md` y la guarda diaria.
-- **P2 — Cargas masivas** (generador, reinicios): `serenata.sin_refresco` +
-  `cuentas_conceptos_reconstruir()`.
-
-## Validación
-
-- Paridad derivación↔tabla = 0 y paridad SQL↔TS (`cuentas-paridad-sql`) en verde.
-- Curva `escala.yml` con el dataset de V0 (server-side, p50/p95): metas
-  provisionales — `periodo` (mes) < 100 ms, `periodo` (año) < 250 ms,
-  `resumen`/`avisos` < 60 ms **sin crecer con los años**, detalle < 10 ms,
-  refresco de un proyecto p95 < 30 ms.
-- k6 de escrituras: p95 de aprobar/pagar sube menos de 50 ms contra la base.
-- `live` 3 corridas seguidas en verde; `auditar_consistencia()` = 0 en test y
-  producción.
+- Tabla = etapa 1 (ambos granos): 0 diferencias en CI, en `live` y en la guarda diaria.
+- Lecturas, servidor, dataset de V0 con 10 años: `periodo` (mes) < 100 ms,
+  `periodo` (año) < 250 ms, `resumen`/`avisos` < 60 ms **y sin crecer con los años**
+  (buffers constantes al agregar años resueltos), detalle < 10 ms.
+- Refresco de un proyecto: p95 < 30 ms; aprobar/pagar suben < 50 ms en k6.
+- Concurrencia: N escritores sobre un proyecto → tabla = derivación, sin deadlocks.
+- `auditar_consistencia()` = 0 en test y producción.
 
 ## Tracker
 
 | Bloque | Estado |
 |---|---|
+| Prerrequisito #124 (región) | Pendiente |
+| Prerrequisito #123 (modelo de facturas y pagos N:M) | Pendiente — decisión de producto |
 | V0 Medición fiel | Pendiente |
-| V1 Derivación por proyecto | Pendiente |
-| V2 Tabla y refresco | Pendiente |
+| V1 Derivación en dos etapas | Pendiente |
+| V2 Tablas en sombra | Pendiente |
 | V3 Lecturas | Pendiente |
-| V4 Red de seguridad | Pendiente |
-| V5 Cierre | Pendiente |
+| V4 Cierre | Pendiente |
