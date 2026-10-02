@@ -51,8 +51,9 @@ modelo de datos", está archivada en `docs/archive/simplificacion-modelo-datos.m
 
 ## Siguiente paso
 
-Nada urgente. Abrir con `/serenata-iniciar-fase` cuando haya iniciativa nueva. Candidatos en `docs/ROADMAP.md`
-("Deuda técnica"): #119, y el frente 2 de latencia de Cuentas si se cruza su disparador.
+**En definición: "Frente 2 v2" (borrador en `docs/PLAN.md`, 2026-10-02).** El usuario decidió retomar el frente 2
+re-ajustado sobre el modelo simplificado y sin salir del plan Free. Esperando aprobación del plan; primer bloque V0
+(dataset realista). #119 sigue pendiente de decisión.
 
 ## Deuda técnica
 
