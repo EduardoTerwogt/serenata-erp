@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** En refinamiento (2026-10-02, tres auditorías) — "#124: Producción y Vercel a Ohio (`us-east-2`, `cle1`)". Pendiente de aprobación del usuario.
+**Estado:** En refinamiento (2026-10-02, tres auditorías + externa) — "#124: Producción y Vercel a Ohio (`us-east-2`, `cle1`)". Pendiente de aprobación del usuario.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -31,7 +31,9 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 
 **Cola de iniciativas (2026-10-02), en este orden:** **#124** (este plan) →
 **#123** nueva lógica de cuentas (su plan se escribe al cerrar #124) → **#110**
-frente 2 v2 (plan auditado guardado en el issue).
+frente 2 v2 (plan auditado guardado en el issue). **#125** (llaves de Supabase,
+fecha límite fin de 2026) entra antes de #123; si va antes o después de #124 lo
+decide el usuario.
 
 ---
 
@@ -153,6 +155,61 @@ ocurre 7 días después del corte. Una cuarta ronda tendría rendimientos
 marginales: lo que falta por descubrir solo aparece ejecutando, y para eso están
 los puntos de parada (llaves, migraciones, comparación, verificación).
 
+## Auditoría externa (2026-10-02): análisis y decisión
+
+Revisada punto por punto contra el código y la documentación vigente. Ningún
+punto se integró sin verificarlo.
+
+| # | Punto de la auditoría externa | Decisión | Por qué |
+|---|---|---|---|
+| X1 | El rollback no distingue datos: volver a la vieja después de escrituras reales las pierde. | **Se integra (P0).** | Es correcto y el plan lo tenía ambiguo ("rollback hasta borrar la vieja"). Ahora hay dos ventanas formales y un GO/NO-GO (abajo). |
+| X2 | Estados formales `FREEZE_START` y `GO_LIVE`. | **Se integra.** | No cuesta nada y quita interpretación. Se agrega un detalle que la auditoría no vio: el cron `/api/keep-alive` corre a las 08:00 UTC (02:00 CDMX) y escribe en la base; la ventana no puede cruzarlo. |
+| X3 | R1 debe dar un GO/NO-GO único y verificable, no diez revisiones sueltas. | **Se integra**, reutilizando lo que existe. | En vez de un sistema nuevo, se extiende `esquema-huella.sql` con GRANTs, extensiones, políticas de `realtime.messages` y RLS por tabla. Así `check-schema-parity --esquema` lo cubre para siempre, también para test ↔ producción (principio 7). El gate es una tabla PASS/FAIL. |
+| X4 | Las llaves legacy se retiran a fin de 2026; dejarlo como deuda posterior. | **Se integra, con más urgencia que la propuesta.** | Verificado en la documentación de Supabase: "The legacy `anon` and `service_role` keys keep working until the end of 2026". Quedan ~3 meses y aplica a **toda** la app, no solo al proyecto nuevo. Se abrió **#125** como iniciativa propia. Coincido en **no** mezclarla con el corte de región (dos cambios a la vez impiden saber qué falló). Pero su lugar en la cola (antes o después de #124) es decisión del usuario, y en cualquier caso va antes de #123 y #110. Test, creado el 2026-09-04, todavía trae la `anon` legacy `HS256` habilitada junto a la publishable (verificado), así que el riesgo de que el proyecto nuevo nazca sin llaves legacy es bajo, aunque no cero: la comprobación C2 sigue siendo punto de parada. |
+| X5 | Comprobar que el historial remoto sea exactamente el conjunto esperado, con un SHA conocido. | **Se integra.** | Barato: 141 nombres contra `_manifest.json` del SHA desde el que se corre `db push`. |
+| X6 | Si `cle1` no está disponible, STOP antes de tocar Supabase. | **Se integra.** | Ya estaba en R0 como verificación; queda como punto de parada explícito. |
+| X7 | Evitar que los hashes de contraseña pasen por el contexto de Claude. | **Se integra.** | Hay alternativa barata: el usuario corre en el SQL Editor de la vieja una consulta que arma el `INSERT` y lo pega en el SQL Editor de la nueva (2 minutos). Claude verifica sin ver los hashes: compara `md5(hash)` entre ambas bases. Cambiar las contraseñas después queda como recomendación. |
+| X8 | Medir mediana, p95 y máximo, no solo p95; y la primera petición en frío. | **Se integra la mediana y el máximo; lo de "en frío" no.** | `preview-latency.yml` hoy solo reporta p95; agregar mediana y máximo es un cambio chico en el PR de R2. La primera petición en frío mide el arranque de la función de Vercel, que no depende de la región, y metería ruido en el A/B. |
+| X9 | Antes de pausar test, que no haya workflows corriendo ni en cola. | **Se integra.** | Claude lo revisa con la API de GitHub. Además se evita la ventana de `escala.yml` (domingos 09:17 UTC). |
+
+Lo demás de la auditoría externa (Ohio, `db push`, no clonar, comparación de
+esquema, Realtime primero, A/B de latencia, la vieja viva 7 días) confirma
+decisiones ya tomadas.
+
+## Ventanas de rollback y GO/NO-GO (X1, X2)
+
+- **`FREEZE_START`** (inicio de R1, antes de pausar test): nadie usa
+  producción, no hay operaciones manuales ni scripts que escriban, y la ventana
+  no cruza el cron de las 08:00 UTC ni `escala.yml`.
+- **Ventana A, antes de `GO_LIVE`:** la vieja está intacta (solo pausada) y la
+  nueva es **descartable**. Rollback seguro: reactivar la vieja, restaurar las 4
+  variables y *Redeploy*. Sin pérdida de datos.
+- **GO/NO-GO de R1:** la nueva no recibe tráfico si una fila no da PASS:
+
+  | Comprobación | Criterio |
+  |---|---|
+  | Historial de migraciones | 141 nombres = `_manifest.json` del SHA usado |
+  | Esquema (huella extendida) | 0 diferencias contra la vieja: columnas, índices, restricciones, triggers, funciones |
+  | GRANTs de tablas | iguales por tabla y rol (`service_role` 245) |
+  | RLS y políticas | iguales, incluidas las de `realtime.messages` |
+  | Extensiones | mismas, en el mismo esquema |
+  | Ajustes de roles | `authenticator`: `safeupdate`, 8 s, 8 s; `anon` 3 s; `authenticated` 8 s |
+  | Llaves | `anon` legacy `HS256` habilitada y JWT secret legacy disponible |
+  | Datos sembrados | tipos y etapas con el mismo contenido que la vieja |
+  | Usuarios | 2 filas, mismos ids, `md5(hash)` igual |
+  | Conteo de filas | igual por tabla |
+  | Consistencia | `auditar_consistencia()` = 0; `preview_next_folio` = `SH001` |
+  | Postgres | versión ≥ test (si es mayor: WARN, se alinea test en R4) |
+
+- **GO/NO-GO de R3:** verificación funcional completa + reinicio + conteos
+  iguales a R1. Al pasar se marca **`GO_LIVE`** y se avisa a los usuarios.
+- **Ventana B, después de `GO_LIVE`:** la nueva es la única fuente de verdad.
+  Ante un problema se hace **forward-fix sobre la nueva**. Volver a la vieja ya
+  no es rollback: solo se considera en emergencia y **después de pasar a la vieja
+  las filas escritas en la nueva** (con el volumen de hoy, unas cuantas filas por
+  SQL), con aprobación explícita del usuario. La vieja queda 7 días solo como
+  respaldo de infraestructura.
+
 ## Automatización y trabajo manual
 
 **Plan Pro temporal: descartado.** "Restore to a new project" copia **en la
@@ -176,7 +233,8 @@ proyectos se resuelve pausando por MCP.
 3. Una captura de Settings → API / Data API (y Realtime → Settings) de la vieja.
 4. Crear el proyecto en el panel (`us-east-2`), con las mismas opciones de Data API.
 5. Correr **un comando** del CLI que Claude deja listo (aplica las 141 migraciones).
-6. Pegar 2 secretos en Vercel (Production y Development).
+6. Copiar los 2 usuarios con dos pegados en el SQL Editor (X7) y pegar 2
+   secretos en Vercel (Production y Development).
 7. Verificación funcional con dos navegadores (~15 min) y borrar de Drive los
    PDFs de prueba. La latencia la mide Claude (C5); la de producción con
    DevTools es opcional.
@@ -195,8 +253,8 @@ proyectos se resuelve pausando por MCP.
 5. **R4** commit con el ref nuevo en `env-check` → CI verde → merge (`cle1`) →
    7 días → borrar la vieja.
 
-**Rollback** hasta borrar la vieja: reactivarla (minutos), restaurar las 4
-variables viejas y *Redeploy*.
+**Rollback:** ver "Ventanas de rollback y GO/NO-GO". Antes de `GO_LIVE` es
+seguro; después, forward-fix.
 
 ## Bloques
 
@@ -219,7 +277,7 @@ repo.
 - [ ] **(usuario)** Supabase → New project → lista de regiones: existe
       `us-east-2` y no hay México.
 - [ ] **(usuario)** Vercel → Project Settings → Functions → Function Region:
-      `cle1` disponible en tu plan.
+      `cle1` disponible en tu plan. **Si no: STOP, no se toca Supabase** (X6).
 - [ ] **(usuario)** Reautenticar el conector de Vercel de Claude con acceso al
       team `eduardoterwogts-projects`. Claude confirma que ya puede leer las
       variables de producción, sin descifrarlas.
@@ -254,12 +312,20 @@ repo.
 - [ ] `ARCHITECTURE.md` (región), `docs/ENV.md` y `CLAUDE.md` si menciona la región.
 - [ ] `scripts/check-schema-parity.mjs`: normalizar también el nombre remoto
       (C3).
+- [ ] `scripts/db/esquema-huella.sql`: agregar GRANTs de tablas, extensiones,
+      políticas de `realtime.messages` y RLS por tabla (X3). Comprobar que test
+      ↔ producción vieja siga en 0 o que las diferencias tengan explicación.
+- [ ] `.github/workflows/preview-latency.yml`: reportar mediana y máximo además
+      del p95 (X8).
 - [ ] CI en verde (`test`, `fresh-db`, `smoke-and-critical`, `live`).
 - [ ] Claude: `preview-latency.yml` sobre el Preview del PR (`cle1` → test):
       login OK, rutas OK y p95 comparado contra la línea base (C5).
 
 ### R1 — Producción nueva
 
+- [ ] **`FREEZE_START`** (X2): fuera de las 08:00 UTC y de la ventana de
+      `escala.yml`.
+- [ ] Claude: ningún workflow de GitHub corriendo ni en cola (X9).
 - [ ] Claude pausa `serenata-erp-test` (MCP). No correr CI hasta R4.
 - [ ] **(usuario)** Crear `serenata-erp` en el panel: región **`us-east-2`**,
       organización "App develop", plan Free, Data API y exposición automática
@@ -274,7 +340,8 @@ repo.
       con la URL del *session pooler* del proyecto nuevo (Connect → Session
       pooler). La contraseña se pide con `read -s` y no queda en el historial
       (C4). Pega aquí solo la salida, nunca la URL.
-- [ ] Claude: el historial tiene las 141 migraciones.
+- [ ] Claude: el historial tiene exactamente los 141 nombres de `_manifest.json`
+      del SHA usado (X5).
 - [ ] Claude, comparación **en vivo** vieja ↔ nueva, todo en 0 diferencias o
       explicado:
       - huella;
@@ -289,10 +356,11 @@ repo.
       `tipo_proyecto_etapas` y `tipo_proyecto_tarea_default`, y deja
       `folio_contadores` vacío). Corre en una transacción que se verifica sola.
 - [ ] Claude: tipos y etapas con el mismo contenido que la vieja (B1).
-- [ ] Claude: copiar los 2 usuarios con sus ids. Los hashes no se escriben en
-      ningún archivo.
-- [ ] Claude: conteo de filas por tabla nueva = vieja;
-      `auditar_consistencia()` = 0; `preview_next_folio` = `SH001`.
+- [ ] **(usuario)** Copiar los 2 usuarios por SQL Editor (X7). Claude da la
+      consulta para la vieja, que arma el `INSERT`; tú lo pegas en la nueva.
+      Claude verifica ids y `md5(hash)` sin ver los hashes.
+- [ ] Claude: **tabla GO/NO-GO de R1** completa, todo en PASS. Si algo falla:
+      NO-GO, se corrige o se descarta la nueva; producción sigue en la vieja.
 - [ ] Congelamiento: nadie usa producción desde aquí hasta el corte.
 
 ### R3 — Corte
@@ -321,6 +389,8 @@ repo.
   - [ ] Cron `/api/keep-alive` con `CRON_SECRET` responde OK.
 - [ ] Claude: reinicio otra vez → `SH001`, conteos = los de R1,
       `auditar_consistencia()` = 0.
+- [ ] **GO/NO-GO de R3 → `GO_LIVE`.** Desde aquí: forward-fix, no rollback
+      (X1).
 - [ ] **(usuario)** Borrar de Drive los PDFs de la verificación.
 - [ ] **(usuario, opcional)** Medición en producción con DevTools, como en R0.
 - [ ] **(usuario)** Avisar a los usuarios que recarguen la app. Recomendado:
