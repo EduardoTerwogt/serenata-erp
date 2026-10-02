@@ -1,0 +1,64 @@
+name: DB push una vez (#124)
+
+# Workflow de UN SOLO USO de la iniciativa #124 (docs/PLAN.md, R2b): aplica las
+# migraciones de db/migrations/ al proyecto NUEVO de producción (us-east-2) con
+# el mismo motor que usa CI (Supabase CLI). Se borra en R4 junto con su secreto.
+# Solo disparo manual; no toca nada hasta que alguien lo ejecuta.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  db-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validar el destino (nunca la vieja ni test)
+        env:
+          URL: ${{ secrets.PROD_NUEVA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$URL" ]; then
+            echo "::error::Falta el secreto PROD_NUEVA_DB_URL."
+            exit 1
+          fi
+          for REF in fwmyoqokcjtldiofuxdg ozrtsludmcguvgqdjicn; do
+            if printf '%s' "$URL" | grep -q "$REF"; then
+              echo "::error::PROD_NUEVA_DB_URL apunta a un proyecto que NO es el nuevo ($REF). Se niega a correr."
+              exit 1
+            fi
+          done
+          echo "Destino validado (no es la vieja ni test)."
+
+      - name: Generar supabase/migrations/ desde db/migrations/
+        run: node scripts/build-supabase-migrations.mjs
+
+      - name: Aplicar con supabase db push
+        env:
+          URL: ${{ secrets.PROD_NUEVA_DB_URL }}
+        run: |
+          set -euo pipefail
+          echo "SHA: $GITHUB_SHA"
+          supabase db push --workdir . --db-url "$URL" --yes
+
+      - name: Resumen (SHA y conteo)
+        env:
+          URL: ${{ secrets.PROD_NUEVA_DB_URL }}
+        run: |
+          set -euo pipefail
+          echo "SHA: $GITHUB_SHA"
+          echo "Migraciones esperadas (manifest): $(node -e "console.log(require('./db/migrations/_manifest.json').count)")"
+          echo "Migraciones registradas en el destino: $(psql "$URL" -At -c 'select count(*) from supabase_migrations.schema_migrations')"
