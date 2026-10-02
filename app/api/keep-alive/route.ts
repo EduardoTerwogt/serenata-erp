@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { checkDriveAuth } from '@/lib/integrations/google/drive'
+import { ejecutarAuditoria } from '@/lib/server/auditoria'
 
 export const maxDuration = 60
 
@@ -93,6 +94,21 @@ export async function GET(request: Request) {
     }
   }
 
+  // B7 (F9): guardas de consistencia del modelo. Un hallazgo no marca el keep-alive como
+  // fallido (su trabajo es mantener vivos la BD y Drive): queda en el log y en la respuesta,
+  // y el administrador lo ve en Admin. Best-effort, igual que las limpiezas de arriba.
+  let auditoria: { ok: boolean; total_violaciones: number | null } = { ok: false, total_violaciones: null }
+  try {
+    const resultado = await ejecutarAuditoria()
+    auditoria = { ok: resultado.total_violaciones === 0, total_violaciones: resultado.total_violaciones }
+    if (resultado.total_violaciones > 0) {
+      const rotas = resultado.guardas.filter((g) => g.violaciones > 0).map((g) => `${g.clave}=${g.violaciones}`)
+      console.error(`Keep-alive: auditar_consistencia encontró ${resultado.total_violaciones} violación(es): ${rotas.join(', ')}`)
+    }
+  } catch (error) {
+    console.error('Keep-alive: auditar_consistencia failed:', error)
+  }
+
   const ok = supabaseOk && drive.status !== 'invalid_grant' && drive.status !== 'error'
 
   return Response.json(
@@ -107,6 +123,7 @@ export async function GET(request: Request) {
       rate_limits_deleted: rateLimitsDeleted,
       pago_operations_deleted: operationsDeleted.pago_operations,
       bulk_import_operations_deleted: operationsDeleted.bulk_import_operations,
+      auditoria,
     },
     { status: ok ? 200 : 500 }
   )

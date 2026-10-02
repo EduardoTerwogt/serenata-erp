@@ -3,7 +3,24 @@ import { fulfillJson } from './http'
 
 export const ADMIN_USER_E2E_ID = 'user-e2e-1'
 
+/** B7: resultado de `auditar_consistencia()` con todas las guardas en orden. */
+export const AUDITORIA_E2E_OK = {
+  ejecutado_en: '2026-10-02T09:00:00Z',
+  total_violaciones: 0,
+  guardas: [
+    { clave: 'cobro_pagado', descripcion: 'cuentas por cobrar: monto_pagado = Σ pagos vigentes', violaciones: 0, ejemplos: [] },
+    { clave: 'folio_cp', descripcion: 'folio de cuenta por pagar nulo o duplicado', violaciones: 0, ejemplos: [] },
+  ],
+}
+
+export async function mockAdminAuditoriaApi(page: Page, resultado: unknown = AUDITORIA_E2E_OK) {
+  await page.route('**/api/admin/auditoria', async (route) => {
+    await fulfillJson(route, resultado)
+  })
+}
+
 export async function mockAdminUsuariosApis(page: Page) {
+  await mockAdminAuditoriaApi(page)
   const usuario = {
     id: ADMIN_USER_E2E_ID,
     email: 'ana@serenata.test',
