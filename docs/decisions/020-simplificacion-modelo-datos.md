@@ -110,9 +110,12 @@ Una tabla `cuentas` con dirección (cobro/pago), una de `pagos`, una de
 
 ## Resultado (2026-10-02)
 
-Ejecutada con migraciones numeradas `20261016`–`20261026`, aplicadas a mano en test y
-producción (las que contienen DROP) o por el MCP (las aditivas). Producción: 35 tablas
-y 1 vista (`historial_responsable`, antes tabla), 72 funciones, 113 índices.
+Ejecutada con migraciones numeradas `20261016`–`20261027`, aplicadas a mano en test y
+producción (las que contienen DROP) o por el MCP (las aditivas). Producción, tras retirar
+`cliente_id_backfill_clasificacion` (`20261027`, residuo de la migración de clientes que
+el reinicio dejó vacío): 34 tablas y 1 vista (`historial_responsable`, antes tabla; el
+Schema Visualizer de Supabase la cuenta como tabla, así que muestra 35), 72 funciones,
+113 índices. Test tiene además `loadtest_runs`, la única excepción declarada.
 
 **Regla de dueño único.** Cada dato vive en una tabla y el resto lo lee: el proveedor de
 una cuenta por pagar sale de `proveedores`; descripción, cantidad y margen, de
