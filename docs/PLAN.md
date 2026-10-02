@@ -221,8 +221,12 @@ checklist).
   producción, no hay operaciones manuales ni scripts que escriban, y la ventana
   no cruza el cron de las 08:00 UTC ni `escala.yml`.
 - **Ventana A, antes de `GO_LIVE`:** la vieja está intacta (solo pausada) y la
-  nueva es **descartable**. Rollback seguro: reactivar la vieja, restaurar las 4
-  variables y *Redeploy*. Sin pérdida de datos.
+  nueva es **descartable**. Rollback seguro, sin pérdida de datos:
+  - reactivar la vieja;
+  - Vercel → Deployments → **Instant Rollback** al deploy de producción
+    anterior, que conserva las variables viejas;
+  - después, restaurar las 4 variables en Settings para que el siguiente deploy
+    no vuelva a apuntar a la nueva.
 - **GO/NO-GO de R1:** la nueva no recibe tráfico si una fila no da PASS:
 
   | Comprobación | Criterio |
@@ -431,12 +435,19 @@ repo.
 
 ### R3 — Corte
 
-- [ ] **(usuario)** Vercel → Environment Variables → **Production** y
-      **Development**: pegar `SUPABASE_SERVICE_ROLE_KEY` y
-      `SUPABASE_JWT_SECRET` del proyecto nuevo. Anotar los viejos en tu gestor.
+- [ ] **(usuario)** Vercel → Environment Variables → **Production**: pegar
+      `SUPABASE_SERVICE_ROLE_KEY` y `SUPABASE_JWT_SECRET` del proyecto nuevo.
+      Según la documentación de Vercel (2026-10-02), las variables
+      *Sensitive* no se pueden volver a leer y solo existen en Production y
+      Preview. Por eso:
+      - no hace falta anotar los valores viejos: el rollback es **Instant
+        Rollback** al deploy de producción anterior, que conserva sus
+        variables;
+      - **Development no se toca:** el usuario no tiene máquina local, así que
+        nadie la usa; en R4 se borran sus entradas que apunten a la vieja.
 - [ ] Claude (o usuario si el conector sigue sin acceso):
-      `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` en Production
-      y Development. **Preview no se toca.**
+      `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` en
+      Production. **Preview y Development no se tocan.**
 - [ ] Claude (o usuario): *Redeploy* de producción **sin caché de build**;
       Claude confirma `READY`.
 - [ ] Claude pausa la vieja y reactiva test (C1).
