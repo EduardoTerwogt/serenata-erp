@@ -51,9 +51,8 @@ modelo de datos", está archivada en `docs/archive/simplificacion-modelo-datos.m
 
 ## Siguiente paso
 
-Orden acordado (2026-10-02): **#124** (test a `us-west-2`) → **#123** (facturas y pagos N:M) → **#110** (frente 2 v2;
-plan auditado guardado en el issue). Cada uno con su propio plan en `docs/PLAN.md`, que quedó vacío para recibir el de
-#124. El PR #100 queda reemplazado por el plan de #110 (cerrarlo al arrancar #110). #119 sigue pendiente de decisión.
+Orden acordado (2026-10-02): **#124** (producción y Vercel a Ohio, opción B; borrador en `docs/PLAN.md`) → **#123** (facturas y pagos N:M) → **#110** (frente 2 v2;
+plan auditado guardado en el issue). Cada uno con su propio plan en `docs/PLAN.md`. El PR #100 queda reemplazado por el plan de #110 (cerrarlo al arrancar #110). #119 sigue pendiente de decisión.
 
 ## Deuda técnica
 

@@ -78,8 +78,8 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Orden acordado (2026-10-02):** #124 (paridad de entornos: test a
-  `us-west-2`) → #123 (nueva lógica de cuentas: facturas y pagos N:M) → #110
+- **Orden acordado (2026-10-02):** #124 (producción y Vercel a Ohio,
+  `us-east-2`/`cle1`; plan en `docs/PLAN.md`) → #123 (nueva lógica de cuentas: facturas y pagos N:M) → #110
   (frente 2 v2, plan auditado guardado en el issue). Lo de abajo es el
   antecedente del frente 2.
 - **Frente 2 de latencia de Cuentas** (2026-09-30, **en pausa**): los
