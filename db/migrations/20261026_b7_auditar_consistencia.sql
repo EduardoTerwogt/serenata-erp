@@ -2,7 +2,7 @@
 -- del modelo (dinero, renglones, K4, K1, folios) en una función de solo lectura que
 -- devuelve, por guarda, cuántas violaciones hay y hasta 5 ids de ejemplo. La corre el
 -- cron diario (`/api/keep-alive`) y la ve el administrador en Admin. Sustituye a
--- `scripts/db/guardas-modelo.sql`, que se retira en el mismo PR.
+-- `scripts/db/guardas-modelo.sql` (retirado en el mismo PR).
 --
 -- Aditiva e idempotente (CREATE OR REPLACE); solo lectura sobre datos de negocio.
 

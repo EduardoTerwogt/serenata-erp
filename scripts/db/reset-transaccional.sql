@@ -7,7 +7,8 @@
 -- `tipo_proyecto_tarea_default`).
 --
 -- ANTES DE CORRERLO (todo obligatorio; sin esto no se ejecuta):
---   1. Respaldo de producción: `supabase db dump` (plan Free, sin respaldos).
+--   1. Respaldo: NO requerido mientras los datos de producción sean de prueba (decisión del
+--      usuario, 2026-10-02). Con datos reales, `supabase db dump` antes de correrlo.
 --   2. Carpetas de prueba de Google Drive de producción en la papelera (H3).
 --   3. Cambiar `c_confirmacion` abajo por el texto exacto que pide el error.
 --

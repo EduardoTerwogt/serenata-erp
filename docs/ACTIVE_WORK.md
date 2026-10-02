@@ -44,14 +44,24 @@ Resultado: `cuentas_pagar` sin copias (dueño único), `item_id` uuid con FK, `c
 `fecha_entrega` `date`, `timestamptz` en Cuentas, CHECKs de renglones, cotización aprobada
 congelada por trigger (P1419) y estado de cotización solo por RPC (L1). El job `live` ya no corre en
 PRs cuyo diff es solo `.md` (job `changes` de `e2e.yml`).
-**Curva de escala (B7, 2026-10-02) → medida** (detalle y tabla en `docs/PLAN.md`, sección B7):
+**B7 (2026-10-02) → casi cerrado.** Curva de escala medida (PR #118; detalle en `docs/PLAN.md`):
 `periodo` y `opciones` dependen de los proyectos del año consultado; `resumen`, `avisos` y
-`candidatos de orden` crecen lineal con el historial total y son los primeros que cruzarían
-800 ms (~5,500 proyectos en total). Frente 2 sigue en pausa con disparador definido. **B6 se
-difiere** (decisión del usuario, opción C): la curva no lo exige; D17 pasa a opcional.
-**Pendiente: recorrido manual en el Preview de B5b y B5c** (no se puede omitir) y luego el resto de **B7** (poda de índices sin uso, `auditar_consistencia()`, cierre y
-respaldo). Lección: producción llevaba migraciones sin aplicar
-(`20261020`/`20261023`); verificar el estado real antes de correr la siguiente.
+`candidatos de orden` crecen lineal con el historial y cruzarían 800 ms hacia ~5,500 proyectos
+en total. Frente 2 en pausa con disparador definido; **B6 diferido** (D17 opcional).
+`auditar_consistencia()` (17 guardas, `20261026`, aplicada en test y producción) corre en el
+cron diario y se ve en Admin → "Consistencia de datos". Herramientas viejas retiradas
+(`foto-dorada`, `mapa-dependencias`, `guardas-modelo.sql`); poda de índices evaluada (ninguna:
+`scripts/db/indices-sin-uso.sql`); ADR 020 con el resultado real. Recorrido manual de
+colaboración en el Preview **hecho**: funciona; hallazgo de producto en `/cotizaciones/nueva`
+(dos motores de edición) → issue #119, para decidir después.
+**Falta de B7 / plan:** re-medir el p50 de guardado de cotizaciones (K6) con `load-test.yml`;
+**B2** (reinicio de datos de producción con `scripts/db/reset-transaccional.sql`: sin respaldo,
+sus datos son de prueba; falta limpiar las carpetas de prueba de Drive); checklist de salida
+(guardas en 0, borrar el script de reinicio) y cierre de los issues #105–#109. Lección:
+producción llevaba migraciones sin aplicar (`20261020`/`20261023`); verificar el estado real
+antes de correr la siguiente.
+**Manual pendiente del usuario:** token de Drive para el entorno Preview y verificar Drive
+ahí (las variables `GOOGLE_SHEETS_SPREADSHEET_ID` y `GOOGLE_CALENDAR_ID` ya se quitaron de Vercel).
 
 **B1+B3 mergeado — PR #112 (2026-10-01), `live` verde.** Sheets, Calendar y Planeación retirados del
 código; clientes por `nombre_clave` + `resolver_cliente`; autosave de productos en

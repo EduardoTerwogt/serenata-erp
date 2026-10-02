@@ -1,6 +1,6 @@
 # 020 — Simplificación del modelo de datos: un dueño por dato
 
-**Estado: Aceptada — alternativa B** (2026-10-01, #106). Decisiones D1–D7 y
+**Estado: Aceptada — alternativa B, ejecutada** (2026-10-01, #106; cierre 2026-10-02, ver "Resultado"). Decisiones D1–D7 y
 plan v3 (dos auditorías) en `docs/PLAN.md`. Sheets se retira (D2); los datos
 de prueba de producción se reinician (D3); tareas y documentos de proyecto se
 conservan (D4); el cómputo no se sube (D7).
@@ -107,3 +107,56 @@ Una tabla `cuentas` con dirección (cobro/pago), una de `pagos`, una de
   alimenten los conceptos.
 - Los documentos que describen el esquema (`ARCHITECTURE.md`,
   `docs/decisions/006`, `011`, `017`) se actualizan en el bloque que los cambia.
+
+## Resultado (2026-10-02)
+
+Ejecutada con migraciones numeradas `20261016`–`20261026`, aplicadas a mano en test y
+producción (las que contienen DROP) o por el MCP (las aditivas). Producción: 35 tablas
+y 1 vista (`historial_responsable`, antes tabla), 72 funciones, 113 índices.
+
+**Regla de dueño único.** Cada dato vive en una tabla y el resto lo lee: el proveedor de
+una cuenta por pagar sale de `proveedores`; descripción, cantidad y margen, de
+`items_cotizacion` por `item_id` (uuid NOT NULL, FK compuesta con la cotización); el
+cliente, de `cotizaciones.cliente_id` → `clientes`. Salen `cuentas_pagar` sin copias,
+`proyectos.cliente`/`cliente_id`, `cuentas_cobrar.cliente`/`proyecto`/`cliente_id`,
+`items_cotizacion.responsable_nombre`, `x_pagar` (ahora `costo_unitario` y `costo_total`),
+`registrar_pago_cuenta_pagar` y las funciones `buscar_*`.
+
+**Integridad en la base, no por convención.** FKs compuestas, CHECK de `importe`, `margen`
+y fecha de entrega, restricción diferida "proveedor ⇒ grupo" y "cuenta y renglón del
+mismo proveedor" (P1417), cotización aprobada congelada por trigger (P1419), estado de la
+cotización solo por RPC (L1), estado del cobro como columna generada (D15), `date` y
+`timestamptz` donde había texto o hora sin zona. Las guardas viven en
+`auditar_consistencia()` (17, cron diario, Admin) y `plpgsql_check` (CI).
+
+**Decisiones que cambiaron en la ejecución.**
+- **B6 (un solo motor de Cuentas, D17) se difiere:** la curva de escala (`docs/PLAN.md`,
+  B7) mostró que la latencia la llevan las RPC de SQL y que el motor TS no la mueve; la
+  paridad `live` vigila que no diverjan. Se retoma si el TS duplicado cuesta más que
+  mantener la paridad.
+- **Frente 2 de latencia en pausa** con disparador explícito (~4,000 proyectos en total,
+  ~2,500 en un año o p95 de `escala.yml` sobre 650 ms). Hoy `resumen`, `avisos` y
+  candidatos de orden recorren todo el historial y crecen lineal; la palanca barata es
+  acotarlos a lo no resuelto antes de rediseñar.
+- **Sin respaldo previo al reinicio de producción (G7):** sus datos son de prueba,
+  inventados; el plan Free sin respaldos sigue siendo un riesgo para el día de uso real y
+  se decide entonces.
+- **Poda de índices:** 0 índices redundantes y los 30 sin uso en test son 4 de 19 MB, casi
+  todos de 8–16 kB en tablas chicas; no se retiró ninguno (`scripts/db/indices-sin-uso.sql`
+  sirve para revisar con estadísticas de producción con uso real).
+- **Herramientas retiradas:** `foto-dorada`, `mapa-dependencias` y `guardas-modelo.sql`
+  (absorbidas por `auditar_consistencia()`).
+
+**Lecciones.** (1) Producción llevaba migraciones sin aplicar (`20261020`, `20261023`):
+antes de correr la siguiente, verificar el estado real de la base. (2) Una migración con
+DROP se corre completa desde el raw del archivo, no por partes. (3) `serenata-erp-test`
+también la usan el job `live` y los Previews: un recorrido manual a la vez que corre la
+CI mezcla ruido con fallas reales.
+
+**Para el módulo de Proyectos (F14).** `proyectos` conserva solo identidad, fecha de
+entrega (`date`), estado y datos operativos; el cliente y el nombre del evento se leen
+de la cotización (`proyectos.id = cotizaciones.id`). Cualquier campo nuevo debe decidir
+primero quién es su dueño y no copiarse a Cuentas.
+
+**Pendiente de producto (#119):** `/cotizaciones/nueva` y `/cotizaciones/[id]` siguen
+siendo dos motores de edición de la misma cotización.
