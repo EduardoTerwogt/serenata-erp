@@ -1,6 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
-import { cargarCuentasAnio, cargarPeriodo } from '@/lib/server/cuentas/periodo-rpc'
-import { construirProyectos, seleccionarProyecto } from '@/lib/server/cuentas/periodo'
+import { cargarPeriodo } from '@/lib/server/cuentas/periodo-rpc'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 import { crearTiempos } from '@/lib/server/server-timing'
@@ -11,11 +10,10 @@ const ROUTE = 'GET /api/cuentas/periodo'
 /**
  * Rediseño de Cuentas B3 (docs/PLAN.md, O1, O1b, D12, S17): un periodo de
  * Cuentas (año + mes o "Todo el año") ya derivado, filtrado, contado y
- * paginado. La derivación del periodo corre en SQL (`cuentas_periodo`, O1b):
- * el año crudo pesaba ~4 MB y moverlo a Node rompía el presupuesto. El
- * proyecto seleccionado (conceptos, cierre y cierre mensual) se arma en TS
- * sobre la lectura cruda de ese solo proyecto. Solo lee: el estado "Vencido"
- * guardado lo actualiza el cron (O2), no esta ruta.
+ * paginado. La derivación corre toda en SQL (`cuentas_periodo`, O1b y B6): el año
+ * crudo pesaba ~4 MB y moverlo a Node rompía el presupuesto, y el proyecto
+ * seleccionado (conceptos, cierre y cierre mensual) viene en la misma lectura.
+ * Solo lee.
  */
 export async function GET(request: Request) {
   const t = crearTiempos()
@@ -31,16 +29,11 @@ export async function GET(request: Request) {
 
   try {
     const hoy = hoyCdmx()
-    const { proyecto, ...filtros } = validation.data
+    const filtros = validation.data
     const anio = filtros.anio ?? Number(hoy.slice(0, 4))
-    const [periodo, seleccionado] = await Promise.all([
-      cargarPeriodo({ ...filtros, anio }, hoy),
-      proyecto
-        ? cargarCuentasAnio(anio, proyecto).then((crudo) => seleccionarProyecto(construirProyectos(crudo, hoy), { ...filtros, proyecto }))
-        : null,
-    ])
+    const periodo = await cargarPeriodo({ ...filtros, anio }, hoy)
     t.marcar('rpc')
-    return t.responder({ ...periodo, seleccionado })
+    return t.responder(periodo)
   } catch (error) {
     return buildErrorResponse(error, ROUTE)
   }

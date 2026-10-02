@@ -1,13 +1,13 @@
 /**
- * Rediseño de Cuentas B5 (U2): arma el detalle de un concepto a partir de las
- * filas de la BD. Módulo puro (sin acceso a datos): lo usan la carga real
- * (detalle.ts) y los mocks e2e. El estado sale de concepto.ts, igual que en
- * la lista, así que el detalle y la tarjeta nunca dicen cosas distintas.
+ * Rediseño de Cuentas B5 (U2) / B6: arma el detalle de un concepto a partir de las filas de la BD
+ * y de lo que SQL ya derivó (`cuentas_conceptos` con un concepto concreto). Módulo puro, sin
+ * acceso a datos y sin reglas de dinero: estado, paso, saldo, vencimiento, complementos, total
+ * y cruce fiscal llegan en `derivado`, así que el detalle y la tarjeta nunca dicen cosas
+ * distintas. Aquí solo se separa lo vigente de lo corregido y se elige qué archivo mostrar.
  */
-import { derivarCobro, derivarPago, type DocumentoXmlInput, type MetodoPagoCfdi } from '@/lib/shared/cuentas/concepto'
+import type { ConceptoDerivado, MetodoPagoCfdi } from '@/lib/shared/cuentas/concepto'
 import type { CorreccionesDetalle, DetalleCobro, DetallePago, DocumentoDetalle, ProyectoDetalleCorto } from '@/lib/shared/cuentas/detalle-tipos'
 import { round2 } from '@/lib/shared/decimal'
-import { calcularEjemploFactura } from '@/lib/shared/factura-fiscal'
 import type { RegimenFiscal } from '@/lib/types'
 
 export interface DocumentoFila {
@@ -26,7 +26,7 @@ export interface DocumentoFila {
 }
 
 /** B7: campos de anulación de un pago (R8). */
-interface Anulable {
+export interface Anulable {
   anulado_at?: string | null
   anulado_motivo?: string | null
 }
@@ -36,7 +36,7 @@ interface Anulable {
  * pagos anulados no cuentan para nada (vigente, saldos, derivación) y se
  * listan aparte en el historial.
  */
-function separar<P extends Anulable & { id: string }>(
+export function separar<P extends Anulable & { id: string }>(
   documentos: DocumentoFila[],
   pagos: P[],
   pagoAnulado: (p: P) => { fecha: string; monto: number },
@@ -75,14 +75,21 @@ function vigente(docs: DocumentoFila[], tipo: string, pagoId?: string): Document
   return lista.reduce<DocumentoFila | null>((a, b) => (!a || b.fecha_carga > a.fecha_carga ? b : a), null)
 }
 
-const xmlInput = (docs: DocumentoFila[], tipo: string, pagoId?: string): DocumentoXmlInput[] =>
-  docs
-    .filter((d) => d.tipo === tipo && (pagoId === undefined || d.pago_id === pagoId))
-    .map((d) => ({
-      estado_validacion: (d.estado_validacion ?? 'pendiente') as DocumentoXmlInput['estado_validacion'],
-      fecha_carga: d.fecha_carga,
-      metodo_pago: (d.metodo_pago_cfdi as MetodoPagoCfdi | null) ?? null,
-    }))
+/** Lo que `cuentas_conceptos` deriva de un cobro. */
+export interface DerivadoCobro {
+  concepto: ConceptoDerivado
+}
+
+/** Lo que `cuentas_conceptos` deriva de un grupo de facturación o de una cuenta suelta. */
+export interface DerivadoPago {
+  concepto: ConceptoDerivado
+  /** Total a transferir: el del CFDI validado, o el estimado por régimen (`total_estimado`). */
+  total: number
+  total_estimado: boolean
+  pagado: number
+  /** Cruce fiscal del neto por régimen del proveedor (D29). */
+  cruce: { neto: number; iva: number; iva_retenido: number; isr_retenido: number }
+}
 
 export interface CobroFilas {
   cuenta: {
@@ -103,28 +110,10 @@ export interface CobroFilas {
   reabierta?: boolean
 }
 
-export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: todosPagos, reabierta = false }: CobroFilas, hoy: string): DetalleCobro {
+export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: todosPagos, reabierta = false }: CobroFilas, { concepto }: DerivadoCobro): DetalleCobro {
   const { docs: documentos, pagos, correcciones } = separar(todos, todosPagos, (p) => ({ fecha: p.fecha_pago, monto: round2(Number(p.monto)) }), reabierta)
   const facturaXml = vigente(documentos, 'FACTURA_XML')
   const orden = [...pagos].sort((a, b) => (a.fecha_pago + (a.created_at ?? '')).localeCompare(b.fecha_pago + (b.created_at ?? '')))
-  const concepto = derivarCobro(
-    {
-      tipo: 'cobro',
-      total: Number(cuenta.monto_total),
-      pagado: Number(cuenta.monto_pagado ?? 0),
-      fecha_vencimiento: cuenta.fecha_vencimiento,
-      fecha_factura: cuenta.fecha_factura,
-      facturas_xml: xmlInput(documentos, 'FACTURA_XML'),
-      pagos: orden.map((p) => ({
-        id: p.id,
-        monto: Number(p.monto),
-        fecha_pago: p.fecha_pago,
-        complemento_xml: xmlInput(documentos, 'COMPLEMENTO_PAGO', p.id),
-        complemento_pdf: documentos.filter((d) => d.tipo === 'COMPLEMENTO_PAGO_PDF' && d.pago_id === p.id).map((d) => ({ fecha_carga: d.fecha_carga })),
-      })),
-    },
-    hoy
-  )
   const metodo = (facturaXml?.metodo_pago_cfdi as MetodoPagoCfdi | null) ?? null
   const xmlDoc = (d: DocumentoFila | null) => (d ? aDoc(d) : null)
 
@@ -196,30 +185,14 @@ export interface PagoFilas {
   reabierta?: boolean
 }
 
-export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyecto, documentos: todos, pagos: todosPagos, orden, reabierta = false }: PagoFilas): DetallePago {
+export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyecto, documentos: todos, pagos: todosPagos, orden, reabierta = false }: PagoFilas, derivado: DerivadoPago): DetallePago {
   const { docs: documentos, pagos, correcciones } = separar(todos, todosPagos, (p) => ({ fecha: p.fecha_pago, monto: round2(Number(p.monto_transferido)) }), reabierta)
   const regimen = proveedor?.regimen_fiscal ?? null
+  const { concepto, total, total_estimado, pagado, cruce } = derivado
   const neto = round2(Number(destino.neto))
-  const estimado = calcularEjemploFactura(neto, regimen)
-  const total = destino.total_a_transferir == null ? estimado.total : round2(Number(destino.total_a_transferir))
-  const pagado = round2(Number(destino.monto_transferido ?? 0))
   const pagosOrdenados = [...pagos].sort((a, b) => (a.fecha_pago + (a.created_at ?? '')).localeCompare(b.fecha_pago + (b.created_at ?? '')))
   const comprobantesDocs = documentos.filter((d) => d.tipo === 'COMPROBANTE_PAGO')
   const primera = cuentas[0]
-
-  const concepto = derivarPago({
-    tipo: 'pago',
-    total,
-    pagado,
-    tiene_proveedor: Boolean(destino.responsable_id),
-    orden_pago_id: destino.orden_pago_id,
-    facturas_xml: xmlInput(documentos, 'FACTURA_PROVEEDOR_XML'),
-    comprobantes: [
-      ...comprobantesDocs.map((d) => ({ fecha_carga: d.fecha_carga })),
-      ...pagosOrdenados.filter((p) => p.comprobante_url).map((p) => ({ fecha_carga: p.created_at ?? p.fecha_pago })),
-    ],
-    fechas_pago: pagosOrdenados.map((p) => p.fecha_pago),
-  })
 
   return {
     tipo: 'pago',
@@ -246,9 +219,9 @@ export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyec
     })),
     neto,
     total,
-    total_estimado: destino.total_a_transferir == null,
+    total_estimado,
     pagado,
-    cruce: { neto: estimado.subtotal, iva: estimado.iva_trasladado, iva_retenido: estimado.iva_retenido, isr_retenido: estimado.isr_retenido, total },
+    cruce: { ...cruce, total },
     factura_xml: (() => {
       const d = vigente(documentos, 'FACTURA_PROVEEDOR_XML')
       return d ? aDoc(d) : null

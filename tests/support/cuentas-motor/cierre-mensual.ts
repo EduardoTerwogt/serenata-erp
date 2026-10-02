@@ -1,5 +1,7 @@
 /**
- * Rediseño de Cuentas B4 (docs/PLAN.md §7 B4, D15, D26, D30, T3): el cierre
+ * Doble de pruebas (B6): réplica en TypeScript del cierre mensual de SQL (`cuentas_cierre_mensual`).
+ * La fuente de verdad es SQL; este módulo solo alimenta los mocks e2e y lo vigila el spec live de
+ * paridad. Rediseño de Cuentas B4 (D15, D26, D30, T3): el cierre
  * del proyecto partido por mes de flujo de efectivo, con su fecha límite ante
  * el SAT (día 17 del mes siguiente).
  *
@@ -18,6 +20,7 @@
  * de cada impuesto es exactamente el total del cierre.
  */
 import type { CierreProyecto } from '@/lib/shared/cierre-proyecto'
+import type { FilaCierre } from '@/lib/shared/cuentas/periodo-tipos'
 import { round2 } from '@/lib/shared/decimal'
 
 export interface MovimientoMes {
@@ -32,20 +35,6 @@ export interface CierreMensualInput {
   cobros: { total: number; pagos: MovimientoMes[] }[]
   /** Pagos a proveedor en total a transferir, por `clave` del cierre (grupo o suelta). */
   pagosProveedor: Record<string, MovimientoMes[]>
-}
-
-export type ConceptoCierre = 'proveedores' | 'iva' | 'retenciones' | 'isr'
-
-export interface FilaCierre {
-  concepto: ConceptoCierre
-  quien: string
-  sub: string
-  monto: number
-  /** YYYY-MM del cobro o pago; null = pendiente ("Al cobrar" / "Al pagar") o agregado. */
-  mes: string | null
-  /** Día 17 del mes siguiente (YYYY-MM-DD); null sin fecha (pendiente o IVA a favor). */
-  fecha_limite: string | null
-  a_favor: boolean
 }
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']

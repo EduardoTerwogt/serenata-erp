@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { calcularCierreProyecto } from '../cierre-proyecto'
-import { calcularEjemploFactura } from '../factura-fiscal'
+import { calcularCierreProyecto } from './cierre-proyecto'
+import { calcularEjemploFactura } from '@/lib/shared/factura-fiscal'
 import { CuentaPagar, RegimenFiscal } from '@/lib/types'
 
 type CuentaPagarFixture = CuentaPagar & { proveedor_regimen_fiscal?: RegimenFiscal | null }

@@ -133,10 +133,15 @@ cotización solo por RPC (L1), estado del cobro como columna generada (D15), `da
 `auditar_consistencia()` (17, cron diario, Admin) y `plpgsql_check` (CI).
 
 **Decisiones que cambiaron en la ejecución.**
-- **B6 (un solo motor de Cuentas, D17) se difiere:** la curva de escala (`docs/PLAN.md`,
-  B7) mostró que la latencia la llevan las RPC de SQL y que el motor TS no la mueve; la
-  paridad `live` vigila que no diverjan. Se retoma si el TS duplicado cuesta más que
-  mantener la paridad.
+- **B6 (un solo motor de Cuentas, D17) se hizo después del cierre**, sin diferirlo como deuda:
+  el proyecto seleccionado (con cierre fiscal y cierre mensual) sale de `cuentas_periodo` y
+  el detalle de un concepto de `cuentas_conceptos` con ese solo concepto (`20261028`,
+  `20261029`; sin DROP: la función de 2 argumentos quedó como envoltura de la de 4). El
+  motor TS pasó a `tests/support/cuentas-motor/` como **doble de pruebas** de los mocks e2e,
+  vigilado por `cuentas-paridad-sql.spec.ts` (periodo, proyecto seleccionado, cierre mensual
+  con 300 casos y filas de detalle). Residuo conocido y aceptado: `detalle-armar.ts` elige el
+  documento más reciente de cada tipo para mostrarlo; es presentación, la regla que decide
+  el estado vive en SQL.
 - **Frente 2 de latencia en pausa** con disparador explícito (~4,000 proyectos en total,
   ~2,500 en un año o p95 de `escala.yml` sobre 650 ms). Hoy `resumen`, `avisos` y
   candidatos de orden recorren todo el historial y crecen lineal; la palanca barata es

@@ -1,41 +1,30 @@
 /**
- * Rediseño de Cuentas B3 (docs/PLAN.md, O1, U1, D4, D9, D12, S17): lectura
- * por periodo.
+ * Doble de pruebas (B6): motor TypeScript de la lectura por periodo de Cuentas.
  *
- * Derivación de referencia en TS: sobre los conceptos crudos se deriva con
- * `concepto.ts` y después se filtra, busca, cuenta por mes, se arman los
- * totales con `calcularCierreProyecto` y se pagina.
- *
- * Desde O1b la ruta del periodo usa la versión SQL (`cuentas_periodo`) para
- * no mover el año crudo; esta sigue armando el proyecto seleccionado (sobre
- * la lectura de ese solo proyecto), alimenta los mocks e2e y es la referencia
- * del test de paridad (tests/e2e/live/cuentas-paridad-sql.spec.ts). Un cambio
- * de regla va en los dos lados. Módulo puro: la BD vive en `periodo-rpc.ts`.
+ * La fuente de verdad de las reglas de dinero es SQL (`cuentas_conceptos`, `cuentas_periodo`).
+ * Este módulo replica la derivación sobre filas crudas para que los mocks e2e (smoke y critical,
+ * sin base de datos) respondan con datos coherentes, y lo vigila el spec live de paridad
+ * (tests/e2e/live/cuentas-paridad-sql.spec.ts). Producción no lo importa. Un cambio de regla va
+ * en SQL; si el spec de paridad se pone rojo, se ajusta este doble.
  */
-import { calcularCierreProyecto, type CuentaPagarCierreInput } from '@/lib/shared/cierre-proyecto'
-import { calcularCierreMensual } from '@/lib/shared/cuentas/cierre-mensual'
-import {
-  derivarCobro,
-  derivarCuentasProyecto,
-  derivarPago,
-  nombreCobro,
-  type ConceptoDerivado,
-} from '@/lib/shared/cuentas/concepto'
+import type { CuentaPagarCierreInput } from '@/lib/shared/cierre-proyecto'
+import { calcularCierreProyecto } from './cierre-proyecto'
+import { calcularCierreMensual } from './cierre-mensual'
+import { nombreCobro, type ConceptoDerivado } from '@/lib/shared/cuentas/concepto'
+import { derivarCobro, derivarCuentasProyecto, derivarPago } from './concepto'
 import {
   SIN_PROYECTO_ID,
   type ConceptoLista,
   type ConceptoVista,
-  type FiltroEstado,
-  type FiltroTipo,
   type MesPeriodo,
   type MesResumen,
   type OpcionesFiltros,
+  type ParametrosPeriodo,
   type PeriodoRespuesta,
   type ProyectoDetalle,
   type TarjetaProyecto,
   type TotalesPeriodo,
   type TotalesProyecto,
-  type VistaCuentas,
 } from '@/lib/shared/cuentas/periodo-tipos'
 import { round2 } from '@/lib/shared/decimal'
 import { calcularEjemploFactura } from '@/lib/shared/factura-fiscal'
@@ -309,20 +298,6 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
 }
 
 // ── Periodo ────────────────────────────────────────────────────────────────
-
-export interface ParametrosPeriodo {
-  anio: number
-  mes: MesPeriodo
-  estado: FiltroEstado
-  tipo: FiltroTipo
-  cliente?: string | null
-  proveedor?: string | null
-  q?: string | null
-  vista: VistaCuentas
-  proyecto?: string | null
-  page: number
-  page_size: number
-}
 
 export function normalizarBusqueda(texto: string): string {
   return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()

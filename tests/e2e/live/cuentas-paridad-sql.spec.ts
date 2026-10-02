@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
-import { AVISOS_POR_CATEGORIA, agruparAvisos, derivarAvisos, type CandidatoAviso } from '@/lib/server/cuentas/avisos'
+import { AVISOS_POR_CATEGORIA, agruparAvisos, type CandidatoAviso } from '@/lib/server/cuentas/avisos'
+import { derivarAvisos } from '../../support/cuentas-motor/avisos-derivar'
+import { calcularCierreMensual } from '../../support/cuentas-motor/cierre-mensual'
+import { calcularCierreProyecto } from '../../support/cuentas-motor/cierre-proyecto'
 import {
   construirOpciones,
   construirPeriodo,
@@ -7,11 +10,10 @@ import {
   pendientesPorAnio,
   seleccionarProyecto,
   ultimoMesConDatos,
-  type ParametrosPeriodo,
-} from '@/lib/server/cuentas/periodo'
-import { decodificarCuentasAnio } from '@/lib/server/cuentas/periodo-crudo'
+} from '../../support/cuentas-motor/periodo'
+import { decodificarCuentasAnio } from '../../support/cuentas-motor/periodo-crudo'
 import { decodificarPeriodoSql } from '@/lib/server/cuentas/periodo-sql'
-import { SIN_PROYECTO_ID, type CategoriaAviso, type ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
+import { SIN_PROYECTO_ID, type CategoriaAviso, type ParametrosPeriodo, type ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
 import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 import { getLiveSupabaseAdmin } from '../utils/live-cleanup'
 import { liveEnabled } from '../utils/live-helpers'
@@ -19,10 +21,10 @@ import { liveEnabled } from '../utils/live-helpers'
 /**
  * Rediseño de Cuentas O1b (docs/PLAN.md): la lectura por periodo, el resumen
  * y los avisos se derivan en SQL (db/migrations/20261003_cuentas_o1b_derivacion_sql.sql).
- * La derivación de referencia sigue siendo la de TS (concepto.ts, periodo.ts,
- * avisos.ts): este test corre ambas sobre la misma BD de test (dataset de
- * carga) y exige resultados idénticos para varias combinaciones de filtros.
- * Solo lee.
+ * SQL es la fuente de verdad (B6). El motor TS de tests/support/cuentas-motor
+ * es el doble que usan los mocks e2e: este test corre ambos sobre la misma BD
+ * de test (dataset de carga) y exige resultados idénticos para varias
+ * combinaciones de filtros, incluido el proyecto seleccionado. Solo lee.
  */
 
 type Supabase = ReturnType<typeof getLiveSupabaseAdmin>
@@ -99,7 +101,7 @@ test.describe('live: paridad de la derivación SQL con la de TS (O1b)', () => {
     }
   })
 
-  test('proyecto seleccionado: la lectura de un solo proyecto deriva igual que el año', async () => {
+  test('proyecto seleccionado (B6): el que arma SQL coincide con el del doble TS', async () => {
     const supabase = getLiveSupabaseAdmin()
     const hoy = hoyCdmx()
     const anio = Number(hoy.slice(0, 4))
@@ -108,11 +110,77 @@ test.describe('live: paridad de la derivación SQL con la de TS (O1b)', () => {
       ...proyectos.filter((p) => !p.sin_fecha).slice(0, 3).map((p) => p.id),
       ...proyectos.filter((p) => p.sin_fecha && !p.sin_proyecto).slice(0, 1).map((p) => p.id),
       SIN_PROYECTO_ID,
+      'NO-EXISTE',
     ]
+    // Sin filtros, con un filtro que deja conceptos y con uno que no deja ninguno (cae a todos).
+    const filtros: { tipo: 'todo' | 'cobro' | 'pago'; q?: string }[] = [{ tipo: 'todo' }, { tipo: 'cobro' }, { tipo: 'pago' }, { tipo: 'todo', q: 'zzzz-sin-coincidencias' }]
     for (const id of ids) {
-      const params = { tipo: 'todo' as const, proyecto: id }
-      const uno = construirProyectos(decodificarCuentasAnio(await rpc(supabase, 'cuentas_por_proyecto', { p_year: anio, p_proyecto: id })), hoy)
-      expect(seleccionarProyecto(uno, params), id).toEqual(seleccionarProyecto(proyectos, params))
+      for (const f of filtros) {
+        const params = { anio, mes: 'todo' as const, estado: 'todas' as const, vista: 'proyectos' as const, page: 1, page_size: 60, proyecto: id, ...f }
+        const sql = decodificarPeriodoSql(await rpc(supabase, 'cuentas_periodo', { p: { ...params, hoy } }))
+        expect(sql.seleccionado, `${id} ${JSON.stringify(f)}`).toEqual(seleccionarProyecto(proyectos, params))
+      }
+    }
+  })
+
+  test('cierre mensual (B6): cuentas_cierre_mensual da lo mismo que el doble TS en 300 casos', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    // Generador determinista (mulberry32): mismo caso en cada corrida.
+    let a = 20261028
+    const rnd = () => {
+      a = (a + 0x6d2b79f5) | 0
+      let t = Math.imul(a ^ (a >>> 15), 1 | a)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    const entre = (min: number, max: number) => Math.round((min + rnd() * (max - min)) * 100) / 100
+    const regimenes = ['moral', 'fisica', 'resico', null] as const
+    const fecha = () => `2026-${String(1 + Math.floor(rnd() * 12)).padStart(2, '0')}-${String(1 + Math.floor(rnd() * 28)).padStart(2, '0')}`
+    const movs = (tope: number) => Array.from({ length: Math.floor(rnd() * 4) }, () => ({ fecha: fecha(), monto: entre(0, tope * 0.6) }))
+
+    for (let n = 0; n < 300; n++) {
+      const nProv = Math.floor(rnd() * 4)
+      const cuentas = Array.from({ length: nProv }, (_, k) => ({
+        id: `cp-${k}`, grupo_id: null, costo_total: entre(500, 90000), responsable_id: `p${k}`, responsable_nombre: `Prov ${k}`,
+        proveedor_regimen_fiscal: regimenes[Math.floor(rnd() * regimenes.length)],
+      }))
+      const margen = entre(0, 120000)
+      const cierre = calcularCierreProyecto(cuentas, margen, entre(0, 20000), entre(0, 40000), entre(0, 5000))
+      const cobros = Array.from({ length: 1 + Math.floor(rnd() * 3) }, () => {
+        const total = entre(1000, 200000)
+        return { total, pagos: movs(total) }
+      })
+      const pagosProveedor: Record<string, { fecha: string; monto: number }[]> = {}
+      for (const q of cierre.quien_cuanto_cuando) pagosProveedor[q.clave] = movs(q.total_a_transferir)
+
+      const ts = calcularCierreMensual({ cierre, cobros, pagosProveedor })
+      const sql = await rpc<unknown>(supabase, 'cuentas_cierre_mensual', { p_cierre: cierre, p_cobros: cobros, p_pagos: pagosProveedor })
+      expect(sql, `caso ${n}`).toEqual(ts)
+    }
+  })
+
+  test('detalle del concepto (B6): cuentas_conceptos de un concepto da la misma fila que la lista', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const hoy = hoyCdmx()
+    const lista = await rpc<Record<string, unknown>[]>(supabase, 'cuentas_conceptos', { p_year: null, p_hoy: hoy, p_objetivo: null, p_id: null })
+    // Una muestra de cada objetivo (cobro, grupo, cuenta) y de cada estado derivado.
+    const vistos = new Set<string>()
+    const muestra = lista.filter((c) => {
+      const k = `${c.objetivo}|${c.estado}|${c.paso}`
+      if (vistos.has(k)) return false
+      vistos.add(k)
+      return true
+    })
+    expect(muestra.length).toBeGreaterThan(0)
+    for (const c of muestra) {
+      const uno = await rpc<Record<string, unknown>[]>(supabase, 'cuentas_conceptos', { p_year: null, p_hoy: hoy, p_objetivo: c.objetivo, p_id: c.id })
+      expect(uno, String(c.key)).toHaveLength(1)
+      // El orden del proyecto depende de cuántos proyectos hay en la lectura: no forma parte del concepto.
+      const { proyecto_orden: _a, ...fila } = uno[0]
+      const { proyecto_orden: _b, ...esperada } = c
+      void _a
+      void _b
+      expect(fila, String(c.key)).toEqual(esperada)
     }
   })
 
