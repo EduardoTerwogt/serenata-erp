@@ -354,10 +354,12 @@ repo.
       - RLS por tabla;
       - `pg_db_role_setting`;
       - conteo de filas por tabla.
-- [ ] Claude: línea base (B5, C5) con `preview-latency.yml` sobre un Preview
-      actual (`sfo1` → test).
-- [ ] **(usuario, opcional)** 5 cargas de `/cuentas` en producción con
-      DevTools → Network, anotando la mediana.
+- [x] Claude: línea base (B5, C5) con `preview-latency.yml` sobre un Preview
+      actual (`sfo1` → test). Hecho 2026-10-05, junto con la medición `cle1`;
+      tabla en la decisión 021.
+- [x] **(usuario, opcional)** 5 cargas de `/cuentas` en producción con
+      DevTools → Network, anotando la mediana. Hecho 2026-10-05: mediana
+      `periodo` 443 ms (decisión 021).
 - [x] Claude: confirmar en la documentación de Supabase si reactivar un
       proyecto pausado cambia su imagen de Postgres (C6). Sí puede: la
       documentación dice que pausar y restaurar deja el proyecto con las
@@ -574,9 +576,9 @@ inmediatamente anterior.
 
 | Bloque | Estado |
 |---|---|
-| R0 Verificaciones, capturas y línea base | En curso (falta la línea base de latencia y que el usuario agende la ventana) |
-| R2 PR de código | En curso (PR en borrador, esperando CI) |
-| R2b Workflow de un solo uso (`db push`) | Pendiente |
+| R0 Verificaciones, capturas y línea base | Hecho salvo agendar la ventana (usuario) |
+| R2 PR de código | PR #126 en borrador, no se mergea hasta R4. Medición A/B hecha |
+| R2b Workflow de un solo uso (`db push`) | Hecho: PR #127 mergeado 2026-10-02 |
 | R1 Producción nueva | Pendiente |
 | R3 Corte y verificación | Pendiente |
 | R4 Cierre | Pendiente |

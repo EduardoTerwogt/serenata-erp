@@ -28,6 +28,25 @@ copia solo de los 2 usuarios. Test no se mueve. Plan de ejecución y rollback
 
 ## Medición antes y después
 
-Pendiente (se llena en R4): `preview-latency.yml` contra un Preview `sfo1` y
-contra el Preview `cle1`, ambos sobre la misma base de test, para aislar el
-efecto de la región (p95, mediana y máximo por ruta).
+**Preview contra test (2026-10-05)**, `preview-latency.yml`, 5 + 40 peticiones
+por ruta, misma base de test, solo cambia la región de Vercel
+(`sfo1` → `cle1`; p95 / mediana):
+
+| Ruta | `sfo1` | `cle1` |
+|---|---|---|
+| `/api/folio` | 463 / 323 ms | 271 / 176 ms |
+| `/api/clientes` | 518 / 392 ms | 512 / 214 ms (pico aislado de 1134 ms) |
+| `/api/productos` | 437 / 303 ms | 317 / 170 ms |
+| `/api/proveedores` | 1148 / 1004 ms | 524 / 449 ms |
+
+Las medianas bajan entre 45 % y 56 %.
+
+**Producción con DevTools (línea base, 2026-10-05):** `/api/cuentas/periodo` en
+`serenata-erp.vercel.app/cuentas`, 5 recargas: 1.38 s, 2.18 s, 438 ms, 443 ms,
+427 ms; **mediana 443 ms** (las dos primeras, arranque en frío). Producción
+tiene 0 filas: el tiempo es casi todo red. Pendiente (R4): repetir la misma
+medición después de la migración y registrarla aquí.
+
+**Distancia desde CDMX (línea recta):** Ohio ~2,750 km, Cleveland ~2,960,
+San Francisco ~3,040, Oregon ~3,620. La ruta de red real la dio cloudping:
+Ohio ~60 ms, Virginia ~64, California ~77, Oregon ~80.
