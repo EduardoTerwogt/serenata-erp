@@ -320,8 +320,8 @@ repo.
 
 ### R0 — Antes de empezar (todo activo, sin cambios)
 
-- [ ] **(usuario)** Supabase → New project → lista de regiones: existe
-      `us-east-2` y no hay México.
+- [x] **(usuario)** Supabase → New project → lista de regiones: existe
+      `us-east-2` y no hay México. Confirmado por el usuario el 2026-10-05.
 - [x] **(usuario)** Vercel → Project Settings → Functions → Function Region:
       `cle1` disponible en tu plan. **Si no: STOP, no se toca Supabase** (X6).
       Confirmado el 2026-10-02: `cle1` aparece y el plan de Vercel es **Hobby**.
@@ -338,7 +338,8 @@ repo.
       Hecho 2026-10-02: Free permite pausados sin límite y se restauran hasta 90
       días después (un clic); el tiempo depende del tamaño y llega correo al
       terminar (ambos proyectos son chicos).
-- [ ] **(usuario)** Capturas de la vieja:
+- [x] **(usuario)** Capturas de la vieja (recibidas 2026-10-05; valores en
+      "Línea base de la vieja"):
       - Settings → API / Data API: esquemas expuestos, *max rows*, *extra search
         path* y exposición automática de tablas nuevas.
       - Settings → JWT: expiración.
@@ -535,6 +536,20 @@ probablemente traiga `supautils, safeupdate`: para el GO/NO-GO cuenta como PASS
 (imagen más nueva, igual que test); falta `safeupdate` = NO-GO.
 Llave `anon` legacy de la vieja: `HS256`, activa, junto a la publishable.
 
+Capturas del panel de la vieja (2026-10-05), para comparar con la nueva en R1:
+- **Data API:** 2 de 2 esquemas expuestos, 33 de 35 tablas y 14 de 80
+  funciones expuestas; exposición automática de tablas nuevas **ON**; *extra
+  search path* `public, extensions`; *max rows* 1000; *pool size* automático.
+- **Realtime:** servicio activo; acceso público a canales **ON**; pools de 2 y 2
+  conexiones; 200 clientes concurrentes; 100 eventos/s, 20 presencias/s y
+  256 KB de payload (topes del plan Free).
+- **Database:** SSL no forzado; red abierta a todas las IP.
+- **Llaves y JWT:** existen llaves publishable y secret nuevas y la pestaña
+  legacy. Llave de firma actual **ECC P-256**; la HS256 legacy figura como
+  "previous key" y el JWT secret legacy "solo verifica". La app firma los
+  tokens de Realtime con ese secret legacy y funciona. En la nueva hay que
+  comprobar el mismo estado (C2). JWT expiry no aplica: Auth no se usa.
+
 **Cuidado con la ventana A:** en Vercel, todo push a `main` (incluso solo `.md`)
 crea un deploy de producción. Entre el *Redeploy* del corte y `GO_LIVE` **no se
 hace ningún push a `main`**; el Instant Rollback de Hobby solo vuelve al deploy
@@ -559,7 +574,7 @@ inmediatamente anterior.
 
 | Bloque | Estado |
 |---|---|
-| R0 Verificaciones, capturas y línea base | En curso (Claude: hecho salvo latencia; usuario: capturas, región `us-east-2`, ventana) |
+| R0 Verificaciones, capturas y línea base | En curso (falta la línea base de latencia y que el usuario agende la ventana) |
 | R2 PR de código | En curso (PR en borrador, esperando CI) |
 | R2b Workflow de un solo uso (`db push`) | Pendiente |
 | R1 Producción nueva | Pendiente |
