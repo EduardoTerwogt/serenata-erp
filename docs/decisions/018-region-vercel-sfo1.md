@@ -1,5 +1,7 @@
 # 018 — Región de Vercel en `sfo1`, sin migrar Supabase de región
 
+**Reemplazada por `021-region-ohio.md` (#124).** Se conserva como historia.
+
 ## Contexto
 
 El usuario reportó que la app en general se siente lenta, en particular

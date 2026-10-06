@@ -320,8 +320,8 @@ repo.
 
 ### R0 — Antes de empezar (todo activo, sin cambios)
 
-- [ ] **(usuario)** Supabase → New project → lista de regiones: existe
-      `us-east-2` y no hay México.
+- [x] **(usuario)** Supabase → New project → lista de regiones: existe
+      `us-east-2` y no hay México. Confirmado por el usuario el 2026-10-05.
 - [x] **(usuario)** Vercel → Project Settings → Functions → Function Region:
       `cle1` disponible en tu plan. **Si no: STOP, no se toca Supabase** (X6).
       Confirmado el 2026-10-02: `cle1` aparece y el plan de Vercel es **Hobby**.
@@ -329,19 +329,24 @@ repo.
       inmediatamente anterior, que es justo el que necesita la ventana A: no se
       hace ningún otro deploy de producción entre el *Redeploy* del corte y
       `GO_LIVE`.
-- [ ] **(usuario)** Reautenticar el conector de Vercel de Claude con acceso al
-      team `eduardoterwogts-projects`. Hecho por el usuario el 2026-10-02;
-      **falta** que Claude confirme en la sesión nueva que ya no da 403 (lee
-      las variables de producción sin descifrarlas).
-- [ ] Claude: confirmar en la documentación de Supabase que un proyecto pausado
+- [x] **(usuario)** Reautenticar el conector de Vercel de Claude con acceso al
+      team `eduardoterwogts-projects`. Confirmado por Claude el 2026-10-02: el
+      conector ve el team y los 2 proyectos, y lista las variables de
+      producción sin descifrarlas (sin 403).
+- [x] Claude: confirmar en la documentación de Supabase que un proyecto pausado
       no cuenta para el límite de 2 activos y cuánto tarda en reactivarse.
-- [ ] **(usuario)** Capturas de la vieja:
+      Hecho 2026-10-02: Free permite pausados sin límite y se restauran hasta 90
+      días después (un clic); el tiempo depende del tamaño y llega correo al
+      terminar (ambos proyectos son chicos).
+- [x] **(usuario)** Capturas de la vieja (recibidas 2026-10-05; valores en
+      "Línea base de la vieja"):
       - Settings → API / Data API: esquemas expuestos, *max rows*, *extra search
         path* y exposición automática de tablas nuevas.
       - Settings → JWT: expiración.
       - Realtime → Settings.
       - Database → Settings: SSL y restricciones de red.
-- [ ] Claude, huella completa de la vieja en el scratchpad:
+- [x] Claude, huella completa de la vieja en el scratchpad (hecho 2026-10-02;
+      valores en "Línea base de la vieja" abajo):
       - `esquema-huella.sql`;
       - GRANTs por tabla y rol;
       - extensiones con esquema y versión;
@@ -349,12 +354,17 @@ repo.
       - RLS por tabla;
       - `pg_db_role_setting`;
       - conteo de filas por tabla.
-- [ ] Claude: línea base (B5, C5) con `preview-latency.yml` sobre un Preview
-      actual (`sfo1` → test).
-- [ ] **(usuario, opcional)** 5 cargas de `/cuentas` en producción con
-      DevTools → Network, anotando la mediana.
-- [ ] Claude: confirmar en la documentación de Supabase si reactivar un
-      proyecto pausado cambia su imagen de Postgres (C6).
+- [x] Claude: línea base (B5, C5) con `preview-latency.yml` sobre un Preview
+      actual (`sfo1` → test). Hecho 2026-10-05, junto con la medición `cle1`;
+      tabla en la decisión 021.
+- [x] **(usuario, opcional)** 5 cargas de `/cuentas` en producción con
+      DevTools → Network, anotando la mediana. Hecho 2026-10-05: mediana
+      `periodo` 443 ms (decisión 021).
+- [x] Claude: confirmar en la documentación de Supabase si reactivar un
+      proyecto pausado cambia su imagen de Postgres (C6). Sí puede: la
+      documentación dice que pausar y restaurar deja el proyecto con las
+      funciones más recientes. Test ya está en `17.6.1.166`; al reactivarlo en
+      R3 se vuelve a comparar versión.
 - [x] **(usuario)** Máquina para el CLI (D1): **no hay**. Se usa R2b.
 - [ ] **(usuario)** Agendar la ventana de R1–R3 (D2): 2–3 h, con tu presencia,
       fuera de las 08:00 UTC y del domingo 09:17 UTC.
@@ -509,6 +519,74 @@ sesiones abiertas siguen válidas: mismos ids y `session_version`),
 `CRON_SECRET`, el cron de Vercel, los secretos de GitHub Actions (todos de test),
 la CSP (`*.supabase.co`), el entorno Preview de Vercel y la base de test.
 
+## Línea base de la vieja (R0, 2026-10-02)
+
+Huella con `esquema-huella-resumen.sql` en `fwmyoqokcjtldiofuxdg`: columnas 341
+`7a1f983e`, funciones 81 `d1e50d05`, índices 111 `4b266a11`, políticas 1
+`c501722e`, restricciones 134 `18f33b6c`, triggers 10 `0b9c949c`.
+
+Categorías extendidas (X3), idénticas en test y en la vieja: GRANTs 136 filas
+(tabla × rol) `a7f8d1ba` (`service_role` 245 privilegios), extensiones 7
+`d953a615`, políticas de `realtime.messages` 2 `73905557`, RLS 34 tablas
+`e8b8ddf6`. Filas por tabla: `usuarios` 2, `tipos_proyecto` 3,
+`tipo_proyecto_etapas` 12, el resto 0. Postgres `17.6.1.084` (aarch64).
+
+Ajustes de roles: `anon` 3 s, `authenticated` 8 s, `authenticator` con
+`statement_timeout=8s`, `lock_timeout=8s` y `session_preload_libraries`
+**`safeupdate`** (en test: `supautils, safeupdate`). El proyecto nuevo
+probablemente traiga `supautils, safeupdate`: para el GO/NO-GO cuenta como PASS
+(imagen más nueva, igual que test); falta `safeupdate` = NO-GO.
+Llave `anon` legacy de la vieja: `HS256`, activa, junto a la publishable.
+
+Capturas del panel de la vieja (2026-10-05), para comparar con la nueva en R1:
+- **Data API:** 2 de 2 esquemas expuestos, 33 de 35 tablas y 14 de 80
+  funciones expuestas; exposición automática de tablas nuevas **ON**; *extra
+  search path* `public, extensions`; *max rows* 1000; *pool size* automático.
+- **Realtime:** servicio activo; acceso público a canales **ON**; pools de 2 y 2
+  conexiones; 200 clientes concurrentes; 100 eventos/s, 20 presencias/s y
+  256 KB de payload (topes del plan Free).
+- **Database:** SSL no forzado; red abierta a todas las IP.
+- **Llaves y JWT:** existen llaves publishable y secret nuevas y la pestaña
+  legacy. Llave de firma actual **ECC P-256**; la HS256 legacy figura como
+  "previous key" y el JWT secret legacy "solo verifica". La app firma los
+  tokens de Realtime con ese secret legacy y funciona. En la nueva hay que
+  comprobar el mismo estado (C2). JWT expiry no aplica: Auth no se usa.
+
+**Cuidado con la ventana A:** en Vercel, todo push a `main` (incluso solo `.md`)
+crea un deploy de producción. Entre el *Redeploy* del corte y `GO_LIVE` **no se
+hace ningún push a `main`**; el Instant Rollback de Hobby solo vuelve al deploy
+inmediatamente anterior.
+
+## Bitácora de la ejecución (2026-10-05/06)
+
+- **R1:** la nueva se creó con el nombre `Serenata-ERP` (`ytlyphlgyhgztkfxwojt`,
+  `us-east-2`, Postgres `17.11.0.002`). `db push` por `db-push-una-vez.yml` (SHA
+  `f714bff`): 141 migraciones en 22 s, historial = `_manifest.json`. Huellas de
+  esquema y de las categorías extendidas idénticas a la vieja.
+- **Diferencias que el plan no previó, corregidas en la nueva:**
+  1. La migración `20260915_loadtest_runs.sql` crea `loadtest_runs` en cualquier
+     base nueva; la vieja nunca la tuvo y `seed-cuentas-test.sql`,
+     `escala-generador.sql` y `escala-limpiar.sql` la usan para decidir "esto es
+     test". Se quitó con `DROP TABLE` (corrido por el usuario en el SQL Editor,
+     porque la confirmación de borrado por MCP expiró). **Al aplicar migraciones
+     futuras a producción, esa no va.**
+  2. `folio_contadores` traía 2 filas sembradas (CC y CP 2026, último 0): se
+     borraron para que quede como la vieja.
+- **Usuarios:** copiados con el `INSERT` armado en la vieja (`jsonb_populate_recordset`);
+  ids y md5 de cada fila idénticos, sin pasar los hashes por Claude.
+- **R3:** variables de Producción en Vercel (las dos `NEXT_PUBLIC_*` por MCP, las
+  dos secretas por el usuario); cada entrada es compartida con Development, que
+  también quedó apuntando a la nueva. *Redeploy* `dpl_9eYDk5k5…` (`sfo1`, sin
+  caché) → `READY`; la vieja se pausó y test se reactivó (misma versión
+  `17.6.1.166`: reactivar no cambió la imagen, C6).
+- **Reinicio posterior a la verificación:** el script viejo no se pudo leer
+  (bloqueo del permiso); se usó un `DO $$` con guardas (se niega si existe
+  `loadtest_runs` o si los conteos de usuarios/tipos/etapas no son 2/3/12),
+  `TRUNCATE` de todas las tablas salvo las 4 conservadas, en una transacción.
+- **Pendiente de la vigilancia (D6):** un error aislado `no partition of relation
+  "messages" found for row` en Realtime a las 00:50 UTC, no repetido; confirmar a
+  las 24 h que las particiones diarias de `realtime.messages` se siguen creando.
+
 ## Riesgos
 
 | Riesgo | Cómo queda cubierto |
@@ -528,9 +606,9 @@ la CSP (`*.supabase.co`), el entorno Preview de Vercel y la base de test.
 
 | Bloque | Estado |
 |---|---|
-| R0 Verificaciones, capturas y línea base | Pendiente |
-| R2 PR de código | Pendiente |
-| R2b Workflow de un solo uso (`db push`) | Pendiente |
-| R1 Producción nueva | Pendiente |
-| R3 Corte y verificación | Pendiente |
-| R4 Cierre | Pendiente |
+| R0 Verificaciones, capturas y línea base | Hecho salvo agendar la ventana (usuario) |
+| R2 PR de código | PR #126: CI verde en cada commit previo, en re-corrida tras R3; merge en R4. Medición A/B hecha |
+| R2b Workflow de un solo uso (`db push`) | Hecho: PR #127 mergeado 2026-10-02 |
+| R1 Producción nueva | **Hecho 2026-10-05**: proyecto `ytlyphlgyhgztkfxwojt` (`us-east-2`), GO/NO-GO en PASS |
+| R3 Corte y verificación | **Hecho**: `GO_LIVE` 2026-10-06 ~01:05 UTC (19:05 CDMX). Pendiente: vigilancia a las 24 h y cron de las 08:00 UTC |
+| R4 Cierre | En curso: `env-check` con los dos refs (PR #126); merge `cle1` cuando el CI esté verde |

@@ -29,6 +29,12 @@ on:
         required: false
         type: string
         default: '30'
+      credenciales:
+        description: "Cuenta staff: 'test' (PLAYWRIGHT_TEST_*, Preview apuntando a serenata-erp-test) o 'preview' (PREVIEW_STAFF_*, Preview apuntando a otra base)"
+        required: false
+        type: choice
+        options: [test, preview]
+        default: test
       gate_ms:
         description: 'Gate de p95 en milisegundos'
         required: false
@@ -46,12 +52,11 @@ jobs:
           WARMUP: ${{ inputs.warmup }}
           SAMPLES: ${{ inputs.samples }}
           GATE_MS: ${{ inputs.gate_ms }}
-          # PREVIEW_STAFF_* tiene prioridad -- una cuenta staff válida en el
-          # entorno real al que apunta el Preview (a menudo producción, no
-          # serenata-erp-test). Si no está seteado, cae a las credenciales
-          # de test que ya usa el job `live`.
-          STAFF_EMAIL: ${{ secrets.PREVIEW_STAFF_EMAIL || secrets.PLAYWRIGHT_TEST_EMAIL }}
-          STAFF_PASSWORD: ${{ secrets.PREVIEW_STAFF_PASSWORD || secrets.PLAYWRIGHT_TEST_PASSWORD }}
+          # Desde 2026-09-24 el Preview apunta a serenata-erp-test, así que por
+          # defecto se usan las credenciales de test. PREVIEW_STAFF_* (cuenta de
+          # otra base) solo con credenciales=preview.
+          STAFF_EMAIL: ${{ inputs.credenciales == 'preview' && secrets.PREVIEW_STAFF_EMAIL || secrets.PLAYWRIGHT_TEST_EMAIL }}
+          STAFF_PASSWORD: ${{ inputs.credenciales == 'preview' && secrets.PREVIEW_STAFF_PASSWORD || secrets.PLAYWRIGHT_TEST_PASSWORD }}
         run: |
           set -euo pipefail
           JAR=$(mktemp)
@@ -85,10 +90,13 @@ jobs:
             RANK=$(awk -v n="$SAMPLES" 'BEGIN{r=n*0.95; ri=int(r); if (r>ri) ri++; if (ri<1) ri=1; print ri}')
             P95=$(printf '%s\n' "${MEASURED[@]}" | sort -n | sed -n "${RANK}p")
             P95_MS=$(awk -v t="$P95" 'BEGIN{printf "%.0f", t*1000}')
+            SORTED=$(printf '%s\n' "${MEASURED[@]}" | sort -n)
+            MED=$(echo "$SORTED" | awk '{a[NR]=$1} END{m=(NR%2)?a[(NR+1)/2]:(a[NR/2]+a[NR/2+1])/2; printf "%.0f", m*1000}')
+            MAX=$(echo "$SORTED" | tail -n 1 | awk '{printf "%.0f", $1*1000}')
             if [ "$P95_MS" -le "$GATE_MS" ]; then
-              echo "RESULT /api/$ROUTE p95=${P95_MS}ms PASS"
+              echo "RESULT /api/$ROUTE p95=${P95_MS}ms mediana=${MED}ms max=${MAX}ms PASS"
             else
-              echo "RESULT /api/$ROUTE p95=${P95_MS}ms FAIL gate=${GATE_MS}ms"
+              echo "RESULT /api/$ROUTE p95=${P95_MS}ms mediana=${MED}ms max=${MAX}ms FAIL gate=${GATE_MS}ms"
               FAILED=1
             fi
           done

@@ -87,4 +87,16 @@ describe('GET /api/internal/env-check', () => {
 
     expect(body.isProductionProject).toBe(true)
   })
+
+  it('#124 -- isProductionProject también es true para el proyecto nuevo de producción (us-east-2)', async () => {
+    process.env.LOADTEST_MODE = 'true'
+    process.env.LOADTEST_ENV_SECRET = 'correct-secret'
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://ytlyphlgyhgztkfxwojt.supabase.co'
+
+    const response = await GET(makeRequest('correct-secret'))
+    const body = await response.json()
+
+    expect(body.supabaseProjectRef).toBe('ytlyphlgyhgztkfxwojt')
+    expect(body.isProductionProject).toBe(true)
+  })
 })
