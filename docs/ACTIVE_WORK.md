@@ -15,7 +15,7 @@ solo contiene lo que se va a trabajar. Modelo = cabecera `pagos` (única tabla n
 `cuentas_cobrar.factura_documento_id` (sin tabla puente); capa de datos en un release con tres migraciones (M1 aditiva,
 M2 RPC y lectura, M3 contracción manual) y gate de producción vacía; una RPC de pago por lado; P14 (permisos) separado en B1;
 UI en cuatro entregas (Menú y Registrar pago, Subir factura, Estado de cuenta y fichas, P22 y chip). Decisiones del usuario
-P1–P29 y técnicas T1–T18 (revisables) en el plan.
+P1–P29 y técnicas T1–T20 (revisables) en el plan.
 
 Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
 1. **#123** — facturas y pagos ligados (una factura para varias cotizaciones, un pago para varias facturas).

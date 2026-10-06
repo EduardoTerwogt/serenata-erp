@@ -8,7 +8,7 @@ visual**.
 
 | Archivo | Qué es |
 |---|---|
-| `cuentas-acciones.html` | **Diseño final.** Recreación de la pantalla de Cuentas tal como está en producción (`app/cuentas/`) con el menú **Acciones** y las tres ventanas nuevas. Fuente de verdad visual para B5. |
+| `cuentas-acciones.html` | **Diseño final.** Recreación de la pantalla de Cuentas tal como está en producción (`app/cuentas/`) con el menú **Acciones** y las tres ventanas nuevas. Fuente de verdad visual para B4 (UI) de `docs/PLAN.md`. |
 | `exploracion-modelo.html` | Exploración previa: diagrama del modelo (factura ↔ cotizaciones ↔ pagos ↔ complementos) con el ejemplo del issue, y el mockup de **cancelar con traspaso** (fuera de #123; referencia para esa iniciativa). Su estilo visual **no** es la referencia. |
 | `PROMPT-claude-design.md` | Prompt opcional para refinar el diseño en Claude Design. |
 

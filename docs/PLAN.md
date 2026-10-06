@@ -215,7 +215,7 @@ Hoy cada factura y cada pago pertenecen a **una sola cuenta**:
 | # | Decisión |
 |---|---|
 | T1 | `pagos` no lleva contraparte ni monto total: ambos se derivan de las líneas. |
-| T2 | Idempotencia: `pagos.operation_id` UNIQUE (parcial, no nulo); índice único parcial sobre `documentos_cuentas_cobrar.operation_id` para `ligar_factura`. `pago_operations` **se retira** (M3) junto con sus usos: rutas `.../estado` (leen `pagos` por `operation_id`), `keep-alive` y su test, `bulk-cleanup.mjs`. |
+| T2 | Idempotencia: `pagos.operation_id` UNIQUE (parcial, no nulo); índice único parcial sobre `documentos_cuentas_cobrar.operation_id` **solo para `tipo = 'FACTURA_XML'`** (`ligar_factura`; el complemento no lleva `operation_id` porque un CFDI con varias facturas son N filas: su idempotencia es el único `(factura_documento_id, pago_id, tipo)`). `pago_operations` **se retira** (M3) junto con sus usos: rutas `.../estado` (leen `pagos` por `operation_id`), `keep-alive` y su test, `bulk-cleanup.mjs`. |
 | T3 | Tolerancias por lado sin unificar (P26). |
 | T4 | Cancelar: bloquea si la cuenta está ligada a una factura vigente **o** tiene cualquier línea de pago (incluida anulada: es la intención documentada en `20261005`). |
 | T5 | `cuentas_por_proyecto` se mantiene y se adapta (3 lecturas de documentos y pagos) solo para conservar la paridad; no se toca `p_proyecto`. El doble TS queda congelado. |
@@ -223,15 +223,17 @@ Hoy cada factura y cada pago pertenecen a **una sola cuenta**:
 | T7 | El menú de Acciones es un componente **local** en `app/cuentas/components/` (mínimo: Escape, flechas, foco, clic fuera). Pasa a `components/ui/` solo si aparece un segundo consumidor real; los 3 desplegables ad hoc no se tocan. |
 | T8 | `GET /api/clientes`: `requireAnySection(['cotizaciones','cuentas'])` **solo en la rama `?q=`** (devuelve `id,nombre`). `?admin=1` y `POST` siguen en `requireSection('cotizaciones')`. `rfc` no entra en `PROVEEDOR_PUBLIC_COLUMNS`. |
 | T9 | Preview y confirmación de factura son **dos rutas** (`api.md`: transición financiera explícita). El preview llama a `factura_cuadre(total, cuentas[])`, función **STABLE sin locks** que devuelve suma, diferencia, tolerancia, estado y el detalle por cuenta, e informa si alguna cuenta ya está ligada o es de otro cliente. `ligar_factura` la reutiliza. No hay modo `dry-run`. |
-| T10 | Los `DROP` solo existen en M3 y los corre una persona en el SQL Editor (el MCP no ejecuta DROP; precedente en `20261020/23/24`), completo desde el raw del archivo, test primero y luego producción. |
-| T11 | **Una RPC de pago por lado:** `registrar_pago_cobro` y `registrar_pago_proveedor`, que comparten solo la función interna que crea la cabecera (idempotencia por `operation_id`). El prorrateo a hijas se **extrae** de `registrar_pago_grupo_factura` (`:86-176`) a función interna de la RPC de proveedor, no se copia. |
+| T10 | Los `DROP` de objetos (columnas, funciones, tabla) solo existen en M3 y los corre una persona en el SQL Editor (el MCP no ejecuta DROP; precedente en `20261020/23/24`), completo desde el raw del archivo, test primero y luego producción. M1 solo relaja o sustituye restricciones (`DROP NOT NULL`, `DROP CONSTRAINT` + `ADD CONSTRAINT`); si el MCP las rechaza, M1 también se corre a mano. |
+| T11 | **Una RPC de pago por lado:** `registrar_pago_cobro` y `registrar_pago_proveedor`, que comparten solo la función interna que crea la cabecera (idempotencia por `operation_id`). El prorrateo a hijas se **extrae** de `registrar_pago_grupo_factura` (`:86-176`) a función interna de la RPC de proveedor, no se copia. Igual para el complemento: `ligar_complemento_cobro` y `ligar_complemento_proveedor` (anclas y tablas distintas). |
 | T12 | El vencimiento lo calcula TS con `calcularDeadline` (única regla) y lo pasa a `ligar_factura` junto con la fecha de emisión; la RPC escribe ambas en cada cuenta. |
 | T13 | Las altas nuevas de PDF y complemento **exigen una factura vigente** (se valida en el servicio; el PDF/complemento se ancla a `factura_documento_id`). El anclaje por cuenta de PDF/complemento solo queda permitido en el CHECK para datos legados del backfill. |
 | T14 | Migraciones en tres pasos (M1 aditiva, M2 RPC y lectura, M3 contracción) y gate de producción vacía: ver B2. |
 | T15 | Carpeta de Drive: un helper para las rutas **nuevas** (`/Por Cobrar/<cliente>/`, `/Por Pagar/<proveedor>/`) que siempre usa `resolveUploadFolderId`; no migra rutas ni archivos viejos. |
-| T16 | **Orden global de locks:** cuentas de cobro por `id` → grupos por `id` → hijas por `id` → cabecera `pagos` por `id` → órdenes de pago; `cuentas_reapertura_activa` (FOR SHARE) por proyecto, en orden. `cancelar_orden_pago` se alinea (lee los grupos de la orden sin bloquear, bloquea grupos → hijas, revalida y al final bloquea la orden) y `cancel_cotizacion` pone grupos antes que hijas. Se documenta en la decisión 022. |
+| T16 | **Orden global de locks:** cuentas de cobro por `id` → grupos por `id` → hijas por `id` → cabecera `pagos` por `id` → órdenes de pago; `cuentas_reapertura_activa` (FOR SHARE) por proyecto, en orden. `cancelar_orden_pago` se alinea (lee los grupos de la orden sin bloquear, bloquea grupos → hijas, revalida y al final bloquea la orden) y `cancel_cotizacion` pone grupos antes que hijas. Las RPC que parten de un `pago_id` (`anular_pago_*`, `corregir_datos_pago`, `adjuntar_comprobante_pago_proveedor`) siguen el patrón que ya usan: leen las líneas sin bloquear, bloquean cuentas/grupos → hijas en ese orden, bloquean la cabecera y revalidan. Se documenta en la decisión 022. |
 | T17 | Sin columna constante `lado` en los ledgers ni FK compuesta: `pagos.lado` es informativo y la coherencia (todas las líneas del mismo lado y contraparte) la dan la RPC por lado y una guarda de `auditar_consistencia()`. |
 | T18 | `cuentas_conceptos` se reescribe **una sola vez** (en M2): lectura nueva del modelo **y** objetivo `cliente`/`proveedor`, filtro por id y orden. B3 solo agrega rutas. |
+| T19 | La regla de validación de la factura de cliente vive **solo en SQL** (`factura_cuadre`). Al asumirla `ligar_factura` se retiran `validarFacturaClienteXML` y `validarMontoFactura` de `factura-parser.ts` (hoy solo las usa `cuentas-cobrar/[id]/subir-factura/route.ts`) y sus mocks en `cuentas-cobrar-subir-factura-route.test.ts`; `calcularDeadline` y la validación fiscal del proveedor se quedan. |
+| T20 | `SERENATA_RFC` es una variable nueva: se crea en Vercel (Production y Preview), en GitHub Actions (jobs `live` y e2e) y en `.env.local`; si falta, las rutas de factura **fallan explícito** (no validan en silencio). Los fixtures de prueba usan ese mismo RFC. El usuario no tiene repo ni Node: la sesión le da el paso a paso exacto (ver B3). |
 
 ## Modelo de datos
 
@@ -262,8 +264,9 @@ N hijas → 1 grupo → 1 factura.
 7. Un complemento referencia una factura vigente y un pago con línea en una cuenta de esa factura (guarda).
 
 **Cachés (siguen siendo cachés; solo las escriben las RPC, nunca TS):** `cuentas_cobrar.monto_pagado`,
-`fecha_factura`, `fecha_vencimiento` (necesarias porque `estado`, columna generada, no puede leer otra tabla),
-`cuentas_pagar_grupos.monto_transferido`. `ligar_factura` escribe las fechas por cada cuenta junto con
+`fecha_pago`, `fecha_factura`, `fecha_vencimiento` (necesarias porque `estado`, columna generada, no puede leer otra
+tabla); `cuentas_pagar_grupos.monto_transferido`/`monto_pagado`/`estado`; `cuentas_pagar.monto_pagado`/`fecha_pago`/`estado`
+(hijas). Registrar y anular un pago multi-línea las recalculan por cada cuenta y grupo afectado. `ligar_factura` escribe las fechas por cada cuenta junto con
 `factura_documento_id` (se **quita** la escritura de `route.ts:164`). Guarda: cuenta con `factura_documento_id` ⇔
 `fecha_factura` no nula.
 
@@ -283,14 +286,14 @@ N hijas → 1 grupo → 1 factura.
 | `baja_documento_pago` / `validar_factura_proveedor` | `20261019:308` / `:662` | Complementos de proveedor; método de pago | M2 |
 | `corregir_proveedor_cuenta_pagar` | `20261023:1117` | Revisar pagos compartidos | M2 |
 | `cancel_cotizacion` | `20261024:927` | Guarda por cuenta ligada **y** por cualquier línea de pago (T4); orden de locks (T16) | M2 |
-| **`buscar_ordenes_pago`** | `20261024` | El `pagado` de cada orden filtra anulados por la cabecera (join a `pagos`) | M2 |
-| **`cancelar_orden_pago`** | `20261024` | Mismo filtro de anulados; **orden de locks alineado (T16)** | M2 |
+| **`buscar_ordenes_pago`** | `20261002` | El `pagado` de cada orden filtra anulados por la cabecera (join a `pagos`) | M2 |
+| **`cancelar_orden_pago`** | `20261023` | Mismo filtro de anulados; **orden de locks alineado (T16)** | M2 |
 | **`recalcular_estado_orden_pago`** | `20261019` | Mismo filtro de anulados | M2 |
 | `cuentas_conceptos` (4 args; el de 2 lo envuelve) | `20261029:15` | `cc_factura` por la columna; pago por cabecera; complementos por (factura, pago); P11/P13; sin rama `COALESCE(grupo_id, cuentas_pagar_id)`; **objetivo `cliente`/`proveedor`, filtro por id y orden (T18)**; datos del chip P20 y descuadre estructurado | M2 |
 | `cuentas_por_proyecto` | `20261024:389` (lecturas `:469-492`) | **Adaptar** 3 lecturas (documentos y pagos) solo para la paridad (T5) | M2 |
 | `cuentas_periodo`, `cuentas_resumen`, `cuentas_avisos_items`, `cuentas_opciones` | `20261028:265`, `20261003`, `20261006` | Indirectos (`cuentas_periodo` lee pagos en `:475`); aviso de complemento de proveedor | M2 |
 | `auditar_consistencia` | `20261026:13` | Guardas nuevas (abajo) | M2 |
-| `factura_cuadre`, `ligar_factura`, `registrar_pago_cobro`, `registrar_pago_proveedor`, `ligar_complemento` | **nuevas** | Ver B2 | M2 |
+| `factura_cuadre`, `ligar_factura`, `registrar_pago_cobro`, `registrar_pago_proveedor`, `ligar_complemento_cobro`, `ligar_complemento_proveedor` | **nuevas** | Ver B2 | M2 |
 | `estado_cuenta` | **nueva** | Ver B3 | M2 |
 
 **Guardas nuevas de `auditar_consistencia()`:** (1) cuenta ligada → FACTURA_XML vigente; (2) cuentas de una factura
@@ -359,7 +362,7 @@ releases, pero **dentro** del release el orden es M1 → M2 → M3 para que cada
 verificado antes de M3; si no hay respaldo, B2 se detiene y se consulta.
 
 - [ ] **M1 — aditiva (MCP):** `clientes.rfc`/`proveedores.rfc`; tabla `pagos` (CHECK de `tipo_pago`, índices, RLS sin
-      policies); `pago_id` (nulo, FK a `pagos`, índice) y CHECK `monto > 0` en los ledgers; `DROP NOT NULL` de
+      policies); `pago_id` (nulo, FK a `pagos`, índice) y CHECK `monto > 0` en los ledgers (antes, consultar que ninguna fila lo viole); `DROP NOT NULL` de
       `tipo_pago`/`fecha_pago` de los ledgers; `cuentas_cobrar.factura_documento_id` + índice;
       `documentos_cuentas_cobrar` (`cuentas_cobrar_id` NULL, `factura_documento_id`, `monto_pagado`, CHECK de ancla,
       repuntar `pago_id` a `pagos` tras el backfill, índice único parcial de `uuid_cfdi` y de `operation_id`);
@@ -374,8 +377,8 @@ verificado antes de M3; si no hay respaldo, B2 se detiene y se consulta.
       que recibe de TS, T12; idempotente por `operation_id`; recibe el **saldo/monto esperado** por cuenta y falla con
       `candidatos_cambiaron`), `registrar_pago_cobro` y `registrar_pago_proveedor` (T11: cabecera + N líneas; residuo
       exacto en `numeric`; recalculan cachés y, en proveedor, el estado de las órdenes; idempotencia por
-      `pagos.operation_id` devolviendo el resultado existente; **saldo esperado por línea**), `ligar_complemento`
-      (busca la factura por UUID, valida PPD, pago y monto; reemplaza la elección TS de `complemento.ts`). Además todo
+      `pagos.operation_id` devolviendo el resultado existente; **saldo esperado por línea**), `ligar_complemento_cobro` y `ligar_complemento_proveedor`
+      (buscan la factura por UUID, validan PPD, pago y monto; reemplazan la elección TS de `complemento.ts`). Además todo
       el inventario marcado M2: correcciones, `cancel_cotizacion` (T4/T16), órdenes de pago, `cuentas_conceptos`
       (T18), `cuentas_por_proyecto`, `cuentas_periodo`, avisos, `estado_cuenta` y las 6 guardas de
       `auditar_consistencia()`.
@@ -389,7 +392,7 @@ verificado antes de M3; si no hay respaldo, B2 se detiene y se consulta.
       `completarReemplazo`, `resolveUploadFolderId`, `uploadFileToDrive`; calcula el vencimiento con `calcularDeadline`)
       y `lib/server/cuentas/registrar-pago.ts` (generaliza `registrar-pago-proveedor.ts`: `withIdempotency`, mapeo de
       `P1411`/`P1413`; el cobro deja de crear el documento `OTRO` fuera de la RPC). Las rutas por cuenta, `.../estado`
-      y `reconcilePago` leen `pagos` por `operation_id`. Quitar la escritura de fechas de `route.ts:164`. `subir-archivo.ts`
+      y `reconcilePago` leen `pagos` por `operation_id`. Quitar la escritura de fechas de `route.ts:164`, retirar `validarFacturaClienteXML`/`validarMontoFactura` (T19) y la `extractFacturaFechaFromXml` local de la ruta de grupo (se usa `facturaData.fecha_emision`). `subir-archivo.ts`
       exige factura vigente y ancla por `factura_documento_id` (T13).
 - [ ] **Retirar `pago_operations` del código (T2):** `keep-alive/route.ts` (la limpieza y el campo
       `pago_operations_deleted`) y su test, `scripts/loadtest/bulk-cleanup.mjs`, tests de las rutas `.../estado`.
@@ -415,10 +418,11 @@ verificado antes de M3; si no hay respaldo, B2 se detiene y se consulta.
 ### B3 — API nueva y lecturas (extender, no duplicar)
 - [ ] Parser: `parseFacturaXML` lee `TipoDeComprobante` y `Concepto/Descripcion` (isArray de `Concepto`) para P4 y P18;
       reutilizar `parseComplementoPagoXML`. El XML tipo P deja de pasar como factura. Validar RFC contra
-      `SERENATA_RFC` (emisor para cliente, receptor para proveedor).
-- [ ] Rutas: `POST /api/cuentas/facturas/preview` (llama `factura_cuadre`) y `POST /api/cuentas/facturas` (XML, cuentas,
+      `SERENATA_RFC` (emisor para cliente, receptor para proveedor) con la variable dada de alta antes de desplegar (T20):
+      paso a paso para el usuario en Vercel (Production y Preview) y GitHub Actions, y entrada en `docs/ENV.md`.
+- [ ] Rutas: `POST /api/cuentas/facturas/preview` (llama `factura_cuadre`) y `POST /api/cuentas/facturas` (cliente → `ligar_factura`; proveedor → el servicio de grupo existente, 1:1 por grupo, que solo cambia en el complemento; XML, cuentas,
       saldos esperados, `operation_id`; el PDF sube por las rutas `.../documentos` existentes con `factura_documento_id`,
-      por el límite de ~4.5 MB de Vercel; el complemento tipo P entra por la misma ruta y va a `ligar_complemento`);
+      por el límite de ~4.5 MB de Vercel; el complemento tipo P entra por la misma ruta y va a `ligar_complemento_cobro` o `ligar_complemento_proveedor`);
       `POST /api/cuentas/pagos` (despacha a la RPC del lado correspondiente) y su `GET .../estado`;
       `GET /api/cuentas/estado-cuenta?lado=&id=` (patrón `periodo-rpc.ts` + `periodo-sql.ts` + schema Zod).
 - [ ] `estado_cuenta(lado, contraparte_id)`: lee saldos de `cuentas_conceptos` (no los recalcula) y agrega solo facturas y
