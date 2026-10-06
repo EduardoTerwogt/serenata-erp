@@ -557,6 +557,36 @@ crea un deploy de producción. Entre el *Redeploy* del corte y `GO_LIVE` **no se
 hace ningún push a `main`**; el Instant Rollback de Hobby solo vuelve al deploy
 inmediatamente anterior.
 
+## Bitácora de la ejecución (2026-10-05/06)
+
+- **R1:** la nueva se creó con el nombre `Serenata-ERP` (`ytlyphlgyhgztkfxwojt`,
+  `us-east-2`, Postgres `17.11.0.002`). `db push` por `db-push-una-vez.yml` (SHA
+  `f714bff`): 141 migraciones en 22 s, historial = `_manifest.json`. Huellas de
+  esquema y de las categorías extendidas idénticas a la vieja.
+- **Diferencias que el plan no previó, corregidas en la nueva:**
+  1. La migración `20260915_loadtest_runs.sql` crea `loadtest_runs` en cualquier
+     base nueva; la vieja nunca la tuvo y `seed-cuentas-test.sql`,
+     `escala-generador.sql` y `escala-limpiar.sql` la usan para decidir "esto es
+     test". Se quitó con `DROP TABLE` (corrido por el usuario en el SQL Editor,
+     porque la confirmación de borrado por MCP expiró). **Al aplicar migraciones
+     futuras a producción, esa no va.**
+  2. `folio_contadores` traía 2 filas sembradas (CC y CP 2026, último 0): se
+     borraron para que quede como la vieja.
+- **Usuarios:** copiados con el `INSERT` armado en la vieja (`jsonb_populate_recordset`);
+  ids y md5 de cada fila idénticos, sin pasar los hashes por Claude.
+- **R3:** variables de Producción en Vercel (las dos `NEXT_PUBLIC_*` por MCP, las
+  dos secretas por el usuario); cada entrada es compartida con Development, que
+  también quedó apuntando a la nueva. *Redeploy* `dpl_9eYDk5k5…` (`sfo1`, sin
+  caché) → `READY`; la vieja se pausó y test se reactivó (misma versión
+  `17.6.1.166`: reactivar no cambió la imagen, C6).
+- **Reinicio posterior a la verificación:** el script viejo no se pudo leer
+  (bloqueo del permiso); se usó un `DO $$` con guardas (se niega si existe
+  `loadtest_runs` o si los conteos de usuarios/tipos/etapas no son 2/3/12),
+  `TRUNCATE` de todas las tablas salvo las 4 conservadas, en una transacción.
+- **Pendiente de la vigilancia (D6):** un error aislado `no partition of relation
+  "messages" found for row` en Realtime a las 00:50 UTC, no repetido; confirmar a
+  las 24 h que las particiones diarias de `realtime.messages` se siguen creando.
+
 ## Riesgos
 
 | Riesgo | Cómo queda cubierto |
@@ -577,8 +607,8 @@ inmediatamente anterior.
 | Bloque | Estado |
 |---|---|
 | R0 Verificaciones, capturas y línea base | Hecho salvo agendar la ventana (usuario) |
-| R2 PR de código | PR #126 en borrador, no se mergea hasta R4. Medición A/B hecha |
+| R2 PR de código | PR #126: CI verde en cada commit previo, en re-corrida tras R3; merge en R4. Medición A/B hecha |
 | R2b Workflow de un solo uso (`db push`) | Hecho: PR #127 mergeado 2026-10-02 |
-| R1 Producción nueva | Pendiente |
-| R3 Corte y verificación | Pendiente |
-| R4 Cierre | Pendiente |
+| R1 Producción nueva | **Hecho 2026-10-05**: proyecto `ytlyphlgyhgztkfxwojt` (`us-east-2`), GO/NO-GO en PASS |
+| R3 Corte y verificación | **Hecho**: `GO_LIVE` 2026-10-06 ~01:05 UTC (19:05 CDMX). Pendiente: vigilancia a las 24 h y cron de las 08:00 UTC |
+| R4 Cierre | En curso: `env-check` con los dos refs (PR #126); merge `cle1` cuando el CI esté verde |

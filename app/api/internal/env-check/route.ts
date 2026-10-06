@@ -17,12 +17,12 @@
 
 import { createHash } from 'crypto'
 
-// Ref real de producción (serenata-erp) -- confirmado en
-// docs/archive/ef-3-engineering-hardening.md sección 3 del plan. Hardcoded a
-// propósito: esta comparación es la última línea de defensa contra medir
-// carga sobre datos reales, no debe depender de que otra env var esté bien
-// configurada.
-const PRODUCTION_SUPABASE_REF = 'fwmyoqokcjtldiofuxdg'
+// Refs reales de producción -- hardcoded a propósito: esta comparación es la
+// última línea de defensa contra medir carga sobre datos reales, no debe
+// depender de que otra env var esté bien configurada. Desde #124 (docs/decisions/021)
+// son dos: el proyecto nuevo en us-east-2 y el viejo en us-west-2, que se
+// conserva pausado 7 días como respaldo. Al borrar el viejo, quitar su ref.
+const PRODUCTION_SUPABASE_REFS = ['ytlyphlgyhgztkfxwojt', 'fwmyoqokcjtldiofuxdg']
 
 function fingerprint(value: string | undefined): string | null {
   if (!value) return null
@@ -59,6 +59,6 @@ export async function GET(request: Request) {
     driveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID ?? null,
     driveFolderIdCuentas: process.env.GOOGLE_DRIVE_FOLDER_ID_CUENTAS ?? null,
     authSecretConfigured: Boolean(process.env.AUTH_SECRET),
-    isProductionProject: supabaseProjectRef === PRODUCTION_SUPABASE_REF,
+    isProductionProject: supabaseProjectRef !== null && PRODUCTION_SUPABASE_REFS.includes(supabaseProjectRef),
   })
 }
