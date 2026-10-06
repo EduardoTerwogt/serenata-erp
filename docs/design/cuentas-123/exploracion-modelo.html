@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Facturas y pagos ligados</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: columna fluida estilo ERP Serenata; tabs segmentados arriba, cada vista es un panel o un modal simulado. */
+:root{
+  --bg:#F5F5F7; --card:#FFFFFF; --row:#FAFAFB; --row2:#F0F0F2; --input:rgba(120,120,128,.12);
+  --line:#DEDEE2; --ink:#1D1D1F; --body:#3A3A3C; --muted:#6E6E73; --faint:#98989D;
+  --accent:#FE7B01; --accent-press:#E06D00; --accent-tint:rgba(254,123,1,.12); --focus:rgba(254,123,1,.45);
+  --ok-bg:rgba(47,168,79,.15); --ok:#218C3E; --info-bg:rgba(46,127,224,.15); --info:#1C63B7;
+  --draft-bg:rgba(142,142,147,.18); --draft:#6E6E73; --bad-bg:rgba(224,71,46,.15); --bad:#C13A20;
+  --shadow:0 1px 2px rgba(0,0,0,.05); --shadow-ov:0 18px 48px rgba(0,0,0,.14); --seg:0 1px 2px rgba(0,0,0,.12);
+  --font:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#1C1C1E; --card:#2C2C2E; --row:#262628; --row2:#232325; --input:rgba(255,255,255,.08);
+  --line:#3A3A3C; --ink:#F5F5F7; --body:#E5E5E7; --muted:#98989D; --faint:#6E6E73;
+  --accent-press:#FF8F1F; --accent-tint:rgba(254,123,1,.18); --focus:rgba(254,123,1,.5);
+  --ok-bg:rgba(47,168,79,.2); --ok:#4ADE80; --info-bg:rgba(46,127,224,.22); --info:#6FA8F5;
+  --draft-bg:rgba(180,180,186,.2); --draft:#C7C7CC; --bad-bg:rgba(224,71,46,.22); --bad:#FF8266;
+  --shadow-ov:0 18px 48px rgba(0,0,0,.45); color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#1C1C1E; --card:#2C2C2E; --row:#262628; --row2:#232325; --input:rgba(255,255,255,.08);
+  --line:#3A3A3C; --ink:#F5F5F7; --body:#E5E5E7; --muted:#98989D; --faint:#6E6E73;
+  --accent-press:#FF8F1F; --accent-tint:rgba(254,123,1,.18); --focus:rgba(254,123,1,.5);
+  --ok-bg:rgba(47,168,79,.2); --ok:#4ADE80; --info-bg:rgba(46,127,224,.22); --info:#6FA8F5;
+  --draft-bg:rgba(180,180,186,.2); --draft:#C7C7CC; --bad-bg:rgba(224,71,46,.22); --bad:#FF8266;
+  --shadow-ov:0 18px 48px rgba(0,0,0,.45); color-scheme:dark; }
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--body);font-family:var(--font);font-size:13.5px;line-height:1.5;margin:0}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:26px 60px;display:flex;flex-direction:column;gap:19px}
+h1,h2,h3{color:var(--ink);font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balance}
+h1{font-size:27px;line-height:1.15} h2{font-size:17px} h3{font-size:14px}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.muted{color:var(--muted)} .faint{color:var(--faint)}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px}
+.head{display:flex;flex-wrap:wrap;gap:13px;align-items:flex-end;justify-content:space-between}
+.note{font-size:12.5px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+
+.seg{display:inline-flex;flex-wrap:wrap;gap:2px;padding:2px;border-radius:9px;background:var(--input);max-width:100%}
+.seg button{all:unset;cursor:pointer;padding:6px 14px;border-radius:7px;font-size:13px;font-weight:500;color:var(--muted);transition:background .18s,color .18s}
+.seg button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:var(--seg)}
+.seg button:focus-visible,.btn:focus-visible,input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.pad{padding:19px}
+.stack{display:flex;flex-direction:column;gap:13px}
+.row{display:flex;flex-wrap:wrap;gap:13px;align-items:center}
+.grow{flex:1;min-width:0}
+
+.pill{display:inline-flex;align-items:center;justify-content:center;min-width:80px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.p-ok{background:var(--ok-bg);color:var(--ok)} .p-info{background:var(--info-bg);color:var(--info)}
+.p-draft{background:var(--draft-bg);color:var(--draft)} .p-bad{background:var(--bad-bg);color:var(--bad)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:7px;background:var(--row2);border:1px solid var(--line);font-size:12px;color:var(--body);white-space:nowrap}
+.chip.acc{background:var(--accent-tint);border-color:transparent;color:var(--accent-press)}
+
+.btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;transition:background .12s}
+.btn.pri{background:var(--accent);color:#fff} .btn.pri:hover{background:var(--accent-press)}
+.btn.gho{background:var(--input);color:var(--ink)} .btn.gho:hover{background:var(--row2)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+/* Modal simulado: se muestra en línea para leerse completo */
+.modal{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-ov);overflow:hidden}
+.m-head{padding:19px 19px 13px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.m-body{padding:19px;display:flex;flex-direction:column;gap:19px}
+.m-foot{padding:13px 19px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--row)}
+
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:13px}
+.kv div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kv b{color:var(--ink);font-weight:600;font-size:14px;overflow-wrap:anywhere}
+
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:13px 16px;display:flex;gap:13px;align-items:center;flex-wrap:wrap;background:var(--row)}
+.file{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)}
+.file svg{flex:none}
+
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);text-align:left;padding:9px 14px;background:var(--row);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+tr.off td{color:var(--faint)}
+tr.sub td{background:var(--row);font-size:12.5px}
+tr.sub td:first-child{padding-left:38px}
+input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);margin:0;vertical-align:middle}
+input.amt{width:120px;height:30px;border:1px solid var(--line);background:var(--input);color:var(--ink);border-radius:8px;padding:0 9px;text-align:right;font:inherit;font-variant-numeric:tabular-nums}
+input.amt.err{border-color:var(--bad)}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field input,.field select{height:34px;border:1px solid var(--line);background:var(--input);color:var(--ink);border-radius:9px;padding:0 10px;font:inherit}
+
+.check{border-radius:10px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;font-size:13px}
+.check.ok{background:var(--ok-bg);color:var(--ok)} .check.bad{background:var(--bad-bg);color:var(--bad)} .check.info{background:var(--info-bg);color:var(--info)}
+.check svg{flex:none;margin-top:2px}
+.check .det{color:var(--body);margin-top:4px}
+
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:13px}
+.sum>div{background:var(--row);border:1px solid var(--line);border-radius:10px;padding:10px 13px;display:flex;flex-direction:column;gap:2px}
+.sum b{font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* Diagrama del modelo */
+.model{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr);gap:19px;align-items:start}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.node{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.node.fa{border-color:var(--info)} .node.fb{border-color:var(--accent)}
+.node .t{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.lnk{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0;border-top:1px solid var(--line)}
+.lnk:first-of-type{border-top:0}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:13px}
+.legend .node b{color:var(--ink)}
+@media (max-width:760px){ .model{grid-template-columns:1fr} }
+.overlay{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.32);display:flex;justify-content:center;align-items:flex-start;overflow-y:auto;padding:max(26px,env(safe-area-inset-top,0px)) 16px 26px}
+.overlay .modal{width:100%;max-width:880px}
+.x{all:unset;cursor:pointer;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--muted)}
+.x:hover{background:var(--input)}
+.m-head .t{display:flex;align-items:flex-start;gap:13px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px}
+.proj{border-top:1px solid var(--line)}
+.proj:first-child{border-top:0}
+.proj-h{display:flex;flex-wrap:wrap;gap:8px 13px;align-items:center;padding:12px 19px;background:var(--row)}
+.con{display:grid;grid-template-columns:22px minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) auto;gap:13px;align-items:center;padding:11px 19px;border-top:1px solid var(--line)}
+.con .io{width:22px;height:22px;border-radius:6px;display:grid;place-items:center}
+.io.in{background:var(--ok-bg);color:var(--ok)} .io.out{background:var(--bad-bg);color:var(--bad)}
+.step{font-size:12.5px;color:var(--accent-press);font-weight:600}
+@media (max-width:700px){ .con{grid-template-columns:22px minmax(0,1fr) auto} .con .hide-sm{display:none} }
+body.lock{overflow:hidden}
+.opt{display:flex;gap:12px;align-items:flex-start;padding:13px 14px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--card)}
+.opt:has(input:checked){border-color:var(--accent);background:var(--accent-tint)}
+.opt.dis{opacity:.45;cursor:not-allowed}
+.opt input{margin-top:3px;accent-color:var(--accent)}
+.opt b{color:var(--ink)}
+.steps{display:flex;flex-direction:column;gap:6px;margin:6px 0 0;padding-left:18px;color:var(--body)}
+textarea.motivo{width:100%;min-height:64px;border:1px solid var(--line);background:var(--input);color:var(--ink);border-radius:9px;padding:8px 10px;font:inherit;resize:vertical}
+.cot-bar{display:flex;flex-wrap:wrap;gap:10px 13px;align-items:center;padding:13px 19px}
+.qa{border:1px dashed var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--muted)}
+.qa b{color:var(--ink)}
+button.chip{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:7px;background:var(--row2);border:1px solid var(--line);font-size:12px;color:var(--body);white-space:nowrap}
+button.chip.acc{background:var(--accent-tint);border-color:transparent;color:var(--accent-press)}
+button.chip:hover{border-color:var(--accent)}
+button.chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+tr.hl td{background:var(--accent-tint)}
+tr.fac{cursor:pointer}
+tr.fac:hover td{background:var(--row)}
+.chev{display:inline-block;transition:transform .18s;color:var(--muted);margin-right:4px;vertical-align:middle}
+tr.fac[aria-expanded="true"] .chev{transform:rotate(90deg)}
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <div class="stack" style="gap:4px">
+      <span class="eyebrow">Issue #123 · Cuentas</span>
+      <h1>Facturas y pagos ligados</h1>
+      <span class="muted">Una factura cubre varias cotizaciones y un pago cubre varias facturas, cada una con su monto.</span>
+    </div>
+    <span class="note">Mockup de exploración · datos de ejemplo</span>
+  </div>
+
+  <div class="seg" role="tablist" id="tabs">
+    <button role="tab" aria-selected="true" data-v="cuentas">Pantalla de Cuentas</button>
+    <button role="tab" aria-selected="false" data-v="cancel">Cancelación (otra iniciativa)</button>
+    <button role="tab" aria-selected="false" data-v="modelo">Cómo se liga (referencia)</button>
+  </div>
+
+  <!-- ============ CUENTAS ============ -->
+  <section id="v-cuentas" class="stack" style="gap:13px">
+    <div class="card">
+      <div class="pad row" style="gap:13px;border-bottom:1px solid var(--line)">
+        <div class="stack grow" style="gap:2px"><h2>Cuentas</h2><span class="muted">Septiembre 2026 · por proyecto</span></div>
+        <div class="toolbar">
+          <button class="btn gho" data-open="factura"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>Subir factura</button>
+          <button class="btn gho" data-open="pago"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>Registrar pago</button>
+          <button class="btn gho" data-open="edo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>Estado de cuenta</button>
+        </div>
+      </div>
+      <div id="c-list"></div>
+    </div>
+    <span class="faint" style="font-size:12.5px">Los tres botones viven solo en la barra de Cuentas y abren una ventana; no hay módulo nuevo. El chip de una factura o pago abre el estado de cuenta en ese documento. El resto de la pantalla (filtros, avisos, cierre) queda como hoy y se omite aquí.</span>
+  </section>
+
+  <!-- ============ CANCELAR (pantalla de cotización) ============ -->
+  <section id="v-cancel" class="stack" style="gap:13px" hidden>
+    <div class="card">
+      <div class="cot-bar">
+        <span class="mono" style="color:var(--ink);font-weight:600;font-size:14px">SH006</span>
+        <span class="grow" style="color:var(--ink);font-weight:600">Post adicional · Grupo Altavista</span>
+        <span class="pill p-ok">Aprobada</span>
+      </div>
+      <div class="cot-bar" style="border-top:1px solid var(--line)">
+        <span class="chip">Factura A · PPD</span><span class="chip">Cobrado $10,000.00 de $69,600.00</span>
+        <span class="grow"></span>
+        <button class="btn gho">Generar PDF</button>
+        <button class="btn gho" data-open="cancel">Cancelar</button>
+        <button class="btn pri">Crear complementaria</button>
+      </div>
+    </div>
+    <div class="check info"><div><b>Fuera de #123.</b> Se conserva como referencia para la iniciativa de cancelación con traspaso.</div></div>
+    <span class="faint" style="font-size:12.5px">Es el botón Cancelar que ya existe en la cotización. Si la cotización tiene factura o cobros, en lugar de bloquearse abre esta ventana.</span>
+  </section>
+
+  <!-- ============ MODELO ============ -->
+  <section id="v-modelo" class="stack" style="gap:19px" hidden>
+    <div class="card pad stack">
+      <div class="row"><h2 class="grow">El ejemplo del issue</h2><span class="chip">Grupo Altavista · GAL120304AB1</span></div>
+      <div class="model">
+        <div class="col">
+          <span class="label">Cotizaciones (cobros)</span>
+          <div id="m-cots" class="col"></div>
+        </div>
+        <div class="col">
+          <span class="label">Facturas (un CFDI cada una)</span>
+          <div class="node fa">
+            <div class="t"><h3>Factura A</h3><span class="pill p-info">PPD</span></div>
+            <span class="mono faint">UUID 6F2C…91AB · 12 sep 2026</span>
+            <div id="m-fa"></div>
+          </div>
+          <div class="node fb">
+            <div class="t"><h3>Factura B</h3><span class="pill p-info">PPD</span></div>
+            <span class="mono faint">UUID 0D7E…44C2 · 15 sep 2026</span>
+            <div id="m-fb"></div>
+          </div>
+        </div>
+        <div class="col">
+          <span class="label">Pago y complementos</span>
+          <div class="node">
+            <div class="t"><h3>Depósito 30 sep</h3><span class="num" style="color:var(--ink);font-weight:600">$487,200.00</span></div>
+            <span class="faint" style="font-size:12.5px">Un comprobante · transferencia BBVA</span>
+            <div class="lnk"><span><span class="dot" style="background:var(--info);display:inline-block;margin-right:6px"></span>Factura A</span><span class="num">$359,600.00</span></div>
+            <div class="lnk"><span><span class="dot" style="background:var(--accent);display:inline-block;margin-right:6px"></span>Factura B</span><span class="num">$127,600.00</span></div>
+          </div>
+          <div class="node">
+            <div class="t"><h3>Complementos</h3><span class="chip">uno por factura</span></div>
+            <div class="lnk"><span>REP de Factura A</span><span class="pill p-ok">Ligado</span></div>
+            <div class="lnk"><span>REP de Factura B</span><span class="pill p-draft">Pendiente</span></div>
+            <span class="faint" style="font-size:12.5px">Al subir el XML se liga solo por el UUID de la factura y el monto pagado.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="node"><span class="label">Factura</span><b>Un registro por CFDI</b><span class="muted">XML y PDF se guardan una vez. Se aplica a cotizaciones (cliente) o a su grupo (proveedor), con monto por cada una.</span></div>
+      <div class="node"><span class="label">Pago</span><b>Un registro por comprobante</b><span class="muted">Depósito del cliente o transferencia a proveedor. Se reparte entre facturas y, dentro de cada factura, entre sus cotizaciones.</span></div>
+      <div class="node"><span class="label">Complemento</span><b>Uno por factura y pago</b><span class="muted">Clientes y proveedores PPD. Si falta, aparece en Avisos y el proyecto no cierra.</span></div>
+      <div class="node"><span class="label">Relación entre facturas</span><b>Sustitución o diferencia</b><span class="muted">Al cancelar con traspaso: la factura se sustituye (SAT 04) o se religa a la cotización nueva más una factura por la diferencia.</span></div>
+    </div>
+
+    <div class="card pad stack">
+      <h2>Cada proyecto cierra por su cuenta</h2><span class="muted">Ejemplo con un primer pago de $300,000 aplicado a la Factura A, de la cotización más antigua a la más nueva.</span>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Cotización</th><th>Mes</th><th>Factura</th><th class="r">Total</th><th class="r">Cobrado</th><th>Estado</th></tr></thead>
+        <tbody id="m-tabla"></tbody>
+      </table></div>
+      <span class="faint" style="font-size:12.5px">En el panel de Cuentas cada cobro sigue en su proyecto y su mes; la factura compartida se ve como un chip que abre el estado de cuenta.</span>
+    </div>
+  </section>
+
+  <!-- ============ CANCELAR CON TRASPASO (ventana) ============ -->
+  <div class="overlay" id="o-cancel" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t-cancel">
+      <div class="m-head"><div class="t"><div class="stack grow" style="gap:4px">
+        <span class="eyebrow">SH006 · Post adicional</span>
+        <h2 id="t-cancel">Cancelar cotización</h2></div><button class="x" data-close aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+        <span class="muted">Esta cotización tiene factura y cobros. Antes de cancelarla hay que decidir a dónde pasan.</span>
+      </div>
+      <div class="m-body">
+        <div class="stack">
+          <h3>Lo que tiene ligado</h3>
+          <div class="sum">
+            <div><span class="label">Total</span><b>$69,600.00</b></div>
+            <div><span class="label">Factura</span><b>Factura A</b><span class="faint" style="font-size:12px">Compartida con SH001, SH003, SH004</span></div>
+            <div><span class="label">Cobrado</span><b>$10,000.00</b><span class="faint" style="font-size:12px">Depósito 30 sep · complemento ligado</span></div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <h3>Cotización que la reemplaza</h3>
+          <div class="row">
+            <label class="field grow" style="min-width:220px"><select id="c-nueva" aria-label="Cotización nueva">
+              <option value="mayor">SH007 · Animación 2D · $81,200.00</option>
+              <option value="igual">SH008 · Motion gráfico · $69,600.00</option>
+              <option value="menor">SH009 · Fotomontaje · $58,000.00</option>
+            </select></label>
+          </div>
+          <span class="faint" style="font-size:12.5px">Solo cotizaciones aprobadas de Grupo Altavista sin factura.</span>
+          <div id="c-dif"></div>
+        </div>
+
+        <div class="stack">
+          <h3>Qué pasa con la Factura A</h3>
+          <label class="opt" id="opt-religar"><input type="radio" name="camino" value="religar" checked>
+            <div class="stack" style="gap:2px"><b>Religar la factura a la cotización nueva</b>
+              <span class="muted" id="t-religar"></span></div></label>
+          <label class="opt" id="opt-sustituir"><input type="radio" name="camino" value="sustituir">
+            <div class="stack" style="gap:2px"><b>Sustituir la factura</b>
+              <span class="muted">El contador cancela la Factura A ante el SAT y emite una nueva (relación 04) con SH001, SH003, SH004 y la cotización nueva.</span></div></label>
+        </div>
+
+        <div class="stack">
+          <h3>Qué va a pasar</h3>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th></th><th>Antes</th><th>Después</th></tr></thead>
+            <tbody id="c-tabla"></tbody>
+          </table></div>
+          <div id="c-avisos" class="stack" style="gap:8px"></div>
+        </div>
+
+        <label class="field"><span class="label">Motivo</span><textarea class="motivo" id="c-motivo" placeholder="Ej. el cliente cambió el servicio de post por animación"></textarea></label>
+
+        <div class="qa"><b>Por definir:</b> qué pasa si la cotización no tiene reemplazo pero ya tiene cobros (saldo a favor del cliente o devolución), y qué pasa si ya hay pagos a proveedor de esa cotización.</div>
+      </div>
+      <div class="m-foot">
+        <span class="muted">Todo se aplica en una sola operación.</span>
+        <span class="grow"></span>
+        <button class="btn gho">No cancelar</button>
+        <button class="btn pri" id="c-save" disabled>Cancelar y traspasar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SUBIR FACTURA ============ -->
+  <div class="overlay" id="o-factura" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t-factura">
+      <div class="m-head"><div class="t"><div class="stack grow" style="gap:4px">
+        <span class="eyebrow">Detectado del XML · Grupo Altavista</span>
+        <h2 id="t-factura">Subir factura</h2></div><button class="x" data-close aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+        <span class="muted">El RFC del XML decide a quién pertenece: si es de un cliente se liga a cotizaciones; si es de un proveedor, a su proyecto.</span>
+      </div>
+      <div class="m-body">
+        <div class="drop">
+          <div class="file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/></svg>F-A_Altavista.xml</div>
+          <div class="file"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>F-A_Altavista.pdf</div>
+          <span class="grow"></span>
+          <div class="seg" id="xmlmode">
+            <button aria-selected="true" data-m="folios">XML con folios</button>
+            <button aria-selected="false" data-m="generico">Concepto genérico</button>
+          </div>
+        </div>
+
+        <div class="kv">
+          <div><span class="label">Receptor</span><b>Grupo Altavista S.A. de C.V.</b><span class="mono faint">GAL120304AB1</span></div>
+          <div><span class="label">Total del XML</span><b class="num">$359,600.00</b></div>
+          <div><span class="label">Método</span><b>PPD · 99 Por definir</b></div>
+          <div><span class="label">Emitida</span><b>12 sep 2026</b><span class="faint">Vence 12 oct 2026</span></div>
+        </div>
+
+        <div class="stack">
+          <div class="row"><h3 class="grow">Cotizaciones que cubre</h3><span class="faint" id="hint-folios">Preseleccionadas por los folios del CFDI</span></div>
+          <div class="tbl-wrap"><table>
+            <thead><tr><th style="width:36px"></th><th>Folio</th><th>Proyecto</th><th>Mes del evento</th><th class="r">Por facturar</th></tr></thead>
+            <tbody id="f-rows"></tbody>
+          </table></div>
+          <span class="faint" style="font-size:12.5px">Solo aparecen cobros de este cliente (RFC del XML) con saldo por facturar.</span>
+        </div>
+
+        <div id="f-check"></div>
+      </div>
+      <div class="m-foot">
+        <span class="muted" id="f-count"></span>
+        <span class="grow"></span>
+        <button class="btn gho">Cancelar</button>
+        <button class="btn pri" id="f-save">Guardar factura</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ REGISTRAR PAGO ============ -->
+  <div class="overlay" id="o-pago" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t-pago">
+      <div class="m-head"><div class="t"><div class="stack grow" style="gap:4px">
+        <span class="eyebrow">Cuentas</span>
+        <h2 id="t-pago">Registrar pago</h2></div><button class="x" data-close aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+      </div>
+      <div class="m-body">
+        <div class="row">
+          <div class="seg" id="p-lado"><button aria-selected="true" data-l="cli">Cobro de cliente</button><button aria-selected="false" data-l="prov">Pago a proveedor</button></div>
+          <label class="field grow" style="min-width:200px"><select id="p-quien" aria-label="Cliente o proveedor"><option>Grupo Altavista S.A. de C.V.</option></select></label>
+        </div>
+        <div class="kv" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+          <label class="field"><span class="label" id="p-mlabel">Monto recibido</span><input id="p-monto" inputmode="decimal" value="300,000.00"></label>
+          <label class="field"><span class="label">Fecha</span><input value="30 sep 2026"></label>
+          <label class="field"><span class="label">Forma</span><select><option>Transferencia</option><option>Cheque</option><option>Efectivo</option></select></label>
+          <div class="field"><span class="label">Comprobante</span><div class="file" style="height:34px" id="p-file">transferencia_BBVA_30sep.pdf</div></div>
+        </div>
+
+        <div class="row">
+          <h3 class="grow">Aplicar a facturas</h3>
+          <button class="btn gho" id="p-auto">Sugerir: la más antigua primero</button>
+        </div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Factura / cotización</th><th>Emitida</th><th class="r">Saldo</th><th class="r">Aplicar</th></tr></thead>
+          <tbody id="p-rows"></tbody>
+        </table></div>
+        <span class="faint" style="font-size:12.5px" id="p-hint">Toca una factura para ver y editar su reparto. Cada factura se reparte entre sus cotizaciones. Si el cliente indica cuánto va a cada una, edita el monto de la cotización.</span>
+
+        <div class="sum">
+          <div><span class="label">Recibido</span><b id="s-rec"></b></div>
+          <div><span class="label">Aplicado</span><b id="s-apl"></b></div>
+          <div><span class="label">Por aplicar</span><b id="s-res"></b></div>
+        </div>
+        <div id="p-check"></div>
+      </div>
+      <div class="m-foot">
+        <span class="muted">Cada factura PPD queda esperando su complemento.</span>
+        <span class="grow"></span>
+        <button class="btn gho">Cancelar</button>
+        <button class="btn pri" id="p-save">Registrar pago</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ESTADO DE CUENTA ============ -->
+  <div class="overlay" id="o-edo" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t-edo">
+      <div class="m-head"><div class="t"><div class="stack grow" style="gap:4px">
+        <span class="eyebrow">Cuentas</span>
+        <h2 id="t-edo">Estado de cuenta</h2></div><button class="x" data-close aria-label="Cerrar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+      </div>
+      <div class="m-body">
+    <div class="row">
+      <div class="seg" id="edo-lado">
+        <button aria-selected="true" data-l="cli">Cliente · Grupo Altavista</button>
+        <button aria-selected="false" data-l="prov">Proveedor · Distrito Sonoro</button>
+      </div>
+      <span class="grow"></span>
+      
+    </div>
+    <div class="sum" id="edo-sum"></div>
+    <div class="stack">
+      <h3>Facturas</h3>
+      <div class="tbl-wrap"><table>
+        <thead id="edo-fh"></thead>
+        <tbody id="edo-f"></tbody>
+      </table></div>
+    </div>
+    <div class="stack">
+      <h3>Pagos</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Fecha</th><th>Comprobante</th><th>Aplicado a</th><th class="r">Monto</th></tr></thead>
+        <tbody id="edo-p"></tbody>
+      </table></div>
+    </div>
+    <div id="edo-aviso"></div>
+      </div>
+      <div class="m-foot"><span class="muted">Se abre igual desde la ficha del cliente o del proveedor.</span><span class="grow"></span><button class="btn pri" data-close>Cerrar</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const fmt = n => '$' + n.toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+const parse = s => { const n = parseFloat(String(s).replace(/[^0-9.]/g,'')); return isNaN(n) ? 0 : n; };
+const ICON_OK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const ICON_WARN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
+const ICON_INFO = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+
+const COTS = [
+  {f:'SH001', p:'Spot TV 30s', mes:'sep 2026', t:185600, fac:'A'},
+  {f:'SH002', p:'Fotofija campaña', mes:'sep 2026', t:92800, fac:'B'},
+  {f:'SH003', p:'Making of', mes:'sep 2026', t:58000, fac:'A'},
+  {f:'SH004', p:'Versiones redes', mes:'sep 2026', t:46400, fac:'A'},
+  {f:'SH005', p:'Casting', mes:'sep 2026', t:34800, fac:'B'},
+  {f:'SH006', p:'Post adicional', mes:'oct 2026', t:69600, fac:'A'},
+];
+
+/* ---------- tabs ---------- */
+function tabs(id, cb){
+  const el = document.getElementById(id);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x===b ? 'true':'false'));
+    cb(b);
+  });
+}
+tabs('tabs', b => {
+  ['cuentas','cancel','modelo'].forEach(v => document.getElementById('v-'+v).hidden = v !== b.dataset.v);
+  try{ localStorage.setItem('mock123-tab', b.dataset.v); }catch(e){}
+});
+try{ const t = localStorage.getItem('mock123-tab'); if(t){ const b=document.querySelector('#tabs [data-v="'+t+'"]'); b && b.click(); } }catch(e){}
+
+/* ---------- modelo ---------- */
+(function(){
+  const color = {A:'var(--info)', B:'var(--accent)'};
+  document.getElementById('m-cots').innerHTML = COTS.map(c =>
+    `<div class="node" style="flex-direction:row;align-items:center;gap:10px;padding:8px 12px">
+       <span class="dot" style="background:${color[c.fac]}"></span>
+       <span class="mono" style="color:var(--ink)">${c.f}</span>
+       <span class="grow faint" style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.p}</span>
+       <span class="num" style="font-size:12.5px">${fmt(c.t)}</span></div>`).join('');
+  ['A','B'].forEach(k => {
+    const list = COTS.filter(c => c.fac===k);
+    const tot = list.reduce((s,c)=>s+c.t,0);
+    document.getElementById('m-f'+k.toLowerCase()).innerHTML =
+      list.map(c => `<div class="lnk"><span class="mono">${c.f}${c.mes!=='sep 2026'?' <span class="chip">'+c.mes+'</span>':''}</span><span class="num">${fmt(c.t)}</span></div>`).join('') +
+      `<div class="lnk" style="font-weight:600;color:var(--ink)"><span>Total del CFDI</span><span class="num">${fmt(tot)}</span></div>`;
+  });
+  // ejemplo con el pago parcial sugerido de $300,000 (más antigua primero)
+  const cobrado = {SH001:185600, SH003:58000, SH004:46400, SH006:10000, SH002:0, SH005:0};
+  document.getElementById('m-tabla').innerHTML = COTS.map(c => {
+    const cb = cobrado[c.f]; const st = cb>=c.t ? ['p-ok','Cobrado'] : cb>0 ? ['p-info','Parcial'] : ['p-draft','Facturado'];
+    return `<tr><td class="mono" style="color:var(--ink)">${c.f}</td><td>${c.mes}</td><td><span class="chip ${c.fac==='A'?'':'acc'}">Factura ${c.fac}</span></td><td class="r num">${fmt(c.t)}</td><td class="r num">${fmt(cb)}</td><td><span class="pill ${st[0]}">${st[1]}</span></td></tr>`;
+  }).join('');
+})();
+
+/* ---------- pantalla de Cuentas ---------- */
+(function(){
+  const IN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>';
+  const OUT = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+  const prov = {SH001:['Distrito Sonoro',41760,'Pagado','p-ok',''], SH003:['Distrito Sonoro',23200,'Pagado','p-ok',''], SH004:['Distrito Sonoro',31320,'Sin complemento','p-info','Pedir complemento']};
+  const cob = {SH001:['Cobrado','p-ok',''], SH003:['Cobrado','p-ok',''], SH004:['Cobrado','p-ok',''], SH006:['Parcial','p-info','Cobrar'], SH002:['Facturado','p-draft','Cobrar'], SH005:['Facturado','p-draft','Cobrar']};
+  document.getElementById('c-list').innerHTML = COTS.map(c => {
+    const k = cob[c.f]; const pv = prov[c.f];
+    return `<div class="proj">
+      <div class="proj-h"><span class="mono" style="color:var(--ink);font-weight:600">${c.f}</span><span class="grow" style="color:var(--ink)">${c.p}</span><span class="faint">${c.mes}</span></div>
+      <div class="con"><span class="io in">${IN}</span>
+        <div class="stack" style="gap:0;min-width:0"><span style="color:var(--ink)">Grupo Altavista</span><span class="faint" style="font-size:12px">Cliente</span></div>
+        <div class="hide-sm"><button class="chip ${c.fac==='A'?'':'acc'}" data-edo="cli" data-hl="Factura ${c.fac}" title="Ver en estado de cuenta">Factura ${c.fac} · ${c.fac==='A'?4:2} cot.</button></div>
+        <div class="hide-sm step">${k[2]||''}</div>
+        <div class="row" style="gap:10px;justify-content:flex-end"><span class="num">${fmt(c.t)}</span><span class="pill ${k[1]}">${k[0]}</span></div></div>
+      ${pv ? `<div class="con"><span class="io out">${OUT}</span>
+        <div class="stack" style="gap:0;min-width:0"><span style="color:var(--ink)">${pv[0]}</span><span class="faint" style="font-size:12px">Proveedor</span></div>
+        <div class="hide-sm"><button class="chip" data-edo="prov" data-hl="pago" title="Ver en estado de cuenta">Pago 26 sep · 3 facturas</button></div>
+        <div class="hide-sm step">${pv[4]}</div>
+        <div class="row" style="gap:10px;justify-content:flex-end"><span class="num">${fmt(pv[1])}</span><span class="pill ${pv[3]}">${pv[2]}</span></div></div>` : ''}
+    </div>`;
+  }).join('');
+})();
+
+/* ---------- ventanas ---------- */
+let lastBtn = null;
+function openO(id, btn){
+  lastBtn = btn || null;
+  document.querySelectorAll('.overlay').forEach(o => o.hidden = o.id !== 'o-'+id);
+  document.body.classList.add('lock');
+  const o = document.getElementById('o-'+id); o.scrollTop = 0; o.querySelector('.x').focus();
+}
+function closeO(){
+  document.querySelectorAll('.overlay').forEach(o => o.hidden = true);
+  document.body.classList.remove('lock');
+  lastBtn && lastBtn.focus();
+}
+document.addEventListener('click', e => {
+  const ch = e.target.closest('[data-edo]');
+  if(ch){ const b = document.querySelector('#edo-lado [data-l="'+ch.dataset.edo+'"]');
+    document.querySelectorAll('#edo-lado button').forEach(x => x.setAttribute('aria-selected', x===b?'true':'false'));
+    edo(ch.dataset.edo, ch.dataset.hl); openO('edo', ch);
+    const t = document.querySelector('#o-edo tr.hl'); t && t.scrollIntoView({block:'center'}); return; }
+  const op = e.target.closest('[data-open]'); if(op){ if(op.dataset.open==='edo') edo(document.querySelector('#edo-lado [aria-selected="true"]').dataset.l); openO(op.dataset.open, op); return; }
+  if(e.target.closest('[data-close]') || e.target.classList.contains('overlay')) closeO();
+  const cancel = e.target.closest('.m-foot .btn.gho'); if(cancel) closeO();
+});
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeO(); });
+
+/* ---------- cancelar con traspaso ---------- */
+(function(){
+  const NUEVAS = {mayor:{f:'SH007',t:81200}, igual:{f:'SH008',t:69600}, menor:{f:'SH009',t:58000}};
+  const VIEJO = 69600, COBRADO = 10000, FA = 359600;
+  const ok = (t) => `<div class="check ok">${ICON_OK}<div>${t}</div></div>`;
+  const warn = (t) => `<div class="check bad">${ICON_WARN}<div>${t}</div></div>`;
+  const info = (t) => `<div class="check info">${ICON_INFO}<div>${t}</div></div>`;
+  function render(){
+    const n = NUEVAS[document.getElementById('c-nueva').value];
+    const dif = n.t - VIEJO;
+    const rel = document.getElementById('opt-religar'), relIn = rel.querySelector('input');
+    const sus = document.querySelector('#opt-sustituir input');
+    document.getElementById('c-dif').innerHTML = dif>0 ? info(`${n.f} es ${fmt(dif)} mayor que SH006.`) : dif<0 ? warn(`${n.f} es ${fmt(-dif)} menor que SH006. La Factura A quedaría por más de lo que cubre: hay que sustituirla.`) : ok(`${n.f} tiene el mismo total que SH006.`);
+    if(dif < 0){ rel.classList.add('dis'); relIn.disabled = true; sus.checked = true; } else { rel.classList.remove('dis'); relIn.disabled = false; }
+    document.getElementById('t-religar').textContent = dif>0
+      ? `La Factura A sigue vigente: sus ${fmt(VIEJO)} de SH006 pasan a ${n.f}. Falta facturar la diferencia de ${fmt(dif)} en una factura nueva relacionada con la A.`
+      : dif===0 ? `La Factura A sigue vigente: sus ${fmt(VIEJO)} de SH006 pasan a ${n.f}. No hace falta otra factura.`
+      : 'No disponible: la cotización nueva es menor.';
+    const camino = document.querySelector('input[name=camino]:checked').value;
+    const filas = [
+      ['Cotización', 'SH006 · Aprobada', `SH006 · Cancelada<br>${n.f} · Aprobada`],
+      ['Cobro de $10,000', 'SH006', n.f],
+    ];
+    const avisos = [];
+    if(camino==='religar'){
+      filas.push(['Factura A', `${fmt(FA)} · cubre SH001, SH003, SH004, SH006`, `${fmt(FA)} · cubre SH001, SH003, SH004, ${n.f} (${fmt(VIEJO)})`]);
+      if(dif>0){ filas.push(['Factura por la diferencia', '—', `Por emitir · ${fmt(dif)} · relacionada con la A`]);
+        avisos.push(info(`Aparece en Avisos: <b>Factura por emitir</b> de ${fmt(dif)} para ${n.f}. Cuando se suba, se liga a ${n.f} por ese monto.`)); }
+      avisos.push(ok('El complemento del depósito del 30 sep sigue siendo válido: la Factura A no cambia.'));
+    } else {
+      const nuevoTotal = FA - VIEJO + n.t;
+      filas.push(['Factura A', `${fmt(FA)} · vigente`, 'Por sustituir · sigue visible hasta subir la nueva']);
+      filas.push(['Factura nueva', '—', `Por emitir · ${fmt(nuevoTotal)} · SH001, SH003, SH004, ${n.f}`]);
+      avisos.push(info(`Aparece en Avisos: <b>Factura por sustituir</b>. Al subir el XML nuevo con relación 04 a la Factura A, el ERP pasa los cobros y da de baja la A.`));
+      avisos.push(warn('Los complementos ya emitidos sobre la Factura A (depósito 30 sep) deben reemitirse sobre la factura nueva. Quedan como <b>complemento pendiente</b>.'));
+    }
+    document.getElementById('c-tabla').innerHTML = filas.map(r => `<tr><td style="color:var(--ink);font-weight:600;white-space:nowrap">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('');
+    document.getElementById('c-avisos').innerHTML = avisos.join('');
+    document.getElementById('c-save').disabled = document.getElementById('c-motivo').value.trim().length < 5;
+  }
+  document.getElementById('c-nueva').addEventListener('change', render);
+  document.querySelectorAll('input[name=camino]').forEach(i => i.addEventListener('change', render));
+  document.getElementById('c-motivo').addEventListener('input', render);
+  render();
+})();
+
+/* ---------- subir factura ---------- */
+const XML_TOTAL = 359600;
+const fSel = {};
+function fInit(mode){
+  COTS.forEach(c => fSel[c.f] = mode==='folios' && c.fac==='A');
+  document.getElementById('hint-folios').textContent = mode==='folios' ? 'Preseleccionadas por los folios del CFDI' : 'El CFDI no trae folios: elige a mano';
+  fRender();
+}
+function fRender(){
+  document.getElementById('f-rows').innerHTML = COTS.map(c => `
+    <tr class="${fSel[c.f]?'':'off'}">
+      <td><input type="checkbox" id="fc-${c.f}" ${fSel[c.f]?'checked':''} aria-label="Incluir ${c.f}"></td>
+      <td class="mono" style="color:var(--ink)">${c.f}</td>
+      <td>${c.p}</td>
+      <td>${c.mes}${c.mes!=='sep 2026'?' <span class="chip">otro mes</span>':''}</td>
+      <td class="r num">${fmt(c.t)}</td></tr>`).join('');
+  const sel = COTS.filter(c => fSel[c.f]);
+  const suma = sel.reduce((s,c)=>s+c.t,0);
+  const dif = Math.round((XML_TOTAL - suma)*100)/100;
+  document.getElementById('f-count').textContent = sel.length + ' cotizaciones · ' + fmt(suma);
+  const box = document.getElementById('f-check');
+  if(sel.length===0){
+    box.innerHTML = `<div class="check info">${ICON_INFO}<div>Selecciona las cotizaciones que cubre esta factura.</div></div>`;
+  } else if(Math.abs(dif) < 0.01){
+    box.innerHTML = `<div class="check ok">${ICON_OK}<div>La suma de las cotizaciones coincide con el total del XML. La factura queda <b>Validada</b>.</div></div>`;
+  } else {
+    const txt = dif>0 ? `faltan ${fmt(dif)}` : `sobran ${fmt(-dif)}`;
+    box.innerHTML = `<div class="check bad">${ICON_WARN}<div><b>No cuadra: XML ${fmt(XML_TOTAL)} vs. cotizaciones ${fmt(suma)} (${txt}).</b>
+      <div class="det">Seleccionadas: ${sel.map(c=>c.f+' '+fmt(c.t)).join(' · ')}.<br>Se puede guardar; la factura queda <b>En revisión</b> con este detalle.</div></div></div>`;
+  }
+  document.getElementById('f-save').textContent = sel.length && Math.abs(dif)>=0.01 ? 'Guardar en revisión' : 'Guardar factura';
+  document.getElementById('f-save').disabled = sel.length===0;
+}
+document.getElementById('f-rows').addEventListener('change', e => { const id=e.target.id.replace('fc-',''); fSel[id]=e.target.checked; fRender(); });
+tabs('xmlmode', b => fInit(b.dataset.m));
+fInit('folios');
+
+/* ---------- registrar pago ---------- */
+const SETS = {
+  cli: { quien:['Grupo Altavista S.A. de C.V.','Productora Lumen S.C.'], monto:300000, file:'transferencia_BBVA_30sep.pdf', label:'Monto recibido',
+    hint:'Toca una factura para ver y editar su reparto. Cada factura se reparte entre sus cotizaciones. Si el cliente indica cuánto va a cada una, edita el monto de la cotización.',
+    facs:[ {k:'Factura A', acc:false, fecha:'12 sep 2026', met:'PPD', cots:COTS.filter(c=>c.fac==='A')},
+           {k:'Factura B', acc:true,  fecha:'15 sep 2026', met:'PPD', cots:COTS.filter(c=>c.fac==='B')} ] },
+  prov: { quien:['Distrito Sonoro','Ana Vidal'], monto:96280, file:'spei_distrito_26sep.pdf', label:'Monto transferido',
+    hint:'Toca una factura para ver su proyecto. Al proveedor se le factura por proyecto: cada factura cubre su grupo. Puede ser pago parcial.',
+    facs:[ {k:'DS-0412', acc:false, fecha:'03 sep 2026', met:'PPD', cots:[{f:'SH001',p:'Spot TV 30s',t:41760}]},
+           {k:'DS-0415', acc:false, fecha:'05 sep 2026', met:'PUE', cots:[{f:'SH003',p:'Making of',t:23200}]},
+           {k:'DS-0419', acc:false, fecha:'10 sep 2026', met:'PPD', cots:[{f:'SH004',p:'Versiones redes',t:31320}]} ] }
+};
+let LADO = 'cli';
+const cur = () => SETS[LADO];
+const allCots = () => cur().facs.flatMap(F => F.cots);
+const apl = {};
+const open = new Set();
+function sugerir(){
+  let resto = parse(document.getElementById('p-monto').value);
+  cur().facs.forEach(F => F.cots.forEach(c => { const a = Math.min(c.t, Math.max(0,resto)); apl[c.f] = Math.round(a*100)/100; resto -= a; }));
+  pRender();
+}
+function pRender(){
+  const rows = [];
+  cur().facs.forEach(F => {
+    const saldo = F.cots.reduce((s,c)=>s+c.t,0);
+    const a = F.cots.reduce((s,c)=>s+(apl[c.f]||0),0);
+    const ex = open.has(F.k);
+    rows.push(`<tr class="fac" data-fac="${F.k}" aria-expanded="${ex}" tabindex="0"><td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span><span class="chip ${F.acc?'acc':''}">${F.k}</span> <span class="faint">${LADO==='cli' ? F.cots.length+' cotizaciones · ' : ''}${F.met}</span></td><td>${F.fecha}</td><td class="r num">${fmt(saldo)}</td><td class="r num" style="font-weight:600;color:var(--ink)">${fmt(a)}</td></tr>`);
+    F.cots.forEach(c => {
+      const v = apl[c.f]||0; const err = v > c.t + 0.001;
+      if(ex) rows.push(`<tr class="sub"><td><span class="mono">${c.f}</span> <span class="faint">${c.p}</span></td><td></td><td class="r num">${fmt(c.t)}</td><td class="r"><input class="amt ${err?'err':''}" id="pa-${c.f}" value="${v.toLocaleString('es-MX',{minimumFractionDigits:2})}" inputmode="decimal" aria-label="Aplicar a ${c.f}"></td></tr>`);
+    });
+  });
+  document.getElementById('p-rows').innerHTML = rows.join('');
+  pTotals();
+}
+function pTotals(){
+  const rec = parse(document.getElementById('p-monto').value);
+  const tot = allCots().reduce((s,c)=>s+(apl[c.f]||0),0);
+  const res = Math.round((rec - tot)*100)/100;
+  document.getElementById('s-rec').textContent = fmt(rec);
+  document.getElementById('s-apl').textContent = fmt(tot);
+  const r = document.getElementById('s-res'); r.textContent = fmt(res); r.style.color = Math.abs(res)<0.01 ? 'var(--ok)' : 'var(--bad)';
+  const over = allCots().filter(c => (apl[c.f]||0) > c.t + 0.001);
+  const box = document.getElementById('p-check'); const save = document.getElementById('p-save');
+  if(over.length){
+    box.innerHTML = `<div class="check bad">${ICON_WARN}<div>${over.map(c=>c.f).join(', ')}: el monto es mayor que su saldo.</div></div>`; save.disabled = true;
+  } else if(Math.abs(res) >= 0.01){
+    box.innerHTML = `<div class="check bad">${ICON_WARN}<div>${res>0 ? 'Quedan '+fmt(res)+' sin aplicar.' : 'Se aplicaron '+fmt(-res)+' de más.'} El monto recibido y lo aplicado deben ser iguales.</div></div>`; save.disabled = true;
+  } else {
+    box.innerHTML = `<div class="check ok">${ICON_OK}<div>Todo el pago está aplicado.</div></div>`; save.disabled = false;
+  }
+}
+function toggleFac(tr){ const k = tr.dataset.fac; open.has(k) ? open.delete(k) : open.add(k); pRender();
+  const n = document.querySelector('#p-rows tr.fac[data-fac="'+k+'"]'); n && n.focus(); }
+document.getElementById('p-rows').addEventListener('click', e => { const tr = e.target.closest('tr.fac'); if(tr) toggleFac(tr); });
+document.getElementById('p-rows').addEventListener('keydown', e => { const tr = e.target.closest('tr.fac'); if(tr && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); toggleFac(tr); } });
+document.getElementById('p-rows').addEventListener('change', e => {
+  if(!e.target.id.startsWith('pa-')) return;
+  apl[e.target.id.slice(3)] = parse(e.target.value); pRender();
+});
+document.getElementById('p-monto').addEventListener('change', sugerir);
+function setLado(l){
+  LADO = l; const d = cur();
+  for(const k in apl) delete apl[k];
+  open.clear();
+  document.getElementById('p-quien').innerHTML = d.quien.map(q=>`<option>${q}</option>`).join('');
+  document.getElementById('p-monto').value = d.monto.toLocaleString('es-MX',{minimumFractionDigits:2});
+  document.getElementById('p-file').textContent = d.file;
+  document.getElementById('p-mlabel').textContent = d.label;
+  document.getElementById('p-hint').textContent = d.hint;
+  sugerir();
+}
+tabs('p-lado', b => setLado(b.dataset.l));
+document.getElementById('p-auto').addEventListener('click', sugerir);
+sugerir();
+
+/* ---------- estado de cuenta ---------- */
+const EDO = {
+  cli: {
+    sum:[['Facturado',487200],['Cobrado',300000],['Saldo',187200],['Complementos pendientes','1']],
+    fh:'<tr><th>Factura</th><th>Emitida</th><th>Cubre</th><th class="r">Total</th><th class="r">Cobrado</th><th class="r">Saldo</th><th>Complemento</th><th>Estado</th></tr>',
+    f:[
+      ['Factura A','12 sep 2026','SH001 · SH003 · SH004 · SH006',359600,300000,'1 de 1',['p-ok','Ligado'],['p-info','Parcial']],
+      ['Factura B','15 sep 2026','SH002 · SH005',127600,0,'—',['p-draft','No aplica'],['p-draft','Facturado']],
+    ],
+    p:[['30 sep 2026','transferencia_BBVA_30sep.pdf','Factura A · SH001, SH003, SH004, SH006 (parcial)',300000]],
+    aviso:null
+  },
+  prov: {
+    sum:[['Facturado',96280],['Pagado',96280],['Saldo',0],['Complementos pendientes','1']],
+    fh:'<tr><th>Factura</th><th>Emitida</th><th>Proyecto</th><th class="r">Total</th><th class="r">Pagado</th><th class="r">Saldo</th><th>Complemento</th><th>Estado</th></tr>',
+    f:[
+      ['DS-0412','03 sep 2026','SH001 Spot TV 30s',41760,41760,'1 de 1',['p-ok','Ligado'],['p-ok','Pagado']],
+      ['DS-0415','05 sep 2026','SH003 Making of',23200,23200,'—',['p-draft','PUE'],['p-ok','Pagado']],
+      ['DS-0419','10 sep 2026','SH004 Versiones redes',31320,31320,'0 de 1',['p-bad','Falta'],['p-info','Sin complemento']],
+    ],
+    p:[['26 sep 2026','spei_distrito_26sep.pdf','DS-0412 · DS-0415 · DS-0419 (orden OP-2026-031)',96280]],
+    aviso:'DS-0419 es PPD y Distrito Sonoro no ha enviado su complemento. Aparece en Avisos y el proyecto SH004 no cierra hasta recibirlo.'
+  }
+};
+function edo(l, hl){
+  const d = EDO[l];
+  document.getElementById('edo-sum').innerHTML = d.sum.map(([k,v]) => `<div><span class="label">${k}</span><b>${typeof v==='number'?fmt(v):v}</b></div>`).join('');
+  document.getElementById('edo-fh').innerHTML = d.fh;
+  document.getElementById('edo-f').innerHTML = d.f.map(r => `<tr class="${hl===r[0]?'hl':''}"><td style="color:var(--ink);font-weight:600">${r[0]}</td><td>${r[1]}</td><td><span class="mono" style="font-size:12px">${r[2]}</span></td><td class="r num">${fmt(r[3])}</td><td class="r num">${fmt(r[4])}</td><td class="r num">${fmt(r[3]-r[4])}</td><td><span class="pill ${r[6][0]}">${r[6][1]}</span></td><td><span class="pill ${r[7][0]}">${r[7][1]}</span></td></tr>`).join('');
+  document.getElementById('edo-p').innerHTML = d.p.map(r => `<tr class="${hl==='pago'?'hl':''}"><td>${r[0]}</td><td class="mono" style="font-size:12px">${r[1]}</td><td>${r[2]}</td><td class="r num" style="color:var(--ink);font-weight:600">${fmt(r[3])}</td></tr>`).join('');
+  document.getElementById('edo-aviso').innerHTML = d.aviso ? `<div class="check bad">${ICON_WARN}<div>${d.aviso}</div></div>` : '';
+}
+tabs('edo-lado', b => edo(b.dataset.l));
+edo('cli');
+</script>

@@ -1,23 +1,35 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-06 (#124 ejecutado: producción y Vercel en Ohio; falta la vigilancia de 7 días).
+**Última actualización:** 2026-10-06 (plan de #123 aprobado y escrito en `docs/PLAN.md`; #124 ejecutado, falta su cierre por fecha).
 
 ## Estado
 
 **Producción corre en la base nueva `ytlyphlgyhgztkfxwojt` (`us-east-2`, Postgres 17.11) con Vercel en `cle1`**
 desde el 2026-10-06 ~01:05 UTC (19:05 CDMX del 5 de octubre). `main` en `9891c57` más el commit de documentación de
 cierre. La base vieja `fwmyoqokcjtldiofuxdg` (`us-west-2`) está **pausada** como respaldo de infraestructura durante
-7 días. **`docs/PLAN.md` = #124, en R4 (cierre).**
+7 días.
+
+**`docs/PLAN.md` = #123 (facturas y pagos ligados), aprobado el 2026-10-06, listo para ejecutar desde B0.**
+Diseño en `docs/design/cuentas-123/`. El plan de #124 se archivó en `docs/archive/produccion-ohio.md`; lo que
+le falta (fechas) sigue abajo en "Siguiente paso".
 
 Cola acordada con el usuario (reordenada el 2026-10-06):
-1. **#124** — producción y Vercel a Ohio. Ejecutado; falta cerrar (ver "Siguiente paso").
-2. **#123** — nueva lógica de cuentas (una factura para varias cotizaciones, un pago para varias facturas).
+1. **#124** — producción y Vercel a Ohio. Ejecutado; falta cerrar por fecha (ver "Siguiente paso").
+2. **#123** — facturas y pagos ligados. **Plan aprobado en `docs/PLAN.md`**; siguiente bloque: B0.
 3. **#110** — frente 2 v2 de Cuentas. Plan auditado en el cuerpo del issue; **depende de #123**.
 4. **#125** — llaves de Supabase legacy → publishable/secret. **Prioridad baja, última.** Las legacy dejan de
    funcionar a fin de 2026 (documentación de Supabase); fecha límite interna **2026-12-01**, revisión el
    **2026-11-01** (si no ha arrancado, pasa al frente). Insumos en el issue y sus comentarios.
 
-## Completado en esta sesión (2026-10-05/06)
+## Completado en esta sesión (2026-10-06, planeación de #123)
+
+- Definición de #123 con el usuario (decisiones P1–P20 en `docs/PLAN.md`), mockups y diseño final en
+  `docs/design/cuentas-123/` (`cuentas-acciones.html`: Cuentas de producción + menú Acciones + 3 ventanas).
+- Verificado en producción: tablas de cuentas con 0 filas; `cuentas_conceptos_base` no existe (frente 2 sin
+  mergear). `ARCHITECTURE.md` corregido en ese punto.
+- Fuera de #123, nueva iniciativa sin fecha: cancelar cotización aprobada con traspaso (`docs/ROADMAP.md`).
+
+## Completado en la sesión anterior (2026-10-05/06)
 
 - **R1:** producción nueva creada con `db push` (workflow de un solo uso `db-push-una-vez.yml`, 141 migraciones);
   huellas de esquema idénticas a la vieja, incluidas GRANTs, extensiones, políticas de Realtime y RLS.
@@ -76,9 +88,9 @@ Cola acordada con el usuario (reordenada el 2026-10-06):
    errores el 2026-10-13 antes de borrar la vieja.
 2. **A los 7 días (2026-10-13):** PR chico que quita el ref viejo de `app/api/internal/env-check/route.ts` (y su test) y borra
    `.github/workflows/db-push-una-vez.yml`; el usuario borra el proyecto viejo y el secreto.
-3. **Cerrar #124:** cerrar el issue, `git mv docs/PLAN.md docs/archive/produccion-ohio.md`, resumen en `docs/ROADMAP.md` →
-   "Cerrado", recrear `docs/PLAN.md` vacío.
-4. **Arrancar #123** (siguiente de la cola). #125 queda al final; revisar su fecha el 2026-11-01.
+3. **Cerrar #124:** cerrar el issue y resumen en `docs/ROADMAP.md` → "Cerrado" (el plan ya está archivado en
+   `docs/archive/produccion-ohio.md`).
+4. **Ejecutar #123 desde B0** (`docs/PLAN.md`). #125 queda al final; revisar su fecha el 2026-11-01.
 
 ## Deuda técnica
 

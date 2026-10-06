@@ -79,9 +79,11 @@ ejecutados de punta a punta, quedan en
 ## Siguiente
 
 - **Orden acordado (2026-10-06, reordenado por el usuario):** #124 (producción y
-  Vercel a Ohio, `us-east-2`/`cle1`; plan en `docs/PLAN.md`; **en producción desde
-  2026-10-06, cierre pendiente de la vigilancia de 7 días**) → #123 (nueva lógica
-  de cuentas: facturas y pagos N:M) → #110 (frente 2 v2, plan en el issue) → #125
+  Vercel a Ohio, `us-east-2`/`cle1`; plan archivado en
+  `docs/archive/produccion-ohio.md`; **en producción desde 2026-10-06, cierre
+  pendiente de la vigilancia de 7 días**) → #123 (facturas y pagos ligados: una
+  factura para varias cotizaciones, un pago para varias facturas; **plan
+  aprobado en `docs/PLAN.md`, diseño en `docs/design/cuentas-123/`**) → #110 (frente 2 v2, plan en el issue) → #125
   (llaves de Supabase legacy → publishable/secret; **prioridad baja, última en la
   cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para
   entonces no ha arrancado, pasa al frente). Lo de abajo es el antecedente del
@@ -103,6 +105,16 @@ ejecutados de punta a punta, quedan en
 **Sin definir a propósito.** Se prioriza en Chat, con el estado real del
 sistema a la vista. Ninguno de los puntos de abajo está comprometido todavía
 ni tiene alcance de iniciativa definido.
+
+- **Cancelar una cotización aprobada con factura o cobros, con traspaso**
+  (2026-10-06, salió de la definición de #123). Hoy se bloquea (D22). Pedido:
+  pasar factura y pagos a la cotización nueva que la reemplaza, con dos
+  salidas: sustituir la factura ante el SAT (relación 04) o religarla y emitir
+  otra por la diferencia (solo si el total nuevo es mayor o igual). Abiertos:
+  cancelar sin reemplazo con cobros (¿saldo a favor, devolución o no se
+  permite?) y con pagos a proveedor ya hechos. Mockup de referencia en
+  `docs/design/cuentas-123/exploracion-modelo.html`. Depende de #123 (el
+  modelo ya guarda monto por aplicación).
 
 ### Deuda técnica (2026-09-26)
 
