@@ -1,19 +1,19 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-06 (#124 ejecutado: producción y Vercel en Ohio; falta la vigilancia de 7 días).
+**Última actualización:** 2026-10-06 (#124 cerrado: producción y Vercel en Ohio; quedan pendientes de limpieza).
 
 ## Estado
 
 **Producción corre en la base nueva `ytlyphlgyhgztkfxwojt` (`us-east-2`, Postgres 17.11) con Vercel en `cle1`**
 desde el 2026-10-06 ~01:05 UTC (19:05 CDMX del 5 de octubre). `main` en `9891c57` más el commit de documentación de
 cierre. La base vieja `fwmyoqokcjtldiofuxdg` (`us-west-2`) está **pausada** como respaldo de infraestructura durante
-7 días. **`docs/PLAN.md` = #124, en R4 (cierre).**
+ya no se espera a los 7 días (decisión del usuario). **#124 cerrado y archivado** (`docs/archive/produccion-ohio.md`);
+`docs/PLAN.md` quedó vacío.
 
-Cola acordada con el usuario (reordenada el 2026-10-06):
-1. **#124** — producción y Vercel a Ohio. Ejecutado; falta cerrar (ver "Siguiente paso").
-2. **#123** — nueva lógica de cuentas (una factura para varias cotizaciones, un pago para varias facturas).
-3. **#110** — frente 2 v2 de Cuentas. Plan auditado en el cuerpo del issue; **depende de #123**.
-4. **#125** — llaves de Supabase legacy → publishable/secret. **Prioridad baja, última.** Las legacy dejan de
+Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
+1. **#123** — nueva lógica de cuentas (una factura para varias cotizaciones, un pago para varias facturas).
+2. **#110** — frente 2 v2 de Cuentas. Plan auditado en el cuerpo del issue; **depende de #123**.
+3. **#125** — llaves de Supabase legacy → publishable/secret. **Prioridad baja, última.** Las legacy dejan de
    funcionar a fin de 2026 (documentación de Supabase); fecha límite interna **2026-12-01**, revisión el
    **2026-11-01** (si no ha arrancado, pasa al frente). Insumos en el issue y sus comentarios.
 
@@ -62,23 +62,20 @@ Cola acordada con el usuario (reordenada el 2026-10-06):
 - Revisar en Vercel → Functions que no haya errores nuevos tras 24 h.
 - Borrar el PDF de prueba de Drive; avisar a los usuarios que recarguen con Cmd/Ctrl+Shift+R; recomendar cambio de
   contraseña a los 2 usuarios (los hashes se copiaron tal cual).
-- Borrar el secreto `PROD_NUEVA_DB_URL` de GitHub (Settings → Secrets) cuando termine R4.
+- Borrar el secreto `PROD_NUEVA_DB_URL` de GitHub (Settings → Secrets).
 - Conector `supabase-prod` en claude.ai: apuntarlo al ref nuevo si tiene ref fijo; revisar `.env.local` de su máquina.
-- A los 7 días (2026-10-13), con la vigilancia limpia: borrar el proyecto viejo `fwmyoqokcjtldiofuxdg` en Supabase.
+- Borrar el proyecto viejo `fwmyoqokcjtldiofuxdg` en Supabase (Settings → General → Delete project). Recomendado después del
+  keep-alive del 2026-10-07 y un día de uso normal; la espera de 7 días se acortó por decisión del usuario.
 - Decidir #119 (alta mínima de cotizaciones).
 
 ## Siguiente paso
 
-1. ~~Vigilancia de 24 h~~ **hecha 2026-10-06 (~17:00 UTC):** `auditar_consistencia()` en producción = 0 violaciones;
-   particiones de `realtime.messages` creadas con 3 días de adelanto (10_05 a 10_09); sin errores de Postgres ni
-   `no partition` desde las 01:00 UTC; Vercel sin clusters de error en 16 h. **No verificable:** la ejecución del keep-alive de
-   las 08:00 UTC (Hobby retiene 1 h de logs de runtime); solo se sabe que no registró errores. Repetir la revisión de BD y
-   errores el 2026-10-13 antes de borrar la vieja.
-2. **A los 7 días (2026-10-13):** PR chico que quita el ref viejo de `app/api/internal/env-check/route.ts` (y su test) y borra
-   `.github/workflows/db-push-una-vez.yml`; el usuario borra el proyecto viejo y el secreto.
-3. **Cerrar #124:** cerrar el issue, `git mv docs/PLAN.md docs/archive/produccion-ohio.md`, resumen en `docs/ROADMAP.md` →
-   "Cerrado", recrear `docs/PLAN.md` vacío.
-4. **Arrancar #123** (siguiente de la cola). #125 queda al final; revisar su fecha el 2026-11-01.
+1. **Limpieza de #124 (cuando el usuario borre la base vieja):** PR chico que quita el ref viejo
+   `fwmyoqokcjtldiofuxdg` de `app/api/internal/env-check/route.ts` (y su test) y borra
+   `.github/workflows/db-push-una-vez.yml`. Antes, repetir la revisión de BD y errores en producción.
+2. **Mañana 2026-10-07 08:05 UTC:** revisión agendada del keep-alive de las 08:00 UTC en los logs de Vercel (Hobby retiene
+   1 h); avisar al usuario antes de que borre la vieja.
+3. **Arrancar #123** (siguiente de la cola). #125 queda al final; revisar su fecha el 2026-11-01.
 
 ## Deuda técnica
 
