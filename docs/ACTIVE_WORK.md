@@ -1,21 +1,32 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-06 (#124 cerrado: producción y Vercel en Ohio; quedan pendientes de limpieza).
+**Última actualización:** 2026-10-06 (plan de #123 aprobado en `docs/PLAN.md`; #124 cerrado, quedan pendientes de limpieza).
 
 ## Estado
 
 **Producción corre en la base nueva `ytlyphlgyhgztkfxwojt` (`us-east-2`, Postgres 17.11) con Vercel en `cle1`**
 desde el 2026-10-06 ~01:05 UTC (19:05 CDMX del 5 de octubre). `main` en `9891c57` más el commit de documentación de
 cierre. La base vieja `fwmyoqokcjtldiofuxdg` (`us-west-2`) está **pausada** como respaldo de infraestructura durante
-ya no se espera a los 7 días (decisión del usuario). **#124 cerrado y archivado** (`docs/archive/produccion-ohio.md`);
-`docs/PLAN.md` quedó vacío.
+ya no se espera a los 7 días (decisión del usuario). **#124 cerrado y archivado** (`docs/archive/produccion-ohio.md`).
+
+**`docs/PLAN.md` = #123 (facturas y pagos ligados), aprobado el 2026-10-06, listo para ejecutar desde B0.**
+Diseño en `docs/design/cuentas-123/`.
 
 Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
-1. **#123** — nueva lógica de cuentas (una factura para varias cotizaciones, un pago para varias facturas).
+1. **#123** — facturas y pagos ligados (una factura para varias cotizaciones, un pago para varias facturas).
+   **Plan aprobado en `docs/PLAN.md`**; siguiente bloque: B0.
 2. **#110** — frente 2 v2 de Cuentas. Plan auditado en el cuerpo del issue; **depende de #123**.
 3. **#125** — llaves de Supabase legacy → publishable/secret. **Prioridad baja, última.** Las legacy dejan de
    funcionar a fin de 2026 (documentación de Supabase); fecha límite interna **2026-12-01**, revisión el
    **2026-11-01** (si no ha arrancado, pasa al frente). Insumos en el issue y sus comentarios.
+
+## Completado en la sesión de planeación de #123 (2026-10-06)
+
+- Definición de #123 con el usuario (decisiones P1–P20 en `docs/PLAN.md`), mockups y diseño final en
+  `docs/design/cuentas-123/` (`cuentas-acciones.html`: Cuentas de producción + menú Acciones + 3 ventanas).
+- Verificado en producción: tablas de cuentas con 0 filas; `cuentas_conceptos_base` no existe (frente 2 sin
+  mergear). `ARCHITECTURE.md` corregido en ese punto.
+- Fuera de #123, nueva iniciativa sin fecha: cancelar cotización aprobada con traspaso (`docs/ROADMAP.md`).
 
 ## Completado en esta sesión (2026-10-05/06)
 
@@ -75,7 +86,7 @@ Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
    `.github/workflows/db-push-una-vez.yml`. Antes, repetir la revisión de BD y errores en producción.
 2. **Mañana 2026-10-07 08:05 UTC:** revisión agendada del keep-alive de las 08:00 UTC en los logs de Vercel (Hobby retiene
    1 h); avisar al usuario antes de que borre la vieja.
-3. **Arrancar #123** (siguiente de la cola). #125 queda al final; revisar su fecha el 2026-11-01.
+3. **Ejecutar #123 desde B0** (`docs/PLAN.md`). #125 queda al final; revisar su fecha el 2026-11-01.
 
 ## Deuda técnica
 
