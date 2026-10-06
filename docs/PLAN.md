@@ -29,11 +29,12 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
 `docs/decisions/020-simplificacion-modelo-datos.md`.
 
 
-**Cola de iniciativas (2026-10-02, decisión del usuario), en este orden:**
-**#124** (este plan) → **#125** llaves de Supabase legacy → publishable/secret
-(fecha límite interna **2026-12-01**; las legacy dejan de funcionar a fin de
-2026) → **#123** nueva lógica de cuentas → **#110** frente 2 v2 (plan auditado
-guardado en el issue).
+**Cola de iniciativas (reordenada el 2026-10-06 por el usuario), en este orden:**
+**#124** (este plan) → **#123** nueva lógica de cuentas → **#110** frente 2 v2
+(plan auditado guardado en el issue) → **#125** llaves de Supabase legacy →
+publishable/secret (**prioridad baja, última**; fecha límite interna
+**2026-12-01**, revisión el 2026-11-01; las legacy dejan de funcionar a fin de
+2026).
 
 **Cómo leer este plan:** las tablas de auditoría son la historia de cómo se
 llegó al diseño. **Lo que se ejecuta es el checklist.** Donde una fila de
@@ -506,7 +507,8 @@ repo.
       del ruido; el beneficio es la alineación de regiones. Ver la decisión.)
 - [ ] A los 7 días, con la vigilancia de D6 limpia: **(usuario)** borrar la
       vieja; Claude quita su ref de `env-check` (PR chico).
-- [ ] Arrancar **#125** (llaves), con fecha límite interna 2026-12-01.
+- [ ] Siguiente iniciativa: **#123**. **#125** (llaves) quedó al final de la cola
+      (2026-10-06), con fecha límite interna 2026-12-01 y revisión el 2026-11-01.
 - [ ] **(usuario)** Conector `supabase-prod` en claude.ai, si tiene ref fijo, y
       `.env.local` de tu máquina si apunta a producción. Claude ajusta
       `CLAUDE.md`, `.claude/rules/migraciones.md` y `docs/inventario-tablas.md`.

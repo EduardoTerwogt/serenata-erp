@@ -78,12 +78,14 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Orden acordado (2026-10-02):** #124 (producción y Vercel a Ohio,
-  `us-east-2`/`cle1`; plan en `docs/PLAN.md`; **en producción desde 2026-10-06,
-  cierre pendiente de la vigilancia de 7 días**) → #125 (llaves de Supabase legacy →
-  publishable/secret, fecha límite interna 2026-12-01) → #123 (nueva lógica de
-  cuentas: facturas y pagos N:M) → #110 (frente 2 v2, plan en el issue). Lo de
-  abajo es el antecedente del frente 2.
+- **Orden acordado (2026-10-06, reordenado por el usuario):** #124 (producción y
+  Vercel a Ohio, `us-east-2`/`cle1`; plan en `docs/PLAN.md`; **en producción desde
+  2026-10-06, cierre pendiente de la vigilancia de 7 días**) → #123 (nueva lógica
+  de cuentas: facturas y pagos N:M) → #110 (frente 2 v2, plan en el issue) → #125
+  (llaves de Supabase legacy → publishable/secret; **prioridad baja, última en la
+  cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para
+  entonces no ha arrancado, pasa al frente). Lo de abajo es el antecedente del
+  frente 2.
 - **Frente 2 de latencia de Cuentas** (2026-09-30, **en pausa**): los
   conceptos de Cuentas se guardan derivados en `cuentas_conceptos_base` y se
   mantienen con triggers (`docs/decisions/019-cuentas-conceptos-materializada.md`).

@@ -9,12 +9,13 @@ desde el 2026-10-06 ~01:05 UTC (19:05 CDMX del 5 de octubre). `main` en `9891c57
 cierre. La base vieja `fwmyoqokcjtldiofuxdg` (`us-west-2`) está **pausada** como respaldo de infraestructura durante
 7 días. **`docs/PLAN.md` = #124, en R4 (cierre).**
 
-Cola acordada con el usuario (2026-10-02):
+Cola acordada con el usuario (reordenada el 2026-10-06):
 1. **#124** — producción y Vercel a Ohio. Ejecutado; falta cerrar (ver "Siguiente paso").
-2. **#125** — llaves de Supabase legacy → publishable/secret. Las legacy dejan de funcionar a fin de 2026
-   (documentación de Supabase); fecha límite interna **2026-12-01**. Insumos en el issue y sus comentarios.
-3. **#123** — nueva lógica de cuentas (una factura para varias cotizaciones, un pago para varias facturas).
-4. **#110** — frente 2 v2 de Cuentas. Plan auditado en el cuerpo del issue; **depende de #123**.
+2. **#123** — nueva lógica de cuentas (una factura para varias cotizaciones, un pago para varias facturas).
+3. **#110** — frente 2 v2 de Cuentas. Plan auditado en el cuerpo del issue; **depende de #123**.
+4. **#125** — llaves de Supabase legacy → publishable/secret. **Prioridad baja, última.** Las legacy dejan de
+   funcionar a fin de 2026 (documentación de Supabase); fecha límite interna **2026-12-01**, revisión el
+   **2026-11-01** (si no ha arrancado, pasa al frente). Insumos en el issue y sus comentarios.
 
 ## Completado en esta sesión (2026-10-05/06)
 
@@ -35,7 +36,7 @@ Cola acordada con el usuario (2026-10-02):
 ## Decisiones nuevas
 
 - **021** reemplaza a la 018: todo en Ohio (`us-east-2` / `cle1`).
-- Orden de iniciativas: #124 → #125 → #123 → #110.
+- Orden de iniciativas (2026-10-06): #124 → #123 → #110 → #125. #125 baja a prioridad baja; revisión el 2026-11-01.
 - Producción **no lleva** `20260915_loadtest_runs.sql` (`.claude/rules/migraciones.md`).
 - El usuario **no tiene repo ni Node** en su máquina: operaciones de base nuevas van por workflow de GitHub o MCP.
 
@@ -74,7 +75,7 @@ Cola acordada con el usuario (2026-10-02):
    `.github/workflows/db-push-una-vez.yml`; el usuario borra el proyecto viejo y el secreto.
 3. **Cerrar #124:** cerrar el issue, `git mv docs/PLAN.md docs/archive/produccion-ohio.md`, resumen en `docs/ROADMAP.md` →
    "Cerrado", recrear `docs/PLAN.md` vacío.
-4. **Arrancar #125** (llaves), con fecha límite interna 2026-12-01.
+4. **Arrancar #123** (siguiente de la cola). #125 queda al final; revisar su fecha el 2026-11-01.
 
 ## Deuda técnica
 
