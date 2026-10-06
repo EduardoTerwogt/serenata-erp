@@ -495,13 +495,15 @@ repo.
 
 ### R4 — Cierre
 
-- [ ] Claude: commit con el ref nuevo en `app/api/internal/env-check/route.ts`
+- [x] Claude: commit con el ref nuevo en `app/api/internal/env-check/route.ts`
       (los dos refs mientras exista la vieja) y su test; CI en verde; merge.
-      Claude confirma el deploy de producción en `cle1`.
-- [ ] Si producción quedó con un Postgres más nuevo que test: **(usuario)**
-      actualizar test desde su panel.
-- [ ] `escala.yml` una vez, como línea base nueva.
-- [ ] Decisión 021 con la medición antes y después.
+      Claude confirma el deploy de producción en `cle1`. (PR #126, `9891c57`;
+      deploy `dpl_AH6znhRz…` READY en `cle1`, alias `serenata-erp.vercel.app`.)
+- [x] Si producción quedó con un Postgres más nuevo que test: **(usuario)**
+      actualizar test desde su panel. (Hecho 2026-10-06: test en `17.11.0.002`.)
+- [x] `escala.yml` una vez, como línea base nueva. (Verde, run 37401207282.)
+- [x] Decisión 021 con la medición antes y después. (Mediana 443 → 409 ms, dentro
+      del ruido; el beneficio es la alineación de regiones. Ver la decisión.)
 - [ ] A los 7 días, con la vigilancia de D6 limpia: **(usuario)** borrar la
       vieja; Claude quita su ref de `env-check` (PR chico).
 - [ ] Arrancar **#125** (llaves), con fecha límite interna 2026-12-01.
@@ -611,4 +613,4 @@ inmediatamente anterior.
 | R2b Workflow de un solo uso (`db push`) | Hecho: PR #127 mergeado 2026-10-02 |
 | R1 Producción nueva | **Hecho 2026-10-05**: proyecto `ytlyphlgyhgztkfxwojt` (`us-east-2`), GO/NO-GO en PASS |
 | R3 Corte y verificación | **Hecho**: `GO_LIVE` 2026-10-06 ~01:05 UTC (19:05 CDMX). Pendiente: vigilancia a las 24 h y cron de las 08:00 UTC |
-| R4 Cierre | En curso: `env-check` con los dos refs (PR #126); merge `cle1` cuando el CI esté verde |
+| R4 Cierre | En curso: `cle1` en producción, test en 17.11, `escala` en verde y decisión 021 hechos. Pendiente: vigilancia de 24 h (08:00 UTC), 7 días con la vieja pausada, borrarla, quitar su ref y `db-push-una-vez.yml`, cerrar #124 y archivar este plan |

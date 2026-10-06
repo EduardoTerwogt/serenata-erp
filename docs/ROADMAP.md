@@ -79,7 +79,8 @@ ejecutados de punta a punta, quedan en
 ## Siguiente
 
 - **Orden acordado (2026-10-02):** #124 (producción y Vercel a Ohio,
-  `us-east-2`/`cle1`; plan en `docs/PLAN.md`) → #125 (llaves de Supabase legacy →
+  `us-east-2`/`cle1`; plan en `docs/PLAN.md`; **en producción desde 2026-10-06,
+  cierre pendiente de la vigilancia de 7 días**) → #125 (llaves de Supabase legacy →
   publishable/secret, fecha límite interna 2026-12-01) → #123 (nueva lógica de
   cuentas: facturas y pagos N:M) → #110 (frente 2 v2, plan en el issue). Lo de
   abajo es el antecedente del frente 2.

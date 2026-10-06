@@ -23,7 +23,12 @@ paths:
 - El upsert de partidas va siempre acotado por `cotizacion_id`, nunca genérico.
 - El job `Migrations` de CI reconstruye el schema desde un Postgres vacío en cada
   push: si una migración no es reproducible desde cero, ahí falla.
-- Probar primero en `serenata-erp-test` (ref `ozrtsludmcguvgqdjicn`), luego producción.
+- Probar primero en `serenata-erp-test` (ref `ozrtsludmcguvgqdjicn`), luego producción
+  (ref `ytlyphlgyhgztkfxwojt`, `us-east-2`, desde 2026-10-06, #124).
+- **Producción no lleva `20260915_loadtest_runs.sql`.** Esa migración crea
+  `loadtest_runs`, y los scripts de siembra y escala usan su existencia para decidir
+  "esto es test"; en producción tiene que seguir sin existir. Al aplicar migraciones
+  nuevas a producción, esa se omite (el historial de producción no la tiene).
 - Contexto completo: `docs/decisions/005-migraciones-manuales-append-only.md`.
 - **Autorización:** dentro de un plan ya aprobado, aplicar y confirmar sin pausar
   (incluido un borrado sin reemplazo) salvo regla de negocio no clara. Fuera de un
