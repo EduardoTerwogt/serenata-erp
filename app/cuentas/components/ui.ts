@@ -45,8 +45,8 @@ export const useEsEscritorio = () => useMedia('(min-width: 768px)')
 /** ≥ xl (1280px): maestro-detalle lado a lado (S14). */
 export const useEsAncho = () => useMedia('(min-width: 1280px)')
 
-/** B7 (D6, supuesto 10): reabrir y corregir son solo de la sección admin (la ruta lo vuelve a validar). */
-export function useEsAdmin() {
+/** #123 (P14): reabrir y corregir son de cualquier usuario con la sección `cuentas` (la ruta lo vuelve a validar). */
+export function useTieneCuentas() {
   const { data } = useSession()
-  return getUserSections(data?.user as { sections?: string[] } | undefined).includes('admin')
+  return getUserSections(data?.user as { sections?: string[] } | undefined).includes('cuentas')
 }

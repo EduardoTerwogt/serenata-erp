@@ -8,10 +8,10 @@ const ROUTE = 'POST /api/cuentas/proyectos/:id/cerrar'
 /**
  * Rediseño de Cuentas B7 (D5, D6): termina la reapertura. Sin pendientes es
  * "Volver a cerrar"; con pendientes, "Terminar correcciones" (las cuentas se
- * cierran solas al resolverlos). Solo admin.
+ * cierran solas al resolverlos). Cualquier usuario con acceso a Cuentas (#123, P14).
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const authResult = await requireSection('admin')
+  const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
 
   const { id } = await params

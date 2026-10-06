@@ -7,8 +7,8 @@ const ROUTE = 'POST /api/cuentas/correcciones'
 
 /**
  * Rediseño de Cuentas B7 (D5, R8, S12, T7; supuesto 1): correcciones sobre
- * cuentas reabiertas. Solo admin (supuesto 10); que las cuentas estén
- * reabiertas lo exige cada RPC, que además deja registro en
+ * cuentas reabiertas. Cualquier usuario con acceso a Cuentas (#123, P14);
+ * que las cuentas estén reabiertas lo exige cada RPC, que además deja registro en
  * cuentas_correcciones:
  * - anular un pago (cobro o proveedor): recalcula saldo, estados y orden;
  * - quitar o reemplazar un documento (baja lógica, queda en el historial);
@@ -16,7 +16,7 @@ const ROUTE = 'POST /api/cuentas/correcciones'
  * - reasignar el proveedor de un concepto ya pagado (pagos anulados y sin orden).
  */
 export async function POST(request: Request) {
-  const authResult = await requireSection('admin')
+  const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
 
   let body: unknown

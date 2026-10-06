@@ -144,11 +144,11 @@ describe('POST /api/cuentas-cobrar/[id]/subir-factura', () => {
   describe('B7: reemplazo de una factura validada', () => {
     it('el plan rechaza -- responde su código sin subir nada', async () => {
       mocks.getCuentaCobrarByIdMock.mockResolvedValueOnce({ id: 'cuenta-1', cotizacion_id: 'SH001', proyecto_id: 'SH001', monto_total: 1000, monto_pagado: 0 })
-      mocks.planearFacturaMock.mockResolvedValueOnce({ ok: false, status: 403, body: { error: 'solo_admin', message: 'solo admin' } })
+      mocks.planearFacturaMock.mockResolvedValueOnce({ ok: false, status: 403, body: { error: 'sin_acceso_cuentas', message: 'sin acceso a Cuentas' } })
       mocks.uploadFileToDriveMock.mockClear()
       const response = await POST(buildRequest(), { params })
       expect(response.status).toBe(403)
-      await expect(response.json()).resolves.toEqual({ error: 'solo_admin', message: 'solo admin' })
+      await expect(response.json()).resolves.toEqual({ error: 'sin_acceso_cuentas', message: 'sin acceso a Cuentas' })
       expect(mocks.planearFacturaMock).toHaveBeenCalledWith('cobro', expect.objectContaining({ proyecto_id: 'SH001' }), [], undefined, null)
       expect(mocks.uploadFileToDriveMock).not.toHaveBeenCalled()
     })

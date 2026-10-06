@@ -11,7 +11,7 @@ import { StatusBanner } from '@/components/ui/StatusBanner'
 import { fmtMoney } from '@/lib/quotations/format'
 import type { DetalleConcepto as Detalle } from '@/lib/shared/cuentas/detalle-tipos'
 import { nombreCobro } from '@/lib/shared/cuentas/concepto'
-import { TONO, useEsAdmin } from '../ui'
+import { TONO, useTieneCuentas } from '../ui'
 import { TabDocumentos } from './TabDocumentos'
 import { TabInformacion } from './TabInformacion'
 import { TabPago } from './TabPago'
@@ -51,9 +51,9 @@ function concepto(d: Detalle) {
  */
 export function DetalleConcepto({ conceptoKey, tab, onTab, onClose, onCambio, hoy }: Props) {
   const { objetivo, detalle: d, error, cargando, recargar } = useDetalle(conceptoKey)
-  const esAdmin = useEsAdmin()
-  // B7 (D5): las correcciones solo aparecen para admin con las cuentas reabiertas.
-  const corrige = Boolean(esAdmin && d?.correcciones.reabierta)
+  const tieneCuentas = useTieneCuentas()
+  // B7 (D5): las correcciones aparecen con las cuentas reabiertas (P14: cualquier usuario de Cuentas).
+  const corrige = Boolean(tieneCuentas && d?.correcciones.reabierta)
   const [aviso, setAviso] = useState<{ tono: 'success' | 'error'; texto: string } | null>(null)
 
   const tras = async (accion: () => Promise<unknown>, exito: string) => {

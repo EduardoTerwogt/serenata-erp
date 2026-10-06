@@ -389,7 +389,7 @@ export const CancelarOrdenSchema = z.object({
   motivo: z.string().trim().min(3, { message: 'Escribe el motivo de la cancelación' }).max(500),
 })
 
-// Rediseño de Cuentas B7 (D5, D6): reabrir y corregir, solo admin. El motivo
+// Rediseño de Cuentas B7 (D5, D6): reabrir y corregir, cualquier usuario de Cuentas (#123, P14). El motivo
 // es obligatorio donde queda en el registro (reabrir, anular, quitar,
 // reasignar un concepto pagado).
 const MotivoCorreccionSchema = z.string().trim().min(3, { message: 'Escribe el motivo' }).max(500)

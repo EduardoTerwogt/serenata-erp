@@ -47,7 +47,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     // B7: con una factura vigente validada, subir otra es reemplazarla:
-    // solo admin con las cuentas reabiertas (reemplazo-factura.ts).
+    // usuario de Cuentas con las cuentas reabiertas (P14, reemplazo-factura.ts).
     const plan = await planearFactura('cobro', cuenta, await getDocumentosCuentaCobrar(id), authResult.session?.user, formData.get('motivo'))
     if (!plan.ok) return Response.json(plan.body, { status: plan.status })
 

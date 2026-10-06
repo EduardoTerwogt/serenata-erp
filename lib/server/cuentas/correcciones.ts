@@ -3,15 +3,15 @@
  * 10): reabrir, volver a cerrar y correcciones. Cada operación es una RPC
  * atómica (db/migrations/20261005_cuentas_b7_reabrir_correcciones.sql) que
  * exige las cuentas reabiertas y deja registro; aquí solo se llaman y sus
- * errores esperados se traducen a mensajes seguros. Que el usuario sea admin
- * lo valida la ruta.
+ * errores esperados se traducen a mensajes seguros. Que el usuario tenga
+ * la sección `cuentas` lo valida la ruta (#123, P14).
  */
 import { DomainError } from '@/lib/server/errors/domain-error'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import type { CorreccionCuentas } from '@/lib/validation/schemas'
 
 const MENSAJES: Record<string, { status: number; mensaje: string }> = {
-  proyecto_no_reabierto: { status: 409, mensaje: 'Las cuentas del proyecto no están reabiertas: un admin debe reabrirlas antes de corregir.' },
+  proyecto_no_reabierto: { status: 409, mensaje: 'Las cuentas del proyecto no están reabiertas: hay que reabrirlas antes de corregir.' },
   motivo_requerido: { status: 400, mensaje: 'Escribe el motivo.' },
   usuario_requerido: { status: 400, mensaje: 'No se pudo identificar al usuario.' },
   fecha_requerida: { status: 400, mensaje: 'La fecha del pago es obligatoria.' },
@@ -46,7 +46,7 @@ export interface ResultadoReapertura {
 }
 
 /**
- * Reabrir (D5, D6). Un admin puede reabrir en cualquier momento, con o sin
+ * Reabrir (D5, D6). Cualquier usuario de Cuentas puede reabrir en cualquier momento, con o sin
  * pendientes (decisión del usuario, sesión 20): así un error en un proyecto
  * que todavía no cierra también se corrige. Idempotente: ya reabiertas
  * devuelve la reapertura vigente.

@@ -58,7 +58,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: 'Grupo de cuentas por pagar no encontrado' }, { status: 404 })
     }
     // B7: con una factura vigente validada (grupo facturado o con pagos),
-    // subir otra es reemplazarla: solo admin con las cuentas reabiertas
+    // subir otra es reemplazarla: usuario de Cuentas con las cuentas reabiertas (P14)
     // (reemplazo-factura.ts). Sin ella (primera, o la anterior se dio de
     // baja) procede aunque el grupo ya no esté ABIERTO:
     // validar_factura_proveedor conserva el snapshot si ya hay pagos.

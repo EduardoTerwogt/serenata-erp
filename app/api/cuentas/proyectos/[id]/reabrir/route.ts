@@ -8,11 +8,11 @@ const ROUTE = 'POST /api/cuentas/proyectos/:id/reabrir'
 
 /**
  * Rediseño de Cuentas B7 (D5, D6, supuesto 10): reabrir las cuentas de un
- * proyecto para corregirlas, cerradas o con pendientes (sesión 20). Solo
- * admin; el motivo es obligatorio y queda registrado con quién y cuándo.
+ * proyecto para corregirlas, cerradas o con pendientes (sesión 20). Cualquier
+ * usuario con acceso a Cuentas (#123, P14); el motivo es obligatorio y queda registrado con quién y cuándo.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const authResult = await requireSection('admin')
+  const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
 
   const { id } = await params

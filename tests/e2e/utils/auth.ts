@@ -52,16 +52,21 @@ export async function login(
  * secciones. Las pruebas de acciones solo de admin (B7 de Cuentas) le dan al
  * cliente una sesión admin; el servidor ya trata al bypass como admin.
  */
-export async function mockSesionAdmin(page: Page) {
+export async function mockSesion(page: Page, secciones: string[]) {
   await page.route('**/api/auth/session', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         // Como la sesión real: auth.ts guarda las secciones ya normalizadas (admin implica todas).
-        user: { id: 'e2e-bypass-user', email: 'e2e@serenata.test', name: 'E2E User', sections: normalizeUserSections(['admin']) },
+        user: { id: 'e2e-bypass-user', email: 'e2e@serenata.test', name: 'E2E User', sections: normalizeUserSections(secciones) },
         expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       }),
     })
   )
 }
+
+export const mockSesionAdmin = (page: Page) => mockSesion(page, ['admin'])
+
+/** #123 (P14): un usuario con solo la sección Cuentas (sin admin) puede reabrir y corregir. */
+export const mockSesionCuentas = (page: Page) => mockSesion(page, ['cuentas'])

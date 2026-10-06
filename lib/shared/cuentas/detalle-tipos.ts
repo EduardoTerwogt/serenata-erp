@@ -38,7 +38,7 @@ export interface PagoAnulado {
   motivo: string | null
 }
 
-/** B7: lo que el detalle necesita para ofrecer correcciones (solo admin y con las cuentas reabiertas). */
+/** B7: lo que el detalle necesita para ofrecer correcciones (usuario de Cuentas, con las cuentas reabiertas; P14). */
 export interface CorreccionesDetalle {
   reabierta: boolean
   bajas: DocumentoBaja[]
