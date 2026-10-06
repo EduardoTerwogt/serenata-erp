@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-06 (modelo de #123 revisado por auditoría sr y re-aprobado en `docs/PLAN.md`; #124 cerrado, quedan pendientes de limpieza).
+**Última actualización:** 2026-10-06 (plan de #123 reescrito tras segunda auditoría técnica: cabecera `pagos` + columna en la cuenta; #124 cerrado, quedan pendientes de limpieza).
 
 ## Estado
 
@@ -10,9 +10,11 @@ cierre. La base vieja `fwmyoqokcjtldiofuxdg` (`us-west-2`) está **pausada** com
 ya no se espera a los 7 días (decisión del usuario). **#124 cerrado y archivado** (`docs/archive/produccion-ohio.md`).
 
 **`docs/PLAN.md` = #123 (facturas y pagos ligados), aprobado el 2026-10-06, listo para ejecutar desde B0.**
-Diseño en `docs/design/cuentas-123/`. **Modelo revisado tras auditoría sr (BD, backend, front):** B+ = tabla puente
-factura↔cuentas de cobro + cabecera `pagos` (2 tablas nuevas en lugar de 4; los ledgers y documentos se extienden).
-Decisiones P21–P25 en el plan (un solo formulario, tolerancia de centavos, RFC como columna, sin tope).
+Diseño en `docs/design/cuentas-123/`. **Plan reescrito tras una segunda auditoría técnica (código, test y producción):**
+modelo = cabecera `pagos` (única tabla nueva) + columna `cuentas_cobrar.factura_documento_id` (sin tabla puente); capa de
+datos en un solo release (B2, sin expandir→contraer porque producción está en 0 filas); P14 (permisos) separado en B1; UI en
+cuatro entregas. Decisiones del usuario P26–P29 (tolerancia 0.01 por cotización ligada, columna, Estado de cuenta también en
+las fichas, complemento lo sube el personal) y T1–T10 (técnicas, revisables) en el plan.
 
 Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
 1. **#123** — facturas y pagos ligados (una factura para varias cotizaciones, un pago para varias facturas).
@@ -24,10 +26,12 @@ Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
 
 ## Completado en la revisión de #123 (2026-10-06, después de la planeación)
 
-- Auditoría sr en tres frentes (BD/SQL, backend TS, front y pruebas) con lectura de test y producción. Resultado y huecos
-  P0 en `docs/PLAN.md` → "Hallazgos de la auditoría". El plan v1 (4 tablas) se reemplazó por B+; bloques B0–B8 rehechos.
-- Antes de B0 hay que **sincronizar test con producción** (`cuentas_conceptos` y `cuentas_periodo` atrasadas en test) y
-  **sembrar documentos y pagos** en test para medir la escala.
+- Auditoría técnica 2 (BD/SQL, backend TS, front/pruebas y decisiones) con lectura de test y producción. Resultado en
+  `docs/PLAN.md` → "Auditoría técnica 2". El modelo B+ (tabla puente + cabecera) se simplificó a cabecera `pagos` + columna en
+  la cuenta (P27); bloques B0–B6 rehechos.
+- Antes de B2 hay que **sincronizar test con producción** (`cuentas_conceptos` y `cuentas_periodo` atrasadas en test) y
+  **sembrar documentos y pagos 1:1** en test para anotar la línea base de `escala.yml` (B0). B1 (P14 + `DESIGN_SYSTEM.md`)
+  es independiente y puede ir antes.
 
 ## Completado en la sesión de planeación de #123 (2026-10-06)
 
@@ -95,7 +99,7 @@ Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
    `.github/workflows/db-push-una-vez.yml`. Antes, repetir la revisión de BD y errores en producción.
 2. **Mañana 2026-10-07 08:05 UTC:** revisión agendada del keep-alive de las 08:00 UTC en los logs de Vercel (Hobby retiene
    1 h); avisar al usuario antes de que borre la vieja.
-3. **Ejecutar #123 desde B0** (`docs/PLAN.md`). #125 queda al final; revisar su fecha el 2026-11-01.
+3. **Ejecutar #123 desde B0** (`docs/PLAN.md`; B1 en paralelo). #125 queda al final; revisar su fecha el 2026-11-01.
 
 ## Deuda técnica
 
