@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-06 (plan de #123 reescrito tras segunda auditoría técnica: cabecera `pagos` + columna en la cuenta; #124 cerrado, quedan pendientes de limpieza).
+**Última actualización:** 2026-10-06 (plan de #123 revisado tras tres auditorías técnicas y limpiado de versiones anteriores; #124 cerrado, quedan pendientes de limpieza).
 
 ## Estado
 
@@ -10,11 +10,12 @@ cierre. La base vieja `fwmyoqokcjtldiofuxdg` (`us-west-2`) está **pausada** com
 ya no se espera a los 7 días (decisión del usuario). **#124 cerrado y archivado** (`docs/archive/produccion-ohio.md`).
 
 **`docs/PLAN.md` = #123 (facturas y pagos ligados), aprobado el 2026-10-06, listo para ejecutar desde B0.**
-Diseño en `docs/design/cuentas-123/`. **Plan reescrito tras una segunda auditoría técnica (código, test y producción):**
-modelo = cabecera `pagos` (única tabla nueva) + columna `cuentas_cobrar.factura_documento_id` (sin tabla puente); capa de
-datos en un solo release (B2, sin expandir→contraer porque producción está en 0 filas); P14 (permisos) separado en B1; UI en
-cuatro entregas. Decisiones del usuario P26–P29 (tolerancia 0.01 por cotización ligada, columna, Estado de cuenta también en
-las fichas, complemento lo sube el personal) y T1–T10 (técnicas, revisables) en el plan.
+Diseño en `docs/design/cuentas-123/`. Plan revisado tras tres auditorías técnicas (código, test y producción) y limpiado:
+solo contiene lo que se va a trabajar. Modelo = cabecera `pagos` (única tabla nueva) + columna
+`cuentas_cobrar.factura_documento_id` (sin tabla puente); capa de datos en un release con tres migraciones (M1 aditiva,
+M2 RPC y lectura, M3 contracción manual) y gate de producción vacía; una RPC de pago por lado; P14 (permisos) separado en B1;
+UI en cuatro entregas (Menú y Registrar pago, Subir factura, Estado de cuenta y fichas, P22 y chip). Decisiones del usuario
+P1–P29 y técnicas T1–T18 (revisables) en el plan.
 
 Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
 1. **#123** — facturas y pagos ligados (una factura para varias cotizaciones, un pago para varias facturas).
@@ -26,12 +27,15 @@ Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
 
 ## Completado en la revisión de #123 (2026-10-06, después de la planeación)
 
-- Auditoría técnica 2 (BD/SQL, backend TS, front/pruebas y decisiones) con lectura de test y producción. Resultado en
-  `docs/PLAN.md` → "Auditoría técnica 2". El modelo B+ (tabla puente + cabecera) se simplificó a cabecera `pagos` + columna en
-  la cuenta (P27); bloques B0–B6 rehechos.
+- Tres auditorías técnicas del plan (BD/SQL, backend TS, front/pruebas, seguridad) con lectura de test y producción. El
+  modelo se simplificó a cabecera `pagos` + columna en la cuenta (P27) y `docs/PLAN.md` quedó limpio, sin versiones
+  anteriores. Hallazgos incorporados: las funciones de órdenes de pago leen `anulado_at` del ledger (entran al inventario),
+  `cancelar_orden_pago` tiene un orden de locks inverso al del pago (ABBA preexistente, T16), `?admin=1` de
+  `/api/clientes` no debe abrirse a Cuentas (T8), y los specs de concurrencia y `keep-alive` se reescriben (no se duplican).
 - Antes de B2 hay que **sincronizar test con producción** (`cuentas_conceptos` y `cuentas_periodo` atrasadas en test) y
-  **sembrar documentos y pagos 1:1** en test para anotar la línea base de `escala.yml` (B0). B1 (P14 + `DESIGN_SYSTEM.md`)
-  es independiente y puede ir antes.
+  **sembrar documentos y pagos 1:1** en test para anotar la línea base de `escala.yml` (B0). B1 (P14) es independiente y
+  puede ir antes.
+- Pendiente fuera de #123: `DESIGN_SYSTEM.md` describe un tema oscuro y `#FF5A1A` que ya no existen (commit solo `.md`).
 
 ## Completado en la sesión de planeación de #123 (2026-10-06)
 
