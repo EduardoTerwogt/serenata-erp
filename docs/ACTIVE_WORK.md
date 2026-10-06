@@ -69,8 +69,11 @@ Cola acordada con el usuario (reordenada el 2026-10-06):
 
 ## Siguiente paso
 
-1. **Vigilancia de 24 h (2026-10-06 ~08:20 UTC):** keep-alive de las 08:00 UTC, particiones de `realtime.messages`,
-   `auditar_consistencia()` en producción. Agendada.
+1. ~~Vigilancia de 24 h~~ **hecha 2026-10-06 (~17:00 UTC):** `auditar_consistencia()` en producción = 0 violaciones;
+   particiones de `realtime.messages` creadas con 3 días de adelanto (10_05 a 10_09); sin errores de Postgres ni
+   `no partition` desde las 01:00 UTC; Vercel sin clusters de error en 16 h. **No verificable:** la ejecución del keep-alive de
+   las 08:00 UTC (Hobby retiene 1 h de logs de runtime); solo se sabe que no registró errores. Repetir la revisión de BD y
+   errores el 2026-10-13 antes de borrar la vieja.
 2. **A los 7 días (2026-10-13):** PR chico que quita el ref viejo de `app/api/internal/env-check/route.ts` (y su test) y borra
    `.github/workflows/db-push-una-vez.yml`; el usuario borra el proyecto viejo y el secreto.
 3. **Cerrar #124:** cerrar el issue, `git mv docs/PLAN.md docs/archive/produccion-ohio.md`, resumen en `docs/ROADMAP.md` →
