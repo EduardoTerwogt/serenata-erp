@@ -27,9 +27,10 @@ Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
    docs/archive/<slug-descriptivo>.md`, resumen en `docs/ROADMAP.md` →
    sección "Cerrado", y este archivo se recrea vacío (estado 1).
 
-Última iniciativa archivada: #124 "Producción y Vercel a Ohio" (2026-10-06,
-ejecutada; su cierre por fecha sigue en `docs/ACTIVE_WORK.md`) — historia en
-`docs/archive/produccion-ohio.md`.
+Última iniciativa cerrada: "Producción y Vercel a Ohio" (#124, 2026-10-06) —
+historia en `docs/archive/produccion-ohio.md`, resultado en
+`docs/decisions/021-region-ohio.md`. Sus pendientes de limpieza siguen en
+`docs/ACTIVE_WORK.md`.
 
 **Cola de iniciativas (2026-10-06):** **#123** (este plan) → **#110** frente 2
 v2 (plan en el issue; depende de #123) → **#125** llaves de Supabase legacy

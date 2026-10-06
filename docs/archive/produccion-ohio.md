@@ -1,13 +1,50 @@
-# Archivo — #124: Producción y Vercel a Ohio (`us-east-2` / `cle1`)
+# #124 — Producción y Vercel a Ohio — plan archivado
 
-**Archivado el 2026-10-06** para liberar `docs/PLAN.md` para #123. La
-iniciativa está ejecutada (producción en Ohio desde el 2026-10-06); lo que
-falta de R4 depende de fechas, no de código, y se sigue en
-`docs/ACTIVE_WORK.md` ("Siguiente paso"): vigilancia y borrado de la base vieja
-el 2026-10-13, PR que quita su ref de `env-check` y borra
-`db-push-una-vez.yml`, cerrar el issue #124 y su resumen en `docs/ROADMAP.md`
-→ "Cerrado". Este archivo conserva el plan, las auditorías y la bitácora tal
-como quedaron.
+**Estado:** Cerrado (2026-10-06, a pedido del usuario; `GO_LIVE` 2026-10-06 ~01:05 UTC). Resultado real en `docs/decisions/021-region-ohio.md`. **Pendientes que sobreviven al cierre** (viven en `docs/ACTIVE_WORK.md`): borrar el proyecto viejo `fwmyoqokcjtldiofuxdg` y el secreto `PROD_NUEVA_DB_URL` (usuario); PR que quita el ref viejo de `app/api/internal/env-check/route.ts` y borra `.github/workflows/db-push-una-vez.yml` (Claude), después de borrar la vieja. La vigilancia de 24 h salió limpia; los 7 días de espera se acortaron por decisión del usuario.
+
+Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
+la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
+→ revisar → mejorar) hasta quedar aprobado, y guía la ejecución bloque por
+bloque. Nombre fijo a propósito: así ninguna skill ni doc queda apuntando a
+un nombre que caduca cuando la iniciativa cierra.
+
+Ver también `docs/ACTIVE_WORK.md` (estado de la sesión) y `docs/ROADMAP.md`
+(dirección de producto, sección "Siguiente"/"Después").
+
+## Ciclo de vida
+
+1. **Vacío** — no hay iniciativa multi-sesión en curso ni en definición.
+2. **Borrador** — una idea se confirma con alcance de iniciativa.
+3. **En refinamiento** — el loop crear → revisar → mejorar ocurre editando
+   este archivo directamente.
+4. **Aprobado** — cualquier sesión o cuenta puede tomarlo desde aquí y
+   ejecutar bloque por bloque, actualizando el tracker de estado conforme
+   avanza.
+5. **Cerrado** — al terminar la iniciativa completa: `git mv docs/PLAN.md
+   docs/archive/<slug-descriptivo>.md`, resumen en `docs/ROADMAP.md` →
+   sección "Cerrado", y este archivo se recrea vacío (estado 1).
+
+Última iniciativa cerrada: "Simplificación del modelo de datos" (2026-10-02)
+— historia en `docs/archive/simplificacion-modelo-datos.md`, resultado en
+`docs/decisions/020-simplificacion-modelo-datos.md`.
+
+
+**Cola de iniciativas (reordenada el 2026-10-06 por el usuario), en este orden:**
+**#124** (este plan) → **#123** nueva lógica de cuentas → **#110** frente 2 v2
+(plan auditado guardado en el issue) → **#125** llaves de Supabase legacy →
+publishable/secret (**prioridad baja, última**; fecha límite interna
+**2026-12-01**, revisión el 2026-11-01; las legacy dejan de funcionar a fin de
+2026).
+
+**Cómo leer este plan:** las tablas de auditoría son la historia de cómo se
+llegó al diseño. **Lo que se ejecuta es el checklist.** Donde una fila de
+auditoría choca con el checklist, manda el checklist. Filas reemplazadas por una
+posterior:
+- A3: la pausa de test ya no dura hasta R4 (→ C1).
+- A4: el ref en `env-check` se cambia en R4, no en R2 (→ B4).
+- A5: el script de reinicio no se commitea (→ B4).
+- A7: los hashes no pasan por Claude (→ X7).
+- A8: la vieja no sigue activa hasta R4 (→ C1).
 
 ---
 

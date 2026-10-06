@@ -78,16 +78,14 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Orden acordado (2026-10-06, reordenado por el usuario):** #124 (producción y
-  Vercel a Ohio, `us-east-2`/`cle1`; plan archivado en
-  `docs/archive/produccion-ohio.md`; **en producción desde 2026-10-06, cierre
-  pendiente de la vigilancia de 7 días**) → #123 (facturas y pagos ligados: una
-  factura para varias cotizaciones, un pago para varias facturas; **plan
-  aprobado en `docs/PLAN.md`, diseño en `docs/design/cuentas-123/`**) → #110 (frente 2 v2, plan en el issue) → #125
+- **Orden acordado (2026-10-06, reordenado por el usuario):** #123 (facturas y
+  pagos ligados: una factura para varias cotizaciones, un pago para varias
+  facturas; **plan aprobado en `docs/PLAN.md`, diseño en
+  `docs/design/cuentas-123/`**) → #110 (frente 2 v2, plan en el issue) → #125
   (llaves de Supabase legacy → publishable/secret; **prioridad baja, última en la
   cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para
-  entonces no ha arrancado, pasa al frente). Lo de abajo es el antecedente del
-  frente 2.
+  entonces no ha arrancado, pasa al frente). #124 (Ohio) ya está cerrado, ver
+  "Cerrado". Lo de abajo es el antecedente del frente 2.
 - **Frente 2 de latencia de Cuentas** (2026-09-30, **en pausa**): los
   conceptos de Cuentas se guardan derivados en `cuentas_conceptos_base` y se
   mantienen con triggers (`docs/decisions/019-cuentas-conceptos-materializada.md`).
@@ -234,6 +232,16 @@ Si aparece otro feature a medias, documentarlo aquí.
 ---
 
 ## Cerrado
+
+- **Producción y Vercel a Ohio (2026-10-06, #124).** Producción recreada en Supabase
+  `us-east-2` (`ytlyphlgyhgztkfxwojt`, Postgres 17.11) desde `db/migrations/` con `db push`
+  (workflow de un solo uso), huellas de esquema idénticas a la vieja y copia solo de los 2
+  usuarios; Vercel en `cle1`; test en 17.11. `GO_LIVE` el 2026-10-05 19:05 CDMX, vigilancia
+  de 24 h limpia. Medición: `/api/cuentas/periodo` mediana 443 → 409 ms (dentro del ruido);
+  el beneficio es la alineación de regiones entre producción, test y Preview, no una mejora
+  grande de latencia. Resultado y lecciones: [`docs/decisions/021`](decisions/021-region-ohio.md);
+  plan completo en `docs/archive/produccion-ohio.md`. Pendientes tras el cierre (en
+  `docs/ACTIVE_WORK.md`): borrar la base vieja y limpiar el ref viejo.
 
 - **Simplificación del modelo de datos (2026-10-02).** Un dueño por dato:
   `cuentas_pagar` sin copias, `item_id` con FK, un solo `cliente_id`, nombres finales
