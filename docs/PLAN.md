@@ -1,9 +1,10 @@
 # Plan de la iniciativa activa
 
-**Estado:** **Aprobado, listo para ejecutar** (2026-10-06, por el usuario). —
-"#123: Facturas y pagos ligados (una factura para varias cotizaciones, un pago
-para varias facturas)". Se ejecuta en una sesión nueva desde **B0**, bloque por
-bloque.
+**Estado:** **Aprobado, listo para ejecutar** (2026-10-06, por el usuario; **modelo
+revisado y re-aprobado el mismo día tras auditoría sr**: B+, ver "Hallazgos de la
+auditoría"). — "#123: Facturas y pagos ligados (una factura para varias
+cotizaciones, un pago para varias facturas)". Se ejecuta en una sesión nueva desde
+**B0**, bloque por bloque.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -157,198 +158,260 @@ Hoy cada factura y cada pago pertenecen a **una sola cuenta**:
 - **Portal:** `GET /api/portal/cuentas` y
   `/api/portal/cuentas/grupos/[id]/factura`.
 
-## Modelo de datos (dirección aprobada; nombres finales se fijan en B1)
+## Hallazgos de la auditoría sr (2026-10-06) que cambiaron este plan
 
-**Idea:** el documento (CFDI) y el pago (comprobante) pasan a ser **registros
-propios**, y lo que cubren se guarda en **aplicaciones con monto**. Los ledgers
-por cuenta que ya existen (`pagos_comprobantes`, `pagos_cuentas_pagar`) **se
-quedan** como el renglón de aplicación del pago: así la derivación de saldos
-casi no cambia y no hay un segundo motor.
+Auditoría de BD, backend TS y front/pruebas sobre el plan v1 (4 tablas nuevas). Verificado contra `main` y los
+proyectos test (`ozrtsludmcguvgqdjicn`) y producción (`ytlyphlgyhgztkfxwojt`) en solo lectura.
 
-| Entidad (nombre provisional) | Qué guarda | Notas |
+- **El motor ya es por cuenta.** `cuentas_conceptos` (`db/migrations/20261029_b6_cuentas_concepto_uno.sql:95-125`) lee
+  la factura por `cuentas_cobrar_id` (`cc_factura`), el pago por cuenta (`cc_pago`) y el complemento por
+  `pago_id` (`cc_comp`). El modelo nuevo tiene que **extender** eso, no sustituirlo.
+- **Sobraban tablas.** `facturas`+`facturas_aplicaciones`+`pagos`+`complementos` (con `lado`) reintroducía la alternativa C
+  de `docs/decisions/020`. La factura de proveedor ya es 1:1 por grupo (P10); el complemento ya existe como renglón de
+  documentos; el ledger por cuenta ya es la "línea" de un pago.
+- **Los ledgers repiten la cabecera del pago.** `pagos_comprobantes` y `pagos_cuentas_pagar` guardan `fecha_pago`,
+  `tipo_pago`, `comprobante_url`, `archivo_nombre`, `notas` y `anulado_*` en cada fila. Con un pago a varias cuentas esos
+  datos quedarían copiados por línea: por eso el modelo nuevo sí lleva **una cabecera de pagos** (decisión del usuario:
+  solución sólida sin deuda técnica; con producción en 0 filas es el momento más barato).
+- **Huecos P0 que el plan v1 no cubría:** RFC inexistente; `cancel_cotizacion` borra por cascada documentos y pagos;
+  caché `fecha_factura`/`fecha_vencimiento`/`monto_pagado`; idempotencia de `pago_operations`; orden de locks inverso entre
+  `cancel_cotizacion` y `registrar_pago_grupo_factura`; anulación multiproyecto (`cuentas_correcciones` tiene un solo
+  `objetivo_id`); lecturas que necesitan las ventanas; tres copias de parse+Drive+guardar factura.
+- **Test ≠ producción.** `cuentas_conceptos` (16,438 vs 17,616 caracteres) y `cuentas_periodo` (16,547 vs 18,339) están
+  atrasadas en test; producción coincide con el repo. Test tiene 2,205 cobros y 10,985 grupos pero solo 6 documentos de
+  cobro, 4 de pago, 3 pagos de cobro y 2 de proveedor: `escala.yml` no mediría los joins nuevos sin sembrar datos.
+
+## Decisiones de la revisión (2026-10-06, usuario)
+
+| # | Decisión |
+|---|---|
+| P21 | **Modelo B+:** puente factura↔cuentas de cobro + cabecera `pagos`. 2 tablas nuevas (no 4). Ver "Modelo de datos". |
+| P22 | **Un solo formulario.** Los botones de las pestañas Pago y Documentos del detalle abren la ventana de Acciones con el proyecto preseleccionado; el detalle muestra y enlaza, no tiene formularios propios. |
+| P23 | **Tolerancia de centavos** en P5: si la diferencia entre el total del CFDI y la suma de las cotizaciones es menor al umbral, se valida y se muestra la diferencia. Umbral exacto: se fija en B0 y se muestra antes de implementar. |
+| P24 | **RFC como columna** en `clientes` y `proveedores` (captura en la ficha); el RFC propio de Serenata, en configuración. Si el XML no coincide con nadie, se elige la contraparte a mano y se ofrece guardar el RFC. |
+| P25 | **Sin tope** de cotizaciones por factura ni de líneas por pago (P6 intacto). El `statement_timeout` de 8 s falla explícito; B2 mide una operación grande en los specs de concurrencia y, si no cabe, se revisa con datos. |
+
+## Modelo de datos (aprobado 2026-10-06; nombres finales se confirman en B0)
+
+**Idea:** el patrón contable estándar (cabecera + líneas) con lo que ya existe. La factura de cobro ya tiene cabecera (su
+renglón en `documentos_cuentas_cobrar`) y le falta solo la tabla de líneas. El pago tiene líneas (los ledgers por cuenta)
+y le falta solo la cabecera. Dos tablas nuevas; los ledgers y los documentos se **extienden**, no se reemplazan.
+
+| Objeto | Qué es | Notas |
 |---|---|---|
-| `facturas` | Un renglón por CFDI de ingreso: `lado` (cliente/proveedor), `uuid_cfdi`, RFC emisor/receptor, `cliente_id` o `proveedor_id`, `total_cfdi`, `metodo_pago` (PUE/PPD/null), `fecha_emision`, archivos XML/PDF (una vez), `estado_validacion` + `detalle_validacion`, baja (`eliminado_*`, `reemplazado_por`), `operation_id` | Índice único parcial de `uuid_cfdi` vigente. Reemplaza las filas FACTURA_* de las dos tablas de documentos. |
-| `facturas_aplicaciones` | `factura_id`, `cuenta_cobrar_id` **o** `grupo_id` (CHECK: exactamente uno), `monto` | Cliente: una fila por cotización. Proveedor: una fila (su grupo). Único: una cuenta/grupo en **una sola factura vigente** (índice parcial). `monto` desde el día uno para no rehacer el modelo cuando llegue la cancelación con traspaso. |
-| `pagos` | Un renglón por comprobante: `lado`, contraparte, `fecha_pago`, `tipo_pago`, archivo (una vez), `orden_pago_id` (proveedor, opcional), `operation_id`, `anulado_*` | **Sin** `monto_total` guardado: el total es la suma de sus aplicaciones (un dato, un dueño). |
-| `pagos_comprobantes` / `pagos_cuentas_pagar` (existentes) | Pasan a ser las **aplicaciones** del pago: ganan `pago_id` (FK). `factura_id` explícito solo si B1 confirma que no se deriva sin ambigüedad de la aplicación de factura. | Saldos, prorrateo a hijas y anulación siguen funcionando sobre el ledger por cuenta. |
-| `complementos` | Un renglón por CFDI tipo P y factura relacionada: `factura_id`, `pago_id`, `uuid_cfdi`, `monto_pagado`, `parcialidad`, `saldo_insoluto`, archivos, validación, baja | Clientes **y** proveedores. Reemplaza COMPLEMENTO_PAGO* de `documentos_cuentas_cobrar`. |
+| `documentos_cuentas_cobrar` (FACTURA_XML) | **Cabecera de la factura** (UUID, total, método de pago, validación, baja, reemplazo) | Único parcial de `uuid_cfdi` para FACTURA_XML vigentes. Nueva columna `factura_documento_id` (auto-FK, precedente `reemplazado_por`) que usan FACTURA_PDF y COMPLEMENTO_* para ligarse a su factura. |
+| `facturas_cobrar_cuentas` (**nueva**) | **Líneas de la factura:** `documento_id` → factura, `cuenta_cobrar_id` → cuenta, `baja_at` | FK a la cuenta con `RESTRICT` (no cascade: un CFDI vigente no se pierde por borrar una cotización). `UNIQUE (cuenta_cobrar_id) WHERE baja_at IS NULL`: una cuenta en a lo más una factura vigente, **declarativo**. Para facturas, esta tabla es el único dueño de "qué cuentas cubre". La baja o el reemplazo escribe `baja_at` en la misma transacción que `eliminado_at` del documento (guarda en `auditar_consistencia()`); el historial del vínculo se conserva. Sin `monto`: por P2 la suma es la de las cotizaciones y se deriva. |
+| `pagos` (**nueva**) | **Cabecera del pago:** `lado` (cobro/proveedor), `cliente_id` o `proveedor_id` (CHECK según el lado), `fecha_pago`, `tipo_pago`, `comprobante_url`, `archivo_nombre`, `notas`, `operation_id` (único), `created_at/by`, `anulado_at/por/motivo` | **Sin monto total**: es la suma de sus líneas (un dato, un dueño). `UNIQUE (id, lado)`. El archivo se guarda una sola vez (P16). Anular = actualizar la cabecera. |
+| `pagos_comprobantes` / `pagos_cuentas_pagar` | **Líneas del pago** (cuenta/grupo + monto; en proveedor también `monto_neto`, `orden_pago_id`, `estimado`) | Ganan `pago_id` FK y `lado` constante con FK compuesta `(pago_id, lado)`: un pago de proveedor no puede colgar de un cobro (precedente: FK compuesta de `cuentas_pagar`). Las columnas de cabecera se **retiran en B8**. `pago_id` = `id` en el backfill (decisión 004: se preservan los ids). CHECK `monto > 0` también en cobro. |
+| `documentos_*` (COMPLEMENTO_PAGO) | **Complemento** (CFDI tipo P) | `pago_id` pasa a FK real a `pagos(id)`. Cobro: `factura_documento_id` + `monto_pagado`; proveedor: se amplía el CHECK de `tipo`, `metodo_pago_cfdi`, `pago_id`. Un CFDI con varias facturas relacionadas = N renglones con el mismo archivo; único `(uuid_cfdi, factura_documento_id)`. `parcialidad` y `saldo_insoluto` no se guardan (nada los deriva). |
+| Proveedor: factura | Sin cambio: 1:1 por grupo (P10) | No se mueve nada de `documentos_cuentas_pagar` salvo lo del complemento. |
 
-**Invariantes (constraint triggers diferidos + `auditar_consistencia()`):**
-1. Una cuenta de cobro / grupo está en **a lo más una factura vigente**.
-2. Toda aplicación de factura es del **mismo cliente/RFC** (o proveedor) que la factura.
-3. `Σ aplicaciones de una factura = total_cfdi` → `validado`; si no →
-   `revision` con detalle (P5). La regla vive en SQL, no en TS.
-4. `Σ aplicaciones de un pago a una cuenta ≤ saldo` de esa cuenta (como hoy).
-5. Todas las aplicaciones de un pago son de la **misma contraparte** y el mismo `lado`.
-6. Un pago anulado anula **todas** sus aplicaciones en la misma transacción.
-7. Un complemento referencia una factura PPD vigente y un pago con aplicación a esa factura.
+**Invariantes:**
+1. Una cuenta de cobro en a lo más una factura vigente → índice único parcial de la puente.
+2. Las cuentas de una factura son del mismo cliente (y RFC) que la factura → `ligar_factura` bajo lock y guarda en
+   `auditar_consistencia()` (no cabe una FK: `cuentas_cobrar` no tiene `cliente_id`).
+3. Σ cotizaciones ligadas vs. `total_cfdi` → `validado` si la diferencia está dentro de la tolerancia (P23), si no
+   `revision` con el detalle (P5). Se calcula en SQL al ligar; `auditar_consistencia()` recalcula y avisa si se desvía.
+4. Σ líneas de un pago a una cuenta ≤ saldo de esa cuenta; comparación en `numeric`, tolerancia unificada (hoy cobro es
+   exacto y proveedor suma 0.01).
+5. Todas las líneas de un pago son del mismo `lado` y contraparte → FK compuesta + guarda.
+6. Anular un pago anula todas sus líneas en la misma transacción (se actualiza la cabecera) y recalcula las cachés de
+   cada cuenta/grupo.
+7. Un complemento referencia una factura vigente y un pago con línea en una cuenta de esa factura.
 
-**Lo que no se toca:** `cuentas_cobrar` y `cuentas_pagar_grupos` como ledger;
-`reconcile_cuenta_pagar_grupo`; `approve_cotizacion`; el prorrateo a hijas de
-`registrar_pago_grupo_factura` (se reutiliza, no se copia); órdenes de pago
-(salvo leer la factura del grupo del modelo nuevo).
+**Cachés (siguen siendo cachés; solo las escriben las RPC, nunca TS):** `cuentas_cobrar.monto_pagado`,
+`fecha_factura`, `fecha_vencimiento`; `cuentas_pagar_grupos.monto_transferido`. `ligar_factura` escribe las fechas por
+cada cuenta; la baja las limpia solo si la cuenta no queda en otra factura vigente.
+
+**Lo que no se toca:** `cuentas_cobrar` y `cuentas_pagar_grupos` como ledger; `reconcile_cuenta_pagar_grupo`;
+`approve_cotizacion`; el prorrateo a hijas de `registrar_pago_grupo_factura` (se extrae a función interna, no se copia);
+órdenes de pago. `cuentas_por_proyecto`, `cuentas_orden_candidatos`, `generar_orden_pago`, `cancelar_orden_pago`,
+`recalcular_estado_orden_pago` y `buscar_ordenes_pago` no cambian de estructura.
+
+**Orden global de locks** (documentar en la decisión nueva): cuentas por `id`, luego grupos por `id`, luego hijas por `id`;
+`cuentas_reapertura_activa` (FOR SHARE) por proyecto, en orden. `cancel_cotizacion` se alinea con ese orden.
+
+## Inventario B0 (SQL vigente por función)
+
+| Función | Vigente en | Cambio |
+|---|---|---|
+| `registrar_pago_cuenta_cobrar` | `20261021:57` | Envoltorio de `registrar_pago` (1 línea) |
+| `registrar_pago_grupo_factura` | `20261019:46` | Extraer `:86-176` a función interna; envoltorio |
+| `anular_pago_cobro` / `anular_pago_proveedor` | `20261021:149` / `20261019:205` | Anular por cabecera; locks en orden; una corrección por cuenta |
+| `corregir_datos_pago` / `adjuntar_comprobante_pago_proveedor` | `20261019:719` / `:388` | Actualizar la cabecera |
+| `baja_documento_cobro` | `20261021:244` (`:283-288`) | `baja_at` en la puente; limpiar fechas solo si la cuenta queda libre |
+| `baja_documento_pago` / `validar_factura_proveedor` | `20261019:308` / `:662` | Complementos de proveedor; método de pago |
+| `corregir_proveedor_cuenta_pagar` | `20261023:1117` | Revisar pagos compartidos |
+| `cancel_cotizacion` | `20261024:927` | Guarda por puente; FK `RESTRICT`; orden de locks |
+| `cuentas_conceptos` (4 args; el de 2 lo envuelve) | `20261029:15` | Factura por puente; pago por cabecera; complementos por (factura, pago); P11/P13; chip y descuadre; objetivo cliente/proveedor |
+| `cuentas_periodo`, `cuentas_resumen`, `cuentas_avisos_items`, `cuentas_opciones` | `20261028:265`, `20261003:839`/`:789` | Indirectos; aviso de complemento de proveedor |
+| `auditar_consistencia` | `20261026:13` | Guardas nuevas (puente ↔ documento, líneas de un pago, complemento ↔ pago, contraparte, Σ vs total) |
+| `ligar_factura`, `registrar_pago`, `ligar_complemento`, `estado_cuenta` | **nuevas** | B2 y B3 |
+
+**TypeScript:** repositorios `lib/server/repositories/cuentas-cobrar.ts` y `cuentas-pagar.ts`; `lib/server/cuentas/detalle.ts`,
+`registrar-pago-proveedor.ts`, `subir-archivo.ts`, `reemplazo-factura.ts`, `correcciones.ts`; rutas
+`app/api/cuentas-cobrar/[id]/{subir-factura,registrar-pago,subir-complemento,documentos}`,
+`app/api/cuentas-pagar/grupos/[id]/{subir-factura,registrar-pago,documentos}`,
+`app/api/cuentas-pagar/pagos/[pagoId]/comprobante`, `app/api/portal/cuentas/grupos/[id]/factura`; Dashboard
+(`getPagosComprobantesEnRango`); `scripts/seed-cuentas-test.sql`; `tests/e2e/utils/live-cleanup.ts`.
 
 ## Bloques
 
-Cada bloque deja `main` desplegable y en verde. Rama + PR en borrador por
-bloque (o por par de bloques si son chicos), migración numerada en
-`db/migrations/` (siguiente libre: `20261030_…`), aplicada a **test y
-producción en el mismo bloque** en que se valida (lección de la decisión 011).
-Toda `CREATE OR REPLACE` parte de la versión vigente en `pg_proc` y se diffea
-contra ella.
+Cada bloque deja `main` desplegable y en verde. Rama + PR en borrador por bloque (o par de bloques chicos), migración
+numerada en `db/migrations/` (siguiente libre: `20261030_…`), aplicada a **test y producción en el mismo bloque** en que se
+valida (lección de la decisión 011). Toda `CREATE OR REPLACE` parte de la versión vigente en `pg_proc` y se diffea contra
+ella. Orden de cada cambio de esquema: columnas nulas → backfill → `NOT NULL`/FK (expandir → migrar → contraer).
 
 ### B0 — Preparación (sin cambios funcionales)
-- [ ] Leer este plan, `docs/design/cuentas-123/README.md` y abrir
-      `cuentas-acciones.html`.
-- [ ] Inventario exacto de **lectores y escritores** de las 4 tablas de
-      documentos/pagos (SQL en `db/migrations`, TS en `lib/`, `app/api/`,
-      Portal, Dashboard, `auditar_consistencia`, doble TS). Guardarlo como
-      tabla en este plan (sección "Inventario B0").
-- [ ] Confirmar los nombres finales del modelo y escribirlos aquí.
-- [ ] Resolver las "Preguntas abiertas" que bloqueen B1.
+- [ ] Sincronizar **test con producción**: aplicar `20261028`/`20261029` donde falten y verificar con huellas de función.
+- [ ] Sembrar en test documentos y pagos realistas (≥1 factura y 2 pagos por cuenta, ~20 % compartidos) y correr
+      `escala.yml` para fijar la línea base **antes** de tocar nada.
+- [ ] Leer `docs/design/cuentas-123/README.md` y abrir `cuentas-acciones.html`.
+- [ ] Confirmar nombres finales del modelo, el umbral de tolerancia (P23) y dónde vive el RFC propio (configuración);
+      confirmar que `lib/types.ts` y `lib/validation/schemas.ts` no chocan.
+- [ ] Resolver las "Preguntas abiertas" que bloqueen B1; tabla "Inventario B0" ya viene arriba: contrastarla con `pg_proc`.
 
 ### B1 — Esquema y migración de datos (expandir; nadie lee lo nuevo todavía)
-- [ ] Migración: tablas `facturas`, `facturas_aplicaciones`, `pagos`,
-      `complementos`; columnas `pago_id` en los ledgers; índices únicos
-      parciales; FKs; RLS igual que las tablas hermanas (sin acceso anon).
-- [ ] Constraint triggers de los invariantes 1, 2, 5, 7 y guardas nuevas en
-      `auditar_consistencia()`.
-- [ ] Backfill idempotente: cada FACTURA_XML/PDF vigente → `facturas` + 1
-      aplicación; cada pago existente → `pagos` 1:1 con su ledger; cada
-      complemento → `complementos`. Producción: 0 filas; **test**: dataset de
-      carga (medir duración).
-- [ ] Escrituras de hoy siguen funcionando: los RPCs actuales también
-      escriben el modelo nuevo (doble escritura temporal **dentro de la misma
-      RPC**, nunca en TS), o se convierten en envoltorios del B2. Decidir en B0.
-- **Validación:** `migrations.yml` (incl. `plpgsql_check`) verde; spec live
-  nueva de backfill (conteos y sumas iguales antes/después);
-  `auditar_consistencia()` = 0 en test y producción.
+- [ ] `clientes.rfc` y `proveedores.rfc` (nulos) + captura en las fichas; RFC propio en configuración.
+- [ ] `pagos` y `facturas_cobrar_cuentas`; `pago_id` + `lado` + FK compuesta en los dos ledgers; `factura_documento_id`,
+      `monto_pagado`, `metodo_pago_cfdi`, `pago_id` y CHECK ampliado de `tipo` en documentos; índices (`pago_id`, puente por
+      documento, parcial de `uuid_cfdi`); RLS y GRANTs iguales a las tablas hermanas (sin acceso anon); CHECK `monto > 0`.
+- [ ] Backfill idempotente: una cabecera por cada línea existente (`pagos.id` = `id` de la línea); puente desde cada
+      FACTURA_XML vigente; `factura_documento_id` de PDFs y complementos. Producción: 0 filas; test: conteos y sumas
+      iguales antes/después (el complemento de test con `uuid_cfdi` NULL queda fuera del único).
+- [ ] **B1 y B2 se despliegan juntos** (mismo PR o par de PR en el mismo release): los RPC actuales pasan a envoltorios
+      en B2 y no hay doble escritura, así que ninguna escritura puede dejar el modelo nuevo desalineado.
+- **Validación:** `migrations.yml` (incl. `plpgsql_check`) verde; spec live de backfill; `auditar_consistencia()` = 0 en test y
+  producción; `auditar-consistencia.spec.ts` ajustado al nuevo número de guardas.
 
-### B2 — RPCs de escritura atómicas
-- [ ] `ligar_factura(...)`: crea la factura y sus aplicaciones; bloquea las
-      cuentas/grupos (`FOR UPDATE`) en orden estable; valida invariantes;
-      calcula validación (P5) en SQL; idempotente por `operation_id`.
-- [ ] `registrar_pago(...)` (cliente o proveedor, N aplicaciones): crea el
-      `pagos` y sus filas de ledger; en proveedor reutiliza el prorrateo a
-      hijas de `registrar_pago_grupo_factura` (extraerlo a función interna, no
-      copiarlo); residuo exacto; idempotencia `pago_operations`.
-- [ ] `ligar_complemento(...)`: busca la factura por UUID, valida PPD y pago.
-- [ ] `registrar_pago_cuenta_cobrar` y `registrar_pago_grupo_factura`
-      quedan como **envoltorios** de `registrar_pago` (1 aplicación), para que
-      el detalle actual siga igual.
-- **Validación:** specs live de concurrencia (misma cuenta en dos facturas a
-  la vez; mismo pago doble clic; dos pagos simultáneos a la misma factura;
-  residuo en centavos); `cuentas-cobrar-concurrency` y
-  `cuentas-pagar-concurrency` siguen verdes.
+### B2 — RPCs de escritura atómicas (SQL manda)
+- [ ] `ligar_factura(...)`: crea o reemplaza la factura y sus líneas bajo `FOR UPDATE` en el orden global; valida
+      invariantes 1–3; calcula la validación (P5/P23) en SQL; **modo `dry-run`** para el preview (TS no recalcula);
+      escribe `fecha_factura`/`fecha_vencimiento` por cuenta; idempotente por `operation_id`.
+- [ ] `registrar_pago(...)` (cobro o proveedor, N líneas): crea cabecera y líneas; reutiliza el prorrateo extraído de
+      `registrar_pago_grupo_factura`; residuo exacto en `numeric`; recalcula las cachés; idempotencia vía
+      `pago_operations` (ampliar el CHECK de dominio; `cuenta_id` = id del pago; los envoltorios no reutilizan el
+      `operation_id` en llamadas anidadas).
+- [ ] `ligar_complemento(...)`: busca la factura por UUID (DoctoRelacionado), valida PPD, pago y monto.
+- [ ] Envoltorios: `registrar_pago_cuenta_cobrar` y `registrar_pago_grupo_factura` (1 línea).
+- [ ] `anular_pago_*`, `baja_documento_cobro`, `corregir_datos_pago`, `adjuntar_comprobante_pago_proveedor`,
+      `cancel_cotizacion` (guarda por puente + `RESTRICT`) y `cuentas_correcciones`: una fila por cuenta afectada.
+- **Validación:** specs live de concurrencia (misma cuenta en dos facturas a la vez; mismo pago con doble clic; dos pagos
+  simultáneos a la misma factura; residuo en centavos; **una operación grande** para medir el límite de 8 s);
+  `cuentas-cobrar-concurrency` y `cuentas-pagar-concurrency` siguen verdes.
 
 ### B3 — Lectura y derivación (SQL manda)
-- [ ] `cuentas_conceptos`: factura vigente y su validación desde
-      `facturas_aplicaciones`; complementos desde `complementos`; P11
-      (complemento obligatorio en proveedor PPD) y P13 (cierre por su parte).
-- [ ] `cuentas_avisos_items`: "Complemento de proveedor faltante" y los
-      complementos de cliente desde la tabla nueva.
-- [ ] `cuentas_orden_candidatos`: factura validada del grupo desde el modelo
-      nuevo.
-- [ ] Detalle (`lib/server/cuentas/detalle.ts`, `detalle-armar.ts`) y
-      repositorios: leer documentos/pagos del modelo nuevo; un documento
-      compartido trae a qué más cubre (para el chip, P20).
-- [ ] Doble TS (`tests/support/cuentas-motor/`) ajustado; paridad verde.
-- [ ] Nueva RPC de lectura `estado_cuenta(lado, contraparte_id)` (P15).
-- **Validación:** `cuentas-paridad-sql` verde; `escala.yml` sin regresión
-  (p95 < 800 ms en test con el dataset de carga); unit de reglas.
+- [ ] `cuentas_conceptos`: factura por puente (validación y descuadre **estructurado**: XML vs suma, diferencia, monto por
+      cotización); pago por cabecera; complementos por (factura, pago); P11 y P13; datos del chip P20 (`factura_id`,
+      etiqueta, nº de cotizaciones, nº de proyectos); objetivo `cliente`/`proveedor` con filtro por id.
+- [ ] `cuentas_avisos_items`: "Complemento de proveedor faltante" y los de cliente desde el modelo nuevo.
+- [ ] `estado_cuenta(lado, contraparte_id)`: lee saldos de `cuentas_conceptos` (no los recalcula) y agrega solo facturas y
+      pagos aplicados.
+- [ ] Detalle (`lib/server/cuentas/detalle.ts`, `detalle-armar.ts`) y repositorios: leer del modelo nuevo; un documento
+      compartido trae a qué más cubre.
+- [ ] **Doble TS congelado** (`tests/support/cuentas-motor/`): no se extiende con aplicaciones; los mocks e2e nuevos usan
+      fixtures JSON generados con la salida real de las RPC en test. Paridad solo en los casos existentes.
+- **Validación:** `cuentas-paridad-sql` verde; `escala.yml` sin regresión sobre la línea base de B0 (p95 < 800 ms con el
+  dataset sembrado); unit de reglas.
 
-### B4 — API
-- [ ] `POST /api/cuentas/facturas` (multipart): parsea el XML
-      (`lib/server/xml/factura-parser.ts`, `complemento-parser.ts`), detecta
-      tipo I/P y lado por RFC, propone cotizaciones por folios SH (P4), sube a
-      Drive **una vez**, llama la RPC. Dos pasos: `preview` (sin escribir) y
-      `confirmar` (con `withIdempotency`).
-- [ ] `POST /api/cuentas/pagos`: contraparte, archivo, aplicaciones; Zod
-      (suma = monto, nada sobre saldo); `withIdempotency`.
-- [ ] `GET /api/cuentas/estado-cuenta?lado=&id=`.
-- [ ] Rutas por cuenta existentes (`cuentas-cobrar/[id]/*`,
-      `cuentas-pagar/grupos/[id]/*`, Portal) delegan en lo nuevo; no se
-      duplica lógica.
-- [ ] Todas: `requireSection('cuentas')` + Zod antes de usar el payload;
-      `const { id } = await params`.
-- **Validación:** tests de ruta en `app/api/__tests__/`; `npx tsc --noEmit`,
-  `npm run lint`, `npm test`.
+### B4 — Servicios y API (extender, no duplicar)
+- [ ] `lib/server/cuentas/subir-factura.ts`: **un solo servicio** (parse → Drive → RPC) que absorbe las tres copias de hoy
+      (cobro, grupo, Portal); la política "Portal rechaza si no cuadra / interno guarda en revisión" es un parámetro.
+- [ ] `lib/server/cuentas/registrar-pago.ts`: un solo servicio de pago (generaliza `registrar-pago-proveedor.ts`; el cobro
+      deja de crear el documento `OTRO` fuera de la RPC); `withIdempotency`.
+- [ ] `POST /api/cuentas/facturas?paso=preview|confirmar` (XML, aplicaciones, `operation_id`; el PDF sube por
+      `/documentos` con `factura_documento_id` por el límite de ~4.5 MB de Vercel; el complemento tipo P entra por la
+      misma ruta y va a `ligar_complemento`); `POST /api/cuentas/pagos`; `GET /api/cuentas/estado-cuenta?lado=&id=`.
+- [ ] **Lecturas para las ventanas:** cotizaciones por facturar de un cliente, grupos por facturar de un proveedor, facturas
+      abiertas de una contraparte con su reparto, y lista buscable de contrapartes (`SearchableSelect`).
+- [ ] Carpeta de Drive por contraparte con un solo helper (`/Por Cobrar/<cliente>/`, `/Por Pagar/<proveedor>/`).
+- [ ] Rutas por cuenta existentes y Portal delegan en los mismos servicios. `requireSection('cuentas')` + Zod antes de usar
+      el payload; `const { id } = await params`. Esquemas nuevos en `lib/validation/schemas.ts`; tipos en `lib/types.ts`
+      (incluye `rfc` en `Cliente` y `Proveedor`).
+- **Validación:** tests de ruta en `app/api/__tests__/`; `npx tsc --noEmit`, `npm run lint`, `npm test`.
 
 ### B5 — UI (diseño: `docs/design/cuentas-123/cuentas-acciones.html`)
-- [ ] Encabezado de Cuentas: botón **Acciones** con menú (P17) en escritorio;
-      en móvil, campana + botón naranja que abre el mismo menú.
-- [ ] Ventanas con `Modal size="820" mobile="sheet" sheetHeight="92%"`:
-      **Subir factura** (factura cliente, factura proveedor, complemento,
-      descuadre "En revisión"), **Registrar pago** (cliente/proveedor,
-      facturas expandibles, sugerir más antigua primero, bloqueo si no
-      cuadra), **Estado de cuenta** (cliente/proveedor, resumen, facturas,
-      pagos, aviso de complemento faltante, documento resaltado).
-- [ ] Chip de documento compartido en la lista, el proyecto abierto y el
-      detalle (P20).
-- [ ] Estado de cuenta también desde `app/clientes` y `app/proveedores` (mismo
-      componente).
-- [ ] Tokens `--sn-*`; componentes de `components/ui/`; nada de `gray-*`.
-- **Validación:** e2e `smoke` + `critical` con mocks (escritorio y móvil):
-  menú, cada ventana, descuadre, reparto que no cuadra; caso del issue
-  completo (6 cotizaciones, 2 facturas, 1 depósito) en un spec `critical`.
+- [ ] Primitivo `components/ui/Menu` (Escape, flechas, Home/End, foco, clic fuera); **un solo menú con dos disparadores**
+      (escritorio y móvil). Encabezado: Acciones con Subir factura, Registrar pago, Orden de pago, Estado de cuenta; Avisos
+      afuera. Mapear las variables del HTML a `--sn-status-*` y `--sn-chip-*`; sin `gray-*` ni `#f97316`.
+- [ ] Ventanas con `Modal size="820" mobile="sheet" sheetHeight="92%"`: Subir factura (cliente, proveedor, complemento,
+      descuadre "En revisión"), Registrar pago (facturas cerradas y expandibles, sugerir más antigua primero, bloqueo si
+      no cuadra), Estado de cuenta. Fecha con `DateField`. Estados que faltan en el diseño: cargando/error del XML, XML
+      inválido o duplicado, cotización ya ligada, contraparte sin facturas abiertas, idempotencia en curso, estado de cuenta
+      vacío, cobros sin factura (anticipo).
+- [ ] **P22:** los botones de las pestañas Pago y Documentos del detalle (`TabPago.tsx`, `TabDocumentos.tsx`) abren la
+      ventana con el proyecto preseleccionado; el detalle conserva solo lectura e historial.
+- [ ] Estado en la URL (`useCuentasUrl`): `sheet=factura|pago|estado`, lado, id y documento resaltado (chip P20).
+- [ ] Refresco: recargar periodo, resumen, avisos y estado de cuenta tras cada acción y al volver el foco
+      (`visibilitychange`); el servidor rechaza datos obsoletos (patrón `candidatos_cambiaron`). Sin Realtime (decisión 003).
+- [ ] Estado de cuenta también desde `app/clientes` y `app/proveedores` (mismo componente; botón solo con sección
+      `cuentas`); captura de RFC en ambas fichas.
+- [ ] Corregir `DESIGN_SYSTEM.md` (describe un tema oscuro y `#FF5A1A` que ya no existen).
+- **Validación:** e2e `smoke` + `critical` con mocks (escritorio y móvil): menú, cada ventana, descuadre, reparto que no
+  cuadra, caso del issue completo (6 cotizaciones, 2 facturas, 1 depósito); unit del reparto "más antigua primero" y del
+  residuo; ajustar `cuentas-ordenes.spec.ts` (Orden de pago pasa al menú) y reescribir `cuentas-detalle-mocks.ts`.
 
 ### B6 — Correcciones, permisos y cancelación
-- [ ] Anular un pago con varias aplicaciones (anula todas; invariante 6); dar de
-      baja o reemplazar una factura con varias aplicaciones; corregir el
-      reparto (anular y volver a registrar).
-- [ ] P14: `requireSection('cuentas')` en reabrir, cerrar, correcciones y
-      reemplazo de factura (hoy `admin`). Actualizar la UI que esconde esas
-      acciones.
-- [ ] `cancel_cotizacion`: bloquear también si la cotización está en una
-      factura vigente (D22 ampliado), con mensaje que nombre la factura.
-- [ ] Reapertura con documento compartido: definir y probar qué proyectos
-      exige reabiertos una corrección que toca varios (ver preguntas).
-- **Validación:** `cuentas-b7-correcciones` y `cuentas-reabrir` verdes +
-  casos nuevos multi-cuenta.
+- [ ] Anular un pago con varias líneas; baja o reemplazo de una factura con varias cuentas; corregir el reparto (anular y
+      volver a registrar). Reapertura con documento compartido: ver pregunta abierta 2.
+- [ ] **P14:** `requireSection('cuentas')` en `app/api/cuentas/correcciones/route.ts:19`,
+      `proyectos/[id]/reabrir/route.ts:15`, `proyectos/[id]/cerrar/route.ts:14` y `lib/server/cuentas/reemplazo-factura.ts:53`;
+      UI: `useEsAdmin` (`app/cuentas/components/ui.ts:49`) en `Reapertura.tsx:21` y `DetalleConcepto.tsx:54-56`; helper
+      `mockSesionCuentas` en `tests/e2e/utils/auth.ts`; invertir el caso "sin admin no hay Reabrir" de
+      `cuentas-reabrir.spec.ts:22` y actualizar `cuentas-correcciones-route.test.ts` y `reemplazo-factura.test.ts`.
+- [ ] `cancel_cotizacion`: bloquear también si la cotización está en una factura vigente (D22 ampliado), con mensaje que
+      nombre la factura.
+- **Validación:** `cuentas-b7-correcciones` y `cuentas-reabrir` verdes + casos multi-cuenta. Los specs live
+  (`cuentas-b1b`, `cuentas-b7-correcciones`) y `live-cleanup.ts` se reescriben a las RPC nuevas y a las tablas nuevas.
 
 ### B7 — Portal de proveedores
-- [ ] "Tus cuentas con Serenata": cada pago muestra las facturas que cubrió
-      (P12) y el complemento pendiente si es PPD.
-- **Validación:** `critical/portal-factura.spec.ts` + caso nuevo.
+- [ ] Diseño mínimo y contrato de `GET /api/portal/cuentas`: cada pago muestra las facturas que cubrió (P12) y el
+      complemento pendiente si es PPD (pregunta abierta 3). Lectura con `requirePortalSession`, filtrada por `proveedorId`.
+- **Validación:** `critical/portal-factura.spec.ts` + caso nuevo definido en este bloque.
 
 ### B8 — Contraer y cerrar
-- [ ] Quitar la doble escritura temporal y los tipos FACTURA_* /
-      COMPLEMENTO_* de las tablas de documentos viejas (o las tablas, si
-      quedan sin uso), con migración.
-- [ ] Decisión nueva en `docs/decisions/` (modelo, permisos P14, D11 y D22
-      actualizados) y nota en 011/017 que remita a ella.
-- [ ] `ARCHITECTURE.md`, `TESTING.md`, `docs/ACTIVE_WORK.md`; cerrar #123;
-      archivar este plan.
+- [ ] Retirar de los ledgers las columnas de cabecera ya movidas; quitar los tipos FACTURA_* / COMPLEMENTO_* huérfanos; retirar
+      la rama suelta `cuenta_pagar_id`/`cuentas_pagar_id` (0 filas en ambos entornos) y sus `COALESCE` en
+      `cuentas_conceptos`; quitar `p_proyecto` de `cuentas_por_proyecto`.
+- [ ] Decisión **022** en `docs/decisions/` (modelo B+, matiz sobre 020/C, P14, D11 y D22, orden de locks) y nota en 011 y
+      017; `ARCHITECTURE.md`, `TESTING.md`, `docs/ACTIVE_WORK.md`; cerrar #123; archivar este plan.
 
 ## Riesgos
 
 | Nivel | Riesgo | Cómo se cubre |
 |---|---|---|
-| P0 | Dos usuarios ligan la misma cotización a facturas distintas al mismo tiempo | Índice único parcial + `FOR UPDATE` en orden estable dentro de la RPC; spec live |
-| P0 | Centavos al repartir un pago | Residuo exacto en la última aplicación (patrón de `registrar_pago_grupo_factura`); `numeric`, nunca `float` |
-| P0 | Saldos o estados distintos entre SQL y el doble TS | Regla solo en SQL; paridad en CI |
-| P0 | Migración de datos pierde o duplica documentos/pagos en test | Backfill idempotente con conteos y sumas antes/después; producción tiene 0 filas |
-| P0 | Ruptura de lo existente (detalle, órdenes, Portal) mientras conviven los dos modelos | Expandir → migrar lectores → contraer; envoltorios en vez de rutas paralelas |
+| P0 | Dos usuarios ligan la misma cotización a facturas distintas | Único parcial en la puente + `FOR UPDATE` en orden global dentro de `ligar_factura`; spec live |
+| P0 | Centavos al repartir un pago | Residuo exacto en `numeric` (patrón de `registrar_pago_grupo_factura`), nunca `float` (no reutilizar `cuentas_cm_*`) |
+| P0 | Borrar una cotización arrastra factura y pagos por cascada | FK `RESTRICT` en la puente; guarda de `cancel_cotizacion` por puente |
+| P0 | Cachés (`fecha_factura`, `monto_pagado`) desalineadas | Solo las escriben las RPC, por cada cuenta; guarda en `auditar_consistencia()` |
+| P0 | Deadlock por orden de locks distinto entre RPCs | Orden global documentado y alineado en `cancel_cotizacion`, `registrar_pago`, `anular_*`, `cerrar/reabrir` |
+| P0 | Saldos o estados distintos entre SQL y el doble TS | La regla vive solo en SQL; doble TS congelado; paridad en CI |
+| P0 | Migración pierde o duplica documentos/pagos | Backfill idempotente con conteos y sumas; producción 0 filas; ids preservados (decisión 004) |
+| P0 | Ruptura de lo existente (detalle, órdenes, Portal) | Expandir → migrar lectores → contraer; envoltorios en vez de rutas paralelas |
+| P1 | RFC inexistente bloquea P18 y P2 | P24 en B1 |
+| P1 | Operación grande rebasa los 8 s | P25: falla explícito; se mide en B2 |
 | P1 | Cierre de un proyecto con documentos compartidos | P13 en SQL + casos en paridad |
-| P1 | Correcciones que afectan varias cuentas y la regla de reapertura | B6 define y prueba; pregunta abierta |
-| P1 | Abrir permisos de admin a todo Cuentas (P14) | Decisión explícita del usuario; registro en `cuentas_correcciones` se mantiene |
-| P1 | Latencia de `cuentas_periodo` con más joins | `escala.yml` en B3; índices por `cuenta_cobrar_id`/`grupo_id` en aplicaciones |
-| P2 | Drive: carpeta de un documento que cruza proyectos | Carpeta por contraparte (`/Por Cobrar/<cliente>/`, `/Por Pagar/<proveedor>/`); confirmar en B0 |
-| P2 | Folios SH no detectados en el CFDI | Preselección es ayuda; la elección manual siempre funciona |
+| P1 | Corrección o anulación que toca varios proyectos | B6 + una corrección por cuenta; pregunta abierta 2 |
+| P1 | Abrir permisos de admin a todo Cuentas (P14) | Decisión explícita del usuario; `cuentas_correcciones` se mantiene |
+| P1 | Latencia de `cuentas_periodo` (527 ms de 800) con más joins | Línea base y siembra en B0; `escala.yml` en B3; índices por `pago_id` y por la puente |
+| P1 | Cabecera de pagos común a cobro y proveedor reabre la discusión de 020/C | Solo la cabecera es común (columnas idénticas); cuentas y documentos siguen separados; FK compuesta `(pago_id, lado)`; se documenta en la 022 |
+| P2 | Drive: carpeta de un documento que cruza proyectos | Helper de carpeta por contraparte |
+| P2 | Folios SH no detectados en el CFDI | La preselección es ayuda; la elección manual siempre funciona |
+| P2 | Drive: archivo huérfano si falla la RPC | Ya ocurre hoy; se loguea (patrón de `comprobante/route.ts:72`) |
 
 ## Preguntas abiertas (resolver en B0 o en el bloque indicado)
 
-1. **Doble escritura vs. envoltorios** durante la transición (B1/B2): elegir la
-   que deje menos código temporal.
-2. **Reapertura con documento compartido** (B6): para anular un pago que
-   cubre proyectos A y B, ¿basta con reabrir uno, o se exige reabrir todos?
-   Propuesta: todos los afectados, con un solo clic.
-3. **Complemento en el Portal** (B7): ¿el proveedor sube su complemento desde
-   el Portal o lo sube el staff? Propuesta: Portal, igual que su factura.
-4. **Drive** (B4): confirmar estructura de carpetas por contraparte.
-5. Un **pago sin factura** (anticipo, D32) sigue permitido en cobros con
-   1 aplicación a la cuenta; confirmar que en el modelo nuevo se registra a la
-   cotización y se liga a la factura cuando llegue.
+1. **Umbral de tolerancia (P23)** (B0): proponer un valor (por ejemplo, por cotización ligada) y mostrarlo al usuario.
+2. **Reapertura con documento compartido** (B6): para anular un pago que cubre proyectos A y B, ¿basta con reabrir uno o se
+   exige reabrir todos? Propuesta: todos los afectados, con un solo clic.
+3. **Complemento en el Portal** (B7): ¿el proveedor sube su complemento desde el Portal o lo sube el staff? Propuesta:
+   Portal, igual que su factura. Hoy el Portal no tiene esa subida.
+4. **Drive** (B4): confirmar la estructura de carpetas por contraparte (hoy hay cuatro convenciones distintas).
+5. **Pago sin factura** (anticipo, D32): se registra a la cotización y se liga a la factura cuando llegue; confirmar y
+   diseñar su entrada en el Estado de cuenta.
+6. **RFC propio y matching** (B0/B1): dónde vive la configuración y qué pasa con contrapartes sin RFC guardado.
+7. **Corregir un descuadre sin resubir** (B6, P2): ligar o desligar una cotización de una factura existente (hoy solo hay
+   reemplazo).
 
 ## Tracker
 
@@ -358,7 +421,7 @@ contra ella.
 | B1 Esquema y migración | Pendiente |
 | B2 RPCs de escritura | Pendiente |
 | B3 Lectura y derivación | Pendiente |
-| B4 API | Pendiente |
+| B4 Servicios y API | Pendiente |
 | B5 UI | Pendiente |
 | B6 Correcciones, permisos, cancelación | Pendiente |
 | B7 Portal | Pendiente |

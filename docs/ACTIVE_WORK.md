@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-06 (plan de #123 aprobado en `docs/PLAN.md`; #124 cerrado, quedan pendientes de limpieza).
+**Última actualización:** 2026-10-06 (modelo de #123 revisado por auditoría sr y re-aprobado en `docs/PLAN.md`; #124 cerrado, quedan pendientes de limpieza).
 
 ## Estado
 
@@ -10,7 +10,9 @@ cierre. La base vieja `fwmyoqokcjtldiofuxdg` (`us-west-2`) está **pausada** com
 ya no se espera a los 7 días (decisión del usuario). **#124 cerrado y archivado** (`docs/archive/produccion-ohio.md`).
 
 **`docs/PLAN.md` = #123 (facturas y pagos ligados), aprobado el 2026-10-06, listo para ejecutar desde B0.**
-Diseño en `docs/design/cuentas-123/`.
+Diseño en `docs/design/cuentas-123/`. **Modelo revisado tras auditoría sr (BD, backend, front):** B+ = tabla puente
+factura↔cuentas de cobro + cabecera `pagos` (2 tablas nuevas en lugar de 4; los ledgers y documentos se extienden).
+Decisiones P21–P25 en el plan (un solo formulario, tolerancia de centavos, RFC como columna, sin tope).
 
 Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
 1. **#123** — facturas y pagos ligados (una factura para varias cotizaciones, un pago para varias facturas).
@@ -19,6 +21,13 @@ Cola acordada con el usuario (reordenada el 2026-10-06; #124 ya cerrado):
 3. **#125** — llaves de Supabase legacy → publishable/secret. **Prioridad baja, última.** Las legacy dejan de
    funcionar a fin de 2026 (documentación de Supabase); fecha límite interna **2026-12-01**, revisión el
    **2026-11-01** (si no ha arrancado, pasa al frente). Insumos en el issue y sus comentarios.
+
+## Completado en la revisión de #123 (2026-10-06, después de la planeación)
+
+- Auditoría sr en tres frentes (BD/SQL, backend TS, front y pruebas) con lectura de test y producción. Resultado y huecos
+  P0 en `docs/PLAN.md` → "Hallazgos de la auditoría". El plan v1 (4 tablas) se reemplazó por B+; bloques B0–B8 rehechos.
+- Antes de B0 hay que **sincronizar test con producción** (`cuentas_conceptos` y `cuentas_periodo` atrasadas en test) y
+  **sembrar documentos y pagos** en test para medir la escala.
 
 ## Completado en la sesión de planeación de #123 (2026-10-06)
 
