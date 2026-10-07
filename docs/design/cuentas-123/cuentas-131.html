@@ -101,7 +101,7 @@ a{color:var(--accent)}
 .seg button{border:0;background:none;cursor:pointer;height:32px;padding:0 15px;border-radius:7px;font-weight:500;color:var(--sn-ink-muted)}
 .seg button[aria-selected="true"]{background:var(--sn-surface);color:var(--sn-ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 
-/* Selector de proyectos y renglones (pieza compartida) */
+/* Selector de proyectos y conceptos (pieza compartida) */
 .sel{border:1px solid var(--sn-hairline);border-radius:10px;overflow:hidden}
 .sel-bar{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--sn-surface-alt-2);border-bottom:1px solid var(--sn-hairline);flex-wrap:wrap}
 .sel-bar input[type=search]{flex:1;min-width:160px;height:32px;border:1px solid transparent;border-radius:7px;outline:0;background:var(--sn-input);padding:0 10px;color:var(--sn-ink)}
@@ -142,6 +142,7 @@ a{color:var(--accent)}
 /* ── Nuevo en #131 ── */
 /* Desplegable de contraparte (SelectorContraparte): cerrado = un campo; abierto = buscador + lista dentro de un panel */
 .dd-wrap{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.dd-wrap .btn.der{margin-left:auto}
 .dd{position:relative;flex:1;min-width:240px;max-width:420px}
 .dd-t{display:flex;align-items:center;gap:8px;width:100%;height:40px;padding:0 14px;border-radius:9px;border:1px solid var(--sn-hairline);background:var(--sn-input);cursor:pointer;text-align:left;color:var(--sn-ink-muted)}
 .dd-t b{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .dd-t.val b{color:var(--sn-ink)}
@@ -177,10 +178,11 @@ a{color:var(--accent)}
 <div class="mock"><b>Estado de la maqueta</b>
  <button data-s="s1" aria-pressed="true">1 · Subir factura: inicio</button>
  <button data-s="s2" aria-pressed="false">2 · Desplegable (proveedor)</button>
- <button data-s="s3" aria-pressed="false">3 · Proveedor: proyecto y renglones</button>
+ <button data-s="s3" aria-pressed="false">3 · Proveedor: proyecto y conceptos</button>
  <button data-s="s4" aria-pressed="false">4 · Gasto extra</button>
- <button data-s="s5" aria-pressed="false">5 · Registrar pago</button>
- <button data-s="s6" aria-pressed="false">6 · Pago de varios proyectos</button>
+ <button data-s="s5" aria-pressed="false">5 · Cobro de cliente</button>
+ <button data-s="s6" aria-pressed="false">6 · Pago a proveedor (varias facturas)</button>
+ <button data-s="s7" aria-pressed="false">7 · Cobro de varios proyectos</button>
 </div>
 <div class="fondo">Maqueta de #131. La barra negra no es parte del producto. Cambia a 390 px para ver la hoja móvil.</div>
 
@@ -192,7 +194,6 @@ a{color:var(--accent)}
    <svg class="i" style="--s:22px" viewBox="0 0 24 24"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>
    <p>Adjunta el XML y el PDF de la factura.</p>
    <button class="btn sec">Adjuntar factura</button>
-   <span class="note">Elige los dos archivos a la vez. El PDF es opcional.</span>
   </div>
  </div>
  <div class="mp-f"><div class="res">Sin factura leída<b>—</b></div><button class="btn sec">Cancelar</button><button class="btn pri" disabled>Guardar factura</button></div>
@@ -213,13 +214,13 @@ a{color:var(--accent)}
      <div class="dd-pie">Solo proveedores con proyectos sin factura</div>
     </div>
    </div>
-   <button class="btn sec"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Proveedor nuevo</button>
+   <button class="btn sec der"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Proveedor nuevo</button>
   </div>
  </div>
  <div class="mp-f"><div class="res">Sin proveedor<b>$9,280.00</b></div><button class="btn sec">Cancelar</button><button class="btn pri" disabled>Guardar factura</button></div>
 </div></section>
 
-<!-- 3 · Proveedor: proyecto y renglones -->
+<!-- 3 · Proveedor: proyecto y conceptos -->
 <section class="mo" data-s="s3" hidden><div class="mp"><div class="mp-grab"><span></span></div>
  <div class="mp-h"><div><div class="ey">Acciones</div><h2 class="mp-t">Subir factura</h2></div><button class="x" aria-label="Cerrar">✕</button></div>
  <div class="mp-b">
@@ -230,8 +231,8 @@ a{color:var(--accent)}
    <div class="proy-ok"><span class="folio">SH-0412</span><b>Boda Rivas</b><span class="note">Cliente: Rivas</span><button class="cambiar">Cambiar</button></div>
   </div>
 
-  <div class="paso"><div class="paso-t"><span class="n">2</span>¿Qué renglones cubre?</div>
-   <div class="aviso a-ok"><span><b>Cuadra con el XML:</b> los 2 renglones de Luminarias del Centro suman $8,000.00, el neto del XML.</span></div>
+  <div class="paso"><div class="paso-t"><span class="n">2</span>¿Qué conceptos cubre?</div>
+   <div class="aviso a-ok"><span><b>Cuadra con el XML:</b> los 2 conceptos de Luminarias del Centro suman $8,000.00, el neto del XML.</span></div>
    <div class="sel">
     <div class="grp"><span>Luminarias del Centro · grupo abierto</span><span class="pill p-info" style="margin-left:auto">Proveedor actual</span></div>
     <div class="row"><input type="checkbox" checked aria-label="Iluminación escenario"><span class="d">Iluminación escenario</span><span class="m">$5,000.00</span></div>
@@ -241,7 +242,7 @@ a{color:var(--accent)}
     <div class="grp"><span>Sonido Lunar · con factura</span><span class="pill p-draft" style="margin-left:auto">No se puede mover</span></div>
     <div class="row bloq"><input type="checkbox" disabled aria-label="Audio"><span class="d">Audio y consola</span><span class="m">$6,500.00</span></div>
    </div>
-   <span class="note">Los renglones de otro proveedor sin factura se pueden mover aquí; los que ya tienen factura o pagos, no.</span>
+   <span class="note">Los conceptos de otro proveedor sin factura se pueden mover aquí; los que ya tienen factura o pagos, no.</span>
   </div>
 
   <label class="sw"><input type="checkbox"><i></i>Esta factura no está en la cotización (gasto extra)</label>
@@ -290,8 +291,33 @@ a{color:var(--accent)}
  <div class="mp-f"><div class="res">Aplicado $0.00 de $0.00<b>$0.00</b></div><button class="btn sec">Cancelar</button><button class="btn pri" disabled>Registrar pago</button></div>
 </div></section>
 
-<!-- 6 · Pago de varios proyectos -->
+<!-- 6 · Pago a proveedor: un pago, varias facturas (una por proyecto) -->
 <section class="mo" data-s="s6" hidden><div class="mp"><div class="mp-grab"><span></span></div>
+ <div class="mp-h"><div><div class="ey">Acciones</div><h2 class="mp-t">Registrar pago</h2></div><button class="x" aria-label="Cerrar">✕</button></div>
+ <div class="mp-b">
+  <div class="hdr-pago">
+   <div class="seg" role="tablist"><button role="tab" aria-selected="false">Cobro de cliente</button><button role="tab" aria-selected="true">Pago a proveedor</button></div>
+   <div class="dd" style="flex:none;width:300px;max-width:100%;min-width:0">
+    <button class="dd-t val"><b>Luminarias del Centro</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+   </div>
+  </div>
+  <div style="display:flex;justify-content:flex-end"><button class="enlace">Pagar varios proyectos a la vez</button></div>
+  <div class="grid2">
+   <div class="fld"><label>Monto transferido</label><input value="22,000.00" style="text-align:right"><span class="h">Se reparte entre las facturas de abajo</span></div>
+   <div class="fld"><label>Fecha de pago</label><input value="07 oct 2026"></div>
+  </div>
+  <div class="sec-t" style="justify-content:space-between;margin:0"><span>Aplicar a facturas</span><button class="enlace">Sugerir: la más antigua primero</button></div>
+  <div class="note" style="margin-top:-8px">Una factura por proyecto: un solo pago puede cubrir varias.</div>
+  <div class="fact"><div style="min-width:0"><div class="prj-h" style="padding:0;background:none;cursor:default"><span class="folio">SH-0398</span><b>Aniversario Ortiz</b></div><div class="note">PROV-0301 · 22 sep · PUE · saldo $9,280.00</div></div><div class="mn"><input value="9,280.00" aria-label="Aplicar a SH-0398"></div></div>
+  <div class="fact"><div style="min-width:0"><div class="prj-h" style="padding:0;background:none;cursor:default"><span class="folio">SH-0412</span><b>Boda Rivas</b></div><div class="note">PROV-0345 · 06 oct · PUE · saldo $9,280.00</div></div><div class="mn"><input value="9,280.00" aria-label="Aplicar a SH-0412"></div></div>
+  <div class="fact"><div style="min-width:0"><div class="prj-h" style="padding:0;background:none;cursor:default"><span class="folio">SH-0431</span><b>Aniversario Rivas</b></div><div class="note">PROV-0352 · 06 oct · PUE · saldo $9,280.00</div></div><div class="mn"><input value="3,440.00" aria-label="Aplicar a SH-0431"></div></div>
+  <div class="aviso a-ok"><span>Aplicado <b>$22,000.00</b> de $22,000.00 en 3 facturas.</span></div>
+ </div>
+ <div class="mp-f"><div class="res">Aplicado $22,000.00 de $22,000.00 · 3 facturas<b>$22,000.00</b></div><button class="btn sec">Cancelar</button><button class="btn pri">Registrar pago</button></div>
+</div></section>
+
+<!-- 7 · Cobro de varios proyectos -->
+<section class="mo" data-s="s7" hidden><div class="mp"><div class="mp-grab"><span></span></div>
  <div class="mp-h"><div><div class="ey">Acciones</div><h2 class="mp-t">Registrar pago</h2></div><button class="x" aria-label="Cerrar">✕</button></div>
  <div class="mp-b">
   <div class="hdr-pago"><div class="seg" role="tablist"><button role="tab" aria-selected="true">Cobro de cliente</button><button role="tab" aria-selected="false">Pago a proveedor</button></div></div>
