@@ -128,6 +128,7 @@ CI de `f182c96`: `live` 92/93; `cuentas-130.spec.ts` 6/6. Solo cayó `cuentas-pa
 
 ## Siguiente paso
 
+-1. **Siguiente: ajustes de UX/UI y de lógica de producto tras tu revisión del preview de `f182c96`** (issue de seguimiento, subissue de #123). Se trabajan en una **rama nueva que sale de `claude/admiring-faraday-i5w9yj`**, con su PR apuntando a la rama de #129 (no a `main`), en una sesión nueva; el cierre de sesión se hace en la rama del PR, no en `main`. Las migraciones nuevas son `20261037` en adelante. No se lanza nada a producción hasta cerrar esos ajustes.
 0. **#130 ya está hecho en la rama** (aviso arriba). Falta: CI verde del último commit (incluido `live`), tu revisión visual de Subir factura (alta de proveedor, gasto extra, completar cliente) y Registrar pago «Por proyecto», y lanzar con #123. Para #110: el pago por proyecto lee de `cuentas_proyectos_selector` y `estado_cuenta(p_proyectos)`, con llave (proyecto, contraparte); #110 solo cambia de dónde se lee. Pendiente opcional: parcialidad y saldo insoluto del complemento.
 1. **Tu revisión de #123** y, si la aprueba, el **lanzamiento** (aviso 1). Al lanzar: verificar `auditar_consistencia()` = 0 en
    producción, archivar `docs/PLAN.md` en `docs/archive/`, cerrar #123 y recrear `PLAN.md` vacío.
