@@ -185,8 +185,15 @@ export async function previsualizarFactura(p: PreviewParams): Promise<Respuesta>
       emisor: lado === 'proveedor' ? { rfc: normalizarRfc(data.rfc_emisor), nombre: data.nombre_emisor ?? null, regimen_codigo: data.regimen_emisor ?? null, regimen_sugerido: regimenSugerido(data.rfc_emisor, data.regimen_emisor) } : null,
       /** Datos del XML para completar la ficha del cliente (#130). */
       receptor: lado === 'cobro' ? { rfc: normalizarRfc(data.rfc_receptor), nombre: data.nombre_receptor ?? null } : null,
+      cliente_tiene_constancia: lado === 'cobro' && contraparte ? await clienteTieneConstancia(contraparte.id) : null,
     },
   }
+}
+
+async function clienteTieneConstancia(id: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.from('clientes').select('constancia_url').eq('id', id).maybeSingle()
+  if (error) throw error
+  return Boolean((data as { constancia_url?: string | null } | null)?.constancia_url)
 }
 
 interface PropuestaRenglones {

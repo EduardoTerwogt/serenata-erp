@@ -45,6 +45,33 @@ export interface CuadreProveedor {
   monto_total: number
 }
 
+/** #130: renglones "por asignar" de un proyecto que suman el neto (subtotal) del XML dentro de la tolerancia. */
+export interface PropuestaRenglones {
+  proyecto_id: string
+  proyecto: string | null
+  renglones: string[]
+  neto: number
+}
+
+export interface ProveedorParecido {
+  id: string
+  nombre: string
+  score: number
+}
+
+/** #130: datos del XML para prellenar el alta del proveedor; el usuario completa banco, CLABE, correo y teléfono. */
+export interface EmisorPreview {
+  rfc: string | null
+  nombre: string | null
+  regimen_codigo: string | null
+  regimen_sugerido: 'moral' | 'fisica' | 'resico' | null
+}
+
+export interface ReceptorPreview {
+  rfc: string | null
+  nombre: string | null
+}
+
 export interface PreviewFactura {
   tipo: 'factura_cobro' | 'factura_proveedor'
   lado: LadoCuentas
@@ -61,6 +88,15 @@ export interface PreviewFactura {
   cuadre: CuadreCobro | CuadreProveedor | null
   /** Ya existe una factura vigente con ese UUID. */
   duplicada: { id: string } | null
+  /** #130: tolerancia (en pesos) con la que se propone por el neto del XML. */
+  tolerancia: number
+  propuesta: PropuestaRenglones[]
+  /** Proveedores con nombre parecido al del emisor, para ofrecer "es este proveedor". */
+  coincidencias_nombre: ProveedorParecido[]
+  emisor: EmisorPreview | null
+  receptor: ReceptorPreview | null
+  /** Cliente ya elegido: ¿tiene constancia guardada? (null si no aplica). */
+  cliente_tiene_constancia: boolean | null
 }
 
 export interface RelacionadoPreview {

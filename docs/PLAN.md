@@ -682,6 +682,14 @@ Rutas y servicios (sin UI). `tsc`, `lint` y las 1,219 pruebas unitarias en verde
 - `PATCH /api/admin/datos-fiscales` guarda la tolerancia. `PATCH /api/cuentas/clientes/[id]` completa la ficha del cliente (RFC, contacto, constancia en Drive) con permiso `cuentas`; es una ruta aparte porque `PUT /api/clientes/[id]` exige Cotizaciones y edita todo.
 - **Desviación de Q7:** la propuesta compara el **subtotal (neto) del XML** y no su total con IVA. El total CFDI es neto + IVA − retenciones del mismo XML, así que da la misma respuesta sin una tercera copia de la fórmula fiscal; la validación del grupo (`validarFacturaFiscalProveedor`) sigue igual. Migración `20261035_c2_propuesta_renglones_factura.sql` (aplicada en test).
 
+### Resultado de C3 (2026-10-07)
+UI de Subir factura. `tsc`, `lint` y pruebas unitarias en verde (RTL: `subir-factura.test.tsx`, puras: `destino-proveedor.test.ts`); e2e `critical/cuentas-acciones` actualizado.
+- Piezas nuevas en `app/cuentas/components/acciones/`: `SelectorProyectos` (reutilizable en C4), `DestinoProveedor` (tres operaciones: proyecto del proveedor, asignar renglones, gasto extra), `AltaProveedor`, `CompletarCliente` y `destino-proveedor.ts` (lógica pura que arma el cuerpo de `POST /api/cuentas/facturas`).
+- Proveedor sin ficha: "Es este proveedor" (RFC o nombre parecido) o "Crear proveedor nuevo" con RFC, nombre y régimen del XML (solo lectura) y teléfono, correo, banco y CLABE obligatorios. Alta y renglones (o gasto) viajan en un solo envío.
+- Si la subida falla tras `preparar` (502 `subida_fallida`), el reintento reutiliza `preparado {proveedor_id, grupo_id}` con el mismo `operation_id`: no repite el alta.
+- Cliente elegido a mano sin RFC: reemplaza la casilla "Guardar el RFC" por "Completar cliente" (RFC del XML, contacto y constancia obligatoria si no hay una guardada); primero `PATCH` de la ficha y luego la factura. Cambio visible: el e2e anterior "se ofrece guardar el RFC" del cliente ahora pasa por la constancia (Q9). Para un proveedor elegido a mano la casilla se conserva.
+- `ApiError.data` expone el cuerpo JSON del error (lo usa el 502).
+
 ## Riesgos
 - **P0:** alta + reasignación + grupo + factura atómicos (una RPC); gasto extra no rompe `auditar_consistencia` ni `cancel_cotizacion` (B0 define si lleva `cotizacion_id`); centavos al repartir (residuo en `numeric`).
 - **P1:** duplicar proveedor; lista de ~2,700 proyectos (< 800 ms p95); ventana de test compartida; total CFDI vs neto da falsos matches; permiso `cuentas` crea proveedores (la RPC valida y deja rastro).
@@ -708,6 +716,6 @@ Rutas y servicios (sin UI). `tsc`, `lint` y las 1,219 pruebas unitarias en verde
 | C0 Cierre de diseño | **Hecho** (2026-10-07): decisiones Q10–Q13 y maqueta `docs/design/cuentas-123/cuentas-130.html` aprobadas por el usuario |
 | C1 Datos | **Hecho en test** (2026-10-07): migración `20261034`; falta correrla en CI (`Migrations`) y en producción al lanzar |
 | C2 API | **Hecho** (2026-10-07): rutas, servicios y pruebas; migración `20261035`; falta CI, `smoke`/`critical` y el spec `live` de C5 |
-| C3 UI Subir factura | Pendiente |
+| C3 UI Subir factura | **Hecho** (2026-10-07): pendiente solo CI y la revisión visual del usuario |
 | C4 UI Registrar pago por proyecto | Pendiente |
 | C5 Cerrar | Pendiente |

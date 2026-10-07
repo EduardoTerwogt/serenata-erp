@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ApiError, getJson, sendFormData } from '@/lib/client/api'
 import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
 import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
 import { clearPendingOperation } from '@/lib/client/pendingOperation'
 import type { EstadoCuentaRespuesta, LadoCuentas } from '@/lib/shared/cuentas/estado-cuenta-tipos'
 import type { PreviewCuentas } from '@/lib/shared/cuentas/factura-preview-tipos'
+import type { ProyectoSelector, SelectorProyectosRespuesta } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import { useGet } from '../ordenes/useOrdenes'
 
 export interface ContraparteLista {
@@ -114,6 +115,29 @@ export interface DatosFactura {
   cuentas?: string[]
 }
 
+/** #130: proveedor nuevo con los datos mínimos; coincide con `FacturaCrearSchema.preparar.proveedor`. */
+export interface ProveedorNuevoDatos {
+  nombre: string
+  rfc: string
+  regimen_fiscal: 'moral' | 'fisica' | 'resico'
+  telefono: string
+  correo: string
+  banco: string
+  clabe: string
+}
+
+export interface GastoExtraDatos {
+  proyecto_id: string
+  concepto: string
+  costo_total: number
+}
+
+export interface PrepararDatos {
+  proveedor?: ProveedorNuevoDatos
+  renglones?: string[]
+  gasto?: GastoExtraDatos
+}
+
 export interface DatosGuardarFactura {
   operation_id: string
   contraparte_id?: string | null
@@ -121,6 +145,7 @@ export interface DatosGuardarFactura {
   cuentas?: { id: string; monto_esperado: number }[]
   grupo_id?: string | null
   pago_id?: string | null
+  preparar?: PrepararDatos
 }
 
 export interface FacturaGuardada {
@@ -129,7 +154,94 @@ export interface FacturaGuardada {
   detalle_validacion?: string | null
   repetido?: boolean
   grupo?: { estado: string }
+  /** #130: lo que `preparar` dejó listo (proveedor y grupo). */
+  preparado?: { proveedor_id: string; grupo_id: string; proveedor_creado?: boolean }
   [k: string]: unknown
+}
+
+export interface DatosCompletarCliente {
+  rfc?: string | null
+  contacto?: string | null
+  telefono?: string | null
+  correo?: string | null
+}
+
+/** #130: completar la ficha de un cliente al facturarle por primera vez (RFC, contacto y constancia). */
+export const accionesCliente = {
+  completar(id: string, datos: DatosCompletarCliente, constancia: File | null) {
+    const fd = new FormData()
+    fd.set('datos', JSON.stringify(datos))
+    if (constancia) fd.set('constancia', constancia)
+    return sendFormData<{ cliente?: unknown }>(`/api/cuentas/clientes/${id}`, fd, 'No se pudo completar la ficha del cliente', { method: 'PATCH' })
+  },
+}
+
+export interface FiltrosSelector {
+  modo: 'renglones' | 'pago'
+  lado?: LadoCuentas
+  q: string
+  contraparte?: string | null
+  soloPendientes: boolean
+}
+
+/**
+ * #130: proyectos del selector compartido (Subir factura y Registrar pago por proyecto), paginados de 25 en 25 por
+ * SQL. Cambiar un filtro vuelve a la página 1 (con debounce y cancelación); `cargarMas` agrega la siguiente.
+ */
+export function useProyectosSelector(f: FiltrosSelector, activo: boolean) {
+  const clave = `${f.modo}|${f.lado ?? ''}|${f.q.trim()}|${f.contraparte ?? ''}|${f.soloPendientes}`
+  const [estado, setEstado] = useState<{ clave: string; proyectos: ProyectoSelector[]; total: number; page: number; error: string | null }>({ clave: '', proyectos: [], total: 0, page: 0, error: null })
+  const [cargandoMas, setCargandoMas] = useState(false)
+
+  const url = useCallback(
+    (page: number) => {
+      const sp = new URLSearchParams({ modo: f.modo, page: String(page), solo_pendientes: String(f.soloPendientes) })
+      if (f.lado) sp.set('lado', f.lado)
+      if (f.q.trim()) sp.set('q', f.q.trim())
+      if (f.contraparte) sp.set('contraparte', f.contraparte)
+      return `/api/cuentas/proyectos-selector?${sp.toString()}`
+    },
+    // `clave` resume los filtros.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clave]
+  )
+
+  useEffect(() => {
+    if (!activo) return undefined
+    const ac = new AbortController()
+    const t = setTimeout(() => {
+      getJson<SelectorProyectosRespuesta>(url(1), 'No se pudieron cargar los proyectos', { signal: ac.signal })
+        .then((r) => setEstado({ clave, proyectos: r.proyectos, total: r.total, page: 1, error: null }))
+        .catch((e) => {
+          if (!ac.signal.aborted) setEstado({ clave, proyectos: [], total: 0, page: 0, error: e instanceof Error ? e.message : 'No se pudieron cargar los proyectos' })
+        })
+    }, 250)
+    return () => {
+      clearTimeout(t)
+      ac.abort()
+    }
+  }, [activo, clave, url])
+
+  const vigente = estado.clave === clave
+  const proyectos = vigente ? estado.proyectos : []
+  const cargarMas = useCallback(() => {
+    if (!vigente || cargandoMas) return
+    setCargandoMas(true)
+    getJson<SelectorProyectosRespuesta>(url(estado.page + 1), 'No se pudieron cargar más proyectos')
+      .then((r) => setEstado((e) => (e.clave === clave ? { ...e, proyectos: [...e.proyectos, ...r.proyectos], total: r.total, page: r.page } : e)))
+      .catch((e) => setEstado((s) => (s.clave === clave ? { ...s, error: e instanceof Error ? e.message : 'No se pudieron cargar más proyectos' } : s)))
+      .finally(() => setCargandoMas(false))
+  }, [vigente, cargandoMas, url, estado.page, clave])
+
+  return {
+    proyectos,
+    total: vigente ? estado.total : 0,
+    error: vigente ? estado.error : null,
+    cargando: activo && !vigente,
+    cargandoMas,
+    hayMas: vigente && proyectos.length < estado.total,
+    cargarMas,
+  }
 }
 
 export const accionesFactura = {

@@ -120,9 +120,13 @@ export interface FacturaMock {
   cuentas?: { id: string; monto_esperado: number }[]
   grupo_id?: string | null
   pago_id?: string | null
+  /** #130: alta de proveedor + renglones, o gasto extra, que arma la ventana. */
+  preparar?: { proveedor?: Record<string, unknown>; renglones?: string[]; gasto?: { proyecto_id: string; concepto: string; costo_total: number } }
 }
 
 export interface LlamadasAcciones {
+  /** #130: PATCH de la ficha del cliente (datos + si trae constancia), en orden. */
+  clientes: { id: string; datos: Record<string, unknown> | null; constancia: boolean }[]
   pagos: PagoMock[]
   /** Altas confirmadas de factura o complemento. */
   facturas: FacturaMock[]
@@ -161,6 +165,17 @@ const candidatosProveedor = () => [
   { grupo_id: 'grupo-SH006', proyecto_id: 'SH006', proyecto: 'Post adicional', estado: 'sin_factura', monto_total: 18560, conceptos: 1, fecha_entrega: '2026-10-02' },
 ]
 
+/** #130: lo que la vista previa agrega a toda factura (la ruta siempre lo devuelve). */
+const EMISOR_NUEVO = { rfc: 'NUE200101XY9', nombre: 'Luces del Norte SA de CV', regimen_codigo: '601', regimen_sugerido: 'moral' as const }
+const camposNuevos = { tolerancia: 1, propuesta: [] as unknown[], coincidencias_nombre: [] as unknown[], emisor: null as unknown, receptor: { rfc: 'SHO100101AB1', nombre: 'Serenata House' }, cliente_tiene_constancia: null as boolean | null }
+
+/** Renglones por asignar de SH004 que suman el neto del XML de `proveedornuevo.xml`. */
+export const RENGLONES_SELECTOR = [
+  { cuenta_id: 'cp-1', descripcion: 'Iluminación set A', costo_total: 12000, gasto_extra: false, responsable_id: null, responsable: null, grupo_id: null, grupo_estado: null, bloqueado: false },
+  { cuenta_id: 'cp-2', descripcion: 'Iluminación set B', costo_total: 8000, gasto_extra: false, responsable_id: null, responsable: null, grupo_id: null, grupo_estado: null, bloqueado: false },
+  { cuenta_id: 'cp-3', descripcion: 'Generador', costo_total: 5000, gasto_extra: false, responsable_id: 'prov-ana', responsable: 'Ana Vidal', grupo_id: 'g-ana', grupo_estado: 'ABIERTO', bloqueado: false },
+]
+
 function previewDe(nombre: string, datos: { contraparte_id?: string | null; cuentas?: string[] }) {
   const cuentas = datos.cuentas ?? []
   const cfdiBase = { uuid: '6F2C0000-0000-0000-0000-000000A191AB', fecha: '2026-09-12T10:00:00', subtotal: null, rfc_emisor: 'SHO100101AB1', rfc_receptor: CLIENTE.rfc, conceptos: [] as string[] }
@@ -182,6 +197,27 @@ function previewDe(nombre: string, datos: { contraparte_id?: string | null; cuen
       preseleccion: [],
       cuadre: elegida ? { estado: 'validado', detalle: null, monto_total: 31320 } : null,
       duplicada: null,
+      ...camposNuevos,
+    }
+  }
+  if (nombre === 'proveedornuevo.xml') {
+    return {
+      tipo: 'factura_proveedor',
+      lado: 'proveedor',
+      cfdi: { ...cfdiBase, uuid: 'LN000001-0000-0000-0000-000000000000', total: 23200, subtotal: 20000, metodo_pago: 'PUE', rfc_emisor: EMISOR_NUEVO.rfc, rfc_receptor: 'SHO100101AB1', folios: [] },
+      rfc_contraparte: EMISOR_NUEVO.rfc,
+      contraparte: datos.contraparte_id ? PROVEEDOR : null,
+      ambiguas: [],
+      ofrecer_guardar_rfc: Boolean(datos.contraparte_id),
+      rfc_distinto: false,
+      candidatos: datos.contraparte_id ? candidatosProveedor() : [],
+      preseleccion: [],
+      cuadre: null,
+      duplicada: null,
+      ...camposNuevos,
+      propuesta: [{ proyecto_id: 'SH004', proyecto: 'Versiones redes', renglones: ['cp-1', 'cp-2'], neto: 20000 }],
+      coincidencias_nombre: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, score: 0.62 }],
+      emisor: EMISOR_NUEVO,
     }
   }
   const sinRfc = nombre === 'sinrfc.xml'
@@ -218,6 +254,9 @@ function previewDe(nombre: string, datos: { contraparte_id?: string | null; cuen
           }
         : null,
     duplicada: nombre === 'duplicada.xml' ? { id: 'fa' } : null,
+    ...camposNuevos,
+    receptor: { rfc: sinRfc ? 'XAXX010101000' : CLIENTE.rfc, nombre: CLIENTE.nombre },
+    cliente_tiene_constancia: sinRfc && contraparte ? false : null,
   }
 }
 
@@ -228,7 +267,7 @@ export function datosDeMultipart(postData: string | null): unknown {
 }
 
 export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones = {}): Promise<LlamadasAcciones> {
-  const llamadas: LlamadasAcciones = { pagos: [], facturas: [], previews: [] }
+  const llamadas: LlamadasAcciones = { clientes: [], pagos: [], facturas: [], previews: [] }
 
   await page.route(/\/api\/cuentas\/estado-cuenta\?/, (route: Route) => {
     const q = new URL(route.request().url()).searchParams
@@ -244,6 +283,20 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
       { id: 'prov-ana', nombre: 'Ana Vidal', activo: true },
     ])
   )
+  await page.route(/\/api\/cuentas\/proyectos-selector\?/, (route: Route) =>
+    fulfillJson(route, {
+      modo: 'renglones',
+      total: 1,
+      page: 1,
+      page_size: 25,
+      proyectos: [{ proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: '2026-09-10', de_contraparte: false, renglones: RENGLONES_SELECTOR }],
+    })
+  )
+  await page.route(/\/api\/cuentas\/clientes\/[^/]+$/, (route: Route) => {
+    const post = route.request().postData() ?? ''
+    llamadas.clientes.push({ id: route.request().url().split('/').pop() ?? '', datos: datosDeMultipart(post) as Record<string, unknown> | null, constancia: post.includes('name="constancia"') })
+    return fulfillJson(route, { cliente: { id: CLIENTE.id } })
+  })
   await page.route(/\/api\/cuentas\/pagos\/estado\?/, (route: Route) => fulfillJson(route, { status: 'not_found' }))
   await page.route(/\/api\/cuentas\/pagos$/, async (route: Route) => {
     llamadas.pagos.push(datosDeMultipart(route.request().postData()) as PagoMock)

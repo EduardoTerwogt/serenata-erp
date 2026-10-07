@@ -23,8 +23,11 @@ import { fechaCorta, plural } from '../formato'
 import { Aviso } from '../detalle/TabPago'
 import { ACCEPT_PDF, ACCEPT_XML, BotonArchivo } from '../detalle/TabDocumentos'
 import { Cap, CUERPO_VENTANA, Dato, Enlace, PieVentana } from './compartido'
+import { CLIENTE_VACIO, CompletarCliente, type ClienteForm } from './CompletarCliente'
+import { armarProveedor, destinoInicial, type DestinoProveedor as Destino } from './destino-proveedor'
+import { DestinoProveedor } from './DestinoProveedor'
 import { SelectorContraparte } from './SelectorContraparte'
-import { accionesFactura, useEstadoCuenta, type ContraparteLista, type FacturaGuardada } from './useAcciones'
+import { accionesCliente, accionesFactura, useEstadoCuenta, type ContraparteLista, type FacturaGuardada } from './useAcciones'
 
 const nuevaLlave = () => crypto.randomUUID()
 
@@ -61,6 +64,10 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
   const [enviando, setEnviando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
   const [listo, setListo] = useState<FacturaGuardada | null>(null)
+  // #130: destino de la factura de un proveedor, ficha del cliente a completar y lo que `preparar` dejó listo si la subida falló.
+  const [destino, setDestino] = useState<Destino>(destinoInicial)
+  const [clienteForm, setClienteForm] = useState<ClienteForm>(CLIENTE_VACIO)
+  const [preparado, setPreparado] = useState<{ proveedor_id: string; grupo_id: string } | null>(null)
   const inicializada = useRef('')
 
   const reiniciar = (archivo: File | null) => {
@@ -73,6 +80,9 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
     setPedirPago(false)
     setAviso(null)
     setGuardarRfc(true)
+    setDestino(destinoInicial())
+    setClienteForm(CLIENTE_VACIO)
+    setPreparado(null)
     setLlave(nuevaLlave())
     inicializada.current = ''
   }
@@ -98,6 +108,9 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
           const porFolios = p.lado === 'cobro' ? p.preseleccion : proponerGrupo(p)
           const propuesta = porFolios.length > 0 ? porFolios : delProyecto(p, proyecto)
           if (propuesta.length > 0) setSeleccion(propuesta)
+          // #130: sin proyecto que nombren los folios, los renglones por asignar que suman el neto del XML se proponen.
+          const sugerida = p.lado === 'proveedor' && propuesta.length === 0 ? p.propuesta[0] : null
+          if (sugerida) setDestino((d) => (d.renglones.length > 0 ? d : { ...d, modo: 'renglones', renglones: sugerida.renglones, proyectoRenglones: sugerida.proyecto_id }))
         })
         .catch((err) => {
           if (ac.signal.aborted) return
@@ -127,11 +140,13 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
   }
 
   const complementoCompleto = complemento ? complemento.relacionados.length > 0 && complemento.relacionados.every((r) => r.factura) : false
-  const puedeGuardar =
-    !enviando &&
-    !leyendo &&
-    Boolean(xml) &&
-    (complemento ? complementoCompleto && (!pedirPago || Boolean(pagoId)) : Boolean(factura) && !factura?.duplicada && Boolean(contraparte) && seleccion.length > 0)
+  const proveedorLado = factura?.lado === 'proveedor'
+  const armado = proveedorLado && factura ? armarProveedor({ ...destino, grupoId: seleccion[0] ?? null }, { contraparteId: contraparte?.id ?? null, emisor: factura.emisor }) : null
+  // Cliente elegido a mano sin RFC: se completa su ficha; la constancia es obligatoria si no tiene una guardada.
+  const completarCliente = Boolean(cobro && manual && factura?.ofrecer_guardar_rfc)
+  const constanciaOk = !completarCliente || Boolean(clienteForm.constancia) || Boolean(factura?.cliente_tiene_constancia)
+  const facturaLista = preparado ? true : proveedorLado ? Boolean(armado?.ok) : Boolean(contraparte) && seleccion.length > 0 && constanciaOk
+  const puedeGuardar = !enviando && !leyendo && Boolean(xml) && (complemento ? complementoCompleto && (!pedirPago || Boolean(pagoId)) : Boolean(factura) && !factura?.duplicada && facturaLista)
 
   const guardar = async () => {
     if (!xml || !puedeGuardar) return
@@ -139,20 +154,35 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
     setAviso(null)
     try {
       const base = { operation_id: llave, contraparte_id: contraparte?.id ?? null }
+      if (completarCliente && manual) {
+        // Primero la ficha (repetirla es seguro): si falla, no se sube la factura.
+        const texto = (v: string) => v.trim() || null
+        await accionesCliente.completar(manual.id, { rfc: factura?.receptor?.rfc ?? null, contacto: texto(clienteForm.contacto), telefono: texto(clienteForm.telefono), correo: texto(clienteForm.correo) }, clienteForm.constancia)
+      }
+      const rfcLado = Boolean(manual && factura?.ofrecer_guardar_rfc && guardarRfc)
       const datos = complemento
         ? { ...base, pago_id: pagoId }
         : cobro
           ? {
               ...base,
-              guardar_rfc: Boolean(manual && factura?.ofrecer_guardar_rfc && guardarRfc),
+              guardar_rfc: completarCliente ? false : rfcLado,
               cuentas: elegidos.filter(esCandidatoCobro).map((c) => ({ id: c.cuenta_id, monto_esperado: c.monto_total })),
             }
-          : { ...base, guardar_rfc: Boolean(manual && factura?.ofrecer_guardar_rfc && guardarRfc), grupo_id: seleccion[0] }
+          : preparado
+            ? { operation_id: llave, contraparte_id: preparado.proveedor_id, grupo_id: preparado.grupo_id }
+            : { operation_id: llave, guardar_rfc: rfcLado, ...(armado?.ok ? armado.cuerpo : {}) }
       const r = await accionesFactura.guardar(xml, pdf, datos)
       setListo(r)
       onGuardada()
     } catch (err) {
       if (err instanceof ApiError && err.code === 'complemento_ambiguo') setPedirPago(true)
+      // #130: el proveedor y los renglones (o el gasto) ya quedaron guardados; el reintento sube la factura a ese grupo.
+      const listoPrevio = err instanceof ApiError && err.code === 'subida_fallida' ? (err.data?.preparado as { proveedor_id: string; grupo_id: string } | undefined) : undefined
+      if (listoPrevio) {
+        setPreparado(listoPrevio)
+        setManual({ id: listoPrevio.proveedor_id, nombre: factura?.emisor?.nombre ?? contraparte?.nombre ?? 'Proveedor' })
+        setDestino((d) => ({ ...d, nuevo: false }))
+      }
       setAviso(err instanceof Error ? err.message : 'No se pudo guardar')
     } finally {
       setEnviando(false)
@@ -160,22 +190,43 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
   }
 
   const revision = Boolean(cuadre && seleccion.length > 0 && (esCuadreCobro(cuadre) ? cuadre.estado === 'revision' : cuadre.estado !== 'validado'))
-  const etiquetaGuardar = complemento ? 'Guardar complemento' : revision ? 'Guardar en revisión' : 'Guardar factura'
+  const etiquetaGuardar = complemento
+    ? 'Guardar complemento'
+    : preparado
+      ? 'Reintentar subir la factura'
+      : destino.nuevo && proveedorLado
+        ? 'Crear proveedor y registrar factura'
+        : completarCliente
+          ? 'Completar cliente y registrar factura'
+          : revision
+            ? 'Guardar en revisión'
+            : 'Guardar factura'
   const sumaComplemento = complemento ? complemento.relacionados.reduce((a, r) => a + r.monto_pagado, 0) : 0
+
+  const proyectoDelPie =
+    destino.modo === 'renglones' || destino.nuevo
+      ? (destino.proyectoRenglones ?? 'Sin proyecto')
+      : destino.modo === 'gasto'
+        ? (destino.gasto.proyecto_id ?? 'Sin proyecto')
+        : elegidos[0] && !esCandidatoCobro(elegidos[0])
+          ? elegidos[0].proyecto_id
+          : 'Sin proyecto'
 
   const pie = !listo ? (
     <PieVentana
       titulo={
         complemento
           ? 'Complemento de pago'
-          : factura && contraparte
-            ? `${cobro ? plural(seleccion.length, 'cotización', 'cotizaciones') : (elegidos[0] && !esCandidatoCobro(elegidos[0]) ? elegidos[0].proyecto_id : 'Sin proyecto')} · ${contraparte.nombre}`
+          : factura && (contraparte || destino.nuevo)
+            ? `${cobro ? plural(seleccion.length, 'cotización', 'cotizaciones') : proyectoDelPie} · ${contraparte?.nombre ?? factura.emisor?.nombre ?? 'Proveedor nuevo'}`
             : 'Sin factura leída'
       }
       detalle={
         complemento
           ? plural(complemento.relacionados.length, 'factura relacionada', 'facturas relacionadas')
-          : cuadre && esCuadreCobro(cuadre)
+          : armado && !armado.ok && !cuadre
+            ? armado.falta
+            : cuadre && esCuadreCobro(cuadre)
             ? `Suma ${fmtMoney(cuadre.suma)} · XML ${fmtMoney(totalXml)}`
             : cuadre
               ? `Total a transferir ${fmtMoney((cuadre as { monto_total: number }).monto_total)}`
@@ -258,44 +309,77 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
                 </Aviso>
               )}
 
-              {!cobro && contraparte && (
-                <Aviso icono="info" tono="neutro">
-                  El RFC es de un proveedor: la factura se liga a su proyecto, como hoy.
-                </Aviso>
-              )}
-              {!contraparte && (
+              {cobro && !contraparte && (
                 <ElegirContraparte factura={factura} onElegir={(c) => { setManual({ id: c.id, nombre: c.nombre }); setSeleccion([]); inicializada.current = '' }} />
               )}
-              {contraparte && manual && factura.ofrecer_guardar_rfc && (
+              {cobro && contraparte && completarCliente && (
+                <CompletarCliente
+                  rfc={factura.receptor?.rfc ?? factura.rfc_contraparte}
+                  nombre={contraparte.nombre}
+                  tieneConstancia={Boolean(factura.cliente_tiene_constancia)}
+                  valor={clienteForm}
+                  onChange={setClienteForm}
+                  onRechazo={setAviso}
+                />
+              )}
+
+              {cobro && contraparte && (
+                <>
+                  <Cap
+                    derecha={
+                      <span className="text-[11.5px] text-subtext">
+                        {factura.preseleccion.length > 0 ? 'Marcadas por los folios del CFDI' : 'El CFDI no trae folios: elige a mano'}
+                      </span>
+                    }
+                  >
+                    Cotizaciones que cubre
+                  </Cap>
+                  {candidatos.length === 0 ? (
+                    <Aviso icono="info" tono="neutro">
+                      {contraparte.nombre} no tiene cotizaciones aprobadas por facturar.
+                    </Aviso>
+                  ) : (
+                    <ListaCandidatos candidatos={candidatos} seleccion={seleccion} multiple onAlternar={alternar} mesFactura={factura.cfdi.fecha?.slice(0, 7) ?? null} />
+                  )}
+                  {candidatos.length > 0 && <div className="-mt-2 text-[11px] text-subtext">Solo cobros de {contraparte.nombre} con saldo por facturar.</div>}
+                  <AvisoCuadre cobro seleccion={seleccion.length} cuadre={cuadre} revision={revision} />
+                </>
+              )}
+
+              {!cobro && contraparte && manual && factura.ofrecer_guardar_rfc && (
                 <label className="flex items-center gap-2.5 text-[12.5px] text-body">
                   <Checkbox checked={guardarRfc} onChange={setGuardarRfc} label="Guardar el RFC en la ficha" />
                   Guardar el RFC {factura.rfc_contraparte} en la ficha de {contraparte.nombre}
                 </label>
               )}
 
-              {contraparte && (
-                <>
-                  <Cap
-                    derecha={
-                      <span className="text-[11.5px] text-subtext">
-                        {cobro ? (factura.preseleccion.length > 0 ? 'Marcadas por los folios del CFDI' : 'El CFDI no trae folios: elige a mano') : 'Un proyecto por factura'}
-                      </span>
-                    }
-                  >
-                    {cobro ? 'Cotizaciones que cubre' : 'Proyecto que cubre'}
-                  </Cap>
-                  {candidatos.length === 0 ? (
-                    <Aviso icono="info" tono="neutro">
-                      {cobro ? `${contraparte.nombre} no tiene cotizaciones aprobadas por facturar.` : `${contraparte.nombre} no tiene proyectos sin factura.`}
-                    </Aviso>
-                  ) : (
-                    <ListaCandidatos candidatos={candidatos} seleccion={seleccion} multiple={Boolean(cobro)} onAlternar={alternar} mesFactura={factura.cfdi.fecha?.slice(0, 7) ?? null} />
-                  )}
-                  {candidatos.length > 0 && (
-                    <div className="-mt-2 text-[11px] text-subtext">{cobro ? `Solo cobros de ${contraparte.nombre} con saldo por facturar.` : `Solo proyectos de ${contraparte.nombre} sin factura validada.`}</div>
-                  )}
-                  <AvisoCuadre cobro={Boolean(cobro)} seleccion={seleccion.length} cuadre={cuadre} revision={revision} />
-                </>
+              {!cobro && (
+                <DestinoProveedor
+                  factura={factura}
+                  contraparte={contraparte ? { id: contraparte.id, nombre: contraparte.nombre } : null}
+                  destino={destino}
+                  onDestino={setDestino}
+                  onElegirProveedor={(c) => {
+                    setManual({ id: c.id, nombre: c.nombre })
+                    setSeleccion([])
+                    inicializada.current = ''
+                  }}
+                  listaGrupos={
+                    contraparte ? (
+                      <>
+                        <Cap derecha={<span className="text-[11.5px] text-subtext">Un proyecto por factura</span>}>Proyecto que cubre</Cap>
+                        {candidatos.length === 0 ? (
+                          <Aviso icono="info" tono="neutro">
+                            {contraparte.nombre} no tiene proyectos sin factura. Asigna renglones o registra un gasto extra.
+                          </Aviso>
+                        ) : (
+                          <ListaCandidatos candidatos={candidatos} seleccion={seleccion} multiple={false} onAlternar={alternar} mesFactura={factura.cfdi.fecha?.slice(0, 7) ?? null} />
+                        )}
+                        <AvisoCuadre cobro={false} seleccion={seleccion.length} cuadre={cuadre} revision={revision} />
+                      </>
+                    ) : null
+                  }
+                />
               )}
             </>
           )}
