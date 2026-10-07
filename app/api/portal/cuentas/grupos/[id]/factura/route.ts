@@ -115,6 +115,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
         uuid_cfdi: facturaData.uuid_timbrado ?? null,
         total_cfdi: facturaData.monto_total ?? null,
+        // #123 (P11): PUE/PPD de la factura del proveedor.
+        metodo_pago_cfdi: facturaData.metodo_pago ?? null,
       }),
       createDocumentoCuentaPagar({
         grupo_id: id,

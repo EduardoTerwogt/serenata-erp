@@ -64,6 +64,20 @@ export const CotizacionUpdateSchema = CotizacionBaseSchema.partial().extend({
   items: z.array(ItemCotizacionSchema).optional(),
 })
 
+// #123 (P24): RFC como columna en clientes y proveedores. Se normaliza igual que el CHECK de la base
+// (`rfc = upper(btrim(rfc))`, no vacío); vacío o solo espacios = sin RFC (null). 12 posiciones (moral) o 13 (física).
+export const RFC_REGEX = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/
+export const RfcSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((v) => {
+    if (v == null) return v === null ? null : undefined
+    const limpio = v.trim().toUpperCase()
+    return limpio === '' ? null : limpio
+  })
+  .refine((v) => v == null || RFC_REGEX.test(v), 'RFC inválido: 12 o 13 caracteres (3-4 letras, 6 dígitos de fecha y 3 de homoclave)')
+
 // ==================== PROVEEDORES (antes "responsables") ====================
 
 export const ProveedorCreateSchema = z.object({
@@ -76,6 +90,7 @@ export const ProveedorCreateSchema = z.object({
   roles: z.array(z.string()).optional().default([]),
   notas: z.string().nullable().optional(),
   regimen_fiscal: z.enum(['moral', 'fisica', 'resico']).nullable().optional(),
+  rfc: RfcSchema,
 })
 
 export const ProveedorUpdateSchema = z.object({
@@ -89,6 +104,7 @@ export const ProveedorUpdateSchema = z.object({
   notas: z.string().nullable().optional(),
   activo: z.boolean().optional(),
   regimen_fiscal: z.enum(['moral', 'fisica', 'resico']).nullable().optional(),
+  rfc: RfcSchema,
 })
 
 // ==================== CLIENTES ====================
@@ -103,6 +119,7 @@ export const ClienteCreateSchema = z.object({
   telefono: z.string().nullable().optional(),
   correo: z.string().email('Correo inválido').nullable().optional(),
   notas: z.string().nullable().optional(),
+  rfc: RfcSchema,
 })
 
 export const ClienteUpdateSchema = z.object({
@@ -113,6 +130,7 @@ export const ClienteUpdateSchema = z.object({
   correo: z.string().email('Correo inválido').nullable().optional(),
   notas: z.string().nullable().optional(),
   activo: z.boolean().optional(),
+  rfc: RfcSchema,
 })
 
 // ==================== PROYECTOS ====================

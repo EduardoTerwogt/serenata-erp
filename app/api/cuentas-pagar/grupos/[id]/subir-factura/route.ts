@@ -1,12 +1,9 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaPagarGrupoById, getDocumentosCuentaPagarGrupo, createDocumentoCuentaPagar, getProyectoById, getProveedorById, validarFacturaProveedor } from '@/lib/db'
-import { uploadFileToDrive } from '@/lib/integrations/google/drive'
+import { getCuentaPagarGrupoById, getDocumentosCuentaPagarGrupo, getProyectoById } from '@/lib/db'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
-import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
-import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
-import { RegimenFiscal } from '@/lib/types'
-import { completarReemplazo, planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
+import { planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
+import { subirFacturaProveedor } from '@/lib/server/cuentas/subir-factura-proveedor'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 
@@ -18,14 +15,6 @@ const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
   XML_INVALID_TYPE: 'El archivo XML debe ser de tipo text/xml o application/xml',
   PDF_INVALID_TYPE: 'El archivo PDF debe ser de tipo application/pdf',
   FILE_TOO_LARGE: 'El archivo excede el límite de 4 MB',
-}
-
-function extractFacturaFechaFromXml(xmlContent: string): string | null {
-  const match = xmlContent.match(/\bFecha=["']([^"']+)["']/i)
-  if (!match?.[1]) return null
-  const rawValue = match[1]
-  const datePart = rawValue.split('T')[0]
-  return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : null
 }
 
 // Contraparte agrupada de app/api/cuentas-pagar/[id]/subir-factura/route.ts
@@ -81,75 +70,18 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     const folderPath = `/Por Pagar/${grupo.proyecto_id}-${proyecto.proyecto}`
     const uploadFolderId = resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined)
-    const facturaXmlUrl = await uploadFileToDrive(facturaXmlFile, folderPath, facturaXmlFile.name, uploadFolderId)
-    const facturaPdfUrl = facturaPdfFile ? await uploadFileToDrive(facturaPdfFile, folderPath, facturaPdfFile.name, uploadFolderId) : null
 
-    let regimenFiscal: RegimenFiscal | null = null
-    try {
-      const proveedor = await getProveedorById(grupo.responsable_id)
-      regimenFiscal = proveedor.regimen_fiscal ?? null
-    } catch {
-      regimenFiscal = null
-    }
-
-    const facturaData = parseFacturaXML(facturaXmlContent)
-    const validacionXml = facturaData.error
-      ? { estado_validacion: 'revision' as const, detalle_validacion: `No se pudo parsear el XML: ${facturaData.error}` }
-      : validarFacturaFiscalProveedor(facturaData, Number(grupo.monto_total || 0), regimenFiscal)
-
-    // V3 (Rediseño de Cuentas B2): el XML entra como 'pendiente' aunque
-    // cuadre; SOLO validar_factura_proveedor lo pasa a 'validado', en la
-    // misma transacción que el snapshot y el cambio a FACTURADO.
-    const cuadra = validacionXml.estado_validacion === 'validado'
-    const documentoXml = await createDocumentoCuentaPagar({
-      grupo_id: id,
-      tipo: 'FACTURA_PROVEEDOR_XML',
-      archivo_url: facturaXmlUrl,
-      archivo_nombre: facturaXmlFile.name,
-      estado_validacion: cuadra ? 'pendiente' : validacionXml.estado_validacion,
-      detalle_validacion: validacionXml.detalle_validacion,
-      // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
-      uuid_cfdi: facturaData.uuid_timbrado ?? null,
-      total_cfdi: facturaData.error ? null : facturaData.monto_total ?? null,
+    const { status, body } = await subirFacturaProveedor({
+      grupo,
+      xmlFile: facturaXmlFile,
+      pdfFile: facturaPdfFile,
+      xmlContent: facturaXmlContent,
+      carpeta: folderPath,
+      uploadFolderId,
+      usuario: authResult.session?.user?.email ?? null,
+      reemplazo: plan.reemplazo,
     })
-
-    const documentoPdf =
-      facturaPdfFile && facturaPdfUrl
-        ? await createDocumentoCuentaPagar({
-            grupo_id: id,
-            tipo: 'FACTURA_PROVEEDOR',
-            archivo_url: facturaPdfUrl,
-            archivo_nombre: facturaPdfFile.name,
-          })
-        : null
-
-    const fechaFactura = extractFacturaFechaFromXml(facturaXmlContent)
-
-    // Regla de cierre (docs/PLAN.md): 'revision' (no cuadra) NO cierra el
-    // grupo -- se guarda el documento, pero el grupo se queda ABIERTO. Solo
-    // una factura que cuadra se valida (y factura el grupo) vía la RPC.
-    let estadoGrupo = grupo.estado
-    if (cuadra) {
-      const validada = await validarFacturaProveedor(documentoXml.id, authResult.session?.user?.email ?? null)
-      documentoXml.estado_validacion = 'validado'
-      estadoGrupo = validada.estado as typeof grupo.estado
-    }
-    if (plan.reemplazo) await completarReemplazo(plan.reemplazo, documentoXml.id)
-
-    return Response.json({
-      success: true,
-      documentos: documentoPdf ? [documentoXml, documentoPdf] : [documentoXml],
-      fecha_factura: fechaFactura,
-      factura_data: facturaData,
-      validacion_estructural: validacionXml,
-      grupo: {
-        id: grupo.id,
-        proyecto_id: grupo.proyecto_id,
-        responsable_nombre: grupo.responsable_nombre,
-        monto_total: grupo.monto_total,
-        estado: estadoGrupo,
-      },
-    })
+    return Response.json(body, { status })
   } catch (error) {
     return buildErrorResponse(error, ROUTE)
   }

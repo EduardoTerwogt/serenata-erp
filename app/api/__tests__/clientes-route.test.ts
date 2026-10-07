@@ -7,9 +7,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * Postgres las dos veces, sin ninguna capa de caché intermedia.
  */
 
-const mocks = vi.hoisted(() => ({ fromMock: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  fromMock: vi.fn(),
+  requireSectionMock: vi.fn(async (_s: string) => ({ response: null as Response | null })),
+  requireAnySectionMock: vi.fn(async (_s: string[]) => ({ response: null as Response | null })),
+}))
 
-vi.mock('@/lib/api-auth', () => ({ requireSection: vi.fn(async () => ({ response: null })) }))
+vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock, requireAnySection: mocks.requireAnySectionMock }))
 vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { from: mocks.fromMock } }))
 
 import { GET, POST } from '../clientes/route'
@@ -32,6 +36,34 @@ function chainableSelect(data: unknown) {
 describe('GET /api/clientes', () => {
   beforeEach(() => {
     mocks.fromMock.mockReset()
+    mocks.requireSectionMock.mockClear()
+    mocks.requireAnySectionMock.mockClear()
+  })
+
+  it('#123 (T8): la búsqueda ?q= admite cotizaciones o cuentas, y solo esa rama', async () => {
+    mocks.fromMock.mockReturnValue(chainableSelect([{ id: '1', nombre: 'ACME' }]))
+    const res = await GET(new Request('http://localhost/api/clientes?q=ac'))
+    expect(res.status).toBe(200)
+    expect(mocks.requireAnySectionMock).toHaveBeenCalledWith(['cotizaciones', 'cuentas'])
+    expect(mocks.requireSectionMock).not.toHaveBeenCalled()
+  })
+
+  it('#123 (T8): ?admin=1 (aunque traiga q), la lista completa y el POST siguen cerrados a quien no tiene cotizaciones', async () => {
+    mocks.fromMock.mockReturnValue(chainableSelect([]))
+    await GET(new Request('http://localhost/api/clientes?admin=1'))
+    await GET(new Request('http://localhost/api/clientes?admin=1&q=ac'))
+    await GET(new Request('http://localhost/api/clientes'))
+    await POST(new Request('http://localhost/api/clientes', { method: 'POST', body: JSON.stringify({ nombre: 'X' }) }))
+    expect(mocks.requireAnySectionMock).not.toHaveBeenCalled()
+    expect(mocks.requireSectionMock).toHaveBeenCalledTimes(4)
+    for (const call of mocks.requireSectionMock.mock.calls) expect(call[0]).toBe('cotizaciones')
+  })
+
+  it('#123 (T8): un usuario sin cotizaciones ni cuentas recibe el 403 de la rama ?q=', async () => {
+    mocks.requireAnySectionMock.mockResolvedValueOnce({ response: Response.json({ error: 'No autorizado' }, { status: 403 }) })
+    const res = await GET(new Request('http://localhost/api/clientes?q=ac'))
+    expect(res.status).toBe(403)
+    expect(mocks.fromMock).not.toHaveBeenCalled()
   })
 
   it('dos GETs sucesivos consultan Postgres las dos veces (sin caché)', async () => {

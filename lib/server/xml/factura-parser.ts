@@ -22,6 +22,10 @@ export interface FacturaData {
   iva_trasladado?: number
   iva_retenido?: number
   isr_retenido?: number
+  // #123 (P4, P18): TipoDeComprobante (I ingreso, E egreso, P pago, T traslado, N nómina) y la descripción de cada
+  // Concepto (en un CFDI de ingreso trae los folios SH de las cotizaciones; en uno de pago, "Pago").
+  tipo_comprobante?: string
+  conceptos?: string[]
   error?: string
 }
 
@@ -38,7 +42,7 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: '',
   removeNSPrefix: true,
   parseAttributeValue: false,
-  isArray: (tagName) => tagName === 'Traslado' || tagName === 'Retencion',
+  isArray: (tagName) => tagName === 'Traslado' || tagName === 'Retencion' || tagName === 'Concepto',
 })
 
 interface ImpuestoNodo {
@@ -122,6 +126,9 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
     const rfcEmisor: string | undefined = comprobante.Emisor?.Rfc
     const rfcReceptor: string | undefined = comprobante.Receptor?.Rfc
     const uuid: string | undefined = comprobante.Complemento?.TimbreFiscalDigital?.UUID
+    const tipoRaw = typeof comprobante.TipoDeComprobante === 'string' ? comprobante.TipoDeComprobante.trim().toUpperCase() : undefined
+    const conceptosNodos: { Descripcion?: string }[] = Array.isArray(comprobante.Conceptos?.Concepto) ? comprobante.Conceptos.Concepto : []
+    const conceptos = conceptosNodos.map((c) => (typeof c.Descripcion === 'string' ? c.Descripcion.trim() : '')).filter((d) => d !== '')
     const metodoRaw = typeof comprobante.MetodoPago === 'string' ? comprobante.MetodoPago.trim().toUpperCase() : undefined
     const metodoPago = metodoRaw === 'PUE' || metodoRaw === 'PPD' ? metodoRaw : undefined
 
@@ -163,6 +170,8 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
       rfc_receptor: rfcReceptor,
       uuid_timbrado: uuid,
       metodo_pago: metodoPago,
+      tipo_comprobante: tipoRaw,
+      conceptos,
       iva_trasladado: ivaTrasladado,
       iva_retenido: ivaRetenido,
       isr_retenido: isrRetenido,

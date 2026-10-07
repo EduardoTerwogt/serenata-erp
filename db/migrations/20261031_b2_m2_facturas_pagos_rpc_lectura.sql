@@ -8,7 +8,8 @@
 -- corregir_proveedor_cuenta_pagar, cancel_cotizacion (D22 ampliada, T4), buscar_ordenes_pago,
 -- cancelar_orden_pago (orden de locks alineado, T16: cierra el ABBA contra el pago), recalcular_estado_orden_pago,
 -- cuentas_conceptos (objetivo cliente/proveedor, T18; P11; P13), cuentas_por_proyecto, cuentas_periodo (chip P20),
--- cuentas_resumen, cuentas_avisos_items y auditar_consistencia (6 guardas nuevas).
+-- cuentas_resumen, cuentas_avisos_items y auditar_consistencia (6 guardas nuevas); lecturas de B3:
+-- facturas_candidatos y estado_cuenta.
 --
 -- Cada función parchada parte del cuerpo vigente en producción (huellas md5 verificadas) y solo cambia lo que
 -- #123 exige. Las RPC viejas de pago (registrar_pago_cuenta_cobrar, registrar_pago_grupo_factura) siguen hasta
@@ -2916,6 +2917,173 @@ g_factura_fecha AS (
   FROM resultado;
 $function$;
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- D. Lecturas de B3 (solo leen): candidatos de una factura y estado de cuenta de una contraparte
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- ── Qué se puede ligar a una factura de esta contraparte (P4, P10) ────────
+-- cobro: las cuentas de cobro del cliente que aún no tienen factura vigente (incluidos los anticipos), la más
+-- antigua primero. proveedor: los grupos del proveedor sin factura validada (la factura de proveedor es 1:1 por
+-- grupo, P10).
+CREATE OR REPLACE FUNCTION public.facturas_candidatos(p_lado text, p_contraparte uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT CASE p_lado
+    WHEN 'cobro' THEN COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'cuenta_id', cc.id, 'folio', cc.folio, 'cotizacion_id', cc.cotizacion_id, 'proyecto_id', cc.proyecto_id,
+               'proyecto', COALESCE(ct.proyecto, p.proyecto), 'monto_total', cc.monto_total, 'monto_pagado', COALESCE(cc.monto_pagado, 0),
+               'saldo', GREATEST(0, round(cc.monto_total - COALESCE(cc.monto_pagado, 0), 2)),
+               'fecha_entrega', p.fecha_entrega) ORDER BY p.fecha_entrega NULLS LAST, cc.cotizacion_id, cc.id)
+      FROM cuentas_cobrar cc
+      JOIN cotizaciones ct ON ct.id = cc.cotizacion_id AND ct.cliente_id = p_contraparte
+      LEFT JOIN proyectos p ON p.id = cc.proyecto_id
+      WHERE cc.factura_documento_id IS NULL), '[]'::jsonb)
+    WHEN 'proveedor' THEN COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'grupo_id', g.id, 'proyecto_id', g.proyecto_id, 'proyecto', p.proyecto, 'estado', g.estado,
+               'monto_total', g.monto_total, 'conceptos', (SELECT count(*) FROM cuentas_pagar cp WHERE cp.grupo_id = g.id),
+               'fecha_entrega', p.fecha_entrega) ORDER BY p.fecha_entrega NULLS LAST, g.proyecto_id, g.id)
+      FROM cuentas_pagar_grupos g
+      LEFT JOIN proyectos p ON p.id = g.proyecto_id
+      WHERE g.responsable_id = p_contraparte
+        AND NOT EXISTS (SELECT 1 FROM documentos_cuentas_pagar d
+                        WHERE d.grupo_id = g.id AND d.tipo = 'FACTURA_PROVEEDOR_XML' AND d.eliminado_at IS NULL
+                          AND d.estado_validacion = 'validado')), '[]'::jsonb)
+  END;
+$function$;
+
+-- ── Estado de cuenta de un cliente o un proveedor (P15, P20, P28) ─────────
+-- Una sola consulta para Estado de cuenta y Registrar pago. Los saldos y estados salen de `cuentas_conceptos`
+-- (no se recalculan); aquí solo se agrupan por factura y se agregan los pagos aplicados. Las facturas van de la
+-- más antigua a la más reciente (P8: "la más antigua primero" es recorrer esta lista) y los cobros sin factura
+-- (anticipos, D32) aparte.
+CREATE OR REPLACE FUNCTION public.estado_cuenta(p_lado text, p_contraparte uuid, p_hoy date DEFAULT NULL::date)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+ SET work_mem TO '16MB'
+AS $function$
+  WITH
+  hoy AS (SELECT COALESCE(p_hoy, hoy_cdmx()) AS d),
+  -- Un concepto por cuenta de cobro (cliente) o por grupo (proveedor), ya con su estado y saldo.
+  cf AS MATERIALIZED (
+    SELECT c.*,
+           CASE p_lado WHEN 'cobro' THEN cc.factura_documento_id
+                       ELSE (SELECT d.id FROM documentos_cuentas_pagar d
+                             WHERE d.grupo_id = c.id::uuid AND d.tipo = 'FACTURA_PROVEEDOR_XML' AND d.eliminado_at IS NULL
+                             ORDER BY d.fecha_carga DESC LIMIT 1) END AS factura_id,
+           cc.fecha_factura::text AS fecha_factura
+    FROM cuentas_conceptos(NULL, (SELECT d FROM hoy), CASE p_lado WHEN 'cobro' THEN 'cliente' ELSE 'proveedor' END, p_contraparte::text) c
+    LEFT JOIN cuentas_cobrar cc ON p_lado = 'cobro' AND cc.id = c.id::uuid
+    WHERE c.tipo = CASE p_lado WHEN 'cobro' THEN 'cobro' ELSE 'pago' END
+  ),
+  cj AS MATERIALIZED (
+    SELECT cf.factura_id, cf.fecha_factura, cf.fecha_vencimiento, cf.total, cf.pagado, cf.saldo, cf.cotizacion_id, cf.proyecto_key, cf.key,
+           jsonb_build_object(
+             'key', cf.key, 'objetivo', cf.objetivo, 'id', cf.id, 'proyecto_id', cf.proyecto_id, 'proyecto_nombre', cf.proyecto_nombre,
+             'cotizacion_id', cf.cotizacion_id, 'folio', cf.folio, 'concepto', cf.concepto, 'total', cf.total, 'pagado', cf.pagado,
+             'saldo', cf.saldo, 'estado', cf.estado, 'paso', cf.paso, 'venc_dias', cf.venc_dias,
+             'fecha_vencimiento', cf.fecha_vencimiento, 'resuelto', cf.resuelto) AS j
+    FROM cf
+  ),
+  -- Datos del documento de factura (cobro: documentos_cuentas_cobrar; proveedor: documentos_cuentas_pagar).
+  doc AS (
+    SELECT d.id, d.uuid_cfdi, d.total_cfdi, d.metodo_pago_cfdi, d.estado_validacion, d.detalle_validacion, d.archivo_url, d.archivo_nombre, d.fecha_carga
+    FROM documentos_cuentas_cobrar d WHERE p_lado = 'cobro' AND d.id IN (SELECT factura_id FROM cj WHERE factura_id IS NOT NULL)
+    UNION ALL
+    SELECT d.id, d.uuid_cfdi, d.total_cfdi, d.metodo_pago_cfdi, d.estado_validacion, d.detalle_validacion, d.archivo_url, d.archivo_nombre, d.fecha_carga
+    FROM documentos_cuentas_pagar d WHERE p_lado = 'proveedor' AND d.id IN (SELECT factura_id FROM cj WHERE factura_id IS NOT NULL)
+  ),
+  facturas AS (
+    SELECT x.factura_id, x.fecha, x.n,
+           jsonb_build_object(
+             'id', x.factura_id, 'uuid_cfdi', d.uuid_cfdi, 'total_cfdi', d.total_cfdi, 'metodo_pago', d.metodo_pago_cfdi,
+             'estado_validacion', d.estado_validacion, 'detalle_validacion', d.detalle_validacion, 'archivo_url', d.archivo_url,
+             'archivo_nombre', d.archivo_nombre, 'fecha_carga', d.fecha_carga, 'fecha_factura', x.fecha,
+             'fecha_vencimiento', x.vence, 'total', x.total, 'pagado', x.pagado, 'saldo', x.saldo, 'conceptos', x.conceptos) AS j
+    FROM (
+      SELECT cj.factura_id, min(cj.fecha_factura) AS fecha, min(cj.fecha_vencimiento) AS vence, count(*) AS n,
+             sum(cj.total) AS total, sum(cj.pagado) AS pagado, sum(cj.saldo) AS saldo,
+             jsonb_agg(cj.j ORDER BY cj.cotizacion_id NULLS LAST, cj.key) AS conceptos
+      FROM cj WHERE cj.factura_id IS NOT NULL GROUP BY cj.factura_id
+    ) x
+    JOIN doc d ON d.id = x.factura_id
+  ),
+  sin_factura AS (
+    SELECT COALESCE(jsonb_agg(cj.j ORDER BY cj.cotizacion_id NULLS LAST, cj.key), '[]'::jsonb) AS j,
+           COALESCE(sum(cj.total), 0) AS total, COALESCE(sum(cj.pagado), 0) AS pagado, COALESCE(sum(cj.saldo), 0) AS saldo
+    FROM cj WHERE cj.factura_id IS NULL
+  ),
+  -- Pagos aplicados a estas cuentas o grupos (los anulados salen marcados, para el historial).
+  lineas AS (
+    SELECT pc.pago_id, pc.cuentas_cobrar_id::text AS destino_id, pc.monto, cc.factura_documento_id AS factura_id, cc.folio, cc.cotizacion_id
+    FROM pagos_comprobantes pc JOIN cuentas_cobrar cc ON cc.id = pc.cuentas_cobrar_id
+    WHERE p_lado = 'cobro' AND pc.cuentas_cobrar_id::text IN (SELECT id FROM cf)
+    UNION ALL
+    SELECT pp.pago_id, pp.grupo_id::text, pp.monto_transferido, f.id, NULL, NULL
+    FROM pagos_cuentas_pagar pp
+    LEFT JOIN LATERAL (SELECT d.id FROM documentos_cuentas_pagar d
+                       WHERE d.grupo_id = pp.grupo_id AND d.tipo = 'FACTURA_PROVEEDOR_XML' AND d.eliminado_at IS NULL
+                       ORDER BY d.fecha_carga DESC LIMIT 1) f ON true
+    WHERE p_lado = 'proveedor' AND pp.grupo_id::text IN (SELECT id FROM cf)
+  ),
+  complementos AS (
+    SELECT d.pago_id, jsonb_agg(jsonb_build_object('id', d.id, 'tipo', d.tipo, 'estado', d.estado_validacion, 'factura_id', d.factura_id,
+                                                  'archivo_url', d.archivo_url, 'monto_pagado', d.monto_pagado) ORDER BY d.fecha_carga) AS j
+    FROM (
+      SELECT id, tipo, estado_validacion, factura_documento_id AS factura_id, archivo_url, monto_pagado, pago_id, fecha_carga
+      FROM documentos_cuentas_cobrar WHERE p_lado = 'cobro' AND tipo IN ('COMPLEMENTO_PAGO', 'COMPLEMENTO_PAGO_PDF') AND eliminado_at IS NULL
+      UNION ALL
+      SELECT id, tipo, estado_validacion, NULL::uuid, archivo_url, monto_pagado, pago_id, fecha_carga
+      FROM documentos_cuentas_pagar WHERE p_lado = 'proveedor' AND tipo IN ('COMPLEMENTO_PAGO', 'COMPLEMENTO_PAGO_PDF') AND eliminado_at IS NULL
+    ) d
+    WHERE d.pago_id IN (SELECT pago_id FROM lineas)
+    GROUP BY d.pago_id
+  ),
+  pagos_j AS (
+    SELECT h.id, h.fecha_pago, h.created_at, sum(l.monto) AS monto,
+           jsonb_build_object(
+             'id', h.id, 'fecha_pago', h.fecha_pago, 'tipo_pago', h.tipo_pago, 'comprobante_url', h.comprobante_url,
+             'archivo_nombre', h.archivo_nombre, 'notas', h.notas, 'anulado', h.anulado_at IS NOT NULL, 'anulado_motivo', h.anulado_motivo,
+             'monto', sum(l.monto),
+             'aplicaciones', jsonb_agg(jsonb_build_object('destino_id', l.destino_id, 'factura_id', l.factura_id, 'folio', l.folio,
+                                                           'cotizacion_id', l.cotizacion_id, 'monto', l.monto) ORDER BY l.destino_id),
+             'complementos', COALESCE(co.j, '[]'::jsonb)) AS j
+    FROM lineas l
+    JOIN pagos h ON h.id = l.pago_id
+    LEFT JOIN complementos co ON co.pago_id = h.id
+    GROUP BY h.id, co.j
+  ),
+  contraparte AS (
+    SELECT jsonb_build_object('id', c.id, 'nombre', c.nombre, 'rfc', c.rfc) AS j
+    FROM clientes c WHERE p_lado = 'cobro' AND c.id = p_contraparte
+    UNION ALL
+    SELECT jsonb_build_object('id', p.id, 'nombre', p.nombre, 'rfc', p.rfc)
+    FROM proveedores p WHERE p_lado = 'proveedor' AND p.id = p_contraparte
+  )
+  SELECT jsonb_build_object(
+    'lado', p_lado,
+    'hoy', to_char((SELECT d FROM hoy), 'YYYY-MM-DD'),
+    'contraparte', (SELECT j FROM contraparte),
+    'resumen', jsonb_build_object(
+      'total', (SELECT COALESCE(sum(total), 0) FROM cj),
+      'pagado', (SELECT COALESCE(sum(pagado), 0) FROM cj),
+      'saldo', (SELECT COALESCE(sum(saldo), 0) FROM cj),
+      'vencido', (SELECT COALESCE(sum(c.saldo), 0) FROM cf c WHERE c.estado = 'vencido'),
+      'facturas', (SELECT count(*) FROM facturas),
+      'sin_factura', (SELECT count(*) FROM cj WHERE factura_id IS NULL),
+      'sin_factura_saldo', (SELECT saldo FROM sin_factura)),
+    'facturas', COALESCE((SELECT jsonb_agg(f.j ORDER BY f.fecha NULLS LAST, f.factura_id) FROM facturas f), '[]'::jsonb),
+    'sin_factura', (SELECT j FROM sin_factura),
+    'pagos', COALESCE((SELECT jsonb_agg(p.j ORDER BY p.fecha_pago DESC, p.created_at DESC, p.id) FROM pagos_j p), '[]'::jsonb)
+  );
+$function$;
+
 -- ── Permisos: las funciones nuevas solo las ejecuta service_role ──
 REVOKE EXECUTE ON FUNCTION public.pagos_resultado(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.pagos_resultado(uuid) TO service_role;
@@ -2935,5 +3103,10 @@ REVOKE EXECUTE ON FUNCTION public.ligar_complemento_cobro(jsonb, jsonb, jsonb, u
 GRANT EXECUTE ON FUNCTION public.ligar_complemento_cobro(jsonb, jsonb, jsonb, uuid, text) TO service_role;
 REVOKE EXECUTE ON FUNCTION public.ligar_complemento_proveedor(jsonb, jsonb, jsonb, uuid, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.ligar_complemento_proveedor(jsonb, jsonb, jsonb, uuid, text) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.facturas_candidatos(text, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.facturas_candidatos(text, uuid) TO service_role;
+REVOKE EXECUTE ON FUNCTION public.estado_cuenta(text, uuid, date) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.estado_cuenta(text, uuid, date) TO service_role;
 
 COMMIT;

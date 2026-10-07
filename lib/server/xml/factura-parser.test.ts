@@ -217,6 +217,34 @@ describe('xml/factura-parser', () => {
     })
   })
 
+  describe('TipoDeComprobante y conceptos (#123, P4, P18)', () => {
+    const conConceptos = (tipo: string, descripciones: string[]) => `
+      <cfdi:Comprobante TipoDeComprobante="${tipo}" Fecha="2026-04-09T10:00:00" SubTotal="1000.00" Total="1160.00">
+        <cfdi:Emisor Rfc="SER010101AAA" />
+        <cfdi:Receptor Rfc="CLI010101AAA" />
+        <cfdi:Conceptos>
+          ${descripciones.map((d) => `<cfdi:Concepto Descripcion="${d}"><cfdi:Impuestos><cfdi:Traslados><cfdi:Traslado Impuesto="002" Importe="10.00" /></cfdi:Traslados></cfdi:Impuestos></cfdi:Concepto>`).join('\n')}
+        </cfdi:Conceptos>
+      </cfdi:Comprobante>`
+
+    it('lee el tipo de comprobante en mayúsculas', () => {
+      expect(parseFacturaXML(conConceptos('i', ['x'])).tipo_comprobante).toBe('I')
+      expect(parseFacturaXML(conConceptos('P', ['Pago'])).tipo_comprobante).toBe('P')
+      expect(parseFacturaXML(CFDI_BASICO).tipo_comprobante).toBeUndefined()
+    })
+
+    it('trae la descripción de cada concepto, con uno solo o con varios', () => {
+      expect(parseFacturaXML(conConceptos('I', ['Producción SH061'])).conceptos).toEqual(['Producción SH061'])
+      expect(parseFacturaXML(conConceptos('I', ['SH061', 'SH062 complementaria'])).conceptos).toEqual(['SH061', 'SH062 complementaria'])
+    })
+
+    it('sin Conceptos devuelve una lista vacía, y los impuestos de cada concepto no se suman al total del comprobante', () => {
+      const r = parseFacturaXML(CFDI_BASICO)
+      expect(r.conceptos).toEqual([])
+      expect(parseFacturaXML(conConceptos('I', ['a', 'b'])).iva_trasladado).toBe(0)
+    })
+  })
+
   // #123 (T19): validarMontoFactura y validarFacturaClienteXML se retiraron; la regla vive en SQL (factura_cuadre)
   // y se prueba contra la base (tests/e2e/live y la paridad).
 
