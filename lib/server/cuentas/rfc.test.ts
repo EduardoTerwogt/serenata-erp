@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { DomainError } from '@/lib/server/errors/domain-error'
-import { clasificarCfdi, foliosEnConceptos, normalizarRfc, serenataRfc } from './rfc'
+import { describe, expect, it } from 'vitest'
+import { clasificarCfdi, foliosEnConceptos, normalizarRfc } from './rfc'
 
 const SERENATA = 'SHO100101AB1'
 
@@ -9,32 +8,6 @@ describe('normalizarRfc', () => {
     expect(normalizarRfc('  xaxx010101000 ')).toBe('XAXX010101000')
     expect(normalizarRfc('   ')).toBeNull()
     expect(normalizarRfc(undefined)).toBeNull()
-  })
-})
-
-describe('serenataRfc (T20)', () => {
-  const original = process.env.SERENATA_RFC
-  afterEach(() => {
-    if (original === undefined) delete process.env.SERENATA_RFC
-    else process.env.SERENATA_RFC = original
-  })
-
-  it('lee la variable normalizada', () => {
-    process.env.SERENATA_RFC = ' sho100101ab1 '
-    expect(serenataRfc()).toBe(SERENATA)
-  })
-
-  it('si falta, falla explícito con un DomainError 500 (no valida en silencio)', () => {
-    delete process.env.SERENATA_RFC
-    expect(() => serenataRfc()).toThrow(DomainError)
-    try {
-      serenataRfc()
-    } catch (e) {
-      expect((e as DomainError).status).toBe(500)
-      expect((e as DomainError).code).toBe('serenata_rfc_faltante')
-    }
-    process.env.SERENATA_RFC = '   '
-    expect(() => serenataRfc()).toThrow(DomainError)
   })
 })
 

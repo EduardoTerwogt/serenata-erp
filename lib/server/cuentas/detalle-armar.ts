@@ -97,6 +97,8 @@ export interface CobroFilas {
     folio: string | null
     cotizacion_id: string | null
     cliente: string | null
+    /** Id de la ficha del cliente (P22: la ventana de Registrar pago se abre con él). */
+    cliente_id?: string | null
     monto_total: number
     monto_pagado: number | null
     fecha_factura: string | null
@@ -127,6 +129,7 @@ export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: 
     cotizacion_id: cuenta.cotizacion_id,
     proyecto,
     cliente: cuenta.cliente ?? 'Cliente',
+    cliente_id: cuenta.cliente_id ?? null,
     total: round2(Number(cuenta.monto_total)),
     pagado: round2(Number(cuenta.monto_pagado ?? 0)),
     fecha_factura: cuenta.fecha_factura,

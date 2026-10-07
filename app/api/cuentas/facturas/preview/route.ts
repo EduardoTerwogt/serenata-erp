@@ -9,7 +9,7 @@ const ROUTE = 'POST /api/cuentas/facturas/preview'
 
 /**
  * #123 (B3, T9, P18): vista previa de "Subir factura". Lee el XML (cliente, proveedor o complemento, por RFC contra
- * `SERENATA_RFC`), propone la contraparte y lo que se puede ligar, preselecciona por los folios SH de los conceptos
+ * el RFC de la constancia de Serenata), propone la contraparte y lo que se puede ligar, preselecciona por los folios SH de los conceptos
  * (P4) y, si ya hay cuentas elegidas, devuelve el cuadre de `factura_cuadre`. NO escribe nada: la confirmación es
  * `POST /api/cuentas/facturas` (transición explícita). Multipart: `xml` y `datos` (JSON, opcional).
  */

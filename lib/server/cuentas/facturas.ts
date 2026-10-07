@@ -1,6 +1,6 @@
 /**
  * #123 (B3, P3, P4, P18, P24): "Subir factura" detecta del XML si es de cliente, de proveedor o un complemento de pago
- * (por RFC contra `SERENATA_RFC`), propone la contraparte y lo que se puede ligar, y confirma el alta. Dos pasos:
+ * (por RFC contra el de la constancia de Serenata), propone la contraparte y lo que se puede ligar, y confirma el alta. Dos pasos:
  *
  * - `previsualizarFactura` (no escribe nada, T9): clasifica el CFDI, encuentra la contraparte por RFC, lista lo que
  *   se puede ligar con la preselección por los folios SH de los conceptos (P4) y, si ya hay cuentas elegidas, el
@@ -23,7 +23,8 @@ import { carpetaContraparte } from './carpetas'
 import { ligarComplemento } from './complemento'
 import { resolverContraparteDeDestinos } from './contrapartes'
 import { cargarCandidatosFactura } from './estado-cuenta-rpc'
-import { clasificarCfdi, foliosEnConceptos, normalizarRfc, serenataRfc, type TipoDocumentoCuentas } from './rfc'
+import { serenataRfc } from './datos-fiscales'
+import { clasificarCfdi, foliosEnConceptos, normalizarRfc, type TipoDocumentoCuentas } from './rfc'
 import { subirFacturaCobro } from './subir-factura'
 import { subirFacturaProveedor } from './subir-factura-proveedor'
 import type { RegimenFiscal } from '@/lib/types'
@@ -74,7 +75,7 @@ async function leerYClasificar(xmlFile: File): Promise<{ ok: true; leido: Leido 
   }
   const data = parseFacturaXML(xmlContent)
   if (data.error) return { ok: false, respuesta: { status: 400, body: { error: `Error al parsear XML: ${data.error}` } } }
-  const clasificacion = clasificarCfdi(data, serenataRfc())
+  const clasificacion = clasificarCfdi(data, await serenataRfc())
   if (!clasificacion.ok) {
     return { ok: false, respuesta: { status: 400, body: { error: clasificacion.codigo, message: clasificacion.mensaje } } }
   }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DomainError } from '@/lib/server/errors/domain-error'
 
 const mocks = vi.hoisted(() => ({
   filasPorTabla: {} as Record<string, unknown[]>,
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   resolverMock: vi.fn(),
   getGrupoMock: vi.fn(),
   getProyectoMock: vi.fn(),
+  serenataRfcMock: vi.fn(),
 }))
 
 vi.mock('@/lib/db', () => ({ getCuentaPagarGrupoById: mocks.getGrupoMock, getProyectoById: mocks.getProyectoMock }))
@@ -34,6 +36,7 @@ vi.mock('../subir-factura', async () => {
 vi.mock('../subir-factura-proveedor', () => ({ subirFacturaProveedor: mocks.subirProveedorMock }))
 vi.mock('../complemento', () => ({ ligarComplemento: mocks.ligarComplementoMock }))
 vi.mock('../estado-cuenta-rpc', () => ({ cargarCandidatosFactura: mocks.candidatosMock }))
+vi.mock('../datos-fiscales', () => ({ serenataRfc: mocks.serenataRfcMock }))
 vi.mock('../contrapartes', () => ({ resolverContraparteDeDestinos: mocks.resolverMock }))
 
 import { avisoRfc, confirmarFactura, preseleccionPorFolios, previsualizarFactura } from '../facturas'
@@ -54,7 +57,7 @@ const archivo = (xml: string) => new File([xml], 'f.xml', { type: 'text/xml' })
 
 beforeEach(() => {
   vi.clearAllMocks()
-  process.env.SERENATA_RFC = SERENATA
+  mocks.serenataRfcMock.mockResolvedValue(SERENATA)
   for (const k of Object.keys(mocks.filasPorTabla)) delete mocks.filasPorTabla[k]
   mocks.updates.length = 0
   mocks.candidatosMock.mockResolvedValue([
@@ -84,9 +87,9 @@ describe('helpers puros', () => {
 })
 
 describe('previsualizarFactura', () => {
-  it('sin SERENATA_RFC falla explícito, no valida en silencio (T20)', async () => {
-    delete process.env.SERENATA_RFC
-    await expect(previsualizarFactura({ xmlFile: archivo(cfdi({})), cuentas: [] })).rejects.toMatchObject({ code: 'serenata_rfc_faltante' })
+  it('sin constancia de Serenata cargada falla explícito, no valida en silencio (T20)', async () => {
+    mocks.serenataRfcMock.mockRejectedValue(new DomainError({ code: 'serenata_fiscal_faltante', status: 409, safeMessage: 'Falta cargar la constancia' }))
+    await expect(previsualizarFactura({ xmlFile: archivo(cfdi({})), cuentas: [] })).rejects.toMatchObject({ code: 'serenata_fiscal_faltante' })
   })
 
   it('un XML que no es de ni para Serenata, o un egreso, se rechaza', async () => {

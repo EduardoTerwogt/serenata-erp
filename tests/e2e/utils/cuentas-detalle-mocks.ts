@@ -51,6 +51,7 @@ function cobroFilas(id: string) {
         folio: `CC-2026-${String(k + 1).padStart(5, '0')}`,
         cotizacion_id: k === 0 ? p.id : `${p.id}-C${k}`,
         cliente: p.cliente,
+        cliente_id: `cli-${p.cliente.toLowerCase().replace(/\s+/g, '-')}`,
         monto_total: total,
         monto_pagado: r2(pagado + extra.reduce((s, x) => s + x.monto, 0)),
         fecha_factura: tieneFactura ? (estado === 'sin_complemento' ? '2026-07-01' : fechaFactura) : null,

@@ -94,14 +94,14 @@ function estadoCobro(conPago = false, id: string = CLIENTE.id): EstadoCuentaResp
   }
 }
 
-function estadoProveedor(): EstadoCuentaRespuesta {
+function estadoProveedor(id: string = PROVEEDOR.id): EstadoCuentaRespuesta {
   const f = [
     factura('d1', 'DS-0412.xml', '2026-09-03', 'PPD', [concepto('grupo', 'SH001', 'Spot TV 30s', 41760)]),
     factura('d2', 'DS-0415.xml', '2026-09-05', 'PUE', [concepto('grupo', 'SH003', 'Making of', 23200)]),
     factura('d3', 'DS-0419.xml', '2026-09-10', 'PPD', [concepto('grupo', 'SH004', 'Versiones redes', 31320)]),
   ]
   const total = f.reduce((a, x) => a + x.total, 0)
-  return { lado: 'proveedor', hoy: HOY_E2E, contraparte: PROVEEDOR, resumen: { total, pagado: 0, saldo: total, vencido: 0, facturas: 3, sin_factura: 0, sin_factura_saldo: 0 }, facturas: f, sin_factura: [], pagos: [] }
+  return { lado: 'proveedor', hoy: HOY_E2E, contraparte: { ...PROVEEDOR, id }, resumen: { total, pagado: 0, saldo: total, vencido: 0, facturas: 3, sin_factura: 0, sin_factura_saldo: 0 }, facturas: f, sin_factura: [], pagos: [] }
 }
 
 export interface PagoMock {
@@ -232,7 +232,7 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
 
   await page.route(/\/api\/cuentas\/estado-cuenta\?/, (route: Route) => {
     const q = new URL(route.request().url()).searchParams
-    return fulfillJson(route, q.get('lado') === 'proveedor' ? estadoProveedor() : estadoCobro(opciones.conPago, q.get('id') ?? CLIENTE.id))
+    return fulfillJson(route, q.get('lado') === 'proveedor' ? estadoProveedor(q.get('id') ?? PROVEEDOR.id) : estadoCobro(opciones.conPago, q.get('id') ?? CLIENTE.id))
   })
   await page.route(/\/api\/clientes\?q=/, (route: Route) => {
     const q = (new URL(route.request().url()).searchParams.get('q') ?? '').toLowerCase()

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getCuentasPagarPorProveedorMock: vi.fn(),
   getCuentasPagarGruposPorProveedorMock: vi.fn(),
   getProveedorByIdMock: vi.fn(),
+  cargarEstadoCuentaMock: vi.fn(),
 }))
 
 vi.mock('@/lib/portal-auth', () => ({
@@ -15,6 +16,10 @@ vi.mock('@/lib/db', () => ({
   getCuentasPagarPorProveedor: mocks.getCuentasPagarPorProveedorMock,
   getCuentasPagarGruposPorProveedor: mocks.getCuentasPagarGruposPorProveedorMock,
   getProveedorById: mocks.getProveedorByIdMock,
+}))
+
+vi.mock('@/lib/server/cuentas/estado-cuenta-rpc', () => ({
+  cargarEstadoCuenta: mocks.cargarEstadoCuentaMock,
 }))
 
 import { GET } from '../portal/cuentas/route'
@@ -66,6 +71,7 @@ describe('GET /api/portal/cuentas', () => {
           { id: 'c1', item_descripcion: 'Renta cámara', cantidad: 1, costo_total: 1000, cotizacion_id: 'SH001' },
           { id: 'c2', item_descripcion: 'Grip', cantidad: 1, costo_total: 500, cotizacion_id: 'SH001' },
         ],
+        pagos: [],
       },
     ])
   })
@@ -107,6 +113,7 @@ describe('GET /api/portal/cuentas', () => {
         monto_transferido: 0,
         saldo_por_transferir: 580,
         items: [{ id: 'c3', item_descripcion: 'Edición', cantidad: 1, costo_total: 500, cotizacion_id: 'SH002' }],
+        pagos: [],
       },
     ])
   })
@@ -121,6 +128,7 @@ describe('GET /api/portal/cuentas', () => {
   })
 
   it('B2 (D14): con factura validada usa el snapshot del CFDI y descuenta lo transferido', async () => {
+    mocks.cargarEstadoCuentaMock.mockResolvedValue({ lado: 'proveedor', facturas: [], pagos: [] })
     mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([
       { id: 'grupo-1', proyecto_id: 'SH001', estado: 'EN_PROCESO_PAGO', monto_total: 1000, monto_pagado: 500, total_a_transferir: 1159.99, monto_transferido: 580 },
     ])
@@ -138,5 +146,64 @@ describe('GET /api/portal/cuentas', () => {
     ])
     const body = await (await GET()).json()
     expect(body.grupos[0].total_a_transferir).toBe(953.33) // 1000 + 160 − 106.67 − 100
+  })
+
+  describe('#123 B5 (P12, P29): pagos y complementos, solo lectura', () => {
+    const estado = {
+      lado: 'proveedor',
+      hoy: '2026-10-01',
+      contraparte: { id: 'prov-1', nombre: 'Proveedor', rfc: null },
+      facturas: [
+        { id: 'f1', archivo_nombre: 'DS-0412.xml', metodo_pago: 'PPD', conceptos: [{ id: 'grupo-1', proyecto_id: 'SH001' }] },
+        { id: 'f2', archivo_nombre: 'DS-0415.xml', metodo_pago: 'PUE', conceptos: [{ id: 'grupo-2', proyecto_id: 'SH003' }] },
+      ],
+      pagos: [
+        {
+          id: 'pg1',
+          fecha_pago: '2026-09-26',
+          tipo_pago: 'TRANSFERENCIA',
+          anulado: false,
+          aplicaciones: [
+            { destino_id: 'grupo-1', factura_id: 'f1', monto: 580 },
+            { destino_id: 'grupo-2', factura_id: 'f2', monto: 232 },
+          ],
+          complementos: [],
+        },
+      ],
+    }
+    const grupo = (id: string, proyecto: string, transferido: number) => ({ id, proyecto_id: proyecto, estado: 'EN_PROCESO_PAGO', monto_total: 500, monto_pagado: 250, total_a_transferir: 580, monto_transferido: transferido })
+
+    it('cada grupo trae sus pagos: qué otras facturas cubrió el mismo pago y si falta el complemento PPD', async () => {
+      mocks.cargarEstadoCuentaMock.mockResolvedValue(estado)
+      mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([grupo('grupo-1', 'SH001', 580), grupo('grupo-2', 'SH003', 232)])
+      const body = await (await GET()).json()
+      const [g1, g2] = body.grupos
+      expect(g1.pagos).toHaveLength(1)
+      expect(g1.pagos[0]).toMatchObject({ pago_id: 'pg1', monto: 580, complemento: 'pendiente' })
+      expect(g1.pagos[0].cubre.map((c: { factura: string }) => c.factura)).toEqual(['DS-0412', 'DS-0415'])
+      expect(g2.pagos[0]).toMatchObject({ monto: 232, complemento: 'no_aplica' })
+    })
+
+    it('consulta SOLO al proveedor de la sesión (nunca uno recibido por parámetro)', async () => {
+      mocks.cargarEstadoCuentaMock.mockResolvedValue(estado)
+      mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([grupo('grupo-1', 'SH001', 580)])
+      await GET()
+      expect(mocks.cargarEstadoCuentaMock).toHaveBeenCalledTimes(1)
+      expect(mocks.cargarEstadoCuentaMock).toHaveBeenCalledWith('proveedor', 'prov-1', expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/))
+    })
+
+    it('un grupo que no aparece en los pagos de ese proveedor no recibe pagos ajenos', async () => {
+      mocks.cargarEstadoCuentaMock.mockResolvedValue(estado)
+      mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([grupo('grupo-1', 'SH001', 580), grupo('grupo-ajeno', 'SH099', 100)])
+      const body = await (await GET()).json()
+      expect(body.grupos.find((g: { id: string }) => g.id === 'grupo-ajeno').pagos).toEqual([])
+    })
+
+    it('si nada se ha transferido no se consulta el estado de cuenta', async () => {
+      mocks.getCuentasPagarGruposPorProveedorMock.mockResolvedValue([grupo('grupo-1', 'SH001', 0)])
+      const body = await (await GET()).json()
+      expect(mocks.cargarEstadoCuentaMock).not.toHaveBeenCalled()
+      expect(body.grupos[0].pagos).toEqual([])
+    })
   })
 })

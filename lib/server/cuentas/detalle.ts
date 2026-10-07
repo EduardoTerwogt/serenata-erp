@@ -86,7 +86,7 @@ const aDerivadoPago = (fila: FilaConceptoSql): DerivadoPago => ({
 export async function cargarDetalleCobro(id: string): Promise<DetalleCobro | null> {
   const { data: cuenta, error } = await supabaseAdmin
     .from('cuentas_cobrar')
-    .select('id, folio, cotizacion_id, monto_total, monto_pagado, fecha_factura, fecha_vencimiento, notas, proyecto_id, factura_documento_id, cotizaciones(cliente, clientes(nombre))')
+    .select('id, folio, cotizacion_id, monto_total, monto_pagado, fecha_factura, fecha_vencimiento, notas, proyecto_id, factura_documento_id, cotizaciones(cliente, cliente_id, clientes(nombre))')
     .eq('id', id)
     .maybeSingle()
   if (error) throw error
@@ -119,13 +119,13 @@ export async function cargarDetalleCobro(id: string): Promise<DetalleCobro | nul
 
   // D12: el cliente sale de la cotización del cobro (clientes.nombre; lo emitido como respaldo).
   const { cotizaciones, ...cuentaBase } = cuenta as typeof cuenta & {
-    cotizaciones: { cliente: string | null; clientes: { nombre: string | null } | null } | null
+    cotizaciones: { cliente: string | null; cliente_id: string | null; clientes: { nombre: string | null } | null } | null
   }
   const cliente = cotizaciones?.clientes?.nombre ?? cotizaciones?.cliente ?? null
 
   return armarDetalleCobro(
     {
-      cuenta: { ...cuentaBase, cliente },
+      cuenta: { ...cuentaBase, cliente, cliente_id: cotizaciones?.cliente_id ?? null },
       proyecto,
       documentos,
       pagos: lineasCobro.map((l) => ({ id: l.pago_id, monto: l.monto, ...l.pagos, lineas: lineas.get(l.pago_id) ?? 1 })),

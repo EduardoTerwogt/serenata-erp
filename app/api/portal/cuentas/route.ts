@@ -2,6 +2,9 @@ import { requirePortalSession } from '@/lib/portal-auth'
 import { getCuentasPagarPorProveedor, getCuentasPagarGruposPorProveedor, getProveedorById } from '@/lib/db'
 import { calcularSaldoPendiente } from '@/lib/server/cuentas/status'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+import { cargarEstadoCuenta } from '@/lib/server/cuentas/estado-cuenta-rpc'
+import { pagosPorGrupo } from '@/lib/server/cuentas/portal-pagos'
+import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 import { round2 } from '@/lib/shared/decimal'
 import { calcularEjemploFactura } from '@/lib/shared/factura-fiscal'
 import { CuentaPagar, RegimenFiscal } from '@/lib/types'
@@ -53,6 +56,12 @@ export async function GET() {
     ])
     const regimen = (proveedor?.regimen_fiscal ?? null) as RegimenFiscal | null
 
+    // #123 (B5, P12, P29): solo lectura. "Este pago cubrió estas facturas" y el complemento pendiente salen del mismo
+    // `estado_cuenta` del proveedor de la SESIÓN (nunca de un parámetro): un pago a proveedor cubre grupos de un solo
+    // proveedor, así que no se expone nada ajeno. Si nada se ha transferido, no hay pagos que consultar.
+    const hayPagos = grupos.some((g) => Number(g.monto_transferido ?? 0) > 0)
+    const pagos = hayPagos ? pagosPorGrupo(await cargarEstadoCuenta('proveedor', portalAuth.proveedorId, hoyCdmx())) : new Map()
+
     const gruposConItems = grupos.map((grupo) => {
       const items = cuentas.filter((c) => c.grupo_id === grupo.id)
       return {
@@ -67,6 +76,7 @@ export async function GET() {
         saldo_pendiente: calcularSaldoPendiente(grupo.monto_total, grupo.monto_pagado || 0),
         ...enTransferir(grupo.monto_total, grupo.total_a_transferir, grupo.monto_transferido, regimen),
         items: items.map(itemDeCuenta),
+        pagos: pagos.get(grupo.id) ?? [],
       }
     })
 
@@ -85,6 +95,7 @@ export async function GET() {
         // B5a: una cuenta suelta no tiene factura ni transferencias propias.
         ...enTransferir(c.costo_total, null, 0, regimen),
         items: [itemDeCuenta(c)],
+        pagos: [],
       }))
 
     return Response.json({ grupos: [...gruposConItems, ...sueltasSinGrupo] })

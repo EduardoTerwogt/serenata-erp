@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-07T00:48:51.714Z",
-  "count": 144,
+  "generated_at": "2026-10-07T03:40:16.057Z",
+  "count": 145,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -145,6 +145,7 @@
     "20261029_b6_cuentas_concepto_uno.sql",
     "20261030_b2_m1_facturas_pagos_aditiva.sql",
     "20261031_b2_m2_facturas_pagos_rpc_lectura.sql",
-    "20261032_b2_m3_contraccion.sql"
+    "20261032_b2_m3_contraccion.sql",
+    "20261033_b6a_datos_fiscales_serenata.sql"
   ]
 }

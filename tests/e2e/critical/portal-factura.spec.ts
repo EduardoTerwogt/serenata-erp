@@ -23,6 +23,7 @@ function grupoDePrueba(i: number) {
     monto_transferido: 1160,
     saldo_por_transferir: 0,
     items: [{ id: `cuenta-${i}`, item_descripcion: 'Item', cantidad: 1, costo_total: 1000, cotizacion_id: `SH0${i}` }],
+    pagos: [],
   }
 }
 
@@ -139,4 +140,23 @@ test('simulador de factura: se autollena al elegir proyecto, sin subir archivos'
   const simulador = page.locator('dl').filter({ hasText: 'Subtotal' })
   await expect(simulador.getByText('$1,160.00')).toBeVisible()
   await expect(page.getByText('persona moral', { exact: false })).toBeVisible()
+})
+
+test('B5 (P12, P29): un pago que cubrió varias facturas lo dice y avisa si falta el complemento PPD', async ({ page }) => {
+  const cubre = [
+    { grupo_id: 'grupo-1', proyecto_id: 'SH01', factura: 'DS-0412', monto: 580 },
+    { grupo_id: 'grupo-2', proyecto_id: 'SH02', factura: 'DS-0415', monto: 232 },
+  ]
+  const grupo1 = { ...grupoDePrueba(1), pagos: [{ pago_id: 'pg1', fecha_pago: '2026-09-26', tipo_pago: 'TRANSFERENCIA', monto: 580, cubre, complemento: 'pendiente' }] }
+  const grupo2 = { ...grupoDePrueba(2), pagos: [{ pago_id: 'pg1', fecha_pago: '2026-09-26', tipo_pago: 'TRANSFERENCIA', monto: 232, cubre, complemento: 'no_aplica' }] }
+  await irATabCuentas(page, (p) => mockPortalDashboard(p, { grupos: [grupo1, grupo2] }))
+
+  const pagos = page.getByRole('list', { name: 'Pagos recibidos' }).filter({ visible: true })
+  await expect(pagos).toHaveCount(2)
+  await expect(pagos.first()).toContainText('Este pago cubrió 2 facturas: DS-0412, DS-0415')
+  await expect(pagos.first()).toContainText('$580.00')
+  await expect(pagos.first().getByText('Falta tu complemento de pago')).toBeVisible()
+  await expect(pagos.nth(1).getByText('Falta tu complemento de pago')).toHaveCount(0)
+  // Solo lectura: el Portal no ofrece subir el complemento ni registrar nada desde aquí.
+  await expect(pagos.first().getByRole('button')).toHaveCount(0)
 })

@@ -80,6 +80,8 @@ export interface DetalleCobro {
   cotizacion_id: string | null
   proyecto: ProyectoDetalleCorto | null
   cliente: string
+  /** Ficha del cliente (null si la cotización solo guardó el nombre): contraparte de la ventana Registrar pago (P22). */
+  cliente_id: string | null
   total: number
   pagado: number
   fecha_factura: string | null

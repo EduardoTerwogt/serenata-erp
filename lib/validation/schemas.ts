@@ -419,6 +419,16 @@ export const PagoEstadoQuerySchema = z.object({
   destino: z.string().uuid().optional(),
 })
 
+// POST /api/admin/datos-fiscales — campo `datos` (JSON) del multipart junto a `constancia`. #123 (B6a): lo leído de la
+// constancia y CONFIRMADO por un administrador (`confirmado: true`); el servidor lo vuelve a validar.
+export const DatosFiscalesGuardarSchema = z.object({
+  rfc: z.string().trim().min(1, 'Falta el RFC').max(20),
+  razon_social: z.string().trim().min(1, 'Falta la razón social').max(300),
+  regimen_fiscal: z.string().trim().max(300).nullable().optional(),
+  codigo_postal: z.string().trim().max(10).nullable().optional(),
+  confirmado: z.literal(true, { message: 'Confirma los datos leídos antes de guardar' }),
+})
+
 // GET /api/cuentas/periodo (Rediseño de Cuentas B3). Query string: todo
 // llega como texto; año y mes vacíos toman el año y mes actuales en la ruta.
 export const CuentasOpcionesQuerySchema = z.object({

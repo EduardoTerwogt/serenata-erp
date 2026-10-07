@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getJson, sendJson, sendFormData } from '@/lib/client/api'
 import { SectionHero } from '@/components/ui/SectionHero'
@@ -17,6 +17,8 @@ import { SectionLoading } from '@/components/ui/SectionLoading'
 import { TableFooter } from '@/components/ui/TableFooter'
 import { Modal } from '@/components/ui/Modal'
 import type { ProveedorDocumento, TipoDocumentoProveedor, RegimenFiscal } from '@/lib/types'
+import type { PagoPortal } from '@/lib/shared/cuentas/portal-tipos'
+import { formatDateDisplay } from '@/lib/format-date'
 import { calcularEjemploFactura, type EjemploFacturaEsperado } from '@/lib/shared/factura-fiscal'
 
 // Bloque 1 (docs/PLAN.md): "Historial" deja de ser su propia tab -- la tabla
@@ -79,6 +81,8 @@ interface GrupoPortal {
   monto_transferido: number
   saldo_por_transferir: number
   items: GrupoPortalItem[]
+  /** #123 (B5, P12): pagos recibidos de este grupo, qué más cubrió cada uno y si falta el complemento PPD. */
+  pagos: PagoPortal[]
 }
 
 function formatMoney(value: number) {
@@ -572,6 +576,30 @@ function conceptosDe(grupo: GrupoPortal): string {
 // no amerita un endpoint paginado nuevo para este volumen.
 const HISTORIAL_PAGE_SIZE = 10
 
+/**
+ * #123 (B5, P12, P29): lo que Serenata ya te pagó de este proyecto, solo lectura. Una misma transferencia puede cubrir
+ * varias de tus facturas: se dice cuáles. Si la factura es PPD, se avisa cuando falta tu complemento de pago.
+ */
+function PagosDelGrupo({ pagos }: { pagos: PagoPortal[] }) {
+  return (
+    <ul aria-label="Pagos recibidos" className="flex flex-col gap-1.5 rounded-control bg-row-alt px-3 py-2.5 text-[12.5px]">
+      {pagos.map(p => (
+        <li key={p.pago_id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <span className="font-medium text-ink">{formatDateDisplay(p.fecha_pago)}</span>
+          <span className="font-semibold text-ink">{formatMoney(p.monto)}</span>
+          <span className="min-w-0 flex-1 text-subtext">
+            {p.cubre.length > 1
+              ? `Este pago cubrió ${p.cubre.length} facturas: ${p.cubre.map(c => c.factura ?? c.proyecto_id ?? 'factura').join(', ')}`
+              : 'Pago de esta factura'}
+          </span>
+          {p.complemento === 'pendiente' && <StatusBadge tone="cancelled">Falta tu complemento de pago</StatusBadge>}
+          {p.complemento === 'recibido' && <StatusBadge tone="approved">Complemento recibido</StatusBadge>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
   const [pagina, setPagina] = useState(1)
   const pageCount = Math.max(1, Math.ceil(grupos.length / HISTORIAL_PAGE_SIZE))
@@ -604,7 +632,8 @@ function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
               </thead>
               <tbody>
                 {gruposPagina.map(grupo => (
-                  <tr key={grupo.id} className="h-[46px] border-b border-hairline last:border-0 odd:bg-row">
+                  <Fragment key={grupo.id}>
+                  <tr className={`h-[46px] border-hairline last:border-0 odd:bg-row ${grupo.pagos.length > 0 ? '' : 'border-b'}`}>
                     <td className="truncate px-[var(--row-pad-x)] align-middle text-ink">
                       {grupo.proyecto_nombre || grupo.items[0]?.item_descripcion || 'Proyecto'}
                     </td>
@@ -614,6 +643,14 @@ function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
                       <StatusBadge tone={toneForCuentaEstado(grupo.estado)}>{grupo.estado}</StatusBadge>
                     </td>
                   </tr>
+                  {grupo.pagos.length > 0 && (
+                    <tr className="border-b border-hairline last:border-0">
+                      <td colSpan={4} className="px-[var(--row-pad-x)] pb-3 pt-1">
+                        <PagosDelGrupo pagos={grupo.pagos} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -633,6 +670,11 @@ function TablaHistorial({ grupos }: { grupos: GrupoPortal[] }) {
                   <span className="text-lg font-bold text-body">{formatMoney(grupo.saldo_por_transferir)}</span>
                   <span className="flex-shrink-0 text-xs text-faint">por recibir</span>
                 </div>
+                {grupo.pagos.length > 0 && (
+                  <div className="mt-3">
+                    <PagosDelGrupo pagos={grupo.pagos} />
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -33,6 +33,8 @@ const idDe = (c: Candidato) => (esCandidatoCobro(c) ? c.cuenta_id : c.grupo_id)
 
 interface Props {
   escritorio: boolean
+  /** Proyecto desde el que se abrió (P22): si el XML no trae folios, sus cuentas se proponen. */
+  proyecto?: string | null
   onClose: () => void
   /** Después de guardar: periodo, resumen, avisos y detalle se vuelven a pedir. */
   onGuardada: () => void
@@ -44,7 +46,7 @@ interface Props {
  * de Serenata. La vista previa no escribe nada (T9); el cuadre lo calcula SQL y aquí solo se pinta (T6). Un total que
  * no cuadra no se rechaza: se guarda "En revisión" con el detalle exacto (P5).
  */
-export function SubirFactura({ escritorio, onClose, onGuardada }: Props) {
+export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada }: Props) {
   const [xml, setXml] = useState<File | null>(null)
   const [pdf, setPdf] = useState<File | null>(null)
   const [preview, setPreview] = useState<PreviewFactura | PreviewComplemento | null>(null)
@@ -93,7 +95,8 @@ export function SubirFactura({ escritorio, onClose, onGuardada }: Props) {
           const marca = `${xml.name}:${xml.size}:${p.contraparte?.id ?? ''}`
           if (inicializada.current === marca) return
           inicializada.current = marca
-          const propuesta = p.lado === 'cobro' ? p.preseleccion : proponerGrupo(p)
+          const porFolios = p.lado === 'cobro' ? p.preseleccion : proponerGrupo(p)
+          const propuesta = porFolios.length > 0 ? porFolios : delProyecto(p, proyecto)
           if (propuesta.length > 0) setSeleccion(propuesta)
         })
         .catch((err) => {
@@ -107,7 +110,7 @@ export function SubirFactura({ escritorio, onClose, onGuardada }: Props) {
       clearTimeout(t)
       ac.abort()
     }
-  }, [xml, manualId, claveSeleccion])
+  }, [xml, manualId, claveSeleccion, proyecto])
 
   const complemento = preview && esComplementoPreview(preview) ? preview : null
   const factura = preview && !esComplementoPreview(preview) ? preview : null
@@ -329,6 +332,13 @@ function proponerGrupo(p: PreviewFactura): string[] {
   const folios = new Set(p.cfdi.folios)
   const coincide = p.candidatos.filter((c) => !esCandidatoCobro(c) && c.proyecto_id && folios.has(c.proyecto_id.toUpperCase()))
   return coincide.length === 1 ? [idDe(coincide[0])] : []
+}
+
+/** Sin folios en el XML, lo que se propone es lo del proyecto desde el que se abrió la ventana (P22). */
+function delProyecto(p: PreviewFactura, proyecto: string | null): string[] {
+  if (!proyecto) return []
+  const propios = p.candidatos.filter((c) => c.proyecto_id === proyecto)
+  return p.lado === 'cobro' ? propios.map(idDe) : propios.length === 1 ? [idDe(propios[0])] : []
 }
 
 function subDelXml(p: PreviewFactura | PreviewComplemento): string {

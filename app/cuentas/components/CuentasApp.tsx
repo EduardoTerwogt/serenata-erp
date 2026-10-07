@@ -87,9 +87,12 @@ export function CuentasApp() {
   const avisosPanel = useAvisos(estado.pantalla === 'avisos' || (escritorio && estado.pantalla === 'ordenes'))
   /** Algo cambió cuentas u órdenes: periodo, resumen y avisos se vuelven a pedir. */
   const recargarAvisos = avisosPanel.recargar
+  /** Sube con cada cambio: el detalle abierto debajo de una ventana de Acciones se vuelve a pedir (P22). */
+  const [refresco, setRefresco] = useState(0)
   const recargarTodo = useCallback(() => {
     recargar()
     recargarAvisos()
+    setRefresco((v) => v + 1)
   }, [recargar, recargarAvisos])
   // B6: tocar un aviso limpia filtros, fija año y mes del evento y abre el proyecto.
   const abrirAviso = useCallback(
@@ -405,7 +408,8 @@ export function CuentasApp() {
             onTab={(t) => reemplazar({ tab: t === 'info' ? null : t })}
             onClose={() => cerrar({ det: null, tab: null })}
             onCambio={recargarTodo}
-            hoy={periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()}
+            refresco={refresco}
+            onAbrirAccion={(sheet, c) => abrir({ sheet, lado: c.lado, cid: c.cid, pre: c.pre })}
           />
         )}
 
@@ -423,7 +427,7 @@ export function CuentasApp() {
             onOrdenCambio={recargarTodo}
           />
         )}
-        {estado.sheet === 'factura' && <SubirFactura escritorio={escritorio} onClose={cerrarAccion} onGuardada={recargarTodo} />}
+        {estado.sheet === 'factura' && <SubirFactura escritorio={escritorio} proyecto={estado.pre} onClose={cerrarAccion} onGuardada={recargarTodo} />}
         {estado.sheet === 'estado' && (
           <EstadoCuenta
             lado={estado.lado ?? 'cobro'}

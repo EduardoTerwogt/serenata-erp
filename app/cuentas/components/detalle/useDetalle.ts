@@ -30,11 +30,14 @@ export function objetivoDeKey(key: string): ObjetivoDetalle | null {
 const base = (o: ObjetivoDetalle) =>
   o.tipo === 'cobro' ? `/api/cuentas-cobrar/${o.id}` : o.tipo === 'grupo' ? `/api/cuentas-pagar/grupos/${o.id}` : `/api/cuentas-pagar/${o.id}`
 
-/** Carga el detalle del concepto abierto; `recargar` después de cada acción. */
-export function useDetalle(key: string | null) {
+/**
+ * Carga el detalle del concepto abierto; `recargar` después de cada acción. `externa` cambia cuando algo fuera del
+ * detalle (las ventanas de Acciones, #123 P22) modificó las cuentas: el detalle se vuelve a pedir.
+ */
+export function useDetalle(key: string | null, externa = 0) {
   const objetivo = key ? objetivoDeKey(key) : null
   const [version, setVersion] = useState(0)
-  const clave = objetivo ? `${objetivo.tipo}:${objetivo.id}#${version}` : ''
+  const clave = objetivo ? `${objetivo.tipo}:${objetivo.id}#${version}.${externa}` : ''
   const [estado, setEstado] = useState<{ clave: string; detalle: DetalleConcepto | null; error: string | null }>({ clave: '', detalle: null, error: null })
 
   useEffect(() => {
