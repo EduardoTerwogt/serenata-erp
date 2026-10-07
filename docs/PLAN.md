@@ -98,7 +98,7 @@ Hoy cada factura y cada pago pertenecen a **una sola cuenta**:
 | P19 | En "Registrar pago" las facturas salen **cerradas** y se expanden para ver/editar el reparto (mejor en celular). |
 | P20 | El chip de una factura o pago compartido en la lista de Cuentas abre el **Estado de cuenta** con ese documento resaltado. |
 | P22 | **Un solo formulario para altas.** Subir factura/complemento y registrar pago viven solo en las ventanas de Acciones; los botones de las pestañas Pago y Documentos del detalle las abren con el proyecto preseleccionado. Las acciones sobre un registro que ya existe (marcar válida, indicar PUE/PPD, adjuntar comprobante a un pago hecho, y los formularios de `Correcciones.tsx`) se quedan en el detalle; no son altas. |
-| P24 | **RFC como columna** en `clientes` y `proveedores` (captura en la ficha). El RFC propio de Serenata es la variable de entorno `SERENATA_RFC` (no hay tabla de configuración; se documenta en `docs/ENV.md`). Si el XML no coincide con nadie, se elige la contraparte a mano y se ofrece guardar el RFC. |
+| P24 | **RFC como columna** en `clientes` y `proveedores` (captura en la ficha). El RFC propio de Serenata es, **de forma temporal**, la variable de entorno `SERENATA_RFC` (`docs/ENV.md`); la forma definitiva (subir la constancia de Serenata en Admin y leer de ahí sus datos fiscales) es **B6a**, al final de la iniciativa. Si el XML no coincide con nadie, se elige la contraparte a mano y se ofrece guardar el RFC. |
 | P25 | **Sin tope** de cotizaciones por factura ni de líneas por pago (P6 intacto). El `statement_timeout` de 8 s falla explícito; B2 mide una operación grande en los specs de concurrencia y, si no cabe, se revisa con datos. |
 | P26 | **Tolerancia: 0.01 por cotización ligada.** Una factura de 6 cotizaciones valida con hasta 0.06 de diferencia. Solo aplica a la validación de la factura. Los pagos conservan su tolerancia de hoy por lado (cobro exacto, proveedor 0.01): **no se unifican**. |
 | P27 | **Factura ligada por columna:** `cuentas_cobrar.factura_documento_id` (sin tabla puente). El historial de qué cuentas cubría una factura dada de baja vive en `cuentas_correcciones` (una fila por cuenta, con el documento en `detalle`). |
@@ -233,7 +233,7 @@ Hoy cada factura y cada pago pertenecen a **una sola cuenta**:
 | T17 | Sin columna constante `lado` en los ledgers ni FK compuesta: `pagos.lado` es informativo y la coherencia (todas las líneas del mismo lado y contraparte) la dan la RPC por lado y una guarda de `auditar_consistencia()`. |
 | T18 | `cuentas_conceptos` se reescribe **una sola vez** (en M2): lectura nueva del modelo **y** objetivo `cliente`/`proveedor`, filtro por id y orden. B3 solo agrega rutas. |
 | T19 | La regla de validación de la factura de cliente vive **solo en SQL** (`factura_cuadre`). Al asumirla `ligar_factura` se retiran `validarFacturaClienteXML` y `validarMontoFactura` de `factura-parser.ts` (hoy solo las usa `cuentas-cobrar/[id]/subir-factura/route.ts`) y sus mocks en `cuentas-cobrar-subir-factura-route.test.ts`; `calcularDeadline` y la validación fiscal del proveedor se quedan. |
-| T20 | `SERENATA_RFC` es una variable nueva: se crea en Vercel (Production y Preview), en GitHub Actions (jobs `live` y e2e) y en `.env.local`; si falta, las rutas de factura **fallan explícito** (no validan en silencio). Los fixtures de prueba usan ese mismo RFC. El usuario no tiene repo ni Node: la sesión le da el paso a paso exacto (ver B3). |
+| T20 | `SERENATA_RFC` es una variable nueva: se crea en Vercel (Production y Preview), en GitHub Actions (jobs `live` y e2e) y en `.env.local`; si falta, las rutas de factura **fallan explícito** (no validan en silencio). Los fixtures de prueba usan ese mismo RFC. El usuario no tiene repo ni Node: la sesión le da el paso a paso exacto (ver B3). **Puente temporal:** B6a lo reemplaza por los datos de la constancia de Serenata cargada en Admin (la regla de fallar explícito se conserva). |
 
 ## Modelo de datos
 
@@ -490,6 +490,41 @@ recalcula con floats y `< .01` y no debe copiarse). Reutilizar `Modal size="820"
       mismo proveedor (invariante 5). Sin subida nueva.
 - **Validación:** `critical/portal-factura.spec.ts` + caso nuevo; test de que no se filtra un grupo ajeno.
 
+### B6a — Datos fiscales de Serenata desde su constancia (Admin) — **al final de la iniciativa, antes de B6**
+
+Pedido del usuario (2026-10-07): el RFC y los datos fiscales de Serenata **no se capturan en una variable de entorno ni
+quedan hardcodeados**; se sube la **Constancia de Situación Fiscal** de Serenata en el módulo Admin, se **validan** los
+datos (igual que con proveedores) y de ahí se cargan. Mientras B6a no exista, `SERENATA_RFC` (T20) es el puente: B3 y B4
+se construyen contra `serenataRfc()` y no se bloquean.
+
+**Qué hay hoy (verificado 2026-10-07)**
+- La constancia de un proveedor se lee con IA (`lib/server/portal/document-parser.ts`, SDK de Anthropic con el PDF como
+  bloque `document`), **no** con un lector de PDF, y extrae solo `nombre_completo` y `regimen_fiscal`; **no extrae RFC**.
+  El cruce con proveedores es por nombre (`match_proveedor_por_nombre`).
+- "Serenata es persona moral" está **hardcodeado** en `lib/server/repositories/dashboard.ts` (`TASA_ISR_PERSONA_MORAL =
+  0.30`) y en el texto de `app/dashboard/page.tsx`. Los PDFs (`cotizacion-pdf*.ts`, `orden-pago-pdf.ts`,
+  `hoja-llamado-pdf.ts`) llevan "Serenata House Entertainment" fijo. No hay tabla de configuración.
+- Una constancia siempre trae el mismo formato (RFC, denominación/razón social, régimen, código postal), así que se puede
+  leer **con texto del PDF y expresiones regulares** (sin IA) y dejar la IA solo como respaldo si el texto no es legible.
+
+**Qué hay que reestructurar (no es solo cambiar la fuente del RFC)**
+- Tabla nueva de un solo registro (p. ej. `datos_fiscales_serenata`: `rfc`, `razon_social`, `regimen_fiscal`,
+  `codigo_postal`, `constancia_documento_url`, `vigente_desde`, `actualizado_por`) con migración numerada, RLS y
+  `search_path` fijo; el seed de test lleva el RFC de prueba `SHO100101AB1`.
+- `serenataRfc()` (`lib/server/cuentas/rfc.ts`) pasa de leer `process.env` (síncrono) a leer esa tabla (asíncrono, con
+  caché corta). Cambia la firma en `clasificarCfdi` y en `facturas.ts`, y los tests de `rfc.test.ts` y
+  `facturas.test.ts`; los jobs e2e dejan de poner `SERENATA_RFC` y siembran la fila. **Sigue fallando explícito** si no
+  hay constancia cargada (T20 conserva su regla).
+- Lector de constancia reutilizable (extender `document-parser.ts` o un parser nuevo en `lib/server/`) que además de nombre
+  y régimen extraiga **RFC**; validación: estructura del RFC (12/13 posiciones), consistencia RFC ↔ tipo de persona ↔
+  régimen, y confirmación manual de lo leído antes de guardar (similar a proveedores). Ruta con `requireSection('admin')`
+  y Zod; subida del archivo a Drive.
+- UI en Admin: subir constancia, ver los datos leídos, confirmar y guardar; historial de constancias.
+- El régimen de Serenata (moral/física) se **deriva de los datos cargados** (12 posiciones = moral) y reemplaza el
+  hardcode del dashboard (`TASA_ISR_PERSONA_MORAL` y su texto) y cualquier otro supuesto; decidir en B6a si los PDFs
+  también leen la razón social de la tabla (no necesario para #123).
+- Al terminar: se retira `SERENATA_RFC` de `docs/ENV.md`, de `e2e.yml` y de Vercel; se anota en la decisión 022.
+
 ### B6 — Cerrar
 - [ ] Decisión **022** en `docs/decisions/`: modelo vigente (cabecera `pagos` + columna), matiz sobre 020/C (solo la
       cabecera de pagos es común), P11 como ampliación de D11, P14 que reemplaza D5/D6/D33/D34 y el supuesto 10 de la 017
@@ -548,10 +583,11 @@ recalcula con floats y `< .01` y no debe copiarse). Reutilizar `Modal size="820"
 | B0 Preparación | **Hecho** (2026-10-07) |
 | B1 Permisos P14 | **Hecho** en código y tests (2026-10-07) |
 | B2 Capa de datos (M1 → M2 → M3, un release) | **Hecho en test** (2026-10-07): M1, M2 y M3 aplicadas en `serenata-erp-test` (M3 y `cancel_cotizacion` por una persona: el MCP retiene todo DELETE/DROP); 23 guardas en 0, `plpgsql_check` en 0. Producción: sin tocar (se corre al lanzar, en orden M1 → M2 → M3). |
-| B3 API nueva y lecturas | **Hecho en código y tests** (2026-10-07): parser, RFC/`SERENATA_RFC` (`docs/ENV.md`, jobs e2e), `estado_cuenta`, `facturas_candidatos`, rutas de factura/pagos/estado de cuenta y búsqueda de clientes. Pendiente de la persona: dar de alta `SERENATA_RFC` en Vercel (Production y Preview) y `.env.local` antes de desplegar. Latencia: `cuentas_conceptos` ≈ +20 % local (500 proyectos); `estado_cuenta` ≈ 560 ms en test, dominado por `cuentas_conceptos`; sin optimizar. |
+| B3 API nueva y lecturas | **Hecho en código y tests** (2026-10-07): parser, RFC/`SERENATA_RFC` (`docs/ENV.md`, jobs e2e), `estado_cuenta`, `facturas_candidatos`, rutas de factura/pagos/estado de cuenta y búsqueda de clientes. `SERENATA_RFC` es un puente temporal: se reemplaza en B6a (constancia de Serenata en Admin), así que no se da de alta en Vercel por ahora. Latencia: `cuentas_conceptos` ≈ +20 % local (500 proyectos); `estado_cuenta` ≈ 560 ms en test, dominado por `cuentas_conceptos`; sin optimizar. |
 | B4a Menú y Registrar pago | Pendiente |
 | B4b Subir factura y complemento | Pendiente |
 | B4c Estado de cuenta y fichas | Pendiente |
 | B4d P22, chip P20 | Pendiente |
 | B5 Portal (solo lectura) | Pendiente |
+| B6a Constancia de Serenata en Admin (reemplaza `SERENATA_RFC`) | Pendiente (al final, antes de B6) |
 | B6 Cerrar | Pendiente |
