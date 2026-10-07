@@ -20,6 +20,8 @@ export interface SubirFacturaProveedorParams {
   uploadFolderId?: string
   usuario: string | null
   reemplazo?: Reemplazo | null
+  /** Motivo extra que fuerza "En revisión" aunque el total cuadre (p. ej. el RFC del XML no coincide, P24). */
+  aviso?: string | null
 }
 
 function fechaDeFactura(xmlContent: string): string | null {
@@ -54,13 +56,15 @@ export async function subirFacturaProveedor(p: SubirFacturaProveedorParams): Pro
 
   // V3 (Rediseño de Cuentas B2): el XML entra como 'pendiente' aunque cuadre; SOLO validar_factura_proveedor lo
   // pasa a 'validado', en la misma transacción que el snapshot y el cambio a FACTURADO.
-  const cuadra = validacionXml.estado_validacion === 'validado'
+  const aviso = p.aviso?.trim() || null
+  const cuadra = validacionXml.estado_validacion === 'validado' && !aviso
+  if (aviso) validacionXml.detalle_validacion = [validacionXml.detalle_validacion, aviso].filter(Boolean).join(' ')
   const documentoXml = await createDocumentoCuentaPagar({
     grupo_id: grupo.id,
     tipo: 'FACTURA_PROVEEDOR_XML',
     archivo_url: facturaXmlUrl,
     archivo_nombre: p.xmlFile.name,
-    estado_validacion: cuadra ? 'pendiente' : validacionXml.estado_validacion,
+    estado_validacion: cuadra ? 'pendiente' : aviso ? 'revision' : validacionXml.estado_validacion,
     detalle_validacion: validacionXml.detalle_validacion,
     // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
     uuid_cfdi: facturaData.uuid_timbrado ?? null,

@@ -547,8 +547,8 @@ recalcula con floats y `< .01` y no debe copiarse). Reutilizar `Modal size="820"
 |---|---|
 | B0 Preparación | **Hecho** (2026-10-07) |
 | B1 Permisos P14 | **Hecho** en código y tests (2026-10-07) |
-| B2 Capa de datos (M1 → M2 → M3, un release) | Pendiente |
-| B3 API nueva y lecturas | Pendiente |
+| B2 Capa de datos (M1 → M2 → M3, un release) | **Hecho en test** (2026-10-07): M1, M2 y M3 aplicadas en `serenata-erp-test` (M3 y `cancel_cotizacion` por una persona: el MCP retiene todo DELETE/DROP); 23 guardas en 0, `plpgsql_check` en 0. Producción: sin tocar (se corre al lanzar, en orden M1 → M2 → M3). |
+| B3 API nueva y lecturas | En curso: parser, RFC/`SERENATA_RFC`, `estado_cuenta`, `facturas_candidatos`, rutas de factura/pagos/estado de cuenta y búsqueda de clientes hechas; falta `docs/ENV.md` y medir latencia |
 | B4a Menú y Registrar pago | Pendiente |
 | B4b Subir factura y complemento | Pendiente |
 | B4c Estado de cuenta y fichas | Pendiente |
