@@ -19,7 +19,7 @@ export function BotonEstadoCuenta({ lado, contraparteId }: { lado: LadoCuentas; 
   if (!hasSection(secciones, 'cuentas')) return null
   return (
     <>
-      <Button type="button" variant="secondary" size="md" iconLeft="file-text" onClick={() => setAbierto(true)}>
+      <Button type="button" variant="secondary" size="md" iconLeft="receipt" onClick={() => setAbierto(true)}>
         Estado de cuenta
       </Button>
       {abierto && <EstadoCuenta lado={lado} contraparteId={contraparteId} doc={null} fija onClose={() => setAbierto(false)} />}

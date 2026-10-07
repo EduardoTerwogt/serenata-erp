@@ -15,9 +15,9 @@ interface Entrada {
 
 const ENTRADAS: Entrada[] = [
   { id: 'factura', texto: 'Subir factura', icono: 'upload' },
-  { id: 'pago', texto: 'Registrar pago', icono: 'arrow-down-left' },
+  { id: 'pago', texto: 'Registrar pago', icono: 'card' },
   { id: 'orden', texto: 'Orden de pago', icono: 'file-text', separador: true },
-  { id: 'estado', texto: 'Estado de cuenta', icono: 'layers' },
+  { id: 'estado', texto: 'Estado de cuenta', icono: 'receipt' },
 ]
 
 interface Props {
@@ -82,7 +82,7 @@ export function MenuAcciones({ onElegir, disponibles }: Props) {
         onClick={(e) => alternar(e.currentTarget)}
         className="hidden h-[var(--control-height-lg)] items-center gap-[6px] rounded-control bg-accent px-[18px] text-[length:var(--text-md)] font-semibold tracking-[0.01em] text-accent-ink transition-colors hover:bg-accent-pressed md:inline-flex"
       >
-        <Icon name="plus" size={15} />
+        <Icon name="zap" size={15} />
         Acciones
         <Icon name="chevron-down" size={14} />
       </button>
@@ -94,7 +94,7 @@ export function MenuAcciones({ onElegir, disponibles }: Props) {
         onClick={(e) => alternar(e.currentTarget)}
         className="flex h-9 w-9 items-center justify-center rounded-control bg-accent text-white md:hidden"
       >
-        <Icon name="plus" size={18} />
+        <Icon name="zap" size={18} />
       </button>
       {abierto && (
         <div role="menu" aria-label="Acciones" className="absolute right-0 top-full z-40 mt-1.5 w-[220px] overflow-hidden rounded-panel border border-hairline bg-card py-1 shadow-overlay">
