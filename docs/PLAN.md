@@ -1,9 +1,9 @@
 # Plan de la iniciativa activa
 
-**Estado:** **Aprobado, listo para ejecutar** (2026-10-06, por el usuario; revisado y
-limpiado el mismo día tras tres auditorías técnicas contra el código y las bases reales).
-— "#123: Facturas y pagos ligados (una factura para varias cotizaciones, un pago para
-varias facturas)". Se ejecuta en una sesión nueva desde **B0**, bloque por bloque.
+**Estado:** **Aprobado y en ejecución** (aprobado 2026-10-06 por el usuario). — "#123: Facturas y pagos ligados (una
+factura para varias cotizaciones, un pago para varias facturas)". **B0–B3 hechos (2026-10-07, en rama y en test);
+siguiente: B4 (UI).** Rama `claude/admiring-faraday-i5w9yj`, PR en borrador #129; producción sin tocar. Estado y pasos
+concretos de la sesión en `docs/ACTIVE_WORK.md`.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -534,6 +534,15 @@ se construyen contra `serenataRfc()` y no se bloquean.
 - [ ] `ARCHITECTURE.md` (incluye `:429` sobre el doble TS), `TESTING.md`, `docs/ENV.md` (`SERENATA_RFC`),
       `docs/decisions/020` (`:140`), `docs/ROADMAP.md` (la dependencia "el modelo ya guarda monto por aplicación" ya no
       es cierta), `docs/ACTIVE_WORK.md`; cerrar #123; archivar este plan.
+- [ ] **Avisos para la entrega** (decirlos al usuario al avisar que el plan está listo para revisar antes de producción):
+      (1) las 3 preguntas de producto abiertas se resolvieron con las propuestas del plan (ver arriba) y la 3.ª quedó en B4b;
+      (2) P14 (cualquiera con la sección `cuentas` puede hacer todo en Cuentas) ya está aplicado en código y tests;
+      (3) `cuentas_conceptos` ≈ +20 % más lento en local (500 proyectos) y la línea base de `escala.yml` ya fallaba en
+      `main`: revisar antes de lanzar; (4) `escala-limpiar.sql` y M3 llevan DELETE/DROP: los corre una persona en el SQL
+      Editor, no el MCP; (5) `rfc` entró en `PROVEEDOR_PUBLIC_COLUMNS` (desvío de T8); (6) restos de siembra en test;
+      (7) los commits salen con `noreply@anthropic.com` en vez de `eduardoterwogth@gmail.com`; (8) **orden de lanzamiento a
+      producción: M1 → M2 → M3 (M3 por una persona; M1/M2 sin `20260915_loadtest_runs.sql`), y B6a (constancia de Serenata)
+      antes de abrir las rutas de factura, porque sin RFC de Serenata fallan explícito.**
 - [ ] Fuera del plan, para #110: la regla de `.claude/rules/migraciones.md` sobre `cuentas_conceptos_derivar` está
       caduca (la función no existe en `main`). Pendientes sueltos que no son de #123: `DESIGN_SYSTEM.md` (describe un
       tema oscuro y `#FF5A1A` que ya no existen), `p_proyecto` de `cuentas_por_proyecto`.
