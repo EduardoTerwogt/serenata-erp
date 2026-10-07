@@ -39,6 +39,12 @@ describe('clasificarCfdi (P18)', () => {
     expect(r).toMatchObject({ ok: false, codigo: 'rfc_ajeno' })
   })
 
+  it('el rechazo dice qué RFC trae el XML y cuál tiene registrado Serenata, para ver de inmediato si la constancia es otra', () => {
+    const r = clasificarCfdi({ tipo_comprobante: 'I', rfc_emisor: 'aaa010101aaa', rfc_receptor: 'BBB010101BBB' }, SERENATA)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.mensaje).toContain(`emisor AAA010101AAA y receptor BBB010101BBB; el RFC de Serenata registrado en Admin → Datos fiscales es ${SERENATA}`)
+  })
+
   it('autofactura (Serenata en ambos extremos) también se rechaza', () => {
     expect(clasificarCfdi({ tipo_comprobante: 'I', rfc_emisor: SERENATA, rfc_receptor: SERENATA }, SERENATA)).toMatchObject({ ok: false, codigo: 'rfc_ajeno' })
   })

@@ -35,7 +35,10 @@ export function clasificarCfdi(data: Pick<FacturaData, 'tipo_comprobante' | 'rfc
   const esReceptor = !!propio && receptor === propio
   if (esEmisor === esReceptor) {
     // Ni emisor ni receptor (o ambos): no es un documento de Serenata.
-    return { ok: false, codigo: 'rfc_ajeno', mensaje: 'El XML no es de ni para Serenata: revisa que sea el archivo correcto.' }
+    const detalle = esEmisor
+      ? 'Serenata aparece como emisor y como receptor.'
+      : `El XML trae emisor ${emisor ?? 'sin RFC'} y receptor ${receptor ?? 'sin RFC'}; el RFC de Serenata registrado en Admin → Datos fiscales es ${propio ?? 'ninguno'}.`
+    return { ok: false, codigo: 'rfc_ajeno', mensaje: `El XML no es de ni para Serenata: revisa que sea el archivo correcto. ${detalle}` }
   }
   const lado = esEmisor ? 'cobro' : 'proveedor'
   const rfcContraparte = esEmisor ? receptor : emisor
