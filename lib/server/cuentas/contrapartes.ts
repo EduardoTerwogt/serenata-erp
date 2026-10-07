@@ -4,6 +4,7 @@
  * la de cobro no tiene el cliente a la mano, así que se revisa aquí antes de tocar Drive.
  */
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import type { ContrapartesPendientes, PendienteContraparte } from '@/lib/shared/cuentas/contrapartes-tipos'
 import type { LadoCuentas } from '@/lib/shared/cuentas/estado-cuenta-tipos'
 
 export interface ContraparteResuelta {
@@ -55,4 +56,11 @@ export async function resolverContraparteDeDestinos(lado: LadoCuentas, ids: stri
   if (errorCliente) throw errorCliente
   if (!cliente) return rechazo(404, 'contraparte_no_encontrada', 'Cliente no encontrado.')
   return { ok: true, contraparte: { id: cliente.id as string, nombre: cliente.nombre as string, rfc: (cliente.rfc as string | null) ?? null } }
+}
+
+/** #131: contrapartes con algo pendiente (`cuentas_contrapartes_pendientes`, SQL decide); `q` filtra por nombre, hasta 50 filas. */
+export async function cargarContrapartesPendientes(lado: LadoCuentas, pendiente: PendienteContraparte, q?: string): Promise<ContrapartesPendientes> {
+  const { data, error } = await supabaseAdmin.rpc('cuentas_contrapartes_pendientes', { p_lado: lado, p_pendiente: pendiente, p_q: q ?? null, p_limit: 50 })
+  if (error) throw error
+  return data as ContrapartesPendientes
 }

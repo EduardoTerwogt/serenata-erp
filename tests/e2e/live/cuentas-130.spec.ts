@@ -270,6 +270,14 @@ test.describe('live: #130 alta de contraparte, gasto extra y pago por proyecto',
       expect((await pOtra.request.get('/api/cuentas/proyectos-selector?modo=renglones')).status()).toBe(403)
       expect((await pOtra.request.get(`/api/cuentas/estado-cuenta?lado=cobro&id=${clienteId}&proyectos=X`)).status()).toBe(403)
 
+      // #131: desplegable de contrapartes (forma, búsqueda por nombre y permiso).
+      const lista = await pCuentas.request.get(`/api/cuentas/contrapartes?lado=cobro&pendiente=todos&q=${encodeURIComponent(prefix)}`)
+      expect(lista.status()).toBe(200)
+      const cuerpo = (await lista.json()) as { total: number; contrapartes: { nombre: string }[] }
+      expect(cuerpo.contrapartes.map((c) => c.nombre)).toContain(`${prefix} Cliente`)
+      expect((await pCuentas.request.get('/api/cuentas/contrapartes?lado=cobro&pendiente=nada')).status()).toBe(400)
+      expect((await pOtra.request.get('/api/cuentas/contrapartes?lado=cobro&pendiente=saldo')).status()).toBe(403)
+
       // Completar la ficha del cliente: solo cuentas; el cliente ya tiene constancia, así que no se pide otra.
       const completar = (p: typeof pCuentas) =>
         p.request.patch(`/api/cuentas/clientes/${clienteId}`, { multipart: { datos: JSON.stringify({ rfc: 'AAA010101AAA', contacto: 'Rosa Díaz', correo: 'rosa@live.test' }) } })

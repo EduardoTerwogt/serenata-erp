@@ -384,6 +384,14 @@ export const ProyectosSelectorQuerySchema = z.object({
   page_size: z.coerce.number().int().min(1).max(50).optional().default(25),
 }).refine((v) => v.modo !== 'pago' || v.lado !== undefined, { message: 'El modo pago requiere lado' })
 
+// GET /api/cuentas/contrapartes (#131): contrapartes con algo pendiente para el desplegable de Acciones.
+export const PENDIENTES_CONTRAPARTE = ['factura', 'complemento', 'saldo', 'todos'] as const
+export const CuentasContrapartesQuerySchema = z.object({
+  lado: z.enum(LADOS_CUENTAS, { message: 'lado inválido (cobro o proveedor)' }),
+  pendiente: z.enum(PENDIENTES_CONTRAPARTE, { message: 'pendiente inválido (factura, complemento, saldo o todos)' }),
+  q: z.string().trim().max(100).optional(),
+})
+
 const centavos = z.coerce.number().finite().positive('El monto debe ser mayor a 0')
 
 // POST /api/cuentas/facturas/preview — campo `datos` (JSON) del multipart junto al archivo `xml`.
