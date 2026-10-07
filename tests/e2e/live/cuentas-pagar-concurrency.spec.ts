@@ -290,7 +290,11 @@ test.describe('live: concurrencia en registrar_pago_proveedor', () => {
       expect([pago, cancela].filter((r) => !r.error).length).toBeGreaterThanOrEqual(1)
 
       const { data: ordenFinal } = await supabase.from('ordenes_pago').select('estado').eq('id', ordenId).single()
-      if (!pago.error) expect(['COMPLETADA', 'PARCIALMENTE_PAGADA']).toContain(ordenFinal?.estado)
+      // Gana la cancelación (la orden queda CANCELADA y el pago, sin orden, también procede) o gana el pago (la
+      // orden se completa y la cancelación se rechaza con orden_con_pagos): nunca un estado intermedio.
+      if (!cancela.error) expect(ordenFinal?.estado).toBe('CANCELADA')
+      else expect(ordenFinal?.estado).toBe('COMPLETADA')
+      if (cancela.error) expect(cancela.error.message).toMatch(/orden_con_pagos/)
     } finally {
       await cleanupLiveCuentasByPrefix(prefix)
     }
