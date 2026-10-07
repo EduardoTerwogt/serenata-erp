@@ -52,22 +52,45 @@ const factura = (id: string, archivo: string, fecha: string, metodo: 'PUE' | 'PP
   }
 }
 
-function estadoCobro(): EstadoCuentaRespuesta {
+/** Con `conPago`, el depósito del issue ($300,000 el 30 sep) ya está aplicado a la Factura A y sin complemento. */
+function estadoCobro(conPago = false): EstadoCuentaRespuesta {
   const a = factura('fa', 'F-A_Altavista.xml', '2026-09-12', 'PPD', [
-    concepto('cobro', 'SH001', 'Spot TV 30s', 185600),
-    concepto('cobro', 'SH003', 'Making of', 58000),
-    concepto('cobro', 'SH004', 'Versiones redes', 46400),
-    concepto('cobro', 'SH006', 'Post adicional', 69600),
+    concepto('cobro', 'SH001', 'Spot TV 30s', 185600, conPago ? 185600 : 0),
+    concepto('cobro', 'SH003', 'Making of', 58000, conPago ? 58000 : 0),
+    concepto('cobro', 'SH004', 'Versiones redes', 46400, conPago ? 46400 : 0),
+    concepto('cobro', 'SH006', 'Post adicional', 69600, conPago ? 10000 : 0),
   ])
   const b = factura('fb', 'F-B_Altavista.xml', '2026-09-15', 'PPD', [concepto('cobro', 'SH002', 'Fotofija campaña', 92800), concepto('cobro', 'SH005', 'Casting', 34800)])
+  const pagado = a.pagado + b.pagado
   return {
     lado: 'cobro',
     hoy: HOY_E2E,
     contraparte: CLIENTE,
-    resumen: { total: a.total + b.total, pagado: 0, saldo: a.total + b.total, vencido: 0, facturas: 2, sin_factura: 0, sin_factura_saldo: 0 },
+    resumen: { total: a.total + b.total, pagado, saldo: a.total + b.total - pagado, vencido: 0, facturas: 2, sin_factura: 0, sin_factura_saldo: 0 },
     facturas: [a, b],
     sin_factura: [],
-    pagos: [],
+    pagos: conPago
+      ? [
+          {
+            id: 'pago-1',
+            fecha_pago: '2026-09-30',
+            tipo_pago: 'TRANSFERENCIA',
+            comprobante_url: 'https://drive.test/transferencia_BBVA_30sep.pdf',
+            archivo_nombre: 'transferencia_BBVA_30sep.pdf',
+            notas: null,
+            anulado: false,
+            anulado_motivo: null,
+            monto: 300000,
+            aplicaciones: [
+              { destino_id: 'cobro-SH001', factura_id: 'fa', folio: 'SH001', cotizacion_id: 'SH001', monto: 185600 },
+              { destino_id: 'cobro-SH003', factura_id: 'fa', folio: 'SH003', cotizacion_id: 'SH003', monto: 58000 },
+              { destino_id: 'cobro-SH004', factura_id: 'fa', folio: 'SH004', cotizacion_id: 'SH004', monto: 46400 },
+              { destino_id: 'cobro-SH006', factura_id: 'fa', folio: 'SH006', cotizacion_id: 'SH006', monto: 10000 },
+            ],
+            complementos: [],
+          },
+        ]
+      : [],
   }
 }
 
@@ -110,6 +133,8 @@ export interface LlamadasAcciones {
 export interface OpcionesAcciones {
   /** Respuesta del POST de pagos (por default 200 con éxito). */
   pago?: { status: number; body: unknown }
+  /** El estado de cuenta del cliente ya trae el depósito del issue aplicado a la Factura A. */
+  conPago?: boolean
   /** Respuesta del POST de facturas (por default 200 con la validación que calculó el preview). */
   factura?: { status: number; body: unknown }
 }
@@ -207,7 +232,7 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
 
   await page.route(/\/api\/cuentas\/estado-cuenta\?/, (route: Route) => {
     const lado = new URL(route.request().url()).searchParams.get('lado')
-    return fulfillJson(route, lado === 'proveedor' ? estadoProveedor() : estadoCobro())
+    return fulfillJson(route, lado === 'proveedor' ? estadoProveedor() : estadoCobro(opciones.conPago))
   })
   await page.route(/\/api\/clientes\?q=/, (route: Route) => {
     const q = (new URL(route.request().url()).searchParams.get('q') ?? '').toLowerCase()

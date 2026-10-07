@@ -237,3 +237,41 @@ test('subir complemento de pago: se liga por el UUID de la factura', async ({ pa
   await expect(modal.getByText('Complemento guardado')).toBeVisible()
   expect(llamadas.facturas).toHaveLength(1)
 })
+
+// ── Estado de cuenta (B4c) ──────────────────────────────────────────────────────────────────────────────────────
+
+test('estado de cuenta: resumen, facturas con su complemento y el pago aplicado', async ({ page }) => {
+  await abrir(page, { conPago: true })
+  await elegirAccion(page, 'Estado de cuenta')
+  await expect(page).toHaveURL(/sheet=estado/)
+  const modal = page.getByRole('dialog', { name: 'Estado de cuenta' })
+  await modal.getByPlaceholder('Buscar cliente por nombre').fill('altavista')
+  await modal.getByRole('option', { name: CLIENTE.nombre }).click()
+
+  await expect(modal.getByText('$487,200.00').first()).toBeVisible()
+  await expect(modal.getByText('$300,000.00').first()).toBeVisible()
+  await expect(modal.getByText('$187,200.00').first()).toBeVisible()
+  // La Factura A es PPD, tiene un pago y ningún complemento: está pendiente.
+  await expect(modal.getByText(/F-A_Altavista: es PPD y falta su complemento de pago/)).toBeVisible()
+  const filaA = modal.getByRole('row', { name: /F-A_Altavista.*Parcial/ })
+  await expect(filaA).toContainText('$359,600.00')
+  await expect(filaA).toContainText('$59,600.00')
+  await expect(filaA).toContainText('Parcial')
+  await expect(filaA).toContainText('SH001 · SH003 · SH004 · SH006')
+  // El depósito se muestra una sola vez, aplicado a las cuatro cotizaciones de la factura.
+  const filaPago = modal.getByRole('row', { name: /30 sep 2026/ })
+  await expect(filaPago).toContainText('F-A_Altavista · SH001, SH003, SH004, SH006')
+  await expect(filaPago.getByRole('link', { name: 'Ver' })).toHaveAttribute('href', 'https://drive.test/transferencia_BBVA_30sep.pdf')
+  await expect(modal.getByText('Saldo').last()).toBeVisible()
+})
+
+test('estado de cuenta: abierto desde un chip resalta el documento y la URL conserva el contexto', async ({ page }) => {
+  await abrir(page, { conPago: true }, '/cuentas?anio=2026&mes=9&sheet=estado&lado=cobro&cid=cli-altavista&doc=fa')
+  const modal = page.getByRole('dialog', { name: 'Estado de cuenta' })
+  await expect(modal.getByText('Grupo Altavista S.A. de C.V.').first()).toBeVisible()
+  await expect(modal.locator('tr[data-resaltada]')).toHaveCount(1)
+  await expect(modal.locator('tr[data-resaltada]')).toContainText('F-A_Altavista')
+  await page.keyboard.press('Escape')
+  await expect(modal).toBeHidden()
+  await expect(page).not.toHaveURL(/sheet=estado/)
+})
