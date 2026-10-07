@@ -1,6 +1,6 @@
 import { computeClientFileHash, computeClientPayloadHash } from '@/lib/shared/canonicalPayload'
 import { clearPendingOperation, createPendingOperation, readPendingOperation } from '@/lib/client/pendingOperation'
-import { reconcilePagoEstado, type PagoReconciliationResult } from '@/lib/client/reconcilePago'
+import { reconcilePagoEstado, type DominioPago, type PagoReconciliationResult } from '@/lib/client/reconcilePago'
 
 /**
  * Orquestación de idempotencia compartida entre useCuentasPagar y
@@ -51,7 +51,7 @@ import { reconcilePagoEstado, type PagoReconciliationResult } from '@/lib/client
  */
 export interface RunIdempotentPagoSubmitParams<TFields> {
   scope: string
-  dominio: 'cuentas-cobrar' | 'cuentas-pagar-grupos'
+  dominio: DominioPago
   cuentaId: string
   fields: TFields
   comprobante?: File
@@ -59,7 +59,7 @@ export interface RunIdempotentPagoSubmitParams<TFields> {
   submit: (args: { operationId: string; comprobante?: File }) => Promise<unknown>
   /** Inyectable solo para pruebas -- por default consulta el endpoint real. */
   reconcile?: (
-    dominio: 'cuentas-cobrar' | 'cuentas-pagar-grupos',
+    dominio: DominioPago,
     cuentaId: string,
     operationId: string
   ) => Promise<PagoReconciliationResult>

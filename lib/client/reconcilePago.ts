@@ -1,3 +1,9 @@
+/**
+ * Dominio de la operación. `cuentas-pagos-*` (#123, B4): `POST /api/cuentas/pagos`, un pago de varias líneas por lado;
+ * su `cuentaId` no se usa (la operación es la cabecera `pagos`).
+ */
+export type DominioPago = 'cuentas-cobrar' | 'cuentas-pagar-grupos' | 'cuentas-pagos-cobro' | 'cuentas-pagos-proveedor'
+
 export type PagoReconciliationStatus = 'completed' | 'not_found' | 'ambiguous'
 
 /**
@@ -22,18 +28,23 @@ export interface PagoReconciliationResult {
  * nada.
  */
 export async function reconcilePagoEstado(
-  dominio: 'cuentas-cobrar' | 'cuentas-pagar-grupos',
+  dominio: DominioPago,
   cuentaId: string,
   operationId: string
 ): Promise<PagoReconciliationResult> {
   try {
     // Los grupos de facturación (docs/PLAN.md) viven bajo un sub-recurso de
     // cuentas-pagar, no bajo su propio dominio en la URL.
-    const path =
-      dominio === 'cuentas-pagar-grupos'
-        ? `/api/cuentas-pagar/grupos/${cuentaId}/registrar-pago/estado`
-        : `/api/${dominio}/${cuentaId}/registrar-pago/estado`
-    const response = await fetch(`${path}?operation_id=${encodeURIComponent(operationId)}`)
+    const op = `operation_id=${encodeURIComponent(operationId)}`
+    const url =
+      dominio === 'cuentas-pagos-cobro' || dominio === 'cuentas-pagos-proveedor'
+        ? `/api/cuentas/pagos/estado?lado=${dominio === 'cuentas-pagos-cobro' ? 'cobro' : 'proveedor'}&${op}`
+        : `${
+            dominio === 'cuentas-pagar-grupos'
+              ? `/api/cuentas-pagar/grupos/${cuentaId}/registrar-pago/estado`
+              : `/api/${dominio}/${cuentaId}/registrar-pago/estado`
+          }?${op}`
+    const response = await fetch(url)
     const body = await response.json().catch(() => ({}))
     if (response.ok && body?.status === 'completed') return { status: 'completed', result: body.result }
     if (response.ok && body?.status === 'ambiguous') return { status: 'ambiguous' }

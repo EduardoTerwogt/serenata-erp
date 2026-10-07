@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { BottomSheet } from '@/components/ui/BottomSheet'
 import { Button } from '@/components/ui/Button'
 import { FilterTabs } from '@/components/ui/FilterTabs'
@@ -18,6 +18,8 @@ import { BotonPeriodo, HojaPeriodo, PeriodoEscritorio } from './Periodo'
 import { CuerpoProyecto, EncabezadoProyecto, ProyectoPanel } from './ProyectoPanel'
 import { ListaCompacta, ListaProyectos, agruparProyectos } from './Proyectos'
 import { AccionesReapertura } from './Reapertura'
+import { MenuAcciones, type AccionCuentas } from './acciones/MenuAcciones'
+import { RegistrarPago } from './acciones/RegistrarPago'
 import { Totales } from './Totales'
 import { useEsAncho, useEsEscritorio } from './ui'
 import { PAGE_SIZE_LISTA, useCuentasDatos } from './useCuentasDatos'
@@ -32,6 +34,12 @@ import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 
 /** Mientras llegan las opciones del año, listas vacías estables (no cambian la memo de Filtros). */
 const SIN_OPCIONES: string[] = []
+
+/** Entradas del menú Acciones cuya ventana ya existe (T7). */
+const ACCIONES_DISPONIBLES: readonly AccionCuentas[] = ['pago', 'orden']
+
+/** Cuánto debe pasar con la pestaña oculta para volver a pedir los datos al regresar a ella (B4a). */
+const REFRESCO_AL_VOLVER_MS = 30_000
 
 const VISTAS: { value: VistaCuentas; label: string }[] = [
   { value: 'proyectos', label: 'Por proyecto' },
@@ -101,6 +109,34 @@ export function CuentasApp() {
       }),
     [cerrar, estado.anio]
   )
+  // Con varias pestañas o usuarios, lo que se ve puede haber cambiado (un pago, una factura): al volver a la pestaña
+  // se vuelve a pedir lo visible. Sin Realtime (decisión 003); solo si la pestaña estuvo oculta un rato.
+  const ocultaDesde = useRef<number | null>(null)
+  useEffect(() => {
+    const alCambiar = () => {
+      if (document.visibilityState === 'hidden') {
+        ocultaDesde.current = Date.now()
+        return
+      }
+      const desde = ocultaDesde.current
+      ocultaDesde.current = null
+      if (desde !== null && Date.now() - desde >= REFRESCO_AL_VOLVER_MS) recargarTodo()
+    }
+    document.addEventListener('visibilitychange', alCambiar)
+    return () => document.removeEventListener('visibilitychange', alCambiar)
+  }, [recargarTodo])
+
+  const elegirAccion = useCallback(
+    (a: AccionCuentas) => {
+      if (a === 'orden') abrir({ pantalla: 'ordenes' })
+      else if (a === 'pago') abrir({ sheet: 'pago', lado: 'cobro', cid: null, pre: null })
+      else if (a === 'factura') abrir({ sheet: 'factura' })
+      else abrir({ sheet: 'estado', lado: 'cobro', cid: null, doc: null })
+    },
+    [abrir]
+  )
+  const cerrarAccion = useCallback(() => cerrar({ sheet: null, lado: null, cid: null, doc: null, pre: null }), [cerrar])
+
   const ancho = useEsAncho()
   const [buscando, setBuscando] = useState(false)
 
@@ -211,32 +247,25 @@ export function CuentasApp() {
       {/* Encabezado */}
       <div className="flex items-center gap-2 px-4 md:justify-between md:gap-3 md:px-0">
         <h1 className="sn-display min-w-0 flex-1 text-[27px] text-ink md:flex-none md:text-[22px]">Cuentas</h1>
-        <div className="hidden items-center gap-2.5 md:flex">
-          <Button variant="secondary" iconLeft="bell" onClick={() => abrir({ pantalla: 'avisos' })}>
+        <div className="flex items-center gap-2 md:gap-2.5">
+          <Button className="max-md:hidden" variant="secondary" iconLeft="bell" onClick={() => abrir({ pantalla: 'avisos' })}>
             <span className="inline-flex items-center gap-1.5">
               Avisos
               <Contador n={avisos} />
             </span>
           </Button>
-          <Button iconLeft="file-text" onClick={() => abrir({ pantalla: 'ordenes' })}>
-            Orden de pago
-          </Button>
-        </div>
-        <div className="flex items-center gap-2 md:hidden">
           <button
             type="button"
             aria-label={`Avisos${avisos ? ` (${avisos})` : ''}`}
             onClick={() => abrir({ pantalla: 'avisos' })}
-            className="relative flex h-9 w-9 items-center justify-center rounded-control border border-hairline bg-card text-body"
+            className="relative flex h-9 w-9 items-center justify-center rounded-control border border-hairline bg-card text-body md:hidden"
           >
             <Icon name="bell" size={18} />
             {avisos > 0 && (
               <span className="absolute -right-[5px] -top-[5px] flex h-[18px] min-w-[18px] items-center justify-center rounded-pill bg-accent px-[5px] text-[10.5px] font-semibold text-white">{avisos}</span>
             )}
           </button>
-          <button type="button" aria-label="Órdenes de pago" onClick={() => abrir({ pantalla: 'ordenes' })} className="flex h-9 w-9 items-center justify-center rounded-control bg-accent text-white">
-            <Icon name="file-text" size={18} />
-          </button>
+          <MenuAcciones onElegir={elegirAccion} disponibles={ACCIONES_DISPONIBLES} />
         </div>
       </div>
 
@@ -383,6 +412,18 @@ export function CuentasApp() {
           onGenerar={() => abrir({ sheet: 'orden' })}
           onHistorial={() => abrir({ sheet: 'historial' })}
           onOrdenCambio={recargarTodo}
+        />
+      )}
+      {estado.sheet === 'pago' && (
+        <RegistrarPago
+          escritorio={escritorio}
+          lado={estado.lado ?? 'cobro'}
+          contraparteId={estado.cid}
+          proyecto={estado.pre}
+          hoy={periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()}
+          onCambio={(c) => reemplazar({ lado: c.lado, cid: c.contraparteId })}
+          onClose={cerrarAccion}
+          onRegistrado={recargarTodo}
         />
       )}
       {estado.sheet === 'orden' && <GenerarOrden escritorio={escritorio} onClose={() => cerrar({ sheet: null })} onGenerada={recargarTodo} />}

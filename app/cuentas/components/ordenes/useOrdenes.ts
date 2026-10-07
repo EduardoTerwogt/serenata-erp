@@ -13,7 +13,7 @@ interface Carga<T> {
 }
 
 /** GET con cancelación al desmontar o al cambiar la URL; `recargar` vuelve a pedirla. */
-function useGet<T>(url: string | null, mensaje: string): Carga<T> {
+export function useGet<T>(url: string | null, mensaje: string): Carga<T> {
   const [version, setVersion] = useState(0)
   const clave = url ? `${url}#${version}` : ''
   const [estado, setEstado] = useState<{ clave: string; datos: T | null; error: string | null }>({ clave: '', datos: null, error: null })

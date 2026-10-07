@@ -34,7 +34,7 @@ interface Props {
   corrige: boolean
 }
 
-function Aviso({ icono, tono, children }: { icono: IconName; tono: 'neutro' | 'acento' | 'ok'; children: ReactNode }) {
+export function Aviso({ icono, tono, children }: { icono: IconName; tono: 'neutro' | 'acento' | 'ok'; children: ReactNode }) {
   const caja = tono === 'acento' ? 'border-accent/35 bg-accent/[0.07]' : tono === 'ok' ? 'border-transparent bg-approved-bg' : 'border-hairline bg-row-alt'
   const color = tono === 'acento' ? 'text-accent' : tono === 'ok' ? 'text-approved-fg' : 'text-subtext'
   return (
