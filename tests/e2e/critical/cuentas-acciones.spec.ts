@@ -130,3 +130,110 @@ test('registrar pago a proveedor: cada factura es un proyecto y el pago liquida 
   expect(llamadas.pagos[0].lado).toBe('proveedor')
   expect(llamadas.pagos[0].lineas.map((l) => l.id)).toEqual(['grupo-SH001', 'grupo-SH003', 'grupo-SH004'])
 })
+
+// ── Subir factura (B4b) ─────────────────────────────────────────────────────────────────────────────────────────
+
+const xml = (name: string) => ({ name, mimeType: 'text/xml', buffer: Buffer.from('<cfdi:Comprobante/>') })
+
+async function subirXml(page: Page, nombre: string) {
+  await elegirAccion(page, 'Subir factura')
+  await expect(page).toHaveURL(/sheet=factura/)
+  const modal = page.getByRole('dialog', { name: 'Subir factura' })
+  await modal.locator('input[type="file"]').first().setInputFiles(xml(nombre))
+  return modal
+}
+
+test('subir factura: el XML con folios marca las cotizaciones, cuadra y se guarda como Válida', async ({ page }) => {
+  const llamadas = await abrir(page)
+  const modal = await subirXml(page, 'folios.xml')
+
+  await expect(modal.getByText(CLIENTE.nombre).first()).toBeVisible()
+  await expect(modal.getByText('Marcadas por los folios del CFDI')).toBeVisible()
+  for (const f of ['SH001', 'SH003', 'SH004', 'SH006']) await expect(modal.getByRole('checkbox', { name: `Incluir ${f}` })).toHaveAttribute('aria-checked', 'true')
+  for (const f of ['SH002', 'SH005']) await expect(modal.getByRole('checkbox', { name: `Incluir ${f}` })).toHaveAttribute('aria-checked', 'false')
+  await expect(modal.getByText(/La suma de las cotizaciones coincide con el total del XML/)).toBeVisible()
+  await expect(modal.getByText('4 cotizaciones · Grupo Altavista S.A. de C.V.')).toBeVisible()
+
+  await modal.getByRole('button', { name: 'Guardar factura' }).click()
+  await expect(modal.getByText('Factura guardada')).toBeVisible()
+  expect(llamadas.facturas).toHaveLength(1)
+  expect(llamadas.facturas[0].cuentas).toEqual([
+    { id: 'cobro-SH001', monto_esperado: 185600 },
+    { id: 'cobro-SH003', monto_esperado: 58000 },
+    { id: 'cobro-SH004', monto_esperado: 46400 },
+    { id: 'cobro-SH006', monto_esperado: 69600 },
+  ])
+  expect(llamadas.facturas[0].operation_id).toMatch(/^[0-9a-f-]{36}$/)
+})
+
+test('subir factura: si el total no cuadra se avisa con el detalle y se guarda "En revisión"', async ({ page }) => {
+  const llamadas = await abrir(page, { factura: { status: 200, body: { success: true, estado_validacion: 'revision', detalle_validacion: 'El XML suma $359,600.00 y las cotizaciones ligadas suman $290,000.00' } } })
+  const modal = await subirXml(page, 'folios.xml')
+  await expect(modal.getByText(/La suma de las cotizaciones coincide/)).toBeVisible()
+
+  // Quitar SH006 ($69,600): el XML ya no cuadra y la ventana lo dice con los números de SQL.
+  await modal.getByRole('checkbox', { name: 'Incluir SH006' }).click()
+  await expect(modal.getByText(/No cuadra: XML \$359,600\.00 vs\. cotizaciones \$290,000\.00 \(faltan \$69,600\.00\)/)).toBeVisible()
+  await expect(modal.getByText('En revisión').first()).toBeVisible()
+  await modal.getByRole('button', { name: 'Guardar en revisión' }).click()
+  await expect(modal.getByText('Factura guardada en revisión')).toBeVisible()
+  expect(llamadas.facturas[0].cuentas).toHaveLength(3)
+})
+
+test('subir factura: un CFDI sin folios se arma a mano y no se guarda sin cotizaciones', async ({ page }) => {
+  const llamadas = await abrir(page)
+  const modal = await subirXml(page, 'generico.xml')
+  await expect(modal.getByText('El CFDI no trae folios: elige a mano')).toBeVisible()
+  const guardar = modal.getByRole('button', { name: 'Guardar factura' })
+  await expect(guardar).toBeDisabled()
+  await expect(modal.getByText('Marca las cotizaciones que cubre esta factura.')).toBeVisible()
+  await modal.getByRole('checkbox', { name: 'Incluir SH001' }).click()
+  await expect(modal.getByRole('button', { name: 'Guardar en revisión' })).toBeEnabled()
+  expect(llamadas.facturas).toHaveLength(0)
+})
+
+test('subir factura: un RFC sin ficha se elige a mano y se ofrece guardar el RFC', async ({ page }) => {
+  const llamadas = await abrir(page)
+  const modal = await subirXml(page, 'sinrfc.xml')
+  await expect(modal.getByText(/No hay un cliente con el RFC XAXX010101000/)).toBeVisible()
+  await modal.getByPlaceholder('Buscar cliente por nombre').fill('altavista')
+  await modal.getByRole('option', { name: CLIENTE.nombre }).click()
+  await expect(modal.getByText(/Guardar el RFC XAXX010101000 en la ficha/)).toBeVisible()
+  await modal.getByRole('checkbox', { name: 'Incluir SH001' }).click()
+  await modal.getByRole('button', { name: /Guardar/ }).last().click()
+  await expect(modal.getByText(/Factura guardada/)).toBeVisible()
+  expect(llamadas.facturas[0].guardar_rfc).toBe(true)
+  expect(llamadas.facturas[0].contraparte_id).toBe(CLIENTE.id)
+})
+
+test('subir factura: XML ajeno o repetido se rechazan con su explicación', async ({ page }) => {
+  await abrir(page)
+  let modal = await subirXml(page, 'ajeno.xml')
+  await expect(modal.getByText('El XML no es de ni para Serenata: revisa que sea el archivo correcto.')).toBeVisible()
+  await modal.getByRole('button', { name: 'Cancelar' }).or(modal.getByRole('button', { name: 'Cerrar' }).first()).first().click()
+
+  modal = await subirXml(page, 'duplicada.xml')
+  await expect(modal.getByText(/Esta factura ya está registrada \(mismo UUID\)/)).toBeVisible()
+  await expect(modal.getByRole('button', { name: /Guardar/ }).last()).toBeDisabled()
+})
+
+test('subir factura de proveedor: se liga al proyecto que nombran los folios', async ({ page }) => {
+  const llamadas = await abrir(page)
+  const modal = await subirXml(page, 'proveedor.xml')
+  await expect(modal.getByText(PROVEEDOR.nombre).first()).toBeVisible()
+  await expect(modal.getByRole('radio', { name: 'Elegir SH004' })).toHaveAttribute('aria-checked', 'true')
+  await expect(modal.getByText(/El total coincide con lo que se le debe/)).toBeVisible()
+  await modal.getByRole('button', { name: 'Guardar factura' }).click()
+  await expect(modal.getByText('Factura guardada')).toBeVisible()
+  expect(llamadas.facturas[0].grupo_id).toBe('grupo-SH004')
+})
+
+test('subir complemento de pago: se liga por el UUID de la factura', async ({ page }) => {
+  const llamadas = await abrir(page)
+  const modal = await subirXml(page, 'complemento.xml')
+  await expect(modal.getByText(/Es un complemento de pago\./)).toBeVisible()
+  await expect(modal.getByText('Factura registrada')).toBeVisible()
+  await modal.getByRole('button', { name: 'Guardar complemento' }).click()
+  await expect(modal.getByText('Complemento guardado')).toBeVisible()
+  expect(llamadas.facturas).toHaveLength(1)
+})

@@ -20,6 +20,7 @@ import { ListaCompacta, ListaProyectos, agruparProyectos } from './Proyectos'
 import { AccionesReapertura } from './Reapertura'
 import { MenuAcciones, type AccionCuentas } from './acciones/MenuAcciones'
 import { RegistrarPago } from './acciones/RegistrarPago'
+import { SubirFactura } from './acciones/SubirFactura'
 import { Totales } from './Totales'
 import { useEsAncho, useEsEscritorio } from './ui'
 import { PAGE_SIZE_LISTA, useCuentasDatos } from './useCuentasDatos'
@@ -36,7 +37,7 @@ import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 const SIN_OPCIONES: string[] = []
 
 /** Entradas del menú Acciones cuya ventana ya existe (T7). */
-const ACCIONES_DISPONIBLES: readonly AccionCuentas[] = ['pago', 'orden']
+const ACCIONES_DISPONIBLES: readonly AccionCuentas[] = ['factura', 'pago', 'orden']
 
 /** Cuánto debe pasar con la pestaña oculta para volver a pedir los datos al regresar a ella (B4a). */
 const REFRESCO_AL_VOLVER_MS = 30_000
@@ -414,6 +415,7 @@ export function CuentasApp() {
           onOrdenCambio={recargarTodo}
         />
       )}
+      {estado.sheet === 'factura' && <SubirFactura escritorio={escritorio} onClose={cerrarAccion} onGuardada={recargarTodo} />}
       {estado.sheet === 'pago' && (
         <RegistrarPago
           escritorio={escritorio}

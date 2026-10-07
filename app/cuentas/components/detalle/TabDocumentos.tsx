@@ -24,7 +24,7 @@ interface Props {
 /** Límite por archivo (supuesto 15): igual que el servidor (factura-validation.ts). */
 export const LIMITE_ARCHIVO = 4 * 1024 * 1024
 export const ACCEPT_XML = '.xml,application/xml,text/xml'
-const ACCEPT_PDF = '.pdf,application/pdf'
+export const ACCEPT_PDF = '.pdf,application/pdf'
 export const ACCEPT_COMPROBANTE = 'image/*,.pdf,application/pdf'
 
 /** Botón que abre el selector de archivo; rechaza en el cliente lo que el servidor rechazaría por tamaño. */

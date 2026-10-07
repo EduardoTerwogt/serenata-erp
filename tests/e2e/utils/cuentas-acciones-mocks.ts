@@ -90,13 +90,110 @@ export interface PagoMock {
   operation_id: string
 }
 
+export interface FacturaMock {
+  operation_id: string
+  contraparte_id?: string | null
+  guardar_rfc?: boolean
+  cuentas?: { id: string; monto_esperado: number }[]
+  grupo_id?: string | null
+  pago_id?: string | null
+}
+
 export interface LlamadasAcciones {
   pagos: PagoMock[]
+  /** Altas confirmadas de factura o complemento. */
+  facturas: FacturaMock[]
+  /** Cuentas elegidas en cada vista previa, en orden. */
+  previews: string[][]
 }
 
 export interface OpcionesAcciones {
   /** Respuesta del POST de pagos (por default 200 con éxito). */
   pago?: { status: number; body: unknown }
+  /** Respuesta del POST de facturas (por default 200 con la validación que calculó el preview). */
+  factura?: { status: number; body: unknown }
+}
+
+/**
+ * Nombre del XML → qué CFDI simula el mock de la vista previa:
+ * `folios.xml` (Factura A de Altavista con los folios SH001, SH003, SH004 y SH006), `generico.xml` (mismo cliente, el
+ * CFDI no trae folios), `proveedor.xml` (DS-0419 de Distrito Sonoro), `sinrfc.xml` (RFC que no es de nadie),
+ * `complemento.xml` (REP de la Factura A), `ajeno.xml` (no es de Serenata, 400) y `duplicada.xml`.
+ */
+const MONTOS_COT: Record<string, number> = { SH001: 185600, SH002: 92800, SH003: 58000, SH004: 46400, SH005: 34800, SH006: 69600 }
+const NOMBRES_COT: Record<string, string> = {
+  SH001: 'Spot TV 30s',
+  SH002: 'Fotofija campaña',
+  SH003: 'Making of',
+  SH004: 'Versiones redes',
+  SH005: 'Casting',
+  SH006: 'Post adicional',
+}
+const candidatosCobro = () =>
+  Object.keys(MONTOS_COT).map((f) => ({ cuenta_id: `cobro-${f}`, folio: f, cotizacion_id: f, proyecto_id: f, proyecto: NOMBRES_COT[f], monto_total: MONTOS_COT[f], monto_pagado: 0, saldo: MONTOS_COT[f], fecha_entrega: '2026-09-10' }))
+const candidatosProveedor = () => [
+  { grupo_id: 'grupo-SH004', proyecto_id: 'SH004', proyecto: 'Versiones redes', estado: 'sin_factura', monto_total: 31320, conceptos: 2, fecha_entrega: '2026-09-10' },
+  { grupo_id: 'grupo-SH006', proyecto_id: 'SH006', proyecto: 'Post adicional', estado: 'sin_factura', monto_total: 18560, conceptos: 1, fecha_entrega: '2026-10-02' },
+]
+
+function previewDe(nombre: string, datos: { contraparte_id?: string | null; cuentas?: string[] }) {
+  const cuentas = datos.cuentas ?? []
+  const cfdiBase = { uuid: '6F2C0000-0000-0000-0000-000000A191AB', fecha: '2026-09-12T10:00:00', subtotal: null, rfc_emisor: 'SHO100101AB1', rfc_receptor: CLIENTE.rfc, conceptos: [] as string[] }
+  if (nombre === 'complemento.xml') {
+    return { tipo: 'complemento_cobro', lado: 'cobro', cfdi: { uuid: 'AAAA0000-0000-0000-0000-00000000REP1', fecha: '2026-10-01T09:00:00' }, relacionados: [{ uuid_factura: '6F2C0000-0000-0000-0000-000000A191AB', monto_pagado: 300000, factura: { id: 'fa', estado_validacion: 'validado', metodo_pago: 'PPD', total_cfdi: 359600 } }] }
+  }
+  if (nombre === 'proveedor.xml') {
+    const elegida = cuentas[0]
+    return {
+      tipo: 'factura_proveedor',
+      lado: 'proveedor',
+      cfdi: { ...cfdiBase, uuid: 'DS000419-0000-0000-0000-000000000000', total: 31320, metodo_pago: 'PPD', rfc_emisor: PROVEEDOR.rfc, rfc_receptor: 'SHO100101AB1', folios: ['SH004'] },
+      rfc_contraparte: PROVEEDOR.rfc,
+      contraparte: PROVEEDOR,
+      ambiguas: [],
+      ofrecer_guardar_rfc: false,
+      rfc_distinto: false,
+      candidatos: candidatosProveedor(),
+      preseleccion: [],
+      cuadre: elegida ? { estado: 'validado', detalle: null, monto_total: 31320 } : null,
+      duplicada: null,
+    }
+  }
+  const sinRfc = nombre === 'sinrfc.xml'
+  const folios = nombre === 'folios.xml' || nombre === 'duplicada.xml' ? ['SH001', 'SH003', 'SH004', 'SH006'] : []
+  const total = 359600
+  const suma = cuentas.reduce((a, id) => a + (MONTOS_COT[id.replace('cobro-', '')] ?? 0), 0)
+  const dif = Math.round((total - suma) * 100) / 100
+  const cuadra = cuentas.length > 0 && Math.abs(dif) <= 0.01 * cuentas.length
+  const contraparte = sinRfc && !datos.contraparte_id ? null : { ...CLIENTE, rfc: sinRfc ? null : CLIENTE.rfc }
+  return {
+    tipo: 'factura_cobro',
+    lado: 'cobro',
+    cfdi: { ...cfdiBase, total, metodo_pago: 'PPD', rfc_receptor: sinRfc ? 'XAXX010101000' : CLIENTE.rfc, folios },
+    rfc_contraparte: sinRfc ? 'XAXX010101000' : CLIENTE.rfc,
+    contraparte,
+    ambiguas: [],
+    ofrecer_guardar_rfc: sinRfc && !!contraparte,
+    rfc_distinto: false,
+    candidatos: contraparte ? candidatosCobro() : [],
+    preseleccion: folios.map((f) => `cobro-${f}`),
+    cuadre:
+      contraparte && cuentas.length > 0
+        ? {
+            total_cfdi: total,
+            n: cuentas.length,
+            suma,
+            diferencia: dif,
+            tolerancia: 0.01 * cuentas.length,
+            estado: cuadra ? 'validado' : 'revision',
+            detalle: cuadra ? null : `El XML suma $359,600.00 y las cotizaciones ligadas suman $${suma.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+            otro_cliente: false,
+            ya_ligadas: [],
+            no_encontradas: 0,
+          }
+        : null,
+    duplicada: nombre === 'duplicada.xml' ? { id: 'fa' } : null,
+  }
 }
 
 /** El campo `datos` (JSON) de un multipart, sin depender de la librería del navegador. */
@@ -106,7 +203,7 @@ export function datosDeMultipart(postData: string | null): unknown {
 }
 
 export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones = {}): Promise<LlamadasAcciones> {
-  const llamadas: LlamadasAcciones = { pagos: [] }
+  const llamadas: LlamadasAcciones = { pagos: [], facturas: [], previews: [] }
 
   await page.route(/\/api\/cuentas\/estado-cuenta\?/, (route: Route) => {
     const lado = new URL(route.request().url()).searchParams.get('lado')
@@ -126,6 +223,21 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
   await page.route(/\/api\/cuentas\/pagos$/, async (route: Route) => {
     llamadas.pagos.push(datosDeMultipart(route.request().postData()) as PagoMock)
     const r = opciones.pago ?? { status: 200, body: { success: true, resumen: {}, pago: { pago_id: 'pago-1', comprobante_url: null } } }
+    await fulfillJson(route, r.body, r.status)
+  })
+  await page.route(/\/api\/cuentas\/facturas\/preview$/, async (route: Route) => {
+    const post = route.request().postData() ?? ''
+    const nombre = post.match(/name="xml"; filename="([^"]+)"/)?.[1] ?? ''
+    if (nombre === 'ajeno.xml') {
+      return fulfillJson(route, { error: 'rfc_ajeno', message: 'El XML no es de ni para Serenata: revisa que sea el archivo correcto.' }, 400)
+    }
+    const datos = (datosDeMultipart(post) ?? {}) as { contraparte_id?: string | null; cuentas?: string[] }
+    llamadas.previews.push(datos.cuentas ?? [])
+    await fulfillJson(route, previewDe(nombre, datos))
+  })
+  await page.route(/\/api\/cuentas\/facturas$/, async (route: Route) => {
+    llamadas.facturas.push(datosDeMultipart(route.request().postData()) as FacturaMock)
+    const r = opciones.factura ?? { status: 200, body: { success: true, estado_validacion: 'validado', detalle_validacion: null } }
     await fulfillJson(route, r.body, r.status)
   })
   return llamadas

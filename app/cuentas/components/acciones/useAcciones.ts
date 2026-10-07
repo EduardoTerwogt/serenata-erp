@@ -6,6 +6,7 @@ import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
 import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
 import { clearPendingOperation } from '@/lib/client/pendingOperation'
 import type { EstadoCuentaRespuesta, LadoCuentas } from '@/lib/shared/cuentas/estado-cuenta-tipos'
+import type { PreviewCuentas } from '@/lib/shared/cuentas/factura-preview-tipos'
 import { useGet } from '../ordenes/useOrdenes'
 
 export interface ContraparteLista {
@@ -105,5 +106,46 @@ export const accionesPago = {
       if (err instanceof ApiError && err.status >= 400 && err.status < 500) clearPendingOperation(scope)
       throw err
     }
+  },
+}
+
+export interface DatosFactura {
+  contraparte_id?: string | null
+  cuentas?: string[]
+}
+
+export interface DatosGuardarFactura {
+  operation_id: string
+  contraparte_id?: string | null
+  guardar_rfc?: boolean
+  cuentas?: { id: string; monto_esperado: number }[]
+  grupo_id?: string | null
+  pago_id?: string | null
+}
+
+export interface FacturaGuardada {
+  success: boolean
+  estado_validacion?: string | null
+  detalle_validacion?: string | null
+  repetido?: boolean
+  grupo?: { estado: string }
+  [k: string]: unknown
+}
+
+export const accionesFactura = {
+  /** Vista previa (no escribe nada, T9): clasifica el XML, propone contraparte y cuentas y devuelve el cuadre de SQL. */
+  preview(xml: File, datos: DatosFactura, signal?: AbortSignal) {
+    const fd = new FormData()
+    fd.set('xml', xml)
+    fd.set('datos', JSON.stringify({ contraparte_id: datos.contraparte_id ?? null, cuentas: datos.cuentas ?? [] }))
+    return sendFormData<PreviewCuentas>('/api/cuentas/facturas/preview', fd, 'No se pudo leer el XML', { signal })
+  },
+  /** Confirma el alta; el PDF viaja con el XML (≤ 4 MB cada uno). El `operation_id` hace idempotente el reintento. */
+  guardar(xml: File, pdf: File | null, datos: DatosGuardarFactura) {
+    const fd = new FormData()
+    fd.set('xml', xml)
+    if (pdf) fd.set('pdf', pdf)
+    fd.set('datos', JSON.stringify(datos))
+    return sendFormData<FacturaGuardada>('/api/cuentas/facturas', fd, 'No se pudo guardar la factura')
   },
 }
