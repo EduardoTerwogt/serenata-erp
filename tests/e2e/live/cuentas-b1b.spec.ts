@@ -9,7 +9,7 @@ import { cleanupLiveCuentasByPrefix, cleanupLiveOrdenesPagoHuerfanas, getLiveSup
  *
  * - generar_orden_pago: dos generaciones simultáneas con el mismo grupo
  *   dejan una sola orden (H1) con su desglose (S1).
- * - registrar_pago_grupo_factura: un pago parcial de un grupo dentro de
+ * - registrar_pago_proveedor: un pago parcial de un grupo dentro de
  *   una orden conserva EN_PROCESO_PAGO (H3).
  * - cancel_cotizacion: principal, complementaria y principal con
  *   complementarias (APROBADA, EMITIDA, BORRADOR), más los casos
@@ -117,13 +117,19 @@ async function limpiar(supabase: Supabase, fx: Fixture) {
   const cuentaIds = (cuentas ?? []).map((c) => c.id)
   if (ordenIds.length) await supabase.from('ordenes_pago_conceptos').delete().in('orden_pago_id', ordenIds)
   // B2: pagos_cuentas_pagar referencia grupos, cuentas y órdenes.
-  if (grupoIds.length) await supabase.from('pagos_cuentas_pagar').delete().in('grupo_id', grupoIds)
-  if (cuentaIds.length) await supabase.from('pagos_cuentas_pagar').delete().in('cuenta_pagar_id', cuentaIds)
+  // #123: las líneas cuelgan de la cabecera `pagos`: se borran las líneas y luego las cabeceras que quedan sin ellas.
+  const pagoIds: string[] = []
+  if (grupoIds.length) {
+    const { data: lineas } = await supabase.from('pagos_cuentas_pagar').select('pago_id').in('grupo_id', grupoIds)
+    pagoIds.push(...(lineas ?? []).map((l) => l.pago_id as string))
+    await supabase.from('pagos_cuentas_pagar').delete().in('grupo_id', grupoIds)
+  }
   if (grupoIds.length) await supabase.from('documentos_cuentas_pagar').delete().in('grupo_id', grupoIds)
   if (cuentaIds.length) await supabase.from('documentos_cuentas_pagar').delete().in('cuentas_pagar_id', cuentaIds)
   await supabase.from('cuentas_pagar').delete().eq('responsable_id', fx.proveedorId)
   if (grupoIds.length) await supabase.from('cuentas_pagar_grupos').delete().in('id', grupoIds)
   if (ordenIds.length) await supabase.from('ordenes_pago').delete().in('id', ordenIds)
+  if (pagoIds.length) await supabase.from('pagos').delete().in('id', Array.from(new Set(pagoIds)))
   if (ids.length) {
     await supabase.from('cuentas_cobrar').delete().in('cotizacion_id', ids)
     await supabase.from('proyectos').delete().in('id', ids)
@@ -268,8 +274,13 @@ test.describe('live: B1b — órdenes de pago atómicas y cancelación en cascad
       fx.ordenes.push(generada.orden_pago_id)
 
       // B2 (D3): se captura el transferido; el neto aplicado es proporcional.
-      const res = must(await supabase.rpc('registrar_pago_grupo_factura', { p_grupo_id: grupoId, p_monto: 400 }))
-      expect((res as { estado_nuevo: string }).estado_nuevo).toBe('EN_PROCESO_PAGO')
+      const res = must(await supabase.rpc('registrar_pago_proveedor', {
+        p_lineas: [{ grupo_id: grupoId, monto: 400 }],
+        p_tipo_pago: 'TRANSFERENCIA',
+        p_fecha_pago: '2026-09-12',
+        p_usuario: 'live',
+      })) as { lineas: { estado_nuevo: string }[] }
+      expect(res.lineas[0].estado_nuevo).toBe('EN_PROCESO_PAGO')
       const fila = must(await supabase.from('cuentas_pagar_grupos').select('estado, monto_pagado, monto_transferido').eq('id', grupoId).single())
       expect(fila.estado).toBe('EN_PROCESO_PAGO')
       expect(Number(fila.monto_transferido)).toBe(400)

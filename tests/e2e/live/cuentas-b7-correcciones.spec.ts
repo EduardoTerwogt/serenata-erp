@@ -79,6 +79,10 @@ async function crearFixture(supabase: Supabase): Promise<Fixture> {
 }
 
 async function limpiar(supabase: Supabase, fx: Fixture) {
+  // #123: las líneas cuelgan de la cabecera `pagos`; se borran las líneas y luego las cabeceras que quedan huérfanas.
+  const { data: lc } = await supabase.from('pagos_comprobantes').select('pago_id').eq('cuentas_cobrar_id', fx.cobroId)
+  const { data: lp } = await supabase.from('pagos_cuentas_pagar').select('pago_id').eq('grupo_id', fx.grupoId)
+  const pagoIds = Array.from(new Set([...(lc ?? []), ...(lp ?? [])].map((l) => l.pago_id as string)))
   await supabase.from('cuentas_reaperturas').delete().eq('proyecto_id', fx.id)
   await supabase.from('cuentas_correcciones').delete().eq('proyecto_id', fx.id)
   await supabase.from('pagos_cuentas_pagar').delete().eq('grupo_id', fx.grupoId)
@@ -87,15 +91,33 @@ async function limpiar(supabase: Supabase, fx: Fixture) {
   await supabase.from('cuentas_pagar_grupos').delete().eq('id', fx.grupoId)
   await supabase.from('pagos_comprobantes').delete().eq('cuentas_cobrar_id', fx.cobroId)
   await supabase.from('cuentas_cobrar').delete().eq('id', fx.cobroId)
+  for (const pagoId of pagoIds) {
+    const [c, p] = await Promise.all([
+      supabase.from('pagos_comprobantes').select('id', { count: 'exact', head: true }).eq('pago_id', pagoId),
+      supabase.from('pagos_cuentas_pagar').select('id', { count: 'exact', head: true }).eq('pago_id', pagoId),
+    ])
+    if ((c.count ?? 1) + (p.count ?? 1) === 0) await supabase.from('pagos').delete().eq('id', pagoId)
+  }
   await supabase.from('proyectos').delete().eq('id', fx.id)
   await supabase.from('cotizaciones').delete().eq('id', fx.id)
   await supabase.from('proveedores').delete().eq('id', fx.proveedorId)
 }
 
-const pagarCobro = (supabase: Supabase, fx: Fixture, monto: number) =>
-  supabase.rpc('registrar_pago_cuenta_cobrar', { p_cuenta_id: fx.cobroId, p_monto: monto, p_tipo_pago: 'TRANSFERENCIA', p_fecha_pago: '2026-09-12' })
+const pagarCobros = (supabase: Supabase, items: [Fixture, number][]) =>
+  supabase.rpc('registrar_pago_cobro', {
+    p_lineas: items.map(([fx, monto]) => ({ cuenta_id: fx.cobroId, monto })),
+    p_tipo_pago: 'TRANSFERENCIA',
+    p_fecha_pago: '2026-09-12',
+    p_usuario: USUARIO,
+  })
+const pagarCobro = (supabase: Supabase, fx: Fixture, monto: number) => pagarCobros(supabase, [[fx, monto]])
 const pagarGrupo = (supabase: Supabase, fx: Fixture, monto: number) =>
-  supabase.rpc('registrar_pago_grupo_factura', { p_grupo_id: fx.grupoId, p_monto: monto, p_tipo_pago: 'TRANSFERENCIA', p_fecha_pago: '2026-09-12', p_usuario: USUARIO })
+  supabase.rpc('registrar_pago_proveedor', {
+    p_lineas: [{ grupo_id: fx.grupoId, monto }],
+    p_tipo_pago: 'TRANSFERENCIA',
+    p_fecha_pago: '2026-09-12',
+    p_usuario: USUARIO,
+  })
 
 test.describe('live: B7 reabrir y anular pagos', () => {
   test.skip(!liveEnabled, 'Live integration tests are disabled until PLAYWRIGHT_BASE_URL and live credentials are configured')
@@ -110,7 +132,7 @@ test.describe('live: B7 reabrir y anular pagos', () => {
     const fx = await crearFixture(supabase)
     try {
       ok(await pagarCobro(supabase, fx, 300))
-      const pago = must(await supabase.from('pagos_comprobantes').select('id').eq('cuentas_cobrar_id', fx.cobroId).single())
+      const pago = { id: must(await supabase.from('pagos_comprobantes').select('pago_id').eq('cuentas_cobrar_id', fx.cobroId).single()).pago_id as string }
 
       const sin = await supabase.rpc('anular_pago_cobro', { p_pago_id: pago.id, p_motivo: 'duplicado', p_usuario: USUARIO })
       expect(sin.error?.code).toBe('P1416')
@@ -132,7 +154,7 @@ test.describe('live: B7 reabrir y anular pagos', () => {
     const fx = await crearFixture(supabase)
     try {
       ok(await pagarCobro(supabase, fx, 600))
-      const p1 = must(await supabase.from('pagos_comprobantes').select('id').eq('cuentas_cobrar_id', fx.cobroId).single())
+      const p1 = { id: must(await supabase.from('pagos_comprobantes').select('pago_id').eq('cuentas_cobrar_id', fx.cobroId).single()).pago_id as string }
       ok(await supabase.rpc('reabrir_cuentas_proyecto', { p_proyecto_id: fx.id, p_motivo: 'pago duplicado', p_usuario: USUARIO }))
 
       // 600 + 400 = 1000 cabe en cualquier orden: con o sin p1 anulado.
@@ -174,7 +196,7 @@ test.describe('live: B7 reabrir y anular pagos', () => {
       expect(Number(pagado.monto_transferido)).toBe(1160)
 
       ok(await supabase.rpc('reabrir_cuentas_proyecto', { p_proyecto_id: fx.id, p_motivo: 'transferencia rebotada', p_usuario: USUARIO }))
-      const pagos = must(await supabase.from('pagos_cuentas_pagar').select('id').eq('grupo_id', fx.grupoId).order('created_at'))
+      const pagos = must(await supabase.from('pagos_cuentas_pagar').select('pago_id, created_at').eq('grupo_id', fx.grupoId).order('created_at')).map((l) => ({ id: l.pago_id as string }))
       ok(await supabase.rpc('anular_pago_proveedor', { p_pago_id: pagos[0].id, p_motivo: 'transferencia rebotada', p_usuario: USUARIO }))
 
       const parcial = must(await supabase.from('cuentas_pagar_grupos').select('estado, monto_transferido, monto_pagado').eq('id', fx.grupoId).single())
@@ -196,7 +218,7 @@ test.describe('live: B7 reabrir y anular pagos', () => {
       expect(anulado.error).toBeNull()
       expect(nuevo.error).toBeNull()
       const final = must(await supabase.from('cuentas_pagar_grupos').select('estado, monto_transferido').eq('id', fx.grupoId).single())
-      const vigentes = must(await supabase.from('pagos_cuentas_pagar').select('monto_transferido').eq('grupo_id', fx.grupoId).is('anulado_at', null))
+      const vigentes = must(await supabase.from('pagos_cuentas_pagar').select('monto_transferido, pagos!inner(anulado_at)').eq('grupo_id', fx.grupoId).is('pagos.anulado_at', null))
       expect(vigentes).toHaveLength(1)
       expect(Number(final.monto_transferido)).toBe(580)
       expect(final.estado).toBe('EN_PROCESO_PAGO')
@@ -205,6 +227,32 @@ test.describe('live: B7 reabrir y anular pagos', () => {
       expect(log).toHaveLength(2)
     } finally {
       await limpiar(supabase, fx)
+    }
+  })
+  test('pago compartido por dos proyectos: anular exige todos reabiertos y anula todas las líneas', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const a = await crearFixture(supabase)
+    const b = await crearFixture(supabase)
+    try {
+      const pago = must(await pagarCobros(supabase, [[a, 300], [b, 200]])) as { pago_id: string }
+
+      // Solo uno reabierto: no se anula nada.
+      ok(await supabase.rpc('reabrir_cuentas_proyecto', { p_proyecto_id: a.id, p_motivo: 'pago compartido', p_usuario: USUARIO }))
+      const parcial = await supabase.rpc('anular_pago_cobro', { p_pago_id: pago.pago_id, p_motivo: 'duplicado', p_usuario: USUARIO })
+      expect(parcial.error?.code).toBe('P1416')
+      const intacto = must(await supabase.from('cuentas_cobrar').select('id, monto_pagado').in('id', [a.cobroId, b.cobroId]))
+      expect(intacto.map((c) => Number(c.monto_pagado)).sort()).toEqual([200, 300])
+
+      ok(await supabase.rpc('reabrir_cuentas_proyecto', { p_proyecto_id: b.id, p_motivo: 'pago compartido', p_usuario: USUARIO }))
+      ok(await supabase.rpc('anular_pago_cobro', { p_pago_id: pago.pago_id, p_motivo: 'duplicado', p_usuario: USUARIO }))
+      const final = must(await supabase.from('cuentas_cobrar').select('monto_pagado').in('id', [a.cobroId, b.cobroId]))
+      expect(final.map((c) => Number(c.monto_pagado))).toEqual([0, 0])
+      // Una corrección por cuenta afectada, cada una en su proyecto.
+      const log = must(await supabase.from('cuentas_correcciones').select('proyecto_id, tipo').in('proyecto_id', [a.id, b.id]))
+      expect(log.filter((l) => l.tipo === 'anular_pago')).toHaveLength(2)
+    } finally {
+      await limpiar(supabase, a)
+      await limpiar(supabase, b)
     }
   })
 })

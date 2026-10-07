@@ -181,22 +181,51 @@ export async function cleanupLiveCuentasByPrefix(prefijo: string) {
     await paso('reaperturas', supabase.from('cuentas_reaperturas').delete().in('proyecto_id', proyectoIds))
     await paso('correcciones', supabase.from('cuentas_correcciones').delete().in('proyecto_id', proyectoIds))
   }
+  // #123: las líneas de pago cuelgan de una cabecera `pagos` (una por pago; puede cubrir varias cuentas). Se borran
+  // las líneas de lo que se limpia y, después, las cabeceras que quedaron sin líneas.
+  const pagoIds = new Set<string>()
+  if (grupoIds.length) {
+    const { data } = await supabase.from('pagos_cuentas_pagar').select('pago_id').in('grupo_id', grupoIds)
+    for (const r of data ?? []) pagoIds.add(r.pago_id as string)
+  }
+  if (cobroIds.length) {
+    const { data } = await supabase.from('pagos_comprobantes').select('pago_id').in('cuentas_cobrar_id', cobroIds)
+    for (const r of data ?? []) pagoIds.add(r.pago_id as string)
+  }
+  const { data: facturas } = cobroIds.length
+    ? await supabase.from('cuentas_cobrar').select('factura_documento_id').in('id', cobroIds).not('factura_documento_id', 'is', null)
+    : { data: [] as { factura_documento_id: string }[] }
+  const facturaIds = Array.from(new Set((facturas ?? []).map((f) => f.factura_documento_id as string)))
+
   if (ordenIds.length) await paso('conceptos de orden', supabase.from('ordenes_pago_conceptos').delete().in('orden_pago_id', ordenIds))
   if (grupoIds.length) {
     await paso('pagos de grupo', supabase.from('pagos_cuentas_pagar').delete().in('grupo_id', grupoIds))
     await paso('documentos de grupo', supabase.from('documentos_cuentas_pagar').delete().in('grupo_id', grupoIds))
   }
   if (cuentaIds.length) {
-    await paso('pagos de cuenta', supabase.from('pagos_cuentas_pagar').delete().in('cuenta_pagar_id', cuentaIds))
     await paso('documentos de cuenta', supabase.from('documentos_cuentas_pagar').delete().in('cuentas_pagar_id', cuentaIds))
     await paso('cuentas por pagar', supabase.from('cuentas_pagar').delete().in('id', cuentaIds))
   }
   if (grupoIds.length) await paso('grupos', supabase.from('cuentas_pagar_grupos').delete().in('id', grupoIds))
   if (ordenIds.length) await paso('órdenes', supabase.from('ordenes_pago').delete().in('id', ordenIds))
   if (cobroIds.length) {
-    await paso('documentos de cobro', supabase.from('documentos_cuentas_cobrar').delete().in('cuentas_cobrar_id', cobroIds))
+    // PDF y complementos cuelgan de la factura (o, los legados, de la cuenta); la factura es cabecera sin ancla.
+    if (facturaIds.length) await paso('PDF y complementos de factura', supabase.from('documentos_cuentas_cobrar').delete().in('factura_documento_id', facturaIds))
+    await paso('documentos de cuenta de cobro', supabase.from('documentos_cuentas_cobrar').delete().in('cuentas_cobrar_id', cobroIds))
     await paso('pagos de cobro', supabase.from('pagos_comprobantes').delete().in('cuentas_cobrar_id', cobroIds))
+    await paso('desligar facturas', supabase.from('cuentas_cobrar').update({ factura_documento_id: null }).in('id', cobroIds))
+    if (facturaIds.length) await paso('facturas', supabase.from('documentos_cuentas_cobrar').delete().in('id', facturaIds))
     await paso('cuentas por cobrar', supabase.from('cuentas_cobrar').delete().in('id', cobroIds))
+  }
+  if (pagoIds.size) {
+    const todos = Array.from(pagoIds)
+    const [cobro, prov] = await Promise.all([
+      supabase.from('pagos_comprobantes').select('pago_id').in('pago_id', todos),
+      supabase.from('pagos_cuentas_pagar').select('pago_id').in('pago_id', todos),
+    ])
+    const conLineas = new Set([...(cobro.data ?? []), ...(prov.data ?? [])].map((r) => r.pago_id as string))
+    const huerfanos = todos.filter((id) => !conLineas.has(id))
+    if (huerfanos.length) await paso('cabeceras de pago', supabase.from('pagos').delete().in('id', huerfanos))
   }
   if (proyectoIds.length) {
     await paso('proyectos', supabase.from('proyectos').delete().in('id', proyectoIds))
