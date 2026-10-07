@@ -297,6 +297,22 @@ describe('confirmarFactura', () => {
       expect(r).toMatchObject({ status: 502, body: { error: 'subida_fallida', preparado: { proveedor_id: 'prov-9', grupo_id: 'g9' } } })
     })
 
+    it('cualquier respuesta que no sea 200 después de preparar también lleva los ids (no solo la excepción)', async () => {
+      mocks.getGrupoMock.mockResolvedValueOnce(null)
+      const sinGrupo = await confirmarFactura({ ...base, cuentas: [], preparar: { proveedor, renglones: ['r1'] }, xmlFile: archivo(xml) })
+      expect(sinGrupo).toMatchObject({ status: 404, body: { preparado: { proveedor_id: 'prov-9', grupo_id: 'g9' } } })
+      mocks.subirProveedorMock.mockResolvedValueOnce({ status: 422, body: { error: 'xml_invalido' } })
+      const rechazada = await confirmarFactura({ ...base, cuentas: [], preparar: { proveedor, renglones: ['r1'] }, xmlFile: archivo(xml) })
+      expect(rechazada).toMatchObject({ status: 422, body: { error: 'xml_invalido', preparado: { proveedor_id: 'prov-9', grupo_id: 'g9' } } })
+    })
+
+    it('sin preparar, un 404 no agrega `preparado`', async () => {
+      mocks.getGrupoMock.mockResolvedValueOnce(null)
+      const r = await confirmarFactura({ ...base, cuentas: [], grupoId: 'g1', xmlFile: archivo(xml) })
+      expect(r.status).toBe(404)
+      expect(r.body).not.toHaveProperty('preparado')
+    })
+
     it('sin preparar, una falla de la subida sigue propagándose', async () => {
       mocks.getGrupoMock.mockResolvedValue({ id: 'g1', proyecto_id: 'SH061', responsable_id: 'prov-9', monto_total: 1000, estado: 'ABIERTO' })
       mocks.subirProveedorMock.mockRejectedValueOnce(new Error('Drive caído'))

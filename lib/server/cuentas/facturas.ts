@@ -337,18 +337,24 @@ export async function confirmarFactura(p: ConfirmarParams): Promise<Respuesta> {
     grupoId = preparado.grupo_id
   }
   if (!grupoId) return { status: 400, body: { error: 'lineas_requeridas', message: 'Elige el proyecto (grupo) al que corresponde la factura.' } }
-  const grupo = await getCuentaPagarGrupoById(grupoId)
-  if (!grupo) return { status: 404, body: { error: 'Grupo de cuentas por pagar no encontrado' } }
-  const proveedor = await contraparteElegida('proveedor', grupo.responsable_id)
-  if (!proveedor) return { status: 404, body: { error: 'Proveedor no encontrado' } }
-  if (p.contraparteId && p.contraparteId !== grupo.responsable_id) {
-    return { status: 409, body: { error: 'contrapartes_distintas', message: 'El grupo elegido es de otro proveedor.' } }
-  }
-  const proyecto = await getProyectoById(grupo.proyecto_id)
-  if (!proyecto) return { status: 404, body: { error: 'Proyecto asociado no encontrado' } }
+  const grupoDestino = grupoId
 
+  // La preparación (proveedor + renglones o gasto) ya se confirmó en su propia transacción: lo que falle de aquí en
+  // adelante deja un estado consistente y reintentable. Toda respuesta que no sea 200 y toda excepción llevan `preparado`
+  // para que la ventana reintente con ese proveedor y grupo, no con el alta (que fallaría por RFC repetido).
+  const conPreparado = (r: Respuesta): Respuesta => (preparado && r.status !== 200 ? { ...r, body: { ...r.body, preparado: { proveedor_id: preparado.proveedor_id, grupo_id: preparado.grupo_id } } } : r)
   let resultado: Respuesta
+  let proveedor: Awaited<ReturnType<typeof contraparteElegida>>
   try {
+    const grupo = await getCuentaPagarGrupoById(grupoDestino)
+    if (!grupo) return conPreparado({ status: 404, body: { error: 'Grupo de cuentas por pagar no encontrado' } })
+    proveedor = await contraparteElegida('proveedor', grupo.responsable_id)
+    if (!proveedor) return conPreparado({ status: 404, body: { error: 'Proveedor no encontrado' } })
+    if (p.contraparteId && p.contraparteId !== grupo.responsable_id) {
+      return conPreparado({ status: 409, body: { error: 'contrapartes_distintas', message: 'El grupo elegido es de otro proveedor.' } })
+    }
+    const proyecto = await getProyectoById(grupo.proyecto_id)
+    if (!proyecto) return conPreparado({ status: 404, body: { error: 'Proyecto asociado no encontrado' } })
     resultado = await subirFacturaProveedor({
       grupo,
       xmlFile: p.xmlFile,
@@ -360,21 +366,15 @@ export async function confirmarFactura(p: ConfirmarParams): Promise<Respuesta> {
       aviso: avisoRfc('proveedor', rfcContraparte, proveedor.rfc),
     })
   } catch (error) {
-    // La preparación ya se confirmó (proveedor y renglones o gasto): el estado es consistente y reintentable. Se avisa
-    // con los ids para que la ventana reintente con el proveedor ya creado, no con el alta (que fallaría por RFC repetido).
     if (!preparado) throw error
     console.error(`[${p.route}] La factura no se guardó tras preparar el grupo:`, error instanceof Error ? error.message : error)
-    return {
+    return conPreparado({
       status: 502,
-      body: {
-        error: 'subida_fallida',
-        message: 'La factura no se guardó, pero el proveedor y los renglones ya quedaron listos. Vuelve a intentarlo con ese proveedor.',
-        preparado: { proveedor_id: preparado.proveedor_id, grupo_id: preparado.grupo_id },
-      },
-    }
+      body: { error: 'subida_fallida', message: 'La factura no se guardó, pero el proveedor y los renglones ya quedaron listos. Vuelve a intentarlo con ese proveedor.' },
+    })
   }
   if (resultado.status === 200) await guardarRfcSiSePidio(p.guardarRfc, 'proveedor', proveedor, rfcContraparte)
-  return preparado && resultado.status === 200 ? { ...resultado, body: { ...resultado.body, preparado } } : resultado
+  return preparado && resultado.status === 200 ? { ...resultado, body: { ...resultado.body, preparado } } : conPreparado(resultado)
 }
 
 /** El RFC del XML contra el de la ficha: si la ficha lo tiene y es otro, la factura queda "En revisión" (P5, P24). */

@@ -34,8 +34,8 @@ export function CompletarCliente({ rfc, nombre, tieneConstancia, valor, onChange
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <TextField label="RFC" value={rfc ?? ''} readOnly className="font-mono text-subtext" />
-        <TextField label="Cliente" value={nombre} readOnly className="text-subtext" />
+        <TextField label="RFC" value={rfc ?? ''} readOnly className="font-mono" />
+        <TextField label="Cliente" value={nombre} readOnly />
         <TextField label="Persona de contacto" value={valor.contacto} onChange={set('contacto')} autoComplete="off" />
         <TextField label="Teléfono" value={valor.telefono} onChange={set('telefono')} inputMode="tel" autoComplete="off" />
         <div className="md:col-span-2">
@@ -44,9 +44,9 @@ export function CompletarCliente({ rfc, nombre, tieneConstancia, valor, onChange
       </div>
       <div className="flex flex-wrap items-center gap-3 rounded-panel border border-hairline px-3.5 py-2.5">
         <Icon name="file-text" size={18} className="flex-none text-subtext" />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[160px] flex-1">
           <div className="truncate text-[13px] font-medium text-ink">{valor.constancia?.name ?? 'Constancia de situación fiscal'}</div>
-          <div className="text-[11.5px] text-subtext">{valor.constancia ? 'PDF o imagen' : tieneConstancia ? 'Ya hay una guardada; subir otra es opcional' : 'Requerida antes de facturar'}</div>
+          <div className={`text-[11.5px] ${!valor.constancia && !tieneConstancia ? 'text-cancelled-fg' : 'text-subtext'}`}>{valor.constancia ? 'PDF o imagen' : tieneConstancia ? 'Opcional' : 'Requerida'}</div>
         </div>
         {valor.constancia ? (
           <Enlace onClick={() => onChange({ ...valor, constancia: null })}>Quitar</Enlace>

@@ -112,7 +112,7 @@ describe('Registrar pago · por proyecto (#130)', () => {
     fireEvent.click(sh061)
     await waitFor(() => expect(llamadas.some((l) => l.url.includes('/estado-cuenta') && l.url.includes('id=prov1') && l.url.includes('proyectos=SH061'))).toBe(true))
     await waitFor(() => expect((screen.getByRole('checkbox', { name: 'Incluir SH070 · Fonoteca MX' }) as HTMLButtonElement).disabled).toBe(true))
-    expect(await screen.findByText('otra contraparte')).toBeTruthy()
+    expect(await screen.findByText('Otra contraparte')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Incluir SH062 · Distrito Sonoro' }))
     await waitFor(() => expect(llamadas.some((l) => l.url.includes('proyectos=SH061%2CSH062'))).toBe(true))
@@ -125,9 +125,9 @@ describe('Registrar pago · por proyecto (#130)', () => {
     fireEvent.click(await caja('Incluir SH062 · Distrito Sonoro'))
     const monto = await screen.findByLabelText(/Monto transferido/)
     fireEvent.change(monto, { target: { value: '33,800.00' } })
-    const registrar = screen.getByRole('button', { name: 'Registrar pago' }) as HTMLButtonElement
-    await waitFor(() => expect(registrar.disabled).toBe(false))
-    fireEvent.click(registrar)
+    const registrar = () => screen.getByRole('button', { name: 'Registrar pago' }) as HTMLButtonElement
+    await waitFor(() => expect(registrar().disabled).toBe(false))
+    fireEvent.click(registrar())
     await waitFor(() => expect(llamadas.some((l) => l.url === '/api/cuentas/pagos')).toBe(true))
     const post = llamadas.find((l) => l.url === '/api/cuentas/pagos')!
     expect(post.datos).toMatchObject({

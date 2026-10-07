@@ -129,6 +129,8 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
   const { datos: estado, error, cargando, recargar } = useEstadoCuenta(lado, cid, porProyecto ? proyectosSel : undefined)
   const [elegida, setElegida] = useState<ContraparteLista | null>(null)
   const [monto, setMonto] = useState('')
+  // Último monto escrito: al llegar líneas nuevas (p. ej. se marcó otro proyecto mientras cargaba) el reparto se sugiere con él.
+  const montoRef = useRef('')
   const [aplicado, setAplicado] = useState<Record<string, string>>({})
   const [manual, setManual] = useState(false)
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set())
@@ -140,7 +142,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
   const [aviso, setAviso] = useState<{ tono: 'error' | 'info'; texto: string } | null>(null)
   const [listo, setListo] = useState<{ total: number; lineas: number } | null>(null)
 
-  const vigente = estado && estado.lado === lado && estado.contraparte?.id === cid && !(porProyecto && cargando) ? estado : null
+  const vigente = estado && estado.lado === lado && estado.contraparte?.id === cid ? estado : null
   const grupos = useMemo(() => (vigente ? gruposPagables(vigente, porProyecto) : []), [vigente, porProyecto])
   const lineas = useMemo(() => lineasDeReparto(grupos, proyecto), [grupos, proyecto])
   const montoCent = parseMonto(monto)
@@ -173,7 +175,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     if (!vigente || huella.current === h) return
     huella.current = h
     setManual(false)
-    aplicarSugerencia(parseMonto(monto))
+    aplicarSugerencia(parseMonto(montoRef.current))
     // Las facturas del proyecto preseleccionado se abren (P22).
     if (proyecto) setAbiertas(new Set(grupos.filter((g) => g.conceptos.some((c) => c.proyecto_id === proyecto)).map((g) => g.clave)))
     // `monto` se lee solo al reiniciar: cambiarlo no debe reiniciar el reparto manual.
@@ -182,6 +184,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
 
   const cambiarMonto = (texto: string) => {
     const limpio = texto.replace(/[^\d.,]/g, '')
+    montoRef.current = limpio
     setMonto(limpio)
     if (!manual) aplicarSugerencia(parseMonto(limpio))
   }
@@ -306,7 +309,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
       bodyClassName={CUERPO_VENTANA}
       header={
         !listo ? (
-          <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:gap-3">
+          <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center md:gap-3">
             <FilterTabs tabs={LADOS} value={lado} onChange={cambiarLado} />
             <FilterTabs tabs={VISTAS} value={vista} onChange={cambiarVista} />
             {!porProyecto && (
@@ -326,13 +329,10 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
           {porProyecto && (
             <>
               <SelectorProyectos modo="pago" lado={lado} contraparteFija={contraparteProy?.id ?? null} proyectosMarcados={proyectosSel} onTogglePago={alternarProyecto} />
-              <Aviso icono="info" tono="neutro">
-                Un pago es de <b>una sola contraparte</b>: al marcar un proyecto, los de otras contrapartes quedan deshabilitados. Solo se paga contra facturas.
-              </Aviso>
             </>
           )}
           {!cid && !porProyecto && <Aviso icono="info" tono="neutro">{lado === 'cobro' ? 'Elige el cliente que depositó.' : 'Elige el proveedor al que se le transfirió.'}</Aviso>}
-          {!cid && porProyecto && <Aviso icono="info" tono="neutro">Marca los proyectos que cubre el {lado === 'cobro' ? 'cobro' : 'pago'}.</Aviso>}
+          {!cid && porProyecto && <Aviso icono="info" tono="neutro">Marca los proyectos que cubre el {lado === 'cobro' ? 'cobro' : 'pago'}. Un pago es de una sola contraparte.</Aviso>}
           {cid && !vigente && !error && <SectionLoading className="min-h-[240px]" />}
           {vigente && grupos.length === 0 && (
             <Aviso icono="circle-check" tono="ok">

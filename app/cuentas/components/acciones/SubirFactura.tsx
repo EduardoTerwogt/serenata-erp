@@ -177,7 +177,7 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
     } catch (err) {
       if (err instanceof ApiError && err.code === 'complemento_ambiguo') setPedirPago(true)
       // #130: el proveedor y los renglones (o el gasto) ya quedaron guardados; el reintento sube la factura a ese grupo.
-      const listoPrevio = err instanceof ApiError && err.code === 'subida_fallida' ? (err.data?.preparado as { proveedor_id: string; grupo_id: string } | undefined) : undefined
+      const listoPrevio = err instanceof ApiError ? (err.data?.preparado as { proveedor_id: string; grupo_id: string } | undefined) : undefined
       if (listoPrevio) {
         setPreparado(listoPrevio)
         setManual({ id: listoPrevio.proveedor_id, nombre: factura?.emisor?.nombre ?? contraparte?.nombre ?? 'Proveedor' })
@@ -196,7 +196,11 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
       ? 'Reintentar subir la factura'
       : destino.nuevo && proveedorLado
         ? 'Crear proveedor y registrar factura'
-        : completarCliente
+        : proveedorLado && destino.modo === 'renglones'
+          ? 'Asignar y registrar factura'
+          : proveedorLado && destino.modo === 'gasto'
+            ? 'Registrar gasto y factura'
+            : completarCliente
           ? 'Completar cliente y registrar factura'
           : revision
             ? 'Guardar en revisión'
@@ -226,11 +230,23 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
           ? plural(complemento.relacionados.length, 'factura relacionada', 'facturas relacionadas')
           : armado && !armado.ok && !cuadre
             ? armado.falta
+            : armado?.ok && !cuadre
+              ? destino.nuevo
+                ? 'Se creará el proveedor y se ligará la factura'
+                : destino.modo === 'renglones'
+                  ? `Mover ${plural(destino.renglones.length, 'renglón', 'renglones')} a ${contraparte?.nombre ?? 'este proveedor'}`
+                  : destino.modo === 'gasto'
+                    ? 'Gasto fuera de cotización: resta de la utilidad'
+                    : 'Elige un XML'
             : cuadre && esCuadreCobro(cuadre)
             ? `Suma ${fmtMoney(cuadre.suma)} · XML ${fmtMoney(totalXml)}`
             : cuadre
               ? `Total a transferir ${fmtMoney((cuadre as { monto_total: number }).monto_total)}`
-              : 'Elige un XML'
+              : factura
+                ? cobro
+                  ? 'Elige las cotizaciones que cubre'
+                  : 'Elige el destino de la factura'
+                : 'Elige un XML'
       }
       etiquetaMonto={complemento ? 'Monto del complemento' : 'Total del XML'}
       monto={xml ? fmtMoney(complemento ? sumaComplemento : totalXml) : undefined}

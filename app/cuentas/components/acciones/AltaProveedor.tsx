@@ -22,14 +22,14 @@ export function AltaProveedor({ emisor, valor, onChange }: Props) {
   const set = (campo: keyof AltaForm) => (e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...valor, [campo]: e.target.value })
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      <TextField label="RFC" value={emisor.rfc ?? ''} readOnly className="font-mono text-subtext" />
-      <TextField label="Nombre o razón social" value={emisor.nombre ?? ''} readOnly className="text-subtext" />
-      <TextField label="Régimen fiscal" value={emisor.regimen_sugerido ? REGIMEN[emisor.regimen_sugerido] : 'No se pudo determinar'} readOnly className="text-subtext" />
-      <TextField label="Teléfono" value={valor.telefono} onChange={set('telefono')} inputMode="tel" autoComplete="off" />
-      <TextField label="Correo" value={valor.correo} onChange={set('correo')} inputMode="email" autoComplete="off" aria-invalid={Boolean(errores.correo)} hint={errores.correo} />
-      <TextField label="Banco" value={valor.banco} onChange={set('banco')} autoComplete="off" />
+      <TextField label="RFC" value={emisor.rfc ?? ''} readOnly className="font-mono" />
+      <TextField label="Nombre o razón social" value={emisor.nombre ?? ''} readOnly />
+      <TextField label="Régimen fiscal" value={emisor.regimen_sugerido ? REGIMEN[emisor.regimen_sugerido] : 'No se pudo determinar'} readOnly />
+      <TextField label="Teléfono" requerido value={valor.telefono} onChange={set('telefono')} inputMode="tel" autoComplete="off" />
+      <TextField label="Correo" requerido value={valor.correo} onChange={set('correo')} inputMode="email" autoComplete="off" error={errores.correo} />
+      <TextField label="Banco" requerido value={valor.banco} onChange={set('banco')} autoComplete="off" />
       <div className="md:col-span-2">
-        <TextField label="CLABE" value={valor.clabe} onChange={set('clabe')} inputMode="numeric" autoComplete="off" className="font-mono" aria-invalid={Boolean(errores.clabe)} hint={errores.clabe} placeholder="18 dígitos" />
+        <TextField label="CLABE" requerido value={valor.clabe} onChange={set('clabe')} inputMode="numeric" autoComplete="off" className="font-mono" error={errores.clabe} placeholder="18 dígitos" />
       </div>
     </div>
   )

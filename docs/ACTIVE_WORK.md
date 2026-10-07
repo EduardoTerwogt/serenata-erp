@@ -64,10 +64,14 @@ Orden de la cola: **#123 → #130 → #110 → #125** (#130 antes de #110 porque
   (las únicas fallas de una corrida completa fueron `portal-factura` por una carrera con mis mocks y ya pasan).
 - **Test (`serenata-erp-test`):** migración `20261033` aplicada y constancia de prueba `SHO100101AB1` cargada.
 
+## Revisión del PR #129 (2026-10-07, tras tu revisión manual)
+
+CI de `6d6eea7`: `live` rojo por una carrera real en el gasto extra (corregida con la migración `20261036`, aplicada en test) y el flake de `cuentas-paridad-sql` (57014; sin regresión: 8,041 buffers contra 7,965). Auditoría de UI contra el design system y correcciones de encimes en móvil; detalle y desvíos conscientes en `docs/PLAN.md` (sección "Revisión del PR #129"). Orden de lanzamiento: `20261034`, `20261035` y **`20261036`** después de `20261033`.
+
 ## Avisos para la entrega (léelos antes de aprobar)
 
 1. **Orden de lanzamiento a producción:** gate de producción vacía (recontar) → M1 `20261030` → M2 `20261031` → **M3 `20261032`
-   la corre una persona** en el SQL Editor (lleva DROP/DELETE; el MCP los retiene) → `20261033` → **`20261034` y `20261035` (#130, aditivas, sin DROP)** → merge del PR #129 →
+   la corre una persona** en el SQL Editor (lleva DROP/DELETE; el MCP los retiene) → `20261033` → **`20261034`, `20261035` y `20261036` (#130, aditivas, sin DROP)** → merge del PR #129 →
    **subir la constancia de Serenata en Admin → Datos fiscales ANTES de abrir las rutas de factura** (sin ella fallan a propósito).
    Producción **no** lleva `20260915_loadtest_runs.sql`. Producción es plan Free, sin respaldos: respaldo manual antes de M3.
 2. Las **3 preguntas de producto** se resolvieron con las propuestas del plan; la 3.ª (**corregir un descuadre ligando o

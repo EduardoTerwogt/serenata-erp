@@ -105,10 +105,10 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
     expect(await screen.findByText(/Cuadra con el XML/)).toBeTruthy()
     expect(boton(/Crear proveedor y registrar factura/).disabled).toBe(true)
 
-    fireEvent.change(screen.getByLabelText('Teléfono'), { target: { value: '5512345678' } })
-    fireEvent.change(screen.getByLabelText('Correo'), { target: { value: 'pagos@audio.mx' } })
-    fireEvent.change(screen.getByLabelText('Banco'), { target: { value: 'BBVA' } })
-    fireEvent.change(screen.getByLabelText('CLABE'), { target: { value: '012345678901234567' } })
+    fireEvent.change(screen.getByLabelText(/^Teléfono/), { target: { value: '5512345678' } })
+    fireEvent.change(screen.getByLabelText(/^Correo/), { target: { value: 'pagos@audio.mx' } })
+    fireEvent.change(screen.getByLabelText(/^Banco/), { target: { value: 'BBVA' } })
+    fireEvent.change(screen.getByLabelText(/^CLABE/), { target: { value: '012345678901234567' } })
     await waitFor(() => expect(boton(/Crear proveedor y registrar factura/).disabled).toBe(false))
 
     fireEvent.click(boton(/Crear proveedor y registrar factura/))
@@ -123,14 +123,16 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
     previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' } })]
     abrir()
     fireEvent.click(await screen.findByRole('button', { name: 'Gasto extra' }))
-    expect(boton(/Guardar factura/).disabled).toBe(true)
+    expect(boton(/Registrar gasto y factura/).disabled).toBe(true)
+    // El costo arranca con el neto del XML (5,000.00) y se puede corregir.
+    expect((screen.getByLabelText(/Costo neto al proveedor/) as HTMLInputElement).value).toBe('5000.00')
 
     fireEvent.click(await screen.findByRole('button', { name: /SH001/ }))
-    fireEvent.change(screen.getByLabelText('Concepto'), { target: { value: 'Renta de grúa' } })
+    fireEvent.change(screen.getByLabelText(/^Concepto/), { target: { value: 'Renta de grúa' } })
     fireEvent.change(screen.getByLabelText(/Costo neto al proveedor/), { target: { value: '5,000.00' } })
-    await waitFor(() => expect(boton(/Guardar factura/).disabled).toBe(false))
+    await waitFor(() => expect(boton(/Registrar gasto y factura/).disabled).toBe(false))
 
-    fireEvent.click(boton(/Guardar factura/))
+    fireEvent.click(boton(/Registrar gasto y factura/))
     await waitFor(() => expect(guardados()).toHaveLength(1))
     expect(guardados()[0].datos).toMatchObject({ contraparte_id: 'p1', preparar: { gasto: { proyecto_id: 'SH001', concepto: 'Renta de grúa', costo_total: 5000 } } })
     expect(guardados()[0].datos?.preparar).not.toHaveProperty('renglones')
@@ -144,10 +146,10 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
     ]
     abrir()
     fireEvent.click(await screen.findByRole('button', { name: /Crear proveedor nuevo/ }))
-    fireEvent.change(await screen.findByLabelText('Teléfono'), { target: { value: '5512345678' } })
-    fireEvent.change(screen.getByLabelText('Correo'), { target: { value: 'pagos@audio.mx' } })
-    fireEvent.change(screen.getByLabelText('Banco'), { target: { value: 'BBVA' } })
-    fireEvent.change(screen.getByLabelText('CLABE'), { target: { value: '012345678901234567' } })
+    fireEvent.change(await screen.findByLabelText(/^Teléfono/), { target: { value: '5512345678' } })
+    fireEvent.change(screen.getByLabelText(/^Correo/), { target: { value: 'pagos@audio.mx' } })
+    fireEvent.change(screen.getByLabelText(/^Banco/), { target: { value: 'BBVA' } })
+    fireEvent.change(screen.getByLabelText(/^CLABE/), { target: { value: '012345678901234567' } })
     await waitFor(() => expect(boton(/Crear proveedor y registrar factura/).disabled).toBe(false))
     fireEvent.click(boton(/Crear proveedor y registrar factura/))
 
@@ -158,6 +160,29 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
     expect(guardados()[1].datos).toMatchObject({ contraparte_id: 'pNuevo', grupo_id: 'gNuevo' })
     expect(guardados()[1].datos).not.toHaveProperty('preparar')
     expect(guardados()[1].datos?.operation_id).toBe(guardados()[0].datos?.operation_id)
+  })
+})
+
+describe('Subir factura · reintento tras preparar (#130)', () => {
+  it('cualquier error con `preparado` (no solo el 502) hace que el reintento use el grupo ya creado', async () => {
+    previews = [base({ propuesta: [{ proyecto_id: 'SH001', proyecto: 'Boda Lopez', renglones: ['c1', 'c2'], neto: 5000 }] })]
+    respuestasGuardar = [
+      json({ error: 'proveedor_no_encontrado', message: 'Proveedor no encontrado', preparado: { proveedor_id: 'pNuevo', grupo_id: 'gNuevo' } }, 404),
+      json({ factura_id: 'f1', estado_validacion: 'validado' }, 201),
+    ]
+    abrir()
+    fireEvent.click(await screen.findByRole('button', { name: /Crear proveedor nuevo/ }))
+    fireEvent.change(await screen.findByLabelText(/^Teléfono/), { target: { value: '5512345678' } })
+    fireEvent.change(screen.getByLabelText(/^Correo/), { target: { value: 'pagos@audio.mx' } })
+    fireEvent.change(screen.getByLabelText(/^Banco/), { target: { value: 'BBVA' } })
+    fireEvent.change(screen.getByLabelText(/^CLABE/), { target: { value: '012345678901234567' } })
+    await waitFor(() => expect(boton(/Crear proveedor y registrar factura/).disabled).toBe(false))
+    fireEvent.click(boton(/Crear proveedor y registrar factura/))
+    expect(await screen.findByText('Proveedor no encontrado')).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: /Reintentar subir la factura/ }))
+    await waitFor(() => expect(guardados()).toHaveLength(2))
+    expect(guardados()[1].datos).toMatchObject({ contraparte_id: 'pNuevo', grupo_id: 'gNuevo' })
+    expect(guardados()[1].datos).not.toHaveProperty('preparar')
   })
 })
 
@@ -188,7 +213,7 @@ describe('Subir factura · cliente sin RFC (#130)', () => {
     fireEvent.change(buscador, { target: { value: 'Lopez' } })
     fireEvent.click(await screen.findByRole('option', { name: /Lopez SA/ }))
 
-    expect(await screen.findByText('Requerida antes de facturar')).toBeTruthy()
+    expect(await screen.findByText('Requerida')).toBeTruthy()
     // Los folios del CFDI ya marcan la cotización; solo falta la constancia.
     expect((await screen.findByRole('checkbox', { name: /Incluir/ })).getAttribute('aria-checked')).toBe('true')
     expect(boton(/Completar cliente y registrar factura/).disabled).toBe(true)
@@ -196,7 +221,7 @@ describe('Subir factura · cliente sin RFC (#130)', () => {
     const archivo = new File(['%PDF'], 'constancia.pdf', { type: 'application/pdf' })
     const inputs = Array.from(document.querySelectorAll('input[type="file"]')) as HTMLInputElement[]
     fireEvent.change(inputs.at(-1)!, { target: { files: [archivo] } })
-    fireEvent.change(screen.getByLabelText('Correo'), { target: { value: 'cliente@lopez.mx' } })
+    fireEvent.change(screen.getByLabelText(/^Correo/), { target: { value: 'cliente@lopez.mx' } })
     await waitFor(() => expect(boton(/Completar cliente y registrar factura/).disabled).toBe(false))
 
     fireEvent.click(boton(/Completar cliente y registrar factura/))

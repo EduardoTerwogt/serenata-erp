@@ -174,6 +174,7 @@ export const RENGLONES_SELECTOR = [
   { cuenta_id: 'cp-1', descripcion: 'Iluminación set A', costo_total: 12000, gasto_extra: false, responsable_id: null, responsable: null, grupo_id: null, grupo_estado: null, bloqueado: false },
   { cuenta_id: 'cp-2', descripcion: 'Iluminación set B', costo_total: 8000, gasto_extra: false, responsable_id: null, responsable: null, grupo_id: null, grupo_estado: null, bloqueado: false },
   { cuenta_id: 'cp-3', descripcion: 'Generador', costo_total: 5000, gasto_extra: false, responsable_id: 'prov-ana', responsable: 'Ana Vidal', grupo_id: 'g-ana', grupo_estado: 'ABIERTO', bloqueado: false },
+  { cuenta_id: 'cp-4', descripcion: 'Banco de efectos', costo_total: 6500, gasto_extra: false, responsable_id: 'prov-fonoteca', responsable: 'Fonoteca MX', grupo_id: 'g-fono', grupo_estado: 'FACTURADO', bloqueado: true },
 ]
 
 function previewDe(nombre: string, datos: { contraparte_id?: string | null; cuentas?: string[] }) {

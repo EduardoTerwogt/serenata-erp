@@ -9,9 +9,9 @@ import type { PreviewFactura } from '@/lib/shared/cuentas/factura-preview-tipos'
 import type { ProyectoSelector, RenglonSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import { plural } from '../formato'
 import { Aviso } from '../detalle/TabPago'
-import { Cap } from './compartido'
+import { Cap, Enlace } from './compartido'
 import { AltaProveedor } from './AltaProveedor'
-import type { DestinoProveedor as Destino, ModoDestino } from './destino-proveedor'
+import { montoDeTexto, type DestinoProveedor as Destino, type ModoDestino } from './destino-proveedor'
 import { SelectorContraparte } from './SelectorContraparte'
 import { SelectorProyectos } from './SelectorProyectos'
 import type { ContraparteLista } from './useAcciones'
@@ -29,8 +29,8 @@ interface Props {
 }
 
 const MODOS: { value: ModoDestino; label: string }[] = [
-  { value: 'grupo', label: 'Proyecto del proveedor' },
-  { value: 'renglones', label: 'Asignar renglones' },
+  { value: 'grupo', label: 'Proyecto' },
+  { value: 'renglones', label: 'Renglones' },
   { value: 'gasto', label: 'Gasto extra' },
 ]
 
@@ -67,8 +67,8 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[12.5px] text-subtext">Es este proveedor:</span>
               {factura.coincidencias_nombre.map((c) => (
-                <Button key={c.id} variant="secondary" size="md" onClick={() => onElegirProveedor({ id: c.id, nombre: c.nombre })}>
-                  {c.nombre}
+                <Button key={c.id} variant="secondary" size="md" className="max-w-full" onClick={() => onElegirProveedor({ id: c.id, nombre: c.nombre })}>
+                  <span className="min-w-0 truncate">{c.nombre}</span>
                 </Button>
               ))}
             </div>
@@ -89,9 +89,7 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
         <>
           <Cap
             derecha={
-              <button type="button" onClick={() => onDestino({ ...destino, nuevo: false })} className="text-[12.5px] font-medium text-accent hover:underline">
-                Elegir uno existente
-              </button>
+              <Enlace onClick={() => onDestino({ ...destino, nuevo: false })}>Elegir uno existente</Enlace>
             }
           >
             Proveedor nuevo · datos del XML
@@ -105,7 +103,10 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
           <FilterTabs
             tabs={nuevo ? MODOS.slice(1) : MODOS}
             value={modo}
-            onChange={(m) => onDestino({ ...destino, modo: m })}
+            onChange={(m) =>
+              // Un gasto extra propone el neto del XML como costo; se puede corregir.
+              onDestino({ ...destino, modo: m, gasto: m === 'gasto' && destino.gasto.costo === '' && subtotal > 0 ? { ...destino.gasto, costo: subtotal.toFixed(2) } : destino.gasto })
+            }
           />
 
           {modo === 'grupo' && listaGrupos}
@@ -114,11 +115,11 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
             <div className="flex flex-col gap-3">
               {propuesta ? (
                 <Aviso icono="circle-check" tono="ok">
-                  <b>Cuadra con el XML:</b> los {plural(propuesta.renglones.length, 'renglón por asignar', 'renglones por asignar')} de {propuesta.proyecto ?? propuesta.proyecto_id} suman {fmtMoney(propuesta.neto)}, el neto del XML (tolerancia {fmtMoney(factura.tolerancia)}). Revisa que sean los correctos.
+                  <b>Cuadra con el XML:</b> {plural(propuesta.renglones.length, 'renglón por asignar', 'renglones por asignar')} de {propuesta.proyecto_id} suman {fmtMoney(propuesta.neto)}, el neto del XML (tolerancia {fmtMoney(factura.tolerancia)}). Revisa los renglones.
                   {!propuestaAplicada && (
                     <>
                       {' '}
-                      <button type="button" className="font-medium text-accent hover:underline" onClick={() => onDestino({ ...destino, modo: 'renglones', renglones: propuesta.renglones, proyectoRenglones: propuesta.proyecto_id })}>
+                      <button type="button" className="font-medium underline" onClick={() => onDestino({ ...destino, modo: 'renglones', renglones: propuesta.renglones, proyectoRenglones: propuesta.proyecto_id })}>
                         Marcarlos
                       </button>
                     </>
@@ -129,7 +130,7 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
                   Ningún proyecto tiene renglones por asignar que sumen {fmtMoney(subtotal)} (neto del XML). Marca los renglones a mano o registra un gasto extra.
                 </Aviso>
               )}
-              <Cap derecha={<span className="text-[11.5px] text-subtext">Una factura es de un solo proyecto</span>}>Renglones</Cap>
+              <Cap>Renglones</Cap>
               <SelectorProyectos
                 modo="renglones"
                 contraparte={contraparte?.id ?? null}
@@ -138,15 +139,11 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
                 proyectoSeleccionado={destino.proyectoRenglones}
                 onToggleRenglon={alternarRenglon}
               />
-              <div className="text-[11px] text-subtext">Los renglones de otro proveedor pasan al emisor mientras su grupo siga abierto, sin pagos ni orden de pago.</div>
             </div>
           )}
 
           {modo === 'gasto' && (
             <div className="flex flex-col gap-3">
-              <Aviso icono="info" tono="neutro">
-                Un gasto extra no está en la cotización: entra a los egresos del proyecto y resta de su utilidad. La cotización aprobada no cambia.
-              </Aviso>
               <Cap>Proyecto del gasto</Cap>
               <SelectorProyectos
                 modo="proyecto"
@@ -155,17 +152,22 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
                 onElegirProyecto={(p) => onDestino({ ...destino, modo: 'gasto', gasto: { ...destino.gasto, proyecto_id: p.proyecto_id, proyecto: p.proyecto } })}
               />
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <TextField label="Concepto" value={destino.gasto.concepto} onChange={(e) => onDestino({ ...destino, gasto: { ...destino.gasto, concepto: e.target.value } })} autoComplete="off" />
+                <TextField label="Concepto" requerido value={destino.gasto.concepto} onChange={(e) => onDestino({ ...destino, gasto: { ...destino.gasto, concepto: e.target.value } })} autoComplete="off" />
                 <TextField
                   label="Costo neto al proveedor"
+                  requerido
                   value={destino.gasto.costo}
                   onChange={(e) => onDestino({ ...destino, gasto: { ...destino.gasto, costo: e.target.value } })}
                   inputMode="decimal"
                   autoComplete="off"
-                  placeholder={subtotal > 0 ? subtotal.toFixed(2) : '0.00'}
-                  hint={subtotal > 0 ? `Subtotal del XML: ${fmtMoney(subtotal)}` : undefined}
+                  placeholder="0.00"
                 />
               </div>
+              {destino.gasto.proyecto_id && montoDeTexto(destino.gasto.costo) !== null && (
+                <Aviso icono="info" tono="neutro">
+                  Resta de la utilidad de {destino.gasto.proyecto_id}: {fmtMoney(montoDeTexto(destino.gasto.costo) ?? 0)} (neto). La cotización aprobada no cambia.
+                </Aviso>
+              )}
             </div>
           )}
         </>

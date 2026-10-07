@@ -27,6 +27,13 @@ En `cuentas-acciones.html`:
 - Clic en un proyecto abre el panel del proyecto; el chip de periodo despliega
   la tira de meses.
 
+## Desvíos conscientes de `cuentas-130.html` (implementado)
+
+- **Banco** es texto libre y no un `<select>`: así está en Proveedores y en el Portal y no hay catálogo de bancos.
+- Las secciones usan el encabezado `Cap` sin número, como los componentes aprobados de #123.
+- El **gasto extra** propone el neto del XML como costo (editable) y no muestra IVA.
+- En **pago por proyecto** no hay casilla "Solo con saldo abierto" (SQL solo lista proyectos con saldo abierto) ni filas "Pagada $0.00".
+
 ## Qué copia de producción (para implementar sin reinventar)
 
 | Pieza del diseño | Componente / archivo real |
