@@ -58,8 +58,11 @@ capturan RFC y abren el mismo Estado de cuenta con la sección `cuentas`. El Por
 - Queda **abierta** la pregunta 3 del plan: corregir un descuadre ligando o desligando cotizaciones de una factura existente
   **sin resubirla** (hoy el camino es marcar válida o reemplazar la factura). La propuesta (una RPC de reasignación como
   corrección registrada, que exige ampliar el CHECK de `tipo` de `cuentas_correcciones`) no se construyó; decidir con uso real.
-- `cuentas_conceptos` quedó ≈ +20 % más lenta en local con 500 proyectos y la línea base de `escala.yml` ya fallaba en `main`:
-  revisar con `escala.yml` antes de lanzar.
+- **Rendimiento de `cuentas_conceptos` (2026-10-07, test, 16,193 conceptos):** como `LANGUAGE sql` usaba plan genérico y hacía una
+  sonda de índice por grupo (309,077 buffers por derivación completa; ≈ 19 por concepto contra 12.3 en `main`). Ahora es plpgsql con
+  `force_custom_plan` (misma consulta, mismo resultado: `md5` idéntico en 9 alcances): 7,965 buffers (≈ 0.5 por concepto), un cliente
+  4,310. Cuesta planeo por llamada (15–70 ms en Micro). El ms en test es ruidoso (×5 entre corridas): decidir por buffers. Sigue
+  lineal en el historial para las lecturas globales (`resumen`, `avisos`, `opciones`): si `escala.yml` no cumple, siguiente paso #110 V2–V3.
 
 ## Referencias
 

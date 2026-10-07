@@ -1889,11 +1889,18 @@ $function$;
 
 CREATE OR REPLACE FUNCTION public.cuentas_conceptos(p_year integer, p_hoy date, p_objetivo text, p_id text)
  RETURNS TABLE(proyecto_key text, proyecto_orden bigint, proyecto_nombre text, proyecto_cliente text, fecha_entrega text, anio integer, mes integer, sin_fecha boolean, sin_proyecto boolean, margen numeric, fee numeric, iva_proyecto numeric, proyecto_reabierta boolean, concepto_creado timestamp with time zone, key text, tipo text, objetivo text, id text, proyecto_id text, cotizacion_id text, folio text, contraparte text, contraparte_id text, concepto text, items integer, total numeric, pagado numeric, total_estimado boolean, regimen_fiscal text, orden_pago_id text, fecha_vencimiento text, estado text, paso text, paso_urgente boolean, saldo numeric, venc_dias integer, resuelto boolean, fecha_resuelto date, metodo_desconocido boolean, complementos jsonb, cierre_iva numeric, cierre_iva_retenido numeric, cierre_isr_retenido numeric, utilidad_proyecto numeric, neto numeric)
- LANGUAGE sql
+ LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
  SET work_mem TO '16MB'
+ SET plan_cache_mode TO 'force_custom_plan'
 AS $function$
+#variable_conflict use_column
+BEGIN
+  -- plpgsql + force_custom_plan, no LANGUAGE sql: una función SQL se planea sin los valores de sus parámetros y, con
+  -- los filtros `p_objetivo IS NULL OR …`, el plan genérico hace una sonda de índice por grupo (309,077 buffers contra
+  -- 3,918 con plan por llamada, medido en test con el mismo SQL). Mismo patrón que cuentas_periodo (decisión 019).
+  RETURN QUERY
   WITH
   -- p_objetivo ('cobro' | 'grupo' | 'cuenta') y p_id (uuid en texto): un solo concepto; NULL = todos (B6).
   -- #123 (T18): 'cliente' | 'proveedor' = todos los conceptos de esa contraparte (estado de cuenta, P15).
@@ -2229,7 +2236,7 @@ AS $function$
          CASE WHEN c.p_fecha IS NOT NULL THEN substr(c.p_fecha, 6, 2)::int END,
          c.p_fecha IS NULL, c.p_sin, c.p_margen, c.p_fee, c.p_iva, c.p_reabierta,
          c.created_at,
-         'c:' || c.id, 'cobro', 'cobro', c.id::text, c.proyecto_id, c.cotizacion_id, c.folio,
+         'c:' || c.id, 'cobro', 'cobro', c.id::text, c.proyecto_id, c.cotizacion_id, c.folio::text,
          COALESCE(c.cliente, c.p_cliente, 'Cliente'), c.cliente_id::text,
          -- nombreCobro (concepto.ts).
          CASE WHEN c.cotizacion_id IS NULL THEN 'Sin cotización'
@@ -2266,6 +2273,7 @@ AS $function$
          p.c_iva, p.c_iva_ret, p.c_isr_ret,
          p.p_utilidad, p.c_subtotal
   FROM pago_d p;
+END;
 $function$;
 
 CREATE OR REPLACE FUNCTION public.cuentas_periodo(p jsonb)

@@ -59,8 +59,8 @@ Orden de la cola: **#123 → #110 → #125** (#125 baja prioridad, revisión 202
    Si lo quieres, es una RPC de reasignación como corrección registrada que exige ampliar el CHECK de `cuentas_correcciones` (DDL
    que correría una persona).
 3. **P14 ya está aplicado:** cualquiera con la sección `cuentas` puede reabrir, corregir y reemplazar facturas.
-4. **Latencia:** `cuentas_conceptos` ≈ +20 % en local (500 proyectos) y la línea base de `escala.yml` ya fallaba en `main`
-   (p95 800 ms): correr `escala.yml` antes de lanzar.
+4. **Latencia:** `cuentas_conceptos` pasó a plpgsql + `force_custom_plan` (309,077 → 7,965 buffers en test, resultado idéntico). Falta
+   confirmar `escala.yml` en la rama (p95 < 800 ms); si no cumple, #110 V2–V3 (ver decisión 022, notas de honestidad).
 5. `scripts/db/escala-limpiar.sql` y M3 llevan DELETE/DROP: los corre una persona.
 6. `rfc` entró en `PROVEEDOR_PUBLIC_COLUMNS` (desvío consciente de T8).
 7. Restos de siembra en test (`seed-cuentas-test.sql`, ids `c_fx_*`): son datos de prueba.
