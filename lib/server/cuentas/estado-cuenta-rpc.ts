@@ -10,8 +10,11 @@ import type {
   LadoCuentas,
 } from '@/lib/shared/cuentas/estado-cuenta-tipos'
 
-export async function cargarEstadoCuenta(lado: LadoCuentas, contraparteId: string, hoy: string): Promise<EstadoCuentaRespuesta> {
-  const { data, error } = await supabaseAdmin.rpc('estado_cuenta', { p_lado: lado, p_contraparte: contraparteId, p_hoy: hoy })
+/** #130: `proyectos` limita el estado a los conceptos de esos proyectos (pago por proyecto); sin él, todo (firma de siempre). */
+export async function cargarEstadoCuenta(lado: LadoCuentas, contraparteId: string, hoy: string, proyectos?: string[]): Promise<EstadoCuentaRespuesta> {
+  const { data, error } = proyectos?.length
+    ? await supabaseAdmin.rpc('estado_cuenta', { p_lado: lado, p_contraparte: contraparteId, p_proyectos: proyectos, p_hoy: hoy })
+    : await supabaseAdmin.rpc('estado_cuenta', { p_lado: lado, p_contraparte: contraparteId, p_hoy: hoy })
   if (error) throw error
   return data as EstadoCuentaRespuesta
 }

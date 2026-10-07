@@ -19,6 +19,8 @@ export interface DatosFiscalesSerenata {
   codigo_postal: string | null
   constancia_url: string | null
   constancia_nombre: string | null
+  /** #130: tolerancia (en pesos) del match de una factura por su total. */
+  tolerancia_total: number
   vigente: boolean
   actualizado_por: string | null
   created_at: string
@@ -59,4 +61,13 @@ export async function historialDatosFiscales(): Promise<DatosFiscalesSerenata[]>
   const { data, error } = await supabaseAdmin.from('datos_fiscales_serenata').select('*').order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as DatosFiscalesSerenata[]
+}
+
+/** Tolerancia (en pesos) para proponer renglones por el total de una factura; $1.00 mientras no haya constancia (#130, Q7). */
+export const TOLERANCIA_TOTAL_INICIAL = 1
+
+export async function toleranciaTotal(): Promise<number> {
+  const datos = await datosFiscalesVigentes()
+  const valor = Number(datos?.tolerancia_total)
+  return Number.isFinite(valor) && valor >= 0 ? valor : TOLERANCIA_TOTAL_INICIAL
 }

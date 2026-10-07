@@ -301,6 +301,27 @@ describe('xml/factura-parser', () => {
       expect(result.iva_trasladado).toBe(80)
     })
 
+    it('extrae nombre y régimen del emisor y del receptor para prellenar el alta (#130)', () => {
+      const xml = `<cfdi:Comprobante Fecha="2026-09-20T10:00:00" SubTotal="1000.00" Total="1160.00">
+        <cfdi:Emisor Rfc="ALE211125DC7" Nombre=" Audio Lemus Estudio SA de CV " RegimenFiscal="601" />
+        <cfdi:Receptor Rfc="SHO100101AB1" Nombre="Serenata House" RegimenFiscalReceptor="601" />
+      </cfdi:Comprobante>`
+      const result = parseFacturaXML(xml)
+      expect(result).toMatchObject({
+        nombre_emisor: 'Audio Lemus Estudio SA de CV',
+        regimen_emisor: '601',
+        nombre_receptor: 'Serenata House',
+        regimen_receptor: '601',
+      })
+    })
+
+    it('sin nombre ni régimen (CFDI 3.3) esos campos quedan undefined, nunca vacíos', () => {
+      const result = parseFacturaXML('<cfdi:Comprobante Fecha="2026-09-20T10:00:00" Total="10"><cfdi:Emisor Rfc="A" Nombre="  " /><cfdi:Receptor Rfc="B" /></cfdi:Comprobante>')
+      expect(result.nombre_emisor).toBeUndefined()
+      expect(result.regimen_emisor).toBeUndefined()
+      expect(result.regimen_receptor).toBeUndefined()
+    })
+
     it('reporta error explícito si el XML está mal formado (tag sin cerrar)', () => {
       const result = parseFacturaXML('<cfdi:Comprobante Folio="X" Fecha="2026-01-01"><cfdi:Emisor Rfc="A" />')
       expect(result.error).toBeTruthy()

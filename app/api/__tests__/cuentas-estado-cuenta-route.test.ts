@@ -38,8 +38,20 @@ describe('GET /api/cuentas/estado-cuenta', () => {
   it('devuelve el estado de cuenta del cliente o proveedor pedido', async () => {
     const res = await GET(req(`?lado=cobro&id=${ID}`))
     expect(res.status).toBe(200)
-    expect(mocks.cargarMock).toHaveBeenCalledWith('cobro', ID, expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/))
+    expect(mocks.cargarMock).toHaveBeenCalledWith('cobro', ID, expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), undefined)
     expect((await res.json()).contraparte.nombre).toBe('Cliente')
+  })
+
+  it('con proyectos (#130) limita el estado a esos proyectos', async () => {
+    const res = await GET(req(`?lado=proveedor&id=${ID}&proyectos=SH061,SH062`))
+    expect(res.status).toBe(200)
+    expect(mocks.cargarMock).toHaveBeenCalledWith('proveedor', ID, expect.any(String), ['SH061', 'SH062'])
+  })
+
+  it('rechaza más de 50 proyectos', async () => {
+    const muchos = Array.from({ length: 51 }, (_, i) => `SH${i}`).join(',')
+    expect((await GET(req(`?lado=cobro&id=${ID}&proyectos=${muchos}`))).status).toBe(400)
+    expect(mocks.cargarMock).not.toHaveBeenCalled()
   })
 
   it('una contraparte que no existe responde 404', async () => {

@@ -22,7 +22,8 @@ const MENSAJES = {
  * proveedor) o de un complemento de pago. El tipo sale del XML. Cliente → `ligar_factura` (una transacción: XML,
  * PDF, ligas y fechas); proveedor → el servicio de grupo (1:1); complemento → `ligar_complemento_*`. El total que no
  * cuadra no se rechaza: queda "En revisión" con el descuadre exacto (P5). Multipart: `xml`, `pdf` (opcional) y
- * `datos` (JSON con `operation_id`, `cuentas`/`grupo_id`, `contraparte_id`, `guardar_rfc`, `pago_id`).
+ * `datos` (JSON con `operation_id`, `cuentas`/`grupo_id`, `contraparte_id`, `guardar_rfc`, `pago_id` y, para un proveedor
+ * nuevo o renglones/gasto extra, `preparar`: #130).
  * El PDF también puede subirse aparte (`.../documentos`) por el límite de ~4.5 MB de Vercel.
  */
 export async function POST(request: Request) {
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
       guardarRfc: d.guardar_rfc,
       cuentas: d.cuentas.map((c) => ({ id: c.id, monto_esperado: c.monto_esperado ?? null })),
       grupoId: d.grupo_id ?? null,
+      preparar: d.preparar ?? null,
       pagoId: d.pago_id ?? null,
       usuario: authResult.session?.user?.email ?? null,
       uploadFolderId: resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined),

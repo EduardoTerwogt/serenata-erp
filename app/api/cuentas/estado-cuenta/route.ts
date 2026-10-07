@@ -9,7 +9,7 @@ const ROUTE = 'GET /api/cuentas/estado-cuenta'
 /**
  * #123 (B3, P15): estado de cuenta de un cliente (`lado=cobro`) o de un proveedor (`lado=proveedor`): una sola
  * consulta (`estado_cuenta`) para la ventana de Estado de cuenta, el reparto de Registrar pago y las fichas (P28).
- * Solo lee. Los saldos y estados los decide SQL.
+ * Solo lee. Los saldos y estados los decide SQL. `proyectos` (ids separados por coma) lo limita a esos proyectos (#130).
  */
 export async function GET(request: Request) {
   const authResult = await requireSection('cuentas')
@@ -20,8 +20,8 @@ export async function GET(request: Request) {
   if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 })
 
   try {
-    const { lado, id } = validation.data
-    const estado = await cargarEstadoCuenta(lado, id, hoyCdmx())
+    const { lado, id, proyectos } = validation.data
+    const estado = await cargarEstadoCuenta(lado, id, hoyCdmx(), proyectos)
     if (!estado.contraparte) {
       return Response.json({ error: lado === 'cobro' ? 'Cliente no encontrado' : 'Proveedor no encontrado' }, { status: 404 })
     }

@@ -7,7 +7,7 @@ import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { leerDatosMultipart } from '@/lib/server/uploads/datos-multipart'
 import { MAX_FILE_SIZE, MENSAJE_LIMITE } from '@/lib/server/uploads/factura-validation'
-import { DatosFiscalesGuardarSchema, validate } from '@/lib/validation/schemas'
+import { DatosFiscalesGuardarSchema, DatosFiscalesToleranciaSchema, validate } from '@/lib/validation/schemas'
 
 const ROUTE = 'datos-fiscales'
 const TIPOS_CONSTANCIA = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
@@ -78,6 +78,33 @@ export async function POST(request: Request) {
     }
     invalidarCacheDatosFiscales()
     return Response.json({ vigente: await datosFiscalesVigentes(), advertencias }, { status: 201 })
+  } catch (error) {
+    return buildErrorResponse(error, ruta)
+  }
+}
+
+/**
+ * #130 (Q7): tolerancia en pesos del match de una factura por su total. Vive en la constancia vigente (cada constancia
+ * nueva la hereda) y se cambia aquí, no por deploy. JSON: `{ tolerancia_total }`.
+ */
+export async function PATCH(request: Request) {
+  const authResult = await requireSection('admin')
+  if (authResult.response) return authResult.response
+  const ruta = `PATCH /api/admin/${ROUTE}`
+
+  try {
+    const validation = validate(DatosFiscalesToleranciaSchema, await request.json().catch(() => null))
+    if (!validation.ok) return Response.json({ error: validation.error }, { status: 400 })
+    const { error } = await supabaseAdmin.rpc('guardar_tolerancia_total', {
+      p_valor: validation.data.tolerancia_total,
+      p_usuario: authResult.session?.user?.email ?? null,
+    })
+    if (error) {
+      if (error.code === 'P1413') return Response.json({ error: 'tolerancia_invalida', message: error.message.split(': ').slice(1).join(': ') || 'La tolerancia no es válida' }, { status: 409 })
+      throw error
+    }
+    invalidarCacheDatosFiscales()
+    return Response.json({ vigente: await datosFiscalesVigentes() })
   } catch (error) {
     return buildErrorResponse(error, ruta)
   }

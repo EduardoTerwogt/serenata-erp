@@ -25,7 +25,7 @@ vi.mock('@/lib/server/cuentas/constancia-serenata', async () => {
   return { ...real, extraerConstancia: mocks.extraerMock }
 })
 
-import { GET, POST } from '../admin/datos-fiscales/route'
+import { GET, PATCH, POST } from '../admin/datos-fiscales/route'
 import { POST as LEER } from '../admin/datos-fiscales/leer/route'
 
 const DATOS = { rfc: 'sho100101ab1', razon_social: 'Serenata House Entertainment S.A. de C.V.', regimen_fiscal: 'Régimen General de Ley Personas Morales', codigo_postal: '06700', confirmado: true }
@@ -121,5 +121,37 @@ describe('datos fiscales de Serenata (B6a)', () => {
     const r = await POST(peticion({ datos: DATOS }))
     expect(r.status).toBeGreaterThanOrEqual(500)
     expect(mocks.rpcMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('tolerancia del match por total (#130, Q7)', () => {
+  const patch = (cuerpo: unknown) => new Request('http://x', { method: 'PATCH', body: JSON.stringify(cuerpo), headers: { 'content-type': 'application/json' } })
+
+  it('exige la sección admin', async () => {
+    mocks.requireSectionMock.mockResolvedValueOnce({ response: Response.json({ error: 'No autorizado' }, { status: 403 }), session: null as never })
+    expect((await PATCH(patch({ tolerancia_total: 2 }))).status).toBe(403)
+    expect(mocks.requireSectionMock).toHaveBeenCalledWith('admin')
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('valida el valor antes de llamar la RPC', async () => {
+    expect((await PATCH(patch({ tolerancia_total: -3 }))).status).toBe(400)
+    expect((await PATCH(patch({}))).status).toBe(400)
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('guarda la tolerancia en la constancia vigente, invalida la caché y devuelve la constancia', async () => {
+    const res = await PATCH(patch({ tolerancia_total: 2.5 }))
+    expect(res.status).toBe(200)
+    expect(mocks.rpcMock).toHaveBeenCalledWith('guardar_tolerancia_total', { p_valor: 2.5, p_usuario: 'admin@serenata.test' })
+    expect(mocks.invalidarMock).toHaveBeenCalled()
+  })
+
+  it('sin constancia cargada responde 409 con el motivo', async () => {
+    mocks.rpcMock.mockResolvedValueOnce({ data: null, error: { code: 'P1413', message: 'sin_constancia: sube primero la constancia' } })
+    const res = await PATCH(patch({ tolerancia_total: 2 }))
+    expect(res.status).toBe(409)
+    expect((await res.json()).message).toBe('sube primero la constancia')
+    expect(mocks.invalidarMock).not.toHaveBeenCalled()
   })
 })

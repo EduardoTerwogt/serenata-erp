@@ -365,7 +365,24 @@ export const LADOS_CUENTAS = ['cobro', 'proveedor'] as const
 export const EstadoCuentaQuerySchema = z.object({
   lado: z.enum(LADOS_CUENTAS, { message: 'lado inválido (cobro o proveedor)' }),
   id: z.string().uuid('id inválido (uuid de la contraparte)'),
+  /** #130: ids de proyecto separados por coma; solo los conceptos de esos proyectos (pago por proyecto). */
+  proyectos: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').map((x) => x.trim()).filter(Boolean) : undefined))
+    .refine((v) => v === undefined || (v.length > 0 && v.length <= 50), 'proyectos: de 1 a 50 ids separados por coma'),
 })
+
+// GET /api/cuentas/proyectos-selector (#130): proyectos con renglones (Subir factura) o con saldo (Registrar pago).
+export const ProyectosSelectorQuerySchema = z.object({
+  modo: z.enum(['renglones', 'pago'], { message: 'modo inválido (renglones o pago)' }),
+  lado: z.enum(LADOS_CUENTAS).optional(),
+  q: z.string().trim().max(100).optional(),
+  contraparte: z.string().uuid().optional(),
+  solo_pendientes: z.enum(['true', 'false']).optional().transform((v) => v !== 'false'),
+  page: z.coerce.number().int().min(1).max(10_000).optional().default(1),
+  page_size: z.coerce.number().int().min(1).max(50).optional().default(25),
+}).refine((v) => v.modo !== 'pago' || v.lado !== undefined, { message: 'El modo pago requiere lado' })
 
 const centavos = z.coerce.number().finite().positive('El monto debe ser mayor a 0')
 
@@ -394,6 +411,35 @@ export const FacturaCrearSchema = z.object({
   grupo_id: z.string().uuid().nullable().optional(),
   /** Complemento: desambigua el pago cuando varios coinciden con el monto (P9). */
   pago_id: z.string().uuid().nullable().optional(),
+  /**
+   * #130 (proveedor): alta del proveedor y/o asignación de renglones o gasto extra, en una transacción, ANTES de subir la
+   * factura. El proveedor es `contraparte_id` (existente) o `preparar.proveedor` (nuevo); el destino es `renglones` o
+   * `gasto` (uno solo). Sin `preparar`, la factura va a `grupo_id` como antes.
+   */
+  preparar: z
+    .object({
+      proveedor: z
+        .object({
+          nombre: z.string().trim().min(1, 'Falta el nombre').max(300),
+          rfc: z.string().trim().toUpperCase().regex(RFC_REGEX, 'RFC inválido'),
+          regimen_fiscal: z.enum(['moral', 'fisica', 'resico']),
+          telefono: z.string().trim().min(1, 'Falta el teléfono').max(40),
+          correo: z.string().trim().email('Correo inválido'),
+          banco: z.string().trim().min(1, 'Falta el banco').max(100),
+          clabe: z.string().trim().transform((v) => v.replace(/\s/g, '')).pipe(z.string().regex(/^\d{18}$/, 'La CLABE debe tener 18 dígitos')),
+        })
+        .optional(),
+      renglones: z.array(z.string().uuid()).max(200).optional(),
+      gasto: z
+        .object({
+          proyecto_id: z.string().trim().min(1).max(50),
+          concepto: z.string().trim().min(1, 'Falta el concepto').max(300),
+          costo_total: z.coerce.number().finite().positive('El costo debe ser mayor a 0'),
+        })
+        .optional(),
+    })
+    .optional()
+    .refine((p) => !p || Boolean(p.renglones?.length) !== (p.gasto !== undefined), 'Elige renglones o registra un gasto extra, no ambos ni ninguno'),
 })
 
 const FechaIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de pago requerida (YYYY-MM-DD)')
@@ -427,6 +473,20 @@ export const DatosFiscalesGuardarSchema = z.object({
   regimen_fiscal: z.string().trim().max(300).nullable().optional(),
   codigo_postal: z.string().trim().max(10).nullable().optional(),
   confirmado: z.literal(true, { message: 'Confirma los datos leídos antes de guardar' }),
+})
+
+// PATCH /api/admin/datos-fiscales — #130: tolerancia (en pesos) del match de una factura por su total.
+export const DatosFiscalesToleranciaSchema = z.object({
+  tolerancia_total: z.coerce.number().finite().min(0, 'La tolerancia no puede ser negativa').max(100, 'La tolerancia máxima es de $100'),
+})
+
+// PATCH /api/cuentas/clientes/[id] — #130: completar la ficha del cliente al facturarle por primera vez (datos del XML
+// y de la constancia). Solo llena lo que falta; el RFC ya guardado no se cambia desde aquí.
+export const ClienteCompletarSchema = z.object({
+  rfc: RfcSchema,
+  contacto: z.string().trim().max(200).nullable().optional(),
+  telefono: z.string().trim().max(40).nullable().optional(),
+  correo: z.string().trim().email('Correo inválido').nullable().optional(),
 })
 
 // GET /api/cuentas/periodo (Rediseño de Cuentas B3). Query string: todo

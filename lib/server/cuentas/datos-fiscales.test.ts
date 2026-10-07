@@ -16,7 +16,7 @@ vi.mock('@/lib/server/supabase-admin', () => ({
   },
 }))
 
-import { datosFiscalesVigentes, invalidarCacheDatosFiscales, serenataRfc } from './datos-fiscales'
+import { datosFiscalesVigentes, invalidarCacheDatosFiscales, serenataRfc, toleranciaTotal } from './datos-fiscales'
 
 const FILA = { id: 'd1', rfc: ' sho100101ab1 ', razon_social: 'Serenata House Entertainment', tipo_persona: 'moral', vigente: true }
 
@@ -52,5 +52,25 @@ describe('serenataRfc (T20, B6a)', () => {
   it('un error de la base se propaga, no se confunde con "sin constancia"', async () => {
     mocks.error = new Error('boom')
     await expect(serenataRfc()).rejects.toThrow('boom')
+  })
+})
+
+describe('toleranciaTotal (#130, Q7)', () => {
+  beforeEach(() => {
+    mocks.fila = null
+    mocks.error = null
+    invalidarCacheDatosFiscales()
+  })
+
+  it('lee la tolerancia de la constancia vigente', async () => {
+    mocks.fila = { ...FILA, tolerancia_total: 2.5 }
+    await expect(toleranciaTotal()).resolves.toBe(2.5)
+  })
+
+  it('sin constancia, o con un valor que no es número, usa $1.00', async () => {
+    await expect(toleranciaTotal()).resolves.toBe(1)
+    invalidarCacheDatosFiscales()
+    mocks.fila = { ...FILA, tolerancia_total: 'x' }
+    await expect(toleranciaTotal()).resolves.toBe(1)
   })
 })

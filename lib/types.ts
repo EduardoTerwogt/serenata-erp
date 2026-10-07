@@ -175,6 +175,9 @@ export interface Cliente {
   created_at: string
   // #123 (P24): RFC como columna, normalizado (recortado y en mayúsculas). null = sin capturar.
   rfc?: string | null
+  // #130: constancia de situación fiscal del cliente (Drive); se pide antes de facturarle por primera vez.
+  constancia_url?: string | null
+  constancia_nombre?: string | null
 }
 
 export interface Cotizacion {
@@ -329,7 +332,9 @@ export interface CuentaPagar {
   cotizacion_id: string
   proyecto_id: string
   proyecto_nombre?: string
-  item_id: string
+  /** null = gasto extra (#130): una cuenta sin renglón, con `concepto` propio. */
+  item_id: string | null
+  concepto?: string | null
   responsable_id: string | null
   /** Costo Total de la cuenta (Costo Unitario × Cantidad del renglón, D13). */
   costo_total: number

@@ -262,3 +262,87 @@ describe('ProveedorUpdateSchema', () => {
     expect(result.success).toBe(false)
   })
 })
+
+// ── #130: selector de proyectos, pago por proyecto, preparar y completar cliente ─────────────────────────────────
+import {
+  ClienteCompletarSchema,
+  DatosFiscalesToleranciaSchema,
+  EstadoCuentaQuerySchema,
+  FacturaCrearSchema,
+  ProyectosSelectorQuerySchema,
+  validate as validar130,
+} from '../schemas'
+
+const U1 = '11111111-1111-4111-8111-111111111111'
+const U2 = '22222222-2222-4222-8222-222222222222'
+const PROVEEDOR_NUEVO = { nombre: 'Audio Lemus', rfc: 'ale211125dc7', regimen_fiscal: 'moral', telefono: '5500000000', correo: 'a@b.co', banco: 'BBVA', clabe: '0123 4567 8901 2345 67' }
+
+describe('EstadoCuentaQuerySchema.proyectos (#130)', () => {
+  it('separa por coma, recorta y no pide el filtro', () => {
+    const ok = validar130(EstadoCuentaQuerySchema, { lado: 'cobro', id: U1, proyectos: 'SH061, SH062 ,' })
+    expect(ok.ok && ok.data.proyectos).toEqual(['SH061', 'SH062'])
+    const sin = validar130(EstadoCuentaQuerySchema, { lado: 'cobro', id: U1 })
+    expect(sin.ok && sin.data.proyectos).toBeUndefined()
+  })
+  it('rechaza una lista vacía de ids o de más de 50', () => {
+    expect(validar130(EstadoCuentaQuerySchema, { lado: 'cobro', id: U1, proyectos: ' , ' }).ok).toBe(false)
+    expect(validar130(EstadoCuentaQuerySchema, { lado: 'cobro', id: U1, proyectos: Array.from({ length: 51 }, (_, i) => `P${i}`).join(',') }).ok).toBe(false)
+  })
+})
+
+describe('ProyectosSelectorQuerySchema (#130)', () => {
+  it('toma valores por omisión y convierte solo_pendientes', () => {
+    const r = validar130(ProyectosSelectorQuerySchema, { modo: 'renglones' })
+    expect(r.ok && r.data).toMatchObject({ solo_pendientes: true, page: 1, page_size: 25 })
+    const f = validar130(ProyectosSelectorQuerySchema, { modo: 'pago', lado: 'cobro', solo_pendientes: 'false' })
+    expect(f.ok && f.data.solo_pendientes).toBe(false)
+  })
+  it('el modo pago exige lado y el tamaño de página tiene tope', () => {
+    expect(validar130(ProyectosSelectorQuerySchema, { modo: 'pago' }).ok).toBe(false)
+    expect(validar130(ProyectosSelectorQuerySchema, { modo: 'renglones', page_size: '51' }).ok).toBe(false)
+  })
+})
+
+describe('FacturaCrearSchema.preparar (#130)', () => {
+  const base = { operation_id: U1 }
+  it('acepta proveedor nuevo con renglones: normaliza RFC y CLABE', () => {
+    const r = validar130(FacturaCrearSchema, { ...base, preparar: { proveedor: PROVEEDOR_NUEVO, renglones: [U2] } })
+    expect(r.ok && r.data.preparar?.proveedor).toMatchObject({ rfc: 'ALE211125DC7', clabe: '012345678901234567' })
+  })
+  it('acepta un gasto extra con proveedor existente (sin datos de alta)', () => {
+    expect(validar130(FacturaCrearSchema, { ...base, contraparte_id: U2, preparar: { gasto: { proyecto_id: 'SH061', concepto: 'Renta', costo_total: 5000 } } }).ok).toBe(true)
+  })
+  it('exige renglones o gasto, no ambos ni ninguno', () => {
+    const gasto = { proyecto_id: 'SH061', concepto: 'Renta', costo_total: 5000 }
+    expect(validar130(FacturaCrearSchema, { ...base, preparar: { proveedor: PROVEEDOR_NUEVO } }).ok).toBe(false)
+    expect(validar130(FacturaCrearSchema, { ...base, preparar: { renglones: [U2], gasto } }).ok).toBe(false)
+    expect(validar130(FacturaCrearSchema, { ...base, preparar: { renglones: [] } }).ok).toBe(false)
+  })
+  it('rechaza un alta incompleta o con datos inválidos (CLABE de 17, correo, RFC, régimen, costo 0)', () => {
+    const malo = (campo: object) => validar130(FacturaCrearSchema, { ...base, preparar: { proveedor: { ...PROVEEDOR_NUEVO, ...campo }, renglones: [U2] } }).ok
+    expect(malo({ clabe: '01234567890123456' })).toBe(false)
+    expect(malo({ correo: 'sin-arroba' })).toBe(false)
+    expect(malo({ rfc: 'XX' })).toBe(false)
+    expect(malo({ regimen_fiscal: 'otro' })).toBe(false)
+    expect(malo({ banco: '' })).toBe(false)
+    expect(validar130(FacturaCrearSchema, { ...base, contraparte_id: U2, preparar: { gasto: { proyecto_id: 'SH061', concepto: 'x', costo_total: 0 } } }).ok).toBe(false)
+  })
+  it('sin preparar sigue siendo la factura de siempre', () => {
+    expect(validar130(FacturaCrearSchema, { ...base, grupo_id: U2 }).ok).toBe(true)
+  })
+})
+
+describe('DatosFiscalesToleranciaSchema y ClienteCompletarSchema (#130)', () => {
+  it('la tolerancia va de 0 a 100 pesos', () => {
+    expect(validar130(DatosFiscalesToleranciaSchema, { tolerancia_total: '1.5' }).ok).toBe(true)
+    expect(validar130(DatosFiscalesToleranciaSchema, { tolerancia_total: -1 }).ok).toBe(false)
+    expect(validar130(DatosFiscalesToleranciaSchema, { tolerancia_total: 101 }).ok).toBe(false)
+    expect(validar130(DatosFiscalesToleranciaSchema, {}).ok).toBe(false)
+  })
+  it('completar cliente normaliza el RFC y valida el correo', () => {
+    const r = validar130(ClienteCompletarSchema, { rfc: ' maz180920hj5 ', correo: 'ana@marea.mx' })
+    expect(r.ok && r.data.rfc).toBe('MAZ180920HJ5')
+    expect(validar130(ClienteCompletarSchema, { correo: 'nope' }).ok).toBe(false)
+    expect(validar130(ClienteCompletarSchema, { rfc: 'abc' }).ok).toBe(false)
+  })
+})

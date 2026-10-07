@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clasificarCfdi, foliosEnConceptos, normalizarRfc } from './rfc'
+import { clasificarCfdi, foliosEnConceptos, normalizarRfc, regimenSugerido } from './rfc'
 
 const SERENATA = 'SHO100101AB1'
 
@@ -64,5 +64,19 @@ describe('foliosEnConceptos (P4)', () => {
   it('un concepto genérico no preselecciona nada', () => {
     expect(foliosEnConceptos(['Servicios de producción audiovisual', 'SHOW 2026', 'SH12'])).toEqual([])
     expect(foliosEnConceptos(undefined)).toEqual([])
+  })
+})
+
+describe('regimenSugerido (#130)', () => {
+  it('626 es RESICO; en lo demás decide la longitud del RFC', () => {
+    expect(regimenSugerido('ALE211125DC7', '601')).toBe('moral')
+    expect(regimenSugerido('LOPJ800101AB1', '612')).toBe('fisica')
+    expect(regimenSugerido('LOPJ800101AB1', '626')).toBe('resico')
+    expect(regimenSugerido(' ale211125dc7 ', null)).toBe('moral')
+  })
+
+  it('con un RFC que no es de 12 ni 13 no se adivina', () => {
+    expect(regimenSugerido('ABC', '601')).toBeNull()
+    expect(regimenSugerido(null, null)).toBeNull()
   })
 })

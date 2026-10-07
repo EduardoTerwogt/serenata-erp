@@ -674,6 +674,14 @@ Cambios respecto al plan, por lo que se encontró en el código:
   único evita duplicados. Utilidad real = utilidad cotizada − Σ gastos extra (solo en `cuentas_conceptos`; `cuentas_por_proyecto`, usada solo por tests, no cambia).
 - Pendiente de C1: aplicar a test los comentarios de `auditar_consistencia` y `estado_cuenta` tal como están en el archivo (el texto en test difiere solo en comentarios).
 
+### Resultado de C2 (2026-10-07)
+Rutas y servicios (sin UI). `tsc`, `lint` y las 1,219 pruebas unitarias en verde; 25+ pruebas nuevas (selector, preparar, completar cliente, tolerancia, parser, esquemas).
+- `GET /api/cuentas/proyectos-selector` (única ruta nueva de lectura) y `GET /api/cuentas/estado-cuenta?proyectos=a,b` (máx. 50) para el pago por proyecto.
+- `POST /api/cuentas/facturas` acepta `preparar` (`contraparte_id` existente o `proveedor` nuevo + `renglones[]` o `gasto`). Si la subida falla después de preparar responde 502 con `preparado {proveedor_id, grupo_id}` para reintentar con el proveedor ya creado (reintentar con el alta fallaría por RFC repetido).
+- `POST .../facturas/preview` devuelve además `tolerancia`, `propuesta` (renglones "por asignar" de un proyecto que suman el neto del XML), `coincidencias_nombre`, `emisor` (RFC, nombre, régimen sugerido) y `receptor`. El parser ahora lee nombre y régimen del emisor y del receptor.
+- `PATCH /api/admin/datos-fiscales` guarda la tolerancia. `PATCH /api/cuentas/clientes/[id]` completa la ficha del cliente (RFC, contacto, constancia en Drive) con permiso `cuentas`; es una ruta aparte porque `PUT /api/clientes/[id]` exige Cotizaciones y edita todo.
+- **Desviación de Q7:** la propuesta compara el **subtotal (neto) del XML** y no su total con IVA. El total CFDI es neto + IVA − retenciones del mismo XML, así que da la misma respuesta sin una tercera copia de la fórmula fiscal; la validación del grupo (`validarFacturaFiscalProveedor`) sigue igual. Migración `20261035_c2_propuesta_renglones_factura.sql` (aplicada en test).
+
 ## Riesgos
 - **P0:** alta + reasignación + grupo + factura atómicos (una RPC); gasto extra no rompe `auditar_consistencia` ni `cancel_cotizacion` (B0 define si lleva `cotizacion_id`); centavos al repartir (residuo en `numeric`).
 - **P1:** duplicar proveedor; lista de ~2,700 proyectos (< 800 ms p95); ventana de test compartida; total CFDI vs neto da falsos matches; permiso `cuentas` crea proveedores (la RPC valida y deja rastro).
@@ -699,7 +707,7 @@ Cambios respecto al plan, por lo que se encontró en el código:
 |---|---|
 | C0 Cierre de diseño | **Hecho** (2026-10-07): decisiones Q10–Q13 y maqueta `docs/design/cuentas-123/cuentas-130.html` aprobadas por el usuario |
 | C1 Datos | **Hecho en test** (2026-10-07): migración `20261034`; falta correrla en CI (`Migrations`) y en producción al lanzar |
-| C2 API | Pendiente |
+| C2 API | **Hecho** (2026-10-07): rutas, servicios y pruebas; migración `20261035`; falta CI, `smoke`/`critical` y el spec `live` de C5 |
 | C3 UI Subir factura | Pendiente |
 | C4 UI Registrar pago por proyecto | Pendiente |
 | C5 Cerrar | Pendiente |

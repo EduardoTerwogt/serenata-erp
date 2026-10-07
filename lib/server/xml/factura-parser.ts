@@ -11,6 +11,12 @@ export interface FacturaData {
   subtotal?: number
   rfc_emisor?: string
   rfc_receptor?: string
+  // #130: nombre y código de régimen fiscal (c_RegimenFiscal) de quien emite y de quien recibe; prellenan el alta de la
+  // contraparte. Opcionales: un CFDI 3.3 puede no traer el régimen del receptor.
+  nombre_emisor?: string
+  regimen_emisor?: string
+  nombre_receptor?: string
+  regimen_receptor?: string
   uuid_timbrado?: string
   // Rediseño de Cuentas B1 (D2): PUE/PPD del atributo MetodoPago. Undefined
   // si el XML no lo trae o trae otro valor -- nunca se adivina (supuesto 4).
@@ -125,6 +131,7 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
     // detalle del documento.
     const rfcEmisor: string | undefined = comprobante.Emisor?.Rfc
     const rfcReceptor: string | undefined = comprobante.Receptor?.Rfc
+    const texto = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined)
     const uuid: string | undefined = comprobante.Complemento?.TimbreFiscalDigital?.UUID
     const tipoRaw = typeof comprobante.TipoDeComprobante === 'string' ? comprobante.TipoDeComprobante.trim().toUpperCase() : undefined
     const conceptosNodos: { Descripcion?: string }[] = Array.isArray(comprobante.Conceptos?.Concepto) ? comprobante.Conceptos.Concepto : []
@@ -168,6 +175,10 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
       subtotal,
       rfc_emisor: rfcEmisor,
       rfc_receptor: rfcReceptor,
+      nombre_emisor: texto(comprobante.Emisor?.Nombre),
+      regimen_emisor: texto(comprobante.Emisor?.RegimenFiscal),
+      nombre_receptor: texto(comprobante.Receptor?.Nombre),
+      regimen_receptor: texto(comprobante.Receptor?.RegimenFiscalReceptor),
       uuid_timbrado: uuid,
       metodo_pago: metodoPago,
       tipo_comprobante: tipoRaw,

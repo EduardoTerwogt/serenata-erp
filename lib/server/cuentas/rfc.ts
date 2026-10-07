@@ -21,6 +21,18 @@ export function normalizarRfc(valor: string | null | undefined): string | null {
   return limpio === '' ? null : limpio
 }
 
+/**
+ * #130: sugerencia de régimen del proveedor para prellenar su alta (el usuario la confirma). 626 es RESICO; en lo
+ * demás decide la longitud del RFC (12 = moral, 13 = física). Con un RFC raro no se adivina: null.
+ */
+export function regimenSugerido(rfc: string | null | undefined, codigoRegimen: string | null | undefined): 'moral' | 'fisica' | 'resico' | null {
+  if (codigoRegimen?.trim() === '626') return 'resico'
+  const limpio = normalizarRfc(rfc)
+  if (limpio?.length === 12) return 'moral'
+  if (limpio?.length === 13) return 'fisica'
+  return null
+}
+
 export function clasificarCfdi(data: Pick<FacturaData, 'tipo_comprobante' | 'rfc_emisor' | 'rfc_receptor'>, rfcPropio: string): ClasificacionCfdi {
   const propio = normalizarRfc(rfcPropio)
   const emisor = normalizarRfc(data.rfc_emisor)

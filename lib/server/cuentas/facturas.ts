@@ -23,8 +23,9 @@ import { carpetaContraparte } from './carpetas'
 import { ligarComplemento } from './complemento'
 import { resolverContraparteDeDestinos } from './contrapartes'
 import { cargarCandidatosFactura } from './estado-cuenta-rpc'
-import { serenataRfc } from './datos-fiscales'
-import { clasificarCfdi, foliosEnConceptos, normalizarRfc, type TipoDocumentoCuentas } from './rfc'
+import { serenataRfc, toleranciaTotal } from './datos-fiscales'
+import { prepararGrupoFacturaProveedor, type GrupoPreparado, type ProveedorNuevo } from './preparar-grupo'
+import { clasificarCfdi, foliosEnConceptos, normalizarRfc, regimenSugerido, type TipoDocumentoCuentas } from './rfc'
 import { subirFacturaCobro } from './subir-factura'
 import { subirFacturaProveedor } from './subir-factura-proveedor'
 import type { RegimenFiscal } from '@/lib/types'
@@ -135,6 +136,11 @@ export async function previsualizarFactura(p: PreviewParams): Promise<Respuesta>
     folios: foliosEnConceptos(data.conceptos),
   }
   const duplicada = await facturaVigenteConUuid(lado, data.uuid_timbrado ?? null)
+  const tolerancia = await toleranciaTotal()
+  // #130: sin grupo que cuadre, el emisor puede ser un proveedor nuevo y los renglones "por asignar" de un proyecto se
+  // proponen por el neto del XML (subtotal) dentro de la tolerancia; solo propone, el usuario revisa y elige.
+  const propuesta = lado === 'proveedor' ? await proponerRenglones(data.subtotal ?? 0, tolerancia) : []
+  const coincidenciasNombre = lado === 'proveedor' && !contraparte ? await proveedoresPorNombre(data.nombre_emisor ?? null) : []
 
   let candidatos: CandidatoFacturaCobro[] | CandidatoFacturaProveedor[] = []
   let preseleccion: string[] = []
@@ -172,8 +178,37 @@ export async function previsualizarFactura(p: PreviewParams): Promise<Respuesta>
       preseleccion,
       cuadre,
       duplicada,
+      tolerancia,
+      propuesta,
+      coincidencias_nombre: coincidenciasNombre,
+      /** Datos del XML para prellenar el alta del proveedor (#130); el usuario completa banco, CLABE, correo y teléfono. */
+      emisor: lado === 'proveedor' ? { rfc: normalizarRfc(data.rfc_emisor), nombre: data.nombre_emisor ?? null, regimen_codigo: data.regimen_emisor ?? null, regimen_sugerido: regimenSugerido(data.rfc_emisor, data.regimen_emisor) } : null,
+      /** Datos del XML para completar la ficha del cliente (#130). */
+      receptor: lado === 'cobro' ? { rfc: normalizarRfc(data.rfc_receptor), nombre: data.nombre_receptor ?? null } : null,
     },
   }
+}
+
+interface PropuestaRenglones {
+  proyecto_id: string
+  proyecto: string | null
+  renglones: string[]
+  neto: number
+}
+
+async function proponerRenglones(subtotal: number, tolerancia: number): Promise<PropuestaRenglones[]> {
+  if (!(subtotal > 0)) return []
+  const { data, error } = await supabaseAdmin.rpc('propuesta_renglones_factura', { p_subtotal: subtotal, p_tolerancia: tolerancia })
+  if (error) throw error
+  return (Array.isArray(data) ? data : []) as PropuestaRenglones[]
+}
+
+/** Proveedores con nombre parecido al del emisor, para ofrecer "es este proveedor" antes de crear uno nuevo (#130). */
+async function proveedoresPorNombre(nombre: string | null): Promise<{ id: string; nombre: string; score: number }[]> {
+  if (!nombre) return []
+  const { data, error } = await supabaseAdmin.rpc('match_proveedor_por_nombre', { p_nombre: nombre, p_excluir_id: '00000000-0000-0000-0000-000000000000' })
+  if (error) throw error
+  return (data ?? []) as { id: string; nombre: string; score: number }[]
 }
 
 async function facturasPorUuid(lado: LadoCuentas, uuids: string[]): Promise<Map<string, { id: string; estado_validacion: string | null; metodo_pago: string | null; total_cfdi: number | null }>> {
@@ -226,6 +261,8 @@ export interface ConfirmarParams {
   cuentas: { id: string; monto_esperado?: number | null }[]
   /** Proveedor: el grupo al que corresponde. */
   grupoId?: string | null
+  /** #130 (proveedor): alta del proveedor y asignación de renglones o gasto extra, antes de subir la factura. */
+  preparar?: { proveedor?: ProveedorNuevo; renglones?: string[]; gasto?: { proyecto_id: string; concepto: string; costo_total: number } } | null
   /** Complemento: desambigua el pago. */
   pagoId?: string | null
   usuario: string | null
@@ -277,8 +314,23 @@ export async function confirmarFactura(p: ConfirmarParams): Promise<Respuesta> {
   }
 
   // Proveedor: la factura es 1:1 por grupo (P10).
-  if (!p.grupoId) return { status: 400, body: { error: 'lineas_requeridas', message: 'Elige el proyecto (grupo) al que corresponde la factura.' } }
-  const grupo = await getCuentaPagarGrupoById(p.grupoId)
+  let grupoId = p.grupoId ?? null
+  let preparado: GrupoPreparado | null = null
+  if (p.preparar) {
+    if (grupoId) return { status: 400, body: { error: 'destino_duplicado', message: 'Usa el grupo o prepara renglones y proveedor, no ambos.' } }
+    if (!p.contraparteId && !p.preparar.proveedor) return { status: 400, body: { error: 'proveedor_requerido', message: 'Elige un proveedor o captura sus datos.' } }
+    preparado = await prepararGrupoFacturaProveedor({
+      proveedorId: p.contraparteId ?? null,
+      proveedor: p.preparar.proveedor,
+      renglones: p.preparar.renglones,
+      gasto: p.preparar.gasto,
+      usuario: p.usuario,
+      operationId: p.operationId || randomUUID(),
+    })
+    grupoId = preparado.grupo_id
+  }
+  if (!grupoId) return { status: 400, body: { error: 'lineas_requeridas', message: 'Elige el proyecto (grupo) al que corresponde la factura.' } }
+  const grupo = await getCuentaPagarGrupoById(grupoId)
   if (!grupo) return { status: 404, body: { error: 'Grupo de cuentas por pagar no encontrado' } }
   const proveedor = await contraparteElegida('proveedor', grupo.responsable_id)
   if (!proveedor) return { status: 404, body: { error: 'Proveedor no encontrado' } }
@@ -288,18 +340,34 @@ export async function confirmarFactura(p: ConfirmarParams): Promise<Respuesta> {
   const proyecto = await getProyectoById(grupo.proyecto_id)
   if (!proyecto) return { status: 404, body: { error: 'Proyecto asociado no encontrado' } }
 
-  const resultado = await subirFacturaProveedor({
-    grupo,
-    xmlFile: p.xmlFile,
-    pdfFile: p.pdfFile,
-    xmlContent,
-    carpeta: carpetaContraparte('proveedor', proveedor.nombre),
-    uploadFolderId: p.uploadFolderId,
-    usuario: p.usuario,
-    aviso: avisoRfc('proveedor', rfcContraparte, proveedor.rfc),
-  })
+  let resultado: Respuesta
+  try {
+    resultado = await subirFacturaProveedor({
+      grupo,
+      xmlFile: p.xmlFile,
+      pdfFile: p.pdfFile,
+      xmlContent,
+      carpeta: carpetaContraparte('proveedor', proveedor.nombre),
+      uploadFolderId: p.uploadFolderId,
+      usuario: p.usuario,
+      aviso: avisoRfc('proveedor', rfcContraparte, proveedor.rfc),
+    })
+  } catch (error) {
+    // La preparación ya se confirmó (proveedor y renglones o gasto): el estado es consistente y reintentable. Se avisa
+    // con los ids para que la ventana reintente con el proveedor ya creado, no con el alta (que fallaría por RFC repetido).
+    if (!preparado) throw error
+    console.error(`[${p.route}] La factura no se guardó tras preparar el grupo:`, error instanceof Error ? error.message : error)
+    return {
+      status: 502,
+      body: {
+        error: 'subida_fallida',
+        message: 'La factura no se guardó, pero el proveedor y los renglones ya quedaron listos. Vuelve a intentarlo con ese proveedor.',
+        preparado: { proveedor_id: preparado.proveedor_id, grupo_id: preparado.grupo_id },
+      },
+    }
+  }
   if (resultado.status === 200) await guardarRfcSiSePidio(p.guardarRfc, 'proveedor', proveedor, rfcContraparte)
-  return resultado
+  return preparado && resultado.status === 200 ? { ...resultado, body: { ...resultado.body, preparado } } : resultado
 }
 
 /** El RFC del XML contra el de la ficha: si la ficha lo tiene y es otro, la factura queda "En revisión" (P5, P24). */
