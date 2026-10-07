@@ -107,9 +107,19 @@ describe('datos fiscales de Serenata (B6a)', () => {
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
-  it('guardar: sin Drive configurado falla explícito y no guarda', async () => {
+  it('guardar: sin Drive configurado (p. ej. un Preview) guarda los datos y avisa que el archivo no se guardó', async () => {
     mocks.driveEnv.current = null
-    expect((await POST(peticion({ datos: DATOS }))).status).toBe(500)
+    const r = await POST(peticion({ datos: DATOS }))
+    expect(r.status).toBe(201)
+    expect((await r.json()).advertencias.join(' ')).toMatch(/Google Drive no está configurado/)
+    expect(mocks.uploadMock).not.toHaveBeenCalled()
+    expect(mocks.rpcMock).toHaveBeenCalledWith('guardar_datos_fiscales_serenata', expect.objectContaining({ p_constancia_url: null, p_rfc: 'SHO100101AB1' }))
+  })
+
+  it('guardar: con Drive configurado pero la subida falla, no guarda nada', async () => {
+    mocks.uploadMock.mockRejectedValue(new Error('drive caído'))
+    const r = await POST(peticion({ datos: DATOS }))
+    expect(r.status).toBeGreaterThanOrEqual(500)
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 })

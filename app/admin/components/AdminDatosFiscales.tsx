@@ -101,10 +101,10 @@ export function AdminDatosFiscales() {
           confirmado: true,
         })
       )
-      await sendFormData('/api/admin/datos-fiscales', fd, 'No se pudo guardar la constancia')
+      const r = await sendFormData<{ advertencias?: string[] }>('/api/admin/datos-fiscales', fd, 'No se pudo guardar la constancia')
       setLectura(null)
       setConfirmado(false)
-      setExito('Constancia guardada. Desde ahora Cuentas reconoce las facturas con este RFC.')
+      setExito(['Constancia guardada. Desde ahora Cuentas reconoce las facturas con este RFC.', ...(r.advertencias ?? [])].join(' '))
       await cargar()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo guardar la constancia')

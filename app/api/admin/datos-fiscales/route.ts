@@ -27,7 +27,8 @@ export async function GET() {
 /**
  * Guarda una constancia nueva: la anterior pasa a historial. Multipart: `constancia` (PDF o imagen, ≤ 4 MB) y `datos`
  * (JSON con lo leído y confirmado). El servidor vuelve a validar (estructura del RFC, razón social): un dato inválido
- * no se guarda aunque el cliente diga que lo confirmó. El PDF va a Drive y el alta es una sola transacción (RPC).
+ * no se guarda aunque el cliente diga que lo confirmó. El PDF va a Drive (si está configurado) y el alta es una sola
+ * transacción (RPC).
  */
 export async function POST(request: Request) {
   const authResult = await requireSection('admin')
@@ -50,9 +51,17 @@ export async function POST(request: Request) {
     const revision = validarConstancia({ rfc: d.rfc, razon_social: d.razon_social, regimen_fiscal: d.regimen_fiscal ?? null, codigo_postal: d.codigo_postal ?? null })
     if (!revision.ok) return Response.json({ error: 'constancia_invalida', message: revision.errores.join(' ') }, { status: 400 })
 
+    // El archivo va a Drive. Si Drive no está configurado en este entorno (p. ej. un Preview) lo importante son los datos:
+    // se guardan igual y se avisa que el archivo no se guardó. Si Drive SÍ está configurado y la subida falla, no se
+    // guarda nada (el error sube tal cual): no queda una constancia sin su archivo por una falla pasajera.
+    const advertencias = [...revision.advertencias]
+    let url: string | null = null
     const googleEnv = getGoogleEnv()
-    if (!googleEnv) return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
-    const url = await uploadFileToDrive(constancia, 'Datos fiscales Serenata', constancia.name, googleEnv.driveFolderIdCuentas || undefined)
+    if (googleEnv) {
+      url = await uploadFileToDrive(constancia, 'Datos fiscales Serenata', constancia.name, googleEnv.driveFolderIdCuentas || undefined)
+    } else {
+      advertencias.push('Google Drive no está configurado en este entorno: se guardaron los datos, pero no el archivo de la constancia.')
+    }
 
     const { error } = await supabaseAdmin.rpc('guardar_datos_fiscales_serenata', {
       p_rfc: revision.rfc,
@@ -68,7 +77,7 @@ export async function POST(request: Request) {
       throw error
     }
     invalidarCacheDatosFiscales()
-    return Response.json({ vigente: await datosFiscalesVigentes(), advertencias: revision.advertencias }, { status: 201 })
+    return Response.json({ vigente: await datosFiscalesVigentes(), advertencias }, { status: 201 })
   } catch (error) {
     return buildErrorResponse(error, ruta)
   }
