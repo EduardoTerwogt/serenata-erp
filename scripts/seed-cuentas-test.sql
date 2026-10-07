@@ -248,3 +248,9 @@ BEGIN
   RAISE NOTICE 'seed-cuentas-test: listo (5 proyectos, 1 orden, 6 grupos, 11 cuentas por pagar, 7 por cobrar).';
 END
 $seed$;
+
+-- #123 (B6a): constancia fiscal de prueba de Serenata (RFC SHO100101AB1, el que usan los fixtures de XML). Solo si no
+-- hay una vigente: en test, `serenataRfc()` lee esta fila y sin ella las rutas de factura fallan explícito (T20).
+INSERT INTO public.datos_fiscales_serenata (rfc, razon_social, regimen_fiscal, tipo_persona, codigo_postal, actualizado_por)
+SELECT 'SHO100101AB1', 'Serenata House Entertainment (datos de prueba)', 'Régimen General de Ley Personas Morales', 'moral', '06700', 'seed-test'
+WHERE NOT EXISTS (SELECT 1 FROM public.datos_fiscales_serenata WHERE vigente);
