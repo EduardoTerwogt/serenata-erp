@@ -245,7 +245,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
               Cancelar
             </Button>
           )}
-          <Button iconLeft="check" onClick={registrar} disabled={!puedeRegistrar} fullWidth={!escritorio}>
+          <Button onClick={registrar} disabled={!puedeRegistrar} fullWidth={!escritorio}>
             {enviando ? 'Registrando…' : 'Registrar pago'}
           </Button>
         </>

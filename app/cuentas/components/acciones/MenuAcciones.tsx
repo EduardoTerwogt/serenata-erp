@@ -97,7 +97,7 @@ export function MenuAcciones({ onElegir, disponibles }: Props) {
         <Icon name="zap" size={18} />
       </button>
       {abierto && (
-        <div role="menu" aria-label="Acciones" className="absolute right-0 top-full z-40 mt-1.5 w-[220px] overflow-hidden rounded-panel border border-hairline bg-card py-1 shadow-overlay">
+        <div role="menu" aria-label="Acciones" className="absolute right-0 top-full z-40 mt-1.5 w-[236px] overflow-hidden rounded-panel border border-hairline bg-card py-1 shadow-overlay">
           {items.map((e) => (
             <div key={e.id}>
               {e.separador && <div role="separator" className="my-1 border-t border-hairline" />}
@@ -105,9 +105,11 @@ export function MenuAcciones({ onElegir, disponibles }: Props) {
                 type="button"
                 role="menuitem"
                 onClick={() => elegir(e.id)}
-                className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-[13.5px] text-ink hover:bg-row-alt focus:bg-row-alt focus:outline-none"
+                className="flex w-full items-center gap-3 px-3 py-2 text-left text-[13.5px] text-ink hover:bg-row-alt focus:bg-row-alt focus:outline-none"
               >
-                <Icon name={e.icono} size={16} className="flex-none text-subtext" />
+                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px] bg-row-alt text-subtext">
+                  <Icon name={e.icono} size={15} />
+                </span>
                 {e.texto}
               </button>
             </div>

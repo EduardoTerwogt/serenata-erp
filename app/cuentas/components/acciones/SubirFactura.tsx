@@ -190,7 +190,7 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
               Cancelar
             </Button>
           )}
-          <Button iconLeft="check" onClick={guardar} disabled={!puedeGuardar} fullWidth={!escritorio}>
+          <Button onClick={guardar} disabled={!puedeGuardar} fullWidth={!escritorio}>
             {enviando ? 'Guardando…' : etiquetaGuardar}
           </Button>
         </>
@@ -364,6 +364,15 @@ function FilaArchivo({ icono, nombre, sub, insignia, accion, onQuitar }: { icono
 function ListaCandidatos({ candidatos, seleccion, multiple, onAlternar }: { candidatos: Candidato[]; seleccion: string[]; multiple: boolean; onAlternar: (id: string) => void }) {
   return (
     <div role={multiple ? 'group' : 'radiogroup'} aria-label="Candidatos" className="overflow-hidden rounded-panel border border-hairline">
+      {multiple && (
+        <div className="hidden items-center gap-3 bg-row-alt px-3.5 py-2 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-subtext md:flex">
+          <span className="w-[18px] flex-none" />
+          <span className="w-[64px] flex-none">Folio</span>
+          <span className="flex-1">Proyecto</span>
+          <span className="w-[84px]">Evento</span>
+          <span className="w-[96px] text-right">Por facturar</span>
+        </div>
+      )}
       {candidatos.map((c) => {
         const id = idDe(c)
         const on = seleccion.includes(id)
@@ -394,8 +403,8 @@ function ListaCandidatos({ candidatos, seleccion, multiple, onAlternar }: { cand
                 {c.proyecto ?? '—'}
                 {!esCandidatoCobro(c) && c.conceptos > 1 && <span className="text-faint"> · {plural(c.conceptos, 'concepto', 'conceptos')}</span>}
               </span>
-              <span className="hidden whitespace-nowrap text-[11.5px] text-subtext md:inline">{fechaCorta(c.fecha_entrega)}</span>
-              <span className="whitespace-nowrap text-[12.5px] font-semibold text-ink">{fmtMoney(monto)}</span>
+              <span className={`hidden whitespace-nowrap text-[11.5px] text-subtext md:inline ${multiple ? 'md:w-[84px]' : ''}`}>{fechaCorta(c.fecha_entrega)}</span>
+              <span className={`whitespace-nowrap text-[12.5px] font-semibold text-ink ${multiple ? 'md:w-[96px] md:text-right' : ''}`}>{fmtMoney(monto)}</span>
             </button>
           </div>
         )

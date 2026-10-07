@@ -60,7 +60,7 @@ import {
   RotateCcw,
   Zap,
   CreditCard,
-  Receipt,
+  ReceiptText,
 } from 'lucide-react'
 
 // Rediseño Apple-style: los íconos y tonos del nav siguen exactamente
@@ -138,7 +138,7 @@ const ICONS = {
   // Menú Acciones de Cuentas (#123): los del mockup aprobado, docs/design/cuentas-123/cuentas-acciones.html.
   zap: Zap,
   card: CreditCard,
-  receipt: Receipt,
+  receipt: ReceiptText,
 } as const
 
 export type IconName = keyof typeof ICONS

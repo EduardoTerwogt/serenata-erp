@@ -100,7 +100,7 @@ export function EstadoCuenta({ lado, contraparteId, doc, fija = false, onCambio,
 
 function Resumen({ k, v, acento = false }: { k: string; v: ReactNode; acento?: boolean }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
+    <div className="flex min-w-0 flex-col gap-1 rounded-panel border border-hairline bg-card px-4 py-3.5">
       <span className="sn-caption">{k}</span>
       <span className={`truncate text-[17px] font-bold ${acento ? 'text-accent' : 'text-ink'}`}>{v}</span>
     </div>
@@ -112,7 +112,7 @@ function Contenido({ e, doc, etiquetaCobrado, resaltada }: { e: EstadoCuentaResp
   const pendientes = e.facturas.map((f) => ({ f, c: estadoComplemento(f, e.pagos) })).filter((x) => x.c && x.c.cubiertos < x.c.total)
   return (
     <>
-      <div className="grid grid-cols-2 gap-4 rounded-panel bg-row-alt px-4 py-3.5 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Resumen k="Facturado" v={fmtMoney(e.resumen.total)} />
         <Resumen k={etiquetaCobrado} v={fmtMoney(e.resumen.pagado)} />
         <Resumen k="Saldo" v={fmtMoney(e.resumen.saldo)} acento />
@@ -156,7 +156,7 @@ function Contenido({ e, doc, etiquetaCobrado, resaltada }: { e: EstadoCuentaResp
             const hl = doc === f.id
             return (
               <tr key={f.id} ref={hl ? resaltada : undefined} data-resaltada={hl || undefined} className={`border-t border-hairline text-[12.5px] ${hl ? 'bg-accent/[0.08]' : ''}`}>
-                <Td fuerte>
+                <Td fuerte nowrap>
                   {f.archivo_url ? (
                     <a href={f.archivo_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
                       {nombreFactura(f)}
@@ -165,7 +165,7 @@ function Contenido({ e, doc, etiquetaCobrado, resaltada }: { e: EstadoCuentaResp
                     nombreFactura(f)
                   )}
                 </Td>
-                <Td>{fechaCorta(f.fecha_factura)}</Td>
+                <Td nowrap>{fechaCorta(f.fecha_factura)}</Td>
                 <Td mono>{f.conceptos.map((c) => c.folio ?? c.proyecto_id).filter(Boolean).join(' · ') || '—'}</Td>
                 <Td derecha>{fmtMoney(f.total)}</Td>
                 <Td derecha>{fmtMoney(f.pagado)}</Td>
@@ -317,6 +317,6 @@ function Th({ children, derecha = false }: { children: ReactNode; derecha?: bool
   return <th className={`px-3.5 text-left font-semibold ${derecha ? 'text-right' : ''}`}>{children}</th>
 }
 
-function Td({ children, derecha = false, fuerte = false, mono = false }: { children: ReactNode; derecha?: boolean; fuerte?: boolean; mono?: boolean }) {
-  return <td className={`px-3.5 py-2.5 align-middle text-ink ${derecha ? 'whitespace-nowrap text-right' : ''} ${fuerte ? 'font-semibold' : ''} ${mono ? 'font-mono text-[11.5px]' : ''}`}>{children}</td>
+function Td({ children, derecha = false, fuerte = false, mono = false, nowrap = false }: { children: ReactNode; derecha?: boolean; fuerte?: boolean; mono?: boolean; nowrap?: boolean }) {
+  return <td className={`px-3.5 py-2.5 align-middle text-ink ${derecha ? 'text-right' : ''} ${derecha || nowrap ? 'whitespace-nowrap' : ''} ${fuerte ? 'font-semibold' : ''} ${mono ? 'font-mono text-[11.5px]' : ''}`}>{children}</td>
 }
