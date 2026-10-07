@@ -258,6 +258,11 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
                 </Aviso>
               )}
 
+              {!cobro && contraparte && (
+                <Aviso icono="info" tono="neutro">
+                  El RFC es de un proveedor: la factura se liga a su proyecto, como hoy.
+                </Aviso>
+              )}
               {!contraparte && (
                 <ElegirContraparte factura={factura} onElegir={(c) => { setManual({ id: c.id, nombre: c.nombre }); setSeleccion([]); inicializada.current = '' }} />
               )}
@@ -284,7 +289,7 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
                       {cobro ? `${contraparte.nombre} no tiene cotizaciones aprobadas por facturar.` : `${contraparte.nombre} no tiene proyectos sin factura.`}
                     </Aviso>
                   ) : (
-                    <ListaCandidatos candidatos={candidatos} seleccion={seleccion} multiple={Boolean(cobro)} onAlternar={alternar} />
+                    <ListaCandidatos candidatos={candidatos} seleccion={seleccion} multiple={Boolean(cobro)} onAlternar={alternar} mesFactura={factura.cfdi.fecha?.slice(0, 7) ?? null} />
                   )}
                   {candidatos.length > 0 && (
                     <div className="-mt-2 text-[11px] text-subtext">{cobro ? `Solo cobros de ${contraparte.nombre} con saldo por facturar.` : `Solo proyectos de ${contraparte.nombre} sin factura validada.`}</div>
@@ -361,7 +366,7 @@ function FilaArchivo({ icono, nombre, sub, insignia, accion, onQuitar }: { icono
   )
 }
 
-function ListaCandidatos({ candidatos, seleccion, multiple, onAlternar }: { candidatos: Candidato[]; seleccion: string[]; multiple: boolean; onAlternar: (id: string) => void }) {
+function ListaCandidatos({ candidatos, seleccion, multiple, onAlternar, mesFactura }: { candidatos: Candidato[]; seleccion: string[]; multiple: boolean; onAlternar: (id: string) => void; mesFactura: string | null }) {
   return (
     <div role={multiple ? 'group' : 'radiogroup'} aria-label="Candidatos" className="overflow-hidden rounded-panel border border-hairline">
       {multiple && (
@@ -369,7 +374,7 @@ function ListaCandidatos({ candidatos, seleccion, multiple, onAlternar }: { cand
           <span className="w-[18px] flex-none" />
           <span className="w-[64px] flex-none">Folio</span>
           <span className="flex-1">Proyecto</span>
-          <span className="w-[84px]">Evento</span>
+          <span className="w-[150px]">Evento</span>
           <span className="w-[96px] text-right">Por facturar</span>
         </div>
       )}
@@ -403,7 +408,11 @@ function ListaCandidatos({ candidatos, seleccion, multiple, onAlternar }: { cand
                 {c.proyecto ?? '—'}
                 {!esCandidatoCobro(c) && c.conceptos > 1 && <span className="text-faint"> · {plural(c.conceptos, 'concepto', 'conceptos')}</span>}
               </span>
-              <span className={`hidden whitespace-nowrap text-[11.5px] text-subtext md:inline ${multiple ? 'md:w-[84px]' : ''}`}>{fechaCorta(c.fecha_entrega)}</span>
+              <span className={`hidden whitespace-nowrap text-[11.5px] text-subtext md:inline ${multiple ? 'md:w-[150px]' : ''}`}>{fechaCorta(c.fecha_entrega)}
+                {multiple && mesFactura && c.fecha_entrega && c.fecha_entrega.slice(0, 7) !== mesFactura && (
+                  <span className="ml-1.5 rounded-[6px] bg-row-alt px-1.5 py-0.5 text-[10px] font-semibold text-subtext">otro mes</span>
+                )}
+              </span>
               <span className={`whitespace-nowrap text-[12.5px] font-semibold text-ink ${multiple ? 'md:w-[96px] md:text-right' : ''}`}>{fmtMoney(monto)}</span>
             </button>
           </div>

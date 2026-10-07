@@ -16,7 +16,7 @@ nada mergeado a `main`.
 `docs/decisions/022-facturas-y-pagos-ligados.md`). Una factura cubre varias cotizaciones y un pago cubre varias facturas.
 Instrucción permanente tuya: ejecutar el plan completo, consultarte solo dudas de producto y **avisarte cuando esté listo para
 revisar antes de producción**: este es ese aviso. Sin aplicar nada a producción ni mergear a `main` hasta tu revisión.
-Orden de la cola: **#123 → #110 → #125** (#125 baja prioridad, revisión 2026-11-01, límite 2026-12-01).
+Orden de la cola: **#123 → #130 → #110 → #125** (#130 antes de #110 porque el pago por proyecto cambia lo que #110 materializa; #125 baja prioridad, revisión 2026-11-01, límite 2026-12-01).
 
 ## Tracker de #123
 
@@ -59,8 +59,11 @@ Orden de la cola: **#123 → #110 → #125** (#125 baja prioridad, revisión 202
    Si lo quieres, es una RPC de reasignación como corrección registrada que exige ampliar el CHECK de `cuentas_correcciones` (DDL
    que correría una persona).
 3. **P14 ya está aplicado:** cualquiera con la sección `cuentas` puede reabrir, corregir y reemplazar facturas.
-4. **Latencia:** `cuentas_conceptos` pasó a plpgsql + `force_custom_plan` (309,077 → 7,965 buffers en test, resultado idéntico). Falta
-   confirmar `escala.yml` en la rama (p95 < 800 ms); si no cumple, #110 V2–V3 (ver decisión 022, notas de honestidad).
+4. **Latencia (gate rojo, conocido):** `cuentas_conceptos` pasó a plpgsql + `force_custom_plan` (309,077 → 7,965 buffers en test,
+   resultado idéntico). `escala.yml` en `0d02802` **no cumple** p95 < 800 ms en las lecturas globales (mes 2308, año 1634, lista 1506,
+   resumen 1257, avisos 1086; antes 1570/1637/1867/1368/1602). El guardado (K6) sí pasa (POST 423 ms). Causa: cada lectura global
+   re-deriva todo el historial; el arreglo es #110 V2–V3 (materializar), que va **después de #130**. `escala.yml` es manual y no bloquea
+   el merge; hoy producción está vacía y el dataset de escala (≈16 mil conceptos) es mucho mayor que el real. Decides si lanzas con esto.
 5. `scripts/db/escala-limpiar.sql` y M3 llevan DELETE/DROP: los corre una persona.
 6. `rfc` entró en `PROVEEDOR_PUBLIC_COLUMNS` (desvío consciente de T8).
 7. Restos de siembra en test (`seed-cuentas-test.sql`, ids `c_fx_*`): son datos de prueba.
@@ -73,8 +76,7 @@ Orden de la cola: **#123 → #110 → #125** (#125 baja prioridad, revisión 202
 
 ## Problemas abiertos
 
-- **CI del PR #129:** `test` y `fresh-db` en verde en `558f8b8` (B3); el E2E de esa cabeza terminó en verde (incluido `live`).
-  El de la cabeza actual (`d29a01b` en adelante) se está corriendo: **revisarlo primero** al retomar.
+- **CI del PR #129:** `test`, `fresh-db`, `smoke-and-critical` y `live` en verde en `0d02802`; solo `escala` (manual) en rojo, ver aviso 4.
 - Durante B2 el `live` falló por `statement_timeout` en `cuentas_conceptos` bajo carga; vigilar si reaparece. Dos rojos seguidos
   del mismo spec son reales; uno se confirma con un solo re-run.
 - Un error aislado de Realtime (`no partition of relation "messages"`) el 2026-10-06 00:50 UTC; confirmar que las particiones
@@ -104,17 +106,16 @@ Orden de la cola: **#123 → #110 → #125** (#125 baja prioridad, revisión 202
 
 ## Siguiente paso
 
-1. **Revisar el CI de PR #129** (`e2e.yml`, `test.yml`, `migrations.yml`) en la cabeza actual y corregir lo que falle.
-2. **Tu revisión de #123** y, si la aprueba, el **lanzamiento** (aviso 1). Al lanzar: verificar `auditar_consistencia()` = 0 en
+1. **Tu revisión de #123** y, si la aprueba, el **lanzamiento** (aviso 1). Al lanzar: verificar `auditar_consistencia()` = 0 en
    producción, archivar `docs/PLAN.md` en `docs/archive/`, cerrar #123 y recrear `PLAN.md` vacío.
-3. Después de #123: **#110**; limpieza de #124 (quitar el ref viejo `fwmyoqokcjtldiofuxdg` de
+2. Después de #123: **#130** (alta de proveedor y pago/factura por proyecto, con análisis previo) y luego **#110** V2–V3; limpieza de #124 (quitar el ref viejo `fwmyoqokcjtldiofuxdg` de
    `app/api/internal/env-check/route.ts` y su test, y borrar `.github/workflows/db-push-una-vez.yml`, cuando borres la base
    vieja); **#125** al final.
 
 ## Deuda técnica
 
 - **Llaves legacy de Supabase** (#125): límite interno 2026-12-01.
-- **Frente 2 de Cuentas** (#110): detrás de #123.
+- **Frente 2 de Cuentas** (#110): detrás de #123 y #130; es lo que resuelve el gate de escala.
 - **`cuentas_por_proyecto(p_year, p_proyecto)`:** `p_proyecto` ya no se usa; quitarlo en la próxima migración que toque esa función.
 - **`realtime-js` fijo en 2.112.0** (la guarda `lib/realtime/__tests__/realtime-js-guard.test.ts` falla si se sube sin pasar el JWT por `accessToken`).
 - **Job `live` intermitente** (`cotizaciones-colaboracion*.spec.ts`, `cuentas-paridad-sql`, 57014).

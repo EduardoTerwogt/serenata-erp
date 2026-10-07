@@ -62,7 +62,9 @@ capturan RFC y abren el mismo Estado de cuenta con la sección `cuentas`. El Por
   sonda de índice por grupo (309,077 buffers por derivación completa; ≈ 19 por concepto contra 12.3 en `main`). Ahora es plpgsql con
   `force_custom_plan` (misma consulta, mismo resultado: `md5` idéntico en 9 alcances): 7,965 buffers (≈ 0.5 por concepto), un cliente
   4,310. Cuesta planeo por llamada (15–70 ms en Micro). El ms en test es ruidoso (×5 entre corridas): decidir por buffers. Sigue
-  lineal en el historial para las lecturas globales (`resumen`, `avisos`, `opciones`): si `escala.yml` no cumple, siguiente paso #110 V2–V3.
+  lineal en el historial para las lecturas globales (`resumen`, `avisos`, `opciones`). `escala.yml` en `0d02802` **no cumple** p95 < 800 ms
+  (mes 2308, año 1634, lista 1506, resumen 1257, avisos 1086 ms; el guardado sí: POST 423 ms): el RPC sigue en ≈0.8–1.1 s por re-derivar
+  el historial. Decisión: se lanza #123 con el gate declarado rojo, se hace #130 (cambia lo que #110 materializa) y después #110 V2–V3.
 
 ## Referencias
 
