@@ -8,111 +8,146 @@
 <style>
 /* Tokens copiados de cuentas-acciones.html (design system de Serenata). Maqueta de #130: no es código de producción. */
 :root{
-  --sn-app:#F5F5F7; --sn-surface:#FFFFFF; --sn-surface-alt:#FAFAFB; --sn-surface-alt-2:#F0F0F2; --sn-input:rgba(120,120,128,.12);
-  --sn-hairline:#DEDEE2; --sn-orange:#FE7B01; --sn-orange-strong:#E06D00;
+  --sn-app:#F5F5F7; --sn-sidebar-glass:rgba(237,237,240,.78); --sn-topbar-glass:rgba(245,245,247,.72);
+  --sn-surface:#FFFFFF; --sn-surface-alt:#FAFAFB; --sn-surface-alt-2:#F0F0F2; --sn-input:rgba(120,120,128,.12);
+  --sn-hairline:#DEDEE2; --sn-orange:#FE7B01; --sn-orange-strong:#E06D00; --sn-orange-soft:#B85800;
   --sn-ink:#1D1D1F; --sn-ink-body:#3A3A3C; --sn-ink-muted:#6E6E73; --sn-ink-faint:#98989D;
   --ok-bg:rgba(47,168,79,.15); --ok:#218C3E; --info-bg:rgba(46,127,224,.15); --info:#1C63B7;
   --draft-bg:rgba(142,142,147,.18); --draft:#6E6E73; --bad-bg:rgba(224,71,46,.15); --bad:#C13A20;
-  --warn-bg:rgba(254,123,1,.12); --warn:#B85800;
-  --accent:var(--sn-orange); --accent-pressed:var(--sn-orange-strong); --accent-tint:rgba(254,123,1,.12); --focus-ring:rgba(254,123,1,.45);
-  --hover-overlay:rgba(0,0,0,.05); --shadow-overlay:0 18px 48px rgba(0,0,0,.22);
-  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif; --font-mono:ui-monospace,'SF Mono',Menlo,monospace;
+  --chip-gray:#8E8E93; --chip-blue:#2E7FE0; --chip-red:#E0472E; --chip-teal:#2FA88C; --chip-indigo:#5B6BD6;
+  --accent:var(--sn-orange); --accent-pressed:var(--sn-orange-strong); --accent-quiet:var(--sn-orange-soft);
+  --accent-tint:rgba(254,123,1,.12); --focus-ring:rgba(254,123,1,.45); --hover-overlay:rgba(0,0,0,.05);
+  --shadow-card:0 1px 2px rgba(0,0,0,.05); --shadow-raised:0 8px 24px rgba(0,0,0,.12); --shadow-overlay:0 18px 48px rgba(0,0,0,.22); --shadow-segment:0 1px 2px rgba(0,0,0,.12);
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;
+  --font-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.2,.8,.2,1);
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --sn-app:#1C1C1E; --sn-surface:#2C2C2E; --sn-surface-alt:#262628; --sn-surface-alt-2:#232325; --sn-input:rgba(255,255,255,.08);
-  --sn-hairline:#3A3A3C; --sn-ink:#F5F5F7; --sn-ink-body:#E5E5E7; --sn-ink-muted:#98989D; --sn-ink-faint:#6E6E73;
-  --ok-bg:rgba(47,168,79,.2); --ok:#4ADE80; --info-bg:rgba(46,127,224,.22); --info:#6FA8F5; --draft-bg:rgba(180,180,186,.2); --draft:#C7C7CC;
-  --bad-bg:rgba(224,71,46,.22); --bad:#FF8266; --warn-bg:rgba(254,123,1,.18); --warn:#E0812B; --accent-tint:rgba(254,123,1,.18);
-  --hover-overlay:rgba(255,255,255,.06); color-scheme:dark;}}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --sn-app:#1C1C1E; --sn-sidebar-glass:rgba(38,38,40,.78); --sn-topbar-glass:rgba(28,28,30,.7);
+  --sn-surface:#2C2C2E; --sn-surface-alt:#262628; --sn-surface-alt-2:#232325; --sn-input:rgba(255,255,255,.08);
+  --sn-hairline:#3A3A3C; --sn-orange-strong:#FF8F1F; --sn-orange-soft:#E0812B;
+  --sn-ink:#F5F5F7; --sn-ink-body:#E5E5E7; --sn-ink-muted:#98989D; --sn-ink-faint:#6E6E73;
+  --ok-bg:rgba(47,168,79,.2); --ok:#4ADE80; --info-bg:rgba(46,127,224,.22); --info:#6FA8F5;
+  --draft-bg:rgba(180,180,186,.2); --draft:#C7C7CC; --bad-bg:rgba(224,71,46,.22); --bad:#FF8266;
+  --accent-tint:rgba(254,123,1,.18); --focus-ring:rgba(254,123,1,.5); --hover-overlay:rgba(255,255,255,.06);
+  --shadow-raised:0 8px 24px rgba(0,0,0,.4); --shadow-overlay:0 18px 48px rgba(0,0,0,.5); color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --sn-app:#1C1C1E; --sn-sidebar-glass:rgba(38,38,40,.78); --sn-topbar-glass:rgba(28,28,30,.7);
+  --sn-surface:#2C2C2E; --sn-surface-alt:#262628; --sn-surface-alt-2:#232325; --sn-input:rgba(255,255,255,.08);
+  --sn-hairline:#3A3A3C; --sn-orange-strong:#FF8F1F; --sn-orange-soft:#E0812B;
+  --sn-ink:#F5F5F7; --sn-ink-body:#E5E5E7; --sn-ink-muted:#98989D; --sn-ink-faint:#6E6E73;
+  --ok-bg:rgba(47,168,79,.2); --ok:#4ADE80; --info-bg:rgba(46,127,224,.22); --info:#6FA8F5;
+  --draft-bg:rgba(180,180,186,.2); --draft:#C7C7CC; --bad-bg:rgba(224,71,46,.22); --bad:#FF8266;
+  --accent-tint:rgba(254,123,1,.18); --focus-ring:rgba(254,123,1,.5); --hover-overlay:rgba(255,255,255,.06);
+  --shadow-raised:0 8px 24px rgba(0,0,0,.4); --shadow-overlay:0 18px 48px rgba(0,0,0,.5); color-scheme:dark; }
 *,*::before,*::after{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--sn-app);color:var(--sn-ink-body);font-family:var(--font-ui);font-size:13.5px;line-height:1.5}
 button,input,select{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
 
+
+svg.i{width:var(--s,16px);height:var(--s,16px);flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent)}
+a{color:var(--accent)}
+.mp-grab{display:none}
+
 /* Barra de maqueta (no es parte del producto) */
-.mock{position:sticky;top:0;z-index:60;background:#1D1D1F;color:#F5F5F7;padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px}
+.mock{position:sticky;top:0;z-index:60;background:#1D1D1F;color:#F5F5F7;padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px}
 .mock b{margin-right:6px;font-weight:600}
-.mock button{border:1px solid #48484A;background:#2C2C2E;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:12px}
+.mock button{border:1px solid #48484A;background:#2C2C2E;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:12.5px}
 .mock button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 .fondo{padding:24px 30px;color:var(--sn-ink-muted);font-size:12.5px}
 
 /* Ventana (Modal.tsx size 820, mobile sheet 92%) */
 .mo{position:fixed;inset:44px 0 0 0;z-index:50;display:flex;justify-content:center;align-items:center;background:rgba(0,0,0,.55);padding:16px}
+.mp-grab span{width:36px;height:5px;border-radius:3px;background:var(--sn-hairline)}
 .mp{display:flex;flex-direction:column;width:100%;max-width:820px;max-height:100%;overflow:hidden;background:var(--sn-surface);border:1px solid var(--sn-hairline);border-radius:12px;box-shadow:var(--shadow-overlay)}
 .mp-h{flex:none;border-bottom:1px solid var(--sn-hairline);padding:18px 22px 14px;display:flex;justify-content:space-between;gap:12px}
-.ey{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.ey{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
 .mp-t{margin:3px 0 0;font-size:17px;font-weight:700;color:var(--sn-ink)}
-.x{width:30px;height:30px;border-radius:999px;border:0;background:var(--sn-surface-alt-2);color:var(--sn-ink-muted);cursor:pointer}
+.x{display:grid;place-items:center;width:30px;height:30px;border-radius:999px;border:0;background:var(--sn-surface-alt-2);color:var(--sn-ink-muted);cursor:pointer}
+.mp-b>*{flex:none}
 .mp-b{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:16px}
 .mp-f{flex:none;border-top:1px solid var(--sn-hairline);background:var(--sn-surface-alt);padding:12px 22px;display:flex;align-items:center;gap:12px}
-.mp-f .res{margin-right:auto;font-size:12px;color:var(--sn-ink-muted)} .mp-f .res b{display:block;font-size:17px;color:var(--sn-ink);font-variant-numeric:tabular-nums}
+.mp-f .res{margin-right:auto;font-size:12.5px;color:var(--sn-ink-muted)} .mp-f .res b{display:block;font-size:17px;color:var(--sn-ink);font-variant-numeric:tabular-nums}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 18px;border-radius:9px;border:1px solid transparent;cursor:pointer;font-size:12.5px;white-space:nowrap}
 .btn.pri{background:var(--accent);color:#fff;font-weight:600} .btn.pri:hover{background:var(--accent-pressed)} .btn.pri:disabled{opacity:.45;cursor:not-allowed}
 .btn.sec{border-color:var(--sn-hairline);background:var(--sn-input);font-weight:500}
-.btn.sm{height:28px;padding:0 11px;font-size:12px}
+.btn.sm{height:28px;padding:0 11px;font-size:12.5px}
 
 .aviso{display:flex;gap:10px;border-radius:10px;padding:11px 14px;font-size:12.5px;line-height:1.45}
 .aviso b{color:inherit}
-.a-warn{background:var(--warn-bg);color:var(--warn)} .a-ok{background:var(--ok-bg);color:var(--ok)} .a-info{background:var(--info-bg);color:var(--info)} .a-bad{background:var(--bad-bg);color:var(--bad)}
+.a-warn{background:var(--accent-tint);color:var(--sn-orange-soft)} .a-ok{background:var(--ok-bg);color:var(--ok)} .a-info{background:var(--info-bg);color:var(--info)} .a-bad{background:var(--bad-bg);color:var(--bad)}
 
 .xml{display:flex;align-items:center;gap:12px;border:1px solid var(--sn-hairline);border-radius:10px;padding:10px 14px;background:var(--sn-surface-alt)}
-.xml .mono{font-family:var(--font-mono);font-size:11.5px;color:var(--sn-ink-muted)}
-.xml b{color:var(--sn-ink)} .xml .tot{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--sn-ink);font-size:15px}
+.xml .mono{font-family:var(--font-mono);font-size:11px;color:var(--sn-ink-muted)}
+.xml b{color:var(--sn-ink)} .xml .tot{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--sn-ink);font-size:17px}
 .xml .tot small{display:block;font-weight:400;font-size:11px;color:var(--sn-ink-muted)}
 
 .sec-t{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sn-ink-muted);margin:0 0 8px;display:flex;align-items:center;gap:8px}
-.sec-t .n{width:18px;height:18px;border-radius:999px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:10.5px}
+.sec-t .n{width:18px;height:18px;border-radius:999px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .fld{display:flex;flex-direction:column;gap:4px;min-width:0}
-.fld label{font-size:11.5px;font-weight:600;color:var(--sn-ink-muted)} .fld label i{color:var(--accent);font-style:normal}
-.fld input,.fld select{height:34px;border-radius:8px;border:1px solid transparent;background:var(--sn-input);padding:0 10px;color:var(--sn-ink);min-width:0}
+.fld label{font-size:11px;font-weight:600;color:var(--sn-ink-muted)} .fld label i{color:var(--accent);font-style:normal}
+.fld input,.fld select{height:32px;border-radius:7px;border:1px solid var(--sn-hairline);background:var(--sn-input);padding:0 14px;color:var(--sn-ink);min-width:0;outline:0;transition:border-color 120ms var(--ease)}
+.fld input:focus,.fld select:focus,.sel-bar input[type=search]:focus,.fact .mn input:focus{border-color:var(--sn-orange-soft)}
 .fld input[readonly]{color:var(--sn-ink-muted);background:var(--sn-surface-alt-2)}
 .fld .h{font-size:11px;color:var(--sn-ink-faint)}
 .fld.err input{border-color:var(--bad)} .fld.err .h{color:var(--bad)}
 
 .seg{display:inline-flex;padding:2px;border-radius:9px;background:var(--sn-input)}
-.seg button{border:0;background:none;cursor:pointer;height:30px;padding:0 14px;border-radius:7px;font-weight:500;color:var(--sn-ink-muted)}
+.seg button{border:0;background:none;cursor:pointer;height:32px;padding:0 15px;border-radius:7px;font-weight:500;color:var(--sn-ink-muted)}
 .seg button[aria-selected="true"]{background:var(--sn-surface);color:var(--sn-ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 
 /* Selector de proyectos y renglones (pieza compartida) */
 .sel{border:1px solid var(--sn-hairline);border-radius:10px;overflow:hidden}
 .sel-bar{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--sn-surface-alt-2);border-bottom:1px solid var(--sn-hairline);flex-wrap:wrap}
-.sel-bar input[type=search]{flex:1;min-width:160px;height:32px;border:0;border-radius:8px;background:var(--sn-input);padding:0 10px;color:var(--sn-ink)}
-.chk{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sn-ink-body);cursor:pointer}
+.sel-bar input[type=search]{flex:1;min-width:160px;height:32px;border:1px solid transparent;border-radius:7px;outline:0;background:var(--sn-input);padding:0 10px;color:var(--sn-ink)}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sn-ink-body);cursor:pointer}
 .prj{border-bottom:1px solid var(--sn-hairline)} .prj:last-child{border-bottom:0}
 .prj-h{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--sn-surface);cursor:pointer;width:100%;border:0;text-align:left}
 .prj-h:hover{background:var(--sn-surface-alt)}
-.folio{font-family:var(--font-mono);font-size:11px;color:var(--accent)}
-.prj-h b{color:var(--sn-ink);font-weight:600} .prj-h .mt{font-size:12px;color:var(--sn-ink-muted)}
-.prj-h .r{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums;font-size:12px;color:var(--sn-ink-muted)}
-.grp{padding:6px 14px 6px 40px;background:var(--sn-surface-alt);font-size:11.5px;font-weight:600;color:var(--sn-ink-muted);display:flex;gap:8px;align-items:center}
+.folio{white-space:nowrap;font-family:var(--font-mono);font-size:11px;color:var(--accent)}
+.prj-h b{color:var(--sn-ink);font-weight:600} .prj-h .mt{font-size:12.5px;color:var(--sn-ink-muted)}
+.prj-h .r{margin-left:auto;text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--sn-ink-muted)}
+.grp{padding:6px 14px 6px 40px;background:var(--sn-surface-alt);font-size:11px;font-weight:600;color:var(--sn-ink-muted);display:flex;gap:8px;align-items:center}
 .row{display:flex;align-items:center;gap:10px;padding:8px 14px 8px 40px;border-top:1px solid var(--sn-hairline);font-size:12.5px}
 .row .d{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sn-ink)}
 .row .m{font-variant-numeric:tabular-nums;color:var(--sn-ink);white-space:nowrap}
-.row.bloq{opacity:.5}
-.pill{display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:999px;font-size:10px;font-weight:500;white-space:nowrap}
-.p-ok{background:var(--ok-bg);color:var(--ok)} .p-info{background:var(--info-bg);color:var(--info)} .p-draft{background:var(--draft-bg);color:var(--draft)} .p-warn{background:var(--warn-bg);color:var(--warn)} .p-bad{background:var(--bad-bg);color:var(--bad)}
+.row.bloq{opacity:.45}
+.pill{display:inline-flex;align-items:center;justify-content:center;min-width:80px;height:22px;padding:0 11px;border-radius:999px;font-size:10px;font-weight:500;white-space:nowrap}
+.p-ok{background:var(--ok-bg);color:var(--ok)} .p-info{background:var(--info-bg);color:var(--info)} .p-draft{background:var(--draft-bg);color:var(--draft)}
 
 .sum{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-radius:10px;background:var(--sn-surface-alt-2);padding:10px 14px;font-size:12.5px}
 .sum b{font-variant-numeric:tabular-nums;color:var(--sn-ink)}
 .fact{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--sn-hairline);border-radius:10px}
 .fact .mn{margin-left:auto;display:flex;align-items:center;gap:8px}
-.fact .mn input{width:120px;height:30px;text-align:right;border-radius:8px;border:0;background:var(--sn-input);padding:0 10px;font-variant-numeric:tabular-nums}
-.note{font-size:11.5px;color:var(--sn-ink-faint)}
+.fact .mn input{width:120px;height:32px;text-align:right;border-radius:7px;border:1px solid transparent;outline:0;background:var(--sn-input);padding:0 10px;font-variant-numeric:tabular-nums}
+.note{font-size:11px;color:var(--sn-ink-faint)}
 
 @media (max-width:860px){
   .mo{align-items:flex-end;padding:0}
   .mp{max-width:none;height:92%;border-radius:16px 16px 0 0}
+  .mp-grab{display:flex;justify-content:center;padding:7px 0 2px}
   .grid2{grid-template-columns:1fr}
   .row{flex-wrap:wrap;padding-left:14px}
   .grp{padding-left:14px}
-  .mp-f{flex-wrap:wrap} .mp-f .btn{flex:1}
+  .mp-f{flex-wrap:wrap} .mp-f .res{flex:0 0 100%;margin-right:0} .mp-f .btn{flex:1}
+  .fact{flex-wrap:wrap} .fact .mn{margin-left:0;width:100%;justify-content:space-between}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-ok" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+</defs></svg>
 <div class="mock" role="tablist" aria-label="Estado de la maqueta">
   <b>Maqueta #130 (no es producto):</b>
   <button data-s="s1" aria-pressed="true">1 · Proveedor nuevo</button>
@@ -125,10 +160,11 @@ button,input,select{font:inherit;color:inherit}
 
 <!-- ===== 1 · Subir factura: emisor no existe, renglones por asignar cuadran ===== -->
 <div class="mo" id="s1"><section class="mp" role="dialog" aria-label="Subir factura">
-  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Factura de proveedor nuevo</h3></div><button class="x" aria-label="Cerrar">✕</button></header>
+  <div class="mp-grab"><span></span></div>
+  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Factura de proveedor nuevo</h3></div><button class="x" aria-label="Cerrar"><svg class="i"><use href="#i-x"/></svg></button></header>
   <div class="mp-b">
     <div class="xml"><div><b>Audio Lemus Estudio S.A. de C.V.</b><div class="mono">ALE211125DC7 · A-0231 · CFDI 4.0 · régimen 601</div></div><div class="tot">$46,400.00<small>total CFDI</small></div></div>
-    <div class="aviso a-warn"><span>⚠</span><span><b>No hay un proveedor con el RFC ALE211125DC7.</b> ¿Es alguno de estos? <u>Audio Lemus (sin RFC)</u> · <u>Estudio Lemus</u>. Si no, créalo abajo.</span></div>
+    <div class="aviso a-warn"><svg class="i"><use href="#i-warn"/></svg><span><b>No hay un proveedor con el RFC ALE211125DC7.</b> Coincidencias por nombre: <u>Audio Lemus (sin RFC)</u> · <u>Estudio Lemus</u>. Elige una o crea el proveedor.</span></div>
 
     <div><h4 class="sec-t"><span class="n">1</span>Proveedor nuevo <span style="font-weight:400;text-transform:none;letter-spacing:0">· prellenado con el XML</span></h4>
       <div class="grid2">
@@ -138,36 +174,37 @@ button,input,select{font:inherit;color:inherit}
         <div class="fld"><label>Teléfono <i>*</i></label><input placeholder="55 0000 0000"></div>
         <div class="fld"><label>Correo <i>*</i></label><input placeholder="contacto@proveedor.com"></div>
         <div class="fld"><label>Banco <i>*</i></label><select><option>Elige banco…</option></select></div>
-        <div class="fld" style="grid-column:1/-1"><label>CLABE <i>*</i></label><input placeholder="18 dígitos"><span class="h">Se necesita para la orden de pago.</span></div>
+        <div class="fld" style="grid-column:1/-1"><label>CLABE <i>*</i></label><input placeholder="18 dígitos"></div>
       </div>
     </div>
 
-    <div><h4 class="sec-t"><span class="n">2</span>¿A qué renglones corresponde?</h4>
+    <div><h4 class="sec-t"><span class="n">2</span>Renglones</h4>
       <div class="sel">
         <div class="sel-bar"><input type="search" placeholder="Buscar folio, proyecto o cliente"><label class="chk"><input type="checkbox" checked> Solo con renglones por asignar o saldo abierto</label></div>
-        <div class="prj"><button class="prj-h"><span>▾</span><span class="folio">SH061</span><div><b>Lanzamiento Altavista</b><div class="mt">Grupo Altavista · 3 por asignar</div></div><span class="r">por asignar<br><b style="color:var(--sn-ink)">$46,400.00</b></span></button>
-          <div class="grp">Sin proveedor <span class="pill p-warn">por asignar</span></div>
+        <div class="prj"><button class="prj-h"><svg class="i"><use href="#i-down"/></svg><span class="folio">SH061</span><div><b>Lanzamiento Altavista</b><div class="mt">Grupo Altavista · 3 por asignar</div></div><span class="r">por asignar<br><b style="color:var(--sn-ink)">$46,400.00</b></span></button>
+          <div class="grp">Sin proveedor <span class="pill p-draft">por asignar</span></div>
           <div class="row"><input type="checkbox" checked><span class="d">Grabación de voz, 2 sesiones</span><span class="m">$18,000.00</span></div>
           <div class="row"><input type="checkbox" checked><span class="d">Edición y mezcla</span><span class="m">$20,000.00</span></div>
           <div class="row"><input type="checkbox" checked><span class="d">Masterización</span><span class="m">$8,400.00</span></div>
         </div>
-        <div class="prj"><button class="prj-h"><span>▸</span><span class="folio">SH062</span><div><b>Spot Cervecería Norte</b><div class="mt">Cervecería Norte · 1 por asignar</div></div><span class="r">$9,000.00</span></button></div>
+        <div class="prj"><button class="prj-h"><svg class="i"><use href="#i-right"/></svg><span class="folio">SH062</span><div><b>Spot Cervecería Norte</b><div class="mt">Cervecería Norte · 1 por asignar</div></div><span class="r">$9,000.00</span></button></div>
       </div>
     </div>
-    <div class="aviso a-ok"><span>✓</span><span><b>Cuadra con el total CFDI:</b> los 3 renglones por asignar de SH061 suman $46,400.00 (tolerancia $1.00). Revisa que sean los correctos.</span></div>
+    <div class="aviso a-ok"><svg class="i"><use href="#i-ok"/></svg><span><b>Cuadra con el total CFDI:</b> los 3 renglones por asignar de SH061 suman $46,400.00 (tolerancia $1.00). Revisa los renglones.</span></div>
   </div>
   <footer class="mp-f"><div class="res">Se creará el proveedor y se ligará la factura<b>$46,400.00 · SH061</b></div><button class="btn sec">Cancelar</button><button class="btn pri" disabled>Crear proveedor y registrar factura</button></footer>
 </section></div>
 
 <!-- ===== 2 · Subir factura: proveedor existente, renglones en otro proveedor (reasignación) ===== -->
 <div class="mo" id="s2" hidden><section class="mp" role="dialog" aria-label="Subir factura">
-  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Asignar renglones al emisor</h3></div><button class="x" aria-label="Cerrar">✕</button></header>
+  <div class="mp-grab"><span></span></div>
+  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Asignar renglones al emisor</h3></div><button class="x" aria-label="Cerrar"><svg class="i"><use href="#i-x"/></svg></button></header>
   <div class="mp-b">
     <div class="xml"><div><b>Distrito Sonoro S.A. de C.V.</b><div class="mono">DSO190612QK3 · DS-0431 · CFDI 4.0</div></div><div class="tot">$28,000.00<small>total CFDI</small></div></div>
-    <div class="aviso a-info"><span>ℹ</span><span>Los conceptos de esta factura están agrupados con <b>otro proveedor</b>. Elígelos y pasan a <b>Distrito Sonoro</b>; queda registrado en correcciones.</span></div>
+    <div class="aviso a-info"><svg class="i"><use href="#i-info"/></svg><span>Los conceptos de esta factura están agrupados con <b>otro proveedor</b>. Elígelos y pasan a <b>Distrito Sonoro</b>; queda registrado en correcciones.</span></div>
     <div class="sel">
       <div class="sel-bar"><input type="search" value="SH061"><label class="chk"><input type="checkbox" checked> Solo con renglones por asignar o saldo abierto</label></div>
-      <div class="prj"><button class="prj-h"><span>▾</span><span class="folio">SH061</span><div><b>Lanzamiento Altavista</b><div class="mt">Grupo Altavista</div></div></button>
+      <div class="prj"><button class="prj-h"><svg class="i"><use href="#i-down"/></svg><span class="folio">SH061</span><div><b>Lanzamiento Altavista</b><div class="mt">Grupo Altavista</div></div></button>
         <div class="grp">Audio Lemus Estudio · grupo abierto <span class="pill p-info">proveedor actual</span></div>
         <div class="row"><input type="checkbox" checked><span class="d">Música original, 1 tema</span><span class="m">$16,000.00</span></div>
         <div class="row"><input type="checkbox" checked><span class="d">Diseño sonoro</span><span class="m">$12,000.00</span></div>
@@ -176,17 +213,18 @@ button,input,select{font:inherit;color:inherit}
         <div class="row bloq"><input type="checkbox" disabled><span class="d">Banco de efectos</span><span class="m">$6,500.00</span></div>
       </div>
     </div>
-    <div class="aviso a-ok"><span>✓</span><span><b>Cuadra con el total CFDI:</b> 2 renglones suman $28,000.00.</span></div>
+    <div class="aviso a-ok"><svg class="i"><use href="#i-ok"/></svg><span><b>Cuadra con el total CFDI:</b> 2 renglones suman $28,000.00.</span></div>
   </div>
   <footer class="mp-f"><div class="res">Mover 2 renglones a Distrito Sonoro<b>$28,000.00 · SH061</b></div><button class="btn sec">Cancelar</button><button class="btn pri">Asignar y registrar factura</button></footer>
 </section></div>
 
 <!-- ===== 3 · Subir factura: sin match → gasto extra ===== -->
 <div class="mo" id="s3" hidden><section class="mp" role="dialog" aria-label="Subir factura">
-  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Gasto fuera de cotización</h3></div><button class="x" aria-label="Cerrar">✕</button></header>
+  <div class="mp-grab"><span></span></div>
+  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Gasto fuera de cotización</h3></div><button class="x" aria-label="Cerrar"><svg class="i"><use href="#i-x"/></svg></button></header>
   <div class="mp-b">
     <div class="xml"><div><b>Distrito Sonoro S.A. de C.V.</b><div class="mono">DSO190612QK3 · DS-0440 · CFDI 4.0</div></div><div class="tot">$5,800.00<small>total CFDI</small></div></div>
-    <div class="aviso a-warn"><span>⚠</span><span><b>Ningún renglón de este proveedor cuadra con $5,800.00.</b> Puedes registrarla como gasto extra de un proyecto.</span></div>
+    <div class="aviso a-warn"><svg class="i"><use href="#i-warn"/></svg><span><b>Ningún renglón de este proveedor cuadra con $5,800.00.</b> Puedes registrarla como gasto extra de un proyecto.</span></div>
     <div><h4 class="sec-t"><span class="n">1</span>Proyecto</h4>
       <div class="sel"><div class="sel-bar"><input type="search" value="SH062"><label class="chk"><input type="checkbox"> Solo con pendientes</label></div>
         <div class="prj"><button class="prj-h"><span class="folio">SH062</span><div><b>Spot Cervecería Norte</b><div class="mt">Cervecería Norte</div></div><span class="r"><input type="radio" checked name="p"></span></button></div>
@@ -196,17 +234,18 @@ button,input,select{font:inherit;color:inherit}
       <div class="fld"><label>Costo neto al proveedor</label><input readonly value="$5,000.00"></div>
       <div class="fld"><label>IVA</label><input readonly value="$800.00"></div>
     </div>
-    <div class="aviso a-info"><span>ℹ</span><span><b>Resta de la utilidad de SH062:</b> $5,000.00 (neto). La cotización aprobada no cambia. Entra a egresos y a Cuentas por pagar.</span></div>
+    <div class="aviso a-info"><svg class="i"><use href="#i-info"/></svg><span><b>Resta de la utilidad de SH062:</b> $5,000.00 (neto). La cotización aprobada no cambia. Entra a egresos y a Cuentas por pagar.</span></div>
   </div>
   <footer class="mp-f"><div class="res">Gasto extra en SH062<b>$5,800.00</b></div><button class="btn sec">Cancelar</button><button class="btn pri">Registrar gasto y factura</button></footer>
 </section></div>
 
 <!-- ===== 4 · Subir factura: cliente nuevo + constancia ===== -->
 <div class="mo" id="s4" hidden><section class="mp" role="dialog" aria-label="Subir factura">
-  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Factura a cliente nuevo</h3></div><button class="x" aria-label="Cerrar">✕</button></header>
+  <div class="mp-grab"><span></span></div>
+  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Factura a cliente nuevo</h3></div><button class="x" aria-label="Cerrar"><svg class="i"><use href="#i-x"/></svg></button></header>
   <div class="mp-b">
     <div class="xml"><div><b>Productora Marea Azul S.A. de C.V.</b><div class="mono">PMA180920HJ5 · SH-A-0098 · receptor del XML</div></div><div class="tot">$116,000.00<small>total CFDI</small></div></div>
-    <div class="aviso a-warn"><span>⚠</span><span><b>No hay un cliente con el RFC PMA180920HJ5.</b> ¿Es <u>Marea Azul Producciones</u> (sin RFC)? Si no, créalo.</span></div>
+    <div class="aviso a-warn"><svg class="i"><use href="#i-warn"/></svg><span><b>No hay un cliente con el RFC PMA180920HJ5.</b> Coincidencia por nombre: <u>Marea Azul Producciones</u> (sin RFC). Elígela o crea el cliente.</span></div>
     <div><h4 class="sec-t"><span class="n">1</span>Cliente nuevo <span style="font-weight:400;text-transform:none;letter-spacing:0">· datos del XML</span></h4>
       <div class="grid2">
         <div class="fld"><label>RFC</label><input readonly value="PMA180920HJ5"></div>
@@ -214,7 +253,7 @@ button,input,select{font:inherit;color:inherit}
         <div class="fld"><label>Persona de contacto</label><input placeholder="Nombre y apellido"></div>
         <div class="fld"><label>Teléfono</label><input placeholder="55 0000 0000"></div>
         <div class="fld" style="grid-column:1/-1"><label>Correo</label><input placeholder="cobranza@cliente.com"></div>
-        <div class="fld err" style="grid-column:1/-1"><label>Constancia de situación fiscal <i>*</i></label><input placeholder="Adjunta el PDF de la constancia"><span class="h">Se pide siempre antes de facturar; se sube junto con la factura.</span></div>
+        <div class="fld err" style="grid-column:1/-1"><label>Constancia de situación fiscal <i>*</i></label><input placeholder="Adjunta el PDF de la constancia"><span class="h">Requerida</span></div>
       </div>
     </div>
     <div><h4 class="sec-t"><span class="n">2</span>Cotizaciones que cubre</h4>
@@ -223,14 +262,15 @@ button,input,select{font:inherit;color:inherit}
         <div class="prj"><div class="row" style="padding-left:14px;border-top:0"><input type="checkbox" checked><span class="folio">SH072</span><span class="d">Cápsulas redes</span><span class="m">$58,000.00</span></div></div>
       </div>
     </div>
-    <div class="aviso a-ok"><span>✓</span><span><b>Cuadra con el total CFDI:</b> 2 cotizaciones suman $116,000.00 (una factura puede cubrir varios proyectos).</span></div>
+    <div class="aviso a-ok"><svg class="i"><use href="#i-ok"/></svg><span><b>Cuadra con el total CFDI:</b> 2 cotizaciones suman $116,000.00 (una factura puede cubrir varios proyectos).</span></div>
   </div>
   <footer class="mp-f"><div class="res">Crear cliente y ligar factura<b>$116,000.00 · 2 cot.</b></div><button class="btn sec">Cancelar</button><button class="btn pri" disabled>Crear cliente y registrar factura</button></footer>
 </section></div>
 
 <!-- ===== 5 · Registrar pago por proyecto ===== -->
 <div class="mo" id="s5" hidden><section class="mp" role="dialog" aria-label="Registrar pago">
-  <header class="mp-h"><div><div class="ey">Registrar pago</div><h3 class="mp-t">Pago por proyecto</h3></div><button class="x" aria-label="Cerrar">✕</button></header>
+  <div class="mp-grab"><span></span></div>
+  <header class="mp-h"><div><div class="ey">Registrar pago</div><h3 class="mp-t">Pago por proyecto</h3></div><button class="x" aria-label="Cerrar"><svg class="i"><use href="#i-x"/></svg></button></header>
   <div class="mp-b">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <div class="seg" role="tablist"><button aria-selected="false">Cobro de cliente</button><button aria-selected="true">Pago a proveedor</button></div>
@@ -238,19 +278,19 @@ button,input,select{font:inherit;color:inherit}
     </div>
     <div class="sel">
       <div class="sel-bar"><input type="search" value="Distrito Sonoro"><label class="chk"><input type="checkbox" checked> Solo con saldo abierto</label></div>
-      <div class="prj"><button class="prj-h"><span>▾</span><span class="folio">SH061</span><div><b>Lanzamiento Altavista</b><div class="mt">Distrito Sonoro · 1 factura</div></div></button>
-        <div class="row"><input type="checkbox" checked><span class="d">DS-0431 · Distrito Sonoro</span><span class="pill p-warn">Por pagar</span><span class="m">$28,000.00</span></div></div>
-      <div class="prj"><button class="prj-h"><span>▾</span><span class="folio">SH062</span><div><b>Spot Cervecería Norte</b><div class="mt">Distrito Sonoro · 2 facturas</div></div></button>
-        <div class="row"><input type="checkbox" checked><span class="d">DS-0440 · gasto extra</span><span class="pill p-warn">Por pagar</span><span class="m">$5,800.00</span></div>
+      <div class="prj"><button class="prj-h"><svg class="i"><use href="#i-down"/></svg><span class="folio">SH061</span><div><b>Lanzamiento Altavista</b><div class="mt">Distrito Sonoro · 1 factura</div></div></button>
+        <div class="row"><input type="checkbox" checked><span class="d">DS-0431 · Distrito Sonoro</span><span class="pill p-info">Por pagar</span><span class="m">$28,000.00</span></div></div>
+      <div class="prj"><button class="prj-h"><svg class="i"><use href="#i-down"/></svg><span class="folio">SH062</span><div><b>Spot Cervecería Norte</b><div class="mt">Distrito Sonoro · 2 facturas</div></div></button>
+        <div class="row"><input type="checkbox" checked><span class="d">DS-0440 · gasto extra</span><span class="pill p-info">Por pagar</span><span class="m">$5,800.00</span></div>
         <div class="row"><input type="checkbox"><span class="d">DS-0412 · Música</span><span class="pill p-ok">Pagada</span><span class="m">$0.00</span></div></div>
-      <div class="prj"><button class="prj-h"><span>▸</span><span class="folio">SH070</span><div><b>Doc. Festival</b><div class="mt">Fonoteca MX</div></div><span class="pill p-draft">otra contraparte</span></button></div>
+      <div class="prj"><button class="prj-h"><svg class="i"><use href="#i-right"/></svg><span class="folio">SH070</span><div><b>Doc. Festival</b><div class="mt">Fonoteca MX</div></div><span class="pill p-draft">otra contraparte</span></button></div>
     </div>
-    <div class="aviso a-info"><span>ℹ</span><span>Un pago es de <b>una sola contraparte</b>. Al elegir Distrito Sonoro, los proyectos de otros proveedores quedan deshabilitados.</span></div>
+    <div class="aviso a-info"><svg class="i"><use href="#i-info"/></svg><span>Un pago es de <b>una sola contraparte</b>. Al elegir Distrito Sonoro, los proyectos de otros proveedores quedan deshabilitados.</span></div>
     <div class="fact"><span class="folio">DS-0431</span><span>Distrito Sonoro · SH061</span><div class="mn"><span class="note">saldo $28,000.00</span><input value="28,000.00"></div></div>
     <div class="fact"><span class="folio">DS-0440</span><span>Distrito Sonoro · SH062</span><div class="mn"><span class="note">saldo $5,800.00</span><input value="5,800.00"></div></div>
     <div class="grid2">
       <div class="fld"><label>Monto del pago <i>*</i></label><input value="$33,800.00"></div>
-      <div class="fld"><label>Fecha</label><input value="07/10/2026"></div>
+      <div class="fld"><label>Fecha</label><input value="07 oct 2026"></div>
     </div>
     <div class="note"><a href="#" onclick="return false">Sugerir: la más antigua primero</a> · el reparto sigue siendo el de Registrar pago (centavos exactos).</div>
   </div>
@@ -264,4 +304,5 @@ document.querySelectorAll('.mock button').forEach(function(b){
     document.querySelectorAll('.mo').forEach(function(m){m.hidden = m.id!==b.dataset.s});
   });
 });
+var h=location.hash.slice(1);if(h){var b=document.querySelector('.mock button[data-s="'+h+'"]');if(b)b.click()}
 </script>
