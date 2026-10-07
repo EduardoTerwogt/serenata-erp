@@ -68,6 +68,8 @@ Orden de la cola: **#123 → #130 → #110 → #125** (#130 antes de #110 porque
 
 CI de `6d6eea7`: `live` rojo por una carrera real en el gasto extra (corregida con la migración `20261036`, aplicada en test) y el flake de `cuentas-paridad-sql` (57014; sin regresión: 8,041 buffers contra 7,965). Auditoría de UI contra el design system y correcciones de encimes en móvil; detalle y desvíos conscientes en `docs/PLAN.md` (sección "Revisión del PR #129"). Orden de lanzamiento: `20261034`, `20261035` y **`20261036`** después de `20261033`.
 
+CI de `f182c96`: `live` 92/93; `cuentas-130.spec.ts` 6/6. Solo cayó `cuentas-paridad-sql › proyecto seleccionado` con `57014` (latencia de las lecturas globales; se atribuye a #110 V2–V3, sin regresión: 8,041 buffers contra 7,965). Además `cleanupLiveCuentasByPrefix` no borraba `historial_cambios_responsable_item` y mi spec dejó filas `LC130…` en test (`auditar_consistencia()` = 6 hasta que el `beforeAll` del siguiente `live` las limpie); helper corregido.
+
 ## Avisos para la entrega (léelos antes de aprobar)
 
 1. **Orden de lanzamiento a producción:** gate de producción vacía (recontar) → M1 `20261030` → M2 `20261031` → **M3 `20261032`

@@ -218,6 +218,13 @@ export async function cleanupLiveCuentasByPrefix(prefijo: string) {
   const { data: cobros } = await supabase.from('cuentas_cobrar').select('id').in('cotizacion_id', proyectoIds)
   const cobroIds = (cobros ?? []).map((c) => c.id as string)
 
+  // #130: reasignar renglones (preparar_grupo_factura_proveedor) deja historial que referencia cotización y proveedores;
+  // se borra antes que ellos o sus FK impiden limpiar.
+  if (proyectoIds.length) await paso('historial de responsables (cotización)', supabase.from('historial_cambios_responsable_item').delete().in('cotizacion_id', proyectoIds))
+  if (proveedorIds.length) {
+    await paso('historial de responsables (anterior)', supabase.from('historial_cambios_responsable_item').delete().in('responsable_anterior_id', proveedorIds))
+    await paso('historial de responsables (nuevo)', supabase.from('historial_cambios_responsable_item').delete().in('responsable_nuevo_id', proveedorIds))
+  }
   if (proyectoIds.length) {
     await paso('reaperturas', supabase.from('cuentas_reaperturas').delete().in('proyecto_id', proyectoIds))
     await paso('correcciones', supabase.from('cuentas_correcciones').delete().in('proyecto_id', proyectoIds))
