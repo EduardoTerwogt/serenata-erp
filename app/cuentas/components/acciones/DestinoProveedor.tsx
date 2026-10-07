@@ -30,7 +30,7 @@ interface Props {
 
 const MODOS: { value: ModoDestino; label: string }[] = [
   { value: 'grupo', label: 'Proyecto' },
-  { value: 'renglones', label: 'Renglones' },
+  { value: 'renglones', label: 'Conceptos' },
   { value: 'gasto', label: 'Gasto extra' },
 ]
 
@@ -115,7 +115,7 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
             <div className="flex flex-col gap-3">
               {propuesta ? (
                 <Aviso icono="circle-check" tono="ok">
-                  <b>Cuadra con el XML:</b> {plural(propuesta.renglones.length, 'renglón por asignar', 'renglones por asignar')} de {propuesta.proyecto_id} suman {fmtMoney(propuesta.neto)}, el neto del XML (tolerancia {fmtMoney(factura.tolerancia)}). Revisa los renglones.
+                  <b>Cuadra con el XML:</b> {plural(propuesta.renglones.length, 'concepto por asignar', 'conceptos por asignar')} de {propuesta.proyecto_id} suman {fmtMoney(propuesta.neto)}, el neto del XML (tolerancia {fmtMoney(factura.tolerancia)}). Revisa los renglones.
                   {!propuestaAplicada && (
                     <>
                       {' '}
@@ -127,10 +127,10 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
                 </Aviso>
               ) : (
                 <Aviso icono="info" tono="neutro">
-                  Ningún proyecto tiene renglones por asignar que sumen {fmtMoney(subtotal)} (neto del XML). Marca los renglones a mano o registra un gasto extra.
+                  Ningún proyecto tiene conceptos por asignar que sumen {fmtMoney(subtotal)} (neto del XML). Marca los conceptos a mano o registra un gasto extra.
                 </Aviso>
               )}
-              <Cap>Renglones</Cap>
+              <Cap>Conceptos</Cap>
               <SelectorProyectos
                 modo="renglones"
                 contraparte={contraparte?.id ?? null}

@@ -234,7 +234,7 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
               ? destino.nuevo
                 ? 'Se creará el proveedor y se ligará la factura'
                 : destino.modo === 'renglones'
-                  ? `Mover ${plural(destino.renglones.length, 'renglón', 'renglones')} a ${contraparte?.nombre ?? 'este proveedor'}`
+                  ? `Mover ${plural(destino.renglones.length, 'concepto', 'conceptos')} a ${contraparte?.nombre ?? 'este proveedor'}`
                   : destino.modo === 'gasto'
                     ? 'Gasto fuera de cotización: resta de la utilidad'
                     : 'Elige un XML'
@@ -386,7 +386,7 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
                         <Cap derecha={<span className="text-[11.5px] text-subtext">Un proyecto por factura</span>}>Proyecto que cubre</Cap>
                         {candidatos.length === 0 ? (
                           <Aviso icono="info" tono="neutro">
-                            {contraparte.nombre} no tiene proyectos sin factura. Asigna renglones o registra un gasto extra.
+                            {contraparte.nombre} no tiene proyectos sin factura. Asigna conceptos o registra un gasto extra.
                           </Aviso>
                         ) : (
                           <ListaCandidatos candidatos={candidatos} seleccion={seleccion} multiple={false} onAlternar={alternar} mesFactura={factura.cfdi.fecha?.slice(0, 7) ?? null} />

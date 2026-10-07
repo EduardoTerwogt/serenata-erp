@@ -149,7 +149,7 @@ export function SelectorProyectos({ modo, lado = 'proveedor', contraparteFija = 
                 </button>
                 {abierto && (
                   <div className="border-t border-hairline bg-row">
-                    {renglones.length === 0 && <div className="px-3.5 py-2.5 text-[12.5px] text-subtext">Sin renglones.</div>}
+                    {renglones.length === 0 && <div className="px-3.5 py-2.5 text-[12.5px] text-subtext">Sin conceptos.</div>}
                     {Array.from(grupos.values()).map((rs) => {
                       const dueno = rs[0].responsable
                       const todosBloqueados = rs.every((r) => r.bloqueado)

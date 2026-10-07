@@ -324,7 +324,7 @@ export async function confirmarFactura(p: ConfirmarParams): Promise<Respuesta> {
   let grupoId = p.grupoId ?? null
   let preparado: GrupoPreparado | null = null
   if (p.preparar) {
-    if (grupoId) return { status: 400, body: { error: 'destino_duplicado', message: 'Usa el grupo o prepara renglones y proveedor, no ambos.' } }
+    if (grupoId) return { status: 400, body: { error: 'destino_duplicado', message: 'Usa el grupo o prepara conceptos y proveedor, no ambos.' } }
     if (!p.contraparteId && !p.preparar.proveedor) return { status: 400, body: { error: 'proveedor_requerido', message: 'Elige un proveedor o captura sus datos.' } }
     preparado = await prepararGrupoFacturaProveedor({
       proveedorId: p.contraparteId ?? null,
@@ -370,7 +370,7 @@ export async function confirmarFactura(p: ConfirmarParams): Promise<Respuesta> {
     console.error(`[${p.route}] La factura no se guardó tras preparar el grupo:`, error instanceof Error ? error.message : error)
     return conPreparado({
       status: 502,
-      body: { error: 'subida_fallida', message: 'La factura no se guardó, pero el proveedor y los renglones ya quedaron listos. Vuelve a intentarlo con ese proveedor.' },
+      body: { error: 'subida_fallida', message: 'La factura no se guardó, pero el proveedor y los conceptos ya quedaron listos. Vuelve a intentarlo con ese proveedor.' },
     })
   }
   if (resultado.status === 200) await guardarRfcSiSePidio(p.guardarRfc, 'proveedor', proveedor, rfcContraparte)

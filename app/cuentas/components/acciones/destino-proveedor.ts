@@ -105,12 +105,12 @@ export function armarProveedor(d: DestinoProveedor, ctx: ContextoProveedor): { o
   const contraparte_id = d.nuevo ? null : ctx.contraparteId
 
   if (d.modo === 'grupo') {
-    if (d.nuevo) return { ok: false, falta: 'Un proveedor nuevo no tiene proyectos: asigna renglones o registra un gasto extra' }
+    if (d.nuevo) return { ok: false, falta: 'Un proveedor nuevo no tiene proyectos: asigna conceptos o registra un gasto extra' }
     if (!d.grupoId) return { ok: false, falta: 'Elige el proyecto al que corresponde la factura' }
     return { ok: true, cuerpo: { contraparte_id, grupo_id: d.grupoId } }
   }
   if (d.modo === 'renglones') {
-    if (d.renglones.length === 0) return { ok: false, falta: 'Elige los renglones que cubre la factura' }
+    if (d.renglones.length === 0) return { ok: false, falta: 'Elige los conceptos que cubre la factura' }
     return { ok: true, cuerpo: { contraparte_id, preparar: { proveedor, renglones: d.renglones } } }
   }
   const costo = montoDeTexto(d.gasto.costo)

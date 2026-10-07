@@ -447,7 +447,7 @@ export const FacturaCrearSchema = z.object({
         .optional(),
     })
     .optional()
-    .refine((p) => !p || Boolean(p.renglones?.length) !== (p.gasto !== undefined), 'Elige renglones o registra un gasto extra, no ambos ni ninguno'),
+    .refine((p) => !p || Boolean(p.renglones?.length) !== (p.gasto !== undefined), 'Elige conceptos o registra un gasto extra, no ambos ni ninguno'),
 })
 
 const FechaIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de pago requerida (YYYY-MM-DD)')

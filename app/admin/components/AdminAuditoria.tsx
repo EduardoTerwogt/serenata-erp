@@ -44,7 +44,7 @@ export function AdminAuditoria() {
   return (
     <SectionCard
       title="Consistencia de datos"
-      description="Guardas permanentes del modelo (dinero, renglones, folios). Se ejecutan también cada día."
+      description="Guardas permanentes del modelo (dinero, conceptos, folios). Se ejecutan también cada día."
       borderedHeader
       actions={<Button variant="secondary" size="md" onClick={() => void ejecutar()} disabled={loading}>Volver a ejecutar</Button>}
     >
