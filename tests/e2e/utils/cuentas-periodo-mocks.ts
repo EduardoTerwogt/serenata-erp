@@ -146,6 +146,26 @@ function proyectosAnio(anio: number): ProyectoDetalle[] {
   return construirProyectos(decodificarCuentasAnio(filasAnio(anio)), HOY_E2E)
 }
 
+/**
+ * #123 (P20): el motor TS de tests (congelado) no conoce `compartido`; el cobro "Cotización SH061" de
+ * SH061 se marca como cubierto por una factura de 4 cotizaciones y un depósito de 3 cuentas para ejercitar el chip.
+ */
+export const CHIP_E2E = { contraparte_id: 'cli-modelo', factura_id: 'fa', pago_id: 'pago-1' }
+function conChipsCompartidos<T>(valor: T): T {
+  const visitar = (x: unknown): void => {
+    if (Array.isArray(x)) return x.forEach(visitar)
+    if (!x || typeof x !== 'object') return
+    const o = x as Record<string, unknown>
+    if (typeof o.key === 'string' && o.key.startsWith('c:') && o.proyecto_id === 'SH061' && String(o.concepto) === 'Cotización SH061') {
+      o.contraparte_id = CHIP_E2E.contraparte_id
+      o.compartido = { factura_id: CHIP_E2E.factura_id, facturas_cuentas: 4, pagos: [{ pago_id: CHIP_E2E.pago_id, lineas: 3 }] }
+    }
+    Object.values(o).forEach(visitar)
+  }
+  visitar(valor)
+  return valor
+}
+
 export async function mockCuentasPeriodo(page: Page) {
   registroMock.cobros.clear()
   registroMock.grupos.clear()
@@ -159,6 +179,7 @@ export async function mockCuentasPeriodo(page: Page) {
     const mes: MesPeriodo = mesRaw === 'todo' ? 'todo' : mesRaw ? Number(mesRaw) : anio === 2026 ? 9 : ultimoMesConDatos(proyectos, anio)
     await fulfillJson(
       route,
+      conChipsCompartidos(
       construirPeriodo(
         proyectos,
         {
@@ -175,6 +196,7 @@ export async function mockCuentasPeriodo(page: Page) {
           page_size: Number(sp.get('page_size')) || 60,
         },
         HOY_E2E
+      )
       )
     )
   })

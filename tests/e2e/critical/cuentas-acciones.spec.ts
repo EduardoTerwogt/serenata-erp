@@ -275,3 +275,27 @@ test('estado de cuenta: abierto desde un chip resalta el documento y la URL cons
   await expect(modal).toBeHidden()
   await expect(page).not.toHaveURL(/sheet=estado/)
 })
+
+// ── Chip de factura o pago compartido (B4d, P20) ────────────────────────────────────────────────────────────────
+
+test('chip de una factura compartida: abre el estado de cuenta con la factura resaltada y no abre el detalle', async ({ page }) => {
+  await abrir(page, { conPago: true }, '/cuentas?anio=2026&mes=9&proyecto=SH061')
+  const chip = page.getByRole('button', { name: /^Factura · 4 cot\.:/ })
+  await expect(chip).toBeVisible()
+  await chip.click()
+  await expect(page).toHaveURL(/sheet=estado/)
+  await expect(page).toHaveURL(/lado=cobro/)
+  await expect(page).toHaveURL(/cid=cli-modelo/)
+  await expect(page).toHaveURL(/doc=fa/)
+  await expect(page).not.toHaveURL(/det=/)
+  const modal = page.getByRole('dialog', { name: 'Estado de cuenta' })
+  await expect(modal.locator('tr[data-resaltada]')).toContainText('F-A_Altavista')
+})
+
+test('chip de un pago compartido: resalta el pago', async ({ page }) => {
+  await abrir(page, { conPago: true }, '/cuentas?anio=2026&mes=9&proyecto=SH061')
+  await page.getByRole('button', { name: /^Pago · 3 cuentas:/ }).click()
+  await expect(page).toHaveURL(/doc=pago-1/)
+  const modal = page.getByRole('dialog', { name: 'Estado de cuenta' })
+  await expect(modal.locator('tr[data-resaltada]')).toContainText('30 sep 2026')
+})

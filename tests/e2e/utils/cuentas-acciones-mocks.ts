@@ -53,7 +53,7 @@ const factura = (id: string, archivo: string, fecha: string, metodo: 'PUE' | 'PP
 }
 
 /** Con `conPago`, el depósito del issue ($300,000 el 30 sep) ya está aplicado a la Factura A y sin complemento. */
-function estadoCobro(conPago = false): EstadoCuentaRespuesta {
+function estadoCobro(conPago = false, id: string = CLIENTE.id): EstadoCuentaRespuesta {
   const a = factura('fa', 'F-A_Altavista.xml', '2026-09-12', 'PPD', [
     concepto('cobro', 'SH001', 'Spot TV 30s', 185600, conPago ? 185600 : 0),
     concepto('cobro', 'SH003', 'Making of', 58000, conPago ? 58000 : 0),
@@ -65,7 +65,7 @@ function estadoCobro(conPago = false): EstadoCuentaRespuesta {
   return {
     lado: 'cobro',
     hoy: HOY_E2E,
-    contraparte: CLIENTE,
+    contraparte: { ...CLIENTE, id },
     resumen: { total: a.total + b.total, pagado, saldo: a.total + b.total - pagado, vencido: 0, facturas: 2, sin_factura: 0, sin_factura_saldo: 0 },
     facturas: [a, b],
     sin_factura: [],
@@ -231,8 +231,8 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
   const llamadas: LlamadasAcciones = { pagos: [], facturas: [], previews: [] }
 
   await page.route(/\/api\/cuentas\/estado-cuenta\?/, (route: Route) => {
-    const lado = new URL(route.request().url()).searchParams.get('lado')
-    return fulfillJson(route, lado === 'proveedor' ? estadoProveedor() : estadoCobro(opciones.conPago))
+    const q = new URL(route.request().url()).searchParams
+    return fulfillJson(route, q.get('lado') === 'proveedor' ? estadoProveedor() : estadoCobro(opciones.conPago, q.get('id') ?? CLIENTE.id))
   })
   await page.route(/\/api\/clientes\?q=/, (route: Route) => {
     const q = (new URL(route.request().url()).searchParams.get('q') ?? '').toLowerCase()

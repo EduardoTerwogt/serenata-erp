@@ -20,6 +20,7 @@ import { ListaCompacta, ListaProyectos, agruparProyectos } from './Proyectos'
 import { AccionesReapertura } from './Reapertura'
 import { MenuAcciones, type AccionCuentas } from './acciones/MenuAcciones'
 import { RegistrarPago } from './acciones/RegistrarPago'
+import { CompartidoContexto, type AbrirCompartido } from './acciones/ChipsCompartidos'
 import { EstadoCuenta } from './acciones/EstadoCuenta'
 import { SubirFactura } from './acciones/SubirFactura'
 import { Totales } from './Totales'
@@ -137,6 +138,11 @@ export function CuentasApp() {
     },
     [abrir]
   )
+  // P20: el chip de una factura o pago compartido abre el Estado de cuenta de su contraparte en ese documento.
+  const abrirCompartido = useCallback<AbrirCompartido>(
+    (c, doc) => abrir({ sheet: 'estado', lado: c.tipo === 'cobro' ? 'cobro' : 'proveedor', cid: c.contraparte_id, doc }),
+    [abrir]
+  )
   const cerrarAccion = useCallback(() => cerrar({ sheet: null, lado: null, cid: null, doc: null, pre: null }), [cerrar])
 
   const ancho = useEsAncho()
@@ -245,201 +251,203 @@ export function CuentasApp() {
   }
 
   return (
-    <div className="flex flex-col gap-3.5 md:gap-[19px]">
-      {/* Encabezado */}
-      <div className="flex items-center gap-2 px-4 md:justify-between md:gap-3 md:px-0">
-        <h1 className="sn-display min-w-0 flex-1 text-[27px] text-ink md:flex-none md:text-[22px]">Cuentas</h1>
-        <div className="flex items-center gap-2 md:gap-2.5">
-          <Button className="max-md:hidden" variant="secondary" iconLeft="bell" onClick={() => abrir({ pantalla: 'avisos' })}>
-            <span className="inline-flex items-center gap-1.5">
-              Avisos
-              <Contador n={avisos} />
-            </span>
-          </Button>
-          <button
-            type="button"
-            aria-label={`Avisos${avisos ? ` (${avisos})` : ''}`}
-            onClick={() => abrir({ pantalla: 'avisos' })}
-            className="relative flex h-9 w-9 items-center justify-center rounded-control border border-hairline bg-card text-body md:hidden"
-          >
-            <Icon name="bell" size={18} />
-            {avisos > 0 && (
-              <span className="absolute -right-[5px] -top-[5px] flex h-[18px] min-w-[18px] items-center justify-center rounded-pill bg-accent px-[5px] text-[10.5px] font-semibold text-white">{avisos}</span>
-            )}
-          </button>
-          <MenuAcciones onElegir={elegirAccion} disponibles={ACCIONES_DISPONIBLES} />
-        </div>
-      </div>
-
-      {/* Periodo */}
-      {periodo && (
-        <div className="hidden md:block">
-          <PeriodoEscritorio anio={anio} mes={mes} meses={periodo.meses} resumen={resumen} hoy={periodo.hoy} onMes={onMes} onAnio={onAnio} />
-        </div>
-      )}
-
-      {/* Controles móviles: periodo, búsqueda y filtros */}
-      <div className="flex flex-col gap-3.5 md:hidden">
-        {buscando ? (
-          <div className="flex items-center gap-3 px-4">
-            <div className="min-w-0 flex-1">
-              <SearchInput value={estado.q} onChange={(e) => filtrar({ q: e.target.value })} placeholder="Buscar proyecto, cliente o concepto" autoFocus />
-            </div>
+    <CompartidoContexto.Provider value={abrirCompartido}>
+      <div className="flex flex-col gap-3.5 md:gap-[19px]">
+        {/* Encabezado */}
+        <div className="flex items-center gap-2 px-4 md:justify-between md:gap-3 md:px-0">
+          <h1 className="sn-display min-w-0 flex-1 text-[27px] text-ink md:flex-none md:text-[22px]">Cuentas</h1>
+          <div className="flex items-center gap-2 md:gap-2.5">
+            <Button className="max-md:hidden" variant="secondary" iconLeft="bell" onClick={() => abrir({ pantalla: 'avisos' })}>
+              <span className="inline-flex items-center gap-1.5">
+                Avisos
+                <Contador n={avisos} />
+              </span>
+            </Button>
             <button
               type="button"
-              className="text-[14px] text-accent"
-              onClick={() => {
-                setBuscando(false)
-                filtrar({ q: '' })
-              }}
+              aria-label={`Avisos${avisos ? ` (${avisos})` : ''}`}
+              onClick={() => abrir({ pantalla: 'avisos' })}
+              className="relative flex h-9 w-9 items-center justify-center rounded-control border border-hairline bg-card text-body md:hidden"
             >
-              Cancelar
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2 px-4">
-            <BotonPeriodo anio={anio} mes={mes} pendientes={periodo?.conteo.pendientes ?? 0} onClick={() => abrir({ sheet: 'periodo' })} />
-            <button type="button" aria-label="Buscar" onClick={() => setBuscando(true)} className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-control border border-hairline bg-card text-body">
-              <Icon name="search" size={18} />
-            </button>
-            <button
-              type="button"
-              aria-label="Filtros"
-              onClick={() => abrir({ sheet: 'filtros' })}
-              className={`relative flex h-[38px] w-[38px] flex-none items-center justify-center rounded-control border bg-card text-body ${nFiltros ? 'border-accent-quiet' : 'border-hairline'}`}
-            >
-              <Icon name="sliders-horizontal" size={18} />
-              {nFiltros > 0 && (
-                <span className="absolute -right-[5px] -top-[5px] flex h-[18px] min-w-[18px] items-center justify-center rounded-pill bg-accent px-[5px] text-[10.5px] font-semibold text-white">{nFiltros}</span>
+              <Icon name="bell" size={18} />
+              {avisos > 0 && (
+                <span className="absolute -right-[5px] -top-[5px] flex h-[18px] min-w-[18px] items-center justify-center rounded-pill bg-accent px-[5px] text-[10.5px] font-semibold text-white">{avisos}</span>
               )}
             </button>
+            <MenuAcciones onElegir={elegirAccion} disponibles={ACCIONES_DISPONIBLES} />
           </div>
-        )}
-        <Chips estado={estado} onCambio={cambiarFiltros} className="overflow-x-auto px-4 [scrollbar-width:none]" />
-        {estado.vista === 'lista' && (
-          <div className="px-4">
-            <FilterTabs tabs={VISTAS} value={estado.vista} onChange={(v) => filtrar({ vista: v, proyecto: null })} />
-          </div>
-        )}
-      </div>
+        </div>
 
-      {/* Barra de vista (escritorio) */}
-      <div className="hidden flex-wrap items-center gap-3 md:flex">
-        <FilterTabs tabs={VISTAS} value={estado.vista} onChange={(v) => filtrar({ vista: v, proyecto: null })} />
+        {/* Periodo */}
         {periodo && (
-          <FiltrosEscritorio estado={estado} conteo={periodo.conteo} clientes={opciones?.clientes ?? SIN_OPCIONES} proveedores={opciones?.proveedores ?? SIN_OPCIONES} mes={mes} onCambio={cambiarFiltros} />
-        )}
-        <Chips estado={estado} onCambio={cambiarFiltros} className="flex-wrap" />
-        <div className="ml-auto">
-          <SearchInput expandable value={estado.q} onChange={(e) => filtrar({ q: e.target.value })} placeholder="Buscar" />
-        </div>
-      </div>
-
-      {error && (
-        <div className="px-4 md:px-0">
-          <StatusBanner tone="error">{error}</StatusBanner>
-        </div>
-      )}
-
-      <div aria-busy={cargando} className={cargando && periodo ? 'opacity-70 transition-opacity' : ''}>
-        {cuerpo()}
-      </div>
-
-      {/* Móvil: proyecto abierto en hoja al 92% */}
-      {!escritorio && sel && (
-        <BottomSheet
-          height="92%"
-          label={sel.nombre}
-          onClose={() => cerrar({ proyecto: null, det: null })}
-          header={
-            <div className="flex-none border-b border-hairline px-4 pb-3.5 pt-2">
-              <EncabezadoProyecto
-                p={sel}
-                acciones={
-                  <button
-                    type="button"
-                    aria-label="Cerrar"
-                    onClick={() => cerrar({ proyecto: null, det: null })}
-                    className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-pill bg-row-alt text-subtext"
-                  >
-                    <Icon name="close" size={16} />
-                  </button>
-                }
-              />
-            </div>
-          }
-        >
-          <div className="grid grid-cols-1 content-start gap-4 px-4 pb-7 pt-3.5">
-            <CuerpoProyecto p={sel} onAbrirConcepto={abrirConcepto} compacto acciones={<AccionesReapertura p={sel} onCambio={recargarTodo} bloque />} />
+          <div className="hidden md:block">
+            <PeriodoEscritorio anio={anio} mes={mes} meses={periodo.meses} resumen={resumen} hoy={periodo.hoy} onMes={onMes} onAnio={onAnio} />
           </div>
-        </BottomSheet>
-      )}
+        )}
 
-      {estado.sheet === 'periodo' && periodo && (
-        <HojaPeriodo anio={anio} mes={mes} meses={periodo.meses} resumen={resumen} onMes={onMes} onAnio={onAnio} onClose={() => cerrar({ sheet: null })} />
-      )}
-      {estado.sheet === 'filtros' && periodo && (
-        <HojaFiltros
-          estado={estado}
-          conteo={periodo.conteo}
-          clientes={opciones?.clientes ?? SIN_OPCIONES}
-          proveedores={opciones?.proveedores ?? SIN_OPCIONES}
-          mes={mes}
-          onCambio={cambiarFiltros}
-          onClose={() => cerrar({ sheet: null })}
-          resultados={resultadosFiltros}
-        />
-      )}
+        {/* Controles móviles: periodo, búsqueda y filtros */}
+        <div className="flex flex-col gap-3.5 md:hidden">
+          {buscando ? (
+            <div className="flex items-center gap-3 px-4">
+              <div className="min-w-0 flex-1">
+                <SearchInput value={estado.q} onChange={(e) => filtrar({ q: e.target.value })} placeholder="Buscar proyecto, cliente o concepto" autoFocus />
+              </div>
+              <button
+                type="button"
+                className="text-[14px] text-accent"
+                onClick={() => {
+                  setBuscando(false)
+                  filtrar({ q: '' })
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2 px-4">
+              <BotonPeriodo anio={anio} mes={mes} pendientes={periodo?.conteo.pendientes ?? 0} onClick={() => abrir({ sheet: 'periodo' })} />
+              <button type="button" aria-label="Buscar" onClick={() => setBuscando(true)} className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-control border border-hairline bg-card text-body">
+                <Icon name="search" size={18} />
+              </button>
+              <button
+                type="button"
+                aria-label="Filtros"
+                onClick={() => abrir({ sheet: 'filtros' })}
+                className={`relative flex h-[38px] w-[38px] flex-none items-center justify-center rounded-control border bg-card text-body ${nFiltros ? 'border-accent-quiet' : 'border-hairline'}`}
+              >
+                <Icon name="sliders-horizontal" size={18} />
+                {nFiltros > 0 && (
+                  <span className="absolute -right-[5px] -top-[5px] flex h-[18px] min-w-[18px] items-center justify-center rounded-pill bg-accent px-[5px] text-[10.5px] font-semibold text-white">{nFiltros}</span>
+                )}
+              </button>
+            </div>
+          )}
+          <Chips estado={estado} onCambio={cambiarFiltros} className="overflow-x-auto px-4 [scrollbar-width:none]" />
+          {estado.vista === 'lista' && (
+            <div className="px-4">
+              <FilterTabs tabs={VISTAS} value={estado.vista} onChange={(v) => filtrar({ vista: v, proyecto: null })} />
+            </div>
+          )}
+        </div>
 
-      {estado.det && (
-        <DetalleConcepto
-          conceptoKey={estado.det}
-          tab={PESTANAS.includes(estado.tab as PestanaDetalle) ? (estado.tab as PestanaDetalle) : 'info'}
-          onTab={(t) => reemplazar({ tab: t === 'info' ? null : t })}
-          onClose={() => cerrar({ det: null, tab: null })}
-          onCambio={recargarTodo}
-          hoy={periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()}
-        />
-      )}
+        {/* Barra de vista (escritorio) */}
+        <div className="hidden flex-wrap items-center gap-3 md:flex">
+          <FilterTabs tabs={VISTAS} value={estado.vista} onChange={(v) => filtrar({ vista: v, proyecto: null })} />
+          {periodo && (
+            <FiltrosEscritorio estado={estado} conteo={periodo.conteo} clientes={opciones?.clientes ?? SIN_OPCIONES} proveedores={opciones?.proveedores ?? SIN_OPCIONES} mes={mes} onCambio={cambiarFiltros} />
+          )}
+          <Chips estado={estado} onCambio={cambiarFiltros} className="flex-wrap" />
+          <div className="ml-auto">
+            <SearchInput expandable value={estado.q} onChange={(e) => filtrar({ q: e.target.value })} placeholder="Buscar" />
+          </div>
+        </div>
 
-      {estado.pantalla && (
-        <PanelAvisosOrdenes
-          pantalla={estado.pantalla}
-          avisos={avisosPanel.datos}
-          avisosError={avisosPanel.error}
-          escritorio={escritorio}
-          onPantalla={(p) => reemplazar({ pantalla: p })}
-          onClose={() => cerrar({ pantalla: null, sheet: null })}
-          onAviso={abrirAviso}
-          onGenerar={() => abrir({ sheet: 'orden' })}
-          onHistorial={() => abrir({ sheet: 'historial' })}
-          onOrdenCambio={recargarTodo}
-        />
-      )}
-      {estado.sheet === 'factura' && <SubirFactura escritorio={escritorio} onClose={cerrarAccion} onGuardada={recargarTodo} />}
-      {estado.sheet === 'estado' && (
-        <EstadoCuenta
-          lado={estado.lado ?? 'cobro'}
-          contraparteId={estado.cid}
-          doc={estado.doc}
-          onCambio={(c) => reemplazar({ lado: c.lado, cid: c.contraparteId, doc: null })}
-          onClose={cerrarAccion}
-        />
-      )}
-      {estado.sheet === 'pago' && (
-        <RegistrarPago
-          escritorio={escritorio}
-          lado={estado.lado ?? 'cobro'}
-          contraparteId={estado.cid}
-          proyecto={estado.pre}
-          hoy={periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()}
-          onCambio={(c) => reemplazar({ lado: c.lado, cid: c.contraparteId })}
-          onClose={cerrarAccion}
-          onRegistrado={recargarTodo}
-        />
-      )}
-      {estado.sheet === 'orden' && <GenerarOrden escritorio={escritorio} onClose={() => cerrar({ sheet: null })} onGenerada={recargarTodo} />}
-      {estado.sheet === 'historial' && escritorio && <HistorialModal onClose={() => cerrar({ sheet: null })} onOrdenCambio={recargarTodo} />}
-    </div>
+        {error && (
+          <div className="px-4 md:px-0">
+            <StatusBanner tone="error">{error}</StatusBanner>
+          </div>
+        )}
+
+        <div aria-busy={cargando} className={cargando && periodo ? 'opacity-70 transition-opacity' : ''}>
+          {cuerpo()}
+        </div>
+
+        {/* Móvil: proyecto abierto en hoja al 92% */}
+        {!escritorio && sel && (
+          <BottomSheet
+            height="92%"
+            label={sel.nombre}
+            onClose={() => cerrar({ proyecto: null, det: null })}
+            header={
+              <div className="flex-none border-b border-hairline px-4 pb-3.5 pt-2">
+                <EncabezadoProyecto
+                  p={sel}
+                  acciones={
+                    <button
+                      type="button"
+                      aria-label="Cerrar"
+                      onClick={() => cerrar({ proyecto: null, det: null })}
+                      className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-pill bg-row-alt text-subtext"
+                    >
+                      <Icon name="close" size={16} />
+                    </button>
+                  }
+                />
+              </div>
+            }
+          >
+            <div className="grid grid-cols-1 content-start gap-4 px-4 pb-7 pt-3.5">
+              <CuerpoProyecto p={sel} onAbrirConcepto={abrirConcepto} compacto acciones={<AccionesReapertura p={sel} onCambio={recargarTodo} bloque />} />
+            </div>
+          </BottomSheet>
+        )}
+
+        {estado.sheet === 'periodo' && periodo && (
+          <HojaPeriodo anio={anio} mes={mes} meses={periodo.meses} resumen={resumen} onMes={onMes} onAnio={onAnio} onClose={() => cerrar({ sheet: null })} />
+        )}
+        {estado.sheet === 'filtros' && periodo && (
+          <HojaFiltros
+            estado={estado}
+            conteo={periodo.conteo}
+            clientes={opciones?.clientes ?? SIN_OPCIONES}
+            proveedores={opciones?.proveedores ?? SIN_OPCIONES}
+            mes={mes}
+            onCambio={cambiarFiltros}
+            onClose={() => cerrar({ sheet: null })}
+            resultados={resultadosFiltros}
+          />
+        )}
+
+        {estado.det && (
+          <DetalleConcepto
+            conceptoKey={estado.det}
+            tab={PESTANAS.includes(estado.tab as PestanaDetalle) ? (estado.tab as PestanaDetalle) : 'info'}
+            onTab={(t) => reemplazar({ tab: t === 'info' ? null : t })}
+            onClose={() => cerrar({ det: null, tab: null })}
+            onCambio={recargarTodo}
+            hoy={periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()}
+          />
+        )}
+
+        {estado.pantalla && (
+          <PanelAvisosOrdenes
+            pantalla={estado.pantalla}
+            avisos={avisosPanel.datos}
+            avisosError={avisosPanel.error}
+            escritorio={escritorio}
+            onPantalla={(p) => reemplazar({ pantalla: p })}
+            onClose={() => cerrar({ pantalla: null, sheet: null })}
+            onAviso={abrirAviso}
+            onGenerar={() => abrir({ sheet: 'orden' })}
+            onHistorial={() => abrir({ sheet: 'historial' })}
+            onOrdenCambio={recargarTodo}
+          />
+        )}
+        {estado.sheet === 'factura' && <SubirFactura escritorio={escritorio} onClose={cerrarAccion} onGuardada={recargarTodo} />}
+        {estado.sheet === 'estado' && (
+          <EstadoCuenta
+            lado={estado.lado ?? 'cobro'}
+            contraparteId={estado.cid}
+            doc={estado.doc}
+            onCambio={(c) => reemplazar({ lado: c.lado, cid: c.contraparteId, doc: null })}
+            onClose={cerrarAccion}
+          />
+        )}
+        {estado.sheet === 'pago' && (
+          <RegistrarPago
+            escritorio={escritorio}
+            lado={estado.lado ?? 'cobro'}
+            contraparteId={estado.cid}
+            proyecto={estado.pre}
+            hoy={periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()}
+            onCambio={(c) => reemplazar({ lado: c.lado, cid: c.contraparteId })}
+            onClose={cerrarAccion}
+            onRegistrado={recargarTodo}
+          />
+        )}
+        {estado.sheet === 'orden' && <GenerarOrden escritorio={escritorio} onClose={() => cerrar({ sheet: null })} onGenerada={recargarTodo} />}
+        {estado.sheet === 'historial' && escritorio && <HistorialModal onClose={() => cerrar({ sheet: null })} onOrdenCambio={recargarTodo} />}
+      </div>
+    </CompartidoContexto.Provider>
   )
 }
