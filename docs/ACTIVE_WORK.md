@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-07 (#123 ejecutado completo en la rama y en test; falta tu revisión y el lanzamiento).
+**Última actualización:** 2026-10-07 (#123 cerrado en la rama, CI verde salvo el gate manual de escala; siguiente sesión: arrancar #130).
 
 ## Estado
 
@@ -30,7 +30,14 @@ Orden de la cola: **#123 → #130 → #110 → #125** (#130 antes de #110 porque
 | B6a Constancia fiscal de Serenata en Admin (migración `20261033`, aplicada en test) | Hecho |
 | B6 Cierre (decisión 022, `ARCHITECTURE.md`, `TESTING.md`, 011/017/020, ROADMAP) | Documentación hecha; **archivar el plan y cerrar #123 al lanzar** |
 
-## Completado en esta sesión (2026-10-07, segunda parte)
+## Completado en esta sesión (2026-10-07, tercera parte)
+
+- **UI fiel al mockup aprobado:** iconos de Acciones (rayo en escritorio y móvil; tarjeta, recibo), fichas de icono en el menú, encabezado de la lista de cotizaciones, Resumen del estado de cuenta en tarjetas, etiqueta «otro mes» y aviso de proveedor en Subir factura. **Desvíos conscientes:** sin «Vence» (el CFDI no la trae; se muestra «Emitida») y sin parcialidad ni saldo insoluto en el complemento (exige ampliar el parser).
+- **Latencia:** `cuentas_conceptos` a plpgsql + `force_custom_plan` (guarda en `migrations.yml`, regla en `.claude/rules/migraciones.md`). Resultado en aviso 4: el gate de escala sigue rojo en lecturas globales.
+- **Decisión de orden (tuya):** #123 → **#130** → #110, porque el pago por proyecto cambia lo que #110 materializa.
+- **Tests (resultado real):** CI de `11e96d9` en verde: `test`, `fresh-db`, `smoke-and-critical`, `live`. `escala.yml` (manual) rojo en `0d02802`. Local: `tsc`, eslint y 26 tests de `app/cuentas` en verde tras el último cambio de UI.
+
+## Completado en la sesión anterior (2026-10-07, segunda parte)
 
 - **B4 (UI):** menú **Acciones** (un menú, dos disparadores) con **Subir factura**, **Registrar pago**, **Orden de pago** y
   **Estado de cuenta** (`app/cuentas/components/acciones/`); estado en la URL (`sheet`, `lado`, `cid`, `doc`, `pre`); el cliente
@@ -106,6 +113,10 @@ Orden de la cola: **#123 → #130 → #110 → #125** (#130 antes de #110 porque
 
 ## Siguiente paso
 
+0. **Próxima sesión: arrancar #130** (comentar en el issue lo ya pedido): alta de proveedor, vínculo a proyectos y «Registrar pago» por proyecto
+   (hoy solo ofrece clientes y proveedores). Empezar con `serenata-iniciar-fase` y análisis sin implementar. Restricciones: todo pago por
+   proyecto entra por `cuentas_conceptos` (sin segunda derivación), se mide por buffers antes y después, y se diseña con llave estable
+   (proyecto, contraparte, tipo) para que #110 solo cambie de dónde se lee. Pendiente opcional: parcialidad y saldo insoluto del complemento.
 1. **Tu revisión de #123** y, si la aprueba, el **lanzamiento** (aviso 1). Al lanzar: verificar `auditar_consistencia()` = 0 en
    producción, archivar `docs/PLAN.md` en `docs/archive/`, cerrar #123 y recrear `PLAN.md` vacío.
 2. Después de #123: **#130** (alta de proveedor y pago/factura por proyecto, con análisis previo) y luego **#110** V2–V3; limpieza de #124 (quitar el ref viejo `fwmyoqokcjtldiofuxdg` de
