@@ -71,6 +71,22 @@ idempotente: borra lo suyo y lo recrea. Se corre pegándolo en el SQL Editor de
 tabla `loadtest_runs`, que solo existe en test. Los tests no lo necesitan;
 sirve para revisar pantallas y RPCs contra datos con forma real.
 
+El seed también carga (si no hay una vigente) la **constancia fiscal de prueba de
+Serenata** (`datos_fiscales_serenata`, RFC `SHO100101AB1`, el que usan los fixtures de
+XML): las rutas de Subir factura leen de ahí el RFC propio y, sin constancia, fallan
+explícito (#123, B6a). Ya no hay variable `SERENATA_RFC` en los jobs de CI.
+
+### Specs de #123 (facturas y pagos ligados)
+
+Con mocks (escritorio y móvil), en `tests/e2e/critical/`: `cuentas-acciones.spec.ts` (menú,
+Registrar pago con el caso del issue, Subir factura y complemento, Estado de cuenta, chips),
+`cuentas-detalle.spec.ts` (el detalle abre las ventanas, P22), `admin-datos-fiscales.spec.ts` y
+el caso de pagos del Portal en `portal-factura.spec.ts`. Unitarios: reparto en centavos
+(`app/cuentas/components/acciones/__tests__/`), servicios de `lib/server/cuentas/`
+(`facturas`, `datos-fiscales`, `constancia-serenata`, `portal-pagos`) y las rutas nuevas en
+`app/api/__tests__/`. Los specs `live` de concurrencia cubren doble clic, la misma cuenta en
+dos facturas, pagos simultáneos y el ABBA de órdenes de pago.
+
 ## Modo bypass (solo smoke y critical)
 
 Con `PLAYWRIGHT_E2E_BYPASS=true` más la cookie `e2e-bypass=1` que pone

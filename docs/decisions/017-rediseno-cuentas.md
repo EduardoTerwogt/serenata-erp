@@ -65,7 +65,7 @@ sesión 19 (plan aprobado). Las referencias "§n" y "Bn" apuntan a ese plan.
 | Sin filtro por estado | Panel **Filtros**: Estado (Todas/Pendientes/Cerradas), Tipo (Todo/Por cobrar/Por pagar), Cliente y Proveedor con búsqueda. Chips removibles y "Limpiar filtros" |
 | Modal de alertas (solo cobros) | Bandeja lateral **Avisos**: cobros vencidos, cobros por vencer, facturas de proveedor faltantes, complementos faltantes y facturas por emitir |
 | Botón "Ficha de órdenes de pago" + modal de preview | Bandeja **Órdenes**: "Nueva orden de pago" con resumen y botón, más las últimas 5. **Historial** en modal con filtros (estado, mes, proveedor, proyecto), búsqueda por folio y filas que se expanden al desglose |
-| Proyecto sin concepto de cierre | Las cuentas de un proyecto se **cierran solas** cuando todo está cobrado, pagado y con los documentos de D11 ("Cuentas cerradas", D17). **Reabrir** (solo admin) y **Volver a cerrar** |
+| Proyecto sin concepto de cierre | Las cuentas de un proyecto se **cierran solas** cuando todo está cobrado, pagado y con los documentos de D11 ("Cuentas cerradas", D17). **Reabrir** (solo admin; desde #123/P14, cualquier usuario con la sección `cuentas`, decisión 022) y **Volver a cerrar** |
 | Cierre del proyecto: una fila por proveedor | Cierre: Proveedores (agregado), IVA a enterar, Retenciones y ISR estimado, cada uno con su fecha límite ante el SAT, más el resumen de utilidad |
 | Detalle: 3 tabs sin contexto | Encabezado con estado, concepto, barra de avance, siguiente paso y saldo. Info con cruce fiscal y bloque "Contacto y pago". Documentos como checklist (requerido/opcional, "Válida"). Pago con estados bloqueado/saldada e historial |
 | Pago a proveedor: monto y comprobante | Monto, **tipo** (Transferencia/Efectivo/**Cheque**), **fecha**, comprobante, notas e **historial de pagos** |
@@ -144,12 +144,12 @@ sesión 19 (plan aprobado). Las referencias "§n" y "Bn" apuntan a ese plan.
 | # | Tema | Decisión |
 |---|---|---|
 | D33 | Cuándo se reabre | **Un admin reabre en cualquier momento**, con o sin pendientes, siempre con motivo. Sin esto, un pago mal capturado o una factura validada equivocada en un proyecto con pendientes no tenía corrección (a veces nunca cierra justo por ese error). El chip dice "N pendientes" y, sin pendientes, "Reabierta". La reapertura no se cierra sola: la termina el admin con "Volver a cerrar" (sin pendientes) o "Terminar correcciones" (con pendientes; las cuentas se cierran solas al resolverlos, D17). Cambia la regla del prototipo (`canReopen` = cerrada). |
-| D34 | Subir otra factura sobre una validada | **Es reemplazarla, y es una corrección:** solo admin, con las cuentas reabiertas y con motivo, igual en cobros, grupos y sueltas (antes las sueltas y los cobros la aceptaban de cualquiera y sin registro). La nueva se sube y valida con el flujo normal y la anterior (XML y PDF) queda dada de baja con `reemplazado_por` hacia la nueva. Dentro de una orden de pago nunca (el PDF ya se emitió con esa factura, D7). |
+| D34 | Subir otra factura sobre una validada | **Es reemplazarla, y es una corrección:** solo admin (desde #123/P14, cualquier usuario de Cuentas; decisión 022), con las cuentas reabiertas y con motivo, igual en cobros, grupos y sueltas (antes las sueltas y los cobros la aceptaban de cualquiera y sin registro). La nueva se sube y valida con el flujo normal y la anterior (XML y PDF) queda dada de baja con `reemplazado_por` hacia la nueva. Dentro de una orden de pago nunca (el PDF ya se emitió con esa factura, D7). |
 | D35 | Cambiar de año (chip de meses, sesión 20) | **Se conserva el mes elegido** (o "Todo el año"), en escritorio y en móvil, como pide el handoff del chip de meses (`docs/design/cuentas/chip-meses/`). Sustituye esa parte de S16; S16 sigue decidiendo el mes solo cuando se entra a un año sin mes en la URL (mes actual en el año en curso, si no el último con datos). |
 
 ## 4. Supuestos (confirmados por el usuario en la sesión 14)
 
-1. **Correcciones sobre un proyecto reabierto:** solo admin, igual que reabrir.
+1. **Correcciones sobre un proyecto reabierto:** solo admin, igual que reabrir (desde #123/P14, cualquier usuario con la sección `cuentas`; decisión 022).
    Mientras el proyecto está reabierto, el resto de los usuarios lo ve pero no
    puede corregir.
 2. **"Por vencer" = faltan 10 días o menos** (como en el diseño; hoy son 3).
@@ -376,7 +376,7 @@ con decisiones ya tomadas y **no se implementan así**:
 | Historial de órdenes en neto | En total a transferir | D20 |
 | "Un solo pago cierra los N conceptos del grupo" | Se permiten pagos parciales al grupo (la RPC vigente lo permite). El texto se ajusta a "El pago se reparte entre los N conceptos del grupo". | Decisión 011: el grupo se paga completo en renglones, no en un solo depósito. |
 | Evento realizado por fecha del proyecto | Por fecha de cada cotización | Decisión 011, D12, supuesto 13. |
-| Reabrir visible para todos | Solo admin lo ve y lo ejecuta | D6 |
+| Reabrir visible para todos | Solo admin lo ve y lo ejecuta (desde #123/P14, quien tenga la sección `cuentas`) | D6 |
 | Una sola fecha SAT por impuesto | Una fila por mes de cobro o pago | D26 |
 | "X pagar · neto al proveedor" | "Costo total · neto al proveedor" | D29, glosario de la decisión 006 |
 | Solo existe "Sin factura" / "Facturado" | Además, "En revisión" (tono borrador) cuando el XML no quedó validado | D25 |

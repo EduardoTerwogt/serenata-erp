@@ -133,6 +133,7 @@ cotización solo por RPC (L1), estado del cobro como columna generada (D15), `da
 `auditar_consistencia()` (17, cron diario, Admin) y `plpgsql_check` (CI).
 
 **Decisiones que cambiaron en la ejecución.**
+- **#123 (decisión 022) matiza la C:** la cabecera de pagos `pagos` es común a cobro y proveedor; cuentas y documentos siguen separados por lado. Una factura de cobro cubre varias cuentas por `cuentas_cobrar.factura_documento_id`.
 - **B6 (un solo motor de Cuentas, D17) se hizo después del cierre**, sin diferirlo como deuda:
   el proyecto seleccionado (con cierre fiscal y cierre mensual) sale de `cuentas_periodo` y
   el detalle de un concepto de `cuentas_conceptos` con ese solo concepto (`20261028`,

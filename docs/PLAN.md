@@ -1,9 +1,11 @@
 # Plan de la iniciativa activa
 
-**Estado:** **Aprobado y en ejecución** (aprobado 2026-10-06 por el usuario). — "#123: Facturas y pagos ligados (una
-factura para varias cotizaciones, un pago para varias facturas)". **B0–B3 hechos (2026-10-07, en rama y en test);
-siguiente: B4 (UI).** Rama `claude/admiring-faraday-i5w9yj`, PR en borrador #129; producción sin tocar. Estado y pasos
-concretos de la sesión en `docs/ACTIVE_WORK.md`.
+**Estado:** **Ejecutado en código y en test; listo para que el usuario lo revise antes de producción** (aprobado
+2026-10-06). — "#123: Facturas y pagos ligados (una factura para varias cotizaciones, un pago para varias facturas)".
+**B0–B6a y la documentación de B6 hechos (2026-10-07, en rama y en test).** Falta el **lanzamiento** (M1 → M2 → M3 en
+producción, merge del PR #129, verificación) y, con él, archivar este plan. Rama `claude/admiring-faraday-i5w9yj`, PR en
+borrador #129; producción sin tocar. Decisión: `docs/decisions/022-facturas-y-pagos-ligados.md`. Estado y pasos concretos en
+`docs/ACTIVE_WORK.md`.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -593,10 +595,10 @@ se construyen contra `serenataRfc()` y no se bloquean.
 | B1 Permisos P14 | **Hecho** en código y tests (2026-10-07) |
 | B2 Capa de datos (M1 → M2 → M3, un release) | **Hecho en test** (2026-10-07): M1, M2 y M3 aplicadas en `serenata-erp-test` (M3 y `cancel_cotizacion` por una persona: el MCP retiene todo DELETE/DROP); 23 guardas en 0, `plpgsql_check` en 0. Producción: sin tocar (se corre al lanzar, en orden M1 → M2 → M3). |
 | B3 API nueva y lecturas | **Hecho en código y tests** (2026-10-07): parser, RFC/`SERENATA_RFC` (`docs/ENV.md`, jobs e2e), `estado_cuenta`, `facturas_candidatos`, rutas de factura/pagos/estado de cuenta y búsqueda de clientes. `SERENATA_RFC` es un puente temporal: se reemplaza en B6a (constancia de Serenata en Admin), así que no se da de alta en Vercel por ahora. Latencia: `cuentas_conceptos` ≈ +20 % local (500 proyectos); `estado_cuenta` ≈ 560 ms en test, dominado por `cuentas_conceptos`; sin optimizar. |
-| B4a Menú y Registrar pago | Pendiente |
-| B4b Subir factura y complemento | Pendiente |
-| B4c Estado de cuenta y fichas | Pendiente |
-| B4d P22, chip P20 | Pendiente |
-| B5 Portal (solo lectura) | Pendiente |
-| B6a Constancia de Serenata en Admin (reemplaza `SERENATA_RFC`) | Pendiente (al final, antes de B6) |
-| B6 Cerrar | Pendiente |
+| B4a Menú y Registrar pago | **Hecho** (2026-10-07): `MenuAcciones`, `RegistrarPago` (reparto en centavos, más antigua primero, idempotencia con `runIdempotentPagoSubmit`), refresco al volver a la pestaña; specs `cuentas-acciones` |
+| B4b Subir factura y complemento | **Hecho** (2026-10-07): `SubirFactura` (preview por RFC, preselección por folios SH, descuadre "En revisión", factura de proveedor, complemento con selector de pago ante `complemento_ambiguo`). La pregunta abierta 3 (corregir un descuadre sin resubir) **no se construyó** (ver Preguntas abiertas) |
+| B4c Estado de cuenta y fichas | **Hecho** (2026-10-07): `EstadoCuenta` (menú, chip y fichas), RFC y botón (P28) en `ClienteModal` y `ProveedorModal` |
+| B4d P22, chip P20 | **Hecho** (2026-10-07): el detalle abre las ventanas con contraparte y proyecto preseleccionados; se retiró el formulario de pago y el alta de XML del detalle; chips de factura y pago compartido; el detalle se vuelve a pedir tras cada ventana |
+| B5 Portal (solo lectura) | **Hecho** (2026-10-07): `GET /api/portal/cuentas` con pagos, qué más cubrió cada uno y complemento PPD; solo del proveedor de la sesión |
+| B6a Constancia de Serenata en Admin (reemplaza `SERENATA_RFC`) | **Hecho** (2026-10-07): migración `20261033` (aplicada en test), lector con IA + validación determinista + confirmación, `serenataRfc()` desde la tabla, Dashboard según tipo de persona; `SERENATA_RFC` retirado de `docs/ENV.md` y `e2e.yml` |
+| B6 Cerrar | **Documentación hecha** (decisión 022, `ARCHITECTURE.md`, `TESTING.md`, 011/017/020, `ROADMAP.md`, script temporal borrado). **Pendiente del lanzamiento:** archivar este plan, cerrar #123 y recrear `PLAN.md` vacío |
