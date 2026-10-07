@@ -17,7 +17,19 @@ export type VistaCuentas = 'proyectos' | 'lista'
 /** Id de URL del grupo "Sin proyecto" (supuesto 11). */
 export const SIN_PROYECTO_ID = 'sin-proyecto'
 
+/**
+ * #123 (P20): lo que un concepto comparte con otros. `facturas_cuentas` > 1 = la factura cubre varias cuentas de
+ * cobro; cada pago con `lineas` > 1 cubre varias cuentas o grupos. El chip abre el Estado de cuenta.
+ */
+export interface CompartidoConcepto {
+  factura_id: string | null
+  facturas_cuentas: number
+  pagos: { pago_id: string; lineas: number }[]
+}
+
 export interface ConceptoVista extends ConceptoDerivado {
+  /** #123 (P20): factura y pagos compartidos del concepto; null en una cuenta suelta. */
+  compartido?: CompartidoConcepto | null
   /** Único en el año: 'c:<cuenta_cobrar>', 'g:<grupo>' o 's:<cuenta_pagar suelta>'. */
   key: string
   tipo: 'cobro' | 'pago'

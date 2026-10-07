@@ -24,6 +24,11 @@ const MENSAJES: Record<string, { status: number; mensaje: string }> = {
   grupo_abierto_existente: { status: 409, mensaje: 'El proveedor ya tiene otro grupo abierto en este proyecto; no se puede reabrir este.' },
   proveedor_no_encontrado: { status: 404, mensaje: 'El proveedor no existe.' },
   grupo_no_abierto: { status: 409, mensaje: 'El grupo ya está facturado o pagado; no se puede reasignar.' },
+  pago_sin_lineas: { status: 409, mensaje: 'El pago no tiene líneas; no se puede corregir.' },
+  documento_sin_cuentas: { status: 409, mensaje: 'No se encontró a qué cuentas pertenece el documento.' },
+  orden_cambio: { status: 409, mensaje: 'La orden cambió mientras se cancelaba; reintenta.' },
+  fecha_factura_requerida: { status: 400, mensaje: 'La cuenta tiene una factura vigente: para quitar su fecha hay que quitar la factura.' },
+  sin_factura: { status: 400, mensaje: 'La cuenta no tiene factura vigente: sube la factura para que tenga fecha.' },
 }
 
 async function llamar<T>(fn: string, args: Record<string, unknown>): Promise<T> {

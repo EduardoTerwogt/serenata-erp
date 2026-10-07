@@ -1150,11 +1150,11 @@ BEGIN
   END IF;
   IF p_reemplazado_por IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM documentos_cuentas_cobrar n
-    WHERE n.id = p_reemplazado_por AND n.id <> p_documento_id AND n.eliminado_at IS NULL AND n.tipo = v_doc.tipo
+    WHERE n.id = p_reemplazado_por AND n.id <> p_documento_id AND n.eliminado_at IS NULL
       AND (n.cuentas_cobrar_id = v_doc.cuentas_cobrar_id
            OR EXISTS (SELECT 1 FROM cuentas_cobrar cc WHERE cc.id = ANY(v_cuentas) AND cc.factura_documento_id = COALESCE(n.factura_documento_id, n.id)))
   ) THEN
-    RAISE EXCEPTION 'reemplazo_invalido: % no es un documento vigente del mismo tipo y de las mismas cuentas', p_reemplazado_por USING ERRCODE = 'P1415';
+    RAISE EXCEPTION 'reemplazo_invalido: % no es un documento vigente de las mismas cuentas', p_reemplazado_por USING ERRCODE = 'P1415';
   END IF;
 
   UPDATE documentos_cuentas_cobrar

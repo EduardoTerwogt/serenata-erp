@@ -51,20 +51,26 @@ export interface ProyectoDetalleCorto {
   fecha_entrega: string | null
 }
 
+/** D16, D27, V4 (#123, P9): complemento de un pago, uno por factura y por pago. */
+export interface ComplementoPagoDetalle {
+  requiere: boolean
+  estado: EstadoComplementoPago | 'no_aplica'
+  xml: DocumentoDetalle | null
+  pdf: DocumentoDetalle | null
+}
+
 export interface PagoCobroDetalle {
+  /** Id de la CABECERA del pago (`pagos`): el que usan anular y corregir. */
   id: string
   fecha: string
   tipo: string
+  /** Lo aplicado a ESTA cuenta (un pago puede cubrir varias, P7). */
   monto: number
   comprobante_url: string | null
   notas: string | null
-  /** D16, D27, V4: complemento de este pago. */
-  complemento: {
-    requiere: boolean
-    estado: EstadoComplementoPago | 'no_aplica'
-    xml: DocumentoDetalle | null
-    pdf: DocumentoDetalle | null
-  }
+  /** Cuántas cuentas cubre el mismo pago (>1 = pago compartido, P20). */
+  lineas: number
+  complemento: ComplementoPagoDetalle
 }
 
 export interface DetalleCobro {
@@ -82,12 +88,15 @@ export interface DetalleCobro {
   metodo: MetodoPagoCfdi | null
   factura_xml: DocumentoDetalle | null
   factura_pdf: DocumentoDetalle | null
+  /** Cuántas cuentas cubre la misma factura (>1 = factura compartida, P20); 0 sin factura. */
+  factura_cuentas: number
   pagos: PagoCobroDetalle[]
   concepto: ConceptoDerivado
   correcciones: CorreccionesDetalle
 }
 
 export interface PagoProveedorDetalle {
+  /** Id de la CABECERA del pago (`pagos`): el que usan anular, corregir y adjuntar el comprobante. */
   id: string
   fecha: string
   tipo: string
@@ -97,6 +106,10 @@ export interface PagoProveedorDetalle {
   notas: string | null
   /** Pago anterior a B2: su monto transferido es estimado (supuesto 12). */
   estimado: boolean
+  /** Cuántos grupos cubre el mismo pago (>1 = pago compartido, P20). */
+  lineas: number
+  /** P11: la factura PPD del proveedor exige un complemento por pago. */
+  complemento: ComplementoPagoDetalle
 }
 
 export interface DetallePago {
@@ -125,6 +138,8 @@ export interface DetallePago {
   cruce: { neto: number; iva: number; iva_retenido: number; isr_retenido: number; total: number }
   factura_xml: DocumentoDetalle | null
   factura_pdf: DocumentoDetalle | null
+  /** Método de pago de la factura del proveedor (null = desconocido). */
+  metodo: MetodoPagoCfdi | null
   /** Comprobantes sueltos (documentos COMPROBANTE_PAGO previos a B2). */
   comprobantes: DocumentoDetalle[]
   pagos: PagoProveedorDetalle[]

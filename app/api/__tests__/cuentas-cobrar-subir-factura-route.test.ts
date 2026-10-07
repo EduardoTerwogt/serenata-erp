@@ -9,13 +9,10 @@ import { describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCuentaCobrarByIdMock: vi.fn(),
-  updateCuentaCobrarMock: vi.fn(),
-  createDocumentoCuentaCobrarMock: vi.fn(),
+  rpcMock: vi.fn(),
   getCotizacionByIdMock: vi.fn(),
   getProyectoByIdMock: vi.fn(),
   parseFacturaXMLMock: vi.fn(),
-  validarMontoFacturaMock: vi.fn(),
-  validarFacturaClienteXMLMock: vi.fn(),
   calcularDeadlineMock: vi.fn(),
   uploadFileToDriveMock: vi.fn(),
   getGoogleEnvMock: vi.fn(),
@@ -28,18 +25,15 @@ vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({
   getCuentaCobrarById: mocks.getCuentaCobrarByIdMock,
   getDocumentosCuentaCobrar: mocks.getDocumentosCuentaCobrarMock,
-  updateCuentaCobrar: mocks.updateCuentaCobrarMock,
-  createDocumentoCuentaCobrar: mocks.createDocumentoCuentaCobrarMock,
   getCotizacionById: mocks.getCotizacionByIdMock,
   getProyectoById: mocks.getProyectoByIdMock,
 }))
 vi.mock('@/lib/server/xml/factura-parser', () => ({
   parseFacturaXML: mocks.parseFacturaXMLMock,
-  validarMontoFactura: mocks.validarMontoFacturaMock,
-  validarFacturaClienteXML: mocks.validarFacturaClienteXMLMock,
   calcularDeadline: mocks.calcularDeadlineMock,
 }))
 vi.mock('@/lib/server/cuentas/reemplazo-factura', () => ({ planearFactura: mocks.planearFacturaMock, completarReemplazo: mocks.completarReemplazoMock }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpcMock } }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
 
@@ -104,40 +98,62 @@ describe('POST /api/cuentas-cobrar/[id]/subir-factura', () => {
     await expect(response.json()).resolves.toEqual({ error: 'El archivo excede el límite de 4 MB' })
   })
 
-  describe('B1: estado calculado (V2) y datos del CFDI en el documento (U7)', () => {
-    function exito(montoPagado: number) {
+  describe('#123 (B2): la factura se liga por ligar_factura (T9, T19)', () => {
+    function exito(estado: 'validado' | 'revision' = 'validado') {
       mocks.planearFacturaMock.mockResolvedValue({ ok: true, reemplazo: null })
-      mocks.getCuentaCobrarByIdMock.mockResolvedValueOnce({ id: 'cuenta-1', cotizacion_id: 'SH001', proyecto_id: 'SH001', monto_total: 1000, monto_pagado: montoPagado })
+      mocks.getCuentaCobrarByIdMock.mockResolvedValueOnce({ id: 'cuenta-1', cotizacion_id: 'SH001', proyecto_id: 'SH001', monto_total: 1000, monto_pagado: 0 })
       mocks.getCotizacionByIdMock.mockResolvedValueOnce({ id: 'SH001', tipo: 'PRINCIPAL', total: 1000 })
       mocks.getProyectoByIdMock.mockResolvedValueOnce({ id: 'SH001', proyecto: 'Evento' })
       mocks.parseFacturaXMLMock.mockReturnValueOnce({ fecha_emision: '2026-09-20', monto_total: 1000, uuid_timbrado: 'UUID-1', metodo_pago: 'PPD' })
-      mocks.validarMontoFacturaMock.mockReturnValueOnce({ coincide: true, diferencia: 0 })
-      mocks.validarFacturaClienteXMLMock.mockReturnValueOnce({ estado_validacion: 'validado', detalle_validacion: null })
       mocks.calcularDeadlineMock.mockReturnValueOnce('2099-10-20')
       mocks.getGoogleEnvMock.mockReturnValue({ driveFolderIdCuentas: 'folder' })
       mocks.uploadFileToDriveMock.mockResolvedValue('https://drive/x')
-      mocks.updateCuentaCobrarMock.mockImplementationOnce(async (_id: string, u: unknown) => u)
-      mocks.createDocumentoCuentaCobrarMock.mockClear()
-      mocks.createDocumentoCuentaCobrarMock.mockImplementation(async (d: { tipo: string }) => ({ id: d.tipo === 'FACTURA_XML' ? 'doc-xml' : 'doc-pdf' }))
       mocks.completarReemplazoMock.mockClear()
-      mocks.updateCuentaCobrarMock.mockClear()
+      mocks.rpcMock.mockReset()
+      mocks.rpcMock.mockResolvedValue({ data: { factura_id: 'doc-xml', pdf_id: null, estado, detalle: estado === 'revision' ? 'No cuadra' : null, repetido: false }, error: null })
     }
 
-    it.each([0, 400, 1000])('con %s ya pagado solo escribe las fechas: el estado es derivado (D15), nunca se manda', async (pagado) => {
-      exito(pagado)
+    it('manda la cuenta, el XML (UUID, total, método), las fechas y el operation_id a la RPC; TS no escribe cachés', async () => {
+      exito()
       const response = await POST(buildRequest(), { params })
       expect(response.status).toBe(200)
-      const update = mocks.updateCuentaCobrarMock.mock.calls[0][1]
-      expect(update).toEqual({ fecha_factura: '2026-09-20', fecha_vencimiento: '2099-10-20' })
-      expect(update).not.toHaveProperty('estado')
+      expect(mocks.rpcMock).toHaveBeenCalledTimes(1)
+      const [nombre, args] = mocks.rpcMock.mock.calls[0]
+      expect(nombre).toBe('ligar_factura')
+      expect(args).toMatchObject({
+        p_cuentas: [{ cuenta_id: 'cuenta-1', monto_esperado: null }],
+        p_xml: expect.objectContaining({ uuid_cfdi: 'UUID-1', total_cfdi: 1000, metodo_pago_cfdi: 'PPD' }),
+        p_fecha_emision: '2026-09-20',
+        p_fecha_vencimiento: '2099-10-20',
+        p_reemplaza: null,
+      })
+      expect(args.p_operation_id).toEqual(expect.any(String))
+      const body = await response.json()
+      expect(body).toMatchObject({ success: true, factura_id: 'doc-xml', estado_validacion: 'validado' })
+      expect(mocks.completarReemplazoMock).not.toHaveBeenCalled()
     })
 
-    it('guarda UUID, total y método del CFDI en la fila del XML', async () => {
-      exito(0)
-      await POST(buildRequest(), { params })
-      const xmlDoc = mocks.createDocumentoCuentaCobrarMock.mock.calls.map((c) => c[0]).find((d) => d.tipo === 'FACTURA_XML')
-      expect(xmlDoc).toMatchObject({ uuid_cfdi: 'UUID-1', total_cfdi: 1000, metodo_pago_cfdi: 'PPD' })
-      expect(mocks.completarReemplazoMock).not.toHaveBeenCalled()
+    it('un descuadre queda "En revisión" con el detalle de la RPC (P5), no se rechaza', async () => {
+      exito('revision')
+      const response = await POST(buildRequest(), { params })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({ estado_validacion: 'revision', detalle_validacion: 'No cuadra' })
+    })
+
+    it('cuenta_ya_ligada → 409 con mensaje seguro', async () => {
+      exito()
+      mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'cuenta_ya_ligada: cuenta-1' } })
+      const response = await POST(buildRequest(), { params })
+      expect(response.status).toBe(409)
+      expect((await response.json()).error).toBe('cuenta_ya_ligada')
+    })
+
+    it('error de RPC desconocido → 400 sin exponer el mensaje crudo', async () => {
+      exito()
+      mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'boom interno' } })
+      const response = await POST(buildRequest(), { params })
+      expect(response.status).toBe(400)
+      expect(JSON.stringify(await response.json())).not.toContain('boom interno')
     })
   })
 
@@ -153,24 +169,23 @@ describe('POST /api/cuentas-cobrar/[id]/subir-factura', () => {
       expect(mocks.uploadFileToDriveMock).not.toHaveBeenCalled()
     })
 
-    it('con reemplazo, la anterior se da de baja apuntando al XML nuevo', async () => {
+    it('con reemplazo, la RPC recibe la anterior y la baja apunta al XML nuevo', async () => {
       const reemplazo = { dominio: 'cobro', anteriores: ['doc-viejo'], motivo: 'RFC', usuario: 'admin@serenata.mx' }
       mocks.getCuentaCobrarByIdMock.mockResolvedValueOnce({ id: 'cuenta-1', cotizacion_id: 'SH001', proyecto_id: 'SH001', monto_total: 1000, monto_pagado: 1000 })
       mocks.getCotizacionByIdMock.mockResolvedValueOnce({ id: 'SH001', tipo: 'PRINCIPAL', total: 1000 })
       mocks.getProyectoByIdMock.mockResolvedValueOnce({ id: 'SH001', proyecto: 'Evento' })
       mocks.parseFacturaXMLMock.mockReturnValueOnce({ fecha_emision: '2026-09-20', monto_total: 1000, uuid_timbrado: 'UUID-2', metodo_pago: 'PUE' })
-      mocks.validarMontoFacturaMock.mockReturnValueOnce({ coincide: true, diferencia: 0 })
-      mocks.validarFacturaClienteXMLMock.mockReturnValueOnce({ estado_validacion: 'validado', detalle_validacion: null })
       mocks.calcularDeadlineMock.mockReturnValueOnce('2099-10-20')
       mocks.getGoogleEnvMock.mockReturnValue({ driveFolderIdCuentas: 'folder' })
       mocks.uploadFileToDriveMock.mockResolvedValue('https://drive/x')
-      mocks.updateCuentaCobrarMock.mockImplementationOnce(async (_id: string, u: unknown) => u)
-      mocks.createDocumentoCuentaCobrarMock.mockImplementation(async (d: { tipo: string }) => ({ id: d.tipo === 'FACTURA_XML' ? 'doc-xml' : 'doc-pdf' }))
+      mocks.rpcMock.mockReset()
+      mocks.rpcMock.mockResolvedValue({ data: { factura_id: 'doc-xml', pdf_id: null, estado: 'validado', detalle: null, repetido: false }, error: null })
+      mocks.completarReemplazoMock.mockClear()
       mocks.planearFacturaMock.mockResolvedValueOnce({ ok: true, reemplazo })
       const response = await POST(buildRequest(), { params })
       expect(response.status).toBe(200)
+      expect(mocks.rpcMock.mock.calls[0][1]).toMatchObject({ p_reemplaza: 'doc-viejo' })
       expect(mocks.completarReemplazoMock).toHaveBeenCalledWith(reemplazo, 'doc-xml')
     })
   })
 })
-

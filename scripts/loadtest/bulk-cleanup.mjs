@@ -10,11 +10,10 @@
  * offset ya corregido en 3B-5/3B-6/3C-2. Keyset por `id` (uuid, cursor
  * seguro), mismo patrón que el resto del plan.
  *
- * Inventario cerrado -- 3 tablas reales quedan deliberadamente fuera del
- * cleanup por runId, verificado contra el código real (no por omisión):
- * - `pago_operations`: ningún escenario de carga de 3A-5 llama
- *   POST .../registrar-pago -- la tabla y sus callers reales sí la usan
- *   fuera de esta suite, pero esta suite nunca escribe ahí.
+ * Inventario cerrado -- 2 tablas reales quedan deliberadamente fuera del
+ * cleanup por runId, verificado contra el código real (no por omisión).
+ * (`pago_operations` se retiró en #123: la idempotencia de un pago es
+ * `pagos.operation_id`, y ningún escenario de carga llama registrar-pago.)
  * - `idempotency_keys`/`bulk_import_operations`: bookkeeping efímero de
  *   requests, no datos de negocio visibles en una pantalla --
  *   `idempotency_keys` ya tiene retención propia por TTL (3C-4).

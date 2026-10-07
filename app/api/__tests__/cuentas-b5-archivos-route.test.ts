@@ -3,9 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   const tablas: Record<string, Record<string, unknown> | null> = {}
   const rpc = vi.fn()
-  const from = vi.fn((tabla: string) => ({
-    select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: tablas[tabla] ?? null, error: null }) }) }),
-  }))
+  // Encadenable: la ruta usa .eq().eq().maybeSingle() y .eq().limit().maybeSingle().
+  const from = vi.fn((tabla: string) => {
+    const cadena: Record<string, unknown> = {}
+    cadena.eq = () => cadena
+    cadena.limit = () => cadena
+    cadena.maybeSingle = async () => ({ data: tablas[tabla] ?? null, error: null })
+    return { select: () => cadena }
+  })
   return {
     tablas,
     rpc,
@@ -50,8 +55,8 @@ beforeEach(() => {
 
 describe('POST /api/cuentas-pagar/pagos/[pagoId]/comprobante (supuesto 17)', () => {
   it('sube a Drive y guarda el enlace con la RPC', async () => {
-    mocks.tablas.pagos_cuentas_pagar = { id: PAGO, grupo_id: 'g-1', cuenta_pagar_id: null, comprobante_url: null, anulado_at: null }
-    mocks.tablas.cuentas_pagar_grupos = { proyecto_id: 'SH061' }
+    mocks.tablas.pagos = { id: PAGO, lado: 'proveedor', comprobante_url: null, anulado_at: null }
+    mocks.tablas.pagos_cuentas_pagar = { grupo_id: 'g-1', cuentas_pagar_grupos: { proyecto_id: 'SH061' } }
     mocks.rpc.mockResolvedValue({ data: { pago_id: PAGO }, error: null })
     const res = await adjuntar(req({ comprobante: pdf() }), { params: Promise.resolve({ pagoId: PAGO }) })
     expect(res.status).toBe(200)
@@ -64,7 +69,7 @@ describe('POST /api/cuentas-pagar/pagos/[pagoId]/comprobante (supuesto 17)', () 
   })
 
   it('un pago que ya tiene comprobante responde 409 sin subir nada', async () => {
-    mocks.tablas.pagos_cuentas_pagar = { id: PAGO, grupo_id: 'g-1', comprobante_url: 'https://ya', anulado_at: null }
+    mocks.tablas.pagos = { id: PAGO, lado: 'proveedor', comprobante_url: 'https://ya', anulado_at: null }
     const res = await adjuntar(req({ comprobante: pdf() }), { params: Promise.resolve({ pagoId: PAGO }) })
     expect(res.status).toBe(409)
     expect(mocks.upload).not.toHaveBeenCalled()

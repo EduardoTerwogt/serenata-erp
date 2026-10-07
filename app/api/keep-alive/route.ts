@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   // 1E-1: retención de idempotency_keys -- borra únicamente filas COMPLETADAS
   // (status_code IS NOT NULL) con más de 7 días. Nunca una fila pendiente
   // (status_code NULL): su expiración/reconciliación es responsabilidad del
-  // dominio (pago_operations/bulk_import_operations), no de esta limpieza.
+  // dominio (bulk_import_operations), no de esta limpieza.
   // Best-effort: un fallo aquí no afecta el resultado del keep-alive.
   let idempotencyKeysDeleted: number | null = null
   try {
@@ -75,13 +75,14 @@ export async function GET(request: Request) {
     console.error('Keep-alive: rate_limits cleanup failed:', error)
   }
 
-  // PLAN.md B3 (K2): retención de las tablas de operaciones idempotentes. Un
+  // PLAN.md B3 (K2): retención de la tabla de operaciones idempotentes. Un
   // operation_id solo sirve para reintentar una petición reciente: pasados 30
   // días la fila es historia y la tabla solo crece. NO se purgan reservas de
-  // folio. Best-effort, igual que arriba.
-  const operationsDeleted: Record<string, number | null> = { pago_operations: null, bulk_import_operations: null }
+  // folio. #123: `pago_operations` se retiró (la idempotencia de un pago es
+  // `pagos.operation_id`, que es el pago mismo y no se purga). Best-effort.
+  const operationsDeleted: Record<string, number | null> = { bulk_import_operations: null }
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  for (const table of ['pago_operations', 'bulk_import_operations'] as const) {
+  for (const table of ['bulk_import_operations'] as const) {
     try {
       const { error: cleanupError, count } = await supabaseAdmin
         .from(table)
@@ -121,7 +122,6 @@ export async function GET(request: Request) {
       ...(drive.message ? { drive_message: drive.message } : {}),
       idempotency_keys_deleted: idempotencyKeysDeleted,
       rate_limits_deleted: rateLimitsDeleted,
-      pago_operations_deleted: operationsDeleted.pago_operations,
       bulk_import_operations_deleted: operationsDeleted.bulk_import_operations,
       auditoria,
     },

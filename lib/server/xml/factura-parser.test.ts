@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseFacturaXML,
-  validarMontoFactura,
-  validarFacturaClienteXML,
   calcularDeadline,
 } from '@/lib/server/xml/factura-parser'
 
@@ -219,39 +217,8 @@ describe('xml/factura-parser', () => {
     })
   })
 
-  describe('validarMontoFactura (informativa, ya existente)', () => {
-    it('detecta coincidencia dentro de tolerancia', () => {
-      expect(validarMontoFactura(1000, 1000.005).coincide).toBe(true)
-    })
-    it('detecta discrepancia', () => {
-      expect(validarMontoFactura(1000, 900).coincide).toBe(false)
-    })
-  })
-
-  describe('validarFacturaClienteXML', () => {
-    it('valida cuando el monto coincide con la cuenta', () => {
-      const result = validarFacturaClienteXML({ monto_total: 1160 }, 1160)
-      expect(result.estado_validacion).toBe('validado')
-      expect(result.detalle_validacion).toBeNull()
-    })
-
-    it('tolera diferencias de centavos por redondeo', () => {
-      const result = validarFacturaClienteXML({ monto_total: 1160.004 }, 1160)
-      expect(result.estado_validacion).toBe('validado')
-    })
-
-    it('marca revision cuando el monto no coincide', () => {
-      const result = validarFacturaClienteXML({ monto_total: 900 }, 1160)
-      expect(result.estado_validacion).toBe('revision')
-      expect(result.detalle_validacion).toContain('900.00')
-      expect(result.detalle_validacion).toContain('1160.00')
-    })
-
-    it('marca revision si no se pudo leer el monto', () => {
-      const result = validarFacturaClienteXML({}, 1160)
-      expect(result.estado_validacion).toBe('revision')
-    })
-  })
+  // #123 (T19): validarMontoFactura y validarFacturaClienteXML se retiraron; la regla vive en SQL (factura_cuadre)
+  // y se prueba contra la base (tests/e2e/live y la paridad).
 
   describe('parseFacturaXML - desglose fiscal (traslados/retenciones)', () => {
     it('extrae subtotal e IVA trasladado de un CFDI de persona moral (sin retenciones)', () => {

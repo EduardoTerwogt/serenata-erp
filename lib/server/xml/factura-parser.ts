@@ -174,39 +174,8 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
   }
 }
 
-const TOLERANCIA_CENTAVOS = 0.01
-
-/**
- * Validación estructural automática de una factura al cliente (FACTURA_XML,
- * cuentas_cobrar): el único monto esperado documentado es el total de la
- * cuenta -- no hay RFC de cliente guardado todavía (llegará con el Portal de
- * Proveedores/clientes), así que RFC y UUID solo se muestran, no bloquean.
- */
-export function validarFacturaClienteXML(facturaData: FacturaData, montoEsperado: number): ResultadoValidacionFactura {
-  if (facturaData.monto_total == null) {
-    return { estado_validacion: 'revision', detalle_validacion: 'No se pudo leer el monto total del XML.' }
-  }
-  const diferencia = Math.abs(facturaData.monto_total - montoEsperado)
-  if (diferencia > TOLERANCIA_CENTAVOS) {
-    return {
-      estado_validacion: 'revision',
-      detalle_validacion: `Monto no coincide: XML $${facturaData.monto_total.toFixed(2)} vs cuenta $${montoEsperado.toFixed(2)}.`,
-    }
-  }
-  return { estado_validacion: 'validado', detalle_validacion: null }
-}
-
-/**
- * Valida que el monto de la factura coincida con el monto de la cotización
- */
-export function validarMontoFactura(montoFactura: number, montoCotizacion: number): {
-  coincide: boolean
-  diferencia: number
-} {
-  const diferencia = Math.abs(montoFactura - montoCotizacion)
-  const coincide = diferencia < 0.01 // Tolerancia de 1 centavo
-  return { coincide, diferencia }
-}
+// #123 (T19): la validación de la factura de cliente (suma de las cotizaciones contra el total del XML, con 0.01
+// de tolerancia por cotización) vive solo en SQL (`factura_cuadre` / `ligar_factura`). Aquí solo se lee el XML.
 
 /**
  * Calcula el deadline de pago (fecha + 30 días)

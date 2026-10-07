@@ -1,10 +1,10 @@
+import { randomUUID } from 'node:crypto'
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaCobrarById, getDocumentosCuentaCobrar, updateCuentaCobrar, createDocumentoCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
-import { parseFacturaXML, validarMontoFactura, validarFacturaClienteXML, calcularDeadline } from '@/lib/server/xml/factura-parser'
-import { uploadFileToDrive } from '@/lib/integrations/google/drive'
+import { getCuentaCobrarById, getDocumentosCuentaCobrar, getCotizacionById, getProyectoById } from '@/lib/db'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
-import { completarReemplazo, planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
+import { planearFactura } from '@/lib/server/cuentas/reemplazo-factura'
+import { subirFacturaCobro } from '@/lib/server/cuentas/subir-factura'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { validateFacturaFiles, FacturaValidationErrorCode } from '@/lib/server/uploads/factura-validation'
 
@@ -18,6 +18,12 @@ const VALIDATION_MESSAGES: Record<FacturaValidationErrorCode, string> = {
   FILE_TOO_LARGE: 'El archivo excede el límite de 4 MB',
 }
 
+/**
+ * Factura de UNA cuenta de cobro. #123 (B2): la lógica vive en `lib/server/cuentas/subir-factura.ts` (una
+ * factura puede cubrir varias cuentas; esa entrada es `POST /api/cuentas/facturas`, B3). La validación del
+ * total contra la cotización ya no está aquí: la hace `ligar_factura` en SQL (T19), y la factura queda
+ * "En revisión" con el descuadre exacto si no cuadra (P5).
+ */
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
@@ -51,7 +57,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const plan = await planearFactura('cobro', cuenta, await getDocumentosCuentaCobrar(id), authResult.session?.user, formData.get('motivo'))
     if (!plan.ok) return Response.json(plan.body, { status: plan.status })
 
-    // Obtener cotización para validar monto
+    // Obtener cotización (nombre del proyecto para la carpeta de Drive)
     const cotizacion = await getCotizacionById(cuenta.cotizacion_id)
     if (!cotizacion) {
       return Response.json(
@@ -60,38 +66,6 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       )
     }
 
-    // Parsear XML — validar contenido antes de regex parse
-    const xmlContent = await xmlFile.text()
-    if (!xmlContent.trim().startsWith('<')) {
-      return Response.json({ error: 'El archivo XML no contiene datos XML válidos' }, { status: 400 })
-    }
-    const facturaData = parseFacturaXML(xmlContent)
-
-    if (facturaData.error) {
-      return Response.json(
-        { error: `Error al parsear XML: ${facturaData.error}` },
-        { status: 400 }
-      )
-    }
-
-    // Validar que tenemos datos mínimos
-    if (!facturaData.fecha_emision || !facturaData.monto_total) {
-      return Response.json(
-        { error: 'Factura incompleta: falta fecha o monto' },
-        { status: 400 }
-      )
-    }
-
-    // Validar monto (informativa, no bloqueante)
-    const validacion = validarMontoFactura(facturaData.monto_total, cotizacion.total)
-    if (!validacion.coincide) {
-      console.warn(`[cuentas-cobrar] Discrepancia de monto: Factura $${facturaData.monto_total} vs Cotización $${cotizacion.total}`)
-    }
-
-    // Calcular deadline
-    const deadline = calcularDeadline(facturaData.fecha_emision)
-
-    // Subir archivos a Drive
     const googleEnv = getGoogleEnv()
     if (!googleEnv) {
       return Response.json(
@@ -111,68 +85,19 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     if (!proyecto) {
       return Response.json({ error: 'Proyecto asociado no encontrado' }, { status: 404 })
     }
-    const folderPath = `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
-    const uploadedFiles: { type: 'FACTURA_PDF' | 'FACTURA_XML'; url: string; nombre: string }[] = []
-    const cuentasFolderId = resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined)
 
-    // Subir PDF
-    if (pdfFile) {
-      const pdfUrl = await uploadFileToDrive(pdfFile, folderPath, pdfFile.name, cuentasFolderId)
-      uploadedFiles.push({
-        type: 'FACTURA_PDF',
-        url: pdfUrl,
-        nombre: pdfFile.name,
-      })
-    }
-
-    // Subir XML
-    const xmlUrl = await uploadFileToDrive(xmlFile, folderPath, xmlFile.name, cuentasFolderId)
-    uploadedFiles.push({
-      type: 'FACTURA_XML',
-      url: xmlUrl,
-      nombre: xmlFile.name,
+    const { status, body } = await subirFacturaCobro({
+      cuentas: [{ id }],
+      xmlFile,
+      pdfFile,
+      carpeta: `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`,
+      uploadFolderId: resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined),
+      usuario: authResult.session?.user?.email ?? null,
+      operationId: randomUUID(),
+      reemplazo: plan.reemplazo,
+      route: ROUTE,
     })
-
-    // Validación estructural automática -- solo aplica al XML (el PDF no se
-    // puede validar estructuralmente, queda en 'pendiente' por default).
-    const validacionXml = validarFacturaClienteXML(facturaData, cotizacion.total)
-
-    // Crear registros en BD
-    let xmlNuevoId: string | null = null
-    for (const file of uploadedFiles) {
-      const doc = await createDocumentoCuentaCobrar({
-        cuentas_cobrar_id: id,
-        tipo: file.type,
-        archivo_url: file.url,
-        archivo_nombre: file.nombre,
-        ...(file.type === 'FACTURA_XML' ? {
-          estado_validacion: validacionXml.estado_validacion,
-          detalle_validacion: validacionXml.detalle_validacion,
-          // Rediseño de Cuentas B1 (U7, D2): datos del CFDI en la fila del XML.
-          uuid_cfdi: facturaData.uuid_timbrado ?? null,
-          total_cfdi: facturaData.monto_total ?? null,
-          metodo_pago_cfdi: facturaData.metodo_pago ?? null,
-        } : {}),
-      })
-      if (file.type === 'FACTURA_XML') xmlNuevoId = doc.id
-    }
-    if (plan.reemplazo && xmlNuevoId) await completarReemplazo(plan.reemplazo, xmlNuevoId)
-
-    // D15: el estado del cobro es una columna generada (sale de montos y
-    // fecha_factura); aquí solo se escriben las fechas.
-    const cuentaActualizada = await updateCuentaCobrar(id, {
-      fecha_factura: facturaData.fecha_emision,
-      fecha_vencimiento: deadline,
-    })
-
-    return Response.json({
-      success: true,
-      cuenta: cuentaActualizada,
-      factura_data: facturaData,
-      validacion,
-      validacion_estructural: validacionXml,
-      archivos_subidos: uploadedFiles.length,
-    })
+    return Response.json(body, { status })
   } catch (error) {
     return buildErrorResponse(error, ROUTE)
   }

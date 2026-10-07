@@ -97,7 +97,7 @@ export async function withIdempotency(
       // pendiente indefinidamente (status_code sigue NULL). No es un error
       // fatal de esta request: se loguea sin relanzar. La recuperación vía
       // reconciliación real depende de la tabla durable del dominio
-      // (pago_operations/bulk_import_operations, 1C-2/1E-3), no de que
+      // (`pagos.operation_id` desde #123, y bulk_import_operations; 1C-2/1E-3), no de que
       // este UPDATE haya tenido éxito.
       console.error(
         `[idempotency] No se pudo guardar el resultado final de (${scope}, ${key}):`,
