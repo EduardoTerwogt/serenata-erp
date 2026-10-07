@@ -602,3 +602,81 @@ se construyen contra `serenataRfc()` y no se bloquean.
 | B5 Portal (solo lectura) | **Hecho** (2026-10-07): `GET /api/portal/cuentas` con pagos, qué más cubrió cada uno y complemento PPD; solo del proveedor de la sesión |
 | B6a Constancia de Serenata en Admin (reemplaza `SERENATA_RFC`) | **Hecho** (2026-10-07): migración `20261033` (aplicada en test), lector con IA + validación determinista + confirmación, `serenataRfc()` desde la tabla, Dashboard según tipo de persona; `SERENATA_RFC` retirado de `docs/ENV.md` y `e2e.yml` |
 | B6 Cerrar | **Documentación hecha** (decisión 022, `ARCHITECTURE.md`, `TESTING.md`, 011/017/020, `ROADMAP.md`, script temporal borrado). **Pendiente del lanzamiento:** archivar este plan, cerrar #123 y recrear `PLAN.md` vacío |
+
+---
+
+# #130 — Subir factura y Registrar pago por proyecto, con alta de contraparte
+
+**Estado:** plan aprobado el 2026-10-07, sin código. Sub-issue de #123 (PR #129). Orden de la cola: #123 → #130 → #110.
+Siguiente migración libre: `20261034_…` (renumerar si otra rama la toma).
+
+## Problema
+Si el RFC del XML no existe, Subir factura solo deja elegir un proveedor ya existente y liga la factura a un grupo
+(proveedor + proyecto) ya existente. Registrar pago solo entra por cliente/proveedor.
+
+## Decisiones de producto (usuario, 2026-10-07)
+| # | Decisión |
+|---|---|
+| Q2 | Proveedor: una factura = un proyecto. Cliente: una factura puede cubrir varios proyectos (P10 sin cambio). |
+| Q3 | Proveedor nuevo: RFC, nombre y régimen (del XML) + **banco, CLABE, correo y teléfono** obligatorios. |
+| Q4 | Pago por proyecto: solo contra **facturas** de esos renglones (P7). Sin anticipos. Una contraparte por pago, varios proyectos. |
+| Q5 | Sin match → **gasto extra fuera de cotización**, sin tabla nueva. |
+| Q6 | Reasignar renglones de otro proveedor: no hay caso con orden de pago/pagos (la orden no se emite sin facturas); se conserva la guarda D21 (grupo `ABIERTO`). |
+| Q7 | Match por **total CFDI** con tolerancia configurable, inicial **$1.00 MXN**, en Admin → Datos fiscales. Solo propone candidatos; la validación fiscal sigue siendo la del neto (`validarFacturaFiscalProveedor`). |
+| Q8 | Permisos: cualquiera con `cuentas` (alta de proveedor, reasignar, gasto extra). |
+| Q9 | Cliente nuevo: alta rápida con datos del XML; la constancia se sube al mismo tiempo; teléfono, correo y contacto se capturan en el alta. Reusar lo existente. |
+
+### Tres operaciones al subir factura de proveedor
+1. **Ligar a grupo existente** (proveedor = emisor y total dentro de tolerancia): preselección ya existente (`facturas_candidatos`).
+2. **Asignar renglones al emisor y ligar** (unifica "por asignar" y "agrupados en otro proveedor"): el selector muestra los renglones del proyecto; se preseleccionan los "por asignar" si su suma cuadra con el total CFDI; el usuario puede marcar renglones de otro proveedor (reasignación, `ABIERTO`, rastro en `cuentas_correcciones`). Si el emisor no existe, la misma ventana abre el alta prellenada. Sin proveedor no existe grupo: nace al asignar. Sin búsqueda automática de subconjuntos.
+3. **Gasto extra** (ningún match): cuenta por pagar sin renglón en el proyecto elegido; suma a egresos.
+
+## Hechos verificados (código de PR #129)
+- `cuentas_pagar.item_id` es `NOT NULL UNIQUE` (`20261023_b5b…:91-105`); no hay `concepto`/`origen`/`tipo`. Gasto extra = relajar `item_id`/`cotizacion_id` + columna `concepto` + CHECK `item_id IS NOT NULL OR concepto IS NOT NULL`.
+- Guardas a ajustar: `g_k4_cuenta_sin_item`, `g_cp_costo_total`, trigger `cuentas_pagar_validar_invariantes` (P1417), `cuentas_conceptos`. `reconcile_cuenta_pagar_grupo` y `reasignar_responsable_cuenta_pagar` ya toleran `item_id IS NULL`.
+- La utilidad sale de `cotizaciones.utilidad_total`: un gasto extra no la mueve solo.
+- `POST /api/proveedores` exige `responsables`; `clientes` no tiene columna de constancia; `datos_fiscales_serenata` guarda una fila por constancia.
+- Proveedor: match contra el neto del grupo (0.01). Cliente: `factura_cuadre` contra el total con IVA.
+- No existe lista ligera de proyectos con grupos y renglones; `cuentas_periodo` deriva todo el año (~1 s).
+
+## Diseño
+- **RPC de lectura** `cuentas_proyectos_selector(lado, q, contraparte?, page)`: paginada, sin derivar saldos; un solo componente `SelectorProyectos` para Subir factura y Registrar pago.
+- **RPC atómica de alta + ligar:** crea/actualiza proveedor, reasigna renglones o crea gasto extra, reconcilia el grupo y llama a `ligar_factura`, con `operation_id` y orden de locks T16. Valida `cuentas`; no usa `POST /api/proveedores`.
+- **Duplicados:** ofrecer "es este proveedor" por RFC y nombre (`match_proveedor_por_nombre`); guardar RFC si falta (P24).
+- **Cliente:** `resolver_cliente` + `ClienteCreateSchema`; constancia en columnas de `clientes` (`constancia_url`, `constancia_nombre`), patrón de Drive.
+- **Pago por proyecto sin RPC nueva:** `estado_cuenta` (y `useEstadoCuenta`) con filtro `proyecto_ids`; error si hay más de una contraparte. El pago sigue por `registrar_pago_cobro|proveedor`, `runIdempotentPagoSubmit` y `reparto.ts`.
+- **Formularios de alta:** se extraen y reutilizan los existentes; nada paralelo.
+- **Tolerancia:** `tolerancia_total numeric default 1.00` en `datos_fiscales_serenata`, copiada por `guardar_datos_fiscales_serenata` en cada fila nueva.
+
+## Bloques
+- **C0 — Cierre de diseño:** mockups del paso "¿A qué proyectos y renglones?" y del alta rápida (proveedor y cliente, móvil) en `docs/design/cuentas-123/`; cerrar preguntas abiertas; confirmar guardas con `pg_proc`.
+- **C1 — Datos (una migración, `plpgsql_check`):** `concepto` y `item_id` nullable; guardas, trigger y lecturas; `tolerancia_total`; constancia en `clientes`; `cuentas_proyectos_selector`; RPC alta + ligar; reasignación de renglones; alta de cliente.
+- **C2 — API:** `requireSection('cuentas')` + Zod; extender `facturas/preview` y `facturas`; GET del selector; alta de cliente con constancia.
+- **C3 — UI Subir factura:** las tres operaciones, alta, `SelectorProyectos`.
+- **C4 — UI Registrar pago por proyecto.**
+- **C5 — Cerrar:** specs (concurrencia, permisos solo-`cuentas`, doble clic), `auditar_consistencia()` = 0, decisión `023`, `ARCHITECTURE.md`, `ACTIVE_WORK.md`.
+
+## Riesgos
+- **P0:** alta + reasignación + grupo + factura atómicos (una RPC); gasto extra no rompe `auditar_consistencia` ni `cancel_cotizacion` (B0 define si lleva `cotizacion_id`); centavos al repartir (residuo en `numeric`).
+- **P1:** duplicar proveedor; lista de ~2,700 proyectos (< 800 ms p95); ventana de test compartida; total CFDI vs neto da falsos matches; permiso `cuentas` crea proveedores (la RPC valida y deja rastro).
+- **P2:** constancia huérfana en Drive si falla la RPC; proveedor nuevo sin Portal (`portal_estado = pendiente_confirmacion`).
+
+## Preguntas abiertas (cerrar en C0)
+1. ¿El gasto extra mueve utilidad/margen del proyecto o solo egresos y cuentas por pagar?
+2. Match por total CFDI: ¿total con IVA contra `monto_total` ajustado por IVA/retenciones, o la validación sigue en neto y el total CFDI solo ordena candidatos? (propuesta: lo segundo)
+3. Constancia del cliente: ¿columnas en `clientes` (propuesta) o `documentos_cuentas_cobrar`?
+4. Filtros del selector (periodo, cliente/proveedor, estado).
+5. ¿#130 entra al lanzamiento de #123 o va en PR aparte tras mergear #129?
+
+## Validación
+`npx tsc --noEmit && npm run lint && npm test`; `test:e2e:smoke` y `critical`; specs `live` nuevos (alta + ligar concurrente, pago por proyecto con contrapartes mezcladas, permisos solo-`cuentas`); `plpgsql_check`; `auditar_consistencia()` = 0 en test; `escala.yml` sin empeorar la línea base.
+
+## Tracker #130
+| Bloque | Estado |
+|---|---|
+| C0 Cierre de diseño | Pendiente |
+| C1 Datos | Pendiente |
+| C2 API | Pendiente |
+| C3 UI Subir factura | Pendiente |
+| C4 UI Registrar pago por proyecto | Pendiente |
+| C5 Cerrar | Pendiente |
