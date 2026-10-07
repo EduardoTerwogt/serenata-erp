@@ -112,26 +112,58 @@ test.describe('live: ciclo completo de cotización contra Supabase y Drive de pr
     const cuentaPagar = pagos?.[0]
     expect(cuentaPagar, 'debe existir una cuenta por pagar real para esta cotización').toBeTruthy()
 
-    // 4. Subir factura real a Drive desde el detalle del cobro (B5). El
-    // concepto se abre por su URL (det = 'c:<id>', estado en la URL, S15);
-    // XML y PDF van en peticiones separadas (supuesto 15).
-    await page.goto(`/cuentas?det=c:${cuentaCobrar!.id}&tab=docs`)
+    // 4. Subir factura real a Drive por la ruta nueva de #123 (`POST /api/cuentas/facturas`, el mismo contrato que usa la
+    // ventana Subir factura; el alta ya no vive en el detalle, P22). El tipo sale del XML por RFC: el emisor es el RFC de
+    // Serenata que dice la constancia vigente de la base de test (no se hardcodea: el administrador puede cambiarla). XML y
+    // PDF van en la misma petición (≤ 4 MB cada uno).
+    const { data: constancia } = await supabase.from('datos_fiscales_serenata').select('rfc').eq('vigente', true).maybeSingle()
+    expect(constancia?.rfc, 'debe haber una constancia fiscal de Serenata vigente en test (seed-cuentas-test.sql o Admin)').toBeTruthy()
+    const total = Number(cuentaCobrar!.monto_total).toFixed(2)
+    const uuid = crypto.randomUUID().toUpperCase()
+    const facturaXml = `<cfdi:Comprobante TipoDeComprobante="I" Fecha="2026-06-01T10:00:00" SubTotal="${total}" Total="${total}" MetodoPago="PUE">
+      <cfdi:Emisor Rfc="${constancia!.rfc}" /><cfdi:Receptor Rfc="XAXX010101000" />
+      <cfdi:Conceptos><cfdi:Concepto Descripcion="Renta de equipo E2E live" /></cfdi:Conceptos>
+      <cfdi:Complemento><tfd:TimbreFiscalDigital UUID="${uuid}" /></cfdi:Complemento>
+    </cfdi:Comprobante>`
+    const facturaRes = await page.request.post('/api/cuentas/facturas', {
+      multipart: {
+        xml: { name: 'factura.xml', mimeType: 'application/xml', buffer: Buffer.from(facturaXml, 'utf-8') },
+        pdf: { name: 'factura.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8') },
+        datos: JSON.stringify({ operation_id: crypto.randomUUID(), cuentas: [{ id: cuentaCobrar!.id, monto_esperado: Number(total) }] }),
+      },
+      timeout: 90_000,
+    })
+    expect(facturaRes.status(), await facturaRes.text()).toBe(200)
+    expect((await facturaRes.json()).estado_validacion).toBe('validado')
+    const { data: ligada } = await supabase.from('cuentas_cobrar').select('factura_documento_id').eq('id', cuentaCobrar!.id).single()
+    expect(ligada?.factura_documento_id, 'la cuenta queda ligada a su factura vigente (P27)').toBeTruthy()
+    const { data: docFactura } = await supabase.from('documentos_cuentas_cobrar').select('tipo, archivo_url').eq('id', ligada!.factura_documento_id).single()
+    expect(docFactura?.tipo).toBe('FACTURA_XML')
+    expect(docFactura?.archivo_url).toMatch(/drive\.google\.com/)
+
+    // 5. Registrar el cobro completo con el mismo contrato que la ventana Registrar pago (`POST /api/cuentas/pagos`: una
+    // cabecera con una línea por cuenta; el saldo que se vio viaja con la línea).
+    const pagoRes = await page.request.post('/api/cuentas/pagos', {
+      multipart: {
+        datos: JSON.stringify({
+          lado: 'cobro',
+          lineas: [{ id: cuentaCobrar!.id, monto: Number(total), saldo_esperado: Number(total) }],
+          tipo_pago: 'TRANSFERENCIA',
+          fecha_pago: '2026-06-02',
+          operation_id: crypto.randomUUID(),
+        }),
+      },
+      timeout: 60_000,
+    })
+    expect(pagoRes.status(), await pagoRes.text()).toBe(200)
+    const { data: cobroPagado } = await supabase.from('cuentas_cobrar').select('monto_pagado, monto_total').eq('id', cuentaCobrar!.id).single()
+    expect(Number(cobroPagado!.monto_pagado)).toBe(Number(cobroPagado!.monto_total))
+
+    // El detalle ya lo muestra saldado (y no ofrece capturar otro pago).
+    await page.goto(`/cuentas?det=c:${cuentaCobrar!.id}&tab=pago`)
     const detCobro = page.getByRole('dialog', { name: cliente })
-    await expect(detCobro.getByText('Factura XML', { exact: true })).toBeVisible({ timeout: 30_000 })
-
-    const facturaXml = `<cfdi:Comprobante Folio="E2E${suffix}" Fecha="2026-06-01T10:00:00" Total="1000.00"></cfdi:Comprobante>`
-    await detCobro.locator('input[type="file"][accept*="xml"]').first().setInputFiles({ name: 'factura.xml', mimeType: 'application/xml', buffer: Buffer.from(facturaXml, 'utf-8') })
-    await expect(detCobro.getByText('Factura XML subida')).toBeVisible({ timeout: 45_000 })
-    await detCobro.locator('input[type="file"][accept*="pdf"]').first().setInputFiles({ name: 'factura.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF', 'utf-8') })
-    await expect(detCobro.getByText('Factura PDF subida')).toBeVisible({ timeout: 45_000 })
-    await expect(detCobro.getByRole('link', { name: 'Ver' }).first()).toHaveAttribute('href', /drive\.google\.com/, { timeout: 15_000 })
-
-    // 5. Registrar el cobro completo (el monto por defecto es el saldo).
-    await detCobro.getByRole('button', { name: 'Registrar pago' }).first().click()
-    await expect(detCobro.getByLabel('Monto')).toHaveValue(Number(cuentaCobrar!.monto_total).toFixed(2))
-    await detCobro.locator('form').getByRole('button', { name: 'Registrar pago' }).click()
-    await expect(detCobro.getByText('Cobro registrado')).toBeVisible({ timeout: 30_000 })
-    await expect(detCobro.getByText('Cuenta saldada. No hay saldo pendiente por registrar.')).toBeVisible({ timeout: 15_000 })
+    await expect(detCobro.getByText('Cuenta saldada. No hay saldo pendiente por registrar.')).toBeVisible({ timeout: 30_000 })
+    await expect(detCobro.getByLabel('Monto')).toHaveCount(0)
     await detCobro.getByRole('button', { name: 'Cerrar' }).click()
 
     // 6. El renglón no tiene proveedor asignado: es una cuenta suelta ('s:<id>').
