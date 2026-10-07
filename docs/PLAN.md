@@ -325,20 +325,39 @@ ella. Toda función nueva fija `SET search_path = public, pg_temp` y hace `REVOK
 y el job `live` de `main`; aplicar las migraciones a test solo cuando el PR esté listo para correr CI y mergear en esa
 misma sesión, sin otros PR con e2e live abiertos. Aplicar a producción en el mismo bloque en que se valida.
 
-### B0 — Preparación (sin cambios funcionales)
-- [ ] Sincronizar **test con producción**: aplicar `20261028`/`20261029` donde falten y verificar con huellas md5 de
-      función (`scripts/db/esquema-huella.sql`).
-- [ ] Sembrar en test, en el **modelo actual (1:1)**, ≥1 factura y 2 pagos por cuenta extendiendo
-      `scripts/db/escala-generador.sql` (hoy no inserta documentos ni pagos) y correr `escala.yml`: **anotar aquí los
-      números** (no hay línea base persistida; el spec solo exige p95 < 800 ms). Esa siembra también hace que el
-      backfill de B2 se pruebe con más de 9 filas. Los casos compartidos (~20 %) se siembran después de B2.
-- [ ] Leer `docs/design/cuentas-123/README.md` y abrir `cuentas-acciones.html`.
-- [ ] Confirmar nombres finales del modelo y el CHECK de ancla; confirmar que `lib/types.ts` y
-      `lib/validation/schemas.ts` no chocan.
-- [ ] Contrastar el "Inventario de SQL" con `pg_proc` y dejar el SQL vigente de cada función a diffear.
-- [ ] Reproducir (en test, dos sesiones) el ABBA entre pagar un grupo con orden y `cancelar_orden_pago` para confirmar
-      que T16 lo cierra.
-- [ ] Resolver las preguntas abiertas 1 y 2 antes de B2/B3.
+### B0 — Preparación (sin cambios funcionales) — **hecho (2026-10-07)**
+- [x] **Test ya estaba sincronizado con producción.** Huellas de esquema (`esquema-huella-resumen.sql`) idénticas en los
+      seis tipos (columnas 341, funciones 81, índices 111, restricciones 134, triggers 10, políticas 1). La nota de md5
+      distintos en `cuentas_conceptos` y `cuentas_periodo` comparaba el fuente **crudo**: con el cuerpo normalizado
+      (sin comentarios ni espacios, como hace la huella) coinciden (`261ac859` y `e27d34b0`). No hay nada que aplicar.
+- [x] **Siembra en test (modelo 1:1 vigente):** `scripts/db/escala-generador.sql` ahora siembra, con `v_docs`,
+      FACTURA_XML (PPD, validada) + FACTURA_PDF y 2 pagos por cuenta de cobro, y factura de proveedor + 2 pagos por
+      grupo, con las cachés escritas como las RPC. 500 proyectos ESC en test: **2,705 cuentas de cobro, 1,006 documentos
+      y 1,003 pagos de cobro; 13,485 grupos, 5,004 documentos y 5,002 pagos de proveedor; 17 guardas en 0.**
+      Limpieza: `scripts/db/escala-limpiar.sql` (la corre una persona en el SQL Editor; el MCP no ejecuta DELETE).
+- [x] **Línea base de `escala.yml` en `main` (HTTP, runner de GitHub contra test Ohio):** el presupuesto de 800 ms
+      **ya falla en `main` sin tocar nada**: sin sembrar 3 de 6 casos fallan (mes 728 ✓, todo el año 1,052, lista 834,
+      resumen 791 ✓, avisos 1,099); con la siembra, 5 de 6 (avisos 1,086). El tiempo de RPC está en ~700 ms (el día del
+      corte era ~400 ms): es el cómputo gratuito de test, no la siembra (en la base, sembrar movió `periodo (mes)` de 933
+      a 1,089 ms p50, `resumen` 648→599, `avisos` 792→673). Para comparar regresiones de #123 se usa la medición dentro de
+      la base (`escala-medir.sql`) y la paridad de salida, no el p95 por HTTP de hoy.
+- [x] Nombres del modelo: no chocan con nada (ni tabla `pagos`, ni `rfc`, ni `factura_documento_id` en producción, test o
+      código; `lib/types.ts` y `lib/validation/schemas.ts` sin `rfc`). El CHECK de ancla se probó con el backfill.
+- [x] Inventario de SQL contrastado con `pg_proc` de producción: las 28 funciones existen y **el último archivo de
+      `db/migrations/` que define cada una da la misma huella normalizada que producción** (verificado con script); M2 se
+      genera de esos cuerpos más el cambio. `cc_factura` no es una función: es un CTE de `cuentas_conceptos`.
+- [x] **ABBA reproducido** con las RPC reales (base local, dos sesiones): `cancelar_orden_pago` vieja toma la orden y pide
+      los grupos mientras `registrar_pago_grupo_factura` vieja tiene el grupo y pide la orden → `deadlock detected`. Con
+      M2 el mismo cruce se serializa sin error (T16 cierra el ABBA).
+- [x] Preguntas abiertas resueltas con la propuesta del plan (el usuario las aprobó al aprobar el plan; se revisan en la
+      entrega): **(1)** anular un pago que cubre varios proyectos exige que **todos** estén reabiertos (`anular_pago_*`,
+      `corregir_datos_pago` y `baja_documento_cobro` fallan con `proyecto_no_reabierto` antes de tocar nada); **(2)**
+      carpetas de Drive `/Por Cobrar/<cliente>/` y `/Por Pagar/<proveedor>/` para las rutas nuevas.
+
+**Cómo se validan M1/M2 sin pagar la base de test:** Postgres 16 local con stubs de Supabase y `plpgsql_check`
+(`apt install postgresql-16-plpgsql-check`); se reconstruyen todas las migraciones y se siembra con el generador.
+M1 + M2 sobre datos del modelo viejo: backfill verificado, lecturas idénticas (conceptos, resumen, avisos, por proyecto
+y periodo, salvo el campo nuevo `compartido`), `auditar_consistencia()` en 0 con 23 guardas, `plpgsql_check` en 0.
 
 ### B1 — Permisos (P14) (en paralelo a B0/B2)
 - [ ] `requireSection('cuentas')` en `app/api/cuentas/correcciones/route.ts:19`,
@@ -526,8 +545,8 @@ recalcula con floats y `< .01` y no debe copiarse). Reutilizar `Modal size="820"
 
 | Bloque | Estado |
 |---|---|
-| B0 Preparación | Pendiente |
-| B1 Permisos P14 | Pendiente |
+| B0 Preparación | **Hecho** (2026-10-07) |
+| B1 Permisos P14 | **Hecho** en código y tests (2026-10-07) |
 | B2 Capa de datos (M1 → M2 → M3, un release) | Pendiente |
 | B3 API nueva y lecturas | Pendiente |
 | B4a Menú y Registrar pago | Pendiente |

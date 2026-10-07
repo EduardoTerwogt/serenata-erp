@@ -3,7 +3,7 @@
 -- Crea `v_n` proyectos aprobados con la forma del dataset de carga de
 -- serenata-erp-test: 5 renglones por cotización, cada uno con su proveedor y su
 -- grupo de pago (≈4.99 grupos por proyecto), 1 cuenta por cobrar por proyecto,
--- casi todo ABIERTO / FACTURA_PENDIENTE y 10 % de cobros ya facturados. Todo va
+-- todo ABIERTO / FACTURA_PENDIENTE (con v_docs, facturado y pagado en parte). Todo va
 -- en bloque (set-based), con el prefijo `ESC` en ids, folios y nombres, así que
 -- `escala-limpiar.sql` lo retira completo sin tocar nada más.
 --
@@ -13,7 +13,7 @@
 --             caso de una sola vista de mes); 12 = repartidos en todo el año.
 --   v_anio    año de las fechas de entrega.
 --   v_docs    true = además siembra facturas y 2 pagos por cuenta y por grupo (ver el bloque final);
---             false = la forma original (sin documentos ni pagos, 10 % de cobros facturados).
+--             false = sin documentos ni pagos (todo FACTURA_PENDIENTE / ABIERTO).
 --
 -- Se niega a correr fuera de una BD de pruebas: exige la tabla `loadtest_runs`
 -- (solo existe en serenata-erp-test) o la variable `app.escala_local` = 'on'
@@ -79,9 +79,9 @@ BEGIN
   SELECT gen_random_uuid(), 'ESC-CP-' || lpad(i::text, 6, '0') || '-' || k, cot, cot, item_id, prov_id, 2000, 'PENDIENTE', 0, grupo_id
   FROM _esc_items;
 
-  INSERT INTO cuentas_cobrar (id, folio, cotizacion_id, proyecto_id, monto_total, monto_pagado, fecha_factura, fecha_vencimiento)
-  SELECT gen_random_uuid(), 'ESC-CC-' || lpad(e.i::text, 6, '0'), e.id, e.id, 20010.00, 0,
-         CASE WHEN e.i % 10 = 0 THEN e.fecha + 3 END, CASE WHEN e.i % 10 = 0 THEN e.fecha + 33 END
+  -- Sin factura no hay fecha de factura (#123: `auditar_consistencia()` las exige juntas); con v_docs se facturan abajo.
+  INSERT INTO cuentas_cobrar (id, folio, cotizacion_id, proyecto_id, monto_total, monto_pagado)
+  SELECT gen_random_uuid(), 'ESC-CC-' || lpad(e.i::text, 6, '0'), e.id, e.id, 20010.00, 0
   FROM _esc e;
 
   UPDATE cotizaciones SET estado = 'APROBADA' WHERE id IN (SELECT id FROM _esc);
