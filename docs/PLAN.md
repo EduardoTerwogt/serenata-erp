@@ -607,7 +607,7 @@ se construyen contra `serenataRfc()` y no se bloquean.
 
 # #130 — Subir factura y Registrar pago por proyecto, con alta de contraparte
 
-**Estado:** plan aprobado el 2026-10-07, sin código. Sub-issue de #123 (PR #129). Orden de la cola: #123 → #130 → #110.
+**Estado:** plan aprobado el 2026-10-07, decisiones de C0 cerradas, sin código. Sub-issue de #123 (PR #129). Orden de la cola: #123 → #130 → #110.
 Siguiente migración libre: `20261034_…` (renumerar si otra rama la toma).
 
 ## Problema
@@ -661,12 +661,17 @@ Si el RFC del XML no existe, Subir factura solo deja elegir un proveedor ya exis
 - **P1:** duplicar proveedor; lista de ~2,700 proyectos (< 800 ms p95); ventana de test compartida; total CFDI vs neto da falsos matches; permiso `cuentas` crea proveedores (la RPC valida y deja rastro).
 - **P2:** constancia huérfana en Drive si falla la RPC; proveedor nuevo sin Portal (`portal_estado = pendiente_confirmacion`).
 
-## Preguntas abiertas (cerrar en C0)
-1. ¿El gasto extra mueve utilidad/margen del proyecto o solo egresos y cuentas por pagar?
-2. Match por total CFDI: ¿total con IVA contra `monto_total` ajustado por IVA/retenciones, o la validación sigue en neto y el total CFDI solo ordena candidatos? (propuesta: lo segundo)
-3. Constancia del cliente: ¿columnas en `clientes` (propuesta) o `documentos_cuentas_cobrar`?
-4. Filtros del selector (periodo, cliente/proveedor, estado).
-5. ¿#130 entra al lanzamiento de #123 o va en PR aparte tras mergear #129?
+## Decisiones de C0 (usuario, 2026-10-07)
+| # | Decisión |
+|---|---|
+| Q10 | **El gasto extra resta de la utilidad real del proyecto:** utilidad = utilidad cotizada (`cotizaciones.utilidad_total`, #99) − Σ `costo_total` (neto, sin IVA) de sus gastos extra. La derivación vive en un solo lugar de SQL (`utilidad_proyecto` en `cuentas_conceptos` y de ahí `cuentas_resumen`, cierre, ISR estimado y utilidad neta); el doble TS congelado de `tests/support/cuentas-motor/` y la paridad se actualizan en C1. Un gasto extra **no** cambia la cotización aprobada. |
+| Q11 | Constancia del cliente: columnas `constancia_url` y `constancia_nombre` en `clientes`. |
+| Q12 | Filtros del selector: búsqueda por texto (folio, proyecto, cliente) + "solo con renglones por asignar o saldo abierto". Sin filtro de periodo. |
+| Q13 | **#130 va en el mismo PR #129:** el lanzamiento de #123 espera a #130. Su migración (`20261034`) corre después de `20261033` en el orden de lanzamiento. |
+| T-a | Match por total CFDI: solo **propone** candidatos y preselecciona; la validación fiscal sigue siendo la de neto (`validarFacturaFiscalProveedor`). |
+
+## Preguntas abiertas
+1. ¿El gasto extra lleva `cotizacion_id` (la aprobada del proyecto) o NULL? Se define al leer `cancel_cotizacion` y las FK en C1; condiciona la guarda de cancelación.
 
 ## Validación
 `npx tsc --noEmit && npm run lint && npm test`; `test:e2e:smoke` y `critical`; specs `live` nuevos (alta + ligar concurrente, pago por proyecto con contrapartes mezcladas, permisos solo-`cuentas`); `plpgsql_check`; `auditar_consistencia()` = 0 en test; `escala.yml` sin empeorar la línea base.
@@ -674,7 +679,7 @@ Si el RFC del XML no existe, Subir factura solo deja elegir un proveedor ya exis
 ## Tracker #130
 | Bloque | Estado |
 |---|---|
-| C0 Cierre de diseño | Pendiente |
+| C0 Cierre de diseño | **Decisiones cerradas** (2026-10-07); mockups en `docs/design/cuentas-123/cuentas-130.html`, pendientes de revisión del usuario |
 | C1 Datos | Pendiente |
 | C2 API | Pendiente |
 | C3 UI Subir factura | Pendiente |

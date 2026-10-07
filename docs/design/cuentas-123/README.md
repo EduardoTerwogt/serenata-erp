@@ -9,6 +9,7 @@ visual**.
 | Archivo | Qué es |
 |---|---|
 | `cuentas-acciones.html` | **Diseño final.** Recreación de la pantalla de Cuentas tal como está en producción (`app/cuentas/`) con el menú **Acciones** y las tres ventanas nuevas. Fuente de verdad visual para B4 (UI) de `docs/PLAN.md`. |
+| `cuentas-130.html` | Maqueta de #130 (alta de proveedor/cliente al subir factura, selector de proyectos y renglones, gasto extra, pago por proyecto). Cinco estados con la barra negra. Referencia visual para C3 y C4 de `docs/PLAN.md`. |
 | `exploracion-modelo.html` | Exploración previa: diagrama del modelo (factura ↔ cotizaciones ↔ pagos ↔ complementos) con el ejemplo del issue, y el mockup de **cancelar con traspaso** (fuera de #123; referencia para esa iniciativa). Su estilo visual **no** es la referencia. |
 | `PROMPT-claude-design.md` | Prompt opcional para refinar el diseño en Claude Design. |
 
