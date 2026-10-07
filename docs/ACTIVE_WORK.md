@@ -4,6 +4,10 @@
 
 ## Estado
 
+**Para retomar #123: el código vive en la rama `claude/admiring-faraday-i5w9yj` (PR #129), no en `main`.** Hacer
+`git fetch origin claude/admiring-faraday-i5w9yj && git switch claude/admiring-faraday-i5w9yj` antes de empezar; en `main`
+no existen `lib/server/cuentas/{rfc,facturas,…}.ts`, las rutas nuevas ni las migraciones `20261030`–`20261032`.
+
 **Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1`** desde el 2026-10-06 (#124 cerrado,
 `docs/archive/produccion-ohio.md`, decisión 021). **Producción no se ha tocado para #123:** ninguna migración aplicada, nada
 mergeado a `main`.
