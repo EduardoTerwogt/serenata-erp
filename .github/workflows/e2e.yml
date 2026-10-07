@@ -70,6 +70,9 @@ jobs:
       # ejercitar la ruta de código real de mint en vez de saltarla.
       SUPABASE_JWT_SECRET: e2e-fake-realtime-secret
       PLAYWRIGHT_E2E_BYPASS: 'true'
+      # #123 (T20): RFC propio de Serenata que usan las rutas de Subir factura; en CI es un valor de prueba (no un
+      # secreto): los fixtures de XML usan este mismo RFC.
+      SERENATA_RFC: SHO100101AB1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -137,6 +140,8 @@ jobs:
     timeout-minutes: 20
     env:
       AUTH_SECRET: live-e2e-secret
+      # #123 (T20): igual que en smoke-and-critical, valor de prueba.
+      SERENATA_RFC: SHO100101AB1
       AUTH_TRUST_HOST: 'true'
       NEXTAUTH_URL: http://127.0.0.1:3000
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}

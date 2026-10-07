@@ -47,6 +47,13 @@ GOOGLE_DRIVE_REFRESH_TOKEN=
 GOOGLE_DRIVE_FOLDER_ID=
 GOOGLE_DRIVE_FOLDER_ID_CUENTAS=
 
+# RFC propio de Serenata House (#123, T20). Las rutas de Subir factura lo comparan con el emisor y el receptor del CFDI
+# para saber si el XML es de cliente (emite Serenata), de proveedor (recibe Serenata) o un complemento. Si falta, esas
+# rutas FALLAN explícito (500, "Falta configurar el RFC de Serenata"): no validan en silencio. En mayúsculas, sin espacios.
+# Va en Vercel (Production y Preview), en GitHub Actions (jobs `live` y e2e) y en `.env.local`. Los fixtures de prueba
+# usan el mismo valor.
+SERENATA_RFC=
+
 # Cron (keep-alive)
 CRON_SECRET=
 
