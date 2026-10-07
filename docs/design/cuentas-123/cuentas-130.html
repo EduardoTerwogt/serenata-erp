@@ -153,7 +153,7 @@ a{color:var(--accent)}
   <button data-s="s1" aria-pressed="true">1 · Proveedor nuevo</button>
   <button data-s="s2" aria-pressed="false">2 · Asignar renglones</button>
   <button data-s="s3" aria-pressed="false">3 · Gasto extra</button>
-  <button data-s="s4" aria-pressed="false">4 · Cliente nuevo</button>
+  <button data-s="s4" aria-pressed="false">4 · Cliente sin RFC</button>
   <button data-s="s5" aria-pressed="false">5 · Pago por proyecto</button>
 </div>
 <div class="fondo">Cuentas (fondo). Cambia el estado de la ventana con la barra negra.</div>
@@ -242,11 +242,11 @@ a{color:var(--accent)}
 <!-- ===== 4 · Subir factura: cliente nuevo + constancia ===== -->
 <div class="mo" id="s4" hidden><section class="mp" role="dialog" aria-label="Subir factura">
   <div class="mp-grab"><span></span></div>
-  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Factura a cliente nuevo</h3></div><button class="x" aria-label="Cerrar"><svg class="i"><use href="#i-x"/></svg></button></header>
+  <header class="mp-h"><div><div class="ey">Subir factura</div><h3 class="mp-t">Factura a cliente sin RFC</h3></div><button class="x" aria-label="Cerrar"><svg class="i"><use href="#i-x"/></svg></button></header>
   <div class="mp-b">
     <div class="xml"><div><b>Productora Marea Azul S.A. de C.V.</b><div class="mono">PMA180920HJ5 · SH-A-0098 · receptor del XML</div></div><div class="tot">$116,000.00<small>total CFDI</small></div></div>
-    <div class="aviso a-warn"><svg class="i"><use href="#i-warn"/></svg><span><b>No hay un cliente con el RFC PMA180920HJ5.</b> Coincidencia por nombre: <u>Marea Azul Producciones</u> (sin RFC). Elígela o crea el cliente.</span></div>
-    <div><h4 class="sec-t"><span class="n">1</span>Cliente nuevo <span style="font-weight:400;text-transform:none;letter-spacing:0">· datos del XML</span></h4>
+    <div class="aviso a-warn"><svg class="i"><use href="#i-warn"/></svg><span><b>No hay un cliente con el RFC PMA180920HJ5.</b> Coincidencia por nombre: <u>Marea Azul Producciones</u> (sin RFC). Se completa su ficha con los datos del XML.</span></div>
+    <div><h4 class="sec-t"><span class="n">1</span>Completar cliente <span style="font-weight:400;text-transform:none;letter-spacing:0">· datos del XML</span></h4>
       <div class="grid2">
         <div class="fld"><label>RFC</label><input readonly value="PMA180920HJ5"></div>
         <div class="fld"><label>Nombre</label><input readonly value="Productora Marea Azul S.A. de C.V."></div>
@@ -264,7 +264,7 @@ a{color:var(--accent)}
     </div>
     <div class="aviso a-ok"><svg class="i"><use href="#i-ok"/></svg><span><b>Cuadra con el total CFDI:</b> 2 cotizaciones suman $116,000.00 (una factura puede cubrir varios proyectos).</span></div>
   </div>
-  <footer class="mp-f"><div class="res">Crear cliente y ligar factura<b>$116,000.00 · 2 cot.</b></div><button class="btn sec">Cancelar</button><button class="btn pri" disabled>Crear cliente y registrar factura</button></footer>
+  <footer class="mp-f"><div class="res">Completar cliente y ligar factura<b>$116,000.00 · 2 cot.</b></div><button class="btn sec">Cancelar</button><button class="btn pri" disabled>Completar cliente y registrar factura</button></footer>
 </section></div>
 
 <!-- ===== 5 · Registrar pago por proyecto ===== -->
