@@ -171,10 +171,10 @@ export async function registrarPago(p: RegistrarPagoParams): Promise<{ status: n
 
 /**
  * Reconciliación (`.../registrar-pago/estado`): el pago que registró esa operación, si lo hay y si cubre el
- * destino indicado (cuenta de cobro o grupo). La idempotencia vive en `pagos.operation_id` (T2); ya no hay
+ * destino indicado (cuenta de cobro o grupo; null = cualquiera, para el pago de varias líneas). La idempotencia vive en `pagos.operation_id` (T2); ya no hay
  * `pago_operations`.
  */
-export async function pagoPorOperacion(lado: LadoPago, operationId: string, destinoId: string): Promise<{ resultado: ResultadoPagoRpc; comprobanteUrl: string | null } | null> {
+export async function pagoPorOperacion(lado: LadoPago, operationId: string, destinoId: string | null): Promise<{ resultado: ResultadoPagoRpc; comprobanteUrl: string | null } | null> {
   const { data: cabecera, error } = await supabaseAdmin.from('pagos').select('id, lado, comprobante_url').eq('operation_id', operationId).maybeSingle()
   if (error) throw error
   if (!cabecera || cabecera.lado !== lado) return null
@@ -182,6 +182,6 @@ export async function pagoPorOperacion(lado: LadoPago, operationId: string, dest
   if (errorResultado) throw errorResultado
   const resultado = data as ResultadoPagoRpc | null
   if (!resultado) return null
-  const cubre = resultado.lineas.some((l) => (lado === 'cobro' ? l.cuenta_id : l.grupo_id) === destinoId)
+  const cubre = destinoId === null || resultado.lineas.some((l) => (lado === 'cobro' ? l.cuenta_id : l.grupo_id) === destinoId)
   return cubre ? { resultado, comprobanteUrl: cabecera.comprobante_url ?? null } : null
 }

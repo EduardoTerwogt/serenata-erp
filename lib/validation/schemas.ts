@@ -357,6 +357,68 @@ export const RegistrarPagoProveedorSchema = z.object({
   operation_id: z.string().uuid('operation_id requerido (uuid)'),
 })
 
+// ── #123 (B3): estado de cuenta, facturas ligadas y pagos multi-línea ────────────────────────────────────────────
+
+export const LADOS_CUENTAS = ['cobro', 'proveedor'] as const
+
+// GET /api/cuentas/estado-cuenta?lado=&id=
+export const EstadoCuentaQuerySchema = z.object({
+  lado: z.enum(LADOS_CUENTAS, { message: 'lado inválido (cobro o proveedor)' }),
+  id: z.string().uuid('id inválido (uuid de la contraparte)'),
+})
+
+const centavos = z.coerce.number().finite().positive('El monto debe ser mayor a 0')
+
+// POST /api/cuentas/facturas/preview — campo `datos` (JSON) del multipart junto al archivo `xml`.
+export const FacturaPreviewSchema = z.object({
+  /** Contraparte elegida a mano (si el RFC del XML no coincide con nadie, P24). */
+  contraparte_id: z.string().uuid().nullable().optional(),
+  /** Cuentas de cobro (cliente) o grupo de proveedor ya elegidos, para calcular el cuadre. */
+  cuentas: z.array(z.string().uuid()).optional().default([]),
+})
+
+// POST /api/cuentas/facturas — campo `datos` (JSON) del multipart junto a `xml` (y `pdf` opcional).
+// Sin tope de cotizaciones por factura (P6, P25).
+export const FacturaCrearSchema = z.object({
+  operation_id: z.string().uuid('operation_id requerido (uuid)'),
+  contraparte_id: z.string().uuid().nullable().optional(),
+  /** Ofrecido al elegir la contraparte a mano: guarda el RFC del XML en su ficha (P24). */
+  guardar_rfc: z.boolean().optional().default(false),
+  /** Cliente: las cuentas de cobro que cubre y el total que el usuario vio (la RPC lo revalida). */
+  cuentas: z
+    .array(z.object({ id: z.string().uuid(), monto_esperado: z.coerce.number().finite().nullable().optional() }))
+    .optional()
+    .default([])
+    .refine((c) => new Set(c.map((x) => x.id)).size === c.length, 'Cada cotización aparece una sola vez en la factura'),
+  /** Proveedor: el grupo al que corresponde (1:1, P10). */
+  grupo_id: z.string().uuid().nullable().optional(),
+  /** Complemento: desambigua el pago cuando varios coinciden con el monto (P9). */
+  pago_id: z.string().uuid().nullable().optional(),
+})
+
+const FechaIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de pago requerida (YYYY-MM-DD)')
+
+// POST /api/cuentas/pagos — campo `datos` (JSON) del multipart junto a `comprobante` (opcional, una sola vez, P16).
+// El monto de cada línea es lo aplicado a esa cuenta (cobro) o el total a transferir de ese grupo (proveedor).
+export const PagoCrearSchema = z.object({
+  lado: z.enum(LADOS_CUENTAS, { message: 'lado inválido (cobro o proveedor)' }),
+  lineas: z
+    .array(z.object({ id: z.string().uuid(), monto: centavos, saldo_esperado: z.coerce.number().finite().nullable().optional() }))
+    .min(1, 'El pago necesita al menos una línea')
+    .refine((l) => new Set(l.map((x) => x.id)).size === l.length, 'Cada cuenta aparece una sola vez en el pago'),
+  tipo_pago: z.enum(TIPOS_PAGO, { message: 'Tipo de pago inválido (TRANSFERENCIA, EFECTIVO o CHEQUE)' }),
+  fecha_pago: FechaIso,
+  notas: z.string().max(2000).nullable().optional(),
+  operation_id: z.string().uuid('operation_id requerido (uuid)'),
+})
+
+// GET /api/cuentas/pagos/estado?lado=&operation_id=&destino=
+export const PagoEstadoQuerySchema = z.object({
+  lado: z.enum(LADOS_CUENTAS),
+  operation_id: z.string().uuid('operation_id requerido (uuid)'),
+  destino: z.string().uuid().optional(),
+})
+
 // GET /api/cuentas/periodo (Rediseño de Cuentas B3). Query string: todo
 // llega como texto; año y mes vacíos toman el año y mes actuales en la ruta.
 export const CuentasOpcionesQuerySchema = z.object({
