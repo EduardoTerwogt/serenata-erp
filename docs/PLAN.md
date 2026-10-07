@@ -656,6 +656,24 @@ Si el RFC del XML no existe, Subir factura solo deja elegir un proveedor ya exis
 - **C4 — UI Registrar pago por proyecto.**
 - **C5 — Cerrar:** specs (concurrencia, permisos solo-`cuentas`, doble clic), `auditar_consistencia()` = 0, decisión `023`, `ARCHITECTURE.md`, `ACTIVE_WORK.md`.
 
+### Resultado de C1 (2026-10-07)
+Migración `20261034_c1_alta_contraparte_y_gasto_extra.sql` (aditiva, sin DROP), **aplicada en test** y verificada en una transacción con rollback
+(alta + 2 renglones reasignados, gasto extra, repetición sin duplicar, utilidad −5,000, `auditar_consistencia()` 0 → 0 con 24 guardas, errores
+esperados, selector en ambos modos, `estado_cuenta` con proyecto). Producción: sin tocar (corre al lanzar, después de `20261033`).
+Cambios respecto al plan, por lo que se encontró en el código:
+- **La factura de proveedor no es una RPC** (se sube por TS: Drive → documento → `validar_factura_proveedor`). `preparar_grupo_factura_proveedor`
+  hace atómico lo que antes no existía (alta de proveedor + asignación/reasignación de renglones o gasto extra) y devuelve el `grupo_id`; la factura
+  se sube después con el flujo actual. Si falla la subida, queda un estado consistente y reintentable.
+- **`cuentas_correcciones` exige una reapertura activa** (`reapertura_id NOT NULL`): no sirve para reasignar fuera de una reapertura. El rastro de
+  una reasignación de renglón va a `historial_cambios_responsable_item` (ya existente).
+- **El cliente ya existe al facturar** (nace con la cotización, sin RFC): "alta de cliente" = completar su ficha (RFC, contacto, constancia) por el
+  `PATCH /api/clientes/[id]` existente; no hay RPC nueva. Solo se agregaron `clientes.constancia_url` y `constancia_nombre`.
+- **`estado_cuenta`**: sobrecarga `(p_lado, p_contraparte, p_proyectos, p_hoy)` con la lógica; la firma anterior es una envoltura. El MCP de Supabase
+  retiene todo `DROP` hasta que una persona confirme, y una sobrecarga con `p_proyectos` opcional habría hecho ambigua la llamada de PostgREST.
+- Gasto extra: `cotizacion_id = proyecto_id` (la principal aprobada); `cancel_cotizacion` lo borra solo si el grupo sigue `ABIERTO`; `operation_id`
+  único evita duplicados. Utilidad real = utilidad cotizada − Σ gastos extra (solo en `cuentas_conceptos`; `cuentas_por_proyecto`, usada solo por tests, no cambia).
+- Pendiente de C1: aplicar a test los comentarios de `auditar_consistencia` y `estado_cuenta` tal como están en el archivo (el texto en test difiere solo en comentarios).
+
 ## Riesgos
 - **P0:** alta + reasignación + grupo + factura atómicos (una RPC); gasto extra no rompe `auditar_consistencia` ni `cancel_cotizacion` (B0 define si lleva `cotizacion_id`); centavos al repartir (residuo en `numeric`).
 - **P1:** duplicar proveedor; lista de ~2,700 proyectos (< 800 ms p95); ventana de test compartida; total CFDI vs neto da falsos matches; permiso `cuentas` crea proveedores (la RPC valida y deja rastro).
@@ -679,8 +697,8 @@ Si el RFC del XML no existe, Subir factura solo deja elegir un proveedor ya exis
 ## Tracker #130
 | Bloque | Estado |
 |---|---|
-| C0 Cierre de diseño | **Decisiones cerradas** (2026-10-07); mockups en `docs/design/cuentas-123/cuentas-130.html`, pendientes de revisión del usuario |
-| C1 Datos | Pendiente |
+| C0 Cierre de diseño | **Hecho** (2026-10-07): decisiones Q10–Q13 y maqueta `docs/design/cuentas-123/cuentas-130.html` aprobadas por el usuario |
+| C1 Datos | **Hecho en test** (2026-10-07): migración `20261034`; falta correrla en CI (`Migrations`) y en producción al lanzar |
 | C2 API | Pendiente |
 | C3 UI Subir factura | Pendiente |
 | C4 UI Registrar pago por proyecto | Pendiente |
