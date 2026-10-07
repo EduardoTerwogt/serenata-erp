@@ -697,6 +697,11 @@ Registrar pago gana la vista "Por proyecto" (segundo selector junto a "Cobro de 
 - Desviaciones de la maqueta: no hay casilla "Solo con saldo abierto" (SQL solo lista proyectos con saldo abierto) ni filas "Pagada $0.00".
 - `candidatos_cambiaron` sigue igual: recarga el estado limitado a los mismos proyectos y vuelve a sugerir el reparto.
 
+### Resultado de C5 (2026-10-07)
+- `tests/e2e/live/cuentas-130.spec.ts`: dos altas simultáneas con el mismo RFC (un proveedor, el otro `proveedor_existente`); grupo facturado no se reasigna y no queda el proveedor nuevo; gasto extra con doble envío (una fila), guardas `gasto_extra_proyecto` y `k4_cuenta_sin_item` sin cambio y cancelar la cotización lo borra; cancelar bloqueado con grupo facturado; pago por proyecto (selector, estado limitado y `contrapartes_distintas`); permisos con un usuario solo-`cuentas` (rutas nuevas 200, otra sección 403, `POST /api/proveedores` 403, RFC distinto 409).
+- No se pudo correr localmente (necesita `TEST_SUPABASE_*` y credenciales); se verificaron los mismos escenarios con SQL en `serenata-erp-test` dentro de transacciones con rollback (alta + reasignación, doble envío, `grupo_no_abierto` P1412 con rollback del proveedor, `contrapartes_distintas`, `cancelacion_bloqueada`, cancelar con gasto extra, pago de un proveedor a `PAGADO`). El gasto extra se une al grupo `ABIERTO` que el proveedor ya tenga en el proyecto.
+- Decisión `docs/decisions/023`, sección en `ARCHITECTURE.md` y fila de pruebas. `auditar_consistencia()` en test: 0 violaciones, 24 guardas.
+
 ## Riesgos
 - **P0:** alta + reasignación + grupo + factura atómicos (una RPC); gasto extra no rompe `auditar_consistencia` ni `cancel_cotizacion` (B0 define si lleva `cotizacion_id`); centavos al repartir (residuo en `numeric`).
 - **P1:** duplicar proveedor; lista de ~2,700 proyectos (< 800 ms p95); ventana de test compartida; total CFDI vs neto da falsos matches; permiso `cuentas` crea proveedores (la RPC valida y deja rastro).
@@ -725,4 +730,4 @@ Registrar pago gana la vista "Por proyecto" (segundo selector junto a "Cobro de 
 | C2 API | **Hecho** (2026-10-07): rutas, servicios y pruebas; migración `20261035`; falta CI, `smoke`/`critical` y el spec `live` de C5 |
 | C3 UI Subir factura | **Hecho** (2026-10-07): pendiente solo CI y la revisión visual del usuario |
 | C4 UI Registrar pago por proyecto | **Hecho** (2026-10-07): pendiente solo CI y la revisión visual del usuario |
-| C5 Cerrar | Pendiente |
+| C5 Cerrar | **Hecho** (2026-10-07): spec `live` `cuentas-130.spec.ts` (solo corre en CI), decisión 023, `ARCHITECTURE.md`, `ACTIVE_WORK.md`; `auditar_consistencia()` = 0 (24 guardas) |

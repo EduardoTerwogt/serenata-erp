@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-07 (#123 cerrado en la rama, CI verde salvo el gate manual de escala; siguiente sesión: arrancar #130).
+**Última actualización:** 2026-10-07 (#123 y #130 cerrados en la rama del PR #129; falta tu revisión, la CI del último commit y el lanzamiento).
 
 ## Estado
 
@@ -16,7 +16,16 @@ nada mergeado a `main`.
 `docs/decisions/022-facturas-y-pagos-ligados.md`). Una factura cubre varias cotizaciones y un pago cubre varias facturas.
 Instrucción permanente tuya: ejecutar el plan completo, consultarte solo dudas de producto y **avisarte cuando esté listo para
 revisar antes de producción**: este es ese aviso. Sin aplicar nada a producción ni mergear a `main` hasta tu revisión.
+**#130** («Alta de contraparte y pago por proyecto», decisión `docs/decisions/023-alta-de-contraparte-y-pago-por-proyecto.md`) se construyó en el mismo PR: C0–C5 hechos (`docs/PLAN.md`, sección #130). Subir factura da de alta al proveedor o completa la ficha del cliente con su constancia, asigna renglones o registra un gasto extra; Registrar pago tiene la vista «Por proyecto». Migraciones `20261034` y `20261035` aplicadas en test; **`auditar_consistencia()` = 0 con 24 guardas**.
 Orden de la cola: **#123 → #130 → #110 → #125** (#130 antes de #110 porque el pago por proyecto cambia lo que #110 materializa; #125 baja prioridad, revisión 2026-11-01, límite 2026-12-01).
+
+## Tracker de #130
+
+| Bloque | Estado |
+|---|---|
+| C0 Diseño · C1 Datos (`20261034`, `20261035`, en test) · C2 API | Hecho |
+| C3 UI Subir factura · C4 UI Registrar pago por proyecto | Hecho (unitarias, e2e `cuentas-acciones` 38/38 escritorio y móvil) |
+| C5 Cierre: spec `live` `cuentas-130.spec.ts`, decisión 023, `ARCHITECTURE.md`, `auditar_consistencia()` = 0 | Hecho; **el spec `live` solo corre en CI** (necesita las llaves de test) y sus escenarios se verificaron antes con SQL en test con rollback |
 
 ## Tracker de #123
 
@@ -58,7 +67,7 @@ Orden de la cola: **#123 → #130 → #110 → #125** (#130 antes de #110 porque
 ## Avisos para la entrega (léelos antes de aprobar)
 
 1. **Orden de lanzamiento a producción:** gate de producción vacía (recontar) → M1 `20261030` → M2 `20261031` → **M3 `20261032`
-   la corre una persona** en el SQL Editor (lleva DROP/DELETE; el MCP los retiene) → `20261033` → merge del PR #129 →
+   la corre una persona** en el SQL Editor (lleva DROP/DELETE; el MCP los retiene) → `20261033` → **`20261034` y `20261035` (#130, aditivas, sin DROP)** → merge del PR #129 →
    **subir la constancia de Serenata en Admin → Datos fiscales ANTES de abrir las rutas de factura** (sin ella fallan a propósito).
    Producción **no** lleva `20260915_loadtest_runs.sql`. Producción es plan Free, sin respaldos: respaldo manual antes de M3.
 2. Las **3 preguntas de producto** se resolvieron con las propuestas del plan; la 3.ª (**corregir un descuadre ligando o
@@ -113,13 +122,10 @@ Orden de la cola: **#123 → #130 → #110 → #125** (#130 antes de #110 porque
 
 ## Siguiente paso
 
-0. **Próxima sesión: arrancar #130** (comentar en el issue lo ya pedido): alta de proveedor, vínculo a proyectos y «Registrar pago» por proyecto
-   (hoy solo ofrece clientes y proveedores). Empezar con `serenata-iniciar-fase` y análisis sin implementar. Restricciones: todo pago por
-   proyecto entra por `cuentas_conceptos` (sin segunda derivación), se mide por buffers antes y después, y se diseña con llave estable
-   (proyecto, contraparte, tipo) para que #110 solo cambie de dónde se lee. Pendiente opcional: parcialidad y saldo insoluto del complemento.
+0. **#130 ya está hecho en la rama** (aviso arriba). Falta: CI verde del último commit (incluido `live`), tu revisión visual de Subir factura (alta de proveedor, gasto extra, completar cliente) y Registrar pago «Por proyecto», y lanzar con #123. Para #110: el pago por proyecto lee de `cuentas_proyectos_selector` y `estado_cuenta(p_proyectos)`, con llave (proyecto, contraparte); #110 solo cambia de dónde se lee. Pendiente opcional: parcialidad y saldo insoluto del complemento.
 1. **Tu revisión de #123** y, si la aprueba, el **lanzamiento** (aviso 1). Al lanzar: verificar `auditar_consistencia()` = 0 en
    producción, archivar `docs/PLAN.md` en `docs/archive/`, cerrar #123 y recrear `PLAN.md` vacío.
-2. Después de #123: **#130** (alta de proveedor y pago/factura por proyecto, con análisis previo) y luego **#110** V2–V3; limpieza de #124 (quitar el ref viejo `fwmyoqokcjtldiofuxdg` de
+2. Después de #123 y #130: **#110** V2–V3; limpieza de #124 (quitar el ref viejo `fwmyoqokcjtldiofuxdg` de
    `app/api/internal/env-check/route.ts` y su test, y borrar `.github/workflows/db-push-una-vez.yml`, cuando borres la base
    vieja); **#125** al final.
 

@@ -473,6 +473,21 @@ cliente calcula en centavos solo para pintar.
   (`sheet`, `lado`, `cid`, `doc`, `pre`); chips de factura/pago compartido (P20); botón y RFC en las fichas (P28); el detalle abre
   esas ventanas (P22). Portal: `GET /api/portal/cuentas` agrega, solo lectura, qué cubrió cada pago y el complemento PPD pendiente.
 
+## Alta de contraparte, gasto extra y pago por proyecto (#130, docs/decisions/023)
+
+Extiende Subir factura y Registrar pago de #123 sin tablas nuevas.
+
+- **Datos** (migraciones `20261034`, `20261035`): `cuentas_pagar.item_id` nullable + `concepto` + `operation_id` (gasto extra, CHECK
+  `cuentas_pagar_renglon_o_gasto`); `clientes.constancia_url/constancia_nombre`; `datos_fiscales_serenata.tolerancia_total`.
+  RPC: `preparar_grupo_factura_proveedor` (alta de proveedor + reasignar renglones o gasto extra, atómica), `cuentas_proyectos_selector`
+  (modos `renglones` y `pago`, paginada), `propuesta_renglones_factura`, `guardar_tolerancia_total`; `estado_cuenta` con `p_proyectos`.
+- **API.** `GET /api/cuentas/proyectos-selector`, `GET /api/cuentas/estado-cuenta?proyectos=`, `PATCH /api/cuentas/clientes/[id]`
+  (completar ficha y constancia), `PATCH /api/admin/datos-fiscales` (tolerancia); `POST /api/cuentas/facturas` acepta `preparar` y,
+  si la subida falla tras preparar, responde 502 `subida_fallida` con `preparado`. Servicios: `preparar-grupo.ts`, `cliente-completar.ts`,
+  `proyectos-selector.ts` en `lib/server/cuentas/`.
+- **UI** (`app/cuentas/components/acciones/`): `SelectorProyectos` (un solo selector, modos renglones / proyecto / pago),
+  `DestinoProveedor`, `AltaProveedor`, `CompletarCliente`, lógica pura en `destino-proveedor.ts`; Registrar pago tiene la vista "Por proyecto".
+
 ## Cuentas: reabrir y correcciones (B7, docs/decisions/017 D33–D34)
 
 - **Reabrir** (`POST /api/cuentas/proyectos/:id/reabrir`, cualquier usuario con la sección `cuentas` desde #123/P14, motivo
@@ -517,6 +532,7 @@ evidencia, no cuenta como terminado.
 | Cuentas por cobrar (factura, complemento, pagos parciales) | crítico + live de concurrencia |
 | Cuentas por pagar (factura, pagos, órdenes de pago con PDF real; cierre fiscal estimado del proyecto, cálculo puro en `lib/shared/cierre-proyecto.ts`) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia, `lib/shared/__tests__/cierre-proyecto.test.ts`, `tests/e2e/critical/cuentas-ordenes.spec.ts`, live `cuentas-b1b.spec.ts` |
 | Facturas y pagos ligados (#123): menú Acciones, Registrar pago, Subir factura, Estado de cuenta, datos fiscales de Serenata, Portal solo lectura | `tests/e2e/critical/{cuentas-acciones,cuentas-detalle,admin-datos-fiscales,portal-factura}.spec.ts`, `app/cuentas/components/acciones/__tests__/`, `lib/server/cuentas/**/*.test.ts`, `app/api/__tests__/{cuentas-facturas,admin-datos-fiscales,portal-cuentas}-route.test.ts`, live de concurrencia |
+| Alta de contraparte, gasto extra y pago por proyecto (#130) | `app/cuentas/components/acciones/__tests__/{subir-factura,registrar-pago-proyecto,destino-proveedor}.test.*`, `tests/e2e/critical/cuentas-acciones.spec.ts`, `lib/server/cuentas/__tests__/{preparar-grupo,cliente-completar}.test.ts`, live `cuentas-130.spec.ts` (alta concurrente, gasto extra idempotente, cancelar, pago por proyecto, permisos solo-`cuentas`) |
 | Cuentas: reabrir y correcciones (B7) | `app/api/__tests__/cuentas-correcciones-route.test.ts`, `lib/server/cuentas/__tests__/reemplazo-factura.test.ts`, `tests/e2e/critical/cuentas-reabrir.spec.ts`, live `cuentas-b7-correcciones.spec.ts` (anulación concurrente) |
 | Cuentas: pantalla por periodo, detalle, avisos (escritorio y 390 px) | `tests/e2e/critical/cuentas-{principal,detalle,ordenes}.spec.ts`, live `cuentas-paridad-sql.spec.ts`; escala `tests/e2e/escala/cuentas-periodo-rendimiento.spec.ts` (p95 < 800 ms, workflow `escala.yml`, aparte del gate de PR) |
 | Registrar pago sin carreras (cobrar y pagar) | `tests/e2e/live/cuentas-*-concurrency.spec.ts` |
