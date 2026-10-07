@@ -548,7 +548,7 @@ recalcula con floats y `< .01` y no debe copiarse). Reutilizar `Modal size="820"
 | B0 Preparación | **Hecho** (2026-10-07) |
 | B1 Permisos P14 | **Hecho** en código y tests (2026-10-07) |
 | B2 Capa de datos (M1 → M2 → M3, un release) | **Hecho en test** (2026-10-07): M1, M2 y M3 aplicadas en `serenata-erp-test` (M3 y `cancel_cotizacion` por una persona: el MCP retiene todo DELETE/DROP); 23 guardas en 0, `plpgsql_check` en 0. Producción: sin tocar (se corre al lanzar, en orden M1 → M2 → M3). |
-| B3 API nueva y lecturas | En curso: parser, RFC/`SERENATA_RFC`, `estado_cuenta`, `facturas_candidatos`, rutas de factura/pagos/estado de cuenta y búsqueda de clientes hechas; falta `docs/ENV.md` y medir latencia |
+| B3 API nueva y lecturas | **Hecho en código y tests** (2026-10-07): parser, RFC/`SERENATA_RFC` (`docs/ENV.md`, jobs e2e), `estado_cuenta`, `facturas_candidatos`, rutas de factura/pagos/estado de cuenta y búsqueda de clientes. Pendiente de la persona: dar de alta `SERENATA_RFC` en Vercel (Production y Preview) y `.env.local` antes de desplegar. Latencia: `cuentas_conceptos` ≈ +20 % local (500 proyectos); `estado_cuenta` ≈ 560 ms en test, dominado por `cuentas_conceptos`; sin optimizar. |
 | B4a Menú y Registrar pago | Pendiente |
 | B4b Subir factura y complemento | Pendiente |
 | B4c Estado de cuenta y fichas | Pendiente |
