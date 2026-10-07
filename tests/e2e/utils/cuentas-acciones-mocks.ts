@@ -271,7 +271,16 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
 
   await page.route(/\/api\/cuentas\/estado-cuenta\?/, (route: Route) => {
     const q = new URL(route.request().url()).searchParams
-    return fulfillJson(route, q.get('lado') === 'proveedor' ? estadoProveedor(q.get('id') ?? PROVEEDOR.id) : estadoCobro(opciones.conPago, q.get('id') ?? CLIENTE.id))
+    const estado = q.get('lado') === 'proveedor' ? estadoProveedor(q.get('id') ?? PROVEEDOR.id) : estadoCobro(opciones.conPago, q.get('id') ?? CLIENTE.id)
+    // #130: `proyectos` limita el estado a los conceptos de esos proyectos (pago por proyecto).
+    const proyectos = q.get('proyectos')?.split(',')
+    if (proyectos) {
+      estado.facturas = estado.facturas
+        .map((f) => ({ ...f, conceptos: f.conceptos.filter((c) => proyectos.includes(c.proyecto_id ?? '')) }))
+        .filter((f) => f.conceptos.length > 0)
+        .map((f) => ({ ...f, total: f.conceptos.reduce((a, c) => a + c.total, 0), saldo: f.conceptos.reduce((a, c) => a + c.saldo, 0) }))
+    }
+    return fulfillJson(route, estado)
   })
   await page.route(/\/api\/clientes\?q=/, (route: Route) => {
     const q = (new URL(route.request().url()).searchParams.get('q') ?? '').toLowerCase()
@@ -283,15 +292,29 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
       { id: 'prov-ana', nombre: 'Ana Vidal', activo: true },
     ])
   )
-  await page.route(/\/api\/cuentas\/proyectos-selector\?/, (route: Route) =>
-    fulfillJson(route, {
+  await page.route(/\/api\/cuentas\/proyectos-selector\?/, (route: Route) => {
+    // Registrar pago por proyecto: cada proyecto con la contraparte y el saldo de sus facturas abiertas.
+    if (new URL(route.request().url()).searchParams.get('modo') === 'pago') {
+      return fulfillJson(route, {
+        modo: 'pago',
+        total: 3,
+        page: 1,
+        page_size: 25,
+        proyectos: [
+          { proyecto_id: 'SH001', proyecto: 'Spot TV 30s', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 41760 }] },
+          { proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 31320 }] },
+          { proyecto_id: 'SH070', proyecto: 'Doc. Festival', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: 'prov-fonoteca', nombre: 'Fonoteca MX', facturas: 1, saldo: 9000 }] },
+        ],
+      })
+    }
+    return fulfillJson(route, {
       modo: 'renglones',
       total: 1,
       page: 1,
       page_size: 25,
       proyectos: [{ proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: '2026-09-10', de_contraparte: false, renglones: RENGLONES_SELECTOR }],
     })
-  )
+  })
   await page.route(/\/api\/cuentas\/clientes\/[^/]+$/, (route: Route) => {
     const post = route.request().postData() ?? ''
     llamadas.clientes.push({ id: route.request().url().split('/').pop() ?? '', datos: datosDeMultipart(post) as Record<string, unknown> | null, constancia: post.includes('name="constancia"') })

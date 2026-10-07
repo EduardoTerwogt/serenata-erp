@@ -20,6 +20,8 @@ import { ACCEPT_COMPROBANTE, BotonArchivo } from '../detalle/TabDocumentos'
 import { Cap, CUERPO_VENTANA, Dato, Enlace, PieVentana } from './compartido'
 import { aCentavos, parseMonto, resumirReparto, sugerirReparto, textoMonto, type LineaReparto } from './reparto'
 import { SelectorContraparte } from './SelectorContraparte'
+import type { ContraparteSaldo, ProyectoSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
+import { SelectorProyectos } from './SelectorProyectos'
 import { accionesPago, useEstadoCuenta, type ContraparteLista } from './useAcciones'
 
 const TIPOS = [
@@ -27,6 +29,14 @@ const TIPOS = [
   { value: 'EFECTIVO', label: 'Efectivo' },
   { value: 'CHEQUE', label: 'Cheque' },
 ] as const
+
+type Vista = 'contraparte' | 'proyecto'
+const VISTAS: { value: Vista; label: string }[] = [
+  { value: 'contraparte', label: 'Por contraparte' },
+  { value: 'proyecto', label: 'Por proyecto' },
+]
+/** Tope de proyectos por pago: el mismo que acepta `GET /api/cuentas/estado-cuenta?proyectos=`. */
+const MAX_PROYECTOS = 50
 
 const LADOS: { value: LadoCuentas; label: string }[] = [
   { value: 'cobro', label: 'Cobro de cliente' },
@@ -47,9 +57,10 @@ export interface GrupoReparto {
 /**
  * Lo que se puede pagar hoy, en el orden en que SQL lo entrega (facturas de la más antigua a la más reciente y, dentro
  * de cada una, sus cotizaciones de la más antigua a la más reciente, P8). Solo entran conceptos con saldo. Los cobros
- * sin factura van al final y solo del lado cliente: a un proveedor no se le paga sin factura validada.
+ * sin factura van al final y solo del lado cliente: a un proveedor no se le paga sin factura validada. `soloFacturas`
+ * (pago por proyecto, #130 Q4) los omite: por proyecto solo se paga contra facturas, sin anticipos.
  */
-export function gruposPagables(estado: EstadoCuentaRespuesta): GrupoReparto[] {
+export function gruposPagables(estado: EstadoCuentaRespuesta, soloFacturas = false): GrupoReparto[] {
   const grupos: GrupoReparto[] = []
   const conSaldo = (cs: ConceptoEstadoCuenta[]) => cs.filter((c) => aCentavos(c.saldo) > 0)
   for (const f of estado.facturas as FacturaEstadoCuenta[]) {
@@ -67,7 +78,7 @@ export function gruposPagables(estado: EstadoCuentaRespuesta): GrupoReparto[] {
       conceptos,
     })
   }
-  if (estado.lado === 'cobro') {
+  if (estado.lado === 'cobro' && !soloFacturas) {
     const conceptos = conSaldo(estado.sin_factura)
     if (conceptos.length > 0) {
       grupos.push({
@@ -109,7 +120,13 @@ interface Props {
  * calcula en centavos enteros y solo para pintar (T6): la RPC decide topes, estados y umbrales bajo lock.
  */
 export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, onCambio, onClose, onRegistrado }: Props) {
-  const { datos: estado, error, cargando, recargar } = useEstadoCuenta(lado, contraparteId)
+  // #130: por proyecto se marcan proyectos de UNA contraparte (Q4) y el estado de cuenta se limita a ellos.
+  const [vista, setVista] = useState<Vista>('contraparte')
+  const [proyectosSel, setProyectosSel] = useState<string[]>([])
+  const [contraparteProy, setContraparteProy] = useState<{ id: string; nombre: string } | null>(null)
+  const porProyecto = vista === 'proyecto'
+  const cid = porProyecto ? (contraparteProy?.id ?? null) : contraparteId
+  const { datos: estado, error, cargando, recargar } = useEstadoCuenta(lado, cid, porProyecto ? proyectosSel : undefined)
   const [elegida, setElegida] = useState<ContraparteLista | null>(null)
   const [monto, setMonto] = useState('')
   const [aplicado, setAplicado] = useState<Record<string, string>>({})
@@ -123,8 +140,8 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
   const [aviso, setAviso] = useState<{ tono: 'error' | 'info'; texto: string } | null>(null)
   const [listo, setListo] = useState<{ total: number; lineas: number } | null>(null)
 
-  const vigente = estado && estado.lado === lado && estado.contraparte?.id === contraparteId ? estado : null
-  const grupos = useMemo(() => (vigente ? gruposPagables(vigente) : []), [vigente])
+  const vigente = estado && estado.lado === lado && estado.contraparte?.id === cid && !(porProyecto && cargando) ? estado : null
+  const grupos = useMemo(() => (vigente ? gruposPagables(vigente, porProyecto) : []), [vigente, porProyecto])
   const lineas = useMemo(() => lineasDeReparto(grupos, proyecto), [grupos, proyecto])
   const montoCent = parseMonto(monto)
   const centavos = useMemo(() => {
@@ -152,7 +169,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
   // Al cargar otra contraparte (o recargar tras un cambio de saldos) el reparto se reinicia sobre las líneas vigentes.
   const huella = useRef('')
   useEffect(() => {
-    const h = `${lado}|${contraparteId}|${lineas.map((l) => `${l.id}:${l.saldo}`).join(',')}`
+    const h = `${lado}|${cid}|${proyectosSel.join(',')}|${lineas.map((l) => `${l.id}:${l.saldo}`).join(',')}`
     if (!vigente || huella.current === h) return
     huella.current = h
     setManual(false)
@@ -161,7 +178,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     if (proyecto) setAbiertas(new Set(grupos.filter((g) => g.conceptos.some((c) => c.proyecto_id === proyecto)).map((g) => g.clave)))
     // `monto` se lee solo al reiniciar: cambiarlo no debe reiniciar el reparto manual.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vigente, lineas, lado, contraparteId])
+  }, [vigente, lineas, lado, cid, proyectosSel])
 
   const cambiarMonto = (texto: string) => {
     const limpio = texto.replace(/[^\d.,]/g, '')
@@ -188,8 +205,32 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     if (l === lado) return
     setAplicado({})
     setAviso(null)
+    setProyectosSel([])
+    setContraparteProy(null)
     huella.current = ''
     onCambio({ lado: l, contraparteId: null })
+  }
+  const cambiarVista = (v: Vista) => {
+    if (v === vista) return
+    setVista(v)
+    setAplicado({})
+    setAviso(null)
+    setProyectosSel([])
+    setContraparteProy(null)
+    huella.current = ''
+  }
+  const alternarProyecto = (p: ProyectoSelector, c: ContraparteSaldo) => {
+    if (!c.id) return
+    const actuales = contraparteProy?.id === c.id ? proyectosSel : []
+    const marcado = actuales.includes(p.proyecto_id)
+    if (!marcado && actuales.length >= MAX_PROYECTOS) {
+      setAviso({ tono: 'info', texto: `Un pago admite hasta ${MAX_PROYECTOS} proyectos. Registra el resto en otro pago.` })
+      return
+    }
+    const siguientes = marcado ? actuales.filter((x) => x !== p.proyecto_id) : [...actuales, p.proyecto_id]
+    setAviso(null)
+    setProyectosSel(siguientes)
+    setContraparteProy(siguientes.length > 0 ? { id: c.id, nombre: c.nombre } : null)
   }
   const elegirContraparte = (c: ContraparteLista) => {
     setElegida(c)
@@ -228,7 +269,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     }
   }
 
-  const nombre = vigente?.contraparte?.nombre ?? elegida?.nombre ?? null
+  const nombre = vigente?.contraparte?.nombre ?? (porProyecto ? contraparteProy?.nombre : elegida?.nombre) ?? null
   const etiquetaMonto = lado === 'cobro' ? 'Monto recibido' : 'Monto transferido'
   const nFacturas = grupos.filter((g) => g.conceptos.some((c) => (centavos.valores[c.id] ?? 0) > 0)).length
 
@@ -267,7 +308,10 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
         !listo ? (
           <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:gap-3">
             <FilterTabs tabs={LADOS} value={lado} onChange={cambiarLado} />
-            <SelectorContraparte key={`${lado}:${contraparteId ?? ''}:${nombre ? 1 : 0}`} lado={lado} valor={nombre && contraparteId ? { id: contraparteId, nombre } : null} onElegir={elegirContraparte} />
+            <FilterTabs tabs={VISTAS} value={vista} onChange={cambiarVista} />
+            {!porProyecto && (
+              <SelectorContraparte key={`${lado}:${contraparteId ?? ''}:${nombre ? 1 : 0}`} lado={lado} valor={nombre && contraparteId ? { id: contraparteId, nombre } : null} onElegir={elegirContraparte} />
+            )}
           </div>
         ) : undefined
       }
@@ -279,8 +323,17 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
         <>
           {aviso && <StatusBanner tone={aviso.tono}>{aviso.texto}</StatusBanner>}
           {error && !vigente && <StatusBanner tone="error">{error}</StatusBanner>}
-          {!contraparteId && <Aviso icono="info" tono="neutro">{lado === 'cobro' ? 'Elige el cliente que depositó.' : 'Elige el proveedor al que se le transfirió.'}</Aviso>}
-          {contraparteId && !vigente && !error && <SectionLoading className="min-h-[240px]" />}
+          {porProyecto && (
+            <>
+              <SelectorProyectos modo="pago" lado={lado} contraparteFija={contraparteProy?.id ?? null} proyectosMarcados={proyectosSel} onTogglePago={alternarProyecto} />
+              <Aviso icono="info" tono="neutro">
+                Un pago es de <b>una sola contraparte</b>: al marcar un proyecto, los de otras contrapartes quedan deshabilitados. Solo se paga contra facturas.
+              </Aviso>
+            </>
+          )}
+          {!cid && !porProyecto && <Aviso icono="info" tono="neutro">{lado === 'cobro' ? 'Elige el cliente que depositó.' : 'Elige el proveedor al que se le transfirió.'}</Aviso>}
+          {!cid && porProyecto && <Aviso icono="info" tono="neutro">Marca los proyectos que cubre el {lado === 'cobro' ? 'cobro' : 'pago'}.</Aviso>}
+          {cid && !vigente && !error && <SectionLoading className="min-h-[240px]" />}
           {vigente && grupos.length === 0 && (
             <Aviso icono="circle-check" tono="ok">
               {lado === 'cobro' ? 'Este cliente no tiene cobros pendientes.' : 'Este proveedor no tiene facturas por pagar.'}

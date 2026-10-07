@@ -69,6 +69,10 @@ describe('gruposPagables', () => {
     const e = estado('proveedor', [factura('D', [concepto('SH001', 100)])], [concepto('SH009', 70)])
     expect(gruposPagables(e).map((x) => x.clave)).toEqual(['D'])
   })
+  it('por proyecto (#130) solo se paga contra facturas: los cobros sin factura (anticipos) no entran', () => {
+    const e = estado('cobro', [factura('A', [concepto('SH001', 100)])], [concepto('SH009', 70)])
+    expect(gruposPagables(e, true).map((x) => x.clave)).toEqual(['A'])
+  })
 })
 
 describe('lineasDeReparto', () => {

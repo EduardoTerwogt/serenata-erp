@@ -18,7 +18,8 @@ export interface RenglonSelector {
 }
 
 export interface ContraparteSaldo {
-  id: string
+  /** null: la cotización no tiene cliente en la ficha (no se puede pagar por proyecto). */
+  id: string | null
   nombre: string
   facturas: number
   saldo: number

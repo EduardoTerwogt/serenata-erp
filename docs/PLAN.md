@@ -690,6 +690,13 @@ UI de Subir factura. `tsc`, `lint` y pruebas unitarias en verde (RTL: `subir-fac
 - Cliente elegido a mano sin RFC: reemplaza la casilla "Guardar el RFC" por "Completar cliente" (RFC del XML, contacto y constancia obligatoria si no hay una guardada); primero `PATCH` de la ficha y luego la factura. Cambio visible: el e2e anterior "se ofrece guardar el RFC" del cliente ahora pasa por la constancia (Q9). Para un proveedor elegido a mano la casilla se conserva.
 - `ApiError.data` expone el cuerpo JSON del error (lo usa el 502).
 
+### Resultado de C4 (2026-10-07)
+Registrar pago gana la vista "Por proyecto" (segundo selector junto a "Cobro de cliente / Pago a proveedor"). Sin RPC ni ruta nuevas: usa `GET /api/cuentas/proyectos-selector?modo=pago` y `estado-cuenta?proyectos=`; el pago sigue por `registrar_pago_cobro|proveedor`, `runIdempotentPagoSubmit` y `reparto.ts`.
+- `SelectorProyectos` modo `pago`: cada proyecto lista sus contrapartes con facturas y saldo; al marcar una se fija la contraparte y las demás quedan deshabilitadas ("otra contraparte"). Máximo 50 proyectos por pago (el tope de la ruta).
+- Solo se paga contra facturas, sin anticipos: `gruposPagables(estado, soloFacturas)` omite los cobros sin factura en esta vista (Q4).
+- Desviaciones de la maqueta: no hay casilla "Solo con saldo abierto" (SQL solo lista proyectos con saldo abierto) ni filas "Pagada $0.00".
+- `candidatos_cambiaron` sigue igual: recarga el estado limitado a los mismos proyectos y vuelve a sugerir el reparto.
+
 ## Riesgos
 - **P0:** alta + reasignación + grupo + factura atómicos (una RPC); gasto extra no rompe `auditar_consistencia` ni `cancel_cotizacion` (B0 define si lleva `cotizacion_id`); centavos al repartir (residuo en `numeric`).
 - **P1:** duplicar proveedor; lista de ~2,700 proyectos (< 800 ms p95); ventana de test compartida; total CFDI vs neto da falsos matches; permiso `cuentas` crea proveedores (la RPC valida y deja rastro).
@@ -717,5 +724,5 @@ UI de Subir factura. `tsc`, `lint` y pruebas unitarias en verde (RTL: `subir-fac
 | C1 Datos | **Hecho en test** (2026-10-07): migración `20261034`; falta correrla en CI (`Migrations`) y en producción al lanzar |
 | C2 API | **Hecho** (2026-10-07): rutas, servicios y pruebas; migración `20261035`; falta CI, `smoke`/`critical` y el spec `live` de C5 |
 | C3 UI Subir factura | **Hecho** (2026-10-07): pendiente solo CI y la revisión visual del usuario |
-| C4 UI Registrar pago por proyecto | Pendiente |
+| C4 UI Registrar pago por proyecto | **Hecho** (2026-10-07): pendiente solo CI y la revisión visual del usuario |
 | C5 Cerrar | Pendiente |

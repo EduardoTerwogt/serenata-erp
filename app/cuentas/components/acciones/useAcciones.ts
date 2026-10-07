@@ -15,9 +15,12 @@ export interface ContraparteLista {
   nombre: string
 }
 
-/** Estado de cuenta de un cliente o proveedor (una sola consulta, P15): alimenta las tres ventanas de Acciones. */
-export const useEstadoCuenta = (lado: LadoCuentas, id: string | null) =>
-  useGet<EstadoCuentaRespuesta>(id ? `/api/cuentas/estado-cuenta?lado=${lado}&id=${id}` : null, 'No se pudo cargar el estado de cuenta')
+/** Estado de cuenta de un cliente o proveedor (una sola consulta, P15): alimenta las tres ventanas de Acciones. `proyectos` lo limita a esos proyectos (pago por proyecto, #130). */
+export const useEstadoCuenta = (lado: LadoCuentas, id: string | null, proyectos?: string[]) =>
+  useGet<EstadoCuentaRespuesta>(
+    id ? `/api/cuentas/estado-cuenta?lado=${lado}&id=${id}${proyectos?.length ? `&proyectos=${encodeURIComponent(proyectos.join(','))}` : ''}` : null,
+    'No se pudo cargar el estado de cuenta'
+  )
 
 /** Proveedores activos (la ruta ya los entrega con columnas públicas); se filtran en el cliente. */
 export function useProveedores(activo: boolean) {

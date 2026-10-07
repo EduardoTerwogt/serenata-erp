@@ -131,6 +131,25 @@ test('registrar pago a proveedor: cada factura es un proyecto y el pago liquida 
   expect(llamadas.pagos[0].lineas.map((l) => l.id)).toEqual(['grupo-SH001', 'grupo-SH003', 'grupo-SH004'])
 })
 
+test('registrar pago por proyecto: se marcan proyectos de un proveedor, las demás contrapartes se deshabilitan y se paga contra sus facturas (#130)', async ({ page }) => {
+  const llamadas = await abrir(page)
+  await elegirAccion(page, 'Registrar pago')
+  const modal = page.getByRole('dialog', { name: 'Registrar pago' })
+  await modal.getByRole('button', { name: 'Pago a proveedor' }).click()
+  await modal.getByRole('button', { name: 'Por proyecto' }).click()
+  await modal.getByRole('checkbox', { name: `Incluir SH001 · ${PROVEEDOR.nombre}` }).click()
+  await expect(modal.getByRole('checkbox', { name: 'Incluir SH070 · Fonoteca MX' })).toBeDisabled()
+  await expect(modal.getByText('otra contraparte')).toBeVisible()
+  await modal.getByRole('checkbox', { name: `Incluir SH004 · ${PROVEEDOR.nombre}` }).click()
+
+  await modal.getByLabel('Monto transferido').fill('73080')
+  await expect(modal.getByText('Aplicado $73,080.00 de $73,080.00')).toBeVisible()
+  await modal.getByRole('button', { name: 'Registrar pago' }).click()
+  await expect(modal.getByText('Pago registrado')).toBeVisible()
+  expect(llamadas.pagos[0].lado).toBe('proveedor')
+  expect(llamadas.pagos[0].lineas.map((l) => l.id)).toEqual(['grupo-SH001', 'grupo-SH004'])
+})
+
 // ── Subir factura (B4b) ─────────────────────────────────────────────────────────────────────────────────────────
 
 const xml = (name: string) => ({ name, mimeType: 'text/xml', buffer: Buffer.from('<cfdi:Comprobante/>') })

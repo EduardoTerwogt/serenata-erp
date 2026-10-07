@@ -7,14 +7,22 @@ import { SearchInput } from '@/components/ui/SearchInput'
 import { SectionLoading } from '@/components/ui/SectionLoading'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { fmtMoney } from '@/lib/quotations/format'
-import type { ProyectoSelector, RenglonSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
+import type { LadoCuentas } from '@/lib/shared/cuentas/estado-cuenta-tipos'
+import type { ContraparteSaldo, ProyectoSelector, RenglonSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import { fechaCorta } from '../formato'
 import { Enlace } from './compartido'
 import { useProyectosSelector } from './useAcciones'
 
 interface Props {
-  /** `renglones`: marcar renglones de un proyecto. `proyecto`: elegir un solo proyecto (gasto extra). */
-  modo: 'renglones' | 'proyecto'
+  /** `renglones`: marcar renglones de un proyecto. `proyecto`: elegir un solo proyecto (gasto extra). `pago`: marcar proyectos con saldo de una sola contraparte (Registrar pago por proyecto). */
+  modo: 'renglones' | 'proyecto' | 'pago'
+  /** Solo modo `pago`: de qué lado se buscan los saldos. */
+  lado?: LadoCuentas
+  /** Solo modo `pago`: contraparte ya fijada por el primer proyecto marcado; las demás quedan deshabilitadas (un pago, una contraparte). */
+  contraparteFija?: string | null
+  /** Solo modo `pago`: proyectos marcados. */
+  proyectosMarcados?: string[]
+  onTogglePago?: (proyecto: ProyectoSelector, contraparte: ContraparteSaldo) => void
   /** Proveedor con el que se prioriza la lista (sus proyectos primero). */
   contraparte?: string | null
   /** Texto con el que arranca la búsqueda (p. ej. el proyecto propuesto por el total del XML). */
@@ -31,11 +39,12 @@ interface Props {
  * proyecto). Lee de SQL, paginado: búsqueda con debounce, "solo con pendientes" y "Cargar más". Una factura de proveedor
  * es de un solo proyecto (P10): el padre reemplaza la selección al marcar un renglón de otro proyecto.
  */
-export function SelectorProyectos({ modo, contraparte = null, busquedaInicial = '', seleccion = [], proyectoSeleccionado = null, onToggleRenglon, onElegirProyecto }: Props) {
+export function SelectorProyectos({ modo, lado = 'proveedor', contraparteFija = null, proyectosMarcados = [], onTogglePago, contraparte = null, busquedaInicial = '', seleccion = [], proyectoSeleccionado = null, onToggleRenglon, onElegirProyecto }: Props) {
   const [q, setQ] = useState(busquedaInicial)
   const [soloPendientes, setSoloPendientes] = useState(modo === 'renglones')
+  const pago = modo === 'pago'
   const [abiertos, setAbiertos] = useState<Set<string>>(() => new Set(proyectoSeleccionado ? [proyectoSeleccionado] : []))
-  const { proyectos, total, error, cargando, cargandoMas, hayMas, cargarMas } = useProyectosSelector({ modo: 'renglones', lado: 'proveedor', q, contraparte, soloPendientes }, true)
+  const { proyectos, total, error, cargando, cargandoMas, hayMas, cargarMas } = useProyectosSelector(pago ? { modo: 'pago', lado, q, soloPendientes: true } : { modo: 'renglones', lado: 'proveedor', q, contraparte, soloPendientes }, true)
 
   const alternar = (id: string) =>
     setAbiertos((a) => {
@@ -51,17 +60,47 @@ export function SelectorProyectos({ modo, contraparte = null, busquedaInicial = 
         <div className="min-w-0 flex-1">
           <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar folio, proyecto o cliente" aria-label="Buscar proyecto" />
         </div>
-        <label className="flex items-center gap-2 text-[12.5px] text-body">
-          <Checkbox checked={soloPendientes} onChange={setSoloPendientes} label="Solo con renglones por asignar o saldo abierto" />
-          Solo con pendientes
-        </label>
+        {!pago && (
+          <label className="flex items-center gap-2 text-[12.5px] text-body">
+            <Checkbox checked={soloPendientes} onChange={setSoloPendientes} label="Solo con renglones por asignar o saldo abierto" />
+            Solo con pendientes
+          </label>
+        )}
       </div>
 
       {error && <div className="px-3.5 py-3 text-[12.5px] text-subtext">{error}</div>}
       {cargando && !error && <SectionLoading className="min-h-[96px]" />}
       {!cargando && !error && proyectos.length === 0 && <div className="px-3.5 py-3 text-[12.5px] text-subtext">Sin proyectos con esos filtros.</div>}
 
-      {proyectos.map((p) => {
+      {pago &&
+        proyectos.map((p) => (
+          <div key={p.proyecto_id} className="border-t border-hairline first:border-t-0">
+            <div className="flex items-center gap-3 px-3.5 py-2.5">
+              <span className="sn-folio w-[64px] flex-none text-[11px] text-accent">{p.proyecto_id}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-medium text-ink">{p.proyecto ?? '—'}</span>
+                <span className="block truncate text-[11.5px] text-subtext">{p.cliente ?? 'Sin cliente'}</span>
+              </span>
+            </div>
+            {(p.contrapartes ?? []).map((c) => {
+              const otra = Boolean(contraparteFija) && contraparteFija !== c.id
+              const marcado = contraparteFija === c.id && proyectosMarcados.includes(p.proyecto_id)
+              return (
+                <div key={`${p.proyecto_id}:${c.id}`} className={`flex items-center gap-3 border-t border-hairline bg-row-alt/50 px-3.5 py-2 pl-10 text-[12.5px] ${otra || !c.id ? 'opacity-45' : ''}`}>
+                  <Checkbox checked={marcado} disabled={otra || !c.id} onChange={() => onTogglePago?.(p, c)} label={`Incluir ${p.proyecto_id} · ${c.nombre}`} />
+                  <span className="min-w-0 flex-1 truncate text-ink">
+                    {c.nombre} · {c.facturas === 1 ? '1 factura' : `${c.facturas} facturas`}
+                  </span>
+                  {otra && <StatusBadge tone="draft">otra contraparte</StatusBadge>}
+                  {!c.id && <StatusBadge tone="draft">sin ficha</StatusBadge>}
+                  <span className="whitespace-nowrap font-semibold text-ink">{fmtMoney(c.saldo)}</span>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+
+      {!pago && proyectos.map((p) => {
         const renglones = p.renglones ?? []
         const abierto = modo === 'renglones' && (abiertos.has(p.proyecto_id) || proyectoSeleccionado === p.proyecto_id)
         const marcados = renglones.filter((r) => seleccion.includes(r.cuenta_id)).length
