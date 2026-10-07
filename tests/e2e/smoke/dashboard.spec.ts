@@ -7,7 +7,7 @@ function resumenMock(overrides: Partial<Record<string, unknown>> = {}) {
     periodoActual: { label: 'Marzo 2026', inicio: '2026-03-01', fin: '2026-04-01' },
     kpis: { porCobrar: 125000, porPagar: 48000, cotizacionesAprobadas: 3, cotizacionesBorrador: 2 },
     balance: [{ label: 'Marzo 2026', ingresos: 130000, egresos: 62000 }],
-    fiscal: { ingresos: 130000, egresos: 62000, impuestos: 20400, deudas: 48000, utilidadAntesIsr: 68000 },
+    fiscal: { ingresos: 130000, egresos: 62000, impuestos: 20400, deudas: 48000, utilidadAntesIsr: 68000, isr: { tipoPersona: 'moral', tasa: 0.3, desdeConstancia: true } },
     cobertura: {
       gastosFijos: [{ id: 'g1', nombre: 'Renta oficina', monto: 15000 }],
       totalGastosFijos: 15000,
