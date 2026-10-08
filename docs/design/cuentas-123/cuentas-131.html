@@ -165,7 +165,7 @@ a{color:var(--accent)}
 .paso-t .n{width:20px;height:20px;border-radius:999px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px}
 .paso-t .n.off{background:var(--sn-surface-alt-2);color:var(--sn-ink-faint)}
 .proy-ok{display:flex;align-items:center;gap:10px;border:1px solid var(--sn-hairline);border-radius:10px;padding:10px 14px;background:var(--sn-surface-alt)}
-.proy-ok b{color:var(--sn-ink)} .proy-ok .cambiar{margin-left:auto;color:var(--accent-quiet);cursor:pointer;background:none;border:0;font-size:12.5px;text-decoration:underline}
+.proy-ok b{color:var(--sn-ink)} .proy-ok .pill{margin-left:auto}
 .sw{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--sn-ink-body);cursor:pointer}
 .sw i{width:34px;height:20px;border-radius:999px;background:var(--sn-input);border:1px solid var(--sn-hairline);position:relative;flex:none}
 .sw i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:var(--sn-ink-faint);transition:all 120ms var(--ease)}
@@ -228,7 +228,8 @@ a{color:var(--accent)}
   <div class="dd-wrap"><div class="dd"><button class="dd-t val"><b>Luminarias del Centro</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div></div>
 
   <div class="paso"><div class="paso-t"><span class="n">1</span>¿De qué proyecto es?</div>
-   <div class="proy-ok"><span class="folio">SH-0412</span><b>Boda Rivas</b><span class="note">Cliente: Rivas</span><button class="cambiar">Cambiar</button></div>
+   <label class="proy-ok"><input type="checkbox" checked aria-label="Proyecto sugerido SH-0412"><span class="folio">SH-0412</span><b>Boda Rivas</b><span class="pill p-info">Lo nombra el folio</span></label>
+   <div class="dd"><button class="dd-t"><b>Elegir otro proyecto</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div>
   </div>
 
   <div class="paso"><div class="paso-t"><span class="n">2</span>¿Qué conceptos cubre?</div>
@@ -257,7 +258,8 @@ a{color:var(--accent)}
   <div class="xml"><div><b>PROV-0345.xml</b><div class="mono">CFDI · Ingreso · 06 oct 2026</div></div><div class="tot"><small>Total del XML</small>$9,280.00</div></div>
   <div class="dd-wrap"><div class="dd"><button class="dd-t val"><b>Luminarias del Centro</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div></div>
   <div class="paso"><div class="paso-t"><span class="n">1</span>¿De qué proyecto es?</div>
-   <div class="proy-ok"><span class="folio">SH-0412</span><b>Boda Rivas</b><span class="note">Cliente: Rivas</span><button class="cambiar">Cambiar</button></div>
+   <label class="proy-ok"><input type="checkbox" checked aria-label="Proyecto sugerido SH-0412"><span class="folio">SH-0412</span><b>Boda Rivas</b><span class="pill p-info">Lo nombra el folio</span></label>
+   <div class="dd"><button class="dd-t"><b>Elegir otro proyecto</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div>
   </div>
   <label class="sw"><input type="checkbox" checked><i></i>Esta factura no está en la cotización (gasto extra)</label>
   <div class="paso"><div class="paso-t"><span class="n">2</span>¿De qué es el gasto?</div>
@@ -275,12 +277,8 @@ a{color:var(--accent)}
 <section class="mo" data-s="s5" hidden><div class="mp"><div class="mp-grab"><span></span></div>
  <div class="mp-h"><div><div class="ey">Acciones</div><h2 class="mp-t">Registrar pago</h2></div><button class="x" aria-label="Cerrar">✕</button></div>
  <div class="mp-b">
-  <div class="hdr-pago">
-   <div class="seg" role="tablist"><button role="tab" aria-selected="true">Cobro de cliente</button><button role="tab" aria-selected="false">Pago a proveedor</button></div>
-   <div class="dd" style="flex:none;width:300px;max-width:100%;min-width:0">
-    <button class="dd-t val"><b>Productora Rivas</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
-   </div>
-  </div>
+  <div class="hdr-pago"><div class="seg" role="tablist"><button role="tab" aria-selected="true">Cobro de cliente</button><button role="tab" aria-selected="false">Pago a proveedor</button></div></div>
+  <div class="dd"><button class="dd-t val"><b>Productora Rivas</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div>
   <div style="display:flex;justify-content:flex-end"><button class="enlace">Pagar varios proyectos a la vez</button></div>
   <div class="grid2">
    <div class="fld"><label>Monto recibido</label><input placeholder="0.00" style="text-align:right"><span class="h">Se reparte entre las facturas de abajo</span></div>
@@ -295,12 +293,8 @@ a{color:var(--accent)}
 <section class="mo" data-s="s6" hidden><div class="mp"><div class="mp-grab"><span></span></div>
  <div class="mp-h"><div><div class="ey">Acciones</div><h2 class="mp-t">Registrar pago</h2></div><button class="x" aria-label="Cerrar">✕</button></div>
  <div class="mp-b">
-  <div class="hdr-pago">
-   <div class="seg" role="tablist"><button role="tab" aria-selected="false">Cobro de cliente</button><button role="tab" aria-selected="true">Pago a proveedor</button></div>
-   <div class="dd" style="flex:none;width:300px;max-width:100%;min-width:0">
-    <button class="dd-t val"><b>Luminarias del Centro</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
-   </div>
-  </div>
+  <div class="hdr-pago"><div class="seg" role="tablist"><button role="tab" aria-selected="false">Cobro de cliente</button><button role="tab" aria-selected="true">Pago a proveedor</button></div></div>
+  <div class="dd"><button class="dd-t val"><b>Luminarias del Centro</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div>
   <div style="display:flex;justify-content:flex-end"><button class="enlace">Pagar varios proyectos a la vez</button></div>
   <div class="grid2">
    <div class="fld"><label>Monto transferido</label><input value="22,000.00" style="text-align:right"><span class="h">Se reparte entre las facturas de abajo</span></div>
@@ -321,16 +315,15 @@ a{color:var(--accent)}
  <div class="mp-h"><div><div class="ey">Acciones</div><h2 class="mp-t">Registrar pago</h2></div><button class="x" aria-label="Cerrar">✕</button></div>
  <div class="mp-b">
   <div class="hdr-pago"><div class="seg" role="tablist"><button role="tab" aria-selected="true">Cobro de cliente</button><button role="tab" aria-selected="false">Pago a proveedor</button></div></div>
+  <div class="dd"><button class="dd-t val"><b>Productora Rivas</b><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button></div>
   <div style="display:flex;justify-content:flex-end"><button class="enlace">← Volver a elegir un cliente</button></div>
-  <div class="aviso a-info"><span>Marca los proyectos que cubre el cobro. Un pago es de un solo cliente.</span></div>
+  <div class="aviso a-info"><span>Marca los proyectos de Productora Rivas que cubre el cobro.</span></div>
   <div class="sel">
    <div class="sel-bar"><input type="search" placeholder="Buscar folio, proyecto o cliente"></div>
    <div class="prj"><div class="prj-h" style="cursor:default"><span class="folio">SH-0412</span><b>Boda Rivas</b></div>
     <div class="row" style="padding-left:40px"><input type="checkbox" checked aria-label="Rivas"><span class="d">Productora Rivas</span><span class="note">1 factura</span><span class="pill p-info">Por pagar</span><span class="m">$18,560.00</span></div></div>
    <div class="prj"><div class="prj-h" style="cursor:default"><span class="folio">SH-0431</span><b>Aniversario Rivas</b></div>
     <div class="row" style="padding-left:40px"><input type="checkbox" checked aria-label="Rivas"><span class="d">Productora Rivas</span><span class="note">1 factura</span><span class="pill p-info">Por pagar</span><span class="m">$9,280.00</span></div></div>
-   <div class="prj"><div class="prj-h" style="cursor:default"><span class="folio">SH-0440</span><b>Gala Ortiz</b></div>
-    <div class="row bloq" style="padding-left:40px"><input type="checkbox" disabled aria-label="Ortiz"><span class="d">Grupo Ortiz</span><span class="pill p-draft">Otro cliente</span><span class="m">$4,640.00</span></div></div>
   </div>
  </div>
  <div class="mp-f"><div class="res">2 proyectos · Productora Rivas<b>$27,840.00</b></div><button class="btn sec">Cancelar</button><button class="btn pri" disabled>Registrar pago</button></div>
