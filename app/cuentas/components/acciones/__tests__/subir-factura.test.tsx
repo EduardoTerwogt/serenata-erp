@@ -71,7 +71,11 @@ function fetchSimulado(input: RequestInfo | URL, init?: RequestInit) {
   return Promise.resolve(json({}))
 }
 
-function abrir(archivos: File[] = [new File(['<xml/>'], 'factura.xml', { type: 'text/xml' })], props: { proyecto?: string } = {}) {
+// El PDF es obligatorio (#131): por defecto se adjuntan los dos archivos.
+const XML = () => new File(['<xml/>'], 'factura.xml', { type: 'text/xml' })
+const PDF = () => new File(['%PDF'], 'factura.pdf', { type: 'application/pdf' })
+
+function abrir(archivos: File[] = [XML(), PDF()], props: { proyecto?: string } = {}) {
   const r = render(<SubirFactura escritorio onClose={() => {}} onGuardada={() => {}} {...props} />)
   const input = r.baseElement.querySelector('input[type="file"]') as HTMLInputElement
   fireEvent.change(input, { target: { files: archivos } })
@@ -355,6 +359,50 @@ describe('Subir factura · cliente sin RFC (#130)', () => {
   })
 })
 
+describe('Subir factura · PDF obligatorio (#131)', () => {
+  const conPropuesta = () => base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' }, propuesta: [{ proyecto_id: 'SH001', proyecto: 'Boda Lopez', renglones: ['c1', 'c2'], neto: 5000 }] })
+  const inputPdf = () => (Array.from(document.querySelectorAll('input[type="file"]')) as HTMLInputElement[]).find((i) => i.accept.includes('pdf') && !i.multiple)!
+
+  it('sin PDF «Guardar» queda bloqueado y el pie pide el PDF; al adjuntarlo se habilita', async () => {
+    previews = [conPropuesta()]
+    abrir([XML()])
+    expect(await screen.findByText('Requerido, hasta 4 MB')).toBeTruthy()
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Incluir Audio ceremonia/ }).getAttribute('aria-checked')).toBe('true'))
+    expect(boton(/Asignar y registrar factura/).disabled).toBe(true)
+    expect(screen.getByText('Adjunta el PDF de la factura')).toBeTruthy()
+
+    fireEvent.change(inputPdf(), { target: { files: [PDF()] } })
+    await waitFor(() => expect(boton(/Asignar y registrar factura/).disabled).toBe(false))
+  })
+
+  it('quitar el PDF vuelve a bloquear «Guardar»', async () => {
+    previews = [conPropuesta()]
+    abrir()
+    await waitFor(() => expect(boton(/Asignar y registrar factura/).disabled).toBe(false))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Quitar' })[1])
+    await waitFor(() => expect(boton(/Asignar y registrar factura/).disabled).toBe(true))
+  })
+
+  it('un complemento también necesita su PDF', async () => {
+    previews = [{ tipo: 'complemento_cobro', lado: 'cobro', cfdi: { uuid: 'U', fecha: '2026-10-01T09:00:00' }, relacionados: [{ uuid_factura: 'F-UUID', monto_pagado: 1000, factura: { id: 'f', estado_validacion: 'validado', metodo_pago: 'PPD', total_cfdi: 1000 } }] } as never]
+    abrir([XML()])
+    expect(await screen.findByText(/Es un/)).toBeTruthy()
+    expect(boton(/Guardar complemento/).disabled).toBe(true)
+    fireEvent.change(inputPdf(), { target: { files: [PDF()] } })
+    await waitFor(() => expect(boton(/Guardar complemento/).disabled).toBe(false))
+  })
+
+  it('XML y PDF juntos no pasan de 4 MB: avisa y no adjunta el PDF', async () => {
+    previews = [conPropuesta()]
+    abrir([new File([new Uint8Array(1.5 * 1024 * 1024)], 'factura.xml', { type: 'text/xml' })])
+    await screen.findByText('Requerido, hasta 4 MB')
+    const grande = new File([new Uint8Array(3 * 1024 * 1024)], 'grande.pdf', { type: 'application/pdf' })
+    fireEvent.change(inputPdf(), { target: { files: [grande] } })
+    expect(await screen.findByText('El XML y el PDF juntos exceden 4 MB. Reduce el PDF.')).toBeTruthy()
+    expect(screen.queryByText('grande.pdf')).toBeNull()
+  })
+})
+
 describe('Subir factura · Adjuntar factura (#131)', () => {
   it('un solo botón recibe el XML y el PDF juntos y los pide de una vez', async () => {
     previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' } })]
@@ -371,7 +419,7 @@ describe('Subir factura · Adjuntar factura (#131)', () => {
     fireEvent.change(input, { target: { files: [new File(['%PDF'], 'solo.pdf', { type: 'application/pdf' })] } })
     expect(await screen.findByText('Falta el XML de la factura.')).toBeTruthy()
     fireEvent.change(input, { target: { files: [new File(['<xml/>'], 'a.xml', { type: 'text/xml' }), new File(['<xml/>'], 'b.xml', { type: 'text/xml' })] } })
-    expect(await screen.findByText('Adjunta un XML y, si lo tienes, su PDF.')).toBeTruthy()
+    expect(await screen.findByText('Adjunta un XML y su PDF.')).toBeTruthy()
     expect(llamadas.filter((l) => l.url.startsWith('/api/cuentas/facturas/preview'))).toHaveLength(0)
   })
 })

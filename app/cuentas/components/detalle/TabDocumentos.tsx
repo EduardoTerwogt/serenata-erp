@@ -27,6 +27,8 @@ interface Props {
 
 /** Límite por archivo (supuesto 15): igual que el servidor (factura-validation.ts). */
 export const LIMITE_ARCHIVO = 4 * 1024 * 1024
+/** #131: XML + PDF de Subir factura viajan juntos; igual que `MAX_TOTAL_SIZE` del servidor. */
+export const LIMITE_TOTAL = 4.2 * 1024 * 1024
 export const ACCEPT_XML = '.xml,application/xml,text/xml'
 export const ACCEPT_PDF = '.pdf,application/pdf'
 export const ACCEPT_COMPROBANTE = 'image/*,.pdf,application/pdf'

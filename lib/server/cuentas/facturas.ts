@@ -8,7 +8,7 @@
  *   fiscal del proveedor.
  * - `confirmarFactura`: cliente → `ligar_factura` (RFC que no coincide = "En revisión", no se rechaza); proveedor →
  *   el servicio de grupo existente (1:1 por grupo); complemento → `ligar_complemento_*`. Los archivos van a
- *   `/Por Cobrar/<cliente>/` o `/Por Pagar/<proveedor>/` (T15). El PDF puede llegar después por `.../documentos`.
+ *   `/Por Cobrar/<cliente>/` o `/Por Pagar/<proveedor>/` (T15). El PDF es obligatorio y viaja con el XML (#131); las rutas por cuenta siguen permitiendo subirlo después.
  *
  * Toda la regla del total vive en SQL (T19): aquí solo se lee el XML, se clasifica y se llama.
  */

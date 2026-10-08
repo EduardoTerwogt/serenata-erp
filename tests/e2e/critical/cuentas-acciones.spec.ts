@@ -160,13 +160,30 @@ test('registrar pago por proyecto: con el proveedor elegido solo salen sus proye
 
 const xml = (name: string) => ({ name, mimeType: 'text/xml', buffer: Buffer.from('<cfdi:Comprobante/>') })
 
-async function subirXml(page: Page, nombre: string) {
+/** El PDF es obligatorio (#131): por defecto el botón único recibe XML y PDF juntos; `conPdf: false` adjunta solo el XML. */
+const pdf = { name: 'factura.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') }
+
+async function subirXml(page: Page, nombre: string, conPdf = true) {
   await elegirAccion(page, 'Subir factura')
   await expect(page).toHaveURL(/sheet=factura/)
   const modal = page.getByRole('dialog', { name: 'Subir factura' })
-  await modal.locator('input[type="file"]').first().setInputFiles(xml(nombre))
+  await modal.locator('input[type="file"]').first().setInputFiles(conPdf ? [xml(nombre), pdf] : xml(nombre))
   return modal
 }
+
+test('subir factura: sin PDF no se puede guardar; al adjuntarlo se habilita (#131)', async ({ page }) => {
+  const llamadas = await abrir(page)
+  const modal = await subirXml(page, 'folios.xml', false)
+  await expect(modal.getByText('Marcadas por los folios del CFDI')).toBeVisible()
+  const guardar = modal.getByRole('button', { name: 'Guardar factura' })
+  await expect(guardar).toBeDisabled()
+  await expect(modal.getByText('Adjunta el PDF de la factura')).toBeVisible()
+  await modal.locator('input[type="file"][accept*="pdf"]:not([multiple])').setInputFiles(pdf)
+  await expect(guardar).toBeEnabled()
+  await guardar.click()
+  await expect(modal.getByText('Factura guardada')).toBeVisible()
+  expect(llamadas.facturas).toHaveLength(1)
+})
 
 test('subir factura: el XML con folios marca las cotizaciones, cuadra y se guarda como Válida', async ({ page }) => {
   const llamadas = await abrir(page)

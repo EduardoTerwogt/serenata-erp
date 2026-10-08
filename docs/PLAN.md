@@ -106,6 +106,7 @@ Hoy cada factura y cada pago pertenecen a **una sola cuenta**:
 | P27 | **Factura ligada por columna:** `cuentas_cobrar.factura_documento_id` (sin tabla puente). El historial de qué cuentas cubría una factura dada de baja vive en `cuentas_correcciones` (una fila por cuenta, con el documento en `detalle`). |
 | P28 | **Estado de cuenta también en las fichas:** botón en `ClienteModal` y `ProveedorModal`, visible solo con sección `cuentas` en la sesión (las fichas ya exigen `cotizaciones`/`responsables`; `cuentas` no las implica). |
 | P29 | **El complemento de pago lo sube el personal**, también el de proveedor. El Portal solo agrega la lectura de P12; no hay subida nueva de proveedor. |
+| P30 | **PDF obligatorio en «Subir factura» (#131, ronda 3):** cliente, proveedor y complemento exigen XML **y** PDF (aunque del PDF no se extraigan datos). Lo impone `POST /api/cuentas/facturas` (`pdfRequired: true`) y el botón Guardar. XML + PDF viajan en la misma petición, con tope combinado de ~4.2 MB (`MAX_TOTAL_SIZE`) por el límite de ~4.5 MB de Vercel. Siguen permitiendo subirlo después las rutas del detalle (por cuenta, por grupo y `subir-complemento`); el Portal ya lo exigía. |
 
 ## Fuera de alcance
 

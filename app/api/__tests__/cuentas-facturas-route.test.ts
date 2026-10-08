@@ -19,7 +19,8 @@ const CUENTA = '22222222-2222-4222-8222-222222222222'
 function peticion(campos: { xml?: File | null; pdf?: File | null; datos?: unknown; datosCrudo?: string }) {
   const fd = new FormData()
   if (campos.xml !== null) fd.append('xml', campos.xml ?? new File(['<cfdi/>'], 'f.xml', { type: 'text/xml' }))
-  if (campos.pdf) fd.append('pdf', campos.pdf)
+  // El PDF es obligatorio (#131): por defecto viaja uno; `pdf: null` lo omite.
+  if (campos.pdf !== null) fd.append('pdf', campos.pdf ?? new File(['%PDF'], 'f.pdf', { type: 'application/pdf' }))
   if (campos.datosCrudo !== undefined) fd.append('datos', campos.datosCrudo)
   else if (campos.datos !== undefined) fd.append('datos', JSON.stringify(campos.datos))
   return new Request('http://x', { method: 'POST', body: fd })
@@ -92,6 +93,24 @@ describe('POST /api/cuentas/facturas', () => {
     expect(arg.cuentas).toHaveLength(40)
     expect(arg).toMatchObject({ operationId: OP, guardarRfc: true, usuario: 'staff@serenata.test', uploadFolderId: 'folder' })
     expect(arg.pdfFile).toBeInstanceOf(File)
+  })
+
+  it('sin PDF (o con un PDF vacío) responde 400 y no llama al servicio', async () => {
+    const datos = { operation_id: OP, cuentas: [{ id: CUENTA }] }
+    const sin = await CREAR(peticion({ pdf: null, datos }))
+    expect(sin.status).toBe(400)
+    expect((await sin.json()).error).toBe('Se requiere el archivo PDF')
+    expect((await CREAR(peticion({ pdf: new File([], 'f.pdf', { type: 'application/pdf' }), datos }))).status).toBe(400)
+    expect(mocks.confirmarMock).not.toHaveBeenCalled()
+  })
+
+  it('XML y PDF juntos pasan del tope de la petición: 400 antes de llegar al servicio', async () => {
+    const xml = new File([new Uint8Array(2.5 * 1024 * 1024)], 'f.xml', { type: 'text/xml' })
+    const pdf = new File([new Uint8Array(2 * 1024 * 1024)], 'f.pdf', { type: 'application/pdf' })
+    const res = await CREAR(peticion({ xml, pdf, datos: { operation_id: OP, cuentas: [{ id: CUENTA }] } }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/juntos exceden 4 MB/)
+    expect(mocks.confirmarMock).not.toHaveBeenCalled()
   })
 
   it('un grupo de proveedor y un pago_id de complemento viajan al servicio', async () => {

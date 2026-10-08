@@ -402,7 +402,7 @@ export const FacturaPreviewSchema = z.object({
   cuentas: z.array(z.string().uuid()).optional().default([]),
 })
 
-// POST /api/cuentas/facturas — campo `datos` (JSON) del multipart junto a `xml` (y `pdf` opcional).
+// POST /api/cuentas/facturas — campo `datos` (JSON) del multipart junto a `xml` y `pdf` (ambos obligatorios, #131).
 // Sin tope de cotizaciones por factura (P6, P25).
 export const FacturaCrearSchema = z.object({
   operation_id: z.string().uuid('operation_id requerido (uuid)'),

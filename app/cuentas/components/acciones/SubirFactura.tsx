@@ -22,7 +22,7 @@ import {
 } from '@/lib/shared/cuentas/factura-preview-tipos'
 import { fechaCorta, plural } from '../formato'
 import { Aviso } from '../detalle/TabPago'
-import { ACCEPT_PDF, ACCEPT_XML, BotonArchivo } from '../detalle/TabDocumentos'
+import { ACCEPT_PDF, ACCEPT_XML, BotonArchivo, LIMITE_TOTAL } from '../detalle/TabDocumentos'
 import { Cap, CUERPO_VENTANA, Dato, Enlace, PieVentana } from './compartido'
 import { CLIENTE_VACIO, CompletarCliente, type ClienteForm } from './CompletarCliente'
 import { armarProveedor, destinoInicial, modoEfectivo, type DestinoProveedor as Destino, type ProyectoSugerido } from './destino-proveedor'
@@ -48,6 +48,8 @@ interface Props {
  * de Serenata. La vista previa no escribe nada (T9); el cuadre lo calcula SQL y aquí solo se pinta (T6). Un total que
  * no cuadra no se rechaza: se guarda "En revisión" con el detalle exacto (P5).
  */
+const MENSAJE_TOTAL = 'El XML y el PDF juntos exceden 4 MB. Reduce el PDF.'
+
 export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada }: Props) {
   const [xml, setXml] = useState<File | null>(null)
   const [pdf, setPdf] = useState<File | null>(null)
@@ -129,15 +131,23 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
     }
   }, [xml, manualId, claveSeleccion, proyecto])
 
-  /** Un solo botón recibe el XML y el PDF juntos: el XML es obligatorio, el PDF opcional. */
+  /** Un solo botón recibe el XML y el PDF juntos: el XML y el PDF son obligatorios (#131). */
   const adjuntar = (archivos: File[]) => {
     const xmls = archivos.filter((f) => /\.xml$/i.test(f.name) || f.type.includes('xml'))
     const pdfs = archivos.filter((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf')
     if (xmls.length === 0) return setAviso('Falta el XML de la factura.')
-    if (xmls.length > 1 || pdfs.length > 1 || xmls.length + pdfs.length !== archivos.length) return setAviso('Adjunta un XML y, si lo tienes, su PDF.')
+    if (xmls.length > 1 || pdfs.length > 1 || xmls.length + pdfs.length !== archivos.length) return setAviso('Adjunta un XML y su PDF.')
+    if (xmls[0].size + (pdfs[0]?.size ?? 0) > LIMITE_TOTAL) return setAviso(MENSAJE_TOTAL)
     setAviso(null)
     reiniciar(xmls[0])
     setPdf(pdfs[0] ?? null)
+  }
+
+  // El PDF es obligatorio (#131) y viaja con el XML: juntos no pasan del tope de la petición.
+  const elegirPdf = (f: File) => {
+    if (xml && xml.size + f.size > LIMITE_TOTAL) return setAviso(MENSAJE_TOTAL)
+    setAviso(null)
+    setPdf(f)
   }
 
   const complemento = preview && esComplementoPreview(preview) ? preview : null
@@ -163,7 +173,7 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
   const completarCliente = Boolean(cobro && manual && factura?.ofrecer_guardar_rfc)
   const constanciaOk = !completarCliente || Boolean(clienteForm.constancia) || Boolean(factura?.cliente_tiene_constancia)
   const facturaLista = preparado ? true : proveedorLado ? Boolean(armado?.ok) : Boolean(contraparte) && seleccion.length > 0 && constanciaOk
-  const puedeGuardar = !enviando && !leyendo && Boolean(xml) && (complemento ? complementoCompleto && (!pedirPago || Boolean(pagoId)) : Boolean(factura) && !factura?.duplicada && facturaLista)
+  const puedeGuardar = !enviando && !leyendo && Boolean(xml) && Boolean(pdf) && (complemento ? complementoCompleto && (!pedirPago || Boolean(pagoId)) : Boolean(factura) && !factura?.duplicada && facturaLista)
 
   const guardar = async () => {
     if (!xml || !puedeGuardar) return
@@ -257,7 +267,9 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
             : 'Sin factura leída'
       }
       detalle={
-        complemento
+        xml && !pdf
+          ? 'Adjunta el PDF de la factura'
+          : complemento
           ? plural(complemento.relacionados.length, 'factura relacionada', 'facturas relacionadas')
           : armado && !armado.ok && !cuadre
             ? armado.falta
@@ -337,8 +349,8 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
               <FilaArchivo
                 icono="file-text"
                 nombre={pdf?.name ?? 'Representación impresa (PDF)'}
-                sub={pdf ? 'PDF' : 'Opcional, hasta 4 MB'}
-                accion={!pdf ? <BotonArchivo etiqueta="Adjuntar PDF" accept={ACCEPT_PDF} variante="ghost" onArchivo={setPdf} onRechazo={setAviso} /> : undefined}
+                sub={pdf ? 'PDF' : 'Requerido, hasta 4 MB'}
+                accion={!pdf ? <BotonArchivo etiqueta="Adjuntar PDF" accept={ACCEPT_PDF} variante="ghost" onArchivo={elegirPdf} onRechazo={setAviso} /> : undefined}
                 onQuitar={pdf ? () => setPdf(null) : undefined}
               />
             </div>
