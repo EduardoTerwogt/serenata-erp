@@ -62,6 +62,9 @@ terminar el trabajo.
   primero y preguntar.
 - Commit + push a la rama después de cada cambio funcional terminado — es seguro,
   no despliega ni mergea nada.
+- **El job `live` de e2e no corre mientras el PR es borrador** (ahorra carga a la base de
+  prueba y a Vercel). Antes del merge, pasar el PR a **Ready for review**: eso lo dispara y
+  debe quedar verde.
 - **Antes del merge:** todas las suites verdes en el PR y el Preview de Vercel
   desplegando bien. Que el push tuviera éxito no prueba nada, y sin PR esas suites
   nunca corrieron.

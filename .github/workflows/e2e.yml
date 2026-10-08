@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+    # `ready_for_review` no va en los tipos por defecto: sin el, marcar un PR
+    # como listo no dispararia `live` (que se omite mientras es borrador).
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 # EF-3A 3A-1: mismo group que load-test.yml -- ambos mutan serenata-erp-test,
@@ -132,7 +135,10 @@ jobs:
     # No corre en PRs cuyo diff es solo `.md` (ver job `changes`): ahorra carga a la
     # base de prueba compartida sin perder cobertura, porque no hay codigo que probar.
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.codigo == 'true'
+    # Tampoco corre mientras el PR es borrador: cada push de WIP pegaba ~4 mil
+    # peticiones a la base de prueba (free tier de Supabase al limite). Pasar el
+    # PR a "Ready for review" lo dispara, y sigue siendo requisito antes del merge.
+    if: github.event_name != 'pull_request' || (needs.changes.outputs.codigo == 'true' && !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
