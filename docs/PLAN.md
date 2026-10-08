@@ -106,6 +106,7 @@ Hoy cada factura y cada pago pertenecen a **una sola cuenta**:
 | P27 | **Factura ligada por columna:** `cuentas_cobrar.factura_documento_id` (sin tabla puente). El historial de qué cuentas cubría una factura dada de baja vive en `cuentas_correcciones` (una fila por cuenta, con el documento en `detalle`). |
 | P28 | **Estado de cuenta también en las fichas:** botón en `ClienteModal` y `ProveedorModal`, visible solo con sección `cuentas` en la sesión (las fichas ya exigen `cotizaciones`/`responsables`; `cuentas` no las implica). |
 | P29 | **El complemento de pago lo sube el personal**, también el de proveedor. El Portal solo agrega la lectura de P12; no hay subida nueva de proveedor. |
+| P30 | **PDF obligatorio en «Subir factura» (#131, ronda 3):** cliente, proveedor y complemento exigen XML **y** PDF (aunque del PDF no se extraigan datos). Lo impone `POST /api/cuentas/facturas` (`pdfRequired: true`) y el botón Guardar. XML + PDF viajan en la misma petición, con tope combinado de ~4.2 MB (`MAX_TOTAL_SIZE`) por el límite de ~4.5 MB de Vercel. Siguen permitiendo subirlo después las rutas del detalle (por cuenta, por grupo y `subir-complemento`); el Portal ya lo exigía. |
 
 ## Fuera de alcance
 
@@ -737,3 +738,13 @@ Registrar pago gana la vista "Por proyecto" (segundo selector junto a "Cobro de 
 | C3 UI Subir factura | **Hecho** (2026-10-07): pendiente solo CI y la revisión visual del usuario |
 | C4 UI Registrar pago por proyecto | **Hecho** (2026-10-07): pendiente solo CI y la revisión visual del usuario |
 | C5 Cerrar | **Hecho** (2026-10-07): spec `live` `cuentas-130.spec.ts` (solo corre en CI), decisión 023, `ARCHITECTURE.md`, `ACTIVE_WORK.md`; `auditar_consistencia()` = 0 (24 guardas) |
+
+## Tracker #131
+| Bloque | Estado |
+|---|---|
+| D0 Maqueta `cuentas-131.html` (aprobada) · D1 Datos y API (`20261037`, `GET /api/cuentas/contrapartes`) | **Hecho** (2026-10-07; migración aplicada en test) |
+| D2 Subir factura (Adjuntar factura, desplegable, «Proveedor nuevo», flujo por proyecto) · D3 Registrar pago (sin pestañas, enlace multi-proyecto) | **Hecho** (2026-10-08): unitarias y e2e `critical`; pendiente CI del PR y tu revisión visual |
+| D4 Cierre: `ACTIVE_WORK.md`, este tracker; «concepto» en lugar de «renglón» en el texto visible | **Hecho** |
+| R1 pie de ventanas · R2 Registrar pago (desplegable en el cuerpo, «varios proyectos» filtrado) · R3 proyecto sugerido con casilla + «Elegir otro proyecto» | **Hecho** (2026-10-08) |
+| R4 datos primero, Drive después (`pendiente:xml|pdf`, «Reintentar subida» / «Subir archivo»; sin copia en Storage, decisión del usuario) | **Hecho** (2026-10-08): unitarias, ruta y e2e `critical`; pendiente CI del PR y tu revisión del preview |
+| Ronda 3 · UX/UI (E1 PDF obligatorio P30 · E2 piezas compartidas `Paso`/`IndicadorCuadre`/`BarraSeleccion` · E3 Subir factura en tres pasos · E4 Registrar pago en tres pasos) | **Hecho** (2026-10-08): unitarias y e2e `critical`; pendiente CI del PR y tu revisión del preview |

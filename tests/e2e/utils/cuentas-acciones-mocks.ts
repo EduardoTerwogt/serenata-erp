@@ -132,6 +132,8 @@ export interface LlamadasAcciones {
   facturas: FacturaMock[]
   /** Cuentas elegidas en cada vista previa, en orden. */
   previews: string[][]
+  /** #131: documentos cuyo archivo se reenvió a Drive con "Reintentar subida", en orden. */
+  reintentos: string[]
 }
 
 export interface OpcionesAcciones {
@@ -177,11 +179,17 @@ export const RENGLONES_SELECTOR = [
   { cuenta_id: 'cp-4', descripcion: 'Banco de efectos', costo_total: 6500, gasto_extra: false, responsable_id: 'prov-fonoteca', responsable: 'Fonoteca MX', grupo_id: 'g-fono', grupo_estado: 'FACTURADO', bloqueado: true },
 ]
 
+/** Conceptos de SH004 que ya son de `PROVEEDOR` en su grupo abierto (suman lo que cuadra con `proveedor.xml`). */
+export const RENGLONES_DEL_PROVEEDOR = [
+  { cuenta_id: 'cp-p1', descripcion: 'Edición versión A', costo_total: 15660, gasto_extra: false, responsable_id: PROVEEDOR.id, responsable: PROVEEDOR.nombre, grupo_id: 'grupo-SH004', grupo_estado: 'ABIERTO', bloqueado: false },
+  { cuenta_id: 'cp-p2', descripcion: 'Edición versión B', costo_total: 15660, gasto_extra: false, responsable_id: PROVEEDOR.id, responsable: PROVEEDOR.nombre, grupo_id: 'grupo-SH004', grupo_estado: 'ABIERTO', bloqueado: false },
+]
+
 function previewDe(nombre: string, datos: { contraparte_id?: string | null; cuentas?: string[] }) {
   const cuentas = datos.cuentas ?? []
   const cfdiBase = { uuid: '6F2C0000-0000-0000-0000-000000A191AB', fecha: '2026-09-12T10:00:00', subtotal: null, rfc_emisor: 'SHO100101AB1', rfc_receptor: CLIENTE.rfc, conceptos: [] as string[] }
   if (nombre === 'complemento.xml') {
-    return { tipo: 'complemento_cobro', lado: 'cobro', cfdi: { uuid: 'AAAA0000-0000-0000-0000-00000000REP1', fecha: '2026-10-01T09:00:00' }, relacionados: [{ uuid_factura: '6F2C0000-0000-0000-0000-000000A191AB', monto_pagado: 300000, factura: { id: 'fa', estado_validacion: 'validado', metodo_pago: 'PPD', total_cfdi: 359600 } }] }
+    return { tipo: 'complemento_cobro', lado: 'cobro', cfdi: { uuid: 'AAAA0000-0000-0000-0000-00000000REP1', fecha: '2026-10-01T09:00:00' }, contraparte: { id: CLIENTE.id, nombre: CLIENTE.nombre }, relacionados: [{ uuid_factura: '6F2C0000-0000-0000-0000-000000A191AB', monto_pagado: 300000, factura: { id: 'fa', estado_validacion: 'validado', metodo_pago: 'PPD', total_cfdi: 359600, archivo_nombre: 'F-A_Altavista.xml' } }] }
   }
   if (nombre === 'proveedor.xml') {
     const elegida = cuentas[0]
@@ -268,7 +276,7 @@ export function datosDeMultipart(postData: string | null): unknown {
 }
 
 export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones = {}): Promise<LlamadasAcciones> {
-  const llamadas: LlamadasAcciones = { clientes: [], pagos: [], facturas: [], previews: [] }
+  const llamadas: LlamadasAcciones = { clientes: [], pagos: [], facturas: [], previews: [], reintentos: [] }
 
   await page.route(/\/api\/cuentas\/estado-cuenta\?/, (route: Route) => {
     const q = new URL(route.request().url()).searchParams
@@ -283,9 +291,19 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
     }
     return fulfillJson(route, estado)
   })
-  await page.route(/\/api\/clientes\?q=/, (route: Route) => {
-    const q = (new URL(route.request().url()).searchParams.get('q') ?? '').toLowerCase()
-    return fulfillJson(route, [{ id: CLIENTE.id, nombre: CLIENTE.nombre }].filter((c) => c.nombre.toLowerCase().includes(q)))
+  // #131: el desplegable de contraparte (cliente o proveedor) con búsqueda por nombre.
+  await page.route(/\/api\/cuentas\/contrapartes\?/, (route: Route) => {
+    const q = new URL(route.request().url()).searchParams
+    const buscado = (q.get('q') ?? '').toLowerCase()
+    const todas =
+      q.get('lado') === 'cobro'
+        ? [{ id: CLIENTE.id, nombre: CLIENTE.nombre, pendientes: 4 }]
+        : [
+            { id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, pendientes: 3 },
+            { id: 'prov-ana', nombre: 'Ana Vidal', pendientes: 1 },
+          ]
+    const contrapartes = todas.filter((c) => c.nombre.toLowerCase().includes(buscado))
+    return fulfillJson(route, { total: contrapartes.length, contrapartes })
   })
   await page.route(/\/api\/proveedores$/, (route: Route) =>
     fulfillJson(route, [
@@ -295,25 +313,26 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
   )
   await page.route(/\/api\/cuentas\/proyectos-selector\?/, (route: Route) => {
     // Registrar pago por proyecto: cada proyecto con la contraparte y el saldo de sus facturas abiertas.
-    if (new URL(route.request().url()).searchParams.get('modo') === 'pago') {
-      return fulfillJson(route, {
-        modo: 'pago',
-        total: 3,
-        page: 1,
-        page_size: 25,
-        proyectos: [
-          { proyecto_id: 'SH001', proyecto: 'Spot TV 30s', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 41760 }] },
-          { proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 31320 }] },
-          { proyecto_id: 'SH070', proyecto: 'Doc. Festival', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: 'prov-fonoteca', nombre: 'Fonoteca MX', facturas: 1, saldo: 9000 }] },
-        ],
-      })
+    const params = new URL(route.request().url()).searchParams
+    if (params.get('modo') === 'pago') {
+      // Como SQL: con `contraparte` solo salen los proyectos con saldo de esa contraparte.
+      const todos = [
+        { proyecto_id: 'SH001', proyecto: 'Spot TV 30s', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 41760 }] },
+        { proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 31320 }] },
+        { proyecto_id: 'SH070', proyecto: 'Doc. Festival', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: 'prov-fonoteca', nombre: 'Fonoteca MX', facturas: 1, saldo: 9000 }] },
+      ]
+      const contraparte = params.get('contraparte')
+      const proyectos = contraparte ? todos.filter((p) => p.contrapartes.some((c) => c.id === contraparte)) : todos
+      return fulfillJson(route, { modo: 'pago', total: proyectos.length, page: 1, page_size: 25, proyectos })
     }
+    // Conceptos de SH004: los del proveedor que ya tiene su grupo abierto, o los de la propuesta por asignar (proveedor nuevo).
+    const delProveedor = new URL(route.request().url()).searchParams.get('contraparte') === PROVEEDOR.id
     return fulfillJson(route, {
       modo: 'renglones',
       total: 1,
       page: 1,
       page_size: 25,
-      proyectos: [{ proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: '2026-09-10', de_contraparte: false, renglones: RENGLONES_SELECTOR }],
+      proyectos: [{ proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: '2026-09-10', de_contraparte: delProveedor, renglones: delProveedor ? RENGLONES_DEL_PROVEEDOR : RENGLONES_SELECTOR }],
     })
   })
   await page.route(/\/api\/cuentas\/clientes\/[^/]+$/, (route: Route) => {
@@ -341,6 +360,10 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
     llamadas.facturas.push(datosDeMultipart(route.request().postData()) as FacturaMock)
     const r = opciones.factura ?? { status: 200, body: { success: true, estado_validacion: 'validado', detalle_validacion: null } }
     await fulfillJson(route, r.body, r.status)
+  })
+  await page.route(/\/api\/cuentas\/documentos\/[^/]+\/reintentar-subida$/, async (route: Route) => {
+    llamadas.reintentos.push(route.request().url().split('/').slice(-2)[0])
+    await fulfillJson(route, { success: true, pendiente: false })
   })
   return llamadas
 }

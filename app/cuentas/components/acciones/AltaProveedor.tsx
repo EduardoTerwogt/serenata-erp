@@ -9,7 +9,7 @@ const REGIMEN: Record<string, string> = { moral: 'Persona moral', fisica: 'Perso
 interface Props {
   emisor: EmisorPreview
   valor: AltaForm
-  onChange: (v: AltaForm) => void
+  onChange: (parche: Partial<AltaForm>) => void
 }
 
 /**
@@ -19,7 +19,7 @@ interface Props {
  */
 export function AltaProveedor({ emisor, valor, onChange }: Props) {
   const errores = erroresAlta(valor)
-  const set = (campo: keyof AltaForm) => (e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...valor, [campo]: e.target.value })
+  const set = (campo: keyof AltaForm) => (e: React.ChangeEvent<HTMLInputElement>) => onChange({ [campo]: e.target.value })
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <TextField label="RFC" value={emisor.rfc ?? ''} readOnly className="font-mono" />

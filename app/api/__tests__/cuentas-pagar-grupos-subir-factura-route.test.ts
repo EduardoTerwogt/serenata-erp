@@ -26,6 +26,7 @@ vi.mock('@/lib/db', () => ({
   validarFacturaProveedor: mocks.validarFacturaProveedorMock,
 }))
 vi.mock('@/lib/server/cuentas/reemplazo-factura', () => ({ planearFactura: mocks.planearFacturaMock, completarReemplazo: mocks.completarReemplazoMock }))
+vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: {} }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
 vi.mock('@/lib/server/xml/factura-parser', () => ({ parseFacturaXML: mocks.parseFacturaXMLMock }))

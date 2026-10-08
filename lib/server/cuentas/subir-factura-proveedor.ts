@@ -4,10 +4,10 @@
  * lado escribe por el repositorio (`@/lib/db`), no por una RPC directa.
  */
 import { createDocumentoCuentaPagar, getProveedorById, validarFacturaProveedor } from '@/lib/db'
-import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { validarFacturaFiscalProveedor } from '@/lib/server/validation/factura-fiscal'
 import { parseFacturaXML } from '@/lib/server/xml/factura-parser'
 import type { RegimenFiscal } from '@/lib/types'
+import { crearSubida } from './archivos-pendientes'
 import { completarReemplazo, type Reemplazo } from './reemplazo-factura'
 
 export interface SubirFacturaProveedorParams {
@@ -22,6 +22,9 @@ export interface SubirFacturaProveedorParams {
   reemplazo?: Reemplazo | null
   /** Motivo extra que fuerza "En revisión" aunque el total cuadre (p. ej. el RFC del XML no coincide, P24). */
   aviso?: string | null
+  /** #131: guarda primero los datos y sube los archivos a Drive después (si Drive falla, quedan pendientes). */
+  driveDespues?: boolean
+  route?: string
 }
 
 function fechaDeFactura(xmlContent: string): string | null {
@@ -32,14 +35,15 @@ function fechaDeFactura(xmlContent: string): string | null {
 }
 
 /**
- * Sube y registra la factura de un grupo de proveedor: Drive → documentos → `validar_factura_proveedor` solo si
+ * Sube y registra la factura de un grupo de proveedor: documentos → Drive → `validar_factura_proveedor` solo si
  * cuadra. Es la lógica que antes vivía en la ruta del grupo; la comparten esa ruta y `POST /api/cuentas/facturas`
  * (#123, B3). #123 (P11): guarda el método de pago (PUE/PPD) en la fila del XML.
  */
 export async function subirFacturaProveedor(p: SubirFacturaProveedorParams): Promise<{ status: number; body: Record<string, unknown> }> {
   const { grupo } = p
-  const facturaXmlUrl = await uploadFileToDrive(p.xmlFile, p.carpeta, p.xmlFile.name, p.uploadFolderId)
-  const facturaPdfUrl = p.pdfFile ? await uploadFileToDrive(p.pdfFile, p.carpeta, p.pdfFile.name, p.uploadFolderId) : null
+  const subida = crearSubida({ lado: 'proveedor', carpeta: p.carpeta, folderId: p.uploadFolderId, despues: p.driveDespues, route: p.route ?? 'subirFacturaProveedor' })
+  const facturaXmlUrl = await subida.guardar('xml', p.xmlFile, p.xmlFile.name)
+  const facturaPdfUrl = p.pdfFile ? await subida.guardar('pdf', p.pdfFile, p.pdfFile.name) : null
 
   let regimenFiscal: RegimenFiscal | null = null
   try {
@@ -86,12 +90,15 @@ export async function subirFacturaProveedor(p: SubirFacturaProveedorParams): Pro
     estadoGrupo = validada.estado
   }
   if (p.reemplazo) await completarReemplazo(p.reemplazo, documentoXml.id)
+  // Los datos ya están: ahora los archivos van a Drive; los que no lleguen quedan pendientes.
+  const archivosPendientes = await subida.terminar({ xml: [documentoXml.id], pdf: documentoPdf ? [documentoPdf.id] : [] })
 
   return {
     status: 200,
     body: {
       success: true,
       documentos: documentoPdf ? [documentoXml, documentoPdf] : [documentoXml],
+      ...(archivosPendientes.length > 0 ? { archivos_pendientes: archivosPendientes } : {}),
       fecha_factura: fechaDeFactura(p.xmlContent),
       factura_data: facturaData,
       validacion_estructural: validacionXml,

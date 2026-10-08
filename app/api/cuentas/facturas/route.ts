@@ -4,7 +4,7 @@ import { buildErrorResponse } from '@/lib/server/errors/domain-error'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { leerDatosMultipart } from '@/lib/server/uploads/datos-multipart'
-import { validateFacturaFiles } from '@/lib/server/uploads/factura-validation'
+import { MENSAJE_LIMITE_TOTAL, excedeTotal, validateFacturaFiles } from '@/lib/server/uploads/factura-validation'
 import { FacturaCrearSchema, validate } from '@/lib/validation/schemas'
 
 const ROUTE = 'POST /api/cuentas/facturas'
@@ -21,10 +21,10 @@ const MENSAJES = {
  * #123 (B3, P1–P6, P9, P18): alta de una factura (de una o varias cotizaciones de un cliente, o de un grupo de
  * proveedor) o de un complemento de pago. El tipo sale del XML. Cliente → `ligar_factura` (una transacción: XML,
  * PDF, ligas y fechas); proveedor → el servicio de grupo (1:1); complemento → `ligar_complemento_*`. El total que no
- * cuadra no se rechaza: queda "En revisión" con el descuadre exacto (P5). Multipart: `xml`, `pdf` (opcional) y
+ * cuadra no se rechaza: queda "En revisión" con el descuadre exacto (P5). Multipart: `xml`, `pdf` (obligatorio, #131) y
  * `datos` (JSON con `operation_id`, `cuentas`/`grupo_id`, `contraparte_id`, `guardar_rfc`, `pago_id` y, para un proveedor
  * nuevo o renglones/gasto extra, `preparar`: #130).
- * El PDF también puede subirse aparte (`.../documentos`) por el límite de ~4.5 MB de Vercel.
+ * XML y PDF viajan juntos: su suma no puede pasar de ~4.2 MB (límite de ~4.5 MB de Vercel por petición).
  */
 export async function POST(request: Request) {
   const authResult = await requireSection('cuentas')
@@ -35,8 +35,9 @@ export async function POST(request: Request) {
     const xml = formData.get('xml')
     const pdf = formData.get('pdf')
     const pdfFile = pdf instanceof File && pdf.size > 0 ? pdf : null
-    const revision = validateFacturaFiles({ xml: xml instanceof File ? xml : null, pdf: pdfFile, pdfRequired: false })
+    const revision = validateFacturaFiles({ xml: xml instanceof File ? xml : null, pdf: pdfFile, pdfRequired: true })
     if (!revision.ok) return Response.json({ error: MENSAJES[revision.code] }, { status: 400 })
+    if (excedeTotal(xml as File, pdfFile)) return Response.json({ error: MENSAJE_LIMITE_TOTAL }, { status: 400 })
 
     const datos = leerDatosMultipart(formData)
     if (!datos.ok) return Response.json({ error: datos.error }, { status: 400 })

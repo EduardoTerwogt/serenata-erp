@@ -6,6 +6,7 @@ import { DateField } from '@/components/ui/DateField'
 import { FilterTabs } from '@/components/ui/FilterTabs'
 import { Icon } from '@/components/ui/Icon'
 import { Modal } from '@/components/ui/Modal'
+import { ProgressBar } from '@/components/ui/ProgressBar'
 import { SectionLoading } from '@/components/ui/SectionLoading'
 import { Select } from '@/components/ui/Select'
 import { StatusBanner } from '@/components/ui/StatusBanner'
@@ -17,10 +18,10 @@ import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 import { fechaCorta, plural } from '../formato'
 import { Aviso } from '../detalle/TabPago'
 import { ACCEPT_COMPROBANTE, BotonArchivo } from '../detalle/TabDocumentos'
-import { Cap, CUERPO_VENTANA, Dato, Enlace, PieVentana } from './compartido'
+import { CUERPO_VENTANA, Dato, Enlace, Paso, PieVentana } from './compartido'
 import { aCentavos, parseMonto, resumirReparto, sugerirReparto, textoMonto, type LineaReparto } from './reparto'
 import { SelectorContraparte } from './SelectorContraparte'
-import type { ContraparteSaldo, ProyectoSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
+import type { ProyectoSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import { SelectorProyectos } from './SelectorProyectos'
 import { accionesPago, useEstadoCuenta, type ContraparteLista } from './useAcciones'
 
@@ -31,12 +32,13 @@ const TIPOS = [
 ] as const
 
 type Vista = 'contraparte' | 'proyecto'
-const VISTAS: { value: Vista; label: string }[] = [
-  { value: 'contraparte', label: 'Por contraparte' },
-  { value: 'proyecto', label: 'Por proyecto' },
-]
 /** Tope de proyectos por pago: el mismo que acepta `GET /api/cuentas/estado-cuenta?proyectos=`. */
 const MAX_PROYECTOS = 50
+
+const MODOS: { value: Vista; label: string }[] = [
+  { value: 'contraparte', label: 'Todas sus facturas' },
+  { value: 'proyecto', label: 'Elegir proyectos' },
+]
 
 const LADOS: { value: LadoCuentas; label: string }[] = [
   { value: 'cobro', label: 'Cobro de cliente' },
@@ -120,12 +122,11 @@ interface Props {
  * calcula en centavos enteros y solo para pintar (T6): la RPC decide topes, estados y umbrales bajo lock.
  */
 export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, onCambio, onClose, onRegistrado }: Props) {
-  // #130: por proyecto se marcan proyectos de UNA contraparte (Q4) y el estado de cuenta se limita a ellos.
+  // #130: por proyecto se marcan proyectos de la contraparte ya elegida (Q4, #131) y el estado de cuenta se limita a ellos.
   const [vista, setVista] = useState<Vista>('contraparte')
   const [proyectosSel, setProyectosSel] = useState<string[]>([])
-  const [contraparteProy, setContraparteProy] = useState<{ id: string; nombre: string } | null>(null)
   const porProyecto = vista === 'proyecto'
-  const cid = porProyecto ? (contraparteProy?.id ?? null) : contraparteId
+  const cid = porProyecto && proyectosSel.length === 0 ? null : contraparteId
   const { datos: estado, error, cargando, recargar } = useEstadoCuenta(lado, cid, porProyecto ? proyectosSel : undefined)
   const [elegida, setElegida] = useState<ContraparteLista | null>(null)
   const [monto, setMonto] = useState('')
@@ -133,7 +134,9 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
   const montoRef = useRef('')
   const [aplicado, setAplicado] = useState<Record<string, string>>({})
   const [manual, setManual] = useState(false)
-  const [abiertas, setAbiertas] = useState<Set<string>>(new Set())
+  // Cada factura se abre sola si ya tiene monto aplicado; lo que el usuario abre o cierra a mano manda sobre eso.
+  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({})
+  const [verNota, setVerNota] = useState(false)
   const [tipo, setTipo] = useState<string>('TRANSFERENCIA')
   const [fecha, setFecha] = useState(hoy || hoyCdmx())
   const [notas, setNotas] = useState('')
@@ -177,7 +180,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     setManual(false)
     aplicarSugerencia(parseMonto(montoRef.current))
     // Las facturas del proyecto preseleccionado se abren (P22).
-    if (proyecto) setAbiertas(new Set(grupos.filter((g) => g.conceptos.some((c) => c.proyecto_id === proyecto)).map((g) => g.clave)))
+    if (proyecto) setAbiertas(Object.fromEntries(grupos.filter((g) => g.conceptos.some((c) => c.proyecto_id === proyecto)).map((g) => [g.clave, true])))
     // `monto` se lee solo al reiniciar: cambiarlo no debe reiniciar el reparto manual.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vigente, lineas, lado, cid, proyectosSel])
@@ -188,6 +191,14 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     setMonto(limpio)
     if (!manual) aplicarSugerencia(parseMonto(limpio))
   }
+  // Al salir del campo el monto queda con su formato (300,000.00); mientras se escribe no se toca.
+  const formatearMonto = () => {
+    const c = parseMonto(monto)
+    if (c === null || c <= 0) return
+    const f = (c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    montoRef.current = f
+    setMonto(f)
+  }
   const editarLinea = (id: string, texto: string) => {
     setManual(true)
     setAplicado((a) => ({ ...a, [id]: texto.replace(/[^\d.,]/g, '') }))
@@ -196,20 +207,16 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     setManual(false)
     aplicarSugerencia(montoCent)
   }
-  const alternar = (clave: string) =>
-    setAbiertas((s) => {
-      const n = new Set(s)
-      if (n.has(clave)) n.delete(clave)
-      else n.add(clave)
-      return n
-    })
+  const aplicadoDe = (g: GrupoReparto) => g.conceptos.reduce((a, c) => a + (centavos.valores[c.id] ?? 0), 0)
+  const estaAbierta = (g: GrupoReparto) => abiertas[g.clave] ?? aplicadoDe(g) > 0
+  const alternar = (g: GrupoReparto) => setAbiertas((a) => ({ ...a, [g.clave]: !estaAbierta(g) }))
 
   const cambiarLado = (l: LadoCuentas) => {
     if (l === lado) return
     setAplicado({})
     setAviso(null)
     setProyectosSel([])
-    setContraparteProy(null)
+    setVista('contraparte')
     huella.current = ''
     onCambio({ lado: l, contraparteId: null })
   }
@@ -219,25 +226,26 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     setAplicado({})
     setAviso(null)
     setProyectosSel([])
-    setContraparteProy(null)
     huella.current = ''
   }
-  const alternarProyecto = (p: ProyectoSelector, c: ContraparteSaldo) => {
-    if (!c.id) return
-    const actuales = contraparteProy?.id === c.id ? proyectosSel : []
-    const marcado = actuales.includes(p.proyecto_id)
-    if (!marcado && actuales.length >= MAX_PROYECTOS) {
+  const alternarProyecto = (p: ProyectoSelector) => {
+    const marcado = proyectosSel.includes(p.proyecto_id)
+    if (!marcado && proyectosSel.length >= MAX_PROYECTOS) {
       setAviso({ tono: 'info', texto: `Un pago admite hasta ${MAX_PROYECTOS} proyectos. Registra el resto en otro pago.` })
       return
     }
-    const siguientes = marcado ? actuales.filter((x) => x !== p.proyecto_id) : [...actuales, p.proyecto_id]
     setAviso(null)
+    setProyectosSel(marcado ? proyectosSel.filter((x) => x !== p.proyecto_id) : [...proyectosSel, p.proyecto_id])
+  }
+  const marcarProyectos = (ids: string[]) => {
+    const siguientes = ids.slice(0, MAX_PROYECTOS)
+    setAviso(ids.length > MAX_PROYECTOS ? { tono: 'info', texto: `Un pago admite hasta ${MAX_PROYECTOS} proyectos. Registra el resto en otro pago.` } : null)
     setProyectosSel(siguientes)
-    setContraparteProy(siguientes.length > 0 ? { id: c.id, nombre: c.nombre } : null)
   }
   const elegirContraparte = (c: ContraparteLista) => {
     setElegida(c)
     setAviso(null)
+    setProyectosSel([])
     huella.current = ''
     onCambio({ lado, contraparteId: c.id })
   }
@@ -272,14 +280,17 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     }
   }
 
-  const nombre = vigente?.contraparte?.nombre ?? (porProyecto ? contraparteProy?.nombre : elegida?.nombre) ?? null
+  const nombre = vigente?.contraparte?.nombre ?? elegida?.nombre ?? null
   const etiquetaMonto = lado === 'cobro' ? 'Monto recibido' : 'Monto transferido'
   const nFacturas = grupos.filter((g) => g.conceptos.some((c) => (centavos.valores[c.id] ?? 0) > 0)).length
+  const ppdAplicadas = grupos.filter((g) => g.metodo === 'PPD' && g.conceptos.some((c) => (centavos.valores[c.id] ?? 0) > 0))
+  const nombresPpd = ppdAplicadas.map((g) => g.titulo).join(', ')
 
   const pie = !listo ? (
     <PieVentana
       titulo={`Aplicado ${fmtMoney(resumen.aplicado / 100)} de ${fmtMoney((montoCent ?? 0) / 100)}`}
-      detalle={`Por aplicar ${fmtMoney(resumen.porAplicar / 100)} · ${plural(nFacturas, 'factura', 'facturas')}`}
+      detalle={cuadra ? `Cuadra · ${plural(nFacturas, 'factura', 'facturas')}` : `Por aplicar ${fmtMoney(resumen.porAplicar / 100)} · ${plural(nFacturas, 'factura', 'facturas')}`}
+      tonoDetalle={cuadra ? 'ok' : montoValido ? 'acento' : 'neutro'}
       etiquetaMonto={etiquetaMonto}
       monto={fmtMoney((montoCent ?? 0) / 100)}
       botones={
@@ -309,13 +320,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
       bodyClassName={CUERPO_VENTANA}
       header={
         !listo ? (
-          <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center md:gap-3">
-            <FilterTabs tabs={LADOS} value={lado} onChange={cambiarLado} />
-            <FilterTabs tabs={VISTAS} value={vista} onChange={cambiarVista} />
-            {!porProyecto && (
-              <SelectorContraparte key={`${lado}:${contraparteId ?? ''}:${nombre ? 1 : 0}`} lado={lado} valor={nombre && contraparteId ? { id: contraparteId, nombre } : null} onElegir={elegirContraparte} />
-            )}
-          </div>
+          <FilterTabs tabs={LADOS} value={lado} onChange={cambiarLado} />
         ) : undefined
       }
       onClose={onClose}
@@ -326,13 +331,20 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
         <>
           {aviso && <StatusBanner tone={aviso.tono}>{aviso.texto}</StatusBanner>}
           {error && !vigente && <StatusBanner tone="error">{error}</StatusBanner>}
-          {porProyecto && (
-            <>
-              <SelectorProyectos modo="pago" lado={lado} contraparteFija={contraparteProy?.id ?? null} proyectosMarcados={proyectosSel} onTogglePago={alternarProyecto} />
-            </>
-          )}
-          {!cid && !porProyecto && <Aviso icono="info" tono="neutro">{lado === 'cobro' ? 'Elige el cliente que depositó.' : 'Elige el proveedor al que se le transfirió.'}</Aviso>}
-          {!cid && porProyecto && <Aviso icono="info" tono="neutro">Marca los proyectos que cubre el {lado === 'cobro' ? 'cobro' : 'pago'}. Un pago es de una sola contraparte.</Aviso>}
+
+          <Paso n={1} titulo={lado === 'cobro' ? '¿Quién pagó?' : '¿A quién se le paga?'} hecho={Boolean(contraparteId)}>
+            <SelectorContraparte
+              key={`${lado}:${contraparteId ?? ''}:${nombre ? 1 : 0}`}
+              lado={lado}
+              pendiente="saldo"
+              valor={nombre && contraparteId ? { id: contraparteId, nombre } : null}
+              onElegir={elegirContraparte}
+              accion={contraparteId ? <FilterTabs tabs={MODOS} value={vista} onChange={cambiarVista} /> : undefined}
+            />
+            {porProyecto && contraparteId && <SelectorProyectos modo="pago" lado={lado} contraparte={contraparteId} proyectosMarcados={proyectosSel} onTogglePago={alternarProyecto} onMarcarPago={marcarProyectos} />}
+            {porProyecto && !cid && <Aviso icono="info" tono="neutro">Marca los proyectos que cubre el {lado === 'cobro' ? 'cobro' : 'pago'}.</Aviso>}
+          </Paso>
+
           {cid && !vigente && !error && <SectionLoading className="min-h-[240px]" />}
           {vigente && grupos.length === 0 && (
             <Aviso icono="circle-check" tono="ok">
@@ -341,100 +353,136 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
           )}
           {vigente && grupos.length > 0 && (
             <>
-              <div className="grid gap-4 md:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
-                <TextField label={etiquetaMonto} inputMode="decimal" value={monto} onChange={(e) => cambiarMonto(e.target.value)} placeholder="0.00" hint="Se reparte entre las facturas de abajo" aria-invalid={monto !== '' && !montoValido} />
-                <label className="flex flex-col gap-1.5">
-                  <span className="sn-label">Fecha de pago</span>
-                  <DateField
-                    value={fecha}
-                    onChange={(e) => setFecha(e.target.value)}
-                    className="h-[var(--control-height)] w-full rounded-[var(--radius-sm)] border border-hairline bg-input px-3.5 text-[length:var(--text-base)] text-body outline-none focus:border-accent-quiet"
+              <Paso n={2} titulo="¿Cuánto y cuándo?">
+                <div className="grid gap-4 md:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
+                  <TextField
+                    label={etiquetaMonto}
+                    inputMode="decimal"
+                    value={monto}
+                    onChange={(e) => cambiarMonto(e.target.value)}
+                    onBlur={formatearMonto}
+                    placeholder="0.00"
+                    hint="Se reparte entre las facturas de abajo"
+                    aria-invalid={monto !== '' && !montoValido}
                   />
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="sn-label">Tipo de pago</span>
-                  <Select value={tipo} onChange={(e) => setTipo(e.target.value)} className="w-full">
-                    {TIPOS.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                <div className="flex flex-col gap-1.5">
-                  <span className="sn-label">Comprobante</span>
-                  <div className="flex min-w-0 items-center gap-2">
-                    {comprobante ? (
-                      <>
-                        <Icon name="paperclip" size={14} className="shrink-0 text-subtext" />
-                        <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{comprobante.name}</span>
-                        <Button variant="ghost" size="md" onClick={() => setComprobante(null)}>
-                          Quitar
-                        </Button>
-                      </>
-                    ) : (
-                      <BotonArchivo etiqueta="Tomar foto o adjuntar" accept={ACCEPT_COMPROBANTE} capture permitirGrande onArchivo={setComprobante} onRechazo={(m) => setAviso({ tono: 'error', texto: m })} />
-                    )}
+                  <label className="flex flex-col gap-1.5">
+                    <span className="sn-label">Fecha de pago</span>
+                    <DateField
+                      value={fecha}
+                      onChange={(e) => setFecha(e.target.value)}
+                      className="h-[var(--control-height)] w-full rounded-[var(--radius-sm)] border border-hairline bg-input px-3.5 text-[length:var(--text-base)] text-body outline-none focus:border-accent-quiet"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="sn-label">Tipo de pago</span>
+                    <Select value={tipo} onChange={(e) => setTipo(e.target.value)} className="w-full">
+                      {TIPOS.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="sn-label">Comprobante</span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      {comprobante ? (
+                        <>
+                          <Icon name="paperclip" size={14} className="shrink-0 text-subtext" />
+                          <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{comprobante.name}</span>
+                          <Button variant="ghost" size="md" onClick={() => setComprobante(null)}>
+                            Quitar
+                          </Button>
+                        </>
+                      ) : (
+                        <BotonArchivo
+                          etiqueta={escritorio ? 'Adjuntar archivo' : 'Tomar foto o adjuntar'}
+                          accept={ACCEPT_COMPROBANTE}
+                          capture={!escritorio}
+                          permitirGrande
+                          onArchivo={setComprobante}
+                          onRechazo={(m) => setAviso({ tono: 'error', texto: m })}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Paso>
 
-              <Cap derecha={<Enlace onClick={sugerir}>Sugerir: la más antigua primero</Enlace>}>Aplicar a facturas</Cap>
-              <div className="flex flex-col gap-2.5">
-                {grupos.map((g) => (
-                  <TarjetaFactura
-                    key={g.clave}
-                    g={g}
-                    lado={lado}
-                    abierta={abiertas.has(g.clave)}
-                    aplicado={aplicado}
-                    centavos={centavos.valores}
-                    excedidas={resumen.excedidas}
-                    onAbrir={() => alternar(g.clave)}
-                    onEditar={editarLinea}
-                  />
-                ))}
-              </div>
+              <Paso
+                n={3}
+                titulo="Se reparte así"
+                derecha={
+                  <Enlace onClick={sugerir}>
+                    <Icon name="refresh" size={13} className="mr-1 inline align-[-2px]" />
+                    Repartir automáticamente
+                  </Enlace>
+                }
+              >
+                <div className="flex flex-col gap-2.5">
+                  {grupos.map((g) => (
+                    <TarjetaFactura
+                      key={g.clave}
+                      g={g}
+                      lado={lado}
+                      abierta={estaAbierta(g)}
+                      aplicado={aplicado}
+                      centavos={centavos.valores}
+                      excedidas={resumen.excedidas}
+                      onAbrir={() => alternar(g)}
+                      onEditar={editarLinea}
+                    />
+                  ))}
+                </div>
 
-              {centavos.invalido ? (
-                <Aviso icono="warning" tono="acento">
-                  Hay montos inválidos en el reparto: usa números con a lo más dos decimales.
-                </Aviso>
-              ) : resumen.excedidas.length > 0 ? (
-                <Aviso icono="warning" tono="acento">
-                  {resumen.excedidas.map((id) => etiquetaLinea(grupos, id)).join(', ')}: el monto es mayor que su saldo.
-                </Aviso>
-              ) : !montoValido ? (
-                <Aviso icono="info" tono="neutro">
-                  Captura el monto del pago: se reparte solo, de la factura más antigua a la más reciente.
-                </Aviso>
-              ) : resumen.porAplicar !== 0 ? (
-                <Aviso icono="warning" tono="acento">
-                  {resumen.porAplicar > 0 ? (
-                    <>
-                      Quedan <b>{fmtMoney(resumen.porAplicar / 100)}</b> por aplicar. Lo {lado === 'cobro' ? 'recibido' : 'transferido'} y lo aplicado deben ser iguales.
-                    </>
-                  ) : (
-                    <>
-                      Se aplicaron <b>{fmtMoney(-resumen.porAplicar / 100)}</b> de más.
-                    </>
-                  )}
-                </Aviso>
-              ) : grupos.some((g) => g.metodo === 'PPD' && g.conceptos.some((c) => (centavos.valores[c.id] ?? 0) > 0)) ? (
-                <Aviso icono="info" tono="neutro">
-                  {lado === 'cobro' ? 'Cada factura PPD queda esperando su complemento; aparece en Avisos hasta que se suba.' : 'Las facturas PPD del proveedor quedan esperando su complemento.'}
-                </Aviso>
-              ) : null}
+                {centavos.invalido ? (
+                  <Aviso icono="warning" tono="acento">
+                    Hay montos inválidos en el reparto: usa números con a lo más dos decimales.
+                  </Aviso>
+                ) : resumen.excedidas.length > 0 ? (
+                  <Aviso icono="warning" tono="acento">
+                    {resumen.excedidas.map((id) => etiquetaLinea(grupos, id)).join(', ')}: el monto es mayor que su saldo.
+                  </Aviso>
+                ) : !montoValido ? (
+                  <Aviso icono="info" tono="neutro">
+                    Captura el monto del pago: se reparte solo, de la factura más antigua a la más reciente.
+                  </Aviso>
+                ) : resumen.porAplicar !== 0 ? (
+                  <Aviso icono="warning" tono="acento">
+                    {resumen.porAplicar > 0 ? (
+                      <>
+                        Quedan <b>{fmtMoney(resumen.porAplicar / 100)}</b> por aplicar. Lo {lado === 'cobro' ? 'recibido' : 'transferido'} y lo aplicado deben ser iguales.
+                      </>
+                    ) : (
+                      <>
+                        Se aplicaron <b>{fmtMoney(-resumen.porAplicar / 100)}</b> de más.
+                      </>
+                    )}
+                  </Aviso>
+                ) : ppdAplicadas.length > 0 ? (
+                  <Aviso icono="info" tono="neutro">
+                    {lado === 'cobro'
+                      ? `${nombresPpd} ${ppdAplicadas.length === 1 ? 'es PPD: queda esperando su complemento y aparece' : 'son PPD: quedan esperando su complemento y aparecen'} en Avisos hasta que se suba.`
+                      : `${nombresPpd} ${ppdAplicadas.length === 1 ? 'es PPD: queda esperando el complemento del proveedor.' : 'son PPD: quedan esperando el complemento del proveedor.'}`}
+                  </Aviso>
+                ) : null}
 
-              <label className="flex flex-col gap-1.5">
-                <span className="sn-label">Notas (opcional)</span>
-                <textarea
-                  value={notas}
-                  onChange={(e) => setNotas(e.target.value)}
-                  placeholder="Notas sobre el pago"
-                  className="h-[72px] w-full resize-y rounded-[var(--radius-sm)] border border-hairline bg-input px-3.5 py-2.5 text-[13.5px] text-body outline-none focus:border-accent-quiet"
-                />
-              </label>
+                {verNota || notas !== '' ? (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="sn-label">Notas (opcional)</span>
+                    <textarea
+                      value={notas}
+                      onChange={(e) => setNotas(e.target.value)}
+                      placeholder="Notas sobre el pago"
+                      className="h-[72px] w-full resize-y rounded-[var(--radius-sm)] border border-hairline bg-input px-3.5 py-2.5 text-[13.5px] text-body outline-none focus:border-accent-quiet"
+                    />
+                  </label>
+                ) : (
+                  <span className="self-start">
+                    <Enlace onClick={() => setVerNota(true)}>+ Agregar nota</Enlace>
+                  </span>
+                )}
+              </Paso>
             </>
           )}
         </>
@@ -476,13 +524,20 @@ function TarjetaFactura({
       <button type="button" onClick={onAbrir} aria-expanded={abierta} className="flex w-full items-center gap-3 px-4 py-3 text-left">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[14.5px] font-semibold text-ink">{g.titulo}</div>
-          <div className="mt-0.5 truncate text-[11.5px] text-subtext">
-            {g.sub} · saldo {fmtMoney(g.saldo / 100)}
+          <div className="mt-0.5 truncate text-[11.5px] text-subtext">{g.sub}</div>
+        </div>
+        <div className="text-right">
+          <div className={`whitespace-nowrap text-[16px] font-bold ${ap > 0 ? 'text-accent' : 'text-faint'}`}>{fmtMoney(ap / 100)}</div>
+          <div className="whitespace-nowrap text-[11.5px] text-subtext">
+            de saldo {fmtMoney(g.saldo / 100)}
+            {ap > 0 && ` · queda ${fmtMoney((g.saldo - ap) / 100)}`}
           </div>
         </div>
-        <span className={`whitespace-nowrap text-[16px] font-bold ${ap > 0 ? 'text-accent' : 'text-faint'}`}>{fmtMoney(ap / 100)}</span>
         <Icon name={abierta ? 'chevron-up' : 'chevron-down'} size={16} className="text-subtext" />
       </button>
+      <div className="px-4 pb-3">
+        <ProgressBar value={g.saldo > 0 ? (ap / g.saldo) * 100 : 0} label={`Aplicado a ${g.titulo}`} />
+      </div>
       {abierta && (
         <div className="border-t border-hairline">
           <div className="grid grid-cols-3 gap-3 bg-row-alt px-4 py-3">

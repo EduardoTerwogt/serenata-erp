@@ -8,6 +8,7 @@ import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { logStructured, newRequestId } from '@/lib/server/observability/log'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
+import { crearSubida } from './archivos-pendientes'
 import { parseComplementoPagoXML, relacionadosDeComplemento } from '@/lib/server/xml/complemento-parser'
 
 export type LadoComplemento = 'cobro' | 'proveedor'
@@ -35,6 +36,8 @@ export interface LigarComplementoParams {
   route: string
   /** Si se pasa, el complemento debe relacionar la factura de esta cuenta de cobro (ruta por cuenta). */
   uuidFacturaEsperado?: string | null
+  /** #131: guarda primero los datos y sube los archivos a Drive después (si Drive falla, quedan pendientes). */
+  driveDespues?: boolean
 }
 
 export async function ligarComplemento(p: LigarComplementoParams): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -52,8 +55,9 @@ export async function ligarComplemento(p: LigarComplementoParams): Promise<{ sta
   if (!googleEnv) return { status: 500, body: { error: 'Google Drive no configurado' } }
   const folderId = p.uploadFolderId ?? (googleEnv.driveFolderIdCuentas || undefined)
   const timestamp = Date.now()
-  const xmlUrl = await uploadFileToDrive(p.xmlFile, p.carpeta, `complemento_pago_${timestamp}.xml`, folderId)
-  const pdfUrl = p.pdfFile ? await uploadFileToDrive(p.pdfFile, p.carpeta, `complemento_pago_${timestamp}.pdf`, folderId) : null
+  const subida = crearSubida({ lado: p.lado, carpeta: p.carpeta, folderId, despues: p.driveDespues, route: p.route })
+  const xmlUrl = await subida.guardar('xml', p.xmlFile, `complemento_pago_${timestamp}.xml`)
+  const pdfUrl = p.pdfFile ? await subida.guardar('pdf', p.pdfFile, `complemento_pago_${timestamp}.pdf`) : null
 
   const { data: resultado, error } = await supabaseAdmin.rpc(RPC[p.lado], {
     p_relacionados: relacionados,
@@ -72,7 +76,11 @@ export async function ligarComplemento(p: LigarComplementoParams): Promise<{ sta
     if (error.code === '23505') return { status: 409, body: { error: 'complemento_existente', message: 'Ese pago ya tiene complemento para la factura.', requestId } }
     return { status: 400, body: { error: 'No se pudo guardar el complemento', requestId } }
   }
-  return { status: 200, body: { success: true, ...(resultado as Record<string, unknown>) } }
+  // Los datos ya están: ahora los archivos van a Drive. Un complemento que relaciona varias facturas repite el archivo en una fila por factura.
+  const filas = ((resultado as { complementos?: { xml_id?: string | null; pdf_id?: string | null }[] }).complementos ?? [])
+  const ids = (k: 'xml_id' | 'pdf_id') => filas.map((f) => f[k]).filter((id): id is string => Boolean(id))
+  const archivosPendientes = await subida.terminar({ xml: ids('xml_id'), pdf: ids('pdf_id') })
+  return { status: 200, body: { success: true, ...(resultado as Record<string, unknown>), ...(archivosPendientes.length > 0 ? { archivos_pendientes: archivosPendientes } : {}) } }
 }
 
 /**

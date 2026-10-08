@@ -384,6 +384,14 @@ export const ProyectosSelectorQuerySchema = z.object({
   page_size: z.coerce.number().int().min(1).max(50).optional().default(25),
 }).refine((v) => v.modo !== 'pago' || v.lado !== undefined, { message: 'El modo pago requiere lado' })
 
+// GET /api/cuentas/contrapartes (#131): contrapartes con algo pendiente para el desplegable de Acciones.
+export const PENDIENTES_CONTRAPARTE = ['factura', 'complemento', 'saldo', 'todos'] as const
+export const CuentasContrapartesQuerySchema = z.object({
+  lado: z.enum(LADOS_CUENTAS, { message: 'lado inválido (cobro o proveedor)' }),
+  pendiente: z.enum(PENDIENTES_CONTRAPARTE, { message: 'pendiente inválido (factura, complemento, saldo o todos)' }),
+  q: z.string().trim().max(100).optional(),
+})
+
 const centavos = z.coerce.number().finite().positive('El monto debe ser mayor a 0')
 
 // POST /api/cuentas/facturas/preview — campo `datos` (JSON) del multipart junto al archivo `xml`.
@@ -394,7 +402,7 @@ export const FacturaPreviewSchema = z.object({
   cuentas: z.array(z.string().uuid()).optional().default([]),
 })
 
-// POST /api/cuentas/facturas — campo `datos` (JSON) del multipart junto a `xml` (y `pdf` opcional).
+// POST /api/cuentas/facturas — campo `datos` (JSON) del multipart junto a `xml` y `pdf` (ambos obligatorios, #131).
 // Sin tope de cotizaciones por factura (P6, P25).
 export const FacturaCrearSchema = z.object({
   operation_id: z.string().uuid('operation_id requerido (uuid)'),
@@ -439,7 +447,7 @@ export const FacturaCrearSchema = z.object({
         .optional(),
     })
     .optional()
-    .refine((p) => !p || Boolean(p.renglones?.length) !== (p.gasto !== undefined), 'Elige renglones o registra un gasto extra, no ambos ni ninguno'),
+    .refine((p) => !p || Boolean(p.renglones?.length) !== (p.gasto !== undefined), 'Elige conceptos o registra un gasto extra, no ambos ni ninguno'),
 })
 
 const FechaIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de pago requerida (YYYY-MM-DD)')
@@ -621,3 +629,6 @@ export function validate<T>(schema: z.ZodType<T>, payload: unknown):
 
 // Re-exportar z para uso en rutas si se necesita
 export { z }
+
+/** #131: `POST /api/cuentas/documentos/[id]/reintentar-subida` (multipart: `archivo` y `datos` con `lado`). */
+export const ReintentarSubidaSchema = z.object({ id: z.string().uuid(), lado: z.enum(['cobro', 'proveedor']) })

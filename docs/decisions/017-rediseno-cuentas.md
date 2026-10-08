@@ -196,7 +196,9 @@ sesión 19 (plan aprobado). Las referencias "§n" y "Bn" apuntan a ese plan.
 15. **Límite de archivo: 4 MB por archivo** (diseño; hoy son 10 MB). Una
     función de Vercel no acepta cuerpos mayores de ~4.5 MB, así que XML y PDF
     se suben **en peticiones separadas**, no juntos en un solo `FormData` como
-    hoy.
+    hoy. *(#131: `POST /api/cuentas/facturas` los recibe juntos con PDF obligatorio y
+    un tope combinado de ~4.2 MB; ver P30 en `docs/PLAN.md`. Las rutas del detalle
+    conservan la subida separada.)*
 16. **Descargar y "Compartir PDF" usan el enlace de Drive** (`pdf_url`),
     confirmado por el usuario en la sesión 12.
     - Los archivos viven en Drive; Supabase solo guarda el enlace, como todos

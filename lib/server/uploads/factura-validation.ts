@@ -1,10 +1,16 @@
 const ALLOWED_XML_TYPES = ['text/xml', 'application/xml']
 const ALLOWED_PDF_TYPES = ['application/pdf']
 // Rediseño de Cuentas (supuesto 15): 4 MB por archivo. Una función de Vercel
-// no acepta cuerpos de más de ~4.5 MB, así que XML y PDF viajan en
+// no acepta cuerpos de más de ~4.5 MB, así que (salvo Subir factura, #131, con su tope combinado) XML y PDF viajan en
 // peticiones separadas y cada uno cabe con margen.
 export const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4 MB
 export const MENSAJE_LIMITE = 'El archivo excede el límite de 4 MB'
+// #131 (Subir factura): con el PDF obligatorio, XML y PDF viajan en la misma petición. El tope combinado deja margen para
+// el cuerpo multipart y el JSON de `datos` bajo el límite de ~4.5 MB de Vercel.
+export const MAX_TOTAL_SIZE = 4.2 * 1024 * 1024
+export const MENSAJE_LIMITE_TOTAL = 'El XML y el PDF juntos exceden 4 MB. Reduce el PDF.'
+
+export const excedeTotal = (xml: File, pdf: File | null): boolean => xml.size + (pdf?.size ?? 0) > MAX_TOTAL_SIZE
 
 export type FacturaValidationErrorCode =
   | 'XML_REQUIRED' | 'XML_INVALID_TYPE'

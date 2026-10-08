@@ -4,9 +4,11 @@ import { useRef, type ReactNode } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { fmtMoney } from '@/lib/quotations/format'
+import { archivoPendiente } from '@/lib/shared/cuentas/archivo-pendiente'
 import type { DetalleCobro, DetalleConcepto, DetallePago, DocumentoDetalle, PagoCobroDetalle } from '@/lib/shared/cuentas/detalle-tipos'
 import { fechaCorta } from '../formato'
 import { HistorialCorrecciones, QuitarDocumento, ReemplazarFactura } from './Correcciones'
+import { reintentarSubida } from '../acciones/useAcciones'
 import { accionesDetalle, type ObjetivoPagable } from './useDetalle'
 
 export type Ejecutar = (accion: () => Promise<unknown>, exito: string) => Promise<void>
@@ -25,6 +27,8 @@ interface Props {
 
 /** Límite por archivo (supuesto 15): igual que el servidor (factura-validation.ts). */
 export const LIMITE_ARCHIVO = 4 * 1024 * 1024
+/** #131: XML + PDF de Subir factura viajan juntos; igual que `MAX_TOTAL_SIZE` del servidor. */
+export const LIMITE_TOTAL = 4.2 * 1024 * 1024
 export const ACCEPT_XML = '.xml,application/xml,text/xml'
 export const ACCEPT_PDF = '.pdf,application/pdf'
 export const ACCEPT_COMPROBANTE = 'image/*,.pdf,application/pdf'
@@ -35,6 +39,8 @@ export function BotonArchivo({
   accept,
   capture,
   onArchivo,
+  onVarios,
+  multiple = false,
   onRechazo,
   variante = 'secondary',
   permitirGrande = false,
@@ -43,6 +49,9 @@ export function BotonArchivo({
   accept: string
   capture?: boolean
   onArchivo: (f: File) => void
+  /** Con `multiple`: recibe todos los archivos elegidos a la vez (p. ej. XML y PDF de una factura). */
+  onVarios?: (fs: File[]) => void
+  multiple?: boolean
   onRechazo: (mensaje: string) => void
   variante?: 'secondary' | 'ghost'
   /** Las imágenes se comprimen antes de subirse: no se frenan aquí. */
@@ -59,17 +68,21 @@ export function BotonArchivo({
         type="file"
         hidden
         accept={accept}
+        multiple={multiple}
         {...(capture ? { capture: 'environment' as const } : {})}
         onChange={(e) => {
-          const f = e.target.files?.[0]
+          const fs = Array.from(e.target.files ?? [])
           e.target.value = ''
-          if (!f) return
-          const imagen = f.type.startsWith('image/')
-          if (f.size > LIMITE_ARCHIVO && !(permitirGrande && imagen)) {
-            onRechazo(`"${f.name}" pesa más de 4 MB. Reduce el archivo e intenta de nuevo.`)
-            return
+          if (fs.length === 0) return
+          for (const f of fs) {
+            const imagen = f.type.startsWith('image/')
+            if (f.size > LIMITE_ARCHIVO && !(permitirGrande && imagen)) {
+              onRechazo(`"${f.name}" pesa más de 4 MB. Reduce el archivo e intenta de nuevo.`)
+              return
+            }
           }
-          onArchivo(f)
+          if (multiple && onVarios) onVarios(fs)
+          else onArchivo(fs[0])
         }}
       />
     </>
@@ -85,6 +98,7 @@ function FilaDoc({
   sub,
   url,
   acciones,
+  pendiente,
 }: {
   nombre: string
   requisito: string
@@ -92,6 +106,8 @@ function FilaDoc({
   sub: string
   url?: string | null
   acciones?: ReactNode
+  /** #131: qué mostrar si el archivo no llegó a Drive (la factura se guardó antes de subirlo). */
+  pendiente?: ReactNode
 }) {
   const icono = estado === 'falta' ? 'circle-dashed' : estado === 'revision' ? 'warning' : estado === 'no_aplica' ? 'circle-dashed' : 'circle-check'
   const color = estado === 'falta' ? 'text-accent' : estado === 'revision' ? 'text-accent' : estado === 'no_aplica' ? 'text-faint' : 'text-approved-fg'
@@ -107,13 +123,33 @@ function FilaDoc({
       </div>
       {estado === 'valida' && <span className="inline-flex h-5 min-w-20 items-center justify-center rounded-full bg-approved-bg px-2 text-[10.5px] font-medium text-approved-fg">Válida</span>}
       {estado === 'revision' && <span className="inline-flex h-5 min-w-20 items-center justify-center rounded-full bg-draft-bg px-2 text-[10.5px] font-medium text-draft-fg">En revisión</span>}
-      {url && (
-        <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] text-accent hover:underline">
-          Ver
-        </a>
+      {archivoPendiente(url) ? (
+        <>
+          <span className="inline-flex h-5 min-w-20 items-center justify-center rounded-full bg-draft-bg px-2 text-[10.5px] font-medium text-draft-fg">Archivo pendiente</span>
+          {pendiente}
+        </>
+      ) : (
+        url && (
+          <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] text-accent hover:underline">
+            Ver
+          </a>
+        )
       )}
       {acciones}
     </div>
+  )
+}
+
+/** #131: "Subir archivo" para un documento cuyo archivo no llegó a Drive; reenvía solo el archivo, la factura no se repite. */
+function SubirPendiente({ doc, lado, ejecutar, rechazo }: { doc: DocumentoDetalle | null; lado: 'cobro' | 'proveedor'; ejecutar: Ejecutar; rechazo: (m: string) => void }) {
+  if (!doc || !archivoPendiente(doc.archivo_url)) return null
+  return (
+    <BotonArchivo
+      etiqueta="Subir archivo"
+      accept={doc.archivo_url === 'pendiente:xml' ? ACCEPT_XML : ACCEPT_PDF}
+      onArchivo={(f) => void ejecutar(() => reintentarSubida({ lado, id: doc.id, archivo: f }), 'Archivo subido a Drive')}
+      onRechazo={rechazo}
+    />
   )
 }
 
@@ -225,6 +261,7 @@ function DocsCobro({ d, objetivo, ejecutar, rechazo, corrige, onAbrirFactura }: 
         estado={estadoXml(xml)}
         sub={xml?.estado_validacion === 'revision' && xml.detalle_validacion ? xml.detalle_validacion : subDoc(xml)}
         url={xml?.archivo_url}
+        pendiente={<SubirPendiente doc={xml} lado="cobro" ejecutar={ejecutar} rechazo={rechazo} />}
         acciones={<AccionesFactura doc={xml} dominio="cobro" objetivo={objetivo} ejecutar={ejecutar} rechazo={rechazo} corrige={corrige} onSubir={subirXml} onValidar={validar} onAbrir={onAbrirFactura} />}
       />
       {xml && d.concepto.metodo_desconocido && (
@@ -244,6 +281,7 @@ function DocsCobro({ d, objetivo, ejecutar, rechazo, corrige, onAbrirFactura }: 
         estado={d.factura_pdf ? 'listo' : 'falta'}
         sub={subDoc(d.factura_pdf)}
         url={d.factura_pdf?.archivo_url}
+        pendiente={<SubirPendiente doc={d.factura_pdf} lado="cobro" ejecutar={ejecutar} rechazo={rechazo} />}
         acciones={
           d.factura_pdf ? (
             corrige && <QuitarDocumento dominio="cobro" doc={d.factura_pdf} nombre="Factura PDF" ejecutar={ejecutar} />
@@ -287,6 +325,7 @@ function ComplementoPago({
         estado={estadoXml(c.xml)}
         sub={c.xml ? `${subDoc(c.xml)} · ${cual}` : `Pendiente · ${cual}`}
         url={c.xml?.archivo_url}
+        pendiente={<SubirPendiente doc={c.xml} lado="cobro" ejecutar={ejecutar} rechazo={rechazo} />}
         acciones={
           <>
             <AccionesXml doc={c.xml} onSubir={(f) => subir(f, 'xml')} onValidar={validar} rechazo={rechazo} onAbrir={onAbrirFactura} etiqueta="Subir complemento" />
@@ -300,6 +339,7 @@ function ComplementoPago({
         estado={c.pdf ? 'listo' : 'falta'}
         sub={c.pdf ? `${subDoc(c.pdf)} · ${cual}` : `Pendiente · ${cual}`}
         url={c.pdf?.archivo_url}
+        pendiente={<SubirPendiente doc={c.pdf} lado="cobro" ejecutar={ejecutar} rechazo={rechazo} />}
         acciones={
           c.pdf ? (
             corrige && <QuitarDocumento dominio="cobro" doc={c.pdf} nombre="Complemento PDF" ejecutar={ejecutar} />
@@ -323,6 +363,7 @@ function DocsPago({ d, objetivo, ejecutar, rechazo, corrige, onAbrirFactura }: D
         estado={estadoXml(xml)}
         sub={xml?.estado_validacion === 'revision' && xml.detalle_validacion ? xml.detalle_validacion : subDoc(xml)}
         url={xml?.archivo_url}
+        pendiente={<SubirPendiente doc={xml} lado="proveedor" ejecutar={ejecutar} rechazo={rechazo} />}
         acciones={
           <AccionesFactura
             doc={xml}
@@ -343,6 +384,7 @@ function DocsPago({ d, objetivo, ejecutar, rechazo, corrige, onAbrirFactura }: D
         estado={d.factura_pdf ? 'listo' : 'falta'}
         sub={subDoc(d.factura_pdf)}
         url={d.factura_pdf?.archivo_url}
+        pendiente={<SubirPendiente doc={d.factura_pdf} lado="proveedor" ejecutar={ejecutar} rechazo={rechazo} />}
         acciones={
           d.factura_pdf ? (
             corrige && <QuitarDocumento dominio="proveedor" doc={d.factura_pdf} nombre="Factura PDF" ejecutar={ejecutar} />

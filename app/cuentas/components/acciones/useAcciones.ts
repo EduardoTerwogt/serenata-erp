@@ -1,5 +1,6 @@
 'use client'
 
+import type { ArchivoPendienteInfo } from '@/lib/shared/cuentas/archivo-pendiente'
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, getJson, sendFormData } from '@/lib/client/api'
 import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
@@ -8,6 +9,7 @@ import { clearPendingOperation } from '@/lib/client/pendingOperation'
 import type { EstadoCuentaRespuesta, LadoCuentas } from '@/lib/shared/cuentas/estado-cuenta-tipos'
 import type { PreviewCuentas } from '@/lib/shared/cuentas/factura-preview-tipos'
 import type { ProyectoSelector, SelectorProyectosRespuesta } from '@/lib/shared/cuentas/proyectos-selector-tipos'
+import type { ContrapartesPendientes, PendienteContraparte } from '@/lib/shared/cuentas/contrapartes-tipos'
 import { useGet } from '../ordenes/useOrdenes'
 
 export interface ContraparteLista {
@@ -22,44 +24,41 @@ export const useEstadoCuenta = (lado: LadoCuentas, id: string | null, proyectos?
     'No se pudo cargar el estado de cuenta'
   )
 
-/** Proveedores activos (la ruta ya los entrega con columnas públicas); se filtran en el cliente. */
-export function useProveedores(activo: boolean) {
-  const [lista, setLista] = useState<ContraparteLista[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
-    if (!activo || lista) return undefined
-    let vivo = true
-    getJson<(ContraparteLista & { activo?: boolean })[]>('/api/proveedores', 'No se pudieron cargar los proveedores')
-      .then((r) => vivo && setLista(r.filter((p) => p.activo !== false).map((p) => ({ id: p.id, nombre: p.nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))))
-      .catch((e) => vivo && setError(e instanceof Error ? e.message : 'No se pudieron cargar los proveedores'))
-    return () => {
-      vivo = false
-    }
-  }, [activo, lista])
-  return { lista, error }
-}
-
-/** Clientes por nombre (`GET /api/clientes?q=` admite la sección `cuentas`, T8); con debounce y cancelación. */
-export function useBuscarClientes(q: string, activo: boolean) {
-  const [estado, setEstado] = useState<{ q: string; lista: ContraparteLista[]; error: string | null }>({ q: '', lista: [], error: null })
+/**
+ * #131: contrapartes del desplegable (`GET /api/cuentas/contrapartes`): las que tienen algo `pendiente` (factura,
+ * complemento o saldo) o `todos`. SQL filtra por nombre y trae hasta 50; con debounce y cancelación mientras se escribe.
+ */
+export function useContrapartes(lado: LadoCuentas, pendiente: PendienteContraparte, q: string, activo: boolean) {
   const buscado = q.trim()
+  const clave = `${lado}|${pendiente}|${buscado}`
+  const [estado, setEstado] = useState<{ clave: string; datos: ContrapartesPendientes | null; error: string | null }>({ clave: '', datos: null, error: null })
   useEffect(() => {
-    if (!activo || buscado === '') return undefined
+    if (!activo) return undefined
     const ac = new AbortController()
-    const t = setTimeout(() => {
-      getJson<ContraparteLista[]>(`/api/clientes?q=${encodeURIComponent(buscado)}`, 'No se pudieron buscar los clientes', { signal: ac.signal })
-        .then((lista) => setEstado({ q: buscado, lista, error: null }))
-        .catch((e) => {
-          if (!ac.signal.aborted) setEstado({ q: buscado, lista: [], error: e instanceof Error ? e.message : 'No se pudieron buscar los clientes' })
-        })
-    }, 250)
+    const t = setTimeout(
+      () => {
+        const sp = new URLSearchParams({ lado, pendiente })
+        if (buscado) sp.set('q', buscado)
+        getJson<ContrapartesPendientes>(`/api/cuentas/contrapartes?${sp.toString()}`, 'No se pudieron cargar los datos', { signal: ac.signal })
+          .then((datos) => setEstado({ clave, datos, error: null }))
+          .catch((e) => {
+            if (!ac.signal.aborted) setEstado({ clave, datos: null, error: e instanceof Error ? e.message : 'No se pudieron cargar los datos' })
+          })
+      },
+      buscado ? 250 : 0
+    )
     return () => {
       clearTimeout(t)
       ac.abort()
     }
-  }, [buscado, activo])
-  const vigente = activo && buscado !== '' && estado.q === buscado
-  return { lista: vigente ? estado.lista : [], error: vigente ? estado.error : null, buscando: activo && buscado !== '' && estado.q !== buscado }
+  }, [activo, clave, lado, pendiente, buscado])
+  const vigente = estado.clave === clave
+  return {
+    lista: vigente ? (estado.datos?.contrapartes ?? []) : [],
+    total: vigente ? (estado.datos?.total ?? 0) : 0,
+    error: vigente ? estado.error : null,
+    cargando: activo && !vigente,
+  }
 }
 
 export interface PagoEntrada {
@@ -159,6 +158,8 @@ export interface FacturaGuardada {
   grupo?: { estado: string }
   /** #130: lo que `preparar` dejó listo (proveedor y grupo). */
   preparado?: { proveedor_id: string; grupo_id: string; proveedor_creado?: boolean }
+  /** #131: la factura quedó guardada pero estos archivos no llegaron a Drive; se reenvían con `reintentarSubida`. */
+  archivos_pendientes?: ArchivoPendienteInfo[]
   [k: string]: unknown
 }
 
@@ -245,6 +246,14 @@ export function useProyectosSelector(f: FiltrosSelector, activo: boolean) {
     hayMas: vigente && proyectos.length < estado.total,
     cargarMas,
   }
+}
+
+/** #131: sube a Drive el archivo de un documento que quedó pendiente (la factura no se repite). */
+export const reintentarSubida = (p: { lado: ArchivoPendienteInfo['lado']; id: string; archivo: File }) => {
+  const fd = new FormData()
+  fd.set('lado', p.lado)
+  fd.set('archivo', p.archivo)
+  return sendFormData<{ success: boolean; pendiente: boolean }>(`/api/cuentas/documentos/${p.id}/reintentar-subida`, fd, 'No se pudo subir el archivo a Drive')
 }
 
 export const accionesFactura = {

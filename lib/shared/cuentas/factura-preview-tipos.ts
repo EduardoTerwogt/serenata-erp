@@ -102,13 +102,15 @@ export interface PreviewFactura {
 export interface RelacionadoPreview {
   uuid_factura: string
   monto_pagado: number
-  factura: { id: string; estado_validacion: string | null; metodo_pago: string | null; total_cfdi: number | null } | null
+  factura: { id: string; estado_validacion: string | null; metodo_pago: string | null; total_cfdi: number | null; archivo_nombre?: string | null } | null
 }
 
 export interface PreviewComplemento {
   tipo: 'complemento_cobro' | 'complemento_proveedor'
   lado: LadoCuentas
   cfdi: { uuid: string | null; fecha: string | null }
+  /** #131: la contraparte del complemento por su RFC (null si no hay una sola). */
+  contraparte?: { id: string; nombre: string } | null
   relacionados: RelacionadoPreview[]
 }
 

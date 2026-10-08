@@ -58,16 +58,15 @@ const estado = (proyectos: string[]): EstadoCuentaRespuesta => {
   } as unknown as EstadoCuentaRespuesta
 }
 
-const selector = {
-  modo: 'pago',
-  total: 3,
-  page: 1,
-  page_size: 25,
-  proyectos: [
-    { proyecto_id: 'SH061', proyecto: 'Lanzamiento', cliente: 'Altavista', fecha_entrega: null, contrapartes: [{ id: 'prov1', nombre: 'Distrito Sonoro', facturas: 1, saldo: 28000 }] },
-    { proyecto_id: 'SH062', proyecto: 'Spot', cliente: 'Cervecería', fecha_entrega: null, contrapartes: [{ id: 'prov1', nombre: 'Distrito Sonoro', facturas: 1, saldo: 5800 }] },
-    { proyecto_id: 'SH070', proyecto: 'Festival', cliente: 'Fonoteca', fecha_entrega: null, contrapartes: [{ id: 'prov2', nombre: 'Fonoteca MX', facturas: 1, saldo: 9000 }] },
-  ],
+const proyectosSelector = [
+  { proyecto_id: 'SH061', proyecto: 'Lanzamiento', cliente: 'Altavista', fecha_entrega: null, contrapartes: [{ id: 'prov1', nombre: 'Distrito Sonoro', facturas: 1, saldo: 28000 }] },
+  { proyecto_id: 'SH062', proyecto: 'Spot', cliente: 'Cervecería', fecha_entrega: null, contrapartes: [{ id: 'prov1', nombre: 'Distrito Sonoro', facturas: 1, saldo: 5800 }] },
+  { proyecto_id: 'SH070', proyecto: 'Festival', cliente: 'Fonoteca', fecha_entrega: null, contrapartes: [{ id: 'prov2', nombre: 'Fonoteca MX', facturas: 1, saldo: 9000 }] },
+]
+/** Como SQL: con `contraparte` solo salen los proyectos con saldo de esa contraparte. */
+const selector = (contraparte: string | null) => {
+  const proyectos = contraparte ? proyectosSelector.filter((p) => p.contrapartes.some((c) => c.id === contraparte)) : proyectosSelector
+  return { modo: 'pago', total: proyectos.length, page: 1, page_size: 25, proyectos }
 }
 
 let llamadas: { url: string; method: string; datos: Record<string, unknown> | null }[]
@@ -80,10 +79,11 @@ beforeEach(() => {
       const url = String(input)
       const fd = init?.body instanceof FormData ? init.body : null
       llamadas.push({ url, method: init?.method ?? 'GET', datos: fd?.get('datos') ? JSON.parse(String(fd.get('datos'))) : null })
-      if (url.startsWith('/api/cuentas/proyectos-selector')) return Promise.resolve(json(selector))
+      if (url.startsWith('/api/cuentas/proyectos-selector')) return Promise.resolve(json(selector(new URL(url, 'http://x').searchParams.get('contraparte'))))
+      if (url.startsWith('/api/cuentas/contrapartes')) return Promise.resolve(json({ total: 1, contrapartes: [{ id: 'prov1', nombre: 'Distrito Sonoro', pendientes: 2 }] }))
       if (url.startsWith('/api/cuentas/estado-cuenta')) {
-        const proyectos = new URL(url, 'http://x').searchParams.get('proyectos')?.split(',') ?? []
-        return Promise.resolve(json(estado(proyectos)))
+        const filtro = new URL(url, 'http://x').searchParams.get('proyectos')
+        return Promise.resolve(json(estado(filtro ? filtro.split(',') : ['SH061', 'SH062'])))
       }
       if (url === '/api/cuentas/pagos') return Promise.resolve(json({ success: true, resumen: {}, pago: { pago_id: 'p1', comprobante_url: null } }))
       return Promise.resolve(json({}))
@@ -95,34 +95,49 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/** Con la contraparte en el estado, como la usa Cuentas (el desplegable llama a `onCambio`). */
 function Ventana() {
-  const [lado, setLado] = useState<LadoCuentas>('proveedor')
-  return <RegistrarPago escritorio lado={lado} contraparteId={null} proyecto={null} hoy="2026-10-07" onCambio={(c) => setLado(c.lado)} onClose={() => {}} onRegistrado={() => {}} />
+  const [c, setC] = useState<{ lado: LadoCuentas; contraparteId: string | null }>({ lado: 'proveedor', contraparteId: null })
+  return <RegistrarPago escritorio lado={c.lado} contraparteId={c.contraparteId} proyecto={null} hoy="2026-10-07" onCambio={setC} onClose={() => {}} onRegistrado={() => {}} />
+}
+
+async function elegirProveedor() {
+  fireEvent.click(screen.getByRole('button', { name: /Elegir proveedor/ }))
+  fireEvent.click(await screen.findByRole('option', { name: /Distrito Sonoro/ }))
+  await screen.findByLabelText(/Monto transferido/)
 }
 
 const caja = (nombre: string | RegExp) => screen.findByRole('checkbox', { name: nombre })
 
-describe('Registrar pago · por proyecto (#130)', () => {
-  it('marcar un proyecto fija la contraparte, deshabilita las demás y carga solo esos proyectos', async () => {
+describe('Registrar pago · por proyecto (#130, #131)', () => {
+  it('el modo «Elegir proyectos» solo sale con contraparte y lista solo sus proyectos', async () => {
     render(<Ventana />)
-    fireEvent.click(screen.getByRole('button', { name: 'Por proyecto' }))
-    const sh061 = await caja('Incluir SH061 · Distrito Sonoro')
-    expect(((await caja('Incluir SH070 · Fonoteca MX')) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.queryByRole('button', { name: 'Elegir proyectos' })).toBeNull()
+    await elegirProveedor()
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
 
-    fireEvent.click(sh061)
+    expect(await caja('Incluir SH061 · Lanzamiento')).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: 'Incluir SH062 · Spot' })).toBeTruthy()
+    expect(screen.queryByRole('checkbox', { name: /SH070/ })).toBeNull()
+    expect(llamadas.some((l) => l.url.includes('/proyectos-selector') && l.url.includes('modo=pago') && l.url.includes('contraparte=prov1'))).toBe(true)
+  })
+
+  it('marcar proyectos limita el estado de cuenta a ellos', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
+    fireEvent.click(await caja('Incluir SH061 · Lanzamiento'))
     await waitFor(() => expect(llamadas.some((l) => l.url.includes('/estado-cuenta') && l.url.includes('id=prov1') && l.url.includes('proyectos=SH061'))).toBe(true))
-    await waitFor(() => expect((screen.getByRole('checkbox', { name: 'Incluir SH070 · Fonoteca MX' }) as HTMLButtonElement).disabled).toBe(true))
-    expect(await screen.findByText('Otra contraparte')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Incluir SH062 · Distrito Sonoro' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Incluir SH062 · Spot' }))
     await waitFor(() => expect(llamadas.some((l) => l.url.includes('proyectos=SH061%2CSH062'))).toBe(true))
   })
 
   it('registra el pago repartido entre los proyectos marcados, una sola contraparte', async () => {
     render(<Ventana />)
-    fireEvent.click(screen.getByRole('button', { name: 'Por proyecto' }))
-    fireEvent.click(await caja('Incluir SH061 · Distrito Sonoro'))
-    fireEvent.click(await caja('Incluir SH062 · Distrito Sonoro'))
+    await elegirProveedor()
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
+    fireEvent.click(await caja('Incluir SH061 · Lanzamiento'))
+    fireEvent.click(await caja('Incluir SH062 · Spot'))
     const monto = await screen.findByLabelText(/Monto transferido/)
     fireEvent.change(monto, { target: { value: '33,800.00' } })
     const registrar = () => screen.getByRole('button', { name: 'Registrar pago' }) as HTMLButtonElement
@@ -137,5 +152,101 @@ describe('Registrar pago · por proyecto (#130)', () => {
         { id: 'g62', monto: 5800, saldo_esperado: 5800 },
       ],
     })
+  })
+})
+
+describe('Registrar pago · una contraparte, varias facturas (#131)', () => {
+  it('el desplegable ocupa el lugar del aviso, sin pestañas por contraparte/proyecto, y un solo pago cubre varias facturas', async () => {
+    render(<Ventana />)
+    expect(screen.queryByRole('button', { name: 'Por contraparte' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Por proyecto' })).toBeNull()
+    expect(screen.queryByText(/Elige el proveedor al que se le transfirió/)).toBeNull()
+    expect(screen.queryByText(/Elige el cliente que depositó/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /Elegir proveedor/ }))
+    expect(await screen.findByText('Solo proveedores con saldo por pagar')).toBeTruthy()
+    expect(llamadas.some((l) => l.url.includes('/api/cuentas/contrapartes') && l.url.includes('lado=proveedor') && l.url.includes('pendiente=saldo'))).toBe(true)
+    fireEvent.click(await screen.findByRole('option', { name: /Distrito Sonoro/ }))
+
+    // Sus dos facturas (una por proyecto) se piden sin limitar proyectos y el pago se reparte entre ellas.
+    const monto = await screen.findByLabelText(/Monto transferido/)
+    expect(llamadas.some((l) => l.url.includes('/estado-cuenta') && l.url.includes('id=prov1') && !l.url.includes('proyectos='))).toBe(true)
+    fireEvent.change(monto, { target: { value: '33,800.00' } })
+    const registrar = () => screen.getByRole('button', { name: 'Registrar pago' }) as HTMLButtonElement
+    await waitFor(() => expect(registrar().disabled).toBe(false))
+    fireEvent.click(registrar())
+    await waitFor(() => expect(llamadas.some((l) => l.url === '/api/cuentas/pagos')).toBe(true))
+    expect(llamadas.find((l) => l.url === '/api/cuentas/pagos')!.datos).toMatchObject({
+      lado: 'proveedor',
+      lineas: [
+        { id: 'g61', monto: 28000, saldo_esperado: 28000 },
+        { id: 'g62', monto: 5800, saldo_esperado: 5800 },
+      ],
+    })
+  })
+
+  it('«Todas sus facturas» regresa a las facturas de la contraparte elegida', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
+    expect(await caja('Incluir SH061 · Lanzamiento')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Todas sus facturas' }))
+    expect(await screen.findByLabelText(/Monto transferido/)).toBeTruthy()
+    expect(screen.queryByRole('checkbox', { name: /SH061/ })).toBeNull()
+  })
+})
+
+describe('Registrar pago · pasos, reparto legible y pulido (#131)', () => {
+  it('«Marcar todos» marca los proyectos de la contraparte y la barra dice cuántos y cuánto', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
+    expect(await screen.findByText('0 de 2 marcados · $0.00 por pagar')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar todos' }))
+    expect(await screen.findByText('2 de 2 marcados · $33,800.00 por pagar')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar todos' }))
+    expect(await screen.findByText('0 de 2 marcados · $0.00 por pagar')).toBeTruthy()
+  })
+
+  it('tres pasos con el nombre de quién se paga; el pie dice «Cuadra» cuando lo aplicado es igual al monto', async () => {
+    render(<Ventana />)
+    expect(screen.getByRole('region', { name: '¿A quién se le paga?' })).toBeTruthy()
+    await elegirProveedor()
+    expect(screen.getByRole('region', { name: '¿Cuánto y cuándo?' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Se reparte así' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/Monto transferido/), { target: { value: '33800' } })
+    expect(await screen.findByText('Cuadra · 2 facturas')).toBeTruthy()
+  })
+
+  it('las facturas con monto aplicado se abren solas y muestran lo que queda; las de $0 quedan cerradas', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    fireEvent.change(screen.getByLabelText(/Monto transferido/), { target: { value: '28000' } })
+    expect(await screen.findByText('de saldo $28,000.00 · queda $0.00')).toBeTruthy()
+    // La primera factura (SH061) recibe todo el monto y se abre; la segunda queda en $0 y cerrada.
+    expect(screen.getByLabelText('Aplicar a SH061')).toBeTruthy()
+    expect(screen.queryByLabelText('Aplicar a SH062')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /SH062|f-g62/ }))
+    expect(await screen.findByLabelText('Aplicar a SH062')).toBeTruthy()
+  })
+
+  it('el monto queda con formato al salir del campo y «Repartir automáticamente» lo reparte otra vez', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    const monto = screen.getByLabelText(/Monto transferido/) as HTMLInputElement
+    fireEvent.change(monto, { target: { value: '33800' } })
+    fireEvent.blur(monto)
+    expect(monto.value).toBe('33,800.00')
+    fireEvent.click(screen.getByRole('button', { name: 'Repartir automáticamente' }))
+    expect(await screen.findByText('Cuadra · 2 facturas')).toBeTruthy()
+  })
+
+  it('la nota va detrás de «+ Agregar nota» y el comprobante se llama «Adjuntar archivo» en escritorio', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    expect(screen.queryByPlaceholderText('Notas sobre el pago')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '+ Agregar nota' }))
+    expect(await screen.findByPlaceholderText('Notas sobre el pago')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Adjuntar archivo' })).toBeTruthy()
   })
 })
