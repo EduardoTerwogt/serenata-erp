@@ -31,10 +31,6 @@ const TIPOS = [
 ] as const
 
 type Vista = 'contraparte' | 'proyecto'
-const VISTAS: { value: Vista; label: string }[] = [
-  { value: 'contraparte', label: 'Por contraparte' },
-  { value: 'proyecto', label: 'Por proyecto' },
-]
 /** Tope de proyectos por pago: el mismo que acepta `GET /api/cuentas/estado-cuenta?proyectos=`. */
 const MAX_PROYECTOS = 50
 
@@ -311,9 +307,8 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
         !listo ? (
           <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center md:gap-3">
             <FilterTabs tabs={LADOS} value={lado} onChange={cambiarLado} />
-            <FilterTabs tabs={VISTAS} value={vista} onChange={cambiarVista} />
             {!porProyecto && (
-              <SelectorContraparte key={`${lado}:${contraparteId ?? ''}:${nombre ? 1 : 0}`} lado={lado} valor={nombre && contraparteId ? { id: contraparteId, nombre } : null} onElegir={elegirContraparte} />
+              <SelectorContraparte key={`${lado}:${contraparteId ?? ''}:${nombre ? 1 : 0}`} lado={lado} pendiente="saldo" valor={nombre && contraparteId ? { id: contraparteId, nombre } : null} onElegir={elegirContraparte} />
             )}
           </div>
         ) : undefined
@@ -324,6 +319,11 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
         <PagoListo total={listo.total} lineas={listo.lineas} nombre={nombre} onClose={onClose} />
       ) : (
         <>
+          <div className="flex justify-end">
+            <Enlace onClick={() => cambiarVista(porProyecto ? 'contraparte' : 'proyecto')}>
+              {porProyecto ? `← Volver a elegir ${lado === 'cobro' ? 'un cliente' : 'un proveedor'}` : 'Pagar varios proyectos a la vez'}
+            </Enlace>
+          </div>
           {aviso && <StatusBanner tone={aviso.tono}>{aviso.texto}</StatusBanner>}
           {error && !vigente && <StatusBanner tone="error">{error}</StatusBanner>}
           {porProyecto && (

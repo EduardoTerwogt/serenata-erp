@@ -35,6 +35,8 @@ export function BotonArchivo({
   accept,
   capture,
   onArchivo,
+  onVarios,
+  multiple = false,
   onRechazo,
   variante = 'secondary',
   permitirGrande = false,
@@ -43,6 +45,9 @@ export function BotonArchivo({
   accept: string
   capture?: boolean
   onArchivo: (f: File) => void
+  /** Con `multiple`: recibe todos los archivos elegidos a la vez (p. ej. XML y PDF de una factura). */
+  onVarios?: (fs: File[]) => void
+  multiple?: boolean
   onRechazo: (mensaje: string) => void
   variante?: 'secondary' | 'ghost'
   /** Las imágenes se comprimen antes de subirse: no se frenan aquí. */
@@ -59,17 +64,21 @@ export function BotonArchivo({
         type="file"
         hidden
         accept={accept}
+        multiple={multiple}
         {...(capture ? { capture: 'environment' as const } : {})}
         onChange={(e) => {
-          const f = e.target.files?.[0]
+          const fs = Array.from(e.target.files ?? [])
           e.target.value = ''
-          if (!f) return
-          const imagen = f.type.startsWith('image/')
-          if (f.size > LIMITE_ARCHIVO && !(permitirGrande && imagen)) {
-            onRechazo(`"${f.name}" pesa más de 4 MB. Reduce el archivo e intenta de nuevo.`)
-            return
+          if (fs.length === 0) return
+          for (const f of fs) {
+            const imagen = f.type.startsWith('image/')
+            if (f.size > LIMITE_ARCHIVO && !(permitirGrande && imagen)) {
+              onRechazo(`"${f.name}" pesa más de 4 MB. Reduce el archivo e intenta de nuevo.`)
+              return
+            }
           }
-          onArchivo(f)
+          if (multiple && onVarios) onVarios(fs)
+          else onArchivo(fs[0])
         }}
       />
     </>

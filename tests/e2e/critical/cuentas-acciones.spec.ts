@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { login } from '../utils/auth'
 import { CLIENTE, PROVEEDOR, mockCuentasAcciones, type LlamadasAcciones, type OpcionesAcciones } from '../utils/cuentas-acciones-mocks'
 import { mockCuentasDetalle } from '../utils/cuentas-detalle-mocks'
@@ -24,10 +24,16 @@ async function elegirAccion(page: Page, nombre: string) {
   await page.getByRole('menuitem', { name: nombre }).click()
 }
 
+/** #131: el desplegable de contraparte: se abre, se busca por nombre y se elige. */
+async function elegirContraparte(modal: Locator, etiqueta: 'cliente' | 'proveedor', busqueda: string, nombre: string) {
+  await modal.getByRole('button', { name: new RegExp(`Elegir ${etiqueta}`) }).click()
+  await modal.getByPlaceholder(`Buscar ${etiqueta}`).fill(busqueda)
+  await modal.getByRole('option', { name: nombre }).click()
+}
+
 async function elegirCliente(page: Page) {
   const modal = page.getByRole('dialog', { name: 'Registrar pago' })
-  await modal.getByRole('searchbox').or(modal.getByPlaceholder('Buscar cliente por nombre')).fill('altavista')
-  await modal.getByRole('option', { name: CLIENTE.nombre }).click()
+  await elegirContraparte(modal, 'cliente', 'altavista', CLIENTE.nombre)
   await expect(page).toHaveURL(/cid=cli-altavista/)
   return modal
 }
@@ -118,8 +124,7 @@ test('registrar pago a proveedor: cada factura es un proyecto y el pago liquida 
   const modal = page.getByRole('dialog', { name: 'Registrar pago' })
   await modal.getByRole('button', { name: 'Pago a proveedor' }).click()
   await expect(page).toHaveURL(/lado=proveedor/)
-  await modal.getByPlaceholder('Buscar proveedor por nombre').fill('distrito')
-  await modal.getByRole('option', { name: PROVEEDOR.nombre }).click()
+  await elegirContraparte(modal, 'proveedor', 'distrito', PROVEEDOR.nombre)
   await expect(modal.getByText('DS-0419')).toBeVisible()
 
   await modal.getByLabel('Monto transferido').fill('96280')
@@ -136,7 +141,7 @@ test('registrar pago por proyecto: se marcan proyectos de un proveedor, las dem�
   await elegirAccion(page, 'Registrar pago')
   const modal = page.getByRole('dialog', { name: 'Registrar pago' })
   await modal.getByRole('button', { name: 'Pago a proveedor' }).click()
-  await modal.getByRole('button', { name: 'Por proyecto' }).click()
+  await modal.getByRole('button', { name: 'Pagar varios proyectos a la vez' }).click()
   await modal.getByRole('checkbox', { name: `Incluir SH001 · ${PROVEEDOR.nombre}` }).click()
   await expect(modal.getByRole('checkbox', { name: 'Incluir SH070 · Fonoteca MX' })).toBeDisabled()
   await expect(modal.getByText('Otra contraparte')).toBeVisible()
@@ -215,8 +220,7 @@ test('subir factura: un RFC sin ficha se elige a mano y se completa la ficha del
   const llamadas = await abrir(page)
   const modal = await subirXml(page, 'sinrfc.xml')
   await expect(modal.getByText(/No hay un cliente con el RFC XAXX010101000/)).toBeVisible()
-  await modal.getByPlaceholder('Buscar cliente por nombre').fill('altavista')
-  await modal.getByRole('option', { name: CLIENTE.nombre }).click()
+  await elegirContraparte(modal, 'cliente', 'altavista', CLIENTE.nombre)
   await expect(modal.getByText('Requerida', { exact: true })).toBeVisible()
   await modal.getByRole('checkbox', { name: 'Incluir SH001' }).click()
   const guardar = modal.getByRole('button', { name: 'Completar cliente y registrar factura' })
@@ -241,7 +245,7 @@ test('subir factura de proveedor sin ficha: se da de alta con el XML, se marcan 
   await expect(modal.getByText(/No hay un proveedor con el RFC NUE200101XY9/)).toBeVisible()
   await expect(modal.getByRole('button', { name: PROVEEDOR.nombre })).toBeVisible()
 
-  await modal.getByRole('button', { name: 'Crear proveedor nuevo' }).click()
+  await modal.getByRole('button', { name: 'Proveedor nuevo', exact: true }).click()
   await expect(modal.getByLabel('RFC')).toHaveValue('NUE200101XY9')
   await expect(modal.getByText(/Cuadra con el XML/)).toBeVisible()
   const guardar = modal.getByRole('button', { name: 'Crear proveedor y registrar factura' })
@@ -263,10 +267,10 @@ test('subir factura de proveedor: un gasto extra pide proyecto, concepto y costo
   const llamadas = await abrir(page)
   const modal = await subirXml(page, 'proveedornuevo.xml')
   await modal.getByRole('button', { name: PROVEEDOR.nombre }).click()
-  await modal.getByRole('button', { name: 'Gasto extra' }).click()
+  // El proyecto (SH004) ya viene propuesto por el neto del XML; solo se activa el gasto extra.
+  await modal.getByRole('switch', { name: /gasto extra/ }).click()
   const guardar = modal.getByRole('button', { name: 'Registrar gasto y factura' })
   await expect(guardar).toBeDisabled()
-  await modal.getByRole('button', { name: /SH004/ }).click()
   await modal.getByLabel(/^Concepto/).fill('Renta de generador')
   await modal.getByLabel(/Costo neto al proveedor/).fill('20,000.00')
   await expect(guardar).toBeEnabled()
@@ -290,7 +294,10 @@ test('subir factura de proveedor: se liga al proyecto que nombran los folios', a
   const llamadas = await abrir(page)
   const modal = await subirXml(page, 'proveedor.xml')
   await expect(modal.getByText(PROVEEDOR.nombre).first()).toBeVisible()
-  await expect(modal.getByRole('radio', { name: 'Elegir SH004' })).toHaveAttribute('aria-checked', 'true')
+  // Los folios nombran SH004 y sus conceptos del proveedor vienen marcados: es justo su grupo, se liga sin reasignar.
+  await expect(modal.getByText('Versiones redes')).toBeVisible()
+  await expect(modal.getByRole('checkbox', { name: 'Incluir Edición versión A' })).toHaveAttribute('aria-checked', 'true')
+  await expect(modal.getByRole('checkbox', { name: 'Incluir Edición versión B' })).toHaveAttribute('aria-checked', 'true')
   await expect(modal.getByText(/El total coincide con lo que se le debe/)).toBeVisible()
   await modal.getByRole('button', { name: 'Guardar factura' }).click()
   await expect(modal.getByText('Factura guardada')).toBeVisible()
@@ -314,8 +321,7 @@ test('estado de cuenta: resumen, facturas con su complemento y el pago aplicado'
   await elegirAccion(page, 'Estado de cuenta')
   await expect(page).toHaveURL(/sheet=estado/)
   const modal = page.getByRole('dialog', { name: 'Estado de cuenta' })
-  await modal.getByPlaceholder('Buscar cliente por nombre').fill('altavista')
-  await modal.getByRole('option', { name: CLIENTE.nombre }).click()
+  await elegirContraparte(modal, 'cliente', 'altavista', CLIENTE.nombre)
 
   await expect(modal.getByText('$487,200.00').first()).toBeVisible()
   await expect(modal.getByText('$300,000.00').first()).toBeVisible()

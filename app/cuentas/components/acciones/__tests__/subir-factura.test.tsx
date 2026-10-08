@@ -53,6 +53,8 @@ interface Llamada {
 let llamadas: Llamada[]
 let previews: PreviewFactura[]
 let respuestasGuardar: Response[]
+let proyectoActual: ProyectoSelector
+let contrapartes: { id: string; nombre: string; pendientes: number }[]
 
 function fetchSimulado(input: RequestInfo | URL, init?: RequestInit) {
   const url = String(input)
@@ -60,17 +62,17 @@ function fetchSimulado(input: RequestInfo | URL, init?: RequestInit) {
   const fd = init?.body instanceof FormData ? init.body : null
   llamadas.push({ url, method, datos: fd?.get('datos') ? JSON.parse(String(fd.get('datos'))) : null, constancia: Boolean(fd?.get('constancia')) })
   if (url.startsWith('/api/cuentas/facturas/preview')) return Promise.resolve(json(previews.length > 1 ? previews.shift() : previews[0]))
-  if (url.startsWith('/api/cuentas/proyectos-selector')) return Promise.resolve(json({ modo: 'renglones', total: 1, page: 1, page_size: 25, proyectos: [proyecto] }))
+  if (url.startsWith('/api/cuentas/proyectos-selector')) return Promise.resolve(json({ modo: 'renglones', total: 1, page: 1, page_size: 25, proyectos: [proyectoActual] }))
+  if (url.startsWith('/api/cuentas/contrapartes')) return Promise.resolve(json({ total: contrapartes.length, contrapartes }))
   if (url === '/api/cuentas/facturas') return Promise.resolve(respuestasGuardar.shift() ?? json({ factura_id: 'f1', estado_validacion: 'validado' }, 201))
   if (url.startsWith('/api/cuentas/clientes/')) return Promise.resolve(json({ cliente: {} }))
-  if (url === '/api/proveedores') return Promise.resolve(json([]))
   return Promise.resolve(json({}))
 }
 
-function abrir() {
-  const r = render(<SubirFactura escritorio onClose={() => {}} onGuardada={() => {}} />)
+function abrir(archivos: File[] = [new File(['<xml/>'], 'factura.xml', { type: 'text/xml' })], props: { proyecto?: string } = {}) {
+  const r = render(<SubirFactura escritorio onClose={() => {}} onGuardada={() => {}} {...props} />)
   const input = r.baseElement.querySelector('input[type="file"]') as HTMLInputElement
-  fireEvent.change(input, { target: { files: [new File(['<xml/>'], 'factura.xml', { type: 'text/xml' })] } })
+  fireEvent.change(input, { target: { files: archivos } })
   return r
 }
 
@@ -81,6 +83,8 @@ beforeEach(() => {
   llamadas = []
   previews = []
   respuestasGuardar = []
+  proyectoActual = proyecto
+  contrapartes = []
   vi.stubGlobal('fetch', vi.fn(fetchSimulado))
 })
 afterEach(() => {
@@ -101,7 +105,7 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
   it('proveedor nuevo con los renglones propuestos: pide los 4 datos y manda alta + renglones en un solo envío', async () => {
     previews = [base({ propuesta: [{ proyecto_id: 'SH001', proyecto: 'Boda Lopez', renglones: ['c1', 'c2'], neto: 5000 }] })]
     abrir()
-    fireEvent.click(await screen.findByRole('button', { name: /Crear proveedor nuevo/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Proveedor nuevo/ }))
     expect(await screen.findByText(/Cuadra con el XML/)).toBeTruthy()
     expect(boton(/Crear proveedor y registrar factura/).disabled).toBe(true)
 
@@ -119,15 +123,17 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
     })
   })
 
-  it('gasto extra: exige proyecto, concepto y costo, y manda el costo numérico', async () => {
+  it('gasto extra: pide proyecto, concepto y costo, y manda el costo numérico', async () => {
     previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' } })]
     abrir()
-    fireEvent.click(await screen.findByRole('button', { name: 'Gasto extra' }))
+    // Paso 1: el proyecto. Sin él no hay interruptor ni destino.
+    expect(boton(/Guardar factura|Asignar y registrar factura/).disabled).toBe(true)
+    fireEvent.click(await screen.findByRole('button', { name: /SH001/ }))
+    fireEvent.click(await screen.findByRole('switch', { name: /gasto extra/ }))
     expect(boton(/Registrar gasto y factura/).disabled).toBe(true)
     // El costo arranca con el neto del XML (5,000.00) y se puede corregir.
     expect((screen.getByLabelText(/Costo neto al proveedor/) as HTMLInputElement).value).toBe('5000.00')
 
-    fireEvent.click(await screen.findByRole('button', { name: /SH001/ }))
     fireEvent.change(screen.getByLabelText(/^Concepto/), { target: { value: 'Renta de grúa' } })
     fireEvent.change(screen.getByLabelText(/Costo neto al proveedor/), { target: { value: '5,000.00' } })
     await waitFor(() => expect(boton(/Registrar gasto y factura/).disabled).toBe(false))
@@ -138,6 +144,37 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
     expect(guardados()[0].datos?.preparar).not.toHaveProperty('renglones')
   })
 
+  it('proveedor existente: elige el proyecto y se marcan sus conceptos; si son justo su grupo abierto, se liga al grupo sin reasignar', async () => {
+    const suyo = (id: string, descripcion: string) => ({ cuenta_id: id, descripcion, costo_total: 2500, gasto_extra: false, responsable_id: 'p1', responsable: 'Audio SA', grupo_id: 'g1', grupo_estado: 'ABIERTO', bloqueado: false })
+    proyectoActual = { ...proyecto, renglones: [suyo('c1', 'Audio ceremonia'), suyo('c2', 'Audio fiesta'), { ...proyecto.renglones![0], cuenta_id: 'c3', descripcion: 'Humo' }] }
+    previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' } })]
+    abrir(undefined, { proyecto: 'SH001' })
+
+    // Los dos conceptos del proveedor vienen marcados y el tercero (libre) no.
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Incluir Audio ceremonia/ }).getAttribute('aria-checked')).toBe('true'))
+    expect(screen.getByRole('checkbox', { name: /Incluir Audio fiesta/ }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('checkbox', { name: /Incluir Humo/ }).getAttribute('aria-checked')).toBe('false')
+    await waitFor(() => expect(boton(/Guardar factura/).disabled).toBe(false))
+    fireEvent.click(boton(/Guardar factura/))
+    await waitFor(() => expect(guardados()).toHaveLength(1))
+    expect(guardados()[0].datos).toMatchObject({ contraparte_id: 'p1', grupo_id: 'g1' })
+    expect(guardados()[0].datos).not.toHaveProperty('preparar')
+  })
+
+  it('sumar un concepto libre al grupo del proveedor asigna conceptos: manda preparar con todos los marcados', async () => {
+    const suyo = (id: string) => ({ cuenta_id: id, descripcion: `Concepto ${id}`, costo_total: 2500, gasto_extra: false, responsable_id: 'p1', responsable: 'Audio SA', grupo_id: 'g1', grupo_estado: 'ABIERTO', bloqueado: false })
+    proyectoActual = { ...proyecto, renglones: [suyo('c1'), { ...proyecto.renglones![0], cuenta_id: 'c3', descripcion: 'Humo' }] }
+    previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' } })]
+    abrir(undefined, { proyecto: 'SH001' })
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Incluir Concepto c1/ }).getAttribute('aria-checked')).toBe('true'))
+    fireEvent.click(screen.getByRole('checkbox', { name: /Incluir Humo/ }))
+    await waitFor(() => expect(boton(/Asignar y registrar factura/).disabled).toBe(false))
+    fireEvent.click(boton(/Asignar y registrar factura/))
+    await waitFor(() => expect(guardados()).toHaveLength(1))
+    expect(guardados()[0].datos).toMatchObject({ contraparte_id: 'p1', preparar: { renglones: ['c1', 'c3'] } })
+    expect(guardados()[0].datos).not.toHaveProperty('grupo_id')
+  })
+
   it('si la subida falla después de preparar, el reintento usa el grupo ya creado y no repite el alta', async () => {
     previews = [base({ propuesta: [{ proyecto_id: 'SH001', proyecto: 'Boda Lopez', renglones: ['c1', 'c2'], neto: 5000 }] })]
     respuestasGuardar = [
@@ -145,7 +182,7 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
       json({ factura_id: 'f1', estado_validacion: 'validado' }, 201),
     ]
     abrir()
-    fireEvent.click(await screen.findByRole('button', { name: /Crear proveedor nuevo/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Proveedor nuevo/ }))
     fireEvent.change(await screen.findByLabelText(/^Teléfono/), { target: { value: '5512345678' } })
     fireEvent.change(screen.getByLabelText(/^Correo/), { target: { value: 'pagos@audio.mx' } })
     fireEvent.change(screen.getByLabelText(/^Banco/), { target: { value: 'BBVA' } })
@@ -171,7 +208,7 @@ describe('Subir factura · reintento tras preparar (#130)', () => {
       json({ factura_id: 'f1', estado_validacion: 'validado' }, 201),
     ]
     abrir()
-    fireEvent.click(await screen.findByRole('button', { name: /Crear proveedor nuevo/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Proveedor nuevo/ }))
     fireEvent.change(await screen.findByLabelText(/^Teléfono/), { target: { value: '5512345678' } })
     fireEvent.change(screen.getByLabelText(/^Correo/), { target: { value: 'pagos@audio.mx' } })
     fireEvent.change(screen.getByLabelText(/^Banco/), { target: { value: 'BBVA' } })
@@ -203,14 +240,10 @@ describe('Subir factura · cliente sin RFC (#130)', () => {
     previews = [cobro()]
     abrir()
     // No hay cliente con ese RFC: se elige a mano (el preview siguiente ya trae la ficha y ofrece completarla).
-    const buscador = await screen.findByPlaceholderText(/Buscar/)
+    const elegir = await screen.findByRole('button', { name: /Elegir cliente/ })
     previews = [cobro({ contraparte: { id: 'cli1', nombre: 'Lopez SA', rfc: null }, ofrecer_guardar_rfc: true, cliente_tiene_constancia: false, candidatos: [cuenta as never], preseleccion: ['cc1'] })]
-    vi.mocked(fetch).mockImplementation((input, init) => {
-      const url = String(input)
-      if (url.startsWith('/api/clientes?q=')) return Promise.resolve(json([{ id: 'cli1', nombre: 'Lopez SA' }]))
-      return fetchSimulado(input, init)
-    })
-    fireEvent.change(buscador, { target: { value: 'Lopez' } })
+    contrapartes = [{ id: 'cli1', nombre: 'Lopez SA', pendientes: 1 }]
+    fireEvent.click(elegir)
     fireEvent.click(await screen.findByRole('option', { name: /Lopez SA/ }))
 
     expect(await screen.findByText('Requerida')).toBeTruthy()
@@ -231,5 +264,26 @@ describe('Subir factura · cliente sin RFC (#130)', () => {
     const patch = llamadas.find((l) => l.method === 'PATCH')
     expect(patch?.constancia).toBe(true)
     expect(patch?.datos).toMatchObject({ rfc: 'SER010101AAA', correo: 'cliente@lopez.mx' })
+  })
+})
+
+describe('Subir factura · Adjuntar factura (#131)', () => {
+  it('un solo botón recibe el XML y el PDF juntos y los pide de una vez', async () => {
+    previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' } })]
+    abrir([new File(['%PDF'], 'factura.pdf', { type: 'application/pdf' }), new File(['<xml/>'], 'factura.xml', { type: 'text/xml' })])
+    expect(await screen.findByText('factura.pdf')).toBeTruthy()
+    expect(screen.getByText('factura.xml')).toBeTruthy()
+    expect(screen.queryByText(/Elegir XML/)).toBeNull()
+  })
+
+  it('sin XML avisa que falta y no sigue; con dos XML tampoco', async () => {
+    render(<SubirFactura escritorio onClose={() => {}} onGuardada={() => {}} />)
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(input.multiple).toBe(true)
+    fireEvent.change(input, { target: { files: [new File(['%PDF'], 'solo.pdf', { type: 'application/pdf' })] } })
+    expect(await screen.findByText('Falta el XML de la factura.')).toBeTruthy()
+    fireEvent.change(input, { target: { files: [new File(['<xml/>'], 'a.xml', { type: 'text/xml' }), new File(['<xml/>'], 'b.xml', { type: 'text/xml' })] } })
+    expect(await screen.findByText('Adjunta un XML y, si lo tienes, su PDF.')).toBeTruthy()
+    expect(llamadas.filter((l) => l.url.startsWith('/api/cuentas/facturas/preview'))).toHaveLength(0)
   })
 })

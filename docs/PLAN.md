@@ -737,3 +737,10 @@ Registrar pago gana la vista "Por proyecto" (segundo selector junto a "Cobro de 
 | C3 UI Subir factura | **Hecho** (2026-10-07): pendiente solo CI y la revisión visual del usuario |
 | C4 UI Registrar pago por proyecto | **Hecho** (2026-10-07): pendiente solo CI y la revisión visual del usuario |
 | C5 Cerrar | **Hecho** (2026-10-07): spec `live` `cuentas-130.spec.ts` (solo corre en CI), decisión 023, `ARCHITECTURE.md`, `ACTIVE_WORK.md`; `auditar_consistencia()` = 0 (24 guardas) |
+
+## Tracker #131
+| Bloque | Estado |
+|---|---|
+| D0 Maqueta `cuentas-131.html` (aprobada) · D1 Datos y API (`20261037`, `GET /api/cuentas/contrapartes`) | **Hecho** (2026-10-07; migración aplicada en test) |
+| D2 Subir factura (Adjuntar factura, desplegable, «Proveedor nuevo», flujo por proyecto) · D3 Registrar pago (sin pestañas, enlace multi-proyecto) | **Hecho** (2026-10-08): unitarias y e2e `critical`; pendiente CI del PR y tu revisión visual |
+| D4 Cierre: `ACTIVE_WORK.md`, este tracker; «concepto» en lugar de «renglón» en el texto visible | **Hecho** |

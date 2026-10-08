@@ -82,6 +82,7 @@ export function EstadoCuenta({ lado, contraparteId, doc, fija = false, onCambio,
             <SelectorContraparte
               key={`${lado}:${contraparteId ?? ''}:${vigente ? 1 : 0}`}
               lado={lado}
+              pendiente="todos"
               valor={vigente?.contraparte ? { id: vigente.contraparte.id, nombre: vigente.contraparte.nombre } : null}
               onElegir={(c: ContraparteLista) => onCambio?.({ lado, contraparteId: c.id })}
             />

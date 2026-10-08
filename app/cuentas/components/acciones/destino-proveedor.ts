@@ -4,6 +4,7 @@
  * que se sabe incompleto y se arma el cuerpo de `POST /api/cuentas/facturas`.
  */
 import type { EmisorPreview } from '@/lib/shared/cuentas/factura-preview-tipos'
+import type { RenglonSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import type { DatosGuardarFactura, GastoExtraDatos, ProveedorNuevoDatos } from './useAcciones'
 
 export type ModoDestino = 'grupo' | 'renglones' | 'gasto'
@@ -18,20 +19,28 @@ export interface AltaForm {
 export const ALTA_VACIA: AltaForm = { telefono: '', correo: '', banco: '', clabe: '' }
 
 export interface GastoForm {
-  proyecto_id: string | null
-  proyecto: string | null
   concepto: string
   /** Texto del campo; se convierte a número al armar la petición. */
   costo: string
 }
 
+/** El proyecto de la factura: basta su id y nombre; sus conceptos los lee `ConceptosProyecto`. */
+export interface ProyectoRef {
+  proyecto_id: string
+  proyecto: string | null
+}
+
 export interface DestinoProveedor {
+  /** `renglones` (conceptos del proyecto) o `gasto`; `grupo` solo lo deduce `modoEfectivo`. */
   modo: ModoDestino
-  /** Grupo (proyecto) elegido de la lista del proveedor, como hoy. */
+  /** Grupo abierto del proveedor cuando lo marcado es exactamente ese grupo (`grupoExacto`). */
   grupoId: string | null
-  /** Cuentas por pagar (renglones) elegidas, todas de un solo proyecto (P10). */
+  /** Proyecto de la factura (P10: una factura de proveedor es de un solo proyecto). */
+  proyecto: ProyectoRef | null
+  /** Cuentas por pagar (conceptos) marcadas, todas de `proyecto`. */
   renglones: string[]
-  proyectoRenglones: string | null
+  /** Ya se hizo la marca inicial de los conceptos de este proyecto (no se repite al volver a cargarlos). */
+  marcado: boolean
   gasto: GastoForm
   /** El emisor no existe: se da de alta con los datos del XML más `alta`. */
   nuevo: boolean
@@ -39,14 +48,40 @@ export interface DestinoProveedor {
 }
 
 export const destinoInicial = (): DestinoProveedor => ({
-  modo: 'grupo',
+  modo: 'renglones',
   grupoId: null,
+  proyecto: null,
   renglones: [],
-  proyectoRenglones: null,
-  gasto: { proyecto_id: null, proyecto: null, concepto: '', costo: '' },
+  marcado: false,
+  gasto: { concepto: '', costo: '' },
   nuevo: false,
   alta: ALTA_VACIA,
 })
+
+/** Lo marcado es justo el grupo abierto del proveedor: la factura se liga a ese grupo sin reasignar nada. */
+export const modoEfectivo = (d: DestinoProveedor): ModoDestino => (d.modo === 'renglones' && d.grupoId && !d.nuevo ? 'grupo' : d.modo)
+
+/** Conceptos del proveedor en el proyecto que se pueden facturar: ya son suyos y no están bloqueados. */
+const propios = (rs: RenglonSelector[], proveedorId: string | null) => rs.filter((r) => proveedorId !== null && r.responsable_id === proveedorId)
+
+/** Id del grupo abierto del proveedor si `marcados` son exactamente sus conceptos en ese grupo; si no, null. */
+export function grupoExacto(rs: RenglonSelector[], marcados: string[], proveedorId: string | null): string | null {
+  const suyos = propios(rs, proveedorId)
+  const grupos = new Set(suyos.map((r) => r.grupo_id))
+  if (marcados.length === 0 || grupos.size !== 1) return null
+  const grupo = Array.from(grupos)[0]
+  if (!grupo || suyos.some((r) => r.grupo_estado !== 'ABIERTO' || r.bloqueado)) return null
+  return suyos.length === marcados.length && suyos.every((r) => marcados.includes(r.cuenta_id)) ? grupo : null
+}
+
+/** Marca inicial al abrir un proyecto: lo que propone el neto del XML, o si no, lo que ya es del proveedor. */
+export function marcaInicial(rs: RenglonSelector[], proveedorId: string | null, propuesta: string[] | null): string[] {
+  const existentes = new Set(rs.map((r) => r.cuenta_id))
+  if (propuesta && propuesta.length > 0 && propuesta.every((id) => existentes.has(id))) return propuesta
+  return propios(rs, proveedorId)
+    .filter((r) => !r.bloqueado)
+    .map((r) => r.cuenta_id)
+}
 
 export const clabeLimpia = (s: string) => s.replace(/\s/g, '')
 
@@ -103,20 +138,17 @@ export function armarProveedor(d: DestinoProveedor, ctx: ContextoProveedor): { o
     return { ok: false, falta: 'Elige al proveedor' }
   }
   const contraparte_id = d.nuevo ? null : ctx.contraparteId
+  if (!d.proyecto) return { ok: false, falta: 'Elige el proyecto al que corresponde la factura' }
 
-  if (d.modo === 'grupo') {
-    if (d.nuevo) return { ok: false, falta: 'Un proveedor nuevo no tiene proyectos: asigna conceptos o registra un gasto extra' }
-    if (!d.grupoId) return { ok: false, falta: 'Elige el proyecto al que corresponde la factura' }
-    return { ok: true, cuerpo: { contraparte_id, grupo_id: d.grupoId } }
-  }
-  if (d.modo === 'renglones') {
+  const modo = modoEfectivo(d)
+  if (modo === 'grupo') return { ok: true, cuerpo: { contraparte_id, grupo_id: d.grupoId } }
+  if (modo === 'renglones') {
     if (d.renglones.length === 0) return { ok: false, falta: 'Elige los conceptos que cubre la factura' }
     return { ok: true, cuerpo: { contraparte_id, preparar: { proveedor, renglones: d.renglones } } }
   }
   const costo = montoDeTexto(d.gasto.costo)
-  if (!d.gasto.proyecto_id) return { ok: false, falta: 'Elige el proyecto del gasto' }
   if (d.gasto.concepto.trim() === '') return { ok: false, falta: 'Escribe el concepto del gasto' }
   if (costo === null) return { ok: false, falta: 'Escribe el costo neto del gasto' }
-  const gasto: GastoExtraDatos = { proyecto_id: d.gasto.proyecto_id, concepto: d.gasto.concepto.trim(), costo_total: costo }
+  const gasto: GastoExtraDatos = { proyecto_id: d.proyecto.proyecto_id, concepto: d.gasto.concepto.trim(), costo_total: costo }
   return { ok: true, cuerpo: { contraparte_id, preparar: { proveedor, gasto } } }
 }

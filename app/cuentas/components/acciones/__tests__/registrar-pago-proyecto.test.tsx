@@ -81,9 +81,10 @@ beforeEach(() => {
       const fd = init?.body instanceof FormData ? init.body : null
       llamadas.push({ url, method: init?.method ?? 'GET', datos: fd?.get('datos') ? JSON.parse(String(fd.get('datos'))) : null })
       if (url.startsWith('/api/cuentas/proyectos-selector')) return Promise.resolve(json(selector))
+      if (url.startsWith('/api/cuentas/contrapartes')) return Promise.resolve(json({ total: 1, contrapartes: [{ id: 'prov1', nombre: 'Distrito Sonoro', pendientes: 2 }] }))
       if (url.startsWith('/api/cuentas/estado-cuenta')) {
-        const proyectos = new URL(url, 'http://x').searchParams.get('proyectos')?.split(',') ?? []
-        return Promise.resolve(json(estado(proyectos)))
+        const filtro = new URL(url, 'http://x').searchParams.get('proyectos')
+        return Promise.resolve(json(estado(filtro ? filtro.split(',') : ['SH061', 'SH062'])))
       }
       if (url === '/api/cuentas/pagos') return Promise.resolve(json({ success: true, resumen: {}, pago: { pago_id: 'p1', comprobante_url: null } }))
       return Promise.resolve(json({}))
@@ -100,12 +101,18 @@ function Ventana() {
   return <RegistrarPago escritorio lado={lado} contraparteId={null} proyecto={null} hoy="2026-10-07" onCambio={(c) => setLado(c.lado)} onClose={() => {}} onRegistrado={() => {}} />
 }
 
+/** Con la contraparte en el estado, como la usa Cuentas (el desplegable llama a `onCambio`). */
+function VentanaConContraparte() {
+  const [c, setC] = useState<{ lado: LadoCuentas; contraparteId: string | null }>({ lado: 'proveedor', contraparteId: null })
+  return <RegistrarPago escritorio lado={c.lado} contraparteId={c.contraparteId} proyecto={null} hoy="2026-10-07" onCambio={setC} onClose={() => {}} onRegistrado={() => {}} />
+}
+
 const caja = (nombre: string | RegExp) => screen.findByRole('checkbox', { name: nombre })
 
 describe('Registrar pago · por proyecto (#130)', () => {
   it('marcar un proyecto fija la contraparte, deshabilita las demás y carga solo esos proyectos', async () => {
     render(<Ventana />)
-    fireEvent.click(screen.getByRole('button', { name: 'Por proyecto' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Pagar varios proyectos a la vez' }))
     const sh061 = await caja('Incluir SH061 · Distrito Sonoro')
     expect(((await caja('Incluir SH070 · Fonoteca MX')) as HTMLButtonElement).disabled).toBe(false)
 
@@ -120,7 +127,7 @@ describe('Registrar pago · por proyecto (#130)', () => {
 
   it('registra el pago repartido entre los proyectos marcados, una sola contraparte', async () => {
     render(<Ventana />)
-    fireEvent.click(screen.getByRole('button', { name: 'Por proyecto' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Pagar varios proyectos a la vez' }))
     fireEvent.click(await caja('Incluir SH061 · Distrito Sonoro'))
     fireEvent.click(await caja('Incluir SH062 · Distrito Sonoro'))
     const monto = await screen.findByLabelText(/Monto transferido/)
@@ -137,5 +144,43 @@ describe('Registrar pago · por proyecto (#130)', () => {
         { id: 'g62', monto: 5800, saldo_esperado: 5800 },
       ],
     })
+  })
+})
+
+describe('Registrar pago · una contraparte, varias facturas (#131)', () => {
+  it('no hay pestañas por contraparte/proyecto: el desplegable lista a quien tiene saldo y un solo pago cubre varias facturas', async () => {
+    render(<VentanaConContraparte />)
+    expect(screen.queryByRole('button', { name: 'Por contraparte' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Por proyecto' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /Elegir proveedor/ }))
+    expect(await screen.findByText('Solo proveedores con saldo por pagar')).toBeTruthy()
+    expect(llamadas.some((l) => l.url.includes('/api/cuentas/contrapartes') && l.url.includes('lado=proveedor') && l.url.includes('pendiente=saldo'))).toBe(true)
+    fireEvent.click(await screen.findByRole('option', { name: /Distrito Sonoro/ }))
+
+    // Sus dos facturas (una por proyecto) se piden sin limitar proyectos y el pago se reparte entre ellas.
+    const monto = await screen.findByLabelText(/Monto transferido/)
+    expect(llamadas.some((l) => l.url.includes('/estado-cuenta') && l.url.includes('id=prov1') && !l.url.includes('proyectos='))).toBe(true)
+    fireEvent.change(monto, { target: { value: '33,800.00' } })
+    const registrar = () => screen.getByRole('button', { name: 'Registrar pago' }) as HTMLButtonElement
+    await waitFor(() => expect(registrar().disabled).toBe(false))
+    fireEvent.click(registrar())
+    await waitFor(() => expect(llamadas.some((l) => l.url === '/api/cuentas/pagos')).toBe(true))
+    expect(llamadas.find((l) => l.url === '/api/cuentas/pagos')!.datos).toMatchObject({
+      lado: 'proveedor',
+      lineas: [
+        { id: 'g61', monto: 28000, saldo_esperado: 28000 },
+        { id: 'g62', monto: 5800, saldo_esperado: 5800 },
+      ],
+    })
+  })
+
+  it('"Pagar varios proyectos a la vez" abre el selector por proyecto y "Volver" regresa al desplegable', async () => {
+    render(<VentanaConContraparte />)
+    fireEvent.click(screen.getByRole('button', { name: 'Pagar varios proyectos a la vez' }))
+    expect(await caja('Incluir SH061 · Distrito Sonoro')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Elegir proveedor/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Volver a elegir un proveedor/ }))
+    expect(await screen.findByRole('button', { name: /Elegir proveedor/ })).toBeTruthy()
   })
 })

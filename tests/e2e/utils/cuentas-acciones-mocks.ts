@@ -177,6 +177,12 @@ export const RENGLONES_SELECTOR = [
   { cuenta_id: 'cp-4', descripcion: 'Banco de efectos', costo_total: 6500, gasto_extra: false, responsable_id: 'prov-fonoteca', responsable: 'Fonoteca MX', grupo_id: 'g-fono', grupo_estado: 'FACTURADO', bloqueado: true },
 ]
 
+/** Conceptos de SH004 que ya son de `PROVEEDOR` en su grupo abierto (suman lo que cuadra con `proveedor.xml`). */
+export const RENGLONES_DEL_PROVEEDOR = [
+  { cuenta_id: 'cp-p1', descripcion: 'Edición versión A', costo_total: 15660, gasto_extra: false, responsable_id: PROVEEDOR.id, responsable: PROVEEDOR.nombre, grupo_id: 'grupo-SH004', grupo_estado: 'ABIERTO', bloqueado: false },
+  { cuenta_id: 'cp-p2', descripcion: 'Edición versión B', costo_total: 15660, gasto_extra: false, responsable_id: PROVEEDOR.id, responsable: PROVEEDOR.nombre, grupo_id: 'grupo-SH004', grupo_estado: 'ABIERTO', bloqueado: false },
+]
+
 function previewDe(nombre: string, datos: { contraparte_id?: string | null; cuentas?: string[] }) {
   const cuentas = datos.cuentas ?? []
   const cfdiBase = { uuid: '6F2C0000-0000-0000-0000-000000A191AB', fecha: '2026-09-12T10:00:00', subtotal: null, rfc_emisor: 'SHO100101AB1', rfc_receptor: CLIENTE.rfc, conceptos: [] as string[] }
@@ -283,9 +289,19 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
     }
     return fulfillJson(route, estado)
   })
-  await page.route(/\/api\/clientes\?q=/, (route: Route) => {
-    const q = (new URL(route.request().url()).searchParams.get('q') ?? '').toLowerCase()
-    return fulfillJson(route, [{ id: CLIENTE.id, nombre: CLIENTE.nombre }].filter((c) => c.nombre.toLowerCase().includes(q)))
+  // #131: el desplegable de contraparte (cliente o proveedor) con búsqueda por nombre.
+  await page.route(/\/api\/cuentas\/contrapartes\?/, (route: Route) => {
+    const q = new URL(route.request().url()).searchParams
+    const buscado = (q.get('q') ?? '').toLowerCase()
+    const todas =
+      q.get('lado') === 'cobro'
+        ? [{ id: CLIENTE.id, nombre: CLIENTE.nombre, pendientes: 4 }]
+        : [
+            { id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, pendientes: 3 },
+            { id: 'prov-ana', nombre: 'Ana Vidal', pendientes: 1 },
+          ]
+    const contrapartes = todas.filter((c) => c.nombre.toLowerCase().includes(buscado))
+    return fulfillJson(route, { total: contrapartes.length, contrapartes })
   })
   await page.route(/\/api\/proveedores$/, (route: Route) =>
     fulfillJson(route, [
@@ -308,12 +324,14 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
         ],
       })
     }
+    // Conceptos de SH004: los del proveedor que ya tiene su grupo abierto, o los de la propuesta por asignar (proveedor nuevo).
+    const delProveedor = new URL(route.request().url()).searchParams.get('contraparte') === PROVEEDOR.id
     return fulfillJson(route, {
       modo: 'renglones',
       total: 1,
       page: 1,
       page_size: 25,
-      proyectos: [{ proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: '2026-09-10', de_contraparte: false, renglones: RENGLONES_SELECTOR }],
+      proyectos: [{ proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: '2026-09-10', de_contraparte: delProveedor, renglones: delProveedor ? RENGLONES_DEL_PROVEEDOR : RENGLONES_SELECTOR }],
     })
   })
   await page.route(/\/api\/cuentas\/clientes\/[^/]+$/, (route: Route) => {
