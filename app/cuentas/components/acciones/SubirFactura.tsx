@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { ApiError } from '@/lib/client/api'
 import { fmtMoney } from '@/lib/quotations/format'
+import type { ArchivoPendienteInfo } from '@/lib/shared/cuentas/archivo-pendiente'
 import type { CandidatoFacturaCobro } from '@/lib/shared/cuentas/estado-cuenta-tipos'
 import {
   esCandidatoCobro,
@@ -27,7 +28,7 @@ import { CLIENTE_VACIO, CompletarCliente, type ClienteForm } from './CompletarCl
 import { armarProveedor, destinoInicial, modoEfectivo, type DestinoProveedor as Destino, type ProyectoSugerido } from './destino-proveedor'
 import { DestinoProveedor } from './DestinoProveedor'
 import { SelectorContraparte } from './SelectorContraparte'
-import { accionesCliente, accionesFactura, useEstadoCuenta, type ContraparteLista, type FacturaGuardada } from './useAcciones'
+import { accionesCliente, accionesFactura, reintentarSubida, useEstadoCuenta, type ContraparteLista, type FacturaGuardada } from './useAcciones'
 
 const nuevaLlave = () => crypto.randomUUID()
 
@@ -62,6 +63,10 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
   const [enviando, setEnviando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
   const [listo, setListo] = useState<FacturaGuardada | null>(null)
+  // #131: archivos de la factura recién guardada que no llegaron a Drive; se reenvían desde los archivos que la ventana ya tiene.
+  const [pendientes, setPendientes] = useState<ArchivoPendienteInfo[]>([])
+  const [reintentando, setReintentando] = useState(false)
+  const [errorReintento, setErrorReintento] = useState<string | null>(null)
   // #130: destino de la factura de un proveedor, ficha del cliente a completar y lo que `preparar` dejó listo si la subida falló.
   const [destino, setDestino] = useState<Destino>(destinoInicial)
   const [clienteForm, setClienteForm] = useState<ClienteForm>(CLIENTE_VACIO)
@@ -184,6 +189,8 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
             ? { operation_id: llave, contraparte_id: preparado.proveedor_id, grupo_id: preparado.grupo_id }
             : { operation_id: llave, guardar_rfc: rfcLado, ...(armado?.ok ? armado.cuerpo : {}) }
       const r = await accionesFactura.guardar(xml, pdf, datos)
+      setPendientes(r.archivos_pendientes ?? [])
+      setErrorReintento(null)
       setListo(r)
       onGuardada()
     } catch (err) {
@@ -199,6 +206,24 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
     } finally {
       setEnviando(false)
     }
+  }
+
+  const reintentar = async () => {
+    setReintentando(true)
+    setErrorReintento(null)
+    const faltan: ArchivoPendienteInfo[] = []
+    for (const p of pendientes) {
+      const archivo = p.rol === 'xml' ? xml : pdf
+      try {
+        if (!archivo) throw new Error('Falta el archivo')
+        await reintentarSubida({ lado: p.lado, id: p.id, archivo })
+      } catch (err) {
+        faltan.push(p)
+        setErrorReintento(err instanceof Error ? err.message : 'No se pudo subir el archivo a Drive')
+      }
+    }
+    setPendientes(faltan)
+    setReintentando(false)
   }
 
   const revision = Boolean(cuadre && seleccion.length > 0 && (esCuadreCobro(cuadre) ? cuadre.estado === 'revision' : cuadre.estado !== 'validado'))
@@ -272,7 +297,21 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
   return (
     <Modal title="Subir factura" eyebrow="Acciones" size="820" mobile="sheet" sheetHeight="92%" closeOnEscape footer={pie} bodyClassName={CUERPO_VENTANA} onClose={onClose}>
       {listo ? (
-        <FacturaLista resultado={listo} complemento={Boolean(complemento)} onOtra={() => { setListo(null); setPdf(null); reiniciar(null) }} onClose={onClose} />
+        <FacturaLista
+          resultado={listo}
+          complemento={Boolean(complemento)}
+          pendientes={pendientes}
+          reintentando={reintentando}
+          errorReintento={errorReintento}
+          onReintentar={reintentar}
+          onOtra={() => {
+            setListo(null)
+            setPdf(null)
+            setPendientes([])
+            reiniciar(null)
+          }}
+          onClose={onClose}
+        />
       ) : (
         <>
           {aviso && <StatusBanner tone="error">{aviso}</StatusBanner>}
@@ -609,7 +648,25 @@ function ElegirPago({ lado, pagoId, onElegir }: { lado: 'cobro' | 'proveedor'; p
   )
 }
 
-function FacturaLista({ resultado, complemento, onOtra, onClose }: { resultado: FacturaGuardada; complemento: boolean; onOtra: () => void; onClose: () => void }) {
+function FacturaLista({
+  resultado,
+  complemento,
+  pendientes,
+  reintentando,
+  errorReintento,
+  onReintentar,
+  onOtra,
+  onClose,
+}: {
+  resultado: FacturaGuardada
+  complemento: boolean
+  pendientes: ArchivoPendienteInfo[]
+  reintentando: boolean
+  errorReintento: string | null
+  onReintentar: () => void
+  onOtra: () => void
+  onClose: () => void
+}) {
   const revision = resultado.estado_validacion === 'revision' || resultado.grupo?.estado === 'revision'
   return (
     <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -619,6 +676,17 @@ function FacturaLista({ resultado, complemento, onOtra, onClose }: { resultado: 
       <div className="text-[17px] font-semibold text-ink">{complemento ? 'Complemento guardado' : revision ? 'Factura guardada en revisión' : 'Factura guardada'}</div>
       {resultado.repetido && <div className="text-[12.5px] text-subtext">Ya estaba registrada: no se duplicó.</div>}
       {revision && resultado.detalle_validacion && <div className="max-w-[460px] text-[12.5px] leading-normal text-subtext">{resultado.detalle_validacion}</div>}
+      {pendientes.length > 0 && (
+        <div className="flex w-full max-w-[460px] flex-col items-center gap-2.5">
+          <Aviso icono="warning" tono="acento">
+            {pendientes.length === 1 ? `${pendientes[0].nombre} no se subió a Drive.` : `${pendientes.length} archivos no se subieron a Drive.`} Los datos ya están guardados.
+          </Aviso>
+          {errorReintento && <StatusBanner tone="error">{errorReintento}</StatusBanner>}
+          <Button variant="secondary" onClick={onReintentar} disabled={reintentando}>
+            {reintentando ? 'Subiendo…' : 'Reintentar subida'}
+          </Button>
+        </div>
+      )}
       <div className="mt-1 flex gap-2.5">
         <Button variant="secondary" onClick={onOtra}>
           Subir otra

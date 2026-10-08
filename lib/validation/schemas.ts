@@ -629,3 +629,6 @@ export function validate<T>(schema: z.ZodType<T>, payload: unknown):
 
 // Re-exportar z para uso en rutas si se necesita
 export { z }
+
+/** #131: `POST /api/cuentas/documentos/[id]/reintentar-subida` (multipart: `archivo` y `datos` con `lado`). */
+export const ReintentarSubidaSchema = z.object({ id: z.string().uuid(), lado: z.enum(['cobro', 'proveedor']) })

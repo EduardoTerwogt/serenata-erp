@@ -1,5 +1,6 @@
 'use client'
 
+import type { ArchivoPendienteInfo } from '@/lib/shared/cuentas/archivo-pendiente'
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, getJson, sendFormData } from '@/lib/client/api'
 import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
@@ -157,6 +158,8 @@ export interface FacturaGuardada {
   grupo?: { estado: string }
   /** #130: lo que `preparar` dejó listo (proveedor y grupo). */
   preparado?: { proveedor_id: string; grupo_id: string; proveedor_creado?: boolean }
+  /** #131: la factura quedó guardada pero estos archivos no llegaron a Drive; se reenvían con `reintentarSubida`. */
+  archivos_pendientes?: ArchivoPendienteInfo[]
   [k: string]: unknown
 }
 
@@ -243,6 +246,14 @@ export function useProyectosSelector(f: FiltrosSelector, activo: boolean) {
     hayMas: vigente && proyectos.length < estado.total,
     cargarMas,
   }
+}
+
+/** #131: sube a Drive el archivo de un documento que quedó pendiente (la factura no se repite). */
+export const reintentarSubida = (p: { lado: ArchivoPendienteInfo['lado']; id: string; archivo: File }) => {
+  const fd = new FormData()
+  fd.set('lado', p.lado)
+  fd.set('archivo', p.archivo)
+  return sendFormData<{ success: boolean; pendiente: boolean }>(`/api/cuentas/documentos/${p.id}/reintentar-subida`, fd, 'No se pudo subir el archivo a Drive')
 }
 
 export const accionesFactura = {

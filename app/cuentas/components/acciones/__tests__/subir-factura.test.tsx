@@ -55,6 +55,7 @@ let previews: PreviewFactura[]
 let respuestasGuardar: Response[]
 let proyectoActual: ProyectoSelector
 let contrapartes: { id: string; nombre: string; pendientes: number }[]
+let reintentoFalla = false
 
 function fetchSimulado(input: RequestInfo | URL, init?: RequestInit) {
   const url = String(input)
@@ -64,6 +65,7 @@ function fetchSimulado(input: RequestInfo | URL, init?: RequestInit) {
   if (url.startsWith('/api/cuentas/facturas/preview')) return Promise.resolve(json(previews.length > 1 ? previews.shift() : previews[0]))
   if (url.startsWith('/api/cuentas/proyectos-selector')) return Promise.resolve(json({ modo: 'renglones', total: 1, page: 1, page_size: 25, proyectos: [proyectoActual] }))
   if (url.startsWith('/api/cuentas/contrapartes')) return Promise.resolve(json({ total: contrapartes.length, contrapartes }))
+  if (url.includes('/reintentar-subida')) return Promise.resolve(json(reintentoFalla ? { error: 'subida_fallida', message: 'Drive no respondió.' } : { success: true, pendiente: false }, reintentoFalla ? 502 : 200))
   if (url === '/api/cuentas/facturas') return Promise.resolve(respuestasGuardar.shift() ?? json({ factura_id: 'f1', estado_validacion: 'validado' }, 201))
   if (url.startsWith('/api/cuentas/clientes/')) return Promise.resolve(json({ cliente: {} }))
   return Promise.resolve(json({}))
@@ -85,6 +87,7 @@ beforeEach(() => {
   respuestasGuardar = []
   proyectoActual = proyecto
   contrapartes = []
+  reintentoFalla = false
   vi.stubGlobal('fetch', vi.fn(fetchSimulado))
 })
 afterEach(() => {
@@ -248,6 +251,40 @@ describe('Subir factura · proyecto sugerido con casilla y desplegable (#131)', 
     proyectoActual = proyecto
     fireEvent.click(screen.getByRole('checkbox', { name: 'Proyecto SH001' }))
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Proyecto SH001' }).getAttribute('aria-checked')).toBe('true'))
+  })
+})
+
+describe('Subir factura · archivos pendientes de Drive (#131)', () => {
+  const guardadaConPendiente = () =>
+    json({ success: true, factura_id: 'f1', estado_validacion: 'validado', archivos_pendientes: [{ lado: 'proveedor', id: 'doc-xml', rol: 'xml', nombre: 'factura.xml' }] }, 201)
+  const guardar = async () => {
+    previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' }, propuesta: [{ proyecto_id: 'SH001', proyecto: 'Boda Lopez', renglones: ['c1', 'c2'], neto: 5000 }] })]
+    abrir()
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Incluir Audio ceremonia/ }).getAttribute('aria-checked')).toBe('true'))
+    await waitFor(() => expect(boton(/Asignar y registrar factura/).disabled).toBe(false))
+    fireEvent.click(boton(/Asignar y registrar factura/))
+  }
+
+  it('si Drive no recibió un archivo, la factura queda guardada y se ofrece reintentar solo la subida', async () => {
+    respuestasGuardar = [guardadaConPendiente()]
+    await guardar()
+    expect(await screen.findByText('Factura guardada')).toBeTruthy()
+    expect(screen.getByText(/factura\.xml no se subió a Drive\. Los datos ya están guardados/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar subida' }))
+    await waitFor(() => expect(llamadas.some((l) => l.url === '/api/cuentas/documentos/doc-xml/reintentar-subida' && l.method === 'POST')).toBe(true))
+    // La factura no se vuelve a guardar: sigue habiendo un solo envío.
+    expect(guardados()).toHaveLength(1)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar subida' })).toBeNull())
+  })
+
+  it('si el reintento falla se avisa y el botón sigue disponible', async () => {
+    respuestasGuardar = [guardadaConPendiente()]
+    reintentoFalla = true
+    await guardar()
+    fireEvent.click(await screen.findByRole('button', { name: 'Reintentar subida' }))
+    expect(await screen.findByText('Drive no respondió.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reintentar subida' })).toBeTruthy()
   })
 })
 

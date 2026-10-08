@@ -132,6 +132,8 @@ export interface LlamadasAcciones {
   facturas: FacturaMock[]
   /** Cuentas elegidas en cada vista previa, en orden. */
   previews: string[][]
+  /** #131: documentos cuyo archivo se reenvió a Drive con "Reintentar subida", en orden. */
+  reintentos: string[]
 }
 
 export interface OpcionesAcciones {
@@ -274,7 +276,7 @@ export function datosDeMultipart(postData: string | null): unknown {
 }
 
 export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones = {}): Promise<LlamadasAcciones> {
-  const llamadas: LlamadasAcciones = { clientes: [], pagos: [], facturas: [], previews: [] }
+  const llamadas: LlamadasAcciones = { clientes: [], pagos: [], facturas: [], previews: [], reintentos: [] }
 
   await page.route(/\/api\/cuentas\/estado-cuenta\?/, (route: Route) => {
     const q = new URL(route.request().url()).searchParams
@@ -358,6 +360,10 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
     llamadas.facturas.push(datosDeMultipart(route.request().postData()) as FacturaMock)
     const r = opciones.factura ?? { status: 200, body: { success: true, estado_validacion: 'validado', detalle_validacion: null } }
     await fulfillJson(route, r.body, r.status)
+  })
+  await page.route(/\/api\/cuentas\/documentos\/[^/]+\/reintentar-subida$/, async (route: Route) => {
+    llamadas.reintentos.push(route.request().url().split('/').slice(-2)[0])
+    await fulfillJson(route, { success: true, pendiente: false })
   })
   return llamadas
 }

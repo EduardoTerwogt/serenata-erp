@@ -6,11 +6,11 @@
  * (`calcularDeadline`, única regla, T12) y se llama a la RPC, que en una transacción crea el XML (cabecera) y
  * su PDF, apunta cada cuenta a la factura y escribe las fechas (cachés; TS ya no las escribe).
  */
-import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { logStructured, newRequestId } from '@/lib/server/observability/log'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { calcularDeadline, parseFacturaXML, type FacturaData } from '@/lib/server/xml/factura-parser'
+import { crearSubida } from './archivos-pendientes'
 import { completarReemplazo, type Reemplazo } from './reemplazo-factura'
 
 export interface SubirFacturaCobroParams {
@@ -25,6 +25,8 @@ export interface SubirFacturaCobroParams {
   usuario: string | null
   /** Llave de idempotencia de la RPC: un reintento no duplica la factura. */
   operationId: string
+  /** #131: guarda primero los datos y sube los archivos a Drive después (si Drive falla, quedan pendientes). */
+  driveDespues?: boolean
   /** Motivo extra que fuerza "En revisión" (p. ej. el RFC no coincide). */
   aviso?: string | null
   /** Si reemplaza a una factura validada (B7): lo que arma `planearFactura`. */
@@ -77,8 +79,9 @@ export async function subirFacturaCobro(p: SubirFacturaCobroParams): Promise<{ s
   if (!googleEnv) return { status: 500, body: { error: 'Google Drive no configurado' } }
   const folderId = p.uploadFolderId ?? (googleEnv.driveFolderIdCuentas || undefined)
 
-  const pdfUrl = p.pdfFile ? await uploadFileToDrive(p.pdfFile, p.carpeta, p.pdfFile.name, folderId) : null
-  const xmlUrl = await uploadFileToDrive(p.xmlFile, p.carpeta, p.xmlFile.name, folderId)
+  const subida = crearSubida({ lado: 'cobro', carpeta: p.carpeta, folderId, despues: p.driveDespues, route: p.route })
+  const pdfUrl = p.pdfFile ? await subida.guardar('pdf', p.pdfFile, p.pdfFile.name) : null
+  const xmlUrl = await subida.guardar('xml', p.xmlFile, p.xmlFile.name)
 
   const { data, error } = await supabaseAdmin.rpc('ligar_factura', {
     p_cuentas: p.cuentas.map((c) => ({ cuenta_id: c.id, monto_esperado: c.monto_esperado ?? null })),
@@ -114,6 +117,8 @@ export async function subirFacturaCobro(p: SubirFacturaCobroParams): Promise<{ s
 
   const factura = data as ResultadoLigarFactura
   if (p.reemplazo && !factura.repetido) await completarReemplazo(p.reemplazo, factura.factura_id)
+  // Los datos ya están: ahora los archivos van a Drive. Una operación repetida no vuelve a subirlos.
+  const archivosPendientes = factura.repetido ? [] : await subida.terminar({ xml: [factura.factura_id], pdf: factura.pdf_id ? [factura.pdf_id] : [] })
 
   return {
     status: 200,
@@ -126,6 +131,7 @@ export async function subirFacturaCobro(p: SubirFacturaCobroParams): Promise<{ s
       validacion_estructural: { estado_validacion: factura.estado, detalle_validacion: factura.detalle },
       archivos_subidos: p.pdfFile ? 2 : 1,
       repetido: factura.repetido,
+      ...(archivosPendientes.length > 0 ? { archivos_pendientes: archivosPendientes } : {}),
     },
   }
 }

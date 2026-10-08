@@ -295,6 +295,7 @@ export async function confirmarFactura(p: ConfirmarParams): Promise<Respuesta> {
       uploadFolderId: p.uploadFolderId,
       usuario: p.usuario,
       route: p.route,
+      driveDespues: true,
     })
   }
 
@@ -313,6 +314,7 @@ export async function confirmarFactura(p: ConfirmarParams): Promise<Respuesta> {
       uploadFolderId: p.uploadFolderId,
       usuario: p.usuario,
       operationId: p.operationId || randomUUID(),
+      driveDespues: true,
       aviso,
       route: p.route,
     })
@@ -364,6 +366,8 @@ export async function confirmarFactura(p: ConfirmarParams): Promise<Respuesta> {
       uploadFolderId: p.uploadFolderId,
       usuario: p.usuario,
       aviso: avisoRfc('proveedor', rfcContraparte, proveedor.rfc),
+      driveDespues: true,
+      route: p.route,
     })
   } catch (error) {
     if (!preparado) throw error

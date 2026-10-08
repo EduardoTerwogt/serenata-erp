@@ -1,5 +1,6 @@
 'use client'
 
+import { archivoPendiente } from '@/lib/shared/cuentas/archivo-pendiente'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Button } from '@/components/ui/Button'
 import { FilterTabs } from '@/components/ui/FilterTabs'
@@ -158,7 +159,7 @@ function Contenido({ e, doc, etiquetaCobrado, resaltada }: { e: EstadoCuentaResp
             return (
               <tr key={f.id} ref={hl ? resaltada : undefined} data-resaltada={hl || undefined} className={`border-t border-hairline text-[12.5px] ${hl ? 'bg-accent/[0.08]' : ''}`}>
                 <Td fuerte nowrap>
-                  {f.archivo_url ? (
+                  {f.archivo_url && !archivoPendiente(f.archivo_url) ? (
                     <a href={f.archivo_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
                       {nombreFactura(f)}
                     </a>

@@ -280,6 +280,25 @@ test('subir factura de proveedor: un gasto extra pide proyecto, concepto y costo
   expect(llamadas.facturas[0].preparar?.gasto).toEqual({ proyecto_id: 'SH004', concepto: 'Renta de generador', costo_total: 20000 })
 })
 
+test('subir factura: si Drive no recibe el archivo la factura queda guardada y se reintenta solo la subida (#131)', async ({ page }) => {
+  const llamadas = await abrir(page, {
+    factura: {
+      status: 200,
+      body: { success: true, estado_validacion: 'validado', detalle_validacion: null, archivos_pendientes: [{ lado: 'cobro', id: 'doc-xml-1', rol: 'xml', nombre: 'folios.xml' }] },
+    },
+  })
+  const modal = await subirXml(page, 'folios.xml')
+  await modal.getByRole('button', { name: 'Guardar factura' }).click()
+  await expect(modal.getByText('Factura guardada')).toBeVisible()
+  await expect(modal.getByText(/folios\.xml no se subió a Drive\. Los datos ya están guardados/)).toBeVisible()
+
+  await modal.getByRole('button', { name: 'Reintentar subida' }).click()
+  await expect(modal.getByRole('button', { name: 'Reintentar subida' })).toHaveCount(0)
+  // La factura no se vuelve a guardar: solo se reenvía el archivo.
+  expect(llamadas.facturas).toHaveLength(1)
+  expect(llamadas.reintentos).toEqual(['doc-xml-1'])
+})
+
 test('subir factura: XML ajeno o repetido se rechazan con su explicación', async ({ page }) => {
   await abrir(page)
   let modal = await subirXml(page, 'ajeno.xml')
