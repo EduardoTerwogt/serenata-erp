@@ -30,6 +30,12 @@ export interface ProyectoRef {
   proyecto: string | null
 }
 
+/** El proyecto que la pantalla propone al leer el XML y por qué (se muestra marcado; el usuario puede desmarcarlo o elegir otro). */
+export interface ProyectoSugerido {
+  ref: ProyectoRef
+  motivo: string
+}
+
 export interface DestinoProveedor {
   /** `renglones` (conceptos del proyecto) o `gasto`; `grupo` solo lo deduce `modoEfectivo`. */
   modo: ModoDestino
@@ -37,6 +43,8 @@ export interface DestinoProveedor {
   grupoId: string | null
   /** Proyecto de la factura (P10: una factura de proveedor es de un solo proyecto). */
   proyecto: ProyectoRef | null
+  /** Lo que se propuso (#131); `proyecto` es lo elegido, que puede ser esto, otro proyecto o nada. */
+  sugerido: ProyectoSugerido | null
   /** Cuentas por pagar (conceptos) marcadas, todas de `proyecto`. */
   renglones: string[]
   /** Ya se hizo la marca inicial de los conceptos de este proyecto (no se repite al volver a cargarlos). */
@@ -51,6 +59,7 @@ export const destinoInicial = (): DestinoProveedor => ({
   modo: 'renglones',
   grupoId: null,
   proyecto: null,
+  sugerido: null,
   renglones: [],
   marcado: false,
   gasto: { concepto: '', costo: '' },

@@ -315,8 +315,12 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
             pendiente="saldo"
             valor={nombre && contraparteId ? { id: contraparteId, nombre } : null}
             onElegir={elegirContraparte}
-            accion={contraparteId ? <Enlace onClick={() => cambiarVista(porProyecto ? 'contraparte' : 'proyecto')}>{porProyecto ? '← Volver al estado de cuenta' : 'Pagar varios proyectos a la vez'}</Enlace> : undefined}
           />
+          {contraparteId && (
+            <div className="flex justify-end">
+              <Enlace onClick={() => cambiarVista(porProyecto ? 'contraparte' : 'proyecto')}>{porProyecto ? '← Volver al estado de cuenta' : 'Pagar varios proyectos a la vez'}</Enlace>
+            </div>
+          )}
           {aviso && <StatusBanner tone={aviso.tono}>{aviso.texto}</StatusBanner>}
           {error && !vigente && <StatusBanner tone="error">{error}</StatusBanner>}
           {porProyecto && contraparteId && <SelectorProyectos modo="pago" lado={lado} contraparte={contraparteId} proyectosMarcados={proyectosSel} onTogglePago={alternarProyecto} />}

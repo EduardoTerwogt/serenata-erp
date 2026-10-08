@@ -24,7 +24,7 @@ import { Aviso } from '../detalle/TabPago'
 import { ACCEPT_PDF, ACCEPT_XML, BotonArchivo } from '../detalle/TabDocumentos'
 import { Cap, CUERPO_VENTANA, Dato, Enlace, PieVentana } from './compartido'
 import { CLIENTE_VACIO, CompletarCliente, type ClienteForm } from './CompletarCliente'
-import { armarProveedor, destinoInicial, modoEfectivo, type DestinoProveedor as Destino, type ProyectoRef } from './destino-proveedor'
+import { armarProveedor, destinoInicial, modoEfectivo, type DestinoProveedor as Destino, type ProyectoSugerido } from './destino-proveedor'
 import { DestinoProveedor } from './DestinoProveedor'
 import { SelectorContraparte } from './SelectorContraparte'
 import { accionesCliente, accionesFactura, useEstadoCuenta, type ContraparteLista, type FacturaGuardada } from './useAcciones'
@@ -107,8 +107,8 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
             const propuesta = p.preseleccion.length > 0 ? p.preseleccion : delProyecto(p, proyecto)
             if (propuesta.length > 0) setSeleccion(propuesta)
           } else {
-            const ref = proyectoPropuesto(p, proyecto)
-            if (ref) setDestino((d) => (d.proyecto ? d : { ...d, proyecto: ref }))
+            const sugerido = proyectoPropuesto(p, proyecto)
+            if (sugerido) setDestino((d) => (d.proyecto ? d : { ...d, proyecto: sugerido.ref, sugerido }))
           }
         })
         .catch((err) => {
@@ -427,17 +427,17 @@ function delProyecto(p: PreviewFactura, proyecto: string | null): string[] {
 }
 
 /**
- * Proveedor: el proyecto que se propone. Primero el que nombran los folios del XML (si es uno solo, P4), luego el
- * proyecto desde el que se abrió la ventana (P22) y al final el de la propuesta por el neto del XML (#130).
+ * Proveedor: el proyecto que se propone y por qué. Primero el que nombran los folios del XML (si es uno solo, P4), luego
+ * el proyecto desde el que se abrió la ventana (P22) y al final el de la propuesta por el neto del XML (#130).
  */
-function proyectoPropuesto(p: PreviewFactura, proyecto: string | null): ProyectoRef | null {
+function proyectoPropuesto(p: PreviewFactura, proyecto: string | null): ProyectoSugerido | null {
   const grupos = p.candidatos.filter((c) => !esCandidatoCobro(c))
   const folios = new Set(p.cfdi.folios)
   const porFolio = grupos.filter((c) => c.proyecto_id && folios.has(c.proyecto_id.toUpperCase()))
-  if (porFolio.length === 1 && porFolio[0].proyecto_id) return { proyecto_id: porFolio[0].proyecto_id, proyecto: porFolio[0].proyecto ?? null }
-  if (proyecto) return { proyecto_id: proyecto, proyecto: grupos.find((c) => c.proyecto_id === proyecto)?.proyecto ?? null }
+  if (porFolio.length === 1 && porFolio[0].proyecto_id) return { ref: { proyecto_id: porFolio[0].proyecto_id, proyecto: porFolio[0].proyecto ?? null }, motivo: 'Lo nombra el folio' }
+  if (proyecto) return { ref: { proyecto_id: proyecto, proyecto: grupos.find((c) => c.proyecto_id === proyecto)?.proyecto ?? null }, motivo: 'Abierto desde este proyecto' }
   const sugerida = p.propuesta[0]
-  return sugerida ? { proyecto_id: sugerida.proyecto_id, proyecto: sugerida.proyecto } : null
+  return sugerida ? { ref: { proyecto_id: sugerida.proyecto_id, proyecto: sugerida.proyecto }, motivo: 'Coincide con el monto' } : null
 }
 
 function subDelXml(p: PreviewFactura | PreviewComplemento): string {

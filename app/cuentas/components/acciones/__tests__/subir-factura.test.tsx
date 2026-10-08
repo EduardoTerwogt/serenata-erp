@@ -126,8 +126,9 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
   it('gasto extra: pide proyecto, concepto y costo, y manda el costo numérico', async () => {
     previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' } })]
     abrir()
-    // Paso 1: el proyecto. Sin él no hay interruptor ni destino.
+    // Paso 1: el proyecto. Sin él no hay interruptor ni destino; sin sugerencia se elige del desplegable.
     expect(boton(/Guardar factura|Asignar y registrar factura/).disabled).toBe(true)
+    fireEvent.click(await screen.findByRole('button', { name: 'Elegir proyecto' }))
     fireEvent.click(await screen.findByRole('button', { name: /SH001/ }))
     fireEvent.click(await screen.findByRole('switch', { name: /gasto extra/ }))
     expect(boton(/Registrar gasto y factura/).disabled).toBe(true)
@@ -197,6 +198,56 @@ describe('Subir factura · proveedor sin ficha (#130)', () => {
     expect(guardados()[1].datos).toMatchObject({ contraparte_id: 'pNuevo', grupo_id: 'gNuevo' })
     expect(guardados()[1].datos).not.toHaveProperty('preparar')
     expect(guardados()[1].datos?.operation_id).toBe(guardados()[0].datos?.operation_id)
+  })
+})
+
+describe('Subir factura · proyecto sugerido con casilla y desplegable (#131)', () => {
+  const propuesta = [{ proyecto_id: 'SH001', proyecto: 'Boda Lopez', renglones: ['c1', 'c2'], neto: 5000 }]
+  const otroProyecto: ProyectoSelector = { ...proyecto, proyecto_id: 'SH002', proyecto: 'Festival', renglones: [{ ...proyecto.renglones![0], cuenta_id: 'c9', descripcion: 'Luces' }] }
+
+  it('el proyecto que coincide con el monto sale marcado con su motivo y sus conceptos se proponen', async () => {
+    previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' }, propuesta })]
+    abrir()
+    const caja = await screen.findByRole('checkbox', { name: 'Proyecto SH001' })
+    expect(caja.getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText('Coincide con el monto')).toBeTruthy()
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Incluir Audio ceremonia/ }).getAttribute('aria-checked')).toBe('true'))
+    // El desplegable sigue a la mano para cambiarlo.
+    expect(screen.getByRole('button', { name: 'Elegir otro proyecto' })).toBeTruthy()
+  })
+
+  it('el proyecto desde el que se abrió la ventana se sugiere aunque el monto no cuadre', async () => {
+    previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' } })]
+    abrir(undefined, { proyecto: 'SH001' })
+    expect((await screen.findByRole('checkbox', { name: 'Proyecto SH001' })).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText('Abierto desde este proyecto')).toBeTruthy()
+  })
+
+  it('desmarcar la sugerencia deja la factura sin proyecto y oculta los conceptos', async () => {
+    previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' }, propuesta })]
+    abrir()
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Proyecto SH001' }))
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Proyecto SH001' }).getAttribute('aria-checked')).toBe('false'))
+    expect(screen.queryByRole('checkbox', { name: /Incluir Audio ceremonia/ })).toBeNull()
+    expect(screen.queryByRole('switch', { name: /gasto extra/ })).toBeNull()
+    expect(boton(/Guardar factura|Asignar y registrar factura/).disabled).toBe(true)
+  })
+
+  it('elegir otro proyecto del desplegable lo marca y desmarca la sugerencia', async () => {
+    previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' }, propuesta })]
+    abrir()
+    await screen.findByRole('checkbox', { name: 'Proyecto SH001' })
+    proyectoActual = otroProyecto
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir otro proyecto' }))
+    fireEvent.click(await screen.findByRole('button', { name: /SH002/ }))
+
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Proyecto SH002' }).getAttribute('aria-checked')).toBe('true'))
+    expect(screen.getByRole('checkbox', { name: 'Proyecto SH001' }).getAttribute('aria-checked')).toBe('false')
+    expect(await screen.findByRole('checkbox', { name: /Incluir Luces/ })).toBeTruthy()
+    // Volver a marcar la sugerencia regresa a su proyecto.
+    proyectoActual = proyecto
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Proyecto SH001' }))
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Proyecto SH001' }).getAttribute('aria-checked')).toBe('true'))
   })
 })
 

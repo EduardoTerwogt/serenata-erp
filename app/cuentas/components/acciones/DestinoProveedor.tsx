@@ -1,18 +1,21 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/Button'
+import { Checkbox } from '@/components/ui/Checkbox'
+import { Icon } from '@/components/ui/Icon'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 import { Switch } from '@/components/ui/Switch'
 import { TextField } from '@/components/ui/TextField'
 import { fmtMoney } from '@/lib/quotations/format'
 import type { PreviewFactura } from '@/lib/shared/cuentas/factura-preview-tipos'
-import type { ProyectoSelector, RenglonSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
+import type { RenglonSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import { plural } from '../formato'
 import { Aviso } from '../detalle/TabPago'
 import { Cap, Enlace } from './compartido'
 import { AltaProveedor } from './AltaProveedor'
 import { ConceptosProyecto } from './ConceptosProyecto'
-import { grupoExacto, marcaInicial, montoDeTexto, type DestinoProveedor as Destino } from './destino-proveedor'
+import { grupoExacto, marcaInicial, montoDeTexto, type DestinoProveedor as Destino, type ProyectoRef } from './destino-proveedor'
 import { SelectorContraparte } from './SelectorContraparte'
 import { SelectorProyectos } from './SelectorProyectos'
 import type { ContraparteLista } from './useAcciones'
@@ -41,6 +44,49 @@ function Paso({ n, titulo, children }: { n: number; titulo: string; children: Re
   )
 }
 
+function FilaProyecto({ p, marcado, motivo, onCambio }: { p: ProyectoRef; marcado: boolean; motivo?: string; onCambio: (marcado: boolean) => void }) {
+  return (
+    <div className="flex items-center gap-3 rounded-panel border border-hairline bg-row-alt px-3.5 py-2.5">
+      <Checkbox checked={marcado} onChange={onCambio} label={`Proyecto ${p.proyecto_id}`} />
+      <span className="sn-folio w-[64px] flex-none text-[11px] text-accent">{p.proyecto_id}</span>
+      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{p.proyecto ?? '—'}</span>
+      {motivo && <StatusBadge tone="issued">{motivo}</StatusBadge>}
+    </div>
+  )
+}
+
+/** Desplegable para elegir a mano el proyecto cuando la sugerencia no es la correcta (mismo selector paginado de SQL). */
+function ElegirProyecto({ etiqueta, proveedorId, elegido, onElegir }: { etiqueta: string; proveedorId: string | null; elegido: string | null; onElegir: (p: ProyectoRef) => void }) {
+  const [abierto, setAbierto] = useState(false)
+  return (
+    <div className="min-w-0">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={abierto}
+        onClick={() => setAbierto((a) => !a)}
+        className={`flex h-[var(--control-height-lg)] w-full min-w-0 items-center gap-2 rounded-control border bg-input px-3.5 text-left text-[length:var(--text-md)] hover:bg-row-alt ${abierto ? 'border-accent-quiet' : 'border-hairline'}`}
+      >
+        <span className="min-w-0 flex-1 truncate text-subtext">{etiqueta}</span>
+        <Icon name={abierto ? 'chevron-up' : 'chevron-down'} size={15} className="flex-none text-subtext" />
+      </button>
+      {abierto && (
+        <div className="mt-1.5">
+          <SelectorProyectos
+            modo="proyecto"
+            contraparte={proveedorId}
+            proyectoSeleccionado={elegido}
+            onElegirProyecto={(p) => {
+              onElegir({ proyecto_id: p.proyecto_id, proyecto: p.proyecto })
+              setAbierto(false)
+            }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 /**
  * A qué se liga la factura de un proveedor (#131). Una factura es de un solo proyecto: se elige el proyecto, luego los
  * conceptos que cubre (los del proveedor ya vienen marcados; los libres o de otro proveedor sin factura se le asignan)
@@ -58,8 +104,10 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
   const propuesta = factura.propuesta.find((p) => p.proyecto_id === proyecto?.proyecto_id) ?? null
   const propuestaAplicada = propuesta && destino.renglones.length === propuesta.renglones.length && propuesta.renglones.every((id) => destino.renglones.includes(id))
 
-  const elegirProyecto = (p: ProyectoSelector) => onDestino({ ...destino, proyecto: { proyecto_id: p.proyecto_id, proyecto: p.proyecto }, renglones: [], grupoId: null, marcado: false })
-  const cambiarProyecto = () => onDestino({ ...destino, proyecto: null, renglones: [], grupoId: null, marcado: false })
+  const sugerido = destino.sugerido
+  const otro = proyecto && proyecto.proyecto_id !== sugerido?.ref.proyecto_id ? proyecto : null
+  const elegirProyecto = (p: ProyectoRef) => onDestino({ ...destino, proyecto: p, renglones: [], grupoId: null, marcado: false })
+  const quitarProyecto = () => onDestino({ ...destino, proyecto: null, renglones: [], grupoId: null, marcado: false })
   const conceptosCargados = (rs: RenglonSelector[]) => {
     if (destino.marcado) return
     const renglones = marcaInicial(rs, proveedorId, propuesta?.renglones ?? null)
@@ -118,15 +166,9 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
       {tiene && (
         <>
           <Paso n={1} titulo="¿De qué proyecto es?">
-            {proyecto ? (
-              <div className="flex items-center gap-3 rounded-panel border border-hairline bg-row-alt px-3.5 py-2.5">
-                <span className="sn-folio w-[64px] flex-none text-[11px] text-accent">{proyecto.proyecto_id}</span>
-                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{proyecto.proyecto ?? '—'}</span>
-                <Enlace onClick={cambiarProyecto}>Cambiar</Enlace>
-              </div>
-            ) : (
-              <SelectorProyectos modo="proyecto" contraparte={proveedorId} proyectoSeleccionado={null} onElegirProyecto={elegirProyecto} />
-            )}
+            {sugerido && <FilaProyecto p={sugerido.ref} marcado={proyecto?.proyecto_id === sugerido.ref.proyecto_id} motivo={sugerido.motivo} onCambio={(m) => (m ? elegirProyecto(sugerido.ref) : quitarProyecto())} />}
+            {otro && <FilaProyecto p={otro} marcado onCambio={quitarProyecto} />}
+            <ElegirProyecto etiqueta={sugerido || otro ? 'Elegir otro proyecto' : 'Elegir proyecto'} proveedorId={proveedorId} elegido={proyecto?.proyecto_id ?? null} onElegir={elegirProyecto} />
           </Paso>
 
           {proyecto && (

@@ -295,7 +295,15 @@ test('subir factura de proveedor: se liga al proyecto que nombran los folios', a
   const llamadas = await abrir(page)
   const modal = await subirXml(page, 'proveedor.xml')
   await expect(modal.getByText(PROVEEDOR.nombre).first()).toBeVisible()
-  // Los folios nombran SH004 y sus conceptos del proveedor vienen marcados: es justo su grupo, se liga sin reasignar.
+  // Los folios nombran SH004: sale marcado con su motivo y el desplegable queda para elegir otro (#131).
+  await expect(modal.getByRole('checkbox', { name: 'Proyecto SH004' })).toHaveAttribute('aria-checked', 'true')
+  await expect(modal.getByText('Lo nombra el folio')).toBeVisible()
+  await expect(modal.getByRole('button', { name: 'Elegir otro proyecto' })).toBeVisible()
+  // Desmarcarlo quita el proyecto y los conceptos; volver a marcarlo los trae de nuevo.
+  await modal.getByRole('checkbox', { name: 'Proyecto SH004' }).click()
+  await expect(modal.getByRole('checkbox', { name: 'Incluir Edición versión A' })).toHaveCount(0)
+  await modal.getByRole('checkbox', { name: 'Proyecto SH004' }).click()
+  // Sus conceptos del proveedor vienen marcados: es justo su grupo, se liga sin reasignar.
   await expect(modal.getByText('Versiones redes')).toBeVisible()
   await expect(modal.getByRole('checkbox', { name: 'Incluir Edición versión A' })).toHaveAttribute('aria-checked', 'true')
   await expect(modal.getByRole('checkbox', { name: 'Incluir Edición versión B' })).toHaveAttribute('aria-checked', 'true')
