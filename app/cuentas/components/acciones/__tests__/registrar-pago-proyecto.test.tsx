@@ -110,11 +110,11 @@ async function elegirProveedor() {
 const caja = (nombre: string | RegExp) => screen.findByRole('checkbox', { name: nombre })
 
 describe('Registrar pago · por proyecto (#130, #131)', () => {
-  it('el enlace "Pagar varios proyectos a la vez" solo sale con contraparte y lista solo sus proyectos', async () => {
+  it('el modo «Elegir proyectos» solo sale con contraparte y lista solo sus proyectos', async () => {
     render(<Ventana />)
-    expect(screen.queryByRole('button', { name: 'Pagar varios proyectos a la vez' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Elegir proyectos' })).toBeNull()
     await elegirProveedor()
-    fireEvent.click(screen.getByRole('button', { name: 'Pagar varios proyectos a la vez' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
 
     expect(await caja('Incluir SH061 · Lanzamiento')).toBeTruthy()
     expect(screen.getByRole('checkbox', { name: 'Incluir SH062 · Spot' })).toBeTruthy()
@@ -125,7 +125,7 @@ describe('Registrar pago · por proyecto (#130, #131)', () => {
   it('marcar proyectos limita el estado de cuenta a ellos', async () => {
     render(<Ventana />)
     await elegirProveedor()
-    fireEvent.click(screen.getByRole('button', { name: 'Pagar varios proyectos a la vez' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
     fireEvent.click(await caja('Incluir SH061 · Lanzamiento'))
     await waitFor(() => expect(llamadas.some((l) => l.url.includes('/estado-cuenta') && l.url.includes('id=prov1') && l.url.includes('proyectos=SH061'))).toBe(true))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Incluir SH062 · Spot' }))
@@ -135,7 +135,7 @@ describe('Registrar pago · por proyecto (#130, #131)', () => {
   it('registra el pago repartido entre los proyectos marcados, una sola contraparte', async () => {
     render(<Ventana />)
     await elegirProveedor()
-    fireEvent.click(screen.getByRole('button', { name: 'Pagar varios proyectos a la vez' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
     fireEvent.click(await caja('Incluir SH061 · Lanzamiento'))
     fireEvent.click(await caja('Incluir SH062 · Spot'))
     const monto = await screen.findByLabelText(/Monto transferido/)
@@ -185,13 +185,68 @@ describe('Registrar pago · una contraparte, varias facturas (#131)', () => {
     })
   })
 
-  it('"Volver al estado de cuenta" regresa a las facturas de la contraparte elegida', async () => {
+  it('«Todas sus facturas» regresa a las facturas de la contraparte elegida', async () => {
     render(<Ventana />)
     await elegirProveedor()
-    fireEvent.click(screen.getByRole('button', { name: 'Pagar varios proyectos a la vez' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
     expect(await caja('Incluir SH061 · Lanzamiento')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Volver al estado de cuenta/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Todas sus facturas' }))
     expect(await screen.findByLabelText(/Monto transferido/)).toBeTruthy()
     expect(screen.queryByRole('checkbox', { name: /SH061/ })).toBeNull()
+  })
+})
+
+describe('Registrar pago · pasos, reparto legible y pulido (#131)', () => {
+  it('«Marcar todos» marca los proyectos de la contraparte y la barra dice cuántos y cuánto', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    fireEvent.click(screen.getByRole('button', { name: 'Elegir proyectos' }))
+    expect(await screen.findByText('0 de 2 marcados · $0.00 por pagar')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar todos' }))
+    expect(await screen.findByText('2 de 2 marcados · $33,800.00 por pagar')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar todos' }))
+    expect(await screen.findByText('0 de 2 marcados · $0.00 por pagar')).toBeTruthy()
+  })
+
+  it('tres pasos con el nombre de quién se paga; el pie dice «Cuadra» cuando lo aplicado es igual al monto', async () => {
+    render(<Ventana />)
+    expect(screen.getByRole('region', { name: '¿A quién se le paga?' })).toBeTruthy()
+    await elegirProveedor()
+    expect(screen.getByRole('region', { name: '¿Cuánto y cuándo?' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Se reparte así' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/Monto transferido/), { target: { value: '33800' } })
+    expect(await screen.findByText('Cuadra · 2 facturas')).toBeTruthy()
+  })
+
+  it('las facturas con monto aplicado se abren solas y muestran lo que queda; las de $0 quedan cerradas', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    fireEvent.change(screen.getByLabelText(/Monto transferido/), { target: { value: '28000' } })
+    expect(await screen.findByText('de saldo $28,000.00 · queda $0.00')).toBeTruthy()
+    // La primera factura (SH061) recibe todo el monto y se abre; la segunda queda en $0 y cerrada.
+    expect(screen.getByLabelText('Aplicar a SH061')).toBeTruthy()
+    expect(screen.queryByLabelText('Aplicar a SH062')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /SH062|f-g62/ }))
+    expect(await screen.findByLabelText('Aplicar a SH062')).toBeTruthy()
+  })
+
+  it('el monto queda con formato al salir del campo y «Repartir automáticamente» lo reparte otra vez', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    const monto = screen.getByLabelText(/Monto transferido/) as HTMLInputElement
+    fireEvent.change(monto, { target: { value: '33800' } })
+    fireEvent.blur(monto)
+    expect(monto.value).toBe('33,800.00')
+    fireEvent.click(screen.getByRole('button', { name: 'Repartir automáticamente' }))
+    expect(await screen.findByText('Cuadra · 2 facturas')).toBeTruthy()
+  })
+
+  it('la nota va detrás de «+ Agregar nota» y el comprobante se llama «Adjuntar comprobante» en escritorio', async () => {
+    render(<Ventana />)
+    await elegirProveedor()
+    expect(screen.queryByPlaceholderText('Notas sobre el pago')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '+ Agregar nota' }))
+    expect(await screen.findByPlaceholderText('Notas sobre el pago')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Adjuntar comprobante' })).toBeTruthy()
   })
 })

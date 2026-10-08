@@ -9,7 +9,7 @@ import { fmtMoney } from '@/lib/quotations/format'
 import type { LadoCuentas } from '@/lib/shared/cuentas/estado-cuenta-tipos'
 import type { ProyectoSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import { fechaCorta } from '../formato'
-import { Enlace } from './compartido'
+import { BarraSeleccion, Enlace } from './compartido'
 import { useProyectosSelector } from './useAcciones'
 
 interface Props {
@@ -20,6 +20,8 @@ interface Props {
   /** Solo modo `pago`: proyectos marcados. */
   proyectosMarcados?: string[]
   onTogglePago?: (proyecto: ProyectoSelector) => void
+  /** Solo modo `pago`: «Marcar todos / Quitar todos» deja marcados exactamente estos proyectos. */
+  onMarcarPago?: (ids: string[]) => void
   /** Modo `pago`: la contraparte de la que se listan los proyectos con saldo. Modo `proyecto`: proveedor con el que se prioriza la lista (sus proyectos primero). */
   contraparte?: string | null
   proyectoSeleccionado?: string | null
@@ -30,7 +32,7 @@ interface Props {
  * Selector de proyectos (#130), una sola pieza para Subir factura de proveedor (`proyecto`) y Registrar pago por
  * proyecto (`pago`). Lee de SQL, paginado: búsqueda con debounce y "Cargar más".
  */
-export function SelectorProyectos({ modo, lado = 'proveedor', proyectosMarcados = [], onTogglePago, contraparte = null, proyectoSeleccionado = null, onElegirProyecto }: Props) {
+export function SelectorProyectos({ modo, lado = 'proveedor', proyectosMarcados = [], onTogglePago, onMarcarPago, contraparte = null, proyectoSeleccionado = null, onElegirProyecto }: Props) {
   const [q, setQ] = useState('')
   const pago = modo === 'pago'
   const { proyectos, total, error, cargando, cargandoMas, hayMas, cargarMas } = useProyectosSelector(pago ? { modo: 'pago', lado, q, contraparte, soloPendientes: true } : { modo: 'renglones', lado: 'proveedor', q, contraparte, soloPendientes: false }, true)
@@ -46,6 +48,17 @@ export function SelectorProyectos({ modo, lado = 'proveedor', proyectosMarcados 
         {cargando && !error && <div className="border-t border-hairline px-3.5 py-3 text-[12.5px] text-subtext">Buscando…</div>}
         {!cargando && !error && proyectos.length === 0 && <div className="border-t border-hairline px-3.5 py-3 text-[12.5px] text-subtext">Sin proyectos con esos filtros.</div>}
 
+        {pago && onMarcarPago && proyectos.length > 0 && (
+          <BarraSeleccion
+            resumen={`${proyectos.filter((p) => proyectosMarcados.includes(p.proyecto_id)).length} de ${total} ${total === 1 ? 'marcado' : 'marcados'} · ${fmtMoney(
+              proyectos.filter((p) => proyectosMarcados.includes(p.proyecto_id)).reduce((a, p) => a + (p.contrapartes ?? []).filter((c) => c.id === contraparte).reduce((x, c) => x + c.saldo, 0), 0)
+            )} por pagar`}
+            onTodas={() => onMarcarPago(proyectos.map((p) => p.proyecto_id))}
+            onNinguna={() => onMarcarPago([])}
+            etiquetaTodas="Marcar todos"
+            etiquetaNinguna="Quitar todos"
+          />
+        )}
         {pago &&
           proyectos.map((p) => {
             const c = (p.contrapartes ?? []).find((x) => x.id === contraparte)

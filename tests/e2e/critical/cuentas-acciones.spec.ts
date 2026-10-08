@@ -59,10 +59,10 @@ test('registrar pago: el depósito del issue se reparte de la factura más antig
   await modal.getByLabel('Monto recibido').fill('300000')
   // La sugerencia llena la Factura A (SH001, SH003, SH004) y deja $10,000 en SH006.
   await expect(modal.getByText('Aplicado $300,000.00 de $300,000.00')).toBeVisible()
-  await expect(modal.getByText('Por aplicar $0.00 · 1 factura')).toBeVisible()
+  await expect(modal.getByText('Cuadra · 1 factura')).toBeVisible()
   const facturaA = modal.getByRole('button', { name: /F-A_Altavista/ })
   await expect(facturaA).toContainText('$300,000.00')
-  await facturaA.click()
+  // La factura con monto aplicado se abre sola: sus conceptos se ven sin tocar nada.
   await expect(modal.getByLabel('Aplicar a SH006')).toHaveValue('10000.00')
 
   await modal.getByRole('button', { name: 'Registrar pago' }).click()
@@ -91,7 +91,6 @@ test('registrar pago: bloquea si lo aplicado no cuadra o si una línea pasa de s
   await expect(registrar).toBeEnabled()
 
   // Reparto a mano: SH006 recibe de más que su saldo ($69,600).
-  await modal.getByRole('button', { name: /F-A_Altavista/ }).click()
   await modal.getByLabel('Aplicar a SH006').fill('80000')
   await expect(modal.getByText(/SH006: el monto es mayor que su saldo/)).toBeVisible()
   await expect(registrar).toBeDisabled()
@@ -101,8 +100,8 @@ test('registrar pago: bloquea si lo aplicado no cuadra o si una línea pasa de s
   await expect(modal.getByText(/por aplicar\. Lo recibido y lo aplicado deben ser iguales/)).toContainText('$10,000.00')
   await expect(registrar).toBeDisabled()
 
-  // "Sugerir" devuelve el reparto de la más antigua primero.
-  await modal.getByRole('button', { name: 'Sugerir: la más antigua primero' }).click()
+  // «Repartir automáticamente» devuelve el reparto de la más antigua primero.
+  await modal.getByRole('button', { name: 'Repartir automáticamente' }).click()
   await expect(registrar).toBeEnabled()
   expect(llamadas.pagos).toHaveLength(0)
 })
@@ -114,7 +113,7 @@ test('registrar pago: si los saldos cambiaron el servidor responde 409, se avisa
   await modal.getByLabel('Monto recibido').fill('100000')
   await modal.getByRole('button', { name: 'Registrar pago' }).click()
   await expect(modal.getByText(/Los saldos cambiaron mientras capturabas el pago/)).toBeVisible()
-  await expect(modal.getByLabel('Monto recibido')).toHaveValue('100000')
+  await expect(modal.getByLabel('Monto recibido')).toHaveValue('100,000.00')
   expect(llamadas.pagos).toHaveLength(1)
 })
 
@@ -129,7 +128,7 @@ test('registrar pago a proveedor: cada factura es un proyecto y el pago liquida 
 
   await modal.getByLabel('Monto transferido').fill('96280')
   await expect(modal.getByText('Aplicado $96,280.00 de $96,280.00')).toBeVisible()
-  await expect(modal.getByText('Por aplicar $0.00 · 3 facturas')).toBeVisible()
+  await expect(modal.getByText('Cuadra · 3 facturas')).toBeVisible()
   await modal.getByRole('button', { name: 'Registrar pago' }).click()
   await expect(modal.getByText('Pago registrado')).toBeVisible()
   expect(llamadas.pagos[0].lado).toBe('proveedor')
@@ -141,9 +140,9 @@ test('registrar pago por proyecto: con el proveedor elegido solo salen sus proye
   await elegirAccion(page, 'Registrar pago')
   const modal = page.getByRole('dialog', { name: 'Registrar pago' })
   await modal.getByRole('button', { name: 'Pago a proveedor' }).click()
-  await expect(modal.getByRole('button', { name: 'Pagar varios proyectos a la vez' })).toHaveCount(0)
+  await expect(modal.getByRole('button', { name: 'Elegir proyectos' })).toHaveCount(0)
   await elegirContraparte(modal, 'proveedor', 'distrito', PROVEEDOR.nombre)
-  await modal.getByRole('button', { name: 'Pagar varios proyectos a la vez' }).click()
+  await modal.getByRole('button', { name: 'Elegir proyectos' }).click()
   await modal.getByRole('checkbox', { name: 'Incluir SH001 · Spot TV 30s' }).click()
   await expect(modal.getByRole('checkbox', { name: /SH070/ })).toHaveCount(0)
   await modal.getByRole('checkbox', { name: 'Incluir SH004 · Versiones redes' }).click()
