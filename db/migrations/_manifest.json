@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-02T07:17:49.025Z",
-  "count": 141,
+  "generated_at": "2026-10-07T23:29:49.957Z",
+  "count": 149,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -142,6 +142,14 @@
     "20261026_b7_auditar_consistencia.sql",
     "20261027_retirar_cliente_id_backfill_clasificacion.sql",
     "20261028_b6_cuentas_proyecto_seleccionado_sql.sql",
-    "20261029_b6_cuentas_concepto_uno.sql"
+    "20261029_b6_cuentas_concepto_uno.sql",
+    "20261030_b2_m1_facturas_pagos_aditiva.sql",
+    "20261031_b2_m2_facturas_pagos_rpc_lectura.sql",
+    "20261032_b2_m3_contraccion.sql",
+    "20261033_b6a_datos_fiscales_serenata.sql",
+    "20261034_c1_alta_contraparte_y_gasto_extra.sql",
+    "20261035_c2_propuesta_renglones_factura.sql",
+    "20261036_c5_preparar_gasto_concurrente.sql",
+    "20261037_d1_contrapartes_pendientes.sql"
   ]
 }

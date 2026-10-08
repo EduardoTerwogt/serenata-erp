@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/Icon'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { fmtMoney } from '@/lib/quotations/format'
 import { SIN_PROYECTO_ID, type ConceptoLista, type ConceptoVista } from '@/lib/shared/cuentas/periodo-tipos'
+import { ChipsCompartidos } from './acciones/ChipsCompartidos'
 import { TONO } from './ui'
 
 const td = 'px-[var(--row-pad-x)] align-middle'
@@ -65,7 +66,10 @@ export function TablaConceptos({ tipo, conceptos, onAbrir }: { tipo: 'cobro' | '
           renderDesktopRow={(c) => (
             <>
               <td className={`${tdDenso} truncate font-semibold text-ink`}>{c.contraparte}</td>
-              <td className={`${tdDenso} truncate text-body`}>{c.concepto}</td>
+              <td className={`${tdDenso} py-1.5 text-body`}>
+                <span className="block truncate">{c.concepto}</span>
+                <ChipsCompartidos c={c} />
+              </td>
               <td className={`${tdDenso} text-right`}>
                 <PagadoTotal c={c} />
               </td>
@@ -84,7 +88,10 @@ export function TablaConceptos({ tipo, conceptos, onAbrir }: { tipo: 'cobro' | '
                 <Chip c={c} />
               </div>
               <div className="flex justify-between gap-2.5 text-[12px]">
-                <span className="min-w-0 flex-1 truncate text-subtext">{c.concepto}</span>
+                <span className="flex min-w-0 flex-1 flex-col text-subtext">
+                  <span className="truncate">{c.concepto}</span>
+                  <ChipsCompartidos c={c} />
+                </span>
                 <PagadoTotal c={c} />
               </div>
             </div>
@@ -136,7 +143,10 @@ export function ListaConceptos({ grupos, pie, onAbrir }: { grupos: TableGroup<Co
               <span className="block truncate font-semibold text-ink">{c.contraparte}</span>
               <span className="block text-[10.5px] text-subtext">{c.tipo === 'cobro' ? 'Cliente' : 'Proveedor'}</span>
             </td>
-            <td className={`${td} truncate text-body`}>{c.concepto}</td>
+            <td className={`${td} py-1.5 text-body`}>
+              <span className="block truncate">{c.concepto}</span>
+              <ChipsCompartidos c={c} />
+            </td>
             <td className={`${td} text-right`}>
               <PagadoTotal c={c} />
             </td>
@@ -159,8 +169,11 @@ export function ListaConceptos({ grupos, pie, onAbrir }: { grupos: TableGroup<Co
                 <Chip c={c} />
               </div>
               <div className="flex justify-between gap-2.5 text-[12px]">
-                <span className="min-w-0 flex-1 truncate text-subtext">
-                  {c.proyecto.nombre} · {c.concepto}
+                <span className="flex min-w-0 flex-1 flex-col text-subtext">
+                  <span className="truncate">
+                    {c.proyecto.nombre} · {c.concepto}
+                  </span>
+                  <ChipsCompartidos c={c} />
                 </span>
                 <PagadoTotal c={c} />
               </div>

@@ -22,7 +22,7 @@ vi.mock('@/lib/server/supabase-admin', () => ({
       if (table === 'rate_limits') {
         return { delete: mocks.rateLimitsDeleteMock }
       }
-      if (table === 'pago_operations' || table === 'bulk_import_operations') {
+      if (table === 'bulk_import_operations') {
         return { delete: (...args: unknown[]) => mocks.operationsDeleteMock(table, ...args) }
       }
       return {
@@ -171,32 +171,29 @@ describe('GET /api/keep-alive', () => {
     errorSpy.mockRestore()
   })
 
-  it('PLAN B3 (K2) -- borra pago_operations y bulk_import_operations de más de 30 días', async () => {
+  it('PLAN B3 (K2) -- borra bulk_import_operations de más de 30 días (pago_operations se retiró en #123)', async () => {
     mocks.operationsLtMock.mockResolvedValue({ error: null, count: 4 })
 
     const body = await (await GET(buildRequest('Bearer secreto-real'))).json()
 
-    expect(mocks.operationsDeleteMock).toHaveBeenCalledWith('pago_operations', { count: 'exact' })
+    expect(mocks.operationsDeleteMock).not.toHaveBeenCalledWith('pago_operations', expect.anything())
     expect(mocks.operationsDeleteMock).toHaveBeenCalledWith('bulk_import_operations', { count: 'exact' })
     const [columna, corte] = mocks.operationsLtMock.mock.calls[0]
     expect(columna).toBe('created_at')
     const dias = (Date.now() - new Date(corte as string).getTime()) / (24 * 60 * 60 * 1000)
     expect(dias).toBeGreaterThan(29.9)
     expect(dias).toBeLessThan(30.1)
-    expect(body.pago_operations_deleted).toBe(4)
+    expect(body).not.toHaveProperty('pago_operations_deleted')
     expect(body.bulk_import_operations_deleted).toBe(4)
   })
 
-  it('PLAN B3 (K2) -- un fallo al purgar operaciones no tumba el keep-alive ni la otra tabla', async () => {
-    mocks.operationsLtMock
-      .mockResolvedValueOnce({ error: { message: 'boom' }, count: null })
-      .mockResolvedValueOnce({ error: null, count: 2 })
+  it('PLAN B3 (K2) -- un fallo al purgar operaciones no tumba el keep-alive', async () => {
+    mocks.operationsLtMock.mockResolvedValueOnce({ error: { message: 'boom' }, count: null })
 
     const response = await GET(buildRequest('Bearer secreto-real'))
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(body.pago_operations_deleted).toBeNull()
-    expect(body.bulk_import_operations_deleted).toBe(2)
+    expect(body.bulk_import_operations_deleted).toBeNull()
   })
 })

@@ -287,8 +287,9 @@ UPDATE`). El recorrido completo, con los defectos que se encontraron en el camin
 
 ## Idempotencia de cliente (pagos y bulk-import de partidas)
 
-`lib/client/pagoIdempotency.ts` (`runIdempotentPagoSubmit`, usado por el
-detalle de Cuentas, `app/cuentas/components/detalle/useDetalle.ts`) y `lib/client/bulkImportIdempotency.ts`
+`lib/client/pagoIdempotency.ts` (`runIdempotentPagoSubmit`, usado por la
+ventana Registrar pago, `app/cuentas/components/acciones/useAcciones.ts`, y por los
+pagos del detalle por cuenta, `app/cuentas/components/detalle/useDetalle.ts`) y `lib/client/bulkImportIdempotency.ts`
 (`runIdempotentBulkImportSubmit`, usado por `handleImportItems` en
 `app/cotizaciones/[id]/page.tsx`) orquestan reintentos seguros de doble clic,
 retry de red o pestaña caída a medio submit, contra `withIdempotency`
@@ -367,11 +368,13 @@ la lección de proceso sobre desplegar a producción: [`docs/decisions/011`](doc
   `items_cotizacion`/`cuentas_pagar` ANTES de llamar a la reconciliación,
   dentro de la misma transacción; solo una excepción real hace que Postgres
   revierta también esas escrituras previas, no solo la reconciliación.
-- `registrar_pago_grupo_factura` prorratea el pago hacia las cuentas hija
-  sobre su **saldo pendiente** (no su `costo_total` original), con la última
-  hija (orden estable por `id`) recibiendo el residuo exacto — garantiza
+- `registrar_pago_proveedor` (#123, reemplaza a `registrar_pago_grupo_factura`)
+  prorratea el pago de cada línea hacia las cuentas hija sobre su **saldo
+  pendiente** (no su `costo_total` original), con la última hija (orden estable
+  por `id`) recibiendo el residuo exacto — garantiza
   `SUM(hijas.monto_pagado) = grupo.monto_pagado` siempre, incluso en pagos
-  parciales sucesivos. Idempotencia por `pago_operations` + `operation_id`. Los
+  parciales sucesivos. Idempotencia por `pagos.operation_id` (`pago_operations`
+  se retiró en M3). Los
   pagos, facturas y órdenes a proveedor son **solo por grupo** (B5a): el pago a
   una cuenta suelta (`registrar_pago_cuenta_pagar`) se retiró; la suelta "por
   asignar" (sin proveedor) solo se consulta hasta que se le asigna uno.
@@ -449,13 +452,49 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
 - Montos: cobros con IVA; pagos en **total a transferir** (snapshot del CFDI
   o estimado por régimen). El neto solo aparece en el cruce fiscal.
 
+## Facturas y pagos ligados (#123, docs/decisions/022)
+
+Una factura cubre varias cotizaciones de un cliente y un pago cubre varias facturas; la regla vive **solo en SQL** y el
+cliente calcula en centavos solo para pintar.
+
+- **Modelo.** Cabecera `pagos` (lado, fecha, tipo, comprobante, `operation_id`, anulación) con líneas en
+  `pagos_comprobantes` (cobro) y `pagos_cuentas_pagar` (proveedor). `cuentas_cobrar.factura_documento_id` liga cada cuenta a su
+  factura vigente (sin tabla puente); el `FACTURA_XML` de cobro no tiene ancla de cuenta. El RFC es columna de `clientes` y
+  `proveedores`; el de Serenata sale de `datos_fiscales_serenata` (constancia cargada en Admin, una fila vigente).
+- **RPC** (migraciones `20261030`–`20261033`): `registrar_pago_cobro`, `registrar_pago_proveedor`, `ligar_factura`,
+  `factura_cuadre` (STABLE, sin locks; tolerancia 0.01 por cotización), `ligar_complemento_cobro` /
+  `ligar_complemento_proveedor`, `guardar_datos_fiscales_serenata`; lecturas `estado_cuenta` y `facturas_candidatos`. Orden global de
+  locks: cuentas de cobro → grupos → hijas → cabecera `pagos` → órdenes de pago.
+- **API.** `POST /api/cuentas/facturas/preview` (no escribe) y `POST /api/cuentas/facturas` (el tipo sale del XML por RFC:
+  factura de cliente, de proveedor o complemento), `POST /api/cuentas/pagos` (+ `GET .../pagos/estado`),
+  `GET /api/cuentas/estado-cuenta`, `/api/admin/datos-fiscales`. Servicios en `lib/server/cuentas/` (`facturas.ts`, `registrar-pago.ts`,
+  `datos-fiscales.ts`, `constancia-serenata.ts`, `portal-pagos.ts`). Sin constancia de Serenata las rutas de factura fallan (409).
+- **UI.** Menú Acciones (`app/cuentas/components/acciones/`): `SubirFactura`, `RegistrarPago`, `EstadoCuenta`; estado en la URL
+  (`sheet`, `lado`, `cid`, `doc`, `pre`); chips de factura/pago compartido (P20); botón y RFC en las fichas (P28); el detalle abre
+  esas ventanas (P22). Portal: `GET /api/portal/cuentas` agrega, solo lectura, qué cubrió cada pago y el complemento PPD pendiente.
+
+## Alta de contraparte, gasto extra y pago por proyecto (#130, docs/decisions/023)
+
+Extiende Subir factura y Registrar pago de #123 sin tablas nuevas.
+
+- **Datos** (migraciones `20261034`, `20261035`): `cuentas_pagar.item_id` nullable + `concepto` + `operation_id` (gasto extra, CHECK
+  `cuentas_pagar_renglon_o_gasto`); `clientes.constancia_url/constancia_nombre`; `datos_fiscales_serenata.tolerancia_total`.
+  RPC: `preparar_grupo_factura_proveedor` (alta de proveedor + reasignar renglones o gasto extra, atómica), `cuentas_proyectos_selector`
+  (modos `renglones` y `pago`, paginada), `propuesta_renglones_factura`, `guardar_tolerancia_total`; `estado_cuenta` con `p_proyectos`.
+- **API.** `GET /api/cuentas/proyectos-selector`, `GET /api/cuentas/estado-cuenta?proyectos=`, `PATCH /api/cuentas/clientes/[id]`
+  (completar ficha y constancia), `PATCH /api/admin/datos-fiscales` (tolerancia); `POST /api/cuentas/facturas` acepta `preparar` y,
+  si la subida falla tras preparar, responde 502 `subida_fallida` con `preparado`. Servicios: `preparar-grupo.ts`, `cliente-completar.ts`,
+  `proyectos-selector.ts` en `lib/server/cuentas/`.
+- **UI** (`app/cuentas/components/acciones/`): `SelectorProyectos` (un solo selector, modos renglones / proyecto / pago),
+  `DestinoProveedor`, `AltaProveedor`, `CompletarCliente`, lógica pura en `destino-proveedor.ts`; Registrar pago tiene la vista "Por proyecto".
+
 ## Cuentas: reabrir y correcciones (B7, docs/decisions/017 D33–D34)
 
-- **Reabrir** (`POST /api/cuentas/proyectos/:id/reabrir`, solo admin, motivo
+- **Reabrir** (`POST /api/cuentas/proyectos/:id/reabrir`, cualquier usuario con la sección `cuentas` desde #123/P14, motivo
   obligatorio) crea una fila en `cuentas_reaperturas` (una activa por
   proyecto). Se reabre con o sin pendientes. **Cerradas = sin pendientes y
   sin reapertura activa.** `.../cerrar` termina la reapertura.
-- **Correcciones** (`POST /api/cuentas/correcciones`, solo admin): anular un
+- **Correcciones** (`POST /api/cuentas/correcciones`, cualquier usuario con la sección `cuentas`, P14): anular un
   pago, dar de baja un documento, corregir fechas y notas, y reasignar el
   proveedor de un concepto pagado. Cada una es una RPC atómica que exige la
   reapertura (`cuentas_reapertura_activa`, `FOR SHARE`; cerrar toma
@@ -466,7 +505,7 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
   ignoran: RPCs de pago y orden, derivación SQL, repositorios y Dashboard.
 - **Reemplazar una factura validada** va por la subida normal con `motivo`
   (`lib/server/cuentas/reemplazo-factura.ts`, en las tres rutas
-  `subir-factura`): solo admin con reapertura, nunca dentro de una orden; la
+  `subir-factura`): con reapertura (P14: cualquier usuario de Cuentas), nunca dentro de una orden; la
   anterior se da de baja apuntando a la nueva.
 
 ## Reglas que se respetan
@@ -492,6 +531,8 @@ evidencia, no cuenta como terminado.
 | Aprobar / cancelar cotización (RPC transaccional) | live: crear → emitir → aprobar → cuentas → cancelar y revertir |
 | Cuentas por cobrar (factura, complemento, pagos parciales) | crítico + live de concurrencia |
 | Cuentas por pagar (factura, pagos, órdenes de pago con PDF real; cierre fiscal estimado del proyecto, cálculo puro en `lib/shared/cierre-proyecto.ts`) | `lib/server/pdf/orden-pago-pdf.ts`, live de concurrencia, `lib/shared/__tests__/cierre-proyecto.test.ts`, `tests/e2e/critical/cuentas-ordenes.spec.ts`, live `cuentas-b1b.spec.ts` |
+| Facturas y pagos ligados (#123): menú Acciones, Registrar pago, Subir factura, Estado de cuenta, datos fiscales de Serenata, Portal solo lectura | `tests/e2e/critical/{cuentas-acciones,cuentas-detalle,admin-datos-fiscales,portal-factura}.spec.ts`, `app/cuentas/components/acciones/__tests__/`, `lib/server/cuentas/**/*.test.ts`, `app/api/__tests__/{cuentas-facturas,admin-datos-fiscales,portal-cuentas}-route.test.ts`, live de concurrencia |
+| Alta de contraparte, gasto extra y pago por proyecto (#130) | `app/cuentas/components/acciones/__tests__/{subir-factura,registrar-pago-proyecto,destino-proveedor}.test.*`, `tests/e2e/critical/cuentas-acciones.spec.ts`, `lib/server/cuentas/__tests__/{preparar-grupo,cliente-completar}.test.ts`, live `cuentas-130.spec.ts` (alta concurrente, gasto extra idempotente, cancelar, pago por proyecto, permisos solo-`cuentas`) |
 | Cuentas: reabrir y correcciones (B7) | `app/api/__tests__/cuentas-correcciones-route.test.ts`, `lib/server/cuentas/__tests__/reemplazo-factura.test.ts`, `tests/e2e/critical/cuentas-reabrir.spec.ts`, live `cuentas-b7-correcciones.spec.ts` (anulación concurrente) |
 | Cuentas: pantalla por periodo, detalle, avisos (escritorio y 390 px) | `tests/e2e/critical/cuentas-{principal,detalle,ordenes}.spec.ts`, live `cuentas-paridad-sql.spec.ts`; escala `tests/e2e/escala/cuentas-periodo-rendimiento.spec.ts` (p95 < 800 ms, workflow `escala.yml`, aparte del gate de PR) |
 | Registrar pago sin carreras (cobrar y pagar) | `tests/e2e/live/cuentas-*-concurrency.spec.ts` |
@@ -541,7 +582,7 @@ autoritativa, no una tabla en un documento. Agrupadas por dominio:
 | Cotizaciones | `cotizaciones` (id = folio texto SH001), `items_cotizacion`, `cotizacion_folio_reservations`, `cotizacion_collaboration_events` |
 | Catálogos | `clientes`, `productos`, `service_templates` |
 | Proyectos | `proyectos`, `tipos_proyecto`, `tipo_proyecto_etapas`, `tipo_proyecto_tarea_default`, `proyecto_tareas`, `proyecto_tarea_checklist`, `proyecto_documentos` |
-| Cuentas | `cuentas_cobrar`, `cuentas_pagar` (folio `CC-/CP-AAAA-NNNNN` por trigger → `siguiente_folio()`, consecutivo que reinicia cada año, año en hora CDMX), `folio_contadores`, `cuentas_pagar_grupos`, `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`, `pagos_comprobantes`, `ordenes_pago` |
+| Cuentas | `cuentas_cobrar`, `cuentas_pagar` (folio `CC-/CP-AAAA-NNNNN` por trigger → `siguiente_folio()`, consecutivo que reinicia cada año, año en hora CDMX), `folio_contadores`, `cuentas_pagar_grupos`, `documentos_cuentas_cobrar`, `documentos_cuentas_pagar`, `pagos` (cabecera común, #123), `pagos_comprobantes`, `pagos_cuentas_pagar`, `ordenes_pago`, `datos_fiscales_serenata` |
 | Proveedores | `proveedores` (antes `responsables`), `proveedor_documentos`, `historial_responsable` (vista `security_invoker` derivada de `items_cotizacion`), `historial_cambios_responsable_item` |
 | Dashboard | `gastos_fijos` |
 | Infraestructura | `usuarios`, `rate_limits`, `idempotency_keys`, `loadtest_runs` (**solo en `serenata-erp-test`**, nunca en producción: control de las corridas de carga) |
@@ -577,7 +618,7 @@ Trampas reales, no teóricas. Cada una costó un bug:
   `/admin`, `lib/integrations/sheets/`, el safety-net de `keep-alive`, el
   scope `spreadsheets` de Google y `sheets_sync_status` con sus 3 RPCs de lock.
   El `keep-alive` conserva la retención de `rate_limits`, `idempotency_keys`,
-  `pago_operations` y `bulk_import_operations` y el sync diario de cobros
+  y `bulk_import_operations` y el sync diario de cobros
   vencidos. Historia: `docs/archive/ef-3-engineering-hardening.md`.
 - **Reservar folio es atómico vía RPC** (`reserve_next_cotizacion_folio()`
   al confirmar; `preview_next_cotizacion_folio_principal()` para el

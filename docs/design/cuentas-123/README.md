@@ -9,6 +9,8 @@ visual**.
 | Archivo | Qué es |
 |---|---|
 | `cuentas-acciones.html` | **Diseño final.** Recreación de la pantalla de Cuentas tal como está en producción (`app/cuentas/`) con el menú **Acciones** y las tres ventanas nuevas. Fuente de verdad visual para B4 (UI) de `docs/PLAN.md`. |
+| `cuentas-130.html` | Maqueta de #130 (alta de proveedor/cliente al subir factura, selector de proyectos y renglones, gasto extra, pago por proyecto). Cinco estados con la barra negra. Referencia visual para C3 y C4 de `docs/PLAN.md`. |
+| `cuentas-131.html` | Maqueta de #131 (ajustes tras el preview): "Adjuntar factura", desplegable de contraparte con buscador y "Proveedor nuevo" al costado, factura de proveedor en un solo flujo por proyecto (pasos ①②, gasto extra) y Registrar pago sin pestañas (cobro y pago a proveedor), con el enlace "Pagar varios proyectos a la vez". Siete estados con la barra negra (incluye el pago a proveedor de varias facturas). |
 | `exploracion-modelo.html` | Exploración previa: diagrama del modelo (factura ↔ cotizaciones ↔ pagos ↔ complementos) con el ejemplo del issue, y el mockup de **cancelar con traspaso** (fuera de #123; referencia para esa iniciativa). Su estilo visual **no** es la referencia. |
 | `PROMPT-claude-design.md` | Prompt opcional para refinar el diseño en Claude Design. |
 
@@ -25,6 +27,13 @@ En `cuentas-acciones.html`:
   cambia entre los casos de cada ventana. **No es parte del producto.**
 - Clic en un proyecto abre el panel del proyecto; el chip de periodo despliega
   la tira de meses.
+
+## Desvíos conscientes de `cuentas-130.html` (implementado)
+
+- **Banco** es texto libre y no un `<select>`: así está en Proveedores y en el Portal y no hay catálogo de bancos.
+- Las secciones usan el encabezado `Cap` sin número, como los componentes aprobados de #123.
+- El **gasto extra** propone el neto del XML como costo (editable) y no muestra IVA.
+- En **pago por proyecto** no hay casilla "Solo con saldo abierto" (SQL solo lista proyectos con saldo abierto) ni filas "Pagada $0.00".
 
 ## Qué copia de producción (para implementar sin reinventar)
 

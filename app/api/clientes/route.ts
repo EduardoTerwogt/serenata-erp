@@ -1,13 +1,20 @@
-import { requireSection } from '@/lib/api-auth'
+import { requireAnySection, requireSection } from '@/lib/api-auth'
 import { createCliente, getClientes } from '@/lib/db'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { validate, ClienteCreateSchema } from '@/lib/validation/schemas'
 
 export async function GET(request: Request) {
-  const authResult = await requireSection('cotizaciones')
-  if (authResult.response) return authResult.response
-
   const { searchParams } = new URL(request.url)
+  const q = (searchParams.get('q') ?? '').trim().slice(0, 100)
+
+  // #123 (T8): la búsqueda por nombre (`?q=`, devuelve solo id y nombre) también la usa el selector de cliente de
+  // Cuentas (Subir factura / Registrar pago / Estado de cuenta). SOLO esa rama admite la sección `cuentas`:
+  // `?admin=1` (todas las columnas, activos e inactivos), la lista completa y el POST siguen exigiendo `cotizaciones`.
+  const esBusqueda = q !== '' && searchParams.get('admin') !== '1'
+  const authResult = esBusqueda
+    ? await requireAnySection(['cotizaciones', 'cuentas'])
+    : await requireSection('cotizaciones')
+  if (authResult.response) return authResult.response
 
   // Bloque 5 (docs/PLAN.md): catálogo administrativo -- lista completa
   // (activos e inactivos, todas las columnas), separado del autocomplete de
@@ -20,8 +27,6 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Error obteniendo clientes' }, { status: 500 })
     }
   }
-
-  const q = (searchParams.get('q') ?? '').trim().slice(0, 100)
 
   let query = supabaseAdmin
     .from('clientes')

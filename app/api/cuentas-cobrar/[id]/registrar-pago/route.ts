@@ -1,15 +1,15 @@
 import { requireSection } from '@/lib/api-auth'
-import { getCuentaCobrarById, getPagosComprobantesByCuenta, createDocumentoCuentaCobrar, getProyectoById } from '@/lib/db'
-import { supabaseAdmin } from '@/lib/server/supabase-admin'
-import { uploadFileToDrive } from '@/lib/integrations/google/drive'
-import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { withIdempotency, computePayloadHash } from '@/lib/server/idempotency'
+import { getCuentaCobrarById, getProyectoById } from '@/lib/db'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
-import { logStructured, newRequestId } from '@/lib/server/observability/log'
+import { registrarPago } from '@/lib/server/cuentas/registrar-pago'
 import { RegistrarPagoCobroSchema, validate } from '@/lib/validation/schemas'
 
 const ROUTE = 'POST /api/cuentas-cobrar/[id]/registrar-pago'
 
+/**
+ * Pago a una cuenta de cobro. #123 (B2): una cabecera `pagos` con una línea, por `registrar_pago_cobro`
+ * (lib/server/cuentas/registrar-pago.ts); el pago de varias cuentas entra por `POST /api/cuentas/pagos`.
+ */
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
   if (authResult.response) return authResult.response
@@ -31,96 +31,32 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return Response.json({ error: validation.error }, { status: 400 })
     }
     const { monto, tipo_pago: tipoPago, fecha_pago: fechaPago, operation_id: operationId } = validation.data
-    const notas = validation.data.notas ?? null
 
-    const payloadHash = computePayloadHash({ dominio: 'cuentas_cobrar', cuentaId: id, monto, tipoPago, fechaPago, notas: notas ?? null })
-
-    // Orden de request (v13.1 §9): sintáctico -> operation_id/uuid (arriba)
-    // -> payloadHash -> consulta idempotency_keys (dentro de withIdempotency)
-    // ANTES de leer saldo/Drive/RPC -- la lectura de la cuenta y el cálculo
-    // del total pagado se movieron DENTRO del handler.
-    const { status, body } = await withIdempotency(
-      `cuentas-cobrar:${id}:registrar-pago`,
+    // Orden de request (v13.1 §9): sintáctico -> operation_id/uuid (arriba) -> payloadHash -> consulta
+    // idempotency_keys ANTES de leer la cuenta, Drive o la RPC (todo eso va dentro del servicio).
+    const { status, body } = await registrarPago({
+      lado: 'cobro',
+      lineas: [{ id, monto }],
+      tipoPago,
+      fechaPago,
+      notas: validation.data.notas ?? null,
       operationId,
-      async () => {
+      comprobante,
+      usuario: authResult.session?.user?.email ?? null,
+      route: ROUTE,
+      scope: `cuentas-cobrar:${id}:registrar-pago`,
+      resolver: async () => {
         const cuenta = await getCuentaCobrarById(id)
-        if (!cuenta) {
-          return { status: 404, body: { error: 'Cuenta por cobrar no encontrada' } }
-        }
-
-        const pagosActuales = await getPagosComprobantesByCuenta(id)
-        const totalPagado = pagosActuales.reduce((sum, p) => sum + p.monto, 0)
-        const nuevoTotal = totalPagado + monto
-
-        if (nuevoTotal > cuenta.monto_total) {
-          return {
-            status: 400,
-            body: { error: `Monto excede el total de la cuenta. Total: $${cuenta.monto_total}, ya pagado: $${totalPagado}, nuevo: $${nuevoTotal}` },
-          }
-        }
-
-        let comprobanteUrl = null
+        if (!cuenta) return { status: 404, body: { error: 'Cuenta por cobrar no encontrada' } }
+        let carpeta = `/Por Cobrar/${cuenta.cotizacion_id}`
         if (comprobante) {
-          const googleEnv = getGoogleEnv()
-          if (!googleEnv) {
-            return { status: 500, body: { error: 'Google Drive no configurado' } }
-          }
-
           const proyecto = await getProyectoById(cuenta.cotizacion_id)
-          if (!proyecto) {
-            return { status: 404, body: { error: 'Proyecto asociado no encontrado' } }
-          }
-          const folderPath = `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
-          const fileName = comprobante.name
-          comprobanteUrl = await uploadFileToDrive(comprobante, folderPath, fileName, googleEnv.driveFolderIdCuentas || undefined)
-
-          await createDocumentoCuentaCobrar({
-            cuentas_cobrar_id: id,
-            tipo: 'OTRO',
-            archivo_url: comprobanteUrl,
-            archivo_nombre: comprobante.name,
-            archivo_size: comprobante.size,
-            operation_id: operationId,
-          })
+          if (!proyecto) return { status: 404, body: { error: 'Proyecto asociado no encontrado' } }
+          carpeta = `/Por Cobrar/${cuenta.cotizacion_id}-${proyecto.proyecto}`
         }
-
-        const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('registrar_pago_cuenta_cobrar', {
-          p_cuenta_id: id,
-          p_monto: monto,
-          p_tipo_pago: tipoPago,
-          p_fecha_pago: fechaPago,
-          p_comprobante_url: comprobanteUrl || '',
-          p_archivo_nombre: comprobante?.name || `pago_${fechaPago}`,
-          p_notas: notas,
-          p_operation_id: operationId,
-        })
-
-        if (rpcError) {
-          const requestId = newRequestId()
-          const rpcDetail = rpcError.message
-          if (rpcError.code === 'P1411') {
-            logStructured({ requestId, route: ROUTE, level: 'warn', message: 'operation_id_cruzado', detail: rpcDetail })
-            return { status: 409, body: { error: 'operation_id_cruzado', requestId } }
-          }
-          logStructured({ requestId, route: ROUTE, level: 'error', message: 'rpc_registrar_pago_cuenta_cobrar_error', detail: rpcDetail })
-          return { status: 400, body: { error: 'No se pudo registrar el pago', requestId } }
-        }
-
-
-        return {
-          status: 200,
-          body: {
-            success: true,
-            resumen: {
-              monto_pagado_total: rpcResult.monto_pagado_total,
-              monto_pendiente: rpcResult.monto_pendiente,
-              estado_nuevo: rpcResult.estado_nuevo,
-            },
-          },
-        }
+        return { carpeta }
       },
-      { payloadHash }
-    )
+    })
 
     return Response.json(body, { status })
   } catch (error) {

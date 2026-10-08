@@ -18,7 +18,7 @@ import {
   type EstadoConcepto,
   type PasoConcepto,
 } from '@/lib/shared/cuentas/concepto'
-import type { ConceptoLista, ConceptoVista, PeriodoRespuesta, ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
+import type { CompartidoConcepto, ConceptoLista, ConceptoVista, PeriodoRespuesta, ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
 import type { RegimenFiscal } from '@/lib/types'
 
 /** Concepto de la lista tal como lo devuelve `cuentas_periodo`. */
@@ -51,6 +51,7 @@ export interface ConceptoSql {
   fecha_resuelto: string | null
   metodo_desconocido: boolean
   complementos: ComplementoPagoDerivado[]
+  compartido?: CompartidoConcepto | null
   proyecto: ConceptoLista['proyecto']
 }
 

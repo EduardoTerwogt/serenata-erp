@@ -45,6 +45,8 @@ export interface Proveedor {
   // credenciales viven aparte, en ProveedorCredenciales.
   portal_estado: PortalEstado | null
   match_candidato_id: string | null
+  // #123 (P24): RFC como columna, normalizado (recortado y en mayúsculas). null = sin capturar.
+  rfc?: string | null
 }
 
 /**
@@ -171,6 +173,11 @@ export interface Cliente {
   notas?: string | null
   activo: boolean
   created_at: string
+  // #123 (P24): RFC como columna, normalizado (recortado y en mayúsculas). null = sin capturar.
+  rfc?: string | null
+  // #130: constancia de situación fiscal del cliente (Drive); se pide antes de facturarle por primera vez.
+  constancia_url?: string | null
+  constancia_nombre?: string | null
 }
 
 export interface Cotizacion {
@@ -325,7 +332,9 @@ export interface CuentaPagar {
   cotizacion_id: string
   proyecto_id: string
   proyecto_nombre?: string
-  item_id: string
+  /** null = gasto extra (#130): una cuenta sin renglón, con `concepto` propio. */
+  item_id: string | null
+  concepto?: string | null
   responsable_id: string | null
   /** Costo Total de la cuenta (Costo Unitario × Cantidad del renglón, D13). */
   costo_total: number
@@ -396,30 +405,46 @@ export interface CuentaCobrar {
   monto_pagado?: number
   fecha_pago: string | null
   notas: string | null
+  // #123 (P27): la factura vigente que cubre a esta cuenta (una factura puede cubrir varias cuentas).
+  factura_documento_id?: string | null
   created_at?: string
   updated_at?: string
 }
 
-/** Columnas de `cuentas_cobrar` que el TS puede escribir directo (el resto: RPCs o derivadas). */
-export type CuentaCobrarUpdate = Partial<Pick<CuentaCobrar, 'fecha_factura' | 'fecha_vencimiento' | 'notas'>>
+/** Columnas de `cuentas_cobrar` que el TS puede escribir directo (el resto: RPCs o derivadas; las fechas de factura y de vencimiento solo las escribe `ligar_factura`, #123). */
+export type CuentaCobrarUpdate = Partial<Pick<CuentaCobrar, 'notas'>>
 
+/**
+ * Un pago de cobro visto desde una cuenta (#123): la línea (monto aplicado a la cuenta) con los datos de su
+ * cabecera `pagos`. `id` es el de la CABECERA (`pago_id`): es el que usan anular/corregir y lo que ve la UI;
+ * `linea_id` es el de la línea; `lineas` cuántas cuentas cubre el mismo pago (>1 = pago compartido).
+ */
 export interface PagoComprobante {
   id: string
+  pago_id: string
+  linea_id: string
   cuentas_cobrar_id: string
   monto: number
   tipo_pago: TipoPago
   fecha_pago: string
-  comprobante_url: string
-  archivo_nombre: string
+  comprobante_url: string | null
+  archivo_nombre: string | null
   notas?: string | null
   created_at: string
+  lineas?: number
+  anulado_at?: string | null
+  anulado_motivo?: string | null
 }
 
 export type EstadoValidacionDocumento = 'pendiente' | 'validado' | 'revision'
 
 export interface DocumentoCuentaCobrar {
   id: string
-  cuentas_cobrar_id: string
+  // #123 (P27): FACTURA_XML no lleva ancla; PDF y complementos cuelgan de `factura_documento_id`; OTRO y los
+  // datos legados, de la cuenta.
+  cuentas_cobrar_id: string | null
+  factura_documento_id?: string | null
+  monto_pagado?: number | null
   tipo: 'FACTURA_PDF' | 'FACTURA_XML' | 'COMPLEMENTO_PAGO' | 'COMPLEMENTO_PAGO_PDF' | 'OTRO'
   archivo_url: string
   archivo_nombre: string
@@ -436,8 +461,9 @@ export interface DocumentoCuentaCobrar {
   uuid_cfdi?: string | null
   total_cfdi?: number | null
   metodo_pago_cfdi?: 'PUE' | 'PPD' | null
-  // D16/D27: pago (pagos_comprobantes) que ampara este archivo de complemento.
+  // D16/D27 (#123): pago (cabecera `pagos`) que ampara este archivo de complemento.
   pago_id?: string | null
+  eliminado_at?: string | null
 }
 
 export interface DocumentoCuentaPagar {
@@ -446,7 +472,7 @@ export interface DocumentoCuentaPagar {
   // documentos legacy por item, grupo_id para facturación agrupada.
   cuentas_pagar_id?: string | null
   grupo_id?: string | null
-  tipo: 'FACTURA_PROVEEDOR' | 'FACTURA_PROVEEDOR_XML' | 'COMPROBANTE_PAGO' | 'OTRO'
+  tipo: 'FACTURA_PROVEEDOR' | 'FACTURA_PROVEEDOR_XML' | 'COMPROBANTE_PAGO' | 'COMPLEMENTO_PAGO' | 'COMPLEMENTO_PAGO_PDF' | 'OTRO'
   archivo_url: string
   archivo_nombre: string
   fecha_carga: string
@@ -457,6 +483,11 @@ export interface DocumentoCuentaPagar {
   // Rediseño de Cuentas B1 (U7): datos del CFDI en la fila del XML.
   uuid_cfdi?: string | null
   total_cfdi?: number | null
+  // #123 (P11): método de pago de la factura del proveedor (PPD exige complemento por pago).
+  metodo_pago_cfdi?: 'PUE' | 'PPD' | null
+  // Complemento: pago (cabecera `pagos`) y monto que ampara.
+  pago_id?: string | null
+  monto_pagado?: number | null
 }
 
 export interface OrdenPago {

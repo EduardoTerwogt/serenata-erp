@@ -29,8 +29,10 @@ describe('planearFactura (B7: reemplazo = corrección de admin con reapertura)',
     expect(r).toMatchObject({ ok: false, status: 409, body: { error: 'en_orden' } })
   })
 
-  it('con factura validada: solo admin, con reapertura y con motivo', async () => {
-    expect(await planearFactura('proveedor', libre, [XML], { email: 'ops@serenata.mx', sections: ['cuentas'] }, 'RFC')).toMatchObject({ status: 403, body: { error: 'solo_admin' } })
+  it('con factura validada: usuario de Cuentas (P14), con reapertura y con motivo', async () => {
+    expect(await planearFactura('proveedor', libre, [XML], { email: 'ops@serenata.mx', sections: ['dashboard'] }, 'RFC')).toMatchObject({ status: 403, body: { error: 'sin_acceso_cuentas' } })
+    mocks.cuentasReabiertasMock.mockResolvedValueOnce(false)
+    expect(await planearFactura('proveedor', libre, [XML], { email: 'ops@serenata.mx', sections: ['cuentas'] }, 'RFC')).toMatchObject({ status: 409, body: { error: 'factura_vigente' } })
     mocks.cuentasReabiertasMock.mockResolvedValueOnce(false)
     expect(await planearFactura('proveedor', libre, [XML], admin, 'RFC')).toMatchObject({ status: 409, body: { error: 'factura_vigente' } })
     expect(mocks.cuentasReabiertasMock).toHaveBeenCalledWith('SH061')

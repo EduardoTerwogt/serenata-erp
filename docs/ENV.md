@@ -47,6 +47,12 @@ GOOGLE_DRIVE_REFRESH_TOKEN=
 GOOGLE_DRIVE_FOLDER_ID=
 GOOGLE_DRIVE_FOLDER_ID_CUENTAS=
 
+# (#123, B6a) El RFC de Serenata House ya NO es una variable de entorno: sale de su Constancia de Situación Fiscal,
+# que se sube en Admin → Datos fiscales (tabla `datos_fiscales_serenata`). Sin constancia cargada, las rutas de Subir
+# factura FALLAN explícito (409, "Falta cargar la Constancia de Situación Fiscal de Serenata"). No hay nada que dar de
+# alta en Vercel ni en GitHub Actions; el seed de test (`scripts/seed-cuentas-test.sql`) carga el RFC de prueba
+# SHO100101AB1 que usan los fixtures de XML.
+
 # Cron (keep-alive)
 CRON_SECRET=
 

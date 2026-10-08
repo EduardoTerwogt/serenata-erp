@@ -38,12 +38,12 @@ beforeEach(() => {
 })
 
 describe('permisos', () => {
-  it('reabrir, cerrar y corregir exigen la sección admin', async () => {
+  it('reabrir, cerrar y corregir exigen la sección cuentas (P14)', async () => {
     mocks.requireSectionMock.mockResolvedValue({ response: Response.json({ error: 'No autorizado' }, { status: 403 }) })
     expect((await postReabrir(req({ motivo: 'corregir factura' }), params())).status).toBe(403)
     expect((await postCerrar(req({}), params())).status).toBe(403)
     expect((await postCorreccion(req({ accion: 'anular_pago' }))).status).toBe(403)
-    expect(mocks.requireSectionMock).toHaveBeenCalledWith('admin')
+    expect(mocks.requireSectionMock).toHaveBeenCalledWith('cuentas')
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 })

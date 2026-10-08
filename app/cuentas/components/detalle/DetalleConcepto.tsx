@@ -11,7 +11,7 @@ import { StatusBanner } from '@/components/ui/StatusBanner'
 import { fmtMoney } from '@/lib/quotations/format'
 import type { DetalleConcepto as Detalle } from '@/lib/shared/cuentas/detalle-tipos'
 import { nombreCobro } from '@/lib/shared/cuentas/concepto'
-import { TONO, useEsAdmin } from '../ui'
+import { TONO, useTieneCuentas } from '../ui'
 import { TabDocumentos } from './TabDocumentos'
 import { TabInformacion } from './TabInformacion'
 import { TabPago } from './TabPago'
@@ -26,8 +26,10 @@ interface Props {
   onClose: () => void
   /** Después de registrar algo: la lista y los totales se vuelven a pedir. */
   onCambio: () => void
-  /** Fecha de negocio (CDMX). */
-  hoy: string
+  /** Cambia cuando una ventana de Acciones modificó las cuentas: el detalle se vuelve a pedir. */
+  refresco: number
+  /** P22: abre Registrar pago o Subir factura con la contraparte y el proyecto de este concepto preseleccionados. */
+  onAbrirAccion: (sheet: 'factura' | 'pago', contexto: { lado: 'cobro' | 'proveedor'; cid: string | null; pre: string | null }) => void
 }
 
 function titulo(d: Detalle) {
@@ -49,11 +51,11 @@ function concepto(d: Detalle) {
  * móvil, con avance y siguiente paso. Pagos a proveedor en total a
  * transferir (D18).
  */
-export function DetalleConcepto({ conceptoKey, tab, onTab, onClose, onCambio, hoy }: Props) {
-  const { objetivo, detalle: d, error, cargando, recargar } = useDetalle(conceptoKey)
-  const esAdmin = useEsAdmin()
-  // B7 (D5): las correcciones solo aparecen para admin con las cuentas reabiertas.
-  const corrige = Boolean(esAdmin && d?.correcciones.reabierta)
+export function DetalleConcepto({ conceptoKey, tab, onTab, onClose, onCambio, refresco, onAbrirAccion }: Props) {
+  const { objetivo, detalle: d, error, cargando, recargar } = useDetalle(conceptoKey, refresco)
+  const tieneCuentas = useTieneCuentas()
+  // B7 (D5): las correcciones aparecen con las cuentas reabiertas (P14: cualquier usuario de Cuentas).
+  const corrige = Boolean(tieneCuentas && d?.correcciones.reabierta)
   const [aviso, setAviso] = useState<{ tono: 'success' | 'error'; texto: string } | null>(null)
 
   const tras = async (accion: () => Promise<unknown>, exito: string) => {
@@ -70,6 +72,9 @@ export function DetalleConcepto({ conceptoKey, tab, onTab, onClose, onCambio, ho
   }
 
   const avisarError = (texto: string) => setAviso({ tono: 'error', texto })
+  const abrirAccion = (sheet: 'factura' | 'pago') =>
+    d &&
+    onAbrirAccion(sheet, d.tipo === 'cobro' ? { lado: 'cobro', cid: d.cliente_id, pre: d.proyecto?.id ?? null } : { lado: 'proveedor', cid: d.responsable.id, pre: d.proyecto?.id ?? null })
 
   const c = d?.concepto
   const pct = d && d.total > 0 ? Math.min(100, Math.round((d.pagado / d.total) * 100)) : 0
@@ -148,8 +153,8 @@ export function DetalleConcepto({ conceptoKey, tab, onTab, onClose, onCambio, ho
           Esta cuenta aún no tiene proveedor. Asígnalo en Información: la factura y el pago se registran sobre el grupo del proveedor.
         </StatusBanner>
       )}
-      {d && objetivo && esPagable(objetivo) && tab === 'docs' && <TabDocumentos d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} corrige={corrige} />}
-      {d && objetivo && esPagable(objetivo) && tab === 'pago' && <TabPago d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} irA={onTab} hoy={hoy} corrige={corrige} />}
+      {d && objetivo && esPagable(objetivo) && tab === 'docs' && <TabDocumentos d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} corrige={corrige} onAbrirFactura={() => abrirAccion('factura')} />}
+      {d && objetivo && esPagable(objetivo) && tab === 'pago' && <TabPago d={d} objetivo={objetivo} ejecutar={tras} avisarError={avisarError} irA={onTab} corrige={corrige} onAbrirPago={() => abrirAccion('pago')} />}
     </Modal>
   )
 }

@@ -1,18 +1,12 @@
 import { requireSection } from '@/lib/api-auth'
-import {
-  createDocumentoCuentaCobrar,
-  getCuentaCobrarById,
-  getDocumentosCuentaCobrar,
-  getPagosComprobantesByCuenta,
-} from '@/lib/db'
-import { uploadFileToDrive } from '@/lib/integrations/google/drive'
+import { getCuentaCobrarById } from '@/lib/db'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+import { agregarPdfComplementoCobro, ligarComplemento } from '@/lib/server/cuentas/complemento'
+import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
+import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { MAX_FILE_SIZE, MENSAJE_LIMITE } from '@/lib/server/uploads/factura-validation'
-import { elegirPagoParaComplemento, facturaXmlVigente } from '@/lib/server/cuentas/complemento'
-import { parseComplementoPagoXML, validarComplementoPago } from '@/lib/server/xml/complemento-parser'
 import { SubirComplementoSchema, validate } from '@/lib/validation/schemas'
-import type { PagoComprobante } from '@/lib/types'
 
 const ROUTE = 'POST /api/cuentas-cobrar/[id]/subir-complemento'
 
@@ -24,14 +18,9 @@ function esPdf(file: File) {
 }
 
 /**
- * Rediseño de Cuentas B1 (docs/PLAN.md, S8, D16, D27, R11):
- * - acepta XML, PDF o los dos (aditivo: la UI actual manda los dos juntos);
- *   al menos uno es obligatorio;
- * - cada archivo queda vinculado a un pago (`pago_id`). Si el cliente no lo
- *   manda (UI actual, hasta B8), se asigna al pago más reciente que todavía
- *   no tenga ese archivo;
- * - el XML se valida contra el UUID de la factura vigente y el monto del
- *   pago; si no cuadra queda en 'revision', igual que las facturas.
+ * Complemento de pago de un cobro. #123 (B2, P9): el XML se liga solo, por el UUID de la factura y el monto
+ * pagado, a un pago de una cuenta de esa factura (`ligar_complemento_cobro`); un mismo CFDI puede relacionar
+ * varias facturas. `pago_id` (opcional) desambigua. El PDF puede ir con el XML o llegar después, con `pago_id`.
  */
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const authResult = await requireSection('cuentas')
@@ -66,68 +55,40 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     if (!cuenta) {
       return Response.json({ error: 'Cuenta por cobrar no encontrada' }, { status: 404 })
     }
-
-    const [pagos, documentos] = await Promise.all([getPagosComprobantesByCuenta(id), getDocumentosCuentaCobrar(id)])
-
-    const pagoIdPedido = validation.data.pago_id ?? null
-    const elegir = (tipo: 'COMPLEMENTO_PAGO' | 'COMPLEMENTO_PAGO_PDF') =>
-      elegirPagoParaComplemento({ pagos, documentos, tipo, pagoId: pagoIdPedido })
-    const pagoXml = xmlFile ? elegir('COMPLEMENTO_PAGO') : null
-    const pagoPdf = pdfFile ? elegir('COMPLEMENTO_PAGO_PDF') : null
-    if (pagoXml === 'pago_ajeno' || pagoPdf === 'pago_ajeno') {
-      return Response.json({ error: 'El pago indicado no pertenece a esta cuenta' }, { status: 400 })
+    if (!cuenta.factura_documento_id) {
+      return Response.json({ error: 'sin_factura', message: 'La cuenta no tiene factura vigente: sube la factura antes del complemento.' }, { status: 409 })
     }
-    // Con los dos archivos en la misma petición van al mismo pago: el del XML manda.
-    const pagoDelPdf: PagoComprobante | null = xmlFile && pdfFile ? pagoXml : pagoPdf
 
     const googleEnv = getGoogleEnv()
     if (!googleEnv) {
       return Response.json({ error: 'Google Drive no configurado' }, { status: 500 })
     }
+    const carpeta = `/Por Cobrar/${cuenta.folio || cuenta.cotizacion_id}`
+    const uploadFolderId = resolveUploadFolderId(request, googleEnv.driveFolderIdCuentas || undefined)
+    const pagoId = validation.data.pago_id ?? null
 
-    const folderPath = `/Por Cobrar/${cuenta.folio || cuenta.cotizacion_id}`
-    const timestamp = new Date().getTime()
-    const documentosCreados = []
-
-    if (xmlFile) {
-      const xmlContent = await xmlFile.text()
-      const factura = facturaXmlVigente(documentos)
-      const validacion = validarComplementoPago(
-        parseComplementoPagoXML(xmlContent),
-        factura?.uuid_cfdi,
-        pagoXml ? Number(pagoXml.monto) : null
-      )
-      const url = await uploadFileToDrive(xmlFile, folderPath, `complemento_pago_${timestamp}.xml`, googleEnv.driveFolderIdCuentas || undefined)
-      documentosCreados.push(await createDocumentoCuentaCobrar({
-        cuentas_cobrar_id: id,
-        tipo: 'COMPLEMENTO_PAGO',
-        archivo_url: url,
-        archivo_nombre: xmlFile.name,
-        archivo_size: xmlFile.size,
-        pago_id: pagoXml?.id ?? null,
-        estado_validacion: validacion.estado_validacion,
-        detalle_validacion: validacion.detalle_validacion,
-      }))
+    if (!xmlFile && pdfFile) {
+      if (!pagoId) return Response.json({ error: 'Para agregar solo el PDF indica el pago (pago_id)' }, { status: 400 })
+      const { status, body } = await agregarPdfComplementoCobro({ cuentaId: id, pagoId, pdfFile, carpeta, uploadFolderId })
+      return Response.json(body, { status })
     }
 
-    if (pdfFile) {
-      const url = await uploadFileToDrive(pdfFile, folderPath, `complemento_pago_${timestamp}.pdf`, googleEnv.driveFolderIdCuentas || undefined)
-      documentosCreados.push(await createDocumentoCuentaCobrar({
-        cuentas_cobrar_id: id,
-        tipo: 'COMPLEMENTO_PAGO_PDF',
-        archivo_url: url,
-        archivo_nombre: pdfFile.name,
-        archivo_size: pdfFile.size,
-        pago_id: pagoDelPdf?.id ?? null,
-      }))
-    }
+    // El complemento debe relacionar la factura de ESTA cuenta (puede cubrir además otras facturas).
+    const { data: factura, error: errorFactura } = await supabaseAdmin.from('documentos_cuentas_cobrar').select('uuid_cfdi').eq('id', cuenta.factura_documento_id).maybeSingle()
+    if (errorFactura) throw errorFactura
 
-    return Response.json({
-      success: true,
-      documentos: documentosCreados,
-      pago_id: (pagoXml ?? pagoDelPdf)?.id ?? null,
-      notas: validation.data.notas ?? null,
+    const { status, body } = await ligarComplemento({
+      lado: 'cobro',
+      xmlFile: xmlFile as File,
+      pdfFile,
+      pagoId,
+      carpeta,
+      uploadFolderId,
+      usuario: authResult.session?.user?.email ?? null,
+      route: ROUTE,
+      uuidFacturaEsperado: factura?.uuid_cfdi ?? null,
     })
+    return Response.json(body, { status })
   } catch (error) {
     return buildErrorResponse(error, ROUTE)
   }

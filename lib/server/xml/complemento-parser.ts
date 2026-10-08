@@ -96,53 +96,16 @@ export function parseComplementoPagoXML(xmlContent: string): ComplementoPagoData
   }
 }
 
-const TOLERANCIA_CENTAVOS = 0.01
+// #123 (P9): el complemento se liga en SQL (`ligar_complemento_cobro` / `_proveedor`) por UUID y monto.
 
-export interface ResultadoValidacionComplemento {
-  estado_validacion: 'validado' | 'revision'
-  detalle_validacion: string | null
+export interface RelacionadoComplemento {
+  uuid_factura: string
+  monto_pagado: number
 }
 
-/**
- * D16/R11: el complemento es válido cuando uno de sus DoctoRelacionado
- * apunta a la factura (IdDocumento = UUID de la factura) y su ImpPagado
- * coincide con el pago registrado (±0.01). Si algo no cuadra, queda en
- * 'revision' y se valida a mano, igual que las facturas. Una factura sin
- * UUID guardado (anterior a B1) no se puede validar sola (T10).
- */
-export function validarComplementoPago(
-  data: ComplementoPagoData,
-  uuidFactura: string | null | undefined,
-  montoPago: number | null | undefined
-): ResultadoValidacionComplemento {
-  if (data.error) {
-    return { estado_validacion: 'revision', detalle_validacion: `No se pudo leer el complemento: ${data.error}` }
-  }
-  if (!uuidFactura) {
-    return {
-      estado_validacion: 'revision',
-      detalle_validacion: 'La factura no tiene UUID guardado (se subió antes de B1): valida el complemento a mano.',
-    }
-  }
-  const objetivo = uuidFactura.trim().toUpperCase()
-  const docto = data.pagos.flatMap((p) => p.doctos).find((d) => d.id_documento.toUpperCase() === objetivo)
-  if (!docto) {
-    return {
-      estado_validacion: 'revision',
-      detalle_validacion: `El complemento no incluye la factura ${uuidFactura} en sus documentos relacionados.`,
-    }
-  }
-  if (montoPago == null) {
-    return { estado_validacion: 'revision', detalle_validacion: 'No hay un pago registrado al cual vincular el complemento.' }
-  }
-  if (docto.imp_pagado == null) {
-    return { estado_validacion: 'revision', detalle_validacion: 'El complemento no declara ImpPagado para la factura.' }
-  }
-  if (Math.abs(docto.imp_pagado - montoPago) > TOLERANCIA_CENTAVOS) {
-    return {
-      estado_validacion: 'revision',
-      detalle_validacion: `ImpPagado no coincide: complemento $${docto.imp_pagado.toFixed(2)} vs pago $${Number(montoPago).toFixed(2)}.`,
-    }
-  }
-  return { estado_validacion: 'validado', detalle_validacion: null }
+/** Una entrada por DoctoRelacionado del CFDI (un mismo UUID en varios Pago son varias parcialidades). */
+export function relacionadosDeComplemento(data: ComplementoPagoData): RelacionadoComplemento[] {
+  return data.pagos.flatMap((p) =>
+    p.doctos.filter((d) => d.imp_pagado != null).map((d) => ({ uuid_factura: d.id_documento, monto_pagado: d.imp_pagado as number }))
+  )
 }

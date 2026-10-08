@@ -1,3 +1,4 @@
+import { datosFiscalesVigentes } from '@/lib/server/cuentas/datos-fiscales'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { getPagosComprobantesEnRango } from '@/lib/server/repositories/cuentas-cobrar'
 import { round2 } from '@/lib/server/shared/decimal'
@@ -11,7 +12,9 @@ export type PeriodoDashboard = 'mes' | 'trimestre' | 'anio'
 
 // Tasa de ISR de persona moral sobre utilidad -- solo para el panel
 // informativo "Cruce del periodo" del Dashboard (mismo criterio del mockup:
-// "ISR 30% sobre utilidad · persona moral"). No es la misma tasa que
+// "ISR 30% sobre utilidad · persona moral"). #123 (B6a): solo aplica si Serenata es
+// persona moral según su constancia fiscal (Admin → Datos fiscales); sin constancia se
+// asume moral, como antes, y el panel lo dice. No es la misma tasa que
 // TASA_RETENCION_ISR de factura-fiscal.ts (esa es la retención a personas
 // físicas dentro de una factura puntual; esta es el ISR corporativo sobre
 // la utilidad del periodo).
@@ -142,6 +145,8 @@ export interface ResumenDashboard {
     impuestos: number
     deudas: number
     utilidadAntesIsr: number
+    /** De dónde sale la estimación de ISR: el tipo de persona de la constancia de Serenata (B6a). */
+    isr: { tipoPersona: 'moral' | 'fisica'; tasa: number | null; desdeConstancia: boolean }
   }
   cobertura: {
     gastosFijos: Array<{ id: string; nombre: string; monto: number }>
@@ -232,6 +237,7 @@ export async function getResumenDashboard({
     actividadProyectosR,
     gastosFijosR,
     cotizacionesRecientesR,
+    datosFiscalesR,
   ] = await Promise.allSettled([
     getDashboardKpisCuentas(),
     getDashboardEgresosPorBucket(buckets),
@@ -240,6 +246,7 @@ export async function getResumenDashboard({
     getDashboardActividadProyectos(periodoActual.inicio, periodoActual.fin),
     getGastosFijos(true),
     getDashboardCotizacionesRecientes(),
+    datosFiscalesVigentes(),
   ])
 
   const fuentesConError: string[] = []
@@ -250,6 +257,7 @@ export async function getResumenDashboard({
   const actividadProyectos = resuelto(fuentesConError, 'Proyectos', actividadProyectosR, { creados: 0, en_curso: 0 })
   const gastosFijosActivos = resuelto(fuentesConError, 'Gastos fijos', gastosFijosR, [])
   const cotizacionesRecientes = resuelto(fuentesConError, 'Cotizaciones recientes', cotizacionesRecientesR, [])
+  const datosFiscales = resuelto(fuentesConError, 'Datos fiscales de Serenata', datosFiscalesR, null)
 
   const balance = buckets.map((b, i) => ({
     label: b.label,
@@ -263,7 +271,11 @@ export async function getResumenDashboard({
   const ingresos = actualBalance.ingresos
   const egresos = actualBalance.egresos
   const utilidadAntesIsr = round2(ingresos - egresos)
-  const impuestos = round2(Math.max(0, utilidadAntesIsr) * TASA_ISR_PERSONA_MORAL)
+  // Sin constancia cargada se asume persona moral (el supuesto de siempre); persona física: la tasa depende del
+  // régimen y no se estima (impuestos 0, el panel lo dice).
+  const tipoPersona = datosFiscales?.tipo_persona ?? 'moral'
+  const tasaIsr = tipoPersona === 'moral' ? TASA_ISR_PERSONA_MORAL : null
+  const impuestos = tasaIsr === null ? 0 : round2(Math.max(0, utilidadAntesIsr) * tasaIsr)
 
   const porCobrar = kpisCuentas.por_cobrar
   const deudas = kpisCuentas.por_pagar
@@ -281,7 +293,7 @@ export async function getResumenDashboard({
     periodoActual,
     kpis: { porCobrar, porPagar: deudas, cotizacionesAprobadas, cotizacionesBorrador },
     balance,
-    fiscal: { ingresos, egresos, impuestos, deudas, utilidadAntesIsr },
+    fiscal: { ingresos, egresos, impuestos, deudas, utilidadAntesIsr, isr: { tipoPersona, tasa: tasaIsr, desdeConstancia: Boolean(datosFiscales) } },
     cobertura: {
       gastosFijos: gastosFijosActivos.map((g) => ({ id: g.id, nombre: g.nombre, monto: Number(g.monto_mensual) })),
       totalGastosFijos,

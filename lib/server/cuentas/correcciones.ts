@@ -3,15 +3,15 @@
  * 10): reabrir, volver a cerrar y correcciones. Cada operación es una RPC
  * atómica (db/migrations/20261005_cuentas_b7_reabrir_correcciones.sql) que
  * exige las cuentas reabiertas y deja registro; aquí solo se llaman y sus
- * errores esperados se traducen a mensajes seguros. Que el usuario sea admin
- * lo valida la ruta.
+ * errores esperados se traducen a mensajes seguros. Que el usuario tenga
+ * la sección `cuentas` lo valida la ruta (#123, P14).
  */
 import { DomainError } from '@/lib/server/errors/domain-error'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import type { CorreccionCuentas } from '@/lib/validation/schemas'
 
 const MENSAJES: Record<string, { status: number; mensaje: string }> = {
-  proyecto_no_reabierto: { status: 409, mensaje: 'Las cuentas del proyecto no están reabiertas: un admin debe reabrirlas antes de corregir.' },
+  proyecto_no_reabierto: { status: 409, mensaje: 'Las cuentas del proyecto no están reabiertas: hay que reabrirlas antes de corregir.' },
   motivo_requerido: { status: 400, mensaje: 'Escribe el motivo.' },
   usuario_requerido: { status: 400, mensaje: 'No se pudo identificar al usuario.' },
   fecha_requerida: { status: 400, mensaje: 'La fecha del pago es obligatoria.' },
@@ -24,6 +24,11 @@ const MENSAJES: Record<string, { status: number; mensaje: string }> = {
   grupo_abierto_existente: { status: 409, mensaje: 'El proveedor ya tiene otro grupo abierto en este proyecto; no se puede reabrir este.' },
   proveedor_no_encontrado: { status: 404, mensaje: 'El proveedor no existe.' },
   grupo_no_abierto: { status: 409, mensaje: 'El grupo ya está facturado o pagado; no se puede reasignar.' },
+  pago_sin_lineas: { status: 409, mensaje: 'El pago no tiene líneas; no se puede corregir.' },
+  documento_sin_cuentas: { status: 409, mensaje: 'No se encontró a qué cuentas pertenece el documento.' },
+  orden_cambio: { status: 409, mensaje: 'La orden cambió mientras se cancelaba; reintenta.' },
+  fecha_factura_requerida: { status: 400, mensaje: 'La cuenta tiene una factura vigente: para quitar su fecha hay que quitar la factura.' },
+  sin_factura: { status: 400, mensaje: 'La cuenta no tiene factura vigente: sube la factura para que tenga fecha.' },
 }
 
 async function llamar<T>(fn: string, args: Record<string, unknown>): Promise<T> {
@@ -46,7 +51,7 @@ export interface ResultadoReapertura {
 }
 
 /**
- * Reabrir (D5, D6). Un admin puede reabrir en cualquier momento, con o sin
+ * Reabrir (D5, D6). Cualquier usuario de Cuentas puede reabrir en cualquier momento, con o sin
  * pendientes (decisión del usuario, sesión 20): así un error en un proyecto
  * que todavía no cierra también se corrige. Idempotente: ya reabiertas
  * devuelve la reapertura vigente.

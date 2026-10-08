@@ -303,7 +303,7 @@ function InfoPago({ d, onReasignar, ejecutar, corrige }: { d: DetallePago; onRea
             <span className="font-semibold text-ink">Total del grupo</span>
             <span className="text-[15px] font-bold text-ink">{fmtMoney(d.neto)}</span>
           </div>
-          {!reasignable && !corrige && <div className="border-t border-accent/20 px-4 py-2 text-[11px] text-subtext">El grupo ya está facturado: para reasignar un renglón, un admin reabre las cuentas.</div>}
+          {!reasignable && !corrige && <div className="border-t border-accent/20 px-4 py-2 text-[11px] text-subtext">El grupo ya está facturado: para reasignar un concepto, un admin reabre las cuentas.</div>}
         </div>
       )}
 

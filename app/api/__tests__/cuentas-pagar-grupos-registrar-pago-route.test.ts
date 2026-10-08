@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCuentaPagarGrupoByIdMock: vi.fn(),
   getProyectoByIdMock: vi.fn(),
-  createDocumentoCuentaPagarMock: vi.fn(),
   uploadFileToDriveMock: vi.fn(),
   getGoogleEnvMock: vi.fn(),
   rpcMock: vi.fn(),
@@ -18,7 +17,6 @@ vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({
   getCuentaPagarGrupoById: mocks.getCuentaPagarGrupoByIdMock,
   getProyectoById: mocks.getProyectoByIdMock,
-  createDocumentoCuentaPagar: mocks.createDocumentoCuentaPagarMock,
 }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
@@ -52,9 +50,8 @@ beforeEach(() => {
   mocks.getProyectoByIdMock.mockResolvedValue({ id: 'SH001', proyecto: 'Spot' })
   mocks.getGoogleEnvMock.mockReturnValue({ driveFolderIdCuentas: 'folder' })
   mocks.uploadFileToDriveMock.mockResolvedValue('https://drive/comprobante.jpg')
-  mocks.createDocumentoCuentaPagarMock.mockResolvedValue({})
   mocks.rpcMock.mockResolvedValue({
-    data: { monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'EN_PROCESO_PAGO' },
+    data: { pago_id: 'pago-1', lado: 'proveedor', lineas: [{ grupo_id: 'grupo-1', monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'EN_PROCESO_PAGO' }] },
     error: null,
   })
 })
@@ -97,15 +94,22 @@ describe('POST /api/cuentas-pagar/grupos/[id]/registrar-pago', () => {
     expect(body.error).toBe('grupo_no_facturable')
   })
 
-  it('éxito -- 200 con resumen, llama la RPC con p_grupo_id', async () => {
+  it('P1414 (el saldo cambió) -- 409 candidatos_cambiaron', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { code: 'P1414', message: 'candidatos_cambiaron: grupo x' } })
+    const res = await POST(buildRequest(), { params })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toBe('candidatos_cambiaron')
+  })
+
+  it('éxito -- 200 con resumen, llama la RPC con la línea del grupo', async () => {
     const res = await POST(buildRequest(), { params })
     expect(res.status).toBe(200)
-    expect(mocks.rpcMock).toHaveBeenCalledWith('registrar_pago_grupo_factura', expect.objectContaining({
-      p_grupo_id: 'grupo-1',
-      p_monto: 300,
+    expect(mocks.rpcMock).toHaveBeenCalledWith('registrar_pago_proveedor', expect.objectContaining({
+      p_lineas: [{ grupo_id: 'grupo-1', monto: 300, saldo_esperado: null }],
       p_operation_id: OP_ID,
     }))
     const body = await res.json()
     expect(body.resumen.estado_nuevo).toBe('EN_PROCESO_PAGO')
+    expect(body.resumen.pago_id).toBe('pago-1')
   })
 })

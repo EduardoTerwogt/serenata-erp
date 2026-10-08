@@ -40,8 +40,9 @@ test('avisos: por categoría; tocar uno limpia filtros y abre el proyecto en su 
 
 test('nueva orden: excluir un responsable, generar y ver la orden lista', async ({ page }) => {
   const llamadas = await abrir(page)
-  if (esMovil()) await page.getByRole('button', { name: 'Órdenes de pago' }).click()
-  else await page.getByRole('button', { name: 'Orden de pago' }).click()
+  // #123 (P17): "Orden de pago" salió del encabezado y vive en el menú Acciones (un menú, dos disparadores).
+  await page.getByRole('button', { name: 'Acciones' }).click()
+  await page.getByRole('menuitem', { name: 'Orden de pago' }).click()
   await expect(page).toHaveURL(/page_m=ordenes/)
   await expect(page.getByText('2 cuentas · 2 proveedores · $96,504.00 a transferir')).toBeVisible()
 

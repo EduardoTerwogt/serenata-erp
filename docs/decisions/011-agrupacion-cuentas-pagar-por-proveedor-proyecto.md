@@ -3,7 +3,7 @@
 > **Nota (2026-10-02):** desde la simplificación del modelo (`docs/decisions/020`) el monto
 > al proveedor se llama `items_cotizacion.costo_unitario` y `cuentas_pagar.costo_total`;
 > este texto conserva `x_pagar`, el nombre de la época. `registrar_pago_cuenta_pagar` (pago a
-> una cuenta suelta) ya no existe: los pagos son solo por grupo (`registrar_pago_grupo_factura`).
+> una cuenta suelta) ya no existe: los pagos son solo por grupo. Desde #123 (`docs/decisions/022`) los pagos entran por `registrar_pago_proveedor` con una cabecera común `pagos` (reemplaza a `registrar_pago_grupo_factura`) y un pago puede cubrir varios grupos del mismo proveedor.
 
 ## Contexto
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { archivoPendiente } from '@/lib/shared/cuentas/archivo-pendiente'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Button } from '@/components/ui/Button'
 import { DateField } from '@/components/ui/DateField'
@@ -265,7 +266,7 @@ export function HistorialCorrecciones({ c, tipo }: { c: CorreccionesDetalle; tip
                   {b.motivo ? ` · ${b.motivo}` : ''}
                 </div>
               </div>
-              {b.archivo_url && (
+              {b.archivo_url && !archivoPendiente(b.archivo_url) && (
                 <a href={b.archivo_url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
                   Ver
                 </a>

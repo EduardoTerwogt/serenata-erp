@@ -44,18 +44,21 @@ async function handleUnauthorizedResponse(url: string): Promise<void> {
 export class ApiError extends Error {
   readonly status: number
   readonly code: string | null
-  constructor(message: string, status: number, code: string | null) {
+  /** Cuerpo JSON de la respuesta (p. ej. `preparado` en un 502 `subida_fallida`, #130); null si no era JSON. */
+  readonly data: Record<string, unknown> | null
+  constructor(message: string, status: number, code: string | null, data: Record<string, unknown> | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.data = data
   }
 }
 
 async function apiError(response: Response, fallbackMessage: string): Promise<ApiError> {
   const data = await safeParseJson(response.clone())
   const code = typeof data?.error === 'string' && /^[a-z0-9_]+$/.test(data.error) ? data.error : null
-  return new ApiError(await getApiErrorMessage(response, fallbackMessage), response.status, code)
+  return new ApiError(await getApiErrorMessage(response, fallbackMessage), response.status, code, (data as Record<string, unknown> | null) ?? null)
 }
 
 async function safeParseJson(response: Response): Promise<JsonLike | null> {

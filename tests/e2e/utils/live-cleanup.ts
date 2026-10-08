@@ -67,9 +67,49 @@ export async function aprobarFixture(supabase: ReturnType<typeof getLiveSupabase
 }
 
 /**
+ * #123: borra cuentas de cobro con todo lo que ya no cae en cascada. La factura (FACTURA_XML) es cabecera sin ancla
+ * de cuenta; PDF y complementos cuelgan de ella; cada pago es una cabecera `pagos` con sus líneas (que sí caen con
+ * la cuenta) y la cabecera se queda huérfana: se borra la que no conserve líneas.
+ */
+export async function cleanupLiveCobros(supabase: ReturnType<typeof getLiveSupabaseAdmin>, cobroIds: string[]) {
+  if (cobroIds.length === 0) return
+  const paso = async (nombre: string, op: PromiseLike<{ error: { message: string } | null }>) => {
+    const { error } = await op
+    if (error) console.warn(`[cleanupLiveCobros] ${nombre}: ${error.message}`)
+  }
+  const { data: lineas } = await supabase.from('pagos_comprobantes').select('pago_id').in('cuentas_cobrar_id', cobroIds)
+  const pagoIds = Array.from(new Set((lineas ?? []).map((l) => l.pago_id as string)))
+  const { data: cuentas } = await supabase.from('cuentas_cobrar').select('factura_documento_id').in('id', cobroIds).not('factura_documento_id', 'is', null)
+  const facturaIds = Array.from(new Set((cuentas ?? []).map((c) => c.factura_documento_id as string)))
+
+  if (facturaIds.length) await paso('PDF y complementos de factura', supabase.from('documentos_cuentas_cobrar').delete().in('factura_documento_id', facturaIds))
+  await paso('documentos de cuenta', supabase.from('documentos_cuentas_cobrar').delete().in('cuentas_cobrar_id', cobroIds))
+  await paso('pagos de cobro', supabase.from('pagos_comprobantes').delete().in('cuentas_cobrar_id', cobroIds))
+  await paso('desligar facturas', supabase.from('cuentas_cobrar').update({ factura_documento_id: null }).in('id', cobroIds))
+  if (facturaIds.length) await paso('facturas', supabase.from('documentos_cuentas_cobrar').delete().in('id', facturaIds))
+  await paso('cuentas por cobrar', supabase.from('cuentas_cobrar').delete().in('id', cobroIds))
+  await cleanupLivePagosHuerfanos(supabase, pagoIds)
+}
+
+/** Borra las cabeceras `pagos` (entre `pagoIds`) que no tienen ninguna línea, de cobro ni de proveedor. */
+export async function cleanupLivePagosHuerfanos(supabase: ReturnType<typeof getLiveSupabaseAdmin>, pagoIds: string[]) {
+  if (pagoIds.length === 0) return
+  const [cobro, prov] = await Promise.all([
+    supabase.from('pagos_comprobantes').select('pago_id').in('pago_id', pagoIds),
+    supabase.from('pagos_cuentas_pagar').select('pago_id').in('pago_id', pagoIds),
+  ])
+  const conLineas = new Set([...(cobro.data ?? []), ...(prov.data ?? [])].map((r) => r.pago_id as string))
+  const huerfanos = pagoIds.filter((id) => !conLineas.has(id))
+  if (huerfanos.length) {
+    const { error } = await supabase.from('pagos').delete().in('id', huerfanos)
+    if (error) console.warn(`[cleanupLivePagosHuerfanos] ${error.message}`)
+  }
+}
+
+/**
  * Borra en orden seguro (respetando FKs) todo lo generado por una cotización
- * de prueba real: cuentas_pagar -> cuentas_cobrar (documentos/pagos van en
- * cascada) -> proyectos -> cotizaciones (items van en cascada) ->
+ * de prueba real: cuentas_pagar -> cuentas_cobrar (pagos y
+ * facturas de cobro se limpian aparte, #123) -> proyectos -> cotizaciones (items van en cascada) ->
  * cotizacion_folio_reservations (folio = cotizaciones.id). Este último paso
  * es crítico: esa tabla tiene un unique global en `folio` sin importar si la
  * reserva ya fue consumida, así que borrar solo `cotizaciones` deja el folio
@@ -83,7 +123,8 @@ export async function cleanupLiveCotizacion(cotizacionId: string) {
   const supabase = getLiveSupabaseAdmin()
 
   await supabase.from('cuentas_pagar').delete().eq('cotizacion_id', cotizacionId)
-  await supabase.from('cuentas_cobrar').delete().eq('cotizacion_id', cotizacionId)
+  const { data: cobros } = await supabase.from('cuentas_cobrar').select('id').eq('cotizacion_id', cotizacionId)
+  await cleanupLiveCobros(supabase, (cobros ?? []).map((c) => c.id as string))
   await supabase.from('proyectos').delete().eq('id', cotizacionId)
   await supabase.from('cotizaciones').delete().eq('id', cotizacionId)
   await supabase.from('cotizacion_folio_reservations').delete().eq('folio', cotizacionId)
@@ -177,26 +218,54 @@ export async function cleanupLiveCuentasByPrefix(prefijo: string) {
   const { data: cobros } = await supabase.from('cuentas_cobrar').select('id').in('cotizacion_id', proyectoIds)
   const cobroIds = (cobros ?? []).map((c) => c.id as string)
 
+  // #130: reasignar renglones (preparar_grupo_factura_proveedor) deja historial que referencia cotización y proveedores;
+  // se borra antes que ellos o sus FK impiden limpiar.
+  if (proyectoIds.length) await paso('historial de responsables (cotización)', supabase.from('historial_cambios_responsable_item').delete().in('cotizacion_id', proyectoIds))
+  if (proveedorIds.length) {
+    await paso('historial de responsables (anterior)', supabase.from('historial_cambios_responsable_item').delete().in('responsable_anterior_id', proveedorIds))
+    await paso('historial de responsables (nuevo)', supabase.from('historial_cambios_responsable_item').delete().in('responsable_nuevo_id', proveedorIds))
+  }
   if (proyectoIds.length) {
     await paso('reaperturas', supabase.from('cuentas_reaperturas').delete().in('proyecto_id', proyectoIds))
     await paso('correcciones', supabase.from('cuentas_correcciones').delete().in('proyecto_id', proyectoIds))
   }
+  // #123: las líneas de pago cuelgan de una cabecera `pagos` (una por pago; puede cubrir varias cuentas). Se borran
+  // las líneas de lo que se limpia y, después, las cabeceras que quedaron sin líneas.
+  const pagoIds = new Set<string>()
+  if (grupoIds.length) {
+    const { data } = await supabase.from('pagos_cuentas_pagar').select('pago_id').in('grupo_id', grupoIds)
+    for (const r of data ?? []) pagoIds.add(r.pago_id as string)
+  }
+  if (cobroIds.length) {
+    const { data } = await supabase.from('pagos_comprobantes').select('pago_id').in('cuentas_cobrar_id', cobroIds)
+    for (const r of data ?? []) pagoIds.add(r.pago_id as string)
+  }
+  const { data: facturas } = cobroIds.length
+    ? await supabase.from('cuentas_cobrar').select('factura_documento_id').in('id', cobroIds).not('factura_documento_id', 'is', null)
+    : { data: [] as { factura_documento_id: string }[] }
+  const facturaIds = Array.from(new Set((facturas ?? []).map((f) => f.factura_documento_id as string)))
+
   if (ordenIds.length) await paso('conceptos de orden', supabase.from('ordenes_pago_conceptos').delete().in('orden_pago_id', ordenIds))
   if (grupoIds.length) {
     await paso('pagos de grupo', supabase.from('pagos_cuentas_pagar').delete().in('grupo_id', grupoIds))
     await paso('documentos de grupo', supabase.from('documentos_cuentas_pagar').delete().in('grupo_id', grupoIds))
   }
   if (cuentaIds.length) {
-    await paso('pagos de cuenta', supabase.from('pagos_cuentas_pagar').delete().in('cuenta_pagar_id', cuentaIds))
     await paso('documentos de cuenta', supabase.from('documentos_cuentas_pagar').delete().in('cuentas_pagar_id', cuentaIds))
     await paso('cuentas por pagar', supabase.from('cuentas_pagar').delete().in('id', cuentaIds))
   }
   if (grupoIds.length) await paso('grupos', supabase.from('cuentas_pagar_grupos').delete().in('id', grupoIds))
   if (ordenIds.length) await paso('órdenes', supabase.from('ordenes_pago').delete().in('id', ordenIds))
-  if (cobroIds.length) {
-    await paso('documentos de cobro', supabase.from('documentos_cuentas_cobrar').delete().in('cuentas_cobrar_id', cobroIds))
-    await paso('pagos de cobro', supabase.from('pagos_comprobantes').delete().in('cuentas_cobrar_id', cobroIds))
-    await paso('cuentas por cobrar', supabase.from('cuentas_cobrar').delete().in('id', cobroIds))
+  await cleanupLiveCobros(supabase, cobroIds)
+  if (pagoIds.size) {
+    const todos = Array.from(pagoIds)
+    const [cobro, prov] = await Promise.all([
+      supabase.from('pagos_comprobantes').select('pago_id').in('pago_id', todos),
+      supabase.from('pagos_cuentas_pagar').select('pago_id').in('pago_id', todos),
+    ])
+    const conLineas = new Set([...(cobro.data ?? []), ...(prov.data ?? [])].map((r) => r.pago_id as string))
+    const huerfanos = todos.filter((id) => !conLineas.has(id))
+    if (huerfanos.length) await paso('cabeceras de pago', supabase.from('pagos').delete().in('id', huerfanos))
   }
   if (proyectoIds.length) {
     await paso('proyectos', supabase.from('proyectos').delete().in('id', proyectoIds))

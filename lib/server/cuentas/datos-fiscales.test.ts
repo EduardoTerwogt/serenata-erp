@@ -1,0 +1,76 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({ fila: null as unknown, error: null as unknown, consultas: 0 }))
+
+vi.mock('@/lib/server/supabase-admin', () => ({
+  supabaseAdmin: {
+    from: () => {
+      const cadena: Record<string, unknown> = {}
+      for (const m of ['select', 'eq', 'order']) cadena[m] = () => cadena
+      cadena.maybeSingle = async () => {
+        mocks.consultas++
+        return { data: mocks.fila, error: mocks.error }
+      }
+      return cadena
+    },
+  },
+}))
+
+import { datosFiscalesVigentes, invalidarCacheDatosFiscales, serenataRfc, toleranciaTotal } from './datos-fiscales'
+
+const FILA = { id: 'd1', rfc: ' sho100101ab1 ', razon_social: 'Serenata House Entertainment', tipo_persona: 'moral', vigente: true }
+
+describe('serenataRfc (T20, B6a)', () => {
+  beforeEach(() => {
+    mocks.fila = null
+    mocks.error = null
+    mocks.consultas = 0
+    invalidarCacheDatosFiscales()
+  })
+
+  it('lee el RFC normalizado de la constancia vigente', async () => {
+    mocks.fila = FILA
+    await expect(serenataRfc()).resolves.toBe('SHO100101AB1')
+  })
+
+  it('sin constancia cargada falla explícito con un DomainError 409 (no valida en silencio)', async () => {
+    await expect(serenataRfc()).rejects.toMatchObject({ code: 'serenata_fiscal_faltante', status: 409 })
+  })
+
+  it('cachea la constancia encontrada, pero nunca la ausencia: la primera constancia surte efecto de inmediato', async () => {
+    mocks.fila = FILA
+    await serenataRfc()
+    await serenataRfc()
+    expect(mocks.consultas).toBe(1)
+    invalidarCacheDatosFiscales()
+    mocks.fila = null
+    await expect(datosFiscalesVigentes()).resolves.toBeNull()
+    await expect(datosFiscalesVigentes()).resolves.toBeNull()
+    expect(mocks.consultas).toBe(3)
+  })
+
+  it('un error de la base se propaga, no se confunde con "sin constancia"', async () => {
+    mocks.error = new Error('boom')
+    await expect(serenataRfc()).rejects.toThrow('boom')
+  })
+})
+
+describe('toleranciaTotal (#130, Q7)', () => {
+  beforeEach(() => {
+    mocks.fila = null
+    mocks.error = null
+    invalidarCacheDatosFiscales()
+  })
+
+  it('lee la tolerancia de la constancia vigente', async () => {
+    mocks.fila = { ...FILA, tolerancia_total: 2.5 }
+    await expect(toleranciaTotal()).resolves.toBe(2.5)
+  })
+
+  it('sin constancia, o con un valor que no es número, usa $1.00', async () => {
+    await expect(toleranciaTotal()).resolves.toBe(1)
+    invalidarCacheDatosFiscales()
+    mocks.fila = { ...FILA, tolerancia_total: 'x' }
+    await expect(toleranciaTotal()).resolves.toBe(1)
+  })
+})

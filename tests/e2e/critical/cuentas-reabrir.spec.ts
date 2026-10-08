@@ -1,15 +1,17 @@
 import { test, expect, type Page } from '@playwright/test'
-import { login, mockSesionAdmin } from '../utils/auth'
+import { login, mockSesion, mockSesionAdmin, mockSesionCuentas } from '../utils/auth'
 import { mockCuentasDetalle } from '../utils/cuentas-detalle-mocks'
 import { mockCuentasPeriodo } from '../utils/cuentas-periodo-mocks'
 
 /**
- * Rediseño de Cuentas B7 (D5, D6): Reabrir y Volver a cerrar solo para admin,
- * con motivo obligatorio; las correcciones del detalle solo aparecen con las
+ * Rediseño de Cuentas B7 (D5, D6): Reabrir y Volver a cerrar para cualquier usuario de Cuentas
+ * (#123, P14), con motivo obligatorio; las correcciones del detalle solo aparecen con las
  * cuentas reabiertas. SH062 tiene todo cobrado y pagado: cuentas cerradas.
  */
-async function abrirProyecto(page: Page, { admin }: { admin: boolean }) {
-  if (admin) await mockSesionAdmin(page)
+async function abrirProyecto(page: Page, { sesion }: { sesion: 'admin' | 'cuentas' | 'sin_cuentas' }) {
+  if (sesion === 'admin') await mockSesionAdmin(page)
+  else if (sesion === 'cuentas') await mockSesionCuentas(page)
+  else await mockSesion(page, ['dashboard'])
   const llamadas = await mockCuentasDetalle(page)
   await mockCuentasPeriodo(page)
   await login(page, '/cuentas?anio=2026&mes=9&proyecto=SH062')
@@ -19,13 +21,18 @@ async function abrirProyecto(page: Page, { admin }: { admin: boolean }) {
 
 const boton = (page: Page, nombre: string) => page.getByRole('button', { name: nombre, exact: true }).filter({ visible: true })
 
-test('sin admin no hay Reabrir ni correcciones', async ({ page }) => {
-  await abrirProyecto(page, { admin: false })
+test('sin la sección Cuentas no hay Reabrir ni correcciones', async ({ page }) => {
+  await abrirProyecto(page, { sesion: 'sin_cuentas' })
   await expect(boton(page, 'Reabrir')).toHaveCount(0)
 })
 
-test('admin: reabrir con motivo obligatorio, corregir y volver a cerrar', async ({ page }) => {
-  const llamadas = await abrirProyecto(page, { admin: true })
+test('con solo la sección Cuentas (sin admin) sí hay Reabrir (P14)', async ({ page }) => {
+  await abrirProyecto(page, { sesion: 'cuentas' })
+  await expect(boton(page, 'Reabrir')).toBeVisible()
+})
+
+test('reabrir con motivo obligatorio, corregir y volver a cerrar', async ({ page }) => {
+  const llamadas = await abrirProyecto(page, { sesion: 'cuentas' })
 
   await boton(page, 'Reabrir').click()
   const modal = page.getByRole('dialog', { name: 'Reabrir' })

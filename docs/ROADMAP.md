@@ -111,9 +111,10 @@ ni tiene alcance de iniciativa definido.
   otra por la diferencia (solo si el total nuevo es mayor o igual). Abiertos:
   cancelar sin reemplazo con cobros (¿saldo a favor, devolución o no se
   permite?) y con pagos a proveedor ya hechos. Mockup de referencia en
-  `docs/design/cuentas-123/exploracion-modelo.html`. Depende de #123, pero el
-  modelo vigente **no guarda monto por aplicación** (la suma de una factura se deriva de
-  las cotizaciones ligadas): esa iniciativa deberá agregarlo si lo necesita.
+  `docs/design/cuentas-123/exploracion-modelo.html`. Depende de #123 (ejecutado, decisión 022): el
+  modelo vigente **no guarda monto por aplicación en la factura** (su suma se deriva de
+  las cotizaciones ligadas; los pagos sí guardan lo aplicado a cada cuenta): esa iniciativa deberá
+  agregarlo a la factura si lo necesita.
 
 ### Deuda técnica (2026-09-26)
 

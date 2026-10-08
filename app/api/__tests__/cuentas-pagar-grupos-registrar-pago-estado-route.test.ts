@@ -3,15 +3,15 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   idempotencyMaybeSingleMock: vi.fn(),
-  pagoOpMaybeSingleMock: vi.fn(),
-  documentoMaybeSingleMock: vi.fn(),
   pagoMaybeSingleMock: vi.fn(),
+  rpcMock: vi.fn(),
   updateEqEqMock: vi.fn(async () => ({ error: null })),
 }))
 
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/server/supabase-admin', () => ({
   supabaseAdmin: {
+    rpc: mocks.rpcMock,
     from: (table: string) => {
       if (table === 'idempotency_keys') {
         return {
@@ -19,14 +19,9 @@ vi.mock('@/lib/server/supabase-admin', () => ({
           update: () => ({ eq: () => ({ eq: mocks.updateEqEqMock }) }),
         }
       }
-      if (table === 'pago_operations') {
-        return { select: () => ({ eq: () => ({ maybeSingle: mocks.pagoOpMaybeSingleMock }) }) }
-      }
-      if (table === 'pagos_cuentas_pagar') {
-        return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: mocks.pagoMaybeSingleMock }) }) }) }
-      }
-      if (table === 'documentos_cuentas_pagar') {
-        return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: mocks.documentoMaybeSingleMock }) }) }) }
+      // #123 (T2): la operación es el operation_id de la cabecera `pagos`.
+      if (table === 'pagos') {
+        return { select: () => ({ eq: () => ({ maybeSingle: mocks.pagoMaybeSingleMock }) }) }
       }
       throw new Error(`tabla inesperada: ${table}`)
     },
@@ -40,16 +35,21 @@ const OP_ID = '11111111-1111-4111-8111-111111111111'
 const req = (operationId: string | null) =>
   new Request(`http://x/api/cuentas-pagar/grupos/grupo-1/registrar-pago/estado${operationId ? `?operation_id=${operationId}` : ''}`)
 
+const resultadoRpc = (id: string) => ({
+  pago_id: 'pago-1',
+  lado: 'proveedor',
+  lineas: [{ grupo_id: id, monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'EN_PROCESO_PAGO' }],
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requireSectionMock.mockResolvedValue({ response: null })
   mocks.idempotencyMaybeSingleMock.mockResolvedValue({ data: null })
-  mocks.pagoOpMaybeSingleMock.mockResolvedValue({ data: null })
-  mocks.documentoMaybeSingleMock.mockResolvedValue({ data: null })
-  mocks.pagoMaybeSingleMock.mockResolvedValue({ data: null })
+  mocks.pagoMaybeSingleMock.mockResolvedValue({ data: null, error: null })
+  mocks.rpcMock.mockResolvedValue({ data: null, error: null })
 })
 
-describe('GET /api/cuentas-pagar/grupos/[id]/registrar-pago/estado', () => {
+describe('GET /api/cuentas-pagar/grupos/grupo-1/registrar-pago/estado', () => {
   it('rechaza sin operation_id', async () => {
     const res = await GET(req(null), { params })
     expect(res.status).toBe(400)
@@ -59,10 +59,10 @@ describe('GET /api/cuentas-pagar/grupos/[id]/registrar-pago/estado', () => {
     mocks.idempotencyMaybeSingleMock.mockResolvedValue({ data: { status_code: 200, response: { success: true } } })
     const res = await GET(req(OP_ID), { params })
     expect(await res.json()).toEqual({ status: 'completed', result: { success: true } })
-    expect(mocks.pagoOpMaybeSingleMock).not.toHaveBeenCalled()
+    expect(mocks.pagoMaybeSingleMock).not.toHaveBeenCalled()
   })
 
-  it('not_found: ni idempotency_keys ni pago_operations tienen el operation_id', async () => {
+  it('not_found: ni idempotency_keys ni pagos tienen el operation_id', async () => {
     const res = await GET(req(OP_ID), { params })
     expect(await res.json()).toEqual({ status: 'not_found' })
   })
@@ -73,56 +73,40 @@ describe('GET /api/cuentas-pagar/grupos/[id]/registrar-pago/estado', () => {
     expect(await res.json()).toEqual({ status: 'ambiguous' })
   })
 
-  it('nunca confunde grupos: pago_operations tiene el operation_id pero de OTRO grupo -- not_found', async () => {
-    mocks.pagoOpMaybeSingleMock.mockResolvedValue({ data: { dominio: 'cuentas_pagar_grupos', cuenta_id: 'otro-grupo', result: {} } })
+  it('nunca confunde lados: el operation_id es de un pago del otro lado -- not_found', async () => {
+    mocks.pagoMaybeSingleMock.mockResolvedValue({ data: { id: 'pago-1', lado: 'cobro', comprobante_url: null }, error: null })
+    const res = await GET(req(OP_ID), { params })
+    expect(await res.json()).toEqual({ status: 'not_found' })
+    expect(mocks.rpcMock).not.toHaveBeenCalled()
+  })
+
+  it('nunca confunde destinos: el pago existe pero no cubre este grupo -- not_found', async () => {
+    mocks.pagoMaybeSingleMock.mockResolvedValue({ data: { id: 'pago-1', lado: 'proveedor', comprobante_url: null }, error: null })
+    mocks.rpcMock.mockResolvedValue({ data: resultadoRpc('otro-destino'), error: null })
     const res = await GET(req(OP_ID), { params })
     expect(await res.json()).toEqual({ status: 'not_found' })
   })
 
-  it('nunca confunde dominios: mismo id pero dominio cuentas_pagar (item) -- not_found', async () => {
-    mocks.pagoOpMaybeSingleMock.mockResolvedValue({ data: { dominio: 'cuentas_pagar', cuenta_id: 'grupo-1', result: {} } })
-    const res = await GET(req(OP_ID), { params })
-    expect(await res.json()).toEqual({ status: 'not_found' })
-  })
-
-  it('completed vía pago_operations: reconstruye el resumen y el comprobante_url, repara idempotency_keys', async () => {
+  it('completed vía pagos: reconstruye el resumen y el comprobante_url, repara idempotency_keys', async () => {
     mocks.idempotencyMaybeSingleMock.mockResolvedValue({ data: { status_code: null, response: null } })
-    mocks.pagoOpMaybeSingleMock.mockResolvedValue({
-      data: { dominio: 'cuentas_pagar_grupos', cuenta_id: 'grupo-1', result: { monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'EN_PROCESO_PAGO' } },
-    })
-    mocks.documentoMaybeSingleMock.mockResolvedValue({ data: { archivo_url: 'https://drive/comprobante.jpg' } })
+    mocks.pagoMaybeSingleMock.mockResolvedValue({ data: { id: 'pago-1', lado: 'proveedor', comprobante_url: 'https://drive/pago.pdf' }, error: null })
+    mocks.rpcMock.mockResolvedValue({ data: resultadoRpc('grupo-1'), error: null })
 
     const res = await GET(req(OP_ID), { params })
+    const body = await res.json()
 
-    expect(await res.json()).toEqual({
-      status: 'completed',
-      result: {
-        success: true,
-        resumen: { monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'EN_PROCESO_PAGO', comprobante_url: 'https://drive/comprobante.jpg' },
-      },
-    })
+    expect(mocks.rpcMock).toHaveBeenCalledWith('pagos_resultado', { p_pago_id: 'pago-1' })
+    expect(body.status).toBe('completed')
+    expect(body.result.success).toBe(true)
+    expect(body.result.resumen).toEqual({ pago_id: 'pago-1', monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'EN_PROCESO_PAGO', comprobante_url: 'https://drive/pago.pdf' })
     expect(mocks.updateEqEqMock).toHaveBeenCalled()
   })
 
-  it('completed vía pago_operations sin comprobante -- comprobante_url null', async () => {
-    mocks.pagoOpMaybeSingleMock.mockResolvedValue({
-      data: { dominio: 'cuentas_pagar_grupos', cuenta_id: 'grupo-1', result: { monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'EN_PROCESO_PAGO' } },
-    })
-
+  it('completed vía pagos sin comprobante -- comprobante_url null', async () => {
+    mocks.pagoMaybeSingleMock.mockResolvedValue({ data: { id: 'pago-1', lado: 'proveedor', comprobante_url: null }, error: null })
+    mocks.rpcMock.mockResolvedValue({ data: resultadoRpc('grupo-1'), error: null })
     const res = await GET(req(OP_ID), { params })
     const body = await res.json()
     expect(body.result.resumen.comprobante_url).toBeNull()
   })
-
-  it('B2 (A1): el comprobante se toma del propio pago (pagos_cuentas_pagar) antes que de un documento', async () => {
-    mocks.pagoOpMaybeSingleMock.mockResolvedValue({
-      data: { dominio: 'cuentas_pagar_grupos', cuenta_id: 'grupo-1', result: { monto_pagado_total: 300, saldo_pendiente: 700, estado_nuevo: 'EN_PROCESO_PAGO' } },
-    })
-    mocks.pagoMaybeSingleMock.mockResolvedValue({ data: { comprobante_url: 'https://drive/pago.pdf' } })
-    const res = await GET(req(OP_ID), { params })
-    const body = await res.json()
-    expect(body.result.resumen.comprobante_url).toBe('https://drive/pago.pdf')
-    expect(mocks.documentoMaybeSingleMock).not.toHaveBeenCalled()
-  })
 })
-

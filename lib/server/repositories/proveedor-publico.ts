@@ -4,11 +4,12 @@ import type { Proveedor, ProveedorCredenciales } from '@/lib/types'
  * Columnas de `proveedores` que pueden salir del servidor: lista blanca, no
  * `*`, para que `password_hash` y `session_version` (credenciales del portal,
  * ProveedorCredenciales) nunca lleguen a una respuesta, ni una columna nueva
- * sensible entre sin que alguien la agregue aquí a propósito. Las únicas
+ * sensible entre sin que alguien la agregue aquí a propósito. `rfc` (#123, P24) entra: el RFC figura en cada
+ * factura y la ficha lo captura; nada del portal lo devuelve (`/api/portal/me` arma su propio objeto). Las únicas
  * lecturas de credenciales viven en repositories/portal.ts (login y signup).
  */
 export const PROVEEDOR_PUBLIC_COLUMNS =
-  'id, nombre, alias, telefono, correo, banco, clabe, roles, notas, activo, created_at, regimen_fiscal, portal_estado, match_candidato_id'
+  'id, nombre, alias, telefono, correo, banco, clabe, roles, notas, activo, created_at, regimen_fiscal, rfc, portal_estado, match_candidato_id'
 
 const CAMPOS_PUBLICOS = PROVEEDOR_PUBLIC_COLUMNS.split(', ') as (keyof Proveedor)[]
 

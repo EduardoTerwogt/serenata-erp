@@ -1,4 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
+import { cuerpoDePago, pagoPorOperacion } from '@/lib/server/cuentas/registrar-pago'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 /**
@@ -32,26 +33,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return Response.json({ status: 'completed', result: idempotencyRow.response })
     }
 
-    const { data: pagoOp } = await supabaseAdmin
-      .from('pago_operations')
-      .select('dominio, cuenta_id, result')
-      .eq('operation_id', operationId)
-      .maybeSingle()
-
-    if (pagoOp) {
-      if (pagoOp.dominio !== 'cuentas_cobrar' || pagoOp.cuenta_id !== id) {
-        return Response.json({ status: 'not_found' })
-      }
-
-      const rpcResult = pagoOp.result as { monto_pagado_total: number; monto_pendiente: number; estado_nuevo: string }
-      const result = {
-        success: true,
-        resumen: {
-          monto_pagado_total: rpcResult.monto_pagado_total,
-          monto_pendiente: rpcResult.monto_pendiente,
-          estado_nuevo: rpcResult.estado_nuevo,
-        },
-      }
+    // #123 (T2): la operación es el `operation_id` de la cabecera `pagos`.
+    const pago = await pagoPorOperacion('cobro', operationId, id)
+    if (pago) {
+      const result = cuerpoDePago('cobro', pago.resultado, pago.comprobanteUrl)
 
       if (idempotencyRow) {
         supabaseAdmin

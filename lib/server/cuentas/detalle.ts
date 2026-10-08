@@ -13,6 +13,48 @@ import { conceptoDerivadoDesdeSql, type FilaConceptoSql } from './periodo-sql'
 
 const COLS_DOC = 'id, tipo, archivo_url, archivo_nombre, fecha_carga, estado_validacion, detalle_validacion, eliminado_at, eliminado_motivo'
 
+type LineaCobroFila = {
+  monto: number
+  pago_id: string
+  pagos: { fecha_pago: string; tipo_pago: string; comprobante_url: string | null; notas: string | null; created_at: string; anulado_at: string | null; anulado_motivo: string | null }
+}
+type LineaProveedorFila = {
+  monto_transferido: number
+  monto_neto: number
+  estimado: boolean
+  pago_id: string
+  pagos: { fecha_pago: string; tipo_pago: string; comprobante_url: string | null; notas: string | null; created_at: string; anulado_at: string | null; anulado_motivo: string | null }
+}
+
+/** Cuántas líneas tiene cada pago (>1 = pago compartido, P20). */
+async function lineasPorPago(tabla: 'pagos_comprobantes' | 'pagos_cuentas_pagar', pagoIds: string[]): Promise<Map<string, number>> {
+  const cuenta = new Map<string, number>()
+  if (pagoIds.length === 0) return cuenta
+  const { data, error } = await supabaseAdmin.from(tabla).select('pago_id').in('pago_id', pagoIds)
+  if (error) throw error
+  for (const l of (data ?? []) as { pago_id: string }[]) cuenta.set(l.pago_id, (cuenta.get(l.pago_id) ?? 0) + 1)
+  return cuenta
+}
+
+/**
+ * Documentos dados de baja de un cobro que ya no cuelgan de él (el historial vive en `cuentas_correcciones`,
+ * P27: la factura dada de baja deja de estar ligada a la cuenta y su XML no lleva ancla de cuenta).
+ */
+async function bajasDeCobro(cuentaId: string, yaCargados: Set<string>): Promise<DocumentoFila[]> {
+  const { data, error } = await supabaseAdmin
+    .from('cuentas_correcciones')
+    .select('detalle')
+    .eq('objetivo', 'cobro')
+    .eq('objetivo_id', cuentaId)
+    .in('tipo', ['quitar_documento', 'reemplazar_documento'])
+  if (error) throw error
+  const ids = Array.from(new Set(((data ?? []) as { detalle: { documento_id?: string } | null }[]).map((c) => c.detalle?.documento_id).filter((x): x is string => Boolean(x) && !yaCargados.has(x as string))))
+  if (ids.length === 0) return []
+  const docs = await supabaseAdmin.from('documentos_cuentas_cobrar').select(`${COLS_DOC}, metodo_pago_cfdi, pago_id`).in('id', ids).not('eliminado_at', 'is', null)
+  if (docs.error) throw docs.error
+  return (docs.data ?? []) as DocumentoFila[]
+}
+
 async function proyectoCorto(id: string | null): Promise<ProyectoDetalleCorto | null> {
   if (!id) return null
   const { data, error } = await supabaseAdmin.from('proyectos').select('id, proyecto, fecha_entrega').eq('id', id).maybeSingle()
@@ -44,33 +86,52 @@ const aDerivadoPago = (fila: FilaConceptoSql): DerivadoPago => ({
 export async function cargarDetalleCobro(id: string): Promise<DetalleCobro | null> {
   const { data: cuenta, error } = await supabaseAdmin
     .from('cuentas_cobrar')
-    .select('id, folio, cotizacion_id, monto_total, monto_pagado, fecha_factura, fecha_vencimiento, notas, proyecto_id, cotizaciones(cliente, clientes(nombre))')
+    .select('id, folio, cotizacion_id, monto_total, monto_pagado, fecha_factura, fecha_vencimiento, notas, proyecto_id, factura_documento_id, cotizaciones(cliente, cliente_id, clientes(nombre))')
     .eq('id', id)
     .maybeSingle()
   if (error) throw error
   if (!cuenta) return null
 
-  const [proyecto, docs, pagos, abierta, derivada] = await Promise.all([
+  const facturaId = (cuenta as { factura_documento_id?: string | null }).factura_documento_id ?? null
+  const [proyecto, docs, pagos, abierta, derivada, facturaCuentas] = await Promise.all([
     proyectoCorto(cuenta.proyecto_id),
-    supabaseAdmin.from('documentos_cuentas_cobrar').select(`${COLS_DOC}, metodo_pago_cfdi, pago_id`).eq('cuentas_cobrar_id', id),
+    // #123 (P27): la factura (FACTURA_XML, sin ancla de cuenta), sus PDF y complementos, y lo anclado a la cuenta.
+    supabaseAdmin
+      .from('documentos_cuentas_cobrar')
+      .select(`${COLS_DOC}, metodo_pago_cfdi, pago_id`)
+      .or(facturaId ? `cuentas_cobrar_id.eq.${id},factura_documento_id.eq.${facturaId},id.eq.${facturaId}` : `cuentas_cobrar_id.eq.${id}`),
+    // #123: la fecha, el tipo, el comprobante y la anulación viven en la cabecera `pagos`.
     supabaseAdmin
       .from('pagos_comprobantes')
-      .select('id, monto, tipo_pago, fecha_pago, comprobante_url, notas, created_at, anulado_at, anulado_motivo')
+      .select('monto, pago_id, pagos!inner(fecha_pago, tipo_pago, comprobante_url, notas, created_at, anulado_at, anulado_motivo)')
       .eq('cuentas_cobrar_id', id),
     cuentasReabiertas(cuenta.proyecto_id),
     filaDerivada('cobro', id),
+    facturaId ? supabaseAdmin.from('cuentas_cobrar').select('id', { count: 'exact', head: true }).eq('factura_documento_id', facturaId) : Promise.resolve({ count: 0, error: null }),
   ])
   if (docs.error) throw docs.error
   if (pagos.error) throw pagos.error
+  if (facturaCuentas.error) throw facturaCuentas.error
+  const documentos = [...((docs.data ?? []) as DocumentoFila[])]
+  documentos.push(...(await bajasDeCobro(id, new Set(documentos.map((d) => d.id)))))
+  const lineasCobro = (pagos.data ?? []) as unknown as LineaCobroFila[]
+  const lineas = await lineasPorPago('pagos_comprobantes', Array.from(new Set(lineasCobro.map((l) => l.pago_id))))
 
   // D12: el cliente sale de la cotización del cobro (clientes.nombre; lo emitido como respaldo).
   const { cotizaciones, ...cuentaBase } = cuenta as typeof cuenta & {
-    cotizaciones: { cliente: string | null; clientes: { nombre: string | null } | null } | null
+    cotizaciones: { cliente: string | null; cliente_id: string | null; clientes: { nombre: string | null } | null } | null
   }
   const cliente = cotizaciones?.clientes?.nombre ?? cotizaciones?.cliente ?? null
 
   return armarDetalleCobro(
-    { cuenta: { ...cuentaBase, cliente }, proyecto, documentos: (docs.data ?? []) as DocumentoFila[], pagos: pagos.data ?? [], reabierta: abierta },
+    {
+      cuenta: { ...cuentaBase, cliente, cliente_id: cotizaciones?.cliente_id ?? null },
+      proyecto,
+      documentos,
+      pagos: lineasCobro.map((l) => ({ id: l.pago_id, monto: l.monto, ...l.pagos, lineas: lineas.get(l.pago_id) ?? 1 })),
+      facturaCuentas: facturaCuentas.count ?? 0,
+      reabierta: abierta,
+    },
     aDerivadoCobro(derivada)
   )
 }
@@ -139,14 +200,16 @@ export async function cargarDetallePago(objetivo: 'grupo' | 'cuenta', id: string
   }
 
   const filtroDocs = objetivo === 'grupo' ? { col: 'grupo_id', val: id } : { col: 'cuentas_pagar_id', val: id }
-  const filtroPagos = objetivo === 'grupo' ? { col: 'grupo_id', val: id } : { col: 'cuenta_pagar_id', val: id }
   const [proyecto, docs, pagos, proveedor, orden, abierta, derivada] = await Promise.all([
     proyectoCorto(destino.proyecto_id),
-    supabaseAdmin.from('documentos_cuentas_pagar').select(COLS_DOC).eq(filtroDocs.col, filtroDocs.val),
-    supabaseAdmin
-      .from('pagos_cuentas_pagar')
-      .select('id, fecha_pago, tipo_pago, monto_transferido, comprobante_url, notas, estimado, created_at, anulado_at, anulado_motivo')
-      .eq(filtroPagos.col, filtroPagos.val),
+    supabaseAdmin.from('documentos_cuentas_pagar').select(`${COLS_DOC}, metodo_pago_cfdi, pago_id`).eq(filtroDocs.col, filtroDocs.val),
+    // #123: una cuenta suelta no tiene pagos (B5a); los de un grupo salen de sus líneas con los datos de la cabecera `pagos`.
+    objetivo === 'grupo'
+      ? supabaseAdmin
+          .from('pagos_cuentas_pagar')
+          .select('monto_transferido, monto_neto, estimado, pago_id, pagos!inner(fecha_pago, tipo_pago, comprobante_url, notas, created_at, anulado_at, anulado_motivo)')
+          .eq('grupo_id', id)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
     destino.responsable_id
       ? supabaseAdmin.from('proveedores').select('id, nombre, regimen_fiscal, correo, telefono, banco, clabe').eq('id', destino.responsable_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -157,6 +220,8 @@ export async function cargarDetallePago(objetivo: 'grupo' | 'cuenta', id: string
     filaDerivada(objetivo, id),
   ])
   for (const r of [docs, pagos, proveedor, orden]) if (r.error) throw r.error
+  const lineasProveedor = (pagos.data ?? []) as unknown as LineaProveedorFila[]
+  const lineas = await lineasPorPago('pagos_cuentas_pagar', Array.from(new Set(lineasProveedor.map((l) => l.pago_id))))
 
   return armarDetallePago({
     objetivo,
@@ -165,7 +230,7 @@ export async function cargarDetallePago(objetivo: 'grupo' | 'cuenta', id: string
     proveedor: proveedor.data ? { ...proveedor.data, regimen_fiscal: (proveedor.data.regimen_fiscal as RegimenFiscal | null) ?? null } : null,
     proyecto,
     documentos: (docs.data ?? []) as DocumentoFila[],
-    pagos: pagos.data ?? [],
+    pagos: lineasProveedor.map((l) => ({ id: l.pago_id, monto_transferido: l.monto_transferido, estimado: l.estimado, ...l.pagos, lineas: lineas.get(l.pago_id) ?? 1 })),
     orden: orden.data,
     reabierta: abierta,
   }, aDerivadoPago(derivada))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseComplementoPagoXML, validarComplementoPago } from '@/lib/server/xml/complemento-parser'
+import { parseComplementoPagoXML } from '@/lib/server/xml/complemento-parser'
 
 const UUID_FACTURA = 'aaaaaaaa-1111-2222-3333-444444444444'
 
@@ -52,32 +52,5 @@ describe('xml/complemento-parser', () => {
       { id_documento: UUID_FACTURA.toUpperCase(), imp_pagado: 1000 },
       { id_documento: 'bbbbbbbb-1111-2222-3333-444444444444', imp_pagado: 500 },
     ])
-  })
-})
-
-describe('validarComplementoPago (D16, R11, T10)', () => {
-  const data = parseComplementoPagoXML(PAGOS20)
-
-  it('valida contra el DoctoRelacionado de la factura (sin importar mayúsculas), no contra MontoTotalPagos', () => {
-    expect(validarComplementoPago(data, UUID_FACTURA, 1000)).toEqual({ estado_validacion: 'validado', detalle_validacion: null })
-    expect(validarComplementoPago(data, UUID_FACTURA, 1500).estado_validacion).toBe('revision')
-  })
-
-  it('tolera un centavo', () => {
-    expect(validarComplementoPago(data, UUID_FACTURA, 1000.01).estado_validacion).toBe('validado')
-  })
-
-  it('queda en revisión si no incluye la factura', () => {
-    const r = validarComplementoPago(data, '99999999-1111-2222-3333-444444444444', 1000)
-    expect(r.estado_validacion).toBe('revision')
-    expect(r.detalle_validacion).toContain('no incluye la factura')
-  })
-
-  it('T10: factura sin UUID guardado → revisión manual', () => {
-    expect(validarComplementoPago(data, null, 1000).estado_validacion).toBe('revision')
-  })
-
-  it('XML ilegible → revisión', () => {
-    expect(validarComplementoPago(parseComplementoPagoXML('<xml />'), UUID_FACTURA, 1000).estado_validacion).toBe('revision')
   })
 })

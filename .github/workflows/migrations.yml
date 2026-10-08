@@ -46,6 +46,9 @@ jobs:
           psql "$DB_URL" -v ON_ERROR_STOP=1 -c "select 1 from pg_proc where proname = 'check_rate_limit'" | grep -q "1 row"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -c "select 1 from pg_proc where proname = 'confirmar_match_proveedor'" | grep -q "1 row"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -c "select 1 from pg_proc where proname = 'approve_cotizacion'" | grep -q "1 row"
+          # cuentas_conceptos: plpgsql + force_custom_plan. Como LANGUAGE sql el plan es genérico y hace una sonda por grupo
+          # (309,077 contra 7,965 buffers en test, 2026-10-07).
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "select 1 from pg_proc p join pg_language l on l.oid = p.prolang where p.proname = 'cuentas_conceptos' and p.pronargs = 4 and l.lanname = 'plpgsql' and 'plan_cache_mode=force_custom_plan' = any(p.proconfig)" | grep -q "1 row"
           echo "OK -- el schema se reconstruyó desde cero correctamente."
 
       # J4 (docs/PLAN.md): plpgsql_check sobre todas las funciones de `public`.

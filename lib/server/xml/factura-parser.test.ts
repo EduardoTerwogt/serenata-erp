@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseFacturaXML,
-  validarMontoFactura,
-  validarFacturaClienteXML,
   calcularDeadline,
 } from '@/lib/server/xml/factura-parser'
 
@@ -219,39 +217,36 @@ describe('xml/factura-parser', () => {
     })
   })
 
-  describe('validarMontoFactura (informativa, ya existente)', () => {
-    it('detecta coincidencia dentro de tolerancia', () => {
-      expect(validarMontoFactura(1000, 1000.005).coincide).toBe(true)
+  describe('TipoDeComprobante y conceptos (#123, P4, P18)', () => {
+    const conConceptos = (tipo: string, descripciones: string[]) => `
+      <cfdi:Comprobante TipoDeComprobante="${tipo}" Fecha="2026-04-09T10:00:00" SubTotal="1000.00" Total="1160.00">
+        <cfdi:Emisor Rfc="SER010101AAA" />
+        <cfdi:Receptor Rfc="CLI010101AAA" />
+        <cfdi:Conceptos>
+          ${descripciones.map((d) => `<cfdi:Concepto Descripcion="${d}"><cfdi:Impuestos><cfdi:Traslados><cfdi:Traslado Impuesto="002" Importe="10.00" /></cfdi:Traslados></cfdi:Impuestos></cfdi:Concepto>`).join('\n')}
+        </cfdi:Conceptos>
+      </cfdi:Comprobante>`
+
+    it('lee el tipo de comprobante en mayúsculas', () => {
+      expect(parseFacturaXML(conConceptos('i', ['x'])).tipo_comprobante).toBe('I')
+      expect(parseFacturaXML(conConceptos('P', ['Pago'])).tipo_comprobante).toBe('P')
+      expect(parseFacturaXML(CFDI_BASICO).tipo_comprobante).toBeUndefined()
     })
-    it('detecta discrepancia', () => {
-      expect(validarMontoFactura(1000, 900).coincide).toBe(false)
+
+    it('trae la descripción de cada concepto, con uno solo o con varios', () => {
+      expect(parseFacturaXML(conConceptos('I', ['Producción SH061'])).conceptos).toEqual(['Producción SH061'])
+      expect(parseFacturaXML(conConceptos('I', ['SH061', 'SH062 complementaria'])).conceptos).toEqual(['SH061', 'SH062 complementaria'])
+    })
+
+    it('sin Conceptos devuelve una lista vacía, y los impuestos de cada concepto no se suman al total del comprobante', () => {
+      const r = parseFacturaXML(CFDI_BASICO)
+      expect(r.conceptos).toEqual([])
+      expect(parseFacturaXML(conConceptos('I', ['a', 'b'])).iva_trasladado).toBe(0)
     })
   })
 
-  describe('validarFacturaClienteXML', () => {
-    it('valida cuando el monto coincide con la cuenta', () => {
-      const result = validarFacturaClienteXML({ monto_total: 1160 }, 1160)
-      expect(result.estado_validacion).toBe('validado')
-      expect(result.detalle_validacion).toBeNull()
-    })
-
-    it('tolera diferencias de centavos por redondeo', () => {
-      const result = validarFacturaClienteXML({ monto_total: 1160.004 }, 1160)
-      expect(result.estado_validacion).toBe('validado')
-    })
-
-    it('marca revision cuando el monto no coincide', () => {
-      const result = validarFacturaClienteXML({ monto_total: 900 }, 1160)
-      expect(result.estado_validacion).toBe('revision')
-      expect(result.detalle_validacion).toContain('900.00')
-      expect(result.detalle_validacion).toContain('1160.00')
-    })
-
-    it('marca revision si no se pudo leer el monto', () => {
-      const result = validarFacturaClienteXML({}, 1160)
-      expect(result.estado_validacion).toBe('revision')
-    })
-  })
+  // #123 (T19): validarMontoFactura y validarFacturaClienteXML se retiraron; la regla vive en SQL (factura_cuadre)
+  // y se prueba contra la base (tests/e2e/live y la paridad).
 
   describe('parseFacturaXML - desglose fiscal (traslados/retenciones)', () => {
     it('extrae subtotal e IVA trasladado de un CFDI de persona moral (sin retenciones)', () => {
@@ -304,6 +299,27 @@ describe('xml/factura-parser', () => {
     it('suma todas las líneas de Traslado con el mismo código de impuesto (varias tasas)', () => {
       const result = parseFacturaXML(CFDI_DOS_TASAS_IVA)
       expect(result.iva_trasladado).toBe(80)
+    })
+
+    it('extrae nombre y régimen del emisor y del receptor para prellenar el alta (#130)', () => {
+      const xml = `<cfdi:Comprobante Fecha="2026-09-20T10:00:00" SubTotal="1000.00" Total="1160.00">
+        <cfdi:Emisor Rfc="ALE211125DC7" Nombre=" Audio Lemus Estudio SA de CV " RegimenFiscal="601" />
+        <cfdi:Receptor Rfc="SHO100101AB1" Nombre="Serenata House" RegimenFiscalReceptor="601" />
+      </cfdi:Comprobante>`
+      const result = parseFacturaXML(xml)
+      expect(result).toMatchObject({
+        nombre_emisor: 'Audio Lemus Estudio SA de CV',
+        regimen_emisor: '601',
+        nombre_receptor: 'Serenata House',
+        regimen_receptor: '601',
+      })
+    })
+
+    it('sin nombre ni régimen (CFDI 3.3) esos campos quedan undefined, nunca vacíos', () => {
+      const result = parseFacturaXML('<cfdi:Comprobante Fecha="2026-09-20T10:00:00" Total="10"><cfdi:Emisor Rfc="A" Nombre="  " /><cfdi:Receptor Rfc="B" /></cfdi:Comprobante>')
+      expect(result.nombre_emisor).toBeUndefined()
+      expect(result.regimen_emisor).toBeUndefined()
+      expect(result.regimen_receptor).toBeUndefined()
     })
 
     it('reporta error explícito si el XML está mal formado (tag sin cerrar)', () => {

@@ -55,6 +55,12 @@ DECLARE
   c_cc_05     constant uuid := '5eedc000-0000-4000-8000-00000000cc05';
   c_cc_05a    constant uuid := '5eedc000-0000-4000-8000-0000000cc05a';
   c_cc_sp     constant uuid := '5eedc000-0000-4000-8000-00000000cc99';
+  c_fx_02     constant uuid := '5eedc000-0000-4000-8000-0000000f0002';  -- FACTURA_XML (cabecera) de SEEDCU02
+  c_fx_03     constant uuid := '5eedc000-0000-4000-8000-0000000f0003';
+  c_fx_04     constant uuid := '5eedc000-0000-4000-8000-0000000f0004';
+  c_pg_011    constant uuid := '5eedc000-0000-4000-8000-0000000e0011';  -- cabeceras `pagos` (id = id de su única línea)
+  c_pg_031    constant uuid := '5eedc000-0000-4000-8000-0000000e0031';
+  c_pg_032    constant uuid := '5eedc000-0000-4000-8000-0000000e0032';
   v_ids       text[] := ARRAY['SEEDCU01','SEEDCU02','SEEDCU03','SEEDCU04','SEEDCU05','SEEDCU05-A','SEEDCU05-B'];
 BEGIN
   IF to_regclass('public.loadtest_runs') IS NULL THEN
@@ -76,9 +82,17 @@ BEGIN
      WHERE orden_pago_id IN (SELECT id FROM ordenes_pago WHERE id = c_orden OR pdf_nombre LIKE 'SEEDCU %');
   END IF;
   DELETE FROM ordenes_pago WHERE id = c_orden OR pdf_nombre LIKE 'SEEDCU %';
-  -- pagos_comprobantes y documentos_cuentas_cobrar caen en cascada.
+  -- #123: la factura (FACTURA_XML) es cabecera sin ancla de cuenta; PDF y complementos cuelgan de ella. Se desligan
+  -- las cuentas, se borran los documentos y, al borrar las cuentas, caen en cascada sus líneas de pago; las
+  -- cabeceras `pagos` del seed se borran al final (tienen ids fijos).
+  UPDATE cuentas_cobrar SET factura_documento_id = NULL
+   WHERE folio LIKE 'SEEDCU-%' OR cotizacion_id = ANY(v_ids) OR proyecto_id = ANY(v_ids);
+  DELETE FROM documentos_cuentas_cobrar
+   WHERE id IN (c_fx_02, c_fx_03, c_fx_04) OR factura_documento_id IN (c_fx_02, c_fx_03, c_fx_04)
+      OR cuentas_cobrar_id IN (SELECT id FROM cuentas_cobrar WHERE folio LIKE 'SEEDCU-%' OR cotizacion_id = ANY(v_ids) OR proyecto_id = ANY(v_ids));
   DELETE FROM cuentas_cobrar
    WHERE folio LIKE 'SEEDCU-%' OR cotizacion_id = ANY(v_ids) OR proyecto_id = ANY(v_ids);
+  DELETE FROM pagos WHERE id IN (c_pg_011, c_pg_031, c_pg_032);
   DELETE FROM historial_cambios_responsable_item WHERE cotizacion_id = ANY(v_ids);
   DELETE FROM proyectos WHERE id = ANY(v_ids);
   DELETE FROM cotizaciones WHERE id = ANY(v_ids);  -- items en cascada
@@ -199,23 +213,44 @@ BEGIN
     (c_cc_05a, 'SEEDCU-CC-05A', 'SEEDCU05-A', 'SEEDCU05', 6670,    0, NULL, NULL, NULL),
     (c_cc_sp,  'SEEDCU-CC-99',  NULL,         NULL,       5000,    0, NULL, NULL, NULL);
 
-  INSERT INTO pagos_comprobantes (id, cuentas_cobrar_id, monto, tipo_pago, fecha_pago, comprobante_url, archivo_nombre, notas)
+  -- #123: cada pago es una cabecera `pagos` (fecha, tipo, comprobante, notas) con su línea por cuenta.
+  INSERT INTO pagos (id, lado, fecha_pago, tipo_pago, comprobante_url, archivo_nombre, notas, created_by)
   VALUES
-    ('5eedc000-0000-4000-8000-0000000e0011', c_cc_01,  5000, 'TRANSFERENCIA', '2026-05-25', 'https://example.com/seedcu/SEEDCU01_anticipo.pdf', 'SEEDCU01_anticipo.pdf', 'Anticipo antes de factura (D32)'),
-    ('5eedc000-0000-4000-8000-0000000e0031', c_cc_03, 13340, 'TRANSFERENCIA', '2026-07-20', 'https://example.com/seedcu/SEEDCU03_pago1.pdf',    'SEEDCU03_pago1.pdf',    'Pago 1 de 2 (PPD)'),
-    ('5eedc000-0000-4000-8000-0000000e0032', c_cc_03, 13340, 'CHEQUE',        '2026-08-01', 'https://example.com/seedcu/SEEDCU03_pago2.pdf',    'SEEDCU03_pago2.pdf',    'Pago 2 de 2 (PPD)');
+    (c_pg_011, 'cobro', '2026-05-25', 'TRANSFERENCIA', 'https://example.com/seedcu/SEEDCU01_anticipo.pdf', 'SEEDCU01_anticipo.pdf', 'Anticipo antes de factura (D32)', 'seed'),
+    (c_pg_031, 'cobro', '2026-07-20', 'TRANSFERENCIA', 'https://example.com/seedcu/SEEDCU03_pago1.pdf',    'SEEDCU03_pago1.pdf',    'Pago 1 de 2 (PPD)', 'seed'),
+    (c_pg_032, 'cobro', '2026-08-01', 'CHEQUE',        'https://example.com/seedcu/SEEDCU03_pago2.pdf',    'SEEDCU03_pago2.pdf',    'Pago 2 de 2 (PPD)', 'seed');
 
-  -- B1: datos del CFDI en la fila del XML y complemento vinculado a su pago.
-  INSERT INTO documentos_cuentas_cobrar (cuentas_cobrar_id, tipo, archivo_url, archivo_nombre, estado_validacion, fecha_carga, uuid_cfdi, total_cfdi, metodo_pago_cfdi, pago_id)
+  INSERT INTO pagos_comprobantes (id, cuentas_cobrar_id, monto, pago_id)
   VALUES
-    (c_cc_02, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU02.xml',      'SEEDCU02_Factura.xml',           'pendiente', '2026-08-18 09:00', NULL, NULL, NULL, NULL),  -- anterior a B1: sin UUID ni método
-    (c_cc_02, 'FACTURA_PDF',      'https://example.com/seedcu/SEEDCU02.pdf',      'SEEDCU02_Factura.pdf',           'pendiente', '2026-08-18 09:00', NULL, NULL, NULL, NULL),
-    (c_cc_03, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU03.xml',      'SEEDCU03_Factura_PPD.xml',       'validado',  '2026-07-06 09:00', 'SEEDCU03-0000-4000-8000-00000000F003', 26680, 'PPD', NULL),
-    (c_cc_03, 'FACTURA_PDF',      'https://example.com/seedcu/SEEDCU03.pdf',      'SEEDCU03_Factura_PPD.pdf',       'pendiente', '2026-07-06 09:00', NULL, NULL, NULL, NULL),
+    (c_pg_011, c_cc_01,  5000, c_pg_011),
+    (c_pg_031, c_cc_03, 13340, c_pg_031),
+    (c_pg_032, c_cc_03, 13340, c_pg_032);
+
+  -- La factura es cabecera sin ancla; PDF y complementos cuelgan de ella (`factura_documento_id`). B1: la fila del
+  -- XML guarda uuid_cfdi, total_cfdi y metodo_pago_cfdi; el complemento, su pago_id y el monto pagado.
+  INSERT INTO documentos_cuentas_cobrar (id, tipo, archivo_url, archivo_nombre, estado_validacion, fecha_carga, uuid_cfdi, total_cfdi, metodo_pago_cfdi)
+  VALUES
+    (c_fx_02, 'FACTURA_XML', 'https://example.com/seedcu/SEEDCU02.xml',      'SEEDCU02_Factura.xml',     'pendiente', '2026-08-18 09:00', NULL, NULL, NULL),  -- anterior a B1: sin UUID ni método
+    (c_fx_03, 'FACTURA_XML', 'https://example.com/seedcu/SEEDCU03.xml',      'SEEDCU03_Factura_PPD.xml', 'validado',  '2026-07-06 09:00', 'SEEDCU03-0000-4000-8000-00000000F003', 26680, 'PPD'),
+    (c_fx_04, 'FACTURA_XML', 'https://example.com/seedcu/SEEDCU04.xml',      'SEEDCU04_Factura.xml',     'revision',  '2026-09-15 09:00', 'SEEDCU04-0000-4000-8000-00000000F004', 13340, 'PUE');
+
+  INSERT INTO documentos_cuentas_cobrar (factura_documento_id, tipo, archivo_url, archivo_nombre, estado_validacion, fecha_carga, pago_id, monto_pagado)
+  VALUES
+    (c_fx_02, 'FACTURA_PDF',      'https://example.com/seedcu/SEEDCU02.pdf',      'SEEDCU02_Factura.pdf',           'pendiente', '2026-08-18 09:00', NULL, NULL),
+    (c_fx_03, 'FACTURA_PDF',      'https://example.com/seedcu/SEEDCU03.pdf',      'SEEDCU03_Factura_PPD.pdf',       'pendiente', '2026-07-06 09:00', NULL, NULL),
     -- Pago 1: complemento solo con XML (D27: le falta el PDF). Pago 2: sin complemento.
-    (c_cc_03, 'COMPLEMENTO_PAGO', 'https://example.com/seedcu/SEEDCU03_rep1.xml', 'SEEDCU03_Complemento_pago1.xml', 'validado',  '2026-07-22 09:00', NULL, NULL, NULL, '5eedc000-0000-4000-8000-0000000e0031'),
-    (c_cc_04, 'FACTURA_XML',      'https://example.com/seedcu/SEEDCU04.xml',      'SEEDCU04_Factura.xml',           'revision',  '2026-09-15 09:00', 'SEEDCU04-0000-4000-8000-00000000F004', 13340, 'PUE', NULL);
+    (c_fx_03, 'COMPLEMENTO_PAGO', 'https://example.com/seedcu/SEEDCU03_rep1.xml', 'SEEDCU03_Complemento_pago1.xml', 'validado',  '2026-07-22 09:00', c_pg_031, 13340);
+
+  UPDATE cuentas_cobrar SET factura_documento_id = c_fx_02 WHERE id = c_cc_02;
+  UPDATE cuentas_cobrar SET factura_documento_id = c_fx_03 WHERE id = c_cc_03;
+  UPDATE cuentas_cobrar SET factura_documento_id = c_fx_04 WHERE id = c_cc_04;
 
   RAISE NOTICE 'seed-cuentas-test: listo (5 proyectos, 1 orden, 6 grupos, 11 cuentas por pagar, 7 por cobrar).';
 END
 $seed$;
+
+-- #123 (B6a): constancia fiscal de prueba de Serenata (RFC SHO100101AB1, el que usan los fixtures de XML). Solo si no
+-- hay una vigente: en test, `serenataRfc()` lee esta fila y sin ella las rutas de factura fallan explícito (T20).
+INSERT INTO public.datos_fiscales_serenata (rfc, razon_social, regimen_fiscal, tipo_persona, codigo_postal, actualizado_por)
+SELECT 'SHO100101AB1', 'Serenata House Entertainment (datos de prueba)', 'Régimen General de Ley Personas Morales', 'moral', '06700', 'seed-test'
+WHERE NOT EXISTS (SELECT 1 FROM public.datos_fiscales_serenata WHERE vigente);

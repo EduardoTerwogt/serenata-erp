@@ -4,8 +4,8 @@
  *
  * Sin factura XML vigente validada, la subida es la normal. Con una, subir
  * otra es **reemplazarla**, y eso es una corrección (decisión del usuario,
- * sesión 20, igual para cobros, grupos y sueltas): solo admin, con las
- * cuentas reabiertas y con motivo. La nueva se sube y valida con el flujo de
+ * sesión 20, igual para cobros, grupos y sueltas): con la sección
+ * `cuentas` (#123, P14: ya no es solo admin), con las cuentas reabiertas y con motivo. La nueva se sube y valida con el flujo de
  * siempre y después la anterior (XML y PDF) se da de baja con
  * `reemplazado_por` apuntando a la nueva, por la RPC de baja. En una orden de
  * pago nunca se cambia la factura: el PDF ya se emitió con ella (D7).
@@ -50,8 +50,8 @@ export async function planearFactura(
   const xmlValidado = vigentes.find((d) => d.tipo === tipos.xml && d.estado_validacion === 'validado')
   if (!xmlValidado) return { ok: true, reemplazo: null }
 
-  if (!getUserSections(usuario ?? null).includes('admin') || !usuario?.email) {
-    return rechazo(403, 'solo_admin', 'Ya tiene una factura validada. Reemplazarla es una corrección que solo hace un admin.')
+  if (!getUserSections(usuario ?? null).includes('cuentas') || !usuario?.email) {
+    return rechazo(403, 'sin_acceso_cuentas', 'Ya tiene una factura validada. Reemplazarla es una corrección que exige acceso a Cuentas.')
   }
   if (!(await cuentasReabiertas(destino.proyecto_id))) {
     return rechazo(409, 'factura_vigente', 'Ya tiene una factura validada. Para reemplazarla, reabre las cuentas del proyecto.')

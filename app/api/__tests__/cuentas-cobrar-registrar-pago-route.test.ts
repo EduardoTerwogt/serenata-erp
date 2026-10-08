@@ -3,9 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireSectionMock: vi.fn(async () => ({ response: null })),
   getCuentaCobrarByIdMock: vi.fn(),
-  getPagosComprobantesByCuentaMock: vi.fn(),
   getProyectoByIdMock: vi.fn(),
-  createDocumentoCuentaCobrarMock: vi.fn(),
   uploadFileToDriveMock: vi.fn(),
   getGoogleEnvMock: vi.fn(),
   rpcMock: vi.fn(),
@@ -22,9 +20,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/api-auth', () => ({ requireSection: mocks.requireSectionMock }))
 vi.mock('@/lib/db', () => ({
   getCuentaCobrarById: mocks.getCuentaCobrarByIdMock,
-  getPagosComprobantesByCuenta: mocks.getPagosComprobantesByCuentaMock,
   getProyectoById: mocks.getProyectoByIdMock,
-  createDocumentoCuentaCobrar: mocks.createDocumentoCuentaCobrarMock,
 }))
 vi.mock('@/lib/integrations/google/drive', () => ({ uploadFileToDrive: mocks.uploadFileToDriveMock }))
 vi.mock('@/lib/integrations/google/env', () => ({ getGoogleEnv: mocks.getGoogleEnvMock }))
@@ -61,13 +57,11 @@ beforeEach(() => {
   )
   mocks.computePayloadHashMock.mockReturnValue('fake-hash')
   mocks.getCuentaCobrarByIdMock.mockResolvedValue({ id: 'cuenta-1', monto_total: 1000, cotizacion_id: 'SH001' })
-  mocks.getPagosComprobantesByCuentaMock.mockResolvedValue([])
   mocks.getProyectoByIdMock.mockResolvedValue({ id: 'SH001', proyecto: 'Spot' })
   mocks.getGoogleEnvMock.mockReturnValue({ driveFolderIdCuentas: 'folder' })
   mocks.uploadFileToDriveMock.mockResolvedValue('https://drive/comprobante.jpg')
-  mocks.createDocumentoCuentaCobrarMock.mockResolvedValue({})
   mocks.rpcMock.mockResolvedValue({
-    data: { monto_pagado_total: 300, monto_pendiente: 700, estado_nuevo: 'PARCIALMENTE_PAGADO' },
+    data: { pago_id: 'pago-1', lado: 'cobro', lineas: [{ cuenta_id: 'cuenta-1', monto_pagado_total: 300, monto_pendiente: 700, estado_nuevo: 'PARCIALMENTE_PAGADO' }] },
     error: null,
   })
 })
@@ -96,11 +90,18 @@ describe('POST /api/cuentas-cobrar/[id]/registrar-pago', () => {
     expect(mocks.rpcMock).not.toHaveBeenCalled()
   })
 
-  it('monto excede el total de la cuenta -- 400', async () => {
-    mocks.getPagosComprobantesByCuentaMock.mockResolvedValue([{ monto: 900 }])
+  it('monto excede el saldo (lo valida la RPC bajo lock) -- 400', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'Monto excede el saldo de la cuenta' } })
     const res = await POST(buildRequest(), { params })
     expect(res.status).toBe(400)
-    expect(mocks.rpcMock).not.toHaveBeenCalled()
+    expect((await res.json()).error).toBe('El monto excede el saldo de la cuenta.')
+  })
+
+  it('P1414 (el saldo cambió) -- 409 candidatos_cambiaron', async () => {
+    mocks.rpcMock.mockResolvedValue({ data: null, error: { code: 'P1414', message: 'candidatos_cambiaron: cuenta x' } })
+    const res = await POST(buildRequest(), { params })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toBe('candidatos_cambiaron')
   })
 
   it('pasa payloadHash y operation_id correctamente', async () => {
@@ -112,34 +113,42 @@ describe('POST /api/cuentas-cobrar/[id]/registrar-pago', () => {
       expect.any(Function),
       { payloadHash: 'fake-hash' }
     )
-    expect(mocks.rpcMock).toHaveBeenCalledWith('registrar_pago_cuenta_cobrar', {
-      p_cuenta_id: 'cuenta-1',
-      p_monto: 300,
+    expect(mocks.rpcMock).toHaveBeenCalledWith('registrar_pago_cobro', {
+      p_lineas: [{ cuenta_id: 'cuenta-1', monto: 300, saldo_esperado: null }],
       p_tipo_pago: 'TRANSFERENCIA',
       p_fecha_pago: '2026-09-12',
-      p_comprobante_url: '',
-      p_archivo_nombre: 'pago_2026-09-12',
+      p_comprobante_url: null,
+      p_archivo_nombre: null,
       p_notas: null,
+      p_usuario: null,
       p_operation_id: OP_ID,
     })
   })
 
-  it('con comprobante: crea el documento con operation_id', async () => {
+  it('con comprobante: lo sube una vez a Drive y su enlace viaja en la cabecera del pago (sin documento OTRO)', async () => {
     const comprobante = new File(['x'], 'comprobante.jpg', { type: 'image/jpeg' })
     await POST(buildRequest({ comprobante }), { params })
 
-    expect(mocks.createDocumentoCuentaCobrarMock).toHaveBeenCalledWith(
-      expect.objectContaining({ cuentas_cobrar_id: 'cuenta-1', tipo: 'OTRO', operation_id: OP_ID })
+    expect(mocks.uploadFileToDriveMock).toHaveBeenCalledTimes(1)
+    expect(mocks.rpcMock).toHaveBeenCalledWith(
+      'registrar_pago_cobro',
+      expect.objectContaining({ p_comprobante_url: 'https://drive/comprobante.jpg', p_archivo_nombre: 'comprobante.jpg', p_operation_id: OP_ID })
     )
   })
 
   it('éxito -- 200 con el resumen esperado', async () => {
     const res = await POST(buildRequest(), { params })
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({
-      success: true,
-      resumen: { monto_pagado_total: 300, monto_pendiente: 700, estado_nuevo: 'PARCIALMENTE_PAGADO' },
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.resumen).toEqual({
+      pago_id: 'pago-1',
+      monto_pagado_total: 300,
+      monto_pendiente: 700,
+      estado_nuevo: 'PARCIALMENTE_PAGADO',
+      comprobante_url: null,
     })
+    expect(body.pago.pago_id).toBe('pago-1')
   })
 
   it('P1411 (operation_id cruzado) -- 409, sin exponer el mensaje crudo de la RPC', async () => {

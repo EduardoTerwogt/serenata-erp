@@ -7,20 +7,20 @@ import { StatusBanner } from '@/components/ui/StatusBanner'
 import { sendJson } from '@/lib/client/api'
 import type { ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
 import { plural } from './formato'
-import { useEsAdmin } from './ui'
+import { useTieneCuentas } from './ui'
 
 const ruta = (id: string, accion: 'reabrir' | 'cerrar') => `/api/cuentas/proyectos/${encodeURIComponent(id)}/${accion}`
 
 /**
- * B7 (D5, D6): Reabrir y Volver a cerrar, solo admin. Se reabre con o sin
+ * B7 (D5, D6): Reabrir y Volver a cerrar, con acceso a Cuentas (P14). Se reabre con o sin
  * pendientes (sesión 20) y con motivo obligatorio. Con pendientes, terminar
  * la reapertura se llama "Terminar correcciones": las cuentas se cierran
  * solas al resolverlos (D17).
  */
 export function AccionesReapertura({ p, onCambio, bloque }: { p: ProyectoDetalle; onCambio: () => void; bloque?: boolean }) {
-  const esAdmin = useEsAdmin()
+  const tieneCuentas = useTieneCuentas()
   const [abierto, setAbierto] = useState(false)
-  if (!esAdmin || p.sin_proyecto) return null
+  if (!tieneCuentas || p.sin_proyecto) return null
 
   const reabiertas = p.cuentas.reabiertas
   const etiqueta = !reabiertas ? 'Reabrir' : p.cuentas.pendientes === 0 ? 'Volver a cerrar' : 'Terminar correcciones'

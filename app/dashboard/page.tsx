@@ -29,7 +29,14 @@ interface ResumenDashboard {
   periodoActual: { label: string; inicio: string; fin: string }
   kpis: { porCobrar: number; porPagar: number; cotizacionesAprobadas: number; cotizacionesBorrador: number }
   balance: BarChartDatum[]
-  fiscal: { ingresos: number; egresos: number; impuestos: number; deudas: number; utilidadAntesIsr: number }
+  fiscal: {
+    ingresos: number
+    egresos: number
+    impuestos: number
+    deudas: number
+    utilidadAntesIsr: number
+    isr: { tipoPersona: 'moral' | 'fisica'; tasa: number | null; desdeConstancia: boolean }
+  }
   cobertura: { gastosFijos: Array<{ id: string; nombre: string; monto: number }>; totalGastosFijos: number; facturado: number }
   actividad: { proyectosCreados: number; cotizacionesAprobadas: number; proyectosEnCurso: number }
   cotizacionesRecientes: Array<{ id: string; proyecto: string; cliente: string; total: number; estado: string; created_at: string }>
@@ -143,7 +150,7 @@ export default function DashboardPage() {
             {[
               { label: 'Ingresos', v: resumen.fiscal.ingresos, className: 'text-ink' },
               { label: 'Egresos (cuentas liquidadas)', v: resumen.fiscal.egresos, className: 'text-body' },
-              { label: 'Impuestos (ISR 30% estimado)', v: resumen.fiscal.impuestos, className: 'text-body' },
+              { label: resumen.fiscal.isr.tasa === null ? 'Impuestos (ISR no estimado)' : `Impuestos (ISR ${Math.round(resumen.fiscal.isr.tasa * 100)}% estimado)`, v: resumen.fiscal.impuestos, className: 'text-body' },
               { label: 'Deudas', v: resumen.fiscal.deudas, className: 'text-accent' },
             ].map((r) => (
               <div key={r.label}>
@@ -154,7 +161,11 @@ export default function DashboardPage() {
             <div className="border-t border-hairline pt-3">
               <div className="sn-label mb-1">Utilidad antes de ISR</div>
               <div className="sn-display text-h2 text-approved-fg">{formatMoney(resumen.fiscal.utilidadAntesIsr)}</div>
-              <div className="mt-1.5 text-xs text-subtext">ISR 30% sobre utilidad · persona moral (estimado)</div>
+              <div className="mt-1.5 text-xs text-subtext">
+                {resumen.fiscal.isr.tasa === null
+                  ? 'Serenata es persona física según su constancia: el ISR depende del régimen y no se estima aquí.'
+                  : `ISR ${Math.round(resumen.fiscal.isr.tasa * 100)}% sobre utilidad · persona moral (estimado)${resumen.fiscal.isr.desdeConstancia ? '' : ' · sin constancia fiscal cargada se asume persona moral'}`}
+              </div>
             </div>
           </div>
         </SectionCard>

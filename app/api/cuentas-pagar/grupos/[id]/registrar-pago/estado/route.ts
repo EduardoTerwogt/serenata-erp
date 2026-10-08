@@ -1,4 +1,5 @@
 import { requireSection } from '@/lib/api-auth'
+import { cuerpoDePago, pagoPorOperacion } from '@/lib/server/cuentas/registrar-pago'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 /**
@@ -33,44 +34,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return Response.json({ status: 'completed', result: idempotencyRow.response })
     }
 
-    const { data: pagoOp } = await supabaseAdmin
-      .from('pago_operations')
-      .select('dominio, cuenta_id, result')
-      .eq('operation_id', operationId)
-      .maybeSingle()
-
-    if (pagoOp) {
-      if (pagoOp.dominio !== 'cuentas_pagar_grupos' || pagoOp.cuenta_id !== id) {
-        return Response.json({ status: 'not_found' })
-      }
-
-      // Rediseño de Cuentas B2 (A1): el comprobante vive en el propio pago
-      // (pagos_cuentas_pagar). Los pagos anteriores lo tenían como documento.
-      const { data: pago } = await supabaseAdmin
-        .from('pagos_cuentas_pagar')
-        .select('comprobante_url')
-        .eq('grupo_id', id)
-        .eq('operation_id', operationId)
-        .maybeSingle()
-      const { data: documento } = pago?.comprobante_url
-        ? { data: null }
-        : await supabaseAdmin
-            .from('documentos_cuentas_pagar')
-            .select('archivo_url')
-            .eq('grupo_id', id)
-            .eq('operation_id', operationId)
-            .maybeSingle()
-
-      const rpcResult = pagoOp.result as { monto_pagado_total: number; saldo_pendiente: number; estado_nuevo: string }
-      const result = {
-        success: true,
-        resumen: {
-          monto_pagado_total: rpcResult.monto_pagado_total,
-          saldo_pendiente: rpcResult.saldo_pendiente,
-          estado_nuevo: rpcResult.estado_nuevo,
-          comprobante_url: pago?.comprobante_url ?? documento?.archivo_url ?? null,
-        },
-      }
+    // #123 (T2): la operación es el `operation_id` de la cabecera `pagos`; el comprobante vive en ella.
+    const pago = await pagoPorOperacion('proveedor', operationId, id)
+    if (pago) {
+      const result = cuerpoDePago('proveedor', pago.resultado, pago.comprobanteUrl)
 
       if (idempotencyRow) {
         supabaseAdmin

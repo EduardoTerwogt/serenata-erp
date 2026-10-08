@@ -59,6 +59,7 @@ export async function mockPortalDashboard(
           monto_transferido: 0,
           saldo_por_transferir: 1160,
           items: [{ id: 'cuenta-1', item_descripcion: 'Audio en vivo', cantidad: 1, costo_total: 1000, cotizacion_id: 'SH001' }],
+          pagos: [],
         },
       ],
     })
@@ -213,6 +214,7 @@ export async function mockPortalDashboardFacturaExitosa(page: Page) {
           monto_transferido: 0,
           saldo_por_transferir: 1160,
           items: [{ id: 'cuenta-1', item_descripcion: 'Audio en vivo', cantidad: 1, costo_total: 1000, cotizacion_id: 'SH001' }],
+          pagos: [],
         },
       ],
     })

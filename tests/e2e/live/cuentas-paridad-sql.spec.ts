@@ -40,6 +40,18 @@ function mesPorDefecto(proyectos: ProyectoDetalle[], anio: number, hoy: string) 
   return anio === Number(hoy.slice(0, 4)) ? Number(hoy.slice(5, 7)) : ultimoMesConDatos(proyectos, anio)
 }
 
+/**
+ * #123 (P20): SQL agrega a cada concepto el campo `compartido` (factura o pago que cubre varias cuentas, para el chip
+ * de la lista). El doble TS está congelado y no lo conoce: se compara todo lo demás.
+ */
+function sinCompartido<T>(valor: T): T {
+  if (Array.isArray(valor)) return valor.map(sinCompartido) as unknown as T
+  if (valor && typeof valor === 'object') {
+    return Object.fromEntries(Object.entries(valor as Record<string, unknown>).filter(([k]) => k !== 'compartido').map(([k, v]) => [k, sinCompartido(v)])) as T
+  }
+  return valor
+}
+
 test.describe('live: paridad de la derivación SQL con la de TS (O1b)', () => {
   test.skip(!liveEnabled, 'Live integration tests are disabled until PLAYWRIGHT_BASE_URL and live credentials are configured')
   test.setTimeout(300_000)
@@ -86,7 +98,7 @@ test.describe('live: paridad de la derivación SQL con la de TS (O1b)', () => {
       const sql = decodificarPeriodoSql(await rpc(supabase, 'cuentas_periodo', { p: { ...caso, hoy } }))
       const etiqueta = JSON.stringify(caso)
       for (const k of Object.keys(ts) as (keyof typeof ts)[]) {
-        expect(sql[k], `${etiqueta} → ${k}`).toEqual(ts[k])
+        expect(sinCompartido(sql[k]), `${etiqueta} → ${k}`).toEqual(ts[k])
       }
     }
   })
@@ -118,7 +130,7 @@ test.describe('live: paridad de la derivación SQL con la de TS (O1b)', () => {
       for (const f of filtros) {
         const params = { anio, mes: 'todo' as const, estado: 'todas' as const, vista: 'proyectos' as const, page: 1, page_size: 60, proyecto: id, ...f }
         const sql = decodificarPeriodoSql(await rpc(supabase, 'cuentas_periodo', { p: { ...params, hoy } }))
-        expect(sql.seleccionado, `${id} ${JSON.stringify(f)}`).toEqual(seleccionarProyecto(proyectos, params))
+        expect(sinCompartido(sql.seleccionado), `${id} ${JSON.stringify(f)}`).toEqual(seleccionarProyecto(proyectos, params))
       }
     }
   })

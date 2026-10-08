@@ -64,6 +64,20 @@ export const CotizacionUpdateSchema = CotizacionBaseSchema.partial().extend({
   items: z.array(ItemCotizacionSchema).optional(),
 })
 
+// #123 (P24): RFC como columna en clientes y proveedores. Se normaliza igual que el CHECK de la base
+// (`rfc = upper(btrim(rfc))`, no vacío); vacío o solo espacios = sin RFC (null). 12 posiciones (moral) o 13 (física).
+export const RFC_REGEX = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/
+export const RfcSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((v) => {
+    if (v == null) return v === null ? null : undefined
+    const limpio = v.trim().toUpperCase()
+    return limpio === '' ? null : limpio
+  })
+  .refine((v) => v == null || RFC_REGEX.test(v), 'RFC inválido: 12 o 13 caracteres (3-4 letras, 6 dígitos de fecha y 3 de homoclave)')
+
 // ==================== PROVEEDORES (antes "responsables") ====================
 
 export const ProveedorCreateSchema = z.object({
@@ -76,6 +90,7 @@ export const ProveedorCreateSchema = z.object({
   roles: z.array(z.string()).optional().default([]),
   notas: z.string().nullable().optional(),
   regimen_fiscal: z.enum(['moral', 'fisica', 'resico']).nullable().optional(),
+  rfc: RfcSchema,
 })
 
 export const ProveedorUpdateSchema = z.object({
@@ -89,6 +104,7 @@ export const ProveedorUpdateSchema = z.object({
   notas: z.string().nullable().optional(),
   activo: z.boolean().optional(),
   regimen_fiscal: z.enum(['moral', 'fisica', 'resico']).nullable().optional(),
+  rfc: RfcSchema,
 })
 
 // ==================== CLIENTES ====================
@@ -103,6 +119,7 @@ export const ClienteCreateSchema = z.object({
   telefono: z.string().nullable().optional(),
   correo: z.string().email('Correo inválido').nullable().optional(),
   notas: z.string().nullable().optional(),
+  rfc: RfcSchema,
 })
 
 export const ClienteUpdateSchema = z.object({
@@ -113,6 +130,7 @@ export const ClienteUpdateSchema = z.object({
   correo: z.string().email('Correo inválido').nullable().optional(),
   notas: z.string().nullable().optional(),
   activo: z.boolean().optional(),
+  rfc: RfcSchema,
 })
 
 // ==================== PROYECTOS ====================
@@ -339,6 +357,146 @@ export const RegistrarPagoProveedorSchema = z.object({
   operation_id: z.string().uuid('operation_id requerido (uuid)'),
 })
 
+// ── #123 (B3): estado de cuenta, facturas ligadas y pagos multi-línea ────────────────────────────────────────────
+
+export const LADOS_CUENTAS = ['cobro', 'proveedor'] as const
+
+// GET /api/cuentas/estado-cuenta?lado=&id=
+export const EstadoCuentaQuerySchema = z.object({
+  lado: z.enum(LADOS_CUENTAS, { message: 'lado inválido (cobro o proveedor)' }),
+  id: z.string().uuid('id inválido (uuid de la contraparte)'),
+  /** #130: ids de proyecto separados por coma; solo los conceptos de esos proyectos (pago por proyecto). */
+  proyectos: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').map((x) => x.trim()).filter(Boolean) : undefined))
+    .refine((v) => v === undefined || (v.length > 0 && v.length <= 50), 'proyectos: de 1 a 50 ids separados por coma'),
+})
+
+// GET /api/cuentas/proyectos-selector (#130): proyectos con renglones (Subir factura) o con saldo (Registrar pago).
+export const ProyectosSelectorQuerySchema = z.object({
+  modo: z.enum(['renglones', 'pago'], { message: 'modo inválido (renglones o pago)' }),
+  lado: z.enum(LADOS_CUENTAS).optional(),
+  q: z.string().trim().max(100).optional(),
+  contraparte: z.string().uuid().optional(),
+  solo_pendientes: z.enum(['true', 'false']).optional().transform((v) => v !== 'false'),
+  page: z.coerce.number().int().min(1).max(10_000).optional().default(1),
+  page_size: z.coerce.number().int().min(1).max(50).optional().default(25),
+}).refine((v) => v.modo !== 'pago' || v.lado !== undefined, { message: 'El modo pago requiere lado' })
+
+// GET /api/cuentas/contrapartes (#131): contrapartes con algo pendiente para el desplegable de Acciones.
+export const PENDIENTES_CONTRAPARTE = ['factura', 'complemento', 'saldo', 'todos'] as const
+export const CuentasContrapartesQuerySchema = z.object({
+  lado: z.enum(LADOS_CUENTAS, { message: 'lado inválido (cobro o proveedor)' }),
+  pendiente: z.enum(PENDIENTES_CONTRAPARTE, { message: 'pendiente inválido (factura, complemento, saldo o todos)' }),
+  q: z.string().trim().max(100).optional(),
+})
+
+const centavos = z.coerce.number().finite().positive('El monto debe ser mayor a 0')
+
+// POST /api/cuentas/facturas/preview — campo `datos` (JSON) del multipart junto al archivo `xml`.
+export const FacturaPreviewSchema = z.object({
+  /** Contraparte elegida a mano (si el RFC del XML no coincide con nadie, P24). */
+  contraparte_id: z.string().uuid().nullable().optional(),
+  /** Cuentas de cobro (cliente) o grupo de proveedor ya elegidos, para calcular el cuadre. */
+  cuentas: z.array(z.string().uuid()).optional().default([]),
+})
+
+// POST /api/cuentas/facturas — campo `datos` (JSON) del multipart junto a `xml` y `pdf` (ambos obligatorios, #131).
+// Sin tope de cotizaciones por factura (P6, P25).
+export const FacturaCrearSchema = z.object({
+  operation_id: z.string().uuid('operation_id requerido (uuid)'),
+  contraparte_id: z.string().uuid().nullable().optional(),
+  /** Ofrecido al elegir la contraparte a mano: guarda el RFC del XML en su ficha (P24). */
+  guardar_rfc: z.boolean().optional().default(false),
+  /** Cliente: las cuentas de cobro que cubre y el total que el usuario vio (la RPC lo revalida). */
+  cuentas: z
+    .array(z.object({ id: z.string().uuid(), monto_esperado: z.coerce.number().finite().nullable().optional() }))
+    .optional()
+    .default([])
+    .refine((c) => new Set(c.map((x) => x.id)).size === c.length, 'Cada cotización aparece una sola vez en la factura'),
+  /** Proveedor: el grupo al que corresponde (1:1, P10). */
+  grupo_id: z.string().uuid().nullable().optional(),
+  /** Complemento: desambigua el pago cuando varios coinciden con el monto (P9). */
+  pago_id: z.string().uuid().nullable().optional(),
+  /**
+   * #130 (proveedor): alta del proveedor y/o asignación de renglones o gasto extra, en una transacción, ANTES de subir la
+   * factura. El proveedor es `contraparte_id` (existente) o `preparar.proveedor` (nuevo); el destino es `renglones` o
+   * `gasto` (uno solo). Sin `preparar`, la factura va a `grupo_id` como antes.
+   */
+  preparar: z
+    .object({
+      proveedor: z
+        .object({
+          nombre: z.string().trim().min(1, 'Falta el nombre').max(300),
+          rfc: z.string().trim().toUpperCase().regex(RFC_REGEX, 'RFC inválido'),
+          regimen_fiscal: z.enum(['moral', 'fisica', 'resico']),
+          telefono: z.string().trim().min(1, 'Falta el teléfono').max(40),
+          correo: z.string().trim().email('Correo inválido'),
+          banco: z.string().trim().min(1, 'Falta el banco').max(100),
+          clabe: z.string().trim().transform((v) => v.replace(/\s/g, '')).pipe(z.string().regex(/^\d{18}$/, 'La CLABE debe tener 18 dígitos')),
+        })
+        .optional(),
+      renglones: z.array(z.string().uuid()).max(200).optional(),
+      gasto: z
+        .object({
+          proyecto_id: z.string().trim().min(1).max(50),
+          concepto: z.string().trim().min(1, 'Falta el concepto').max(300),
+          costo_total: z.coerce.number().finite().positive('El costo debe ser mayor a 0'),
+        })
+        .optional(),
+    })
+    .optional()
+    .refine((p) => !p || Boolean(p.renglones?.length) !== (p.gasto !== undefined), 'Elige conceptos o registra un gasto extra, no ambos ni ninguno'),
+})
+
+const FechaIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha de pago requerida (YYYY-MM-DD)')
+
+// POST /api/cuentas/pagos — campo `datos` (JSON) del multipart junto a `comprobante` (opcional, una sola vez, P16).
+// El monto de cada línea es lo aplicado a esa cuenta (cobro) o el total a transferir de ese grupo (proveedor).
+export const PagoCrearSchema = z.object({
+  lado: z.enum(LADOS_CUENTAS, { message: 'lado inválido (cobro o proveedor)' }),
+  lineas: z
+    .array(z.object({ id: z.string().uuid(), monto: centavos, saldo_esperado: z.coerce.number().finite().nullable().optional() }))
+    .min(1, 'El pago necesita al menos una línea')
+    .refine((l) => new Set(l.map((x) => x.id)).size === l.length, 'Cada cuenta aparece una sola vez en el pago'),
+  tipo_pago: z.enum(TIPOS_PAGO, { message: 'Tipo de pago inválido (TRANSFERENCIA, EFECTIVO o CHEQUE)' }),
+  fecha_pago: FechaIso,
+  notas: z.string().max(2000).nullable().optional(),
+  operation_id: z.string().uuid('operation_id requerido (uuid)'),
+})
+
+// GET /api/cuentas/pagos/estado?lado=&operation_id=&destino=
+export const PagoEstadoQuerySchema = z.object({
+  lado: z.enum(LADOS_CUENTAS),
+  operation_id: z.string().uuid('operation_id requerido (uuid)'),
+  destino: z.string().uuid().optional(),
+})
+
+// POST /api/admin/datos-fiscales — campo `datos` (JSON) del multipart junto a `constancia`. #123 (B6a): lo leído de la
+// constancia y CONFIRMADO por un administrador (`confirmado: true`); el servidor lo vuelve a validar.
+export const DatosFiscalesGuardarSchema = z.object({
+  rfc: z.string().trim().min(1, 'Falta el RFC').max(20),
+  razon_social: z.string().trim().min(1, 'Falta la razón social').max(300),
+  regimen_fiscal: z.string().trim().max(300).nullable().optional(),
+  codigo_postal: z.string().trim().max(10).nullable().optional(),
+  confirmado: z.literal(true, { message: 'Confirma los datos leídos antes de guardar' }),
+})
+
+// PATCH /api/admin/datos-fiscales — #130: tolerancia (en pesos) del match de una factura por su total.
+export const DatosFiscalesToleranciaSchema = z.object({
+  tolerancia_total: z.coerce.number().finite().min(0, 'La tolerancia no puede ser negativa').max(100, 'La tolerancia máxima es de $100'),
+})
+
+// PATCH /api/cuentas/clientes/[id] — #130: completar la ficha del cliente al facturarle por primera vez (datos del XML
+// y de la constancia). Solo llena lo que falta; el RFC ya guardado no se cambia desde aquí.
+export const ClienteCompletarSchema = z.object({
+  rfc: RfcSchema,
+  contacto: z.string().trim().max(200).nullable().optional(),
+  telefono: z.string().trim().max(40).nullable().optional(),
+  correo: z.string().trim().email('Correo inválido').nullable().optional(),
+})
+
 // GET /api/cuentas/periodo (Rediseño de Cuentas B3). Query string: todo
 // llega como texto; año y mes vacíos toman el año y mes actuales en la ruta.
 export const CuentasOpcionesQuerySchema = z.object({
@@ -389,7 +547,7 @@ export const CancelarOrdenSchema = z.object({
   motivo: z.string().trim().min(3, { message: 'Escribe el motivo de la cancelación' }).max(500),
 })
 
-// Rediseño de Cuentas B7 (D5, D6): reabrir y corregir, solo admin. El motivo
+// Rediseño de Cuentas B7 (D5, D6): reabrir y corregir, cualquier usuario de Cuentas (#123, P14). El motivo
 // es obligatorio donde queda en el registro (reabrir, anular, quitar,
 // reasignar un concepto pagado).
 const MotivoCorreccionSchema = z.string().trim().min(3, { message: 'Escribe el motivo' }).max(500)
@@ -471,3 +629,6 @@ export function validate<T>(schema: z.ZodType<T>, payload: unknown):
 
 // Re-exportar z para uso en rutas si se necesita
 export { z }
+
+/** #131: `POST /api/cuentas/documentos/[id]/reintentar-subida` (multipart: `archivo` y `datos` con `lado`). */
+export const ReintentarSubidaSchema = z.object({ id: z.string().uuid(), lado: z.enum(['cobro', 'proveedor']) })

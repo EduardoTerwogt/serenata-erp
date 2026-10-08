@@ -1,11 +1,8 @@
 'use client'
 
-import { useState, type FormEvent, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/Button'
-import { DateField } from '@/components/ui/DateField'
 import { Icon, type IconName } from '@/components/ui/Icon'
-import { Select } from '@/components/ui/Select'
-import { TextField } from '@/components/ui/TextField'
 import { fmtMoney } from '@/lib/quotations/format'
 import type { DetalleConcepto } from '@/lib/shared/cuentas/detalle-tipos'
 import { fechaCorta } from '../formato'
@@ -15,12 +12,8 @@ import { Seccion } from './TabInformacion'
 import { accionesDetalle, type ObjetivoPagable } from './useDetalle'
 import type { PestanaDetalle } from './DetalleConcepto'
 
-const TIPOS = [
-  { value: 'TRANSFERENCIA', label: 'Transferencia' },
-  { value: 'EFECTIVO', label: 'Efectivo' },
-  { value: 'CHEQUE', label: 'Cheque' },
-] as const
-const etiquetaTipo = (t: string) => TIPOS.find((x) => x.value === t)?.label ?? t
+const TIPOS_PAGO: Record<string, string> = { TRANSFERENCIA: 'Transferencia', EFECTIVO: 'Efectivo', CHEQUE: 'Cheque' }
+const etiquetaTipo = (t: string) => TIPOS_PAGO[t] ?? t
 
 interface Props {
   d: DetalleConcepto
@@ -28,13 +21,13 @@ interface Props {
   ejecutar: Ejecutar
   avisarError: (mensaje: string) => void
   irA: (t: PestanaDetalle) => void
-  /** Fecha de negocio (CDMX) para el default del formulario. */
-  hoy: string
   /** B7: admin con las cuentas reabiertas. */
   corrige: boolean
+  /** P22: el alta de un pago vive en la ventana Registrar pago (Acciones), con este proyecto preseleccionado. */
+  onAbrirPago: () => void
 }
 
-function Aviso({ icono, tono, children }: { icono: IconName; tono: 'neutro' | 'acento' | 'ok'; children: ReactNode }) {
+export function Aviso({ icono, tono, children }: { icono: IconName; tono: 'neutro' | 'acento' | 'ok'; children: ReactNode }) {
   const caja = tono === 'acento' ? 'border-accent/35 bg-accent/[0.07]' : tono === 'ok' ? 'border-transparent bg-approved-bg' : 'border-hairline bg-row-alt'
   const color = tono === 'acento' ? 'text-accent' : tono === 'ok' ? 'text-approved-fg' : 'text-subtext'
   return (
@@ -62,7 +55,7 @@ function bloqueo(d: DetalleConcepto): { mensaje: string; boton: string; tab: Pes
 }
 
 /** Pestaña Registrar pago (B5): formulario, bloqueos, saldada e historial. */
-export function TabPago({ d, objetivo, ejecutar, avisarError, irA, hoy, corrige }: Props) {
+export function TabPago({ d, ejecutar, avisarError, irA, corrige, onAbrirPago }: Props) {
   const saldo = Math.max(0, Math.round((d.total - d.pagado) * 100) / 100)
   const bloq = bloqueo(d)
   const saldada = saldo <= 0
@@ -85,114 +78,20 @@ export function TabPago({ d, objetivo, ejecutar, avisarError, irA, hoy, corrige 
         </Aviso>
       )}
       {!bloq && !saldada && (
-        // Se vuelve a montar cuando cambia el pagado: los defaults (monto = saldo) se recalculan.
-        <Formulario key={d.pagado} d={d} objetivo={objetivo} saldo={saldo} ejecutar={ejecutar} avisarError={avisarError} hoy={hoy} />
+        <div className="flex flex-col items-start gap-3">
+          <Aviso icono="layers" tono="acento">
+            {d.tipo === 'cobro'
+              ? `Saldo pendiente ${fmtMoney(saldo)}. El cobro se registra en la ventana Registrar pago: un mismo depósito puede cubrir varias facturas y proyectos del cliente.`
+              : `Por transferir ${fmtMoney(saldo)}. El pago se registra en la ventana Registrar pago: una misma transferencia puede cubrir varias facturas del proveedor.`}
+          </Aviso>
+          <Button iconLeft="check" onClick={onAbrirPago}>
+            Registrar pago
+          </Button>
+        </div>
       )}
       <HistorialPagos d={d} ejecutar={ejecutar} avisarError={avisarError} corrige={corrige} />
       <HistorialCorrecciones c={d.correcciones} tipo="pagos" />
     </>
-  )
-}
-
-function Formulario({ d, objetivo, saldo, ejecutar, avisarError, hoy }: { d: DetalleConcepto; objetivo: ObjetivoPagable; saldo: number; ejecutar: Ejecutar; avisarError: (m: string) => void; hoy: string }) {
-  const [monto, setMonto] = useState(saldo.toFixed(2))
-  const [tipo, setTipo] = useState<string>('TRANSFERENCIA')
-  const [fecha, setFecha] = useState(hoy)
-  const [notas, setNotas] = useState('')
-  const [comprobante, setComprobante] = useState<File | null>(null)
-  const [enviando, setEnviando] = useState(false)
-
-  const valor = Number(monto)
-  const montoValido = Number.isFinite(valor) && valor > 0 && Math.round(valor * 100) / 100 <= saldo
-  const facturaValidada = d.factura_xml?.estado_validacion === 'validado'
-
-  const enviar = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!montoValido || !fecha || enviando) return
-    setEnviando(true)
-    try {
-      await ejecutar(
-        () => accionesDetalle.registrarPago(objetivo, { monto: Math.round(valor * 100) / 100, tipo_pago: tipo, fecha_pago: fecha, notas, comprobante: comprobante ?? undefined }),
-        d.tipo === 'cobro' ? 'Cobro registrado' : 'Pago registrado'
-      )
-    } finally {
-      setEnviando(false)
-    }
-  }
-
-  return (
-    <form className="flex flex-col gap-4" onSubmit={enviar}>
-      {d.tipo === 'cobro' && !facturaValidada && (
-        <Aviso icono="warning" tono="acento">
-          Aún no hay factura validada; las cuentas no cerrarán sin ella.
-        </Aviso>
-      )}
-      {d.tipo === 'pago' && (
-        <Aviso icono="layers" tono="acento">
-          {d.items.length > 1
-            ? `El pago se reparte entre los ${d.items.length} conceptos del grupo. Total a transferir: ${fmtMoney(d.total)}.`
-            : `Total a transferir: ${fmtMoney(d.total)} (neto con IVA y retenciones).`}
-        </Aviso>
-      )}
-      <div className="grid gap-4 md:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
-        <TextField
-          label="Monto"
-          inputMode="decimal"
-          value={monto}
-          onChange={(e) => setMonto(e.target.value.replace(/[^\d.]/g, ''))}
-          hint={montoValido || monto === '' ? `${d.tipo === 'cobro' ? 'Saldo pendiente' : 'Por transferir'} ${fmtMoney(saldo)}` : `Debe ser mayor a 0 y no pasar de ${fmtMoney(saldo)}`}
-          aria-invalid={!montoValido}
-        />
-        <label className="flex flex-col gap-1.5">
-          <span className="sn-label">Tipo de pago</span>
-          <Select value={tipo} onChange={(e) => setTipo(e.target.value)} className="w-full">
-            {TIPOS.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="sn-label">Fecha de pago</span>
-          <DateField
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className="h-[var(--control-height)] w-full rounded-[var(--radius-sm)] border border-hairline bg-input px-3.5 text-[length:var(--text-base)] text-body outline-none focus:border-accent-quiet"
-          />
-        </label>
-        <div className="flex flex-col gap-1.5">
-          <span className="sn-label">Comprobante</span>
-          <div className="flex min-w-0 items-center gap-2">
-            {comprobante ? (
-              <>
-                <Icon name="paperclip" size={14} className="shrink-0 text-subtext" />
-                <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{comprobante.name}</span>
-                <Button variant="ghost" size="md" onClick={() => setComprobante(null)}>
-                  Quitar
-                </Button>
-              </>
-            ) : (
-              <BotonArchivo etiqueta="Tomar foto o adjuntar" accept={ACCEPT_COMPROBANTE} capture permitirGrande onArchivo={setComprobante} onRechazo={avisarError} />
-            )}
-          </div>
-        </div>
-      </div>
-      <label className="flex flex-col gap-1.5">
-        <span className="sn-label">Notas (opcional)</span>
-        <textarea
-          value={notas}
-          onChange={(e) => setNotas(e.target.value)}
-          placeholder="Notas sobre el pago"
-          className="h-[72px] w-full resize-y rounded-[var(--radius-sm)] border border-hairline bg-input px-3.5 py-2.5 text-[13.5px] text-body outline-none focus:border-accent-quiet"
-        />
-      </label>
-      <div className="flex justify-end">
-        <Button type="submit" iconLeft="check" disabled={!montoValido || !fecha || enviando} className="w-full md:w-auto">
-          {enviando ? 'Registrando…' : 'Registrar pago'}
-        </Button>
-      </div>
-    </form>
   )
 }
 

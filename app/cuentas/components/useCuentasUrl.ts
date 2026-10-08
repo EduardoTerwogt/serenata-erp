@@ -4,8 +4,13 @@ import { useCallback, useEffect, useMemo } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { FiltroEstado, FiltroTipo, MesPeriodo, VistaCuentas } from '@/lib/shared/cuentas/periodo-tipos'
 
-/** Hojas y modales que se abren con push (S15): 'orden' = Generar orden, 'historial' = Historial de órdenes (B6). */
-export type HojaCuentas = 'periodo' | 'filtros' | 'buscar' | 'orden' | 'historial'
+/**
+ * Hojas y modales que se abren con push (S15): 'orden' = Generar orden, 'historial' = Historial de órdenes (B6);
+ * 'factura' | 'pago' | 'estado' = las ventanas del menú Acciones (#123, B4).
+ */
+export type HojaCuentas = 'periodo' | 'filtros' | 'buscar' | 'orden' | 'historial' | 'factura' | 'pago' | 'estado'
+const HOJAS: readonly HojaCuentas[] = ['periodo', 'filtros', 'buscar', 'orden', 'historial', 'factura', 'pago', 'estado']
+export type LadoAcciones = 'cobro' | 'proveedor'
 export type PantallaCuentas = 'avisos' | 'ordenes'
 
 export interface EstadoCuentas {
@@ -26,6 +31,11 @@ export interface EstadoCuentas {
   tab: string | null
   sheet: HojaCuentas | null
   pantalla: PantallaCuentas | null
+  /** Ventanas de Acciones (#123): lado, contraparte (`cid`), documento resaltado (`doc`, P20) y proyecto de origen (`pre`, P22). */
+  lado: LadoAcciones | null
+  cid: string | null
+  doc: string | null
+  pre: string | null
 }
 
 const DEFAULTS: EstadoCuentas = {
@@ -44,6 +54,10 @@ const DEFAULTS: EstadoCuentas = {
   tab: null,
   sheet: null,
   pantalla: null,
+  lado: null,
+  cid: null,
+  doc: null,
+  pre: null,
 }
 
 function leer(sp: URLSearchParams): EstadoCuentas {
@@ -68,8 +82,12 @@ function leer(sp: URLSearchParams): EstadoCuentas {
     proyecto: sp.get('proyecto'),
     det: sp.get('det'),
     tab: sp.get('tab'),
-    sheet: (['periodo', 'filtros', 'buscar', 'orden', 'historial'] as const).find((h) => h === sp.get('sheet')) ?? null,
+    sheet: HOJAS.find((h) => h === sp.get('sheet')) ?? null,
     pantalla: (['avisos', 'ordenes'] as const).find((p) => p === sp.get('page_m')) ?? null,
+    lado: (['cobro', 'proveedor'] as const).find((l) => l === sp.get('lado')) ?? null,
+    cid: sp.get('cid'),
+    doc: sp.get('doc'),
+    pre: sp.get('pre'),
   }
 }
 
@@ -90,6 +108,10 @@ function escribir(e: EstadoCuentas): string {
   if (e.tab) sp.set('tab', e.tab)
   if (e.sheet) sp.set('sheet', e.sheet)
   if (e.pantalla) sp.set('page_m', e.pantalla)
+  if (e.lado) sp.set('lado', e.lado)
+  if (e.cid) sp.set('cid', e.cid)
+  if (e.doc) sp.set('doc', e.doc)
+  if (e.pre) sp.set('pre', e.pre)
   const qs = sp.toString()
   return qs ? `?${qs}` : ''
 }

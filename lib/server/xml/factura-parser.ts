@@ -11,6 +11,12 @@ export interface FacturaData {
   subtotal?: number
   rfc_emisor?: string
   rfc_receptor?: string
+  // #130: nombre y código de régimen fiscal (c_RegimenFiscal) de quien emite y de quien recibe; prellenan el alta de la
+  // contraparte. Opcionales: un CFDI 3.3 puede no traer el régimen del receptor.
+  nombre_emisor?: string
+  regimen_emisor?: string
+  nombre_receptor?: string
+  regimen_receptor?: string
   uuid_timbrado?: string
   // Rediseño de Cuentas B1 (D2): PUE/PPD del atributo MetodoPago. Undefined
   // si el XML no lo trae o trae otro valor -- nunca se adivina (supuesto 4).
@@ -22,6 +28,10 @@ export interface FacturaData {
   iva_trasladado?: number
   iva_retenido?: number
   isr_retenido?: number
+  // #123 (P4, P18): TipoDeComprobante (I ingreso, E egreso, P pago, T traslado, N nómina) y la descripción de cada
+  // Concepto (en un CFDI de ingreso trae los folios SH de las cotizaciones; en uno de pago, "Pago").
+  tipo_comprobante?: string
+  conceptos?: string[]
   error?: string
 }
 
@@ -38,7 +48,7 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: '',
   removeNSPrefix: true,
   parseAttributeValue: false,
-  isArray: (tagName) => tagName === 'Traslado' || tagName === 'Retencion',
+  isArray: (tagName) => tagName === 'Traslado' || tagName === 'Retencion' || tagName === 'Concepto',
 })
 
 interface ImpuestoNodo {
@@ -121,7 +131,11 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
     // detalle del documento.
     const rfcEmisor: string | undefined = comprobante.Emisor?.Rfc
     const rfcReceptor: string | undefined = comprobante.Receptor?.Rfc
+    const texto = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined)
     const uuid: string | undefined = comprobante.Complemento?.TimbreFiscalDigital?.UUID
+    const tipoRaw = typeof comprobante.TipoDeComprobante === 'string' ? comprobante.TipoDeComprobante.trim().toUpperCase() : undefined
+    const conceptosNodos: { Descripcion?: string }[] = Array.isArray(comprobante.Conceptos?.Concepto) ? comprobante.Conceptos.Concepto : []
+    const conceptos = conceptosNodos.map((c) => (typeof c.Descripcion === 'string' ? c.Descripcion.trim() : '')).filter((d) => d !== '')
     const metodoRaw = typeof comprobante.MetodoPago === 'string' ? comprobante.MetodoPago.trim().toUpperCase() : undefined
     const metodoPago = metodoRaw === 'PUE' || metodoRaw === 'PPD' ? metodoRaw : undefined
 
@@ -161,8 +175,14 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
       subtotal,
       rfc_emisor: rfcEmisor,
       rfc_receptor: rfcReceptor,
+      nombre_emisor: texto(comprobante.Emisor?.Nombre),
+      regimen_emisor: texto(comprobante.Emisor?.RegimenFiscal),
+      nombre_receptor: texto(comprobante.Receptor?.Nombre),
+      regimen_receptor: texto(comprobante.Receptor?.RegimenFiscalReceptor),
       uuid_timbrado: uuid,
       metodo_pago: metodoPago,
+      tipo_comprobante: tipoRaw,
+      conceptos,
       iva_trasladado: ivaTrasladado,
       iva_retenido: ivaRetenido,
       isr_retenido: isrRetenido,
@@ -174,39 +194,8 @@ export function parseFacturaXML(xmlContent: string): FacturaData {
   }
 }
 
-const TOLERANCIA_CENTAVOS = 0.01
-
-/**
- * Validación estructural automática de una factura al cliente (FACTURA_XML,
- * cuentas_cobrar): el único monto esperado documentado es el total de la
- * cuenta -- no hay RFC de cliente guardado todavía (llegará con el Portal de
- * Proveedores/clientes), así que RFC y UUID solo se muestran, no bloquean.
- */
-export function validarFacturaClienteXML(facturaData: FacturaData, montoEsperado: number): ResultadoValidacionFactura {
-  if (facturaData.monto_total == null) {
-    return { estado_validacion: 'revision', detalle_validacion: 'No se pudo leer el monto total del XML.' }
-  }
-  const diferencia = Math.abs(facturaData.monto_total - montoEsperado)
-  if (diferencia > TOLERANCIA_CENTAVOS) {
-    return {
-      estado_validacion: 'revision',
-      detalle_validacion: `Monto no coincide: XML $${facturaData.monto_total.toFixed(2)} vs cuenta $${montoEsperado.toFixed(2)}.`,
-    }
-  }
-  return { estado_validacion: 'validado', detalle_validacion: null }
-}
-
-/**
- * Valida que el monto de la factura coincida con el monto de la cotización
- */
-export function validarMontoFactura(montoFactura: number, montoCotizacion: number): {
-  coincide: boolean
-  diferencia: number
-} {
-  const diferencia = Math.abs(montoFactura - montoCotizacion)
-  const coincide = diferencia < 0.01 // Tolerancia de 1 centavo
-  return { coincide, diferencia }
-}
+// #123 (T19): la validación de la factura de cliente (suma de las cotizaciones contra el total del XML, con 0.01
+// de tolerancia por cotización) vive solo en SQL (`factura_cuadre` / `ligar_factura`). Aquí solo se lee el XML.
 
 /**
  * Calcula el deadline de pago (fecha + 30 días)

@@ -7,10 +7,12 @@ import { Modal } from '@/components/ui/Modal'
 import { StatusBanner } from '@/components/ui/StatusBanner'
 import { FilterTabs } from '@/components/ui/FilterTabs'
 import { Button } from '@/components/ui/Button'
+import { BotonEstadoCuenta } from '@/app/cuentas/components/acciones/BotonEstadoCuenta'
 
 interface ClienteFormValues {
   nombre: string
   tipo: string
+  rfc: string
   contacto: string
   telefono: string
   correo: string
@@ -36,6 +38,7 @@ export function ClienteModal({ cliente, onClose, onSaved }: Props) {
     defaultValues: {
       nombre: cliente?.nombre || '',
       tipo: cliente?.tipo || '',
+      rfc: cliente?.rfc || '',
       contacto: cliente?.contacto || '',
       telefono: cliente?.telefono || '',
       correo: cliente?.correo || '',
@@ -80,6 +83,11 @@ export function ClienteModal({ cliente, onClose, onSaved }: Props) {
       {error && <StatusBanner tone="error">{error}</StatusBanner>}
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+        {!esNuevo && (
+          <div className="-mb-2 flex">
+            <BotonEstadoCuenta lado="cobro" contraparteId={cliente!.id} />
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
             <label className={LABEL_CLASS}>Nombre *</label>
@@ -93,6 +101,10 @@ export function ClienteModal({ cliente, onClose, onSaved }: Props) {
           <div>
             <label className={LABEL_CLASS}>Tipo</label>
             <input {...register('tipo')} className={INPUT_CLASS} placeholder="Ej. Marca, Agencia" />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>RFC</label>
+            <input {...register('rfc')} className={`${INPUT_CLASS} font-mono uppercase`} placeholder="12 o 13 caracteres" maxLength={13} />
           </div>
           <div>
             <label className={LABEL_CLASS}>Persona de contacto</label>

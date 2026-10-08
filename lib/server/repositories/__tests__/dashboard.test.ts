@@ -5,11 +5,13 @@ const mocks = vi.hoisted(() => ({
   getPagosComprobantesEnRango: vi.fn(),
   fromMock: vi.fn(),
   rpcMock: vi.fn(),
+  datosFiscalesMock: vi.fn(),
 }))
 
 vi.mock('@/lib/server/repositories/cuentas-cobrar', () => ({
   getPagosComprobantesEnRango: mocks.getPagosComprobantesEnRango,
 }))
+vi.mock('@/lib/server/cuentas/datos-fiscales', () => ({ datosFiscalesVigentes: mocks.datosFiscalesMock }))
 vi.mock('@/lib/server/supabase-admin', () => ({ supabaseAdmin: { from: mocks.fromMock, rpc: mocks.rpcMock } }))
 
 import { rangoDePeriodo, bucketsDePeriodo, getResumenDashboard } from '../dashboard'
@@ -104,6 +106,7 @@ describe('bucketsDePeriodo', () => {
 describe('getResumenDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.datosFiscalesMock.mockResolvedValue({ tipo_persona: 'moral' })
   })
 
   it('mes sin pagos ni egresos -- todo en cero, sin dividir entre cero', async () => {
@@ -113,7 +116,7 @@ describe('getResumenDashboard', () => {
 
     const resumen = await getResumenDashboard({ periodo: 'mes', fecha: '2026-03-15' })
 
-    expect(resumen.fiscal).toEqual({ ingresos: 0, egresos: 0, impuestos: 0, deudas: 0, utilidadAntesIsr: 0 })
+    expect(resumen.fiscal).toEqual({ ingresos: 0, egresos: 0, impuestos: 0, deudas: 0, utilidadAntesIsr: 0, isr: { tipoPersona: 'moral', tasa: 0.3, desdeConstancia: true } })
     expect(resumen.kpis).toEqual({ porCobrar: 0, porPagar: 0, cotizacionesAprobadas: 0, cotizacionesBorrador: 0 })
     expect(resumen.cobertura).toEqual({ gastosFijos: [], totalGastosFijos: 0, facturado: 0 })
     expect(resumen.balance).toHaveLength(6)
@@ -194,5 +197,44 @@ describe('getResumenDashboard', () => {
     expect(resumen.fuentesConError).toEqual(['Egresos por periodo'])
     expect(resumen.fiscal.egresos).toBe(0)
     expect(resumen.fiscal.ingresos).toBe(500)
+  })
+
+  describe('ISR según la constancia fiscal de Serenata (#123 B6a)', () => {
+    const conUtilidad = () => {
+      mockDashboardRpcs({ egresosPorBucket: [0, 0, 0, 0, 0, 3000] })
+      mocks.getPagosComprobantesEnRango.mockResolvedValue([{ id: 'pc1', monto: 7500, fecha_pago: '2026-03-20' } as PagoComprobante])
+      mockGastosFijosActivos([])
+    }
+
+    it('persona moral: 30 % sobre la utilidad, y se dice que viene de la constancia', async () => {
+      conUtilidad()
+      const r = await getResumenDashboard({ periodo: 'mes', fecha: '2026-03-15' })
+      expect(r.fiscal.impuestos).toBe(1350)
+      expect(r.fiscal.isr).toEqual({ tipoPersona: 'moral', tasa: 0.3, desdeConstancia: true })
+    })
+
+    it('persona física: el ISR no se estima con la tasa de moral', async () => {
+      mocks.datosFiscalesMock.mockResolvedValue({ tipo_persona: 'fisica' })
+      conUtilidad()
+      const r = await getResumenDashboard({ periodo: 'mes', fecha: '2026-03-15' })
+      expect(r.fiscal.impuestos).toBe(0)
+      expect(r.fiscal.isr).toEqual({ tipoPersona: 'fisica', tasa: null, desdeConstancia: true })
+    })
+
+    it('sin constancia cargada se asume moral y el panel lo sabe', async () => {
+      mocks.datosFiscalesMock.mockResolvedValue(null)
+      conUtilidad()
+      const r = await getResumenDashboard({ periodo: 'mes', fecha: '2026-03-15' })
+      expect(r.fiscal.impuestos).toBe(1350)
+      expect(r.fiscal.isr.desdeConstancia).toBe(false)
+    })
+
+    it('si la lectura de la constancia falla no se inventa: se reporta la fuente con error y se asume moral', async () => {
+      mocks.datosFiscalesMock.mockRejectedValue(new Error('boom'))
+      conUtilidad()
+      const r = await getResumenDashboard({ periodo: 'mes', fecha: '2026-03-15' })
+      expect(r.fuentesConError).toContain('Datos fiscales de Serenata')
+      expect(r.fiscal.isr.tipoPersona).toBe('moral')
+    })
   })
 })

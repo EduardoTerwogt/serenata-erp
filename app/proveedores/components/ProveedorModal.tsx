@@ -10,6 +10,7 @@ import { StatusBanner } from '@/components/ui/StatusBanner'
 import { FilterTabs } from '@/components/ui/FilterTabs'
 import { Icon } from '@/components/ui/Icon'
 import { Button } from '@/components/ui/Button'
+import { BotonEstadoCuenta } from '@/app/cuentas/components/acciones/BotonEstadoCuenta'
 import { StatusBadge, toneForValidacionEstado } from '@/components/ui/StatusBadge'
 
 // Mismas etiquetas que app/portal/page.tsx (TIPO_LABEL) -- se duplica en vez
@@ -28,6 +29,7 @@ interface ProveedorFormValues {
   correo: string
   banco: string
   clabe: string
+  rfc: string
   notas: string
 }
 
@@ -67,6 +69,7 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
       correo: proveedor?.correo || '',
       banco: proveedor?.banco || '',
       clabe: proveedor?.clabe || '',
+      rfc: proveedor?.rfc || '',
       notas: proveedor?.notas || '',
     },
   })
@@ -148,6 +151,11 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
       {error && <StatusBanner tone="error">{error}</StatusBanner>}
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+        {!esNuevo && (
+          <div className="-mb-2 flex">
+            <BotonEstadoCuenta lado="proveedor" contraparteId={proveedor!.id} />
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
             <label className={LABEL_CLASS}>Nombre completo *</label>
@@ -210,6 +218,12 @@ export function ProveedorModal({ proveedor, onClose, onSaved }: Props) {
             <label className={LABEL_CLASS}>CLABE interbancaria</label>
             <input {...register('clabe')} className={`${INPUT_CLASS} font-mono`} placeholder="18 dígitos" maxLength={18} />
           </div>
+        </div>
+
+        <div>
+          <label className={LABEL_CLASS}>RFC</label>
+          <input {...register('rfc')} className={`${INPUT_CLASS} font-mono uppercase md:max-w-[260px]`} placeholder="12 o 13 caracteres" maxLength={13} />
+          <p className="text-faint text-xs mt-1.5">Con el RFC, Cuentas reconoce solo de quién es cada factura que se sube.</p>
         </div>
 
         <div>

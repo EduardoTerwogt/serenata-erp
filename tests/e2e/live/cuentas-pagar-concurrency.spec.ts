@@ -4,7 +4,7 @@ import { cleanupLiveCuentasByPrefix, getLiveSupabaseAdmin, insertarCuentaPagarCo
 
 /**
  * Prueba de concurrencia real contra serenata-erp-test para el RPC
- * registrar_pago_grupo_factura (SELECT ... FOR UPDATE sobre el grupo). Mismo
+ * registrar_pago_proveedor (#123: una cabecera `pagos` con una línea por grupo, locks en el orden global de T16). Mismo
  * patron que tests/e2e/live/cuentas-cobrar-concurrency.spec.ts: llama al RPC
  * directo via supabase-js (sin navegador) para disparar dos requests realmente
  * simultaneos con Promise.all. Cubre ademas el recalculo atomico de
@@ -27,6 +27,16 @@ const liveEnabled = Boolean(
 const PREFIJO = 'LCON'
 
 type Supabase = ReturnType<typeof getLiveSupabaseAdmin>
+
+/** Pago a uno o varios grupos del mismo proveedor (el monto es el total a transferir de cada línea). */
+function pagarGrupos(supabase: Supabase, items: [string, number][], operationId?: string) {
+  return supabase.rpc('registrar_pago_proveedor', {
+    p_lineas: items.map(([grupo_id, monto]) => ({ grupo_id, monto })),
+    p_tipo_pago: 'TRANSFERENCIA',
+    p_fecha_pago: '2026-09-05',
+    p_operation_id: operationId ?? null,
+  })
+}
 
 function ok(result: { error: unknown }) {
   if (result.error) throw result.error
@@ -79,7 +89,7 @@ async function crearGrupoDePrueba(supabase: Supabase, prefix: string, proveedorI
   return grupoId
 }
 
-test.describe('live: concurrencia en registrar_pago_grupo_factura', () => {
+test.describe('live: concurrencia en registrar_pago_proveedor', () => {
   test.skip(!liveEnabled, 'Live integration tests are disabled until PLAYWRIGHT_BASE_URL and live credentials are configured')
 
   // Restos de corridas anteriores (timeout, proceso matado): rompen las guardas de consistencia.
@@ -95,8 +105,8 @@ test.describe('live: concurrencia en registrar_pago_grupo_factura', () => {
 
     try {
       const [r1, r2] = await Promise.all([
-        supabase.rpc('registrar_pago_grupo_factura', { p_grupo_id: grupoId, p_monto: 580 }),
-        supabase.rpc('registrar_pago_grupo_factura', { p_grupo_id: grupoId, p_monto: 580 }),
+        pagarGrupos(supabase, [[grupoId, 580]]),
+        pagarGrupos(supabase, [[grupoId, 580]]),
       ])
 
       expect(r1.error).toBeNull()
@@ -134,8 +144,8 @@ test.describe('live: concurrencia en registrar_pago_grupo_factura', () => {
 
     try {
       const [r1, r2] = await Promise.all([
-        supabase.rpc('registrar_pago_grupo_factura', { p_grupo_id: grupoId, p_monto: 800 }),
-        supabase.rpc('registrar_pago_grupo_factura', { p_grupo_id: grupoId, p_monto: 800 }),
+        pagarGrupos(supabase, [[grupoId, 800]]),
+        pagarGrupos(supabase, [[grupoId, 800]]),
       ])
 
       const resultados = [r1, r2]
@@ -181,8 +191,8 @@ test.describe('live: concurrencia en registrar_pago_grupo_factura', () => {
       const ordenId = (orden as { orden_pago_id: string }).orden_pago_id
 
       const [r1, r2] = await Promise.all([
-        supabase.rpc('registrar_pago_grupo_factura', { p_grupo_id: grupoAId, p_monto: 580 }),
-        supabase.rpc('registrar_pago_grupo_factura', { p_grupo_id: grupoBId, p_monto: 1160 }),
+        pagarGrupos(supabase, [[grupoAId, 580]]),
+        pagarGrupos(supabase, [[grupoBId, 1160]]),
       ])
 
       expect(r1.error).toBeNull()
@@ -199,6 +209,92 @@ test.describe('live: concurrencia en registrar_pago_grupo_factura', () => {
       // del estado agregado podria perderse y quedar en PARCIALMENTE_PAGADA.
       // B2 (R6, S1): el estado sale de Σ transferido frente a Σ transferir_cubierto.
       expect(ordenActualizada.estado).toBe('COMPLETADA')
+    } finally {
+      await cleanupLiveCuentasByPrefix(prefix)
+    }
+  })
+  test('doble clic: el mismo operation_id registra un solo pago a proveedor', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const prefix = `${PREFIJO}${randomUUID().slice(0, 6).toUpperCase()}`
+    const proveedorId = await crearProveedor(supabase, prefix)
+    const grupoId = await crearGrupoDePrueba(supabase, prefix, proveedorId, 1000)
+    const operationId = randomUUID()
+
+    try {
+      const [r1, r2] = await Promise.all([pagarGrupos(supabase, [[grupoId, 500]], operationId), pagarGrupos(supabase, [[grupoId, 500]], operationId)])
+      expect(r1.error).toBeNull()
+      expect(r2.error).toBeNull()
+      expect((r1.data as { pago_id: string }).pago_id).toBe((r2.data as { pago_id: string }).pago_id)
+
+      const { data: pagos } = await supabase.from('pagos_cuentas_pagar').select('id').eq('grupo_id', grupoId)
+      expect(pagos).toHaveLength(1)
+      const { data: grupo } = await supabase.from('cuentas_pagar_grupos').select('monto_transferido').eq('id', grupoId).single()
+      expect(Number(grupo?.monto_transferido)).toBe(500)
+    } finally {
+      await cleanupLiveCuentasByPrefix(prefix)
+    }
+  })
+
+  test('un pago a dos grupos del mismo proveedor es una cabecera con dos líneas y es atómico', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const prefix = `${PREFIJO}${randomUUID().slice(0, 6).toUpperCase()}`
+    const proveedorId = await crearProveedor(supabase, prefix)
+    const grupoAId = await crearGrupoDePrueba(supabase, prefix, proveedorId, 500)
+    const grupoBId = await crearGrupoDePrueba(supabase, prefix, proveedorId, 1000)
+
+    try {
+      // Una línea excede su saldo: no se aplica ninguna.
+      const malo = await pagarGrupos(supabase, [[grupoAId, 580], [grupoBId, 2000]])
+      expect(malo.error?.message ?? '').toMatch(/excede el total a transferir/i)
+      const { data: ninguno } = await supabase.from('pagos_cuentas_pagar').select('id').in('grupo_id', [grupoAId, grupoBId])
+      expect(ninguno).toHaveLength(0)
+
+      const bueno = await pagarGrupos(supabase, [[grupoAId, 580], [grupoBId, 1160]])
+      expect(bueno.error).toBeNull()
+      const { data: lineas } = await supabase.from('pagos_cuentas_pagar').select('pago_id').in('grupo_id', [grupoAId, grupoBId])
+      expect(lineas).toHaveLength(2)
+      expect(new Set((lineas ?? []).map((l) => l.pago_id)).size).toBe(1)
+      const { data: grupos } = await supabase.from('cuentas_pagar_grupos').select('estado').in('id', [grupoAId, grupoBId])
+      expect((grupos ?? []).map((g) => g.estado)).toEqual(['PAGADO', 'PAGADO'])
+    } finally {
+      await cleanupLiveCuentasByPrefix(prefix)
+    }
+  })
+
+  test('pagar contra cancelar la orden a la vez no se bloquea (ABBA cerrado, T16): una de las dos gana y queda consistente', async () => {
+    const supabase = getLiveSupabaseAdmin()
+    const prefix = `${PREFIJO}${randomUUID().slice(0, 6).toUpperCase()}`
+    const proveedorId = await crearProveedor(supabase, prefix)
+    const grupoAId = await crearGrupoDePrueba(supabase, prefix, proveedorId, 500)
+    const grupoBId = await crearGrupoDePrueba(supabase, prefix, proveedorId, 1000)
+
+    try {
+      const { data: orden, error: ordenError } = await supabase.rpc('generar_orden_pago', {
+        p_candidatos: [
+          { tipo: 'grupo', id: grupoAId, monto_esperado: 500 },
+          { tipo: 'grupo', id: grupoBId, monto_esperado: 1000 },
+        ],
+        p_pdf_url: null,
+        p_pdf_nombre: `${prefix}.pdf`,
+        p_usuario: 'live',
+      })
+      if (ordenError) throw ordenError
+      const ordenId = (orden as { orden_pago_id: string }).orden_pago_id
+
+      const [pago, cancela] = await Promise.all([
+        pagarGrupos(supabase, [[grupoAId, 580], [grupoBId, 1160]]),
+        supabase.rpc('cancelar_orden_pago', { p_orden_id: ordenId, p_motivo: 'live', p_usuario: 'live' }),
+      ])
+      // Antes del orden global de locks esto podía terminar en deadlock (40P01) para una de las dos.
+      for (const r of [pago, cancela]) expect(r.error?.code ?? '').not.toBe('40P01')
+      expect([pago, cancela].filter((r) => !r.error).length).toBeGreaterThanOrEqual(1)
+
+      const { data: ordenFinal } = await supabase.from('ordenes_pago').select('estado').eq('id', ordenId).single()
+      // Gana la cancelación (la orden queda CANCELADA y el pago, sin orden, también procede) o gana el pago (la
+      // orden se completa y la cancelación se rechaza con orden_con_pagos): nunca un estado intermedio.
+      if (!cancela.error) expect(ordenFinal?.estado).toBe('CANCELADA')
+      else expect(ordenFinal?.estado).toBe('COMPLETADA')
+      if (cancela.error) expect(cancela.error.message).toMatch(/orden_con_pagos/)
     } finally {
       await cleanupLiveCuentasByPrefix(prefix)
     }

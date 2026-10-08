@@ -37,20 +37,26 @@ export async function POST(request: Request, props: { params: Promise<{ pagoId: 
     }
     if (archivo.size > MAX_FILE_SIZE) return Response.json({ error: MENSAJE_LIMITE }, { status: 400 })
 
+    // #123: el comprobante vive en la cabecera `pagos`; el proyecto (carpeta de Drive) sale del grupo de su primera línea.
     const { data: pago, error: errPago } = await supabaseAdmin
-      .from('pagos_cuentas_pagar')
-      .select('id, grupo_id, cuenta_pagar_id, comprobante_url, anulado_at')
+      .from('pagos')
+      .select('id, lado, comprobante_url, anulado_at')
       .eq('id', pagoId)
+      .eq('lado', 'proveedor')
       .maybeSingle()
     if (errPago) throw errPago
     if (!pago) return Response.json({ error: 'Pago no encontrado' }, { status: 404 })
     if (pago.comprobante_url) return Response.json({ error: 'comprobante_existente', message: MENSAJES.comprobante_existente }, { status: 409 })
 
-    const destino = pago.grupo_id
-      ? await supabaseAdmin.from('cuentas_pagar_grupos').select('proyecto_id').eq('id', pago.grupo_id).maybeSingle()
-      : await supabaseAdmin.from('cuentas_pagar').select('proyecto_id, cotizacion_id').eq('id', pago.cuenta_pagar_id).maybeSingle()
-    if (destino.error) throw destino.error
-    const proyectoId: string | null = destino.data?.proyecto_id ?? null
+    const { data: linea, error: errLinea } = await supabaseAdmin
+      .from('pagos_cuentas_pagar')
+      .select('grupo_id, cuentas_pagar_grupos(proyecto_id)')
+      .eq('pago_id', pagoId)
+      .limit(1)
+      .maybeSingle()
+    if (errLinea) throw errLinea
+    const grupo = linea?.cuentas_pagar_grupos as { proyecto_id: string } | { proyecto_id: string }[] | null | undefined
+    const proyectoId: string | null = (Array.isArray(grupo) ? grupo[0]?.proyecto_id : grupo?.proyecto_id) ?? null
     const proyecto = proyectoId ? await getProyectoById(proyectoId) : null
 
     const googleEnv = getGoogleEnv()

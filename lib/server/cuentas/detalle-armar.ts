@@ -97,6 +97,8 @@ export interface CobroFilas {
     folio: string | null
     cotizacion_id: string | null
     cliente: string | null
+    /** Id de la ficha del cliente (P22: la ventana de Registrar pago se abre con él). */
+    cliente_id?: string | null
     monto_total: number
     monto_pagado: number | null
     fecha_factura: string | null
@@ -105,12 +107,15 @@ export interface CobroFilas {
   }
   proyecto: ProyectoDetalleCorto | null
   documentos: DocumentoFila[]
-  pagos: ({ id: string; monto: number; tipo_pago: string; fecha_pago: string; comprobante_url: string | null; notas: string | null; created_at?: string } & Anulable)[]
+  /** `id` es el de la cabecera `pagos`; `lineas` cuántas cuentas cubre el mismo pago. */
+  pagos: ({ id: string; monto: number; tipo_pago: string; fecha_pago: string; comprobante_url: string | null; notas: string | null; created_at?: string; lineas?: number } & Anulable)[]
+  /** Cuántas cuentas cubre la factura vigente de este cobro (0 si no tiene). */
+  facturaCuentas?: number
   /** B7: las cuentas del proyecto están reabiertas. */
   reabierta?: boolean
 }
 
-export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: todosPagos, reabierta = false }: CobroFilas, { concepto }: DerivadoCobro): DetalleCobro {
+export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: todosPagos, facturaCuentas = 0, reabierta = false }: CobroFilas, { concepto }: DerivadoCobro): DetalleCobro {
   const { docs: documentos, pagos, correcciones } = separar(todos, todosPagos, (p) => ({ fecha: p.fecha_pago, monto: round2(Number(p.monto)) }), reabierta)
   const facturaXml = vigente(documentos, 'FACTURA_XML')
   const orden = [...pagos].sort((a, b) => (a.fecha_pago + (a.created_at ?? '')).localeCompare(b.fecha_pago + (b.created_at ?? '')))
@@ -124,6 +129,7 @@ export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: 
     cotizacion_id: cuenta.cotizacion_id,
     proyecto,
     cliente: cuenta.cliente ?? 'Cliente',
+    cliente_id: cuenta.cliente_id ?? null,
     total: round2(Number(cuenta.monto_total)),
     pagado: round2(Number(cuenta.monto_pagado ?? 0)),
     fecha_factura: cuenta.fecha_factura,
@@ -132,6 +138,7 @@ export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: 
     metodo,
     factura_xml: xmlDoc(facturaXml),
     factura_pdf: xmlDoc(vigente(documentos, 'FACTURA_PDF')),
+    factura_cuentas: facturaXml ? Math.max(1, facturaCuentas) : 0,
     pagos: orden.map((p) => {
       const derivado = concepto.complementos.find((c) => c.pago_id === p.id)
       return {
@@ -141,6 +148,7 @@ export function armarDetalleCobro({ cuenta, proyecto, documentos: todos, pagos: 
         monto: round2(Number(p.monto)),
         comprobante_url: p.comprobante_url,
         notas: p.notas,
+        lineas: p.lineas ?? 1,
         complemento: {
           requiere: metodo === 'PPD' ? Boolean(derivado?.requiere) : false,
           estado: metodo === 'PPD' && derivado ? derivado.estado : 'no_aplica',
@@ -179,7 +187,8 @@ export interface PagoFilas {
   proveedor: { id: string; nombre: string; regimen_fiscal: RegimenFiscal | null; correo: string | null; telefono: string | null; banco: string | null; clabe: string | null } | null
   proyecto: ProyectoDetalleCorto | null
   documentos: DocumentoFila[]
-  pagos: ({ id: string; fecha_pago: string; tipo_pago: string; monto_transferido: number; comprobante_url: string | null; notas: string | null; estimado: boolean; created_at?: string } & Anulable)[]
+  /** `id` es el de la cabecera `pagos`; `lineas` cuántos grupos cubre el mismo pago. */
+  pagos: ({ id: string; fecha_pago: string; tipo_pago: string; monto_transferido: number; comprobante_url: string | null; notas: string | null; estimado: boolean; created_at?: string; lineas?: number } & Anulable)[]
   orden: { id: string; pdf_nombre: string | null; pdf_url: string | null; estado: string; fecha_generacion: string } | null
   /** B7: las cuentas del proyecto están reabiertas. */
   reabierta?: boolean
@@ -193,6 +202,7 @@ export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyec
   const pagosOrdenados = [...pagos].sort((a, b) => (a.fecha_pago + (a.created_at ?? '')).localeCompare(b.fecha_pago + (b.created_at ?? '')))
   const comprobantesDocs = documentos.filter((d) => d.tipo === 'COMPROBANTE_PAGO')
   const primera = cuentas[0]
+  const metodo = (vigente(documentos, 'FACTURA_PROVEEDOR_XML')?.metodo_pago_cfdi as MetodoPagoCfdi | null | undefined) ?? null
 
   return {
     tipo: 'pago',
@@ -230,16 +240,34 @@ export function armarDetallePago({ objetivo, destino, cuentas, proveedor, proyec
       const d = vigente(documentos, 'FACTURA_PROVEEDOR')
       return d ? aDoc(d) : null
     })(),
+    metodo,
     comprobantes: comprobantesDocs.map(aDoc),
-    pagos: pagosOrdenados.map((p) => ({
-      id: p.id,
-      fecha: p.fecha_pago,
-      tipo: p.tipo_pago,
-      monto: round2(Number(p.monto_transferido)),
-      comprobante_url: p.comprobante_url,
-      notas: p.notas,
-      estimado: p.estimado,
-    })),
+    pagos: pagosOrdenados.map((p) => {
+      // P11: un proveedor PPD exige un complemento por pago (XML y PDF); lo deriva SQL (`concepto.complementos`).
+      const derivado = concepto.complementos.find((c) => c.pago_id === p.id)
+      return {
+        id: p.id,
+        fecha: p.fecha_pago,
+        tipo: p.tipo_pago,
+        monto: round2(Number(p.monto_transferido)),
+        comprobante_url: p.comprobante_url,
+        notas: p.notas,
+        estimado: p.estimado,
+        lineas: p.lineas ?? 1,
+        complemento: {
+          requiere: metodo === 'PPD' ? Boolean(derivado?.requiere) : false,
+          estado: metodo === 'PPD' && derivado ? derivado.estado : ('no_aplica' as const),
+          xml: (() => {
+            const d = vigente(documentos, 'COMPLEMENTO_PAGO', p.id)
+            return d ? aDoc(d) : null
+          })(),
+          pdf: (() => {
+            const d = vigente(documentos, 'COMPLEMENTO_PAGO_PDF', p.id)
+            return d ? aDoc(d) : null
+          })(),
+        },
+      }
+    }),
     orden: orden
       ? { id: orden.id, nombre: orden.pdf_nombre ?? 'Orden de pago', pdf_url: orden.pdf_url, estado: orden.estado, fecha: orden.fecha_generacion }
       : null,

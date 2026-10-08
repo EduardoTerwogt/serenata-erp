@@ -20,7 +20,12 @@ test.describe('live: auditar_consistencia()', () => {
     const r = data as { ejecutado_en: string; total_violaciones: number; guardas: { clave: string; descripcion: string; violaciones: number; ejemplos: string[] }[] }
     expect(typeof r.ejecutado_en).toBe('string')
     expect(typeof r.total_violaciones).toBe('number')
-    expect(r.guardas.length).toBeGreaterThanOrEqual(17)
+    expect(r.guardas.length).toBeGreaterThanOrEqual(23)
+    // #123: las seis guardas del modelo de facturas y pagos ligados.
+    const claves = r.guardas.map((g) => g.clave)
+    for (const k of ['factura_ligada', 'factura_cliente', 'factura_suma', 'pago_coherente', 'complemento_valido', 'factura_fecha']) {
+      expect(claves).toContain(k)
+    }
     for (const g of r.guardas) {
       expect(typeof g.clave).toBe('string')
       expect(typeof g.descripcion).toBe('string')

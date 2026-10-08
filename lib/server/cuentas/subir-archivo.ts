@@ -34,9 +34,15 @@ export async function subirArchivoCuenta(params: { destino: DestinoArchivo; id: 
 
   let carpeta: string
   let proyectoId: string | null
+  let facturaDocumentoId: string | null = null
   if (destino === 'cobro') {
     const cuenta = await getCuentaCobrarById(id)
     if (!cuenta) return { status: 404, body: { error: 'Cuenta por cobrar no encontrada' } }
+    // #123 (T13): el PDF se ancla a la factura vigente (que puede cubrir varias cuentas); sin factura no hay a qué anclarlo.
+    if (!cuenta.factura_documento_id) {
+      return { status: 409, body: { error: 'sin_factura', message: 'Sube primero la factura XML: el PDF se liga a ella.' } }
+    }
+    facturaDocumentoId = cuenta.factura_documento_id
     carpeta = `/Por Cobrar/${cuenta.cotizacion_id}`
     proyectoId = cuenta.proyecto_id ?? null
   } else {
@@ -54,7 +60,7 @@ export async function subirArchivoCuenta(params: { destino: DestinoArchivo; id: 
 
   const documento =
     destino === 'cobro'
-      ? await createDocumentoCuentaCobrar({ cuentas_cobrar_id: id, tipo: 'FACTURA_PDF', archivo_url: url, archivo_nombre: archivo.name })
+      ? await createDocumentoCuentaCobrar({ factura_documento_id: facturaDocumentoId, tipo: 'FACTURA_PDF', archivo_url: url, archivo_nombre: archivo.name })
       : await createDocumentoCuentaPagar({
           grupo_id: id,
           tipo: 'FACTURA_PROVEEDOR',
