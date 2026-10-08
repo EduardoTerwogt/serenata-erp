@@ -7,22 +7,20 @@ import { SearchInput } from '@/components/ui/SearchInput'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { fmtMoney } from '@/lib/quotations/format'
 import type { LadoCuentas } from '@/lib/shared/cuentas/estado-cuenta-tipos'
-import type { ContraparteSaldo, ProyectoSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
+import type { ProyectoSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import { fechaCorta } from '../formato'
 import { Enlace } from './compartido'
 import { useProyectosSelector } from './useAcciones'
 
 interface Props {
-  /** `proyecto`: elegir un solo proyecto (factura de proveedor). `pago`: marcar proyectos con saldo de una sola contraparte (Registrar pago por proyecto). */
+  /** `proyecto`: elegir un solo proyecto (factura de proveedor). `pago`: marcar proyectos con saldo de la contraparte elegida (Registrar pago por proyecto). */
   modo: 'proyecto' | 'pago'
   /** Solo modo `pago`: de qué lado se buscan los saldos. */
   lado?: LadoCuentas
-  /** Solo modo `pago`: contraparte ya fijada por el primer proyecto marcado; las demás quedan deshabilitadas (un pago, una contraparte). */
-  contraparteFija?: string | null
   /** Solo modo `pago`: proyectos marcados. */
   proyectosMarcados?: string[]
-  onTogglePago?: (proyecto: ProyectoSelector, contraparte: ContraparteSaldo) => void
-  /** Modo `proyecto`: proveedor con el que se prioriza la lista (sus proyectos primero). */
+  onTogglePago?: (proyecto: ProyectoSelector) => void
+  /** Modo `pago`: la contraparte de la que se listan los proyectos con saldo. Modo `proyecto`: proveedor con el que se prioriza la lista (sus proyectos primero). */
   contraparte?: string | null
   proyectoSeleccionado?: string | null
   onElegirProyecto?: (proyecto: ProyectoSelector) => void
@@ -32,10 +30,10 @@ interface Props {
  * Selector de proyectos (#130), una sola pieza para Subir factura de proveedor (`proyecto`) y Registrar pago por
  * proyecto (`pago`). Lee de SQL, paginado: búsqueda con debounce y "Cargar más".
  */
-export function SelectorProyectos({ modo, lado = 'proveedor', contraparteFija = null, proyectosMarcados = [], onTogglePago, contraparte = null, proyectoSeleccionado = null, onElegirProyecto }: Props) {
+export function SelectorProyectos({ modo, lado = 'proveedor', proyectosMarcados = [], onTogglePago, contraparte = null, proyectoSeleccionado = null, onElegirProyecto }: Props) {
   const [q, setQ] = useState('')
   const pago = modo === 'pago'
-  const { proyectos, total, error, cargando, cargandoMas, hayMas, cargarMas } = useProyectosSelector(pago ? { modo: 'pago', lado, q, soloPendientes: true } : { modo: 'renglones', lado: 'proveedor', q, contraparte, soloPendientes: false }, true)
+  const { proyectos, total, error, cargando, cargandoMas, hayMas, cargarMas } = useProyectosSelector(pago ? { modo: 'pago', lado, q, contraparte, soloPendientes: true } : { modo: 'renglones', lado: 'proveedor', q, contraparte, soloPendientes: false }, true)
 
   return (
     <div className="overflow-hidden rounded-panel border border-hairline">
@@ -49,35 +47,26 @@ export function SelectorProyectos({ modo, lado = 'proveedor', contraparteFija = 
         {!cargando && !error && proyectos.length === 0 && <div className="border-t border-hairline px-3.5 py-3 text-[12.5px] text-subtext">Sin proyectos con esos filtros.</div>}
 
         {pago &&
-          proyectos.map((p) => (
-            <div key={p.proyecto_id} className="border-t border-hairline">
-              <div className="flex items-center gap-3 px-3.5 py-2.5">
+          proyectos.map((p) => {
+            const c = (p.contrapartes ?? []).find((x) => x.id === contraparte)
+            return (
+              <div key={p.proyecto_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline px-3.5 py-2.5">
+                <Checkbox checked={proyectosMarcados.includes(p.proyecto_id)} onChange={() => onTogglePago?.(p)} label={`Incluir ${p.proyecto_id} · ${p.proyecto ?? ''}`} />
                 <span className="sn-folio w-[64px] flex-none text-[11px] text-accent">{p.proyecto_id}</span>
-                <span className="min-w-0 flex-1">
+                <span className="min-w-[120px] flex-1">
                   <span className="block truncate text-[13px] font-medium text-ink">{p.proyecto ?? '—'}</span>
                   <span className="block truncate text-[11.5px] text-subtext">{p.cliente ?? 'Sin cliente'}</span>
                 </span>
+                {c && (
+                  <span className="flex flex-none items-center gap-3">
+                    <span className="text-[11.5px] text-subtext">{c.facturas === 1 ? '1 factura' : `${c.facturas} facturas`}</span>
+                    <StatusBadge tone="issued">Por pagar</StatusBadge>
+                    <span className="whitespace-nowrap font-semibold text-ink">{fmtMoney(c.saldo)}</span>
+                  </span>
+                )}
               </div>
-              {(p.contrapartes ?? []).map((c) => {
-                const otra = Boolean(contraparteFija) && contraparteFija !== c.id
-                const marcado = contraparteFija === c.id && proyectosMarcados.includes(p.proyecto_id)
-                const apagada = otra || !c.id
-                return (
-                  <div key={`${p.proyecto_id}:${c.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline bg-row px-3.5 py-2 pl-10 text-[12.5px] max-md:pl-3.5">
-                    <Checkbox checked={marcado} disabled={apagada} onChange={() => onTogglePago?.(p, c)} label={`Incluir ${p.proyecto_id} · ${c.nombre}`} />
-                    <span className={`min-w-[120px] flex-1 truncate ${apagada ? 'text-faint' : 'text-ink'}`}>{c.nombre}</span>
-                    <span className="flex flex-none items-center gap-3">
-                      <span className="text-[11.5px] text-subtext">{c.facturas === 1 ? '1 factura' : `${c.facturas} facturas`}</span>
-                      {otra && <StatusBadge tone="draft">Otra contraparte</StatusBadge>}
-                      {!c.id && <StatusBadge tone="draft">Sin ficha</StatusBadge>}
-                      {!apagada && <StatusBadge tone="issued">Por pagar</StatusBadge>}
-                      <span className={`whitespace-nowrap font-semibold ${apagada ? 'text-faint' : 'text-ink'}`}>{fmtMoney(c.saldo)}</span>
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
+            )
+          })}
 
         {!pago &&
           proyectos.map((p) => {

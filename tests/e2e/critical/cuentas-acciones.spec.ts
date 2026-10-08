@@ -136,16 +136,17 @@ test('registrar pago a proveedor: cada factura es un proyecto y el pago liquida 
   expect(llamadas.pagos[0].lineas.map((l) => l.id)).toEqual(['grupo-SH001', 'grupo-SH003', 'grupo-SH004'])
 })
 
-test('registrar pago por proyecto: se marcan proyectos de un proveedor, las demás contrapartes se deshabilitan y se paga contra sus facturas (#130)', async ({ page }) => {
+test('registrar pago por proyecto: con el proveedor elegido solo salen sus proyectos y se paga contra sus facturas (#130, #131)', async ({ page }) => {
   const llamadas = await abrir(page)
   await elegirAccion(page, 'Registrar pago')
   const modal = page.getByRole('dialog', { name: 'Registrar pago' })
   await modal.getByRole('button', { name: 'Pago a proveedor' }).click()
+  await expect(modal.getByRole('button', { name: 'Pagar varios proyectos a la vez' })).toHaveCount(0)
+  await elegirContraparte(modal, 'proveedor', 'distrito', PROVEEDOR.nombre)
   await modal.getByRole('button', { name: 'Pagar varios proyectos a la vez' }).click()
-  await modal.getByRole('checkbox', { name: `Incluir SH001 · ${PROVEEDOR.nombre}` }).click()
-  await expect(modal.getByRole('checkbox', { name: 'Incluir SH070 · Fonoteca MX' })).toBeDisabled()
-  await expect(modal.getByText('Otra contraparte')).toBeVisible()
-  await modal.getByRole('checkbox', { name: `Incluir SH004 · ${PROVEEDOR.nombre}` }).click()
+  await modal.getByRole('checkbox', { name: 'Incluir SH001 · Spot TV 30s' }).click()
+  await expect(modal.getByRole('checkbox', { name: /SH070/ })).toHaveCount(0)
+  await modal.getByRole('checkbox', { name: 'Incluir SH004 · Versiones redes' }).click()
 
   await modal.getByLabel('Monto transferido').fill('73080')
   await expect(modal.getByText('Aplicado $73,080.00 de $73,080.00')).toBeVisible()

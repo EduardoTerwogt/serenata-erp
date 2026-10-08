@@ -311,18 +311,17 @@ export async function mockCuentasAcciones(page: Page, opciones: OpcionesAcciones
   )
   await page.route(/\/api\/cuentas\/proyectos-selector\?/, (route: Route) => {
     // Registrar pago por proyecto: cada proyecto con la contraparte y el saldo de sus facturas abiertas.
-    if (new URL(route.request().url()).searchParams.get('modo') === 'pago') {
-      return fulfillJson(route, {
-        modo: 'pago',
-        total: 3,
-        page: 1,
-        page_size: 25,
-        proyectos: [
-          { proyecto_id: 'SH001', proyecto: 'Spot TV 30s', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 41760 }] },
-          { proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 31320 }] },
-          { proyecto_id: 'SH070', proyecto: 'Doc. Festival', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: 'prov-fonoteca', nombre: 'Fonoteca MX', facturas: 1, saldo: 9000 }] },
-        ],
-      })
+    const params = new URL(route.request().url()).searchParams
+    if (params.get('modo') === 'pago') {
+      // Como SQL: con `contraparte` solo salen los proyectos con saldo de esa contraparte.
+      const todos = [
+        { proyecto_id: 'SH001', proyecto: 'Spot TV 30s', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 41760 }] },
+        { proyecto_id: 'SH004', proyecto: 'Versiones redes', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: PROVEEDOR.id, nombre: PROVEEDOR.nombre, facturas: 1, saldo: 31320 }] },
+        { proyecto_id: 'SH070', proyecto: 'Doc. Festival', cliente: CLIENTE.nombre, fecha_entrega: null, contrapartes: [{ id: 'prov-fonoteca', nombre: 'Fonoteca MX', facturas: 1, saldo: 9000 }] },
+      ]
+      const contraparte = params.get('contraparte')
+      const proyectos = contraparte ? todos.filter((p) => p.contrapartes.some((c) => c.id === contraparte)) : todos
+      return fulfillJson(route, { modo: 'pago', total: proyectos.length, page: 1, page_size: 25, proyectos })
     }
     // Conceptos de SH004: los del proveedor que ya tiene su grupo abierto, o los de la propuesta por asignar (proveedor nuevo).
     const delProveedor = new URL(route.request().url()).searchParams.get('contraparte') === PROVEEDOR.id

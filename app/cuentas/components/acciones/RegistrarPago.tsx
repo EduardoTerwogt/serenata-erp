@@ -20,7 +20,7 @@ import { ACCEPT_COMPROBANTE, BotonArchivo } from '../detalle/TabDocumentos'
 import { Cap, CUERPO_VENTANA, Dato, Enlace, PieVentana } from './compartido'
 import { aCentavos, parseMonto, resumirReparto, sugerirReparto, textoMonto, type LineaReparto } from './reparto'
 import { SelectorContraparte } from './SelectorContraparte'
-import type { ContraparteSaldo, ProyectoSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
+import type { ProyectoSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import { SelectorProyectos } from './SelectorProyectos'
 import { accionesPago, useEstadoCuenta, type ContraparteLista } from './useAcciones'
 
@@ -116,12 +116,11 @@ interface Props {
  * calcula en centavos enteros y solo para pintar (T6): la RPC decide topes, estados y umbrales bajo lock.
  */
 export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, onCambio, onClose, onRegistrado }: Props) {
-  // #130: por proyecto se marcan proyectos de UNA contraparte (Q4) y el estado de cuenta se limita a ellos.
+  // #130: por proyecto se marcan proyectos de la contraparte ya elegida (Q4, #131) y el estado de cuenta se limita a ellos.
   const [vista, setVista] = useState<Vista>('contraparte')
   const [proyectosSel, setProyectosSel] = useState<string[]>([])
-  const [contraparteProy, setContraparteProy] = useState<{ id: string; nombre: string } | null>(null)
   const porProyecto = vista === 'proyecto'
-  const cid = porProyecto ? (contraparteProy?.id ?? null) : contraparteId
+  const cid = porProyecto && proyectosSel.length === 0 ? null : contraparteId
   const { datos: estado, error, cargando, recargar } = useEstadoCuenta(lado, cid, porProyecto ? proyectosSel : undefined)
   const [elegida, setElegida] = useState<ContraparteLista | null>(null)
   const [monto, setMonto] = useState('')
@@ -205,7 +204,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     setAplicado({})
     setAviso(null)
     setProyectosSel([])
-    setContraparteProy(null)
+    setVista('contraparte')
     huella.current = ''
     onCambio({ lado: l, contraparteId: null })
   }
@@ -215,25 +214,21 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     setAplicado({})
     setAviso(null)
     setProyectosSel([])
-    setContraparteProy(null)
     huella.current = ''
   }
-  const alternarProyecto = (p: ProyectoSelector, c: ContraparteSaldo) => {
-    if (!c.id) return
-    const actuales = contraparteProy?.id === c.id ? proyectosSel : []
-    const marcado = actuales.includes(p.proyecto_id)
-    if (!marcado && actuales.length >= MAX_PROYECTOS) {
+  const alternarProyecto = (p: ProyectoSelector) => {
+    const marcado = proyectosSel.includes(p.proyecto_id)
+    if (!marcado && proyectosSel.length >= MAX_PROYECTOS) {
       setAviso({ tono: 'info', texto: `Un pago admite hasta ${MAX_PROYECTOS} proyectos. Registra el resto en otro pago.` })
       return
     }
-    const siguientes = marcado ? actuales.filter((x) => x !== p.proyecto_id) : [...actuales, p.proyecto_id]
     setAviso(null)
-    setProyectosSel(siguientes)
-    setContraparteProy(siguientes.length > 0 ? { id: c.id, nombre: c.nombre } : null)
+    setProyectosSel(marcado ? proyectosSel.filter((x) => x !== p.proyecto_id) : [...proyectosSel, p.proyecto_id])
   }
   const elegirContraparte = (c: ContraparteLista) => {
     setElegida(c)
     setAviso(null)
+    setProyectosSel([])
     huella.current = ''
     onCambio({ lado, contraparteId: c.id })
   }
@@ -268,7 +263,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
     }
   }
 
-  const nombre = vigente?.contraparte?.nombre ?? (porProyecto ? contraparteProy?.nombre : elegida?.nombre) ?? null
+  const nombre = vigente?.contraparte?.nombre ?? elegida?.nombre ?? null
   const etiquetaMonto = lado === 'cobro' ? 'Monto recibido' : 'Monto transferido'
   const nFacturas = grupos.filter((g) => g.conceptos.some((c) => (centavos.valores[c.id] ?? 0) > 0)).length
 
@@ -305,12 +300,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
       bodyClassName={CUERPO_VENTANA}
       header={
         !listo ? (
-          <div className="flex flex-col gap-2.5 md:flex-row md:flex-wrap md:items-center md:gap-3">
-            <FilterTabs tabs={LADOS} value={lado} onChange={cambiarLado} />
-            {!porProyecto && (
-              <SelectorContraparte key={`${lado}:${contraparteId ?? ''}:${nombre ? 1 : 0}`} lado={lado} pendiente="saldo" valor={nombre && contraparteId ? { id: contraparteId, nombre } : null} onElegir={elegirContraparte} />
-            )}
-          </div>
+          <FilterTabs tabs={LADOS} value={lado} onChange={cambiarLado} />
         ) : undefined
       }
       onClose={onClose}
@@ -319,20 +309,18 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
         <PagoListo total={listo.total} lineas={listo.lineas} nombre={nombre} onClose={onClose} />
       ) : (
         <>
-          <div className="flex justify-end">
-            <Enlace onClick={() => cambiarVista(porProyecto ? 'contraparte' : 'proyecto')}>
-              {porProyecto ? `← Volver a elegir ${lado === 'cobro' ? 'un cliente' : 'un proveedor'}` : 'Pagar varios proyectos a la vez'}
-            </Enlace>
-          </div>
+          <SelectorContraparte
+            key={`${lado}:${contraparteId ?? ''}:${nombre ? 1 : 0}`}
+            lado={lado}
+            pendiente="saldo"
+            valor={nombre && contraparteId ? { id: contraparteId, nombre } : null}
+            onElegir={elegirContraparte}
+            accion={contraparteId ? <Enlace onClick={() => cambiarVista(porProyecto ? 'contraparte' : 'proyecto')}>{porProyecto ? '← Volver al estado de cuenta' : 'Pagar varios proyectos a la vez'}</Enlace> : undefined}
+          />
           {aviso && <StatusBanner tone={aviso.tono}>{aviso.texto}</StatusBanner>}
           {error && !vigente && <StatusBanner tone="error">{error}</StatusBanner>}
-          {porProyecto && (
-            <>
-              <SelectorProyectos modo="pago" lado={lado} contraparteFija={contraparteProy?.id ?? null} proyectosMarcados={proyectosSel} onTogglePago={alternarProyecto} />
-            </>
-          )}
-          {!cid && !porProyecto && <Aviso icono="info" tono="neutro">{lado === 'cobro' ? 'Elige el cliente que depositó.' : 'Elige el proveedor al que se le transfirió.'}</Aviso>}
-          {!cid && porProyecto && <Aviso icono="info" tono="neutro">Marca los proyectos que cubre el {lado === 'cobro' ? 'cobro' : 'pago'}. Un pago es de una sola contraparte.</Aviso>}
+          {porProyecto && contraparteId && <SelectorProyectos modo="pago" lado={lado} contraparte={contraparteId} proyectosMarcados={proyectosSel} onTogglePago={alternarProyecto} />}
+          {porProyecto && !cid && <Aviso icono="info" tono="neutro">Marca los proyectos que cubre el {lado === 'cobro' ? 'cobro' : 'pago'}.</Aviso>}
           {cid && !vigente && !error && <SectionLoading className="min-h-[240px]" />}
           {vigente && grupos.length === 0 && (
             <Aviso icono="circle-check" tono="ok">
