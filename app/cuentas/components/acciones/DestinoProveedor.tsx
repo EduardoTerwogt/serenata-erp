@@ -12,7 +12,7 @@ import type { PreviewFactura } from '@/lib/shared/cuentas/factura-preview-tipos'
 import type { RenglonSelector } from '@/lib/shared/cuentas/proyectos-selector-tipos'
 import { plural } from '../formato'
 import { Aviso } from '../detalle/TabPago'
-import { Cap, Enlace } from './compartido'
+import { Cap, Enlace, Paso } from './compartido'
 import { AltaProveedor } from './AltaProveedor'
 import { ConceptosProyecto } from './ConceptosProyecto'
 import { grupoExacto, marcaInicial, montoDeTexto, type DestinoProveedor as Destino, type ProyectoRef } from './destino-proveedor'
@@ -30,18 +30,6 @@ interface Props {
   onElegirProveedor: (c: ContraparteLista) => void
   /** Cuadre que calcula SQL cuando lo marcado es exactamente el grupo del proveedor; null si no aplica. */
   avisoCuadre: ReactNode
-}
-
-function Paso({ n, titulo, children }: { n: number; titulo: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 text-[12.5px] font-semibold text-ink">
-        <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-ink">{n}</span>
-        {titulo}
-      </div>
-      {children}
-    </div>
-  )
 }
 
 function FilaProyecto({ p, marcado, motivo, onCambio }: { p: ProyectoRef; marcado: boolean; motivo?: string; onCambio: (marcado: boolean) => void }) {
