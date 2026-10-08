@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { Icon } from '@/components/ui/Icon'
@@ -25,7 +25,8 @@ interface Props {
   /** Proveedor existente (por RFC o elegido a mano); null si el emisor no existe. */
   contraparte: { id: string; nombre: string } | null
   destino: Destino
-  onDestino: (d: Destino) => void
+  /** Actualiza con la forma funcional: lo escrito y lo marcado no se pisan aunque lleguen datos del servidor a mitad de la captura. */
+  onDestino: Dispatch<SetStateAction<Destino>>
   /** Elegir a un proveedor que ya existe ("es este proveedor", o el desplegable). */
   onElegirProveedor: (c: ContraparteLista) => void
   /** Cuadre que calcula SQL cuando lo marcado es exactamente el grupo del proveedor; null si no aplica. */
@@ -94,22 +95,24 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
 
   const sugerido = destino.sugerido
   const otro = proyecto && proyecto.proyecto_id !== sugerido?.ref.proyecto_id ? proyecto : null
-  const elegirProyecto = (p: ProyectoRef) => onDestino({ ...destino, proyecto: p, renglones: [], grupoId: null, marcado: false })
-  const quitarProyecto = () => onDestino({ ...destino, proyecto: null, renglones: [], grupoId: null, marcado: false })
-  const conceptosCargados = (rs: RenglonSelector[]) => {
-    if (destino.marcado) return
-    const renglones = marcaInicial(rs, proveedorId, propuesta?.renglones ?? null)
-    onDestino({ ...destino, renglones, grupoId: grupoExacto(rs, renglones, proveedorId), marcado: true })
-  }
-  const alternar = (rs: RenglonSelector[], r: RenglonSelector) => {
-    const renglones = destino.renglones.includes(r.cuenta_id) ? destino.renglones.filter((x) => x !== r.cuenta_id) : [...destino.renglones, r.cuenta_id]
-    onDestino({ ...destino, modo: 'renglones', renglones, grupoId: grupoExacto(rs, renglones, proveedorId), marcado: true })
-  }
+  const elegirProyecto = (p: ProyectoRef) => onDestino((d) => ({ ...d, proyecto: p, renglones: [], grupoId: null, marcado: false }))
+  const quitarProyecto = () => onDestino((d) => ({ ...d, proyecto: null, renglones: [], grupoId: null, marcado: false }))
+  const conceptosCargados = (rs: RenglonSelector[]) =>
+    onDestino((d) => {
+      if (d.marcado) return d
+      const renglones = marcaInicial(rs, proveedorId, propuesta?.renglones ?? null)
+      return { ...d, renglones, grupoId: grupoExacto(rs, renglones, proveedorId), marcado: true }
+    })
+  const alternar = (rs: RenglonSelector[], r: RenglonSelector) =>
+    onDestino((d) => {
+      const renglones = d.renglones.includes(r.cuenta_id) ? d.renglones.filter((x) => x !== r.cuenta_id) : [...d.renglones, r.cuenta_id]
+      return { ...d, modo: 'renglones', renglones, grupoId: grupoExacto(rs, renglones, proveedorId), marcado: true }
+    })
   // «Marcar todos / Quitar todos»: reemplaza lo marcado (el grupo exacto se vuelve a calcular).
-  const marcarVarios = (rs: RenglonSelector[], ids: string[]) => onDestino({ ...destino, modo: 'renglones', renglones: ids, grupoId: grupoExacto(rs, ids, proveedorId), marcado: true })
+  const marcarVarios = (rs: RenglonSelector[], ids: string[]) => onDestino((d) => ({ ...d, modo: 'renglones', renglones: ids, grupoId: grupoExacto(rs, ids, proveedorId), marcado: true }))
   // Un gasto extra propone el neto del XML como costo; se puede corregir.
   const cambiarGasto = (activo: boolean) =>
-    onDestino({ ...destino, modo: activo ? 'gasto' : 'renglones', gasto: activo && destino.gasto.costo === '' && subtotal > 0 ? { ...destino.gasto, costo: subtotal.toFixed(2) } : destino.gasto })
+    onDestino((d) => ({ ...d, modo: activo ? 'gasto' : 'renglones', gasto: activo && d.gasto.costo === '' && subtotal > 0 ? { ...d.gasto, costo: subtotal.toFixed(2) } : d.gasto }))
 
   return (
     <div className="flex flex-col gap-4">
@@ -136,7 +139,7 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
             onElegir={onElegirProveedor}
             accion={
               emisor?.regimen_sugerido ? (
-                <Button variant="secondary" size="md" iconLeft="plus" onClick={() => onDestino({ ...destino, nuevo: true, modo: 'renglones' })}>
+                <Button variant="secondary" size="md" iconLeft="plus" onClick={() => onDestino((d) => ({ ...d, nuevo: true, modo: 'renglones' }))}>
                   Proveedor nuevo
                 </Button>
               ) : undefined
@@ -148,8 +151,8 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
 
       {nuevo && emisor && (
         <>
-          <Cap derecha={<Enlace onClick={() => onDestino({ ...destino, nuevo: false })}>Elegir uno existente</Enlace>}>Proveedor nuevo · datos del XML</Cap>
-          <AltaProveedor emisor={emisor} valor={destino.alta} onChange={(alta) => onDestino({ ...destino, alta })} />
+          <Cap derecha={<Enlace onClick={() => onDestino((d) => ({ ...d, nuevo: false }))}>Elegir uno existente</Enlace>}>Proveedor nuevo · datos del XML</Cap>
+          <AltaProveedor emisor={emisor} valor={destino.alta} onChange={(parche) => onDestino((d) => ({ ...d, alta: { ...d.alta, ...parche } }))} />
         </>
       )}
 
@@ -169,12 +172,12 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
                   <>
                     <div className="sn-caption mt-1">Gasto extra</div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <TextField label="Concepto" requerido value={destino.gasto.concepto} onChange={(e) => onDestino({ ...destino, gasto: { ...destino.gasto, concepto: e.target.value } })} autoComplete="off" />
+                      <TextField label="Concepto" requerido value={destino.gasto.concepto} onChange={(e) => { const v = e.target.value; onDestino((d) => ({ ...d, gasto: { ...d.gasto, concepto: v } })) }} autoComplete="off" />
                       <TextField
                         label="Costo neto al proveedor"
                         requerido
                         value={destino.gasto.costo}
-                        onChange={(e) => onDestino({ ...destino, gasto: { ...destino.gasto, costo: e.target.value } })}
+                        onChange={(e) => { const v = e.target.value; onDestino((d) => ({ ...d, gasto: { ...d.gasto, costo: v } })) }}
                         inputMode="decimal"
                         autoComplete="off"
                         placeholder="0.00"
@@ -195,7 +198,7 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
                         {!propuestaAplicada && (
                           <>
                             {' '}
-                            <button type="button" className="font-medium underline" onClick={() => onDestino({ ...destino, modo: 'renglones', renglones: propuesta.renglones, grupoId: null, marcado: true })}>
+                            <button type="button" className="font-medium underline" onClick={() => onDestino((d) => ({ ...d, modo: 'renglones', renglones: propuesta.renglones, grupoId: null, marcado: true }))}>
                               Marcarlos
                             </button>
                           </>

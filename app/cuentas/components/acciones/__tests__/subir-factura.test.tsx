@@ -56,6 +56,9 @@ let respuestasGuardar: Response[]
 let proyectoActual: ProyectoSelector
 let contrapartes: { id: string; nombre: string; pendientes: number }[]
 let reintentoFalla = false
+// Retiene la respuesta de los conceptos hasta que la prueba la libere (para probar lo que llega a mitad de la captura).
+let retenerSelector = false
+let liberarSelector: (() => void) | null = null
 
 function fetchSimulado(input: RequestInfo | URL, init?: RequestInit) {
   const url = String(input)
@@ -63,7 +66,11 @@ function fetchSimulado(input: RequestInfo | URL, init?: RequestInit) {
   const fd = init?.body instanceof FormData ? init.body : null
   llamadas.push({ url, method, datos: fd?.get('datos') ? JSON.parse(String(fd.get('datos'))) : null, constancia: Boolean(fd?.get('constancia')) })
   if (url.startsWith('/api/cuentas/facturas/preview')) return Promise.resolve(json(previews.length > 1 ? previews.shift() : previews[0]))
-  if (url.startsWith('/api/cuentas/proyectos-selector')) return Promise.resolve(json({ modo: 'renglones', total: 1, page: 1, page_size: 25, proyectos: [proyectoActual] }))
+  if (url.startsWith('/api/cuentas/proyectos-selector')) {
+    const respuesta = () => json({ modo: 'renglones', total: 1, page: 1, page_size: 25, proyectos: [proyectoActual] })
+    if (retenerSelector) return new Promise<Response>((res) => { liberarSelector = () => res(respuesta()) })
+    return Promise.resolve(respuesta())
+  }
   if (url.startsWith('/api/cuentas/contrapartes')) return Promise.resolve(json({ total: contrapartes.length, contrapartes }))
   if (url.includes('/reintentar-subida')) return Promise.resolve(json(reintentoFalla ? { error: 'subida_fallida', message: 'Drive no respondió.' } : { success: true, pendiente: false }, reintentoFalla ? 502 : 200))
   if (url === '/api/cuentas/facturas') return Promise.resolve(respuestasGuardar.shift() ?? json({ factura_id: 'f1', estado_validacion: 'validado' }, 201))
@@ -92,6 +99,8 @@ beforeEach(() => {
   proyectoActual = proyecto
   contrapartes = []
   reintentoFalla = false
+  retenerSelector = false
+  liberarSelector = null
   vi.stubGlobal('fetch', vi.fn(fetchSimulado))
 })
 afterEach(() => {
@@ -485,6 +494,27 @@ describe('Subir factura · pasos, cuadre y selección masiva (#131)', () => {
     expect(await screen.findByText('F-A_Altavista')).toBeTruthy()
     expect(screen.getByText('Grupo Altavista')).toBeTruthy()
     expect(screen.getByText('UUID 6F2C-A191AB')).toBeTruthy()
+  })
+})
+
+describe('Subir factura · captura que no se pierde (#131)', () => {
+  it('lo escrito del proveedor nuevo sigue ahí cuando llegan los conceptos a mitad de la captura', async () => {
+    retenerSelector = true
+    previews = [base({ propuesta: [{ proyecto_id: 'SH001', proyecto: 'Boda Lopez', renglones: ['c1', 'c2'], neto: 5000 }] })]
+    abrir()
+    fireEvent.click(await screen.findByRole('button', { name: /^Proveedor nuevo/ }))
+    fireEvent.change(await screen.findByLabelText(/^Teléfono/), { target: { value: '5512345678' } })
+    fireEvent.change(screen.getByLabelText(/^Correo/), { target: { value: 'pagos@audio.mx' } })
+    // Los conceptos llegan ahora, con la captura a medias, y marcan lo propuesto.
+    await waitFor(() => expect(liberarSelector).not.toBeNull())
+    liberarSelector!()
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Incluir Audio ceremonia/ }).getAttribute('aria-checked')).toBe('true'))
+    fireEvent.change(screen.getByLabelText(/^Banco/), { target: { value: 'BBVA' } })
+    fireEvent.change(screen.getByLabelText(/^CLABE/), { target: { value: '012345678901234567' } })
+
+    expect((screen.getByLabelText(/^Teléfono/) as HTMLInputElement).value).toBe('5512345678')
+    expect((screen.getByLabelText(/^Correo/) as HTMLInputElement).value).toBe('pagos@audio.mx')
+    await waitFor(() => expect(boton(/Crear proveedor y registrar factura/).disabled).toBe(false))
   })
 })
 
