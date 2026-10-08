@@ -54,8 +54,8 @@ export function PieVentana({
   botones: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-3 px-4 py-3.5 md:flex-row md:items-center md:gap-5 md:px-[22px]">
-      <div className="flex items-end justify-between gap-3 md:flex-1">
+    <div className="flex flex-col gap-3 px-4 py-3.5 md:flex-row md:flex-wrap md:items-center md:gap-x-5 md:px-[22px]">
+      <div className="flex items-end justify-between gap-3 md:min-w-[340px] md:flex-1">
         <div className="min-w-0">
           <div className="truncate text-[13.5px] font-semibold text-ink">{titulo}</div>
           <div className="mt-0.5 text-[11.5px] text-subtext">{detalle}</div>
@@ -67,7 +67,8 @@ export function PieVentana({
           </div>
         )}
       </div>
-      <div className="flex gap-2.5">{botones}</div>
+      {/* Los botones no se parten en dos líneas ni se aprietan: si no caben junto al total, bajan a su propia fila (ventana de 736–820 px). */}
+      <div className="flex gap-2.5 md:ml-auto md:flex-none md:[&>*]:whitespace-nowrap">{botones}</div>
     </div>
   )
 }
