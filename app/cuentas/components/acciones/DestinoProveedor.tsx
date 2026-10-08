@@ -105,6 +105,8 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
     const renglones = destino.renglones.includes(r.cuenta_id) ? destino.renglones.filter((x) => x !== r.cuenta_id) : [...destino.renglones, r.cuenta_id]
     onDestino({ ...destino, modo: 'renglones', renglones, grupoId: grupoExacto(rs, renglones, proveedorId), marcado: true })
   }
+  // «Marcar todos / Quitar todos»: reemplaza lo marcado (el grupo exacto se vuelve a calcular).
+  const marcarVarios = (rs: RenglonSelector[], ids: string[]) => onDestino({ ...destino, modo: 'renglones', renglones: ids, grupoId: grupoExacto(rs, ids, proveedorId), marcado: true })
   // Un gasto extra propone el neto del XML como costo; se puede corregir.
   const cambiarGasto = (activo: boolean) =>
     onDestino({ ...destino, modo: activo ? 'gasto' : 'renglones', gasto: activo && destino.gasto.costo === '' && subtotal > 0 ? { ...destino.gasto, costo: subtotal.toFixed(2) } : destino.gasto })
@@ -153,57 +155,60 @@ export function DestinoProveedor({ factura, contraparte, destino, onDestino, onE
 
       {tiene && (
         <>
-          <Paso n={1} titulo="¿De qué proyecto es?">
+          <Paso n={2} titulo="¿Qué cubre?">
+            <div className="sn-caption">Proyecto</div>
             {sugerido && <FilaProyecto p={sugerido.ref} marcado={proyecto?.proyecto_id === sugerido.ref.proyecto_id} motivo={sugerido.motivo} onCambio={(m) => (m ? elegirProyecto(sugerido.ref) : quitarProyecto())} />}
             {otro && <FilaProyecto p={otro} marcado onCambio={quitarProyecto} />}
             <ElegirProyecto etiqueta={sugerido || otro ? 'Elegir otro proyecto' : 'Elegir proyecto'} proveedorId={proveedorId} elegido={proyecto?.proyecto_id ?? null} onElegir={elegirProyecto} />
+
+            {proyecto && (
+              <>
+                <Switch checked={gasto} onChange={cambiarGasto} label="Esta factura no está en la cotización (gasto extra)" />
+
+                {gasto ? (
+                  <>
+                    <div className="sn-caption mt-1">Gasto extra</div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <TextField label="Concepto" requerido value={destino.gasto.concepto} onChange={(e) => onDestino({ ...destino, gasto: { ...destino.gasto, concepto: e.target.value } })} autoComplete="off" />
+                      <TextField
+                        label="Costo neto al proveedor"
+                        requerido
+                        value={destino.gasto.costo}
+                        onChange={(e) => onDestino({ ...destino, gasto: { ...destino.gasto, costo: e.target.value } })}
+                        inputMode="decimal"
+                        autoComplete="off"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    {montoDeTexto(destino.gasto.costo) !== null && (
+                      <Aviso icono="info" tono="neutro">
+                        Resta de la utilidad de {proyecto.proyecto_id}: {fmtMoney(montoDeTexto(destino.gasto.costo) ?? 0)} (neto). La cotización aprobada no cambia.
+                      </Aviso>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="sn-caption mt-1">Conceptos</div>
+                    {propuesta && (
+                      <Aviso icono="circle-check" tono="ok">
+                        <b>Cuadra con el XML:</b> {plural(propuesta.renglones.length, 'concepto por asignar', 'conceptos por asignar')} de {propuesta.proyecto_id} suman {fmtMoney(propuesta.neto)}, el neto del XML (tolerancia {fmtMoney(factura.tolerancia)}).
+                        {!propuestaAplicada && (
+                          <>
+                            {' '}
+                            <button type="button" className="font-medium underline" onClick={() => onDestino({ ...destino, modo: 'renglones', renglones: propuesta.renglones, grupoId: null, marcado: true })}>
+                              Marcarlos
+                            </button>
+                          </>
+                        )}
+                      </Aviso>
+                    )}
+                    <ConceptosProyecto proyectoId={proyecto.proyecto_id} proveedorId={proveedorId} seleccion={destino.renglones} onCargado={conceptosCargados} onAlternar={alternar} onMarcar={marcarVarios} />
+                  </>
+                )}
+              </>
+            )}
           </Paso>
-
-          {proyecto && (
-            <>
-              <Switch checked={gasto} onChange={cambiarGasto} label="Esta factura no está en la cotización (gasto extra)" />
-
-              {gasto ? (
-                <Paso n={2} titulo="¿De qué es el gasto?">
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <TextField label="Concepto" requerido value={destino.gasto.concepto} onChange={(e) => onDestino({ ...destino, gasto: { ...destino.gasto, concepto: e.target.value } })} autoComplete="off" />
-                    <TextField
-                      label="Costo neto al proveedor"
-                      requerido
-                      value={destino.gasto.costo}
-                      onChange={(e) => onDestino({ ...destino, gasto: { ...destino.gasto, costo: e.target.value } })}
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  {montoDeTexto(destino.gasto.costo) !== null && (
-                    <Aviso icono="info" tono="neutro">
-                      Resta de la utilidad de {proyecto.proyecto_id}: {fmtMoney(montoDeTexto(destino.gasto.costo) ?? 0)} (neto). La cotización aprobada no cambia.
-                    </Aviso>
-                  )}
-                </Paso>
-              ) : (
-                <Paso n={2} titulo="¿Qué conceptos cubre?">
-                  {propuesta && (
-                    <Aviso icono="circle-check" tono="ok">
-                      <b>Cuadra con el XML:</b> {plural(propuesta.renglones.length, 'concepto por asignar', 'conceptos por asignar')} de {propuesta.proyecto_id} suman {fmtMoney(propuesta.neto)}, el neto del XML (tolerancia {fmtMoney(factura.tolerancia)}).
-                      {!propuestaAplicada && (
-                        <>
-                          {' '}
-                          <button type="button" className="font-medium underline" onClick={() => onDestino({ ...destino, modo: 'renglones', renglones: propuesta.renglones, grupoId: null, marcado: true })}>
-                            Marcarlos
-                          </button>
-                        </>
-                      )}
-                    </Aviso>
-                  )}
-                  <ConceptosProyecto proyectoId={proyecto.proyecto_id} proveedorId={proveedorId} seleccion={destino.renglones} onCargado={conceptosCargados} onAlternar={alternar} />
-                  {avisoCuadre}
-                </Paso>
-              )}
-            </>
-          )}
+          {proyecto && !gasto && avisoCuadre && <Paso n={3} titulo="Confirmar">{avisoCuadre}</Paso>}
         </>
       )}
     </div>

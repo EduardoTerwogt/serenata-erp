@@ -427,7 +427,7 @@ export function CuentasApp() {
             onOrdenCambio={recargarTodo}
           />
         )}
-        {estado.sheet === 'factura' && <SubirFactura escritorio={escritorio} proyecto={estado.pre} onClose={cerrarAccion} onGuardada={recargarTodo} />}
+        {estado.sheet === 'factura' && <SubirFactura escritorio={escritorio} proyecto={estado.pre} onClose={cerrarAccion} onGuardada={recargarTodo} onVerEstado={(lado, cid, doc) => abrir({ sheet: 'estado', lado, cid, doc })} />}
         {estado.sheet === 'estado' && (
           <EstadoCuenta
             lado={estado.lado ?? 'cobro'}

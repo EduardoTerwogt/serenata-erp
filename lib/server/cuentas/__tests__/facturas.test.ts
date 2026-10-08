@@ -184,9 +184,12 @@ describe('previsualizarFactura', () => {
       <cfdi:Complemento><pago20:Pagos><pago20:Pago FechaPago="2026-09-25T12:00:00" Monto="500">
         <pago20:DoctoRelacionado IdDocumento="aaaaaaaa-0000-4000-8000-000000000001" ImpPagado="500.00" />
       </pago20:Pago></pago20:Pagos></cfdi:Complemento></cfdi:Comprobante>`
-    mocks.filasPorTabla.documentos_cuentas_cobrar = [{ id: 'fac-1', uuid_cfdi: 'AAAAAAAA-0000-4000-8000-000000000001', estado_validacion: 'validado', metodo_pago_cfdi: 'PPD', total_cfdi: 1160 }]
+    mocks.filasPorTabla.documentos_cuentas_cobrar = [{ id: 'fac-1', uuid_cfdi: 'AAAAAAAA-0000-4000-8000-000000000001', estado_validacion: 'validado', metodo_pago_cfdi: 'PPD', total_cfdi: 1160, archivo_nombre: 'F-A_Altavista.xml' }]
+    mocks.filasPorTabla.clientes = [{ id: 'cli-1', nombre: 'Grupo Altavista', rfc: CLIENTE }]
     const r = await previsualizarFactura({ xmlFile: archivo(xml), cuentas: [] })
     expect(r.body).toMatchObject({ tipo: 'complemento_cobro', relacionados: [{ monto_pagado: 500, factura: { id: 'fac-1' } }] })
+    // #131: el nombre de la factura y la contraparte (por su RFC) salen para no mostrar solo el UUID.
+    expect(r.body).toMatchObject({ contraparte: { id: 'cli-1', nombre: 'Grupo Altavista' }, relacionados: [{ factura: { archivo_nombre: 'F-A_Altavista.xml' } }] })
   })
 })
 

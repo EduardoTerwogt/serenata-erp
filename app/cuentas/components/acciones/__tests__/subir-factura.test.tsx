@@ -386,7 +386,7 @@ describe('Subir factura · PDF obligatorio (#131)', () => {
   it('un complemento también necesita su PDF', async () => {
     previews = [{ tipo: 'complemento_cobro', lado: 'cobro', cfdi: { uuid: 'U', fecha: '2026-10-01T09:00:00' }, relacionados: [{ uuid_factura: 'F-UUID', monto_pagado: 1000, factura: { id: 'f', estado_validacion: 'validado', metodo_pago: 'PPD', total_cfdi: 1000 } }] } as never]
     abrir([XML()])
-    expect(await screen.findByText(/Es un/)).toBeTruthy()
+    expect(await screen.findByText(/Se liga solo, por el UUID/)).toBeTruthy()
     expect(boton(/Guardar complemento/).disabled).toBe(true)
     fireEvent.change(inputPdf(), { target: { files: [PDF()] } })
     await waitFor(() => expect(boton(/Guardar complemento/).disabled).toBe(false))
@@ -400,6 +400,118 @@ describe('Subir factura · PDF obligatorio (#131)', () => {
     fireEvent.change(inputPdf(), { target: { files: [grande] } })
     expect(await screen.findByText('El XML y el PDF juntos exceden 4 MB. Reduce el PDF.')).toBeTruthy()
     expect(screen.queryByText('grande.pdf')).toBeNull()
+  })
+})
+
+const cobroBase = (extra: Partial<PreviewFactura> = {}): PreviewFactura =>
+  base({
+    tipo: 'factura_cobro',
+    lado: 'cobro',
+    contraparte: { id: 'c1', nombre: 'Grupo Altavista', rfc: 'GAL120304AB1' },
+    rfc_contraparte: 'GAL120304AB1',
+    cfdi: { uuid: 'U-9', fecha: '2026-09-12T10:00:00', total: 359600, subtotal: 310000, metodo_pago: 'PPD', rfc_emisor: 'SER010101AAA', rfc_receptor: 'GAL120304AB1', conceptos: [], folios: ['SH001', 'SH003', 'SH004'] },
+    candidatos: ['SH001:185600', 'SH002:92800', 'SH003:58000', 'SH004:46400', 'SH006:69600'].map((x) => {
+      const [folio, monto] = x.split(':')
+      return { cuenta_id: `cuenta-${folio}`, folio, cotizacion_id: folio, proyecto_id: folio, proyecto: `Proyecto ${folio}`, monto_total: Number(monto), monto_pagado: 0, saldo: Number(monto), fecha_entrega: '2026-09-10' }
+    }),
+    preseleccion: ['cuenta-SH001', 'cuenta-SH003', 'cuenta-SH004'],
+    cuadre: { total_cfdi: 359600, n: 3, suma: 290000, diferencia: 69600, tolerancia: 0.03, estado: 'revision', detalle: null, otro_cliente: false, ya_ligadas: [], no_encontradas: 0 },
+    ...extra,
+  })
+
+describe('Subir factura · pasos, cuadre y selección masiva (#131)', () => {
+  it('la lista dice cuántas van marcadas y «Quitar todas / Marcar todas» cambia la selección', async () => {
+    previews = [cobroBase()]
+    abrir()
+    expect(await screen.findByText('3 de 5 marcadas · $290,000.00')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar todas' }))
+    expect(await screen.findByText('0 de 5 marcadas · $0.00')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar todas' }))
+    expect(await screen.findByText('5 de 5 marcadas · $452,400.00')).toBeTruthy()
+  })
+
+  it('no cuadra: el indicador dice cuánto falta y ofrece marcar la cotización que vale justo la diferencia', async () => {
+    previews = [cobroBase()]
+    abrir()
+    expect(await screen.findByText(/No cuadra: XML \$359,600\.00 vs\. cotizaciones \$290,000\.00 \(faltan \$69,600\.00\)/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Guardar en revisión' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar SH006' }))
+    expect(await screen.findByText('4 de 5 marcadas · $359,600.00')).toBeTruthy()
+  })
+
+  it('cuadra: indicador en verde con la suma y «Válida» en el paso de archivos', async () => {
+    previews = [cobroBase({ cuadre: { total_cfdi: 359600, n: 4, suma: 359600, diferencia: 0, tolerancia: 0.03, estado: 'validado', detalle: null, otro_cliente: false, ya_ligadas: [], no_encontradas: 0 } })]
+    abrir()
+    expect(await screen.findByText('Cuadra con el XML')).toBeTruthy()
+    expect(screen.getByText('Válida')).toBeTruthy()
+  })
+
+  it('arrastrar y soltar el XML y el PDF en escritorio los adjunta', async () => {
+    previews = [cobroBase()]
+    render(<SubirFactura escritorio onClose={() => {}} onGuardada={() => {}} />)
+    const zona = screen.getByText('Arrastra aquí el XML y el PDF de la factura.').parentElement as HTMLElement
+    fireEvent.drop(zona, { dataTransfer: { files: [XML(), PDF()] } })
+    expect(await screen.findByText('factura.pdf')).toBeTruthy()
+    expect(screen.getByText('factura.xml')).toBeTruthy()
+  })
+
+  it('al guardar, la pantalla resume lo ligado y «Ver en Cuentas» abre el estado de la contraparte con la factura resaltada', async () => {
+    previews = [cobroBase({ cuadre: { total_cfdi: 359600, n: 4, suma: 359600, diferencia: 0, tolerancia: 0.03, estado: 'validado', detalle: null, otro_cliente: false, ya_ligadas: [], no_encontradas: 0 } })]
+    respuestasGuardar = [json({ success: true, factura_id: 'fac-1', estado_validacion: 'validado' }, 201)]
+    const onVerEstado = vi.fn()
+    const r = render(<SubirFactura escritorio onClose={() => {}} onGuardada={() => {}} onVerEstado={onVerEstado} />)
+    fireEvent.change(r.baseElement.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [XML(), PDF()] } })
+    await waitFor(() => expect(boton(/Guardar factura/).disabled).toBe(false))
+    fireEvent.click(boton(/Guardar factura/))
+    expect(await screen.findByText('Factura guardada')).toBeTruthy()
+    expect(screen.getByText('Grupo Altavista')).toBeTruthy()
+    expect(screen.getByText('3 cotizaciones')).toBeTruthy()
+    expect(screen.getByText('$359,600.00')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Ver en Cuentas' }))
+    expect(onVerEstado).toHaveBeenCalledWith('cobro', 'c1', 'fac-1')
+  })
+
+  it('complemento: muestra el nombre de la factura y la contraparte, con el UUID como detalle', async () => {
+    previews = [
+      {
+        tipo: 'complemento_cobro',
+        lado: 'cobro',
+        cfdi: { uuid: 'U', fecha: '2026-10-01T09:00:00' },
+        contraparte: { id: 'c1', nombre: 'Grupo Altavista' },
+        relacionados: [{ uuid_factura: '6F2C-A191AB', monto_pagado: 300000, factura: { id: 'f', estado_validacion: 'validado', metodo_pago: 'PPD', total_cfdi: 359600, archivo_nombre: 'F-A_Altavista.xml' } }],
+      } as never,
+    ]
+    abrir()
+    expect(await screen.findByText('F-A_Altavista')).toBeTruthy()
+    expect(screen.getByText('Grupo Altavista')).toBeTruthy()
+    expect(screen.getByText('UUID 6F2C-A191AB')).toBeTruthy()
+  })
+})
+
+describe('Subir factura · conceptos del proveedor (#131)', () => {
+  const concepto = (id: string, descripcion: string, extra: Record<string, unknown> = {}) => ({ cuenta_id: id, descripcion, costo_total: 1000, gasto_extra: false, responsable_id: null, responsable: null, grupo_id: null, grupo_estado: null, bloqueado: false, ...extra })
+
+  it('barra «N de M marcados» con «Marcar todos / Quitar todos», y los conceptos bloqueados van plegados en una sola fila', async () => {
+    proyectoActual = {
+      ...proyecto,
+      renglones: [
+        concepto('c1', 'Audio ceremonia'),
+        concepto('c2', 'Audio fiesta'),
+        concepto('c3', 'Audio y consola', { responsable_id: 'otro', responsable: 'Sonido Lunar', grupo_id: 'g9', grupo_estado: 'FACTURADO', bloqueado: true }),
+      ],
+    }
+    previews = [base({ contraparte: { id: 'p1', nombre: 'Audio SA', rfc: 'AAA010101AAA' } })]
+    abrir(undefined, { proyecto: 'SH001' })
+    expect(await screen.findByText('0 de 2 marcados · $0.00')).toBeTruthy()
+    expect(screen.queryByRole('checkbox', { name: /Incluir Audio y consola/ })).toBeNull()
+    expect(screen.getByText(/1 concepto de otro proveedor con factura/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar todos' }))
+    expect(await screen.findByText('2 de 2 marcados · $2,000.00')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Ver' }))
+    expect((await screen.findByRole('checkbox', { name: /Incluir Audio y consola/ })).hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar todos' }))
+    expect(await screen.findByText('0 de 2 marcados · $0.00')).toBeTruthy()
   })
 })
 

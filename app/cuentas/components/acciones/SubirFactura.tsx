@@ -23,7 +23,7 @@ import {
 import { fechaCorta, plural } from '../formato'
 import { Aviso } from '../detalle/TabPago'
 import { ACCEPT_PDF, ACCEPT_XML, BotonArchivo, LIMITE_TOTAL } from '../detalle/TabDocumentos'
-import { Cap, CUERPO_VENTANA, Dato, Enlace, PieVentana } from './compartido'
+import { BarraSeleccion, CUERPO_VENTANA, Dato, Enlace, IndicadorCuadre, Paso, PieVentana } from './compartido'
 import { CLIENTE_VACIO, CompletarCliente, type ClienteForm } from './CompletarCliente'
 import { armarProveedor, destinoInicial, modoEfectivo, type DestinoProveedor as Destino, type ProyectoSugerido } from './destino-proveedor'
 import { DestinoProveedor } from './DestinoProveedor'
@@ -40,6 +40,8 @@ interface Props {
   onClose: () => void
   /** Después de guardar: periodo, resumen, avisos y detalle se vuelven a pedir. */
   onGuardada: () => void
+  /** #131 «Ver en Cuentas»: abre el Estado de cuenta de la contraparte con el documento resaltado. */
+  onVerEstado?: (lado: 'cobro' | 'proveedor', contraparteId: string | null, doc: string | null) => void
 }
 
 /**
@@ -48,9 +50,18 @@ interface Props {
  * de Serenata. La vista previa no escribe nada (T9); el cuadre lo calcula SQL y aquí solo se pinta (T6). Un total que
  * no cuadra no se rechaza: se guarda "En revisión" con el detalle exacto (P5).
  */
+interface ResumenGuardado {
+  lado: 'cobro' | 'proveedor'
+  contraparteId: string | null
+  quien: string
+  que: string
+  total: number
+  documento: string | null
+}
+
 const MENSAJE_TOTAL = 'El XML y el PDF juntos exceden 4 MB. Reduce el PDF.'
 
-export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada }: Props) {
+export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada, onVerEstado }: Props) {
   const [xml, setXml] = useState<File | null>(null)
   const [pdf, setPdf] = useState<File | null>(null)
   const [preview, setPreview] = useState<PreviewFactura | PreviewComplemento | null>(null)
@@ -65,6 +76,8 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
   const [enviando, setEnviando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
   const [listo, setListo] = useState<FacturaGuardada | null>(null)
+  const [resumenGuardado, setResumenGuardado] = useState<ResumenGuardado | null>(null)
+  const [arrastrando, setArrastrando] = useState(false)
   // #131: archivos de la factura recién guardada que no llegaron a Drive; se reenvían desde los archivos que la ventana ya tiene.
   const [pendientes, setPendientes] = useState<ArchivoPendienteInfo[]>([])
   const [reintentando, setReintentando] = useState(false)
@@ -160,6 +173,9 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
   const totalXml = factura?.cfdi.total ?? 0
 
   const alternar = (id: string) => setSeleccion((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
+  // Atajo del descuadre (#131): si una cotización sin marcar vale justo lo que falta, se ofrece marcarla. Solo compara valores que SQL ya entregó.
+  const faltante = cuadre && esCuadreCobro(cuadre) && cuadre.diferencia > 0 ? cuadre.diferencia : 0
+  const sugerida = faltante > 0 ? (candidatos.find((c) => !seleccion.includes(c.cuenta_id) && Math.abs(c.monto_total - faltante) <= (factura?.tolerancia ?? 1)) ?? null) : null
 
   const complementoCompleto = complemento ? complemento.relacionados.length > 0 && complemento.relacionados.every((r) => r.factura) : false
   const proveedorLado = factura?.lado === 'proveedor'
@@ -199,6 +215,20 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
             ? { operation_id: llave, contraparte_id: preparado.proveedor_id, grupo_id: preparado.grupo_id }
             : { operation_id: llave, guardar_rfc: rfcLado, ...(armado?.ok ? armado.cuerpo : {}) }
       const r = await accionesFactura.guardar(xml, pdf, datos)
+      setResumenGuardado({
+        lado: complemento ? complemento.lado : cobro ? 'cobro' : 'proveedor',
+        contraparteId: complemento ? (complemento.contraparte?.id ?? null) : (preparado?.proveedor_id ?? contraparte?.id ?? null),
+        quien: complemento ? (complemento.contraparte?.nombre ?? 'Complemento de pago') : (contraparte?.nombre ?? factura?.emisor?.nombre ?? 'Proveedor'),
+        que: complemento
+          ? plural(complemento.relacionados.length, 'factura relacionada', 'facturas relacionadas')
+          : cobro
+            ? plural(elegidos.length, 'cotización', 'cotizaciones')
+            : modoEfectivo(destino) === 'gasto'
+              ? `Gasto extra · ${destino.proyecto?.proyecto_id ?? ''}`
+              : `${destino.proyecto?.proyecto_id ?? ''} · ${plural(destino.renglones.length, 'concepto', 'conceptos')}`,
+        total: complemento ? sumaComplemento : totalXml,
+        documento: complemento ? null : cobro ? ((r.factura_id as string | undefined) ?? null) : (((r.documentos as { id: string }[] | undefined) ?? [])[0]?.id ?? null),
+      })
       setPendientes(r.archivos_pendientes ?? [])
       setErrorReintento(null)
       setListo(r)
@@ -289,6 +319,7 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
                   : 'Elige el destino de la factura'
                 : 'Elige un XML'
       }
+      tonoDetalle={xml && !pdf ? 'acento' : cuadre && !revision && seleccion.length > 0 ? 'ok' : cuadre && revision ? 'acento' : 'neutro'}
       etiquetaMonto={complemento ? 'Monto del complemento' : 'Total del XML'}
       monto={xml ? fmtMoney(complemento ? sumaComplemento : totalXml) : undefined}
       botones={
@@ -312,6 +343,8 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
         <FacturaLista
           resultado={listo}
           complemento={Boolean(complemento)}
+          resumen={resumenGuardado}
+          onVerEstado={onVerEstado ? () => { if (resumenGuardado) { onVerEstado(resumenGuardado.lado, resumenGuardado.contraparteId, resumenGuardado.documento); } } : undefined}
           pendientes={pendientes}
           reintentando={reintentando}
           errorReintento={errorReintento}
@@ -320,6 +353,7 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
             setListo(null)
             setPdf(null)
             setPendientes([])
+            setResumenGuardado(null)
             reiniciar(null)
           }}
           onClose={onClose}
@@ -329,44 +363,63 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
           {aviso && <StatusBanner tone="error">{aviso}</StatusBanner>}
           {errorXml && <StatusBanner tone="error">{errorXml}</StatusBanner>}
 
-          {!xml && (
-            <div className="flex flex-col items-center gap-3 rounded-panel border border-dashed border-hairline px-5 py-9 text-center">
-              <Icon name="upload" size={22} className="text-subtext" />
-              <p className="max-w-[420px] text-[13px] leading-normal text-subtext">Adjunta el XML y el PDF de la factura.</p>
-              <BotonArchivo etiqueta="Adjuntar factura" accept={`${ACCEPT_XML},${ACCEPT_PDF}`} multiple onArchivo={() => undefined} onVarios={adjuntar} onRechazo={setAviso} />
-            </div>
-          )}
-
-          {xml && (
-            <div className="overflow-hidden rounded-panel border border-hairline">
-              <FilaArchivo
-                icono="file-text"
-                nombre={xml.name}
-                sub={preview ? subDelXml(preview) : leyendo ? 'Leyendo…' : 'CFDI'}
-                insignia={factura && seleccion.length > 0 && cuadre ? <StatusBadge tone={revision ? 'draft' : 'approved'}>{revision ? 'En revisión' : 'Válida'}</StatusBadge> : null}
-                onQuitar={() => reiniciar(null)}
-              />
-              <FilaArchivo
-                icono="file-text"
-                nombre={pdf?.name ?? 'Representación impresa (PDF)'}
-                sub={pdf ? 'PDF' : 'Requerido, hasta 4 MB'}
-                accion={!pdf ? <BotonArchivo etiqueta="Adjuntar PDF" accept={ACCEPT_PDF} variante="ghost" onArchivo={elegirPdf} onRechazo={setAviso} /> : undefined}
-                onQuitar={pdf ? () => setPdf(null) : undefined}
-              />
-            </div>
-          )}
-
-          {xml && leyendo && !preview && <SectionLoading className="min-h-[160px]" />}
-
-          {factura && (
-            <>
+          <Paso
+            n={1}
+            titulo="Archivos"
+            hecho={Boolean(xml && pdf && (factura || complemento))}
+            derecha={
+              factura && seleccion.length > 0 && cuadre ? (
+                <StatusBadge tone={revision ? 'draft' : 'approved'}>{revision ? 'En revisión' : 'Válida'}</StatusBadge>
+              ) : complemento ? (
+                <StatusBadge tone="issued">Complemento de pago</StatusBadge>
+              ) : undefined
+            }
+          >
+            {!xml ? (
+              <div
+                onDragOver={escritorio ? (e) => { e.preventDefault(); setArrastrando(true) } : undefined}
+                onDragLeave={escritorio ? () => setArrastrando(false) : undefined}
+                onDrop={
+                  escritorio
+                    ? (e) => {
+                        e.preventDefault()
+                        setArrastrando(false)
+                        adjuntar(Array.from(e.dataTransfer.files))
+                      }
+                    : undefined
+                }
+                className={`flex flex-col items-center gap-3 rounded-panel border border-dashed px-5 py-9 text-center ${arrastrando ? 'border-accent-quiet bg-row-alt' : 'border-hairline'}`}
+              >
+                <Icon name="upload" size={22} className="text-subtext" />
+                <p className="max-w-[420px] text-[13px] leading-normal text-subtext">{escritorio ? 'Arrastra aquí el XML y el PDF de la factura.' : 'Adjunta el XML y el PDF de la factura.'}</p>
+                <BotonArchivo etiqueta="Adjuntar factura" accept={`${ACCEPT_XML},${ACCEPT_PDF}`} multiple onArchivo={() => undefined} onVarios={adjuntar} onRechazo={setAviso} />
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-panel border border-hairline">
+                <FilaArchivo icono="file-text" nombre={xml.name} sub={preview ? subDelXml(preview) : leyendo ? 'Leyendo…' : 'CFDI'} onQuitar={() => reiniciar(null)} />
+                <FilaArchivo
+                  icono="file-text"
+                  secundaria
+                  nombre={pdf?.name ?? 'Representación impresa (PDF)'}
+                  sub={pdf ? 'PDF' : 'Requerido, hasta 4 MB'}
+                  accion={!pdf ? <BotonArchivo etiqueta="Adjuntar PDF" accept={ACCEPT_PDF} variante="ghost" onArchivo={elegirPdf} onRechazo={setAviso} /> : undefined}
+                  onQuitar={pdf ? () => setPdf(null) : undefined}
+                />
+              </div>
+            )}
+            {xml && leyendo && !preview && <SectionLoading className="min-h-[160px]" />}
+            {factura && (
               <div className="grid grid-cols-2 gap-3 rounded-panel bg-row-alt px-4 py-3 md:grid-cols-4">
                 <Dato k={cobro ? 'Receptor' : 'Emisor'} v={contraparte?.nombre ?? 'Sin coincidencia'} fuerte />
                 <Dato k="RFC" v={factura.rfc_contraparte} mono />
                 <Dato k="Método" v={factura.cfdi.metodo_pago === 'PPD' ? 'PPD · Parcialidades' : factura.cfdi.metodo_pago === 'PUE' ? 'PUE · Una exhibición' : null} />
                 <Dato k="Emitida" v={fechaCorta(factura.cfdi.fecha?.slice(0, 10))} />
               </div>
+            )}
+          </Paso>
 
+          {factura && (
+            <>
               {factura.duplicada && (
                 <Aviso icono="warning" tono="acento">
                   Esta factura ya está registrada (mismo UUID). No se puede subir dos veces; si hay que corregirla, reemplázala desde el detalle.
@@ -394,24 +447,30 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
 
               {cobro && contraparte && (
                 <>
-                  <Cap
-                    derecha={
-                      <span className="text-[11.5px] text-subtext">
-                        {factura.preseleccion.length > 0 ? 'Marcadas por los folios del CFDI' : 'El CFDI no trae folios: elige a mano'}
-                      </span>
-                    }
+                  <Paso
+                    n={2}
+                    titulo="¿Qué cotizaciones cubre?"
+                    derecha={<span className="text-[11.5px] font-normal text-subtext">{factura.preseleccion.length > 0 ? 'Marcadas por los folios del CFDI' : 'El CFDI no trae folios: elige a mano'}</span>}
                   >
-                    Cotizaciones que cubre
-                  </Cap>
-                  {candidatos.length === 0 ? (
-                    <Aviso icono="info" tono="neutro">
-                      {contraparte.nombre} no tiene cotizaciones aprobadas por facturar.
-                    </Aviso>
-                  ) : (
-                    <ListaCandidatos candidatos={candidatos} seleccion={seleccion} onAlternar={alternar} mesFactura={factura.cfdi.fecha?.slice(0, 7) ?? null} />
-                  )}
-                  {candidatos.length > 0 && <div className="-mt-2 text-[11px] text-subtext">Solo cobros de {contraparte.nombre} con saldo por facturar.</div>}
-                  <AvisoCuadre cobro seleccion={seleccion.length} cuadre={cuadre} revision={revision} />
+                    {candidatos.length === 0 ? (
+                      <Aviso icono="info" tono="neutro">
+                        {contraparte.nombre} no tiene cotizaciones aprobadas por facturar.
+                      </Aviso>
+                    ) : (
+                      <ListaCandidatos
+                        candidatos={candidatos}
+                        seleccion={seleccion}
+                        onAlternar={alternar}
+                        onTodas={() => setSeleccion(candidatos.map((c) => c.cuenta_id))}
+                        onNinguna={() => setSeleccion([])}
+                        mesFactura={factura.cfdi.fecha?.slice(0, 7) ?? null}
+                      />
+                    )}
+                    {candidatos.length > 0 && <div className="text-[11px] text-subtext">Solo cobros de {contraparte.nombre} con saldo por facturar.</div>}
+                  </Paso>
+                  <Paso n={3} titulo="Confirmar">
+                    <CuadreFactura cobro seleccion={seleccion.length} cuadre={cuadre} revision={revision} sugerida={sugerida} onMarcar={alternar} />
+                  </Paso>
                 </>
               )}
 
@@ -433,7 +492,7 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
                     setSeleccion([])
                     inicializada.current = ''
                   }}
-                  avisoCuadre={seleccion.length > 0 ? <AvisoCuadre cobro={false} seleccion={seleccion.length} cuadre={cuadre} revision={revision} /> : null}
+                  avisoCuadre={seleccion.length > 0 ? <CuadreFactura cobro={false} seleccion={seleccion.length} cuadre={cuadre} revision={revision} sugerida={null} onMarcar={alternar} /> : null}
                 />
               )}
             </>
@@ -441,28 +500,40 @@ export function SubirFactura({ escritorio, proyecto = null, onClose, onGuardada 
 
           {complemento && (
             <>
-              <Aviso icono={complementoCompleto ? 'circle-check' : 'warning'} tono={complementoCompleto ? 'ok' : 'acento'}>
-                {complementoCompleto ? (
-                  <>
-                    Es un <b>complemento de pago</b>. Se liga solo, por el UUID de la factura que trae.
-                  </>
-                ) : (
-                  <>
-                    Es un complemento de pago, pero {complemento.relacionados.length === 0 ? 'no relaciona ninguna factura' : 'una de las facturas que relaciona no está registrada'}. Sube primero esa factura.
-                  </>
-                )}
-              </Aviso>
-              <Cap>Queda ligado a</Cap>
-              <div className="overflow-hidden rounded-panel border border-hairline">
-                {complemento.relacionados.map((r) => (
-                  <div key={r.uuid_factura} className="flex items-center gap-3 border-t border-hairline px-3.5 py-2.5 text-[12.5px] first:border-t-0">
-                    <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink">{r.uuid_factura}</span>
-                    <span className="whitespace-nowrap font-semibold text-ink">{fmtMoney(r.monto_pagado)}</span>
-                    <StatusBadge tone={r.factura ? 'approved' : 'cancelled'}>{r.factura ? 'Factura registrada' : 'No registrada'}</StatusBadge>
-                  </div>
-                ))}
-              </div>
-              {pedirPago && <ElegirPago lado={complemento.lado} pagoId={pagoId} onElegir={setPagoId} />}
+              <Paso n={2} titulo="¿A qué se liga?">
+                <div className="overflow-hidden rounded-panel border border-hairline">
+                  {complemento.relacionados.map((r) => (
+                    <div key={r.uuid_factura} className="flex items-center gap-3 border-t border-hairline px-3.5 py-2.5 text-[12.5px] first:border-t-0">
+                      <div className="min-w-0 flex-1">
+                        {r.factura ? (
+                          <>
+                            <div className="truncate text-[13.5px] font-semibold text-ink">{r.factura.archivo_nombre?.replace(/\.xml$/i, '') ?? 'Factura registrada'}</div>
+                            {complemento.contraparte && <div className="truncate text-[11.5px] text-subtext">{complemento.contraparte.nombre}</div>}
+                          </>
+                        ) : (
+                          <div className="text-[13px] font-medium text-ink">Factura sin registrar</div>
+                        )}
+                        <div className="truncate font-mono text-[10.5px] text-faint">UUID {r.uuid_factura}</div>
+                      </div>
+                      <span className="whitespace-nowrap font-semibold text-ink">{fmtMoney(r.monto_pagado)}</span>
+                      <StatusBadge tone={r.factura ? 'approved' : 'cancelled'}>{r.factura ? 'Factura registrada' : 'No registrada'}</StatusBadge>
+                    </div>
+                  ))}
+                </div>
+                {pedirPago && <ElegirPago lado={complemento.lado} pagoId={pagoId} onElegir={setPagoId} />}
+              </Paso>
+              <Paso n={3} titulo="Confirmar">
+                <IndicadorCuadre
+                  cuadra={complementoCompleto}
+                  titulo={complementoCompleto ? 'Se liga solo, por el UUID de la factura' : 'Falta registrar la factura'}
+                  detalle={
+                    complementoCompleto
+                      ? 'Queda asociado al pago de esa factura.'
+                      : `El complemento ${complemento.relacionados.length === 0 ? 'no relaciona ninguna factura' : 'relaciona una factura que no está registrada'}. Sube primero esa factura.`
+                  }
+                  resumen={<b>{fmtMoney(sumaComplemento)}</b>}
+                />
+              </Paso>
             </>
           )}
         </>
@@ -496,9 +567,9 @@ function subDelXml(p: PreviewFactura | PreviewComplemento): string {
   return `CFDI · Ingreso · ${fechaCorta(p.cfdi.fecha?.slice(0, 10))}`
 }
 
-function FilaArchivo({ icono, nombre, sub, insignia, accion, onQuitar }: { icono: 'file-text'; nombre: string; sub: string; insignia?: React.ReactNode; accion?: React.ReactNode; onQuitar?: () => void }) {
+function FilaArchivo({ icono, nombre, sub, insignia, accion, secundaria = false, onQuitar }: { icono: 'file-text'; nombre: string; sub: string; insignia?: React.ReactNode; accion?: React.ReactNode; secundaria?: boolean; onQuitar?: () => void }) {
   return (
-    <div className="flex items-center gap-3 border-t border-hairline px-3.5 py-2.5 first:border-t-0">
+    <div className={`flex items-center gap-3 border-t border-hairline px-3.5 first:border-t-0 ${secundaria ? 'bg-row-alt py-2' : 'py-2.5'}`}>
       <Icon name={icono} size={18} className="flex-none text-subtext" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-medium text-ink">{nombre}</div>
@@ -511,9 +582,25 @@ function FilaArchivo({ icono, nombre, sub, insignia, accion, onQuitar }: { icono
   )
 }
 
-function ListaCandidatos({ candidatos, seleccion, onAlternar, mesFactura }: { candidatos: CandidatoFacturaCobro[]; seleccion: string[]; onAlternar: (id: string) => void; mesFactura: string | null }) {
+function ListaCandidatos({
+  candidatos,
+  seleccion,
+  onAlternar,
+  onTodas,
+  onNinguna,
+  mesFactura,
+}: {
+  candidatos: CandidatoFacturaCobro[]
+  seleccion: string[]
+  onAlternar: (id: string) => void
+  onTodas: () => void
+  onNinguna: () => void
+  mesFactura: string | null
+}) {
+  const marcadas = candidatos.filter((c) => seleccion.includes(c.cuenta_id))
   return (
     <div role="group" aria-label="Candidatos" className="overflow-hidden rounded-panel border border-hairline">
+      <BarraSeleccion resumen={`${marcadas.length} de ${candidatos.length} marcadas · ${fmtMoney(marcadas.reduce((a, c) => a + c.monto_total, 0))}`} onTodas={onTodas} onNinguna={onNinguna} />
       <div className="hidden items-center gap-3 bg-row-alt px-3.5 py-2 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-subtext md:flex">
         <span className="w-[18px] flex-none" />
         <span className="w-[64px] flex-none">Folio</span>
@@ -546,7 +633,21 @@ function ListaCandidatos({ candidatos, seleccion, onAlternar, mesFactura }: { ca
   )
 }
 
-function AvisoCuadre({ cobro, seleccion, cuadre, revision }: { cobro: boolean; seleccion: number; cuadre: PreviewFactura['cuadre']; revision: boolean }) {
+function CuadreFactura({
+  cobro,
+  seleccion,
+  cuadre,
+  revision,
+  sugerida,
+  onMarcar,
+}: {
+  cobro: boolean
+  seleccion: number
+  cuadre: PreviewFactura['cuadre']
+  revision: boolean
+  sugerida: CandidatoFacturaCobro | null
+  onMarcar: (cuentaId: string) => void
+}) {
   if (seleccion === 0 || !cuadre) {
     return (
       <Aviso icono="info" tono="neutro">
@@ -555,48 +656,50 @@ function AvisoCuadre({ cobro, seleccion, cuadre, revision }: { cobro: boolean; s
     )
   }
   if (!revision) {
-    return (
-      <Aviso icono="check" tono="ok">
-        {cobro ? (
-          <>
-            La suma de las cotizaciones coincide con el total del XML. La factura queda <b>Válida</b>.
-          </>
-        ) : (
-          <>El total coincide con lo que se le debe y el impuesto corresponde a su régimen.</>
-        )}
-      </Aviso>
+    return cobro ? (
+      <IndicadorCuadre
+        cuadra
+        titulo="Cuadra con el XML"
+        detalle={`${plural(seleccion, 'cotización suma', 'cotizaciones suman')} lo mismo que el total del XML. La factura queda Válida.`}
+        resumen={esCuadreCobro(cuadre) ? <><span className="block text-[11px]">Suma · XML</span><b>{fmtMoney(cuadre.total_cfdi)}</b></> : undefined}
+      />
+    ) : (
+      <IndicadorCuadre cuadra titulo="Cuadra con lo que se le debe" detalle="El total coincide con lo que se le debe y el impuesto corresponde a su régimen." />
     )
   }
   if (esCuadreCobro(cuadre)) {
     const dif = Math.abs(cuadre.diferencia)
     return (
-      <Aviso icono="warning" tono="acento">
-        <b>
-          No cuadra: XML {fmtMoney(cuadre.total_cfdi)} vs. cotizaciones {fmtMoney(cuadre.suma)} ({cuadre.diferencia > 0 ? 'faltan' : 'sobran'} {fmtMoney(dif)}).
-        </b>
-        {cuadre.detalle && (
+      <IndicadorCuadre
+        cuadra={false}
+        titulo={`No cuadra: XML ${fmtMoney(cuadre.total_cfdi)} vs. cotizaciones ${fmtMoney(cuadre.suma)} (${cuadre.diferencia > 0 ? 'faltan' : 'sobran'} ${fmtMoney(dif)}).`}
+        detalle={
           <>
-            <br />
-            {cuadre.detalle}
+            {cuadre.detalle && <>{cuadre.detalle} </>}
+            Se puede guardar; queda <b>En revisión</b> con este detalle.
           </>
-        )}
-        <br />
-        Se puede guardar; queda <b>En revisión</b> con este detalle.
-      </Aviso>
+        }
+        accion={
+          sugerida ? (
+            <Button variant="secondary" size="md" onClick={() => onMarcar(sugerida.cuenta_id)}>
+              Marcar {sugerida.cotizacion_id ?? sugerida.folio}
+            </Button>
+          ) : undefined
+        }
+      />
     )
   }
   return (
-    <Aviso icono="warning" tono="acento">
-      <b>La factura no pasa la validación.</b>
-      {cuadre.detalle && (
+    <IndicadorCuadre
+      cuadra={false}
+      titulo="La factura no pasa la validación."
+      detalle={
         <>
-          <br />
-          {cuadre.detalle}
+          {cuadre.detalle && <>{cuadre.detalle} </>}
+          Se puede guardar; queda <b>En revisión</b> con este detalle.
         </>
-      )}
-      <br />
-      Se puede guardar; queda <b>En revisión</b> con este detalle.
-    </Aviso>
+      }
+    />
   )
 }
 
@@ -663,6 +766,8 @@ function ElegirPago({ lado, pagoId, onElegir }: { lado: 'cobro' | 'proveedor'; p
 function FacturaLista({
   resultado,
   complemento,
+  resumen,
+  onVerEstado,
   pendientes,
   reintentando,
   errorReintento,
@@ -672,6 +777,8 @@ function FacturaLista({
 }: {
   resultado: FacturaGuardada
   complemento: boolean
+  resumen: ResumenGuardado | null
+  onVerEstado?: () => void
   pendientes: ArchivoPendienteInfo[]
   reintentando: boolean
   errorReintento: string | null
@@ -686,6 +793,16 @@ function FacturaLista({
         <Icon name="check" size={20} />
       </span>
       <div className="text-[17px] font-semibold text-ink">{complemento ? 'Complemento guardado' : revision ? 'Factura guardada en revisión' : 'Factura guardada'}</div>
+      {resumen && (
+        <div className="flex w-full max-w-[480px] items-center gap-3 rounded-panel border border-hairline px-3.5 py-3 text-left">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13.5px] font-semibold text-ink">{resumen.quien}</div>
+            <div className="truncate text-[11.5px] text-subtext">{resumen.que}</div>
+          </div>
+          <span className="whitespace-nowrap text-[14px] font-semibold text-ink">{fmtMoney(resumen.total)}</span>
+          <StatusBadge tone={revision ? 'draft' : 'approved'}>{revision ? 'En revisión' : 'Válida'}</StatusBadge>
+        </div>
+      )}
       {resultado.repetido && <div className="text-[12.5px] text-subtext">Ya estaba registrada: no se duplicó.</div>}
       {revision && resultado.detalle_validacion && <div className="max-w-[460px] text-[12.5px] leading-normal text-subtext">{resultado.detalle_validacion}</div>}
       {pendientes.length > 0 && (
@@ -703,6 +820,11 @@ function FacturaLista({
         <Button variant="secondary" onClick={onOtra}>
           Subir otra
         </Button>
+        {onVerEstado && resumen && (
+          <Button variant="secondary" onClick={onVerEstado}>
+            Ver en Cuentas
+          </Button>
+        )}
         <Button onClick={onClose}>Cerrar</Button>
       </div>
     </div>

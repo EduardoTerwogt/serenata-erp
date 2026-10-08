@@ -193,7 +193,7 @@ test('subir factura: el XML con folios marca las cotizaciones, cuadra y se guard
   await expect(modal.getByText('Marcadas por los folios del CFDI')).toBeVisible()
   for (const f of ['SH001', 'SH003', 'SH004', 'SH006']) await expect(modal.getByRole('checkbox', { name: `Incluir ${f}` })).toHaveAttribute('aria-checked', 'true')
   for (const f of ['SH002', 'SH005']) await expect(modal.getByRole('checkbox', { name: `Incluir ${f}` })).toHaveAttribute('aria-checked', 'false')
-  await expect(modal.getByText(/La suma de las cotizaciones coincide con el total del XML/)).toBeVisible()
+  await expect(modal.getByText(/Cuadra con el XML/)).toBeVisible()
   await expect(modal.getByText('4 cotizaciones · Grupo Altavista S.A. de C.V.')).toBeVisible()
 
   await modal.getByRole('button', { name: 'Guardar factura' }).click()
@@ -211,11 +211,13 @@ test('subir factura: el XML con folios marca las cotizaciones, cuadra y se guard
 test('subir factura: si el total no cuadra se avisa con el detalle y se guarda "En revisión"', async ({ page }) => {
   const llamadas = await abrir(page, { factura: { status: 200, body: { success: true, estado_validacion: 'revision', detalle_validacion: 'El XML suma $359,600.00 y las cotizaciones ligadas suman $290,000.00' } } })
   const modal = await subirXml(page, 'folios.xml')
-  await expect(modal.getByText(/La suma de las cotizaciones coincide/)).toBeVisible()
+  await expect(modal.getByText(/Cuadra con el XML/)).toBeVisible()
 
   // Quitar SH006 ($69,600): el XML ya no cuadra y la ventana lo dice con los números de SQL.
   await modal.getByRole('checkbox', { name: 'Incluir SH006' }).click()
   await expect(modal.getByText(/No cuadra: XML \$359,600\.00 vs\. cotizaciones \$290,000\.00 \(faltan \$69,600\.00\)/)).toBeVisible()
+  // Una cotización sin marcar vale justo lo que falta: el indicador ofrece marcarla.
+  await expect(modal.getByRole('button', { name: 'Marcar SH006' })).toBeVisible()
   await expect(modal.getByText('En revisión').first()).toBeVisible()
   await modal.getByRole('button', { name: 'Guardar en revisión' }).click()
   await expect(modal.getByText('Factura guardada en revisión')).toBeVisible()
@@ -352,7 +354,8 @@ test('subir factura de proveedor: se liga al proyecto que nombran los folios', a
 test('subir complemento de pago: se liga por el UUID de la factura', async ({ page }) => {
   const llamadas = await abrir(page)
   const modal = await subirXml(page, 'complemento.xml')
-  await expect(modal.getByText(/Es un complemento de pago\./)).toBeVisible()
+  await expect(modal.getByText(/Se liga solo, por el UUID/)).toBeVisible()
+  await expect(modal.getByText('F-A_Altavista')).toBeVisible()
   await expect(modal.getByText('Factura registrada')).toBeVisible()
   await modal.getByRole('button', { name: 'Guardar complemento' }).click()
   await expect(modal.getByText('Complemento guardado')).toBeVisible()

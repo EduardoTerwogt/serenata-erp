@@ -189,7 +189,7 @@ function previewDe(nombre: string, datos: { contraparte_id?: string | null; cuen
   const cuentas = datos.cuentas ?? []
   const cfdiBase = { uuid: '6F2C0000-0000-0000-0000-000000A191AB', fecha: '2026-09-12T10:00:00', subtotal: null, rfc_emisor: 'SHO100101AB1', rfc_receptor: CLIENTE.rfc, conceptos: [] as string[] }
   if (nombre === 'complemento.xml') {
-    return { tipo: 'complemento_cobro', lado: 'cobro', cfdi: { uuid: 'AAAA0000-0000-0000-0000-00000000REP1', fecha: '2026-10-01T09:00:00' }, relacionados: [{ uuid_factura: '6F2C0000-0000-0000-0000-000000A191AB', monto_pagado: 300000, factura: { id: 'fa', estado_validacion: 'validado', metodo_pago: 'PPD', total_cfdi: 359600 } }] }
+    return { tipo: 'complemento_cobro', lado: 'cobro', cfdi: { uuid: 'AAAA0000-0000-0000-0000-00000000REP1', fecha: '2026-10-01T09:00:00' }, contraparte: { id: CLIENTE.id, nombre: CLIENTE.nombre }, relacionados: [{ uuid_factura: '6F2C0000-0000-0000-0000-000000A191AB', monto_pagado: 300000, factura: { id: 'fa', estado_validacion: 'validado', metodo_pago: 'PPD', total_cfdi: 359600, archivo_nombre: 'F-A_Altavista.xml' } }] }
   }
   if (nombre === 'proveedor.xml') {
     const elegida = cuentas[0]

@@ -115,6 +115,7 @@ export async function previsualizarFactura(p: PreviewParams): Promise<Respuesta>
         tipo,
         lado,
         cfdi: { uuid: complemento.uuid ?? data.uuid_timbrado ?? null, fecha: data.fecha_emision ?? null },
+        contraparte: await contraparteDelComplemento(lado, rfcContraparte),
         relacionados: relacionados.map((x) => ({ ...x, factura: facturas.get(x.uuid_factura.toUpperCase()) ?? null })),
       },
     }
@@ -218,13 +219,21 @@ async function proveedoresPorNombre(nombre: string | null): Promise<{ id: string
   return (data ?? []) as { id: string; nombre: string; score: number }[]
 }
 
-async function facturasPorUuid(lado: LadoCuentas, uuids: string[]): Promise<Map<string, { id: string; estado_validacion: string | null; metodo_pago: string | null; total_cfdi: number | null }>> {
-  const mapa = new Map<string, { id: string; estado_validacion: string | null; metodo_pago: string | null; total_cfdi: number | null }>()
+/** #131: nombre de la contraparte del complemento, solo si el RFC identifica a una. */
+async function contraparteDelComplemento(lado: LadoCuentas, rfc: string | null): Promise<{ id: string; nombre: string } | null> {
+  const porRfc = await contrapartesPorRfc(lado, rfc)
+  return porRfc.length === 1 ? { id: porRfc[0].id, nombre: porRfc[0].nombre } : null
+}
+
+type FacturaPorUuid = { id: string; estado_validacion: string | null; metodo_pago: string | null; total_cfdi: number | null; archivo_nombre: string | null }
+
+async function facturasPorUuid(lado: LadoCuentas, uuids: string[]): Promise<Map<string, FacturaPorUuid>> {
+  const mapa = new Map<string, FacturaPorUuid>()
   if (uuids.length === 0) return mapa
   const [tablaDocs, tipoXml] = lado === 'cobro' ? (['documentos_cuentas_cobrar', 'FACTURA_XML'] as const) : (['documentos_cuentas_pagar', 'FACTURA_PROVEEDOR_XML'] as const)
   const { data, error } = await supabaseAdmin
     .from(tablaDocs)
-    .select('id, uuid_cfdi, estado_validacion, metodo_pago_cfdi, total_cfdi')
+    .select('id, uuid_cfdi, estado_validacion, metodo_pago_cfdi, total_cfdi, archivo_nombre')
     .eq('tipo', tipoXml)
     .is('eliminado_at', null)
   if (error) throw error
@@ -232,7 +241,7 @@ async function facturasPorUuid(lado: LadoCuentas, uuids: string[]): Promise<Map<
   for (const d of data ?? []) {
     const u = (d.uuid_cfdi as string | null)?.toUpperCase()
     if (u && buscados.has(u)) {
-      mapa.set(u, { id: d.id as string, estado_validacion: d.estado_validacion as string | null, metodo_pago: d.metodo_pago_cfdi as string | null, total_cfdi: d.total_cfdi as number | null })
+      mapa.set(u, { id: d.id as string, estado_validacion: d.estado_validacion as string | null, metodo_pago: d.metodo_pago_cfdi as string | null, total_cfdi: d.total_cfdi as number | null, archivo_nombre: (d.archivo_nombre as string | null) ?? null })
     }
   }
   return mapa
