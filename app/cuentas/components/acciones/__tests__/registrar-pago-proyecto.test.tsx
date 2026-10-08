@@ -241,12 +241,12 @@ describe('Registrar pago · pasos, reparto legible y pulido (#131)', () => {
     expect(await screen.findByText('Cuadra · 2 facturas')).toBeTruthy()
   })
 
-  it('la nota va detrás de «+ Agregar nota» y el comprobante se llama «Adjuntar comprobante» en escritorio', async () => {
+  it('la nota va detrás de «+ Agregar nota» y el comprobante se llama «Adjuntar archivo» en escritorio', async () => {
     render(<Ventana />)
     await elegirProveedor()
     expect(screen.queryByPlaceholderText('Notas sobre el pago')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '+ Agregar nota' }))
     expect(await screen.findByPlaceholderText('Notas sobre el pago')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Adjuntar comprobante' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Adjuntar archivo' })).toBeTruthy()
   })
 })

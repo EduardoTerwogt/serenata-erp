@@ -675,7 +675,7 @@ function CuadreFactura({
         titulo={`No cuadra: XML ${fmtMoney(cuadre.total_cfdi)} vs. cotizaciones ${fmtMoney(cuadre.suma)} (${cuadre.diferencia > 0 ? 'faltan' : 'sobran'} ${fmtMoney(dif)}).`}
         detalle={
           <>
-            {cuadre.detalle && <>{cuadre.detalle} </>}
+            {cuadre.detalle && <>{cuadre.detalle.replace(/\.?$/, '.')} </>}
             Se puede guardar; queda <b>En revisión</b> con este detalle.
           </>
         }
@@ -695,7 +695,7 @@ function CuadreFactura({
       titulo="La factura no pasa la validación."
       detalle={
         <>
-          {cuadre.detalle && <>{cuadre.detalle} </>}
+          {cuadre.detalle && <>{cuadre.detalle.replace(/\.?$/, '.')} </>}
           Se puede guardar; queda <b>En revisión</b> con este detalle.
         </>
       }

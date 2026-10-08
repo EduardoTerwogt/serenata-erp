@@ -396,7 +396,7 @@ export function RegistrarPago({ escritorio, lado, contraparteId, proyecto, hoy, 
                         </>
                       ) : (
                         <BotonArchivo
-                          etiqueta={escritorio ? 'Adjuntar comprobante' : 'Tomar foto o adjuntar'}
+                          etiqueta={escritorio ? 'Adjuntar archivo' : 'Tomar foto o adjuntar'}
                           accept={ACCEPT_COMPROBANTE}
                           capture={!escritorio}
                           permitirGrande

@@ -44,14 +44,16 @@ export function Etiqueta({ tono, children }: { tono: StatusTone; children: React
 export function Paso({ n, titulo, hecho = false, derecha, children }: { n: number; titulo: string; hecho?: boolean; derecha?: ReactNode; children?: ReactNode }) {
   return (
     <section className="flex flex-col gap-2" aria-label={titulo}>
-      <div className="flex items-center gap-2 text-[12.5px] font-semibold text-ink">
-        <span
-          className={`flex h-5 w-5 flex-none items-center justify-center rounded-full text-[11px] font-semibold ${hecho ? 'bg-approved-bg text-approved-fg' : 'bg-accent text-accent-ink'}`}
-          aria-hidden="true"
-        >
-          {hecho ? <Icon name="check" size={12} strokeWidth={3} /> : n}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] font-semibold text-ink">
+        <span className="flex items-center gap-2">
+          <span
+            className={`flex h-5 w-5 flex-none items-center justify-center rounded-full text-[11px] font-semibold ${hecho ? 'bg-approved-bg text-approved-fg' : 'bg-accent text-accent-ink'}`}
+            aria-hidden="true"
+          >
+            {hecho ? <Icon name="check" size={12} strokeWidth={3} /> : n}
+          </span>
+          {titulo}
         </span>
-        {titulo}
         {derecha && <span className="ml-auto flex items-center gap-3 font-medium">{derecha}</span>}
       </div>
       {children}

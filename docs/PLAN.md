@@ -747,3 +747,4 @@ Registrar pago gana la vista "Por proyecto" (segundo selector junto a "Cobro de 
 | D4 Cierre: `ACTIVE_WORK.md`, este tracker; «concepto» en lugar de «renglón» en el texto visible | **Hecho** |
 | R1 pie de ventanas · R2 Registrar pago (desplegable en el cuerpo, «varios proyectos» filtrado) · R3 proyecto sugerido con casilla + «Elegir otro proyecto» | **Hecho** (2026-10-08) |
 | R4 datos primero, Drive después (`pendiente:xml|pdf`, «Reintentar subida» / «Subir archivo»; sin copia en Storage, decisión del usuario) | **Hecho** (2026-10-08): unitarias, ruta y e2e `critical`; pendiente CI del PR y tu revisión del preview |
+| Ronda 3 · UX/UI (E1 PDF obligatorio P30 · E2 piezas compartidas `Paso`/`IndicadorCuadre`/`BarraSeleccion` · E3 Subir factura en tres pasos · E4 Registrar pago en tres pasos) | **Hecho** (2026-10-08): unitarias y e2e `critical`; pendiente CI del PR y tu revisión del preview |
