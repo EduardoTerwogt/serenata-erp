@@ -197,7 +197,7 @@ sesión 19 (plan aprobado). Las referencias "§n" y "Bn" apuntan a ese plan.
     función de Vercel no acepta cuerpos mayores de ~4.5 MB, así que XML y PDF
     se suben **en peticiones separadas**, no juntos en un solo `FormData` como
     hoy. *(#131: `POST /api/cuentas/facturas` los recibe juntos con PDF obligatorio y
-    un tope combinado de ~4.2 MB; ver P30 en `docs/PLAN.md`. Las rutas del detalle
+    un tope combinado de ~4.2 MB; ver `docs/decisions/024-subir-factura-pdf-obligatorio-y-archivos-despues.md`. Las rutas del detalle
     conservan la subida separada.)*
 16. **Descargar y "Compartir PDF" usan el enlace de Drive** (`pdf_url`),
     confirmado por el usuario en la sesión 12.

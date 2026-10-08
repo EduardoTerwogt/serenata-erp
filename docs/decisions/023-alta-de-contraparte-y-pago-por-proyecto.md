@@ -1,8 +1,8 @@
 # 023 — Alta de contraparte, gasto extra y pago por proyecto (#130)
 
-**Estado:** ejecutada en código y en `serenata-erp-test` (migraciones `20261034` y `20261035`); **pendiente de lanzar a
-producción junto con #123** (mismo PR #129). Detalle de ejecución, preguntas Q1–Q13 y bloques C0–C5: `docs/PLAN.md` (se
-archiva al lanzar). Diseño visual: `docs/design/cuentas-123/cuentas-130.html`.
+**Estado:** **lanzada a producción el 2026-10-08** junto con #123 (PR #129, merge `35709b6`; migraciones `20261034`, `20261035` y
+`20261036`). Detalle de ejecución, preguntas Q1–Q13 y bloques C0–C5: `docs/archive/facturas-pagos-ligados-123-130-131.md`.
+Diseño visual: `docs/design/cuentas-123/cuentas-130.html`.
 
 ## Contexto
 

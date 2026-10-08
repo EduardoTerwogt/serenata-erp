@@ -488,6 +488,20 @@ Extiende Subir factura y Registrar pago de #123 sin tablas nuevas.
 - **UI** (`app/cuentas/components/acciones/`): `SelectorProyectos` (un solo selector, modos renglones / proyecto / pago),
   `DestinoProveedor`, `AltaProveedor`, `CompletarCliente`, lógica pura en `destino-proveedor.ts`; Registrar pago tiene la vista "Por proyecto".
 
+## Ajustes de Subir factura y Registrar pago, y archivos después de guardar (#131, docs/decisions/024)
+
+Sin tablas nuevas; una sola migración aditiva de lectura.
+
+- **Datos** (migración `20261037`): `cuentas_contrapartes_pendientes(p_lado, p_pendiente, p_q, p_limit)` (plpgsql con `force_custom_plan`)
+  alimenta el desplegable de contraparte con buscador (solo con algo pendiente: factura, complemento, saldo o todos).
+- **API.** `GET /api/cuentas/contrapartes`. `POST /api/cuentas/facturas` exige XML **y** PDF (`pdfRequired`, tope combinado ~4.2 MB) y
+  guarda **datos primero, Drive después**: si Drive falla el documento queda con `archivo_url = pendiente:xml|pdf`
+  (`lib/shared/cuentas/archivo-pendiente.ts`) y `POST /api/cuentas/documentos/[id]/reintentar-subida` reenvía solo el archivo
+  (`lib/server/cuentas/archivos-pendientes.ts`). Las demás rutas que usan esos servicios siguen con Drive primero.
+- **UI.** Subir factura y Registrar pago en tres pasos (①②③) con piezas compartidas en `acciones/compartido.tsx` (`Paso`,
+  `IndicadorCuadre`, `BarraSeleccion`, `PieVentana`); el detalle y el Estado de cuenta no enlazan un `pendiente:*` (muestran «Archivo
+  pendiente» y «Subir archivo»). Trampa: todo lector nuevo de `archivo_url` debe tratar el valor `pendiente:*`.
+
 ## Cuentas: reabrir y correcciones (B7, docs/decisions/017 D33–D34)
 
 - **Reabrir** (`POST /api/cuentas/proyectos/:id/reabrir`, cualquier usuario con la sección `cuentas` desde #123/P14, motivo

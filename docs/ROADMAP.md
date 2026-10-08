@@ -78,14 +78,11 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Orden acordado (2026-10-06, reordenado por el usuario):** #123 (facturas y
-  pagos ligados: una factura para varias cotizaciones, un pago para varias
-  facturas; **plan aprobado en `docs/PLAN.md`, diseño en
-  `docs/design/cuentas-123/`**) → #110 (frente 2 v2, plan en el issue) → #125
-  (llaves de Supabase legacy → publishable/secret; **prioridad baja, última en la
-  cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para
-  entonces no ha arrancado, pasa al frente). #124 (Ohio) ya está cerrado, ver
-  "Cerrado". Lo de abajo es el antecedente del frente 2.
+- **Orden acordado (actualizado 2026-10-08):** #123 (facturas y pagos ligados, con #130 y #131) ya está
+  **lanzada** (ver "Cerrado") → #110 (frente 2 v2, plan en el issue; es lo que resuelve el gate de escala
+  de las lecturas globales) → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
+  en la cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para entonces no ha
+  arrancado, pasa al frente). #124 (Ohio) ya está cerrado. Lo de abajo es el antecedente del frente 2.
 - **Frente 2 de latencia de Cuentas** (2026-09-30, **en pausa**): los
   conceptos de Cuentas se guardan derivados en `cuentas_conceptos_base` y se
   mantienen con triggers (`docs/decisions/019-cuentas-conceptos-materializada.md`).
@@ -111,7 +108,7 @@ ni tiene alcance de iniciativa definido.
   otra por la diferencia (solo si el total nuevo es mayor o igual). Abiertos:
   cancelar sin reemplazo con cobros (¿saldo a favor, devolución o no se
   permite?) y con pagos a proveedor ya hechos. Mockup de referencia en
-  `docs/design/cuentas-123/exploracion-modelo.html`. Depende de #123 (ejecutado, decisión 022): el
+  `docs/design/cuentas-123/exploracion-modelo.html`. Depende de #123 (lanzado, decisión 022): el
   modelo vigente **no guarda monto por aplicación en la factura** (su suma se deriva de
   las cotizaciones ligadas; los pagos sí guardan lo aplicado a cada cuenta): esa iniciativa deberá
   agregarlo a la factura si lo necesita.
@@ -234,6 +231,18 @@ Si aparece otro feature a medias, documentarlo aquí.
 ---
 
 ## Cerrado
+
+- **Facturas y pagos ligados (2026-10-08, #123 con #130 y #131).** Una factura cubre varias cotizaciones y un pago cubre
+  varias facturas (cabecera `pagos`, `cuentas_cobrar.factura_documento_id`, RPC `ligar_factura`, `registrar_pago_cobro|proveedor`,
+  `ligar_complemento_*`, `estado_cuenta`); alta de proveedor, gasto extra y pago por proyecto (#130); ajustes de UX en tres rondas,
+  PDF obligatorio y archivos a Drive después de guardar (#131). Constancia fiscal de Serenata en Admin (B6a). PR #129 (merge
+  `35709b6`) con las migraciones `20261030`–`20261037` aplicadas antes a producción y verificadas (36 funciones = archivos por md5,
+  `auditar_consistencia()` = 0, 24 guardas). Gate de escala de las lecturas globales **sigue rojo** (p95 ≈ 1.1–2.3 s contra 800 ms):
+  lo resuelve #110. Resultado y lecciones: [`docs/decisions/022`](decisions/022-facturas-y-pagos-ligados.md),
+  [`023`](decisions/023-alta-de-contraparte-y-pago-por-proyecto.md) y
+  [`024`](decisions/024-subir-factura-pdf-obligatorio-y-archivos-despues.md); plan completo en
+  `docs/archive/facturas-pagos-ligados-123-130-131.md`. Pendiente tras el lanzamiento (en `docs/ACTIVE_WORK.md`): subir la
+  constancia de Serenata y revisar `ANTHROPIC_API_KEY`.
 
 - **Producción y Vercel a Ohio (2026-10-06, #124).** Producción recreada en Supabase
   `us-east-2` (`ytlyphlgyhgztkfxwojt`, Postgres 17.11) desde `db/migrations/` con `db push`

@@ -30,6 +30,13 @@ paths:
   "esto es test"; en producción tiene que seguir sin existir. Al aplicar migraciones
   nuevas a producción, esa se omite (el historial de producción no la tiene).
 - Contexto completo: `docs/decisions/005-migraciones-manuales-append-only.md`.
+- **Aplicar a producción por MCP (2026-10-08, #123):** `apply_migration` expira a los 60 s y **retiene todo SQL con
+  `DELETE`/`DROP`** esperando una confirmación interactiva que nadie ve (síntoma: expira sin error, la función no cambia). Eso lo corre
+  una persona en el SQL Editor, un bloque por archivo y completo. Los archivos grandes (≥ 50 KB, varias funciones) el SQL Editor los
+  cortó a media función (`unterminated dollar-quoted string`): se aplican por MCP en partes de una o pocas funciones y **nunca se da
+  por buena una migración por el `success`**: comparar `md5(prosrc)` de cada función contra el cuerpo extraído del archivo
+  (marcadores `$function$`, no números de línea), más `pg_get_function_identity_arguments`, `proconfig` y ACL, el esquema contra test
+  y `auditar_consistencia()` = 0. Se aplican en orden numérico y, tras las que quitan objetos (M3), se verifica que ya no existan.
 - **Autorización:** dentro de un plan ya aprobado, aplicar y confirmar sin pausar
   (incluido un borrado sin reemplazo) salvo regla de negocio no clara. Fuera de un
   plan, sigue la regla de 005. Ver `CLAUDE.md` → "Autonomía de ejecución" /

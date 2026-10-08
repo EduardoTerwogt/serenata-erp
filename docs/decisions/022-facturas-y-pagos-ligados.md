@@ -1,8 +1,8 @@
 # 022 — Facturas y pagos ligados (#123)
 
-**Estado:** ejecutada en código y en `serenata-erp-test`; **pendiente de lanzar a producción** (PR #129, no se mergea ni se
-aplica nada a producción hasta la revisión del usuario). Detalle de ejecución y decisiones de producto P1–P29 y técnicas
-T1–T20: `docs/PLAN.md` (se archiva en `docs/archive/` al lanzar).
+**Estado:** **lanzada a producción el 2026-10-08** (PR #129, merge `35709b6`; migraciones `20261030`–`20261037` aplicadas antes del
+merge y verificadas, `auditar_consistencia()` = 0). Detalle de ejecución y decisiones de producto P1–P30 y técnicas T1–T20:
+`docs/archive/facturas-pagos-ligados-123-130-131.md`.
 
 ## Contexto
 
