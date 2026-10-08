@@ -744,3 +744,5 @@ Registrar pago gana la vista "Por proyecto" (segundo selector junto a "Cobro de 
 | D0 Maqueta `cuentas-131.html` (aprobada) · D1 Datos y API (`20261037`, `GET /api/cuentas/contrapartes`) | **Hecho** (2026-10-07; migración aplicada en test) |
 | D2 Subir factura (Adjuntar factura, desplegable, «Proveedor nuevo», flujo por proyecto) · D3 Registrar pago (sin pestañas, enlace multi-proyecto) | **Hecho** (2026-10-08): unitarias y e2e `critical`; pendiente CI del PR y tu revisión visual |
 | D4 Cierre: `ACTIVE_WORK.md`, este tracker; «concepto» en lugar de «renglón» en el texto visible | **Hecho** |
+| R1 pie de ventanas · R2 Registrar pago (desplegable en el cuerpo, «varios proyectos» filtrado) · R3 proyecto sugerido con casilla + «Elegir otro proyecto» | **Hecho** (2026-10-08) |
+| R4 datos primero, Drive después (`pendiente:xml|pdf`, «Reintentar subida» / «Subir archivo»; sin copia en Storage, decisión del usuario) | **Hecho** (2026-10-08): unitarias, ruta y e2e `critical`; pendiente CI del PR y tu revisión del preview |
