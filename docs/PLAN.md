@@ -51,9 +51,12 @@ invariante en el issue. Es 100 % lectura/presentación de dinero que ya existe: 
 - **Aproximado vs. real ya es derivable:** `total_estimado = total_a_transferir IS NULL` y `tiene_factura` por concepto; «facturas que faltan» = conceptos con `paso = subir_factura`.
 - Con CFDI validado, subtotal = neto cotizado (±0.01) e IVA = 16 %; solo la retención de IVA tiene tolerancia (0.03 %). Ver `validarFacturaFiscalProveedor`.
 
-**Diagnóstico del −$9.09.** `ajuste = flujo − IVA neto − retenciones − utilidad` es **exactamente Σ(total estimado − `total_a_transferir` real)**. Con SH001 en producción hoy
-(4 sueltas sin proveedor) el ajuste es 0.00; no se reproduce. Aparece con un grupo cuyo CFDI difiere de la estimación (centavos de retención, régimen distinto al facturar, documento aceptado
-desde «En revisión»). Falta la captura/estado exacto de quien lo vio. Se elimina de raíz: lo real reemplaza todo y deja de haber dos fuentes.
+**Diagnóstico del −$9.09 (causa raíz, reproducida con la captura de SH001).** No es un descuadre de datos: es un bug de `round2` en `lib/shared/decimal.ts`.
+`round2` redondea partiendo la representación en texto (`toString().split('.')`); un residuo de punto flotante tan chico que JS escribe en notación científica lo rompe.
+En SH001, `8476.7 − 1169.2 − 0 − 7307.5` da `9.094947017729282e-13`; `round2` lo parte en `"9"` + `"094947017729282e-13"`, toma `"09"` y devuelve **9.09** (con `1e-7` devuelve `NaN`).
+`conciliacionUtilidad()` lo pinta como «Ajuste −$9.09», aunque los datos cuadran exacto (flujo 8,476.70 − IVA 1,169.20 − retenciones 0 = utilidad 7,307.50; verificado en SQL de producción, solo lectura).
+**Alcance:** todo llamador que reste/sume floats y deje un residuo |x| < 1e-6 (u ≥ 1e21): `ProyectoPanel`, `Totales`, `orden-cruce`, `status` (saldos), `detalle-armar`, `portal/cuentas`, `preview-cuentas` y el dashboard (`lib/server/shared/decimal.ts` re-exporta la misma). Un saldo «fantasma» de $0.0x–$9.99 es posible.
+Aparte, y aplicable a otros casos reales: con facturas reales cuyo total difiera de la estimación, el «ajuste» sí sería un descuadre genuino (Σ estimado − real); eso lo elimina la Fase 1.
 
 **Infraestructura reutilizable.** `obtenerRetencionesPorRegimen` / `calcularEjemploFactura` (`lib/shared/factura-fiscal.ts`) = configuración por régimen; `auditar_consistencia()` (27 guardas) para
 la guarda permanente del invariante; `ConceptoVista.paso`/`estado` y `useAcciones` para las acciones; `StatusBadge`, `sn-caption`, `fmtMoney`, `TablaConceptos`.
@@ -70,6 +73,8 @@ No se construye un segundo motor.
 **Recomendación: B** (más `regimen_cfdi` si la pregunta 2 es sí). **¿Migración?** Sí, una sola, aditiva (`20261042`); el conteo «aprox./facturas que faltan» no la necesita.
 
 ## Fase 1 — Lógica y pruebas (sin tocar la interfaz)
+
+**B0 (independiente, un PR chico, puede salir antes).** Arreglar `round2` en `lib/shared/decimal.ts`: si el valor se escribe en notación científica, redondear con `toFixed(2)` (y normalizar `-0`). Una prueba unitaria con `8476.7 − 1169.2 − 7307.5` (→ 0), `±1e-7`, `1e-13` y los casos 100.005 que motivaron la función. Es la causa del −$9.09; los demás bloques no dependen de él.
 
 | Bloque | Qué | Archivos |
 |---|---|---|
@@ -98,11 +103,11 @@ No se construye un segundo motor.
 - **P1** — Motor TS de pruebas (`tests/support/cuentas-motor`, 2,147 líneas) alimenta `critical` y la paridad `live`: o se amplía al nuevo contrato o se recorta la paridad al bloque que no cambia (pregunta 5).
 - **P2** — Facturas ya validadas sin las 4 columnas: se quedan con estimación + total real (retenciones = residual). En producción no hay ninguna real; en la base de test sí (fixtures).
 - **P2** — Régimen congelado solo al archivar (025): una factura con el régimen de ese día convive con el régimen vigente del proveedor para las aproximadas. Aceptable y visible en el detalle.
-- **Lo que no sé:** el estado exacto que mostró −$9.09; si la sección `Totales.tsx`/Dashboard (ISR estimado, «IVA a enterar» del periodo) debe seguir el mismo vocabulario; el nombre real de los conceptos/proveedores de SH001 (la maqueta usa Proveedor A–D).
+- **Lo que no sé:** si otros llamadores de `round2` ya mostraron un valor fantasma en producción (se revisa al hacer B0); si la sección `Totales.tsx`/Dashboard (ISR estimado, «IVA a enterar» del periodo) debe seguir el mismo vocabulario; el nombre real de los conceptos/proveedores de SH001 (la maqueta usa Proveedor A–D).
 
 ## Preguntas para ti
 
-1. ¿Tienes captura o fecha de la pantalla con el −$9.09? Con eso lo reproduzco antes de empezar.
+1. ~~Captura del −$9.09~~ (recibida; causa raíz arriba). ¿Apruebas el **B0** como PR aparte, ya, sin esperar el resto del plan?
 2. ¿Guardamos también el **régimen real** de cada factura (derivado de las retenciones del XML, columna `regimen_cfdi`) o basta el vigente del proveedor?
 3. ¿Si una factura se acepta desde «En revisión» con subtotal distinto al cotizado, la **utilidad se mueve** (lo real manda)? Propuesta: sí.
 4. ¿Alineamos ahora el vocabulario de **totales del periodo** (`Totales.tsx`, Dashboard: «ISR estimado», «Utilidad neta») o queda para otra iniciativa? Propuesta: solo la etiqueta «Utilidad neta», el resto aparte.
@@ -113,4 +118,4 @@ No se construye un segundo motor.
 
 | Bloque | Estado |
 |---|---|
-| B1–B7 | Pendiente (borrador sin aprobar) |
+| B0–B7 | Pendiente (borrador sin aprobar) |
