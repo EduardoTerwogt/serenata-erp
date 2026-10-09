@@ -437,11 +437,12 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
   la BD de test. **Un cambio de regla va en SQL; si la paridad se pone roja, se
   ajusta el doble.**
 - **Los conceptos se derivan al leer:** las cuatro RPCs de lectura pasan por
-  `cuentas_conceptos` (última versión en `20261029`), que calcula todo desde
+  `cuentas_conceptos` (última versión en `20261034`), que calcula todo desde
   las tablas fuente en cada llamada. La tabla derivada `cuentas_conceptos_base`
-  con triggers (decisión 019, PR #100) **no está en `main` ni en producción**
-  (verificado 2026-10-06): el frente 2 sigue en pausa y se retoma en #110,
-  después de #123.
+  con triggers (decisión 019, PR #100) **no existe** y quedó sustituida: #110
+  (plan aprobado en `docs/PLAN.md`, decisión 025) baja el costo de lectura con
+  un piso de lectura más barato (B1) y un **histórico de solo consulta** a los
+  190 días del último cambio (B2), que `resumen` y `avisos` ignoran.
 - `cuentas_periodo` fija `plan_cache_mode = force_custom_plan`: con el plan
   genérico de plpgsql (desde la 6.ª llamada por conexión) la misma petición
   pasaba de ~0.4 s a ~4.6 s.

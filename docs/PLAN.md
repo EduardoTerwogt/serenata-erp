@@ -1,7 +1,8 @@
 # Plan de la iniciativa activa
 
-**Estado:** **Borrador** (2026-10-09) — Frente 2 v2 de Cuentas (#110): leer Cuentas sin recalcular el historial. Dirección
-aprobada por el usuario; el texto pasa a **Aprobado** cuando lo revise. Sustituye al plan del issue #110 (2026-10-02) y cierra el PR #100.
+**Estado:** **Aprobado** (2026-10-09) — Frente 2 v3 de Cuentas (#110): que leer Cuentas cueste lo que se muestra, no el historial.
+Aprobado por el usuario tras dos auditorías y tres rondas de decisiones de negocio. Sustituye al plan del issue #110 (2026-10-02),
+al borrador v2 del mismo día y al PR #100 (cerrado). Ejecución bloque por bloque (tracker al final).
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -32,96 +33,171 @@ producción el 2026-10-08, merge `35709b6`) — historia en
 
 ---
 
-# Frente 2 v2 de Cuentas — leer sin recalcular el historial (#110)
+# Frente 2 v3 de Cuentas — leer lo que se muestra (#110)
 
-## Objetivo y meta (sin cambio)
+## Contexto
 
-Que leer Cuentas cueste en proporción a **lo que se muestra** (el año, el proyecto, lo pendiente) y no al historial completo, con el
-cómputo del plan Free de Supabase. Meta: ~2,500 proyectos por año y ~10 años de historial, con las lecturas dentro de presupuesto.
+Cada lectura global de Cuentas re-deriva todo el historial con `cuentas_conceptos` (plpgsql de ~400 líneas, `20261034`,
+`plan_cache_mode = force_custom_plan`). Medido con `EXPLAIN (ANALYZE, BUFFERS)` el 2026-10-09:
 
-**Restricciones del usuario (2026-10-09):** ningún feature cambia; la única consecuencia visible es una mejora; la iniciativa
-salda deuda técnica y no la crea. Por eso el criterio de aceptación de todo bloque es **salida idéntica** (paridad = 0), y el plan
-no agrega estado derivado mientras no haga falta demostrado con mediciones.
-
-## Auditoría (2026-10-09, `main` `b974c43`, BD de test y producción)
-
-- **Premisas del issue ya cumplidas:** #124 (test y producción en `us-east-2`, Postgres 17.11.0.002, Vercel `cle1`) y #123/#130/#131
-  (modelo final de facturas y pagos, migraciones `20261030`–`20261038`). El PR #100 y sus `20261009`/`20261010` están obsoletos (rama sobre
-  `55930c5`); `main` salta de `20261008` a `20261011` y el siguiente número libre es `20261039`.
-- **Los objetos del frente 2 no existen** en test ni en producción (tabla nula, 0 funciones).
-- **Producción:** 1 proyecto, 4 cuentas por pagar; `auditar_consistencia()` = 0 en test y producción.
-- **Test:** 2,703 proyectos (500 son residuo `ESC` del generador), 16,195 conceptos, 1,010 documentos de cobro, 5,005 de pago, 6,007 pagos;
-  todo en 2026 (un solo año).
-- **La derivación creció:** gasto extra (`item_id` nulo + `concepto`) que resta de la utilidad real, cliente por llave, modos
-  `cobro|grupo|cuenta|cliente|proveedor`, y lectores nuevos (`estado_cuenta`, `cuentas_proyectos_selector`, `facturas_candidatos`). Sigue siendo una función plpgsql
-  de ~400 líneas con `force_custom_plan` (`20261034`).
-- **Quién la llama (verificado en `pg_proc`):** `cuentas_periodo` (año), `cuentas_resumen` y `cuentas_avisos_items` (`NULL` = todo el historial),
-  `cuentas_opciones` (año) y `estado_cuenta`. Cada carga de `/cuentas` deriva 3 veces (periodo, resumen, opciones) y el panel de avisos una cuarta.
-
-| Medición en test (`EXPLAIN BUFFERS`, todo en caché) | Buffers | Tiempo (ruidoso) |
-|---|---|---|
-| `cuentas_conceptos(NULL, hoy)` | 15,845 | 1,197 ms |
-| `cuentas_resumen` | 16,808 | 705 ms |
-| `cuentas_periodo` (mes) | 16,505 | 862 ms |
-| `cuentas_opciones(2026)` | 15,970 | 1,627 ms |
-| detalle de un concepto | ≈3,060 | 82 ms |
-| `estado_cuenta` de un cliente | ≈3,700 | — |
-
-- **Hallazgos del perfil por nodos** (consulta con los CTE de documentos podados por el planner; cubre ~60% del costo): no hay un punto caliente
-  único, así que un arreglo local rinde del orden de 2×, no de 10×. Desperdicio verificable: `proyecto_id IN (SELECT id FROM py)` en `cc` y `cp`
-  no filtra nada en lecturas globales pero obliga a construir `py` y evaluar un subplan hasheado por fila; el bloque más grande es `cp` → `g`
-  (escaneos completos de `cuentas_pagar` y `cuentas_pagar_grupos`). El tiempo de reloj varía hasta 5× (cómputo Micro): **la puerta usa
-  buffers + filas + mediana, no un solo p95**.
-- **Caducado en el issue:** 162k buffers por año contra 3.7k por concepto (44×). Hoy es 16k contra 3k (5×).
-- **Crece con los años (lo que la meta exige):** `resumen` y `avisos` (leen todo el historial). La lectura de un año no crece con los años.
-- **Cosmético, no es drift:** el `md5` de `cuentas_periodo` y `cuentas_resumen` en test difiere del de producción solo por comentarios.
-
-## Enfoque: primero sin estado nuevo
-
-Se descartan, con motivo, las alternativas de mantener una copia derivada desde el arranque:
-
-| Alternativa | Por qué no ahora |
+| Caso | Buffers |
 |---|---|
-| Tablas `cuentas_proyecto_base` + `cuentas_concepto_base` con triggers en ~14 tablas, cola, constraint trigger, advisory locks y `MERGE` (diseño del issue, ADR 019) | Mete una clase de falla en cada escritura financiera (aprobar, pagar, subir documento) y una copia que puede diferir de la derivación. Contradice «no crear deuda»; se reserva para el bloque condicional V2. |
-| RPC única `cuentas_carga` | Cambia el contrato API↔UI y no baja el costo de cada endpoint medido por separado. |
-| Vista materializada / refresco al leer | Refresco completo por escritura; refresco al leer ya se probó y se descartó en CI (ADR 019). |
-| Caché fuera de la BD | Datos viejos en pantalla de dinero: viola «fallar explícito». |
+| Producción (1 proyecto, 5 conceptos), año o global | **≈3,360** (85–300 ms) — piso **constante** |
+| Test, concepto individual (cliente con 1 concepto) | 3,681 (+320 sobre el piso) |
+| Test, año vacío (2025, 4 filas) | 6,406 (≈3.3k de piso + ≈3.1k que dependen de las tablas, **origen sin identificar**) |
+| Test, año lleno (2026, 16,195 conceptos) | 15,873 |
+| Test, `cuentas_resumen` | 16,828 (0.7–1.8 s) |
 
-Principios de ejecución: SQL sigue siendo la única fuente de las reglas de dinero; `cuentas_conceptos(p_year, p_hoy[, p_objetivo, p_id])`
-conserva su firma (los llamadores no cambian); cada migración trae su reversa (`CREATE OR REPLACE` de la versión anterior) probada en test.
+- El piso (probablemente replanificar ~40 CTE en cada llamada por `force_custom_plan`; **hipótesis a confirmar en B0**) hace imposibles
+  presupuestos como «< 60 ms».
+- Medidos aparte: `OR proyecto_id IS NULL` en `cuentas_pagar` = 173 buffers, `p_factura` = 163, `p_comp` = 3: **no** explican los ≈3.1k.
+  Qué reescribir en B1 lo decide el perfil por nodos de B0.
+- Parte proporcional a los datos ≈ 0.78 buffers por concepto. Con 1,000 proyectos/año × 10 años (≈65k conceptos) las lecturas globales
+  extrapolan a 2.7–6.6 s contra un `statement_timeout` de 8 s (PostgREST).
+- Los datos de test no sirven para probar equivalencia: 95% sin resolver, 0 gastos extra, 0 anulados, 0 reaperturas, 0 facturas o pagos
+  multi-proyecto, 1 complemento de cobro. La base de test (65 MB; 39 MB de Cuentas por año) no aguanta 10 años en plan Free (tope 500 MB).
+- `scripts/loadtest/k6/cuentas.js` llama rutas que ya no existen; no hay prueba de concurrencia de `periodo`/`resumen`/`avisos`.
+
+## Decisiones del usuario (2026-10-09)
+
+- **Volumen:** 1,000 proyectos/año × 10 años como mínimo; hay margen para subir de plan de Supabase, pero debe quedar listo
+  técnicamente. 5–10 usuarios simultáneos.
+- **Avisos** muestra los pendientes viejos siempre. El contador de avisos y el select de años pueden tardar unos segundos en actualizarse.
+- **Histórico:** un proyecto pasa a histórico de solo consulta **190 días después del último cambio registrado en el sistema** (no la fecha
+  de negocio), cuando todo está resuelto. Automático y diario. No se reabre ni se corrige.
+- **Proyectos que comparten factura o pago** se archivan juntos y solo si todos cumplen.
+- **Algo nuevo en un histórico** (cotización complementaria, cuenta nueva, nota de crédito) «no puede ocurrir»: se rechaza con error
+  explícito. El histórico sigue sumando en totales y búsqueda.
+- **Alcance: solo Cuentas.** No se toca el módulo Proyectos ni la tabla `proyectos` (se definirá después). Consecuencia anotada: la
+  fecha de entrega de un histórico sigue editable desde Proyectos y movería sus totales hasta que se defina ese módulo.
+- **Iniciativas aparte, después de #110** (cada una con su plan; todas cambian qué significa «resuelto»): ajuste de monto de factura de
+  proveedor (aceptar una factura de monto distinto sin tocar la cotización), notas de crédito / devoluciones, cancelación con traspaso,
+  saldo a favor / anticipos, gastos sin factura y «dar por perdido» un pendiente con motivo.
+
+**Restricción:** salvo lo decidido arriba, ningún feature cambia; salida idéntica (0 diferencias).
+
+## Enfoque
+
+1. **Piso / lectura (B1):** que cada lectura cueste lo que devuelve. Sin estado nuevo. Qué se reescribe lo decide B0.
+2. **Histórico (B2):** estado de negocio persistido, no caché. Como un histórico está resuelto e inmutable, `resumen` y `avisos` pueden
+   ignorarlo y dar el mismo resultado (todas las categorías de aviso exigen un concepto sin resolver).
+3. Descartado, con motivo: tablas espejo con triggers en ~14 tablas, cola y locks (el PR #100 y la ADR 019: meten una clase de falla en cada
+   escritura financiera); RPC única `cuentas_carga` (cambia el contrato API↔UI y no baja el costo de cada endpoint); vista materializada;
+   caché externa (datos viejos en pantalla de dinero); `cuentas_opciones` desde tablas base (duplica reglas de nombre y ahorra una consulta
+   por año y visita); debounce del contador y aviso previo de archivado (YAGNI hasta que la puerta falle).
+
+Expectativa honesta: con un conjunto vivo de ~7k conceptos la lectura global baja de ≈16.8k a ≈8.8k buffers (≈ −48%, 0.35–0.9 s);
+800 ms queda **borderline**. Si B3 no pasa, la palanca siguiente es eliminar el piso (quitar `force_custom_plan` separando modos sin
+`p IS NULL OR`); es un rediseño mayor y se decide con el usuario.
 
 ## Bloques
 
-| Bloque | Qué | Producción |
-|---|---|---|
-| **V0 Medición fiel** | Generador calibrado con parámetros del negocio y **10 años** (hoy 1 año); retirar el residuo `ESC` de test. Perfil completo por nodos (con todos los CTE referenciados) y línea base de buffers, filas y mediana/p95 de servidor para: periodo (mes, año, lista), resumen, avisos, opciones, detalle (cobro, grupo, cuenta), `estado_cuenta` (cliente, proveedor) y selector. Agregar esos casos a `scripts/db/escala-medir.sql`. Presupuestos finales se fijan aquí. | — |
-| **V1a Opciones sin derivación** | `cuentas_opciones` lee de `cuentas_cobrar`/`cuentas_pagar`/grupos/clientes/proveedores (solo usa `tipo`, `contraparte`, `contraparte_id`); quita 1 de las 3 derivaciones por carga. Mismo `jsonb` que la actual. | Sí |
-| **V1b Derivación por conjunto de proyectos** | Una sola consulta parametrizada por conjunto de proyectos (la resolución `py` sale del llamador: año, un concepto, una contraparte); los CTE de documentos y pagos (`p_factura`, `p_comp`, `cc_comp`, …) se filtran por ese conjunto; `proyecto_id IN (SELECT id FROM py)` deja de ejecutarse en lecturas globales; 1–2 índices parciales por llave (p. ej. documentos de pago por grupo y fecha). `cuentas_conceptos` queda como envoltura con la firma actual. | Sí |
-| **V1c Equivalencia** | `scripts/db/` compara la función anterior (copiada en test con otro nombre, no migrada) contra la nueva: 0 diferencias de `jsonb` en todos los modos y varias fechas sobre el dataset de V0; `cuentas-paridad-sql` y la suite actual en verde; `plpgsql_check` y la guarda `force_custom_plan` de `migrations.yml`. | — |
-| **Puerta tras V1** | Medir con el dataset de V0 a 10 años. Todo dentro de presupuesto → saltar a V3. `resumen`/`avisos` fuera de presupuesto o creciendo con los años → V2, con el usuario. | — |
-| **V2 (condicional) Marca por proyecto para lecturas globales** | Solo si la puerta lo exige. En vez del espejo de 45 columnas: una sola marca por proyecto («tiene conceptos sin resolver») para que `resumen`/`avisos` deriven solo esos proyectos. Se diseña entonces con los datos de V0; no se escribe SQL antes. **Heredado del plan anterior y obligatorio:** cobertura mecánica de triggers con `plpgsql_show_dependency_tb` (confirmar que existe en `plpgsql_check` 2.8), `WHEN (OLD IS DISTINCT FROM NEW)` sin listas de columnas, advisory lock por proyecto con `read committed` explícito, guarda en `auditar_consistencia()` que solo reporta (corregir es manual), lanzamiento en sombra con ventana en 0, reversa probada y `SET LOCAL serenata.sin_refresco` para cargas masivas. Dependencias que hoy ensanchan el conjunto afectado: `pagos` (anulado, fecha, comprobante), `clientes`, `items_cotizacion`, `proveedores`, `cotizaciones`, y los documentos ligados por `factura_documento_id` (una factura puede cruzar proyectos). | Sí, en sombra |
-| **V3 Cierre** | ADR 019 reescrito (se descartó materializar primero; medidas antes/después) y `ARCHITECTURE.md` («última versión `20261029`» caduca); actualizar la regla de `.claude/rules/migraciones.md` sobre `cuentas_conceptos_derivar` (la función no existe); quitar `p_proyecto` muerto de `cuentas_por_proyecto` si una migración de V1 la toca; `live` 3 corridas seguidas; `escala.yml` con los casos nuevos; cerrar #110 y mover este archivo a `docs/archive/`. | — |
+### B0 — Medición y diagnóstico (local, sin tocar la base compartida)
+- **Postgres 16 local** (instalado, cluster apagado). No existe un arranque reproducible: crear `scripts/db/local-bootstrap.sql` (roles
+  `anon`/`authenticated`/`service_role`, esquemas `auth`/`realtime` mínimos) y confirmar `plpgsql_check` y `pg_trgm`. Alternativa si resulta
+  mejor: medir en test con ≈5 años (10 años ≈ 416 MB de 500 MB, demasiado justo).
+- Extender `scripts/db/escala-generador.sql` (no crear otro): N años y proporción de resueltos por antigüedad (años viejos ≥ 95% resueltos).
+- Un solo `scripts/db/cuentas-equivalencia.sql`: fixture de ramas (~30 proyectos: gasto extra, pagos anulados, reapertura, **factura de cobro y
+  pago compartidos entre proyectos**, también entre años, cobro sin proyecto, PPD con/sin complemento, sin proveedor, complementarias, cada modo
+  `cobro|grupo|cuenta|cliente|proveedor`) más el golden: `md5` ordenado de `cuentas_conceptos` (todos los modos y fechas), `cuentas_periodo`,
+  `resumen`, `avisos`, `estado_cuenta`. Se corre **antes** de cambiar nada.
+- Ampliar `scripts/db/escala-medir.sql`: buffers además de ms; casos detalle (cobro/grupo/cuenta), `estado_cuenta`, selector, año vacío vs lleno.
+- Reescribir `scripts/loadtest/k6/cuentas.js` para `/api/cuentas/periodo|resumen|avisos`, 5–10 VUs.
+- **Perfil por nodos** de `cuentas_conceptos` (cuerpo con literales) para ubicar los ≈3.1k dependientes de las tablas; prueba de la hipótesis del
+  piso (planificación vs ejecución).
+- Salida: línea base en buffers y presupuestos **derivados de requisitos y conscientes del piso** (p95 < 800 ms a 5–10 usuarios; buffers de
+  `resumen`/`avisos` independientes del historial archivable; año vacío ≈ piso). Se retira «< 60 ms» / «< 10 ms».
 
-## Validación (presupuestos provisionales; se fijan con la línea base de V0)
+### B1 — Piso / lectura (migración `20261039`)
+Objetivos según B0. `cuentas_conceptos(p_year, p_hoy, p_objetivo, p_id)` conserva **firma y `RETURNS TABLE` idénticos** (cambiarlos exige `DROP`,
+que el MCP retiene) y `force_custom_plan` mientras no se decida lo contrario (la guarda de `migrations.yml` exige plpgsql, `pronargs = 4`).
+Índice parcial solo si un `EXPLAIN (ANALYZE, BUFFERS)` lo exige (`scripts/db/indices-sin-uso.sql`).
+Aceptación: golden = 0 diferencias, buffers según B0. Reversa = `CREATE OR REPLACE` de la versión anterior, probada.
 
-- **Salida idéntica:** 0 diferencias entre la función anterior y la nueva, y `cuentas-paridad-sql` en verde (también en `live`).
-- Detalle de un concepto y `estado_cuenta`: buffers casi constantes (no dependen del tamaño del historial).
-- Lecturas con dataset de 10 años: `periodo` (mes) < 100 ms de servidor, `periodo` (año) < 250 ms, `resumen`/`avisos` < 60 ms y **sin crecer con los
-  años**, detalle < 10 ms; en el cliente, p95 < 800 ms (el gate de `escala.yml`).
-- `auditar_consistencia()` = 0 en test y producción antes y después de cada lanzamiento.
+### B2 — Histórico (migración `20261040`; sin `DROP`: `CREATE OR REPLACE TRIGGER`)
+- `proyectos.cuentas_historico_at timestamptz` + índice parcial `WHERE cuentas_historico_at IS NULL`. Solo la columna; **ninguna guarda sobre `proyectos`**.
+- **`cuentas_ultimo_cambio(p_proyecto text)`:** una sola función con el máximo de `created_at`/`updated_at`/`fecha_carga`/`anulado_at`/`eliminado_at`
+  de las cuentas, grupos, pagos y líneas, documentos, reaperturas y `cuentas_correcciones` del proyecto. Huecos que cubre con la unión:
+  `pagos_comprobantes` y `pagos_cuentas_pagar` sin `updated_at`; `cuentas_pagar_grupos.updated_at` sin trigger; `editar_pago` modifica `pagos` sin
+  marca (deja `cuentas_correcciones.created_at`).
+- **RPC `archivar_cuentas_historicas(p_year int, p_hoy date, p_dry_run boolean)`** (service_role), **por año** para no pasar los 8 s:
+  - Deriva los conceptos vivos de ese año (`p_objetivo = 'vivos'`).
+  - Un proyecto es elegible si tiene ≥ 1 concepto, todos resueltos, sin reapertura activa y `cuentas_ultimo_cambio` ≥ 190 días antes de `p_hoy`
+    (naturales, CDMX). Excluye «sin-proyecto» y los proyectos sin fecha de entrega (llamada aparte).
+  - Los proyectos unidos por factura o pago compartido (`cuentas_cobrar.factura_documento_id`, `pagos_comprobantes`, `pagos_cuentas_pagar`)
+    forman un componente: se archivan **juntos y solo si todos son elegibles**. Un componente que cruza años no se archiva y se reporta en el `p_dry_run`.
+  - Para marcar, bloquea las filas de `proyectos` del componente (`FOR UPDATE`, orden por `id`) y **recomprueba `cuentas_ultimo_cambio`** (cualquier
+    escritura posterior lo mueve; no se re-deriva). Devuelve `jsonb` con candidatos, archivados y componentes diferidos.
+- **Guardas de escritura** — `cuentas_bloquear_historico()` como trigger BEFORE insert/update/delete, nombrado para correr antes de
+  `trigger_auto_folio_*` (un insert rechazado no consume folio):
+  - Tablas: `cuentas_cobrar`, `cuentas_pagar`, `cuentas_pagar_grupos` (todo pago o anulación actualiza una de ellas), `documentos_cuentas_cobrar`,
+    `documentos_cuentas_pagar`, `cuentas_reaperturas` (insert) y `cotizaciones` (insert de una complementaria de un histórico).
+  - `pagos` y las líneas de pago no llevan guarda: editar un pago exige reapertura y esa está bloqueada.
+  - Documentos sin ancla (factura de cobro, complementos por factura): el proyecto sale de una cuenta ligada; por el archivado en componente basta una.
+  - `FOR KEY SHARE` sobre el proyecto (no frena ediciones normales); el archivado usa `FOR UPDATE` (conflicta y serializa).
+  - Error explícito con código nuevo siguiendo `P1416` (`proyecto_historico`).
+  - **Cobertura:** test de comportamiento que ejecuta cada RPC y ruta de escritura de Cuentas (≈50 RPC) contra un histórico del fixture y espera
+    `proyecto_historico`. No basta enumerar tablas.
+- **Lecturas:** `p_objetivo = 'vivos'` (valor nuevo y explícito; **agregarlo a los predicados de `cc` y `cp`**, o devolverían 0 filas en silencio)
+  excluye históricos. `cuentas_resumen` y `cuentas_avisos_items` lo usan; periodo, opciones, `estado_cuenta` y detalle siguen viendo todo.
+- `auditar_consistencia()` (24 → 27 guardas): histórico con concepto no resuelto; histórico con reapertura activa; componente mixto (histórico conectado
+  con un proyecto vivo). Solo reporta. Ajustar los tests que cuentan guardas (`tests/e2e/live/auditar-consistencia.spec.ts`,
+  `app/api/__tests__/keep-alive-route.test.ts`).
+- **Cron:** el `keep-alive` diario (`vercel.json`, 08:00 UTC; único cron) llama a la RPC una vez por año con proyectos vivos. Cada paso en su
+  `try/catch` para no cortar el ping a Supabase; si falla el archivado, queda en log y en la respuesta y devuelve 500 **al final**.
+- **Rutas y Portal:** mapear `proyecto_historico` a 409 con mensaje claro (`DomainError`); el Portal de proveedores no puede subir documentos a un histórico.
+- **UI (solo Cuentas):** `cuentas_periodo` agrega `historico` al proyecto y `lib/server/cuentas/detalle.ts` lo lee de `proyectos` (sin tocar el
+  `RETURNS TABLE` de `cuentas_conceptos`); `lib/shared/cuentas/periodo-tipos.ts` + `app/cuentas/components/acciones/` y `detalle/` muestran insignia
+  «Histórico» y deshabilitan acciones (tokens `--sn-*`).
+- **Emergencia (solo SQL de admin):** limpiar `cuentas_historico_at` e insertar una fila en `cuentas_reaperturas` con motivo y usuario (reutiliza el
+  rastro de auditoría existente). **Reversa de B2:** `cuentas_historico_at = NULL` en todos y retirar los triggers.
+- Aceptación: golden de `resumen`/`avisos` **idéntico con y sin** los proyectos del fixture marcados históricos; un proyecto que comparte factura o pago con
+  uno vivo **no** se archiva solo y sí junto con él; escribir en un histórico falla por cada ruta; `cuentas_ultimo_cambio` avanza con cada RPC de escritura;
+  `auditar_consistencia()` = 0.
+
+### B3 — Puerta
+Con el dataset de B0 a 10 años: presupuestos de B0 cumplidos; `cuentas-paridad-sql` y `cuentas-periodo-rendimiento` en verde; **test `live` nuevo** que
+crea un histórico de fixture (prefijo propio) y prueba el 409 por ruta y su mapeo; `live` verde 3 corridas seguidas. Si no pasa, se discute con el usuario
+(p. ej. eliminar el piso) antes de agregar estado.
+
+### B4 — Cierre y limpieza
+- `docs/decisions/019-cuentas-conceptos-materializada.md` marcada como sustituida; nueva `docs/decisions/025-historico-de-cuentas-190-dias.md` (regla,
+  invariante, componentes, guardas, emergencia y reversa, pendientes de Proyectos y del régimen fiscal del proveedor, qué se descartó y por qué).
+- `ARCHITECTURE.md`: describir `p_objetivo = 'vivos'`, el histórico y las migraciones `20261039` / `20261040`.
+- Borrar `scripts/db/test-retirar-frente2.sql` (objetos que ya no existen).
+- `.claude/rules/migraciones.md`: añadir la guarda de ACL y la regla `CREATE OR REPLACE TRIGGER`; verificar la nota de `cuentas_conceptos_derivar`.
+- `cuentas_por_proyecto(p_year, p_proyecto)`: quitar el parámetro muerto solo si una migración de B1/B2 toca la función; la función se queda (la usa
+  `cuentas-paridad-sql`).
+- Cerrar #110 y mover este archivo a `docs/archive/`.
+
+## Validación
+
+- **Local (Postgres 16):** reconstruir con `local-bootstrap.sql` + migraciones en orden + seeds → `cuentas-equivalencia.sql` (0 diferencias),
+  `EXPLAIN (ANALYZE, BUFFERS)` por caso, `plpgsql_check`.
+- **Repo:** `npx tsc --noEmit && npm run lint && npm test`, `npm run test:e2e:smoke && npm run test:e2e:critical`, `npm run build`.
+- **Test:** aplicar por MCP (sin `DROP`/`DELETE`), comparar `md5(prosrc)` contra los archivos, `auditar_consistencia()` = 0, `cuentas-paridad-sql`,
+  rendimiento y el test `live` nuevo; PR a Ready for review para disparar `live`.
+- **Producción:** solo tras todo en verde; `archivar_cuentas_historicas(p_dry_run => true)` primero y respaldo manual antes del primer archivado real.
 
 ## Riesgos
 
-- **P1** — Reescribir una función de ~400 líneas con 5 modos: lo cubre V1c (comparación completa contra la anterior) y la reversa por migración.
-- **P1** — Mejora insuficiente de las lecturas globales: la puerta lo decide con datos de 10 años, no con estimaciones; V2 queda definido pero apagado.
-- **P1** — Medir con tiempo de reloj en cómputo Micro: buffers + filas + mediana, `escala.yml` solo como tendencia.
-- **P2** — El dataset de V0 depende de los parámetros del negocio (ver abajo); mientras falten, se usa la forma actual de test y se anota como supuesto.
-- **P2** — Documentos desactualizados (ADR 019, `ARCHITECTURE.md`, cuerpo del issue #110): se corrigen en V3 y en este mismo cambio el issue queda apuntando a este plan.
-
-## Pendiente del usuario
-
-Parámetros del negocio para V0: proyectos por año y su estacionalidad, renglones y proveedores por proyecto, % PPD/PUE, documentos y pagos
-por concepto, % resuelto por antigüedad y reaperturas. Sin ellos V0 usa la forma de test y lo declara como supuesto.
+- **P0** — Archivar es irreversible por decisión de negocio. Mitigación: criterio estricto (resuelto + 190 días desde el último cambio en el sistema),
+  `p_dry_run` con lista previa, emergencia solo por SQL de admin con rastro en `cuentas_reaperturas`, respaldo manual antes del primer archivado real
+  en producción (plan Free sin respaldos, ADR 020).
+- **P0** — Facturas y pagos compartidos entre proyectos: archivado por componente + guarda por componente + fixture con ese caso (hoy test no tiene ninguno).
+- **P1** — Guardas incompletas: test de comportamiento sobre cada RPC/ruta de escritura + guarda de auditoría.
+- **P1** — La marca de «último cambio» tiene huecos si una escritura relevante no la mueve: `cuentas_ultimo_cambio` + test que lo verifica por RPC.
+- **P1** — Reglas futuras cambian «resuelto» (notas de crédito, traspaso, gastos sin factura): la invariante «histórico ⇒ resuelto» puede dejar de
+  cumplirse. Guarda de auditoría; revisar `archivar_*` al abrir esas iniciativas.
+- **P1** — Rediseñar una función de ~400 líneas con 5 modos: golden + fixture + reversa por migración.
+- **P1** — Las expectativas de B3 pueden no cumplirse por el piso fijo; la palanca está nombrada y el rediseño mayor se pospone.
+- **P1** — Pendientes que nunca se resuelven mantienen vivo su proyecto: medir en producción; «dar por perdido» es la salida (iniciativa aparte).
+- **P2** — Sin guarda sobre `proyectos`: la fecha de entrega de un histórico (editable desde Proyectos) movería sus totales hasta definir ese módulo.
+- **P2** — Los totales fiscales de un histórico dependen del régimen fiscal **actual** del proveedor (`c_iva_ret`, `c_isr_ret` leen `proveedores` en vivo).
+  Fuera de alcance; se anota en la decisión nueva.
+- **P2** — Postgres 16 local vs 17 en Supabase: los buffers son comparables; confirmar la mejora final una vez en test.
+- **P2** — Permisos de funciones nuevas: `REVOKE` a `PUBLIC`/`anon`/`authenticated`, `GRANT` a `service_role`, `search_path` fijo. Agregar guarda a
+  `migrations.yml` (hoy no hay ninguna sobre ACL).
 
 ## Tracker
 
@@ -130,10 +206,9 @@ por concepto, % resuelto por antigüedad y reaperturas. Sin ellos V0 usa la form
 | Prerrequisito #124 (región) | Hecho (2026-10-06) |
 | Prerrequisito #123 (modelo de facturas y pagos) | Hecho (2026-10-08, `35709b6`) |
 | PR #100 | Cerrado como reemplazado (2026-10-09) |
-| V0 Medición fiel | Pendiente |
-| V1a Opciones sin derivación | Pendiente |
-| V1b Derivación por conjunto de proyectos | Pendiente |
-| V1c Equivalencia | Pendiente |
-| Puerta tras V1 | Pendiente |
-| V2 Marca por proyecto (condicional) | No iniciado — depende de la puerta |
-| V3 Cierre | Pendiente |
+| Plan v3 aprobado y docs alineados | En curso |
+| B0 Medición y diagnóstico | Pendiente |
+| B1 Piso / lectura | Pendiente — depende del perfil de B0 |
+| B2 Histórico | Pendiente |
+| B3 Puerta | Pendiente |
+| B4 Cierre y limpieza | Pendiente |

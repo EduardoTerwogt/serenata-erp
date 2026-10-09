@@ -78,22 +78,20 @@ ejecutados de punta a punta, quedan en
 
 ## Siguiente
 
-- **Orden acordado (actualizado 2026-10-08):** #123 (facturas y pagos ligados, con #130 y #131) ya está
-  **lanzada** (ver "Cerrado") → #110 (frente 2 v2, plan en `docs/PLAN.md`; es lo que ataca el gate de escala
-  de las lecturas globales) → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
-  en la cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para entonces no ha
-  arrancado, pasa al frente). #124 (Ohio) ya está cerrado. Lo de abajo es el antecedente del frente 2.
-- **Frente 2 de latencia de Cuentas — v2, en borrador (2026-10-09)**, plan en
-  `docs/PLAN.md` (epic #110). Auditado contra `main`: #124 y #123 ya están hechos y el
-  PR #100 (tablas `cuentas_conceptos_base` con triggers, `docs/decisions/019`) quedó
-  **cerrado como reemplazado**. El enfoque nuevo es primero **sin estado derivado**
-  (V0 medición a 10 años, V1 derivación por conjunto de proyectos, opciones sin
-  derivación, equivalencia de salida = 0 diferencias); la marca por proyecto para
-  lecturas globales (V2) solo si la puerta tras V1 lo exige. Antecedente:
+- **Orden acordado (actualizado 2026-10-09):** #123 (facturas y pagos ligados, con #130 y #131) ya está
+  **lanzada** (ver "Cerrado") → #110 (frente 2, plan **aprobado** en `docs/PLAN.md`; es lo que ataca el gate
+  de escala de las lecturas globales) → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja,
+  última en la cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para entonces no ha
+  arrancado, pasa al frente). #124 (Ohio) ya está cerrado.
+- **Frente 2 de latencia de Cuentas — plan v3 aprobado (2026-10-09)**, `docs/PLAN.md` (epic #110). Auditado
+  contra `main`, test y producción; el PR #100 (tablas `cuentas_conceptos_base` con triggers,
+  `docs/decisions/019`) quedó **cerrado como reemplazado**. Enfoque: **sin estado derivado**. B0 medición
+  local a 10 años y perfil por nodos; B1 piso de lectura (la derivación cuesta ≈3.4k buffers aun sin datos);
+  B2 **histórico de solo consulta** a los 190 días del último cambio, que permite que `resumen` y `avisos`
+  ignoren lo archivado; equivalencia de salida = 0 diferencias. Antecedente:
   `docs/archive/frente2-cuentas-conceptos-pausado.md`.
-  - Meta (sin cambio): ~2,500 proyectos por año y ~10 años de historial. El
-    ambiente de test con miles de datos es el piso que producción debe aguantar
-    antes de pasar a uso real.
+  - Meta: 1,000 proyectos por año y mínimo 10 años de historial, 5–10 usuarios simultáneos. Hay margen para
+    subir el plan de Supabase, pero debe quedar listo técnicamente.
 
 ---
 
@@ -114,6 +112,19 @@ ni tiene alcance de iniciativa definido.
   modelo vigente **no guarda monto por aplicación en la factura** (su suma se deriva de
   las cotizaciones ligadas; los pagos sí guardan lo aplicado a cada cuenta): esa iniciativa deberá
   agregarlo a la factura si lo necesita.
+- **Casos que cambian qué significa «resuelto»** (2026-10-09, decididos al planear #110: cada uno su
+  iniciativa, **después** de #110, con la dirección en mente). Si alguno llega, hay que revisar la
+  invariante «histórico ⇒ resuelto» de `docs/PLAN.md` (B2) y su guarda en `auditar_consistencia()`:
+  - **Ajuste de monto de factura de proveedor:** el proveedor manda una factura de monto mayor o menor
+    al presupuestado; se acepta y se ajusta la cuenta (utilidad, impuestos y operaciones se recalculan)
+    sin tocar la cotización, que es el cobro final al cliente. Hoy un descuadre queda «En revisión» y no
+    hay ajuste de monto.
+  - **Notas de crédito / devoluciones, saldo a favor / anticipos y gastos sin factura** (caja chica,
+    viáticos, extranjero).
+  - **«Dar por perdido» un pendiente con motivo** (una factura que el proveedor nunca mandó): lo saca de
+    Avisos y permite que el proyecto cierre y pase a histórico.
+  - **Qué se congela del módulo Proyectos en un histórico** (etapa, notas, fecha de entrega, Reporte de
+    Cierre). #110 solo congela Cuentas; la fecha de entrega de un histórico sigue editable hasta definirlo.
 
 ### Deuda técnica (2026-09-26)
 

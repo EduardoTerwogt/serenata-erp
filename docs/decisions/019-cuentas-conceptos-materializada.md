@@ -1,5 +1,9 @@
 # 019 — `cuentas_conceptos_base`: los conceptos de Cuentas se guardan derivados y se mantienen con triggers
 
+> **Estado: sustituida (2026-10-09) por la decisión [025](025-historico-de-cuentas-190-dias.md).** Esta tabla derivada nunca llegó a `main` ni
+> a producción (PR #100, cerrado como reemplazado). Se conserva como historia: explica por qué no se guarda una copia derivada de los conceptos
+> (cada escritura financiera pasa a depender de ~14 triggers, una cola y locks) y qué se midió.
+
 ## Contexto
 
 Cada RPC de lectura de Cuentas (`cuentas_periodo`, `cuentas_resumen`,

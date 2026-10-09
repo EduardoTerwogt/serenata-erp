@@ -1,19 +1,21 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-09 — auditoría de #110 y plan en borrador (`docs/PLAN.md`); PR #100 cerrado. Antes (2026-10-08): **#123 «Facturas y pagos ligados»
+**Última actualización:** 2026-10-09 — plan de #110 **aprobado** (v3, `docs/PLAN.md`) tras dos auditorías y las decisiones de negocio; PR #100 cerrado. Antes (2026-10-08): **#123 «Facturas y pagos ligados»
 (con #130 y #131) lanzada a producción.** PR [#129](https://github.com/EduardoTerwogt/serenata-erp/pull/129) fusionado en `main` como `35709b6`; issues #123, #130 y #131 cerrados.
 
 ## Estado
 
 **`main` = `35709b6`** (merge commit, sin squash). Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1`
 (#124, 2026-10-06). La base de producción tiene aplicadas **`20261030`–`20261037`** y está **verificada** (ver abajo); sigue sin datos
-de negocio (solo `usuarios` y catálogos). **Iniciativa en borrador (2026-10-09): #110, `docs/PLAN.md`** (leer Cuentas sin recalcular el historial; primero
-sin estado nuevo, con marca por proyecto solo si la puerta tras V1 lo exige; PR #100 cerrado como reemplazado). El plan de #123 vive en
+de negocio (solo `usuarios` y catálogos). **Iniciativa aprobada (2026-10-09): #110, `docs/PLAN.md`** (leer Cuentas lo que se muestra: B0 medición local, B1 piso de lectura,
+B2 histórico de solo consulta a los 190 días del último cambio, B3 puerta, B4 cierre; PR #100 cerrado como reemplazado). El plan de #123 vive en
 `docs/archive/facturas-pagos-ligados-123-130-131.md`. Decisiones: `docs/decisions/022` (#123), `023` (#130) y `024` (#131: PDF
 obligatorio y archivos a Drive después de guardar).
 
-**Cola de iniciativas:** **#110** (frente 2 v2; resuelve el gate de escala) → **#125** (llaves de Supabase legacy; prioridad baja,
+**Cola de iniciativas:** **#110** (frente 2; resuelve el gate de escala) → **#125** (llaves de Supabase legacy; prioridad baja,
 revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
+Después de #110, cada una con su plan: ajuste de monto de factura de proveedor, notas de crédito, traspaso, saldo a favor, gastos sin factura,
+«dar por perdido» y qué se congela del módulo Proyectos en un histórico (ver `docs/ROADMAP.md` → «Después»).
 
 ## Completado en esta sesión (2026-10-08)
 
@@ -45,7 +47,7 @@ revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de cotizac
 ## Problemas abiertos
 
 - **Gate de escala en rojo (conocido):** p95 de las lecturas globales ≈ 1.1–2.3 s contra 800 ms (mes 2308, año 1634, lista 1506, resumen 1257, avisos 1086 en `0d02802`);
-  el guardado pasa (POST 423 ms). Causa: cada lectura global re-deriva el historial; lo ataca #110 V1 (`docs/PLAN.md`). `escala.yml` es manual y no bloquea. Hoy no importa:
+  el guardado pasa (POST 423 ms). Causa: cada lectura global re-deriva el historial; lo atacan #110 B1 (piso de lectura) y B2 (histórico) (`docs/PLAN.md`). `escala.yml` es manual y no bloquea. Hoy no importa:
   producción está vacía y el dataset de escala (≈16 mil conceptos) es mucho mayor que el real.
 - **Flake `57014`** en `cuentas-paridad-sql` (job `live`): un rojo se confirma con un solo re-run; dos seguidos son reales. Flake intermitente en
   `cuentas-principal.spec.ts:45` (móvil) y en un test de Cotizaciones bajo carga.
@@ -78,8 +80,9 @@ revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de cotizac
 ## Siguiente paso
 
 1. Verificar el lanzamiento (punto 1 de arriba) y correr `auditar_consistencia()` en Admin tras la primera factura/pago reales.
-2. **#110** (frente 2 v2): revisar `docs/PLAN.md` (borrador) y pasarlo a Aprobado; dar los parámetros del negocio para V0 (ver "Pendiente del usuario" del plan);
-   arrancar por V0 (medición fiel a 10 años). El pago por proyecto lee de `cuentas_proyectos_selector` y `estado_cuenta(p_proyectos)`, con llave (proyecto, contraparte).
+2. **#110** (frente 2): plan aprobado en `docs/PLAN.md`; arrancar por **B0** (medición local a 10 años: bootstrap de Postgres 16, equivalencia/golden,
+   perfil por nodos). B1 se define con ese perfil; B2 (histórico a los 190 días) no depende de B1. El pago por proyecto lee de `cuentas_proyectos_selector` y
+   `estado_cuenta(p_proyectos)`, con llave (proyecto, contraparte).
 3. Limpieza de #124 (quitar el ref viejo `fwmyoqokcjtldiofuxdg` de `app/api/internal/env-check/route.ts` y su test, y borrar
    `.github/workflows/db-push-una-vez.yml`, cuando borres la base vieja); **#125** al final.
 4. Opcionales sin fecha: parcialidad y saldo insoluto del complemento (exige ampliar el parser); corregir un descuadre ligando o desligando cotizaciones sin
@@ -89,7 +92,7 @@ revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de cotizac
 ## Deuda técnica
 
 - **Llaves legacy de Supabase** (#125): límite interno 2026-12-01.
-- **Frente 2 de Cuentas** (#110): es lo que resuelve el gate de escala.
+- **Frente 2 de Cuentas** (#110): es lo que resuelve el gate de escala (plan aprobado en `docs/PLAN.md`).
 - **`cuentas_por_proyecto(p_year, p_proyecto)`:** `p_proyecto` ya no se usa; quitarlo en la próxima migración que toque esa función.
 - **`realtime-js` fijo en 2.112.0** (la guarda `lib/realtime/__tests__/realtime-js-guard.test.ts` falla si se sube sin pasar el JWT por `accessToken`).
 - **Job `live` intermitente** (`cotizaciones-colaboracion*.spec.ts`, `cuentas-paridad-sql`, 57014).
