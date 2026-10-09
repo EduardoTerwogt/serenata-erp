@@ -3,6 +3,9 @@ name: E2E
 on:
   push:
     branches: [main]
+    # Un push de solo .md no ejecuta build ni tests. Solo en `push`: en `pull_request` un check omitido
+    # por filtro de rutas queda pendiente y bloquearia el merge (los PRs usan el job `changes`).
+    paths-ignore: ['**.md']
   pull_request:
     # `ready_for_review` no va en los tipos por defecto: sin el, marcar un PR
     # como listo no dispararia `live` (que se omite mientras es borrador).
