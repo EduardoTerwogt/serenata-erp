@@ -1,7 +1,7 @@
 # 025 — Histórico de Cuentas a 190 días y lectura sin recalcular el historial (#110)
 
 **Estado:** APROBADA (2026-10-09). Implementada en el PR #136 (migraciones `20261039` y `20261040`); producción al cerrar la iniciativa.
-Sustituye a [`019`](019-cuentas-conceptos-materializada.md). Plan y mediciones: `docs/PLAN.md` (se archiva en `docs/archive/` al cerrar #110).
+Sustituye a [`019`](019-cuentas-conceptos-materializada.md). Plan y mediciones: `docs/archive/frente2-historico-cuentas-110.md`.
 
 ## Contexto
 

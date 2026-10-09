@@ -7,7 +7,7 @@
 //
 // PUERTA (decisión del usuario, 2026-10-09): 5 usuarios simultáneos (VUS=5, el default), p95 < 800 ms POR ENDPOINT y < 1% de errores.
 // Con VUS=10 el escenario es solo un DATO (se espera ~1-1.5 s en Micro): sus umbrales fallarán y eso no reprueba la puerta; sirve
-// de aviso para subir el plan de Supabase. Ver docs/PLAN.md → «Resultados de B3».
+// de aviso para subir el plan de Supabase. Ver docs/archive/frente2-historico-cuentas-110.md → «Resultados de B3».
 //
 //   k6 run --env TARGET_URL=https://<host> --env PLAYWRIGHT_TEST_EMAIL=... --env PLAYWRIGHT_TEST_PASSWORD=... \
 //          [--env VUS=5] [--env ANIO=2026] [--env DURACION=4m] scripts/loadtest/k6/cuentas.js
