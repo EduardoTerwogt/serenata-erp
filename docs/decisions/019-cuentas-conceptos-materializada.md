@@ -1,5 +1,9 @@
 # 019 — `cuentas_conceptos_base`: los conceptos de Cuentas se guardan derivados y se mantienen con triggers
 
+**Estado: SUSTITUIDA (2026-10-09) por [`025`](025-historico-de-cuentas-190-dias.md).** La tabla `cuentas_conceptos_base` y sus triggers
+(PR #100) **nunca llegaron a `main` ni a producción**; el PR se cerró como reemplazado. Se conserva como historia de por qué se descartó
+mantener un espejo derivado con triggers en ~14 tablas (#110, `docs/PLAN.md`).
+
 ## Contexto
 
 Cada RPC de lectura de Cuentas (`cuentas_periodo`, `cuentas_resumen`,

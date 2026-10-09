@@ -14,6 +14,7 @@
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
 import { computePayloadHash, withIdempotency } from '@/lib/server/idempotency'
+import { respuestaProyectoHistorico } from '@/lib/server/errors/domain-error'
 import { logStructured, newRequestId } from '@/lib/server/observability/log'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
@@ -138,6 +139,11 @@ export async function registrarPago(p: RegistrarPagoParams): Promise<{ status: n
       if (error) {
         const requestId = newRequestId()
         const detail = error.message ?? ''
+        const historico = respuestaProyectoHistorico(error, requestId)
+        if (historico) {
+          logStructured({ requestId, route: p.route, level: 'warn', message: 'proyecto_historico', detail })
+          return historico
+        }
         if (error.code === 'P1411') {
           logStructured({ requestId, route: p.route, level: 'warn', message: 'operation_id_cruzado', detail })
           return { status: 409, body: { error: 'operation_id_cruzado', requestId } }

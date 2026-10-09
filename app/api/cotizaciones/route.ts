@@ -2,6 +2,7 @@ import { after } from 'next/server'
 import { requireSection } from '@/lib/api-auth'
 import { buscarCotizaciones, getCotizacionById } from '@/lib/db'
 import { formatSupabaseError } from '@/lib/quotations/rpc-utils'
+import { esProyectoHistorico } from '@/lib/server/errors/domain-error'
 import {
   buildCreateCotizacionPayload,
   createOrReplaceCotizacion,
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
     return Response.json(await getCotizacionById(folio), { status: 201 })
   } catch (error) {
     const message = formatSupabaseError(error)
-    const status = String(message).includes('folio reservado') || String(message).includes('reserva de folio') ? 409 : 500
+    const status = String(message).includes('folio reservado') || String(message).includes('reserva de folio') || esProyectoHistorico(error) ? 409 : 500
     console.error('[POST /api/cotizaciones] Error creando cotizacion:', message)
     return Response.json({ error: message || 'Error creando cotizacion' }, { status })
   }

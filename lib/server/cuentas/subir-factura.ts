@@ -7,6 +7,7 @@
  * su PDF, apunta cada cuenta a la factura y escribe las fechas (cachés; TS ya no las escribe).
  */
 import { getGoogleEnv } from '@/lib/integrations/google/env'
+import { respuestaProyectoHistorico } from '@/lib/server/errors/domain-error'
 import { logStructured, newRequestId } from '@/lib/server/observability/log'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { calcularDeadline, parseFacturaXML, type FacturaData } from '@/lib/server/xml/factura-parser'
@@ -107,6 +108,8 @@ export async function subirFacturaCobro(p: SubirFacturaCobroParams): Promise<{ s
     const requestId = newRequestId()
     const detail = error.message ?? ''
     const codigo = detail.split(':')[0].trim()
+    const historico = respuestaProyectoHistorico(error, requestId)
+    if (historico) return historico
     const conocido = MENSAJES[codigo]
     // Los archivos ya quedaron en Drive: se registran para poder limpiarlos.
     logStructured({ requestId, route: p.route, level: conocido ? 'warn' : 'error', message: conocido ? codigo : 'rpc_ligar_factura_error', detail: `${detail} (archivos huérfanos: ${xmlUrl}${pdfUrl ? `, ${pdfUrl}` : ''})` })

@@ -79,21 +79,9 @@ ejecutados de punta a punta, quedan en
 ## Siguiente
 
 - **Orden acordado (actualizado 2026-10-08):** #123 (facturas y pagos ligados, con #130 y #131) ya está
-  **lanzada** (ver "Cerrado") → #110 (frente 2 v2, plan en `docs/PLAN.md`; es lo que ataca el gate de escala
-  de las lecturas globales) → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
+  **lanzada** (ver "Cerrado") → #110 (frente 2, **lanzado** el 2026-10-09; ver "Cerrado") → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
   en la cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para entonces no ha
   arrancado, pasa al frente). #124 (Ohio) ya está cerrado. Lo de abajo es el antecedente del frente 2.
-- **Frente 2 de latencia de Cuentas — v2, en borrador (2026-10-09)**, plan en
-  `docs/PLAN.md` (epic #110). Auditado contra `main`: #124 y #123 ya están hechos y el
-  PR #100 (tablas `cuentas_conceptos_base` con triggers, `docs/decisions/019`) quedó
-  **cerrado como reemplazado**. El enfoque nuevo es primero **sin estado derivado**
-  (V0 medición a 10 años, V1 derivación por conjunto de proyectos, opciones sin
-  derivación, equivalencia de salida = 0 diferencias); la marca por proyecto para
-  lecturas globales (V2) solo si la puerta tras V1 lo exige. Antecedente:
-  `docs/archive/frente2-cuentas-conceptos-pausado.md`.
-  - Meta (sin cambio): ~2,500 proyectos por año y ~10 años de historial. El
-    ambiente de test con miles de datos es el piso que producción debe aguantar
-    antes de pasar a uso real.
 
 ---
 
@@ -234,6 +222,16 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Frente 2 de Cuentas: leer lo que se muestra (2026-10-09, #110).** Lectura barata sin estado derivado nuevo (`20261039`: sin barridos
+  globales, hash join en lecturas masivas) e **histórico a 190 días** (`20261040`): un proyecto cerrado, sin cambios y sin pendientes pasa a solo
+  consulta (error `proyecto_historico`, 409), se archiva desde el cron `keep-alive`, sigue sumando en ingresos, egresos, utilidad e impuestos y sale de
+  `resumen` y `avisos`; `20261041` congela el régimen fiscal de los proveedores al archivar (lo cerrado no se mueve, solo lo abierto). PR #136 con las
+  tres migraciones aplicadas antes a producción y verificadas (14 funciones = archivos por md5, `auditar_consistencia()` = 0 con 27 guardas).
+  **Puerta de rendimiento (decisión del usuario):** 5 usuarios simultáneos con el uso real de la pantalla, p95 < 800 ms por endpoint; 10 usuarios es un dato
+  (≈ 1–1.5 s en Micro) que avisa cuándo subir el plan de Supabase. Descartado con medición: unir resumen y avisos, `opciones` desde tablas base y reducir el
+  CPU por concepto (revisar solo si `Server-Timing` en producción muestra `periodo` > 1 s sostenido). Decisión:
+  [`docs/decisions/025`](decisions/025-historico-de-cuentas-190-dias.md); plan y mediciones en `docs/archive/frente2-historico-cuentas-110.md`.
+  Pendiente: correr `scripts/loadtest/k6/cuentas.js` (VUS=5) contra un deploy real.
 - **Facturas y pagos ligados (2026-10-08, #123 con #130 y #131).** Una factura cubre varias cotizaciones y un pago cubre
   varias facturas (cabecera `pagos`, `cuentas_cobrar.factura_documento_id`, RPC `ligar_factura`, `registrar_pago_cobro|proveedor`,
   `ligar_complemento_*`, `estado_cuenta`); alta de proveedor, gasto extra y pago por proyecto (#130); ajustes de UX en tres rondas,

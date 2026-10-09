@@ -20,7 +20,8 @@ const ruta = (id: string, accion: 'reabrir' | 'cerrar') => `/api/cuentas/proyect
 export function AccionesReapertura({ p, onCambio, bloque }: { p: ProyectoDetalle; onCambio: () => void; bloque?: boolean }) {
   const tieneCuentas = useTieneCuentas()
   const [abierto, setAbierto] = useState(false)
-  if (!tieneCuentas || p.sin_proyecto) return null
+  // Un histórico no se reabre ni se corrige (decisión 025): sin botón.
+  if (!tieneCuentas || p.sin_proyecto || p.historico) return null
 
   const reabiertas = p.cuentas.reabiertas
   const etiqueta = !reabiertas ? 'Reabrir' : p.cuentas.pendientes === 0 ? 'Volver a cerrar' : 'Terminar correcciones'

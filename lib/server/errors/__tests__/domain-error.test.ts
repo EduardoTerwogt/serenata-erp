@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DomainError, buildErrorResponse } from '../domain-error'
+import { DomainError, buildErrorResponse, esProyectoHistorico, respuestaProyectoHistorico } from '../domain-error'
 
 describe('DomainError', () => {
   it('expone code, status y safeMessage', () => {
@@ -66,5 +66,26 @@ describe('buildErrorResponse', () => {
     const a = await buildErrorResponse(new Error('a'), 'r').json() as { requestId: string }
     const b = await buildErrorResponse(new Error('b'), 'r').json() as { requestId: string }
     expect(a.requestId).not.toBe(b.requestId)
+  })
+
+  it('#110 B2 -- un error P1420 de Supabase (proyecto histórico) sale como 409 explícito, sin detalle técnico', async () => {
+    const errorSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const response = buildErrorResponse({ code: 'P1420', message: 'proyecto_historico: el proyecto SH061 ya es histórico' }, 'POST /x')
+    const body = (await response.json()) as { error: string; codigo: string; requestId: string }
+    expect(response.status).toBe(409)
+    expect(body.codigo).toBe('proyecto_historico')
+    expect(body.error).toMatch(/histórico/)
+    expect(body.error).not.toContain('SH061')
+    expect(body.requestId).toBeTruthy()
+    errorSpy.mockRestore()
+  })
+
+  it('#110 B2 -- esProyectoHistorico y respuestaProyectoHistorico solo reconocen P1420', () => {
+    expect(esProyectoHistorico({ code: 'P1420' })).toBe(true)
+    expect(esProyectoHistorico({ code: 'P1413' })).toBe(false)
+    expect(esProyectoHistorico(null)).toBe(false)
+    expect(esProyectoHistorico(new Error('P1420'))).toBe(false)
+    expect(respuestaProyectoHistorico({ code: 'P1413' })).toBeNull()
+    expect(respuestaProyectoHistorico({ code: 'P1420' }, 'req-1')).toMatchObject({ status: 409, body: { codigo: 'proyecto_historico', requestId: 'req-1' } })
   })
 })

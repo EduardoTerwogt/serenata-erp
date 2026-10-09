@@ -66,6 +66,14 @@ jobs:
           fi
           echo "OK -- plpgsql_check: 0 errores."
 
+      # #110 B2 (decisión 025): prueba de comportamiento del histórico de Cuentas sobre la fixture de scripts/db/cuentas-equivalencia.sql:
+      # archivado por componentes, resumen/avisos idénticos con y sin históricos, escrituras rechazadas (RPC y tablas), 27 guardas en 0
+      # y que toda RPC de escritura de Cuentas esté cubierta. Corre dentro de una transacción que se deshace.
+      - name: Histórico de Cuentas — prueba de comportamiento
+        run: |
+          DB_URL=$(supabase status --workdir . -o env | grep '^DB_URL=' | cut -d'=' -f2- | tr -d '"')
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f scripts/db/cuentas-historico-prueba.sql
+
       # Huella del esquema reconstruido desde db/migrations/ (scripts/db/esquema-huella-resumen.sql).
       # No falla: se imprime para compararla con producción y detectar migraciones
       # que ordenan distinto de como se aplicaron (p. ej. 20260916_preview_next…).

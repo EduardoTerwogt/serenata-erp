@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-08T23:12:38.462Z",
-  "count": 150,
+  "generated_at": "2026-10-09T14:16:55.790Z",
+  "count": 153,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -151,6 +151,9 @@
     "20261035_c2_propuesta_renglones_factura.sql",
     "20261036_c5_preparar_gasto_concurrente.sql",
     "20261037_d1_contrapartes_pendientes.sql",
-    "20261038_revocar_execute_funciones_publicas.sql"
+    "20261038_revocar_execute_funciones_publicas.sql",
+    "20261039_b1_cuentas_conceptos_lectura.sql",
+    "20261040_b2_historico_cuentas.sql",
+    "20261041_b2_historico_congela_regimen.sql"
   ]
 }

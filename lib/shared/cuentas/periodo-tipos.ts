@@ -78,6 +78,11 @@ export interface TarjetaProyecto {
   mes: number | null
   sin_fecha: boolean
   sin_proyecto: boolean
+  /**
+   * #110 B2 (decisión 025): el proyecto pasó a histórico, de solo consulta (190 días sin cambios y todo resuelto). Sigue sumando en
+   * totales y búsqueda; cualquier escritura de Cuentas sobre él se rechaza con 409 `proyecto_historico`.
+   */
+  historico: boolean
   cuentas: CuentasProyectoDerivadas
   totales: TotalesProyecto
 }

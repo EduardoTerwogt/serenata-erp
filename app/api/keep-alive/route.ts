@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { checkDriveAuth } from '@/lib/integrations/google/drive'
 import { ejecutarAuditoria } from '@/lib/server/auditoria'
+import { hoyCdmx } from '@/lib/shared/hoy-cdmx'
 
 export const maxDuration = 60
 
@@ -110,7 +111,33 @@ export async function GET(request: Request) {
     console.error('Keep-alive: auditar_consistencia failed:', error)
   }
 
-  const ok = supabaseOk && drive.status !== 'invalid_grant' && drive.status !== 'error'
+  // #110 B2 (decisión 025): archivado diario de proyectos a histórico, UNA llamada por año (cada una cabe en los 8 s de PostgREST).
+  // Cada año va en su propio try/catch para que uno que falle no corte los demás ni el ping de arriba; si algo falla queda en el
+  // log y en la respuesta, y el keep-alive devuelve 500 al final.
+  const archivado: { ok: boolean; anios: number; proyectos: number; fallos: string[] } = { ok: true, anios: 0, proyectos: 0, fallos: [] }
+  try {
+    const { data: anios, error: aniosError } = await supabaseAdmin.rpc('cuentas_anios')
+    if (aniosError) throw aniosError
+    if (!Array.isArray(anios)) throw new Error('cuentas_anios no devolvió una lista')
+    const hoy = hoyCdmx()
+    for (const anio of anios as number[]) {
+      try {
+        const { data, error } = await supabaseAdmin.rpc('archivar_cuentas_historicas', { p_year: anio, p_hoy: hoy, p_dry_run: false })
+        if (error) throw error
+        archivado.anios += 1
+        archivado.proyectos += Number((data as { archivados?: number } | null)?.archivados ?? 0)
+      } catch (error) {
+        console.error(`Keep-alive: archivar_cuentas_historicas ${anio} failed:`, error)
+        archivado.fallos.push(`${anio}: ${error instanceof Error ? error.message : (error as { message?: string })?.message ?? 'error'}`)
+      }
+    }
+  } catch (error) {
+    console.error('Keep-alive: lista de años para archivar failed:', error)
+    archivado.fallos.push(`años: ${error instanceof Error ? error.message : (error as { message?: string })?.message ?? 'error'}`)
+  }
+  archivado.ok = archivado.fallos.length === 0
+
+  const ok = supabaseOk && drive.status !== 'invalid_grant' && drive.status !== 'error' && archivado.ok
 
   return Response.json(
     {
@@ -124,6 +151,7 @@ export async function GET(request: Request) {
       rate_limits_deleted: rateLimitsDeleted,
       bulk_import_operations_deleted: operationsDeleted.bulk_import_operations,
       auditoria,
+      archivado,
     },
     { status: ok ? 200 : 500 }
   )

@@ -1,5 +1,6 @@
 import { requireSection } from '@/lib/api-auth'
 import { getDocumentosCuentaCobrar, updateDocumentoCuentaCobrar } from '@/lib/db'
+import { respuestaProyectoHistorico } from '@/lib/server/errors/domain-error'
 import { DocumentoCobroPatchSchema, validate } from '@/lib/validation/schemas'
 
 // Marca manualmente el estado_validacion de un documento (cualquier tipo:
@@ -41,6 +42,8 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
 
     return Response.json({ documento: actualizado })
   } catch (error) {
+    const historico = respuestaProyectoHistorico(error)
+    if (historico) return Response.json(historico.body, { status: historico.status })
     console.error('[cuentas-cobrar/documentos/:docId][PATCH]', error)
     return Response.json({ error: 'Error actualizando estado de validación' }, { status: 500 })
   }
