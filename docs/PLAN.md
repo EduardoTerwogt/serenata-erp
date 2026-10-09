@@ -142,6 +142,11 @@ corridas idénticas; recrearla tras limpiar da el mismo golden).
 | `cuentas_avisos_items` | 829,600 | 4,100 |
 | concepto individual: cobro / grupo | 937 / 3,991 | 21 / 69 |
 | `cuentas_anios` | 277 | 11 |
+| `cuentas_por_proyecto` (proyecto seleccionado) | 21,900 | 200 |
+| `cuentas_orden_candidatos` | 45,200 | 280 |
+| un cliente / un proveedor (`cuentas_conceptos` por contraparte) | 2,100 / 5,200 | 34 / 73 |
+| `estado_cuenta` cliente / proveedor | 2,600 / 6,600 | 64 / 129 |
+| selector de proyectos: pago cobro / pago proveedor / renglones | 3,100 / 72,400 / 5,100 | 45 / 168 / 44 |
 
 **Presupuestos (derivados de los requisitos, conscientes del piso):** p95 < 800 ms con 5–10 usuarios en Micro. La relación medida en test es
 ≈0.075 ms por buffer (resumen: 1,257 ms con 16,828 buffers), unas 11 veces más lenta que la máquina local, así que 800 ms ≈ 10,000 buffers por lectura.

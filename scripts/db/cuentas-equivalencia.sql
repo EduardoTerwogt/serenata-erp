@@ -507,7 +507,7 @@ $fx$;
 -- `p_sql` devuelve (k text, t text); se imprime cuántas filas y el md5 de sus textos en el orden de k.
 CREATE FUNCTION pg_temp.eq_md5(p_sql text, OUT n bigint, OUT h text) LANGUAGE plpgsql AS $f$
 BEGIN
-  EXECUTE 'SELECT count(*), COALESCE(md5(string_agg(t, ''|'' ORDER BY k)), ''vacio'') FROM (' || p_sql || ') x' INTO n, h;
+  EXECUTE 'SELECT count(*), COALESCE(md5(string_agg(t, ''|'' ORDER BY k, t)), ''vacio'') FROM (' || p_sql || ') x' INTO n, h;
 END
 $f$;
 
