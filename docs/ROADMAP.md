@@ -79,19 +79,21 @@ ejecutados de punta a punta, quedan en
 ## Siguiente
 
 - **Orden acordado (actualizado 2026-10-08):** #123 (facturas y pagos ligados, con #130 y #131) ya está
-  **lanzada** (ver "Cerrado") → #110 (frente 2 v2, plan en el issue; es lo que resuelve el gate de escala
+  **lanzada** (ver "Cerrado") → #110 (frente 2 v2, plan en `docs/PLAN.md`; es lo que ataca el gate de escala
   de las lecturas globales) → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
   en la cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para entonces no ha
   arrancado, pasa al frente). #124 (Ohio) ya está cerrado. Lo de abajo es el antecedente del frente 2.
-- **Frente 2 de latencia de Cuentas** (2026-09-30, **en pausa**): los
-  conceptos de Cuentas se guardan derivados en `cuentas_conceptos_base` y se
-  mantienen con triggers (`docs/decisions/019-cuentas-conceptos-materializada.md`).
-  Implementado en el PR #100 (issue #99), en borrador. Falta validar bajo
-  demanda y resolver el cómputo de la BD de test; estado y pasos para
-  retomarlo en `docs/archive/frente2-cuentas-conceptos-pausado.md`. Epic #110;
-  cómputo de test #107; #99 salió al PR #104.
-  - Escala de referencia: el ambiente de test con miles de datos es el objetivo
-    que producción debe aguantar antes de pasar a uso real.
+- **Frente 2 de latencia de Cuentas — v2, en borrador (2026-10-09)**, plan en
+  `docs/PLAN.md` (epic #110). Auditado contra `main`: #124 y #123 ya están hechos y el
+  PR #100 (tablas `cuentas_conceptos_base` con triggers, `docs/decisions/019`) quedó
+  **cerrado como reemplazado**. El enfoque nuevo es primero **sin estado derivado**
+  (V0 medición a 10 años, V1 derivación por conjunto de proyectos, opciones sin
+  derivación, equivalencia de salida = 0 diferencias); la marca por proyecto para
+  lecturas globales (V2) solo si la puerta tras V1 lo exige. Antecedente:
+  `docs/archive/frente2-cuentas-conceptos-pausado.md`.
+  - Meta (sin cambio): ~2,500 proyectos por año y ~10 años de historial. El
+    ambiente de test con miles de datos es el piso que producción debe aguantar
+    antes de pasar a uso real.
 
 ---
 
