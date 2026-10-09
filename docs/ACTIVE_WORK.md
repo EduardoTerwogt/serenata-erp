@@ -6,6 +6,9 @@
 
 ## Estado
 
+**Iniciativa en definición (2026-10-09):** [#140](https://github.com/EduardoTerwogt/serenata-erp/issues/140) «Cuenta de proyecto clara para no contadores»: borrador en `docs/PLAN.md`
+(plan en 2 fases, 6 preguntas abiertas), maqueta en un artefacto privado. Sin código implementado. No se ha aprobado.
+
 **`main` = `279206e`** (merge de #139; sin cambios de app ni de base desde `6c42f48`). Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1` (#124);
 el código de la app en producción es el de `6c42f48` (`serenata-erp.vercel.app`). La base de producción tiene aplicadas **`20261030`–`20261041`** y está verificada; sigue sin datos de negocio reales
 (solo `usuarios`, catálogos y un proyecto de prueba; la constancia fiscal de Serenata ya está subida). **No hay iniciativa activa**: `docs/PLAN.md` está vacío.

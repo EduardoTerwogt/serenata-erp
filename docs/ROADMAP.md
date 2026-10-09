@@ -82,6 +82,8 @@ ejecutados de punta a punta, quedan en
   **lanzada** (ver "Cerrado") → #110 (frente 2, **lanzado** el 2026-10-09; ver "Cerrado") → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
   en la cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para entonces no ha
   arrancado, pasa al frente). #124 (Ohio) ya está cerrado. Lo de abajo es el antecedente del frente 2.
+- **#140 — Cuenta de proyecto clara para no contadores** (2026-10-09, **borrador** en `docs/PLAN.md`): una sola utilidad antes de ISR, tres sobres (proveedores / SAT / Serenata),
+  aproximado vs. real por factura e invariante cobrado = proveedores + SAT + utilidad. Espera tu aprobación y 6 preguntas; no tiene fecha.
 
 ---
 
