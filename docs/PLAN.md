@@ -247,6 +247,13 @@ Hecho y verificado en local (fixture de 46 proyectos y dataset de 10 años); apl
 - **App:** `keep-alive` archiva una vez por año (cada uno en su `try/catch`; si falla alguno responde 500 al final y lo dice); toda ruta responde 409
   `proyecto_historico` (`buildErrorResponse` y las rutas que no lo usan); insignia «Histórico» y sin botón de reabrir.
 
+#### Régimen fiscal congelado (2026-10-09, migración `20261041`, decisión del usuario)
+
+Un proyecto cerrado no se mueve si el proveedor cambia de régimen fiscal; solo se mueve lo abierto. `cuentas_conceptos` leía `proveedores.regimen_fiscal` en vivo
+(retenciones de IVA/ISR y total estimado). Ahora `archivar_cuentas_historicas` congela el régimen de cada proveedor del proyecto en `proyectos.cuentas_regimenes` y la derivación
+lo usa mientras el proyecto sea histórico. Verificado: golden idéntico (117 líneas) con nada archivado; la prueba de comportamiento cambia el régimen de un proveedor y comprueba que el
+histórico no se mueve y el proyecto abierto sí (y falla con las funciones de `20261040`); aplicada en test con md5 idéntico al local. Límite: el congelado ocurre al archivar, no al resolver.
+
 #### Resultados de B3 (2026-10-09) — puerta redefinida con el uso real (decisión del usuario)
 
 Dataset local de 10 años × 1,000 proyectos con los años 2017–2025 archivados (quedan vivos 1,450 proyectos ≈ 8,800 conceptos: 450 pendientes viejos + el año en curso).

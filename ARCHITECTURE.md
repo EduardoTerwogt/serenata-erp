@@ -449,7 +449,9 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
   `cuentas_resumen` y `cuentas_avisos_items` leen solo los vivos, y todo lo
   demás (periodo con la bandera `historico`, totales de ingresos/egresos/
   utilidad/impuestos, estado de cuenta, detalle, dashboard) sigue contando los
-  históricos. `auditar_consistencia()` tiene 27 guardas.
+  históricos. Al archivar se congela el régimen fiscal de cada proveedor del
+  proyecto (`proyectos.cuentas_regimenes`, `20261041`): un cambio de régimen
+  posterior no mueve un proyecto cerrado. `auditar_consistencia()` tiene 27 guardas.
 - `cuentas_periodo` fija `plan_cache_mode = force_custom_plan`: con el plan
   genérico de plpgsql (desde la 6.ª llamada por conexión) la misma petición
   pasaba de ~0.4 s a ~4.6 s.

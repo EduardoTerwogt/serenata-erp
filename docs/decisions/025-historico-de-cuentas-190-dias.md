@@ -29,15 +29,20 @@ las lecturas globales extrapolaban a 2.7–6.6 s contra un `statement_timeout` d
      (todas sus categorías exigen un concepto sin resolver; un histórico está resuelto). **Todo lo demás sigue viendo los históricos:**
      `cuentas_periodo` (con la bandera `historico` y su insignia), totales de ingresos, egresos, utilidad e impuestos, `estado_cuenta`, detalle,
      búsqueda, y el dashboard (lee las tablas base).
+   - **Régimen fiscal congelado (`20261041`, decisión del usuario 2026-10-09):** un proyecto cerrado no se mueve si el proveedor cambia de
+     régimen; solo se mueve lo abierto. Al archivar, `archivar_cuentas_historicas` guarda el régimen de cada proveedor del proyecto en
+     `proyectos.cuentas_regimenes` y `cuentas_conceptos` lo usa mientras `cuentas_historico_at` no sea NULL (retenciones de IVA/ISR y total
+     estimado). Un histórico sin congelado (archivado antes de la migración) cae al régimen actual. **Límite conocido:** el congelado ocurre al
+     archivar (190 días tras el último cambio); un proyecto ya resuelto pero aún no histórico sigue el régimen actual.
    - **Auditoría:** `auditar_consistencia()` pasa de 24 a 27 guardas (`historico_modificado`, `historico_reabierto`, `componente_mixto`).
 3. **Puerta de rendimiento redefinida por el usuario (B3).** 5 usuarios simultáneos con el comportamiento real de la pantalla, p95 < 800 ms por
    endpoint; 10 usuarios es un **dato** (≈ 1–1.5 s en Micro), señal para subir el plan de Supabase. Escenario: `scripts/loadtest/k6/cuentas.js`.
 
 ## Emergencia y reversa
 
-- Reabrir uno: SQL de admin que limpie `cuentas_historico_at` del proyecto e inserte en `cuentas_reaperturas` con motivo y usuario (rastro de auditoría existente).
-- Reversa total: `UPDATE proyectos SET cuentas_historico_at = NULL`, retirar los triggers `trigger_00_cuentas_historico` y volver a las funciones
-  de `20261039` (`cuentas_conceptos`), `20261031` (`cuentas_periodo`, `cuentas_resumen`, `cuentas_avisos_items`) y `20261034` (`auditar_consistencia`).
+- Reabrir uno: SQL de admin que limpie `cuentas_historico_at` y `cuentas_regimenes` del proyecto e inserte en `cuentas_reaperturas` con motivo y usuario (rastro de auditoría existente).
+- Reversa total: `UPDATE proyectos SET cuentas_historico_at = NULL, cuentas_regimenes = NULL`, retirar los triggers `trigger_00_cuentas_historico` y volver a las funciones
+  de `20261039` (`cuentas_conceptos`; `archivar_cuentas_historicas` de `20261040`), `20261031` (`cuentas_periodo`, `cuentas_resumen`, `cuentas_avisos_items`) y `20261034` (`auditar_consistencia`).
 
 ## Alternativas descartadas
 
@@ -52,6 +57,6 @@ las lecturas globales extrapolaban a 2.7–6.6 s contra un `statement_timeout` d
 ## Pendientes anotados
 
 - La fecha de entrega de un histórico sigue editable desde Proyectos hasta que se defina ese módulo.
-- Los totales fiscales de un histórico dependen del régimen fiscal **actual** del proveedor: si cambia, un año cerrado puede moverse. Decidir antes de que
-  haya años archivados con datos reales (¿congelar el régimen al archivar?).
+- Los proyectos resueltos pero aún no archivados (los primeros 190 días) siguen el régimen actual del proveedor; si el usuario quiere congelarlos
+  desde que se resuelven, hay que guardar el régimen en cada RPC de pago/cierre (cambio mayor, hoy no pedido).
 - Producción trae 24 guardas de auditoría; tras aplicar `20261040` serán 27.

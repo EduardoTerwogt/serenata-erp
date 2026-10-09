@@ -9,6 +9,7 @@
 --   3. Cada RPC de escritura de Cuentas y cada escritura directa sobre las tablas guardadas contra un histórico NO se completa:
 --      `ok P1420` (la guarda) o `ok otra regla` (otra validación la rechazó antes); una escritura que prospera es `FALLA`.
 --   4. `auditar_consistencia()` queda en 0 con 27 guardas, y la bandera `historico` sale en `cuentas_periodo`.
+--   4b. Si un proveedor cambia de régimen fiscal, el histórico no se mueve (régimen congelado al archivar) y un proyecto abierto sí.
 -- Termina con ROLLBACK; cualquier línea `FALLA` o una aserción fallida aborta con error.
 \set ON_ERROR_STOP on
 \set solo_fixture 1
@@ -169,6 +170,37 @@ FROM jsonb_array_elements(auditar_consistencia()->'guardas') g \gset
 \else
   \echo 'FALLA auditar_consistencia reporta violaciones'
   SELECT jsonb_pretty(auditar_consistencia());
+  SELECT 1/0;
+\endif
+
+-- 4b. Régimen congelado: un proyecto cerrado no se mueve si el proveedor cambia de régimen; lo abierto sí.
+SELECT string_agg(key || ':' || COALESCE(regimen_fiscal, '-') || ':' || COALESCE(cierre_iva_retenido, 0) || ':' || COALESCE(cierre_isr_retenido, 0) || ':' || total, ',' ORDER BY key) AS d
+FROM cuentas_conceptos(NULL, '2027-06-01', NULL, NULL) WHERE proyecto_key = 'EQ15' AND tipo = 'pago' \gset h15_
+SELECT string_agg(key || ':' || COALESCE(regimen_fiscal, '-') || ':' || COALESCE(cierre_iva_retenido, 0) || ':' || COALESCE(cierre_isr_retenido, 0) || ':' || total, ',' ORDER BY key) AS d
+FROM cuentas_conceptos(NULL, '2027-06-01', NULL, NULL) WHERE proyecto_key = 'EQ01' AND tipo = 'pago' \gset v01_
+SELECT (cuentas_regimenes IS NOT NULL AND cuentas_regimenes <> '{}'::jsonb) AS ok_congelado FROM proyectos WHERE id = 'EQ15' \gset
+\if :ok_congelado
+  \echo 'ok el archivado congela el régimen de los proveedores del histórico'
+\else
+  \echo 'FALLA el archivado no congeló el régimen'
+  SELECT 1/0;
+\endif
+UPDATE proveedores SET regimen_fiscal = CASE regimen_fiscal WHEN 'moral' THEN 'fisica' ELSE 'moral' END
+WHERE id IN (SELECT responsable_id FROM cuentas_pagar_grupos WHERE proyecto_id IN ('EQ15', 'EQ01'));
+SELECT string_agg(key || ':' || COALESCE(regimen_fiscal, '-') || ':' || COALESCE(cierre_iva_retenido, 0) || ':' || COALESCE(cierre_isr_retenido, 0) || ':' || total, ',' ORDER BY key) = :'h15_d' AS ok_cerrado_igual
+FROM cuentas_conceptos(NULL, '2027-06-01', NULL, NULL) WHERE proyecto_key = 'EQ15' AND tipo = 'pago' \gset
+SELECT string_agg(key || ':' || COALESCE(regimen_fiscal, '-') || ':' || COALESCE(cierre_iva_retenido, 0) || ':' || COALESCE(cierre_isr_retenido, 0) || ':' || total, ',' ORDER BY key) <> :'v01_d' AS ok_abierto_se_mueve
+FROM cuentas_conceptos(NULL, '2027-06-01', NULL, NULL) WHERE proyecto_key = 'EQ01' AND tipo = 'pago' \gset
+\if :ok_cerrado_igual
+  \echo 'ok un histórico no cambia cuando el proveedor cambia de régimen'
+\else
+  \echo 'FALLA el histórico se movió con el cambio de régimen'
+  SELECT 1/0;
+\endif
+\if :ok_abierto_se_mueve
+  \echo 'ok un proyecto abierto sí sigue el régimen actual'
+\else
+  \echo 'FALLA el proyecto abierto no cambió con el régimen'
   SELECT 1/0;
 \endif
 

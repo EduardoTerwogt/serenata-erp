@@ -8,7 +8,7 @@
 **`main` = `35709b6`** (merge commit, sin squash). Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1`
 (#124, 2026-10-06). La base de producción tiene aplicadas **`20261030`–`20261037`** y está **verificada** (ver abajo); sigue sin datos
 de negocio (solo `usuarios` y catálogos). **Iniciativa en ejecución (2026-10-09): #110, `docs/PLAN.md` v5 aprobado** (leer Cuentas sin recalcular el historial: B0 medición → B1 piso
-de lectura → B2 histórico a 190 días → B3 puerta → B4 cierre; PR #100 cerrado como reemplazado; ADR 019 sustituida, ADR 025 aprobada). Migraciones `20261039` y `20261040` aplicadas en **test**, **no en producción**; B3 se redefinió con el usuario (5 usuarios simultáneos p95 < 800 ms; 10 = dato). El plan de #123 vive en
+de lectura → B2 histórico a 190 días → B3 puerta → B4 cierre; PR #100 cerrado como reemplazado; ADR 019 sustituida, ADR 025 aprobada). Migraciones `20261039`, `20261040` y `20261041` aplicadas en **test**, **no en producción**; B3 se redefinió con el usuario (5 usuarios simultáneos p95 < 800 ms; 10 = dato). El plan de #123 vive en
 `docs/archive/facturas-pagos-ligados-123-130-131.md`. Decisiones: `docs/decisions/022` (#123), `023` (#130) y `024` (#131: PDF
 obligatorio y archivos a Drive después de guardar).
 
@@ -66,7 +66,7 @@ revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de cotizac
 
 ## Pendiente del usuario
 
-0. **#110:** pasar el PR [#136](https://github.com/EduardoTerwogt/serenata-erp/pull/136) a *Ready for review* (dispara `live`) y, con todo verde, fusionar; luego aplicar `20261039` y `20261040` a producción (dry-run de `archivar_cuentas_historicas`, respaldo manual antes del primer archivado real, `auditar_consistencia()` = 27 guardas en 0; omitir `20260915_loadtest_runs.sql`). Decidir qué hacer con los totales fiscales de un histórico cuando cambia el régimen del proveedor (ADR 025).
+0. **#110:** pasar el PR [#136](https://github.com/EduardoTerwogt/serenata-erp/pull/136) a *Ready for review* (dispara `live`) y, con todo verde, fusionar; luego aplicar `20261039`, `20261040` y `20261041` a producción (dry-run de `archivar_cuentas_historicas`, respaldo manual antes del primer archivado real, `auditar_consistencia()` = 27 guardas en 0; omitir `20260915_loadtest_runs.sql`).
 
 1. **Tras el deploy de `35709b6`:** que el deploy de Vercel haya terminado bien; **subir la Constancia de Situación Fiscal de Serenata** en Admin → Datos fiscales (sin ella las
    rutas de factura fallan a propósito, 409); confirmar que `ANTHROPIC_API_KEY` está en Vercel (la lectura de constancias usa IA; sin ella el formulario llega vacío y se captura a mano);
