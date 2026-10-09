@@ -241,8 +241,7 @@ Si aparece otro feature a medias, documentarlo aquí.
   lo resuelve #110. Resultado y lecciones: [`docs/decisions/022`](decisions/022-facturas-y-pagos-ligados.md),
   [`023`](decisions/023-alta-de-contraparte-y-pago-por-proyecto.md) y
   [`024`](decisions/024-subir-factura-pdf-obligatorio-y-archivos-despues.md); plan completo en
-  `docs/archive/facturas-pagos-ligados-123-130-131.md`. Pendiente tras el lanzamiento (en `docs/ACTIVE_WORK.md`): subir la
-  constancia de Serenata y revisar `ANTHROPIC_API_KEY`.
+  `docs/archive/facturas-pagos-ligados-123-130-131.md`.
 
 - **Producción y Vercel a Ohio (2026-10-06, #124).** Producción recreada en Supabase
   `us-east-2` (`ytlyphlgyhgztkfxwojt`, Postgres 17.11) desde `db/migrations/` con `db push`

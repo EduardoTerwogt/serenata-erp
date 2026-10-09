@@ -7,7 +7,7 @@ fusionado en `main` como `6c42f48` (merge commit, sin squash); issue #110 cerrad
 
 **`main` = `6c42f48`.** Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1` (#124); deploy de `6c42f48` en **READY**
 (`serenata-erp.vercel.app`). La base de producción tiene aplicadas **`20261030`–`20261041`** y está verificada; sigue sin datos de negocio reales
-(solo `usuarios`, catálogos y un proyecto de prueba). **No hay iniciativa activa**: `docs/PLAN.md` está vacío.
+(solo `usuarios`, catálogos y un proyecto de prueba; la constancia fiscal de Serenata ya está subida). **No hay iniciativa activa**: `docs/PLAN.md` está vacío.
 
 **Cola de iniciativas:** **#125** (llaves de Supabase legacy; prioridad baja, revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de
 cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
@@ -64,18 +64,14 @@ cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
 
 1. **#110:** correr `scripts/loadtest/k6/cuentas.js` (`VUS=5`) contra un deploy real y revisar `Server-Timing` de `periodo`; confirmar que el cron `keep-alive` responde 200 con `archivado.ok`;
    tomar un respaldo manual antes de que haya datos reales que archivar (ADR 020, plan Free sin respaldos).
-2. **Tras el lanzamiento de #123:** **subir la Constancia de Situación Fiscal de Serenata** en Admin → Datos fiscales (sin ella las rutas de factura fallan a propósito, 409);
-   confirmar que `ANTHROPIC_API_KEY` está en Vercel; probar Subir factura (XML y PDF) y Registrar pago en producción; revisar en Vercel → Functions que no haya errores nuevos.
-3. De #124: borrar el PDF de prueba de Drive; avisar a los usuarios que recarguen (Cmd/Ctrl+Shift+R) y recomendar cambio de contraseña; borrar el secreto
-   `PROD_NUEVA_DB_URL` de GitHub; apuntar el conector `supabase-prod` al ref nuevo y revisar `.env.local`; borrar el proyecto viejo `fwmyoqokcjtldiofuxdg` en Supabase.
-4. Decidir #119 (alta mínima de cotizaciones). Opcional: borrar ramas ya fusionadas (`claude/ajustes-131`, `claude/admiring-faraday-i5w9yj`, `claude/practical-hypatia-gc37j4`).
+2. Decidir #119 (alta mínima de cotizaciones). Opcional: borrar ramas ya fusionadas (`claude/ajustes-131`, `claude/admiring-faraday-i5w9yj`, `claude/practical-hypatia-gc37j4`).
 
 ## Siguiente paso
 
-1. Verificar el lanzamiento (puntos 1 y 2 de arriba) y correr `auditar_consistencia()` en Admin tras la primera factura/pago reales.
+1. Verificar el lanzamiento de #110 (punto 1 de arriba) y correr `auditar_consistencia()` en Admin tras la primera factura/pago reales.
 2. Elegir la próxima iniciativa (`docs/ROADMAP.md` → "Siguiente"/"Después"): **#125** al final; #119 y #101 esperan decisión tuya.
-3. Limpieza de #124 (quitar el ref viejo `fwmyoqokcjtldiofuxdg` de `app/api/internal/env-check/route.ts` y su test, y borrar
-   `.github/workflows/db-push-una-vez.yml`, cuando borres la base vieja).
+3. Limpieza de código de #124, si la base vieja `fwmyoqokcjtldiofuxdg` ya se borró: quitar su ref de `app/api/internal/env-check/route.ts` y su test, y borrar
+   `.github/workflows/db-push-una-vez.yml`.
 4. Opcionales sin fecha: parcialidad y saldo insoluto del complemento (exige ampliar el parser); corregir un descuadre ligando o desligando cotizaciones sin
    resubir la factura (exige ampliar el CHECK de `cuentas_correcciones`); cancelar una cotización aprobada con factura o cobros, con traspaso (`docs/ROADMAP.md` → "Después").
 
