@@ -440,8 +440,9 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
   `cuentas_conceptos` (última versión en `20261029`), que calcula todo desde
   las tablas fuente en cada llamada. La tabla derivada `cuentas_conceptos_base`
   con triggers (decisión 019, PR #100) **no está en `main` ni en producción**
-  (verificado 2026-10-06): el frente 2 sigue en pausa y se retoma en #110,
-  después de #123.
+  (verificado 2026-10-06; la decisión 019 quedó sustituida por la 025): el frente 2
+  se ejecuta en #110 (`docs/PLAN.md`, plan v5 aprobado el 2026-10-09). Cuando B1/B2
+  lleguen a `main`, esta sección describe `p_objetivo = 'vivos'` y el histórico.
 - `cuentas_periodo` fija `plan_cache_mode = force_custom_plan`: con el plan
   genérico de plpgsql (desde la 6.ª llamada por conexión) la misma petición
   pasaba de ~0.4 s a ~4.6 s.

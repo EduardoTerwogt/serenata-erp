@@ -1,9 +1,8 @@
 # Plan de la iniciativa activa
 
-**Estado:** **Aprobado, sin ejecutar** (2026-10-09) — Frente 2 de Cuentas, plan v5 (#110): que leer Cuentas cueste lo que se muestra, no el historial.
+**Estado:** **Aprobado, en ejecución** (aprobado 2026-10-09; arranque de ejecución 2026-10-09) — Frente 2 de Cuentas, plan v5 (#110): que leer Cuentas cueste lo que se muestra, no el historial.
 Aprobado por el usuario tras dos auditorías y tres rondas de decisiones de negocio. Sustituye al plan del issue #110 (2026-10-02),
-al borrador v2 del mismo día y al PR #100 (cerrado). **Se ejecuta completo en otra sesión, desde cero**, bloque por bloque (tracker al final);
-no hay ningún trabajo de código previo.
+al borrador v2 del mismo día y al PR #100 (cerrado). **Se ejecuta completo, bloque por bloque** (tracker al final); no había trabajo de código previo.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -208,7 +207,7 @@ crea un histórico de fixture (prefijo propio) y prueba el 409 por ruta y su map
 | Prerrequisito #123 (modelo de facturas y pagos) | Hecho (2026-10-08, `35709b6`) |
 | PR #100 | Cerrado como reemplazado (2026-10-09) |
 | Plan v5 aprobado | Hecho (2026-10-09) |
-| Alinear docs al arrancar (`ACTIVE_WORK`, `ROADMAP`, `ARCHITECTURE`, ADR 019 sustituida y ADR 025; ver B4) | Pendiente — primer paso de la sesión que ejecute |
+| Alinear docs al arrancar (`ACTIVE_WORK`, `ROADMAP`, `ARCHITECTURE`, ADR 019 sustituida y ADR 025 en borrador; ADR 025 se completa en B4) | Hecho (2026-10-09) |
 | B0 Medición y diagnóstico | Pendiente |
 | B1 Piso / lectura | Pendiente — depende del perfil de B0 |
 | B2 Histórico | Pendiente |

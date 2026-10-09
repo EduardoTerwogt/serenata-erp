@@ -1,14 +1,14 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-09 — auditoría de #110 y plan en borrador (`docs/PLAN.md`); PR #100 cerrado. Antes (2026-10-08): **#123 «Facturas y pagos ligados»
+**Última actualización:** 2026-10-09 — **#110 en ejecución** (plan v5 aprobado, `docs/PLAN.md`; bloque 0 de docs hecho, sigue B0); PR #100 cerrado. Antes (2026-10-08): **#123 «Facturas y pagos ligados»
 (con #130 y #131) lanzada a producción.** PR [#129](https://github.com/EduardoTerwogt/serenata-erp/pull/129) fusionado en `main` como `35709b6`; issues #123, #130 y #131 cerrados.
 
 ## Estado
 
 **`main` = `35709b6`** (merge commit, sin squash). Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1`
 (#124, 2026-10-06). La base de producción tiene aplicadas **`20261030`–`20261037`** y está **verificada** (ver abajo); sigue sin datos
-de negocio (solo `usuarios` y catálogos). **Iniciativa en borrador (2026-10-09): #110, `docs/PLAN.md`** (leer Cuentas sin recalcular el historial; primero
-sin estado nuevo, con marca por proyecto solo si la puerta tras V1 lo exige; PR #100 cerrado como reemplazado). El plan de #123 vive en
+de negocio (solo `usuarios` y catálogos). **Iniciativa en ejecución (2026-10-09): #110, `docs/PLAN.md` v5 aprobado** (leer Cuentas sin recalcular el historial: B0 medición → B1 piso
+de lectura → B2 histórico a 190 días → B3 puerta → B4 cierre; PR #100 cerrado como reemplazado; ADR 019 sustituida, ADR 025 en borrador). El plan de #123 vive en
 `docs/archive/facturas-pagos-ligados-123-130-131.md`. Decisiones: `docs/decisions/022` (#123), `023` (#130) y `024` (#131: PDF
 obligatorio y archivos a Drive después de guardar).
 
@@ -78,8 +78,7 @@ revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de cotizac
 ## Siguiente paso
 
 1. Verificar el lanzamiento (punto 1 de arriba) y correr `auditar_consistencia()` en Admin tras la primera factura/pago reales.
-2. **#110** (frente 2 v2): revisar `docs/PLAN.md` (borrador) y pasarlo a Aprobado; dar los parámetros del negocio para V0 (ver "Pendiente del usuario" del plan);
-   arrancar por V0 (medición fiel a 10 años). El pago por proyecto lee de `cuentas_proyectos_selector` y `estado_cuenta(p_proyectos)`, con llave (proyecto, contraparte).
+2. **#110** (frente 2 v2): plan v5 aprobado y en ejecución; seguir el tracker de `docs/PLAN.md` (B0 medición fiel a 10 años en curso). El pago por proyecto lee de `cuentas_proyectos_selector` y `estado_cuenta(p_proyectos)`, con llave (proyecto, contraparte).
 3. Limpieza de #124 (quitar el ref viejo `fwmyoqokcjtldiofuxdg` de `app/api/internal/env-check/route.ts` y su test, y borrar
    `.github/workflows/db-push-una-vez.yml`, cuando borres la base vieja); **#125** al final.
 4. Opcionales sin fecha: parcialidad y saldo insoluto del complemento (exige ampliar el parser); corregir un descuadre ligando o desligando cotizaciones sin
