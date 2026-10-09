@@ -108,6 +108,51 @@ Expectativa honesta: con un conjunto vivo de ~7k conceptos la lectura global baj
 - Salida: línea base en buffers y presupuestos **derivados de requisitos y conscientes del piso** (p95 < 800 ms a 5–10 usuarios; buffers de
   `resumen`/`avisos` independientes del historial archivable; año vacío ≈ piso). Se retira «< 60 ms» / «< 10 ms».
 
+#### Resultados de B0 (2026-10-09)
+
+**Entorno:** Postgres 16 local reconstruido con `scripts/db/local-up.sh` (150 migraciones, 9 s; `plpgsql_check` no existe en el contenedor y lo cubre CI),
+`jit = off` como en test (verificado: PG 17.11, `jit = off`). Con JIT activo una consulta grande de Cuentas perdía ≈9 s compilando: artefacto
+local, ya corregido en `local-up.sh`. Dataset: `escala-generador.sql` con 10 años × 1,000 proyectos (60,000 conceptos; el año actual 40% resuelto y
+los anteriores 95%), 289 MB, `auditar_consistencia()` = 0. Golden: `scripts/db/cuentas-equivalencia.sql` (40 proyectos de ramas, 113 líneas, dos
+corridas idénticas; recrearla tras limpiar da el mismo golden).
+
+**Hallazgos (cambian B1):**
+
+1. **El «piso» de ≈3,300 buffers NO es planificación por llamada.** Es la **primera llamada de cada conexión** (carga de catálogo; 2,600–3,600 buffers
+   para cualquier función de Cuentas). La segunda llamada de la misma sesión cuesta **150–180 buffers** (`cuentas_conceptos` en año vacío, base chica).
+   Una conexión de PostgREST lo paga una vez. La hipótesis de replanificar ~40 CTE por llamada queda descartada: eliminar `force_custom_plan` no
+   ahorra nada que importe, y la palanca «rediseño mayor» del plan deja de ser necesaria por este motivo.
+2. **El costo dependiente de las tablas del año vacío (≈3,700) está identificado:** el predicado `c.proyecto_id IS NULL OR c.proyecto_id IN (py)` de las CTE
+   `cc` y `cp` impide usar el índice y hace un barrido completo de `cuentas_cobrar` (923) y `cuentas_pagar` (2,738) aunque el año no tenga proyectos.
+3. **La derivación de un año hace barridos completos de tablas que no dependen del año:** `pagos` (120,000 filas) 4 veces, `cotizaciones` 5, `items_cotizacion` 2,
+   `proveedores`, `documentos_cuentas_pagar`, `documentos_cuentas_cobrar`, `clientes` y `pagos_comprobantes`. Costo ≈ 18 buffers por concepto del año
+   (107,000 para 6,000), así que el costo crece con la historia total aunque el año consultado sea chico.
+4. **`resumen`, `avisos` y `opciones` derivan TODO el historial** (`cuentas_conceptos(NULL, …)`) o el año completo: 830,000 buffers y 4–5 s locales con 60,000
+   conceptos (en Micro serían ×~10, por encima del `statement_timeout` de 8 s). Esto es lo que B2 elimina (un histórico queda fuera de `resumen` y `avisos`).
+
+**Línea base (buffers calientes, 10 años, 60,000 conceptos; `scripts/db/escala-medir.sql`):**
+
+| Lectura | Buffers hoy | ms locales |
+|---|---|---|
+| `cuentas_conceptos` año vacío (2000) | 3,830 | 32 |
+| `cuentas_conceptos` año de 6,000 conceptos | 107,400 | 630 |
+| `cuentas_conceptos` todos (60,000) | 829,400 | 4,700 |
+| `cuentas_periodo` año completo / `cuentas_opciones` | 107,800 / 107,400 | 620 / 580 |
+| `cuentas_resumen` | 830,200 | 5,400 |
+| `cuentas_avisos_items` | 829,600 | 4,100 |
+| concepto individual: cobro / grupo | 937 / 3,991 | 21 / 69 |
+| `cuentas_anios` | 277 | 11 |
+
+**Presupuestos (derivados de los requisitos, conscientes del piso):** p95 < 800 ms con 5–10 usuarios en Micro. La relación medida en test es
+≈0.075 ms por buffer (resumen: 1,257 ms con 16,828 buffers), unas 11 veces más lenta que la máquina local, así que 800 ms ≈ 10,000 buffers por lectura.
+Se retira «< 60 ms» / «< 10 ms». Metas para B1/B2/B3 (se verifican por buffers calientes, no por ms):
+
+- Año de ≈6,000 conceptos (`periodo`, `opciones`): **≤ 12,000** buffers (hoy 107,400; ≈ 2 por concepto).
+- `resumen` y `avisos` con 10 años de historial y los años viejos archivados: **≤ 12,000** (hoy 830,000) y **independientes de los históricos**.
+- Año vacío: **≤ 600** (hoy 3,830). Concepto individual (cobro, grupo): **≤ 600** cada uno.
+- La primera llamada de una conexión nueva (≈3,000) no se presupuesta: es de la conexión, no de la lectura.
+- Si B1 no alcanza el presupuesto del año de 6,000 conceptos, B3 documenta el límite alcanzado y se decide con el usuario; no se cambia la meta en silencio.
+
 ### B1 — Piso / lectura (migración `20261039`)
 Objetivos según B0. `cuentas_conceptos(p_year, p_hoy, p_objetivo, p_id)` conserva **firma y `RETURNS TABLE` idénticos** (cambiarlos exige `DROP`,
 que el MCP retiene) y `force_custom_plan` mientras no se decida lo contrario (la guarda de `migrations.yml` exige plpgsql, `pronargs = 4`).
@@ -208,7 +253,7 @@ crea un histórico de fixture (prefijo propio) y prueba el 409 por ruta y su map
 | PR #100 | Cerrado como reemplazado (2026-10-09) |
 | Plan v5 aprobado | Hecho (2026-10-09) |
 | Alinear docs al arrancar (`ACTIVE_WORK`, `ROADMAP`, `ARCHITECTURE`, ADR 019 sustituida y ADR 025 en borrador; ADR 025 se completa en B4) | Hecho (2026-10-09) |
-| B0 Medición y diagnóstico | Pendiente |
+| B0 Medición y diagnóstico | Hecho (2026-10-09): ver «Resultados de B0»; falta solo el k6 contra un deploy real (lo corre `escala.yml`/manual) |
 | B1 Piso / lectura | Pendiente — depende del perfil de B0 |
 | B2 Histórico | Pendiente |
 | B3 Puerta | Pendiente |

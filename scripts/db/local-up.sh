@@ -9,6 +9,8 @@ DB="${1:-serenata_local}"
 dropdb --if-exists "$DB"
 createdb "$DB"
 # Como en Supabase: `extensions` en el search_path de la BD (operadores trigram sin calificar).
+# Supabase trae jit = off (verificado en test, PG 17.11): con JIT activo, una consulta grande de Cuentas perdía ~9 s compilando.
+psql -d "$DB" -q -c "ALTER DATABASE \"$DB\" SET jit = off"
 psql -d "$DB" -q -c "ALTER DATABASE \"$DB\" SET search_path = \"\$user\", public, extensions"
 psql -d "$DB" -v ON_ERROR_STOP=1 -q -f scripts/db/local-bootstrap.sql
 # Producción no lleva 20260915_loadtest_runs.sql, pero aquí sí hace falta para que `escala-generador.sql` se reconozca como BD de pruebas.
