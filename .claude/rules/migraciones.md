@@ -14,7 +14,10 @@ paths:
     existente. Si hay cualquier duda de que esto se cumple, agregar una
     migración nueva en vez de editar la vieja.
 - Todo cambio aplicado a producción se guarda aquí como archivo numerado y se commitea.
-- `SECURITY DEFINER` debe fijar `search_path`. Revisar permisos `EXECUTE`.
+- `SECURITY DEFINER` debe fijar `search_path`. Revisar permisos `EXECUTE`: toda función nueva de uso interno lleva
+  `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated; GRANT EXECUTE … TO service_role` y se verifica en test (`aclexplode(proacl)`:
+  solo el dueño y `service_role`).
+- Para triggers usa `CREATE OR REPLACE TRIGGER` (PG ≥ 14), no `DROP TRIGGER` + `CREATE`: el MCP retiene todo SQL con `DROP`/`DELETE`.
 - **Toda función nueva fija `search_path`** (`SET search_path = public, pg_temp`
   como mínimo), sea o no `SECURITY DEFINER` — el advisor la marca WARN si no.
 - `pg_trgm` vive en `extensions` desde 2026-09-24: una función que use

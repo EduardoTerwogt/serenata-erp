@@ -1,6 +1,6 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-09 — **#110 en ejecución** (plan v5 aprobado, `docs/PLAN.md`; bloque 0 de docs hecho, sigue B0); PR #100 cerrado. Antes (2026-10-08): **#123 «Facturas y pagos ligados»
+**Última actualización:** 2026-10-09 — **#110 implementado en el PR #136 (borrador), pendiente de CI completo (`live`) y de producción** (B0–B4 hechos en código y test; plan en `docs/PLAN.md`); PR #100 cerrado. Antes (2026-10-08): **#123 «Facturas y pagos ligados»
 (con #130 y #131) lanzada a producción.** PR [#129](https://github.com/EduardoTerwogt/serenata-erp/pull/129) fusionado en `main` como `35709b6`; issues #123, #130 y #131 cerrados.
 
 ## Estado
@@ -8,7 +8,7 @@
 **`main` = `35709b6`** (merge commit, sin squash). Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1`
 (#124, 2026-10-06). La base de producción tiene aplicadas **`20261030`–`20261037`** y está **verificada** (ver abajo); sigue sin datos
 de negocio (solo `usuarios` y catálogos). **Iniciativa en ejecución (2026-10-09): #110, `docs/PLAN.md` v5 aprobado** (leer Cuentas sin recalcular el historial: B0 medición → B1 piso
-de lectura → B2 histórico a 190 días → B3 puerta → B4 cierre; PR #100 cerrado como reemplazado; ADR 019 sustituida, ADR 025 en borrador). El plan de #123 vive en
+de lectura → B2 histórico a 190 días → B3 puerta → B4 cierre; PR #100 cerrado como reemplazado; ADR 019 sustituida, ADR 025 aprobada). Migraciones `20261039` y `20261040` aplicadas en **test**, **no en producción**; B3 se redefinió con el usuario (5 usuarios simultáneos p95 < 800 ms; 10 = dato). El plan de #123 vive en
 `docs/archive/facturas-pagos-ligados-123-130-131.md`. Decisiones: `docs/decisions/022` (#123), `023` (#130) y `024` (#131: PDF
 obligatorio y archivos a Drive después de guardar).
 
@@ -44,9 +44,7 @@ revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de cotizac
 
 ## Problemas abiertos
 
-- **Gate de escala en rojo (conocido):** p95 de las lecturas globales ≈ 1.1–2.3 s contra 800 ms (mes 2308, año 1634, lista 1506, resumen 1257, avisos 1086 en `0d02802`);
-  el guardado pasa (POST 423 ms). Causa: cada lectura global re-deriva el historial; lo ataca #110 V1 (`docs/PLAN.md`). `escala.yml` es manual y no bloquea. Hoy no importa:
-  producción está vacía y el dataset de escala (≈16 mil conceptos) es mucho mayor que el real.
+- **Gate de escala (#110):** con B1+B2 en local (10 años, 2017–2025 archivados), 5 usuarios con el comportamiento real cumplen p95 < 800 ms; 10 usuarios ≈ 1–1.5 s en Micro (dato, no puerta). Falta correr `scripts/loadtest/k6/cuentas.js` contra un deploy real. `escala.yml` es manual y no bloquea.
 - **Flake `57014`** en `cuentas-paridad-sql` (job `live`): un rojo se confirma con un solo re-run; dos seguidos son reales. Flake intermitente en
   `cuentas-principal.spec.ts:45` (móvil) y en un test de Cotizaciones bajo carga.
 - Un error aislado de Realtime (`no partition of relation "messages"`) el 2026-10-06 00:50 UTC: confirmar que las particiones diarias se siguen creando.
@@ -67,6 +65,8 @@ revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de cotizac
 - Desde la sesión de Claude no hay salida de red a `*.supabase.co` ni `*.vercel.app` (proxy): verificar por MCP o Actions.
 
 ## Pendiente del usuario
+
+0. **#110:** pasar el PR [#136](https://github.com/EduardoTerwogt/serenata-erp/pull/136) a *Ready for review* (dispara `live`) y, con todo verde, fusionar; luego aplicar `20261039` y `20261040` a producción (dry-run de `archivar_cuentas_historicas`, respaldo manual antes del primer archivado real, `auditar_consistencia()` = 27 guardas en 0; omitir `20260915_loadtest_runs.sql`). Decidir qué hacer con los totales fiscales de un histórico cuando cambia el régimen del proveedor (ADR 025).
 
 1. **Tras el deploy de `35709b6`:** que el deploy de Vercel haya terminado bien; **subir la Constancia de Situación Fiscal de Serenata** en Admin → Datos fiscales (sin ella las
    rutas de factura fallan a propósito, 409); confirmar que `ANTHROPIC_API_KEY` está en Vercel (la lectura de constancias usa IA; sin ella el formulario llega vacío y se captura a mano);

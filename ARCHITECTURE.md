@@ -437,12 +437,19 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
   la BD de test. **Un cambio de regla va en SQL; si la paridad se pone roja, se
   ajusta el doble.**
 - **Los conceptos se derivan al leer:** las cuatro RPCs de lectura pasan por
-  `cuentas_conceptos` (última versión en `20261029`), que calcula todo desde
-  las tablas fuente en cada llamada. La tabla derivada `cuentas_conceptos_base`
-  con triggers (decisión 019, PR #100) **no está en `main` ni en producción**
-  (verificado 2026-10-06; la decisión 019 quedó sustituida por la 025): el frente 2
-  se ejecuta en #110 (`docs/PLAN.md`, plan v5 aprobado el 2026-10-09). Cuando B1/B2
-  lleguen a `main`, esta sección describe `p_objetivo = 'vivos'` y el histórico.
+  `cuentas_conceptos` (`20261039`: sin barridos globales; plpgsql con
+  `force_custom_plan`), que calcula todo desde las tablas fuente en cada
+  llamada. No hay tabla derivada (la 019 quedó sustituida por la 025).
+- **Histórico (#110, decisión 025, `20261040`):** `proyectos.cuentas_historico_at`.
+  Un proyecto pasa a histórico de solo consulta 190 días después de su último
+  cambio, si todo está resuelto; lo marca `archivar_cuentas_historicas` desde el
+  cron `keep-alive` (una llamada por año). Escribir en él falla con
+  `proyecto_historico` (409, `P1420`, trigger `trigger_00_cuentas_historico`).
+  `cuentas_conceptos` acepta `p_objetivo = 'vivos' | 'historicos'`;
+  `cuentas_resumen` y `cuentas_avisos_items` leen solo los vivos, y todo lo
+  demás (periodo con la bandera `historico`, totales de ingresos/egresos/
+  utilidad/impuestos, estado de cuenta, detalle, dashboard) sigue contando los
+  históricos. `auditar_consistencia()` tiene 27 guardas.
 - `cuentas_periodo` fija `plan_cache_mode = force_custom_plan`: con el plan
   genérico de plpgsql (desde la 6.ª llamada por conexión) la misma petición
   pasaba de ~0.4 s a ~4.6 s.

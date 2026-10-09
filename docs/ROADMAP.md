@@ -83,7 +83,7 @@ ejecutados de punta a punta, quedan en
   de las lecturas globales) → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
   en la cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para entonces no ha
   arrancado, pasa al frente). #124 (Ohio) ya está cerrado. Lo de abajo es el antecedente del frente 2.
-- **Frente 2 de latencia de Cuentas — v5, aprobado y en ejecución (2026-10-09)**, plan en
+- **Frente 2 de latencia de Cuentas — v5, implementado en el PR #136 y pendiente de producción (2026-10-09)**, plan en
   `docs/PLAN.md` (epic #110; B0 medición → B1 piso → B2 histórico 190 días → B3 puerta → B4 cierre). Auditado contra `main`: #124 y #123 ya están hechos y el
   PR #100 (tablas `cuentas_conceptos_base` con triggers, `docs/decisions/019`) quedó
   **cerrado como reemplazado**. El enfoque nuevo es primero **sin estado derivado**

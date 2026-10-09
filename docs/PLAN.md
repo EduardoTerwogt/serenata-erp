@@ -243,11 +243,11 @@ Hecho y verificado en local (fixture de 46 proyectos y dataset de 10 años); apl
   PostgREST); (3) `cuentas_conceptos` también acepta `'historicos'` (solo los archivados); (4) código de error **P1420** (P1416–P1419 ya estaban en uso).
 - **Rendimiento del archivado** (lo que casi se nos escapa): la primera versión tardaba **255 s por año** (la marca de último cambio por proyecto con un OR que impedía los
   índices, 50 ms × 2 × 950 proyectos). Con la versión por lote (una pasada por tabla): **1.4 s por año** de 950 proyectos, valores idénticos a la versión lenta en los 43
-  proyectos de la fixture. El ajuste está en el archivo de la migración; falta aplicarlo a test (hoy test tiene la versión lenta, correcta pero no apta para el cron).
+  proyectos de la fixture. El ajuste está en el archivo de la migración y **ya está aplicado en test** (md5 de `prosrc` idéntico al local en las 4 funciones —`cuentas_ultimo_cambio_lote`, `cuentas_ultimo_cambio`, `archivar_cuentas_historicas`, `auditar_consistencia`—, `proconfig` y ACL `postgres`/`service_role`; `auditar_consistencia()` = 0 con 27 guardas; archivado en simulación de 2026 en 1 s).
 - **App:** `keep-alive` archiva una vez por año (cada uno en su `try/catch`; si falla alguno responde 500 al final y lo dice); toda ruta responde 409
   `proyecto_historico` (`buildErrorResponse` y las rutas que no lo usan); insignia «Histórico» y sin botón de reabrir.
 
-#### Resultados de B3 (2026-10-09) — la puerta NO pasa con 5–10 usuarios simultáneos
+#### Resultados de B3 (2026-10-09) — puerta redefinida con el uso real (decisión del usuario)
 
 Dataset local de 10 años × 1,000 proyectos con los años 2017–2025 archivados (quedan vivos 1,450 proyectos ≈ 8,800 conceptos: 450 pendientes viejos + el año en curso).
 Servidor limitado a **2 núcleos** (`taskset`), como un Micro; la máquina local es ≈ 1.5× más rápida que test por consulta.
@@ -259,23 +259,30 @@ Servidor limitado a **2 núcleos** (`taskset`), como un Micro; la máquina local
 | `periodo` (mes) | 630 | **550 / 750** |
 | `opciones` | 580 | **430 / 490** |
 
-Con usuarios simultáneos, cada uno visitando Cuentas cada 2–5 s (el patrón de `k6/cuentas.js`: periodo + resumen + avisos + opciones por visita):
+**El patrón original no era el de la pantalla.** El escenario de k6 pedía periodo + resumen + avisos + opciones en cada visita, cada 2–5 s: 5 usuarios daban p95 de 2–2.5 s
+y 10 usuarios de 4–4.7 s (≈ 2.2 s de CPU por visita; el trabajo es CPU —derivar ≈ 8,800 conceptos, ≈ 0.4–0.5 s en caliente—, no lectura). La UI real hace otra cosa:
+`opciones` una vez por año y sesión, `avisos` solo con el panel abierto, `resumen` en segundo plano (no bloquea la tabla) y tras registrar algo; solo `periodo` bloquea lo visible.
 
-| Usuarios | periodo mes p95 | resumen p95 | avisos p95 | opciones p95 |
+Con ese comportamiento (pgbench, llegadas a ritmo fijo, 2 núcleos; 70% periodo, 15% resumen, 10% avisos, 5% opciones; p95 local → ×1.5 para test):
+
+| Usuarios (1 acción / 8 s) | periodo | resumen | avisos | opciones |
 |---|---|---|---|---|
-| 1 | 750 | 810 | 830 | 490 |
-| 5 | 1,990 | 2,510 | 2,280 | 1,070 |
-| 10 | 4,240 | 4,690 | 4,170 | 2,890 |
+| 5 | 417 → ≈ 625 ms | 464 → ≈ 700 ms | 514 → ≈ 770 ms | 291 → ≈ 440 ms |
+| 10 | 600–790 → ≈ 0.9–1.2 s | ≈ 1.0 → ≈ 1.5 s | 0.6–1.0 → ≈ 0.9–1.5 s | 261–454 → ≈ 0.4–0.7 s |
 
-Causa: es CPU, no lectura. Derivar los ≈ 8,800 conceptos vivos cuesta ≈ 76 µs por concepto (≈ 0.67 s) y **cada visita lo hace cuatro veces** (periodo, resumen, avisos, opciones),
-≈ 2.2 s de CPU por visita: dos núcleos se saturan con 5 usuarios que visiten cada 3.5 s. Un usuario solo sí cumple (p95 ≈ 0.8 s).
-Decisión pendiente (ver «Pendiente del usuario»): este patrón de 5–10 visitas continuas es mucho más duro que el uso real; si el requisito es ese patrón, hace falta
-reducir el trabajo por visita (una sola lectura para resumen y avisos, menos CPU por concepto) o más cómputo.
+(Muestras de 5–50 por endpoint: los p95 de resumen y avisos son ruidosos. Saturación del equipo ≈ 3 acciones/s.)
+
+**Decisión (usuario, 2026-10-09):** la puerta de B3 es **5 usuarios simultáneos, p95 < 800 ms por endpoint** (pasa con margen aun aplicando ×1.5); **10 usuarios es un dato**,
+no una puerta (se espera ≈ 1–1.5 s en Micro) y es el aviso para subir el plan de Supabase. `k6/cuentas.js` ya modela el comportamiento real (default `VUS=5`).
+Descartado: unir `resumen` y `avisos` (el panel de avisos es perezoso; ganaba ≈ 25% de CPU solo cuando se piden juntos), `opciones` desde tablas base (segundo motor de derivación;
+ya descartado en la ADR 025) y reducir el CPU por concepto (opción 4): el perfil de `cuentas_conceptos` en caliente (≈ 390–470 ms) no tiene un punto caliente —es una sola
+consulta de ≈ 10 uniones/ordenamientos repartidos; los mayores son ≈ 100 ms de ordenamientos y ≈ 90 ms de un recorrido de pagos— y reescribirla, con el golden como único
+resguardo, arriesga mucho por una ganancia estimada de 15–20%. **Revisar solo si `Server-Timing` en producción muestra `periodo` > 1 s sostenido.**
 
 ### B3 — Puerta
 Con el dataset de B0 a 10 años: presupuestos de B0 cumplidos; `cuentas-paridad-sql` y `cuentas-periodo-rendimiento` en verde; **test `live` nuevo** que
 crea un histórico de fixture (prefijo propio) y prueba el 409 por ruta y su mapeo; `live` verde 3 corridas seguidas. Si no pasa, se discute con el usuario
-(p. ej. eliminar el piso) antes de agregar estado.
+(p. ej. eliminar el piso) antes de agregar estado. **Puerta vigente (2026-10-09):** 5 usuarios simultáneos, p95 < 800 ms por endpoint; ver «Resultados de B3».
 
 ### B4 — Cierre y limpieza
 - `docs/decisions/019-cuentas-conceptos-materializada.md` marcada como sustituida (la tabla derivada nunca llegó a `main`); nueva `docs/decisions/025-historico-de-cuentas-190-dias.md` (regla,
@@ -327,6 +334,6 @@ crea un histórico de fixture (prefijo propio) y prueba el 409 por ruta y su map
 | Alinear docs al arrancar (`ACTIVE_WORK`, `ROADMAP`, `ARCHITECTURE`, ADR 019 sustituida y ADR 025 en borrador; ADR 025 se completa en B4) | Hecho (2026-10-09) |
 | B0 Medición y diagnóstico | Hecho (2026-10-09): ver «Resultados de B0»; falta solo el k6 contra un deploy real (lo corre `escala.yml`/manual) |
 | B1 Piso / lectura | Hecho en local y test (2026-10-09); producción al final, con B2 |
-| B2 Histórico | Hecho en local; en test falta el ajuste de rendimiento del archivado (2026-10-09) |
-| B3 Puerta | Medida (2026-10-09): un usuario pasa, 5–10 simultáneos NO — decisión del usuario pendiente |
+| B2 Histórico | Hecho en local y test (2026-10-09); producción al final |
+| B3 Puerta | Redefinida por el usuario (2026-10-09): 5 usuarios simultáneos p95 < 800 ms (pasa con margen); 10 usuarios = dato. Falta correr `k6/cuentas.js` contra un deploy real |
 | B4 Cierre y limpieza | Pendiente |
