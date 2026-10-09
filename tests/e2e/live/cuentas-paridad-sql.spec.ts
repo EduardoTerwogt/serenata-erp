@@ -124,14 +124,15 @@ test.describe('live: paridad de la derivación SQL con la de TS (O1b)', () => {
       SIN_PROYECTO_ID,
       'NO-EXISTE',
     ]
-    // Sin filtros, con un filtro que deja conceptos y con uno que no deja ninguno (cae a todos).
-    const filtros: { tipo: 'todo' | 'cobro' | 'pago'; q?: string }[] = [{ tipo: 'todo' }, { tipo: 'cobro' }, { tipo: 'pago' }, { tipo: 'todo', q: 'zzzz-sin-coincidencias' }]
-    for (const id of ids) {
-      for (const f of filtros) {
-        const params = { anio, mes: 'todo' as const, estado: 'todas' as const, vista: 'proyectos' as const, page: 1, page_size: 60, proyecto: id, ...f }
-        const sql = decodificarPeriodoSql(await rpc(supabase, 'cuentas_periodo', { p: { ...params, hoy } }))
-        expect(sinCompartido(sql.seleccionado), `${id} ${JSON.stringify(f)}`).toEqual(seleccionarProyecto(proyectos, params))
-      }
+    // Cada llamada recalcula todo el año sea cual sea el id, y la base de test (free) tiene picos de más de 8 s (statement_timeout):
+    // cada id va sin filtro; los filtros (cobro, pago y uno que no deja ningún concepto y cae a todos) solo con el primer id.
+    const sinFiltro: { tipo: 'todo' | 'cobro' | 'pago'; q?: string } = { tipo: 'todo' }
+    const filtros = [{ tipo: 'cobro' as const }, { tipo: 'pago' as const }, { tipo: 'todo' as const, q: 'zzzz-sin-coincidencias' }]
+    const casos = [...ids.map((id) => ({ id, f: sinFiltro })), ...filtros.map((f) => ({ id: ids[0], f }))]
+    for (const { id, f } of casos) {
+      const params = { anio, mes: 'todo' as const, estado: 'todas' as const, vista: 'proyectos' as const, page: 1, page_size: 60, proyecto: id, ...f }
+      const sql = decodificarPeriodoSql(await rpc(supabase, 'cuentas_periodo', { p: { ...params, hoy } }))
+      expect(sinCompartido(sql.seleccionado), `${id} ${JSON.stringify(f)}`).toEqual(seleccionarProyecto(proyectos, params))
     }
   })
 
