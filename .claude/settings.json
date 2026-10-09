@@ -45,6 +45,15 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-push-gate.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "mcp__.*__(execute_sql|apply_migration)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/supabase-destructive-gate.mjs\""
+          }
+        ]
       }
     ]
   }
