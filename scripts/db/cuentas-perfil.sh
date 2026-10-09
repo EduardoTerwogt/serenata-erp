@@ -9,7 +9,9 @@ set -euo pipefail
 DB="${1:-serenata_local}"; ANIO="${2:-2026}"; HOY="${3:-2026-10-15}"; OBJ="${4:-NULL}"; ID="${5:-NULL}"
 lit() { if [ "$1" = "NULL" ]; then echo "NULL::text"; else echo "'$1'"; fi; }
 CUERPO=$(psql -d "$DB" -At -c "select prosrc from pg_proc where oid = 'cuentas_conceptos(integer,date,text,text)'::regprocedure")
-SQL=$(printf '%s\n' "$CUERPO" | awk '/RETURN QUERY/{f=1;next} /^END;/{f=0} f' \
+SQL=$(printf '%s\n' "$CUERPO" | awk '/RETURN QUERY/{f=1;next} /^END;/{f=0} /IF v_masivo THEN PERFORM/{f=0} f' \
   | sed -E "s/\bp_year\b/$( [ "$ANIO" = NULL ] && echo 'NULL::int' || echo "$ANIO" )/g; s/\bp_hoy\b/'$HOY'::date/g; s/\bp_objetivo\b/$(lit "$OBJ")/g; s/\bp_id\b/$(lit "$ID")/g" \
   | sed -E '$ s/;[[:space:]]*$//')
-psql -d "$DB" -q -c "SET work_mem='16MB'" -c "EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, TIMING ON, SUMMARY ON) SELECT count(*) FROM ($SQL) q"
+# Lectura masiva (sin objetivo): igual que la función, sin lazos anidados (ver 20261039).
+NL=""; [ "$OBJ" = "NULL" ] && NL="SET enable_nestloop = off"; [ -n "${NESTLOOP:-}" ] && NL="SET enable_nestloop = $NESTLOOP"
+psql -d "$DB" -q -c "SET work_mem='16MB'" -c "${NL:-SET enable_nestloop = on}" -c "EXPLAIN (ANALYZE, BUFFERS, COSTS OFF, TIMING ON, SUMMARY ON) SELECT count(*) FROM ($SQL) q"

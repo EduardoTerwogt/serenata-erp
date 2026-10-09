@@ -4,6 +4,7 @@
 --     impedía el índice y barría cuentas_cobrar y cuentas_pagar completas aun con un año vacío (≈3,700 buffers).
 --   · pcp: los pagos vigentes de los grupos se leen una vez (antes tres búsquedas por grupo, ≈60,000 buffers por 5,000 grupos).
 --   · it: los renglones se leen una vez (antes dos barridos completos de items_cotizacion).
+--   · p_factura y cot: solo los documentos y cotizaciones del conjunto (antes barrían toda la tabla en cada lectura).
 --   · proy: con p_objetivo NULL decide desde cc / cp (antes dos búsquedas por proyecto en las tablas completas).
 -- Reversa: CREATE OR REPLACE con el cuerpo de 20261034_c1_alta_contraparte_y_gasto_extra.sql.
 
@@ -16,7 +17,27 @@ CREATE OR REPLACE FUNCTION public.cuentas_conceptos(p_year integer, p_hoy date, 
  SET plan_cache_mode TO 'force_custom_plan'
 AS $function$
 #variable_conflict use_column
+DECLARE
+  v_masivo boolean := false;
+  v_nestloop text;
 BEGIN
+  -- Lectura masiva (sin objetivo) que abarca ≥ 30% de los proyectos: leer cada tabla UNA vez con hash join y barrido cuesta menos
+  -- tiempo que una búsqueda por índice por fila (medido con 10 años × 1,000 proyectos: toda la historia 4.2 s con lazos anidados contra
+  -- 3.1 s sin ellos; un año, 10% de los proyectos, 0.5 s contra 0.65 s: ahí los índices ganan). El planificador estima mal el tamaño
+  -- de las CTE, así que aquí se le quitan los lazos anidados solo mientras dura esta función y solo en ese caso. Un proyecto, una
+  -- contraparte, un año o un año vacío siguen con índices.
+  IF p_objetivo IS NULL THEN
+    SELECT count(*) * 10 >= 3 * GREATEST((SELECT reltuples FROM pg_class WHERE oid = 'public.proyectos'::regclass), 1)
+      INTO v_masivo
+      FROM proyectos p
+     WHERE p_year IS NULL
+        OR (p.fecha_entrega >= make_date(p_year, 1, 1) AND p.fecha_entrega < make_date(p_year + 1, 1, 1))
+        OR p.fecha_entrega IS NULL;
+    IF v_masivo THEN
+      v_nestloop := current_setting('enable_nestloop');
+      PERFORM set_config('enable_nestloop', 'off', true);
+    END IF;
+  END IF;
   -- plpgsql + force_custom_plan, no LANGUAGE sql: una función SQL se planea sin los valores de sus parámetros y, con
   -- los filtros `p_objetivo IS NULL OR …`, el plan genérico hace una sonda de índice por grupo (309,077 buffers contra
   -- 3,918 con plan por llamada, medido en test con el mismo SQL). Mismo patrón que cuentas_periodo (decisión 019).
@@ -80,12 +101,15 @@ BEGIN
     FROM cuentas_pagar_grupos gr WHERE gr.id IN (SELECT grupo_id FROM cp WHERE grupo_id IS NOT NULL)
   ),
   cot AS (
-    SELECT COALESCE(c.es_complementaria_de, c.id) AS pid,
+    SELECT c.pid,
            ROUND(SUM(c.margen_total), 2) AS margen, ROUND(SUM(c.fee_agencia), 2) AS fee, ROUND(SUM(c.iva), 2) AS iva,
            -- #99: utilidad_total = margen + fee − descuento (calculations.ts).
            ROUND(SUM(c.utilidad_total), 2) AS utilidad
-    FROM cotizaciones c
-    WHERE c.estado = 'APROBADA' AND COALESCE(c.es_complementaria_de, c.id) IN (SELECT id FROM py)
+    FROM (SELECT x.id AS pid, x.margen_total, x.fee_agencia, x.iva, x.utilidad_total
+          FROM cotizaciones x WHERE x.estado = 'APROBADA' AND x.es_complementaria_de IS NULL AND x.id IN (SELECT id FROM py)
+          UNION ALL
+          SELECT x.es_complementaria_de, x.margen_total, x.fee_agencia, x.iva, x.utilidad_total
+          FROM cotizaciones x WHERE x.estado = 'APROBADA' AND x.es_complementaria_de IN (SELECT id FROM py)) c
     GROUP BY 1
   ),
   -- #130 (Q10): los gastos extra (cuentas sin renglón) restan de la utilidad real del proyecto; la cotización aprobada no cambia.
@@ -222,11 +246,15 @@ BEGIN
     FROM cp c WHERE c.grupo_id IS NULL
   ),
   p_factura AS (
-    SELECT DISTINCT ON (COALESCE(d.grupo_id, d.cuentas_pagar_id)) COALESCE(d.grupo_id, d.cuentas_pagar_id) AS obj_id,
-           d.estado_validacion, d.fecha_carga, d.metodo_pago_cfdi
-    FROM documentos_cuentas_pagar d
-    WHERE d.tipo = 'FACTURA_PROVEEDOR_XML' AND COALESCE(d.grupo_id, d.cuentas_pagar_id) IS NOT NULL AND d.eliminado_at IS NULL
-    ORDER BY COALESCE(d.grupo_id, d.cuentas_pagar_id), d.fecha_carga DESC
+    SELECT DISTINCT ON (d.obj_id) d.obj_id, d.estado_validacion, d.fecha_carga, d.metodo_pago_cfdi
+    FROM (SELECT x.grupo_id AS obj_id, x.estado_validacion, x.fecha_carga, x.metodo_pago_cfdi
+          FROM documentos_cuentas_pagar x
+          WHERE x.tipo = 'FACTURA_PROVEEDOR_XML' AND x.eliminado_at IS NULL AND x.grupo_id IN (SELECT id FROM g)
+          UNION ALL
+          SELECT x.cuentas_pagar_id, x.estado_validacion, x.fecha_carga, x.metodo_pago_cfdi
+          FROM documentos_cuentas_pagar x
+          WHERE x.tipo = 'FACTURA_PROVEEDOR_XML' AND x.eliminado_at IS NULL AND x.cuentas_pagar_id IN (SELECT id FROM cp WHERE grupo_id IS NULL)) d
+    ORDER BY d.obj_id, d.fecha_carga DESC
   ),
   -- Comprobantes (D11): documentos COMPROBANTE_PAGO y pagos con comprobante.
   -- Pagos vigentes de los grupos, leídos UNA vez (antes tres búsquedas por grupo: 60,000 buffers con 5,000 grupos).
@@ -238,9 +266,13 @@ BEGIN
   p_comp AS (
     SELECT obj_id, max(ts) AS ts
     FROM (
-      SELECT COALESCE(d.grupo_id, d.cuentas_pagar_id) AS obj_id, d.fecha_carga AS ts
+      SELECT d.grupo_id AS obj_id, d.fecha_carga AS ts
       FROM documentos_cuentas_pagar d
-      WHERE d.tipo = 'COMPROBANTE_PAGO' AND COALESCE(d.grupo_id, d.cuentas_pagar_id) IS NOT NULL AND d.eliminado_at IS NULL
+      WHERE d.tipo = 'COMPROBANTE_PAGO' AND d.eliminado_at IS NULL AND d.grupo_id IN (SELECT id FROM g)
+      UNION ALL
+      SELECT d.cuentas_pagar_id, d.fecha_carga
+      FROM documentos_cuentas_pagar d
+      WHERE d.tipo = 'COMPROBANTE_PAGO' AND d.eliminado_at IS NULL AND d.cuentas_pagar_id IN (SELECT id FROM cp WHERE grupo_id IS NULL)
       UNION ALL
       SELECT grupo_id, created_at FROM pcp WHERE con_comprobante
     ) t
@@ -405,5 +437,6 @@ BEGIN
          p.c_iva, p.c_iva_ret, p.c_isr_ret,
          p.p_utilidad, p.c_subtotal
   FROM pago_d p;
+  IF v_masivo THEN PERFORM set_config('enable_nestloop', v_nestloop, true); END IF;
 END;
 $function$;
