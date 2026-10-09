@@ -72,7 +72,9 @@ Toda la lógica real vive en `lib/proxy-handler.ts` para poder testearla sin
 arrastrar `NextAuth({...})` (que Vitest no resuelve bajo Next 16). Valida sesión
 y secciones permitidas antes de llegar a página o API. Dentro de cada route,
 `requireSection('cotizaciones')` repite la comprobación -- también vía
-`getNodeSessionToken()`, no `auth()`. Secciones: `admin`, `dashboard`,
+`getNodeSessionToken()`, no `auth()` -- y es la capa que revalida contra la base (el proxy solo mira el JWT).
+`__tests__/api-route-guards.test.ts` exige esa guardia en cada método de cada route (antes de leer el body o la base) y que
+las rutas públicas del proxy declaren la suya. Secciones: `admin`, `dashboard`,
 `cotizaciones`, `proyectos`, `cuentas`, `responsables`. El portal
 de proveedores tiene sesión propia, independiente de NextAuth.
 

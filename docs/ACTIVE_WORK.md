@@ -1,12 +1,13 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-09 — **#110 «Frente 2 de Cuentas» lanzado a producción.** PR [#136](https://github.com/EduardoTerwogt/serenata-erp/pull/136)
-fusionado en `main` como `6c42f48` (merge commit, sin squash); issue #110 cerrado. Antes (2026-10-08): #123/#130/#131 «Facturas y pagos ligados» (PR #129, `35709b6`).
+**Última actualización:** 2026-10-09 (cierre) — **#110 «Frente 2 de Cuentas» lanzado a producción** (PR [#136](https://github.com/EduardoTerwogt/serenata-erp/pull/136),
+`6c42f48`, issue cerrado) y **CI/tests afinados** tras dos rojos de `live` en `main` (PR [#138](https://github.com/EduardoTerwogt/serenata-erp/pull/138) y
+[#139](https://github.com/EduardoTerwogt/serenata-erp/pull/139)). Antes (2026-10-08): #123/#130/#131 «Facturas y pagos ligados» (PR #129, `35709b6`).
 
 ## Estado
 
-**`main` = `6c42f48`.** Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1` (#124); deploy de `6c42f48` en **READY**
-(`serenata-erp.vercel.app`). La base de producción tiene aplicadas **`20261030`–`20261041`** y está verificada; sigue sin datos de negocio reales
+**`main` = `279206e`** (merge de #139; sin cambios de app ni de base desde `6c42f48`). Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1` (#124);
+el código de la app en producción es el de `6c42f48` (`serenata-erp.vercel.app`). La base de producción tiene aplicadas **`20261030`–`20261041`** y está verificada; sigue sin datos de negocio reales
 (solo `usuarios`, catálogos y un proyecto de prueba; la constancia fiscal de Serenata ya está subida). **No hay iniciativa activa**: `docs/PLAN.md` está vacío.
 
 **Cola de iniciativas:** **#125** (llaves de Supabase legacy; prioridad baja, revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de
@@ -23,6 +24,14 @@ cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
 - **Producción, antes del merge** (por MCP en partes, sin `DROP`/`DELETE`, sin `20260915_loadtest_runs.sql`): 14 funciones = archivos por md5, 8 triggers, columnas e índice,
   ACL solo `postgres`/`service_role`, `auditar_consistencia()` = 0 con 27 guardas, archivado en simulación vacío (no se archivó nada de verdad).
 
+## Completado después del lanzamiento (2026-10-09, CI y tests)
+
+- **Análisis del 57014** (solo lectura): sin bloat, sin fixtures residuales, sin locks (las lecturas de Cuentas no toman). Una llamada a `cuentas_periodo` tarda ~0.8 s en reposo pero en CI
+  `pg_stat_statements` da media 1.9 s y máximo ~8 s; la base free se atasca a ratos y también cancela `resumen` + `periodo` de la UI en tests que lo toleran.
+- **#138:** «proyecto seleccionado (B6)» pasó de 20–24 a 8–9 llamadas (mismas ramas cubiertas). **#139:** `paths-ignore: ['**.md']` solo en `push` de `e2e.yml`, `test.yml` y `migrations.yml`
+  (13 de los últimos 20 pushes a `main` eran solo docs y lanzaban E2E completo) + `__tests__/api-route-guards.test.ts` (toda ruta de `app/api` con `requireSection/AnySection` antes de leer body/base;
+  públicas del proxy declaradas con su guardia). Documentado en `TESTING.md`.
+
 ## Decisiones nuevas
 
 - `docs/decisions/025`: histórico a 190 días, componentes por factura/pago compartido, régimen congelado al archivar, puerta de rendimiento a 5 usuarios.
@@ -33,14 +42,15 @@ cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
 
 - Local: `tsc` limpio, lint sin errores, **1,320 pruebas unitarias**; golden de las lecturas de Cuentas (117 líneas) con 0 diferencias antes/después de cada migración;
   `scripts/db/cuentas-historico-prueba.sql` completo (incluye régimen congelado; probado que falla con las funciones anteriores); BD limpia reconstruida desde las 153 migraciones.
-- CI del último commit (`332ca54`): `test`, `fresh-db`, `smoke-and-critical` y `live` **verdes**. En el commit anterior `live` falló una vez por un error de mi fixture
-  (ya corregido) y otra por el flake `57014` (verde en el re-run).
+- **`main` en `279206e`:** `Test Suite`, `Migrations` y `E2E` (smoke, critical y `live`) **verdes**; el PR #139 también verde en sus 4 jobs. Conteo hoy: 1,327 unitarias (153 archivos), 26 smoke,
+  155 critical, 95 live, 6 escala. Mutación manual del test de guardias (ruta sin guardia, portal sin `requirePortalSession`, `folio` con guardia débil): falla en las tres.
+- `Migrations` falló una vez en `d716c4b` por «Setup Supabase CLI» (instalación de la herramienta, 6 s, antes de aplicar nada); el mismo job pasó en `279206e`.
 - **No se verificó desde la sesión:** el cron `keep-alive` real en producción ni `scripts/loadtest/k6/cuentas.js` contra un deploy (sin salida de red a `*.supabase.co`/`*.vercel.app`).
 
 ## Problemas abiertos
 
 - **Régimen fiscal de lo resuelto pero no archivado** (primeros 190 días): sigue el régimen actual del proveedor. Congelarlo desde que se resuelve exigiría guardarlo en cada RPC de pago/cierre; no se pidió.
-- **`57014` en `cuentas-paridad-sql › proyecto seleccionado`** (job `live`, dos rojos seguidos en `main` el 2026-10-09): no es aleatorio. Una llamada a `cuentas_periodo` tarda ~0.8 s en la base de test
+- **`57014` en `cuentas-paridad-sql › proyecto seleccionado`** (job `live`, dos rojos seguidos en `main` el 2026-10-09; verde en #138, #139 y `main` tras el recorte): no es aleatorio. Una llamada a `cuentas_periodo` tarda ~0.8 s en la base de test
   en reposo (2,703 proyectos) pero `pg_stat_statements` en CI da media 1.9 s y máximo ~8 s (el `statement_timeout` de PostgREST); la base free se atasca a ratos (`resumen` + `periodo` de la UI también
   cancelados en `basic` y `cuentas-130`, que lo toleran). Causa del atasco sin probar (CPU compartida, contención de 2 vCPU o plan tras `autoanalyze`). Mitigación: el test pasó de 20–24 a 8–9 llamadas;
   si reaparecen timeouts, medir con `EXPLAIN (ANALYZE, BUFFERS)` por llamada durante un CI. Subir cómputo descartado (plan free).
@@ -65,6 +75,8 @@ cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
 
 ## Pendiente del usuario
 
+0. **Comprobar el filtro de #139:** el push de cierre de esta sesión es solo `.md`; no debe crear corridas de `E2E`, `Test Suite` ni `Migrations` (si crea alguna, revisar el `paths-ignore`).
+   Mirar también en GitHub (Settings → Branches) si `main` exige checks: el filtro va solo en `push`, no debería afectar.
 1. **#110:** correr `scripts/loadtest/k6/cuentas.js` (`VUS=5`) contra un deploy real y revisar `Server-Timing` de `periodo`; confirmar que el cron `keep-alive` responde 200 con `archivado.ok`;
    tomar un respaldo manual antes de que haya datos reales que archivar (ADR 020, plan Free sin respaldos).
 2. Decidir #119 (alta mínima de cotizaciones). Opcional: borrar ramas ya fusionadas (`claude/ajustes-131`, `claude/admiring-faraday-i5w9yj`, `claude/practical-hypatia-gc37j4`).
@@ -79,6 +91,11 @@ cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
 
 ## Deuda técnica
 
+- **Doble TS de Cuentas** (`tests/support/cuentas-motor`, 2,147 líneas, solo pruebas): segunda implementación de las reglas que alimenta los datos simulados de `critical` y la paridad de `live` (6 pruebas, ~18 % del tiempo de `live`).
+  Candidato a plan aparte: reemplazar la paridad por la equivalencia `scripts/db/cuentas-equivalencia.sql` y los simulados por fixtures fijos.
+- Si el 57014 reaparece: mover las 6 pruebas de paridad de `live` por PR a corrida nocturna o semanal; recortar «cierre mensual» de 300 a ~60 casos (semilla fija); medir con `EXPLAIN (ANALYZE, BUFFERS)` por llamada durante un CI.
+- **Sin vigilancia de producción:** nadie comprueba que el cron `keep-alive` responda 200 con `archivado.ok` ni que `auditar_consistencia()` siga en 0. Bastaría un workflow diario con un `curl` (requiere `CRON_SECRET` en los secretos de GitHub).
+- `TESTING.md` dice «17 guardas» en `auditar_consistencia()`; son 27.
 - **Llaves legacy de Supabase** (#125): límite interno 2026-12-01.
 - **`cuentas_por_proyecto(p_year, p_proyecto)`:** `p_proyecto` ya no se usa; quitarlo en la próxima migración que toque esa función (DROP + CREATE manual).
 - **`realtime-js` fijo en 2.112.0** (la guarda `lib/realtime/__tests__/realtime-js-guard.test.ts` falla si se sube sin pasar el JWT por `accessToken`).
