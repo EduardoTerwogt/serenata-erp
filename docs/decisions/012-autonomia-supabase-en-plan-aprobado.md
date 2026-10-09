@@ -47,6 +47,13 @@ un plan" y "pedido suelto" la aplica Claude por criterio, leyendo esta decisión
 `CLAUDE.md` → "Autonomía de ejecución" / "Supabase", igual que el resto de las
 reglas de autonomía del proyecto.
 
+**Guarda de SQL destructivo:** `.claude/hooks/supabase-destructive-gate.mjs` (hook
+`PreToolUse` sobre `execute_sql`/`apply_migration` de cualquier conector) fuerza
+confirmación manual cuando el SQL contiene `DROP`, `TRUNCATE` o `DELETE FROM`. Solo
+agrega una pausa, nunca concede permisos; el resto sigue aprobado por `allow` y por
+los tool permissions del conector en claude.ai. Un `DROP FUNCTION` previo a recrearla
+también pregunta (falso positivo aceptado).
+
 **Deliberadamente fuera de la lista de permisos:** `create_branch`, `delete_branch`,
 `merge_branch`, `rebase_branch`, `reset_branch`, `create_project`, `pause_project`,
 `restore_project` — operaciones de infraestructura de proyecto/branch (crear o
