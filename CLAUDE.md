@@ -160,7 +160,7 @@ natural — ver "Nota sobre los slash commands" en `docs/PROMPTS.md`.
 
 ## Convenciones
 
-- **Imports:** alias `@/` = raíz. Ej: `import { supabaseAdmin } from '@/lib/supabase'`.
+- **Imports:** alias `@/` = raíz. Ej: `import { supabaseAdmin } from '@/lib/server/supabase-admin'`.
 - **Tipos:** `lib/types.ts`. **Schemas:** `lib/validation/schemas.ts`.
 - **Idioma:** código español/inglés mixto (como ya existe); UI en español.
 - **No crear archivos innecesarios:** preferir editar los existentes.
