@@ -164,6 +164,28 @@ que el MCP retiene) y `force_custom_plan` mientras no se decida lo contrario (la
 Índice parcial solo si un `EXPLAIN (ANALYZE, BUFFERS)` lo exige (`scripts/db/indices-sin-uso.sql`).
 Aceptación: golden = 0 diferencias, buffers según B0. Reversa = `CREATE OR REPLACE` de la versión anterior, probada.
 
+#### Resultados de B1 (2026-10-09, migración `20261039`)
+
+`cuentas_conceptos` conserva firma, `RETURNS TABLE`, plpgsql y `force_custom_plan`. **Golden = 0 diferencias** (60,000 conceptos + fixture, 134 líneas, y la
+fixture sola) y `auditar_consistencia()` = 0. Aplicada en **test** por MCP (md5 del cuerpo = el aplicado en la base local, ACL `postgres`/`service_role`, `proconfig`
+igual). Cambios: `cc`/`cp` por `UNION ALL` en vez de `IS NULL OR IN (…)`; pagos de proveedor (`pcp`) y renglones (`it`) leídos una vez; `p_factura`, `p_comp` y `cot`
+acotados al conjunto; y, **solo en lectura masiva (≥ 30% de los proyectos)**, sin lazos anidados mientras dura la función (medido: un año con índices 0.5 s contra 0.65 s
+sin ellos; toda la historia 4.2 s contra 3.1 s sin ellos).
+
+| Lectura (10 años, 60,000 conceptos, local) | Antes | Después |
+|---|---|---|
+| año vacío (buffers, caliente) | 3,830 | **202** |
+| concepto individual: cobro / grupo | 937 / 3,991 | **149 / 148** |
+| un año de 6,000 conceptos (ms) | 630 | **410** |
+| toda la historia: buffers / ms | 829,400 / 4,700 | **26,500 / 2,700** |
+| `resumen` / `avisos` (ms) | 5,400 / 4,100 | 4,000 / 3,800 |
+| **test, año 2026 (16,195 conceptos): buffers / ms** | 15,873 / — | **7,442 / 625** |
+| **test, `resumen`: buffers / ms** | 16,828 / 700–1,800 | **8,390 / 687** |
+
+**Lo que B1 NO logra, dicho con claridad:** el presupuesto «≤ 12,000 buffers por 6,000 conceptos» se cumple en lo que cuesta *leer* en test (7,442), pero el **tiempo** de
+`resumen` y `avisos` sobre 10 años sigue en ≈ 4 s locales porque es CPU de derivar 60,000 conceptos (≈ 50 µs por concepto), no lectura de páginas. Eso solo lo baja B2
+(el histórico sale de `resumen` y `avisos`). Un año completo de 6,000 conceptos cuesta ≈ 0.4–0.5 s locales por la misma razón: derivar es lo caro, ya no leer.
+
 ### B2 — Histórico (migración `20261040`; sin `DROP`: `CREATE OR REPLACE TRIGGER`)
 - `proyectos.cuentas_historico_at timestamptz` + índice parcial `WHERE cuentas_historico_at IS NULL`. Solo la columna; **ninguna guarda sobre `proyectos`**.
 - **`cuentas_ultimo_cambio(p_proyecto text)`:** una sola función con el máximo de `created_at`/`updated_at`/`fecha_carga`/`anulado_at`/`eliminado_at`
@@ -259,7 +281,7 @@ crea un histórico de fixture (prefijo propio) y prueba el 409 por ruta y su map
 | Plan v5 aprobado | Hecho (2026-10-09) |
 | Alinear docs al arrancar (`ACTIVE_WORK`, `ROADMAP`, `ARCHITECTURE`, ADR 019 sustituida y ADR 025 en borrador; ADR 025 se completa en B4) | Hecho (2026-10-09) |
 | B0 Medición y diagnóstico | Hecho (2026-10-09): ver «Resultados de B0»; falta solo el k6 contra un deploy real (lo corre `escala.yml`/manual) |
-| B1 Piso / lectura | Pendiente — depende del perfil de B0 |
+| B1 Piso / lectura | Hecho en local y test (2026-10-09); producción al final, con B2 |
 | B2 Histórico | Pendiente |
 | B3 Puerta | Pendiente |
 | B4 Cierre y limpieza | Pendiente |
