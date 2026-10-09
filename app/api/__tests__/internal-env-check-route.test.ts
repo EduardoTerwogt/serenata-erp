@@ -77,18 +77,7 @@ describe('GET /api/internal/env-check', () => {
     expect(JSON.stringify(body)).not.toContain('service-role-key-value')
   })
 
-  it('EF-3A 3A-1 -- isProductionProject es true si el ref de Supabase coincide con el de producción', async () => {
-    process.env.LOADTEST_MODE = 'true'
-    process.env.LOADTEST_ENV_SECRET = 'correct-secret'
-    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://fwmyoqokcjtldiofuxdg.supabase.co'
-
-    const response = await GET(makeRequest('correct-secret'))
-    const body = await response.json()
-
-    expect(body.isProductionProject).toBe(true)
-  })
-
-  it('#124 -- isProductionProject también es true para el proyecto nuevo de producción (us-east-2)', async () => {
+  it('EF-3A 3A-1 / #124 -- isProductionProject es true si el ref de Supabase es el de producción (us-east-2)', async () => {
     process.env.LOADTEST_MODE = 'true'
     process.env.LOADTEST_ENV_SECRET = 'correct-secret'
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://ytlyphlgyhgztkfxwojt.supabase.co'

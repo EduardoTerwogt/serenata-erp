@@ -70,8 +70,7 @@ cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
 
 1. Verificar el lanzamiento de #110 (punto 1 de arriba) y correr `auditar_consistencia()` en Admin tras la primera factura/pago reales.
 2. Elegir la próxima iniciativa (`docs/ROADMAP.md` → "Siguiente"/"Después"): **#125** al final; #119 y #101 esperan decisión tuya.
-3. Limpieza de código de #124, si la base vieja `fwmyoqokcjtldiofuxdg` ya se borró: quitar su ref de `app/api/internal/env-check/route.ts` y su test, y borrar
-   `.github/workflows/db-push-una-vez.yml`.
+3. Opcional: borrar `.github/workflows/db-push-una-vez.yml` (workflow de un solo uso de #124 contra la base nueva; ya no tiene su secreto `PROD_NUEVA_DB_URL`).
 4. Opcionales sin fecha: parcialidad y saldo insoluto del complemento (exige ampliar el parser); corregir un descuadre ligando o desligando cotizaciones sin
    resubir la factura (exige ampliar el CHECK de `cuentas_correcciones`); cancelar una cotización aprobada con factura o cobros, con traspaso (`docs/ROADMAP.md` → "Después").
 

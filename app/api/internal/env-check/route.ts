@@ -20,9 +20,8 @@ import { createHash } from 'crypto'
 // Refs reales de producción -- hardcoded a propósito: esta comparación es la
 // última línea de defensa contra medir carga sobre datos reales, no debe
 // depender de que otra env var esté bien configurada. Desde #124 (docs/decisions/021)
-// son dos: el proyecto nuevo en us-east-2 y el viejo en us-west-2, que se
-// conserva pausado 7 días como respaldo. Al borrar el viejo, quitar su ref.
-const PRODUCTION_SUPABASE_REFS = ['ytlyphlgyhgztkfxwojt', 'fwmyoqokcjtldiofuxdg']
+// producción es el proyecto de us-east-2; el viejo de us-west-2 ya se borró.
+const PRODUCTION_SUPABASE_REFS = ['ytlyphlgyhgztkfxwojt']
 
 function fingerprint(value: string | undefined): string | null {
   if (!value) return null
