@@ -40,7 +40,10 @@ cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
 ## Problemas abiertos
 
 - **Régimen fiscal de lo resuelto pero no archivado** (primeros 190 días): sigue el régimen actual del proveedor. Congelarlo desde que se resuelve exigiría guardarlo en cada RPC de pago/cierre; no se pidió.
-- **Flake `57014`** en `cuentas-paridad-sql › proyecto seleccionado` (job `live`): 24 llamadas de ~1.6 s sobre la base de test (2,703 proyectos); un rojo se confirma con un solo re-run, dos seguidos son reales.
+- **`57014` en `cuentas-paridad-sql › proyecto seleccionado`** (job `live`, dos rojos seguidos en `main` el 2026-10-09): no es aleatorio. Una llamada a `cuentas_periodo` tarda ~0.8 s en la base de test
+  en reposo (2,703 proyectos) pero `pg_stat_statements` en CI da media 1.9 s y máximo ~8 s (el `statement_timeout` de PostgREST); la base free se atasca a ratos (`resumen` + `periodo` de la UI también
+  cancelados en `basic` y `cuentas-130`, que lo toleran). Causa del atasco sin probar (CPU compartida, contención de 2 vCPU o plan tras `autoanalyze`). Mitigación: el test pasó de 20–24 a 8–9 llamadas;
+  si reaparecen timeouts, medir con `EXPLAIN (ANALYZE, BUFFERS)` por llamada durante un CI. Subir cómputo descartado (plan free).
   Flake intermitente en `cuentas-principal.spec.ts:45` (móvil) y en un test de Cotizaciones bajo carga.
 - Un error aislado de Realtime (`no partition of relation "messages"`) el 2026-10-06 00:50 UTC: confirmar que las particiones diarias se siguen creando.
 - **Historial de migraciones de producción:** con nombres por partes y sin entradas para lo corrido a mano o por `execute_sql` (incluidas `20261039`–`20261041`). Es cosmético;
@@ -79,7 +82,7 @@ cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
 - **Llaves legacy de Supabase** (#125): límite interno 2026-12-01.
 - **`cuentas_por_proyecto(p_year, p_proyecto)`:** `p_proyecto` ya no se usa; quitarlo en la próxima migración que toque esa función (DROP + CREATE manual).
 - **`realtime-js` fijo en 2.112.0** (la guarda `lib/realtime/__tests__/realtime-js-guard.test.ts` falla si se sube sin pasar el JWT por `accessToken`).
-- **Job `live` intermitente** (`cotizaciones-colaboracion*.spec.ts`, `cuentas-paridad-sql`, 57014).
+- **Job `live` intermitente** (`cotizaciones-colaboracion*.spec.ts`, `cuentas-paridad-sql`, 57014): ver «Problemas abiertos»; la base de test free no tiene margen contra los 8 s.
 - **Sin respaldos en el plan Free** (ADR 020): con datos reales, respaldo manual antes de cualquier migración con `DROP`.
 - La fecha de entrega de un histórico sigue editable desde Proyectos hasta que se defina ese módulo (ADR 025).
 - `DESIGN_SYSTEM.md` describe un tema oscuro y `#FF5A1A` que ya no existen.
