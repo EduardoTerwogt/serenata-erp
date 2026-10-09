@@ -34,6 +34,12 @@ async function crearFixture(supabase: Supabase): Promise<Fixture> {
   ok(await supabase.from('cuentas_pagar_grupos').insert({ id: grupoId, proyecto_id: id, responsable_id: proveedorId, estado: 'FACTURADO', monto_total: 600, total_a_transferir: 696 }))
   const cuenta = await insertarCuentaPagarConRenglon(supabase, { cotizacionId: id, proyectoId: id, responsableId: proveedorId, grupoId, xPagar: 600, descripcion: 'Renglón' })
   await aprobarFixture(supabase, id)
+  // Pagar a un proveedor exige factura XML validada (D25); el total a transferir es el neto × 1.16 (persona moral).
+  ok(await supabase.from('cuentas_pagar_grupos').update({ monto_total: 600, total_a_transferir: 696 }).eq('id', grupoId))
+  ok(await supabase.from('documentos_cuentas_pagar').insert({
+    grupo_id: grupoId, tipo: 'FACTURA_PROVEEDOR_XML', archivo_url: 'https://example.com/live.xml', archivo_nombre: 'live.xml',
+    estado_validacion: 'validado', total_cfdi: 696,
+  }))
   return { id, proveedorId, cobroId: cobro.id as string, grupoId, cuentaId: (cuenta as { id: string }).id }
 }
 
