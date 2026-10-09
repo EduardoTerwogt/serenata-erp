@@ -15,39 +15,66 @@ CREATE INDEX IF NOT EXISTS idx_proyectos_cuentas_vivos ON public.proyectos (fech
 -- ════════ 2. Último cambio registrado de un proyecto ════════
 -- Máximo de las marcas de tiempo de todo lo que Cuentas escribe sobre el proyecto. Cubre los huecos de las tablas sin `updated_at`
 -- (pagos_comprobantes, pagos_cuentas_pagar), los grupos (`updated_at` sin trigger) y `editar_pago`, que modifica `pagos` sin marca
--- pero deja `cuentas_correcciones.created_at`.
+-- pero deja `cuentas_correcciones.created_at`. Una sola implementación, por lote: una pasada por tabla para muchos proyectos (el
+-- archivado diario y la auditoría) o por índice para uno (medido: ~1 s para 1,000 proyectos; por proyecto serían ~4 s).
+CREATE OR REPLACE FUNCTION public.cuentas_ultimo_cambio_lote(p_proyectos text[])
+ RETURNS TABLE(proyecto_id text, ultimo timestamptz)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  WITH
+  cc AS (SELECT c.proyecto_id, max(greatest(c.created_at, c.updated_at, c.fecha_pago)) AS m
+           FROM cuentas_cobrar c WHERE c.proyecto_id = ANY (p_proyectos) GROUP BY 1),
+  cp AS (SELECT c.proyecto_id, max(greatest(c.created_at, c.updated_at, c.fecha_pago)) AS m
+           FROM cuentas_pagar c WHERE c.proyecto_id = ANY (p_proyectos) GROUP BY 1),
+  gr AS (SELECT g.proyecto_id, max(greatest(g.created_at, g.updated_at)) AS m
+           FROM cuentas_pagar_grupos g WHERE g.proyecto_id = ANY (p_proyectos) GROUP BY 1),
+  pc AS (SELECT c.proyecto_id, max(greatest(l.created_at, h.created_at, h.anulado_at)) AS m
+           FROM cuentas_cobrar c JOIN pagos_comprobantes l ON l.cuentas_cobrar_id = c.id JOIN pagos h ON h.id = l.pago_id
+          WHERE c.proyecto_id = ANY (p_proyectos) GROUP BY 1),
+  pp AS (SELECT g.proyecto_id, max(greatest(l.created_at, h.created_at, h.anulado_at)) AS m
+           FROM cuentas_pagar_grupos g JOIN pagos_cuentas_pagar l ON l.grupo_id = g.id JOIN pagos h ON h.id = l.pago_id
+          WHERE g.proyecto_id = ANY (p_proyectos) GROUP BY 1),
+  -- Documentos de cobro: anclados a la cuenta, la factura vigente de la cuenta y lo que cuelga de esa factura (una rama por llave:
+  -- un OR entre ellas impediría los índices).
+  dc AS (SELECT q.proyecto_id, max(q.m) AS m FROM (
+           SELECT c.proyecto_id, greatest(d.created_at, d.fecha_carga, d.eliminado_at) AS m
+             FROM cuentas_cobrar c JOIN documentos_cuentas_cobrar d ON d.cuentas_cobrar_id = c.id WHERE c.proyecto_id = ANY (p_proyectos)
+           UNION ALL
+           SELECT c.proyecto_id, greatest(d.created_at, d.fecha_carga, d.eliminado_at)
+             FROM cuentas_cobrar c JOIN documentos_cuentas_cobrar d ON d.id = c.factura_documento_id WHERE c.proyecto_id = ANY (p_proyectos)
+           UNION ALL
+           SELECT c.proyecto_id, greatest(d.created_at, d.fecha_carga, d.eliminado_at)
+             FROM cuentas_cobrar c JOIN documentos_cuentas_cobrar d ON d.factura_documento_id = c.factura_documento_id
+            WHERE c.proyecto_id = ANY (p_proyectos) AND c.factura_documento_id IS NOT NULL) q GROUP BY 1),
+  dp AS (SELECT q.proyecto_id, max(q.m) AS m FROM (
+           SELECT g.proyecto_id, greatest(d.created_at, d.fecha_carga, d.eliminado_at) AS m
+             FROM cuentas_pagar_grupos g JOIN documentos_cuentas_pagar d ON d.grupo_id = g.id WHERE g.proyecto_id = ANY (p_proyectos)
+           UNION ALL
+           SELECT c.proyecto_id, greatest(d.created_at, d.fecha_carga, d.eliminado_at)
+             FROM cuentas_pagar c JOIN documentos_cuentas_pagar d ON d.cuentas_pagar_id = c.id WHERE c.proyecto_id = ANY (p_proyectos)) q GROUP BY 1),
+  re AS (SELECT r.proyecto_id, max(greatest(r.abierta_at, r.cerrada_at)) AS m
+           FROM cuentas_reaperturas r WHERE r.proyecto_id = ANY (p_proyectos) GROUP BY 1),
+  co AS (SELECT k.proyecto_id, max(k.created_at) AS m
+           FROM cuentas_correcciones k WHERE k.proyecto_id = ANY (p_proyectos) GROUP BY 1)
+  SELECT i.id, greatest(cc.m, cp.m, gr.m, pc.m, pp.m, dc.m, dp.m, re.m, co.m)
+  FROM unnest(p_proyectos) AS i(id)
+  LEFT JOIN cc ON cc.proyecto_id = i.id LEFT JOIN cp ON cp.proyecto_id = i.id LEFT JOIN gr ON gr.proyecto_id = i.id
+  LEFT JOIN pc ON pc.proyecto_id = i.id LEFT JOIN pp ON pp.proyecto_id = i.id LEFT JOIN dc ON dc.proyecto_id = i.id
+  LEFT JOIN dp ON dp.proyecto_id = i.id LEFT JOIN re ON re.proyecto_id = i.id LEFT JOIN co ON co.proyecto_id = i.id;
+$function$;
+
 CREATE OR REPLACE FUNCTION public.cuentas_ultimo_cambio(p_proyecto text)
  RETURNS timestamptz
  LANGUAGE sql
  STABLE
  SET search_path TO 'public', 'pg_temp'
 AS $function$
-  SELECT greatest(
-    (SELECT max(greatest(c.created_at, c.updated_at, c.fecha_pago)) FROM cuentas_cobrar c WHERE c.proyecto_id = p_proyecto),
-    (SELECT max(greatest(c.created_at, c.updated_at, c.fecha_pago)) FROM cuentas_pagar c WHERE c.proyecto_id = p_proyecto),
-    (SELECT max(greatest(g.created_at, g.updated_at)) FROM cuentas_pagar_grupos g WHERE g.proyecto_id = p_proyecto),
-    (SELECT max(greatest(pc.created_at, h.created_at, h.anulado_at))
-       FROM cuentas_cobrar c JOIN pagos_comprobantes pc ON pc.cuentas_cobrar_id = c.id JOIN pagos h ON h.id = pc.pago_id
-      WHERE c.proyecto_id = p_proyecto),
-    (SELECT max(greatest(pp.created_at, h.created_at, h.anulado_at))
-       FROM cuentas_pagar_grupos g JOIN pagos_cuentas_pagar pp ON pp.grupo_id = g.id JOIN pagos h ON h.id = pp.pago_id
-      WHERE g.proyecto_id = p_proyecto),
-    -- Documentos de cobro: anclados a la cuenta, la factura vigente de la cuenta y lo que cuelga de esa factura.
-    (SELECT max(greatest(d.created_at, d.fecha_carga, d.eliminado_at))
-       FROM documentos_cuentas_cobrar d
-      WHERE d.cuentas_cobrar_id IN (SELECT c.id FROM cuentas_cobrar c WHERE c.proyecto_id = p_proyecto)
-         OR d.id IN (SELECT c.factura_documento_id FROM cuentas_cobrar c WHERE c.proyecto_id = p_proyecto AND c.factura_documento_id IS NOT NULL)
-         OR d.factura_documento_id IN (SELECT c.factura_documento_id FROM cuentas_cobrar c WHERE c.proyecto_id = p_proyecto AND c.factura_documento_id IS NOT NULL)),
-    (SELECT max(greatest(d.created_at, d.fecha_carga, d.eliminado_at))
-       FROM documentos_cuentas_pagar d
-      WHERE d.grupo_id IN (SELECT g.id FROM cuentas_pagar_grupos g WHERE g.proyecto_id = p_proyecto)
-         OR d.cuentas_pagar_id IN (SELECT c.id FROM cuentas_pagar c WHERE c.proyecto_id = p_proyecto)),
-    (SELECT max(greatest(r.abierta_at, r.cerrada_at)) FROM cuentas_reaperturas r WHERE r.proyecto_id = p_proyecto),
-    (SELECT max(k.created_at) FROM cuentas_correcciones k WHERE k.proyecto_id = p_proyecto)
-  );
+  SELECT l.ultimo FROM public.cuentas_ultimo_cambio_lote(ARRAY[p_proyecto]) l;
 $function$;
 
--- Proyectos unidos al dado por una factura de cobro o un pago compartidos (una cuenta sin proyecto aparece como 'sin-proyecto').
+-- Proyectos unidos a los dados por una factura de cobro o un pago compartidos (una cuenta sin proyecto aparece como 'sin-proyecto').
 CREATE OR REPLACE FUNCTION public.cuentas_vecinos_proyecto(p_proyecto text)
  RETURNS SETOF text
  LANGUAGE sql
@@ -75,7 +102,8 @@ $function$;
 -- Por año (para no pasar los 8 s de PostgREST). Un proyecto es elegible si tiene al menos un concepto, todos resueltos, sin reapertura
 -- activa y sin cambios en los 190 días naturales (CDMX) anteriores a p_hoy. Los proyectos unidos por factura o pago compartido forman
 -- un componente: se archivan juntos y solo si todos son elegibles de ESTE año; un componente que cruza años (o toca una cuenta sin
--- proyecto) no se archiva y se reporta. Con p_dry_run no escribe nada.
+-- proyecto) no se archiva y se reporta. Con p_dry_run no escribe nada. Para marcar bloquea (FOR UPDATE, orden por id) los proyectos de
+-- los componentes completos y RECOMPRUEBA el último cambio de todos en una pasada: cualquier escritura posterior lo mueve, no se re-deriva.
 CREATE OR REPLACE FUNCTION public.archivar_cuentas_historicas(p_year integer, p_hoy date, p_dry_run boolean DEFAULT true)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -85,10 +113,12 @@ CREATE OR REPLACE FUNCTION public.archivar_cuentas_historicas(p_year integer, p_
 AS $function$
 DECLARE
   v_corte date := p_hoy - 190;
+  v_resueltos text[];
   v_elegibles text[];
   v_comp text[];
-  v_cambio timestamptz;
-  v_ok boolean;
+  v_completos text[] := '{}';
+  v_candidatos text[];
+  v_firmes text[];
   v_archivados text[] := '{}';
   v_diferidos jsonb := '[]'::jsonb;
   v_n_comp integer := 0;
@@ -97,15 +127,18 @@ BEGIN
     RAISE EXCEPTION 'parametros_invalidos: p_year y p_hoy son obligatorios' USING ERRCODE = 'P1415';
   END IF;
 
-  SELECT COALESCE(array_agg(id ORDER BY id), '{}') INTO v_elegibles
+  -- Resueltos y sin reapertura; la marca de último cambio (lo caro) se calcula en lote solo para ellos.
+  SELECT COALESCE(array_agg(c.proyecto_key ORDER BY c.proyecto_key), '{}') INTO v_resueltos
   FROM (
-    SELECT c.proyecto_key AS id
+    SELECT c.proyecto_key
     FROM cuentas_conceptos(p_year, p_hoy, 'vivos', NULL) c
     WHERE NOT c.sin_proyecto AND NOT c.sin_fecha AND c.anio = p_year
     GROUP BY c.proyecto_key
     HAVING bool_and(c.resuelto) AND NOT bool_or(c.proyecto_reabierta)
-       AND (cuentas_ultimo_cambio(c.proyecto_key) AT TIME ZONE 'America/Mexico_City')::date <= v_corte
-  ) e;
+  ) c;
+  SELECT COALESCE(array_agg(l.proyecto_id ORDER BY l.proyecto_id), '{}') INTO v_elegibles
+  FROM cuentas_ultimo_cambio_lote(v_resueltos) l
+  WHERE (l.ultimo AT TIME ZONE 'America/Mexico_City')::date <= v_corte;
 
   -- Componentes: cada grupo de proyectos conectados por factura o pago compartido, a partir de los elegibles (uno por componente).
   FOR v_comp IN
@@ -120,27 +153,41 @@ BEGIN
     IF NOT (v_comp <@ v_elegibles) THEN
       v_diferidos := v_diferidos || jsonb_build_object('proyectos', to_jsonb(v_comp),
         'motivo', 'el componente incluye proyectos no elegibles (otro año, con pendientes o con cambios recientes)');
-      CONTINUE;
+    ELSE
+      v_completos := v_completos || v_comp;
     END IF;
-    IF p_dry_run THEN
-      v_archivados := v_archivados || v_comp;
-      CONTINUE;
-    END IF;
-    -- Bloquea el componente en orden fijo y recomprueba el último cambio (cualquier escritura posterior lo mueve; no se re-deriva).
-    PERFORM 1 FROM proyectos WHERE id = ANY (v_comp) ORDER BY id FOR UPDATE;
-    v_ok := true;
-    FOR v_cambio IN SELECT cuentas_ultimo_cambio(x) FROM unnest(v_comp) x LOOP
-      IF (v_cambio AT TIME ZONE 'America/Mexico_City')::date > v_corte THEN v_ok := false; END IF;
-    END LOOP;
-    IF v_ok AND EXISTS (SELECT 1 FROM proyectos WHERE id = ANY (v_comp) AND cuentas_historico_at IS NOT NULL) THEN v_ok := false; END IF;
-    IF v_ok AND EXISTS (SELECT 1 FROM cuentas_reaperturas WHERE proyecto_id = ANY (v_comp) AND cerrada_at IS NULL) THEN v_ok := false; END IF;
-    IF NOT v_ok THEN
-      v_diferidos := v_diferidos || jsonb_build_object('proyectos', to_jsonb(v_comp), 'motivo', 'cambió mientras se archivaba');
-      CONTINUE;
-    END IF;
-    UPDATE proyectos SET cuentas_historico_at = now() WHERE id = ANY (v_comp);
-    v_archivados := v_archivados || v_comp;
   END LOOP;
+
+  IF p_dry_run THEN
+    v_archivados := v_completos;
+  ELSIF cardinality(v_completos) > 0 THEN
+    -- Bloqueo en orden fijo de todos los proyectos a marcar y recomprobación en lote.
+    PERFORM 1 FROM proyectos WHERE id = ANY (v_completos) ORDER BY id FOR UPDATE;
+    SELECT COALESCE(array_agg(p.id ORDER BY p.id), '{}') INTO v_candidatos
+    FROM proyectos p
+    WHERE p.id = ANY (v_completos) AND p.cuentas_historico_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM cuentas_reaperturas r WHERE r.proyecto_id = p.id AND r.cerrada_at IS NULL);
+    SELECT COALESCE(array_agg(l.proyecto_id ORDER BY l.proyecto_id), '{}') INTO v_firmes
+    FROM cuentas_ultimo_cambio_lote(v_candidatos) l
+    WHERE (l.ultimo AT TIME ZONE 'America/Mexico_City')::date <= v_corte;
+    -- Un componente se marca completo o no se marca.
+    FOR v_comp IN
+      SELECT DISTINCT comp FROM (
+        SELECT array_agg(proyecto ORDER BY proyecto) AS comp FROM (
+          WITH RECURSIVE cl(raiz, proyecto) AS (
+            SELECT e, e FROM unnest(v_completos) e
+            UNION
+            SELECT cl.raiz, v FROM cl, LATERAL cuentas_vecinos_proyecto(cl.proyecto) v)
+          SELECT raiz, proyecto FROM cl) z GROUP BY raiz) q
+    LOOP
+      IF v_comp <@ v_firmes THEN
+        v_archivados := v_archivados || v_comp;
+      ELSE
+        v_diferidos := v_diferidos || jsonb_build_object('proyectos', to_jsonb(v_comp), 'motivo', 'cambió mientras se archivaba');
+      END IF;
+    END LOOP;
+    UPDATE proyectos SET cuentas_historico_at = now() WHERE id = ANY (v_archivados);
+  END IF;
 
   RETURN jsonb_build_object(
     'anio', p_year, 'hoy', p_hoy, 'corte', v_corte, 'dry_run', p_dry_run,
@@ -148,9 +195,9 @@ BEGIN
     'archivados', cardinality(v_archivados), 'proyectos', to_jsonb(v_archivados), 'diferidos', v_diferidos);
 END;
 $function$;
-REVOKE EXECUTE ON FUNCTION public.cuentas_ultimo_cambio(text), public.cuentas_vecinos_proyecto(text),
+REVOKE EXECUTE ON FUNCTION public.cuentas_ultimo_cambio_lote(text[]), public.cuentas_ultimo_cambio(text), public.cuentas_vecinos_proyecto(text),
   public.archivar_cuentas_historicas(integer, date, boolean) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.cuentas_ultimo_cambio(text), public.cuentas_vecinos_proyecto(text),
+GRANT EXECUTE ON FUNCTION public.cuentas_ultimo_cambio_lote(text[]), public.cuentas_ultimo_cambio(text), public.cuentas_vecinos_proyecto(text),
   public.archivar_cuentas_historicas(integer, date, boolean) TO service_role;
 
 -- ════════ 4. Guardas de escritura ════════
@@ -1303,7 +1350,8 @@ g_historico_modificado AS (
   -- Un histórico quedó resuelto al archivarse y no admite escrituras: si algo cambió después, podría haber dejado de estarlo.
   SELECT p.id::text AS id
   FROM proyectos p
-  WHERE p.cuentas_historico_at IS NOT NULL AND cuentas_ultimo_cambio(p.id) > p.cuentas_historico_at
+  JOIN cuentas_ultimo_cambio_lote(ARRAY(SELECT h.id FROM proyectos h WHERE h.cuentas_historico_at IS NOT NULL)) l ON l.proyecto_id = p.id
+  WHERE p.cuentas_historico_at IS NOT NULL AND l.ultimo > p.cuentas_historico_at
 ),
 g_historico_reabierto AS (
   SELECT r.proyecto_id::text AS id

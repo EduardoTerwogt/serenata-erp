@@ -227,6 +227,51 @@ sin ellos; toda la historia 4.2 s contra 3.1 s sin ellos).
   uno vivo **no** se archiva solo y sí junto con él; escribir en un histórico falla por cada ruta; `cuentas_ultimo_cambio` avanza con cada RPC de escritura;
   `auditar_consistencia()` = 0.
 
+#### Resultados de B2 (2026-10-09, migración `20261040`)
+
+Hecho y verificado en local (fixture de 46 proyectos y dataset de 10 años); aplicado en **test** salvo el ajuste de rendimiento de abajo.
+
+- **Golden:** con nada archivado, la salida es idéntica a la de antes salvo la bandera `historico` en `cuentas_periodo` y las 3 guardas nuevas (`auditar_consistencia`
+  24 → 27, todas en 0). Con 60,000 conceptos y la fixture: 0 diferencias en `conceptos`, `periodo`, `resumen`, `avisos`, `estado_cuenta`, selector, etc.
+- **Prueba de comportamiento** (`scripts/db/cuentas-historico-prueba.sql`, corre también en el job `Migrations` de CI): el archivado marca lo esperado y respeta los
+  componentes (EQ14+EQ15 y EQ40+EQ41 juntos; EQ38/EQ39 —cruzan años— y EQ42/EQ43 —uno sigue vivo— no se archivan); `resumen` y `avisos` idénticos con y sin
+  históricos; cada RPC de escritura y cada tabla guardada rechaza la escritura sobre un histórico (`P1420`, o una regla previa); un proyecto vivo escribe con normalidad;
+  y falla si aparece una RPC de escritura de Cuentas que la prueba no cubra.
+- **Desviaciones del plan, con motivo:** (1) guarda también sobre `pagos` (UPDATE): `adjuntar_comprobante_pago_proveedor` escribe solo ahí y dejaba modificar el pago
+  de un histórico; (2) la guarda de auditoría «histórico con concepto no resuelto» es «histórico con cambios posteriores al archivado» (`historico_modificado`):
+  como un histórico queda resuelto al archivarse y no admite escrituras, es equivalente y cuesta ~1 s en vez de derivar todos los históricos (inviable en los 8 s de
+  PostgREST); (3) `cuentas_conceptos` también acepta `'historicos'` (solo los archivados); (4) código de error **P1420** (P1416–P1419 ya estaban en uso).
+- **Rendimiento del archivado** (lo que casi se nos escapa): la primera versión tardaba **255 s por año** (la marca de último cambio por proyecto con un OR que impedía los
+  índices, 50 ms × 2 × 950 proyectos). Con la versión por lote (una pasada por tabla): **1.4 s por año** de 950 proyectos, valores idénticos a la versión lenta en los 43
+  proyectos de la fixture. El ajuste está en el archivo de la migración; falta aplicarlo a test (hoy test tiene la versión lenta, correcta pero no apta para el cron).
+- **App:** `keep-alive` archiva una vez por año (cada uno en su `try/catch`; si falla alguno responde 500 al final y lo dice); toda ruta responde 409
+  `proyecto_historico` (`buildErrorResponse` y las rutas que no lo usan); insignia «Histórico» y sin botón de reabrir.
+
+#### Resultados de B3 (2026-10-09) — la puerta NO pasa con 5–10 usuarios simultáneos
+
+Dataset local de 10 años × 1,000 proyectos con los años 2017–2025 archivados (quedan vivos 1,450 proyectos ≈ 8,800 conceptos: 450 pendientes viejos + el año en curso).
+Servidor limitado a **2 núcleos** (`taskset`), como un Micro; la máquina local es ≈ 1.5× más rápida que test por consulta.
+
+| Lectura (un usuario, ms: p50 / p95) | Antes (todo vivo) | Ahora |
+|---|---|---|
+| `resumen` | 5,400 | **650 / 810** |
+| `avisos` | 4,100 | **570 / 830** |
+| `periodo` (mes) | 630 | **550 / 750** |
+| `opciones` | 580 | **430 / 490** |
+
+Con usuarios simultáneos, cada uno visitando Cuentas cada 2–5 s (el patrón de `k6/cuentas.js`: periodo + resumen + avisos + opciones por visita):
+
+| Usuarios | periodo mes p95 | resumen p95 | avisos p95 | opciones p95 |
+|---|---|---|---|---|
+| 1 | 750 | 810 | 830 | 490 |
+| 5 | 1,990 | 2,510 | 2,280 | 1,070 |
+| 10 | 4,240 | 4,690 | 4,170 | 2,890 |
+
+Causa: es CPU, no lectura. Derivar los ≈ 8,800 conceptos vivos cuesta ≈ 76 µs por concepto (≈ 0.67 s) y **cada visita lo hace cuatro veces** (periodo, resumen, avisos, opciones),
+≈ 2.2 s de CPU por visita: dos núcleos se saturan con 5 usuarios que visiten cada 3.5 s. Un usuario solo sí cumple (p95 ≈ 0.8 s).
+Decisión pendiente (ver «Pendiente del usuario»): este patrón de 5–10 visitas continuas es mucho más duro que el uso real; si el requisito es ese patrón, hace falta
+reducir el trabajo por visita (una sola lectura para resumen y avisos, menos CPU por concepto) o más cómputo.
+
 ### B3 — Puerta
 Con el dataset de B0 a 10 años: presupuestos de B0 cumplidos; `cuentas-paridad-sql` y `cuentas-periodo-rendimiento` en verde; **test `live` nuevo** que
 crea un histórico de fixture (prefijo propio) y prueba el 409 por ruta y su mapeo; `live` verde 3 corridas seguidas. Si no pasa, se discute con el usuario
@@ -282,6 +327,6 @@ crea un histórico de fixture (prefijo propio) y prueba el 409 por ruta y su map
 | Alinear docs al arrancar (`ACTIVE_WORK`, `ROADMAP`, `ARCHITECTURE`, ADR 019 sustituida y ADR 025 en borrador; ADR 025 se completa en B4) | Hecho (2026-10-09) |
 | B0 Medición y diagnóstico | Hecho (2026-10-09): ver «Resultados de B0»; falta solo el k6 contra un deploy real (lo corre `escala.yml`/manual) |
 | B1 Piso / lectura | Hecho en local y test (2026-10-09); producción al final, con B2 |
-| B2 Histórico | Pendiente |
-| B3 Puerta | Pendiente |
+| B2 Histórico | Hecho en local; en test falta el ajuste de rendimiento del archivado (2026-10-09) |
+| B3 Puerta | Medida (2026-10-09): un usuario pasa, 5–10 simultáneos NO — decisión del usuario pendiente |
 | B4 Cierre y limpieza | Pendiente |
