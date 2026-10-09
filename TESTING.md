@@ -21,6 +21,13 @@ lo justifica — nunca para que deje de fallar.
 Además: `npx tsc --noEmit` y `npm run lint` antes de cualquier commit que toque
 código.
 
+- **Guardias de la API:** `__tests__/api-route-guards.test.ts` (corre con `npm test`) exige que cada método de cada
+  `app/api/**/route.ts` llame `await requireSection/requireAnySection(...)` antes de leer el body o la base, y que toda ruta
+  que el proxy deja pasar sin sesión (portal, `keep-alive`, `internal`, OAuth de Drive) esté declarada con su guardia propia.
+  Una ruta nueva que no cumpla falla el test; si de verdad es pública o solo pide sesión, se declara en `PUBLICAS` / `SOLO_SESION`.
+- **Un push de solo `.md` a `main` no dispara CI** (`paths-ignore` en `e2e.yml`, `test.yml` y `migrations.yml`, solo en `push`).
+  En `pull_request` no se filtra por ruta: un check omitido queda pendiente y bloquea el merge.
+
 ## Por qué el nivel live importa
 
 Los niveles mockeados responden siempre 200: no pueden decir si el servidor y la

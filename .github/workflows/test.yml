@@ -9,6 +9,9 @@ on:
   push:
     branches:
       - main
+    # Un push de solo .md no ejecuta build ni tests. Solo en `push`: en `pull_request` un check omitido
+    # por filtro de rutas queda pendiente y bloquearia el merge (los PRs usan el job `changes`).
+    paths-ignore: ['**.md']
 
 permissions:
   contents: read
