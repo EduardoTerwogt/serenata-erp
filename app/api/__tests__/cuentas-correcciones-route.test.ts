@@ -132,4 +132,13 @@ describe('POST /api/cuentas/correcciones', () => {
     expect(res.status).toBe(500)
     expect(JSON.stringify(await res.json())).not.toContain('boom')
   })
+
+  it('#110 B2 -- un proyecto histórico responde 409 explícito (proyecto_historico), nunca 500', async () => {
+    mocks.rpcMock.mockResolvedValueOnce({ data: null, error: { code: 'P1420', message: 'proyecto_historico: el proyecto SH061 ya es histórico y no admite cambios en Cuentas' } })
+    const res = await postCorreccion(req({ accion: 'anular_pago', dominio: 'cobro', pago_id: PAGO, motivo: 'duplicado' }))
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.codigo).toBe('proyecto_historico')
+    expect(body.error).toMatch(/histórico/)
+  })
 })

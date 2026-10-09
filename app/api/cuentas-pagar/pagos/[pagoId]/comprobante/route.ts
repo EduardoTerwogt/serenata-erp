@@ -2,7 +2,7 @@ import { requireSection } from '@/lib/api-auth'
 import { getProyectoById } from '@/lib/db'
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
-import { buildErrorResponse } from '@/lib/server/errors/domain-error'
+import { buildErrorResponse, respuestaProyectoHistorico } from '@/lib/server/errors/domain-error'
 import { resolveUploadFolderId } from '@/lib/server/loadtest/drive-folder-override'
 import { logStructured, newRequestId } from '@/lib/server/observability/log'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
@@ -76,6 +76,8 @@ export async function POST(request: Request, props: { params: Promise<{ pagoId: 
       const codigo = Object.keys(MENSAJES).find((k) => detail.startsWith(k))
       // El archivo ya quedó en Drive: se registra para poder limpiarlo.
       logStructured({ requestId, route: ROUTE, level: codigo ? 'warn' : 'error', message: codigo ?? 'rpc_adjuntar_comprobante_error', detail: `${detail} (archivo huérfano: ${url})` })
+      const historico = respuestaProyectoHistorico(error, requestId)
+      if (historico) return Response.json(historico.body, { status: historico.status })
       if (codigo) return Response.json({ error: codigo, message: MENSAJES[codigo], requestId }, { status: 409 })
       return Response.json({ error: 'No se pudo adjuntar el comprobante', requestId }, { status: 400 })
     }

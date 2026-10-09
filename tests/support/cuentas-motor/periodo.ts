@@ -284,6 +284,8 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
       mes: fecha ? Number(fecha.slice(5, 7)) : null,
       sin_fecha: !fecha,
       sin_proyecto: b.sin_proyecto,
+      // El doble no archiva (el histórico es estado de la BD); la paridad con SQL se compara sin proyectos históricos.
+      historico: false,
       conceptos,
       cuentas: derivarCuentasProyecto(conceptos, { reabierta: b.reabierta }),
       totales: totalesDe(conceptos),

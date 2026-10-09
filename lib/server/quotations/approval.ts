@@ -1,4 +1,5 @@
 import { getCotizacionById } from '@/lib/db'
+import { respuestaProyectoHistorico } from '@/lib/server/errors/domain-error'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 
 export async function approveQuotationAndFetchResult(id: string) {
@@ -26,6 +27,9 @@ export async function approveQuotationAndFetchResult(id: string) {
   const { data, error } = await supabaseAdmin.rpc('approve_cotizacion', { p_id: id })
 
   if (error) {
+    // P1420 (#110 B2): aprobar una complementaria de un proyecto histórico (solo consulta).
+    const historico = respuestaProyectoHistorico(error)
+    if (historico) return { ok: false as const, status: historico.status, body: historico.body }
     // P1418 (D12, F4): datos de la cotización que la aprobación exige (cliente del
     // catálogo, fecha de entrega válida). Falla explícito, con el motivo.
     if (error.code === 'P1418') {

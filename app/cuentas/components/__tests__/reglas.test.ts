@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { chipsActivos, reglasFiltros } from '../Filtros'
 import { agruparProyectos } from '../Proyectos'
+import { chipProyecto } from '../ui'
 import type { EstadoCuentas } from '../useCuentasUrl'
 import type { TarjetaProyecto } from '@/lib/shared/cuentas/periodo-tipos'
 
@@ -46,5 +47,14 @@ describe('agruparProyectos', () => {
 
   it('sin agrupar, un solo grupo sin encabezado', () => {
     expect(agruparProyectos([p('a', 7)], [], 2026, false)).toEqual([{ key: 'todos', label: null, proyectos: [p('a', 7)] }])
+  })
+})
+
+describe('chipProyecto (#110 B2)', () => {
+  const cuentas = { cerradas: true, reabiertas: false, pendientes: 0, hay_vencidos: false, fecha_cierre: '2026-01-10' }
+
+  it('un proyecto histórico se ve como "Histórico", aunque también esté cerrado', () => {
+    expect(chipProyecto({ cuentas, historico: true })).toEqual({ label: 'Histórico', tone: 'draft', corto: 'Histórico' })
+    expect(chipProyecto({ cuentas, historico: false }).label).toBe('Cerrada')
   })
 })

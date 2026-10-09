@@ -6,6 +6,7 @@
  */
 import { uploadFileToDrive } from '@/lib/integrations/google/drive'
 import { getGoogleEnv } from '@/lib/integrations/google/env'
+import { respuestaProyectoHistorico } from '@/lib/server/errors/domain-error'
 import { logStructured, newRequestId } from '@/lib/server/observability/log'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { crearSubida } from './archivos-pendientes'
@@ -70,6 +71,8 @@ export async function ligarComplemento(p: LigarComplementoParams): Promise<{ sta
     const requestId = newRequestId()
     const detail = error.message ?? ''
     const codigo = detail.split(':')[0].trim()
+    const historico = respuestaProyectoHistorico(error, requestId)
+    if (historico) return historico
     const conocido = MENSAJES[codigo]
     logStructured({ requestId, route: p.route, level: conocido ? 'warn' : 'error', message: conocido ? codigo : `rpc_${RPC[p.lado]}_error`, detail: `${detail} (archivos huérfanos: ${xmlUrl}${pdfUrl ? `, ${pdfUrl}` : ''})` })
     if (conocido) return { status: conocido.status, body: { error: codigo, message: conocido.mensaje, requestId } }
@@ -126,6 +129,8 @@ export async function agregarPdfComplementoCobro(p: {
     .select()
     .single()
   if (error) {
+    const historico = respuestaProyectoHistorico(error)
+    if (historico) return historico
     if (error.code === '23505') return { status: 409, body: { error: 'complemento_existente', message: 'Ese pago ya tiene el PDF del complemento.' } }
     throw error
   }

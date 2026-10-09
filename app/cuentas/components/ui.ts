@@ -14,9 +14,10 @@ export const TONO: Record<TonoEstado, StatusTone> = {
   cancelada: 'cancelled',
 }
 
-/** Chip del proyecto (README): "Cerrada", "Reabierta" o "N pendientes" (rojo si hay vencidos). */
-export function chipProyecto(p: Pick<TarjetaProyecto, 'cuentas'>): { label: string; tone: StatusTone; corto: string } {
+/** Chip del proyecto (README): "Histórico", "Cerrada", "Reabierta" o "N pendientes" (rojo si hay vencidos). */
+export function chipProyecto(p: Pick<TarjetaProyecto, 'cuentas' | 'historico'>): { label: string; tone: StatusTone; corto: string } {
   const c = p.cuentas
+  if (p.historico) return { label: 'Histórico', tone: 'draft', corto: 'Histórico' }
   if (c.cerradas) return { label: 'Cerrada', tone: 'approved', corto: 'Cerrada' }
   if (c.reabiertas && c.pendientes === 0) return { label: 'Reabierta', tone: 'issued', corto: 'Reabierta' }
   return {

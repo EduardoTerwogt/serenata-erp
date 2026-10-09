@@ -1,4 +1,5 @@
 import { requireAnySection } from '@/lib/api-auth'
+import { respuestaProyectoHistorico } from '@/lib/server/errors/domain-error'
 import { supabaseAdmin } from '@/lib/server/supabase-admin'
 import { ItemPatchSchema, validate } from '@/lib/validation/schemas'
 import { createHistorialCambioResponsableItem } from '@/lib/server/repositories/historial-cambios-responsable'
@@ -84,6 +85,8 @@ export async function PATCH(
       })
       if (rpcError) {
         if (rpcError.code === 'P1412') return grupoNoAbiertoResponse
+        const historico = respuestaProyectoHistorico(rpcError)
+        if (historico) return Response.json(historico.body, { status: historico.status })
         throw rpcError
       }
     } else {

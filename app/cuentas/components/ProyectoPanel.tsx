@@ -215,6 +215,14 @@ export function leyendaCierre(p: ProyectoDetalle): string {
 }
 
 function Aviso({ p }: { p: ProyectoDetalle }) {
+  if (p.historico) {
+    return (
+      <div className="flex items-start gap-2 text-[12px] leading-[1.45] text-subtext">
+        <Icon name="lock" size={13} className="mt-0.5 flex-none" />
+        <span>Proyecto histórico: solo consulta. Pasó a histórico tras 190 días sin cambios con todo cobrado, pagado y con documentos; ya no admite cambios.</span>
+      </div>
+    )
+  }
   return (
     <div className="flex items-start gap-2 text-[12px] leading-[1.45] text-subtext">
       <Icon name="info" size={13} className="mt-0.5 flex-none" />

@@ -4,6 +4,23 @@ import { toErrorMessage } from '@/lib/server/portal/error-message'
 const MENSAJE_GENERICO = 'Error interno, intenta de nuevo'
 
 /**
+ * #110 B2 (decisión 025): SQLSTATE con el que las guardas de Cuentas rechazan cualquier escritura sobre un proyecto histórico
+ * (`proyecto_historico`). Es una regla de negocio, no una falla: sale como 409 explícito en toda ruta.
+ */
+export const CODIGO_PROYECTO_HISTORICO = 'P1420'
+export const MENSAJE_PROYECTO_HISTORICO = 'Este proyecto ya es histórico (solo consulta): no admite cambios en Cuentas.'
+
+export function esProyectoHistorico(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === CODIGO_PROYECTO_HISTORICO
+}
+
+/** Para las funciones que responden `{ status, body }` en vez de lanzar: la respuesta 409 de un histórico, o null si no lo es. */
+export function respuestaProyectoHistorico(error: unknown, requestId?: string): { status: 409; body: { error: string; codigo: string; requestId?: string } } | null {
+  if (!esProyectoHistorico(error)) return null
+  return { status: 409, body: { error: MENSAJE_PROYECTO_HISTORICO, codigo: 'proyecto_historico', ...(requestId ? { requestId } : {}) } }
+}
+
+/**
  * EF-2 1E-2: error con un mensaje explícitamente seguro para el cliente
  * (`safeMessage`) separado del error real que causó el fallo (`cause`).
  * `code` identifica el tipo de error en los logs sin exponer detalle
@@ -47,6 +64,11 @@ export function buildErrorResponse(error: unknown, route: string): Response {
       detail: toErrorMessage(error.cause ?? error),
     })
     return Response.json({ error: error.safeMessage, requestId }, { status: error.status })
+  }
+
+  if (esProyectoHistorico(error)) {
+    logStructured({ requestId, route, level: 'warn', message: 'proyecto_historico', detail: toErrorMessage(error) })
+    return Response.json({ error: MENSAJE_PROYECTO_HISTORICO, codigo: 'proyecto_historico', requestId }, { status: 409 })
   }
 
   logStructured({

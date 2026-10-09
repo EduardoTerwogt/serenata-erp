@@ -13,6 +13,7 @@
 --   psql -d <bd> -qAt -f scripts/db/cuentas-equivalencia.sql > golden-antes.txt     (crea la fixture si falta y calcula el golden)
 --   psql -d <bd> -qAt -v solo_golden=1 -f scripts/db/cuentas-equivalencia.sql > golden-despues.txt   (no toca la fixture)
 --   psql -d <bd> -q -v limpiar=1 -f scripts/db/cuentas-equivalencia.sql                (retira la fixture; contiene DELETE)
+--   psql -d <bd> -q -v solo_fixture=1 -f scripts/db/cuentas-equivalencia.sql           (solo crea la fixture; la usa cuentas-historico-prueba.sql)
 -- Luego `diff golden-antes.txt golden-despues.txt` (vacío = equivalente). `-q` es obligatorio: sin él las etiquetas de comando ensucian la salida.
 -- Con datos de `escala-generador.sql` presentes el golden los incluye también (mismo código, más filas).
 --
@@ -486,6 +487,33 @@ BEGIN
   v_p3 := pg_temp.eq_pc('EQ37c', ARRAY[pg_temp.eq_cc('EQ37')], ARRAY[0.4], DATE '2026-03-10');
   PERFORM pg_temp.eq_comp('EQ37a', v_fx, v_p1, 'validado');
   PERFORM pg_temp.eq_comp('EQ37b', v_fx, v_p2, 'validado');
+  -- EQ38 (2026) + EQ39 (2025): ambos resueltos y unidos por UNA factura de cobro: componente que cruza años (#110 B2).
+  PERFORM pg_temp.eq_proy('EQ38', DATE '2026-02-02', cl_a, ARRAY['moral']);
+  PERFORM pg_temp.eq_proy('EQ39', DATE '2025-12-20', cl_a, ARRAY['moral']);
+  v_fx := pg_temp.eq_fx('EQ3839', ARRAY[pg_temp.eq_cc('EQ38'), pg_temp.eq_cc('EQ39')], 'PUE', 'validado', DATE '2026-02-06');
+  PERFORM pg_temp.eq_pc('EQ38', ARRAY[pg_temp.eq_cc('EQ38')], ARRAY[1.0], DATE '2026-02-12');
+  PERFORM pg_temp.eq_pc('EQ39', ARRAY[pg_temp.eq_cc('EQ39')], ARRAY[1.0], DATE '2026-02-12');
+  PERFORM pg_temp.eq_fp(pg_temp.eq_gr('EQ38'), 'EQ38', 'validado', 'PUE', DATE '2026-02-08');
+  PERFORM pg_temp.eq_pp('EQ38', ARRAY[pg_temp.eq_gr('EQ38')], ARRAY[1.0], DATE '2026-02-14');
+  PERFORM pg_temp.eq_fp(pg_temp.eq_gr('EQ39'), 'EQ39', 'validado', 'PUE', DATE '2026-02-08');
+  PERFORM pg_temp.eq_pp('EQ39', ARRAY[pg_temp.eq_gr('EQ39')], ARRAY[1.0], DATE '2026-02-14');
+  -- EQ40 + EQ41 (2026): resueltos, facturas separadas y UN pago de cobro compartido: se archivan juntos.
+  PERFORM pg_temp.eq_proy('EQ40', DATE '2026-02-20', cl_b, ARRAY['moral']);
+  PERFORM pg_temp.eq_proy('EQ41', DATE '2026-02-22', cl_b, ARRAY['moral']);
+  v_fx := pg_temp.eq_fx('EQ40', ARRAY[pg_temp.eq_cc('EQ40')], 'PUE', 'validado', DATE '2026-02-25');
+  v_fx := pg_temp.eq_fx('EQ41', ARRAY[pg_temp.eq_cc('EQ41')], 'PUE', 'validado', DATE '2026-02-25');
+  PERFORM pg_temp.eq_pc('EQ4041', ARRAY[pg_temp.eq_cc('EQ40'), pg_temp.eq_cc('EQ41')], ARRAY[1.0, 1.0], DATE '2026-03-05');
+  PERFORM pg_temp.eq_fp(pg_temp.eq_gr('EQ40'), 'EQ40', 'validado', 'PUE', DATE '2026-02-27');
+  PERFORM pg_temp.eq_pp('EQ40', ARRAY[pg_temp.eq_gr('EQ40')], ARRAY[1.0], DATE '2026-03-07');
+  PERFORM pg_temp.eq_fp(pg_temp.eq_gr('EQ41'), 'EQ41', 'validado', 'PUE', DATE '2026-02-27');
+  PERFORM pg_temp.eq_pp('EQ41', ARRAY[pg_temp.eq_gr('EQ41')], ARRAY[1.0], DATE '2026-03-07');
+  -- EQ42 (resuelto) + EQ43 (cobro pendiente) unidos por UNA factura: ninguno se archiva (el componente incluye un proyecto vivo).
+  PERFORM pg_temp.eq_proy('EQ42', DATE '2026-03-02', cl_a, ARRAY['moral']);
+  PERFORM pg_temp.eq_proy('EQ43', DATE '2026-03-04', cl_a, ARRAY['moral']);
+  v_fx := pg_temp.eq_fx('EQ4243', ARRAY[pg_temp.eq_cc('EQ42'), pg_temp.eq_cc('EQ43')], 'PUE', 'validado', DATE '2026-03-08');
+  PERFORM pg_temp.eq_pc('EQ42', ARRAY[pg_temp.eq_cc('EQ42')], ARRAY[1.0], DATE '2026-03-15');
+  PERFORM pg_temp.eq_fp(pg_temp.eq_gr('EQ42'), 'EQ42', 'validado', 'PUE', DATE '2026-03-10');
+  PERFORM pg_temp.eq_pp('EQ42', ARRAY[pg_temp.eq_gr('EQ42')], ARRAY[1.0], DATE '2026-03-17');
   -- Cobro sin proyecto (y sin cotización): uno facturado y cobrado, otro pendiente.
   INSERT INTO cuentas_cobrar (id, folio, cotizacion_id, proyecto_id, monto_total, monto_pagado, created_at)
   VALUES (pg_temp.eq_cc('SINPROY1'), 'EQ-CC-SINPROY1', NULL, NULL, 1000, 0, TIMESTAMPTZ '2026-03-01 12:00+00'),
@@ -494,6 +522,10 @@ BEGIN
   PERFORM pg_temp.eq_pc('SINPROY1', ARRAY[pg_temp.eq_cc('SINPROY1')], ARRAY[1.0], DATE '2026-03-15');
 END
 $fx$;
+\endif
+
+\if :{?solo_fixture}
+\quit
 \endif
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -505,6 +537,12 @@ $fx$;
 \pset null '∅'
 
 -- `p_sql` devuelve (k text, t text); se imprime cuántas filas y el md5 de sus textos en el orden de k.
+-- `cuentas_periodo` agrega `historico` por proyecto (#110 B2): se quita para comparar contra versiones anteriores; la bandera se
+-- verifica aparte en `periodo[bandera historico]`.
+CREATE FUNCTION pg_temp.eq_sh(j jsonb) RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT regexp_replace(regexp_replace(j::text, ', "historico": (true|false)', '', 'g'), '"historico": (true|false), ', '', 'g')
+$$;
+
 CREATE FUNCTION pg_temp.eq_md5(p_sql text, OUT n bigint, OUT h text) LANGUAGE plpgsql AS $f$
 BEGIN
   EXECUTE 'SELECT count(*), COALESCE(md5(string_agg(t, ''|'' ORDER BY k, t)), ''vacio'') FROM (' || p_sql || ') x' INTO n, h;
@@ -561,7 +599,7 @@ ORDER BY m.modo, a.anio NULLS LAST;
 SELECT 'periodo[anio=' || a.anio || ',mes=' || m.mes || ']', r.n, r.h
 FROM (VALUES (2026), (2025)) a(anio)
 CROSS JOIN (VALUES ('todo'), ('1'), ('2'), ('3'), ('4'), ('5'), ('6'), ('7'), ('8'), ('9'), ('10'), ('11'), ('12')) m(mes)
-CROSS JOIN LATERAL pg_temp.eq_md5(format($q$SELECT 'p' AS k, cuentas_periodo(jsonb_build_object('anio', %s, 'mes', %L, 'hoy', '2026-10-15', 'page_size', 200))::jsonb::text AS t$q$, a.anio, m.mes)) r
+CROSS JOIN LATERAL pg_temp.eq_md5(format($q$SELECT 'p' AS k, pg_temp.eq_sh(cuentas_periodo(jsonb_build_object('anio', %s, 'mes', %L, 'hoy', '2026-10-15', 'page_size', 200))::jsonb) AS t$q$, a.anio, m.mes)) r
 ORDER BY a.anio DESC, CASE WHEN m.mes = 'todo' THEN 0 ELSE m.mes::int END;
 
 SELECT 'periodo[' || f.nombre || ']', r.n, r.h
@@ -582,20 +620,27 @@ FROM (VALUES
   ('anio sin proyectos', '{"anio":2000,"mes":"todo","vista":"proyectos"}'),
   ('anio anterior sin mes', '{"anio":2025,"vista":"proyectos","page_size":200}')
 ) f(nombre, filtro)
-CROSS JOIN LATERAL pg_temp.eq_md5(format($q$SELECT 'p' AS k, cuentas_periodo(%L::jsonb || '{"hoy":"2026-10-15"}'::jsonb)::jsonb::text AS t$q$, f.filtro)) r
+CROSS JOIN LATERAL pg_temp.eq_md5(format($q$SELECT 'p' AS k, pg_temp.eq_sh(cuentas_periodo(%L::jsonb || '{"hoy":"2026-10-15"}'::jsonb)::jsonb) AS t$q$, f.filtro)) r
 ORDER BY f.nombre;
 
 -- Proyecto seleccionado (detalle en el panel) de cada proyecto de la muestra.
 SELECT 'periodo[seleccionado]', r.n, r.h
 FROM pg_temp.eq_md5($q$
-  SELECT p.id AS k, cuentas_periodo(jsonb_build_object('anio', 2026, 'mes', 'todo', 'hoy', '2026-10-15', 'proyecto', p.id, 'vista', 'lista', 'page_size', 5))::jsonb::text AS t
+  SELECT p.id AS k, pg_temp.eq_sh(cuentas_periodo(jsonb_build_object('anio', 2026, 'mes', 'todo', 'hoy', '2026-10-15', 'proyecto', p.id, 'vista', 'lista', 'page_size', 5))::jsonb) AS t
   FROM _eq_proys p WHERE p.id LIKE 'EQ%'
+$q$) r;
+
+-- Bandera `historico` por proyecto en la lista de tarjetas (#110 B2; en versiones anteriores a B2 no existe y sale 'null').
+SELECT 'periodo[bandera historico]', r.n, r.h
+FROM pg_temp.eq_md5($q$
+  SELECT t->>'id' AS k, COALESCE(t->>'historico', 'null') AS t
+  FROM jsonb_array_elements(cuentas_periodo('{"anio":2026,"mes":"todo","hoy":"2026-10-15","vista":"proyectos","page_size":200}'::jsonb)::jsonb->'proyectos'->'items') t
 $q$) r;
 
 -- Años de otros proyectos de escala: solo el año completo.
 SELECT 'periodo[anio=' || a.anio || ',mes=todo,otros]', r.n, r.h
 FROM _eq_anios a
-CROSS JOIN LATERAL pg_temp.eq_md5(format($q$SELECT 'p' AS k, cuentas_periodo(jsonb_build_object('anio', %s, 'mes', 'todo', 'hoy', '2026-10-15', 'page_size', 60))::jsonb::text AS t$q$, a.anio)) r
+CROSS JOIN LATERAL pg_temp.eq_md5(format($q$SELECT 'p' AS k, pg_temp.eq_sh(cuentas_periodo(jsonb_build_object('anio', %s, 'mes', 'todo', 'hoy', '2026-10-15', 'page_size', 60))::jsonb) AS t$q$, a.anio)) r
 WHERE a.anio NOT IN (2025, 2026, 2000)
 ORDER BY a.anio DESC;
 

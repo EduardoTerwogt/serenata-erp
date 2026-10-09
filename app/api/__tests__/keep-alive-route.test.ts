@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   rateLimitsDeleteMock: vi.fn(),
   rateLimitsLtMock: vi.fn(),
   rpcMock: vi.fn(),
+  auditoriaMock: vi.fn(),
   operationsLtMock: vi.fn(),
   operationsDeleteMock: vi.fn(),
 }))
@@ -64,7 +65,12 @@ describe('GET /api/keep-alive', () => {
     mocks.deleteMock.mockReset().mockReturnValue({ not: mocks.notMock })
     mocks.rateLimitsLtMock.mockReset().mockResolvedValue({ error: null, count: 0 })
     mocks.rateLimitsDeleteMock.mockReset().mockReturnValue({ lt: mocks.rateLimitsLtMock })
-    mocks.rpcMock.mockReset().mockResolvedValue({ data: AUDITORIA_OK, error: null })
+    mocks.auditoriaMock.mockReset().mockResolvedValue({ data: AUDITORIA_OK, error: null })
+    mocks.rpcMock.mockReset().mockImplementation(async (fn: string) => {
+      if (fn === 'cuentas_anios') return { data: [2026, 2025], error: null }
+      if (fn === 'archivar_cuentas_historicas') return { data: { archivados: 2 }, error: null }
+      return mocks.auditoriaMock()
+    })
     mocks.operationsLtMock.mockReset().mockResolvedValue({ error: null, count: 0 })
     mocks.operationsDeleteMock.mockReset().mockReturnValue({ lt: mocks.operationsLtMock })
     process.env.CRON_SECRET = 'secreto-real'
@@ -147,7 +153,7 @@ describe('GET /api/keep-alive', () => {
 
   it('B7 -- una violación se registra y se reporta, pero no marca el keep-alive como fallido', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mocks.rpcMock.mockResolvedValue({
+    mocks.auditoriaMock.mockResolvedValue({
       data: { ...AUDITORIA_OK, total_violaciones: 2, guardas: [{ clave: 'cp_sin_grupo', descripcion: 'x', violaciones: 2, ejemplos: ['a'] }] },
       error: null,
     })
@@ -162,7 +168,7 @@ describe('GET /api/keep-alive', () => {
 
   it('B7 -- si la auditoría falla, el keep-alive sigue y lo dice sin fingir que todo está en orden', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mocks.rpcMock.mockResolvedValue({ data: null, error: { message: 'boom' } })
+    mocks.auditoriaMock.mockResolvedValue({ data: null, error: { message: 'boom' } })
 
     const response = await GET(buildRequest('Bearer secreto-real'))
 
@@ -195,5 +201,49 @@ describe('GET /api/keep-alive', () => {
 
     expect(response.status).toBe(200)
     expect(body.bulk_import_operations_deleted).toBeNull()
+  })
+
+  it('#110 B2 -- archiva a histórico una vez por año, con la fecha de hoy, y reporta cuántos', async () => {
+    const response = await GET(buildRequest('Bearer secreto-real'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    const llamadas = mocks.rpcMock.mock.calls.filter(([fn]) => fn === 'archivar_cuentas_historicas')
+    expect(llamadas.map(([, args]) => args.p_year)).toEqual([2026, 2025])
+    expect(llamadas.every(([, args]) => args.p_dry_run === false && /^\d{4}-\d{2}-\d{2}$/.test(args.p_hoy))).toBe(true)
+    expect(body.archivado).toEqual({ ok: true, anios: 2, proyectos: 4, fallos: [] })
+  })
+
+  it('#110 B2 -- si el archivado de un año falla, los demás siguen y el keep-alive devuelve 500 al final', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.rpcMock.mockImplementation(async (fn: string, args?: { p_year?: number }) => {
+      if (fn === 'cuentas_anios') return { data: [2026, 2025], error: null }
+      if (fn === 'archivar_cuentas_historicas') return args?.p_year === 2026 ? { data: null, error: { message: 'statement timeout' } } : { data: { archivados: 3 }, error: null }
+      return mocks.auditoriaMock()
+    })
+
+    const response = await GET(buildRequest('Bearer secreto-real'))
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.archivado.ok).toBe(false)
+    expect(body.archivado.proyectos).toBe(3)
+    expect(body.archivado.fallos).toEqual(['2026: statement timeout'])
+    expect(body.auditoria).toEqual({ ok: true, total_violaciones: 0 })
+    expect(body.rate_limits_deleted).toBe(0)
+    errorSpy.mockRestore()
+  })
+
+  it('#110 B2 -- si no se puede leer la lista de años, lo dice (500) en vez de fingir que archivó', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.rpcMock.mockImplementation(async (fn: string) => (fn === 'cuentas_anios' ? { data: null, error: { message: 'boom' } } : mocks.auditoriaMock()))
+
+    const response = await GET(buildRequest('Bearer secreto-real'))
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body.archivado.ok).toBe(false)
+    expect(mocks.rpcMock).not.toHaveBeenCalledWith('archivar_cuentas_historicas', expect.anything())
+    errorSpy.mockRestore()
   })
 })
