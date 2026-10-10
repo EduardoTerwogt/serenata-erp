@@ -49,7 +49,10 @@ const Nota = ({ children, cursiva }: { children: ReactNode; cursiva?: boolean })
 const th = 'whitespace-nowrap px-3 py-2 text-right text-[10.5px] font-semibold uppercase tracking-[0.04em] text-subtext first:text-left'
 const td = 'whitespace-nowrap px-3 py-2 text-right tabular-nums first:text-left'
 
-function Detalle({ p, aprox }: { p: ProyectoDetalle; aprox: boolean }) {
+/** Detalle para contabilidad: va debajo de las tablas de Entradas y Salidas. No aplica a «Sin proyecto». */
+export function DetalleContable({ p, hoy }: { p: ProyectoDetalle; hoy: string }) {
+  if (p.sin_proyecto) return null
+  const aprox = resumenProyecto(p, hoy).aprox
   const t = p.totales
   const c = p.cierre
   // [concepto, monto, ¿depende de totales estimados?]: lo del cliente y el subtotal de proveedores son exactos.
@@ -204,7 +207,7 @@ export function ProyectoResumen({ p, hoy }: { p: ProyectoDetalle; hoy: string })
       <div className="flex flex-col gap-2 rounded-[10px] bg-row-alt px-3.5 py-3">
         <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-[13.5px] text-body">
           <span>
-            El cliente pagó {completo ? 'todo' : 'parte'}: <b className="font-semibold tabular-nums text-ink">{fmtMoney(t.cobrado)}</b>
+            El cliente ha pagado: <b className="font-semibold tabular-nums text-ink">{fmtMoney(t.cobrado)}</b>
           </span>
           {!completo && (
             <span>
@@ -245,7 +248,6 @@ export function ProyectoResumen({ p, hoy }: { p: ProyectoDetalle; hoy: string })
           <Nota cursiva>Referencia: el ISR real se calcula con toda la empresa.</Nota>
         </Sobre>
       </section>
-      <Detalle p={p} aprox={r.aprox} />
     </>
   )
 }

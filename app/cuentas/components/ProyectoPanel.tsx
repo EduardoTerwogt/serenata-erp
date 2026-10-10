@@ -6,7 +6,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import type { ConceptoVista, ProyectoDetalle } from '@/lib/shared/cuentas/periodo-tipos'
 import { TablaConceptos } from './Conceptos'
 import { fechaCorta } from './formato'
-import { ProyectoResumen } from './ProyectoResumen'
+import { DetalleContable, ProyectoResumen } from './ProyectoResumen'
 import { chipProyecto } from './ui'
 
 interface ProyectoPanelProps {
@@ -79,6 +79,7 @@ export function CuerpoProyecto({ p, hoy, onAbrirConcepto, onAccion, pie }: Omit<
       <ProyectoResumen p={p} hoy={hoy} />
       <TablaConceptos tipo="cobro" conceptos={cobros} onAbrir={onAbrirConcepto} onAccion={p.historico ? undefined : onAccion} />
       <TablaConceptos tipo="pago" conceptos={pagos} onAbrir={onAbrirConcepto} onAccion={p.historico ? undefined : onAccion} />
+      <DetalleContable p={p} hoy={hoy} />
       <Aviso p={p} />
       {pie}
     </>
