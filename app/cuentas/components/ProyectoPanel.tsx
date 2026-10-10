@@ -23,7 +23,7 @@ interface ProyectoPanelProps {
 /** Cierre del proyecto; el conteo de pendientes ya lo dice el chip del encabezado. */
 export function leyendaCierre(p: ProyectoDetalle): string {
   if (p.cuentas.cerradas) return `Cuentas cerradas automáticamente el ${fechaCorta(p.cuentas.fecha_cierre)}`
-  if (p.cuentas.reabiertas) return 'Cuentas reabiertas'
+  if (p.cuentas.reabiertas) return p.cuentas.pendientes === 0 ? 'Cuentas reabiertas manualmente' : 'Cuentas reabiertas'
   return ''
 }
 
