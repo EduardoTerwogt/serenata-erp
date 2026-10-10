@@ -79,6 +79,7 @@ describe('utilidades de presentación', () => {
   it('«~» solo en lo aproximado', () => {
     expect(montoAprox(1234.5, true)).toBe('~$1,234.50')
     expect(montoAprox(1234.5, false)).toBe('$1,234.50')
+    expect(montoAprox(-1234.5, true)).toBe('-~$1,234.50')
   })
   it('alerta: cobro que el cliente ya pagó y sigue sin factura', () => {
     expect(cobroSinFactura({ tipo: 'cobro', estado: 'sin_factura', pagado: 10 })).toBe(true)

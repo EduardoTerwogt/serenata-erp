@@ -115,7 +115,7 @@ export function TablaConceptos({ tipo, conceptos, onAbrir, onAccion }: { tipo: '
                 <PagadoTotal c={c} />
               </div>
               {onAccion && c.paso_etiqueta && (
-                <div className="flex justify-end pt-1">
+                <div className="flex justify-end pt-1 text-[12px]">
                   <SiguientePaso c={c} onAccion={onAccion} />
                 </div>
               )}

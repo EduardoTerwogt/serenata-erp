@@ -12,7 +12,7 @@ const mesLabel = (mes: string) => `${MESES_CORTOS[Number(mes.slice(5, 7)) - 1]} 
 export const cobroSinFactura = (c: Pick<ConceptoVista, 'tipo' | 'estado' | 'pagado'>) => c.tipo === 'cobro' && c.estado === 'sin_factura' && c.pagado > 0
 
 /** `~` delante de un monto aproximado (el total de un proveedor sin factura se estima con su régimen). */
-export const montoAprox = (v: number, aprox: boolean) => `${aprox ? '~' : ''}${fmtMoney(v)}`
+export const montoAprox = (v: number, aprox: boolean) => (aprox ? `${v < 0 ? '-' : ''}~${fmtMoney(Math.abs(v))}` : fmtMoney(v))
 
 /** Lo que falta para cerrar el proyecto, en frases ("facturarle al cliente", "asignar 4 proveedores"…). */
 export function falta(conceptos: ConceptoVista[]): string[] {
