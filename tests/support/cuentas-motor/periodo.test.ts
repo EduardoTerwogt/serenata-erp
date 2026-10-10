@@ -139,7 +139,7 @@ describe('construirPeriodo', () => {
     const filas = r.seleccionado!.cierre_mensual
     const iva = filas.filter((f) => f.concepto === 'iva').reduce((a, f) => a + f.monto, 0)
     expect(round(iva)).toBe(r.seleccionado!.cierre.iva_neto_a_enterar)
-    expect(filas[0]).toMatchObject({ concepto: 'proveedores', monto: 21460 })
+    expect(filas.some((f) => ['isr', 'proveedores'].includes(f.concepto))).toBe(false)
     expect(r.proyectos.items[0]).not.toHaveProperty('cierre_mensual')
   })
 

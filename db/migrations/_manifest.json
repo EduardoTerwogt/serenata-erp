@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-09T14:16:55.790Z",
-  "count": 153,
+  "generated_at": "2026-10-10T00:10:14.465Z",
+  "count": 154,
   "order": [
     "20260101_base_schema_missing_tables.sql",
     "20260327_p0_p1_cotizaciones_stability.sql",
@@ -154,6 +154,7 @@
     "20261038_revocar_execute_funciones_publicas.sql",
     "20261039_b1_cuentas_conceptos_lectura.sql",
     "20261040_b2_historico_cuentas.sql",
-    "20261041_b2_historico_congela_regimen.sql"
+    "20261041_b2_historico_congela_regimen.sql",
+    "20261042_cuenta_proyecto_cierre.sql"
   ]
 }

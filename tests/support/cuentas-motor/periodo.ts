@@ -269,7 +269,9 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
     ]
 
     // #99: la utilidad bruta lleva el descuento de las cotizaciones (utilidad_total).
-    const cierre = calcularCierreProyecto(cierreInput, b.margen, b.fee, b.iva, round2(b.margen + b.fee - b.utilidad))
+    const cierreBase = calcularCierreProyecto(cierreInput, b.margen, b.fee, b.iva, round2(b.margen + b.fee - b.utilidad))
+    const totales = totalesDe(conceptos)
+    const cierre = { ...cierreBase, cuadre_diferencia: round2(totales.cobros_total - totales.pagos_total - cierreBase.sat_total - cierreBase.utilidad_bruta) }
     const pagosProveedor: Record<string, { fecha: string; monto: number }[]> = {}
     for (const g of gruposP) pagosProveedor[g.id] = g.pagos_realizados
     for (const cp of pagosP) pagosProveedor[cp.id] = cp.pagos_realizados
@@ -288,7 +290,7 @@ export function construirProyectos(raw: CuentasAnioRaw, hoy: string): ProyectoDe
       historico: false,
       conceptos,
       cuentas: derivarCuentasProyecto(conceptos, { reabierta: b.reabierta }),
-      totales: totalesDe(conceptos),
+      totales,
       cierre,
       cierre_mensual: calcularCierreMensual({
         cierre,

@@ -14,7 +14,6 @@
  *   favor" sin fecha límite (D30); no se arrastra a otro mes del proyecto.
  * - Retenciones del mes = pagado al proveedor en el mes × retenciones / total
  *   a transferir.
- * - ISR estimado del mes = ISR estimado × cobrado en el mes / total de cobros.
  * - Lo que falta cobrar o pagar va en una fila "Al cobrar" / "Al pagar".
  * Redondeo al centavo con el residuo en la última fila: la suma de las filas
  * de cada impuesto es exactamente el total del cierre.
@@ -92,11 +91,9 @@ export function calcularCierreMensual({ cierre, cobros, pagosProveedor }: Cierre
   const faltaCobrar = totalCobros - cobrado > 0.005
 
   const ivaTrasladadoMes = new Map<string, number>()
-  const isrMes = new Map<string, number>()
   if (totalCobros > 0) {
     for (const [mes, v] of Array.from(cobradoMes.entries())) {
       ivaTrasladadoMes.set(mes, (v * cierre.iva_cobrado) / totalCobros)
-      isrMes.set(mes, (v * cierre.isr_serenata_estimado) / totalCobros)
     }
   }
 
@@ -120,19 +117,6 @@ export function calcularCierreMensual({ cierre, cobros, pagosProveedor }: Cierre
 
   const filas: FilaCierre[] = []
 
-  const nProv = cierre.quien_cuanto_cuando.length
-  if (nProv > 0) {
-    filas.push({
-      concepto: 'proveedores',
-      quien: 'Proveedores',
-      sub: `${nProv} ${nProv === 1 ? 'proveedor' : 'proveedores'} · IVA incluido, menos retenciones`,
-      monto: round2(cierre.quien_cuanto_cuando.reduce((s, q) => s + q.total_a_transferir, 0)),
-      mes: null,
-      fecha_limite: null,
-      a_favor: false,
-    })
-  }
-
   const iva = repartir(cierre.iva_neto_a_enterar, ivaMes, faltaCobrar || faltaPagar)
   for (const f of iva.filas) {
     const aFavor = f.monto < 0
@@ -149,8 +133,17 @@ export function calcularCierreMensual({ cierre, cobros, pagosProveedor }: Cierre
     })
   }
   if (iva.pendiente !== 0 || (iva.filas.length === 0 && cierre.iva_neto_a_enterar !== 0)) {
+    const aFavor = iva.pendiente < 0
     const cuando = faltaCobrar && faltaPagar ? 'Al cobrar y al pagar' : faltaPagar ? 'Al pagar' : 'Al cobrar'
-    filas.push({ concepto: 'iva', quien: 'IVA a enterar', sub: cuando, monto: iva.pendiente, mes: null, fecha_limite: null, a_favor: false })
+    filas.push({
+      concepto: 'iva',
+      quien: aFavor ? 'IVA acreditable por aplicar' : 'IVA a enterar',
+      sub: aFavor ? 'Se descuenta en el mes en que pagues' : cuando,
+      monto: iva.pendiente,
+      mes: null,
+      fecha_limite: null,
+      a_favor: aFavor,
+    })
   }
 
   const retTotal = round2(cierre.iva_retenido_total + cierre.isr_retenido_total)
@@ -167,23 +160,7 @@ export function calcularCierreMensual({ cierre, cobros, pagosProveedor }: Cierre
     })
   }
   if (ret.pendiente !== 0) {
-    filas.push({ concepto: 'retenciones', quien: 'Retenciones a enterar', sub: 'Al pagar', monto: ret.pendiente, mes: null, fecha_limite: null, a_favor: false })
-  }
-
-  const isr = repartir(cierre.isr_serenata_estimado, isrMes, faltaCobrar)
-  for (const f of isr.filas) {
-    filas.push({
-      concepto: 'isr',
-      quien: `ISR estimado (30%) · ${mesLabel(f.mes)}`,
-      sub: `SAT · pago provisional el ${fechaCorta(fechaLimiteSat(f.mes))}`,
-      monto: f.monto,
-      mes: f.mes,
-      fecha_limite: fechaLimiteSat(f.mes),
-      a_favor: false,
-    })
-  }
-  if (isr.pendiente !== 0) {
-    filas.push({ concepto: 'isr', quien: 'ISR estimado (30%)', sub: 'Al cobrar', monto: isr.pendiente, mes: null, fecha_limite: null, a_favor: false })
+    filas.push({ concepto: 'retenciones', quien: 'Retenciones a enterar', sub: '17 del mes siguiente al pago', monto: ret.pendiente, mes: null, fecha_limite: null, a_favor: false })
   }
 
   return filas

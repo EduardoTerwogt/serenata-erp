@@ -182,7 +182,7 @@ export interface AvisosRespuesta {
   total: number
 }
 
-export type ConceptoCierre = 'proveedores' | 'iva' | 'retenciones' | 'isr'
+export type ConceptoCierre = 'iva' | 'retenciones'
 
 export interface FilaCierre {
   concepto: ConceptoCierre

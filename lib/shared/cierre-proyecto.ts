@@ -24,6 +24,13 @@ export interface CierreProyecto {
   iva_cobrado: number
   iva_pagado: number
   iva_neto_a_enterar: number
+  /** Lo que es del SAT: IVA neto a enterar + retenciones de IVA e ISR (#140). */
+  sat_total: number
+  /**
+   * Control del cuadre (#140): cobros − pagos (con IVA) − SAT − utilidad bruta. 0 = cuadra;
+   * distinto de 0 = una factura fuera de tolerancia o un dato roto (la UI avisa si |valor| > 0.01).
+   */
+  cuadre_diferencia: number
   utilidad_bruta: number
   isr_serenata_estimado: number
   utilidad_neta: number

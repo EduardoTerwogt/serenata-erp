@@ -102,7 +102,7 @@ describe('GET /api/cuentas/periodo', () => {
   it('con proyecto pide el seleccionado a cuentas_periodo y pone etiqueta a sus conceptos (B6)', async () => {
     const { proyecto: _p, ...fila } = periodoSql.lista.items[0]
     void _p
-    const cierre = { quien_cuanto_cuando: [], iva_retenido_total: 0, isr_retenido_total: 0, iva_cobrado: 0, iva_pagado: 0, iva_neto_a_enterar: 0, utilidad_bruta: 0, isr_serenata_estimado: 0, utilidad_neta: 0, utilidad_libre_estimada: 0 }
+    const cierre = { quien_cuanto_cuando: [], iva_retenido_total: 0, isr_retenido_total: 0, iva_cobrado: 0, iva_pagado: 0, iva_neto_a_enterar: 0, sat_total: 0, cuadre_diferencia: 0, utilidad_bruta: 0, isr_serenata_estimado: 0, utilidad_neta: 0, utilidad_libre_estimada: 0 }
     mocks.rpcMock.mockImplementation(async () => ({
       data: { ...periodoSql, seleccionado: { ...tarjeta, conceptos: [fila], cierre, cierre_mensual: [] } },
       error: null,
