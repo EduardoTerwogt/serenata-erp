@@ -9,6 +9,8 @@
  * decimal-seguro, usado donde el cliente necesita paridad exacta con una RPC.
  */
 export function round2(value: number): number {
+  // |x| < 0.005 redondea a 0; evita la notación científica de toString() (p. ej. 9.09e-13).
+  if (Math.abs(value) < 0.005) return 0
   const sign = value < 0 ? -1 : 1
   const [intPart, fracPart = ''] = Math.abs(value).toString().split('.')
   if (fracPart.length <= 2) return sign * Number(`${intPart}.${fracPart.padEnd(2, '0')}`)
