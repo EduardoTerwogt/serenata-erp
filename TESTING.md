@@ -15,7 +15,8 @@ lo justifica — nunca para que deje de fallar.
 | E2E critical | `npm run test:e2e:critical` | Flujos de negocio completos, con las APIs **mockeadas**. | Local y CI |
 | E2E live | `npm run test:e2e:live` | Servidor Next real contra **Supabase y Drive de prueba reales**. | **Solo CI** |
 | E2E escala | `npm run test:e2e:escala` | Latencia de las lecturas de Cuentas contra el dataset de carga (miles de proyectos). Aparte del gate de PR (D18). | **Solo CI**, manual y semanal (`escala.yml`) |
-| Consistencia de datos | `select auditar_consistencia()` / Admin → "Consistencia de datos" | 17 guardas permanentes del modelo (dinero, renglones, K4, folios); cron diario en `/api/keep-alive`. `plpgsql_check` en CI revisa las funciones. Generador, medición e índices: `scripts/db/escala-*.sql`, `indices-sin-uso.sql`. | Producción y test, a demanda |
+| Consistencia de datos | `select auditar_consistencia()` / Admin → "Consistencia de datos" | 27 guardas permanentes del modelo (dinero, renglones, K4, folios); cron diario en `/api/keep-alive`. `plpgsql_check` en CI revisa las funciones. Generador, medición e índices: `scripts/db/escala-*.sql`, `indices-sin-uso.sql`. | Producción y test, a demanda |
+| Cuenta de proyecto (SQL) | `psql -d <bd> -v ON_ERROR_STOP=1 -f scripts/db/cuenta-proyecto-prueba.sql` | #140: invariante `cobrado = a transferir + SAT + utilidad` (`cuadre_diferencia`), retención de IVA real dentro/fuera de tolerancia, tres regímenes y cierre mensual sin ISR/proveedores. Sobre la fixture de `cuentas-equivalencia.sql`; termina en `ROLLBACK`. | Local y test, a demanda |
 | Migrations | workflow `Migrations` | Que `db/migrations/*.sql` reconstruye el schema completo desde un Postgres vacío (Fase 4.5) — via Supabase CLI, sin tocar ningún proyecto real. | **Solo CI** |
 
 Además: `npx tsc --noEmit` y `npm run lint` antes de cualquier commit que toque

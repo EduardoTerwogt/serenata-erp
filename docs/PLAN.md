@@ -1,6 +1,6 @@
 # Plan de la iniciativa activa
 
-**Estado:** **Aprobado, no iniciado** (2026-10-09) — iniciativa [#140](https://github.com/EduardoTerwogt/serenata-erp/issues/140) «Cuenta de proyecto clara para no contadores». Ejecución diferida: **B0 abre la ejecución**; B1–B5 después de verificar #110. Ver el tracker de «Bloques».
+**Estado:** **Ejecutado, en revisión en el PR [#142](https://github.com/EduardoTerwogt/serenata-erp/pull/142)** (2026-10-10) — iniciativa [#140](https://github.com/EduardoTerwogt/serenata-erp/issues/140) «Cuenta de proyecto clara para no contadores». B0–B5 hechos en una sola rama; la migración `20261042` ya está en test y producción. Falta la revisión en Preview y el merge. ADR 026.
 
 Este archivo es el tracker de trabajo de **una sola iniciativa multi-sesión a
 la vez** — nace como borrador desde la primera idea, se refina en vivo (crear
@@ -83,16 +83,16 @@ Invariante: `cobrado con IVA = a transferir + SAT (IVA neto + retenciones) + uti
 - Pop up: `SelectorContraparte` cerrado por defecto, «Proveedor nuevo» (nombre, RFC, régimen, teléfono, correo, banco, CLABE) y, si hay otros conceptos del proyecto **sin proveedor**, su lista para marcarlos.
 - Chip de pendientes = `p.cuentas.pendientes`; la leyenda ya no repite el conteo. Aviso del IVA con el mes del cobro y solo si ese mes no terminó (`periodo.hoy`). Chip del SAT = suma de los renglones (iva + retenciones) con la fecha límite más próxima; con mes cerrado dice ese monto.
 
-## Bloques y tracker (todos «Pendiente»; nada se ejecuta en esta sesión)
+## Bloques y tracker (todos «Hecho» el 2026-10-10, PR #142; pendiente: revisión en Preview y merge)
 
 | Bloque | Qué | Cuándo |
 |---|---|---|
-| **B0** | Arreglo de `round2` + pruebas (PR aparte) | **Inicia la ejecución** |
-| B1 | Migración `20261042` + tipos TS + motor de pruebas + `scripts/db/cuenta-proyecto-prueba.sql` | Tras verificar #110 |
-| B2 | Ruta `POST /api/cuentas/proveedores/asignar` + schema extraído | Tras B1 |
-| B3 | Panel: `ProyectoResumen` (veredicto, franja, sobres, detalle contable), `~`, borrado de `Metricas`/`Cierre` | Tras B1 |
-| B4 | Botones de «Siguiente paso» + pop up `AsignarProveedor` + «Subir factura» como rótulo | Tras B2 y B3 |
-| B5 | Docs: ADR 026, `ARCHITECTURE.md`, `TESTING.md`, `ROADMAP.md`; issue nuevo de montos | Al cerrar |
+| **B0** | Arreglo de `round2` + pruebas (PR aparte) | Hecho |
+| B1 | Migración `20261042` + tipos TS + motor de pruebas + `scripts/db/cuenta-proyecto-prueba.sql` | Hecho |
+| B2 | Ruta `POST /api/cuentas/proveedores/asignar` + schema extraído | Hecho |
+| B3 | Panel: `ProyectoResumen` (veredicto, franja, sobres, detalle contable), `~`, borrado de `Metricas`/`Cierre` | Hecho |
+| B4 | Botones de «Siguiente paso» + pop up `AsignarProveedor` + «Subir factura» como rótulo | Hecho |
+| B5 | Docs: ADR 026, `ARCHITECTURE.md`, `TESTING.md`, `ROADMAP.md`; issue nuevo de montos | Hecho |
 
 ## Fase 0 — B0 (PR aparte, sale primero)
 

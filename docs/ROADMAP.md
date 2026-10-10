@@ -82,9 +82,9 @@ ejecutados de punta a punta, quedan en
   **lanzada** (ver "Cerrado") → #110 (frente 2, **lanzado** el 2026-10-09; ver "Cerrado") → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
   en la cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para entonces no ha
   arrancado, pasa al frente). #124 (Ohio) ya está cerrado. Lo de abajo es el antecedente del frente 2.
-- **#140 — Cuenta de proyecto clara para no contadores** (2026-10-09, **aprobado, no iniciado**, plan v4 en `docs/PLAN.md`): una utilidad antes de ISR, tres sobres (proveedores / SAT / Serenata),
-  aproximado vs. real (`~`), «Siguiente paso» como botón y pop up de asignar proveedor; sin tablas ni columnas nuevas. **B0** (arreglo de `round2`, PR aparte) abre la ejecución; **B1–B5 entran después de
-  verificar el lanzamiento de #110**. Issue derivado por crear (B5): captura y edición de montos a proveedor antes de tener factura, distinguiendo equipo propio de pendiente de proveedor.
+- **#140 — Cuenta de proyecto clara para no contadores** (2026-10-10, **implementado, en revisión en el PR #142**; ADR 026): una utilidad antes de ISR, tres sobres (proveedores / SAT / Serenata),
+  aproximado vs. real (`~`), «Siguiente paso» como botón y pop up de asignar proveedor; sin tablas ni columnas nuevas (migración `20261042`, ya aplicada en test y producción).
+  Issue derivado: [#143](https://github.com/EduardoTerwogt/serenata-erp/issues/143), captura y edición de montos a proveedor antes de tener factura, distinguiendo equipo propio de pendiente de proveedor.
 
 ---
 
