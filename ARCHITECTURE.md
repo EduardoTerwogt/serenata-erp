@@ -431,6 +431,10 @@ estado y un siguiente paso **derivados** de montos, documentos y fechas; el
   vigente de lo corregido y elige qué archivo mostrar. En producción no queda
   TypeScript que calcule estado, paso, saldo, vencimiento, complementos, cruce
   fiscal ni cierre.
+- **Cuenta de proyecto (#140, decisión 026).** `ProyectoResumen.tsx` (+ `resumen-proyecto.ts`, puro) pinta el veredicto, los tres sobres
+  (proveedores / SAT / Serenata) y el detalle contable solo con `totales` y `cierre`; `cierre` trae `sat_total` y `cuadre_diferencia`. «~» marca lo
+  aproximado (`total_estimado`). «Siguiente paso» es un botón por concepto (`CuentasApp.abrirPaso`); asignar proveedor abre `AsignarProveedor`
+  (`POST /api/cuentas/proveedores/asignar`).
 - **Doble de pruebas:** `tests/support/cuentas-motor/` conserva la derivación en
   TS (`concepto.ts`, `periodo.ts`, `cierre-*.ts`, `detalle-derivar.ts`) solo para
   que los mocks e2e (smoke y critical, sin base de datos) respondan con datos

@@ -28,4 +28,10 @@ describe('round2', () => {
   it('un saldo pendiente tras un pago mayor al total (negativo) redondea con el mismo criterio', () => {
     expect(round2(-0.005)).toBe(-0.01)
   })
+
+  it('residuos de punto flotante y notación científica dan 0, no un ajuste fantasma', () => {
+    expect(round2(8476.7 - 1169.2 - 7307.5)).toBe(0)
+    for (const x of [1e-7, -1e-7, 1e-13, -1e-13, 0.004]) expect(round2(x)).toBe(0)
+    expect(round2(0.005)).toBe(0.01)
+  })
 })

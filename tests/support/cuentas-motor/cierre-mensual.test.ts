@@ -30,12 +30,12 @@ describe('calcularCierreMensual (D26, D30, T3)', () => {
   it('todo pendiente: una fila "Al cobrar"/"Al pagar" por impuesto con el total exacto', () => {
     const cierre = cierreBase()
     const filas = calcularCierreMensual({ cierre, cobros: [{ total: 46400, pagos: [] }], pagosProveedor: {} })
-    expect(filas[0]).toMatchObject({ concepto: 'proveedores', quien: 'Proveedores', sub: '2 proveedores · IVA incluido, menos retenciones' })
+    // #140: el cierre mensual ya no trae filas de proveedores ni de ISR (el ISR es solo referencia).
+    expect(filas.some((f) => ['isr', 'proveedores'].includes(f.concepto))).toBe(false)
     expect(suma(filas, 'iva')).toBe(cierre.iva_neto_a_enterar)
     expect(suma(filas, 'retenciones')).toBe(Math.round((cierre.iva_retenido_total + cierre.isr_retenido_total) * 100) / 100)
-    expect(suma(filas, 'isr')).toBe(cierre.isr_serenata_estimado)
     expect(filas.find((f) => f.concepto === 'iva')).toMatchObject({ sub: 'Al cobrar y al pagar', fecha_limite: null })
-    expect(filas.find((f) => f.concepto === 'isr')).toMatchObject({ sub: 'Al cobrar' })
+    expect(filas.find((f) => f.concepto === 'retenciones')).toMatchObject({ sub: '17 del mes siguiente al pago' })
   })
 
   it('cobros y pagos en meses distintos: una fila por mes con su día 17 y cuadre al centavo', () => {
@@ -57,9 +57,8 @@ describe('calcularCierreMensual (D26, D30, T3)', () => {
     // Sep: 3200 trasladado − 1600 acreditable del proveedor físico.
     expect(ivaSep.monto).toBe(1600)
     // Nada pendiente: sin filas "Al cobrar"/"Al pagar" y cuadre exacto.
-    expect(filas.some((f) => f.mes === null && f.concepto !== 'proveedores')).toBe(false)
+    expect(filas.some((f) => f.mes === null)).toBe(false)
     expect(suma(filas, 'iva')).toBe(cierre.iva_neto_a_enterar)
-    expect(suma(filas, 'isr')).toBe(cierre.isr_serenata_estimado)
     const retSep = filas.find((f) => f.concepto === 'retenciones' && f.mes === '2026-09')!
     expect(retSep.monto).toBe(Math.round((fis.iva_retenido + fis.isr_retenido) * 100) / 100)
     expect(filas.some((f) => f.concepto === 'retenciones' && f.mes === '2026-10')).toBe(false)
@@ -81,24 +80,17 @@ describe('calcularCierreMensual (D26, D30, T3)', () => {
     expect(suma(filas, 'iva')).toBe(cierre.iva_neto_a_enterar)
   })
 
-  it('cobro parcial: la parte sin cobrar va en "Al cobrar" y absorbe el redondeo', () => {
+  it('IVA pendiente negativo: "IVA acreditable por aplicar", se descuenta en el mes en que pagues', () => {
+    // Todo cobrado y proveedor físico sin pagar: el IVA trasladado ya está en su mes; lo acreditable queda pendiente.
     const cierre = cierreBase()
     const filas = calcularCierreMensual({
       cierre,
-      cobros: [{ total: 46400, pagos: [{ fecha: '2026-09-05', monto: 15466.67 }] }],
+      cobros: [{ total: 46400, pagos: [{ fecha: '2026-10-03', monto: 46400 }] }],
       pagosProveedor: {},
     })
-    expect(suma(filas, 'isr')).toBe(cierre.isr_serenata_estimado)
-    expect(filas.filter((f) => f.concepto === 'isr').map((f) => f.sub)).toEqual(['SAT · pago provisional el 17 oct 2026', 'Al cobrar'])
-  })
-
-  it('un pago mayor al total no infla el mes', () => {
-    const cierre = cierreBase()
-    const filas = calcularCierreMensual({
-      cierre,
-      cobros: [{ total: 46400, pagos: [{ fecha: '2026-09-05', monto: 50000 }] }],
-      pagosProveedor: {},
-    })
-    expect(filas.find((f) => f.concepto === 'isr' && f.mes === '2026-09')!.monto).toBe(cierre.isr_serenata_estimado)
+    const pendiente = filas.find((f) => f.concepto === 'iva' && f.mes === null)!
+    expect(pendiente.monto).toBeLessThan(0)
+    expect(pendiente).toMatchObject({ quien: 'IVA acreditable por aplicar', sub: 'Se descuenta en el mes en que pagues', a_favor: true })
+    expect(suma(filas, 'iva')).toBe(cierre.iva_neto_a_enterar)
   })
 })

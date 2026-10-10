@@ -42,12 +42,17 @@ export function calcularCierreProyecto(
     const monto = representante.grupo_monto_total ?? items.reduce((sum, item) => sum + (item.costo_total || 0), 0)
     const regimenFiscal = representante.proveedor_regimen_fiscal ?? null
     const r = calcularEjemploFactura(monto, regimenFiscal)
+    const snapshot = representante.grupo_total_a_transferir
+    const tieneSnapshot = snapshot != null
+    // #140: con factura real, la retención de IVA es el residuo del Total del CFDI si cae dentro de la tolerancia del
+    // validador (max(0.01, 0.03 % del neto) + 0.03); si no, la estimada por régimen. Espejo de `ret_iva_cierre` en SQL.
+    const residuo = tieneSnapshot ? round2(r.subtotal + r.iva_trasladado - Number(snapshot) - r.isr_retenido) : 0
+    const ivaRetenido =
+      tieneSnapshot && Math.abs(residuo - r.iva_retenido) <= Math.max(0.01, 0.0003 * r.subtotal) + 0.03 ? residuo : r.iva_retenido
     // H10: con factura validada manda el Total del CFDI (el mismo que usa el
     // saldo del pago); sin factura, el estimado. IVA y retenciones siguen
     // estimados por régimen: el CFDI solo guarda su Total.
     // El snapshot vive en el grupo (B5a): una cuenta suelta siempre se estima.
-    const snapshot = representante.grupo_total_a_transferir
-    const tieneSnapshot = snapshot != null
     return {
       clave,
       proveedor_id: representante.responsable_id,
@@ -55,7 +60,7 @@ export function calcularCierreProyecto(
       regimen_fiscal: regimenFiscal,
       neto: r.subtotal,
       iva_trasladado: r.iva_trasladado,
-      iva_retenido: r.iva_retenido,
+      iva_retenido: ivaRetenido,
       isr_retenido: r.isr_retenido,
       total_a_transferir: tieneSnapshot ? round2(Number(snapshot)) : r.total,
       total_es_snapshot: tieneSnapshot,
@@ -78,6 +83,9 @@ export function calcularCierreProyecto(
     iva_cobrado: ivaTotalProyecto,
     iva_pagado,
     iva_neto_a_enterar,
+    sat_total: round2(iva_neto_a_enterar + iva_retenido_total + isr_retenido_total),
+    // Necesita los cobros, que este módulo no conoce: lo completa `construirProyectos` (periodo.ts).
+    cuadre_diferencia: 0,
     utilidad_bruta,
     isr_serenata_estimado,
     utilidad_neta,

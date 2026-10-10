@@ -1,14 +1,14 @@
 # Trabajo activo
 
-**Última actualización:** 2026-10-09 (cierre) — **#110 «Frente 2 de Cuentas» lanzado a producción** (PR [#136](https://github.com/EduardoTerwogt/serenata-erp/pull/136),
-`6c42f48`, issue cerrado) y **CI/tests afinados** tras dos rojos de `live` en `main` (PR [#138](https://github.com/EduardoTerwogt/serenata-erp/pull/138) y
-[#139](https://github.com/EduardoTerwogt/serenata-erp/pull/139)). Antes (2026-10-08): #123/#130/#131 «Facturas y pagos ligados» (PR #129, `35709b6`).
+**Última actualización:** 2026-10-10 — **#140 «Cuenta de proyecto clara» ejecutado (B0–B5) y en revisión en el PR [#142](https://github.com/EduardoTerwogt/serenata-erp/pull/142)** (borrador). La migración
+`20261042` ya está aplicada en test y **producción** (md5 de `cuentas_cierre_mensual` y `cuentas_periodo` = archivo, ACL y `proconfig` iguales, `auditar_consistencia()` = 0). Falta: revisión del usuario en el Preview y merge.
+Antes (2026-10-09): #110 lanzado (PR #136) y CI afinado (#138, #139).
 
 ## Estado
 
 **`main` = `279206e`** (merge de #139; sin cambios de app ni de base desde `6c42f48`). Producción corre en la base `ytlyphlgyhgztkfxwojt` (`us-east-2`) con Vercel en `cle1` (#124);
-el código de la app en producción es el de `6c42f48` (`serenata-erp.vercel.app`). La base de producción tiene aplicadas **`20261030`–`20261041`** y está verificada; sigue sin datos de negocio reales
-(solo `usuarios`, catálogos y un proyecto de prueba; la constancia fiscal de Serenata ya está subida). **Iniciativa aprobada, no iniciada**: [#140](https://github.com/EduardoTerwogt/serenata-erp/issues/140) en `docs/PLAN.md` (plan v4; **B0** abre la ejecución, B1–B5 tras verificar #110). Sin código implementado.
+el código de la app en producción es el de `6c42f48` (`serenata-erp.vercel.app`). La base de producción tiene aplicadas **`20261030`–`20261042`** y está verificada; sigue sin datos de negocio reales
+(solo `usuarios`, catálogos y un proyecto de prueba; la constancia fiscal de Serenata ya está subida). **#140 en revisión** (PR #142): B0–B5 hechos; ver ADR 026. Issue derivado de montos: [#143](https://github.com/EduardoTerwogt/serenata-erp/issues/143).
 
 **Cola de iniciativas:** **#125** (llaves de Supabase legacy; prioridad baja, revisión 2026-11-01, límite 2026-12-01). Aparte: #119 (alta mínima de
 cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
@@ -84,7 +84,7 @@ cotizaciones, falta tu decisión) y #101 (diseño de Proyectos, sin arrancar).
 ## Siguiente paso
 
 1. Verificar el lanzamiento de #110 (punto 1 de arriba) y correr `auditar_consistencia()` en Admin tras la primera factura/pago reales.
-2. Arrancar **#140** (`docs/PLAN.md`): empezar por **B0** (arreglo de `round2`, PR aparte, no depende de #110); B1–B5 después de verificar #110. Luego **#125** (revisión 2026-11-01); #119 y #101 esperan decisión tuya.
+2. Revisar #140 en el Preview del PR #142 (SH001 en escritorio y móvil: sin proveedores, 4 físicas, mixto) y mergear. Luego **#125** (revisión 2026-11-01); #119 y #101 esperan decisión tuya; #143 (montos) sin arrancar.
 3. Opcional: borrar `.github/workflows/db-push-una-vez.yml` (workflow de un solo uso de #124 contra la base nueva; ya no tiene su secreto `PROD_NUEVA_DB_URL`).
 4. Opcionales sin fecha: parcialidad y saldo insoluto del complemento (exige ampliar el parser); corregir un descuadre ligando o desligando cotizaciones sin
    resubir la factura (exige ampliar el CHECK de `cuentas_correcciones`); cancelar una cotización aprobada con factura o cobros, con traspaso (`docs/ROADMAP.md` → "Después").

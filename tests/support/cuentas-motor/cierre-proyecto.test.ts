@@ -114,4 +114,22 @@ describe('calcularCierreProyecto', () => {
     expect(cierre.quien_cuanto_cuando[0].total_a_transferir).toBe(calcularEjemploFactura(1000, 'moral').total)
     expect(cierre.quien_cuanto_cuando[0].total_es_snapshot).toBe(false)
   })
+
+  it('#140: la retención de IVA de una factura real es el residuo del Total si cae dentro de tolerancia; fuera, la estimada', () => {
+    const est = calcularEjemploFactura(3000, 'fisica')
+    const con = (total: number) =>
+      calcularCierreProyecto([
+        cuenta({ id: 'g-3a', grupo_id: 'g-3', costo_total: 3000, grupo_monto_total: 3000, grupo_total_a_transferir: total, proveedor_regimen_fiscal: 'fisica' }),
+      ], 0, 0, 0)
+    expect(con(est.total).iva_retenido_total).toBe(est.iva_retenido)
+    expect(con(est.total + 0.02).iva_retenido_total).toBe(Math.round((est.iva_retenido - 0.02) * 100) / 100)
+    expect(con(est.total + 5).iva_retenido_total).toBe(est.iva_retenido)
+  })
+
+  it('#140: sat_total = IVA neto a enterar + retenciones', () => {
+    const cierre = calcularCierreProyecto([
+      cuenta({ id: 'cp-f', responsable_id: 'p-f', costo_total: 3000, proveedor_regimen_fiscal: 'fisica' }),
+    ], 4000, 1500, 1600)
+    expect(cierre.sat_total).toBe(Math.round((cierre.iva_neto_a_enterar + cierre.iva_retenido_total + cierre.isr_retenido_total) * 100) / 100)
+  })
 })

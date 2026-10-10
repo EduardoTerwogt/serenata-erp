@@ -14,6 +14,10 @@ export interface AltaForm {
   correo: string
   banco: string
   clabe: string
+  /** Solo al asignar un proveedor sin XML (#140): con factura, RFC, nombre y régimen vienen del XML. */
+  nombre?: string
+  rfc?: string
+  regimen?: ProveedorNuevoDatos['regimen_fiscal'] | ''
 }
 
 export const ALTA_VACIA: AltaForm = { telefono: '', correo: '', banco: '', clabe: '' }
@@ -118,6 +122,15 @@ export function proveedorNuevo(emisor: EmisorPreview | null, a: AltaForm): Prove
     banco: a.banco.trim(),
     clabe: clabeLimpia(a.clabe),
   }
+}
+
+/** Proveedor nuevo capturado a mano (sin XML, #140), o null si falta algo; la validación de verdad es la de Zod y SQL. */
+export function proveedorNuevoManual(a: AltaForm): ProveedorNuevoDatos | null {
+  const nombre = a.nombre?.trim()
+  const rfc = a.rfc?.trim().toUpperCase()
+  if (!nombre || !rfc || !a.regimen || Object.keys(erroresAlta(a)).length > 0) return null
+  if ([a.telefono, a.correo, a.banco, a.clabe].some((v) => v.trim() === '')) return null
+  return { nombre, rfc, regimen_fiscal: a.regimen, telefono: a.telefono.trim(), correo: a.correo.trim(), banco: a.banco.trim(), clabe: clabeLimpia(a.clabe) }
 }
 
 /** Monto escrito por el usuario ("5,800.00", "5800") → número positivo con centavos, o null. */

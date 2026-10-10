@@ -74,7 +74,7 @@ export const TONO_ESTADO: Record<EstadoConcepto, TonoEstado> = {
 }
 
 export const ETIQUETA_PASO: Record<PasoConcepto, string> = {
-  emitir_factura: 'Emitir factura',
+  emitir_factura: 'Subir factura',
   revisar_factura: 'Revisar factura',
   cobrar: 'Cobrar',
   subir_complemento: 'Subir complemento',

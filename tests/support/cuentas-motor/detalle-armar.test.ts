@@ -57,7 +57,7 @@ describe('armarDetalleCobro', () => {
     expect(d.factura_pdf?.id).toBe('fp')
   })
 
-  it('sin factura: "Emitir factura" aunque tenga anticipo (V1, D32)', () => {
+  it('sin factura: "Subir factura" aunque tenga anticipo (V1, D32)', () => {
     const d = cobro(
       { cuenta: { ...cuenta, monto_pagado: 100000, fecha_factura: null }, proyecto: null, documentos: [], pagos: [{ id: 'p1', monto: 100000, tipo_pago: 'EFECTIVO', fecha_pago: '2026-09-01', comprobante_url: null, notas: null }] }
     )

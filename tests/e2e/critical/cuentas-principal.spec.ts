@@ -28,7 +28,8 @@ test('periodo del mes: totales, tarjetas de proyecto y maestro-detalle', async (
   const entradas = page.getByRole('region', { name: 'Entradas · Clientes' })
   await expect(entradas.getByText('Total $400,200.00')).toBeVisible()
   await expect(page.getByRole('region', { name: 'Salidas · Proveedores' }).getByText('Foros Churubusco').filter({ visible: true }).first()).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Cierre del proyecto' }).getByText('Proveedores', { exact: true })).toBeVisible()
+  await expect(page.getByText(/Este proyecto (te deja|pierde)/)).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Reparto' }).getByRole('heading', { name: 'Proveedores' })).toBeVisible()
 
   if (esMovil()) {
     // Móvil: el proyecto se abre en hoja; cerrar la hoja regresa a la lista.
