@@ -79,12 +79,11 @@ ejecutados de punta a punta, quedan en
 ## Siguiente
 
 - **Orden acordado (actualizado 2026-10-08):** #123 (facturas y pagos ligados, con #130 y #131) ya está
-  **lanzada** (ver "Cerrado") → #110 (frente 2, **lanzado** el 2026-10-09; ver "Cerrado") → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
+  **lanzada** (ver "Cerrado") → #110 (frente 2, **lanzado** el 2026-10-09; ver "Cerrado") → #140 (cuenta de proyecto clara, **lanzada** el 2026-10-10; ver "Cerrado") → #125 (llaves de Supabase legacy → publishable/secret; **prioridad baja, última
   en la cola, con fecha límite interna 2026-12-01 y revisión el 2026-11-01**: si para entonces no ha
   arrancado, pasa al frente). #124 (Ohio) ya está cerrado. Lo de abajo es el antecedente del frente 2.
-- **#140 — Cuenta de proyecto clara para no contadores** (2026-10-10, **implementado, en revisión en el PR #142**; ADR 026): una utilidad antes de ISR, tres sobres (proveedores / SAT / Serenata),
-  aproximado vs. real (`~`), «Siguiente paso» como botón y pop up de asignar proveedor; sin tablas ni columnas nuevas (migración `20261042`, ya aplicada en test y producción).
-  Issue derivado: [#143](https://github.com/EduardoTerwogt/serenata-erp/issues/143), captura y edición de montos a proveedor antes de tener factura, distinguiendo equipo propio de pendiente de proveedor.
+- **#143 — Montos a proveedor antes de tener factura** (2026-10-10, sin arrancar; salió de #140): capturar y editar `costo_total` desde la cotización o desde Cuentas y distinguir «equipo propio»
+  (sin costo, ingreso íntegro) de «pendiente de proveedor/costo» (la lista de equipos propios aún no existe como dato). Ver el issue y `docs/decisions/026`.
 
 ---
 
@@ -225,6 +224,11 @@ Si aparece otro feature a medias, documentarlo aquí.
 
 ## Cerrado
 
+- **Cuenta de proyecto clara para no contadores (2026-10-10, #140).** El panel de cada proyecto dice qué deja («te deja $X antes de ISR») y qué falta, y reparte lo que pagó el cliente en tres sobres
+  (proveedores / SAT / Serenata); el ISR queda solo como referencia; «~» marca lo aproximado (proveedor sin factura) y con factura real la retención de IVA sale del residuo del CFDI; `cuadre_diferencia`
+  avisa si el reparto no cuadra. «Siguiente paso» es un botón por concepto y asignar proveedor es un pop up (`POST /api/cuentas/proveedores/asignar`), sin exigir factura. Migración `20261042` (solo funciones, sin tablas ni
+  columnas), aplicada antes a test y producción; PR #142; `round2` ya no deja ajustes fantasma. Plan archivado en `docs/archive/cuenta-proyecto-clara-140.md`, decisión en `docs/decisions/026`.
+  Derivado: [#143](https://github.com/EduardoTerwogt/serenata-erp/issues/143) (montos a proveedor antes de factura; equipo propio vs. pendiente de costo).
 - **Frente 2 de Cuentas: leer lo que se muestra (2026-10-09, #110).** Lectura barata sin estado derivado nuevo (`20261039`: sin barridos
   globales, hash join en lecturas masivas) e **histórico a 190 días** (`20261040`): un proyecto cerrado, sin cambios y sin pendientes pasa a solo
   consulta (error `proyecto_historico`, 409), se archiva desde el cron `keep-alive`, sigue sumando en ingresos, egresos, utilidad e impuestos y sale de

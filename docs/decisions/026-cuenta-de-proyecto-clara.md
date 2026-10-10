@@ -1,6 +1,6 @@
 # 026 — Cuenta de proyecto clara para no contadores (#140)
 
-**Estado:** APROBADA (2026-10-09). Implementada en el PR #142 (migración `20261042`). Plan: `docs/PLAN.md` (v4).
+**Estado:** APROBADA (2026-10-09). Implementada y lanzada a producción el 2026-10-10 (PR #142, migración `20261042`). Plan archivado: `docs/archive/cuenta-proyecto-clara-140.md`.
 
 ## Contexto
 
