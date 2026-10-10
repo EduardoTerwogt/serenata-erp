@@ -41,9 +41,9 @@ const pago = (o: Partial<ConceptoPagoInput> = {}): ConceptoPagoInput => ({
 })
 
 describe('concepto — cobros', () => {
-  it('FACTURA_PENDIENTE → Sin factura / Emitir factura', () => {
+  it('FACTURA_PENDIENTE → Sin factura / Subir factura', () => {
     const d = derivarCobro(cobro(), HOY)
-    expect([d.estado, d.etiqueta, d.tono, d.paso_etiqueta]).toEqual(['sin_factura', 'Sin factura', 'borrador', 'Emitir factura'])
+    expect([d.estado, d.etiqueta, d.tono, d.paso_etiqueta]).toEqual(['sin_factura', 'Sin factura', 'borrador', 'Subir factura'])
     expect(d.resuelto).toBe(false)
   })
 

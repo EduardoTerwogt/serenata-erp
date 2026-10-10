@@ -2,7 +2,7 @@
 
 import type { ArchivoPendienteInfo } from '@/lib/shared/cuentas/archivo-pendiente'
 import { useCallback, useEffect, useState } from 'react'
-import { ApiError, getJson, sendFormData } from '@/lib/client/api'
+import { ApiError, getJson, sendFormData, sendJson } from '@/lib/client/api'
 import { normalizeComprobante } from '@/lib/client/normalizeComprobante'
 import { runIdempotentPagoSubmit } from '@/lib/client/pagoIdempotency'
 import { clearPendingOperation } from '@/lib/client/pendingOperation'
@@ -254,6 +254,17 @@ export const reintentarSubida = (p: { lado: ArchivoPendienteInfo['lado']; id: st
   fd.set('lado', p.lado)
   fd.set('archivo', p.archivo)
   return sendFormData<{ success: boolean; pendiente: boolean }>(`/api/cuentas/documentos/${p.id}/reintentar-subida`, fd, 'No se pudo subir el archivo a Drive')
+}
+
+/** #140: `POST /api/cuentas/proveedores/asignar` — conceptos sin proveedor a uno existente (`proveedor_id`) o nuevo (`proveedor`). */
+export interface AsignarDatos {
+  operation_id: string
+  proveedor_id?: string | null
+  proveedor?: ProveedorNuevoDatos
+  renglones: string[]
+}
+export const accionesAsignar = {
+  asignar: (d: AsignarDatos) => sendJson<{ proveedor_id: string; proveedor_nombre: string; reasignados: number }>('/api/cuentas/proveedores/asignar', d, 'No se pudo asignar el proveedor'),
 }
 
 export const accionesFactura = {

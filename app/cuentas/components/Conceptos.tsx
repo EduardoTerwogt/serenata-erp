@@ -6,6 +6,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { fmtMoney } from '@/lib/quotations/format'
 import { SIN_PROYECTO_ID, type ConceptoLista, type ConceptoVista } from '@/lib/shared/cuentas/periodo-tipos'
 import { ChipsCompartidos } from './acciones/ChipsCompartidos'
+import { montoAprox, cobroSinFactura } from './resumen-proyecto'
 import { TONO } from './ui'
 
 const td = 'px-[var(--row-pad-x)] align-middle'
@@ -14,16 +15,35 @@ const tdDenso = 'px-3 align-middle first:pl-4 last:pr-4'
 export function PagadoTotal({ c }: { c: Pick<ConceptoVista, 'pagado' | 'total' | 'total_estimado'> }) {
   return (
     <span className="whitespace-nowrap text-ink" title={c.total_estimado ? 'Total estimado con el régimen del proveedor: aún no hay factura validada' : undefined}>
-      {fmtMoney(c.pagado)} / {fmtMoney(c.total)}
+      {fmtMoney(c.pagado)} / {montoAprox(c.total, c.total_estimado)}
     </span>
   )
 }
 
-export function SiguientePaso({ c }: { c: ConceptoVista }) {
+/**
+ * Siguiente paso del concepto. Con `onAccion` (panel del proyecto, #140) es un botón que abre la ventana del paso; sin
+ * él, texto (vista Lista, proyectos históricos y conceptos sin proyecto). `en_orden` no tiene destino: siempre texto.
+ */
+export function SiguientePaso({ c, onAccion }: { c: ConceptoVista; onAccion?: (c: ConceptoVista) => void }) {
   if (!c.paso_etiqueta) return <span className="text-faint">—</span>
+  const urgente = c.paso_urgente || cobroSinFactura(c)
+  const boton = onAccion && c.proyecto_id && c.paso !== 'en_orden'
   return (
     <span className="block min-w-0">
-      <span className={`block font-medium ${c.paso_urgente ? 'text-cancelled-fg' : 'text-ink'}`}>{c.paso_etiqueta}</span>
+      {boton ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onAccion(c)
+          }}
+          className={`inline-flex h-7 max-w-full items-center whitespace-nowrap rounded-control border px-[11px] text-[12px] font-semibold ${urgente ? 'border-transparent bg-cancelled-bg text-cancelled-fg' : 'border-hairline bg-card text-ink hover:bg-row-alt'}`}
+        >
+          {c.paso_etiqueta}
+        </button>
+      ) : (
+        <span className={`block font-medium ${urgente ? 'text-cancelled-fg' : 'text-ink'}`}>{c.paso_etiqueta}</span>
+      )}
       {c.vencimiento && (
         <span className={`block text-[10.5px] ${c.vencimiento.vencido ? 'text-cancelled-fg' : 'text-subtext'}`}>{c.vencimiento.texto}</span>
       )}
@@ -31,12 +51,12 @@ export function SiguientePaso({ c }: { c: ConceptoVista }) {
   )
 }
 
-export function Chip({ c }: { c: Pick<ConceptoVista, 'tono' | 'etiqueta'> }) {
-  return <StatusBadge tone={TONO[c.tono]}>{c.etiqueta}</StatusBadge>
+export function Chip({ c, alerta }: { c: Pick<ConceptoVista, 'tono' | 'etiqueta'>; alerta?: boolean }) {
+  return <StatusBadge tone={alerta ? 'cancelled' : TONO[c.tono]}>{c.etiqueta}</StatusBadge>
 }
 
 /** "Entradas · Clientes" o "Salidas · Proveedores" del proyecto abierto. */
-export function TablaConceptos({ tipo, conceptos, onAbrir }: { tipo: 'cobro' | 'pago'; conceptos: ConceptoVista[]; onAbrir: (c: ConceptoVista) => void }) {
+export function TablaConceptos({ tipo, conceptos, onAbrir, onAccion }: { tipo: 'cobro' | 'pago'; conceptos: ConceptoVista[]; onAbrir: (c: ConceptoVista) => void; onAccion?: (c: ConceptoVista) => void }) {
   const titulo = tipo === 'cobro' ? 'Entradas · Clientes' : 'Salidas · Proveedores'
   const total = conceptos.reduce((s, c) => s + c.total, 0)
   return (
@@ -74,10 +94,10 @@ export function TablaConceptos({ tipo, conceptos, onAbrir }: { tipo: 'cobro' | '
                 <PagadoTotal c={c} />
               </td>
               <td className={`${tdDenso} text-center`}>
-                <Chip c={c} />
+                <Chip c={c} alerta={cobroSinFactura(c)} />
               </td>
               <td className={`${tdDenso} py-1.5`}>
-                <SiguientePaso c={c} />
+                <SiguientePaso c={c} onAccion={onAccion} />
               </td>
             </>
           )}
@@ -85,7 +105,7 @@ export function TablaConceptos({ tipo, conceptos, onAbrir }: { tipo: 'cobro' | '
             <div className="flex flex-col gap-0.5 px-3.5 py-[9px]">
               <div className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">{c.contraparte}</span>
-                <Chip c={c} />
+                <Chip c={c} alerta={cobroSinFactura(c)} />
               </div>
               <div className="flex justify-between gap-2.5 text-[12px]">
                 <span className="flex min-w-0 flex-1 flex-col text-subtext">
@@ -94,6 +114,11 @@ export function TablaConceptos({ tipo, conceptos, onAbrir }: { tipo: 'cobro' | '
                 </span>
                 <PagadoTotal c={c} />
               </div>
+              {onAccion && c.paso_etiqueta && (
+                <div className="flex justify-end pt-1">
+                  <SiguientePaso c={c} onAccion={onAccion} />
+                </div>
+              )}
             </div>
           )}
         />

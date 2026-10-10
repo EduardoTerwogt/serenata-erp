@@ -21,6 +21,7 @@ import { AccionesReapertura } from './Reapertura'
 import { MenuAcciones, type AccionCuentas } from './acciones/MenuAcciones'
 import { RegistrarPago } from './acciones/RegistrarPago'
 import { CompartidoContexto, type AbrirCompartido } from './acciones/ChipsCompartidos'
+import { AsignarProveedor } from './acciones/AsignarProveedor'
 import { EstadoCuenta } from './acciones/EstadoCuenta'
 import { SubirFactura } from './acciones/SubirFactura'
 import { Totales } from './Totales'
@@ -164,6 +165,31 @@ export function CuentasApp() {
     [abrir, cerrar, estado.proyecto]
   )
   const abrirConcepto = useCallback((c: ConceptoVista) => abrir({ det: c.key, tab: null }), [abrir])
+  // #140: el pop up de Asignar proveedor es transitorio (no vive en la URL); lo demás reutiliza las ventanas de siempre.
+  const [asignando, setAsignando] = useState<ConceptoVista | null>(null)
+  const abrirPaso = useCallback(
+    (c: ConceptoVista) => {
+      const lado = c.tipo === 'cobro' ? 'cobro' : 'proveedor'
+      const contexto = { lado, cid: c.contraparte_id, pre: c.proyecto_id } as const
+      switch (c.paso) {
+        case 'asignar_proveedor':
+          return setAsignando(c)
+        case 'emitir_factura':
+        case 'subir_factura':
+        case 'subir_complemento':
+          return abrir({ sheet: 'factura', ...contexto })
+        case 'cobrar':
+        case 'pagar':
+          return abrir({ sheet: 'pago', ...contexto })
+        case 'subir_comprobante':
+          return abrir({ det: c.key, tab: 'pago' })
+        default:
+          // revisar factura o complemento, indicar PUE o PPD: se resuelve en la pestaña Documentos del detalle.
+          return abrir({ det: c.key, tab: 'docs' })
+      }
+    },
+    [abrir]
+  )
 
   const grupos = useMemo(
     () => (periodo ? agruparProyectos(periodo.proyectos.items, periodo.sin_fecha, periodo.anio, periodo.mes === 'todo' && estado.agrupar) : []),
@@ -182,6 +208,7 @@ export function CuentasApp() {
   const totalProyectos = periodo ? periodo.proyectos.total + periodo.sin_fecha.length : 0
   const alcance = periodo ? `${etiquetaPeriodo(periodo.anio, periodo.mes)} · ${plural(periodo.proyectos.total, 'proyecto', 'proyectos')}` : ''
   const sel = periodo?.seleccionado ?? null
+  const hoyNegocio = periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()
   const hayProyectos = totalProyectos > 0
   const hayFilas = (periodo?.lista.total ?? 0) > 0
   const avisos = resumen?.avisos ?? 0
@@ -229,7 +256,9 @@ export function CuentasApp() {
       const panel = (
         <ProyectoPanel
           p={sel}
+          hoy={hoyNegocio}
           onAbrirConcepto={abrirConcepto}
+          onAccion={abrirPaso}
           acciones={<AccionesReapertura p={sel} onCambio={recargarTodo} />}
           onVolver={ancho ? undefined : () => cerrar({ proyecto: null })}
         />
@@ -380,7 +409,7 @@ export function CuentasApp() {
             }
           >
             <div className="grid grid-cols-1 content-start gap-4 px-4 pb-7 pt-3.5">
-              <CuerpoProyecto p={sel} onAbrirConcepto={abrirConcepto} compacto acciones={<AccionesReapertura p={sel} onCambio={recargarTodo} bloque />} />
+              <CuerpoProyecto p={sel} hoy={hoyNegocio} onAbrirConcepto={abrirConcepto} onAccion={abrirPaso} pie={<AccionesReapertura p={sel} onCambio={recargarTodo} bloque />} />
             </div>
           </BottomSheet>
         )}
@@ -443,12 +472,13 @@ export function CuentasApp() {
             lado={estado.lado ?? 'cobro'}
             contraparteId={estado.cid}
             proyecto={estado.pre}
-            hoy={periodo?.hoy ?? resumen?.hoy ?? hoyCdmx()}
+            hoy={hoyNegocio}
             onCambio={(c) => reemplazar({ lado: c.lado, cid: c.contraparteId })}
             onClose={cerrarAccion}
             onRegistrado={recargarTodo}
           />
         )}
+        {asignando && <AsignarProveedor concepto={asignando} onClose={() => setAsignando(null)} onAsignado={recargarTodo} />}
         {estado.sheet === 'orden' && <GenerarOrden escritorio={escritorio} onClose={() => cerrar({ sheet: null })} onGenerada={recargarTodo} />}
         {estado.sheet === 'historial' && escritorio && <HistorialModal onClose={() => cerrar({ sheet: null })} onOrdenCambio={recargarTodo} />}
       </div>

@@ -93,7 +93,7 @@ describe('GET /api/cuentas/periodo', () => {
     expect(mocks.rpcMock).toHaveBeenCalledWith('cuentas_periodo', { p: expect.objectContaining({ vista: 'lista', mes: 'todo' }) })
     const fila = body.lista.items[0]
     expect(fila).toMatchObject({
-      estado: 'vencido', etiqueta: 'Vencido', tono: 'cancelada', paso: 'emitir_factura', paso_etiqueta: 'Emitir factura',
+      estado: 'vencido', etiqueta: 'Vencido', tono: 'cancelada', paso: 'emitir_factura', paso_etiqueta: 'Subir factura',
       vencimiento: { fecha: '2026-09-10', dias: -14, vencido: true, texto: 'Vencido hace 14 días' },
     })
     expect(fila).not.toHaveProperty('venc_dias')

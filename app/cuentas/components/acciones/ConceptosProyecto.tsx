@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { plural } from '../formato'
@@ -13,6 +13,8 @@ interface Props {
   proyectoId: string
   /** Proveedor de la factura: sus conceptos salen como "Proveedor actual". */
   proveedorId: string | null
+  /** #140 (Asignar proveedor): solo los conceptos que aún no tienen proveedor. */
+  soloPorAsignar?: boolean
   seleccion: string[]
   /** Los conceptos del proyecto llegaron (marca inicial y grupo exacto). */
   onCargado: (conceptos: RenglonSelector[]) => void
@@ -26,10 +28,11 @@ interface Props {
  * pueden mover: los de otro proveedor sin factura se reasignan; los que ya tienen factura o pagos quedan bloqueados.
  * Se leen con el mismo `cuentas_proyectos_selector` que el selector de proyectos.
  */
-export function ConceptosProyecto({ proyectoId, proveedorId, seleccion, onCargado, onAlternar, onMarcar }: Props) {
+export function ConceptosProyecto({ proyectoId, proveedorId, soloPorAsignar, seleccion, onCargado, onAlternar, onMarcar }: Props) {
   const [verBloqueados, setVerBloqueados] = useState(false)
   const { proyectos, cargando, error } = useProyectosSelector({ modo: 'renglones', lado: 'proveedor', q: proyectoId, contraparte: proveedorId, soloPendientes: false }, true)
-  const conceptos = proyectos.find((p) => p.proyecto_id === proyectoId)?.renglones ?? null
+  const todos = proyectos.find((p) => p.proyecto_id === proyectoId)?.renglones ?? null
+  const conceptos = useMemo(() => (soloPorAsignar ? (todos?.filter((r) => !r.responsable_id) ?? null) : todos), [todos, soloPorAsignar])
 
   useEffect(() => {
     if (conceptos) onCargado(conceptos)
