@@ -402,6 +402,27 @@ export const FacturaPreviewSchema = z.object({
   cuentas: z.array(z.string().uuid()).optional().default([]),
 })
 
+// Alta de un proveedor desde Cuentas (factura o asignación de conceptos, #130/#140).
+export const ProveedorNuevoSchema = z.object({
+  nombre: z.string().trim().min(1, 'Falta el nombre').max(300),
+  rfc: z.string().trim().toUpperCase().regex(RFC_REGEX, 'RFC inválido'),
+  regimen_fiscal: z.enum(['moral', 'fisica', 'resico']),
+  telefono: z.string().trim().min(1, 'Falta el teléfono').max(40),
+  correo: z.string().trim().email('Correo inválido'),
+  banco: z.string().trim().min(1, 'Falta el banco').max(100),
+  clabe: z.string().trim().transform((v) => v.replace(/\s/g, '')).pipe(z.string().regex(/^\d{18}$/, 'La CLABE debe tener 18 dígitos')),
+})
+
+// POST /api/cuentas/proveedores/asignar — #140: asigna conceptos sin proveedor a uno existente o recién dado de alta.
+export const ProveedorAsignarSchema = z
+  .object({
+    operation_id: z.string().uuid('operation_id requerido (uuid)'),
+    proveedor_id: z.string().uuid().nullable().optional(),
+    proveedor: ProveedorNuevoSchema.optional(),
+    renglones: z.array(z.string().uuid()).min(1, 'Elige al menos un concepto').max(200),
+  })
+  .refine((d) => Boolean(d.proveedor_id) !== Boolean(d.proveedor), 'Elige un proveedor existente o captura uno nuevo, no ambos ni ninguno')
+
 // POST /api/cuentas/facturas — campo `datos` (JSON) del multipart junto a `xml` y `pdf` (ambos obligatorios, #131).
 // Sin tope de cotizaciones por factura (P6, P25).
 export const FacturaCrearSchema = z.object({
@@ -426,17 +447,7 @@ export const FacturaCrearSchema = z.object({
    */
   preparar: z
     .object({
-      proveedor: z
-        .object({
-          nombre: z.string().trim().min(1, 'Falta el nombre').max(300),
-          rfc: z.string().trim().toUpperCase().regex(RFC_REGEX, 'RFC inválido'),
-          regimen_fiscal: z.enum(['moral', 'fisica', 'resico']),
-          telefono: z.string().trim().min(1, 'Falta el teléfono').max(40),
-          correo: z.string().trim().email('Correo inválido'),
-          banco: z.string().trim().min(1, 'Falta el banco').max(100),
-          clabe: z.string().trim().transform((v) => v.replace(/\s/g, '')).pipe(z.string().regex(/^\d{18}$/, 'La CLABE debe tener 18 dígitos')),
-        })
-        .optional(),
+      proveedor: ProveedorNuevoSchema.optional(),
       renglones: z.array(z.string().uuid()).max(200).optional(),
       gasto: z
         .object({
